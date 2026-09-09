@@ -1,0 +1,73 @@
+# Builds the runtime and runs the test projects.
+#
+# The suite needs a display and finds one on its own: with no DISPLAY,
+# tests/run.sh falls back to Xvfb, so nothing here has to set one up beyond
+# installing it.
+name: build and test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config \
+            libgtk-4-dev libgtksourceview-5-dev libvte-2.91-gtk4-dev \
+            libsqlite3-dev \
+            xvfb xdotool desktop-file-utils
+
+      - name: Build
+        run: |
+          cmake -S . -B build
+          cmake --build build -j"$(nproc)"
+
+      - name: Test
+        run: ./tests/run.sh
+
+      # What `make install` produces, run out of a staging prefix under /tmp.
+      # A step of this job and not one of its own: it installs the build the
+      # step above just tested, and re-building it somewhere else would only
+      # be re-testing the compiler.
+      #
+      # It brings up its own Xvfb rather than going through xvfb-run, so it
+      # needs no display arranged for it -- but it does need `xdotool`, which
+      # is the only dependency here that the suite does not already have.
+      - name: Test the install
+        run: ./tests/install.sh
+
+  # A second job and not a second step: it builds the whole runtime again with
+  # clang and the sanitizer, so failing here says something different from
+  # failing above and the two should be readable apart.
+  sanitizer:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config clang \
+            libgtk-4-dev libgtksourceview-5-dev libvte-2.91-gtk4-dev \
+            libsqlite3-dev \
+            xvfb
+
+      # What this catches is what a machine catches and a person does not: both
+      # memory bugs this codebase has had were use-after-free that crashed on
+      # some machines and not others, and it was the sanitizer -- being slow
+      # enough for a timeout to land before the report -- that exposed a block of
+      # assertions that had not run in months.
+      #
+      # It runs headless on its own: tests/asan.sh exports HEADLESS=1.
+      - name: Test under AddressSanitizer
+        run: ./tests/asan.sh

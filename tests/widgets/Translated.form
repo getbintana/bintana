@@ -1,0 +1,45 @@
+{
+  "format": "bintana-form/1",
+  "class": "Translated",
+  "properties": {
+    "Arrangement": "Vertical"
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "Lbl",
+      "properties": { "Text": "Name:", "Tooltip": "the customer's name" }
+    },
+    {
+      "type": "Label",
+      "name": "LblCount",
+      "properties": { "Text": "{0} files, {1} unsaved" },
+      "design": { "Text": "12 files, 2 unsaved" }
+    },
+    {
+      "type": "TextBox",
+      "name": "Txt",
+      "properties": { "Placeholder": "type here" }
+    },
+    {
+      "type": "ComboBox",
+      "name": "Cmb",
+      "properties": { "Items": ["Retail", "Wholesale"] }
+    },
+    {
+      "type": "Label",
+      "name": "LblStyled",
+      "properties": { "Text": "Untranslated", "Style": "heading" }
+    },
+    {
+      "type": "SourceEditor",
+      "name": "Ed",
+      "properties": { "Text": "Name:", "Tooltip": "type here" }
+    },
+    {
+      "type": "TextEditor",
+      "name": "Memo",
+      "properties": { "Text": "Name:", "Tooltip": "type here" }
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+<!-- A surface drawn on: the frame, with a curve and a mark inside it. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path fill-rule="evenodd" d="M1 2h14v12H1z M2.2 3.2v9.6h11.6V3.2z"/>
+  <path d="M3.4 11.4c1.8 0 2.6-5.2 4.6-5.2 2 0 2.6 3.4 4.6 3.4v1.2c-2.6 0-3-3.4-4.6-3.4-1.6 0-2.4 5.2-4.6 5.2z"/>
+  <path d="M10.6 4.2h2.2v2.2h-2.2z" opacity="0.45"/>
+</svg>

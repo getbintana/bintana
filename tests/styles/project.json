@@ -1,0 +1,5 @@
+{
+  "name": "styles",
+  "main": "Main",
+  "description": "Which style classes this desktop's theme defines, and what each one is written for. A console project: it reads the stylesheet, it does not open a window."
+}

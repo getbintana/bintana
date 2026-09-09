@@ -1,0 +1,231 @@
+{
+  "format": "bintana-form/1",
+  "class": "ProjectForm",
+  "properties": {
+    "Text": "Project",
+    "Width": 560,
+    "Height": 476
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblPrName",
+      "properties": {
+        "X": 16,
+        "Y": 22,
+        "Width": 110,
+        "Height": 24,
+        "Text": "Name:"
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtPrName",
+      "properties": {
+        "X": 134,
+        "Y": 16,
+        "Width": 410,
+        "Height": 34,
+        "HAlign": "Fill"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblPrVersion",
+      "properties": {
+        "X": 16,
+        "Y": 68,
+        "Width": 110,
+        "Height": 24,
+        "Text": "Version:"
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtPrVersion",
+      "properties": {
+        "X": 134,
+        "Y": 62,
+        "Width": 410,
+        "Height": 34,
+        "HAlign": "Fill",
+        "Placeholder": "0.1.0"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblPrStartup",
+      "properties": {
+        "X": 16,
+        "Y": 114,
+        "Width": 110,
+        "Height": 24,
+        "Text": "Starts at:"
+      }
+    },
+    {
+      "type": "ComboBox",
+      "name": "CmbPrKind",
+      "properties": {
+        "X": 134,
+        "Y": 108,
+        "Width": 126,
+        "Height": 34,
+        "Items": [
+          "a form",
+          "a function"
+        ],
+        "Tooltip": "A project opens a startup form, or calls a main function and never draws at all."
+      }
+    },
+    {
+      "type": "ComboBox",
+      "name": "CmbPrStartup",
+      "properties": {
+        "X": 268,
+        "Y": 108,
+        "Width": 276,
+        "Height": 34,
+        "HAlign": "Fill"
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtPrMain",
+      "properties": {
+        "X": 268,
+        "Y": 108,
+        "Width": 276,
+        "Height": 34,
+        "Visible": false,
+        "Tooltip": "The function the runtime calls; the IDE cannot list functions, so type it"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblPrDesc",
+      "properties": {
+        "X": 16,
+        "Y": 160,
+        "Width": 110,
+        "Height": 24,
+        "Text": "Description:"
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtPrDesc",
+      "properties": {
+        "X": 134,
+        "Y": 154,
+        "Width": 410,
+        "Height": 34,
+        "HAlign": "Fill"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblPrOrder",
+      "properties": {
+        "X": 16,
+        "Y": 204,
+        "Width": 200,
+        "Height": 24,
+        "Text": "Load order:"
+      }
+    },
+    {
+      "type": "ListBox",
+      "name": "LstPrSources",
+      "properties": {
+        "X": 16,
+        "Y": 232,
+        "Width": 424,
+        "Height": 150,
+        "HAlign": "Fill",
+        "VAlign": "Fill"
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnPrUp",
+      "properties": {
+        "X": 452,
+        "Y": 232,
+        "Width": 92,
+        "Height": 32,
+        "Text": "Up",
+        "HAlign": "End"
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnPrDown",
+      "properties": {
+        "X": 452,
+        "Y": 270,
+        "Width": 92,
+        "Height": 32,
+        "Text": "Down",
+        "HAlign": "End"
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnPrDecide",
+      "properties": {
+        "X": 452,
+        "Y": 318,
+        "Width": 92,
+        "Height": 32,
+        "Text": "Decide",
+        "HAlign": "End",
+        "Tooltip": "Write the order this project already loads in, so it can be changed"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblPrHint",
+      "properties": {
+        "X": 16,
+        "Y": 390,
+        "Width": 528,
+        "Height": 40,
+        "Text": "",
+        "Wrap": true,
+        "Style": "dim-label",
+        "HAlign": "Fill",
+        "VAlign": "End"
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnPrCancel",
+      "properties": {
+        "X": 354,
+        "Y": 432,
+        "Width": 90,
+        "Height": 32,
+        "Text": "Cancel",
+        "HAlign": "End",
+        "VAlign": "End",
+        "Cancel": true
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnPrOk",
+      "properties": {
+        "X": 454,
+        "Y": 432,
+        "Width": 90,
+        "Height": 32,
+        "Text": "OK",
+        "Style": "suggested-action",
+        "HAlign": "End",
+        "VAlign": "End",
+        "Default": true
+      }
+    }
+  ]
+}

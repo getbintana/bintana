@@ -1,0 +1,150 @@
+{
+  "format": "bintana-form/1",
+  "class": "Files",
+  "properties": {
+    "Text": "Files",
+    "Icon": "folder-symbolic",
+    "Width": 660,
+    "Height": 460
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "PathStrip",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Height": 34,
+        "Style": "linked",
+        "Width": 190,
+        "X": 12,
+        "Y": 12
+      },
+      "children": [
+        {
+          "type": "Button",
+          "name": "BtnUp",
+          "properties": {
+            "Height": 34,
+            "Icon": "go-up-symbolic",
+            "Tooltip": "The folder above this one",
+            "Width": 40
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnFolder",
+          "properties": {
+            "Height": 34,
+            "Text": "Choose folder…",
+            "Width": 150
+          }
+        }
+      ]
+    },
+    {
+      "type": "Label",
+      "name": "LblPath",
+      "properties": {
+        "Ellipsize": true,
+        "HAlign": "Fill",
+        "Height": 20,
+        "Style": "dim-label",
+        "Width": 434,
+        "X": 214,
+        "Y": 19
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtFind",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 34,
+        "Icon": "edit-clear-symbolic",
+        "Placeholder": "Filter by name",
+        "Tooltip": "Anywhere in the name, accents folded. The rows are not rebuilt to filter",
+        "Width": 300,
+        "X": 12,
+        "Y": 56
+      }
+    },
+    {
+      "type": "ComboBox",
+      "name": "CmbKind",
+      "properties": {
+        "HAlign": "End",
+        "Height": 34,
+        "Index": 0,
+        "Items": [
+          "Everything",
+          "Folders",
+          "Text",
+          "Images",
+          "Other"
+        ],
+        "Text": "Everything",
+        "Width": 150,
+        "X": 320,
+        "Y": 56
+      }
+    },
+    {
+      "type": "CheckButton",
+      "name": "ChkHidden",
+      "properties": {
+        "HAlign": "End",
+        "Height": 24,
+        "Text": "Hidden ones",
+        "VAlign": "Center",
+        "Width": 170,
+        "X": 478,
+        "Y": 61
+      }
+    },
+    {
+      "type": "RowList",
+      "name": "List",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 300,
+        "MinHeight": 120,
+        "MinWidth": 280,
+        "Style": "frame",
+        "VAlign": "Fill",
+        "Width": 636,
+        "X": 11,
+        "Y": 100
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblCount",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 40,
+        "Style": "dim-label",
+        "VAlign": "End",
+        "Width": 516,
+        "Wrap": true,
+        "X": 12,
+        "Y": 408
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnOpen",
+      "properties": {
+        "Enabled": false,
+        "HAlign": "End",
+        "Height": 34,
+        "Style": "suggested-action",
+        "Text": "Open",
+        "Tooltip": "A folder is entered; anything else goes to the desktop",
+        "VAlign": "End",
+        "Width": 108,
+        "X": 540,
+        "Y": 410
+      }
+    }
+  ]
+}

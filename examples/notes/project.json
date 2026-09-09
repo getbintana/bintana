@@ -1,0 +1,11 @@
+{
+  "name": "Notes",
+  "startup": "NotesForm",
+  "sources": [
+    "AskName.js",
+    "Confirm.js",
+    "NotesForm.js"
+  ],
+  "version": "1.0",
+  "description": "A folder of notes: the file name is the title, and nothing is ever lost"
+}

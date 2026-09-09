@@ -1,0 +1,5 @@
+<!-- Tabs above the page they show. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <rect x="1" y="2" width="6" height="3"/>
+  <path fill-rule="evenodd" d="M1 6h14v8H1z M2.2 7.2v5.6h11.6V7.2z"/>
+</svg>

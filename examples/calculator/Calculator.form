@@ -1,0 +1,376 @@
+{
+  "format": "bintana-form/1",
+  "class": "Calculator",
+  "properties": {
+    "Text": "Calculadora",
+    "Icon": "accessories-calculator",
+    "Arrangement": "Vertical",
+    "Spacing": 8,
+    "Padding": 12,
+    "Width": 300,
+    "Height": 400,
+    "MinWidth": 240,
+    "MinHeight": 320
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "Display",
+      "properties": {
+        "Alignment": "Right",
+        "Ellipsize": true,
+        "Font": "Normal 20",
+        "HAlign": "Fill",
+        "HExpand": true,
+        "Height": 37,
+        "MinHeight": 52,
+        "Style": "bta-display",
+        "Text": "0",
+        "Width": 300
+      }
+    },
+    {
+      "type": "Grid",
+      "name": "Keys",
+      "properties": {
+        "ColumnSpacing": 6,
+        "Columns": 4,
+        "Expand": true,
+        "HAlign": "Fill",
+        "HExpand": true,
+        "Height": 363,
+        "Homogeneous": true,
+        "RowSpacing": 6,
+        "Spacing": 6,
+        "VAlign": "Fill",
+        "VExpand": true,
+        "Width": 300
+      },
+      "children": [
+        {
+          "type": "Button",
+          "name": "BtnClear",
+          "properties": {
+            "Expand": true,
+            "Focusable": false,
+            "HAlign": "Fill",
+            "HExpand": true,
+            "Shortcut": [
+              "Escape",
+              "Delete"
+            ],
+            "Style": "destructive-action",
+            "Text": "C",
+            "VAlign": "Fill",
+            "VExpand": true
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnBack",
+          "properties": {
+            "Expand": true,
+            "Focusable": false,
+            "HAlign": "Fill",
+            "HExpand": true,
+            "Shortcut": "BackSpace",
+            "Text": "←",
+            "VAlign": "Fill",
+            "VExpand": true
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnSign",
+          "properties": {
+            "Expand": true,
+            "Focusable": false,
+            "HAlign": "Fill",
+            "HExpand": true,
+            "Text": "±",
+            "VAlign": "Fill",
+            "VExpand": true
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnDiv",
+          "properties": {
+            "Expand": true,
+            "Focusable": false,
+            "HAlign": "Fill",
+            "HExpand": true,
+            "Shortcut": [
+              "slash",
+              "KP_Divide"
+            ],
+            "Style": "suggested-action",
+            "Text": "÷",
+            "VAlign": "Fill",
+            "VExpand": true
+          }
+        },
+        {
+          "type": "Button",
+          "name": "Btn7",
+          "properties": {
+            "Expand": true,
+            "Focusable": false,
+            "HAlign": "Fill",
+            "HExpand": true,
+            "Shortcut": [
+              "7",
+              "KP_7"
+            ],
+            "Text": "7",
+            "VAlign": "Fill",
+            "VExpand": true
+          }
+        },
+        {
+          "type": "Button",
+          "name": "Btn8",
+          "properties": {
+            "Expand": true,
+            "Focusable": false,
+            "HAlign": "Fill",
+            "HExpand": true,
+            "Shortcut": [
+              "8",
+              "KP_8"
+            ],
+            "Text": "8",
+            "VAlign": "Fill",
+            "VExpand": true
+          }
+        },
+        {
+          "type": "Button",
+          "name": "Btn9",
+          "properties": {
+            "Expand": true,
+            "Focusable": false,
+            "HAlign": "Fill",
+            "HExpand": true,
+            "Shortcut": [
+              "9",
+              "KP_9"
+            ],
+            "Text": "9",
+            "VAlign": "Fill",
+            "VExpand": true
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnMul",
+          "properties": {
+            "Expand": true,
+            "Focusable": false,
+            "HAlign": "Fill",
+            "HExpand": true,
+            "Shortcut": [
+              "asterisk",
+              "KP_Multiply"
+            ],
+            "Style": "suggested-action",
+            "Text": "×",
+            "VAlign": "Fill",
+            "VExpand": true
+          }
+        },
+        {
+          "type": "Button",
+          "name": "Btn4",
+          "properties": {
+            "Expand": true,
+            "Focusable": false,
+            "HAlign": "Fill",
+            "HExpand": true,
+            "Shortcut": [
+              "4",
+              "KP_4"
+            ],
+            "Text": "4",
+            "VAlign": "Fill",
+            "VExpand": true
+          }
+        },
+        {
+          "type": "Button",
+          "name": "Btn5",
+          "properties": {
+            "Expand": true,
+            "Focusable": false,
+            "HAlign": "Fill",
+            "HExpand": true,
+            "Shortcut": [
+              "5",
+              "KP_5"
+            ],
+            "Text": "5",
+            "VAlign": "Fill",
+            "VExpand": true
+          }
+        },
+        {
+          "type": "Button",
+          "name": "Btn6",
+          "properties": {
+            "Expand": true,
+            "Focusable": false,
+            "HAlign": "Fill",
+            "HExpand": true,
+            "Shortcut": [
+              "6",
+              "KP_6"
+            ],
+            "Text": "6",
+            "VAlign": "Fill",
+            "VExpand": true
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnSub",
+          "properties": {
+            "Expand": true,
+            "Focusable": false,
+            "HAlign": "Fill",
+            "HExpand": true,
+            "Shortcut": [
+              "minus",
+              "KP_Subtract"
+            ],
+            "Style": "suggested-action",
+            "Text": "−",
+            "VAlign": "Fill",
+            "VExpand": true
+          }
+        },
+        {
+          "type": "Button",
+          "name": "Btn1",
+          "properties": {
+            "Expand": true,
+            "Focusable": false,
+            "HAlign": "Fill",
+            "HExpand": true,
+            "Shortcut": [
+              "1",
+              "KP_1"
+            ],
+            "Text": "1",
+            "VAlign": "Fill",
+            "VExpand": true
+          }
+        },
+        {
+          "type": "Button",
+          "name": "Btn2",
+          "properties": {
+            "Expand": true,
+            "Focusable": false,
+            "HAlign": "Fill",
+            "HExpand": true,
+            "Shortcut": [
+              "2",
+              "KP_2"
+            ],
+            "Text": "2",
+            "VAlign": "Fill",
+            "VExpand": true
+          }
+        },
+        {
+          "type": "Button",
+          "name": "Btn3",
+          "properties": {
+            "Expand": true,
+            "Focusable": false,
+            "HAlign": "Fill",
+            "HExpand": true,
+            "Shortcut": [
+              "3",
+              "KP_3"
+            ],
+            "Text": "3",
+            "VAlign": "Fill",
+            "VExpand": true
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnAdd",
+          "properties": {
+            "Expand": true,
+            "Focusable": false,
+            "HAlign": "Fill",
+            "HExpand": true,
+            "Shortcut": [
+              "plus",
+              "KP_Add"
+            ],
+            "Style": "suggested-action",
+            "Text": "+",
+            "VAlign": "Fill",
+            "VExpand": true
+          }
+        },
+        {
+          "type": "Button",
+          "name": "Btn0",
+          "properties": {
+            "Expand": true,
+            "Focusable": false,
+            "HAlign": "Fill",
+            "HExpand": true,
+            "Shortcut": [
+              "0",
+              "KP_0"
+            ],
+            "Text": "0",
+            "VAlign": "Fill",
+            "VExpand": true
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnPoint",
+          "properties": {
+            "Expand": true,
+            "Focusable": false,
+            "HAlign": "Fill",
+            "HExpand": true,
+            "Shortcut": [
+              "period",
+              "comma",
+              "KP_Decimal",
+              "KP_Separator"
+            ],
+            "Text": ",",
+            "VAlign": "Fill",
+            "VExpand": true
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnEquals",
+          "properties": {
+            "ColumnSpan": 2,
+            "Default": true,
+            "Expand": true,
+            "Focusable": false,
+            "HAlign": "Fill",
+            "HExpand": true,
+            "Shortcut": "equal",
+            "Style": "suggested-action",
+            "Text": "=",
+            "VAlign": "Fill",
+            "VExpand": true
+          }
+        }
+      ]
+    }
+  ]
+}

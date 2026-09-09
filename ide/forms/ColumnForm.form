@@ -1,0 +1,211 @@
+{
+  "format": "bintana-form/1",
+  "class": "ColumnForm",
+  "properties": {
+    "Text": "Columns",
+    "Width": 560,
+    "Height": 420,
+    "Icon": "x-office-spreadsheet-symbolic"
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblCols",
+      "properties": {
+        "X": 16,
+        "Y": 14,
+        "Width": 300,
+        "Height": 24,
+        "Text": "The columns, in order:"
+      }
+    },
+    {
+      "type": "TableView",
+      "name": "ColList",
+      "properties": {
+        "X": 16,
+        "Y": 42,
+        "Width": 420,
+        "Height": 180,
+        "HAlign": "Fill",
+        "VAlign": "Fill",
+        "MinWidth": 260,
+        "Columns": [
+          {
+            "Text": "Heading",
+            "Width": 200
+          },
+          {
+            "Text": "Width",
+            "Width": 70,
+            "Alignment": "Right"
+          },
+          {
+            "Text": "Alignment",
+            "Width": 100
+          }
+        ]
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnColAdd",
+      "properties": {
+        "X": 448,
+        "Y": 42,
+        "Width": 96,
+        "Height": 32,
+        "Text": "Add",
+        "HAlign": "End"
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnColDel",
+      "properties": {
+        "X": 448,
+        "Y": 80,
+        "Width": 96,
+        "Height": 32,
+        "Text": "Delete",
+        "HAlign": "End"
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnColUp",
+      "properties": {
+        "X": 448,
+        "Y": 126,
+        "Width": 96,
+        "Height": 32,
+        "Text": "Up",
+        "HAlign": "End"
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnColDown",
+      "properties": {
+        "X": 448,
+        "Y": 164,
+        "Width": 96,
+        "Height": 32,
+        "Text": "Down",
+        "HAlign": "End"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblColText",
+      "properties": {
+        "X": 16,
+        "Y": 240,
+        "Width": 90,
+        "Height": 24,
+        "Text": "Heading:"
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtColText",
+      "properties": {
+        "X": 112,
+        "Y": 234,
+        "Width": 300,
+        "Height": 34,
+        "HAlign": "Fill",
+        "ActivatesDefault": true
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblColWidth",
+      "properties": {
+        "X": 16,
+        "Y": 282,
+        "Width": 90,
+        "Height": 24,
+        "Text": "Width:"
+      }
+    },
+    {
+      "type": "SpinBox",
+      "name": "SpnColWidth",
+      "properties": {
+        "X": 112,
+        "Y": 276,
+        "Width": 100,
+        "Height": 34,
+        "Min": 0,
+        "Max": 2000,
+        "Step": 10
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblColAlign",
+      "properties": {
+        "X": 230,
+        "Y": 282,
+        "Width": 80,
+        "Height": 24,
+        "Text": "Alignment:"
+      }
+    },
+    {
+      "type": "ComboBox",
+      "name": "CmbColAlign",
+      "properties": {
+        "X": 312,
+        "Y": 276,
+        "Width": 100,
+        "Height": 34
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblColHint",
+      "properties": {
+        "X": 16,
+        "Y": 322,
+        "Width": 528,
+        "Height": 34,
+        "Text": "A width of 0 lets the column size itself. Every column can be dragged whatever it says here.",
+        "Wrap": true,
+        "Style": "dim-label",
+        "HAlign": "Fill",
+        "VAlign": "End"
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnColCancel",
+      "properties": {
+        "X": 354,
+        "Y": 372,
+        "Width": 90,
+        "Height": 32,
+        "Text": "Cancel",
+        "HAlign": "End",
+        "VAlign": "End",
+        "Cancel": true
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnColOk",
+      "properties": {
+        "X": 454,
+        "Y": 372,
+        "Width": 90,
+        "Height": 32,
+        "Text": "OK",
+        "Style": "suggested-action",
+        "HAlign": "End",
+        "VAlign": "End",
+        "Default": true
+      }
+    }
+  ]
+}

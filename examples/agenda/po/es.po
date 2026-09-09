@@ -1,0 +1,86 @@
+# Spanish for the agenda example.
+#
+# The line this catalogue exists for is the first one: the long date.
+#
+# glibc has no long-date pattern, and `%A %d %B %Y` reads "domingo 8 marzo 2026"
+# in Spanish -- it is missing the two "de", and which connector words a language
+# uses and where they go is not something a format string can know.  So the
+# runtime hands out the two fields the locale *does* define, `Weekday` and
+# `Month`, and the sentence is a msgid: this file reorders it and puts the
+# connectors in, which is exactly what a translator is for.
+#
+# The rest is what a window of this size costs in Spanish, which is the other
+# thing worth seeing: fifteen strings.
+msgid ""
+msgstr ""
+"Project-Id-Version: agenda\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. The whole reason this catalogue exists: {0} weekday, {1} day, {2} month,
+#. {3} year -- reordered and with the connectors Spanish writes.
+msgid "{0}, {1} {2} {3}"
+msgstr "{0} {1} de {2} de {3}"
+
+msgid "Agenda"
+msgstr "Agenda"
+
+msgid "Today"
+msgstr "Hoy"
+
+msgid "Tomorrow"
+msgstr "Mañana"
+
+msgid "Yesterday"
+msgstr "Ayer"
+
+msgid "In {0} day"
+msgid_plural "In {0} days"
+msgstr[0] "Dentro de {0} día"
+msgstr[1] "Dentro de {0} días"
+
+msgid "{0} day ago"
+msgid_plural "{0} days ago"
+msgstr[0] "Hace {0} día"
+msgstr[1] "Hace {0} días"
+
+msgid "{0} entry"
+msgid_plural "{0} entries"
+msgstr[0] "{0} entrada"
+msgstr[1] "{0} entradas"
+
+msgid "Nothing on this day."
+msgstr "No hay nada este día."
+
+#. How long an entry runs, shown in its tooltip. The hour-and-minutes one is
+#. "1 h 30" in both languages: the abbreviation is the same and the order of the
+#. two numbers is not something a translator should have to keep.
+msgid "{0} minute"
+msgid_plural "{0} minutes"
+msgstr[0] "{0} minuto"
+msgstr[1] "{0} minutos"
+
+msgid "{0} hour"
+msgid_plural "{0} hours"
+msgstr[0] "{0} hora"
+msgstr[1] "{0} horas"
+
+msgid "{0} h {1}"
+msgstr "{0} h {1}"
+
+#. An entry in the file whose end is before its start: a typo, said out loud
+#. rather than shown as a negative length.
+msgid "{0} ends before it starts"
+msgstr "{0} termina antes de empezar"
+
+msgid "The day before"
+msgstr "El día anterior"
+
+msgid "The day after"
+msgstr "El día siguiente"
+
+msgid "Any day at all"
+msgstr "Cualquier día"

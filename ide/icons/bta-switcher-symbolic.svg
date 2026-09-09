@@ -1,0 +1,6 @@
+<!-- A strip of linked buttons, one of them chosen, over the page it shows. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <rect x="2" y="1.5" width="6" height="4"/>
+  <path fill-rule="evenodd" d="M8 1.5h6v4H8z M9.2 2.7v1.6h3.6V2.7z"/>
+  <path fill-rule="evenodd" d="M1 7h14v7.5H1z M2.2 8.2v5.1h11.6V8.2z"/>
+</svg>

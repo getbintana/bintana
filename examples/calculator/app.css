@@ -1,0 +1,8 @@
+/* The display: big, right-aligned, and sunk into the window the way a
+   calculator's is.  A Style class and not per-widget colours, so the whole of
+   it follows the desktop's light or dark theme without a line of code. */
+.bta-display {
+    background: alpha(currentColor, 0.06);
+    border-radius: 8px;
+    padding: 4px 10px;
+}

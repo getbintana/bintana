@@ -1,0 +1,6 @@
+<!-- A date: a calendar page with its header filled, and days on it. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path fill-rule="evenodd" d="M1.5 2.5h13v12h-13z M2.7 6.7v6.6h10.6V6.7z"/>
+  <path d="M1.5 2.5h13v3h-13z"/>
+  <path d="M4 8.2h2v2H4z M7 8.2h2v2H7z M10 8.2h2v2h-2z"/>
+</svg>

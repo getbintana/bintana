@@ -1,0 +1,53 @@
+{
+  "format": "bintana-form/1",
+  "class": "Confirm",
+  "properties": {
+    "Text": "Notes",
+    "Width": 400,
+    "Height": 150,
+    "Resizable": false
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblMessage",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 56,
+        "VAlign": "Fill",
+        "Width": 368,
+        "Wrap": true,
+        "X": 16,
+        "Y": 20
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnCancel",
+      "properties": {
+        "Cancel": true,
+        "HAlign": "End",
+        "Height": 32,
+        "Text": "Cancel",
+        "VAlign": "End",
+        "Width": 90,
+        "X": 190,
+        "Y": 100
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnYes",
+      "properties": {
+        "HAlign": "End",
+        "Height": 32,
+        "Style": "destructive-action",
+        "Text": "Delete",
+        "VAlign": "End",
+        "Width": 120,
+        "X": 294,
+        "Y": 100
+      }
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+# Translation template for this project.
+# Written by the Bintana IDE: Project > Update translations.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: hello\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: Form1.form: Form1.Text
+msgid "Hello Bintana"
+msgstr ""
+
+#: Form1.form: Label1.Text
+msgid "Your name:"
+msgstr ""
+
+#: Form1.form: Button1.Text
+msgid "Greet"
+msgstr ""
+
+#: Form1.form: CheckBox1.Text
+msgid "Upper case"
+msgstr ""
+
+#: Form2.form: Form2.Text
+msgid "Form2"
+msgstr ""
+
+#: Form2.form: Button1.Text
+msgid "Button1"
+msgstr ""
+
+#: Form1.js:38
+msgid "Hello {0}!"
+msgstr ""
+
+#: Form1.js:48
+msgid "Hello Bintana -- {0}"
+msgstr ""
+
+#: Form1.js:22
+msgid "Type a name first."
+msgstr ""

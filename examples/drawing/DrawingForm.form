@@ -1,0 +1,145 @@
+{
+  "format": "bintana-form/1",
+  "class": "DrawingForm",
+  "properties": {
+    "Text": "Drawing",
+    "Width": 780,
+    "Height": 560,
+    "Arrangement": "Vertical",
+    "Spacing": 8,
+    "Margin": 8
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "Top",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Spacing": 8,
+        "Height": 200,
+        "Expand": false
+      },
+      "children": [
+        {
+          "type": "Frame",
+          "name": "FrmLine",
+          "properties": {
+            "Text": "A sparkline",
+            "Arrangement": "Vertical",
+            "Expand": true
+          },
+          "children": [
+            {
+              "type": "DrawingArea",
+              "name": "Line",
+              "properties": {
+                "Expand": true,
+                "Margin": 6
+              }
+            }
+          ]
+        },
+        {
+          "type": "Frame",
+          "name": "FrmGauge",
+          "properties": {
+            "Text": "A gauge",
+            "Arrangement": "Vertical",
+            "Width": 200
+          },
+          "children": [
+            {
+              "type": "DrawingArea",
+              "name": "Gauge",
+              "properties": {
+                "Expand": true,
+                "Margin": 6
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Frame",
+      "name": "FrmPie",
+      "properties": {
+        "Text": "A pie, and what it cost to draw",
+        "Arrangement": "Vertical",
+        "Expand": true
+      },
+      "children": [
+        {
+          "type": "DrawingArea",
+          "name": "Pie",
+          "properties": {
+            "Expand": true,
+            "Margin": 6
+          }
+        }
+      ]
+    },
+    {
+      "type": "Panel",
+      "name": "Bar",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Spacing": 8,
+        "Height": 34
+      },
+      "children": [
+        {
+          "type": "Button",
+          "name": "BtnMore",
+          "properties": {
+            "Text": "More data",
+            "Width": 110
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnRough",
+          "properties": {
+            "Text": "Rougher",
+            "Width": 110
+          }
+        },
+        {
+          "type": "CheckButton",
+          "name": "ChkSmooth",
+          "properties": {
+            "Text": "Antialias",
+            "Active": true,
+            "Width": 110
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnMeasure",
+          "properties": {
+            "Text": "Measure",
+            "Width": 100
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnSave",
+          "properties": {
+            "Text": "Save a PNG",
+            "Width": 120
+          }
+        }
+      ]
+    },
+    {
+      "type": "Label",
+      "name": "LblCost",
+      "properties": {
+        "Text": "",
+        "Height": 20,
+        "Style": "dim-label",
+        "Alignment": "Left"
+      }
+    }
+  ]
+}

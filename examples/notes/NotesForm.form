@@ -1,0 +1,136 @@
+{
+  "format": "bintana-form/1",
+  "class": "NotesForm",
+  "properties": {
+    "Text": "Notes",
+    "Width": 760,
+    "Height": 520
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "Bar",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "HAlign": "Fill",
+        "Height": 38,
+        "Spacing": 6,
+        "Width": 736,
+        "X": 12,
+        "Y": 10
+      },
+      "children": [
+        {
+          "type": "Button",
+          "name": "BtnFolder",
+          "properties": {
+            "Text": "Folder…",
+            "Tooltip": "Where the notes are kept"
+          }
+        },
+        {
+          "type": "Label",
+          "name": "LblFolder",
+          "properties": {
+            "Ellipsize": true,
+            "HExpand": true,
+            "Style": "dim-label caption",
+            "VAlign": "Center"
+          }
+        },
+        {
+          "type": "Panel",
+          "name": "NewGroup",
+          "properties": {
+            "Arrangement": "Horizontal",
+            "Style": "linked"
+          },
+          "children": [
+            {
+              "type": "Button",
+              "name": "BtnNew",
+              "properties": {
+                "Shortcut": [
+                  "<Control>n"
+                ],
+                "Style": "suggested-action",
+                "Text": "New note",
+                "Tooltip": "Ctrl+N"
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnMore",
+              "properties": {
+                "Enabled": false,
+                "Icon": "pan-down-symbolic",
+                "Menu": [
+                  {
+                    "name": "MnuRename",
+                    "text": "Rename…"
+                  },
+                  {
+                    "separator": true
+                  },
+                  {
+                    "name": "MnuTrash",
+                    "text": "Move to trash"
+                  }
+                ],
+                "Tooltip": "What to do with this note"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Split",
+      "name": "Panes",
+      "properties": {
+        "Grows": "End",
+        "HAlign": "Fill",
+        "Height": 404,
+        "MinHeight": 160,
+        "MinWidth": 420,
+        "Position": 220,
+        "VAlign": "Fill",
+        "Width": 736,
+        "X": 12,
+        "Y": 58
+      },
+      "children": [
+        {
+          "type": "ListBox",
+          "name": "Notes",
+          "properties": {
+            "MinWidth": 140,
+            "Style": "frame"
+          }
+        },
+        {
+          "type": "TextEditor",
+          "name": "Ed",
+          "properties": {
+            "Enabled": false,
+            "MinWidth": 240
+          }
+        }
+      ]
+    },
+    {
+      "type": "Label",
+      "name": "LblWhere",
+      "properties": {
+        "Ellipsize": true,
+        "HAlign": "Fill",
+        "Height": 34,
+        "Style": "dim-label caption",
+        "VAlign": "End",
+        "Width": 736,
+        "X": 12,
+        "Y": 474
+      }
+    }
+  ]
+}

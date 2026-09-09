@@ -1,0 +1,314 @@
+{
+  "format": "bintana-form/1",
+  "class": "Form1",
+  "properties": {
+    "Text": "TableView",
+    "Icon": "x-office-spreadsheet-symbolic",
+    "Width": 708,
+    "Height": 436
+  },
+  "children": [
+    {
+      "type": "Switcher",
+      "name": "Pages",
+      "properties": {
+        "Current": 0,
+        "HAlign": "Fill",
+        "Height": 380,
+        "MinHeight": 300,
+        "MinWidth": 420,
+        "Tabs": [
+          "Rows it does not",
+          "Rows it holds",
+          "Rows that nest"
+        ],
+        "VAlign": "Fill",
+        "Width": 684,
+        "X": 12,
+        "Y": 12
+      },
+      "children": [
+        {
+          "type": "Panel",
+          "name": "BigPage",
+          "properties": {},
+          "children": [
+            {
+              "type": "TableView",
+              "name": "Big",
+              "properties": {
+                "Columns": [
+                  {
+                    "Text": "Row",
+                    "Width": 90,
+                    "Alignment": "Right"
+                  },
+                  {
+                    "Text": "Square",
+                    "Width": 140,
+                    "Alignment": "Right"
+                  },
+                  {
+                    "Text": "Every third",
+                    "Width": 160
+                  }
+                ],
+                "HAlign": "Fill",
+                "Height": 250,
+                "MinHeight": 140,
+                "MinWidth": 260,
+                "Sortable": true,
+                "VAlign": "Fill",
+                "Width": 554,
+                "X": 10,
+                "Y": 10
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblBig",
+              "properties": {
+                "HAlign": "Fill",
+                "Height": 60,
+                "Style": "dim-label",
+                "VAlign": "End",
+                "Width": 554,
+                "Wrap": true,
+                "X": 10,
+                "Y": 272
+              }
+            },
+            {
+              "type": "Separator",
+              "name": "Separator1",
+              "properties": {
+                "Height": 12,
+                "Width": 160,
+                "X": 56,
+                "Y": 308
+              }
+            }
+          ]
+        },
+        {
+          "type": "Panel",
+          "name": "HeldPage",
+          "properties": {
+            "Height": 310,
+            "Width": 540
+          },
+          "children": [
+            {
+              "type": "TableView",
+              "name": "Files",
+              "properties": {
+                "Columns": [
+                  {
+                    "Text": "Name",
+                    "Width": 190
+                  },
+                  {
+                    "Text": "Size",
+                    "Width": 80,
+                    "Alignment": "Right"
+                  },
+                  {
+                    "Text": "Kind",
+                    "Width": 110
+                  }
+                ],
+                "HAlign": "Fill",
+                "Height": 250,
+                "MinHeight": 140,
+                "MinWidth": 260,
+                "Sortable": true,
+                "VAlign": "Fill",
+                "Width": 400,
+                "X": 10,
+                "Y": 10
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnAdd",
+              "properties": {
+                "HAlign": "End",
+                "Height": 32,
+                "Text": "Add a row",
+                "Width": 140,
+                "X": 424,
+                "Y": 10
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnDelete",
+              "properties": {
+                "HAlign": "End",
+                "Height": 32,
+                "Text": "Delete",
+                "Width": 140,
+                "X": 424,
+                "Y": 48
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnRename",
+              "properties": {
+                "HAlign": "End",
+                "Height": 32,
+                "Text": "Rename",
+                "Width": 140,
+                "X": 424,
+                "Y": 86
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnClear",
+              "properties": {
+                "HAlign": "End",
+                "Height": 32,
+                "Text": "Clear",
+                "Width": 140,
+                "X": 424,
+                "Y": 132
+              }
+            },
+            {
+              "type": "CheckButton",
+              "name": "ChkMulti",
+              "properties": {
+                "HAlign": "End",
+                "Height": 28,
+                "Text": "Many at once",
+                "Width": 140,
+                "X": 424,
+                "Y": 180
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblHeld",
+              "properties": {
+                "HAlign": "Fill",
+                "Height": 44,
+                "Style": "dim-label",
+                "VAlign": "End",
+                "Width": 554,
+                "Wrap": true,
+                "X": 10,
+                "Y": 272
+              }
+            }
+          ]
+        },
+        {
+          "type": "Panel",
+          "name": "TreePage",
+          "properties": {
+            "Height": 310,
+            "Width": 540
+          },
+          "children": [
+            {
+              "type": "TableView",
+              "name": "Tree",
+              "properties": {
+                "Columns": [
+                  {
+                    "Text": "Name",
+                    "Width": 220
+                  },
+                  {
+                    "Text": "Size",
+                    "Width": 80,
+                    "Alignment": "Right"
+                  },
+                  {
+                    "Text": "Kind",
+                    "Width": 110
+                  }
+                ],
+                "HAlign": "Fill",
+                "Height": 250,
+                "MinHeight": 140,
+                "MinWidth": 260,
+                "Sortable": true,
+                "VAlign": "Fill",
+                "Width": 400,
+                "X": 10,
+                "Y": 10
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnExpand",
+              "properties": {
+                "HAlign": "End",
+                "Height": 32,
+                "Text": "Expand all",
+                "Width": 140,
+                "X": 424,
+                "Y": 10
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnCollapse",
+              "properties": {
+                "HAlign": "End",
+                "Height": 32,
+                "Text": "Collapse all",
+                "Width": 140,
+                "X": 424,
+                "Y": 48
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnPrune",
+              "properties": {
+                "HAlign": "End",
+                "Height": 32,
+                "Text": "Remove the folder",
+                "Width": 140,
+                "X": 424,
+                "Y": 86
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblTree",
+              "properties": {
+                "HAlign": "Fill",
+                "Height": 40,
+                "Style": "dim-label",
+                "Text": "",
+                "VAlign": "End",
+                "Width": 520,
+                "Wrap": true,
+                "X": 10,
+                "Y": 266
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Label",
+      "name": "LblStatus",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 24,
+        "Style": "dim-label",
+        "VAlign": "End",
+        "Width": 684,
+        "X": 12,
+        "Y": 404
+      }
+    }
+  ]
+}

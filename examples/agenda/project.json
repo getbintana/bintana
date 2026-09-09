@@ -1,0 +1,9 @@
+{
+  "name": "Agenda",
+  "startup": "Agenda",
+  "sources": [
+    "Agenda.js"
+  ],
+  "version": "1.0",
+  "description": "A day at a time: Day for the arithmetic a calendar date needs, and Locale for the sentence that names it"
+}

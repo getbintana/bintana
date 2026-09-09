@@ -1,0 +1,5 @@
+{
+  "name": "install",
+  "main": "Main",
+  "description": "Installs the project into a staging prefix and runs the IDE out of it. A console project: the window it opens is on an X server of its own, never on yours."
+}

@@ -1,0 +1,113 @@
+/*
+ * project.json, as a shape rather than as a bag of keys.
+ *
+ * Every mutation of a project's manifest went through `withConfig`, which read
+ * JSON, handed a plain object to a mutator and wrote it back -- so what the file
+ * is *allowed* to say lived in the mutators, one `Array.isArray(config.sources)`
+ * at a time, and what was wrong with a broken one was only ever discovered by
+ * the thing that tripped over it.
+ *
+ * Declared here once, the same way a control declares its properties: the names,
+ * what each one accepts, and which are not optional.  Reading a file reports
+ * everything wrong with it at once instead of stopping at the first, and writing
+ * one goes through the setters, so the IDE cannot save a manifest that a project
+ * would refuse to open.
+ *
+ * `Naming = "lower"` because the file spells its keys in lower case and Bintana
+ * spells properties in PascalCase.  That is a rule about the file, said once,
+ * rather than an `as:` on every field.
+ */
+"use strict";
+
+Namespace("Ide");
+
+/*
+ * What a project starts at, in the two words the dialogs show.
+ *
+ * Here and not in either dialog, because both ask the same question and a
+ * project's sources share one scope: two files declaring `const KIND_FORM` at
+ * the top level is a redeclaration, and the runtime says so.
+ */
+Ide.Kind = { Form: "a form", Function: "a function" };
+
+Ide.ProjectFile = class ProjectFile extends Record {
+    static Naming = "lower";
+
+    static Fields = {
+        /* A project has a name and something to start.  *Something*, and that is
+         * why neither of the next two is required on its own: a project starts
+         * at a form (`startup`) or at a function (`main`), and `Validate` below
+         * is where "one of them" is said -- a `Field` can only speak about
+         * itself. */
+        Name:    Field.Text({ required: true, max: 120 }),
+        Startup: Field.Text({ max: 120 }),
+        Main:    Field.Text({ max: 120 }),
+
+        /*
+         * Load order, and only needed when one class extends another of the same
+         * project.  Empty is legitimate and means "every .js under the project,
+         * sorted by path" -- so it is not required, and an empty list is not a
+         * complaint.
+         */
+        Sources: Field.List(Field.Text()),
+
+        /*
+         * The libraries this project uses, by name -- resolved by the runtime
+         * over six places (see `docs/formats.md`), which is why the IDE asks
+         * `Application.LibraryPath` rather than looking for them itself: two
+         * copies of a search path drift, and the one that drifts is the one
+         * nobody runs from a shell.
+         *
+         * Not required, and an empty list is the ordinary state: a project that
+         * uses nothing shared is most projects.
+         */
+        Uses: Field.List(Field.Text()),
+
+        /*
+         * What the project calls its own release. Free text and not a checked
+         * shape: "1.0", "2026.08", "3.1-rc2" and a bare git hash are all things
+         * projects really put here, and a rule that only admitted `x.y.z` would
+         * be this IDE deciding for them. Optional -- a project without a version
+         * is an ordinary project, and the runtime answers "" for it.
+         */
+        Version: Field.Text({ max: 40 }),
+
+        Description: Field.Text({ max: 400 }),
+    };
+
+    /*
+     * The rule no single field can state: **one or the other**.
+     *
+     * A project with neither loads and cannot run, which is the state worth
+     * reporting; a project with both is worse, because it looks like it draws
+     * and does not -- the runtime calls `main` and never opens the form. Both go
+     * to the console with everything else that is wrong with the manifest, so a
+     * project is still opened and can still be fixed.
+     */
+    Validate() {
+        const out = super.Validate();
+
+        if (!this.Startup && !this.Main)
+            out.push("nothing to start: declare a startup form or a main function");
+        else if (this.Startup && this.Main)
+            out.push(`declares both startup (${this.Startup}) and main (${this.Main}); ` +
+                     "the runtime calls main and never opens the form");
+
+        return out;
+    }
+
+    /*
+     * Whether `sources` is the list that decides load order.  A project without
+     * one is loaded by directory, and the mutators have to leave it alone rather
+     * than inventing one: writing a list where there was none would freeze the
+     * load order of a project that never asked for it.
+     *
+     * Empty and absent are the same question, which is the runtime's own rule and
+     * not a convenience: `collect_sources` falls back to the directory scan when
+     * the list it built is empty, so `"sources": []` loads exactly what no
+     * `sources` key loads.  Asking `Array.isArray` instead -- which is what this
+     * used to do -- called an empty list a list, and the first form created would
+     * have frozen the order of a project that had asked for the scan.
+     */
+    get Lists() { return this.Sources.length > 0; }
+};

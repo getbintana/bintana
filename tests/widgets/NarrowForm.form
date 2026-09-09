@@ -1,0 +1,36 @@
+{
+  "format": "bintana-form/1",
+  "class": "NarrowForm",
+  "properties": {
+    "Text": "narrow",
+    "Width": 400,
+    "Height": 120
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "NStrip",
+      "properties": {
+        "Ellipsize": true,
+        "HAlign": "Fill",
+        "Height": 22,
+        "Text": "drawn to the margins",
+        "Width": 376,
+        "X": 12,
+        "Y": 12
+      }
+    },
+    {
+      "type": "Button",
+      "name": "NEnd",
+      "properties": {
+        "HAlign": "End",
+        "Height": 30,
+        "Text": "end",
+        "Width": 88,
+        "X": 300,
+        "Y": 60
+      }
+    }
+  ]
+}

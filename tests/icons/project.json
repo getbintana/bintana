@@ -1,0 +1,5 @@
+{
+  "name": "icons",
+  "main": "Main",
+  "description": "Which declared icons this desktop really has. A console project: it reads the themes off the disk, so it needs no display and never asks GTK."
+}

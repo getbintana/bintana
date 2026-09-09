@@ -1,0 +1,87 @@
+{
+  "format": "bintana-form/1",
+  "class": "StopwatchForm",
+  "properties": {
+    "Text": "Stopwatch",
+    "Width": 380,
+    "Height": 420
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblTime",
+      "properties": {
+        "Alignment": "Center",
+        "HAlign": "Fill",
+        "Height": 56,
+        "Style": "title-1",
+        "Text": "0:00,00",
+        "Width": 356,
+        "X": 12,
+        "Y": 24
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnStart",
+      "properties": {
+        "Focusable": false,
+        "Height": 40,
+        "Shortcut": ["space"],
+        "Style": "suggested-action",
+        "Text": "Start",
+        "Tooltip": "Space",
+        "Width": 110,
+        "X": 12,
+        "Y": 96
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnLap",
+      "properties": {
+        "Enabled": false,
+        "Focusable": false,
+        "HAlign": "Center",
+        "Height": 40,
+        "Shortcut": ["l"],
+        "Text": "Lap",
+        "Tooltip": "L",
+        "Width": 110,
+        "X": 135,
+        "Y": 96
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnReset",
+      "properties": {
+        "Enabled": false,
+        "Focusable": false,
+        "HAlign": "End",
+        "Height": 40,
+        "Shortcut": ["r"],
+        "Text": "Reset",
+        "Tooltip": "R",
+        "Width": 110,
+        "X": 258,
+        "Y": 96
+      }
+    },
+    {
+      "type": "RowList",
+      "name": "List",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 252,
+        "MinHeight": 80,
+        "MinWidth": 220,
+        "Style": "frame",
+        "VAlign": "Fill",
+        "Width": 356,
+        "X": 12,
+        "Y": 156
+      }
+    }
+  ]
+}

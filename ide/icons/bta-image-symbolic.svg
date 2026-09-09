@@ -1,0 +1,6 @@
+<!-- A framed picture: a sun over hills, which is what a picture of a picture is. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path fill-rule="evenodd" d="M1 2h14v12H1z M2.2 3.2v9.6h11.6V3.2z"/>
+  <circle cx="5.2" cy="6" r="1.4"/>
+  <path d="M3 12.2l3.2-3.6 2 2.2 2.6-3.2 2.2 4.6z"/>
+</svg>

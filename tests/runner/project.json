@@ -1,0 +1,5 @@
+{
+  "name": "runner",
+  "main": "Main",
+  "description": "Runs the Bintana test projects. A console project: no window, no display."
+}

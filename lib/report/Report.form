@@ -1,0 +1,8 @@
+{
+  "format": "bintana-form/1",
+  "class": "Report",
+  "properties": { "Width": 480, "Height": 640, "Arrangement": "Vertical" },
+  "children": [
+    { "type": "DrawingArea", "name": "Canvas", "properties": { "Expand": true } }
+  ]
+}

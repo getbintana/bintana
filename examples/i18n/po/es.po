@@ -1,0 +1,66 @@
+# Spanish for the layout example.
+#
+# The point of these three: `Rule` is four characters and `Separador` is nine.
+# Nothing else about the form changes, and that is enough to break row 1.
+msgid ""
+msgstr ""
+"Project-Id-Version: i18n\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Layout under translation"
+msgstr "El layout bajo traducción"
+
+msgid "The same three buttons, laid out four ways. The dashed line is where the box above them ends."
+msgstr "Los mismos tres botones, dispuestos de cuatro maneras. La línea azul marca dónde termina el espacio de cada fila."
+
+msgid "1. Coordinates, no slack"
+msgstr "1. Coordenadas, sin holgura"
+
+msgid "2. Coordinates, with room to grow into"
+msgstr "2. Coordenadas, con espacio para crecer"
+
+msgid "3. A horizontal box"
+msgstr "3. Una caja horizontal"
+
+msgid "4. A horizontal box, homogeneous"
+msgstr "4. Una caja horizontal, homogénea"
+
+msgid "Item"
+msgstr "Ítem"
+
+msgid "Submenu"
+msgstr "Submenú"
+
+msgid "Rule"
+msgstr "Separador"
+
+msgid "Measure"
+msgstr "Medir de nuevo"
+
+msgid "Catalogue in use: {0}"
+msgstr "Catálogo en uso: {0}"
+
+msgid "No catalogue: showing the msgids"
+msgstr "Sin catálogo: se muestran los msgid"
+
+msgid "Anchors under translation"
+msgstr "Las anclas bajo traducción"
+
+msgid "Drawn at 460 wide. Resize the window and press Measure."
+msgstr "Dibujado a 460 de ancho. Cambiá el tamaño de la ventana y apretá Medir."
+
+msgid "Start"
+msgstr "Principio"
+
+msgid "Center"
+msgstr "Centro"
+
+msgid "End"
+msgstr "Final"
+
+msgid "Save"
+msgstr "Guardar los cambios"

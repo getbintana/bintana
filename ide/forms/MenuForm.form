@@ -1,0 +1,237 @@
+{
+  "format": "bintana-form/1",
+  "class": "MenuForm",
+  "properties": {
+    "Arrangement": "Vertical",
+    "Height": 470,
+    "Text": "Menus",
+    "Width": 640
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "PnlContent",
+      "properties": {
+        "Arrangement": "Vertical",
+        "Expand": true,
+        "Margin": 12,
+        "Spacing": 12
+      },
+      "children": [
+        {
+          "type": "Panel",
+          "name": "PnlBody",
+          "properties": {
+            "Arrangement": "Horizontal",
+            "Expand": true,
+            "Spacing": 12
+          },
+          "children": [
+            {
+              "type": "Panel",
+              "name": "PnlTree",
+              "properties": {
+                "Arrangement": "Vertical",
+                "Spacing": 6
+              },
+              "children": [
+                {
+                  "type": "Label",
+                  "name": "LblTree",
+                  "properties": {
+                    "Text": "Menu bar"
+                  }
+                },
+                {
+                  "type": "TreeView",
+                  "name": "Tree",
+                  "properties": {
+                    "Expand": true
+                  }
+                },
+                {
+                  "type": "Grid",
+                  "name": "BtnGrid",
+                  "properties": {
+                    "Columns": 3,
+                    "Homogeneous": true,
+                    "Spacing": 6
+                  },
+                  "children": [
+                    {
+                      "type": "Button",
+                      "name": "BtnItem",
+                      "properties": {
+                        "Height": 30,
+                        "Text": "Item"
+                      }
+                    },
+                    {
+                      "type": "Button",
+                      "name": "BtnSubmenu",
+                      "properties": {
+                        "Height": 30,
+                        "Text": "Submenu"
+                      }
+                    },
+                    {
+                      "type": "Button",
+                      "name": "BtnSeparator",
+                      "properties": {
+                        "Height": 30,
+                        "Text": "Rule"
+                      }
+                    },
+                    {
+                      "type": "Button",
+                      "name": "BtnUp",
+                      "properties": {
+                        "Enabled": false,
+                        "Height": 30,
+                        "Text": "Up"
+                      }
+                    },
+                    {
+                      "type": "Button",
+                      "name": "BtnDown",
+                      "properties": {
+                        "Enabled": false,
+                        "Height": 30,
+                        "Text": "Down"
+                      }
+                    },
+                    {
+                      "type": "Button",
+                      "name": "BtnDelete",
+                      "properties": {
+                        "Enabled": false,
+                        "Height": 30,
+                        "Style": "destructive-action",
+                        "Text": "Delete"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "Panel",
+              "name": "PnlItem",
+              "properties": {
+                "Arrangement": "Vertical",
+                "HExpand": true,
+                "Spacing": 4
+              },
+              "children": [
+                {
+                  "type": "Label",
+                  "name": "LblText",
+                  "properties": {
+                    "Text": "Text"
+                  }
+                },
+                {
+                  "type": "TextBox",
+                  "name": "TxtText",
+                  "properties": {
+                    "Enabled": false
+                  }
+                },
+                {
+                  "type": "Label",
+                  "name": "LblName",
+                  "properties": {
+                    "Text": "Name (its handler is Name_Click)"
+                  }
+                },
+                {
+                  "type": "TextBox",
+                  "name": "TxtName",
+                  "properties": {
+                    "Enabled": false
+                  }
+                },
+                {
+                  "type": "Label",
+                  "name": "LblShortcut",
+                  "properties": {
+                    "Text": "Shortcut, e.g. <Control>s"
+                  }
+                },
+                {
+                  "type": "TextBox",
+                  "name": "TxtShortcut",
+                  "properties": {
+                    "Enabled": false
+                  }
+                },
+                {
+                  "type": "CheckButton",
+                  "name": "ChkDynamic",
+                  "properties": {
+                    "Enabled": false,
+                    "Text": "Entries filled by the application (dynamic)"
+                  }
+                },
+                {
+                  "type": "CheckButton",
+                  "name": "ChkCheck",
+                  "properties": {
+                    "Enabled": false,
+                    "Text": "Ticks on and off (check)"
+                  }
+                },
+                {
+                  "type": "CheckButton",
+                  "name": "ChkRadio",
+                  "properties": {
+                    "Enabled": false,
+                    "Text": "Marks the entry chosen (radio)"
+                  }
+                },
+                {
+                  "type": "Label",
+                  "name": "LblHint",
+                  "properties": {
+                    "Text": "",
+                    "Wrap": true,
+                    "Expand": true,
+                    "VAlign": "Start"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "Panel",
+          "name": "PnlButtons",
+          "properties": {
+            "Arrangement": "Horizontal",
+            "HAlign": "End",
+            "Spacing": 8
+          },
+          "children": [
+            {
+              "type": "Button",
+              "name": "BtnCancel",
+              "properties": {
+                "Text": "Cancel",
+                "Cancel": true
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnOk",
+              "properties": {
+                "Style": "suggested-action",
+                "Text": "OK",
+                "Default": true
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

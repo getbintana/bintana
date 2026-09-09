@@ -1,0 +1,9 @@
+{
+  "name": "Contacts",
+  "startup": "Contacts",
+  "sources": [
+    "Contacts.js"
+  ],
+  "version": "1.0",
+  "description": "A phone book in the order this desktop puts names in, and found without the accents typed"
+}

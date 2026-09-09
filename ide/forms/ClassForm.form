@@ -1,0 +1,364 @@
+{
+  "format": "bintana-form/1",
+  "class": "ClassForm",
+  "properties": {
+    "Height": 560,
+    "Icon": "applications-graphics-symbolic",
+    "Text": "Class",
+    "Width": 430
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblTxtName",
+      "properties": {
+        "Text": "Name",
+        "X": 16,
+        "Y": 22,
+        "Width": 88,
+        "Height": 22
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtName",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 34,
+        "Width": 300,
+        "X": 112,
+        "Y": 16,
+        "Placeholder": "field-label"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblColBack",
+      "properties": {
+        "Text": "Background",
+        "X": 16,
+        "Y": 66,
+        "Width": 88,
+        "Height": 22
+      }
+    },
+    {
+      "type": "Panel",
+      "name": "ColBackGroup",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "HAlign": "Fill",
+        "Height": 34,
+        "Style": "linked",
+        "Width": 298,
+        "X": 112,
+        "Y": 60
+      },
+      "children": [
+        {
+          "type": "ColorButton",
+          "name": "ColBack",
+          "properties": {
+            "HExpand": true,
+            "Height": 34,
+            "Width": 264
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnColBackNone",
+          "properties": {
+            "Height": 34,
+            "Icon": "edit-clear-symbolic",
+            "Tooltip": "Leave it to the theme",
+            "Width": 34
+          }
+        }
+      ]
+    },
+    {
+      "type": "Label",
+      "name": "LblColFore",
+      "properties": {
+        "Text": "Foreground",
+        "X": 16,
+        "Y": 106,
+        "Width": 88,
+        "Height": 22
+      }
+    },
+    {
+      "type": "Panel",
+      "name": "ColForeGroup",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "HAlign": "Fill",
+        "Height": 34,
+        "Style": "linked",
+        "Width": 298,
+        "X": 112,
+        "Y": 100
+      },
+      "children": [
+        {
+          "type": "ColorButton",
+          "name": "ColFore",
+          "properties": {
+            "HExpand": true,
+            "Height": 34,
+            "Width": 264
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnColForeNone",
+          "properties": {
+            "Height": 34,
+            "Icon": "edit-clear-symbolic",
+            "Tooltip": "Leave it to the theme",
+            "Width": 34
+          }
+        }
+      ]
+    },
+    {
+      "type": "Label",
+      "name": "LblTxtFont",
+      "properties": {
+        "Text": "Font",
+        "X": 16,
+        "Y": 146,
+        "Width": 88,
+        "Height": 22
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtFont",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 34,
+        "Width": 300,
+        "X": 112,
+        "Y": 140,
+        "Placeholder": "Bold — or Cantarell Bold 12"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblSpnScale",
+      "properties": {
+        "Text": "Font scale",
+        "X": 16,
+        "Y": 186,
+        "Width": 88,
+        "Height": 22
+      }
+    },
+    {
+      "type": "SpinBox",
+      "name": "SpnScale",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 34,
+        "Width": 300,
+        "X": 112,
+        "Y": 180,
+        "Min": 0.5,
+        "Max": 4,
+        "Step": 0.05,
+        "Decimals": 2,
+        "Value": 1
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblSpnOpacity",
+      "properties": {
+        "Text": "Opacity",
+        "X": 16,
+        "Y": 226,
+        "Width": 88,
+        "Height": 22
+      }
+    },
+    {
+      "type": "SpinBox",
+      "name": "SpnOpacity",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 34,
+        "Width": 300,
+        "X": 112,
+        "Y": 220,
+        "Min": 0,
+        "Max": 1,
+        "Step": 0.05,
+        "Decimals": 2,
+        "Value": 1
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblTxtBorder",
+      "properties": {
+        "Text": "Border",
+        "X": 16,
+        "Y": 266,
+        "Width": 88,
+        "Height": 22
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtBorder",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 34,
+        "Width": 300,
+        "X": 112,
+        "Y": 260,
+        "Placeholder": "1 solid #888888"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblTxtRadius",
+      "properties": {
+        "Text": "Radius",
+        "X": 16,
+        "Y": 306,
+        "Width": 88,
+        "Height": 22
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtRadius",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 34,
+        "Width": 300,
+        "X": 112,
+        "Y": 300,
+        "Placeholder": "6, or 8 8 0 0"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblTxtPadding",
+      "properties": {
+        "Text": "Padding",
+        "X": 16,
+        "Y": 346,
+        "Width": 88,
+        "Height": 22
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtPadding",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 34,
+        "Width": 300,
+        "X": 112,
+        "Y": 340,
+        "Placeholder": "4, or 4 8"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblTxtShadow",
+      "properties": {
+        "Text": "Shadow",
+        "X": 16,
+        "Y": 386,
+        "Width": 88,
+        "Height": 22
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtShadow",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 34,
+        "Width": 300,
+        "X": 112,
+        "Y": 380,
+        "Placeholder": "0 1 4 0 rgba(0,0,0,0.3)"
+      }
+    },
+    {
+      "type": "Panel",
+      "name": "Preview",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 72,
+        "Style": "frame",
+        "VAlign": "End",
+        "Width": 398,
+        "X": 16,
+        "Y": 428
+      },
+      "children": [
+        {
+          "type": "Label",
+          "name": "Sample",
+          "properties": {
+            "Text": "Sample",
+            "Alignment": "Center",
+            "Height": 40,
+            "Width": 200,
+            "X": 99,
+            "Y": 16
+          }
+        }
+      ]
+    },
+    {
+      "type": "Label",
+      "name": "LblSays",
+      "properties": {
+        "Ellipsize": true,
+        "HAlign": "Fill",
+        "Height": 22,
+        "Style": "dim-label",
+        "VAlign": "End",
+        "Width": 200,
+        "X": 16,
+        "Y": 524
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnCancel",
+      "properties": {
+        "Cancel": true,
+        "HAlign": "End",
+        "Height": 32,
+        "Text": "Cancel",
+        "VAlign": "End",
+        "Width": 90,
+        "X": 226,
+        "Y": 518
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnSave",
+      "properties": {
+        "Default": true,
+        "HAlign": "End",
+        "Height": 32,
+        "Style": "suggested-action",
+        "Text": "Save",
+        "VAlign": "End",
+        "Width": 90,
+        "X": 324,
+        "Y": 518
+      }
+    }
+  ]
+}

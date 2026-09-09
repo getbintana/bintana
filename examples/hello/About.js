@@ -1,0 +1,3 @@
+class About extends Component {
+
+}

@@ -1,0 +1,5 @@
+build/
+build-asan/
+.cache/
+compile_commands.json
+tests/widgets/RoundTrip.form

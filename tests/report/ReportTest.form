@@ -1,0 +1,17 @@
+{
+  "format": "bintana-form/1",
+  "class": "ReportTest",
+  "properties": {
+    "Text": "report",
+    "Width": 600,
+    "Height": 500,
+    "Arrangement": "Vertical"
+  },
+  "children": [
+    {
+      "type": "Report",
+      "name": "Rep",
+      "properties": { "Expand": true }
+    }
+  ]
+}

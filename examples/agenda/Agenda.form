@@ -1,0 +1,125 @@
+{
+  "format": "bintana-form/1",
+  "class": "Agenda",
+  "properties": {
+    "Text": "Agenda",
+    "Icon": "x-office-calendar-symbolic",
+    "Width": 660,
+    "Height": 500
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "Strip",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Height": 34,
+        "Style": "linked",
+        "Width": 290,
+        "X": 12,
+        "Y": 12
+      },
+      "children": [
+        {
+          "type": "Button",
+          "name": "BtnPrev",
+          "properties": {
+            "Height": 34,
+            "Icon": "go-previous-symbolic",
+            "Shortcut": ["<Alt>Left"],
+            "Tooltip": "The day before",
+            "Width": 40
+          }
+        },
+        {
+          "type": "DatePicker",
+          "name": "Picker",
+          "properties": {
+            "Height": 34,
+            "Tooltip": "Any day at all",
+            "Width": 210
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnNext",
+          "properties": {
+            "Height": 34,
+            "Icon": "go-next-symbolic",
+            "Shortcut": ["<Alt>Right"],
+            "Tooltip": "The day after",
+            "Width": 40
+          }
+        }
+      ]
+    },
+    {
+      "type": "Button",
+      "name": "BtnToday",
+      "properties": {
+        "HAlign": "End",
+        "Height": 34,
+        "Shortcut": ["<Control>t"],
+        "Text": "Today",
+        "Width": 100,
+        "X": 548,
+        "Y": 12
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblDay",
+      "properties": {
+        "Ellipsize": true,
+        "HAlign": "Fill",
+        "Height": 30,
+        "Style": "title-2",
+        "Width": 636,
+        "X": 12,
+        "Y": 62
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblWhen",
+      "properties": {
+        "Ellipsize": true,
+        "HAlign": "Fill",
+        "Height": 20,
+        "Style": "dim-label",
+        "Width": 636,
+        "X": 12,
+        "Y": 96
+      }
+    },
+    {
+      "type": "RowList",
+      "name": "List",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 288,
+        "MinHeight": 120,
+        "MinWidth": 340,
+        "Style": "frame",
+        "VAlign": "Fill",
+        "Width": 636,
+        "X": 12,
+        "Y": 126
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblCount",
+      "properties": {
+        "Ellipsize": true,
+        "HAlign": "Fill",
+        "Height": 34,
+        "Style": "dim-label",
+        "VAlign": "End",
+        "Width": 636,
+        "X": 12,
+        "Y": 454
+      }
+    }
+  ]
+}

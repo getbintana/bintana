@@ -1,0 +1,10 @@
+{
+  "name": "Quote",
+  "startup": "QuoteForm",
+  "sources": [
+    "Quote.js",
+    "QuoteForm.js"
+  ],
+  "version": "1.0",
+  "description": "A quote: Record declares the shape once, Decimal keeps the money exact, and Split hands out the remainder"
+}

@@ -1,0 +1,11 @@
+<!--
+  A button: a block you press.  Solid, so it cannot be mistaken for the controls
+  that are a bordered field.
+
+  The icons in this directory are drawn with fills and no strokes: GTK recolours
+  a -symbolic icon by forcing `fill`, so anything that is `stroke` would not
+  follow the text colour and would stay black on a dark theme.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <rect x="1" y="4" width="14" height="8" rx="2"/>
+</svg>

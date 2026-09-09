@@ -1,0 +1,8 @@
+{
+  "format": "bintana-form/1",
+  "class": "Chart",
+  "properties": { "Width": 320, "Height": 220, "Arrangement": "Vertical" },
+  "children": [
+    { "type": "DrawingArea", "name": "Canvas", "properties": { "Expand": true } }
+  ]
+}

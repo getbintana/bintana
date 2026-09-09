@@ -1,0 +1,12 @@
+<!--
+  Close: the cross.  Two bars through the centre rather than a path, so it is a
+  fill like everything else here and follows the text colour.
+
+  Rotated 45 degrees about the middle of the square, which puts the arms at
+  11/sqrt(2) ~ 7.8px each way: the same visual weight as the square next to it,
+  which spans 10 but only reaches its corners.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <rect x="2.5" y="7.3" width="11" height="1.4" transform="rotate(45 8 8)"/>
+  <rect x="2.5" y="7.3" width="11" height="1.4" transform="rotate(-45 8 8)"/>
+</svg>

@@ -1,0 +1,8 @@
+{
+  "name": "calculator",
+  "startup": "Calculator",
+  "sources": [
+    "Calculator.js"
+  ],
+  "version": "1.0"
+}

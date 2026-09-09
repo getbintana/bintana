@@ -1,0 +1,5 @@
+<!-- Layers: one drawn over the other, offset so both show. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path fill-rule="evenodd" d="M1 1.6h9.4v9.4H1z M2.2 2.8v7h7v-7z" opacity="0.45"/>
+  <path fill-rule="evenodd" d="M5.6 5h9.4v9.4H5.6z M6.8 6.2v7h7v-7z"/>
+</svg>

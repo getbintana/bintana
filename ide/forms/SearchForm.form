@@ -1,0 +1,147 @@
+{
+  "format": "bintana-form/1",
+  "class": "SearchForm",
+  "properties": {
+    "Arrangement": "Vertical",
+    "Height": 520,
+    "Icon": "system-search",
+    "Text": "Find in project",
+    "Width": 720
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "Head",
+      "properties": {
+        "Arrangement": "Vertical",
+        "Margin": 8,
+        "Spacing": 6
+      },
+      "children": [
+        {
+          "type": "Panel",
+          "name": "TermRow",
+          "properties": {
+            "Arrangement": "Horizontal",
+            "HAlign": "Fill",
+            "Spacing": 8
+          },
+          "children": [
+            {
+              "type": "TextBox",
+              "name": "TxtTerm",
+              "properties": {
+                "ActivatesDefault": true,
+                "HAlign": "Fill",
+                "HExpand": true,
+                "Icon": "edit-find",
+                "Tooltip": "Text to find"
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnFind",
+              "properties": {
+                "Default": true,
+                "Height": 32,
+                "Style": "suggested-action",
+                "Text": "Find",
+                "Width": 110
+              }
+            }
+          ]
+        },
+        {
+          "type": "Panel",
+          "name": "OptionRow",
+          "properties": {
+            "Arrangement": "Horizontal",
+            "HAlign": "Fill",
+            "Spacing": 8
+          },
+          "children": [
+            {
+              "type": "CheckButton",
+              "name": "ChkCase",
+              "properties": {
+                "Text": "Match case"
+              }
+            },
+            {
+              "type": "CheckButton",
+              "name": "ChkWord",
+              "properties": {
+                "Text": "Whole word only"
+              }
+            },
+            {
+              "type": "CheckButton",
+              "name": "ChkRegex",
+              "properties": {
+                "Text": "Regular expression"
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblFiles",
+              "properties": {
+                "HAlign": "End",
+                "HExpand": true,
+                "Text": "Files:"
+              }
+            },
+            {
+              "type": "ComboBox",
+              "name": "CboFiles",
+              "properties": {
+                "Tooltip": "Which files to look in",
+                "Width": 170
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Label",
+      "name": "LblCount",
+      "properties": {
+        "HAlign": "Fill",
+        "Margin": 8,
+        "Style": "dim-label",
+        "Text": ""
+      }
+    },
+    {
+      "type": "TreeView",
+      "name": "Results",
+      "properties": {
+        "Expand": true,
+        "HAlign": "Fill",
+        "VAlign": "Fill"
+      }
+    },
+    {
+      "type": "Panel",
+      "name": "Buttons",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "HAlign": "End",
+        "Margin": 8,
+        "Spacing": 8
+      },
+      "children": [
+        {
+          "type": "Button",
+          "name": "BtnClose",
+          "properties": {
+            "Cancel": true,
+            "Height": 32,
+            "Text": "Close",
+            "Width": 110
+          }
+        }
+      ]
+    }
+  ]
+}

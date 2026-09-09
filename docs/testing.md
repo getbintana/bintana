@@ -1,0 +1,575 @@
+# Testing
+
+```sh
+HEADLESS=1 ./tests/run.sh               # all four projects, 4513 assertions
+HEADLESS=1 ./tests/run.sh widgets       # one project
+HEADLESS=1 ./tests/run.sh widgets record  # one test of it
+HEADLESS=1 ./tests/run.sh ide designer  # one project, stopping after a phase of it
+HEADLESS=1 ./tests/run.sh ide list      # what it can be asked for
+BINTANA=/other/bintana HEADLESS=1 ./tests/run.sh
+TIMEOUT=300 HEADLESS=1 ./tests/run.sh   # a slower machine than the one this was written on
+./tests/run.sh                          # ...on your own screen; see below
+```
+
+**`HEADLESS=1` is written first here because `run.sh` does not default to it.** It
+falls back to `xvfb-run` only when there is **no** `DISPLAY`, which is the CI case
+and never the desktop case — so the bare command on a machine somebody is using
+opens the suite over their work and takes the keyboard for a minute. `tests/asan.sh`
+exports `HEADLESS=${HEADLESS:-1}` for exactly this reason and `run.sh` does not,
+which is the asymmetry to remember. `HEADLESS=` (empty) is the way back to a real
+screen, for the questions that need one.
+
+The second argument goes through to the project as its own second argument — the
+first is always the runner's pid, which the projects use to name their scratch
+directories. What a project makes of it is its business: `tests/ide` reads it as a
+phase to stop after and `tests/widgets` as the tests to run, which is why the two
+answer `list` differently.
+
+The tests are **Bintana applications, not a harness**. Each one prints
+`N passed, M failed` and quits with a non-zero status on failure; the runner runs
+them under a per-project timeout and reports. A test project is a directory under
+`tests/` whose `project.json` does not declare `main` — there is no list to add a
+new one to.
+
+**And the runner is one too.** `tests/runner` is a console project -- `"main"` in
+its manifest, so it opens no window and needs no display, which is what lets it be
+the thing that decides whether the suite needs a virtual one. `tests/run.sh` is
+the ten lines of shell that cannot be: finding the binary and saying so when there
+is none is the one job that has to work when the runtime does not, and a runner
+written in Bintana cannot be what tells you that Bintana will not build. Past
+that it hands over, and the binary it chose is the binary the runner reports as
+its own -- there is no path passed down and nothing that can disagree about which
+build ran.
+
+The hang guard is `Timer.After` and `Kill`, which is where the shell's `timeout`
+went. It sends SIGTERM and then SIGKILL five seconds later, to the child's whole
+**process group**: killing `xvfb-run` alone left its X server orphaned to init
+once per timeout, and the survivor held the output pipe open so the last of the
+project's output was never read. See [`runtime-api.md`](runtime-api.md#exec). That timeout is a guard against a
+hang -- an uncaught throw in `Form_Open` aborts before `Application.Quit` and the
+project would sit there forever -- so it has to stay well clear of how long a
+project legitimately takes: `tests/ide` drives the whole IDE and takes about a
+minute, twice that under a sanitizer. `TIMEOUT=<seconds>` overrides it, and
+`tests/asan.sh` raises it on its own. A guard set just above the real time makes a
+slow machine look like a broken one. There is no framework to learn: `check`,
+`eq`, `neq` and `throws` are ten lines at the top of each project.
+
+Everything needs a display, and that is deliberate: a test that does not go
+through GTK proves nothing about a GTK binding. It does not need *your* display,
+though — with no `DISPLAY` or `WAYLAND_DISPLAY` (`Environment.HasDisplay`, which
+is a question about the environment and not about the runner, since the runner
+never has one), it falls back to
+`xvfb-run` (with the cairo renderer, since a virtual display is the least likely
+place to have a GL context), which is what makes the suite runnable over ssh and
+in CI: `.github/workflows/ci.yml` installs the dependencies plus `xvfb` and runs
+`./tests/run.sh` unchanged.
+
+## The four projects
+
+| Project | What it covers |
+|---|---|
+| `tests/smoke` | The `.form` loader, event dispatch, the basic controls, nesting |
+| `tests/widgets` | Containers, `Arrangement`, `HAlign`/`VAlign`, boxes and splits, `Notebook`, `RowList`, `TreeView`, both editors and the source one's search, radio grouping, the value controls (`Slider`, `ProgressBar`, `DatePicker`, `Calendar` and its marks, `ToggleButton`, `Switch`), multiple selection, menu items that hold a state, drag and drop, icons, `PropertyOptions`, removing a child from every container and refilling it (`Removal`), what every numeric setter refuses (`NumericSetters`), the serialiser round trip, a command several places point at (`Action`: the shared `Enabled`, and the four things a bound control refuses), `Record`/`Field` and records inside records (`Nested`: a list of them, a shape that contains itself, and a cycle refused rather than hung on), a record over a sqlite table (`Database`: the driver, `Table`, and the four ways a shape can fail to fit a table — **120 assertions with sqlite and one without**, since it is an optional build dependency and the claim there is that it says which package is missing), `TextProperties`/`Locale`/`Locale.Read`/`Fill` and design values, `Locale.Compare` and `Locale.Matches`, `Day`, `Stopwatch`, `Exec` and its `Stop`, a `File.Watch` that stops itself, a form shown narrower than it was drawn, the `Grid`, the CSS node of every control, a `DrawingArea` rendered without a screen (`Save` into a PNG, and `Dump` asserted call by call), `File`/`Directory`/`Exec` |
+| `tests/report` | `lib/report`: pagination, the group ladder, the totals, the masthead, the bands that grow, the PDF, and the five regressions the library shipped once |
+| `tests/ide` | The IDE itself, driven the way a user drives it |
+
+**A shipped library is held to its page the way the runtime is.** `tests/api.sh`
+proves `docs/llm/report.md` documents everything `Report` publishes; it cannot
+prove any of it is true, and for a library that draws, *true* is what the reader
+needs. `tests/report` is the other half, and its shape is the reusable part:
+`Save()` runs the same `Canvas_Draw` synchronously against an image surface, so
+`Canvas.Dump()` on the next line is **that page's** calls — which is how a banded
+document is asserted page by page with no screen and no waiting for a frame,
+which would only ever show the current page. Off that dump it reads the words
+that landed, the font each one was drawn in, and the transform the page was
+placed with.
+
+Two of its assertions are worth knowing about because they are not obvious. The
+font in force for a run is the last `Font` line before its `Text` line, which is
+how "one band's `Bold 18` leaked into every row under it" becomes something a
+test can say. And **a frame that ran to the end is proved by the dump**, not by
+`Save()` returning: the clip it opens and the `Pop` that closes it are in the
+dump, and a frame that died halfway has neither. That assertion was written when
+a throwing `Draw` could not be seen from outside at all; `Save` and `SavePdf`
+fail now (`bta_emit_ok`), and the dump is still what tells a frame that finished
+from one that merely did not throw.
+
+`tests/ide` loads the **real** `ide/**/*.js` — its `project.json` points at them — and
+its `.form` files and `icons/` are symlinks to the IDE's own, so the two cannot
+drift. A change to the IDE that breaks the IDE breaks this test.
+
+## Running part of it
+
+Both large projects can be asked for a part of themselves, and **they mean
+different things by it**, because they are different shapes of test.
+
+`tests/ide` is twenty-five **phases**, each a generator with a scope of its own,
+listed in `PHASES` at the bottom of `Driver.js`. `./tests/run.sh ide <name>` runs
+every phase up to and including the last one whose name contains `<name>`:
+
+```
+welcome files designer palette clipboard completion handlers images watch tooldirs
+namespaces selfns views forms nested projects menus folders strings settings
+columns export errors search running
+```
+
+`./tests/run.sh ide list` prints that list, which is the copy that cannot go
+stale; the one above is here to be read.
+
+The saving is the point of it: `welcome files` is 101 assertions in **0.3 s**
+against 1736 in about 45, and `designer` is 351 in 4 s. Iterating on an early phase
+stops being a minute a time.
+
+**It runs a prefix, not a selection**, and that is not a limitation to be fixed
+later — it follows from what the test *is*. The phases are a narrative: each one
+works on the project the ones before it built, renamed and edited, so a run can
+stop early but cannot start late. Making them independent would mean each building
+its own fixture, which is a different and much larger test.
+
+A partial run says so — `ide: 351 passed, 0 failed  [only welcome, files,
+designer]` — because a green line that reads like the whole suite when eight of
+a phase never ran is the worst thing this file could print. The same reason
+`run.sh` exits 2 on a project name that matches nothing, instead of passing
+without having tested anything.
+
+One consequence worth knowing: only the `running` phase used to end the run (it
+reports from the child's exit callback), so a run that stopped before it reported
+nothing and hung until the timeout — which reads exactly like a frozen test.
+`drive` now reports when the generator finishes, and whoever ends the run on its
+own says so with `reportsItself`.
+
+### tests/widgets selects
+
+`tests/widgets` is 125 tests listed in `TESTS`, and a filter there **selects** rather
+than running a prefix — `HEADLESS=1 ./tests/run.sh widgets record` is 66 assertions
+in a fifth of a second against 2386 in about three. It can select because these tests are
+independent: each builds the controls it needs and deletes them again. The two that
+are not say so in the file:
+
+- `Serializer` runs first and stays first: it has to see the form exactly as the
+  `.form` left it, and everything after dirties it.
+- `Exec` is the asynchronous tail — it reports and quits — and what it checks
+  includes what `Terminal` and `TimerShorthand` left behind, since a terminal's
+  text is only readable a beat after being fed and a timer has to have fired. So
+  `NEEDS` pulls those in both directions: asking for the tail brings them, and
+  asking for either of them brings the tail that finishes them. Without the second
+  direction, `run.sh widgets terminal` answered with half of the terminal's
+  assertions and looked complete.
+
+Two things filtering exposed, both of which had been unreachable:
+
+- `checkTimers` reads what **`TimerShorthand`** sets, not `testTimer` — the filter
+  `timer` matched both by substring and hid it. Asking for `terminal` did not, and
+  the run died in an async callback where `Form_Open`'s try/catch cannot see it.
+- `finish()` swept the scratch directory unconditionally, and listing one that was
+  never created throws — from inside the catch that calls `finish()`, so the run
+  reported nothing and waited for the timeout. Cleanup that fails must not sink the
+  report.
+
+Both are the same lesson: **a path the suite never takes is a path nobody has
+tested**, and running part of a test suite takes paths the whole one does not.
+
+## What a test has to prove
+
+**Make the round trip.** Assigning `TextBox1.Text` from JS has to reach GTK, come
+back as a real `changed` signal, and land on `TextBox1_Change`. Asserting that a JS
+property remembers what was assigned to it proves nothing about the binding:
+
+```js
+this.TextBox1.Text = "hi";
+check("assigning Text raises Change", this.changes > before);
+```
+
+**Drive the UI, not the model.** `tests/ide` selects in the tree by setting
+`FileTree.Key`, presses buttons with `Btn.Click()`, chooses menu items with
+`Mnu.Click()`, and clicks the canvas through `Glass_MouseDown(x, y)` — the same
+handlers the runtime would dispatch. The palette is exercised by clicking its real
+buttons:
+
+```js
+palette(ide, "CheckButton").Click();
+```
+
+**Compile what was rewritten.** After the IDE edits a `.js`, `new Function(source)`
+is the only honest way to claim it is still valid JavaScript.
+
+**Assert against the layout, not against arithmetic.** Where a control ends up
+inside a `Frame` is the theme's decision, so the test asserts that the real position
+differs from the naive sum — if they matched, the test would be proving nothing.
+
+## Two things that will bite
+
+**Wrap `Form_Open` in try/catch.** An uncaught throw aborts `Form_Open` before
+`Application.Quit` is ever reached, and the run hangs until the timeout instead of
+failing with a message.
+
+**Anything that depends on layout needs a frame first.** `PickAt`, `OriginIn` and an
+unset `Width`/`Height` all read GTK's allocation, and a widget just created — or one
+whose container was just made visible — has none until the main loop runs again.
+`Form_Open` itself runs *before* the window is presented.
+
+`tests/ide/Driver.js` is a generator for exactly this: each `yield` hands control
+back to GTK for a frame.
+
+```js
+ide.openNamed("Form1.form");
+yield;                       // hand GTK a frame
+```
+
+**One frame is not a promise.** GTK does not have to have allocated anything by
+the next turn of the main loop, and under load it often has not — which is what
+made a handful of these tests fail once every few runs on a busy machine. Never
+count frames; wait for the thing itself:
+
+```js
+yield* until(() => ide.designer.rectOf(button).w > 0);   // a specific fact
+yield* settled(ide);                                      // the layout stopped moving
+```
+
+`until(cond)` polls a frame at a time and gives up after thirty, so a genuinely
+broken expectation still fails with real values rather than hanging.
+
+**`tests/widgets` has an `until` of its own, and a waiting test has to be
+counted.** It is callback-shaped rather than a generator — the assertions that
+depend on the wait live inside it — so a condition that never comes true does not
+fail loudly: it pushes its failure two seconds later, by which time the run has
+reported, and the assertions inside it simply never ran. The total comes out a
+few lower than the day before with nothing red to explain it. That is how a whole
+block of `testWindowState` sat unrun for as long as it did, and why the sanitizer
+— slow enough for the timeout to land first — is what finally showed it. `until`
+counts what is outstanding now and `finish()` refuses to report while anything
+is, so the silence is a red line again.
+
+`settled(ide)` waits until two consecutive frames report identical geometry. Use
+it around anything that reads **drawn** geometry, which is more than it sounds:
+`align` works off the inset (drawn size against requested size) and `distribute`
+off drawn positions, so driving either before the layout has settled measures the
+previous frame and moves controls to where they used to be — *before* the call as
+much as after it.
+
+That distinction found a real mistake. `align left moves the others to the
+anchor` asserted that two controls ended up with the same `X`; it only passed
+because the insets had not been measured yet and both came back zero. Aligned
+means the same *drawn* edge, and a Frame and a Label need requests one pixel
+apart to get there.
+
+The driver also waits for the first allocation before starting at all, by polling
+`FileTree.Width` (a widget with no size of its own reports zero until GTK has
+allocated the window).
+
+## The public surface, which the suite does not cover
+
+```sh
+tests/api.sh
+```
+
+`docs/llm/controls.md` is meant to be the **whole** public surface: an application
+author should never have to open `runtime/src` to learn whether a property exists.
+`tests/api` is what makes that a claim rather than a hope — a console project that
+parses the `JSCFunctionListEntry` tables and every `bta_emit` call, and fails when
+a member has no row in the reference, or when an event is documented with a
+different number of arguments than the runtime passes.
+
+It parses rather than links, so it answers when the runtime does not build, which
+is the same bargain `tests/icons` and `tests/styles` make. 235 widget members and
+30 events at the time of writing, plus 85 on the globals and 23 published by
+`lib/`.
+
+**The globals are held to the same rule**, against `docs/llm/library.md`, and
+they were not until it was written: a table that was not a widget's was exempted
+from the `controls.md` check and *nothing asked anything else*, so 46 members of
+`Locale`, `Decimal`, `Connection`, `Log` and `Day` were documented by hand or not
+at all. It reads both shapes the runtime builds a global with — a
+`JSCFunctionListEntry` table and a run of `JS_SetPropertyStr` — and it found
+three real gaps the day it was written: `Application.LibraryPath`, which the IDE
+calls, and `Decimal`'s `toString` and `toJSON`. Which globals those are is an
+explicit list in `tests/api/Check.js`, because the same C shape builds half the
+runtime's *return values* and a scan that guessed would demand a heading for
+every one of them.
+
+**The libraries in `lib/` are held to the same rule**, against
+`docs/llm/<library>.md`. They ship with the runtime, so a project reaching one
+with `uses` is using a public API and not reading somebody's example: the check
+reads what a component publishes out of the Bintana -- accessors and methods with
+a capital initial, `static Events`, and the arity of each `Emit` -- and reports a
+library with no reference page at all before anything else. `lib/charts` is the
+one there is, and [`llm/charts.md`](llm/charts.md) is its page.
+
+**The event arity is the half worth having.** A missing row is obvious the first
+time somebody looks for it; a signature that is confidently wrong is not.
+`MouseWheel` was written `(dx, dy, ctrl, shift)` in three documents and passes
+two, for as long as nobody counted.
+
+## Two reproductions kept by hand
+
+`tests/manual/` holds two standalone C programs. Neither runs in the suite and
+both earned their place by settling a question the suite could not:
+
+| | |
+|---|---|
+| `cairo-cost.c` | what a frame of drawing costs, per figure and per point, straight against cairo. It was written before there was any binding to measure through, and it is what says the cost is in **covered pixels** -- 5,000 points as a readable curve 2.15 ms, the same 5,000 as a zigzag 109 ms. The numbers are in [widgets.md](widgets.md#drawingarea-and-painter) |
+| `completion-popover.c` | sixty lines of plain GTK, with `gtk_source_init()` on one line that can be commented out, which is the shortest demonstration that the completion popover's collapse is a **missing initialisation** and not a bug in whatever provider is loaded. Being plain GTK with no `GApplication` of its own, it also shows that *where* the call goes matters |
+
+Both are compiled by the comment at the top of each file. They are kept rather
+than deleted because the question each answers comes back: the first every time
+somebody proposes drawing more points, the second every time a popover misbehaves.
+
+## Icons, which the suite cannot judge
+
+`tests/icons.sh` checks every `Icon` declared in a `.form` against the icons this
+desktop really has, **without a display**: it reads the theme and what it
+inherits off the disk, adds the symbolic set GTK4 embeds in its own library, and
+adds whatever the project ships in `icons/`.
+
+**And whether the file it found will actually draw**, which turned out to be a
+second question and not the same one. GTK 4.20 replaced the librsvg path for
+symbolic icons with a parser of its own, and that parser does not apply
+`transform` — so a theme that positions its artwork with one draws every such
+icon outside its own box. elementary-xfce does it in 120 of its 258 symbolic
+icons: the file is there, the name resolves, `Application.HasIcon` says yes, and
+the button is blank. It was found by an arrow that would not appear in
+`examples/agenda`, and the tool now reports those separately from the ones that
+are simply absent.
+
+Like the runner, the tool is a **Bintana console project** (`tests/icons`) and
+the `.sh` is the bootstrap. Reading the themes off the disk is not an
+implementation detail here but the whole design: `Application.HasIcon` would
+answer about whatever display the process has, and a console project has none, so
+the Adwaita-under-Xvfb mistake is not available to make.
+
+It exists because the suite structurally cannot answer this. Under Xvfb GTK falls
+back to Adwaita, so a name Adwaita ships and the user's theme does not passes
+every assertion and draws nothing on the screen -- `view-more-symbolic` did it
+once and `view-table-symbolic` did it again, the second time behind a
+hand-written list of forms that had drifted from the directory.
+
+```sh
+tests/icons.sh            # every .form in the tree
+tests/icons.sh ide        # only that directory
+```
+
+It exits non-zero when something is missing **or blank**, so it can be a step in a
+checklist;
+it is deliberately *not* part of `tests/run.sh`, because what it answers is about
+the machine it runs on and CI's machine is not the one anybody looks at.
+
+## Style classes, which it cannot judge either
+
+`tests/styles.sh` is the same bargain for `Style`: it reads the theme's own
+selectors and prints which classes exist and what each is written for — whether
+it is qualified for a node (`button.suggested-action`), and whether its rules are
+about the children rather than the thing carrying it (`.boxed-list > row`). It is
+a console project too (`tests/styles`), and it reads the theme straight out of
+the library: `gresource extract` writes to its output and the lines *are* the
+answer, so there is no temporary file and no trap to remove it.
+
+```sh
+tests/styles.sh                 # the theme compiled into GTK
+tests/styles.sh --all           # every class in it, by how much it is used
+tests/styles.sh --json          # the same, as the table ide/modules/Styles.js holds
+tests/styles.sh path/to/gtk.css # a theme of your own
+```
+
+`--json` prints JSON and nothing else — the header line the shell version printed
+above it made the one mode meant for a machine the one mode a machine could not
+read. It is how `ide/modules/Styles.js` is regenerated: the IDE's class chooser
+orders by it, so that a `Button` is offered the button classes first and a
+`ListBox` is not. That file says so in its header, and a stale row in it costs
+ordering rather than a class nobody can write — the field it sits behind is free
+text.
+
+Nothing asserts a class name, and nothing could: which classes exist is the
+theme's answer, and the desktop the program runs on is not this one. A class the
+theme does not have is accepted, saved into the `.form`, and does nothing —
+exactly the shape of failure `icons.sh` exists for. What the suite *can* check is
+the other half, which is ours: which CSS node each control is, since a class that
+lands on the wrong node cannot match whatever the theme says. `Widget.CssNode()`
+asks GTK, and `tests/widgets` writes the whole table down — every placeable type,
+or the run fails. It is there because three of those nodes moved in one afternoon
+(`Panel` from `box` to `fixed`, `ColorButton` from `box` to `colorbutton`,
+`Form`'s column now built only when there is a menu bar) and every assertion
+stayed green: for the stylesheet of anyone using the runtime, each of those is a
+rule that stops matching.
+
+The vocabulary it prints, and the node table to read it against, are in
+[widgets.md](widgets.md#styling-the-vocabulary).
+
+## The install, which the suite cannot see either
+
+`tests/install.sh` answers a question none of the suite's projects can be asked:
+whether what `make install` produces works. Everything else here runs the IDE as
+`<repo>/ide`, where every file it could want is beside it because it was never
+moved — and an install moves it.
+
+```sh
+./tests/install.sh              # needs cmake, Xvfb and xdotool
+```
+
+It installs the build into a staging prefix under `/tmp` (`cmake --install
+--prefix`, which is what a packager does and the case most likely to be broken
+by a path written down at configure time), checks that both project trees came
+out whole, and then **starts the installed IDE through the installed launcher**
+and asks the display what appeared.
+
+The window is the assertion, and it is one string:
+`IDE de Bintana — hello` under `LANGUAGE=es`. Three separate things had to be
+found for that title — the installed sources, the installed `po/es.po`, and the
+project the launcher was handed — and no lighter check covers them. Its class is
+`bintana-ide`, which is what the installed `bintana-ide.desktop` claims to match; that
+is why the launcher starts the runtime under a name of its own rather than
+letting every Bintana application be `bintana` to the desktop.
+
+**It brings up an `Xvfb` of its own instead of using `xvfb-run`**, and that is
+forced rather than chosen: `xvfb-run` owns its display for the length of one
+command, and the whole check is a *second* command asking that display what the
+first one drew. Nothing here ever touches the caller's screen, so unlike the
+suite it is safe to run bare.
+
+The failure modes it exists for are all quiet ones: a form nobody added to a
+list, a catalogue that landed where the runtime does not look, a launcher
+carrying the prefix it was configured with rather than the one it ended up in.
+None of them is a build error, and none shows up until a menu entry opens a
+window with something missing from it.
+
+## Scratch state
+
+Tests that touch the filesystem work under `/tmp` and clean up after themselves —
+a project left behind makes the next run fail for something that is not the code.
+
+The directory carries the runner's pid: the runner passes its own
+`Environment.ProcessId` after the project path, it arrives as `Application.Arguments[0]`, and the projects build
+`/tmp/bta-test-ide-<pid>` out of it. Without that, two suites at once — a flake
+hunt beside an ordinary run, two CI jobs on one machine — edit each other's files,
+and the collisions fail assertions that read exactly like real bugs (*"a form can
+be created in a folder: expected true, got false"*). Invoked by hand with no
+argument the directory is simply untagged.
+
+`Application.ConfigDirectory` is per project name, so `tests/ide` writes its own
+`~/.config/bintana/ide-test/recent.json` and can never touch the real IDE's list.
+That test both uses and exercises the persistence: the second run of the suite reads
+back a list whose `/tmp` entries no longer exist, which is what proves they get
+filtered out.
+
+## Under the sanitizer
+
+```sh
+./tests/asan.sh
+```
+
+Builds with clang and AddressSanitizer, runs the test projects, and reports
+anything `tests/lsan.supp` did not suppress -- GTK, fontconfig and the GL stack
+leak plenty of their own, and the suppression file is what keeps those out of the
+way so that what is left is ours.
+
+Both memory bugs this codebase has had were use-after-free: a wrapper collected
+while GTK still showed the widget, and a handler that outlived the widget it
+carried. Neither is deterministic, and both showed up as a crash that could as
+easily not have happened. The sanitizer turns that into an answer.
+
+The reports go to files rather than the terminal because the child project the
+IDE test runs writes to a pty that the test then reads, and a leak summary in
+there looks exactly like the child misbehaving -- which is a false failure I
+walked into.
+
+## Asking instead of looking
+
+Most of what a screenshot gets asked is a number, and a number belongs in the
+suite. `Bounds()` reports what GTK allocated (as against `Width`, which is the
+request), and `Dump()` prints a subtree with those numbers:
+
+```js
+eq("the dialog keeps its declared width", dlg.Bounds().Width, 640);
+check("nothing was pushed out of the panel", box.Dump().includes("hidden") === false);
+```
+
+**An ad-hoc probe is a project, and `tests/try.sh <dir>` runs one** without
+putting it on anybody's screen. It is `xvfb-run` around the binary, and it exists
+because `HEADLESS=1` is read by the runner and *not* by `bintana`: `HEADLESS=1
+./build/bintana <dir>` looks like the safe thing right up until the window opens. Two
+files under a scratch directory and a `print` of what they measured is how most
+questions in this document were answered — what a property really does to an
+allocation, which of two defaults GTK ships. `HEADLESS= tests/try.sh` is the way
+back to a real screen for the questions that need one.
+
+When it really is about pixels, `tests/probe.sh` asks the capture rather than
+showing it: `pixel` for a colour, `region` for whether an area is uniform (which is
+what "blank" means), `diff` for whether anything changed at all. See
+[`AGENTS.md`](../AGENTS.md#verifying-by-hand).
+
+## What the tests cannot see
+
+Rendering, real key and pointer delivery, focus, window management, **whether a
+disclosure arrow is actually drawn** (a `TableView` in tree mode answers
+`Expanded(key)` about its *state*; that the arrow is on the row and openable is a
+picture, and it was a picture that caught the bind/unbind bug), and **a drop
+that starts outside the application**: nothing in the suite can drag a file out
+of a file manager, so `AcceptFiles` and `FileDrop` are asserted as far as their
+surface goes — the properties, the serialisation, the handler over a list of
+paths — and the gesture itself is one to try by hand once, by dragging a picture
+onto `examples/viewer`. Those are checked
+by hand with `xdotool` and ImageMagick's `import`, and doing so has repeatedly found
+what the suite could not: z-order occlusion, a desktop stealing a function key, a
+relative path that only breaks under a real `cwd`, an icon that resolves but renders
+blank, a drag that never starts because a `Button`'s gesture claimed the press, and a
+click on a `Terminal` match that never arrived because VTE had claimed the sequence
+— the suite covered the pattern, the parsing and the dispatch, and every one of
+those passed while the click did nothing.
+
+The way to check something that only a pointer can answer, without a screenshot
+doing the deciding: patch the IDE's own `Form_Open` from an extra `.js` in a
+throwaway project that loads the real `ide/**/*.js`, have it drive itself to the state
+in question and `print` what it measures, then click with `xdotool` and read the log.
+That is how the console's links were checked both ways — that clicking one goes to
+the line, and that dragging across one still selects text instead.
+
+Three things that waste time when doing it:
+
+- **The window manager places the window differently on every run.** Read the
+  geometry (`xdotool getwindowgeometry --shell`) and click relative to it.
+- **Capture the window, not the screen** (`import -window $WID`) — and make sure no
+  earlier instance survived, or the screenshot shows a state that no longer exists.
+  Menus and drag icons are separate surfaces, though, so those need the root window.
+- **When a screenshot and an in-app measurement disagree, believe the measurement.**
+  Print `OriginIn` and the widget's own numbers from inside the running application
+  instead of estimating pixels off a scaled crop.
+
+**The tab order is checked without pressing Tab.** `Form.FocusNext` /
+`FocusPrevious` go through the same `gtk_widget_child_focus` GTK itself calls, so
+what runs is the real surface `focus` vfunc and the real GTK walk, and `Focused`
+says where it landed — declared order, ties falling back to the drawn order, and
+an unfocusable control skipped. What is left for a person is the *key* arriving,
+and the reason to check it is that an editor and a `Terminal` are supposed to
+keep Tab for themselves: indentation and shell completion have to still work.
+
+**Enter and Escape are declarations the suite can check and keys it cannot press.**
+`Button.Default` / `Button.Cancel` are covered on every side that is measurable:
+the flags, what the serialiser writes, that two of them resolve to one, that
+deleting the button leaves the form with none — and `Form.DefaultButton` asks the
+*window* rather than the flag, so it is the assertion that says `form_show` really
+reached `gtk_window_set_default_widget`. What is left is the key arriving, which
+is one run of the IDE: `Ctrl+N` opens a prompt, Escape must dismiss it, Enter in
+the field must accept it. Worth doing after touching either, because a
+`Form_KeyPress` that consumes the key first, a desktop that grabs it, and a
+focused button that answers Enter itself are all invisible from inside.
+
+**A file chooser cannot be in the suite at all**, and it is the sharpest case of
+this: `Dialog.OpenFile`/`SaveFile`/`SelectFolder` are modal, nothing in JS can
+close one, so the chooser sits on top of the form the *next* test measures. One
+turned `testExec`'s pushed-surface assertions red while `testFileDialog` passed
+on its own — `Dialog.Color`'s two get away with it and a file dialog does not. So
+the accepted options are checked by hand and every **refusal** is in the suite,
+where a refusal shows nothing by construction: it throws before the chooser
+exists. Checking the other half is four numbers off one capture — the title
+reached GTK, `Name` prefilled the field, `Folder` set the breadcrumb, and the
+listing under a `*.js *.mjs` filter shows `MAYUS.JS`, which is the whole reason
+`*.ext` becomes a suffix instead of a glob.
+
+**Translation is a test the suite cannot be.** `LANGUAGE=es ./build/bintana ide
+examples/hello` runs the IDE off `ide/po/es.po`, and running it that way found four
+kinds of string that escape extraction and one layout that overflows -- none of
+which any assertion was looking for. `examples/i18n` is the reduced case: the same
+three buttons laid out four ways, and a report of which row ran past its room in
+which language. Numbers, so the answer is not an impression.
+
+Copy a project to `/tmp` before driving it interactively: a stray drag plus a save
+will edit `examples/hello` for real.

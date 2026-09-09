@@ -1,0 +1,8 @@
+<!-- A code editor: the gutter with its line numbers, and code indented beside it. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path fill-rule="evenodd" d="M1 2h14v12H1z M2.2 3.2v9.6h11.6V3.2z"/>
+  <path d="M2.2 3.2h3v9.6h-3z"/>
+  <path d="M6.2 4.8h6.2v1.2H6.2z"/>
+  <path d="M7.8 7.2h4.6v1.2H7.8z"/>
+  <path d="M6.2 9.6h4v1.2h-4z"/>
+</svg>

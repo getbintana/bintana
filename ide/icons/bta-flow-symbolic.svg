@@ -1,0 +1,6 @@
+<!-- A gallery: items of their own size, wrapping into as many as fit. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path d="M1 2h5v3.4H1z M7 2h8v3.4H7z"/>
+  <path d="M1 6.4h8v3.4H1z M10 6.4h5v3.4h-5z"/>
+  <path d="M1 10.8h6v3.4H1z"/>
+</svg>

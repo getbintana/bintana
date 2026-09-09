@@ -1,0 +1,9 @@
+{
+  "name": "Drawing",
+  "startup": "DrawingForm",
+  "sources": [
+    "DrawingForm.js"
+  ],
+  "version": "1.0",
+  "description": "The drawing surface: a sparkline, a gauge and a pie, and what a Painter costs"
+}

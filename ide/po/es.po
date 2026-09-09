@@ -1,0 +1,1121 @@
+# Spanish (Argentina) for the Bintana IDE.
+# Written by the Bintana IDE: Project > Update translations.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: ide\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: forms/AboutForm.form: AboutForm.Text forms/MainForm.form: menu MnuAbout
+msgid "About Bintana"
+msgstr "Acerca de Bintana"
+
+#: forms/AboutForm.form: LblName.Text forms/AskForm.form: AskForm.Text
+#: forms/ConfirmForm.form: ConfirmForm.Text forms/MainForm.form:
+#: LblWelcome.Text
+msgid "Bintana"
+msgstr "Bintana"
+
+#: forms/AboutForm.form: LblSummary.Text
+msgid ""
+"A RAD environment in the spirit of Visual Basic and Gambas: QuickJS embedded "
+"in a GTK4 runtime. The IDE is written in Bintana and runs on it with no "
+"privileges of its own."
+msgstr ""
+"Un entorno RAD al estilo de Visual Basic y Gambas: QuickJS embebido en un "
+"runtime GTK4. El IDE está escrito en Bintana y corre sobre él sin "
+"privilegios propios."
+
+#: forms/AboutForm.form: LblCopyright.Text
+msgid "Copyright © 2026 Matias De lellis — MIT License"
+msgstr "Copyright © 2026 Matias De lellis — Licencia MIT"
+
+#: forms/AboutForm.form: BtnClose.Text forms/ImageForm.form: forms/PoForm.form:
+#: forms/SearchForm.form: forms/PoForm.js:392
+msgid "Close"
+msgstr "Cerrar"
+
+#: forms/AskForm.form: BtnCancel.Text forms/ColumnForm.form: BtnColCancel.Text
+#: forms/ConfirmForm.form: BtnNo.Text forms/IconForm.form: forms/MenuForm.form:
+#: forms/NewProjectForm.form: forms/ProjectForm.form: BtnPrCancel.Text
+msgid "Cancel"
+msgstr "Cancelar"
+
+#: forms/AskForm.form: BtnOk.Text forms/ColumnForm.form: BtnColOk.Text
+#: forms/MenuForm.form: forms/ProjectForm.form: BtnPrOk.Text
+msgid "OK"
+msgstr "Aceptar"
+
+#: forms/ColumnForm.form: ColumnForm.Text
+msgid "Columns"
+msgstr "Columnas"
+
+#: forms/ColumnForm.form: LblCols.Text
+msgid "The columns, in order:"
+msgstr "Las columnas, en orden:"
+
+#: forms/ColumnForm.form: ColList.Columns.Text
+msgid "Heading"
+msgstr "Encabezado"
+
+#: forms/ColumnForm.form: ColList.Columns.Text
+msgid "Width"
+msgstr "Ancho"
+
+#: forms/ColumnForm.form: ColList.Columns.Text
+msgid "Alignment"
+msgstr "Alineación"
+
+#: forms/ColumnForm.form: BtnColAdd.Text
+msgid "Add"
+msgstr "Agregar"
+
+#: forms/ColumnForm.form: BtnColDel.Text forms/ConfirmForm.form: BtnYes.Text
+#: forms/MenuForm.form: BtnDelete.Text
+msgid "Delete"
+msgstr "Eliminar"
+
+#: forms/ColumnForm.form: BtnColUp.Text forms/MenuForm.form: BtnUp.Text
+#: forms/ProjectForm.form: BtnPrUp.Text
+msgid "Up"
+msgstr "Subir"
+
+#: forms/ColumnForm.form: BtnColDown.Text forms/MenuForm.form: BtnDown.Text
+#: forms/ProjectForm.form: BtnPrDown.Text
+msgid "Down"
+msgstr "Bajar"
+
+#: forms/ColumnForm.form: LblColText.Text
+msgid "Heading:"
+msgstr "Encabezado:"
+
+#: forms/ColumnForm.form: LblColWidth.Text
+msgid "Width:"
+msgstr "Ancho:"
+
+#: forms/ColumnForm.form: LblColAlign.Text
+msgid "Alignment:"
+msgstr "Alineación:"
+
+#: forms/ColumnForm.form: LblColHint.Text
+msgid ""
+"A width of 0 lets the column size itself. Every column can be dragged "
+"whatever it says here."
+msgstr ""
+"Un ancho de 0 deja que la columna se dimensione sola. Toda columna se puede "
+"arrastrar, diga lo que diga acá."
+
+#: forms/IconForm.form: IconForm.Text modules/PropertyGrid.js:637
+msgid "Choose an icon"
+msgstr "Elegir un icono"
+
+#: forms/IconForm.form: BtnNone.Text
+msgid "None"
+msgstr "Ninguno"
+
+#: forms/ImageForm.form: ImageForm.Text
+msgid "Image"
+msgstr "Imagen"
+
+#: forms/ImageForm.form: BtnFit.Text
+msgid "Fit"
+msgstr "Ajustar"
+
+#: forms/ImageForm.form: BtnOne.Text
+msgid "1:1"
+msgstr "1:1"
+
+#: forms/MainForm.form: MainForm.Text
+msgid "Bintana IDE"
+msgstr "IDE de Bintana"
+
+#: forms/MainForm.form: menu MnuFile
+msgid "_File"
+msgstr "_Archivo"
+
+#: forms/MainForm.form: menu MnuNewProject BtnWelcomeNew.Text
+msgid "New project..."
+msgstr "Proyecto nuevo..."
+
+#: forms/MainForm.form: menu MnuNewForm
+msgid "New form..."
+msgstr "Formulario nuevo..."
+
+#: forms/MainForm.form: menu MnuNewComponent
+msgid "New component..."
+msgstr "Componente nuevo..."
+
+#: forms/MainForm.form: menu MnuNewModule
+#, fuzzy
+msgid "New module..."
+msgstr "Componente nuevo..."
+
+#: forms/MainForm.form: menu MnuOpen BtnWelcomeOpen.Text
+msgid "Open project..."
+msgstr "Abrir proyecto..."
+
+#: forms/MainForm.form: menu MnuRecent
+msgid "Recent projects"
+msgstr "Proyectos recientes"
+
+#: forms/MainForm.form: menu MnuReload
+msgid "Refresh"
+msgstr "Actualizar"
+
+#: forms/MainForm.form: menu MnuCloseTab
+msgid "Close tab"
+msgstr "Cerrar la pestaña"
+
+#: forms/MainForm.form: menu MnuRename
+msgid "Rename..."
+msgstr "Renombrar..."
+
+#: forms/MainForm.form: menu MnuDelete
+msgid "Delete from project..."
+msgstr "Eliminar del proyecto..."
+
+#: forms/MainForm.form: menu MnuSave forms/PoForm.form: BtnSave.Text
+msgid "Save"
+msgstr "Guardar"
+
+#: forms/MainForm.form: menu MnuSaveAll
+msgid "Save all"
+msgstr "Guardar todo"
+
+#: forms/MainForm.form: menu MnuQuit forms/MainForm.js:588
+msgid "Quit"
+msgstr "Salir"
+
+#: forms/MainForm.form: menu MnuEditMenu
+msgid "_Edit"
+msgstr "_Editar"
+
+#: forms/MainForm.form: menu MnuUndo
+msgid "Undo"
+msgstr "Deshacer"
+
+#: forms/MainForm.form: menu MnuRedo
+msgid "Redo"
+msgstr "Rehacer"
+
+#: forms/MainForm.form: menu MnuCut
+msgid "Cut"
+msgstr "Cortar"
+
+#: forms/MainForm.form: menu MnuCopy
+msgid "Copy"
+msgstr "Copiar"
+
+#: forms/MainForm.form: menu MnuPaste
+msgid "Paste"
+msgstr "Pegar"
+
+#: forms/MainForm.form: menu MnuDuplicate
+msgid "Duplicate"
+msgstr "Duplicar"
+
+#: forms/MainForm.form: menu MnuFind
+msgid "Find..."
+msgstr "Buscar..."
+
+#: forms/MainForm.form: menu MnuReplace
+msgid "Find and replace..."
+msgstr "Buscar y reemplazar..."
+
+#: forms/MainForm.form: menu MnuFindAll
+msgid "Find in project..."
+msgstr "Buscar en el proyecto..."
+
+#: forms/MainForm.form: menu MnuFindNext
+msgid "Find next"
+msgstr "Buscar la siguiente"
+
+#: forms/MainForm.form: menu MnuFindPrev
+msgid "Find previous"
+msgstr "Buscar la anterior"
+
+#: forms/MainForm.form: menu MnuComplete
+msgid "Complete"
+msgstr "Completar"
+
+#: forms/MainForm.form: menu MnuProject
+msgid "_Project"
+msgstr "_Proyecto"
+
+#: forms/MainForm.form: menu MnuRun BtnRun.Text
+msgid "Run"
+msgstr "Ejecutar"
+
+#: forms/MainForm.form: menu MnuStop BtnStop.Text
+msgid "Stop"
+msgstr "Detener"
+
+#: forms/MainForm.form: menu MnuTranslations
+msgid "Update translations"
+msgstr "Actualizar las traducciones"
+
+#: forms/MainForm.form: menu MnuTranslationNew
+msgid "New translation..."
+msgstr "Traducción nueva..."
+
+#: forms/MainForm.form: menu MnuTranslationEditor
+msgid "External translation editor..."
+msgstr "Editor de traducciones externo..."
+
+#: forms/MainForm.form: menu MnuTidy
+msgid "Tidy files into folders..."
+msgstr ""
+
+#: forms/MainForm.form: menu MnuExport
+msgid "Export project..."
+msgstr "Exportar el proyecto..."
+
+#: forms/MainForm.form: menu MnuProjectSettings
+msgid "Project settings..."
+msgstr "Propiedades del proyecto..."
+
+#: forms/MainForm.form: menu MnuFormMenu
+msgid "F_orm"
+msgstr "F_ormulario"
+
+#: forms/MainForm.form: menu MnuMenus
+msgid "Edit menus..."
+msgstr "Editar los menús..."
+
+#: forms/MainForm.form: menu MnuAdd
+msgid "Add control"
+msgstr "Agregar un control"
+
+#: forms/MainForm.form: menu MnuDel BtnDelCtl.Tooltip
+msgid "Delete control"
+msgstr "Eliminar el control"
+
+#: forms/MainForm.form: menu MnuHandler
+msgid "Write handler"
+msgstr "Escribir un manejador"
+
+#: forms/MainForm.form: menu MnuRaise BtnRaise.Tooltip
+msgid "Bring to front"
+msgstr "Traer al frente"
+
+#: forms/MainForm.form: menu MnuLower BtnLower.Tooltip
+msgid "Send to back"
+msgstr "Enviar al fondo"
+
+#: forms/MainForm.form: menu MnuAlignLeft
+msgid "Align left"
+msgstr "Alinear a la izquierda"
+
+#: forms/MainForm.form: menu MnuAlignRight
+msgid "Align right"
+msgstr "Alinear a la derecha"
+
+#: forms/MainForm.form: menu MnuAlignTop
+msgid "Align top"
+msgstr "Alinear arriba"
+
+#: forms/MainForm.form: menu MnuAlignBottom
+msgid "Align bottom"
+msgstr "Alinear abajo"
+
+#: forms/MainForm.form: menu MnuSameWidth
+msgid "Same width"
+msgstr "Igualar el ancho"
+
+#: forms/MainForm.form: menu MnuSameHeight
+msgid "Same height"
+msgstr "Igualar la altura"
+
+#: forms/MainForm.form: menu MnuSpreadH
+msgid "Distribute horizontally"
+msgstr "Distribuir horizontalmente"
+
+#: forms/MainForm.form: menu MnuSpreadV
+msgid "Distribute vertically"
+msgstr "Distribuir verticalmente"
+
+#: forms/MainForm.form: menu MnuHelp
+msgid "_Help"
+msgstr "Ay_uda"
+
+#: forms/MainForm.form: Pages.Tabs
+msgid "Welcome"
+msgstr "Bienvenida"
+
+#: forms/MainForm.form: Pages.Tabs
+msgid "Workspace"
+msgstr "Espacio de trabajo"
+
+#: forms/MainForm.form: LblWelcomeHint.Text
+msgid "Open a project, or start a new one."
+msgstr "Abrí un proyecto, o empezá uno nuevo."
+
+#: forms/MainForm.form: LblWelcomeRecent.Text
+msgid "Recent"
+msgstr "Recientes"
+
+#: forms/MainForm.form: LblStatus.Text forms/MainForm.js:720
+msgid "No project"
+msgstr "Sin proyecto"
+
+#: forms/MainForm.form: CmbView.Tooltip
+msgid "What this tree shows"
+msgstr "Qué muestra este árbol"
+
+#: forms/MainForm.form: BtnTakeDisk.Text forms/MainForm.js:1193
+msgid "Reload"
+msgstr "Recargar"
+
+#: forms/MainForm.form: BtnReloadHide.Tooltip
+msgid "Keep what is open"
+msgstr "Conservar lo que está abierto"
+
+#: forms/MainForm.form: TabActions.Tooltip
+msgid "Tab actions"
+msgstr "Acciones de la pestaña"
+
+#: forms/MainForm.form: FindText.Tooltip forms/SearchForm.form: TxtTerm.Tooltip
+msgid "Text to find"
+msgstr "Texto a buscar"
+
+#: forms/MainForm.form: BtnFindPrev.Tooltip
+msgid "Previous match (Shift+F3)"
+msgstr "Coincidencia anterior (Shift+F3)"
+
+#: forms/MainForm.form: BtnFindNext.Tooltip
+msgid "Next match (F3)"
+msgstr "Coincidencia siguiente (F3)"
+
+#: forms/MainForm.form: ChkFindCase.Text
+msgid "Aa"
+msgstr "Aa"
+
+#: forms/MainForm.form: ChkFindCase.Tooltip forms/SearchForm.form: ChkCase.Text
+msgid "Match case"
+msgstr "Distinguir mayúsculas"
+
+#: forms/MainForm.form: ChkFindWord.Text
+msgid "Word"
+msgstr "Palabra"
+
+#: forms/MainForm.form: ChkFindWord.Tooltip forms/SearchForm.form: ChkWord.Text
+msgid "Whole word only"
+msgstr "Sólo palabras completas"
+
+#: forms/MainForm.form: ChkFindRegex.Text
+msgid ".*"
+msgstr ".*"
+
+#: forms/MainForm.form: ChkFindRegex.Tooltip forms/SearchForm.form:
+#: ChkRegex.Text
+msgid "Regular expression"
+msgstr "Expresión regular"
+
+#: forms/MainForm.form: BtnFindClose.Tooltip
+msgid "Close the find bar (Escape)"
+msgstr "Cerrar la barra de búsqueda (Escape)"
+
+#: forms/MainForm.form: ReplaceText.Tooltip
+msgid "Replace the matches with this"
+msgstr "Reemplazar las coincidencias con esto"
+
+#: forms/MainForm.form: BtnReplace.Text
+msgid "Replace"
+msgstr "Reemplazar"
+
+#: forms/MainForm.form: BtnReplaceAll.Text
+msgid "All"
+msgstr "Todas"
+
+#: forms/MainForm.form: SideTabs.Tabs
+msgid "Properties"
+msgstr "Propiedades"
+
+#: forms/MainForm.form: SideTabs.Tabs
+msgid "Controls"
+msgstr "Controles"
+
+#: forms/MainForm.form: PropDesignLabel.Text
+msgid "Design values"
+msgstr "Valores de diseño"
+
+#: forms/MainForm.form: PropDesignLabel.Tooltip PropDesign.Tooltip
+msgid ""
+"Edit what the designer shows instead of what the application will run with"
+msgstr ""
+"Editar lo que muestra el diseñador en lugar de lo que va a usar la aplicación"
+
+#: forms/MainForm.form: PropFind.Placeholder
+msgid "Filter properties"
+msgstr "Filtrar propiedades"
+
+#: forms/MainForm.form: PropFind.Tooltip
+msgid "Show only the properties whose name contains this"
+msgstr "Muestra sólo las propiedades cuyo nombre contiene esto"
+
+#: forms/MainForm.form: LblConsole.Text
+msgid "Output"
+msgstr "Salida"
+
+#: forms/MenuForm.form: MenuForm.Text
+msgid "Menus"
+msgstr "Menús"
+
+#: forms/MenuForm.form: LblTree.Text
+msgid "Menu bar"
+msgstr "Barra de menús"
+
+#: forms/MenuForm.form: BtnItem.Text
+msgid "Item"
+msgstr "Ítem"
+
+#: forms/MenuForm.form: BtnSubmenu.Text
+msgid "Submenu"
+msgstr "Submenú"
+
+#: forms/MenuForm.form: BtnSeparator.Text
+msgid "Rule"
+msgstr "Separador"
+
+#: forms/MenuForm.form: LblText.Text
+msgid "Text"
+msgstr "Texto"
+
+#: forms/MenuForm.form: LblName.Text
+msgid "Name (its handler is Name_Click)"
+msgstr "Nombre (su handler es Nombre_Click)"
+
+#: forms/MenuForm.form: LblShortcut.Text
+msgid "Shortcut, e.g. <Control>s"
+msgstr "Atajo, por ejemplo <Control>s"
+
+#: forms/MenuForm.form: ChkDynamic.Text
+msgid "Entries filled by the application (dynamic)"
+msgstr "Entradas que llena la aplicación (dynamic)"
+
+#: forms/MenuForm.form: ChkCheck.Text
+msgid "Ticks on and off (check)"
+msgstr "Se marca y se desmarca (check)"
+
+#: forms/MenuForm.form: ChkRadio.Text
+msgid "Marks the entry chosen (radio)"
+msgstr "Marca la entrada elegida (radio)"
+
+#: forms/NewProjectForm.form: NewProjectForm.Text
+msgid "New project"
+msgstr "Proyecto nuevo"
+
+#: forms/NewProjectForm.form: LblName.Text forms/ProjectForm.form:
+#: LblPrName.Text
+msgid "Name:"
+msgstr "Nombre:"
+
+#: forms/NewProjectForm.form: LblDesc.Text forms/ProjectForm.form:
+#: LblPrDesc.Text
+msgid "Description:"
+msgstr "Descripción:"
+
+#: forms/NewProjectForm.form: LblBase.Text
+msgid "Base folder:"
+msgstr "Carpeta base:"
+
+#: forms/NewProjectForm.form: BtnCreate.Text
+msgid "Create"
+msgstr "Crear"
+
+#: forms/PoForm.form: PoForm.Text modules/ProjectTree.js:413
+msgid "Translations"
+msgstr "Traducciones"
+
+#: forms/PoForm.form: ChkTodo.Text
+msgid "Only untranslated"
+msgstr "Sólo sin traducir"
+
+#: forms/PoForm.form: ChkTodo.Tooltip
+msgid ""
+"Show just the entries with nothing in them, and the ones marked as needing "
+"work"
+msgstr ""
+"Mostrar solamente las entradas vacías y las marcadas como que necesitan "
+"revisión"
+
+#: forms/PoForm.form: LblSourceCaption.Text
+msgid "Source"
+msgstr "Original"
+
+#: forms/PoForm.form: ChkFuzzy.Text
+msgid "Needs work"
+msgstr "Necesita revisión"
+
+#: forms/PoForm.form: ChkFuzzy.Tooltip
+msgid ""
+"gettext's fuzzy flag: a translation nobody has confirmed, which the runtime "
+"will not use"
+msgstr ""
+"La bandera fuzzy de gettext: una traducción que nadie confirmó, y que el "
+"runtime no va a usar"
+
+#: forms/ProjectForm.form: ProjectForm.Text modules/ProjectTree.js:78
+msgid "Project"
+msgstr "Proyecto"
+
+#: forms/ProjectForm.form: LblPrVersion.Text
+msgid "Version:"
+msgstr "Versión:"
+
+#: forms/ProjectForm.form: TxtPrVersion.Placeholder
+msgid "0.1.0"
+msgstr "0.1.0"
+
+#: forms/ProjectForm.form: LblPrStartup.Text
+msgid "Starts at:"
+msgstr "Empieza en:"
+
+#: forms/ProjectForm.form: LblPrOrder.Text
+msgid "Load order:"
+msgstr "Orden de carga:"
+
+#: forms/ProjectForm.form: BtnPrDecide.Text
+msgid "Decide"
+msgstr "Fijar"
+
+#: forms/ProjectForm.form: BtnPrDecide.Tooltip
+msgid "Write the order this project already loads in, so it can be changed"
+msgstr "Escribir el orden en que este proyecto ya carga, para poder cambiarlo"
+
+#: forms/SearchForm.form: SearchForm.Text
+msgid "Find in project"
+msgstr "Buscar en el proyecto"
+
+#: forms/SearchForm.form: BtnFind.Text
+msgid "Find"
+msgstr "Buscar"
+
+#: forms/SearchForm.form: LblFiles.Text
+msgid "Files:"
+msgstr "Archivos:"
+
+#: forms/SearchForm.form: CboFiles.Tooltip
+msgid "Which files to look in"
+msgstr "En qué archivos buscar"
+
+#: forms/AboutForm.js:48
+msgid "Version {0}, on Bintana {1}"
+msgstr "Versión {0}, sobre Bintana {1}"
+
+#: forms/AboutForm.js:50
+msgid "On Bintana {0}"
+msgstr "Sobre Bintana {0}"
+
+#: forms/ColumnForm.js:186
+msgid "Column {0} has no heading."
+msgstr "La columna {0} no tiene encabezado."
+
+#: forms/ImageForm.js:117
+msgid "{0} x {1}  ·  {2}%"
+msgstr "{0} x {1}  ·  {2} %"
+
+#: forms/ImageForm.js:61
+msgid ""
+"Cannot show {0}:\n"
+"{1}"
+msgstr ""
+"No se pudo mostrar {0}:\n"
+"{1}"
+
+#: forms/MainForm.js:240
+msgid "Bintana IDE -- {0}"
+msgstr "IDE de Bintana — {0}"
+
+#: forms/MainForm.js:300
+msgid "(select a control)"
+msgstr "(elegí un control)"
+
+#: forms/MainForm.js:315 forms/MainForm.js:322
+msgid "(none yet)"
+msgstr "(todavía ninguno)"
+
+#: forms/MainForm.js:592
+msgid "Quit without saving"
+msgstr "Salir sin guardar"
+
+#: forms/MainForm.js:594
+msgid "Save all and quit"
+msgstr "Guardar todo y salir"
+
+#: forms/MainForm.js:725
+msgid "{0}   double click to edit"
+msgstr "{0}   doble clic para editar"
+
+#: forms/MainForm.js:739
+msgid "   form {0}x{1}"
+msgstr "   formulario {0}x{1}"
+
+#: forms/MainForm.js:742
+msgid "   Ln {0}, Col {1}"
+msgstr "   Lín {0}, Col {1}"
+
+#: forms/MainForm.js:1169
+msgid "{0} is no longer on disk."
+msgstr "{0} ya no está en el disco."
+
+#: forms/MainForm.js:1171
+msgid "{0} changed on disk, and there are unsaved changes here."
+msgstr "{0} cambió en el disco, y acá hay cambios sin guardar."
+
+#: forms/MainForm.js:1173
+msgid "{0} changed on disk."
+msgstr "{0} cambió en el disco."
+
+#: forms/MainForm.js:1194
+msgid "{0} changed on disk. Take the newer file and lose what is unsaved here?"
+msgstr ""
+"{0} cambió en el disco. ¿Tomar el archivo nuevo y perder lo que no está "
+"guardado acá?"
+
+#: forms/MainForm.js:1195
+msgid "Reload without saving"
+msgstr "Recargar sin guardar"
+
+#: forms/MainForm.js:589
+msgid "{1} has unsaved changes."
+msgid_plural ""
+"{0} files have unsaved changes:\n"
+"{1}"
+msgstr[0] "{1} tiene cambios sin guardar."
+msgstr[1] ""
+"{0} archivos tienen cambios sin guardar:\n"
+"{1}"
+
+#: forms/MainForm.js:727
+msgid "{0} file"
+msgid_plural "{0} files"
+msgstr[0] "{0} archivo"
+msgstr[1] "{0} archivos"
+
+#: forms/MainForm.js:882 modules/Exporter.js:39
+msgid "Open a project first."
+msgstr "Abrí un proyecto primero."
+
+#: forms/MainForm.js:1043
+msgid ""
+"There is no template yet. Run Project > Update translations first: it "
+"gathers every string the project shows and writes the .pot a translation "
+"starts from."
+msgstr ""
+"Todavía no hay plantilla. Corré primero Proyecto > Actualizar las "
+"traducciones: junta cada cadena que el proyecto muestra y escribe el .pot "
+"del que arranca una traducción."
+
+#: forms/MainForm.js:235
+msgid ""
+"{0} has no project.json.\n"
+"It can still be edited, but it will not be able to run."
+msgstr ""
+"{0} no tiene project.json.\n"
+"Se puede editar igual, pero no va a poder ejecutarse."
+
+#: forms/MainForm.js:780
+msgid ""
+"{0}\n"
+"is not there any more."
+msgstr ""
+"{0}\n"
+"ya no está."
+
+#: forms/MainForm.js:1388
+msgid "Open a form's design to edit its menus."
+msgstr "Abrí el diseño de un formulario para editar sus menús."
+
+#: forms/MainForm.js:227
+msgid ""
+"No such directory:\n"
+"{0}"
+msgstr ""
+"No existe el directorio:\n"
+"{0}"
+
+#: forms/MainForm.js:412
+msgid "{0} already exists and is not a folder."
+msgstr "{0} ya existe y no es una carpeta."
+
+#: forms/MainForm.js:422
+msgid "{0} is already a project."
+msgstr "{0} ya es un proyecto."
+
+#: forms/MainForm.js:992
+msgid ""
+"Cannot open {0}:\n"
+"{1}"
+msgstr ""
+"No se pudo abrir {0}:\n"
+"{1}"
+
+#: forms/MenuForm.js:274
+msgid "\"{0}\" is not usable as a menu item name."
+msgstr "\"{0}\" no sirve como nombre de ítem de menú."
+
+#: forms/MenuForm.js:280
+msgid "{0} is already used by another item."
+msgstr "{0} ya lo usa otro ítem."
+
+#: forms/NewProjectForm.js:76
+msgid "Base folder"
+msgstr "Carpeta base"
+
+#: forms/NewProjectForm.js:50
+msgid "\"{0}\" is not usable as a folder name."
+msgstr "\"{0}\" no sirve como nombre de carpeta."
+
+#: forms/NewProjectForm.js:54
+msgid ""
+"The base folder does not exist:\n"
+"{0}"
+msgstr ""
+"La carpeta base no existe:\n"
+"{0}"
+
+#: forms/PoForm.js:211
+msgid "{0} of {1} left to translate"
+msgstr "{0} de {1} sin traducir"
+
+#: forms/PoForm.js:348
+msgid "Translations — {0} *"
+msgstr "Traducciones — {0} *"
+
+#: forms/PoForm.js:349
+msgid "Translations — {0}"
+msgstr "Traducciones — {0}"
+
+#: forms/PoForm.js:393
+msgid "Close {0} without saving the changes?"
+msgstr "¿Cerrar {0} sin guardar los cambios?"
+
+#: forms/PoForm.js:394
+msgid "Close without saving"
+msgstr "Cerrar sin guardar"
+
+#: forms/PoForm.js:396
+msgid "Save and close"
+msgstr "Guardar y cerrar"
+
+#: forms/PoForm.js:212
+msgid "{0} string, translated"
+msgid_plural "{0} strings, all translated"
+msgstr[0] "{0} cadena, traducida"
+msgstr[1] "{0} cadenas, todas traducidas"
+
+#: forms/PoForm.js:87 modules/Translations.js:273
+msgid "Cannot read {0}: {1}"
+msgstr "No se pudo leer {0}: {1}"
+
+#: forms/PoForm.js:360
+msgid "Cannot save {0}: {1}"
+msgstr "No se pudo guardar {0}: {1}"
+
+#: forms/ProjectForm.js:127 modules/Manifest.js:48
+msgid ""
+"project.json was left alone:\n"
+"{0}"
+msgstr ""
+"project.json quedó sin tocar:\n"
+"{0}"
+
+#: forms/SearchForm.js:118
+msgid "Every file"
+msgstr "Todos los archivos"
+
+#: forms/SearchForm.js:197 modules/Finder.js:79
+msgid "bad regex"
+msgstr "expresión inválida"
+
+#: forms/SearchForm.js:248
+msgid "No file contains \"{0}\""
+msgstr "Ningún archivo contiene \"{0}\""
+
+#: forms/SearchForm.js:250
+msgid "{0} of {1} matches for \"{2}\", in {3} files"
+msgstr "{0} de {1} coincidencias de \"{2}\", en {3} archivos"
+
+#: forms/SearchForm.js:252
+msgid "One match for \"{1}\", in {2} files"
+msgid_plural "{0} matches for \"{1}\", in {2} files"
+msgstr[0] "Una coincidencia de \"{1}\", en {2} archivos"
+msgstr[1] "{0} coincidencias de \"{1}\", en {2} archivos"
+
+#: modules/Designer.js:443 modules/Designer.js:1627
+msgid ""
+"A split holds exactly two children.\n"
+"Put a container in one of its halves to hold more."
+msgstr ""
+"Un Split sostiene exactamente dos hijos.\n"
+"Poné un contenedor en una de sus mitades para tener más."
+
+#: modules/Designer.js:1772
+msgid "\"{0}\" is not usable as a control name."
+msgstr "\"{0}\" no sirve como nombre de control."
+
+#: modules/Designer.js:1777
+msgid "There is already a control named {0}."
+msgstr "Ya hay un control llamado {0}."
+
+#: modules/Exporter.js:58
+msgid "Export project"
+msgstr "Exportar el proyecto"
+
+#: modules/Exporter.js:63
+msgid "tar archives"
+msgstr "Archivos tar"
+
+#: modules/Exporter.js:64
+msgid "All files"
+msgstr "Todos los archivos"
+
+#: modules/Exporter.js:121
+msgid "Exported to {0}"
+msgstr "Exportado a {0}"
+
+#: modules/Exporter.js:49
+msgid "tar is not installed, so there is nothing to export with."
+msgstr "tar no está instalado, así que no hay con qué exportar."
+
+#: modules/Exporter.js:96
+msgid ""
+"Choose a folder outside the project: an archive written inside it would be "
+"archiving itself."
+msgstr ""
+"Elegí una carpeta fuera del proyecto: un archivo escrito adentro se estaría "
+"archivando a sí mismo."
+
+#: modules/Exporter.js:117
+msgid "tar failed ({0}); the console says what it reported."
+msgstr "tar falló ({0}); la consola dice qué informó."
+
+#: modules/Finder.js:94
+msgid "none"
+msgstr "ninguna"
+
+#: modules/FormFiles.js:644
+msgid "Nothing to tidy: every class is already in a folder."
+msgstr ""
+
+#: modules/FormFiles.js:146
+msgid "Open a project before creating a form."
+msgstr "Abrí un proyecto antes de crear un formulario."
+
+#: modules/FormFiles.js:259
+#, fuzzy
+msgid "Open a project before creating a module."
+msgstr "Abrí un proyecto antes de crear un formulario."
+
+#: modules/FormFiles.js:343
+msgid "Open a project before creating a component."
+msgstr "Abrí un proyecto antes de crear un componente."
+
+#: modules/FormFiles.js:368
+msgid "Save the changes before renaming."
+msgstr "Guardá los cambios antes de renombrar."
+
+#: modules/FormFiles.js:551
+msgid ""
+"These files still name {0}:\n"
+"{1}\n"
+"\n"
+"They have to be updated by hand."
+msgstr ""
+"Estos archivos todavía nombran a {0}:\n"
+"{1}\n"
+"\n"
+"Hay que actualizarlos a mano."
+
+#: modules/FormFiles.js:632
+#, fuzzy
+msgid "Open a project before tidying it."
+msgstr "Abrí un proyecto antes de crear un formulario."
+
+#: modules/FormFiles.js:638
+#, fuzzy
+msgid "Save the changes before tidying the project."
+msgstr "Guardá los cambios antes de renombrar."
+
+#: modules/FormFiles.js:164 modules/FormFiles.js:292 modules/FormFiles.js:412
+msgid "\"{0}\" is not usable as a class name."
+msgstr "\"{0}\" no sirve como nombre de clase."
+
+#: modules/FormFiles.js:168 modules/FormFiles.js:296 modules/FormFiles.js:416
+msgid "\"{0}\" is not usable as a folder."
+msgstr "\"{0}\" no sirve como carpeta."
+
+#: modules/FormFiles.js:189 modules/FormFiles.js:199 modules/FormFiles.js:306
+#: modules/FormFiles.js:314 modules/FormFiles.js:439
+msgid "The project already has a {0}."
+msgstr "El proyecto ya tiene un {0}."
+
+#: modules/FormFiles.js:397
+msgid "The project has no single class called {0}."
+msgstr "El proyecto no tiene una sola clase llamada {0}."
+
+#: modules/FormFiles.js:425 modules/FormFiles.js:569
+msgid "{0} already exists."
+msgstr "{0} ya existe."
+
+#: modules/FormFiles.js:564
+msgid "\"{0}\" is not usable as a file name."
+msgstr "\"{0}\" no sirve como nombre de archivo."
+
+#: modules/FormFiles.js:822
+msgid "{0} does not exist, there is nowhere to write the handler."
+msgstr "{0} no existe, no hay dónde escribir el handler."
+
+#: modules/FormFiles.js:841
+msgid "Class {0} not found in {1}."
+msgstr "No se encontró la clase {0} en {1}."
+
+#: modules/FormFiles.js:850
+msgid ""
+"Adding {0}() to {1} would break it:\n"
+"{2}"
+msgstr ""
+"Agregar {0}() a {1} lo rompería:\n"
+"{2}"
+
+#: modules/Manifest.js:39
+msgid ""
+"project.json could not be read:\n"
+"{0}"
+msgstr ""
+"No se pudo leer project.json:\n"
+"{0}"
+
+#: modules/Manifest.js:105
+msgid ""
+"The project starts at {0}, which no longer exists. It will not be able to "
+"run."
+msgstr ""
+"El proyecto empieza en {0}, que ya no existe. No va a poder ejecutarse."
+
+#: modules/Manifest.js:139
+msgid "{0} has no project.json to edit."
+msgstr "{0} no tiene un project.json para editar."
+
+#: modules/ProjectTree.js:78
+msgid "Files"
+msgstr "Archivos"
+
+#: modules/ProjectTree.js:350
+msgid "Forms"
+msgstr "Formularios"
+
+#: modules/ProjectTree.js:352
+msgid "Components"
+msgstr "Componentes"
+
+#: modules/ProjectTree.js:374
+msgid "design"
+msgstr "diseño"
+
+#: modules/ProjectTree.js:379
+msgid "code"
+msgstr "código"
+
+#: modules/ProjectTree.js:397
+msgid "Modules"
+msgstr "Módulos"
+
+#: modules/ProjectTree.js:434
+msgid "Images"
+msgstr "Imágenes"
+
+#: modules/ProjectTree.js:440
+msgid "Other"
+msgstr "Otros"
+
+#: modules/PropertyGrid.js:476
+msgid "Essential"
+msgstr "Esenciales"
+
+#: modules/PropertyGrid.js:479
+msgid "Appearance"
+msgstr "Apariencia"
+
+#: modules/PropertyGrid.js:480
+msgid "Layout"
+msgstr "Disposición"
+
+#: modules/PropertyGrid.js:481
+msgid "Behaviour"
+msgstr "Comportamiento"
+
+#: modules/PropertyGrid.js:569
+msgid "Fill with a sample"
+msgstr "Llenar con una muestra"
+
+#: modules/PropertyGrid.js:644
+msgid "Edit the columns"
+msgstr "Editar las columnas"
+
+#: modules/PropertyGrid.js:904
+msgid "The box this control is in decides where it goes."
+msgstr "La caja en la que está este control decide dónde va."
+
+#: modules/PropertyGrid.js:906
+msgid "On a fixed surface a control keeps the place and size it was given."
+msgstr ""
+"En una superficie fija un control conserva el lugar y el tamaño que se le "
+"dio."
+
+#: modules/PropertyGrid.js:912
+msgid "Does nothing while {0} is off."
+msgstr "No hace nada mientras {0} esté apagada."
+
+#: modules/PropertyGrid.js:973
+msgid "{0}: {1} is not a valid size."
+msgstr "{0}: {1} no es un tamaño válido."
+
+#: modules/TabSet.js:168
+msgid "This project"
+msgstr "Este proyecto"
+
+#: modules/TabSet.js:251
+msgid "The project has no {0}."
+msgstr "El proyecto no tiene {0}."
+
+#: modules/TabSet.js:597
+msgid ""
+"Could not save {0}:\n"
+"{1}"
+msgstr ""
+"No se pudo guardar {0}:\n"
+"{1}"
+
+#: modules/Translations.js:388
+msgid "Close the translation editor first: {0}"
+msgstr "Cerrá primero el editor de traducciones: {0}"
+
+#: modules/Translations.js:397
+msgid "Nothing to translate: no declared text found."
+msgstr "No hay nada para traducir: no se encontró texto declarado."
+
+#: modules/Translations.js:260
+msgid ""
+"{0} is not a locale name. Use a code like es, pt_BR or zh_Hans -- it is what "
+"the file is named after, and what the desktop is matched against."
+msgstr ""
+"{0} no es un nombre de locale. Usá un código como es, pt_BR o zh_Hans: es "
+"cómo se llama el archivo, y con qué se compara el escritorio."
+
+#: modules/Translations.js:265
+msgid "This project already has {0}.po."
+msgstr "Este proyecto ya tiene {0}.po."
+
+#: modules/Translations.js:337
+msgid "Cannot run {0}: {1}"
+msgstr "No se pudo ejecutar {0}: {1}"
+
+#: modules/Translations.js:362
+msgid "{0} is not installed, or not on the PATH."
+msgstr "{0} no está instalado, o no está en el PATH."

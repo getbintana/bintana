@@ -1,0 +1,5 @@
+<!-- A value dragged along a track: the track, and the knob sitting on it. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path d="M1 7.4h14v1.2H1z"/>
+  <path d="M6 4.6a3.4 3.4 0 1 1 0 6.8 3.4 3.4 0 0 1 0-6.8z"/>
+</svg>

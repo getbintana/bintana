@@ -1,0 +1,118 @@
+{
+  "format": "bintana-form/1",
+  "class": "ReportForm",
+  "properties": {
+    "Text": "Statement of account",
+    "Width": 940,
+    "Height": 720,
+    "Arrangement": "Vertical",
+    "Spacing": 8,
+    "Margin": 8
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "Body",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Spacing": 8,
+        "Expand": true
+      },
+      "children": [
+        {
+          "type": "Frame",
+          "name": "FrmReport",
+          "properties": {
+            "Text": "Preview",
+            "Arrangement": "Vertical",
+            "Expand": true
+          },
+          "children": [
+            {
+              "type": "Report",
+              "name": "Report",
+              "properties": {
+                "Expand": true,
+                "Margin": 8
+              }
+            }
+          ]
+        },
+        {
+          "type": "Panel",
+          "name": "Side",
+          "properties": {
+            "Arrangement": "Vertical",
+            "Spacing": 8,
+            "Width": 230
+          },
+          "children": [
+            {
+              "type": "Label",
+              "name": "LblTitle",
+              "properties": {
+                "Text": "Statement of account",
+                "Alignment": "Center",
+                "Height": 24
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblPage",
+              "properties": {
+                "Text": "Page 1 of 1",
+                "Alignment": "Center",
+                "Height": 24,
+                "Style": "dim-label"
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnPrev",
+              "properties": {
+                "Text": "Previous"
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnNext",
+              "properties": {
+                "Text": "Next"
+              }
+            },
+            {
+              "type": "Separator",
+              "name": "Sep",
+              "properties": {}
+            },
+            {
+              "type": "Button",
+              "name": "BtnExport",
+              "properties": {
+                "Text": "Export PNG"
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnPdf",
+              "properties": {
+                "Text": "Export PDF"
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblStatus",
+              "properties": {
+                "Text": "",
+                "Style": "dim-label",
+                "Wrap": true,
+                "Alignment": "Left",
+                "Expand": true
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+<!-- The application icon: a form with code in it. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!--
+    Flat, with every point written out rather than scaled into place. Both are
+    the same lesson twice: an icon this project ships has to draw under whatever
+    renders it, and `transform` is the attribute GTK 4.20 stopped honouring.
+    That one does not fail loudly; it draws an empty square.
+
+    The brackets are ide/icons/bta-code-symbolic.svg at 1.5x, the arithmetic
+    done here so that the file has no transform left to ignore.
+
+    **The comment above the element is one line on purpose.** gdk-pixbuf decides
+    a file is SVG by looking for `<svg` in its first bytes, and a header comment
+    long enough to push the element past that window makes the icon load as
+    "Unrecognized image file format", with nothing wrong in the file at all.
+  -->
+  <rect x="2" y="2" width="60" height="60" rx="13" fill="#1c71d8"/>
+  <rect x="11" y="14" width="42" height="36" rx="4" fill="#ffffff"/>
+  <rect x="11" y="25" width="42" height="1.5" fill="#cfe1fa"/>
+  <circle cx="16.5" cy="19.5" r="1.8" fill="#99c1f1"/>
+  <circle cx="22.5" cy="19.5" r="1.8" fill="#99c1f1"/>
+  <circle cx="28.5" cy="19.5" r="1.8" fill="#99c1f1"/>
+  <path d="M28.55 30.5 21.5 38l7.05 7.5 2.25-2.1L25.85 38l4.95-5.4z" fill="#1c71d8"/>
+  <path d="M35.45 30.5 33.2 32.6 38.15 38l-4.95 5.4 2.25 2.1L42.5 38z" fill="#1c71d8"/>
+</svg>

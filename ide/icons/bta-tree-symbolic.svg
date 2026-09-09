@@ -1,0 +1,8 @@
+<!-- A tree: rows that nest, under the triangle that folds them. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path d="M1 2.8h2.8L2.4 5.4z"/>
+  <path d="M4.6 3h10.4v1.6H4.6z"/>
+  <path d="M6.8 7h8.2v1.6H6.8z"/>
+  <path d="M6.8 11h8.2v1.6H6.8z"/>
+  <path d="M5 7h1.2v5.6H5z" opacity="0.45"/>
+</svg>

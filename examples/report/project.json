@@ -1,0 +1,13 @@
+{
+  "name": "Report",
+  "startup": "ReportForm",
+  "uses": [
+    "report"
+  ],
+  "sources": [
+    "Data.js",
+    "ReportForm.js"
+  ],
+  "version": "1.0",
+  "description": "A banded report: the Crystal Reports model, grouped and totalled, with a masthead, rows that grow, and the whole document out as one PDF"
+}

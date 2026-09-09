@@ -1,0 +1,175 @@
+{
+  "format": "bintana-form/1",
+  "class": "Viewer",
+  "properties": {
+    "AcceptFiles": true,
+    "Arrangement": "Vertical",
+    "Height": 560,
+    "Icon": "image-x-generic",
+    "Text": "Image viewer",
+    "Width": 820
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "Bar",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Height": 46,
+        "Margin": 6,
+        "Spacing": 6,
+        "Style": "toolbar",
+        "Width": 800
+      },
+      "children": [
+        {
+          "type": "Button",
+          "name": "BtnOpen",
+          "properties": {
+            "Height": 32,
+            "Icon": "folder-open-symbolic",
+            "Style": "flat",
+            "Tooltip": "Open a folder",
+            "Width": 34
+          }
+        },
+        {
+          "type": "Separator",
+          "name": "Sep1",
+          "properties": {
+            "Orientation": "Vertical",
+            "Width": 1
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnPrev",
+          "properties": {
+            "Height": 32,
+            "Icon": "go-previous",
+            "Style": "flat",
+            "Tooltip": "Previous (Left)",
+            "Width": 34
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnNext",
+          "properties": {
+            "Height": 32,
+            "Icon": "go-next",
+            "Style": "flat",
+            "Tooltip": "Next (Right)",
+            "Width": 34
+          }
+        },
+        {
+          "type": "Separator",
+          "name": "Sep2",
+          "properties": {
+            "Orientation": "Vertical",
+            "Width": 1
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnFit",
+          "properties": {
+            "Height": 32,
+            "Style": "flat",
+            "Text": "Fit",
+            "Width": 64
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnOne",
+          "properties": {
+            "Height": 32,
+            "Style": "flat",
+            "Text": "1:1",
+            "Width": 56
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnOut",
+          "properties": {
+            "Height": 32,
+            "Icon": "zoom-out-symbolic",
+            "Style": "flat",
+            "Width": 34
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnIn",
+          "properties": {
+            "Height": 32,
+            "Icon": "zoom-in-symbolic",
+            "Style": "flat",
+            "Width": 34
+          }
+        },
+        {
+          "type": "ComboBox",
+          "name": "CmbFit",
+          "properties": {
+            "Tooltip": "How it fills the frame when it is not zoomed",
+            "Width": 130
+          }
+        },
+        {
+          "type": "Label",
+          "name": "LblAbout",
+          "properties": {
+            "Alignment": "Right",
+            "HAlign": "Fill",
+            "HExpand": true,
+            "Style": "dim-label"
+          }
+        }
+      ]
+    },
+    {
+      "type": "Split",
+      "name": "Body",
+      "properties": {
+        "Expand": true,
+        "Grows": "End",
+        "HAlign": "Fill",
+        "HExpand": true,
+        "Height": 502,
+        "Position": 190,
+        "VAlign": "Fill",
+        "VExpand": true,
+        "Width": 820
+      },
+      "children": [
+        {
+          "type": "ListBox",
+          "name": "Files",
+          "properties": {
+            "Width": 190
+          }
+        },
+        {
+          "type": "Scroller",
+          "name": "View",
+          "properties": {
+            "HAlign": "Fill",
+            "Style": "osd",
+            "VAlign": "Fill"
+          },
+          "children": [
+            {
+              "type": "Picture",
+              "name": "Shown",
+              "properties": {}
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

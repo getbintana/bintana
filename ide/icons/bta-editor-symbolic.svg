@@ -1,0 +1,7 @@
+<!-- Prose in a box: lines of uneven length, and no gutter beside them. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path fill-rule="evenodd" d="M1 2h14v12H1z M2.2 3.2v9.6h11.6V3.2z"/>
+  <path d="M3.6 4.8h8.8v1.2H3.6z"/>
+  <path d="M3.6 7.2h8.8v1.2H3.6z"/>
+  <path d="M3.6 9.6h5.4v1.2H3.6z"/>
+</svg>

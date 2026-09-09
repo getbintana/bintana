@@ -1,0 +1,9 @@
+{
+  "name": "Usage",
+  "startup": "UsageForm",
+  "sources": [
+    "UsageForm.js"
+  ],
+  "version": "1.0",
+  "description": "What is taking up the space: Exec streaming a long child, with a Stop that means it"
+}

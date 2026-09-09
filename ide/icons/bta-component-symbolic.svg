@@ -1,0 +1,9 @@
+<!--
+  A component: a form that is not a window, so a box with two tabs sticking out
+  of it, something made to be plugged into something else.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path fill-rule="evenodd" d="M3 3h12v10H3z M4.2 4.2v7.6h9.6V4.2z"/>
+  <rect x="1" y="5" width="3" height="2.4"/>
+  <rect x="1" y="8.6" width="3" height="2.4"/>
+</svg>

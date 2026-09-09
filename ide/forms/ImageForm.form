@@ -1,0 +1,101 @@
+{
+  "format": "bintana-form/1",
+  "class": "ImageForm",
+  "properties": {
+    "Arrangement": "Vertical",
+    "Height": 520,
+    "Icon": "image-x-generic",
+    "Text": "Image",
+    "Width": 680
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "Bar",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Height": 44,
+        "Margin": 6,
+        "Spacing": 6,
+        "Style": "toolbar"
+      },
+      "children": [
+        {
+          "type": "Button",
+          "name": "BtnFit",
+          "properties": {
+            "Height": 30,
+            "Style": "flat",
+            "Text": "Fit",
+            "Width": 70
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnOne",
+          "properties": {
+            "Height": 30,
+            "Style": "flat",
+            "Text": "1:1",
+            "Width": 60
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnOut",
+          "properties": {
+            "Height": 30,
+            "Icon": "zoom-out-symbolic",
+            "Style": "flat",
+            "Width": 34
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnIn",
+          "properties": {
+            "Height": 30,
+            "Icon": "zoom-in-symbolic",
+            "Style": "flat",
+            "Width": 34
+          }
+        },
+        {
+          "type": "Label",
+          "name": "LblAbout",
+          "properties": {
+            "HAlign": "Fill",
+            "HExpand": true,
+            "Style": "dim-label"
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnClose",
+          "properties": {
+            "Cancel": true,
+            "Height": 30,
+            "Text": "Close",
+            "Width": 90
+          }
+        }
+      ]
+    },
+    {
+      "type": "Scroller",
+      "name": "View",
+      "properties": {
+        "Expand": true,
+        "HAlign": "Fill",
+        "VAlign": "Fill"
+      },
+      "children": [
+        {
+          "type": "Picture",
+          "name": "Shown",
+          "properties": {}
+        }
+      ]
+    }
+  ]
+}

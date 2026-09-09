@@ -1,0 +1,6 @@
+<!-- A numeric field: the field and the up and down arrows. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path fill-rule="evenodd" d="M1 4h14v8H1z M2.2 5.2v5.6h11.6V5.2z"/>
+  <path d="M9.6 7.6h2.8L11 6z"/>
+  <path d="M9.6 8.4h2.8L11 10z"/>
+</svg>

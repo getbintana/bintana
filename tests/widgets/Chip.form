@@ -1,0 +1,9 @@
+{
+  "format": "bintana-form/1",
+  "class": "Chip",
+  "properties": { "Width": 120, "Height": 30 },
+  "children": [
+    { "type": "Label", "name": "Shown",
+      "properties": { "X": 0, "Y": 4, "Width": 60, "Height": 24, "Text": "0" } }
+  ]
+}

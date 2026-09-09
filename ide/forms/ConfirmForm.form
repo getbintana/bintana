@@ -1,0 +1,67 @@
+{
+  "format": "bintana-form/1",
+  "class": "ConfirmForm",
+  "properties": {
+    "Text": "Bintana",
+    "Width": 400,
+    "Height": 150,
+    "Resizable": false
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblMessage",
+      "properties": {
+        "X": 16,
+        "Y": 20,
+        "Width": 368,
+        "Height": 60,
+        "Text": "",
+        "HAlign": "Fill",
+        "VAlign": "Fill"
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnOther",
+      "properties": {
+        "HAlign": "End",
+        "Height": 32,
+        "Text": "",
+        "VAlign": "End",
+        "Visible": false,
+        "Width": 170,
+        "X": 16,
+        "Y": 100
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnNo",
+      "properties": {
+        "X": 196,
+        "Y": 100,
+        "Width": 90,
+        "Height": 32,
+        "Text": "Cancel",
+        "HAlign": "End",
+        "VAlign": "End",
+        "Cancel": true
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnYes",
+      "properties": {
+        "HAlign": "End",
+        "Height": 32,
+        "Style": "destructive-action",
+        "Text": "Delete",
+        "VAlign": "End",
+        "Width": 90,
+        "X": 294,
+        "Y": 100
+      }
+    }
+  ]
+}

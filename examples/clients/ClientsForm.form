@@ -1,0 +1,366 @@
+{
+  "format": "bintana-form/1",
+  "class": "ClientsForm",
+  "properties": {
+    "Text": "Clients",
+    "Icon": "system-users-symbolic",
+    "Arrangement": "Vertical",
+    "Spacing": 10,
+    "Padding": "12",
+    "Width": 940,
+    "Height": 600
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "Bar",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Spacing": 8
+      },
+      "children": [
+        {
+          "type": "TextBox",
+          "name": "TxtFilter",
+          "properties": {
+            "Placeholder": "Filter by name",
+            "Icon": "edit-find-symbolic",
+            "HExpand": true,
+            "HAlign": "Fill"
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnNew",
+          "properties": {
+            "Text": "New",
+            "Icon": "list-add-symbolic",
+            "Width": 104
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnDelete",
+          "properties": {
+            "Text": "Delete",
+            "Icon": "user-trash-symbolic",
+            "Enabled": false,
+            "Width": 104
+          }
+        }
+      ]
+    },
+    {
+      "type": "Split",
+      "name": "Body",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Position": 400,
+        "Grows": "End",
+        "Expand": true
+      },
+      "children": [
+        {
+          "type": "TableView",
+          "name": "Clients",
+          "properties": {
+            "Columns": [
+              {
+                "Text": "Name",
+                "Width": 190
+              },
+              {
+                "Text": "Balance",
+                "Width": 100,
+                "Alignment": "Right"
+              },
+              {
+                "Text": "Category",
+                "Width": 0
+              }
+            ],
+            "MinWidth": 280,
+            "HAlign": "Fill"
+          }
+        },
+        {
+          "type": "Panel",
+          "name": "Detail",
+          "properties": {
+            "Arrangement": "Vertical",
+            "Spacing": 10,
+            "Padding": "0 0 0 12",
+            "MinWidth": 400,
+            "HAlign": "Fill"
+          },
+          "children": [
+            {
+              "type": "Grid",
+              "name": "Fields",
+              "properties": {
+                "Columns": 4,
+                "RowSpacing": 8,
+                "ColumnSpacing": 8
+              },
+              "children": [
+                {
+                  "type": "Label",
+                  "name": "LblName",
+                  "properties": {
+                    "Text": "Name",
+                    "HAlign": "End"
+                  }
+                },
+                {
+                  "type": "TextBox",
+                  "name": "TxtName",
+                  "properties": {
+                    "ColumnSpan": 3,
+                    "HExpand": true,
+                    "HAlign": "Fill"
+                  }
+                },
+                {
+                  "type": "Label",
+                  "name": "LblCategory",
+                  "properties": {
+                    "Text": "Category",
+                    "HAlign": "End"
+                  }
+                },
+                {
+                  "type": "ComboBox",
+                  "name": "CmbCategory",
+                  "properties": {
+                    "HAlign": "Fill"
+                  }
+                },
+                {
+                  "type": "CheckButton",
+                  "name": "ChkActive",
+                  "properties": {
+                    "Text": "Active",
+                    "ColumnSpan": 2,
+                    "HAlign": "Start"
+                  }
+                },
+                {
+                  "type": "Label",
+                  "name": "LblSince",
+                  "properties": {
+                    "Text": "Since",
+                    "HAlign": "End"
+                  }
+                },
+                {
+                  "type": "DatePicker",
+                  "name": "PckSince",
+                  "properties": {
+                    "HAlign": "Fill"
+                  }
+                },
+                {
+                  "type": "Label",
+                  "name": "LblPostal",
+                  "properties": {
+                    "Text": "Postal code",
+                    "HAlign": "End"
+                  }
+                },
+                {
+                  "type": "TextBox",
+                  "name": "TxtPostal",
+                  "properties": {
+                    "HAlign": "Fill"
+                  }
+                },
+                {
+                  "type": "Label",
+                  "name": "LblBalance",
+                  "properties": {
+                    "Text": "Balance",
+                    "HAlign": "End"
+                  }
+                },
+                {
+                  "type": "TextBox",
+                  "name": "TxtBalance",
+                  "properties": {
+                    "Alignment": "Right",
+                    "Purpose": "Number",
+                    "Placeholder": "0.00",
+                    "ColumnSpan": 3,
+                    "HAlign": "Start",
+                    "Width": 140
+                  }
+                }
+              ]
+            },
+            {
+              "type": "Separator",
+              "name": "Rule",
+              "properties": {}
+            },
+            {
+              "type": "Panel",
+              "name": "OrdersHead",
+              "properties": {
+                "Arrangement": "Horizontal",
+                "Spacing": 8
+              },
+              "children": [
+                {
+                  "type": "Label",
+                  "name": "LblOrders",
+                  "properties": {
+                    "Text": "Orders",
+                    "Style": "heading"
+                  }
+                },
+                {
+                  "type": "Label",
+                  "name": "LblTotal",
+                  "properties": {
+                    "Style": "heading",
+                    "Alignment": "Right",
+                    "Ellipsize": true,
+                    "HExpand": true,
+                    "HAlign": "Fill"
+                  }
+                }
+              ]
+            },
+            {
+              "type": "TableView",
+              "name": "Orders",
+              "properties": {
+                "Columns": [
+                  {
+                    "Text": "Placed",
+                    "Width": 100
+                  },
+                  {
+                    "Text": "What",
+                    "Width": 0
+                  },
+                  {
+                    "Text": "Amount",
+                    "Width": 108,
+                    "Alignment": "Right"
+                  },
+                  {
+                    "Text": "State",
+                    "Width": 84
+                  }
+                ],
+                "Expand": true,
+                "MinHeight": 110
+              }
+            },
+            {
+              "type": "Panel",
+              "name": "OrderEdit",
+              "properties": {
+                "Arrangement": "Horizontal",
+                "Spacing": 8
+              },
+              "children": [
+                {
+                  "type": "DatePicker",
+                  "name": "PckPlaced",
+                  "properties": {
+                    "Enabled": false
+                  }
+                },
+                {
+                  "type": "TextBox",
+                  "name": "TxtWhat",
+                  "properties": {
+                    "Enabled": false,
+                    "Placeholder": "What was ordered",
+                    "HExpand": true,
+                    "HAlign": "Fill"
+                  }
+                },
+                {
+                  "type": "TextBox",
+                  "name": "TxtAmount",
+                  "properties": {
+                    "Enabled": false,
+                    "Alignment": "Right",
+                    "Purpose": "Number",
+                    "Placeholder": "0.00",
+                    "Width": 130
+                  }
+                }
+              ]
+            },
+            {
+              "type": "Panel",
+              "name": "Actions",
+              "properties": {
+                "Arrangement": "Horizontal",
+                "Spacing": 8
+              },
+              "children": [
+                {
+                  "type": "Button",
+                  "name": "BtnAddOrder",
+                  "properties": {
+                    "Text": "Add order",
+                    "Enabled": false,
+                    "Width": 112
+                  }
+                },
+                {
+                  "type": "Button",
+                  "name": "BtnExecute",
+                  "properties": {
+                    "Text": "Execute",
+                    "Style": "suggested-action",
+                    "Enabled": false,
+                    "Width": 104
+                  }
+                },
+                {
+                  "type": "Button",
+                  "name": "BtnRemoveOrder",
+                  "properties": {
+                    "Text": "Remove",
+                    "Enabled": false,
+                    "Width": 96
+                  }
+                },
+                {
+                  "type": "Panel",
+                  "name": "Gap",
+                  "properties": {
+                    "HExpand": true
+                  }
+                },
+                {
+                  "type": "Button",
+                  "name": "BtnSave",
+                  "properties": {
+                    "Text": "Save",
+                    "Enabled": false,
+                    "Width": 104
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Label",
+      "name": "LblStatus",
+      "properties": {
+        "Wrap": true,
+        "Lines": 2,
+        "HAlign": "Fill"
+      }
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "format": "bta-agenda/1",
+
+  "Weekly": [
+    { "Weekday": "Monday",    "Time": "09:00", "Ends": "09:15", "What": "Team stand-up",  "Who": "the whole floor" },
+    { "Weekday": "Monday",    "Time": "16:30", "What": "One to one",           "Who": "Ñanculeo, Ayelén" },
+    { "Weekday": "Tuesday",   "Time": "08:15", "Ends": "09:00", "What": "Swimming",       "Who": "" },
+    { "Weekday": "Tuesday",   "Time": "10:00", "Ends": "11:00", "What": "Weekly planning", "Who": "the whole floor" },
+    { "Weekday": "Tuesday",   "Time": "11:00", "Ends": "12:30", "What": "Design review",  "Who": "Álvarez, María" },
+    { "Weekday": "Tuesday",   "Time": "18:00", "What": "Spanish class",        "Who": "" },
+    { "Weekday": "Wednesday", "Time": "09:00", "Ends": "09:15", "What": "Team stand-up",  "Who": "the whole floor" },
+    { "Weekday": "Wednesday", "Time": "14:00", "What": "Suppliers",            "Who": "Öztürk, Kerem" },
+    { "Weekday": "Thursday",  "Time": "08:15", "Ends": "09:00", "What": "Swimming",       "Who": "" },
+    { "Weekday": "Thursday",  "Time": "10:30", "What": "Budget",               "Who": "de la Fuente, Javier" },
+    { "Weekday": "Friday",    "Time": "09:00", "Ends": "09:15", "What": "Team stand-up",  "Who": "the whole floor" },
+    { "Weekday": "Friday",    "Time": "12:00", "Ends": "13:30", "What": "Lunch out",      "Who": "Echeverría, Nahuel" },
+    { "Weekday": "Friday",    "Time": "17:00", "What": "Week in review",       "Who": "" },
+        { "Weekday": "Sunday",    "Time": "13:00", "What": "Lunch at my mother's", "Who": "" }
+  ],
+
+  "Yearly": [
+    { "On": "01-01", "What": "New Year's Day" },
+    { "On": "02-14", "What": "Birthday",         "Who": "García, Andrés" },
+    { "On": "03-21", "What": "Anniversary" },
+    { "On": "05-01", "What": "Labour Day" },
+    { "On": "06-09", "What": "Birthday",         "Who": "Núñez, Facundo" },
+    { "On": "08-31", "What": "Birthday",         "Who": "Ibáñez, Camila" },
+    { "On": "09-15", "What": "Birthday",         "Who": "Zapata, Renata" },
+    { "On": "11-02", "What": "Anniversary",      "Who": "Duarte, Rocío" },
+    { "On": "12-25", "What": "Christmas Day" }
+  ]
+}

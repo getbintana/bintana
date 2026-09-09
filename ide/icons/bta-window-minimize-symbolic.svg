@@ -1,0 +1,16 @@
+<!--
+  Minimize: the bar a window is reduced to, low in the square so it reads as the
+  bottom of the screen rather than as a divider.
+
+  These three are the window buttons the designer draws on the title bar over a
+  form.  The desktop's own (window-minimize-symbolic and friends) come first --
+  see TitleBar.js -- and these are what a theme that cannot be asked for them
+  falls back to, so they are drawn as one set: the same 10px span, the same
+  1.4px stroke width, the same margins.
+
+  Fills and no strokes, like every icon here: GTK recolours a -symbolic icon by
+  forcing `fill`, and a `stroke` would stay black on a dark theme.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <rect x="3" y="10.6" width="10" height="1.4"/>
+</svg>

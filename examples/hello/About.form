@@ -1,0 +1,9 @@
+{
+  "format": "bintana-form/1",
+  "class": "About",
+  "properties": {
+    "Width": 200,
+    "Height": 60
+  },
+  "children": []
+}

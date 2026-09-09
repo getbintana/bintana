@@ -1,0 +1,79 @@
+{
+  "format": "bintana-form/1",
+  "class": "AskForm",
+  "properties": {
+    "Text": "Bintana",
+    "Width": 380,
+    "Height": 140,
+    "Resizable": false
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblPrompt",
+      "properties": {
+        "X": 16,
+        "Y": 16,
+        "Width": 348,
+        "Height": 22,
+        "Text": "",
+        "HAlign": "Fill"
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtValue",
+      "properties": {
+        "X": 16,
+        "Y": 44,
+        "Width": 348,
+        "Height": 34,
+        "Text": "",
+        "HAlign": "Fill",
+        "ActivatesDefault": true
+      }
+    },
+    {
+      "type": "CheckButton",
+      "name": "ChkOption",
+      "properties": {
+        "X": 16,
+        "Y": 84,
+        "Width": 348,
+        "Height": 26,
+        "Text": "",
+        "Visible": false,
+        "HAlign": "Fill"
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnCancel",
+      "properties": {
+        "X": 176,
+        "Y": 92,
+        "Width": 90,
+        "Height": 32,
+        "Text": "Cancel",
+        "HAlign": "End",
+        "VAlign": "End",
+        "Cancel": true
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnOk",
+      "properties": {
+        "HAlign": "End",
+        "Height": 32,
+        "Style": "suggested-action",
+        "Text": "OK",
+        "VAlign": "End",
+        "Width": 90,
+        "X": 274,
+        "Y": 92,
+        "Default": true
+      }
+    }
+  ]
+}

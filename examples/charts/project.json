@@ -1,0 +1,12 @@
+{
+  "name": "Charts",
+  "startup": "ChartsForm",
+  "uses": [
+    "charts"
+  ],
+  "sources": [
+    "ChartsForm.js"
+  ],
+  "version": "1.0",
+  "description": "Charts from the shipped library: five shapes, a measured axis, 21 600 readings"
+}

@@ -1,0 +1,68 @@
+{
+  "format": "bintana-form/1",
+  "class": "Form2",
+  "properties": {
+    "Text": "Form2",
+    "Width": 380,
+    "Height": 352,
+    "Arrangement": "Fixed"
+  },
+  "children": [
+    {
+      "type": "Button",
+      "name": "Button1",
+      "properties": {
+        "Height": 34,
+        "Text": "Button1",
+        "Width": 110,
+        "X": 16,
+        "Y": 16
+      }
+    },
+    {
+      "type": "CheckButton",
+      "name": "CheckButton1",
+      "properties": {
+        "Height": 28,
+        "Text": "CheckButton1",
+        "Width": 140,
+        "X": 16,
+        "Y": 76
+      }
+    },
+    {
+      "type": "CheckButton",
+      "name": "CheckButton2",
+      "properties": {
+        "Group": "Hola",
+        "Height": 28,
+        "Text": "CheckButton2",
+        "Width": 140,
+        "X": 16,
+        "Y": 120
+      }
+    },
+    {
+      "type": "CheckButton",
+      "name": "CheckButton3",
+      "properties": {
+        "Group": "Hola",
+        "Height": 28,
+        "Text": "CheckButton2",
+        "Width": 140,
+        "X": 16,
+        "Y": 156
+      }
+    },
+    {
+      "type": "RowList",
+      "name": "RowList1",
+      "properties": {
+        "Height": 130,
+        "Width": 180,
+        "X": 180,
+        "Y": 40
+      }
+    }
+  ]
+}

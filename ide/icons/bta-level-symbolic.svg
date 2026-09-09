@@ -1,0 +1,5 @@
+<!-- A reading: the blocks it reaches, and the ones it does not. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path d="M1 6h2.8v4H1z M4.6 6h2.8v4H4.6z M8.2 6h2.8v4H8.2z"/>
+  <path d="M11.8 6h2.8v4h-2.8z" opacity="0.45"/>
+</svg>

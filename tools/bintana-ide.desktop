@@ -1,0 +1,24 @@
+# The IDE's menu entry.
+#
+# `Exec` is the bare name and not a path: the launcher is installed in bindir,
+# and a path baked in here would be the configure-time prefix rather than
+# wherever the install actually landed.
+#
+# `StartupWMClass` is what ties a window back to this file -- see the note in
+# `bintana-ide.in` about the name the launcher starts the runtime under.  Without
+# it the desktop sees a window of class `bintana` belonging to nothing it knows.
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Bintana IDE
+Name[es]=IDE de Bintana
+GenericName=Form designer
+GenericName[es]=Diseñador de formularios
+Comment=Design forms and write the code behind them
+Comment[es]=Diseñá formularios y escribí el código detrás de ellos
+Exec=bintana-ide %f
+Icon=bintana-ide
+Terminal=false
+Categories=Development;IDE;GUIDesigner;
+Keywords=Bintana;RAD;forms;JavaScript;GTK;
+StartupWMClass=bintana-ide

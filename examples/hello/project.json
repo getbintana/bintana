@@ -1,0 +1,11 @@
+{
+  "name": "hello",
+  "startup": "Form2",
+  "sources": [
+    "Form1.js",
+    "Form2.js",
+    "About.js",
+    "Form3.js"
+  ],
+  "version": "1.0"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "widgets",
+  "startup": "WidgetsForm",
+  "sources": [
+    "Stepper.js",
+    "Chip.js",
+    "Gadgets/Stepper.js",
+    "Translated.js",
+    "WidgetsForm.js"
+  ]
+}

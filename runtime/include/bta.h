@@ -1,0 +1,686 @@
+/*
+ * Bintana runtime -- GTK4 widgets driven by QuickJS.
+ *
+ * Every widget visible from JS is one JS object carrying a BtaWidget in its
+ * opaque slot.  All widget classes share a single JSClassID; the class
+ * hierarchy (Widget -> Control -> Button, ...) lives entirely in the
+ * prototype chain, which keeps the C side flat and table driven.
+ */
+#ifndef BTA_H
+#define BTA_H
+
+#include <gtk/gtk.h>
+#include "quickjs.h"
+
+typedef struct BtaWidget BtaWidget;
+typedef struct BtaApp    BtaApp;
+
+/*
+ * What becomes of a control when its container is not the size the
+ * coordinates were written for.  GTK's own four words, because they mean the
+ * same here as they do in a box -- and they are the same four cases WinForms
+ * spells Anchor = Left / Right / Left,Right / None.
+ */
+/*
+ * ...and in a box the same four words say where the child sits in the cell it
+ * was given, which is what GTK's own halign/valign mean. One vocabulary, two
+ * containers -- but the *default* cannot be one value, because the two
+ * containers disagree about it: a drawn control stays where it was drawn, and a
+ * child of a box fills its cell. `Auto` is that disagreement, named: whatever
+ * the container does when nothing was asked for.
+ */
+typedef enum {
+    BTA_ALIGN_AUTO,     /* whatever the container does by default */
+    BTA_ALIGN_START,    /* keep the distance to the left/top edge: stays put */
+    BTA_ALIGN_END,      /* keep the distance to the right/bottom edge: slides */
+    BTA_ALIGN_CENTER,   /* keep the proportion: moves half the slack */
+    BTA_ALIGN_FILL,     /* keep both distances: stretches */
+} BtaAlign;
+
+struct BtaWidget {
+    GtkWidget *gtk;    /* outermost widget; this is what the parent lays out */
+    GtkWidget *inner;  /* the control proper (differs when wrapped in a scroller) */
+    GtkWidget *slot;   /* containers: where children go. NULL for leaf controls */
+
+    JSContext *ctx;
+    JSValue    form;   /* owning Form, duplicated -- reported via gc_mark */
+    JSValue    self;   /* this widget's own wrapper, BORROWED (never freed):
+                        * the wrapper owns us, so it always outlives us.
+                        * Lets Children map GTK widgets back to JS objects. */
+    char      *name;   /* control name; the "Button1" in Button1_Click */
+
+    /*
+     * Commands. On a **form**, the one action group its menu items, its actions
+     * and its bound controls all live in -- created by whichever of the three
+     * needs it first, and owned here because it outlives all of them.
+     *
+     * On any other widget, `action` is the path (`"form.ActDelete"`) of the
+     * action this control is bound to, or NULL. A control that has one takes its
+     * `Enabled` from the action and refuses to be told otherwise: two places
+     * governing one command is the bug an `Action` exists to prevent, and the
+     * IDE had it in two files with two different expressions.
+     */
+    GSimpleActionGroup *actions;   /* forms only */
+    char               *action;    /* everything else */
+
+    int        x, y, w, h;
+    /* The floor a stretched control may not be squeezed below. 0 means none
+     * was declared, and what GTK says the control needs is used instead. */
+    int        min_w, min_h;
+    /* Read by the surface this widget sits on; meaningless anywhere else,
+     * the way Expand is meaningless here. Default Start, i.e. stay put. */
+    BtaAlign   halign, valign;
+    /*
+     * Where Tab stops on this one, among the children of a `Fixed` surface.
+     * Carried out by `bta_fixed_focus`, and meaningless in a box for the same
+     * reason X/Y are: there the order Tab walks is the order things are drawn
+     * in, and that is not a second thing to declare.
+     *
+     * 0 for everything until something says otherwise, and ties are broken by
+     * the order the children are in -- so a form that declares nothing keeps
+     * the order it was drawn in, which is every form written before this
+     * existed. No renumbering of siblings: `TabIndex` is sparse on purpose, and
+     * a setter that renumbered would be reaching into a form that may be a
+     * drawing on the designer's canvas.
+     */
+    int        tab_index;
+    /* How many of a Grid's columns this one takes. Meaningless in any other
+     * container, exactly as X/Y are meaningless outside a Fixed. */
+    int        span;
+    /* Containers: do this one's children follow it when it is resized? Kept
+     * here and not on the slot, because Arrangement replaces the slot and the
+     * answer has to survive that. */
+    bool       anchored;
+    bool       is_form;
+    bool       opened;  /* forms: has Form_Open already fired? */
+
+    /*
+     * Forms: the size the `.form` declared, kept apart from the size the window
+     * currently is.
+     *
+     * `w`/`h` are the current size, because `Resize` writes them -- so they stop
+     * being the declaration the moment an application restores a remembered
+     * window size, which is an ordinary thing for one to do. The anchors need
+     * the *drawn* size and nothing else: it is what every coordinate in the file
+     * was measured against, and that does not change because somebody made the
+     * window smaller. See `bta_fixed.c`, where reading `w` instead of this put a
+     * toolbar 68 pixels wider than its own window at every size.
+     *
+     * Zero on anything that is not a form, and on a form built from code with no
+     * `.form` behind it -- there the first allocation is the only answer there is.
+     */
+    int        drawn_w, drawn_h;
+
+    /*
+     * Buttons: what Enter and Escape do on the form this one is on.
+     *
+     * Plain flags on the button, and **nothing is told to GTK here**. A window
+     * has one default widget, so the obvious setter would call
+     * `gtk_window_set_default_widget` -- and the designer builds the controls of
+     * the form it is drawing inside the *IDE's* window, where every one of them
+     * is bound to `MainForm` (see `bta_container_attach`), so that setter cannot
+     * tell a drawing from an application and would hand the IDE's Enter key to a
+     * button on a canvas. `form_show` resolves them instead: a drawing is never
+     * shown as a form, so it can never reach the window.
+     */
+    bool       is_default;
+    bool       is_cancel;
+
+    /* The application's own classes, as written in Style: the normal way to
+     * dress a control, and the reason the three below are the exception.
+     * A space separated list of CSS class names, NULL for none. */
+    char      *style;
+
+    /* Colours, applied through a CSS class unique to this widget. Allocated
+     * lazily: most widgets never set one. */
+    char      *style_class;
+    char      *background;
+    char      *foreground;
+    char      *font;        /* a Pango description, re-serialised; NULL for none */
+    char      *radius;      /* corner radii, "8" or "8 8 0 0"; NULL for square */
+    char      *padding;     /* inner room, same shape; NULL for the theme's */
+    /* The keys that press this control, as declared -- kept so the getter and
+     * the serialiser answer with what the .form said. */
+    char     **shortcuts;
+    GtkEventController *shortcut_ctl;   /* owned by the widget, replaced on set */
+    char      *shadow;      /* "x y blur spread colour"; NULL for none */
+    char      *border;      /* "width style colour", normalised; NULL for none */
+    /* Relative size and dimming, which is how a theme's own headings are
+     * written: a factor of whatever font is in force, and an opacity. 0 and 1
+     * are "nothing said". */
+    double     font_scale;
+    double     opacity;
+
+    /* Objects that are not this widget but carry handlers of ours: a text
+     * buffer, a selection model. Held so the finaliser can unhook them.
+     * Allocated lazily; see bta_widget_watch. */
+    GPtrArray *watched;
+
+    /* Context menu: the popover, parented to `gtk` and so ours to unparent,
+     * and the spec it was built from -- kept because a GMenu cannot be walked
+     * back into one, exactly as a form keeps __menus. Duplicated, reported via
+     * gc_mark. JS_UNDEFINED when the widget has no menu. */
+    GtkWidget *popup;
+    JSValue    menu;
+};
+
+struct BtaApp {
+    JSRuntime      *rt;
+    JSContext      *ctx;
+    GtkApplication *gapp;
+
+    char           *dir;      /* project directory */
+    char           *name;
+    /* What the project calls its own release, verbatim out of project.json;
+     * "" when it declares none, which is an ordinary state and not a fault. */
+    char           *version;
+    char           *startup;  /* class name of the form to open first */
+    /*
+     * project.json's "main": the function to call instead of opening a form.
+     * NULL for an ordinary application, and the whole of what makes a project a
+     * console one -- there is no second switch, because a project either shows
+     * a window or it does not.
+     */
+    char           *entry;
+    GPtrArray      *sources;  /* absolute paths of .js files, in load order */
+    /*
+     * The libraries `project.json`'s "uses" named, resolved to absolute
+     * directories in the order they were declared.  A library is a directory of
+     * `.js` and `.form` files and nothing else: its sources load before the
+     * project's own and its forms are indexed with them, which is the whole of
+     * what makes its classes usable from a `.form`.
+     */
+    GPtrArray      *libs;
+    GHashTable     *forms;    /* class name -> its .form, anywhere in the tree */
+    char          **args;     /* NULL-terminated; argv after the project dir */
+
+    /* The console loop, so Application.Quit can stop it. NULL while a form
+     * application runs: there GtkApplication owns the loop. */
+    GMainLoop      *loop;
+    /* Quit was called. Its own flag because a console `main` can call it before
+     * the loop exists, and a loop that has not started cannot be stopped. */
+    bool            quitting;
+
+    JSValue         startup_form;
+    int             exit_code;
+};
+
+extern JSClassID bta_widget_class_id;
+
+/* Set on every GtkWidget we create, so a GTK child can be mapped back to its
+ * BtaWidget when walking a container. Cleared by the finalizer. */
+#define BTA_WIDGET_QUARK "bta-widget"
+
+/*
+ * One entry per widget class.  bta_widgets_init() walks the table once,
+ * chaining each prototype onto its parent's and exposing the constructor as a
+ * global, so declaring a new control means adding a row plus a build function
+ * -- no plumbing.
+ */
+typedef struct BtaClass {
+    const char *name;
+    const char *parent;                 /* NULL for the root class */
+    void      (*build)(BtaWidget *w);   /* create the GTK side */
+    const JSCFunctionListEntry *props;
+    int         nprops;
+    bool        is_form;
+
+    /* The values one of this class's properties accepts, comma separated, or
+     * NULL when it is free-form.  This is what turns a string property into a
+     * drop-down in a property editor instead of a text field, and it belongs
+     * next to the property so the two cannot disagree.  The returned string
+     * must outlive the call (a literal, or a cached one). */
+    const char *(*options)(const char *prop);
+
+    /*
+     * The properties of this class that hold text a person reads, comma
+     * separated; NULL when it has none.  This is what the .form loader looks
+     * up in the catalogue, what a property editor offers a sample value for,
+     * and what an extractor collects -- one declaration, three consumers, so
+     * none of them keeps a list that can drift.
+     *
+     * It is declared per class and not deduced from the name for a reason that
+     * would otherwise be a disaster: `SourceEditor.Text` is source code and
+     * `Terminal.Text` is a screen of output.  Translating either would be
+     * silent and catastrophic, so a class says which of its strings are prose.
+     *
+     * Accumulated along the class chain rather than first-match, unlike
+     * `options`: a Button's text properties are its own *plus* Widget's
+     * Tooltip.
+     */
+    const char *texts;
+
+    /*
+     * The events this class raises, comma separated; NULL when it raises none of
+     * its own.  **The first is the default** -- the one a double click in the
+     * designer writes, which is the one you almost always want.
+     *
+     * Declared here for the same reason `texts` is: the answer belongs next to
+     * the class, and the alternative is a list somewhere else that drifts the
+     * first time a control is added. There was such a list -- `DEFAULT_EVENT` in
+     * ide/Designer.js, fifteen types written by hand with `|| "MouseDown"` as the
+     * fallback -- so `ColorButton`, `FontButton`, `Notebook`, `Switcher` and
+     * `RowList` all double-clicked into a mouse handler nobody wanted.
+     *
+     * Accumulated along the class chain like `texts` and unlike `options`: a
+     * Button's events are its own `Click` *plus* every one Widget raises.
+     */
+    const char *events;
+
+    JSValue     proto;                  /* filled in by bta_widgets_init */
+    JSValue     ctor;
+} BtaClass;
+
+/*
+ * Widgets are declared per module and gathered here.  Modules register in
+ * dependency order (see bta_class_table), because a class's parent prototype
+ * has to exist before the child can chain onto it.
+ */
+void      bta_register_classes(const BtaClass *rows, int n);
+BtaClass *bta_class_table(int *count);
+BtaClass *bta_class_find(const char *name);
+
+void bta_core_register(void);      /* bta_controls.c */
+/* A radio button's group is the container it is in, so the set changes whenever
+ * a child is added or taken out. GTK's group is a chain and not a name, so it is
+ * rebuilt from the slot's children; `child` is the one that arrived or left, and
+ * anything that is not a radio returns at once. */
+void bta_radio_regroup(GtkWidget *slot, GtkWidget *child);
+void bta_layout_register(void);    /* bta_layout.c   */
+void bta_notebook_register(void);  /* bta_notebook.c */
+/* A page just added: give it the tab name the .form promised, if any. Properties
+ * are applied before children exist, so the promise outlives the assignment. */
+void bta_notebook_page_added(GtkWidget *notebook, GtkWidget *page);
+void bta_switcher_register(void);  /* bta_switcher.c */
+/* The same promise a Switcher's Tabs makes, kept as each page arrives; a page
+ * nothing named gets one anyway, because a nameless button is a blank one. */
+void bta_switcher_page_added(GtkWidget *stack, GtkWidget *page);
+/* Moves a page among its siblings. GTK has no reorder for a stack, so this is
+ * where the pages are taken out and put back; false when it is not one. */
+bool bta_switcher_reorder(BtaWidget *w, GtkWidget *child, int index);
+void bta_paint_register(void);     /* bta_paint.c: DrawingArea */
+/* The Painter class, which is not a widget: registered with the runtime's
+ * other non-widget classes rather than in the widget table. */
+void bta_painter_init(JSContext *ctx, JSValue global);
+/* `Text`: what a string measures, asked where there is no painter -- the same
+ * font map and the same resolution a Painter's TextWidth answers with. */
+void bta_metrics_init(JSContext *ctx, JSValue global);
+void bta_text_register(void);      /* bta_text.c: Editor and TextEditor */
+/* The plumbing both editors need over whichever view they built: the scroller
+ * that becomes `gtk`, the buffer's `Change` and `Cursor`, and the watch without
+ * which those handlers outlive the widget. */
+void bta_text_view_setup(BtaWidget *w, GtkWidget *view);
+/* The line a JS caller means, 1-based and clamped, as an iter at its start --
+ * shared because a SourceEditor's marks are placed by line too. */
+void bta_text_iter_at_line(GtkTextBuffer *buf, GtkTextIter *it, int32_t line);
+void bta_editor_register(void);    /* bta_editor.c: SourceEditor */
+void bta_terminal_register(void);  /* bta_terminal.c */
+void bta_tree_register(void);
+void bta_table_register(void);      /* bta_tree.c     */
+
+/*
+ * Convenience for the module tables.  Designated initialisers, so a field
+ * added to BtaClass costs nothing here: `texts` arrived that way, and the next
+ * one will too.
+ */
+#define BTA_CLASS_FULL(cname, parent_, build_, props_, nprops_, is_form_, \
+                       options_, texts_, events_)                         \
+    { .name = cname, .parent = parent_, .build = build_,                  \
+      .props = props_, .nprops = nprops_, .is_form = is_form_,            \
+      .options = options_, .texts = texts_, .events = events_,            \
+      .proto = JS_UNDEFINED, .ctor = JS_UNDEFINED }
+
+/*
+ * Every variant takes `events` last, so a class states what it raises where it
+ * states everything else about itself.  NULL for the containers that raise
+ * nothing of their own -- which is most of them, and saying so is the point.
+ */
+#define BTA_CLASS(cname, parent, build, props, is_form, events) \
+    BTA_CLASS_FULL(cname, parent, build, props, (int)G_N_ELEMENTS(props), \
+                   is_form, NULL, NULL, events)
+#define BTA_CLASS_BARE(cname, parent, build, is_form, events) \
+    BTA_CLASS_FULL(cname, parent, build, NULL, 0, is_form, NULL, NULL, events)
+/* Same, for a class that has enumerated properties (see BtaClass.options). */
+#define BTA_CLASS_ENUM(cname, parent, build, props, is_form, options, events) \
+    BTA_CLASS_FULL(cname, parent, build, props, (int)G_N_ELEMENTS(props), \
+                   is_form, options, NULL, events)
+/* ...and for one that has properties holding prose (see BtaClass.texts). */
+#define BTA_CLASS_TEXT(cname, parent, build, props, is_form, texts, events) \
+    BTA_CLASS_FULL(cname, parent, build, props, (int)G_N_ELEMENTS(props), \
+                   is_form, NULL, texts, events)
+#define BTA_CLASS_ENUM_TEXT(cname, parent, build, props, is_form, options, texts, events) \
+    BTA_CLASS_FULL(cname, parent, build, props, (int)G_N_ELEMENTS(props), \
+                   is_form, options, texts, events)
+
+BtaApp *bta_current_app(void);
+
+/* --- runtime ------------------------------------------------------------ */
+BtaApp *bta_app_new(const char *project_dir);
+void    bta_app_free(BtaApp *app);
+int     bta_app_run(BtaApp *app, int argc, char **argv);
+
+char   *bta_read_file(const char *path, size_t *len);
+int     bta_eval_file(JSContext *ctx, const char *path);
+void    bta_dump_error(JSContext *ctx);
+void    bta_drain_jobs(JSRuntime *rt);   /* run pending promise callbacks */
+/* Resolves a top-level class by name, including `class X {}` bindings that
+ * live in the global lexical scope rather than on globalThis. */
+JSValue bta_lookup_global(JSContext *ctx, const char *name);
+
+/* --- widgets ------------------------------------------------------------ */
+void       bta_widgets_init(JSContext *ctx, JSValue global);
+/* Releases the class table's prototypes/constructors before the context dies. */
+void       bta_widgets_cleanup(JSContext *ctx);
+BtaWidget *bta_widget_of(JSValueConst v);
+/* Unwraps `this`, throwing a TypeError when it is not a widget. */
+BtaWidget *bta_this(JSContext *ctx, JSValueConst this_val);
+
+/* A number from a property setter, or false with a TypeError naming the value.
+ * Every numeric setter goes through these: JS_ToInt32 turns a string that is not
+ * a number into 0 without failing, which is how `Margin = "0 0 0 12"` was a
+ * silent zero. */
+bool       bta_to_number(JSContext *ctx, JSValueConst val, const char *name,
+                         double *out);
+bool       bta_to_int(JSContext *ctx, JSValueConst val, const char *name,
+                      int32_t *out);
+/* Calls form.<Name>_<event>() if the form defines it. */
+void       bta_emit(BtaWidget *w, const char *event, int argc, JSValueConst *argv);
+/* The same, answering whether the handler threw -- which only an exporter needs:
+ * a frame that died halfway must not become a file that reports success. */
+bool       bta_emit_ok(BtaWidget *w, const char *event, int argc, JSValueConst *argv);
+/* Same as bta_emit, for event sources that are not widgets (menu items).
+ * Returns what the handler returned, so an event can be consumed;
+ * JS_UNDEFINED when there is no handler. The caller owns the result. */
+JSValue    bta_emit_on(JSContext *ctx, JSValueConst form, const char *name,
+                       const char *event, int argc, JSValueConst *argv);
+/* Instantiates a widget class by name, as the .form loader does. */
+JSValue    bta_widget_new(JSContext *ctx, const char *type);
+/* Binds a control to its owning form: sets the name used for event lookup. */
+void       bta_widget_bind(BtaWidget *w, JSValueConst form, const char *name);
+/* Same, for every descendant that has no form yet: a subtree assembled before
+ * being attached would otherwise dispatch no events. */
+void       bta_widget_bind_tree(BtaWidget *w, JSValueConst form);
+/* "I connected a handler on this object, and it carries `w`." Anything that is
+ * not the widget itself (a GtkTextBuffer, a selection model) has to say so, or
+ * its handlers outlive the widget and fire into freed memory. */
+void       bta_widget_watch(BtaWidget *w, gpointer object);
+/* The inverse of adopting: drop the parent's JS reference to a child. Every way
+ * of removing one has to call it, or the wrappers pile up. */
+void       bta_widget_release(JSContext *ctx, JSValueConst parent_val,
+                             JSValueConst child_val);
+/* Both halves of adding a child, whatever the container: hold a JS reference to
+ * it (the wrapper owns the BtaWidget) and bind it to the form. */
+void       bta_widget_adopt(JSContext *ctx, JSValueConst parent_val,
+                            BtaWidget *parent, JSValueConst child_val,
+                            BtaWidget *child);
+/* Re-applies x/y/width/height to the GTK layout. */
+void       bta_widget_relayout(BtaWidget *w);
+/*
+ * The first control under `w` carrying `Default` or `Cancel`, in tree order, or
+ * NULL when there is none.
+ *
+ * Walked rather than remembered on purpose: a pointer to a button is a pointer
+ * that outlives it -- the family of bug that bit `Notebook.Append` -- and there
+ * is nothing here worth a weak reference for. A dialog is a dozen widgets and
+ * this runs on a keypress.
+ */
+BtaWidget *bta_widget_flagged(BtaWidget *w, bool cancel);
+/* Puts `child` into `parent`'s slot, however that slot packs its children
+ * (GtkFixed by coordinates, GtkBox appended, GtkPaned start-then-end).
+ * Returns false and throws when the slot is full or absent. */
+bool       bta_container_attach(JSContext *ctx, BtaWidget *parent, BtaWidget *child);
+/* Takes `child` out of whatever container holds it, dropping the parent's
+ * lifetime reference too. Safe on an already-detached widget. */
+bool       bta_container_detach(JSContext *ctx, BtaWidget *child);
+/* Empties a container, however its slot holds its children. */
+JSValue    bta_container_clear(JSContext *ctx, JSValueConst this_val);
+/* The Bintana widget behind one direct GTK child of a slot, or NULL when that
+ * child is not ours. A GtkListBox wraps each child in a row of its own, so the
+ * widget can be one level below what the slot reports. */
+BtaWidget *bta_slot_child(GtkWidget *child);
+/* The Widget prototype's own accessors, shared by the class table. */
+const JSCFunctionListEntry *bta_widget_base_props(int *count);
+/* Whether `prop` is one of the properties holding prose for this object's class
+ * or any it inherits from (see BtaClass.texts).  Answers about the prototype
+ * chain, so it works on anything the loader is applying properties to. */
+bool bta_widget_text_prop(JSContext *ctx, JSValueConst obj, const char *prop);
+/* Same, and says *where* in the property the prose is: `field` comes back newly
+ * allocated for a declaration like `"Columns.Text"`, NULL when the whole value
+ * is prose. See the definition. */
+bool bta_widget_text_prop_field(JSContext *ctx, JSValueConst obj,
+                                const char *prop, char **field);
+
+/* --- the RAD surface ---------------------------------------------------- */
+/*
+ * The container behind Arrangement = "Fixed": absolute coordinates that
+ * survive a resize, because each child's HAlign/VAlign says what to do with
+ * the slack. See bta_fixed.c.
+ */
+#define BTA_TYPE_FIXED (bta_fixed_get_type())
+G_DECLARE_FINAL_TYPE(BtaFixed, bta_fixed, BTA, FIXED, GtkWidget)
+GtkWidget *bta_fixed_new(void);
+/*
+ * The same layout, as a manager one can hand to any widget.
+ *
+ * What a container is and how it arranges its children are two questions, and
+ * GTK4 keeps them apart: this is what lets `Arrangement` swap the arrangement
+ * *in place*, leaving the widget the parent lays out -- with its CSS node, its
+ * handlers and its place among its siblings -- exactly where it was.
+ */
+GtkLayoutManager *bta_fixed_layout_new(void);
+/*
+ * Which arrangement a surface is wearing at the moment.
+ *
+ * `BTA_IS_FIXED(w)` is the other question -- is this one of our surfaces, i.e.
+ * can it be re-arranged at all -- and the two must not be confused: a `Panel`
+ * arranged `Horizontal` is still a `BtaFixed`, and treating it as a coordinate
+ * surface is what would take `HAlign` away from every child of a box. Anything
+ * that is not one of our surfaces answers false to both.
+ */
+bool              bta_surface_is_fixed(GtkWidget *widget);
+bool              bta_surface_is_box(GtkWidget *widget);
+/* Off for a surface that is a drawing board rather than a window: children sit
+ * exactly where they were drawn, whatever size the surface grew to. Harmless
+ * on anything that is not one of ours. */
+void       bta_fixed_set_anchored(GtkWidget *fixed, bool on);
+bool       bta_fixed_get_anchored(GtkWidget *fixed);
+
+/* --- File / Dir / Exec -------------------------------------------------- */
+void bta_sys_init(JSContext *ctx, JSValue global);
+void bta_sys_cleanup(void);   /* cancels children still running */
+/*
+ * How much of the program is still owed an answer: children running, timers
+ * armed, files watched.  A console project ends when this reaches zero -- the
+ * same bargain node makes, and the only one that lets a `main` that only prints
+ * return without hanging and a `main` that spawns something wait for it.
+ */
+guint bta_sys_pending(void);
+
+/* --- commands: actions and menus ---------------------------------------- */
+
+/*
+ * The form's action group, made on the first call and inserted on its widget.
+ * Menus, actions and bound controls share one: an accelerator, a menu item and a
+ * button naming the same command have to resolve it in the same place.
+ */
+GSimpleActionGroup *bta_form_actions(BtaWidget *form);
+
+/*
+ * Builds the form's commands from a .form "actions" array, exposing each on the
+ * form by name. Called **before** the menus and the children, both of which may
+ * name one.
+ */
+int bta_actions_build(JSContext *ctx, JSValueConst form_obj, BtaWidget *w,
+                      JSValueConst actions);
+
+/* Whether that name is a command of this form, so a control can refuse to bind
+ * to one that is not there rather than doing nothing when it is pressed. */
+bool bta_action_exists(BtaWidget *form, const char *name);
+
+/* How GTK spells the group a form's commands live in: `form.ActDelete`. */
+#define BTA_ACTION_GROUP "form"
+
+/*
+ * Puts the action's label and icon on a control that has just bound to it --
+ * and only where the control declared neither, so a toolbar button stays
+ * icon-only while the menu shows the label.
+ */
+void bta_action_dress(JSContext *ctx, BtaWidget *form, const char *name,
+                      JSValueConst control);
+
+/*
+ * A note that `key` was *declared* as one value and *applied* as another, which
+ * is what the serialiser writes back while the applied one is still there. The
+ * loader's own use is a substituted `Width`; a control dressed by a command uses
+ * it to serialise as having declared nothing.
+ */
+void bta_note_declared(JSContext *ctx, JSValueConst target, const char *key,
+                       JSValueConst declared, JSValueConst applied);
+
+/* --- menus -------------------------------------------------------------- */
+void bta_menu_init(JSContext *ctx);
+/* Builds the form's menu bar from a .form "menus" array, exposing each item on
+ * the form by name and registering its accelerator. */
+int  bta_menus_build(JSContext *ctx, JSValueConst form_obj, BtaWidget *w,
+                     JSValueConst menus);
+/* The same spec, as a context menu on one widget: the items are exposed on the
+ * form by name and dispatch as Name_Click like any other. Replaces whatever
+ * menu the widget had; a NULL or empty spec leaves it with none. */
+int  bta_menu_popup_build(JSContext *ctx, JSValueConst form_obj, BtaWidget *w,
+                          JSValueConst menus);
+/* Pops the widget's context menu up at a point in its own coordinates. */
+void bta_menu_popup_show(BtaWidget *w, double x, double y);
+/* Drops it: called from the widget finaliser, which owns the popover. */
+void bta_menu_popup_free(BtaWidget *w);
+
+/* Whether the icon search path (the desktop's, plus <project>/icons) has an
+ * icon by that name. `widget` may be NULL for the default display. */
+bool bta_icon_available(GtkWidget *widget, const char *name);
+/* Show a named icon on a GtkImage by whichever route is safe: GTK rasterises an
+ * SVG icon on a thread pool, and two icons whose SVG carries text race there, so
+ * those are resolved here and handed over as a paintable instead.  Every icon
+ * the runtime draws goes through this. */
+void bta_image_set_icon(GtkWidget *image, const char *name);
+/* The same answer for a widget that takes a paintable rather than a GtkImage:
+ * NULL means "use the icon name, it is fine". Transfer full. */
+GtkIconPaintable *bta_icon_paintable(GtkWidget *widget, const char *name, int size);
+
+/* Re-places a Grid's children: they flow in order, wrapping at `Columns`, so
+ * anything that changes the order or the spans has to say so. Harmless on a slot
+ * that is not one. */
+void bta_grid_reflow(GtkWidget *slot);
+
+/* --- Locale -------------------------------------------------------------
+ *
+ * Translation, from the project's own po/<lang>.po.  The .po and not the .mo:
+ * a project directory holds sources, nothing in it is generated or compiled,
+ * and .po is the interchange format every translation tool already speaks.
+ */
+/* `libs` are the library directories from project.json's `uses`: their `po/`
+ * is read before the project's, so the project's wording wins. */
+void bta_locale_init(JSContext *ctx, JSValue global, const char *project_dir,
+                    GPtrArray *libs);
+
+/* Decimal: exact base-10 arithmetic with the ordinary operators, which needs
+ * the JS_SetArithHandler patch in vendor/quickjs. */
+void bta_decimal_init(JSContext *ctx, JSValue global);
+
+/*
+ * `Connection` -- the base class every driver's connections inherit from, whose
+ * prototype rad.js hangs `Table` on -- and `Database`, the object a driver adds
+ * its opener to.  Everything a driver shares, which is an interface and not an
+ * implementation.  Registered before any driver.
+ */
+void bta_database_init(JSContext *ctx, JSValue global);
+
+/* The base prototype, for a driver to build its own on with JS_NewObjectProto.
+ * A fresh reference: the caller frees it. */
+JSValue bta_connection_proto(JSContext *ctx);
+
+/* One driver's opener onto `Database` -- `bta_database_driver(ctx, "Sqlite",
+ * open, 1)` makes `Database.Sqlite(path)`. */
+void bta_database_driver(JSContext *ctx, const char *name,
+                         JSCFunction *open, int nargs);
+
+/*
+ * The sqlite driver.  Optional at build time (BTA_HAVE_SQLITE); without it
+ * `Database.Sqlite` says which package is missing.  The mapping from a row to a
+ * `Record` is in rad.js -- see the head of bta_sqlite.c for why it cannot be
+ * anywhere else.
+ */
+void bta_sqlite_init(JSContext *ctx, JSValue global);
+
+/*
+ * Bytes: the value a file is when it is not text. One class, immutable, with the
+ * operations an application actually performs on a file it read.
+ */
+void bta_bytes_init(JSContext *ctx, JSValue global);
+/* A new Bytes over a **copy** of this memory -- the callers all hand over
+ * something whose lifetime is not ours (a GLib buffer, a sqlite BLOB). */
+JSValue bta_bytes_new(JSContext *ctx, const void *data, size_t len);
+/* The bytes this value holds, or NULL when it is not a Bytes. Never NULL for
+ * one that is: an empty Bytes points at nothing rather than being nothing. */
+const uint8_t *bta_bytes_get(JSValueConst v, size_t *len);
+
+/* Day: a calendar date as "YYYY-MM-DD" text -- the value DatePicker and
+ * Field.Date already hold -- with the arithmetic JavaScript's instant cannot do
+ * correctly. */
+void bta_day_init(JSContext *ctx, JSValue global);
+
+/*
+ * A Decimal's digits, for Locale to format without a double in the way: `units`
+ * in the smallest place and `scale` places, e.g. 1999 and 2 for 19.99.  `want`
+ * asks for a particular number of places, or -1 for the value's own.
+ *
+ * Three answers and not two, because "not a decimal" and "a decimal that would
+ * not fit" are different things and only the second leaves an exception behind:
+ *   1  written
+ *   0  not a Decimal -- nothing written, nothing thrown
+ *  -1  a Decimal, but it could not be scaled; an exception is pending
+ */
+int bta_decimal_parts(JSContext *ctx, JSValueConst v, int want,
+                      int64_t *units, int *scale);
+
+/*
+ * A decimal held as **text**, for whoever has to order, compare or total one
+ * where there is no JS context to complain to -- which is a sqlite callback in
+ * the middle of a statement.  `false` when the text is not a decimal; nothing is
+ * ever thrown.
+ *
+ * Two integers rather than a value, because a decimal *written down* is always
+ * exactly `units` at `scale` places: `10/3` has no text.
+ */
+bool bta_decimal_from_text(const char *text, int64_t *units, int *scale);
+
+/* And back -- `199` at 2 places is `"1.99"`.  A fresh string, g_free'd by the
+ * caller. */
+char *bta_decimal_to_text(int64_t units, int scale);
+void bta_locale_cleanup(void);
+/*
+ * The catalogue's version of `msgid`, or NULL when there is no catalogue or no
+ * entry for it.  `ctxt` disambiguates a word that is not translated the same
+ * way twice (gettext's msgctxt); NULL for none.
+ *
+ * The caller does not own the result: it lives in the catalogue.
+ */
+const char *bta_locale_lookup(const char *ctxt, const char *msgid);
+/* `{0}`, `{1}`... replaced by argv[0..].  Positional and not `%s`, because a
+ * translator has to be able to reorder them.  Always a fresh string. */
+char *bta_locale_format(JSContext *ctx, const char *text,
+                        int argc, JSValueConst *argv);
+
+/* --- .form loader ------------------------------------------------------- */
+/* Reads <project>/<class_name>.form and populates `form_obj` with the widget
+ * tree, wiring each control to its Name_Event handlers. */
+int bta_form_build(JSContext *ctx, JSValueConst form_obj, const char *class_name);
+
+/*
+ * Platform log backends.  The runtime logs to stdout and stderr on its own;
+ * these are what a system that has something better offers instead, and a build
+ * without one answers false and is none the worse for it.  Levels are the
+ * runtime's own order: 0 Debug, 1 Info, 2 Warning, 3 Error.
+ */
+bool bta_journal_available(void);
+bool bta_journal_send(int level, const char *text);
+
+#endif /* BTA_H */

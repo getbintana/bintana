@@ -1,0 +1,189 @@
+{
+  "format": "bintana-form/1",
+  "class": "ChartsForm",
+  "properties": {
+    "Text": "Charts",
+    "Width": 1120,
+    "Height": 620,
+    "Arrangement": "Vertical",
+    "Spacing": 8,
+    "Margin": 8
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "Row",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Spacing": 8,
+        "Height": 240,
+        "Expand": true
+      },
+      "children": [
+        {
+          "type": "Chart",
+          "name": "Sales",
+          "properties": {
+            "Type": "Bar",
+            "Title": "Sales, and margin on the right",
+            "Labels": [
+              "Q1",
+              "Q2",
+              "Q3",
+              "Q4"
+            ],
+            "Legend": "Bottom",
+            "Expand": true
+          },
+          "design": {
+            "Series": [
+              {
+                "Name": "2025",
+                "Values": [
+                  12,
+                  19,
+                  7,
+                  15
+                ]
+              },
+              {
+                "Name": "2026",
+                "Values": [
+                  15,
+                  12,
+                  21,
+                  18
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "Chart",
+          "name": "Share",
+          "properties": {
+            "Type": "Area",
+            "Title": "Share, monthly",
+            "Legend": "None",
+            "Decimals": 1,
+            "Width": 320
+          }
+        },
+        {
+          "type": "Chart",
+          "name": "Mix",
+          "properties": {
+            "Type": "Doughnut",
+            "Title": "Where it went",
+            "Labels": [
+              "Rent",
+              "Wages",
+              "Stock",
+              "Tax",
+              "Other"
+            ],
+            "Legend": "Bottom",
+            "ShowValues": true,
+            "Width": 260
+          }
+        }
+      ]
+    },
+    {
+      "type": "Chart",
+      "name": "Load",
+      "properties": {
+        "Type": "Line",
+        "Title": "Six hours of readings \u2014 wheel to zoom, drag to pan, double click to reset",
+        "Legend": "Bottom",
+        "Expand": true,
+        "Zoomable": true
+      }
+    },
+    {
+      "type": "Panel",
+      "name": "Bar",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Spacing": 8,
+        "Height": 34
+      },
+      "children": [
+        {
+          "type": "ComboBox",
+          "name": "CmbType",
+          "properties": {
+            "Items": [
+              "Bar",
+              "Line",
+              "Area",
+              "Pie",
+              "Doughnut"
+            ],
+            "Width": 110
+          }
+        },
+        {
+          "type": "CheckButton",
+          "name": "ChkGrid",
+          "properties": {
+            "Text": "Grid",
+            "Active": true,
+            "Width": 80
+          }
+        },
+        {
+          "type": "CheckButton",
+          "name": "ChkStack",
+          "properties": {
+            "Text": "Stacked",
+            "Width": 100
+          }
+        },
+        {
+          "type": "CheckButton",
+          "name": "ChkCurve",
+          "properties": {
+            "Text": "Rounded",
+            "Width": 100
+          }
+        },
+        {
+          "type": "CheckButton",
+          "name": "ChkReduce",
+          "properties": {
+            "Text": "Decimate",
+            "Active": true,
+            "Width": 110
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnMeasure",
+          "properties": {
+            "Text": "Measure",
+            "Width": 100
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnSave",
+          "properties": {
+            "Text": "Save a PNG",
+            "Width": 120
+          }
+        }
+      ]
+    },
+    {
+      "type": "Label",
+      "name": "LblSaid",
+      "properties": {
+        "Text": "",
+        "Height": 20,
+        "Style": "dim-label",
+        "Alignment": "Left"
+      }
+    }
+  ]
+}

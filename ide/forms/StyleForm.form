@@ -1,0 +1,109 @@
+{
+  "format": "bintana-form/1",
+  "class": "StyleForm",
+  "properties": {
+    "Height": 420,
+    "Icon": "applications-graphics-symbolic",
+    "Text": "Choose classes",
+    "Width": 420
+  },
+  "children": [
+    {
+      "type": "TextBox",
+      "name": "TxtFind",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 34,
+        "Icon": "edit-clear-symbolic",
+        "Placeholder": "Filter classes",
+        "Width": 388,
+        "X": 16,
+        "Y": 16
+      }
+    },
+    {
+      "type": "RowList",
+      "name": "List",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 274,
+        "MinHeight": 120,
+        "MinWidth": 240,
+        "Style": "frame",
+        "VAlign": "Fill",
+        "Width": 388,
+        "X": 16,
+        "Y": 58
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblChosen",
+      "properties": {
+        "Ellipsize": true,
+        "HAlign": "Fill",
+        "Height": 22,
+        "Style": "dim-label",
+        "VAlign": "End",
+        "Width": 240,
+        "X": 16,
+        "Y": 344
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnNew",
+      "properties": {
+        "Height": 32,
+        "Text": "New…",
+        "Tooltip": "A class of your own, in app.css",
+        "VAlign": "End",
+        "Width": 80,
+        "X": 16,
+        "Y": 372
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnEdit",
+      "properties": {
+        "Height": 32,
+        "Text": "Edit…",
+        "Tooltip": "Edit the project's class the list is on",
+        "VAlign": "End",
+        "Width": 80,
+        "X": 102,
+        "Y": 372
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnCancel",
+      "properties": {
+        "Cancel": true,
+        "HAlign": "End",
+        "Height": 32,
+        "Text": "Cancel",
+        "VAlign": "End",
+        "Width": 90,
+        "X": 216,
+        "Y": 372
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnOk",
+      "properties": {
+        "Default": true,
+        "HAlign": "End",
+        "Height": 32,
+        "Style": "suggested-action",
+        "Text": "Apply",
+        "VAlign": "End",
+        "Width": 90,
+        "X": 314,
+        "Y": 372
+      }
+    }
+  ]
+}

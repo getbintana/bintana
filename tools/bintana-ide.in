@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+#
+# The installed IDE, as one word.
+#
+# `bintana` takes a project directory and the IDE is a project like any other, so
+# what a menu entry -- or a person at a shell -- needs is a name for the pair.
+# That name is all this adds.
+#
+# **It resolves its own location instead of carrying a prefix.** The path baked
+# in at configure time is wrong for every install that moves afterwards, and two
+# ordinary ones do: `cmake --install --prefix <staging>` and a packager's
+# DESTDIR. What stays true is the hop between bindir and the IDE's data
+# directory -- @BTA_BIN_TO_IDE@ -- because both move together.
+#
+# **`exec -a bintana-ide` is not a flourish.** The runtime sets no GTK application
+# id, so a window's class is the name the program was started under: `bintana`, for
+# every Bintana application there is. Started under this name the IDE's window
+# says `bintana-ide`, which is what `StartupWMClass` in bintana-ide.desktop matches --
+# and that match is what puts the IDE's own icon and name in the dock instead of
+# a generic one.  It is also why this is bash and not sh: `exec -a` is not POSIX.
+set -u
+
+here=$(dirname "$(readlink -f "$0")")
+
+exec -a bintana-ide "$here/bintana" "$here/@BTA_BIN_TO_IDE@" "$@"

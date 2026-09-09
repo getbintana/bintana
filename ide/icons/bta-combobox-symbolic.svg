@@ -1,0 +1,5 @@
+<!-- A drop-down: the field and the little arrow that opens it. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path fill-rule="evenodd" d="M1 4h14v8H1z M2.2 5.2v5.6h11.6V5.2z"/>
+  <path d="M9.4 6.9h3.2L11 9.4z"/>
+</svg>

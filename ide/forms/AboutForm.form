@@ -1,0 +1,108 @@
+{
+  "format": "bintana-form/1",
+  "class": "AboutForm",
+  "properties": {
+    "Arrangement": "Vertical",
+    "Height": 380,
+    "Icon": "applications-development",
+    "Text": "About Bintana",
+    "Width": 420,
+    "Resizable": false
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "PnlContent",
+      "properties": {
+        "Arrangement": "Vertical",
+        "Expand": true,
+        "Margin": 16,
+        "Spacing": 8
+      },
+      "children": [
+        {
+          "type": "Image",
+          "name": "ImgAbout",
+          "properties": {
+            "Icon": "applications-development",
+            "Size": 96
+          }
+        },
+        {
+          "type": "Label",
+          "name": "LblName",
+          "properties": {
+            "Alignment": "Center",
+            "HAlign": "Fill",
+            "Style": "title-1",
+            "Text": "Bintana"
+          }
+        },
+        {
+          "type": "Label",
+          "name": "LblVersion",
+          "properties": {
+            "Alignment": "Center",
+            "HAlign": "Fill",
+            "Style": "dim-label",
+            "Text": ""
+          }
+        },
+        {
+          "type": "Label",
+          "name": "LblSummary",
+          "properties": {
+            "Alignment": "Center",
+            "HAlign": "Fill",
+            "Text": "A RAD environment in the spirit of Visual Basic and Gambas: QuickJS embedded in a GTK4 runtime. The IDE is written in Bintana and runs on it with no privileges of its own.",
+            "Width": 388,
+            "Wrap": true
+          }
+        },
+        {
+          "type": "Label",
+          "name": "LblCopyright",
+          "properties": {
+            "Alignment": "Center",
+            "HAlign": "Fill",
+            "Style": "dim-label",
+            "Text": "Copyright © 2026 Matias De lellis — MIT License"
+          }
+        },
+        {
+          "type": "Label",
+          "name": "LblRuntime",
+          "properties": {
+            "Alignment": "Center",
+            "Ellipsize": true,
+            "HAlign": "Fill",
+            "Style": "dim-label",
+            "Text": ""
+          }
+        },
+        {
+          "type": "Panel",
+          "name": "PnlButtons",
+          "properties": {
+            "Arrangement": "Horizontal",
+            "HAlign": "End",
+            "Spacing": 8,
+            "VAlign": "End",
+            "VExpand": true
+          },
+          "children": [
+            {
+              "type": "Button",
+              "name": "BtnClose",
+              "properties": {
+                "Style": "suggested-action",
+                "Text": "Close",
+                "Cancel": true
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

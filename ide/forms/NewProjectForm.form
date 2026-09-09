@@ -1,0 +1,143 @@
+{
+  "format": "bintana-form/1",
+  "class": "NewProjectForm",
+  "properties": {
+    "Arrangement": "Vertical",
+    "Height": 260,
+    "Text": "New project",
+    "Width": 520,
+    "Resizable": false
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "PnlContent",
+      "properties": {
+        "Arrangement": "Vertical",
+        "Expand": true,
+        "Margin": 16,
+        "Spacing": 12
+      },
+      "children": [
+        {
+          "type": "Grid",
+          "name": "Fields",
+          "properties": {
+            "Columns": 2,
+            "Spacing": 8
+          },
+          "children": [
+            {
+              "type": "Label",
+              "name": "LblName",
+              "properties": {
+                "HAlign": "End",
+                "Text": "Name:"
+              }
+            },
+            {
+              "type": "TextBox",
+              "name": "TxtName",
+              "properties": {
+                "HAlign": "Fill",
+                "HExpand": true
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblKind",
+              "properties": {
+                "HAlign": "End",
+                "Text": "Starts at:"
+              }
+            },
+            {
+              "type": "ComboBox",
+              "name": "CmbKind",
+              "properties": {
+                "HAlign": "Fill",
+                "HExpand": true,
+                "Items": [
+                  "a form",
+                  "a function"
+                ],
+                "Tooltip": "A form opens a window; a function is a console project -- it never draws"
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblDesc",
+              "properties": {
+                "HAlign": "End",
+                "Text": "Description:"
+              }
+            },
+            {
+              "type": "TextBox",
+              "name": "TxtDesc",
+              "properties": {
+                "HAlign": "Fill",
+                "HExpand": true
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblBase",
+              "properties": {
+                "HAlign": "End",
+                "Text": "Base folder:"
+              }
+            },
+            {
+              "type": "TextBox",
+              "name": "TxtBase",
+              "properties": {
+                "HAlign": "Fill",
+                "HExpand": true,
+                "Icon": "folder-open"
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblHint",
+              "properties": {
+                "ColumnSpan": 2,
+                "HAlign": "Fill",
+                "Text": ""
+              }
+            }
+          ]
+        },
+        {
+          "type": "Panel",
+          "name": "PnlButtons",
+          "properties": {
+            "Arrangement": "Horizontal",
+            "HAlign": "End",
+            "Spacing": 8
+          },
+          "children": [
+            {
+              "type": "Button",
+              "name": "BtnCancel",
+              "properties": {
+                "Text": "Cancel",
+                "Cancel": true
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnCreate",
+              "properties": {
+                "Icon": "document-new",
+                "Style": "suggested-action",
+                "Text": "Create",
+                "Default": true
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

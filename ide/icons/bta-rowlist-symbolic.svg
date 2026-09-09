@@ -1,0 +1,8 @@
+<!-- Rows that hold controls rather than text: a widget in each row. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path fill-rule="evenodd" d="M1 2h14v12H1z M2.2 3.2v9.6h11.6V3.2z"/>
+  <path d="M3.2 4.2h2.4v2.4H3.2z"/>
+  <path d="M6.4 4.8h6.4v1.2H6.4z" opacity="0.45"/>
+  <path d="M3.2 8h2.4v2.4H3.2z"/>
+  <path d="M6.4 8.6h6.4v1.2H6.4z" opacity="0.45"/>
+</svg>

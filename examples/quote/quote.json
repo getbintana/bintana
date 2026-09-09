@@ -1,0 +1,16 @@
+{
+  "format": "bta-quote/1",
+
+  "customer":    "Ñanculeo, Ayelén",
+  "date":        "2026-08-24",
+  "discount":    "5.00",
+  "tax":         "21",
+  "instalments": 3,
+
+  "lines": [
+    { "what": "Design of the catalogue",   "quantity": "18.00", "price": "4200.00" },
+    { "what": "Photography, per session",  "quantity": "3.00",  "price": "16500.00" },
+    { "what": "Printing, 500 copies",      "quantity": "1.00",  "price": "87400.00" },
+    { "what": "Delivery",                  "quantity": "1.00",  "price": "9950.00" }
+  ]
+}

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  A rule: two groups of things with a line between them.
+
+  Fills and no strokes, which is the rule for an own -symbolic icon here: GTK
+  recolours by forcing `fill`, so a stroke keeps the colour written in the file
+  and comes out black on a dark theme.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path d="M2 3h12v1.5H2zM2 5.5h8V7H2z" opacity="0.45"/>
+  <path d="M1 8h14v1.5H1z"/>
+  <path d="M2 11h12v1.5H2zM2 13.5h8V15H2z" opacity="0.45"/>
+</svg>

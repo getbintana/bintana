@@ -1,0 +1,48 @@
+{
+  "format": "bintana-form/1",
+  "class": "TestForm",
+  "properties": {
+    "Text": "smoke",
+    "Width": 320,
+    "Height": 240
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "Label1",
+      "properties": { "X": 10, "Y": 12, "Width": 120, "Height": 20, "Text": "label" }
+    },
+    {
+      "type": "Button",
+      "name": "Button1",
+      "properties": { "X": 10, "Y": 40, "Width": 90, "Height": 30, "Text": "button" }
+    },
+    {
+      "type": "TextBox",
+      "name": "TextBox1",
+      "properties": { "X": 10, "Y": 78, "Width": 200, "Height": 30 }
+    },
+    {
+      "type": "CheckButton",
+      "name": "CheckBox1",
+      "properties": { "X": 10, "Y": 114, "Width": 140, "Height": 24, "Text": "check" }
+    },
+    {
+      "type": "ListBox",
+      "name": "ListBox1",
+      "properties": { "X": 10, "Y": 144, "Width": 200, "Height": 60 }
+    },
+    {
+      "type": "Panel",
+      "name": "Panel1",
+      "properties": { "X": 220, "Y": 40, "Width": 90, "Height": 100 },
+      "children": [
+        {
+          "type": "Label",
+          "name": "Nested1",
+          "properties": { "X": 4, "Y": 4, "Width": 80, "Height": 20, "Text": "nested" }
+        }
+      ]
+    }
+  ]
+}

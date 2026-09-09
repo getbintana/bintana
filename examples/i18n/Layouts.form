@@ -1,0 +1,201 @@
+{
+  "format": "bintana-form/1",
+  "class": "Layouts",
+  "properties": {
+    "Arrangement": "Vertical",
+    "Height": 520,
+    "Spacing": 8,
+    "Text": "Layout under translation",
+    "Width": 460
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblIntro",
+      "properties": {
+        "Alignment": "Left",
+        "Margin": 8,
+        "Text": "The same three buttons, laid out four ways. The dashed line is where the box above them ends.",
+        "Wrap": true
+      }
+    },
+    {
+      "type": "Frame",
+      "name": "FrmFixed",
+      "properties": {
+        "Arrangement": "Fixed",
+        "Height": 76,
+        "Margin": 8,
+        "Text": "1. Coordinates, no slack"
+      },
+      "children": [
+        {
+          "type": "Panel",
+          "name": "RulerA",
+          "properties": { "Background": "#3584e4", "Height": 3, "Width": 268, "X": 8, "Y": 6 }
+        },
+        {
+          "type": "Button",
+          "name": "BtnFixedItem",
+          "properties": { "Height": 30, "Text": "Item", "Width": 84, "X": 8, "Y": 16 }
+        },
+        {
+          "type": "Button",
+          "name": "BtnFixedSub",
+          "properties": { "Height": 30, "Text": "Submenu", "Width": 88, "X": 98, "Y": 16 }
+        },
+        {
+          "type": "Button",
+          "name": "BtnFixedRule",
+          "properties": { "Height": 30, "Text": "Rule", "Width": 84, "X": 192, "Y": 16 }
+        }
+      ]
+    },
+    {
+      "type": "Frame",
+      "name": "FrmSlack",
+      "properties": {
+        "Arrangement": "Fixed",
+        "Height": 76,
+        "Margin": 8,
+        "Text": "2. Coordinates, with room to grow into"
+      },
+      "children": [
+        {
+          "type": "Panel",
+          "name": "RulerB",
+          "properties": { "Background": "#3584e4", "Height": 3, "Width": 380, "X": 8, "Y": 6 }
+        },
+        {
+          "type": "Button",
+          "name": "BtnSlackItem",
+          "properties": { "Height": 30, "Text": "Item", "Width": 84, "X": 8, "Y": 16 }
+        },
+        {
+          "type": "Button",
+          "name": "BtnSlackSub",
+          "properties": { "Height": 30, "Text": "Submenu", "Width": 88, "X": 98, "Y": 16 }
+        },
+        {
+          "type": "Button",
+          "name": "BtnSlackRule",
+          "properties": { "Height": 30, "Text": "Rule", "Width": 84, "X": 192, "Y": 16 }
+        }
+      ]
+    },
+    {
+      "type": "Frame",
+      "name": "FrmBox",
+      "properties": {
+        "Height": 70,
+        "Margin": 8,
+        "Text": "3. A horizontal box"
+      },
+      "children": [
+        {
+          "type": "Panel",
+          "name": "BoxRow",
+          "properties": {
+            "Arrangement": "Horizontal",
+            "HAlign": "Start",
+            "Margin": 6,
+            "Spacing": 6,
+            "VAlign": "Start"
+          },
+          "children": [
+            {
+              "type": "Button",
+              "name": "BtnBoxItem",
+              "properties": { "Height": 30, "Text": "Item", "Width": 84 }
+            },
+            {
+              "type": "Button",
+              "name": "BtnBoxSub",
+              "properties": { "Height": 30, "Text": "Submenu", "Width": 88 }
+            },
+            {
+              "type": "Button",
+              "name": "BtnBoxRule",
+              "properties": { "Height": 30, "Text": "Rule", "Width": 84 }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Frame",
+      "name": "FrmEven",
+      "properties": {
+        "Height": 70,
+        "Margin": 8,
+        "Text": "4. A horizontal box, homogeneous"
+      },
+      "children": [
+        {
+          "type": "Panel",
+          "name": "EvenRow",
+          "properties": {
+            "Arrangement": "Horizontal",
+            "Homogeneous": true,
+            "Margin": 6,
+            "Spacing": 6,
+            "VAlign": "Start"
+          },
+          "children": [
+            {
+              "type": "Button",
+              "name": "BtnEvenItem",
+              "properties": { "Height": 30, "Text": "Item" }
+            },
+            {
+              "type": "Button",
+              "name": "BtnEvenSub",
+              "properties": { "Height": 30, "Text": "Submenu" }
+            },
+            {
+              "type": "Button",
+              "name": "BtnEvenRule",
+              "properties": { "Height": 30, "Text": "Rule" }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Panel",
+      "name": "Bar",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Margin": 8,
+        "Spacing": 8
+      },
+      "children": [
+        {
+          "type": "Label",
+          "name": "LblLang",
+          "properties": { "Alignment": "Left", "HExpand": true }
+        },
+        {
+          "type": "Button",
+          "name": "BtnAnchors",
+          "properties": { "Height": 32, "Text": "Anchors...", "Width": 110 }
+        },
+        {
+          "type": "Button",
+          "name": "BtnMeasure",
+          "properties": { "Height": 32, "Text": "Measure", "Width": 110 }
+        }
+      ]
+    },
+    {
+      "type": "TextEditor",
+      "name": "Report",
+      "properties": {
+        "Expand": true,
+        "Margin": 8,
+        "ReadOnly": true,
+        "Wrap": false
+      }
+    }
+  ]
+}

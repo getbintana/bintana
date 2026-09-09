@@ -1,0 +1,5 @@
+{
+  "name": "smoke",
+  "startup": "TestForm",
+  "sources": ["TestForm.js"]
+}

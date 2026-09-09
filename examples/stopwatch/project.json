@@ -1,0 +1,9 @@
+{
+  "name": "Stopwatch",
+  "startup": "StopwatchForm",
+  "sources": [
+    "StopwatchForm.js"
+  ],
+  "version": "1.0",
+  "description": "How long something took: the forward-only clock, and why counting ticks is the wrong answer"
+}

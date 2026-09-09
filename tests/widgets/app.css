@@ -1,0 +1,14 @@
+/*
+ * The application's stylesheet, which the runtime loads because it is named
+ * app.css and sits next to project.json.  Here it exists so the suite can see
+ * that it was loaded at all: a class that changes something a test can measure.
+ *
+ * Prefixed t- so nothing here can collide with a class GTK or the theme has.
+ */
+.t-big {
+    font-size: 32pt;
+}
+
+.t-red {
+    color: rgb(255, 0, 0);
+}

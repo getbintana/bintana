@@ -1,0 +1,9 @@
+{
+  "name": "Files",
+  "startup": "Files",
+  "sources": [
+    "Files.js"
+  ],
+  "version": "1.0",
+  "description": "A directory listed into a RowList, and filtered without rebuilding a row"
+}

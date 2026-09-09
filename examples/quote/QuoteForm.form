@@ -1,0 +1,202 @@
+{
+  "format": "bintana-form/1",
+  "class": "QuoteForm",
+  "properties": {
+    "Text": "Quote",
+    "Icon": "accessories-calculator-symbolic",
+    "Width": 720,
+    "Height": 512
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblCustomer",
+      "properties": { "Height": 20, "Text": "Customer", "Width": 70, "X": 12, "Y": 19 }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtCustomer",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 34,
+        "Placeholder": "Who this is for",
+        "Width": 382,
+        "X": 86,
+        "Y": 12
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblDate",
+      "properties": { "HAlign": "End", "Height": 20, "Text": "Date", "Width": 40, "X": 488, "Y": 19 }
+    },
+    {
+      "type": "DatePicker",
+      "name": "PckDate",
+      "properties": { "HAlign": "End", "Height": 34, "Width": 170, "X": 538, "Y": 12 }
+    },
+    {
+      "type": "RowList",
+      "name": "List",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 240,
+        "MinHeight": 100,
+        "MinWidth": 420,
+        "Style": "frame",
+        "VAlign": "Fill",
+        "Width": 696,
+        "X": 12,
+        "Y": 58
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtWhat",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 34,
+        "Placeholder": "What",
+        "VAlign": "End",
+        "Width": 330,
+        "X": 12,
+        "Y": 310
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtQuantity",
+      "properties": {
+        "Alignment": "Right",
+        "HAlign": "End",
+        "Height": 34,
+        "Placeholder": "Qty",
+        "Purpose": "Number",
+        "VAlign": "End",
+        "Width": 80,
+        "X": 352,
+        "Y": 310
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtPrice",
+      "properties": {
+        "Alignment": "Right",
+        "HAlign": "End",
+        "Height": 34,
+        "Placeholder": "Unit price",
+        "Purpose": "Number",
+        "VAlign": "End",
+        "Width": 100,
+        "X": 440,
+        "Y": 310
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnAdd",
+      "properties": {
+        "HAlign": "End",
+        "Height": 34,
+        "Text": "Add",
+        "VAlign": "End",
+        "Width": 76,
+        "X": 548,
+        "Y": 310
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnRemove",
+      "properties": {
+        "Enabled": false,
+        "HAlign": "End",
+        "Height": 34,
+        "Text": "Remove",
+        "VAlign": "End",
+        "Width": 76,
+        "X": 632,
+        "Y": 310
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblInstalments",
+      "properties": { "Height": 20, "Text": "Instalments", "VAlign": "End", "Width": 84, "X": 12, "Y": 361 }
+    },
+    {
+      "type": "SpinBox",
+      "name": "SpnInstalments",
+      "properties": { "Height": 34, "Max": 12, "Min": 1, "VAlign": "End", "Value": 1, "Width": 70, "X": 104, "Y": 354 }
+    },
+    {
+      "type": "Label",
+      "name": "LblSplit",
+      "properties": {
+        "Height": 66,
+        "Style": "dim-label",
+        "VAlign": "End",
+        "Width": 376,
+        "Wrap": true,
+        "X": 12,
+        "Y": 394
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnSave",
+      "properties": { "Height": 34, "Text": "Save…", "VAlign": "End", "Width": 110, "X": 12, "Y": 466 }
+    },
+    {
+      "type": "Label",
+      "name": "LblSubtotalCaption",
+      "properties": { "Alignment": "Right", "HAlign": "End", "Height": 22, "Text": "Subtotal", "VAlign": "End", "Width": 120, "X": 400, "Y": 358 }
+    },
+    {
+      "type": "Label",
+      "name": "LblSubtotal",
+      "properties": { "Alignment": "Right", "HAlign": "End", "Height": 22, "VAlign": "End", "Width": 92, "X": 616, "Y": 358 }
+    },
+    {
+      "type": "Label",
+      "name": "LblDiscountCaption",
+      "properties": { "Alignment": "Right", "HAlign": "End", "Height": 22, "Text": "Discount %", "VAlign": "End", "Width": 120, "X": 400, "Y": 394 }
+    },
+    {
+      "type": "SpinBox",
+      "name": "SpnDiscount",
+      "properties": { "Decimals": 2, "HAlign": "End", "Height": 30, "Max": 100, "Min": 0, "Step": 0.5, "VAlign": "End", "Width": 80, "X": 528, "Y": 390 }
+    },
+    {
+      "type": "Label",
+      "name": "LblDiscount",
+      "properties": { "Alignment": "Right", "HAlign": "End", "Height": 22, "Style": "dim-label", "VAlign": "End", "Width": 92, "X": 616, "Y": 394 }
+    },
+    {
+      "type": "Label",
+      "name": "LblTaxCaption",
+      "properties": { "Alignment": "Right", "HAlign": "End", "Height": 22, "Text": "VAT %", "VAlign": "End", "Width": 120, "X": 400, "Y": 430 }
+    },
+    {
+      "type": "ComboBox",
+      "name": "CmbTax",
+      "properties": { "HAlign": "End", "Height": 30, "VAlign": "End", "Width": 80, "X": 528, "Y": 426 }
+    },
+    {
+      "type": "Label",
+      "name": "LblTax",
+      "properties": { "Alignment": "Right", "HAlign": "End", "Height": 22, "Style": "dim-label", "VAlign": "End", "Width": 92, "X": 616, "Y": 430 }
+    },
+    {
+      "type": "Label",
+      "name": "LblTotalCaption",
+      "properties": { "Alignment": "Right", "HAlign": "End", "Height": 24, "Style": "heading", "Text": "Total", "VAlign": "End", "Width": 120, "X": 400, "Y": 466 }
+    },
+    {
+      "type": "Label",
+      "name": "LblTotal",
+      "properties": { "Alignment": "Right", "HAlign": "End", "Height": 24, "Style": "title-4", "VAlign": "End", "Width": 180, "X": 528, "Y": 466 }
+    }
+  ]
+}

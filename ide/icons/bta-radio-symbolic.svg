@@ -1,0 +1,5 @@
+<!-- A chosen option: the ring, and the dot inside it. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path fill-rule="evenodd" d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13z M8 2.7a5.3 5.3 0 1 1 0 10.6 5.3 5.3 0 0 1 0-10.6z"/>
+  <path d="M8 5a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"/>
+</svg>

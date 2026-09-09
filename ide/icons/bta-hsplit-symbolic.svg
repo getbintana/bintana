@@ -1,0 +1,6 @@
+<!-- Two halves and the divider between them, side by side. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path fill-rule="evenodd" d="M1 2h6v12H1z M2.2 3.2v9.6h3.6V3.2z"/>
+  <path fill-rule="evenodd" d="M9 2h6v12H9z M10.2 3.2v9.6h3.6V3.2z"/>
+  <rect x="7.4" y="4" width="1.2" height="8"/>
+</svg>

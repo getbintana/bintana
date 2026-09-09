@@ -1,0 +1,11 @@
+{
+  "format": "bintana-form/1",
+  "class": "Gadgets.Stepper",
+  "properties": { "Width": 140, "Height": 30 },
+  "children": [
+    { "type": "Label", "name": "Shown",
+      "properties": { "X": 0, "Y": 0, "Width": 60, "Height": 24, "Text": "x" } },
+    { "type": "Button", "name": "Bump",
+      "properties": { "X": 70, "Y": 0, "Width": 60, "Height": 28, "Text": "bump" } }
+  ]
+}

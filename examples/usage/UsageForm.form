@@ -1,0 +1,118 @@
+{
+  "format": "bintana-form/1",
+  "class": "UsageForm",
+  "properties": {
+    "Text": "Usage",
+    "Width": 680,
+    "Height": 480
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "Strip",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Height": 34,
+        "Style": "linked",
+        "Width": 200,
+        "X": 12,
+        "Y": 12
+      },
+      "children": [
+        {
+          "type": "Button",
+          "name": "BtnUp",
+          "properties": {
+            "Height": 34,
+            "Shortcut": ["<Alt>Up"],
+            "Text": "Up",
+            "Tooltip": "The folder above this one",
+            "Width": 56
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnChoose",
+          "properties": {
+            "Height": 34,
+            "Text": "Choose folder…",
+            "Width": 144
+          }
+        }
+      ]
+    },
+    {
+      "type": "Label",
+      "name": "LblPath",
+      "properties": {
+        "Ellipsize": true,
+        "HAlign": "Fill",
+        "Height": 20,
+        "Style": "dim-label",
+        "VAlign": "Center",
+        "Width": 340,
+        "X": 224,
+        "Y": 19
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnStop",
+      "properties": {
+        "Enabled": false,
+        "HAlign": "End",
+        "Height": 34,
+        "Shortcut": ["Escape"],
+        "Text": "Stop",
+        "Tooltip": "Escape",
+        "Width": 90,
+        "X": 578,
+        "Y": 12
+      }
+    },
+    {
+      "type": "RowList",
+      "name": "List",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 348,
+        "MinHeight": 120,
+        "MinWidth": 380,
+        "Style": "frame",
+        "VAlign": "Fill",
+        "Width": 656,
+        "X": 12,
+        "Y": 58
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblStatus",
+      "properties": {
+        "Ellipsize": true,
+        "HAlign": "Fill",
+        "Height": 34,
+        "Style": "dim-label",
+        "VAlign": "End",
+        "Width": 540,
+        "X": 12,
+        "Y": 434
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnOpen",
+      "properties": {
+        "Enabled": false,
+        "HAlign": "End",
+        "Height": 34,
+        "Text": "Open",
+        "Tooltip": "Measure that folder instead",
+        "VAlign": "End",
+        "Width": 100,
+        "X": 568,
+        "Y": 434
+      }
+    }
+  ]
+}

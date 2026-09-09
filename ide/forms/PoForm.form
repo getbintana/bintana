@@ -1,0 +1,141 @@
+{
+  "format": "bintana-form/1",
+  "class": "PoForm",
+  "properties": {
+    "Arrangement": "Vertical",
+    "Height": 560,
+    "Text": "Translations",
+    "Width": 760
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "Bar",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Margin": 8,
+        "Spacing": 8
+      },
+      "children": [
+        {
+          "type": "Label",
+          "name": "LblCount",
+          "properties": {
+            "Alignment": "Left",
+            "HExpand": true
+          }
+        },
+        {
+          "type": "CheckButton",
+          "name": "ChkTodo",
+          "properties": {
+            "Text": "Only untranslated",
+            "Tooltip": "Show just the entries with nothing in them, and the ones marked as needing work"
+          }
+        }
+      ]
+    },
+    {
+      "type": "Split",
+      "name": "Body",
+      "properties": {
+        "Arrangement": "Vertical",
+        "Expand": true,
+        "Position": 240
+      },
+      "children": [
+        {
+          "type": "ListBox",
+          "name": "LstEntries",
+          "properties": {
+            "Expand": true
+          }
+        },
+        {
+          "type": "Panel",
+          "name": "Pane",
+          "properties": {
+            "Arrangement": "Vertical",
+            "Margin": 8,
+            "Spacing": 4
+          },
+          "children": [
+            {
+              "type": "Label",
+              "name": "LblSourceCaption",
+              "properties": {
+                "Alignment": "Left",
+                "Style": "caption-heading",
+                "Text": "Source"
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblSource",
+              "properties": {
+                "Alignment": "Left",
+                "HExpand": true,
+                "Wrap": true
+              }
+            },
+            {
+              "type": "Panel",
+              "name": "Forms",
+              "properties": {
+                "Arrangement": "Vertical",
+                "Expand": true,
+                "Spacing": 4
+              }
+            },
+            {
+              "type": "CheckButton",
+              "name": "ChkFuzzy",
+              "properties": {
+                "Text": "Needs work",
+                "Tooltip": "gettext's fuzzy flag: a translation nobody has confirmed, which the runtime will not use"
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblRefs",
+              "properties": {
+                "Alignment": "Left",
+                "Style": "dim-label",
+                "Wrap": true
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Panel",
+      "name": "Buttons",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "HAlign": "End",
+        "Margin": 8,
+        "Spacing": 8
+      },
+      "children": [
+        {
+          "type": "Button",
+          "name": "BtnSave",
+          "properties": {
+            "Style": "suggested-action",
+            "Text": "Save",
+            "Width": 100
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnClose",
+          "properties": {
+            "Text": "Close",
+            "Width": 100
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "format": "bintana-form/1",
+  "class": "Stepper",
+  "properties": { "Width": 180, "Height": 34 },
+  "children": [
+    { "type": "Button", "name": "Down",
+      "properties": { "X": 0, "Y": 0, "Width": 32, "Height": 30, "Text": "-" } },
+    { "type": "Label", "name": "Shown",
+      "properties": { "X": 40, "Y": 4, "Width": 60, "Height": 24, "Text": "0" } },
+    { "type": "Button", "name": "Up",
+      "properties": { "X": 110, "Y": 0, "Width": 32, "Height": 30, "Text": "+" } }
+  ]
+}

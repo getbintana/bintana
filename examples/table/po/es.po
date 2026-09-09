@@ -1,0 +1,156 @@
+# Spanish for the TableView example.
+#
+# Worth reading for one thing: **a column's heading is here and its Alignment is
+# not.** `TableView` declares `Columns.Text` as its prose, so the loader
+# translates that member of every column object and copies `Width` and
+# `Alignment` untouched. A catalogue that reached `Alignment` would translate the
+# word `Right` and the runtime would then refuse the value the file wrote.
+#
+# Run it with:  LANGUAGE=es ./build/bintana examples/table
+msgid ""
+msgstr ""
+"Project-Id-Version: table\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: Form1.form: Form1.Text
+msgid "TableView"
+msgstr "TableView"
+
+#: Form1.form: Pages.Tabs
+msgid "Rows it holds"
+msgstr "Filas que guarda"
+
+#: Form1.form: Pages.Tabs
+msgid "Rows it does not"
+msgstr "Filas que no guarda"
+
+# The headings of the first table.
+#: Form1.form: Files.Columns.Text
+msgid "Name"
+msgstr "Nombre"
+
+#: Form1.form: Files.Columns.Text
+msgid "Size"
+msgstr "Tamaño"
+
+#: Form1.form: Files.Columns.Text
+msgid "Kind"
+msgstr "Tipo"
+
+# ...and of the second.
+#: Form1.form: Big.Columns.Text
+msgid "Row"
+msgstr "Fila"
+
+#: Form1.form: Big.Columns.Text
+msgid "Square"
+msgstr "Cuadrado"
+
+#: Form1.form: Big.Columns.Text
+msgid "Every third"
+msgstr "Cada tres"
+
+#: Form1.form: BtnAdd.Text
+msgid "Add a row"
+msgstr "Agregar una fila"
+
+#: Form1.form: BtnDelete.Text
+msgid "Delete"
+msgstr "Eliminar"
+
+#: Form1.form: BtnRename.Text
+msgid "Rename"
+msgstr "Renombrar"
+
+#: Form1.form: BtnClear.Text
+msgid "Clear"
+msgstr "Vaciar"
+
+#: Form1.form: ChkMulti.Text
+msgid "Many at once"
+msgstr "Varias a la vez"
+
+#: Form1.js
+msgid "{0} rows. Selected: {1}. Click a heading to sort; double click a row."
+msgstr "{0} filas. Seleccionadas: {1}. Clic en un encabezado ordena; doble clic en una fila."
+
+#: Form1.js
+msgid "none"
+msgstr "ninguna"
+
+#: Form1.js
+msgid "Sorted by {0}, {1}"
+msgstr "Ordenado por {0}, {1}"
+
+#: Form1.js
+msgid "ascending"
+msgstr "ascendente"
+
+#: Form1.js
+msgid "descending"
+msgstr "descendente"
+
+#: Form1.js
+msgid "{0} is {1}"
+msgstr "{0} es {1}"
+
+#: Form1.js
+msgid "Nothing is selected."
+msgstr "No hay nada seleccionado."
+
+#: Form1.js
+msgid "Select a row first."
+msgstr "Elegí una fila primero."
+
+#: Form1.js
+msgid "Row {0} is selected"
+msgstr "La fila {0} está seleccionada"
+
+#: Form1.js
+msgid "yes"
+msgstr "sí"
+
+#: Form1.js
+msgid "no"
+msgstr "no"
+
+#: Form1.js
+msgid "{0} rows, and {1} questions asked so far. Scroll, and watch the second number: a table that answers Data is only ever asked about what is on screen."
+msgstr "{0} filas, y {1} preguntas hechas hasta ahora. Andá scrolleando y mirá el segundo número: a una tabla que contesta Data sólo se le pregunta por lo que está en pantalla."
+
+#. The third page: a table whose rows nest.
+#: Form1.form
+msgid "Rows that nest"
+msgstr "Filas que anidan"
+
+#: Form1.form
+msgid "Expand all"
+msgstr "Expandir todo"
+
+#: Form1.form
+msgid "Collapse all"
+msgstr "Colapsar todo"
+
+#. Removing a node takes its subtree with it, which is why this says the folder
+#. and not the row.
+#: Form1.form
+msgid "Remove the folder"
+msgstr "Quitar la carpeta"
+
+#: Form1.js
+msgid "Choose a node first."
+msgstr "Elegí un nodo primero."
+
+#: Form1.js
+msgid "{0} nodes, addressed by key."
+msgstr "{0} nodos, direccionados por clave."
+
+#. The point of the page in one line: the key is what a program keeps, because
+#. the position is of the visible list.
+#: Form1.js
+msgid "{0} nodes. Selected: {1} — row {2} of what is on screen, which is why the key is what to keep."
+msgstr "{0} nodos. Seleccionado: {1} — fila {2} de lo que está en pantalla, que es justamente por qué lo que se guarda es la clave."

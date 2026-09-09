@@ -1,0 +1,5 @@
+<!-- How far along: the track as a frame, filled up to a bit past halfway. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path fill-rule="evenodd" d="M1 5h14v6H1z M2.2 6.2v3.6h11.6V6.2z"/>
+  <path d="M2.2 6.2h6.8v3.6H2.2z"/>
+</svg>

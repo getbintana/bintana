@@ -1,0 +1,55 @@
+# Spanish for the hello example.
+#
+# Nothing in project.json points at this directory: po/ is found by name, the way
+# icons/ and app.css are. The runtime reads the .po itself rather than a compiled
+# .mo, because nothing in a project directory is generated.
+#
+# Written by hand here; in a project one runs Project > Update translations in the
+# IDE, which walks the .form files and the code and writes po/hello.pot for
+# msgmerge (or Poedit) to bring the catalogues up to date.
+msgid ""
+msgstr ""
+"Project-Id-Version: hello\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+# --- declared in the .form files: nothing in the code asks for these ---------
+#: Form1.form: Form1.Text
+msgid "Hello Bintana"
+msgstr "Hola Bintana"
+
+#: Form1.form: Label1.Text
+msgid "Your name:"
+msgstr "Tu nombre:"
+
+#: Form1.form: Button1.Text
+msgid "Greet"
+msgstr "Saludar"
+
+#: Form1.form: CheckBox1.Text
+msgid "Upper case"
+msgstr "Mayúsculas"
+
+#: Form2.form: Form2.Text
+msgid "Form2"
+msgstr "Formulario 2"
+
+#: Form2.form: Button1.Text
+msgid "Button1"
+msgstr ""
+
+#: Form1.js:38
+msgid "Hello {0}!"
+msgstr "¡Hola {0}!"
+
+#: Form1.js:48
+msgid "Hello Bintana -- {0}"
+msgstr "Hola Bintana -- {0}"
+
+# --- the exception: strings built in code ------------------------------------
+#: Form1.js:22
+msgid "Type a name first."
+msgstr "Escribí un nombre primero."

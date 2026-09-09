@@ -1,0 +1,9 @@
+{
+  "name": "i18n",
+  "startup": "Layouts",
+  "sources": [
+    "Layouts.js",
+    "Anchors.js"
+  ],
+  "description": "What translation does to a layout, measured rather than eyeballed."
+}

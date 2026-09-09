@@ -1,0 +1,51 @@
+{
+  "format": "bintana-form/1",
+  "class": "AskName",
+  "properties": {
+    "Text": "Notes",
+    "Width": 380,
+    "Height": 150,
+    "Resizable": false
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblPrompt",
+      "properties": { "HAlign": "Fill", "Height": 20, "Width": 348, "X": 16, "Y": 20 }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtName",
+      "properties": { "HAlign": "Fill", "Height": 34, "Width": 348, "X": 16, "Y": 48 }
+    },
+    {
+      "type": "Button",
+      "name": "BtnCancel",
+      "properties": {
+        "Cancel": true,
+        "HAlign": "End",
+        "Height": 32,
+        "Text": "Cancel",
+        "VAlign": "End",
+        "Width": 90,
+        "X": 170,
+        "Y": 100
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnOk",
+      "properties": {
+        "Default": true,
+        "HAlign": "End",
+        "Height": 32,
+        "Style": "suggested-action",
+        "Text": "OK",
+        "VAlign": "End",
+        "Width": 90,
+        "X": 274,
+        "Y": 100
+      }
+    }
+  ]
+}

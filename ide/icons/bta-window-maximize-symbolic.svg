@@ -1,0 +1,13 @@
+<!--
+  Maximize: the window filling the screen, drawn as the outline of it.
+
+  Four bars and not a rectangle with a hole, for the same reason the frame icon
+  is: what is being drawn is a border.  See bta-window-minimize-symbolic.svg for
+  what the three of them share.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <rect x="3" y="3" width="10" height="1.4"/>
+  <rect x="3" y="11.6" width="10" height="1.4"/>
+  <rect x="3" y="3" width="1.4" height="10"/>
+  <rect x="11.6" y="3" width="1.4" height="10"/>
+</svg>

@@ -1,0 +1,72 @@
+{
+  "format": "bintana-form/1",
+  "class": "Form1",
+  "properties": {
+    "Height": 260,
+    "Text": "Hello Bintana",
+    "Width": 420
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "Label1",
+      "properties": {
+        "Height": 24,
+        "Style": "field-label",
+        "Text": "Your name:",
+        "Width": 100,
+        "X": 20,
+        "Y": 20
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TextBox1",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 34,
+        "Width": 380,
+        "X": 20,
+        "Y": 48
+      }
+    },
+    {
+      "type": "Button",
+      "name": "Button1",
+      "properties": {
+        "Height": 36,
+        "Style": "suggested-action",
+        "Text": "Greet",
+        "Width": 120,
+        "X": 20,
+        "Y": 96
+      }
+    },
+    {
+      "type": "CheckButton",
+      "name": "CheckBox1",
+      "properties": {
+        "Height": 28,
+        "Text": "Upper case",
+        "Width": 160,
+        "X": 148,
+        "Y": 100
+      }
+    },
+    {
+      "type": "ListBox",
+      "name": "ListBox1",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 96,
+        "MinHeight": 60,
+        "MinWidth": 200,
+        "Style": "result-list",
+        "VAlign": "Fill",
+        "Width": 380,
+        "X": 20,
+        "Y": 144
+      }
+    }
+  ]
+}

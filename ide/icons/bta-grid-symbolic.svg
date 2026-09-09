@@ -1,0 +1,6 @@
+<!-- A grid: cells as wide as what is in them, which is why they differ. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path d="M1 2h3.4v3.6H1z M5.4 2h5.2v3.6H5.4z M11.6 2h3.4v3.6h-3.4z"/>
+  <path d="M1 6.6h3.4v3.6H1z M5.4 6.6h5.2v3.6H5.4z M11.6 6.6h3.4v3.6h-3.4z"/>
+  <path d="M1 11.2h3.4v3.4H1z M5.4 11.2h5.2v3.4H5.4z M11.6 11.2h3.4v3.4h-3.4z"/>
+</svg>

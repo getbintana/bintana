@@ -1,0 +1,71 @@
+{
+  "format": "bintana-form/1",
+  "class": "Contacts",
+  "properties": {
+    "Text": "Contacts",
+    "Icon": "x-office-address-book-symbolic",
+    "Width": 660,
+    "Height": 480
+  },
+  "children": [
+    {
+      "type": "TextBox",
+      "name": "TxtFind",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 34,
+        "Icon": "edit-clear-symbolic",
+        "Placeholder": "Search by name or city",
+        "Tooltip": "Anywhere in the name, without accents and in any case: ver finds Echeverría",
+        "Width": 636,
+        "X": 12,
+        "Y": 12
+      }
+    },
+    {
+      "type": "RowList",
+      "name": "List",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 364,
+        "MinHeight": 140,
+        "MinWidth": 320,
+        "Style": "frame",
+        "VAlign": "Fill",
+        "Width": 636,
+        "X": 12,
+        "Y": 58
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblCount",
+      "properties": {
+        "Ellipsize": true,
+        "HAlign": "Fill",
+        "Height": 34,
+        "Style": "dim-label",
+        "VAlign": "End",
+        "Width": 504,
+        "X": 12,
+        "Y": 434
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnCopy",
+      "properties": {
+        "Enabled": false,
+        "HAlign": "End",
+        "Height": 34,
+        "Icon": "edit-copy-symbolic",
+        "Text": "Copy number",
+        "Tooltip": "The selected contact's number, onto the clipboard",
+        "VAlign": "End",
+        "Width": 120,
+        "X": 528,
+        "Y": 434
+      }
+    }
+  ]
+}

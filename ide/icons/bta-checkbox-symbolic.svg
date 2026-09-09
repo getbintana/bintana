@@ -1,0 +1,5 @@
+<!-- A checked box: the box, and the tick as a filled polygon. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path fill-rule="evenodd" d="M2 3h12v12H2z M3.2 4.2v9.6h9.6V4.2z"/>
+  <path d="M6.9 12 3.6 8.7l1.5-1.5 1.8 1.8 4.6-4.6 1.5 1.5z"/>
+</svg>
