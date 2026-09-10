@@ -40,6 +40,13 @@ Namespace("Ide");
  * the controls that hold a value. `Form` and `Component` are the two that are
  * deliberately absent: a form is the surface being drawn on, and a component of
  * the project has a tab of its own.
+ *
+ * **And a type this build cannot run is not offered**, which is a different
+ * question from whether it is in the list: `Widget.Available` answers it, and
+ * `Terminal` on a runtime built without VTE is the case -- the class is there, a
+ * `.form` with one in it loads, and starting a child refuses. A button that
+ * places a control the user cannot finish is worse than a missing button, and
+ * the only warning used to be a dialog at run time.
  */
 const PALETTE_TABS = [
     { name: "Basic",  types: ["Button", "Label", "Image", "Picture", "Separator", "TextBox",
@@ -195,7 +202,17 @@ function paletteIcon(type) {
     return (PALETTE_ICON[type] || []).find((name) => Application.HasIcon(name)) || "";
 }
 
-const PALETTE = PALETTE_TABS.flatMap((tab) => tab.types);
+/*
+ * Asked of the runtime, per type, once -- and it is `PALETTE_TABS` that is
+ * filtered rather than each tab's buttons, so a group whose every type is
+ * missing loses its tab too rather than showing an empty gallery.
+ */
+const PALETTE_TABS_HERE = PALETTE_TABS
+    .map((tab) => ({ name: tab.name,
+                     types: tab.types.filter((t) => Widget.Available(t)) }))
+    .filter((tab) => tab.types.length);
+
+const PALETTE = PALETTE_TABS_HERE.flatMap((tab) => tab.types);
 
 /* The project's own components get a tab of their own, after the runtime's. */
 const COMPONENT_TAB  = "Project";
@@ -338,7 +355,7 @@ Ide.Palette = class Palette {
         }
 
         const tabs = [
-            ...PALETTE_TABS,
+            ...PALETTE_TABS_HERE,
             ...(mine.length ? [{ name: COMPONENT_TAB, types: mine.map((c) => c.name) }] : []),
             ...libs,
         ];

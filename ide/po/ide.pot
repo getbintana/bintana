@@ -473,8 +473,16 @@ msgstr ""
 msgid "Show only the properties whose name contains this"
 msgstr ""
 
-#: forms/MainForm.form: LblConsole.Text
+#: forms/MainForm.form: ConsoleBox.Tabs
 msgid "Output"
+msgstr ""
+
+#: forms/MainForm.js:733
+msgid "Terminal"
+msgstr ""
+
+#: forms/MainForm.js:759
+msgid "the shell ended"
 msgstr ""
 
 #: forms/MenuForm.form: MenuForm.Text

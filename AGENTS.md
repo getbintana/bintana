@@ -151,8 +151,18 @@ cannot do, since it owns its display for the length of one command.
 The suite needs a display but not yours: with no `DISPLAY`/`WAYLAND_DISPLAY` it
 falls back to `xvfb-run` (`HEADLESS=1` forces it), which is what `.github/workflows/ci.yml`
 relies on. Anything you drive by hand still needs a real display. Build deps:
-`gtk4`, `gtksourceview-5`, `vte-2.91-gtk4` (with headers), pkg-config. QuickJS
-is vendored, so nothing to install for it.
+`gtk4`, `gtksourceview-5` (with headers), pkg-config. QuickJS is vendored, so
+nothing to install for it. Five are optional and CMake says what it found either
+way: `sqlite3`, `libsystemd`, `libsoup-3.0`, `gstreamer-1.0` and
+**`vte-2.91-gtk4`** -- the last being the pty behind `Terminal`, and the only
+dependency with no Windows port. **Build both ways before touching anything under
+an `#ifdef`**: a wrapper `pkg-config` that exits 1 for one module name and
+delegates the rest is the whole of it
+(`cmake -S . -B build-x -DPKG_CONFIG_EXECUTABLE=<wrapper>`), and
+`BINTANA=<path> BINTANA_LIB_PATH=$PWD/lib HEADLESS=1 ./tests/run.sh` runs the
+suite against it -- the library path because `lib/` is found relative to the
+*executable*, so a build in another directory fails twelve chart assertions for
+a reason that has nothing to do with what was turned off.
 
 `.js` and `.form` files are data read at runtime — **no rebuild needed** after
 editing anything under `ide/`, `tests/`, or `examples/`.
@@ -533,13 +543,13 @@ Three things that will waste your time:
 - **`tests/widgets` selects where `tests/ide` runs a prefix**, and the difference is
   the shape of the tests, not a missing feature: the widget tests each build what
   they need and delete it, so any one of them can run alone (`run.sh widgets record`
-  is 60 assertions in 0.2 s). Its couplings are declared in `NEEDS`, both ways --
+  is 71 assertions in 0.2 s). Its couplings are declared in `NEEDS`, both ways --
   the async tail checks what `Terminal` and `TimerShorthand` set up, so asking for
   either brings the other. A test whose deferred half lives in the tail and does not
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `HEADLESS=1 ./tests/run.sh ide designer` runs the prefix ending at that phase —
-  351 assertions in 4 s against 1740 in 45, which is what makes iterating on an
+  351 assertions in 4 s against 1768 in 45, which is what makes iterating on an
   early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.
@@ -613,6 +623,8 @@ person who wrote it either.
   `ConsoleBox` were `Fixed` when each of them is a *column* -- a label over a
   tree, a toolbar over a split -- with every child `Fill` at the full width and
   coordinates that never meant anything. A box has no design size to get wrong.
+  (`ConsoleBox` is a `Notebook` now, for a further reason: how many pages it has
+  depends on whether the build has VTE, so it is not something written down.)
   Reach for `Fixed` when a person drew it, not when the shape happens to be
   rectangles.
 - **`Width` is not "has it been allocated", and a guard that asks it may be
@@ -1737,11 +1749,11 @@ person who wrote it either.
   shape to look for: ask what *else* holds the name before handing it out. The
   check is the file and not a counter, because a counter forgets overnight and
   the file does not.
-- **And an assertion about the console can pass on somebody else's line.** The
-  test for the warning above searched the whole scrollback for the handler's
+- **And an assertion about the output pane can pass on somebody else's line.**
+  The test for the warning above searched the whole scrollback for the handler's
   name -- which `openHandler` had already logged, two steps earlier, naming the
   same method and the same file. It stayed green with the fix reverted. Take the
-  length of `Console.Text` before the gesture and search only what came after,
+  length of `LogView.Text` before the gesture and search only what came after,
   and key on a phrase only the new message uses.
 - **A completion handler is asked about the word, and `before` stops where the
   word starts.** Both halves were guessed wrong the first time. `_` is a word
@@ -2377,3 +2389,60 @@ person who wrote it either.
   no RTSP URI, no digest credentials, no pipeline to tune. What a camera needs
   is `source-setup` into `rtspsrc`'s `user-id`/`user-pw`, which only a pipeline
   of our own has.
+- **An optional dependency is not the same question as an optional *widget*, and
+  `Widget.Types()` is the wrong list to build a palette from.** `Terminal` on a
+  build without VTE is there, constructs, draws, loads out of a `.form` and
+  answers every property: the class is not what is missing, the pty is. So the
+  class table gained `available` (`BTA_CLASS_OPTIONAL` passes it; every other
+  macro defaults it to true), `Widget.Available(type)` reads it for a caller that
+  has a name and no control, and the instance publishes `Available` for one that
+  has a control. **Offer from `Available`, load from `Types`** -- the IDE's
+  palette filters on the first and `Widget.New` still builds the stub, because a
+  `.form` that already holds one has to open. `Video` is the same gap and cannot
+  answer it yet, which is `docs/issues/ISSUE-video-availability.md`.
+- **The IDE's output pane was a `Terminal` for nothing, and the audit is the
+  lesson rather than the fix.** Consumer by consumer, everything that used it
+  wanted `Run`, `Clear`, `Text`, `Stop` and `Exit` -- and *nothing* used stdin,
+  typing, ANSI colour, `Kill`, `ScrollbackLines` or `less`. The one thing VTE
+  uniquely gives, an interactive terminal, had no caller. It is `Exec` plus a
+  read-only `TextEditor` now, which is what `examples/usage` already documented,
+  and the dependency stopped being required in the same change. Before keeping a
+  heavy widget because of what it *can* do, list what the callers actually call.
+- **A click in a `ReadOnly` `TextEditor` does move the insertion cursor**, so
+  `Line`/`Column` say where it landed and `Selection` is `""` -- which is the
+  whole of what replaced VTE's `LinkPattern`. Measured with a real pointer
+  (`xdotool` on an `Xvfb` of its own, a two-file probe under the scratch
+  directory), because none of it is answerable from the suite: there is no
+  synthetic pointer here.
+- **...and the handler is `MouseUp`, not `Cursor`.** `Cursor` fires on the click
+  and looks like the obvious one -- it also fires on every arrow key, so reading
+  a log with the keyboard would open a file per keystroke. Same probe, same
+  sitting: a plain click gives `Cursor` (at press), `MouseDown`, then `MouseUp`
+  with the cursor already there and no selection; a drag gives `Cursor` events
+  with a growing `Selection` and, usually, **no `MouseUp` at all** -- GTK's own
+  drag gesture claims the sequence, which is the VTE trap above seen from the
+  other side. `Selection !== ""` is still the guard, because "usually" is not a
+  contract.
+- **Gestures coalesce, so a probe that clicks twice in the same place is
+  measuring a double click.** Two 0.4 s-apart clicks in that same sitting
+  produced three `MouseUp`s for five gestures and one `DblClick` that never
+  arrived, which read as `MouseUp` being unreliable -- it is not. Leave more than
+  GTK's double-click time (1.2 s was ample) between gestures in a pointer probe,
+  or the answer is about the coalescing and not about the widget.
+- **`Terminal.Stop()` does not end an interactive shell, and the pty does.**
+  Bash ignores SIGTERM when it is interactive, so the IDE's terminal tab still
+  reads `Running === true` after `stopShell()` -- which looked like a leak
+  waiting to happen. It is not: closing the pty makes the kernel hang up its
+  foreground process group, which is what closing a terminal window has always
+  meant, and VTE does that when the widget goes. Measured by starting a bash in
+  the tab, quitting the IDE and looking for it (`ps`): nothing left behind. So
+  the SIGTERM is for everything that *does* honour it, and following it with a
+  `Kill()` would be the IDE sending SIGKILL to whatever build or editor somebody
+  had running. A test can only assert the first half, so it drives `SHELL` at
+  `/bin/cat`; the second half is a by-hand measurement and says so.
+- **A throw inside `Form_Open` hangs a phase-limited `tests/run.sh`**, because it
+  becomes a dialog and the driver waits for a window that is sitting behind it.
+  `Notebook.Append(child, label)` wants a *widget* for the label and threw a
+  `TypeError` on a string; the run went to the 120 s timeout with nothing on
+  stdout but the traceback. If a `run.sh <project> <phase>` stops producing
+  assertions, read the traceback before believing the phase is slow.

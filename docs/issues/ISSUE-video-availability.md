@@ -16,11 +16,13 @@ In both, a user drags a Video onto a form, draws around it, and learns only
 when the program runs and `Play()` throws that this machine could never have
 played it. The designer offered a control it could not keep.
 
-`Terminal` is the other widget with an optional engine and has the same gap,
-so whatever answers this should answer for both. `Video` is the harder of the
-two, and the reason is worth stating: `BTA_HAVE_GST` would answer half of it,
-and the build with GStreamer and no `gtk4paintablesink` is the other half --
-so the answer is not always a compile-time constant.
+The same question **is** answered for the other optional-engine widget:
+`Terminal` publishes a read-only `Available`, `Widget.Available(type)` asks it
+of the class, and the palette stops offering it on a build without VTE (see
+[`widgets.md`](../widgets.md#a-build-without-vte)). `Video` is the case that
+shows the question is not always a compile-time constant, which is why it is
+still open: `BTA_HAVE_GST` would answer half of it, and the build with
+GStreamer and no `gtk4paintablesink` is the other half.
 
 ## What I wrote instead
 
@@ -43,10 +45,11 @@ do than build a control to ask about it:
 Widget.Available("Video")
 ```
 
-Either spelling would do. What matters is that it can be asked **before** a
-control is placed, and that `Video` can answer it on a build with GStreamer
-and no sink -- where the honest answer depends on the plugin registry, whose
-first read is 573 ms cold.
+`Terminal.Available` and `Widget.Available(type)` are that vocabulary and they
+exist; what is missing is `Video`'s own answer. Its row in the class table
+declares `available` like every other, and today that declaration would have to
+be a compile-time constant while the real answer depends on the plugin registry
+— whose first read is 573 ms cold, which is why a palette cannot simply ask.
 
 ## Why the existing words do not cover it
 
@@ -56,7 +59,10 @@ and `Application.HasIcon` are capabilities of the system, not of a control.
 `PropertyOptions` and `TextProperties` answer a different question about a
 class.
 
-The only way to know today is to call `Play()` and catch, which starts a
+`Widget.Available("Video")` is the *right shape* and answers `true` here, which
+is the gap: `available` in the class table is a declaration a class makes about
+itself at compile time, and `Video` would be declaring something it cannot know
+yet. The only way to know today is to call `Play()` and catch, which starts a
 pipeline to answer a question a palette asks before anything is drawn — and on
 a build with GStreamer and no sink, the answer depends on the plugin registry,
 whose first read is 573 ms cold.

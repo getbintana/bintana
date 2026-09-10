@@ -1,13 +1,21 @@
 /*
  * Running the project, and reading what it printed.
  *
- * The child gets a real pty (`Terminal.Run`), so nothing has to be captured or
- * forwarded and its colours work.  What this class adds is the other direction:
- * a traceback names a place, and a place is somewhere to go.
+ * The child is an `Exec`, and what it printed goes into a `TextEditor` -- the
+ * shape `examples/usage` documents, and the one every other application would
+ * write.  The pane used to be a `Terminal`: a real pty, for a consumer that
+ * never typed into it, never coloured anything and never ran `less`.  What the
+ * IDE does is launch a child and show what it printed, and neither of those
+ * needs a terminal.
  *
- * `MainForm` keeps `log` and the two console handlers -- a control's events are
- * looked up on the form, and `log` is what the whole IDE writes with -- and hands
- * the work here.
+ * What this class adds is the other direction: a traceback names a place, and a
+ * place is somewhere to go.  A terminal answered that with `LinkPattern` and an
+ * event; a text buffer answers it with the token under the click, which is
+ * `linkAt` below -- ten lines, and testable without a pointer.
+ *
+ * `MainForm` keeps `log` and the pane's one handler -- a control's events are
+ * looked up on the form, and `log` is what the whole IDE writes with -- and
+ * hands the work here.
  */
 "use strict";
 
@@ -17,6 +25,8 @@ Ide.Runner = class Runner {
 
     constructor(ide) {
         this.ide = ide;
+        /* The child, while there is one: an Exec handle. */
+        this.job = null;
     }
 
     start() {
@@ -27,12 +37,27 @@ Ide.Runner = class Runner {
          * execute something other than what is on screen. */
         ide.saveAllDirty();
 
-        ide.Console.Clear();
+        ide.LogView.Clear();
         ide.log(`> bintana ${ide.project}\n`);
         ide.running = true;
         ide.refresh();
 
-        ide.Console.Run([Application.Executable, ide.project], ide.project);
+        /*
+         * The lines arrive split and without their newline, which is what the
+         * pane puts back: `Append` writes at the end and scrolls there.  stdout
+         * and stderr are merged on purpose -- a traceback interleaved with the
+         * program's own output in the wrong order is worse than either.
+         */
+        this.job = Exec([Application.Executable, ide.project],
+                        { Directory: ide.project },
+                        (line) => ide.log(`${line}\n`),
+                        (code) => this.finished(code));
+    }
+
+    /* What the Stop button means, in the one place that knows there is a child
+     * at all.  Pressed twice is an ordinary thing to do, so it asks first. */
+    stop() {
+        if (this.job && this.job.Running) this.job.Stop();
     }
 
     /* The child is over. A run that ended badly said where, so go there rather
@@ -40,6 +65,7 @@ Ide.Runner = class Runner {
     finished(code) {
         const ide = this.ide;
 
+        this.job = null;
         ide.log(code === 0 ? "\n[finished ok]\n"
                            : `\n[finished with code ${code}]\n`);
         ide.running = false;
@@ -49,18 +75,78 @@ Ide.Runner = class Runner {
     }
 
     /*
-     * A place clicked in the console.  The pattern that made it clickable is
-     * `SOURCE_LINK`, set on the terminal in `Form_Open` -- one string for the two
-     * who need it, since a pattern that highlights what the parser cannot read is
-     * a link that does nothing.
+     * A place clicked in the log.
+     *
+     * The pane is an ordinary read-only `TextEditor`, and a click in one moves
+     * the insertion cursor: `Line` and `Column` say where it landed, `Text` has
+     * the rest, and `linkAt` puts those three together.  Measured, on a real
+     * pointer under Xvfb -- which is what this replaced a terminal's
+     * `LinkPattern` with.
+     *
+     * `Selection` is the guard.  A click leaves none; a drag leaves the text it
+     * covered, and dragging across a place to copy it must not go there.  (A
+     * drag does not usually produce a `MouseUp` here at all -- GTK's own drag
+     * gesture claims the sequence -- but that is a second line of defence and
+     * not one to lean on.)
      */
-    clicked(text) {
-        const at = /^(.*):(\d+)(?::\d+)?$/.exec(text);
-        if (at) this.open(at[1], Number(at[2]));
+    followClick() {
+        const view = this.ide.LogView;
+        if (view.Selection !== "") return false;
+
+        const link = this.linkAt(view.Line, view.Column, view.Text);
+        return link ? this.clicked(link) : false;
     }
 
     /*
-     * Opens a file the console named, at a line.  Only files of this project: a
+     * The place written at a line and column of some text, `""` for none.
+     *
+     * This is what `LinkPattern` used to do inside VTE, and it is split out
+     * from the click for the reason that matters: a test can drive it without a
+     * pointer, which is where the behaviour actually is.  `line` and `column`
+     * are 1-based, the way `Editor` reports them.
+     *
+     * The token is the run of characters a place can be made of around that
+     * column -- letters, digits, the separators of a path, and the colons a
+     * `file:line:column` carries -- and `SOURCE_LINK` is matched inside it.
+     * Not against the whole line: `at Form_Open (/tmp/Main.js:42:9)` holds one
+     * place, and a click at either end of that line is on neither of them.
+     */
+    linkAt(line, column, text) {
+        const row = (text || "").split("\n")[line - 1];
+        if (!row) return "";
+
+        const TOKEN = /[\w./+:-]/;
+        let from = column - 1;
+
+        /* The cursor clamps to the end of the line, so a click anywhere in the
+         * empty space to the right of a traceback would otherwise read the
+         * frame it ends with -- a click on nothing, going somewhere. */
+        if (from >= row.length) return "";
+
+        /* A click just past the end of a word does land on the space after it,
+         * and there the character before is the one that was aimed at. */
+        if (!TOKEN.test(row[from])) from--;
+        if (from < 0 || !TOKEN.test(row[from])) return "";
+
+        let to = from;
+        while (from > 0 && TOKEN.test(row[from - 1])) from--;
+        while (to + 1 < row.length && TOKEN.test(row[to + 1])) to++;
+
+        const found = new RegExp(SOURCE_LINK).exec(row.slice(from, to + 1));
+        return found ? found[0] : "";
+    }
+
+    /*
+     * A place, as text: `file.js:42`, with the column a traceback adds allowed
+     * and ignored.  Answers whether it went anywhere.
+     */
+    clicked(text) {
+        const at = /^(.*):(\d+)(?::\d+)?$/.exec(text);
+        return at ? this.open(at[1], Number(at[2])) : false;
+    }
+
+    /*
+     * Opens a file the log named, at a line.  Only files of this project: a
      * traceback runs through the runtime's own frames and through whatever else
      * the program read, and those are not the IDE's to open.  Answers whether it
      * went anywhere.
@@ -94,7 +180,7 @@ Ide.Runner = class Runner {
      *
      * A traceback is printed innermost first, so the first frame naming a file of
      * ours is the one that threw -- what is under it is `(native)` or the
-     * runtime's own.  `start` clears the console, so anything found here is from
+     * runtime's own.  `start` clears the pane, so anything found here is from
      * this run.
      */
     errorLocation(text) {
@@ -121,18 +207,21 @@ Ide.Runner = class Runner {
     }
 
     /*
-     * VTE digests what it is fed on its own time, so the exit signal can arrive
-     * before the last lines of the traceback are on screen: looking once would
-     * work most of the time, which is the worst kind of working.  A few turns of
-     * the main loop is all it takes, and giving up quietly is the right answer
-     * when the program died of something that named no line at all.
+     * Where the run that just failed died, if it said.
+     *
+     * Looked for once and not on a retry.  `Exec` calls the exit callback only
+     * after both pipes have seen EOF, and `Append` puts a line in the buffer as
+     * it arrives -- so by the time `finished` runs, everything the child printed
+     * is in `Text`.  This used to be ten tries thirty milliseconds apart,
+     * because VTE digests what it is fed on its own time and the exit signal
+     * could arrive before the last of the traceback was on screen.  There is no
+     * pty left to wait for.
+     *
+     * Giving up quietly is still the right answer when the program died of
+     * something that named no line at all.
      */
-    findErrorLine(tries = 10) {
-        const where = this.errorLocation(this.ide.Console.Text);
-        if (where) {
-            this.open(where.path, where.line);
-            return;
-        }
-        if (tries > 0) Timer.After(30, () => this.findErrorLine(tries - 1));
+    findErrorLine() {
+        const where = this.errorLocation(this.ide.LogView.Text);
+        if (where) this.open(where.path, where.line);
     }
 };

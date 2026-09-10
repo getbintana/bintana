@@ -1844,16 +1844,40 @@ function* p_palette(ide) {
      * `Form` is the surface being drawn on and `Component` is the base a
      * project's own classes extend -- neither is a control one drops, and the
      * project's components have a tab of their own.
+     *
+     * **...and every type this build cannot run is not**, which is the same
+     * question the other way round and the one the palette had no word for:
+     * `Widget.Available`. On a runtime built without VTE the `Terminal` button
+     * is simply absent -- the class is still there and a `.form` with one in it
+     * still loads, so `Widget.Types()` is the wrong list to build a palette
+     * from. Both directions asserted, because a filter that dropped everything
+     * would pass the first on its own.
      */
     const NOT_PLACED = ["Form", "Component"];
     const unoffered  = [];
+    const offeredAnyway = [];
     for (const type of Widget.Types()) {
-        if (NOT_PLACED.includes(type) || PALETTE.includes(type)) continue;
+        if (NOT_PLACED.includes(type)) continue;
         try { Widget.New(type).Delete(); } catch (e) { continue; }   /* abstract */
-        unoffered.push(type);
+
+        if (!Widget.Available(type)) {
+            if (PALETTE.includes(type)) offeredAnyway.push(type);
+        } else if (!PALETTE.includes(type)) {
+            unoffered.push(type);
+        }
     }
     eq("every type that can be placed is on the palette",
        JSON.stringify(unoffered), "[]");
+    eq("and nothing this build cannot run is",
+       JSON.stringify(offeredAnyway), "[]");
+
+    /* This build has VTE, so the case above is the one that is *not* exercised
+     * here: what can be asserted either way is that the palette's list is the
+     * available half of the declared one, and never more than it. */
+    const declared = PALETTE_TABS.flatMap((t) => t.types);
+    eq("the palette offers the available half of what it declares",
+       JSON.stringify(declared.filter((t) => Widget.Available(t))),
+       JSON.stringify(declared.filter((t) => PALETTE.includes(t))));
 
     const beforeAdd = ide.Surface.Children.length;
     palette(ide, "CheckButton").Click();
@@ -2922,11 +2946,11 @@ function* p_handlers(ide) {
     yield* settled(ide);
     ide.designer.select(byName(ide, doomed));
 
-    /* Only what the console says *after* this: writing the handler a moment ago
+    /* Only what the log says *after* this: writing the handler a moment ago
      * logged its own line naming the same method and the same file, and an
      * assertion that searched the whole scrollback would pass on that -- which
      * is exactly what it did until the fix was reverted and it stayed green. */
-    const said = ide.Console.Text.length;
+    const said = ide.LogView.Text.length;
     ide.ActDelCtl_Click();
 
     check("the control is gone", !ide.Surface.Children.some((c) => c.Name === doomed));
@@ -2935,10 +2959,10 @@ function* p_handlers(ide) {
        '["Click"]');
 
     /* Said out loud: dead code nobody knows about is how this went wrong. */
-    yield* until(() => ide.Console.Text.slice(said).includes("still in"), 60);
+    yield* until(() => ide.LogView.Text.slice(said).includes("still in"), 60);
 
-    const tail = ide.Console.Text.slice(said);
-    check("the console says the handler stayed", tail.includes(`${doomed}_Click`),
+    const tail = ide.LogView.Text.slice(said);
+    check("the log says the handler stayed", tail.includes(`${doomed}_Click`),
           JSON.stringify(tail.slice(0, 200)));
     check("and which file it stayed in", tail.includes(jsName),
           JSON.stringify(tail.slice(0, 200)));
@@ -5627,7 +5651,7 @@ function* p_projects(ide) {
      * walked whole, not just its first level. */
     const deep = ide.designer.allControls().map((c) => c.Name);
     check("every control is reachable, however deep",
-          deep.includes("PropGrid") && deep.includes("Palette") && deep.includes("Console"),
+          deep.includes("PropGrid") && deep.includes("Palette") && deep.includes("LogView"),
           `${deep.length} controls`);
 
     /*
@@ -7655,14 +7679,123 @@ function* p_export(ide) {
 }
 
 function* p_errors(ide) {
+    /* --- the bottom panel --------------------------------------------------
+     *
+     * Two pages now, and they are two different things: the output of a run is
+     * a **log**, which needs no pty and is an ordinary read-only `TextEditor`;
+     * a terminal is for working in, which is why `Terminal` was not removed
+     * when the console stopped being one.
+     *
+     * The label over the pane went with the change -- a notebook's tab already
+     * says what the page is, and two of them saying it would be the `forms`
+     * folder with a `Formularios` inside it.
+     */
+    eq("the bottom panel is a notebook", ide.ConsoleBox.constructor.name, "Notebook");
+    eq("whose first page is the log", ide.ConsoleBox.Children[0].Name, "LogView");
+    eq("and it is a plain editor and not a terminal",
+       ide.LogView.constructor.name, "TextEditor");
+    eq("...read-only, so nothing the user types joins what a program printed",
+       ide.LogView.ReadOnly, true);
+    eq("...and the tab says what it is", ide.ConsoleBox.Tabs[0], "Output");
+
+    /*
+     * The second page exists only where a child can be run in it, which is
+     * `Widget.Available`'s question: a runtime built without VTE gets one page
+     * and no tab promising a terminal that would refuse.  This build has VTE,
+     * so both branches are stated and the one that holds here is checked.
+     */
+    eq("there is a terminal page exactly when this build can run one",
+       ide.ConsoleBox.Count, Widget.Available("Terminal") ? 2 : 1);
+    eq("...and a Shell to go with it", ide.Shell !== null, Widget.Available("Terminal"));
+
+    if (Widget.Available("Terminal")) {
+        eq("the terminal's tab says so", ide.ConsoleBox.Tabs[ide.shellPage], "Terminal");
+        check("and it is a real Terminal", ide.Shell.Available);
+
+        /*
+         * **Started when the page is looked at, in the project's directory.**
+         * Not at launch: a terminal nobody has turned to is a child process
+         * nobody asked for, started in whatever directory the IDE happened to
+         * be launched from.
+         *
+         * `SHELL` is what it runs, so this drives it with a command that says
+         * where it is and ends -- the honest way to read a cwd back out of a
+         * pty, and it leaves no child behind.
+         */
+        const hadShell = Environment.Get("SHELL");
+
+        Environment.Set("SHELL", "/bin/pwd");
+        ide.ConsoleBox.Current = ide.shellPage;
+        yield* until(() => ide.Shell.Text.includes(TMP), 200);
+        check("the terminal starts in the project's directory",
+              ide.Shell.Text.includes(TMP), JSON.stringify(ide.Shell.Text));
+        check("...and says when the shell ended",
+              ide.Shell.Text.includes("shell"), JSON.stringify(ide.Shell.Text));
+
+        /*
+         * And the child is this process's, so leaving asks it to end.
+         *
+         * `cat` and not a shell, because what this can assert is that the
+         * SIGTERM arrives -- an interactive bash *ignores* it, and what ends
+         * one is the pty being closed (the kernel hangs up the foreground
+         * group, which VTE does when the widget goes). That half is not
+         * answerable from here and was measured by hand: no shell is left
+         * behind after the IDE quits.
+         */
+        Environment.Set("SHELL", "/bin/cat");
+        ide.ConsoleBox.Current = 0;
+        ide.ConsoleBox.Current = ide.shellPage;
+        yield* until(() => ide.Shell.Running, 200);
+        check("looking at the page again starts another", ide.Shell.Running);
+
+        ide.stopShell();
+        yield* until(() => !ide.Shell.Running, 200);
+        check("and leaving asks the child to end", !ide.Shell.Running);
+
+        ide.ConsoleBox.Current = 0;
+        if (hadShell) Environment.Set("SHELL", hadShell);
+    }
+
     /* --- from the error to the line ----------------------------------------
      *
-     * Whether the pointer really lands on a place in the terminal is a pointer
-     * question and is checked by hand.  Everything around it is checked here:
-     * that the console is watching for one, that a traceback is read back to the
-     * frame that matters, and that going there opens the file at the line.
+     * Whether the pointer really lands where it was aimed is a pointer question
+     * and is checked by hand.  Everything from the landing on is checked here:
+     * that a line and a column of the log name the place written there, that a
+     * traceback is read back to the frame that matters, and that going there
+     * opens the file at the line.
+     *
+     * `linkAt` is where the reading lives now.  It used to be VTE's:
+     * `LinkPattern` matched inside the terminal and handed the text over, so
+     * there was nothing to assert but that the pattern had been assigned.
      */
-    eq("the console watches for places", ide.Console.LinkPattern, SOURCE_LINK);
+    const TRACE_LINE = `    at Form_Open (${TMP}/Main.js:42:9)`;
+
+    eq("a click on a place in the log names it",
+       ide.runner.linkAt(1, 20, TRACE_LINE), `${TMP}/Main.js:42`);
+    eq("...from either end of it",
+       ide.runner.linkAt(1, TRACE_LINE.indexOf(":42"), TRACE_LINE),
+       `${TMP}/Main.js:42`);
+    eq("a click on the words before it names nothing",
+       ide.runner.linkAt(1, 8, TRACE_LINE), "");
+    /* The cursor clamps to the end of the line, so this is the one case a
+     * column cannot tell apart on its own: a click in the empty space to the
+     * right of a traceback reads as a click on its last character. */
+    eq("and a click past the end of the line names nothing",
+       ide.runner.linkAt(1, TRACE_LINE.length + 20, TRACE_LINE), "");
+    /* ...while the space *inside* a line still points at the word before it,
+     * which is where a click one pixel wide of a place lands. */
+    const trailing = `${TMP}/Main.js:42 y`;
+    eq("a click just past a place still names it",
+       ide.runner.linkAt(1, trailing.indexOf(" y") + 1, trailing),
+       `${TMP}/Main.js:42`);
+    eq("a line with no place in it has none",
+       ide.runner.linkAt(1, 4, "hello from tabs"), "");
+    eq("nor does a line that is not there",
+       ide.runner.linkAt(9, 1, "one\ntwo"), "");
+    /* The right *line* of several, which is the half a column alone cannot do. */
+    eq("the place read is the one on the line clicked",
+       ide.runner.linkAt(2, 20, `nothing here\n${TRACE_LINE}`),
+       `${TMP}/Main.js:42`);
 
     const traceback =
         "Bintana error: Error: boom\n" +
@@ -7685,13 +7818,34 @@ function* p_errors(ide) {
        ide.errorLocation(`Bintana error: first\n    at A (${TMP}/project.json:1:1)\n` +
                          traceback).line, 2);
 
-    ide.Console_Link(`${TMP}/Main.js:2`);
-    eq("clicking a place opens that file", ide.activeFile, "Main.js");
-    eq("at that line",                     ide.Editor.Line, 2);
+    check("clicking a place goes there", ide.runner.clicked(`${TMP}/Main.js:2`));
+    eq("...opening that file",           ide.activeFile, "Main.js");
+    eq("...at that line",                ide.Editor.Line, 2);
 
     const stayPut = ide.activeFile;
-    ide.Console_Link("/usr/lib/bintana/other.js:9");
-    eq("a place outside the project goes nowhere", ide.activeFile, stayPut);
+    check("a place outside the project goes nowhere",
+          !ide.runner.clicked("/usr/lib/bintana/other.js:9"));
+    eq("...and nothing else opens", ide.activeFile, stayPut);
+
+    /*
+     * And a drag is not a click.  Selecting a traceback to copy it runs the
+     * pointer across a place, and going there would be the wrong answer to a
+     * gesture that meant *copy this*.  `Selection` is the guard, and it is
+     * asked before anything is read.
+     */
+    ide.LogView.Append(`\n${TRACE_LINE}\n`);
+    const traceRow = ide.LogView.Line - 1;    /* Append leaves the cursor past it */
+
+    ide.LogView.Select(traceRow, 20, 6);
+    check("a drag selects", ide.LogView.Selection !== "",
+          JSON.stringify(ide.LogView.Selection));
+    check("...and dragging across a place does not go there",
+          !ide.runner.followClick());
+
+    /* The same spot, with nothing selected, is a click -- and does. */
+    ide.LogView.Select(traceRow, 20, 0);
+    eq("the same spot clicked is on a place", ide.LogView.Selection, "");
+    check("...and goes there", ide.runner.followClick());
 
 }
 
@@ -7956,13 +8110,21 @@ function* p_running(ide) {
         log(text);
         if (!text.includes("[finished")) return;
 
-        /* This probe runs *inside* the IDE's exit callback, before it has
-         * finished re-enabling the toolbar -- and VTE may still be digesting
-         * the last of the pty output.  Let both settle before asserting. */
-        Timer.After(250, () => {
-            const screen = ide.Console.Text;
-            check("the child's output reaches the terminal",
-                  screen.includes("hello from tabs"), JSON.stringify(screen));
+        /*
+         * Nothing to wait for any more.  `Exec` calls the exit callback only
+         * once both pipes have seen EOF and `Append` puts a line in the buffer
+         * as it arrives, so everything the child printed is in `Text` by the
+         * time this runs -- where a terminal was still digesting the last of
+         * the pty output a quarter of a second later, and this probe had to
+         * sit behind a `Timer.After(250)` to see it.
+         *
+         * It does still run *inside* the exit callback, before `finished` has
+         * re-enabled the toolbar: one turn, not a delay.
+         */
+        Timer.After(0, () => {
+            const shown = ide.LogView.Text;
+            check("the child's output reaches the log",
+                  shown.includes("hello from tabs"), JSON.stringify(shown));
             check("a clean exit is reported", out.includes("[finished ok]"),
                   JSON.stringify(out));
             eq("Run re-enables when the child exits", ide.BtnRun.Enabled, true);

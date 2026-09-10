@@ -457,9 +457,17 @@ msgstr "Filtrar propiedades"
 msgid "Show only the properties whose name contains this"
 msgstr "Muestra sólo las propiedades cuyo nombre contiene esto"
 
-#: forms/MainForm.form: LblConsole.Text
+#: forms/MainForm.form: ConsoleBox.Tabs
 msgid "Output"
 msgstr "Salida"
+
+#: forms/MainForm.js:733
+msgid "Terminal"
+msgstr "Terminal"
+
+#: forms/MainForm.js:759
+msgid "the shell ended"
+msgstr "el shell terminó"
 
 #: forms/MenuForm.form: MenuForm.Text
 msgid "Menus"

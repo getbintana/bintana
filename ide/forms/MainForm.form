@@ -1085,32 +1085,27 @@
                       ]
                     },
                     {
-                      "type": "Panel",
+                      "type": "Notebook",
                       "name": "ConsoleBox",
                       "properties": {
-                        "Arrangement": "Vertical",
-                        "Height": 173
+                        "Height": 173,
+                        "Tabs": [
+                          "Output"
+                        ]
                       },
                       "children": [
                         {
-                          "type": "Label",
-                          "name": "LblConsole",
-                          "properties": {
-                            "Height": 26,
-                            "Margin": 4,
-                            "Style": "heading",
-                            "Text": "Output"
-                          }
-                        },
-                        {
-                          "type": "Terminal",
-                          "name": "Console",
+                          "type": "TextEditor",
+                          "name": "LogView",
                           "properties": {
                             "Expand": true,
+                            "Font": "Monospace 10",
                             "HAlign": "Fill",
                             "HExpand": true,
+                            "ReadOnly": true,
                             "VAlign": "Fill",
-                            "VExpand": true
+                            "VExpand": true,
+                            "Wrap": false
                           }
                         }
                       ]

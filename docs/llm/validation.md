@@ -251,6 +251,7 @@ Every name can also be asked of a live control:
 
 ```js
 Widget.Types()                       // every class the runtime has
+Widget.Available("Terminal")         // ...and whether this build can run one
 w.PropertyNames()                    // every settable property, along the chain
 w.PropertyOptions("HAlign")          // exactly what that property accepts
 w.EventNames()                       // what it raises, most derived first

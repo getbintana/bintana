@@ -85,3 +85,54 @@ jobs:
       # It runs headless on its own: tests/asan.sh exports HEADLESS=1.
       - name: Test under AddressSanitizer
         run: ./tests/asan.sh
+
+  # A third job, and the only one that proves the optional half of an optional
+  # dependency: `Terminal` without VTE. Nothing else can -- the two jobs above
+  # both have it, so every `#else` in bta_terminal.c is dead code there, and the
+  # one time it mattered it was a class that could not load out of a `.form`.
+  #
+  # `vte-2.91-gtk4` is simply not installed here, which is the honest version of
+  # the test: CMake looks, does not find it, says so, and the runtime builds. The
+  # suite then runs against that binary and the terminal assertions take their
+  # other branch -- `tests/widgets`' testTerminal checks the state answers and
+  # the verbs refuse, and `tests/ide` checks the palette has no button and the
+  # bottom panel has one page.
+  #
+  # BINTANA_LIB_PATH because the binary is not ./build/bintana: `lib/` is found
+  # relative to the executable, and a build in another directory would fail
+  # twelve chart assertions for a reason that has nothing to do with VTE.
+  no-vte:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies, without VTE
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config \
+            libgtk-4-dev libgtksourceview-5-dev \
+            libsqlite3-dev libsoup-3.0-dev \
+            libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+            gstreamer1.0-tools \
+            xvfb
+          sudo apt-get install -y --no-install-recommends gstreamer1.0-gtk4 \
+            || echo "no gstreamer1.0-gtk4: the media test will skip the video half"
+
+      - name: Build without VTE
+        run: |
+          cmake -S . -B build-novte 2>&1 | tee cmake.log
+          # It has to have *decided* it and not merely compiled: a runner that
+          # grew libvte as some other package's dependency would make this whole
+          # job a second copy of the first one, silently. CMake says which way it
+          # went, so read it back.
+          grep -q 'no vte:' cmake.log \
+            || { echo "this runner has VTE: the job would prove nothing"; exit 1; }
+          cmake --build build-novte -j"$(nproc)"
+
+      - name: Test
+        env:
+          BINTANA: ./build-novte/bintana
+          BINTANA_LIB_PATH: ${{ github.workspace }}/lib
+        run: ./tests/run.sh

@@ -3905,6 +3905,52 @@ static JSValue w_types(JSContext *ctx, JSValueConst this_val,
     return out;
 }
 
+/*
+ * Widget.Available(type): whether this build can run one.
+ *
+ * The third of the questions a palette asks about a class it has only the name
+ * of.  `Widget.Types()` says what classes there are and `Widget.New` makes one;
+ * neither answers the one that matters before a control is offered, which is
+ * whether the engine behind it was there when the runtime was built.
+ * `Terminal` without VTE is the case: the class exists, a `.form` naming one
+ * loads, every property answers -- and `Run` refuses, which is far too late for
+ * a palette. So a class declares its own answer (BtaClass.available) and this
+ * reads it.
+ *
+ * A name the table does not have is one of the project's own classes, and there
+ * the question is only whether it resolves: a component is JavaScript, and
+ * JavaScript this runtime can always run. A name that is nothing at all is
+ * false rather than a throw -- what a caller does with the answer is skip the
+ * button, and having to wrap that in a try is the wrong shape.
+ */
+static JSValue w_available(JSContext *ctx, JSValueConst this_val,
+                           int argc, JSValueConst *argv)
+{
+    const char *type = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    if (!type)
+        return JS_ThrowTypeError(ctx, "Widget.Available(type) expects a type name");
+
+    BtaClass *cls = bta_class_find(type);
+    if (cls) {
+        JS_FreeCString(ctx, type);
+        return JS_NewBool(ctx, cls->available);
+    }
+
+    JSValue klass = bta_lookup_global(ctx, type);
+    JS_FreeCString(ctx, type);
+
+    /* A lookup that threw is not a question anybody asked: swallow it, the way
+     * the answer swallows a name that is simply not there. */
+    if (JS_IsException(klass)) {
+        JS_FreeValue(ctx, JS_GetException(ctx));
+        return JS_FALSE;
+    }
+
+    bool is_class = JS_IsFunction(ctx, klass);
+    JS_FreeValue(ctx, klass);
+    return JS_NewBool(ctx, is_class);
+}
+
 static JSValue w_new_by_type(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
@@ -3995,6 +4041,9 @@ void bta_widgets_init(JSContext *ctx, JSValue global)
             /* ...and what there is to make one of. */
             JS_SetPropertyStr(ctx, ctor, "Types",
                               JS_NewCFunction(ctx, w_types, "Types", 0));
+            /* ...and which of those this build can actually run. */
+            JS_SetPropertyStr(ctx, ctor, "Available",
+                              JS_NewCFunction(ctx, w_available, "Available", 1));
         }
 
         JS_SetPropertyStr(ctx, global, cls->name, JS_DupValue(ctx, ctor));

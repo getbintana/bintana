@@ -218,7 +218,12 @@ list. What everybody was going to write in it has a name of its own:
 [`Settings`](#settings).
 
 **`Executable` plus `Arguments`** is how the IDE runs a project: it spawns itself
-with the project directory as the argument, in a `Terminal`.
+with the project directory as the argument, through
+[`Exec`](llm/library.md#exec), and shows what it printed in a read-only
+`TextEditor`. It ran in a `Terminal` until that was measured: nothing on the way
+used the pty — no typing, no colour, no `less` — and the pane was a *log*, not a
+console. The terminal is still there, in a tab of its own, for the things that
+really are interactive.
 
 **Uncaught errors.** A handler that throws does not stop the application, and
 until it was reported that meant a button that silently stopped working. Every
@@ -827,7 +832,11 @@ the program that started it. The cost is a child with no controlling terminal, w
 matters only to something interactive — and interactive is `Terminal`.
 
 For anything interactive use a `Terminal` instead: it has a real pty, so colours,
-prompts and input work, and nothing has to be captured or forwarded.
+prompts and input work, and nothing has to be captured or forwarded. Note that
+**VTE is optional at build time**, so a program that needs one should ask
+[`Widget.Available("Terminal")`](llm/controls.md#what-there-is-and-what-this-build-can-run)
+first; showing what a child printed needs no pty and is `Exec` plus a read-only
+`TextEditor`, whose `Append` is what a log pane wants.
 
 ### `Exec.Wait` — the same child, run to the end
 
@@ -882,7 +891,8 @@ if (r.TimedOut) Message.Error("make did not finish in a minute");
 never ends hangs the program — exactly as in a shell script. Use it for a command
 you know ends and ends quickly: `msgmerge`, `msgfmt`, `tar`, `git status`. Tools.
 For anything long, of unknown length, or that has to show progress, the callback
-spelling is the right one, and interactive is `Terminal`.
+spelling is the right one, and interactive is `Terminal` (which the build may
+not have — `Widget.Available("Terminal")` says).
 
 **Its child leads a process group of its own**, exactly as an asynchronous one
 does, and that took a second look. A blocked caller cannot answer a Ctrl-C, so

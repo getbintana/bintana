@@ -267,6 +267,24 @@ typedef struct BtaClass {
      */
     const char *events;
 
+    /*
+     * Whether **this build** can run one.  True for all but the classes whose
+     * engine is optional at build time, which declare their own answer.
+     *
+     * A separate question from whether the class is *there*: `Terminal`
+     * without VTE still exists, still builds, still loads out of a `.form` and
+     * still answers every property -- what it cannot do is start a child.  So
+     * `Widget.Types()` keeps meaning *what classes there are* and this is
+     * *what this build can run*, which is the one a palette wants: a control it
+     * offers is a control the user can finish.
+     *
+     * Declared per class for the reason `texts` and `events` are: the answer
+     * belongs beside the class, and the alternative is a list of the optional
+     * ones somewhere else, drifting from the first `#ifdef` that moves.
+     * Not accumulated along the chain -- availability is one class's own.
+     */
+    bool        available;
+
     JSValue     proto;                  /* filled in by bta_widgets_init */
     JSValue     ctor;
 } BtaClass;
@@ -320,15 +338,27 @@ void bta_table_register(void);      /* bta_tree.c     */
 
 /*
  * Convenience for the module tables.  Designated initialisers, so a field
- * added to BtaClass costs nothing here: `texts` arrived that way, and the next
- * one will too.
+ * added to BtaClass costs nothing here -- `texts` arrived that way.
+ *
+ * With one exception, which is why there is an inner macro: a field whose
+ * sensible default is **not** the zero value cannot be left out.  `available`
+ * is `true` for every class but one, and a `bool` omitted from a designated
+ * initialiser is `false` -- so `BTA_CLASS_FULL` fills it in and
+ * `BTA_CLASS_OPTIONAL` is how the exception says otherwise.
  */
-#define BTA_CLASS_FULL(cname, parent_, build_, props_, nprops_, is_form_, \
-                       options_, texts_, events_)                         \
+#define BTA_CLASS_AT(cname, parent_, build_, props_, nprops_, is_form_,   \
+                     options_, texts_, available_, events_)               \
     { .name = cname, .parent = parent_, .build = build_,                  \
       .props = props_, .nprops = nprops_, .is_form = is_form_,            \
       .options = options_, .texts = texts_, .events = events_,            \
+      .available = available_,                                            \
       .proto = JS_UNDEFINED, .ctor = JS_UNDEFINED }
+
+/* Available, which all but the optional-engine classes are (see the field). */
+#define BTA_CLASS_FULL(cname, parent_, build_, props_, nprops_, is_form_, \
+                       options_, texts_, events_)                         \
+    BTA_CLASS_AT(cname, parent_, build_, props_, nprops_, is_form_,       \
+                 options_, texts_, true, events_)
 
 /*
  * Every variant takes `events` last, so a class states what it raises where it
@@ -351,6 +381,15 @@ void bta_table_register(void);      /* bta_tree.c     */
 #define BTA_CLASS_ENUM_TEXT(cname, parent, build, props, is_form, options, texts, events) \
     BTA_CLASS_FULL(cname, parent, build, props, (int)G_N_ELEMENTS(props), \
                    is_form, options, texts, events)
+/*
+ * ...and for a class whose engine is optional at build time, which says so
+ * itself: `Terminal` is the one, and `#ifdef BTA_HAVE_VTE true #else false` is
+ * the whole of the declaration.  `available` comes before `events` because
+ * every variant takes `events` last.
+ */
+#define BTA_CLASS_OPTIONAL(cname, parent, build, props, is_form, available, events) \
+    BTA_CLASS_AT(cname, parent, build, props, (int)G_N_ELEMENTS(props), \
+                 is_form, NULL, NULL, available, events)
 
 BtaApp *bta_current_app(void);
 

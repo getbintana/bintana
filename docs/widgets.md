@@ -539,7 +539,7 @@ did nothing:
 | `TreeView` | `scrolledwindow` | `> listview` |
 | `TableView` | `scrolledwindow` | `> columnview > row` |
 | `TextEditor`, `SourceEditor` | `scrolledwindow` | `> textview` |
-| `Terminal` | `scrolledwindow` | `> vte-terminal` |
+| `Terminal` | `scrolledwindow` | `> vte-terminal`, or `> textview` on a build with no VTE (see [*a build without VTE*](#a-build-without-vte)) |
 | `Video` | `picture` | the paintable GStreamer draws into |
 | `DrawingArea` | `widget` | nothing: what is inside it is ink, not widgets |
 | `Flow` | `scrolledwindow` | `> viewport > flowbox > flowboxchild` |
@@ -1929,6 +1929,10 @@ to end (SIGTERM) and `Kill()` makes it (SIGKILL) — the same two verbs, meaning
 same two things, that an `Exec` handle takes; both answer whether there was a
 child at all, so a Stop button pressed twice is an ordinary thing to do.
 
+**The pty is optional at build time**, and it is worth knowing that before the
+rest of this section: everything below describes a build that has VTE, and
+[*a build without VTE*](#a-build-without-vte) says what the other one does.
+
 `Exit(code)` fires when the child ends, `Running` says whether one is alive, `Text` is everything it has shown
 — scrollback included, not just the rows that fit — which is how a test can assert
 what a child printed.
@@ -1969,6 +1973,39 @@ Two things about how the click is read, both of which cost time:
 A button event's position is in the surface's coordinates and what VTE checks a
 match at are the terminal's, so the point is translated through
 `gtk_widget_compute_point`.
+
+#### A build without VTE
+
+`BTA_HAVE_VTE`, and the bargain is sqlite's, libsoup's and GStreamer's: CMake
+looks for `vte-2.91-gtk4`, says what it found either way, and the runtime builds
+without it. What makes this one different from those three is *why* it is
+optional — VTE is the only dependency with no Windows port, and it stopped being
+required the day the IDE's own output pane stopped being a terminal.
+
+What a build without it has is the whole class minus the child:
+
+| | |
+|---|---|
+| the class | registered, constructs, is in `Widget.Types()` |
+| the GTK shape | the same `GtkScrolledWindow`, with a `GtkTextView` inside it instead of a `vte-terminal` — so the designer places one, the serialiser saves it, and `CssNode()` still answers `scrolledwindow` |
+| `Feed`, `Text`, `Clear` | work, on the buffer. `\r` is dropped rather than drawn as a box: a carriage return is a terminal's and means nothing to a text buffer |
+| `LinkPattern`, `ScrollbackLines`, `FontScale` | kept and read back. They are **state a `.form` declares**, and a getter or setter that refused would make a build with no VTE one that cannot *open* a form with a Terminal in it |
+| `Run`, `Stop`, `Kill` | refuse, naming the package |
+| `Link`, `Exit` | never fire: there is no child and nothing highlighting anything |
+
+The split of *state answers, verbs refuse* is not a nicety and is the same one
+`Video` makes without GStreamer. The designer reads every property of a selected
+control and the serialiser reads them all again to save, so one getter that threw
+would take a form with a `Terminal` in it out of reach of a runtime that can still
+draw it perfectly well. **Optional at build time was never meant to cost loading a
+form.**
+
+`Available` is how a program asks, and
+[`Widget.Available("Terminal")`](llm/controls.md#what-there-is-and-what-this-build-can-run)
+is the same question about the class, for a caller that has a name and no control
+— which is what the IDE's palette has when it decides whether to draw a button.
+The palette filters on it, and the IDE's terminal tab is built only where the
+answer is yes.
 
 ### Video
 

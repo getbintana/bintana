@@ -15,7 +15,15 @@ endif()
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GTK4 REQUIRED IMPORTED_TARGET gtk4)
 pkg_check_modules(GTKSOURCE REQUIRED IMPORTED_TARGET gtksourceview-5)
-pkg_check_modules(VTE REQUIRED IMPORTED_TARGET vte-2.91-gtk4)
+
+# Optional: VTE is the pty behind `Terminal`, and it is the only dependency
+# with no Windows port -- which is why it stopped being required. Without it
+# the class is still there, a .form naming one still loads and every property
+# still answers; what refuses is starting a child, and `Widget.Available`
+# ("Terminal") is what says so before anything is drawn. The IDE's output pane
+# is an ordinary read-only TextEditor now, so nothing on its critical path
+# needs this.
+pkg_check_modules(VTE IMPORTED_TARGET vte-2.91-gtk4)
 
 # Optional: sqlite is what Database.Sqlite opens.  Optional and not required for
 # the same reason the journal is: a program that draws windows and reads JSON
@@ -105,7 +113,15 @@ target_include_directories(bintana PRIVATE
     ${CMAKE_SOURCE_DIR}/runtime/include
     ${CMAKE_BINARY_DIR}/generated
 )
-target_link_libraries(bintana PRIVATE quickjs PkgConfig::GTK4 PkgConfig::GTKSOURCE PkgConfig::VTE)
+target_link_libraries(bintana PRIVATE quickjs PkgConfig::GTK4 PkgConfig::GTKSOURCE)
+
+if(VTE_FOUND)
+    target_link_libraries(bintana PRIVATE PkgConfig::VTE)
+    target_compile_definitions(bintana PRIVATE BTA_HAVE_VTE=1)
+    message(STATUS "vte ${VTE_VERSION}: Terminal can run a child")
+else()
+    message(STATUS "no vte: Terminal exists and refuses to run one")
+endif()
 
 if(SQLITE3_FOUND)
     target_link_libraries(bintana PRIVATE PkgConfig::SQLITE3)

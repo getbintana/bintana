@@ -184,6 +184,14 @@ Exec(["git", "status", "--short"],
 a file name with spaces cannot turn into a command. stdout and stderr are merged,
 read asynchronously and split into lines. Both callbacks are optional.
 
+**This plus a read-only [`TextEditor`](controls.md#texteditor) is a log pane**,
+and it is what to reach for rather than a `Terminal`: `Append` writes at the end
+and scrolls there whatever the cursor was doing, and it works with `ReadOnly` on.
+A pty buys typing, colour and `less`; if the program does none of those, it is a
+dependency paid for nothing. The IDE's own output pane is exactly this. The exit
+callback runs only once **both pipes have seen EOF**, so everything the child
+printed is already in the buffer when it does.
+
 An options object may come between the argv and the callbacks:
 
 | Option | |
@@ -222,7 +230,8 @@ in a row into an ordinary `for` loop.
 exits, and that is also what makes it safe: no handler runs inside the wait.
 Without a `Timeout` a command that never ends hangs the program. Use it for
 `msgmerge`, `git status`, `tar`. For anything long, use the callback spelling;
-for anything interactive, a [`Terminal`](controls.md#terminal).
+for anything genuinely interactive, a [`Terminal`](controls.md#terminal) — which
+this build may not have, so ask `Widget.Available("Terminal")` first.
 
 ## Dialog
 

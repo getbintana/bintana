@@ -107,7 +107,7 @@ desktop's theme already declares.
 | toolbar and design-bar buttons, `TabActions` | `flat` — no face until hovered |
 | `ToolBar`, `DesignBar` | `toolbar` |
 | `RunGroup` | `linked` — and it is what keeps `BtnRun` blue; see below |
-| `LblFiles`, `LblConsole`, `LblWelcomeRecent` | `heading` |
+| `LblFiles`, `LblWelcomeRecent` | `heading` |
 | `LblStatus`, `LblWelcomeHint` | `dim-label` |
 | `LblWelcome` | `title-1` — the welcome page's name of the program |
 | `SideBar` | `sidebar` |
@@ -175,15 +175,23 @@ Split                   HAlign/VAlign Fill: the whole window below the toolbar
                             "Properties"  PropGrid, the whole page
                             "Controls"    ControlsBox: SideSplit (Palette +
                                           WidgetTree) with DesignBar under it
-    ConsoleBox (Panel)  "Output" label + Terminal, both Fill
+    ConsoleBox (Notebook) the bottom panel: two pages, both Fill
+                            "Output"    LogView, a read-only TextEditor
+                            "Terminal"  Shell, built in code and only where
+                                        Widget.Available("Terminal") says yes
 ```
 
-`SideBar` and `ConsoleBox` work in coordinates because their heights follow from
-numbers the `.form` itself declares — `Split`'s `Height` and `RightSplit`'s
-`Position`. That is the test for whether a container can be drawn: **can its size
-be derived from what is written down?**
+`SideBar` works in coordinates because its height follows from numbers the
+`.form` itself declares — `Split`'s `Height` and `RightSplit`'s `Position`. That
+is the test for whether a container can be drawn: **can its size be derived from
+what is written down?**
 
-Four things could not, and stayed containers:
+`ConsoleBox` used to be one of those and is a `Notebook` now, for the reason at
+the bottom of the list below. The label that used to sit over the output pane
+went with the change: a tab already says what the page is, and two of them
+saying it is the `forms` folder with a `Formularios` inside it.
+
+Five things could not, and stayed containers:
 
 - **The splits.** A draggable divider is not something an anchor can express, and
   the project tree, the console and the property panel are all resized with one.
@@ -203,6 +211,9 @@ Four things could not, and stayed containers:
   it needs a design size to keep them from. A view is created by code with no idea
   how big its page will be, so a control put in one would keep its natural size.
   A box has no such question.
+- **`ConsoleBox`.** Two pages, one of which is built in code and only on a build
+  that has VTE — so how many there are is not something written down, and a
+  notebook's pages are its own business exactly as a `Split`'s two halves are.
 
 **Every page owns what is in it.** A code tab makes its own `SourceEditor`; a form
 tab makes its own canvas — `Scroller` → `Overlay` → `Surface` + `Glass` — and its
@@ -749,29 +760,86 @@ has written when one stops to go and look something up.
 
 `BtnRun` saves every dirty tab first — a `.form` and its `.js` travel together, and
 running with either unsaved would execute something other than what is on screen —
-then spawns the runtime on the project in the `Terminal`:
+then spawns the runtime on the project with `Exec`:
 
 ```js
-this.Console.Run([Application.Executable, this.project], this.project);
+this.job = Exec([Application.Executable, ide.project],
+                { Directory: ide.project },
+                (line) => ide.log(`${line}\n`),
+                (code) => this.finished(code));
 ```
 
-A real pty, so the child's colours and prompts work, and `Exit(code)` re-enables the
-toolbar.
+**The output pane is a log view, not a console**, and that is the whole of what
+changed here. It ran in a `Terminal` — a real pty — for a consumer that never
+typed into it, never coloured anything and never ran `less`: audited, the IDE did
+two things, launch a child and show what it printed, and neither needs a pty. So
+the child is `Exec`'s and the pane is a read-only `TextEditor` whose `Append`
+writes at the end and scrolls there, which is what its own documentation says a
+log pane wants.
+
+Two things follow, and both are simplifications. `log()` no longer translates
+`\n` to `\r\n` — a terminal is a grid of lines and wanted CRLF; a text buffer
+takes the newline it is given. And `findErrorLine` no longer retries: `Exec`
+calls the exit callback only once both pipes have seen EOF and `Append` puts a
+line in the buffer as it arrives, so everything the child printed is in `Text` by
+the time the run is reported over. It used to be ten tries thirty milliseconds
+apart, because VTE digests what it is fed on its own time.
+
+`Runner.stop()` is what the Stop button means — `if (this.job && this.job.Running)
+this.job.Stop();` — and `Stop` reaches the child's whole **process group**, which
+matters because the child is the runtime running somebody's program.
+
+A real terminal is still one tab away: see [*the terminal
+tab*](#the-terminal-tab).
 
 ### From the error to the line
 
-A traceback names a place -- `at Boom_Click (/path/Form1.js:42:30)` -- and the
-console is told to recognise that shape:
+A traceback names a place -- `at Boom_Click (/path/Form1.js:42:30)` -- and
+clicking it goes there. `LinkPattern` and VTE's `Link` event used to do that;
+with an ordinary `TextEditor` it is four published properties
+(`Selection`, `Line`, `Column`, `Text`), one event, and ten lines of JavaScript:
 
 ```js
-this.Console.LinkPattern = SOURCE_LINK;      // in Form_Open
+LogView_MouseUp() { this.runner.followClick(); }             // MainForm
+
+followClick() {                                              // Runner
+    const view = this.ide.LogView;
+    if (view.Selection !== "") return false;                 // a drag, not a click
+
+    const link = this.linkAt(view.Line, view.Column, view.Text);
+    return link ? this.clicked(link) : false;
+}
 ```
 
-`SOURCE_LINK` is one string for the two who need it: the terminal, which makes text
-matching it clickable, and the parser that reads a click back. A pattern that
-highlights what the parser cannot read is a link that does nothing.
+A click in a `ReadOnly` editor **moves the insertion cursor**, so `Line` and
+`Column` say where it landed and `linkAt` takes the token around that column --
+the run of characters a place can be made of -- and matches `SOURCE_LINK` inside
+it. Not against the whole line: `at Form_Open (/tmp/Main.js:42:9)` holds one
+place, and a click at either end of that line is on neither of them.
 
-Clicking one is one way in (`Console_Link`). The other is a run that ended badly,
+`SOURCE_LINK` is one string for the two who need it: the click, which reads the
+token back, and the scan that finds the frame a failed run died in.
+
+Three things about the gesture, each of them measured rather than assumed (a real
+pointer, on an Xvfb of its own):
+
+- **`MouseUp` and not `Cursor`.** `Cursor` fires on the click and would have been
+  the obvious handler -- but it fires on every arrow key too, so reading the log
+  with the keyboard would open a file per keystroke.
+- **`Selection` is the guard.** A click leaves none; a drag leaves the text it
+  covered, and dragging across a place to copy it must not go there.
+- **And a drag usually produces no `MouseUp` at all**, because GTK's own drag
+  gesture claims the sequence -- the same trap VTE's `LinkPattern` work hit from
+  the other side. That is a second line of defence and not one to lean on, which
+  is why the guard is there as well.
+
+The cursor clamps to the end of a line, which is the one case a column cannot
+tell apart on its own: a click in the empty space to the right of a traceback
+reads as a click on its last character. `linkAt` refuses a column past the end
+for that reason, and still points at the word before a space *inside* a line,
+which is where a click one pixel wide of a place lands.
+
+Clicking one is one way in. The other is a run that ended badly,
 which goes there on its own: pressing Run and being left in front of a wall of text
 with the file it names one click away is what that fixes. `errorLocation()` takes
 the **innermost** frame of the **last** traceback that belongs to this project -- a
@@ -782,11 +850,45 @@ clears the console, so anything found is from this run.
 Only files of the project: a traceback runs through the runtime's own frames and
 through whatever else the program read, and those are not the IDE's to open.
 
-VTE digests what it is fed on its own time, so the exit signal can arrive before
-the last lines of the traceback are on screen -- looking once would work most of
-the time, which is the worst kind of working. `findErrorLine` looks over the next
-few turns of the main loop and gives up quietly, which is the right answer when the
-program died of something that named no line at all.
+`findErrorLine` looks **once** and gives up quietly, which is the right answer
+when the program died of something that named no line at all. It looked ten times
+thirty milliseconds apart while the pane was a terminal, because VTE digests what
+it is fed on its own time and the exit signal could arrive before the last of the
+traceback was on screen. `Exec` and a text buffer have nothing to wait for.
+
+## The terminal tab
+
+`ConsoleBox`'s second page, and the only real `Terminal` left in the IDE. The
+output pane above it is a log view because showing what a child printed needs no
+pty; this one is Linux's actual terminal -- git, a service, a file to move -- and
+it is why `Terminal` was not removed when the console stopped being one.
+
+Three decisions, and each of them is a line of code:
+
+- **It exists only where a child can be run in it.** `buildTerminal` asks
+  `Widget.Available("Terminal")` and returns if the answer is no, so a runtime
+  built without VTE has a bottom panel of one page and no tab promising something
+  that would refuse. Asked of the *class* rather than of a control, because
+  building one to ask would be building the thing the answer says not to build.
+- **The shell starts when the page is first looked at**, not when the IDE opens:
+  a terminal nobody has turned to is a child process nobody asked for, started in
+  whatever directory the IDE happened to be launched from. `ConsoleBox_Switch`
+  runs `Environment.Get("SHELL") || "/bin/sh"` in the project's directory --
+  which is the whole point of it being here -- or in the user's home when there
+  is no project open.
+- **And leaving asks it to end.** `stopShell()` sends SIGTERM (reaching the whole
+  process group) on the way out, and every way out of the IDE goes through one
+  method for that reason: `Form_Close` when there is nothing to ask, and `quit()`
+  from the answer when there was. It is **not** what ends an interactive shell --
+  bash ignores SIGTERM -- and what does is the pty being closed, which hangs up
+  its foreground process group the way closing a terminal window always has.
+  Measured: nothing is left behind. So the signal is for everything that does
+  honour it, and there is deliberately no `Kill()` behind it, because what is in
+  the terminal may be a build or an editor.
+
+The control is called `Shell` and not `Terminal`, because `Terminal` is the
+class: a field of that name in `MainForm.js` would read as the class in every
+line that mentioned it. What the user sees is the tab, and the tab says Terminal.
 
 Two shapes of failure, and one entry point each. A **load error** -- a syntax error,
 a class that will not compile -- prints and exits non-zero, and that is the jump. An

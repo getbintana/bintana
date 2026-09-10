@@ -43,7 +43,7 @@ LANGUAGE=es ./build/bintana ide examples/hello    # the IDE itself, from ide/po/
 ./build/bintana examples/session     # Http with cookies and Basic auth: a login the next request remembers
 ./build/bintana examples/serve       # Http.Server: a static file server on :8080. Runs until Ctrl-C
 LANGUAGE=es ./build/bintana examples/agenda   # ...and the long date the catalogue rewrites
-HEADLESS=1 ./tests/run.sh         # 4799 assertions in 4 projects, on a virtual display
+HEADLESS=1 ./tests/run.sh         # 4837 assertions in 4 projects, on a virtual display
 ./tests/run.sh                    # the same, on *your* screen: it only falls back to
                                   # Xvfb when there is no DISPLAY, so on a desktop this
                                   # opens three windows and takes the keyboard
@@ -51,14 +51,19 @@ sudo cmake --install build        # ...or install it: see below
 ./tests/install.sh                # what that would produce, tried without installing it
 ```
 
-Dependencies: `gtk4`, `gtksourceview-5`, `vte-2.91-gtk4` (with headers) and
-pkg-config. QuickJS is vendored in `vendor/quickjs` (quickjs-ng v0.16.1).
+Dependencies: `gtk4`, `gtksourceview-5` (with headers) and pkg-config. QuickJS is
+vendored in `vendor/quickjs` (quickjs-ng v0.16.1).
 
-`libsystemd` is optional and only adds `Logger.Target = "Journal"`; without it the
-build is the same and logging goes to the terminal. `libsoup-3.0` is optional the
-same way and is what `Http` speaks; without it the build is the same and `Http`
-says which package is missing when it is called. `sqlite3` likewise, for
-`Database.Sqlite`.
+Five more are **optional**, and CMake says what it found either way. `libsystemd` only
+adds `Logger.Target = "Journal"`; without it the build is the same and logging
+goes to the terminal. `libsoup-3.0` is what `Http` speaks, `sqlite3` is what
+`Database.Sqlite` opens, and `gstreamer-1.0` is what `Video` and `AudioPlayer`
+play through; without each, the build is the same and the thing itself says
+which package is missing when it is called. `vte-2.91-gtk4` is the pty behind
+`Terminal` and is optional too — the class is still there, still draws and still
+loads out of a `.form`, and only `Run`, `Stop` and `Kill` refuse;
+`Widget.Available("Terminal")` is what a program asks first. It is the only
+dependency with no Windows port, which is why it stopped being required.
 Everything needs an X or Wayland display; there is no headless mode.
 
 This file is the overview and the quick reference. The technical documentation —
@@ -423,7 +428,7 @@ before reaching for a screenshot.
 | `TextEditor` | multi-line plain text: `Text`, `Line` (ro), `Column` (ro), `Selection` (ro), `Modified`, `ReadOnly`, `Wrap`, `CanUndo`/`CanRedo` (ro), `GotoLine`, `Select`, `Insert`, `Append`, `Clear`, `Undo`, `Redo` — a note, a description, a log | `Change`, `Cursor` |
 | `SourceEditor` | the same, plus what a source file needs: `Language`, `Theme`, `ShowLineNumbers`, `ShowMarks`, `Completion`, `CompletionTitle`, `Mark`/`Unmark`/`Marks`/`ClearMarks` | `Change`, `Cursor`, `Complete` |
 | ...searching (a `SourceEditor`'s) | `Search(text, {CaseSensitive, WholeWord, Regex})` → how many, `Matches` (ro), `MatchIndex` (ro), `FindNext()`, `FindPrevious()`, `Replace(with)`, `ReplaceAll(with)` | |
-| `Terminal` | `Text` (ro), `Running` (ro), `ScrollbackLines`, `FontScale`, `LinkPattern`, `Run(argv,cwd)`, `Stop()`, `Kill()`, `Feed(text)`, `Clear()` | `Exit(code)`, `Link(text)` |
+| `Terminal` | `Available` (ro), `Text` (ro), `Running` (ro), `ScrollbackLines`, `FontScale`, `LinkPattern`, `Run(argv,cwd)`, `Stop()`, `Kill()`, `Feed(text)`, `Clear()` | `Exit(code)`, `Link(text)` |
 | `Video` | a clip that plays, in the window: `Uri` (a URI or a plain path), `User`/`Password` (RTSP digest; the secret never reads back), `Latency`, `Volume`, `Muted`, `Loop`, `Fit`, `Position`/`Duration`/`Playing`/`Seekable`/`Buffering`/`SourceWidth`/`SourceHeight` (ro), `Play()`, `Pause()`, `Stop()`, `Seek(s)`, `Save(path)` — sound with no window is `AudioPlayer` (see §7) | `Ended()`, `Error(message, kind)` |
 | `DrawingArea` | a surface to draw on: `Redraw()`, `Dump()`, `Save(path,[w],[h])`, `SavePdf(path,w,h,[pages],[before])` — the `Draw` event hands over a `Painter` | `Draw` |
 
@@ -434,6 +439,12 @@ are declared once on an abstract `Editor` and inherited by both. `Terminal` is V
 with a real pty; highlighting, undo, colours and interactive input are all the
 widget's own doing, and `PropertyOptions("Language")` asks GtkSourceView what it
 has, so the list cannot drift from what the setter accepts.
+
+**And a log pane is a `TextEditor`, not a `Terminal`.** `Append` writes at the end
+and scrolls there whatever the cursor was doing, and it works with `ReadOnly` on,
+which is the whole of what showing a child's output takes. A pty buys typing,
+colour and `less`; if none of those is used, it is a dependency paid for nothing.
+The IDE's own output pane made that mistake and is a `TextEditor` now.
 
 Which one a form wants is not a close call: **a `TextEditor` is the multi-line
 field this widget set went without**, for observations, a note, a description, a
@@ -663,8 +674,12 @@ some frames later.
 (`"[\\w./+-]+\\.js:\\d+"`), and clicking something that matches raises
 `Link(text)` — what the text *means* is the application's business. Dragging
 across a match selects it as it always did: the click is reported on release, and
-only when press and release landed on the same match. This is how the IDE's
-console turns a traceback into somewhere to go (§8).
+only when press and release landed on the same match. There is nothing to
+highlight on a build with no VTE, so `Link` never fires there.
+
+The IDE turns a traceback into somewhere to go without any of this now — its
+output pane is a `TextEditor`, so a click moves the cursor and `Line`/`Column`
+say where it landed (§8).
 
 ### Containers
 
@@ -1417,8 +1432,9 @@ sqlite and not about this runtime. The full reference for both is in
 subject beside it (`Designer`, `TabSet`, `Classes`, ... — see
 [docs/ide.md](docs/ide.md)), the `AskForm` / `ConfirmForm` / `NewProjectForm` /
 `IconForm` dialogs, and
-`icons/`. It has a project tree, a tabbed editor with highlighting, run/stop in a
-real VTE terminal, menus with accelerators, and a **form designer**.
+`icons/`. It has a project tree, a tabbed editor with highlighting, run/stop with
+the output in a log pane, a real VTE terminal in a tab beside it, menus with
+accelerators, and a **form designer**.
 
 The project tree groups each form with its code: a form is one thing even though
 it lives in two files.
@@ -1539,7 +1555,7 @@ pointer and snapped to the grid — and inside a container if dropped on one.
 `ToggleButton`, `Switch`, `LinkButton`), `Data` (`ComboBox`, `SpinBox`, `ListBox`,
 `Slider`, `DatePicker`, `Calendar`, `ColorButton`, `FontButton`, `ProgressBar`,
 `LevelBar`, `Spinner`), `Views` (`TreeView`, `TableView`, `TextEditor`,
-`SourceEditor`, `Terminal`, `RowList`, `Flow`, `DrawingArea`), `Boxes` (`Panel`, `Grid`, `Frame`, `Expander`,
+`SourceEditor`, `Terminal`, `RowList`, `Flow`, `DrawingArea`, `Video`), `Boxes` (`Panel`, `Grid`, `Frame`, `Expander`,
 `Scroller`) and `Split` (`Split`, `Notebook`, `Switcher`, `Overlay`). The three
 pickers sit together because they are one gesture: a date, a colour and a font are
 all **picked** from the desktop's own chooser rather than spelled out. There is no
@@ -1552,6 +1568,14 @@ excepted. Which is how it was found that six of them were missing: `TreeView`,
 `SourceEditor`, `Terminal`, `RowList`, `Overlay` and `Flow` were controls of the
 runtime that no button offered, and five of them are what the IDE's own windows
 are built out of.
+
+**Except what this build cannot run**, which is the same question the other way
+round and is `Widget.Available(type)`. `Terminal` on a runtime built without VTE
+is the case: the class is there and a `.form` holding one still opens, so
+`Widget.Types()` is the wrong list to build a palette from — the button is
+simply absent, rather than placing a control whose only warning would be a
+dialog at run time. Both directions are asserted, since a filter that dropped
+everything would satisfy the first on its own.
 
 **Elastic forms** are designed too, not only `Fixed` ones. The surface lays its
 children out the way the running form will, so a form declared `Vertical` is a

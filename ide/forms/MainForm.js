@@ -32,10 +32,11 @@
 /*
  * A place, as a traceback writes one: `at Boom_Click (/path/Form1.js:42:30)`.
  *
- * One string for the two who need it -- the console, which makes text matching
- * it clickable, and the parser that reads a click back -- because a pattern that
- * highlights what the parser cannot read is a link that does nothing.  Basic
- * enough to mean the same thing to PCRE2 and to JavaScript.
+ * One string for the two who need it -- the click, which reads the token under
+ * the pointer back, and the scan that finds the frame a failed run died in.
+ * It was PCRE2's as well while the pane was a terminal and `LinkPattern` made
+ * the text clickable; the pane is an ordinary `TextEditor` now, so it is only
+ * ever a JavaScript regex -- see `Runner.linkAt`.
  */
 const SOURCE_LINK = "[\\w./+-]+\\.(?:js|form|json):\\d+";
 
@@ -126,7 +127,7 @@ const HANDLER_NEW     = "  ";
  *
  * Before there was a welcome page, an IDE with no project open was the whole
  * workspace with nothing in it: an empty tree, a dead toolbar, a tab strip of no
- * tabs, and a line in the console asking the user to open something. What a
+ * tabs, and a line in the output pane asking the user to open something. What a
  * window with nothing to show should show is what it can *do*, which is three
  * things -- open one, start one, or go back to one.
  */
@@ -202,11 +203,17 @@ class MainForm extends Form {
      * the welcome page, where nothing has ever been selected. */
     handlerEvents = [];
 
+    /* The bottom panel's terminal, and which page it is -- `null` and `-1` on a
+     * build whose `Terminal` cannot run a child, since there is no second page
+     * there at all. Declared here and not left to `buildTerminal`, so every
+     * reader of them (`ConsoleBox_Switch`, `stopShell`) is answered either way. */
+    Shell     = null;
+    shellPage = -1;
+
     Form_Open() {
         this.dressTabActions();
         this.dressViews();
-        /* An error in the console names a line, and a line is somewhere to go. */
-        this.Console.LinkPattern = SOURCE_LINK;
+        this.buildTerminal();
         this.renderTabs();          /* no pages yet: no strip either */
         this.setMode(false);        /* ...and so no editor nor designer either */
         this.loadRecent();
@@ -215,7 +222,7 @@ class MainForm extends Form {
         if (arg) {
             this.openProject(arg);
         } else {
-            /* The welcome page says the rest; the console keeps the version,
+            /* The welcome page says the rest; the log keeps the version,
              * which is the one thing it says that a button cannot. */
             this.log(`Bintana ${BTA_VERSION}\n`);
             this.Pages.Current = PAGE_WELCOME;
@@ -624,9 +631,22 @@ class MainForm extends Form {
      * the answer.  `Application.Quit` and not `Close()` on the way out, because
      * quitting the main loop asks nobody: a second trip through this handler
      * would be a second dialog for a question already answered.
+     *
+     * And the way out goes through `quit()` rather than through
+     * `Application.Quit` directly, because there is now something owed on the
+     * way: the terminal tab's shell is a child of this process.
      */
     Form_Close() {
-        return this.confirmQuit();
+        const asked = this.confirmQuit();
+        if (!asked) this.stopShell();       /* nothing to ask: it really closes */
+        return asked;
+    }
+
+    /* Everything owed before the window goes, in the one place every way out
+     * passes through. */
+    quit() {
+        this.stopShell();
+        Application.Quit(0);
     }
 
     /*
@@ -646,9 +666,9 @@ class MainForm extends Form {
                           "{0} files have unsaved changes:\n{1}",
                           dirty.length, list),
             Locale.Text("Quit without saving"),
-            () => Application.Quit(0),
+            () => this.quit(),
             { Text: Locale.Text("Save all and quit"),
-              Run:  () => { this.saveAllDirty(); Application.Quit(0); } });
+              Run:  () => { this.saveAllDirty(); this.quit(); } });
     }
 
     /* The Notebook fires Switch while the .form is still loading, when no tab
@@ -675,9 +695,101 @@ class MainForm extends Form {
      * stays here: it is what the whole IDE writes with. */
     run() { this.runner.start(); }
 
-    /* A terminal wants CRLF; the rest of the program thinks in \n. */
+    /*
+     * The output pane is a log view and not a console: `Append` writes at the
+     * end and scrolls there whatever the cursor was doing, which is what a log
+     * pane wants, and `ReadOnly` stops only the user's keyboard.
+     *
+     * No CRLF translation any more. A terminal is a grid of lines and wanted
+     * one; a text buffer takes `\n` as the newline it is.
+     */
     log(text) {
-        this.Console.Feed(text.replace(/\n/g, "\r\n"));
+        this.LogView.Append(text);
+    }
+
+
+    /* ------------------------------------------------------------ terminal
+     *
+     * The bottom panel's second page, and the only place a real `Terminal` is
+     * left in the IDE: the output pane above it is a log view, because showing
+     * what a child printed needs no pty.  This one does -- it is Linux's actual
+     * terminal, for git, a service, a file to move -- and it is why `Terminal`
+     * was not removed when the console stopped being one.
+     *
+     * `Shell` and not `Terminal` for the control's name, because `Terminal` is
+     * the class: a field of that name in this file would read as the class in
+     * every line that mentioned it.  What the *user* sees is the tab, and the
+     * tab says Terminal.
+     */
+
+    /* The page exists only where a child can be run in it, which is what
+     * `Widget.Available` answers: a build without VTE gets a bottom panel of
+     * one page, and no tab promising something that would refuse.
+     *
+     * Asked of the *class* and not of a control, because there is no control
+     * yet -- which is the whole reason `Widget.Available(type)` exists beside
+     * the `Available` an instance publishes. Building one to ask would be
+     * building the thing the answer says not to build. */
+    buildTerminal() {
+        if (!Widget.Available("Terminal")) return;
+
+        this.Shell = new Terminal();
+        this.Shell.Name = "Shell";
+
+        /* A tab label is a widget and not a string -- `Notebook.Append` takes
+         * one or none, which is what lets the IDE colour its own tab strip --
+         * so the page arrives nameless and is named next, the way `Palette`
+         * builds its groups. */
+        const tab = new Label();
+        tab.Text = Locale.Text("Terminal");
+
+        this.shellPage = this.ConsoleBox.Append(this.Shell);
+        this.ConsoleBox.SetTabLabel(this.shellPage, tab);
+    }
+
+    /*
+     * The shell starts when the page is first *looked at*, not when the IDE
+     * opens: a terminal nobody has turned to is a child process nobody asked
+     * for, and an IDE that starts one at launch has started one in whatever
+     * directory it was launched from.
+     *
+     * In the project's directory, which is the whole point of it being here --
+     * and in the user's own home when there is no project open, because a
+     * shell has to start somewhere and the directory the IDE was launched from
+     * is nobody's choice.
+     */
+    ConsoleBox_Switch(index) {
+        if (!this.Shell || index !== this.shellPage) return;
+        if (this.Shell.Running) return;
+
+        const shell = Environment.Get("SHELL") || "/bin/sh";
+        this.Shell.Run([shell], this.project || Environment.Get("HOME") || "/");
+    }
+
+    /* A shell that ended says so where it ended, and the next look at the tab
+     * starts another: an empty black pane is not an answer. */
+    Shell_Exit(code) {
+        this.Shell.Feed(`\r\n[${Locale.Text("the shell ended")}: ${code}]\r\n`);
+    }
+
+    /*
+     * Asks the child to end (SIGTERM, reaching its whole process group) on the
+     * way out, and on the way back to the page so a dead shell is replaced.
+     *
+     * **It is not what ends an interactive shell**, and that is worth knowing
+     * rather than assuming: bash ignores SIGTERM when it is interactive, so
+     * `Running` is still true after this. What ends it is the pty being closed
+     * -- the kernel hangs up the foreground process group, which is what
+     * closing a terminal window has always meant, and VTE does it when the
+     * widget goes. Measured: no shell is left behind after the IDE quits.
+     *
+     * So this is for everything that *does* honour SIGTERM, and for saying out
+     * loud that the child is ours. It deliberately does not follow with a
+     * `Kill()`: what is in the terminal may be a build or an editor, and
+     * SIGKILL is not the IDE's to send on somebody's behalf.
+     */
+    stopShell() {
+        if (this.Shell && this.Shell.Running) this.Shell.Stop();
     }
 
 
@@ -855,16 +967,26 @@ class MainForm extends Form {
     }
 
     BtnStop_Click() {
-        this.Console.Stop();
+        this.runner.stop();
     }
 
-    Console_Exit(code) { this.runner.finished(code); }
-    Console_Link(text) { this.runner.clicked(text); }
+    /*
+     * A click in the log, which is how a traceback becomes somewhere to go.
+     *
+     * `MouseUp` and not `Cursor`, which was what this looked like it should be:
+     * a click *does* move the insertion cursor in a `ReadOnly` editor and
+     * `Cursor` does fire -- but so does every arrow key, so reading the log
+     * with the keyboard would open a file per keystroke. `MouseUp` is the
+     * pointer's alone. A drag usually produces none at all, GTK's own drag
+     * gesture having claimed the sequence, but only usually -- which is why
+     * `Runner.followClick` guards on `Selection` as well. Both measured.
+     */
+    LogView_MouseUp() { this.runner.followClick(); }
 
     /* Both delegate to `Runner`, and these two are here because `tests/ide`
      * drives them by name -- as good a reason as a handler's. */
     errorLocation(text)   { return this.runner.errorLocation(text); }
-    findErrorLine(tries)  { return this.runner.findErrorLine(tries); }
+    findErrorLine()       { return this.runner.findErrorLine(); }
     openSource(path, line) { return this.runner.open(path, line); }
 
     /* The designer's control tree: the other way to select something, and the
@@ -1438,10 +1560,10 @@ class MainForm extends Form {
     MnuReload_Click() { this.BtnReload_Click(); }
     MnuSave_Click()   { this.save(); }
     MnuSaveAll_Click() { this.saveAllDirty(); }
-    MnuQuit_Click()   { if (!this.confirmQuit()) Application.Quit(0); }
+    MnuQuit_Click()   { if (!this.confirmQuit()) this.quit(); }
 
     MnuRun_Click()    { this.run(); }
-    MnuStop_Click()   { this.Console.Stop(); }
+    MnuStop_Click()   { this.runner.stop(); }
 
     /* Undo is split by mode, so Ctrl+Z does not steal the text editor's undo
      * when the editor is what is on screen. */

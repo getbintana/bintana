@@ -376,7 +376,7 @@ const TESTS = [
     "Settings", "Timer", "Icons", "Font", "Style", "Radius", "Padding", "Shadow", "StyleRule",
     "ColorButton",
     "ColorDialog", "FileDialog", "IconList", "FormIcon", "ButtonClick",
-    "TextProperties", "Locale", "LocaleRead", "TranslatedForm", "Fill", "DesignValues",
+    "Available", "TextProperties", "Locale", "LocaleRead", "TranslatedForm", "Fill", "DesignValues",
     "Grid",
     "File", "Dir", "Trash", "Environment",
     /* Async, and last but one: its callbacks land on later turns of the loop,
@@ -7288,12 +7288,62 @@ class Spike extends Form {
      * What Text answers is what the program printed, not what fits on screen:
      * a console pane a couple of rows tall is the normal case, and one that
      * reported only the visible rows could not be tested against at all.
+     *
+     * **VTE is optional at build time**, so the first thing asked is whether
+     * there is a pty here at all -- the way `testMedia` asks about GStreamer.
+     * What survives the answer being no is checked either way: the class is
+     * there, it draws, its state answers, and the three verbs that need a
+     * child refuse by name.
      */
     testTerminal() {
         const term = new Terminal();
         this.Fixed1.Add(term);
         term.Name = "Term1";
         term.Resize(200, 40);        /* two or three rows, like a console pane */
+
+        /* Asked of the class and of the control, which must agree: a palette
+         * asks the first (it has a name and no widget) and a program with one
+         * in front of it asks the second. */
+        eq("a Terminal says whether this build can run one",
+           term.Available, Widget.Available("Terminal"));
+        check("...and it is a boolean either way",
+              typeof term.Available === "boolean", `${term.Available}`);
+
+        /*
+         * Without VTE the *state* still answers and the *verbs* refuse, which
+         * is not a nicety: the designer reads every value of a selected
+         * control and the serialiser reads them all again to save, so a getter
+         * that threw would make a runtime with no VTE one that could not draw
+         * a form with a Terminal in it -- or load one, since a declared
+         * LinkPattern is assigned like any other property.
+         */
+        if (!term.Available) {
+            term.Feed("sin pty\n");
+            eq("a Terminal with no pty still shows what it is fed",
+               term.Text, "sin pty");
+            check("...and still says nothing is running", !term.Running);
+
+            term.LinkPattern = "[\\w./-]+\\.js:\\d+";
+            eq("...and still keeps a pattern a .form declared",
+               term.LinkPattern, "[\\w./-]+\\.js:\\d+");
+            eq("...and its scrollback", (term.ScrollbackLines = 500, term.ScrollbackLines), 500);
+
+            const refused = [];
+            for (const verb of [() => term.Run(["true"]), () => term.Stop(),
+                                () => term.Kill()]) {
+                try { verb(); refused.push("did not refuse"); }
+                catch (e) { refused.push(/VTE/.test(e.message) ? "named" : e.message); }
+            }
+            eq("the three verbs that need a child refuse, naming the package",
+               JSON.stringify(refused), '["named","named","named"]');
+
+            term.Clear();
+            eq("and Clear empties it", term.Text, "");
+
+            term.Delete();
+            this.term = null;
+            return;
+        }
 
         for (let i = 1; i <= 40; i++) term.Feed(`line ${i}\r\n`);
         check("nothing is running in it", !term.Running);
@@ -7333,6 +7383,8 @@ class Spike extends Form {
     Term1_Link(text) { this.linked = text; }
 
     checkTerminal() {
+        if (!this.term) return;        /* no VTE: testTerminal said so and finished */
+
         const text = this.term.Text;
 
         check("the last line is there", text.includes("line 40"),
@@ -9403,6 +9455,46 @@ class Spike extends Form {
         check("including the empty one, which is plain text", langs.includes(""));
         check("and the themes installed",
               this.Ed.PropertyOptions("Theme").length > 0);
+    }
+
+    /*
+     * --- what this build can run -----------------------------------------
+     *
+     * `Widget.Types()` says which classes there are; this says which of them
+     * this *build* can run, which is not the same question and had no word at
+     * all. A class whose engine is optional -- `Terminal` without VTE -- is
+     * there either way: it constructs, it draws, a `.form` naming one loads,
+     * and only the verbs refuse. A palette asks this before it offers a button
+     * for it, because a control the user cannot finish is worse than a missing
+     * one.
+     */
+    testAvailable() {
+        check("an ordinary control is available", Widget.Available("Button"));
+        check("...and so is an abstract class, which is about the build and not"
+              + " about whether one can be made", Widget.Available("Widget"));
+
+        /* The optional one, whichever way this build went: what is asserted is
+         * that the answer is a boolean and that the class exists regardless --
+         * `testTerminal` is where each branch is checked. */
+        check("Terminal answers one way or the other",
+              typeof Widget.Available("Terminal") === "boolean");
+        check("...and is in the list of classes either way",
+              Widget.Types().includes("Terminal"));
+        eq("...and can still be made, which is what loading a .form needs",
+           Widget.New("Terminal").CssNode(), "scrolledwindow");
+
+        /* A class of the project's own is JavaScript, and JavaScript this
+         * runtime can always run. */
+        check("a component of the project is available too",
+              Widget.Available("Gadgets.Stepper"));
+
+        /* And a name that is nothing at all answers rather than throwing: what
+         * a caller does with the answer is skip a button, and wrapping that in
+         * a try is the wrong shape. */
+        check("a name that is no class at all is not available",
+              !Widget.Available("Nonsense"));
+        throws("...where Widget.New on the same name throws",
+               () => Widget.New("Nonsense"));
     }
 
     /* --- which properties hold prose ------------------------------------ */

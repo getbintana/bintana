@@ -147,7 +147,9 @@ and a translator would then change what a keyword means.
 There is a macro for each combination: `BTA_CLASS_TEXT`,
 `BTA_CLASS_ENUM_TEXT`, and `BTA_CLASS_FULL` underneath them all. They use
 designated initialisers, so a field added to `BtaClass` costs nothing in the
-module tables.
+module tables — as long as its sensible default is the zero value. `available`
+is the one that is not (see below), which is why `BTA_CLASS_FULL` fills it in
+and there is an inner `BTA_CLASS_AT` beneath it.
 
 **Get this wrong in the permissive direction and it is a disaster, not a bug.**
 `SourceEditor` declares no `texts` on purpose: its `Text` is the source file being
@@ -159,6 +161,51 @@ translated identifier is not.
 
 A read-only property needs no thought here — the loader could never assign it, so
 `ListBox.Text` and `Terminal.Text` are excluded already.
+
+## Adding a widget whose engine is optional at build time
+
+Four of the runtime's dependencies are optional — sqlite, libsystemd, libsoup,
+GStreamer — and a fifth, VTE, is optional *and* a widget's, which is the case
+this section is about. `Terminal` is the one, and the mold is worth following
+exactly, because getting it wrong is invisible on the machine that has the
+dependency.
+
+**The verbs refuse; the state answers.** That is the whole rule, and the reason
+is the designer: the property grid reads every value of the selected control and
+the serialiser reads them all again to save, so one getter or setter that threw
+would make a build without the dependency one that cannot *open* a form holding
+that widget. It happened with `Video`: a declared `Uri` is assigned like any
+other property, and the load died with a dialog. **Optional at build time was
+never meant to cost loading a form.**
+
+So the widget still registers, still builds a GTK shape (`Terminal` without VTE
+builds the same `GtkScrolledWindow` with a `GtkTextView` in it, so `CssNode()`
+and the designer are unchanged), and every property round-trips. Put the calls
+that really need the library behind a handful of static functions with two
+implementations — `bta_media.c`'s `engine_*` and `bta_terminal.c`'s `term_*` —
+rather than writing the class twice.
+
+**And the class says so in its row**, which is what a palette reads:
+
+```c
+BTA_CLASS_OPTIONAL("Terminal", "Control", term_build, terminal_props,
+                   false, TERM_AVAILABLE, "Exit,Link")
+```
+
+`BtaClass.available` defaults to true through every other macro. From JS it is
+`Widget.Available(type)` for a caller that has a name and no control — the IDE's
+palette, which filters its buttons on it — and a read-only `Available` on the
+instance for a caller that has one. `Widget.Types()` keeps meaning *what classes
+there are*, and `Widget.New` keeps building it, because a `.form` that already
+holds one has to load.
+
+In CMake, `pkg_check_modules` **without** `REQUIRED`, a `BTA_HAVE_*` definition,
+and a `message(STATUS …)` **either way** — the message is what a build reads back
+to know which half it got, and the `no-vte` CI job greps for it so that a runner
+which quietly grew the library cannot turn the job into a copy of the ordinary
+one. Everything the library's headers bring goes inside the guard, `signal.h` and
+`sys/wait.h` included: they do not exist on Windows either, which is the reason
+VTE became optional at all.
 
 ## Adding an event
 

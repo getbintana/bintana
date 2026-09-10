@@ -1,7 +1,7 @@
 # Controls
 
 **This is the complete surface, not a selection.** Every property, method and
-event of every class is below — 384 rows, covering 217 distinct members and 31
+event of every class is below — 385 rows, covering 218 distinct members and 34
 events across 41 classes. If something is not here, the runtime does not have it,
 and you should not have to open the project tree to find that out.
 
@@ -47,6 +47,28 @@ Widget                            (abstract)
 
 `Widget`, `Control`, `Container` and `Editor` cannot be instantiated. `Form` and `Component`
 are what a project's own classes extend.
+
+### What there is, and what this build can run
+
+Three questions about a class one has only the **name** of — which is the
+position a palette, a `.form` loader and an extractor are all in:
+
+| | |
+|---|---|
+| `Widget.Types()` → array | every class the runtime has, in registration order |
+| `Widget.New(type)` → widget | makes one. The runtime's classes first, then the project's own and its libraries' — which is how a component appears in a `.form` as an ordinary `"type"`. Throws on a name that is neither |
+| `Widget.Available(type)` → boolean | whether **this build** can run one. `false` for a name that is no class at all, so it answers rather than throwing |
+
+`Types` and `Available` are not the same list, and the difference is the point:
+[`Terminal`](#terminal) is always in `Types()` because the class is always there
+— it constructs, it draws, a `.form` with one in it loads — and
+`Available("Terminal")` is false on a runtime built without VTE, where starting
+a child refuses. **Offer from `Available`, load from `Types`**: a palette
+button for a control the user cannot finish is worse than a missing button, and
+a `.form` that already holds one still has to open.
+
+A class of the project's own is available whenever it resolves: a component is
+JavaScript, and JavaScript this runtime can always run.
 
 
 ### Where to find one
@@ -820,10 +842,13 @@ person writes a form: `p.Rotate(-90)` for an axis label is obviously right where
 
 ## Terminal
 
-VTE with a real pty, so colours, prompts and interactive input all work. Use it for anything interactive; for a command you capture, use [`Exec`](library.md#exec).
+VTE with a real pty, so colours, prompts and interactive input all work. Use it for anything interactive; for a command you capture, use [`Exec`](library.md#exec) — and for showing what it printed, a read-only [`TextEditor`](#texteditor), whose `Append` is what a log pane wants.
+
+**VTE is optional at build time**, so this is the one control that may not be able to do its job. `Available` says whether it can; `Widget.Available("Terminal")` is [the same question asked of the class](#what-there-is-and-what-this-build-can-run), which is what a palette wants. Where it is false the class is still all here — one constructs, a `.form` naming one loads, every property answers and `Feed`, `Text` and `Clear` work — and `Run`, `Stop` and `Kill` refuse, naming the package that is missing. `Link` never fires there, since there is nothing highlighting anything.
 
 | Member | |
 |---|---|
+| `Available` (ro) | whether this build can run a child in one. `false` on a runtime built without VTE, where the three verbs refuse |
 | `FontScale` | a multiplier on the terminal's own font. Default `1` |
 | `LinkPattern` | a regex; clicking text that matches raises `Link(text)`. What the text *means* is yours |
 | `ScrollbackLines` | how much history it keeps. Default `10000` |

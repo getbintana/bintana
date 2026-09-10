@@ -1,7 +1,7 @@
 # Testing
 
 ```sh
-HEADLESS=1 ./tests/run.sh               # all four projects, 4799 assertions
+HEADLESS=1 ./tests/run.sh               # all four projects, 4837 assertions
 HEADLESS=1 ./tests/run.sh widgets       # one project
 HEADLESS=1 ./tests/run.sh widgets record  # one test of it
 HEADLESS=1 ./tests/run.sh ide designer  # one project, stopping after a phase of it
@@ -69,7 +69,7 @@ in CI: `.github/workflows/ci.yml` installs the dependencies plus `xvfb` and runs
 | Project | What it covers |
 |---|---|
 | `tests/smoke` | The `.form` loader, event dispatch, the basic controls, nesting |
-| `tests/widgets` | Containers, `Arrangement`, `HAlign`/`VAlign`, boxes and splits, `Notebook`, `RowList`, `TreeView`, both editors and the source one's search, radio grouping, the value controls (`Slider`, `ProgressBar`, `DatePicker`, `Calendar` and its marks, `ToggleButton`, `Switch`), multiple selection, menu items that hold a state, drag and drop, icons, `PropertyOptions`, removing a child from every container and refilling it (`Removal`), what every numeric setter refuses (`NumericSetters`), the serialiser round trip, a command several places point at (`Action`: the shared `Enabled`, and the four things a bound control refuses), `Record`/`Field` and records inside records (`Nested`: a list of them, a shape that contains itself, and a cycle refused rather than hung on), a record over a sqlite table (`Database`: the driver, `Table`, and the four ways a shape can fail to fit a table — **120 assertions with sqlite and one without**, since it is an optional build dependency and the claim there is that it says which package is missing), moving pictures and sound (`Media`: a `Video` played to its end and replayed, seekable once known, its frame measured and saved as a PNG, `Pause` holding a position, a node with declared properties round-tripping back to the same file, `Loop` still going past one length, `Buffering` reading `100` on a local clip that never waits for data (below 100 needs a server throttled under the bitrate, which is a measurement by hand and not a test), a missing file and an unreachable RTSP camera answering `Error` with a message that names the clip and a `kind` a form can branch on, an `AudioPlayer` cue played and looped — **and the properties still answering without GStreamer, where only the verbs refuse**, since the designer and the serialiser read every value of a control and must not depend on an optional build dependency. **The clips are generated with `gst-launch-1.0` into a temporary directory rather than committed**, the TLS certificate's bargain; where there is no `gst-launch` the parts that need a file are skipped, and where GStreamer has its base plugins but not the GTK4 sink — a CI runner, say — the video half skips and the audio half runs), `TextProperties`/`Locale`/`Locale.Read`/`Fill` and design values, `Locale.Compare` and `Locale.Matches`, `Day`, `Stopwatch`, `Exec` and its `Stop`, a `File.Watch` that stops itself, a form shown narrower than it was drawn, the `Grid`, the CSS node of every control, a `DrawingArea` rendered without a screen (`Save` into a PNG, and `Dump` asserted call by call), `File`/`Directory`/`Exec`, an HTTP client against servers of its own on 127.0.0.1 (`HttpWait`: the blocking spelling, the verbs, a built upload, the stub without libsoup; `Http`: the callbacks, every verb echoed, a multipart framed and reposted, Basic auth, `Accept-Language`, no proxy, a jar that sends back, a proxy proved by transit, tuned pools, redirect, cancel and guard, and two requests in flight with one of them stopped — each callback handed its own handle, which is what lets a form drop the answer to a request it replaced) and serving over the same transport (`HttpServer`, dogfooded through the client: ephemeral port, echo, `404`, silence is `500`, `Stop` true then false; `Allow`, `Auth`, uploads parsed back, and `Tls` probed over real HTTPS — **the three HTTP tests need `python3` for the servers the client is aimed at, and the TLS step also needs `openssl`, which makes its own throwaway certificate into a temporary directory rather than keeping one in the tree; each is skipped, not failed, where the tool is missing**) |
+| `tests/widgets` | Containers, `Arrangement`, `HAlign`/`VAlign`, boxes and splits, `Notebook`, `RowList`, `TreeView`, both editors and the source one's search, radio grouping, the value controls (`Slider`, `ProgressBar`, `DatePicker`, `Calendar` and its marks, `ToggleButton`, `Switch`), multiple selection, menu items that hold a state, drag and drop, icons, `PropertyOptions`, removing a child from every container and refilling it (`Removal`), what every numeric setter refuses (`NumericSetters`), the serialiser round trip, a command several places point at (`Action`: the shared `Enabled`, and the four things a bound control refuses), `Record`/`Field` and records inside records (`Nested`: a list of them, a shape that contains itself, and a cycle refused rather than hung on), a record over a sqlite table (`Database`: the driver, `Table`, and the four ways a shape can fail to fit a table — **120 assertions with sqlite and one without**, since it is an optional build dependency and the claim there is that it says which package is missing), moving pictures and sound (`Media`: a `Video` played to its end and replayed, seekable once known, its frame measured and saved as a PNG, `Pause` holding a position, a node with declared properties round-tripping back to the same file, `Loop` still going past one length, `Buffering` reading `100` on a local clip that never waits for data (below 100 needs a server throttled under the bitrate, which is a measurement by hand and not a test), a missing file and an unreachable RTSP camera answering `Error` with a message that names the clip and a `kind` a form can branch on, an `AudioPlayer` cue played and looped — **and the properties still answering without GStreamer, where only the verbs refuse**, since the designer and the serialiser read every value of a control and must not depend on an optional build dependency. **The clips are generated with `gst-launch-1.0` into a temporary directory rather than committed**, the TLS certificate's bargain; where there is no `gst-launch` the parts that need a file are skipped, and where GStreamer has its base plugins but not the GTK4 sink — a CI runner, say — the video half skips and the audio half runs), `TextProperties`/`Locale`/`Locale.Read`/`Fill` and design values, `Locale.Compare` and `Locale.Matches`, `Day`, `Stopwatch`, `Exec` and its `Stop`, a `File.Watch` that stops itself, a form shown narrower than it was drawn, the `Grid`, what this build can run and what it merely *has* (`Available`: an ordinary control, an abstract class, a component of the project, a name that is no class at all — and `Terminal` either way, **with a branch for each**: with VTE the pty, the pattern and the scrollback; without it the state still answering, a `.form`'s `LinkPattern` still round-tripping, and `Run`/`Stop`/`Kill` refusing by name, since a build with no pty must still be able to draw and save a form that has a `Terminal` in it), the CSS node of every control, a `DrawingArea` rendered without a screen (`Save` into a PNG, and `Dump` asserted call by call), `File`/`Directory`/`Exec`, an HTTP client against servers of its own on 127.0.0.1 (`HttpWait`: the blocking spelling, the verbs, a built upload, the stub without libsoup; `Http`: the callbacks, every verb echoed, a multipart framed and reposted, Basic auth, `Accept-Language`, no proxy, a jar that sends back, a proxy proved by transit, tuned pools, redirect, cancel and guard, and two requests in flight with one of them stopped — each callback handed its own handle, which is what lets a form drop the answer to a request it replaced) and serving over the same transport (`HttpServer`, dogfooded through the client: ephemeral port, echo, `404`, silence is `500`, `Stop` true then false; `Allow`, `Auth`, uploads parsed back, and `Tls` probed over real HTTPS — **the three HTTP tests need `python3` for the servers the client is aimed at, and the TLS step also needs `openssl`, which makes its own throwaway certificate into a temporary directory rather than keeping one in the tree; each is skipped, not failed, where the tool is missing**) |
 | `tests/report` | `lib/report`: pagination, the group ladder, the totals, the masthead, the bands that grow, the PDF, and the five regressions the library shipped once |
 | `tests/ide` | The IDE itself, driven the way a user drives it |
 
@@ -117,7 +117,7 @@ columns export errors search running
 stale; the one above is here to be read.
 
 The saving is the point of it: `welcome files` is 101 assertions in **0.3 s**
-against 1736 in about 45, and `designer` is 351 in 4 s. Iterating on an early phase
+against 1768 in about 45, and `designer` is 351 in 4 s. Iterating on an early phase
 stops being a minute a time.
 
 **It runs a prefix, not a selection**, and that is not a limitation to be fixed
@@ -140,9 +140,9 @@ own says so with `reportsItself`.
 
 ### tests/widgets selects
 
-`tests/widgets` is 125 tests listed in `TESTS`, and a filter there **selects** rather
-than running a prefix — `HEADLESS=1 ./tests/run.sh widgets record` is 66 assertions
-in a fifth of a second against 2386 in about three. It can select because these tests are
+`tests/widgets` is 130 tests listed in `TESTS`, and a filter there **selects** rather
+than running a prefix — `HEADLESS=1 ./tests/run.sh widgets record` is 71 assertions
+in a fifth of a second against 2917 in about three. It can select because these tests are
 independent: each builds the controls it needs and deletes them again. The two that
 are not say so in the file:
 
@@ -519,13 +519,27 @@ The way to check something that only a pointer can answer, without a screenshot
 doing the deciding: patch the IDE's own `Form_Open` from an extra `.js` in a
 throwaway project that loads the real `ide/**/*.js`, have it drive itself to the state
 in question and `print` what it measures, then click with `xdotool` and read the log.
-That is how the console's links were checked both ways — that clicking one goes to
-the line, and that dragging across one still selects text instead.
+That is how the output pane's links were checked both ways — that clicking one
+goes to the line, and that dragging across one still selects text instead. The
+pane is a read-only `TextEditor` now, and the same method answered the questions
+its click rests on: that a click really does move the insertion cursor in one,
+that `Line`/`Column` report where, that `Selection` is `""` for a click and the
+covered text for a drag, and that a drag usually produces no `MouseUp` at all.
+A two-file probe under the scratch directory and an `Xvfb` of its own was enough
+for those — no IDE to drive, since the question was about the widget.
 
 Three things that waste time when doing it:
 
 - **The window manager places the window differently on every run.** Read the
-  geometry (`xdotool getwindowgeometry --shell`) and click relative to it.
+  geometry (`xdotool getwindowgeometry --shell`) and click relative to it. On a
+  bare `Xvfb` there is no window manager at all, so `xdotool windowactivate`
+  fails -- harmlessly, but it prints an error that reads like the probe not
+  working.
+- **Gestures coalesce.** Two clicks in the same place 0.4 s apart are a double
+  click, and a probe that does not know it measures three releases for five
+  gestures and concludes the wrong thing. Leave over a second between distinct
+  gestures, and print `MouseDown` beside whatever is being measured so the
+  sequence is visible.
 - **Capture the window, not the screen** (`import -window $WID`) — and make sure no
   earlier instance survived, or the screenshot shows a state that no longer exists.
   Menus and drag icons are separate surfaces, though, so those need the root window.
