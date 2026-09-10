@@ -42,7 +42,7 @@ LANGUAGE=es ./build/bintana ide examples/hello    # the IDE itself, from ide/po/
 ./build/bintana examples/session     # Http with cookies and Basic auth: a login the next request remembers
 ./build/bintana examples/serve       # Http.Server: a static file server on :8080. Runs until Ctrl-C
 LANGUAGE=es ./build/bintana examples/agenda   # ...and the long date the catalogue rewrites
-HEADLESS=1 ./tests/run.sh         # 4716 assertions in 4 projects, on a virtual display
+HEADLESS=1 ./tests/run.sh         # 4723 assertions in 4 projects, on a virtual display
 ./tests/run.sh                    # the same, on *your* screen: it only falls back to
                                   # Xvfb when there is no DISPLAY, so on a desktop this
                                   # opens three windows and takes the keyboard

@@ -2241,6 +2241,17 @@ person who wrote it either.
   and the ".." refusal`), copied out of the plan that predated the
   measurement: a sentence describing a guard nobody wrote, sitting in the
   file people read to find out what the runtime does.
+- **`Stop()` asks, it does not undo, and the answer still arrives.** A
+  cancelled request calls back a turn of the loop later -- by which time the
+  request that replaced it is already flying. A control that stays enabled
+  (`examples/jokes`' category combo; the button cannot do it, since it
+  disables itself) is used twice before the first answer lands, and the stale
+  `Cancelled` overwrote what the live request was doing: the status read a
+  failure with the button re-enabled while a good request was on its way.
+  What makes a stale answer droppable is the handle each callback is handed
+  as its second argument -- compare it against the one being waited for.
+  Reproduced both ways against a 3 s server before it was believed: without
+  the check the status showed `Cancelled` twice, with it never.
 - **A server lives as long as its object, so an example keeps it at module
   scope.** Dropping a listening server disconnects (a port is not left held
   past whoever held it), which means a `const` inside `Main` dies with the

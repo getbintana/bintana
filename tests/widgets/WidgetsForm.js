@@ -11128,6 +11128,45 @@ class Spike extends Form {
 
         const api = Http.Client({ BaseUrl: "http://127.0.0.1:8473",
                                   Headers: { "X-Def": "1" }, Timeout: 5000 });
+        /* Two in flight, one of them stopped: the shape a form takes when a
+         * control that stays enabled is used twice before the first answer
+         * lands (`examples/jokes`' category combo -- the button cannot do it,
+         * since it disables itself). `Stop()` asks rather than undoes, so the
+         * cancelled request still answers a turn later, *after* its
+         * replacement is already flying. What makes that answer droppable is
+         * that each callback is handed its own handle: without it a stale
+         * error overwrites what the live request is doing, and the example
+         * showed `Cancelled` with its button re-enabled while a good request
+         * was still on its way. */
+        const race = () => {
+            let landed = 0;
+            const done = () => { if (++landed === 2) steps[6](); };
+            const stale = api.Get("/slow", () => {
+                failures.push("the stopped request of the pair must not answer");
+                done();
+            }, (e, handle) => {
+                eq("the stale answer is an error", e.Kind, "Cancelled");
+                check("...handed the handle of the request that was stopped",
+                      handle === stale, `${handle && handle.Url}`);
+                check("...which is not the one still flying", handle !== live);
+                done();
+            });
+            const live = api.Get("/", (r, handle) => {
+                eq("the replacement answers for itself", r.Status, 200);
+                check("...handed its own handle", handle === live,
+                      `${handle && handle.Url}`);
+                check("...not the stopped one's", handle !== stale);
+                done();
+            }, (e) => {
+                failures.push(`the replacement errored: ${e.Message}`);
+                done();
+            });
+
+            check("both are in flight before either answers",
+                  stale.Running === true && live.Running === true);
+            stale.Stop();
+        };
+
         const steps = [
             () => {
                 const h = api.Get("/", (r) => {
@@ -11183,13 +11222,13 @@ class Spike extends Form {
             () => {
                 const h = api.Get("/slow", (r) => {
                     failures.push("a stopped request must not answer");
-                    steps[6]();
+                    race();
                 }, (e) => {
                     eq("stopping calls onError Cancelled", e.Kind, "Cancelled");
                     check("...and leaves TimedOut false", h.TimedOut === false);
                     check("stopping a finished job answers false",
                           h.Stop() === false);
-                    steps[6]();
+                    race();
                 });
                 check("stopping a live request answers true", h.Stop() === true);
             },
