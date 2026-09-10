@@ -801,12 +801,100 @@ clients.Save(c);                                      // UPDATE, by the key
 - sqlite is optional at build time; without it `Database.Sqlite` says which
   package is missing.
 
+## Http
+
+A native HTTP client over libsoup3. `Http.Client(opts)` holds its own session;
+`Http.Get/Post/...` are shorthands on a shared default client.
+
+```js
+const c = Http.Client({ BaseUrl: "https://api.example.com/v1", Timeout: 60000 });
+c.Get("/users", {}, (r) => print(r.Body.ToText()), (e) => print(e.Message));
+const r = Http.GetWait("https://example.com/", { Timeout: 5000 });
+```
+
+| | |
+|---|---|
+| `Client([opts])` | a client with its own session: `BaseUrl`, `Headers`, `Timeout` (ms, `0` waits forever), `FollowRedirects` (default `true`), `Language`, `UserAgent`, `Proxy`, `Auth`, `Cookies`, `IdleTimeout`, `MaxConns`, `MaxPerHost`. The options are an object — a bare URL is refused |
+| `IdleTimeout` | ms a pooled connection idles before soup closes it (`0` is soup's own 60 s); soup counts seconds, so anything under one becomes one |
+| `MaxConns`, `MaxPerHost` | constructor-only (`10`/`2` unless told): soup takes them once, so assigning later throws |
+| `Request(method, url, [body], [opts], onDone, [onError])` | any verb: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`; anything else is refused, in the blocking spelling too |
+| `Auth` | `{ User, Password }`, Basic and preemptive; reads back `null` when none is set. An explicit `Authorization` header wins over it, and an explicit `Content-Type` header wins over the one the body's shape implies |
+| `Get(url, [opts], onDone, [onError])` | no body |
+| `Post(url, body, [opts], onDone, [onError])` | `body` is text, `Bytes` or an object (canonical JSON, `application/json`) |
+| `Put(url, body, [opts], onDone, [onError])`, `Patch(…)` | with body, like `Post` |
+| `Delete(url, [opts], onDone, [onError])`, `Head(…)` | no body, like `Get` |
+| `RequestWait(method, url, [body], [opts])` | the blocking spelling: answers with the record, **throws** on transport failure — and what it throws carries the same `Kind` and `Status` the callback would have been handed |
+| `GetWait(url, [opts])`, `PostWait(url, body, [opts])` | same, per verb |
+| `PutWait(url, body, [opts])`, `PatchWait(…)` | same, with body |
+| `DeleteWait(url, [opts])`, `HeadWait(…)` | same, no body |
+| `UserAgent` | sent as-is; `""` sends none — and some servers answer the nameless with an error |
+| `Log` | `"none"` unless told: `"minimal"`, `"headers"` or `"body"` sends the traffic through `Logger` at `Debug` — so `Logger.Level = "Debug"` shows it and a `Handler` takes it; a `Wait`'s never reaches a `Handler`, since its context is private and its caller is blocked |
+| `Cookies` | `false` unless told: `true` keeps a jar of the session's own, so a login answers the next request |
+| `new Multipart()` | a file upload as a value: `Field(name, value)` and `File(name, filename, body, [contentType])` (body is text or `Bytes`, `application/octet-stream` unless told), both answering the upload for chaining; `Length` counts the parts. Sent as the body of a `Post`/`Put`/`Patch`, which sets its own `Content-Type` with soup's boundary — an explicit one beside it is refused |
+| `Part(index)` | one part read back: `{ Name, Filename, Type, Data }`, `Data` as `Bytes`. Past the end is refused |
+| `Server([opts])` | a listener of its own — see `Http Server` below |
+
+`onDone({ Status, Reason, Headers, Body, Url })` — `4xx/5xx` come here, it is an
+answer. `Headers` keys are lower-cased. `Body` is always `Bytes` (`ToText()` is
+strict UTF-8). `onError({ Message, Kind, Status })` — `Kind` is one of
+`Timeout`, `Dns`, `Tls`, `Refused`, `Cancelled`, `Redirect`, `Error`.
+Both callbacks are handed the request's own **handle as a second argument**,
+so a form with more than one request in the air can tell whose answer arrived:
+`Stop()` asks rather than undoes, and a cancelled request still answers a turn
+later. The handle answers `Running`, `TimedOut`, `Url`, `Method` and `Stop()`
+(cancelling calls `onError` with `Kind: "Cancelled"`). Per-request `opts` carry
+`Headers`, `Query: {k:v}` (appended escaped), `Body`, `ContentType`, `Timeout`,
+`FollowRedirects`, `Auth` — and naming any of them is what makes an object
+options rather than a JSON body. A repeated response header keeps the last of
+them, `Set-Cookie` included, which is what `Cookies: true` is for. libsoup is optional at build time; without it `Http`
+says which package is missing. `examples/http` (a console tool),
+`examples/jokes` (a window on JokeAPI), `examples/session` (auth plus cookies
+against httpbingo) and `examples/serve` (a static file server) are the whole
+of it running.
+
+## Http Server
+
+Serving over the same transport, on the loop the application already runs.
+
+```js
+const srv = Http.Server({ Port: 0 });   // 0 is ephemeral: read it back
+srv.Request = (req) => {
+    if (req.Path === "/hi") req.Answer(200, "hola");
+    else req.Answer(404, "nope");
+};
+srv.Start();
+```
+
+| | |
+|---|---|
+| `Server([opts])` | `Port` (`8080` unless told, `0` ephemeral), `Host` (`"local"` loopback only, `"any"` is an explicit word), `ServerName` (the `Server:` header, `""` for soup's own), `Tls`, `Allow`, `Auth`. The options are an object — a bare port is refused |
+| `Tls` | `{ Cert, Key }` files, or nothing: `https` when set, `null` when not. Missing files fail at `Start`, naming them |
+| `Allow` | a list of exact IPs, or nothing (open). Refused remotes get `403` before the handler runs. Exact means exact: on a dual-stack `"any"` server, `::1` is not `127.0.0.1` |
+| `Auth` | `{ Realm, Users }`: Basic over the whole server, `401` with the realm until the right password. Nothing set is open, and reads back `null`. Like `Allow`, takes effect at once |
+| `req.Multipart()` | the upload parsed: a `Multipart` to read with `Part(index)` (or re-post). Refused on a plain body |
+| `Request` | assign `(req) => …`; required before `Start`, replaceable while running |
+| `Start()` | listens; throws naming the reason (a busy port says which one). A second `Start` is refused |
+| `Stop()` | `true` while something was listening, `false` after — like signalling a reaped child |
+| `Running`, `Port`, `Url` | `Port` is declared until `Start`, actual after; `Url` is `""` until then, and empty again after `Stop` |
+| `Answer(status, [body], [opts])` | on the request: `body` follows the client's rules (object serialises canonical), `opts` carries `Headers` and `ContentType`. The second argument is always the body, the third always the options |
+| `req.Method`, `req.Path`, `req.Query`, `req.Headers`, `req.Body`, `req.Remote` | `Headers` lower-cased and `Body` always `Bytes`, like the client's answers; `Query` repeats keep one; `Remote` is the IP |
+| second `Answer`, late `Answer` | refused: the request was already answered / already ended. A handler that returns without answering gets a `500` |
+
+A listening server counts like a watch: a console project that returned from
+`main` with one running stays for its requests. Dropping it without `Stop`
+disconnects. **The handler answers before it returns**: there is no deferred
+answer, so a route that must ask a database or another server first has nowhere
+to wait — a `Wait` inside the handler freezes the loop the server answers on,
+and returning to answer later gets the `500`. `examples/serve` is a static file
+server in ten lines of handler; it carries no `".."` refusal because soup
+normalizes dot-segments before the handler runs.
+
 ## Others
 
 `print(...)` — a line to stdout, arguments joined with a space.
 `BTA_VERSION` — the runtime's version string.
 
-There is no `Promise`, no `window`, no `document`, no `fetch`, no `require`, and
-**no HTTP client**: nothing in the runtime speaks to a network. A program that
-needs to reach one does it through a child process (`Exec(["curl", …])`), which
-is a choice you should say out loud to whoever asked.
+There is no `Promise`, no `window`, no `document`, no `fetch`, no `require`.
+`Http` above is the one that speaks to a network; anything else still goes through
+a child process (`Exec(["curl", …])`), which is a choice you should say out loud
+to whoever asked.

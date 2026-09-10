@@ -1,0 +1,6 @@
+{
+  "name": "serve",
+  "main": "Main",
+  "version": "1.0",
+  "description": "Http.Server as a static file server over its own directory"
+}

@@ -37,8 +37,12 @@ LANGUAGE=es ./build/bintana ide examples/hello    # the IDE itself, from ide/po/
 ./build/bintana examples/drawing     # DrawingArea: a sparkline, a gauge and a pie — and what a frame really costs
 ./build/bintana examples/charts      # Charts from lib/charts: five shapes, two axes, and 21 600 readings you can zoom into
 ./build/bintana examples/report      # Report from lib/report: the Crystal Reports bands, grouped and totalled, out as one PDF
+./build/bintana examples/jokes       # Http on a window: async, and a Stop that means it
+./build/bintana examples/http        # Http from the console: the blocking spelling, against a public API
+./build/bintana examples/session     # Http with cookies and Basic auth: a login the next request remembers
+./build/bintana examples/serve       # Http.Server: a static file server on :8080. Runs until Ctrl-C
 LANGUAGE=es ./build/bintana examples/agenda   # ...and the long date the catalogue rewrites
-HEADLESS=1 ./tests/run.sh         # 4493 assertions in 4 projects, on a virtual display
+HEADLESS=1 ./tests/run.sh         # 4716 assertions in 4 projects, on a virtual display
 ./tests/run.sh                    # the same, on *your* screen: it only falls back to
                                   # Xvfb when there is no DISPLAY, so on a desktop this
                                   # opens three windows and takes the keyboard
@@ -50,7 +54,10 @@ Dependencies: `gtk4`, `gtksourceview-5`, `vte-2.91-gtk4` (with headers) and
 pkg-config. QuickJS is vendored in `vendor/quickjs` (quickjs-ng v0.16.1).
 
 `libsystemd` is optional and only adds `Logger.Target = "Journal"`; without it the
-build is the same and logging goes to the terminal.
+build is the same and logging goes to the terminal. `libsoup-3.0` is optional the
+same way and is what `Http` speaks; without it the build is the same and `Http`
+says which package is missing when it is called. `sqlite3` likewise, for
+`Database.Sqlite`.
 Everything needs an X or Wayland display; there is no headless mode.
 
 This file is the overview and the quick reference. The technical documentation —
@@ -1227,6 +1234,8 @@ its `image-missing`) or ship an SVG that renders to nothing.
 | `Settings` | `Get(key, fallback)`, `Set`, `Has`, `Delete`, `Keys`, `Clear`, `Path` |
 | `Timer` | `Timer.After(ms, fn)`, `Timer.Every(ms, fn)`; `new Timer(delay, tick)`: `Delay`, `Tick`, `Enabled`, `Start`, `Stop`, `Once` |
 | `Logger` | `Debug`, `Info`, `Warning`, `Error`; `Level`, `Target`, `Handler` |
+| `Http` | a client (`Client`, `Get`/`Post`/…, `GetWait`/…, always `Bytes` bodies) and a server (`Server`, `Request`, `Answer`) over libsoup3 |
+| `Multipart` | `new Multipart()`: `Field`, `File`, `Part`, `Length` — a file upload as a value, for `Http` in either direction |
 | `Record` / `Field` | the shape data has, declared once — see below |
 | | `print`, `BTA_VERSION` |
 

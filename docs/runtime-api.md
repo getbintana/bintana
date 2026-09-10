@@ -2123,6 +2123,147 @@ which is what stage 3's cursor will have to answer.
 
 The same three are also what read a decimal **somebody else** wrote as text.
 
+## Http
+
+A native HTTP client over libsoup3.
+`Http.Client(opts)` holds its own `SoupSession`; `Http.Get/Post/...` are
+shorthands on a shared default client.
+
+```js
+const api = Http.Client({ BaseUrl: "https://api.example.com/v1",
+                          Headers: { Accept: "application/json" },
+                          Timeout: 60000, FollowRedirects: true,
+                          Auth: { User: "u", Password: "p" } });
+
+api.Get("/users", {}, (r) => this.show(r.Body.ToText()),
+                      (e) => Message.Error("{0}", e.Message));
+
+// Both callbacks are handed the request's own handle as well, so a form with
+// more than one in the air can tell whose answer arrived:
+api.Get("/users", {}, (r, h) => { if (h === this.pending) this.show(r); });
+
+const r = Http.GetWait("https://example.com/", { Timeout: 5000 });
+// r = { Status: 200, Reason: "OK", Headers: {...}, Body: Bytes, Url: "final..." }
+// ...and TimedOut: true in the one case where the answer and the guard tie
+
+const up = new Multipart().Field("note", "hello")
+    .File("scan", "a.png", File.LoadBytes("a.png"), "image/png");
+api.Post("/upload", up, (r) => print(r.Status), (e) => print(e.Message));
+```
+
+Two callbacks, `Exec`-style: `4xx/5xx` go to `onDone` (it is an answer),
+transport/DNS/TLS/timeout go to `onError`. `Body` is always `Bytes`: text via
+`Body.ToText()` (strict UTF-8, throws), JSON via `JSON.parse` + `Record.Load`,
+binary via `File.SaveBytes` / `Hash.Sha256(Bytes)`. An object passed as `body`
+serialises canonical (`JSON.stringify(v,null,2)+"\n"`, the `File.SaveJson`
+shape) with `application/json`; text defaults to
+`text/plain;charset=utf-8`, `Bytes` to `application/octet-stream`. A
+`Multipart` built with `Field`/`File` posts as `multipart/form-data` with
+soup's boundary -- one upload posts twice, and a `ContentType` beside it is
+refused rather than breaking the framing silently:
+
+| | |
+|---|---|
+| `Client([opts])` | the options are an object -- a bare URL is refused, since reading it as "none given" configures nothing while looking like it worked. `BaseUrl` (ours; absolute URL wins; `/a/`+`/b`=`/a/b`), `Headers` (defaults, request merges and wins), `Timeout` ms (our guard+cancel; soup `timeout` stays 60s), `FollowRedirects: true` (→ inverted `NO_REDIRECT`), `Language` (→ `Accept-Language`), `Proxy: "default"` (system resolver) \| `null` (direct, no proxy) \| `"http(s)://..."` (one of your own), `Auth: { User, Password }` (Basic, preemptive; reads back `null` when none is set, like `Proxy`), `Cookies: false` (`true` keeps a jar of the session's own), `UserAgent` (sent as-is; `""` sends none), `Log: "none"` (`"minimal"`/`"headers"`/`"body"` send the traffic through `Logger` at `Debug`), `IdleTimeout` (ms idle before soup closes a pooled connection, `0` is soup's own 60 s), `MaxConns`/`MaxPerHost` (`10`/`2`; constructor-only, assigning later throws) |
+| `Request(method, url, [body], [opts], onDone, [onError])` | `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`; anything else is refused naming what it accepts |
+| `Get(url, [opts], onDone, [onError])` | no body |
+| `Post(url, body, [opts], onDone, [onError])` | with body |
+| `Put(url, body, …)`, `Patch(url, body, …)` | with body, like `Post` |
+| `Delete(url, …)`, `Head(url, …)` | no body, like `Get` |
+| `RequestWait(method, url, [body], [opts])` | blocking: answers with the record, **throws** on transport failure |
+| `GetWait(url, [opts])`, `PostWait(url, body, [opts])` | blocking per verb |
+| `PutWait`, `PatchWait` (with body), `DeleteWait`, `HeadWait` (without) | blocking per verb |
+| Per-request `opts` | `Headers` (merge), `Query: {k:v}` (appended escaped), `Body`, `ContentType`, `Timeout` (guard only), `FollowRedirects` (request wins), `Auth` (request wins over the client's). Naming any of them makes the object options rather than a JSON body, in both spellings |
+| `new Multipart()` | `Field(name, value)`, `File(name, filename, body, [contentType])` — a body for `Post`/`Put`/`Patch` (a `GET` carrying one is refused, since it would land in the options unheard); `Length` counts the parts, `Part(index)` reads one back as `{ Name, Filename, Type, Data }` |
+
+The handle: `Running`, `TimedOut`, `Url`, `Method`, `Stop()` (→ bool). It is
+also the **second argument** to both callbacks — `onDone(res, handle)`,
+`onError(err, handle)` — because `Stop()` asks rather than undoes: a cancelled
+request still answers, a turn of the loop later, by which time the request
+that replaced it is already in flight. Comparing the handle handed in against
+the one being waited for is how a form drops a stale answer
+(`examples/jokes`).
+`Stop()` cancels one live request → `Running=false`, `onError
+{Kind:"Cancelled"}`; the guard instead sets `TimedOut=true` + `onError
+{Kind:"Timeout"}`. `onError` is `{Message, Kind, Status: 0}` with `Kind` one of
+`Timeout|Dns|Tls|Refused|Cancelled|Redirect|Error`, and the message names the
+caller (`Http.Get: cannot reach '...': ...`). What a `Wait` **throws** carries
+the same `Kind` and `Status` on it, so a `catch` can tell a name that does not
+resolve from a deadline without reading the prose back. A callback is required
+(`a callback is required: http is async`); `Wait` takes none. `Headers must be
+an object`; a relative URL with no `BaseUrl` is refused where it is asked.
+`Wait` freezes the window like `Exec.Wait` — no handler runs inside it.
+
+Honest limits: `404 goes to onDone`, `Wait freezes`, `cancel calls onError
+Cancelled`, credentials never belong in a `.form`. `Auth` is Basic sent
+preemptively -- libsoup3 has no session `authenticate` signal (connecting one
+is a `GLib-GObject-CRITICAL`), and its replacement wants a challenge round
+trip; a 401 from anything else is answered, like any other status. An explicit
+`Authorization` header wins over `Auth`, and an explicit `Content-Type` header
+wins over the one the body's shape implies: the specific spelling beats the
+general one, both times. A response's repeated header keeps the last of them
+(`Headers` is an object, and `Set-Cookie` is what repeats -- which is what
+`Cookies: true` is for). Nameless clients get refused out in the wild: one echo service
+answers no `User-Agent` with a 402 and no body, which is why the knob exists
+(`examples/session` names itself). `Log` never spews on its own: traffic
+arrives as `Debug`, so `Logger.Level = "Debug"` shows it and a `Handler`
+takes it -- except a `Wait`'s, which never reaches a `Handler`, since its
+context is private and its caller is blocked mid-call. Without `Cookies`
+every request travels
+alone: a `Set-Cookie`
+answer is kept nowhere, so the next request sends nothing back -- which is the
+default, and what a login flow turns on. libsoup is optional at build time
+(`BTA_HAVE_SOUP`); without it `Http` exists and says which package is missing.
+`examples/http` (a console tool against a public JSON API), `examples/jokes`
+(a window on JokeAPI: async on a form, cancelled on close) and
+`examples/session` (auth plus cookies against httpbingo: login, prove the jar,
+every verb) are the whole of it running.
+
+## Http Server
+
+Serving over the same transport, answered on the loop the application already
+runs -- which is why there is no affinity question here: creation and dispatch
+share the default context by construction, the thing `Wait` needed two
+sessions for.
+
+```js
+const srv = Http.Server({ Port: 8080 });
+srv.Request = (req) => {
+    if (req.Path === "/hi" && req.Method === "GET") req.Answer(200, "hola");
+    else req.Answer(404, "nope");
+};
+srv.Start();   // throws naming the GError: a busy port says which one
+```
+
+| | |
+|---|---|
+| `Server([opts])` | the options are an object, like the client's -- a bare port is refused. `Port` (`8080` unless told, `0` ephemeral and read back after `Start`), `Host: "local"` (loopback only) \| `"any"` (all interfaces -- an explicit word, since binding the world by default is the footgun), `ServerName` (the `Server:` header; `""` for soup's own), `Tls: { Cert, Key }` (files; `https` when set, missing ones fail at `Start` naming them), `Allow` (exact IPs, or nothing which is open -- refused remotes get `403` before the handler runs), `Auth: { Realm, Users }` (Basic over the whole server; nothing set is open, and `Auth`/`Tls` read back `null` when they are). `Allow` matches an address exactly, so a `Host: "any"` server on a dual-stack machine sees `::1` and `127.0.0.1` as two different remotes |
+| `Request` | assign `(req) => …`; required before `Start` (`Request is required`), replaceable while running; anything but a function is refused |
+| `Start()` | listens now; a second `Start` while running is refused rather than rebound. `Port`/`Host`/`ServerName` apply here, so re-`Start`ing moves the server |
+| `Stop()` | `true` while something was listening, `false` after -- the `Exec` mold |
+| `Running`, `Port`, `Url` | `Port` is declared until `Start`, actual after; `Url` is `""` until then, and empty again after `Stop` |
+| `req.Method`, `req.Path`, `req.Query`, `req.Headers`, `req.Body`, `req.Remote` | `Headers` lower-cased and `Body` always `Bytes`, like the client's answers; `Query` repeats keep one; `Remote` is the IP, for the log line |
+| `req.Multipart()` | the upload parsed into a `Multipart` (`Part(index)` reads `{ Name, Filename, Type, Data }`); refused on a plain body |
+| when it applies | `Port`/`Host`/`Tls`/`ServerName` apply at `Start`, so re-`Start`ing moves all of them; `Allow`, `Auth` and `Request` take effect at once, which is what makes banning mid-run possible |
+| `Answer(status, [body], [opts])` | `body` follows the client's rules (an object serialises canonical); `opts` carries `Headers` and `ContentType`. Positional, so a JSON body never reads as options: the second argument is always the body, the third always the options |
+| second `Answer`, late `Answer` | refused (`already answered` / `already ended`); a handler that returns without answering gets a `500` |
+
+**The handler answers before it returns.** There is no deferred answer yet, so a
+route that has to ask a database or another server first has nowhere to wait: a
+`Wait` inside the handler would freeze the very loop the server answers on, and
+returning to answer later gets the `500` above. Handlers serve what is already
+in hand. libsoup can pause a message and it is what a later phase would build
+on; today it is a limit worth knowing before designing a route around it.
+
+A listening server counts like a watch: a console project that returned from
+`main` with one running stays for its requests, and `Application.Quit(code)`
+still ends it. Dropping a server without `Stop` disconnects in the finalizer,
+or the port stays held past the program. `examples/serve` is a static file
+server in ten lines of handler: routing, `Bytes` straight from disk to socket,
+and statuses. It carries no `".."` refusal, and says why -- soup normalizes a
+request's dot-segments before the handler runs, so `/a/../../x` arrives as
+`/x` and a guard for it would be dead code teaching the wrong lesson.
+
 ## Others
 
 - `print(...)` — a line to stdout. What a program that talks to a terminal
@@ -2140,7 +2281,8 @@ promise are written as a chain of callbacks — `Exec`'s exit callback,
 `Dialog`'s answer, `Timer.After`. Nothing drains a microtask queue because there
 is no queue to drain.
 
-There is no `window`, no `document`, no `fetch`, no `require`.
+There is no `window`, no `document`, no `fetch`, no `require`. `Http` above is
+the one that speaks to a network.
 
 ## What rad.js adds to the prototypes
 

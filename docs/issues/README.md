@@ -39,6 +39,8 @@ leaving it here would have it re-argued.
 
 Git has all of them if anybody wants to read what the asking looked like.
 
-The gaps that predate this directory — network, records over a database,
-packaging, asynchrony — are already written down and are **not** re-reported
-here; see [`llm/issues.md`](../llm/issues.md#what-is-known-to-be-missing).
+The gaps that predate this directory — records over a database, packaging,
+asynchrony — are already written down and are **not** re-reported here; see
+[`llm/issues.md`](../llm/issues.md#what-is-known-to-be-missing). (Network was
+one of them until `Http` arrived; a gap kept past its answer is a second
+description of the same feature.)

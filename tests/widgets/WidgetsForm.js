@@ -347,6 +347,9 @@ const TESTS = [
      * Here nothing else has armed anything yet.
      */
     "ExecWait",
+    /* Blocking too, and for the same reason: it holds the loop while a local
+     * server answers, so it runs before anything has armed a deadline. */
+    "HttpWait",
     /* Also blocking: it starts a child of its own to pin the exact strings. */
     "LocaleFormat",
     /* Blocking too, and for the same reason: the order is pinned from children
@@ -376,6 +379,13 @@ const TESTS = [
     "TextProperties", "Locale", "LocaleRead", "TranslatedForm", "Fill", "DesignValues",
     "Grid",
     "File", "Dir", "Trash", "Environment",
+    /* Async, and last but one: its callbacks land on later turns of the loop,
+     * like Exec's, and it stops its own server before the run ends. */
+    "Http",
+    /* Async too, and answered on this same loop: it dogfoods the client, so
+     * both must be going when either is. A Wait would freeze the loop the
+     * server answers on -- that dogfood is async or it is a deadlock. */
+    "HttpServer",
     /* Async, and last: it reports and quits. */
     "Exec",
 ];
@@ -418,6 +428,11 @@ const NEEDS = {
     RowFilter:      ["Exec"],
     Terminal:       ["Exec"],
     TimerShorthand: ["Exec"],
+    /* Its callbacks land on later turns of the loop, so the run has to still
+     * be going when they do -- otherwise `run.sh widgets http` answers with
+     * the synchronous half and looks complete. */
+    Http:           ["Exec"],
+    HttpServer:     ["Exec"],
     /* Its round trip happens once the window is up, which is not now: Form_Open
      * runs before the window is presented and a completion asked for off screen
      * is asked of nothing. */
@@ -10671,6 +10686,1269 @@ class Spike extends Form {
         check("output from before the cut still arrives",
               Exec.Wait(["sh", "-c", "echo antes; sleep 30"], { Timeout: 200 })
                   .Output.includes("antes"));
+    }
+
+    /* --- Http.Wait ------------------------------------------------------
+     *
+     * The blocking spelling, against servers of our own on 127.0.0.1: nothing
+     * here waits for a later turn of the loop, which is the whole point of it
+     * -- and why this runs second, beside ExecWait. Zero external net: one
+     * `python3 -m http.server` for the ordinary answers and one sleeping
+     * one-liner for the guard.
+     *
+     * libsoup is optional at build time, so without it this reports the stub
+     * instead of the network -- the testDatabase mold: the claim is that the
+     * runtime says which package is missing rather than missing a global.
+     */
+    testHttpWait() {
+        if (!Application.HasCommand("python3")) {
+            failures.push("Http tests need python3 on the PATH");
+            return;
+        }
+
+        let noSoup = false;
+        try {
+            Http.GetWait("http://127.0.0.1:9/", { Timeout: 200 });
+        } catch (e) {
+            noSoup = /without libsoup/.test(e.message);
+        }
+        if (noSoup) {
+            for (const [what, fn] of [
+                ["Client", () => Http.Client()],
+                ["Get", () => Http.Get("http://127.0.0.1:9/", () => 0)],
+                ["Post", () => Http.Post("http://127.0.0.1:9/", "x", () => 0)],
+                ["Request", () => Http.Request("GET", "http://127.0.0.1:9/", () => 0)],
+                ["GetWait", () => Http.GetWait("http://127.0.0.1:9/")],
+                ["PostWait", () => Http.PostWait("http://127.0.0.1:9/", "x")],
+                ["RequestWait", () => Http.RequestWait("GET", "http://127.0.0.1:9/")],
+                ["Multipart", () => new Multipart()],
+            ]) {
+                let complaint = "";
+                try {
+                    fn();
+                } catch (e) {
+                    complaint = e.message;
+                }
+                check(`without libsoup, Http.${what} says which package`,
+                      complaint.includes("without libsoup"), complaint);
+            }
+            return;
+        }
+
+        const fast = Exec(["python3", "-m", "http.server", "8471",
+                           "--directory", "/tmp"]);
+        const slow = Exec(["python3", "-c", [
+            "from http.server import BaseHTTPRequestHandler, HTTPServer",
+            "import time",
+            "class H(BaseHTTPRequestHandler):",
+            "    def do_GET(self):",
+            "        time.sleep(30)",
+            "    def log_message(self, *a):",
+            "        pass",
+            "HTTPServer((\"127.0.0.1\", 8472), H).serve_forever()",
+        ].join("\n")]);
+
+        /* The servers take a moment, and a cold python takes longer: ask
+         * until one answers or the budget is gone. Counting tries instead of
+         * time is the flaky version -- a refused connection answers in a
+         * millisecond, so forty tries can be over before the interpreter has
+         * imported its own server. */
+        let up = false;
+        const t0 = Date.now();
+        while (!up && Date.now() - t0 < 15000) {
+            try {
+                Http.GetWait("http://127.0.0.1:8471/", { Timeout: 250 });
+                up = true;
+            } catch (e) { /* not yet */ }
+        }
+        check("the local server answers", up);
+        if (!up) {
+            fast.Stop();
+            slow.Stop();
+            return;
+        }
+
+        const r = Http.GetWait("http://127.0.0.1:8471/");
+        eq("a 200 answers 200", r.Status, 200);
+        check("with a reason", r.Reason.length > 0, r.Reason);
+        check("a body arrives as Bytes",
+              r.Body instanceof Bytes && r.Body.Length > 0);
+        check("headers arrive lower-cased",
+              typeof r.Headers["content-type"] === "string",
+              JSON.stringify(Dictionary.Keys(r.Headers).slice(0, 4)));
+        eq("the final URL is the one asked", r.Url, "http://127.0.0.1:8471/");
+
+        /* A 404 is an answer, not a transport failure: for Wait that means it
+         * is returned rather than thrown. */
+        eq("a 404 answers 404",
+            Http.GetWait("http://127.0.0.1:8471/nobody-here").Status, 404);
+
+        /* The query is appended escaped, never interpolated. */
+        eq("a query does not break the answer",
+            Http.GetWait("http://127.0.0.1:8471/", { Query: { a: "b c" } }).Status,
+            200);
+
+        const api = Http.Client({ BaseUrl: "http://127.0.0.1:8471", Timeout: 5000 });
+        eq("BaseUrl reads back", api.BaseUrl, "http://127.0.0.1:8471");
+        eq("Timeout reads back", api.Timeout, 5000);
+        eq("FollowRedirects starts true", api.FollowRedirects, true);
+        api.Headers = { "X-Probe": "si" };
+        eq("Headers read back", api.Headers["X-Probe"], "si");
+        eq("a relative URL rides the BaseUrl", api.GetWait("/").Status, 200);
+        eq("an absolute URL wins over it",
+            api.GetWait("http://127.0.0.1:8471/").Status, 200);
+
+        /* POST answers rather than throws, whatever the status: http.server
+         * answers no POST at all, so this is a 501 that still went and came. */
+        const posted = api.PostWait("/", { hello: "world" });
+        check("a POST answers with a status",
+              typeof posted.Status === "number", JSON.stringify(posted.Status));
+        check("...and a body", posted.Body instanceof Bytes);
+
+        const full = Http.Client({ BaseUrl: "http://127.0.0.1:8471", Language: "es",
+                                   Proxy: null, Auth: { User: "u", Password: "p" },
+                                   UserAgent: "B/1.0" });
+        eq("Language reads back", full.Language, "es");
+        eq("Proxy null reads back", full.Proxy, null);
+        eq("Auth reads back", full.Auth.User, "u");
+        eq("UserAgent reads back", full.UserAgent, "B/1.0");
+        full.Language = "de";
+        eq("...and writes", full.Language, "de");
+        full.Proxy = "default";
+        eq("...and back to the system resolver", full.Proxy, "default");
+        full.Auth = null;
+        /* Nothing, not a pair of empty strings: the same answer `Proxy` gives
+         * when it is off, so "no credentials" and "a user named nothing" are
+         * not the same value. */
+        eq("...and cleared", full.Auth, null);
+        eq("a client with no Auth reads back nothing", Http.Client({}).Auth, null);
+
+        const jarred = Http.Client({ Cookies: true });
+        check("Cookies reads back", jarred.Cookies === true);
+        jarred.Cookies = false;
+        check("...and off", jarred.Cookies === false);
+
+        const proxied = Http.Client({ Proxy: "http://127.0.0.1:8489" });
+        eq("Proxy reads back", proxied.Proxy, "http://127.0.0.1:8489");
+        proxied.Proxy = null;
+        eq("...and off", proxied.Proxy, null);
+
+        const limited = Http.Client({ MaxConns: 4, MaxPerHost: 1, IdleTimeout: 5000 });
+        eq("MaxConns reads back", limited.MaxConns, 4);
+        eq("MaxPerHost reads back", limited.MaxPerHost, 1);
+        eq("IdleTimeout reads back", limited.IdleTimeout, 5000);
+        eq("...soup's defaults when untold", Http.Client({}).MaxConns, 10);
+        limited.IdleTimeout = 2000;
+        eq("...and IdleTimeout writes", limited.IdleTimeout, 2000);
+        eq("...through a tuned session",
+            limited.GetWait("http://127.0.0.1:8471/").Status, 200);
+        for (const [what, fn, name] of [
+            ["assigning MaxConns", () => { limited.MaxConns = 9; }, "constructor-only"],
+            ["assigning MaxPerHost", () => { limited.MaxPerHost = 9; }, "constructor-only"],
+        ]) {
+            let complaint = "";
+            try {
+                fn();
+            } catch (e) {
+                complaint = e.message;
+            }
+            check(`refuses ${what}, by name`, complaint.includes(name), complaint);
+        }
+
+        /* The traffic itself goes to stdout, where no assertion can reach
+         * it -- so this pins the knob and that a logging client still
+         * answers, and a run with Log on is eyeballed once. */
+        const logged = Http.Client({ Log: "headers" });
+        eq("Log reads back", logged.Log, "headers");
+        logged.Log = "none";
+        eq("...and off", logged.Log, "none");
+        const noisy = Http.Client({ BaseUrl: "http://127.0.0.1:8471", Log: "headers" });
+        eq("a logging client still answers", noisy.GetWait("/").Status, 200);
+
+        /* Traffic goes through Logger at Debug: with the default level
+         * nothing flows, and a Wait never reaches a Handler -- its context
+         * is private and its caller is blocked mid-call. */
+        const seen = [];
+        const wasLevel = Logger.Level;
+        const wasHandler = Logger.Handler;
+        Logger.Level = "Debug";
+        Logger.Handler = (level, text) => seen.push(text);
+        eq("a Wait with logging still answers", noisy.GetWait("/").Status, 200);
+        check("...without ever calling home", seen.length === 0, seen.length);
+        Logger.Handler = wasHandler;
+        Logger.Level = wasLevel;
+
+        /* The remaining verbs go out as themselves: http.server answers no
+         * PUT/PATCH/DELETE at all (501s that still went and came) but it does
+         * answer HEAD -- 200 with nothing in it. */
+        const head = api.HeadWait("/");
+        eq("HEAD answers 200", head.Status, 200);
+        eq("...with no body", head.Body.Length, 0);
+        check("PUT answers with a status",
+              typeof api.PutWait("/", "x").Status === "number");
+        check("PATCH answers with a status",
+              typeof api.PatchWait("/", "x").Status === "number");
+        check("DELETE answers with a status",
+              typeof api.DeleteWait("/").Status === "number");
+
+        const m = new Multipart().Field("note", "hello")
+            .File("up", "a.txt", new Bytes("FILEDATA"));
+        eq("a built multipart counts its parts", m.Length, 2);
+
+        /* What it refuses, naming itself. */
+        for (const [what, fn, name] of [
+            ["no callback at all",
+             () => Http.Get("http://127.0.0.1:8471/"), "a callback is required"],
+            ["a Headers that is not an object",
+             () => Http.Client({ Headers: "x" }), "Headers must be an object"],
+            ["a callback where Wait's options go",
+             () => Http.GetWait("http://127.0.0.1:8471/", () => 0),
+             "takes no callbacks"],
+            ["a relative URL with no BaseUrl",
+             () => Http.GetWait("/relative"), "BaseUrl"],
+            ["a verb that is not one",
+             () => Http.Request("GETT", "http://127.0.0.1:8471/", () => 0),
+             "is not one of"],
+            ["a negative Timeout",
+             () => Http.Get("http://127.0.0.1:8471/", { Timeout: -5 }, () => 0),
+             "Timeout"],
+            ["a Proxy that is neither default nor null",
+             () => Http.Client({ Proxy: 42 }), "Proxy"],
+            ["an Auth that is not an object",
+             () => Http.Client({ Auth: "x" }), "Auth"],
+            ["an Auth without a Password",
+             () => Http.Client({ Auth: { User: "u" } }), "Password"],
+            ["a Proxy that is neither default, null, nor a URL",
+             () => Http.Client({ Proxy: 42 }), "must be"],
+            ["a Proxy to nowhere parseable",
+             () => Http.Client({ Proxy: "gopher://x" }), "http(s) URL"],
+            ["no connections at all",
+             () => Http.Client({ MaxConns: 0 }), "at least"],
+            ["a negative IdleTimeout",
+             () => Http.Client({ IdleTimeout: -1 }), "negative"],
+            ["a Log level that is not one",
+             () => Http.Client({ Log: "chatty" }), "must be one of"],
+            ["a Multipart with arguments",
+             () => new Multipart("x"), "no arguments"],
+            ["a Field without both",
+             () => new Multipart().Field("only"), "needs both"],
+            ["a File with a bad body",
+             () => new Multipart().File("f", "a.txt", 42), "text or Bytes"],
+            ["a GET with a multipart",
+             () => Http.Get("http://127.0.0.1:8471/", m, () => 0),
+             "no body"],
+            ["a multipart with a ContentType",
+             () => api.PostWait("/", m, { ContentType: "x" }),
+             "its own Content-Type"],
+            ["a Query that is not an object",
+             () => Http.GetWait("http://127.0.0.1:8471/", { Query: "a=1" }),
+             "Query must be an object"],
+            ["a Timeout that is not a number",
+             () => Http.GetWait("http://127.0.0.1:8471/", { Timeout: "soon" }),
+             "is not a number"],
+            ["a Timeout setter that is not a number",
+             () => { api.Timeout = "soon"; }, "is not a number"],
+            ["a Part that is not a number",
+             () => m.Part("x"), "is not a number"],
+            ["a Part past the end",
+             () => m.Part(9), "beyond"],
+            /* A verb refused in one spelling and passed to soup in the other
+             * is the same call answering two ways. */
+            ["a verb RequestWait does not know",
+             () => Http.RequestWait("CONNECT", "http://127.0.0.1:8471/"),
+             "is not one of GET"],
+            ["...and the same one on a client",
+             () => api.RequestWait("TRACE", "/"), "is not one of GET"],
+            /* A URL where the options go configures nothing while looking
+             * like it worked -- the shape somebody coming from fetch writes. */
+            ["a Client built from a bare URL",
+             () => Http.Client("http://127.0.0.1:8471/"), "the options are an object"],
+            ["a Server built from a bare port",
+             () => Http.Server(8080), "the options are an object"],
+        ]) {
+            let complaint = "";
+            try {
+                fn();
+            } catch (e) {
+                complaint = e.message;
+            }
+            check(`refuses ${what}, by name`, complaint.includes(name), complaint);
+        }
+
+        /* The guard: the slow server answers in thirty seconds, the deadline
+         * is 300 ms, and the throw lands on the deadline. */
+        const started = Date.now();
+        let complaint = "";
+        try {
+            Http.GetWait("http://127.0.0.1:8472/", { Timeout: 300 });
+        } catch (e) {
+            complaint = e.message;
+        }
+        check("a guarded Wait throws", complaint.includes("cannot reach"), complaint);
+        check("...on the deadline, not after thirty seconds",
+              Date.now() - started < 3000, Date.now() - started);
+
+        fast.Stop();
+        slow.Stop();
+    }
+
+    /* --- Http -----------------------------------------------------------
+     *
+     * The callback spelling, against one small server of our own on 127.0.0.1
+     * that answers `/`, bounces `/redir`, sleeps on `/slow`, echoes the two
+     * probe headers on `/headers` and takes a POST to `/sub`. Its assertions
+     * land on later turns of the loop, so this runs in the async tail (see
+     * NEEDS) and stops its server when the chain ends.
+     */
+    testHttp() {
+        if (!Application.HasCommand("python3")) {
+            failures.push("Http tests need python3 on the PATH");
+            return;
+        }
+
+        let noSoup = false;
+        try {
+            Http.GetWait("http://127.0.0.1:9/", { Timeout: 200 });
+        } catch (e) {
+            noSoup = /without libsoup/.test(e.message);
+        }
+        if (noSoup) {
+            /* The Wait test asserts the whole stub; one refusal here proves
+             * the async verbs throw before starting too. */
+            let complaint = "";
+            try {
+                Http.Get("http://127.0.0.1:9/", () => 0, () => 0);
+            } catch (e) {
+                complaint = e.message;
+            }
+            check("without libsoup, Http.Get says which package",
+                  complaint.includes("without libsoup"), complaint);
+            return;
+        }
+
+        const srv = Exec(["python3", "-c", [
+            "from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer",
+            "import base64",
+            "import time",
+            "WANT = \"Basic \" + base64.b64encode(b\"u:p\").decode()",
+            "class H(BaseHTTPRequestHandler):",
+            "    def answer(self, status, body, ctype=\"text/plain\"):",
+            "        try:",
+            "            self.send_response(status)",
+            "            self.send_header(\"Content-Type\", ctype)",
+            "            self.send_header(\"Content-Length\", str(len(body)))",
+            "            self.end_headers()",
+            "            self.wfile.write(body)",
+            "        except (BrokenPipeError, ConnectionResetError):",
+            "            pass",
+            "    def echo_verb(self):",
+            "        self.answer(200, (\"got \" + self.command).encode())",
+            "    def do_GET(self):",
+            "        path = self.path.split(\"?\")[0]",
+            "        if path == \"/redir\":",
+            "            self.send_response(302)",
+            "            self.send_header(\"Location\", \"/\")",
+            "            self.end_headers()",
+            "            return",
+            "        if path == \"/slow\":",
+            "            time.sleep(30)",
+            "            self.answer(200, b\"late\")",
+            "            return",
+            "        if path == \"/auth\":",
+            "            if self.headers.get(\"Authorization\") != WANT:",
+            "                self.send_response(401)",
+            "                self.send_header(\"WWW-Authenticate\", 'Basic realm=\"probe\"')",
+            "                self.end_headers()",
+            "                return",
+            "            self.answer(200, b\"authed\")",
+            "            return",
+            "        if path == \"/headers\":",
+            "            d = self.headers.get(\"X-Def\", \"\")",
+            "            q = self.headers.get(\"X-Req\", \"\")",
+            "            g = self.headers.get(\"Accept-Language\", \"\")",
+            "            u = self.headers.get(\"User-Agent\", \"\")",
+            "            self.answer(200, (\"x-def=\" + d + \" x-req=\" + q + \" lang=\" + g + \" ua=\" + u).encode())",
+            "            return",
+            "        if path == \"/login\":",
+            "            self.send_response(200)",
+            "            self.send_header(\"Set-Cookie\", \"session=abc; Path=/\")",
+            "            self.send_header(\"Content-Length\", \"5\")",
+            "            self.end_headers()",
+            "            self.wfile.write(b\"login\")",
+            "            return",
+            "        if path == \"/whoami\":",
+            "            b = self.headers.get(\"Cookie\", \"\").encode()",
+            "            self.send_response(200)",
+            "            self.send_header(\"Content-Length\", str(len(b)))",
+            "            self.end_headers()",
+            "            self.wfile.write(b)",
+            "            return",
+            "        if path == \"/\":",
+            "            self.answer(200, b\"hola\")",
+            "            return",
+            "        self.send_error(404)",
+            "    def do_POST(self):",
+            "        n = int(self.headers.get(\"Content-Length\", 0))",
+            "        data = self.rfile.read(n)",
+            "        if self.path.split(\"?\")[0] == \"/echo\":",
+            "            ct = self.headers.get(\"Content-Type\", \"\")",
+            "            self.answer(200, (\"type=\" + ct + \" body=\" + data.decode(\"utf-8\", \"replace\")).encode())",
+            "            return",
+            "        if self.path.split(\"?\")[0] == \"/sub\":",
+            "            self.answer(201, b\"creado\")",
+            "        elif self.path.split(\"?\")[0] == \"/mp\":",
+            "            ct = self.headers.get(\"Content-Type\", \"\")",
+            "            ok = ct.startswith(\"multipart/form-data; boundary=\") and b'name=\"note\"' in data and b'hello' in data and b'filename=\"a.txt\"' in data and b'FILEDATA' in data",
+            "            self.answer(200, (\"multipart ok\" if ok else \"multipart BROKEN\").encode())",
+            "        else:",
+            "            self.send_error(404)",
+            "    def do_PUT(self):",
+            "        n = int(self.headers.get(\"Content-Length\", 0))",
+            "        data = self.rfile.read(n)",
+            "        if self.path.split(\"?\")[0] == \"/mp\":",
+            "            ct = self.headers.get(\"Content-Type\", \"\")",
+            "            ok = ct.startswith(\"multipart/form-data; boundary=\") and b'hello' in data",
+            "            self.answer(200, (\"multipart ok\" if ok else \"multipart BROKEN\").encode())",
+            "        else:",
+            "            self.echo_verb()",
+            "    def do_PATCH(self):",
+            "        n = int(self.headers.get(\"Content-Length\", 0))",
+            "        self.rfile.read(n)",
+            "        self.echo_verb()",
+            "    def do_DELETE(self):",
+            "        self.echo_verb()",
+            "    def do_HEAD(self):",
+            "        self.send_response(200)",
+            "        self.send_header(\"Content-Length\", \"0\")",
+            "        self.end_headers()",
+            "    def log_message(self, *a):",
+            "        pass",
+            "ThreadingHTTPServer((\"127.0.0.1\", 8473), H).serve_forever()",
+        ].join("\n")]);
+
+        const api = Http.Client({ BaseUrl: "http://127.0.0.1:8473",
+                                  Headers: { "X-Def": "1" }, Timeout: 5000 });
+        const steps = [
+            () => {
+                const h = api.Get("/", (r) => {
+                    eq("async GET answers 200", r.Status, 200);
+                    check("a text body arrives", r.Body.ToText().includes("hola"),
+                          r.Body.ToText().slice(0, 40));
+                    check("the handle is done before onDone runs",
+                          h.Running === false);
+                    steps[1]();
+                }, (e) => {
+                    failures.push(`async GET errored: ${e.Message}`);
+                    steps[1]();
+                });
+                check("the handle runs while the request flies",
+                      h.Running === true);
+                eq("the handle names its method", h.Method, "GET");
+                eq("...and its URL", h.Url, "http://127.0.0.1:8473/");
+            },
+            () => api.Get("/headers", { Headers: { "X-Req": "2" } }, (r) => {
+                check("client defaults and request headers merge",
+                      r.Body.ToText().includes("x-def=1") &&
+                      r.Body.ToText().includes("x-req=2"),
+                      r.Body.ToText());
+                steps[2]();
+            }, (e) => {
+                failures.push(`headers errored: ${e.Message}`);
+                steps[2]();
+            }),
+            () => api.Get("/redir", (r) => {
+                eq("a redirect is followed", r.Status, 200);
+                check("...to the final URL", r.Url === "http://127.0.0.1:8473/",
+                      r.Url);
+                steps[3]();
+            }, (e) => {
+                failures.push(`redirect errored: ${e.Message}`);
+                steps[3]();
+            }),
+            () => api.Get("/redir", { FollowRedirects: false }, (r) => {
+                eq("FollowRedirects false answers the 302", r.Status, 302);
+                steps[4]();
+            }, (e) => {
+                failures.push(`unfollowed redirect errored: ${e.Message}`);
+                steps[4]();
+            }),
+            () => api.Post("/sub", { a: 1 }, (r) => {
+                eq("a POST answers 201", r.Status, 201);
+                eq("...with the echoed body", r.Body.ToText(), "creado");
+                steps[5]();
+            }, (e) => {
+                failures.push(`POST errored: ${e.Message}`);
+                steps[5]();
+            }),
+            () => {
+                const h = api.Get("/slow", (r) => {
+                    failures.push("a stopped request must not answer");
+                    steps[6]();
+                }, (e) => {
+                    eq("stopping calls onError Cancelled", e.Kind, "Cancelled");
+                    check("...and leaves TimedOut false", h.TimedOut === false);
+                    check("stopping a finished job answers false",
+                          h.Stop() === false);
+                    steps[6]();
+                });
+                check("stopping a live request answers true", h.Stop() === true);
+            },
+            () => {
+                const h = api.Get("/slow", { Timeout: 300 }, (r) => {
+                    failures.push("a timed-out request must not answer");
+                    steps[7]();
+                }, (e) => {
+                    eq("the guard calls onError Timeout", e.Kind, "Timeout");
+                    check("...and marks the handle", h.TimedOut === true);
+                    steps[7]();
+                });
+            },
+            () => {
+                /* The blocking spelling, against this server rather than the
+                 * dogfooded one: a Wait aimed at a server in our own loop is
+                 * a deadlock, and these are the assertions that need Wait.
+                 *
+                 * An object where a body goes is a body -- unless it names an
+                 * option. `FollowRedirects` was in the async list and not the
+                 * blocking one, so a Wait asking for it posted its own
+                 * options as JSON and configured nothing. */
+                const wait = Http.Client({ BaseUrl: "http://127.0.0.1:8473",
+                                           Timeout: 5000 });
+
+                for (const [key, value] of [["Query", { z: "1" }], ["Headers", {}],
+                                            ["Timeout", 5000], ["FollowRedirects", true],
+                                            ["ContentType", "text/plain"], ["Body", ""],
+                                            ["Auth", null]]) {
+                    const got = wait.PostWait("/echo", { [key]: value }).Body.ToText();
+
+                    check(`a ${key} makes the object options, not a body`,
+                          got.endsWith("body="), got);
+                }
+                check("...and an object naming none of them is the body",
+                      wait.PostWait("/echo", { hello: 1 }).Body.ToText().includes('"hello"'));
+
+                /* A Content-Type written by hand beats the one the body's
+                 * shape implies: the rule `Authorization` already followed. */
+                const named = wait.PostWait("/echo", { hi: 1 },
+                    { Headers: { "Content-Type": "application/vnd.me+json" } }).Body.ToText();
+
+                check("a declared Content-Type wins over the inferred one",
+                      named.startsWith("type=application/vnd.me+json"), named);
+                check("...and the body still goes out", named.includes('"hi"'), named);
+
+                const asked = wait.PostWait("/echo", { hi: 1 },
+                    { ContentType: "application/vnd.opt+json" }).Body.ToText();
+
+                check("...and an explicit ContentType still wins over both",
+                      asked.startsWith("type=application/vnd.opt+json"), asked);
+
+                /* What a Wait throws carries the same Kind the callbacks get,
+                 * so a catch can tell a deadline from a refusal. */
+                let thrown = null;
+
+                try {
+                    Http.GetWait("http://127.0.0.1:9/", { Timeout: 2000 });
+                } catch (e) {
+                    thrown = e;
+                }
+                check("a Wait throws", thrown !== null);
+                check("...carrying the Kind the callbacks would have got",
+                      thrown && (thrown.Kind === "Refused" || thrown.Kind === "Error"),
+                      thrown && thrown.Kind);
+                eq("...and a Status", thrown && thrown.Status, 0);
+
+                api.Put("/echo", "x", (r) => {
+                    eq("PUT answers", r.Status, 200);
+                    eq("...echoing the verb", r.Body.ToText(), "got PUT");
+                    api.Patch("/echo", "x", (r2) => {
+                        eq("PATCH answers", r2.Status, 200);
+                        eq("...echoing the verb", r2.Body.ToText(), "got PATCH");
+                        api.Delete("/echo", (r3) => {
+                            eq("DELETE answers", r3.Status, 200);
+                            eq("...echoing the verb", r3.Body.ToText(), "got DELETE");
+                            api.Head("/echo", (r4) => {
+                                eq("HEAD answers", r4.Status, 200);
+                                eq("...with no body", r4.Body.Length, 0);
+                                steps[8]();
+                            }, (e) => {
+                                failures.push(`HEAD errored: ${e.Message}`);
+                                steps[8]();
+                            });
+                        }, (e) => {
+                            failures.push(`DELETE errored: ${e.Message}`);
+                            steps[8]();
+                        });
+                    }, (e) => {
+                        failures.push(`PATCH errored: ${e.Message}`);
+                        steps[8]();
+                    });
+                }, (e) => {
+                    failures.push(`PUT errored: ${e.Message}`);
+                    steps[8]();
+                });
+            },
+            () => {
+                const authed = Http.Client({ BaseUrl: "http://127.0.0.1:8473",
+                                             Auth: { User: "u", Password: "p" } });
+                eq("Auth reads back", authed.Auth.User, "u");
+                authed.Get("/auth", (r) => {
+                    eq("client Auth answers 200", r.Status, 200);
+                    eq("...authed", r.Body.ToText(), "authed");
+                    const wrong = Http.Client({ BaseUrl: "http://127.0.0.1:8473",
+                                                Auth: { User: "u", Password: "no" } });
+                    wrong.Get("/auth", (r2) => {
+                        eq("a wrong password answers 401", r2.Status, 401);
+                        api.Get("/auth", { Auth: { User: "u", Password: "p" } }, (r3) => {
+                            eq("per-request Auth wins", r3.Status, 200);
+                            steps[9]();
+                        }, (e) => {
+                            failures.push(`request Auth errored: ${e.Message}`);
+                            steps[9]();
+                        });
+                    }, (e) => {
+                        failures.push(`wrong Auth errored: ${e.Message}`);
+                        steps[9]();
+                    });
+                }, (e) => {
+                    failures.push(`Auth errored: ${e.Message}`);
+                    steps[9]();
+                });
+            },
+            () => {
+                const es = Http.Client({ BaseUrl: "http://127.0.0.1:8473",
+                                         Language: "es", UserAgent: "Bintana-Test" });
+                eq("Language reads back", es.Language, "es");
+                es.Get("/headers", (r) => {
+                    check("Language arrives as Accept-Language",
+                          r.Body.ToText().includes("lang=es"), r.Body.ToText());
+                    check("UserAgent arrives as itself",
+                          r.Body.ToText().includes("ua=Bintana-Test"), r.Body.ToText());
+                    const direct = Http.Client({ Proxy: null });
+                    check("Proxy null reads back", direct.Proxy === null);
+                    direct.Get("http://127.0.0.1:8473/", (r2) => {
+                        eq("a proxyless client still answers", r2.Status, 200);
+                        steps[10]();
+                    }, (e) => {
+                        failures.push(`proxy errored: ${e.Message}`);
+                        steps[10]();
+                    });
+                }, (e) => {
+                    failures.push(`language errored: ${e.Message}`);
+                    steps[10]();
+                });
+            },
+            () => {
+                const m = new Multipart().Field("note", "hello")
+                    .File("up", "a.txt", new Bytes("FILEDATA"), "text/plain");
+                eq("a built multipart counts its parts", m.Length, 2);
+                api.Post("/mp", m, (r) => {
+                    eq("a multipart posts", r.Status, 200);
+                    eq("...framed", r.Body.ToText(), "multipart ok");
+                    api.Put("/mp", m, (r2) => {
+                        eq("...and reposts with its verb", r2.Status, 200);
+                        eq("...framed again", r2.Body.ToText(), "multipart ok");
+                        steps[11]();
+                    }, (e) => {
+                        failures.push(`multipart PUT errored: ${e.Message}`);
+                        steps[11]();
+                    });
+                }, (e) => {
+                    failures.push(`multipart errored: ${e.Message}`);
+                    steps[11]();
+                });
+            },
+            () => {
+                const jar = Http.Client({ BaseUrl: "http://127.0.0.1:8473",
+                                          Cookies: true });
+                check("Cookies reads back", jar.Cookies === true);
+                jar.Get("/login", (r) => {
+                    eq("login answers", r.Status, 200);
+                    jar.Get("/whoami", (r2) => {
+                        check("the jar sends the cookie back",
+                              r2.Body.ToText().includes("session=abc"),
+                              r2.Body.ToText());
+                        api.Get("/whoami", (r3) => {
+                            check("without a jar nothing is sent",
+                                  !r3.Body.ToText().includes("session="),
+                                  JSON.stringify(r3.Body.ToText()));
+                            steps[12]();
+                        }, (e) => {
+                            failures.push(`nojar errored: ${e.Message}`);
+                            steps[12]();
+                        });
+                    }, (e) => {
+                        failures.push(`whoami errored: ${e.Message}`);
+                        steps[12]();
+                    });
+                }, (e) => {
+                    failures.push(`login errored: ${e.Message}`);
+                    steps[12]();
+                });
+            },
+            () => {
+                const seen = [];
+                const wasLevel = Logger.Level;
+                Logger.Level = "Debug";
+                Logger.Handler = (level, text) => seen.push(`${level}|${text}`);
+                api.Log = "body";
+                api.Get("/", (r) => {
+                    eq("a logging request still answers", r.Status, 200);
+                    check("its traffic reaches the Handler",
+                          seen.some((l) => l.includes("GET / ")),
+                          `${seen.length} lines`);
+                    check("...headers and body alike",
+                          seen.some((l) => l.includes("hola")),
+                          `${seen.length} lines`);
+                    check("...as Debug",
+                          seen.length > 0 && seen.every((l) => l.startsWith("Debug|")));
+                    api.Log = "none";
+                    Logger.Handler = null;
+                    Logger.Level = wasLevel;
+                    steps[13]();
+                }, (e) => {
+                    failures.push(`logged request errored: ${e.Message}`);
+                    api.Log = "none";
+                    Logger.Handler = null;
+                    Logger.Level = wasLevel;
+                    steps[13]();
+                });
+            },
+            () => {
+                /* A forward proxy of our own on an ephemeral port, read back
+                 * like the server's: it prints the request line it gets
+                 * (absolute-form, which only proxies ever see) and pipes the
+                 * rest through rewritten to origin-form. A hardcoded port
+                 * here collides with yesterday's crashed run, the same
+                 * lesson `Port: 0` teaches one test over. */
+                let fwd = null;
+                let hit = null;
+                let res = null;
+                let tries = 0;
+                let done = false;
+                const px = Http.Client({ Timeout: 8000 });
+                const maybe = () => {
+                    if (done || !hit || !res)
+                        return;
+                    done = true;
+                    eq("through the proxy", res, 200);
+                    if (fwd)
+                        fwd.Stop();
+                    steps[14]();
+                };
+                const giveup = (why) => {
+                    if (done)
+                        return;
+                    done = true;
+                    failures.push(why);
+                    if (fwd)
+                        fwd.Stop();
+                    steps[14]();
+                };
+                const ask = () => {
+                    tries++;
+                    px.Get("http://127.0.0.1:8473/headers", (r) => {
+                        res = r.Status;
+                        /* Arrived without transiting is the bug this hunts:
+                         * fail loudly instead of hanging for the runner. */
+                        Timer.After(3000, () => {
+                            if (!done)
+                                giveup("proxy never saw it");
+                        });
+                        maybe();
+                    }, (e) => {
+                        /* The forwarder takes a moment; ask again. */
+                        if (tries < 25)
+                            Timer.After(200, ask);
+                        else
+                            giveup(`proxy errored: ${e.Message}`);
+                    });
+                };
+                try {
+                    fwd = Exec(["python3", "-u", "-c", [
+                    "import socket, threading",
+                    "def pipe(a, b):",
+                    "    try:",
+                    "        while True:",
+                    "            d = a.recv(65536)",
+                    "            if not d: break",
+                    "            b.sendall(d)",
+                    "    except OSError:",
+                    "        pass",
+                    "def handle(client):",
+                    "    try:",
+                    "        req = b\"\"",
+                    "        while b\"\\r\\n\" not in req:",
+                    "            chunk = client.recv(4096)",
+                    "            if not chunk: break",
+                    "            req += chunk",
+                    "        line, rest = req.split(b\"\\r\\n\", 1)",
+                    "        print(\"HIT \" + line.decode(\"latin-1\"), flush=True)",
+                    "        parts = line.split(b\" \")",
+                    "        uri = parts[1] if len(parts) > 1 else b\"/\"",
+                    "        if b\"://\" in uri:",
+                    "            uri = uri.split(b\"/\", 3)[2]",
+                    "            uri = b\"/\" + uri.split(b\"/\", 1)[-1] if b\"/\" in uri else b\"/\"",
+                    "        server = socket.create_connection((\"127.0.0.1\", 8473), timeout=10)",
+                    "        server.sendall(parts[0] + b\" \" + uri + b\" \" + parts[2] + b\"\\r\\n\" + rest)",
+                    "        t = threading.Thread(target=pipe, args=(server, client), daemon=True)",
+                    "        t.start()",
+                    "        pipe(client, server)",
+                    "    except OSError:",
+                    "        pass",
+                    "    finally:",
+                    "        try: client.close()",
+                    "        except OSError: pass",
+                    "ls = socket.socket()",
+                    "ls.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)",
+                    "ls.bind((\"127.0.0.1\", 0))",
+                    "ls.listen(50)",
+                    "print(\"PORT %d\" % ls.getsockname()[1], flush=True)",
+                    "while True:",
+                    "    c, _ = ls.accept()",
+                    "    threading.Thread(target=handle, args=(c,), daemon=True).start()",
+                ].join("\n")], (line) => {
+                    if (line.startsWith("PORT ")) {
+                        try {
+                            px.Proxy = "http://127.0.0.1:" + line.slice(5).trim();
+                        } catch (e) {
+                            giveup(`proxy address failed: ${e.message}`);
+                            return;
+                        }
+                        ask();
+                    } else if (line.startsWith("HIT")) {
+                        check("the proxy sees absolute-form",
+                              line.includes("GET http://127.0.0.1:8473/headers"),
+                              line);
+                        hit = line;
+                        maybe();
+                    }
+                });
+                } catch (e) {
+                    giveup(`proxy spawn failed: ${e.message}`);
+                }
+                /* No PORT line means the forwarder never came up: fail
+                 * loudly instead of hanging for the runner. */
+                Timer.After(10000, () => {
+                    if (!done && tries === 0)
+                        giveup("proxy never started");
+                });
+            },
+            () => api.Get("/nobody", (r) => {
+                eq("a 404 answers 404", r.Status, 404);
+                srv.Stop();
+                /* The chain holds itself: every step closes over `steps` and
+                 * `steps` holds every step, so without this the whole chain
+                 * is garbage the collector only finds if it happens to run
+                 * before teardown -- and `JS_FreeRuntime` aborts on GC luck. */
+                steps.length = 0;
+                waiting--;
+            }, (e) => {
+                failures.push(`a 404 must not error: ${e.Message}`);
+                srv.Stop();
+                steps.length = 0;
+                waiting--;
+            }),
+        ];
+
+        until("the http server answers", () => {
+            try {
+                Http.GetWait("http://127.0.0.1:8473/", { Timeout: 200 });
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }, () => {
+            /* Counted, like an until: the run ends from Exec's tail, and on
+             * a loaded machine it gets there before a chain nobody counted
+             * does -- which reads as a smaller total with nothing red, the
+             * same silence `until` was taught to refuse. */
+            waiting++;
+            steps[0]();
+        });
+    }
+
+    /* --- HttpServer -----------------------------------------------------
+     *
+     * Serving, dogfooded through the client: no python, no external net. The
+     * dogfood is async on purpose -- a Wait would freeze the loop this same
+     * server answers on, which is a deadlock and not a test. Ephemeral port,
+     * read back: a hardcoded one collides with yesterday's crashed run.
+     */
+    testHttpServer() {
+        let noSoup = false;
+        try {
+            Http.Server({ Port: 0 });
+        } catch (e) {
+            noSoup = /without libsoup/.test(e.message);
+            if (!noSoup)
+                throw e;
+        }
+        if (noSoup) {
+            /* The Wait test asserts the client stub; one refusal here proves
+             * the server is the same story. */
+            let complaint = "";
+            try {
+                Http.Server({ Port: 0 });
+            } catch (e) {
+                complaint = e.message;
+            }
+            check("without libsoup, Http.Server says which package",
+                  complaint.includes("without libsoup"), complaint);
+            return;
+        }
+
+        /* The server under test is ours, and so is the client asking it, so
+         * nothing outside is needed until the TLS step -- which wants a
+         * certificate and something that speaks https to check it with. Both
+         * are made here rather than committed: a key in the tree is a key
+         * that expires one day with nobody watching, and a fixture nobody
+         * generated is a fixture nobody can regenerate. Missing either tool
+         * skips that one step; it never fails the suite for a machine that
+         * simply does not have openssl. */
+        const tlsDir = File.Join(Environment.TempDirectory,
+                                 `bintana-tls-${Environment.ProcessId}`);
+        const TlsCert = File.Join(tlsDir, "server.crt");
+        const TlsKey = File.Join(tlsDir, "server.key");
+        let canTls = Application.HasCommand("openssl") && Application.HasCommand("python3");
+
+        if (canTls) {
+            Directory.Make(tlsDir);
+            const made = Exec.Wait(["openssl", "req", "-x509", "-newkey", "rsa:2048",
+                                    "-nodes", "-days", "1",
+                                    "-keyout", TlsKey, "-out", TlsCert,
+                                    "-subj", "/CN=127.0.0.1",
+                                    "-addext", "subjectAltName=IP:127.0.0.1,DNS:localhost"],
+                                   { Timeout: 30000 });
+
+            canTls = made.ExitCode === 0 && File.Exists(TlsCert) && File.Exists(TlsKey);
+            if (!canTls)
+                print(`  (skipping the TLS step: openssl exited ${made.ExitCode})`);
+        } else {
+            print("  (skipping the TLS step: it needs openssl and python3)");
+        }
+
+        const srv = Http.Server({ Port: 0 });
+        eq("a new server is not running", srv.Running, false);
+        eq("its URL is empty until Start", srv.Url, "");
+        eq("its port is declared until Start", srv.Port, 0);
+
+        let complaint = "";
+        try {
+            srv.Start();
+        } catch (e) {
+            complaint = e.message;
+        }
+        check("Start without Request is refused", complaint.includes("Request is required"),
+              complaint);
+
+        complaint = "";
+        try {
+            srv.Request = "answer";
+        } catch (e) {
+            complaint = e.message;
+        }
+        check("Request must be a function", complaint.includes("must be a function"),
+              complaint);
+
+        eq("Tls starts empty", srv.Tls, null);
+        eq("Allow starts open", JSON.stringify(srv.Allow), "[]");
+        eq("Auth starts open", srv.Auth, null);
+        srv.Tls = { Cert: "a", Key: "b" };
+        eq("Tls reads back", srv.Tls.Key, "b");
+        srv.Tls = null;
+        eq("...and clears", srv.Tls, null);
+        srv.Allow = ["127.0.0.1"];
+        eq("Allow reads back", JSON.stringify(srv.Allow), '["127.0.0.1"]');
+        srv.Allow = null;
+        srv.Auth = { Realm: "r", Users: { u: "p" } };
+        eq("Auth reads back", srv.Auth.Users.u, "p");
+        srv.Auth = null;
+        eq("...and clears", srv.Auth, null);
+
+        for (const [what, fn, name] of [
+            ["Tls that is not an object", () => { srv.Tls = "x"; }, "Tls"],
+            ["Tls without a Key", () => { srv.Tls = { Cert: "a" }; }, "Cert and a Key"],
+            ["Allow that is not a list", () => { srv.Allow = "x"; }, "Allow"],
+            ["Auth without Users", () => { srv.Auth = { Realm: "r" }; }, "Realm and Users"],
+        ]) {
+            let complaint = "";
+            try {
+                fn();
+            } catch (e) {
+                complaint = e.message;
+            }
+            check(`refuses ${what}, by name`, complaint.includes(name), complaint);
+        }
+
+        /* The shape every server is written in: a handler closing over the
+         * server it belongs to. Held from C without being reported to the
+         * collector, that pair is a cycle nothing can see -- a listening
+         * socket nothing can reach and nothing can free. Made and dropped
+         * here so the sanitizer run walks it; the collection itself is not
+         * something this suite can force, since there is no `gc()` in the
+         * language. */
+        {
+            const looped = Http.Server({ Port: 0 });
+
+            looped.Request = (req) => req.Answer(200, looped.Url);
+            looped.Start();
+            check("a server its own handler names still listens",
+                  looped.Running === true);
+            looped.Stop();
+        }
+
+        srv.Request = (req) => {
+            if (req.Path === "/echo") {
+                req.Answer(200, { method: req.Method, path: req.Path,
+                                  q: req.Query, agent: req.Headers["user-agent"],
+                                  body: req.Body.ToText(), remote: req.Remote,
+                                  type: req.Headers["content-type"] || "" });
+            } else if (req.Path === "/declared") {
+                /* An object body implies application/json; the header names
+                 * something else, and the named one is the specific spelling. */
+                req.Answer(200, { ok: true },
+                           { Headers: { "Content-Type": "application/vnd.me+json" } });
+            } else if (req.Path === "/mp") {
+                try {
+                    const mp = req.Multipart();
+                    const parts = [];
+
+                    for (let i = 0; i < mp.Length; i++) parts.push(mp.Part(i));
+                    req.Answer(200, { count: mp.Length, parts });
+                } catch (e) {
+                    req.Answer(400, e.message);
+                }
+            } else if (req.Path === "/hi") {
+                req.Answer(200, "hola");
+            } else if (req.Path === "/badanswer") {
+                try {
+                    req.Answer("lots");
+                } catch (e) {
+                    req.Answer(200, e.message);
+                }
+            } else if (req.Path === "/silent") {
+                /* falls off: the runtime answers 500 */
+            } else {
+                req.Answer(404, "nope");
+            }
+        };
+        srv.Start();
+        check("listening", srv.Running === true);
+        check("on an ephemeral port", srv.Port !== 0, srv.Port);
+        check("answered locally", srv.Url.startsWith("http://127.0.0.1:"),
+              srv.Url);
+
+        complaint = "";
+        try {
+            srv.Start();
+        } catch (e) {
+            complaint = e.message;
+        }
+        check("a second Start is refused", complaint.includes("already running"),
+              complaint);
+
+        complaint = "";
+        try {
+            srv.Port = "eighty";
+        } catch (e) {
+            complaint = e.message;
+        }
+        check("a Port that is not a number is refused", complaint.includes("is not a number"),
+              complaint);
+
+        /* Counted: like testHttp's chain, or the tail ends the run early --
+         * and emptied at the end, for the same cycle the other chain taught. */
+        waiting++;
+        const api = Http.Client({ BaseUrl: srv.Url, Timeout: 5000,
+                                  Headers: { "User-Agent": "Dogfood/1" } });
+        const finish = () => {
+            srv.Stop();
+            if (File.Exists(TlsCert)) File.Delete(TlsCert);
+            if (File.Exists(TlsKey)) File.Delete(TlsKey);
+            if (File.IsDir(tlsDir)) Directory.Delete(tlsDir);
+            steps.length = 0;
+            waiting--;
+        };
+        const steps = [
+            () => steps.pending = api.Get("/echo?r=1&r=2", { Query: { a: "1", b: "x y" } }, (r, handle) => {
+                eq("dogfood answers 200", r.Status, 200);
+                const echo = JSON.parse(r.Body.ToText());
+                eq("...the method", echo.method, "GET");
+                eq("...the path", echo.path, "/echo");
+                eq("...the query", echo.q.b, "x y");
+                eq("...repeats keep the last", echo.q.r, "2");
+                eq("...the headers", echo.agent, "Dogfood/1");
+                eq("...an empty body", echo.body, "");
+                check("...the remote", echo.remote === "127.0.0.1", echo.remote);
+                /* The handle rides along, so a form with two requests in the
+                 * air can tell whose answer this is. */
+                check("...and the callback is handed its own handle",
+                      handle === steps.pending, `${handle && handle.Url}`);
+                steps[1]();
+            }, (e) => {
+                failures.push(`dogfood errored: ${e.Message}`);
+                finish();
+            }),
+            () => api.Post("/echo", { hello: "world" }, (r2) => {
+                const posted = JSON.parse(r2.Body.ToText());
+
+                eq("a posted body arrives", posted.body,
+                   JSON.stringify({ hello: "world" }, null, 2) + "\n");
+                eq("...typed by its shape", posted.type, "application/json");
+                steps[2]();
+            }, (e) => {
+                failures.push(`POST errored: ${e.Message}`);
+                finish();
+            }),
+            () => api.Get("/nobody", (r3) => {
+                eq("unknown paths answer 404", r3.Status, 404);
+                eq("...with the handler's words", r3.Body.ToText(), "nope");
+                steps[3]();
+            }, (e) => {
+                failures.push(`404 errored: ${e.Message}`);
+                finish();
+            }),
+            () => {
+                srv.Allow = ["127.0.0.1"];
+                api.Get("/hi", (ra) => {
+                    eq("allowed remotes answer", ra.Status, 200);
+                    srv.Allow = ["10.9.9.9"];
+                    api.Get("/hi", (rb) => {
+                        eq("others get 403", rb.Status, 403);
+                        srv.Allow = null;
+                        srv.Auth = { Realm: "probe", Users: { u: "p" } };
+                        api.Get("/hi", (rc) => {
+                            eq("no credentials answer 401", rc.Status, 401);
+                            check("...challenged",
+                                  (rc.Headers["www-authenticate"] || "")
+                                      .includes("Basic realm=") &&
+                                  (rc.Headers["www-authenticate"] || "")
+                                      .includes("probe"),
+                                  rc.Headers["www-authenticate"]);
+                            api.Get("/hi", { Auth: { User: "u", Password: "no" } }, (rd) => {
+                                eq("wrong ones too", rd.Status, 401);
+                                api.Get("/hi", { Auth: { User: "u", Password: "p" } }, (re) => {
+                                    eq("right ones pass", re.Status, 200);
+                                    srv.Auth = null;
+                                    api.Get("/hi", (rf) => {
+                                        eq("open again", rf.Status, 200);
+                                        steps[4]();
+                                    }, (e) => {
+                                        failures.push(`reopened errored: ${e.Message}`);
+                                        finish();
+                                    });
+                                }, (e) => {
+                                    failures.push(`authed errored: ${e.Message}`);
+                                    finish();
+                                });
+                            }, (e) => {
+                                failures.push(`wrong errored: ${e.Message}`);
+                                finish();
+                            });
+                        }, (e) => {
+                            failures.push(`gated errored: ${e.Message}`);
+                            finish();
+                        });
+                    }, (e) => {
+                        failures.push(`forbidden errored: ${e.Message}`);
+                        finish();
+                    });
+                }, (e) => {
+                    failures.push(`allowed errored: ${e.Message}`);
+                    finish();
+                });
+            },
+            () => {
+                if (!canTls) {
+                    steps[5]();
+                    return;
+                }
+                srv.Stop();
+                srv.Tls = { Cert: TlsCert, Key: TlsKey };
+                try {
+                    srv.Start();
+                } catch (e) {
+                    failures.push(`tls Start threw: ${e.message}`);
+                    finish();
+                    return;
+                }
+                check("https url", srv.Url.startsWith("https://"), srv.Url);
+
+                try {
+                    Exec(["python3", "-c", [
+                        "import http.client, ssl",
+                        "ctx = ssl._create_unverified_context()",
+                        `c = http.client.HTTPSConnection("127.0.0.1", ${srv.Port}, context=ctx, timeout=10)`,
+                        "c.request(\"GET\", \"/hi\")",
+                        "r = c.getresponse()",
+                        "print(\"TLS-OK\" if r.status == 200 and r.read() == b\"hola\" else \"TLS-BAD\")",
+                    ].join("\n")],
+                    (line) => {
+                        check("tls answers", line.includes("TLS-OK"), line);
+                    },
+                    (code) => {
+                        eq("tls probe exits", code, 0);
+                        srv.Stop();
+                        srv.Tls = null;
+                        srv.Start();
+                        steps[5]();
+                    });
+                } catch (e) {
+                    failures.push(`tls probe could not run: ${e.message}`);
+                    srv.Stop();
+                    srv.Tls = null;
+                    srv.Start();
+                    steps[5]();
+                }
+            },
+            () => {
+                const m = new Multipart().Field("note", "hello")
+                    .File("up", "a.txt", new Bytes("FILEDATA"), "text/plain");
+                api.Post("/mp", m, (r) => {
+                    eq("a parsed upload answers", r.Status, 200);
+                    const got = JSON.parse(r.Body.ToText());
+                    eq("...two parts", got.count, 2);
+                    eq("...the field", got.parts[0].Name, "note");
+                    eq("...its text", got.parts[0].Data, "aGVsbG8=");
+                    eq("...the file", got.parts[1].Filename, "a.txt");
+                    eq("...its type", got.parts[1].Type, "text/plain");
+                    eq("...its bytes", got.parts[1].Data, "RklMRURBVEE=");
+                    api.Post("/mp", { plain: "json" }, (r2) => {
+                        eq("a plain body is not multipart", r2.Status, 400);
+                        steps[6]();
+                    }, (e) => {
+                        failures.push(`plain-mp errored: ${e.Message}`);
+                        finish();
+                    });
+                }, (e) => {
+                    failures.push(`multipart errored: ${e.Message}`);
+                    finish();
+                });
+            },
+            () => api.Get("/badanswer", (r4) => {
+                eq("a bad status answers", r4.Status, 200);
+                check("...naming what arrived",
+                      r4.Body.ToText().includes("is not a number"), r4.Body.ToText());
+                steps[7]();
+            }, (e) => {
+                failures.push(`badanswer errored: ${e.Message}`);
+                finish();
+            }),
+            () => api.Get("/silent", (r5) => {
+                eq("no answer is a 500", r5.Status, 500);
+                check("stopping answers true", srv.Stop() === true);
+                check("...and then false", srv.Stop() === false);
+                check("...and Running goes", srv.Running === false);
+                steps.length = 0;
+                waiting--;
+            }, (e) => {
+                failures.push(`silent errored: ${e.Message}`);
+                srv.Stop();
+                steps.length = 0;
+                waiting--;
+            }),
+        ];
+        steps[0]();
     }
 
     /* --- Exec ----------------------------------------------------------- */

@@ -1,0 +1,9 @@
+{
+  "name": "jokes",
+  "startup": "JokesForm",
+  "sources": [
+    "JokesForm.js"
+  ],
+  "version": "1.0",
+  "description": "Http on a window: async jokes from JokeAPI, cancelled on close"
+}

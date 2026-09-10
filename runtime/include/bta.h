@@ -363,6 +363,14 @@ char   *bta_read_file(const char *path, size_t *len);
 int     bta_eval_file(JSContext *ctx, const char *path);
 void    bta_dump_error(JSContext *ctx);
 void    bta_drain_jobs(JSRuntime *rt);   /* run pending promise callbacks */
+
+/* A Debug line from C, where there is no argv to join: threshold, Handler,
+ * sink -- everything Logger.Debug does once the line exists. The plain one
+ * skips the Handler, for a context where JS must not run (a Wait's traffic,
+ * whose caller is blocked mid-call). */
+void    bta_log_debug(JSContext *ctx, const char *text);
+void    bta_log_debug_plain(const char *text);
+
 /* Resolves a top-level class by name, including `class X {}` bindings that
  * live in the global lexical scope rather than on globalThis. */
 JSValue bta_lookup_global(JSContext *ctx, const char *name);
@@ -484,6 +492,11 @@ bool              bta_surface_is_box(GtkWidget *widget);
  * on anything that is not one of ours. */
 void       bta_fixed_set_anchored(GtkWidget *fixed, bool on);
 bool       bta_fixed_get_anchored(GtkWidget *fixed);
+
+/* --- Http ------------------------------------------------------------- */
+void  bta_http_init(JSContext *ctx, JSValue global);
+void  bta_http_cleanup(void);   /* cancels requests still in flight */
+guint bta_http_pending(void);   /* requests owed an answer */
 
 /* --- File / Dir / Exec -------------------------------------------------- */
 void bta_sys_init(JSContext *ctx, JSValue global);

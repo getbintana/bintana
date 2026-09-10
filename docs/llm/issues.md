@@ -177,7 +177,6 @@ needed and what it did instead.
 | A **form** bound to a table — a control that names a field and fills itself | [`docs/data-plan.md`](../data-plan.md). The records-over-a-table half exists: [`Database.Sqlite` and `Table`](library.md#database-and-table) |
 | A word for *do this, then that* | [`docs/async-plan.md`](../async-plan.md) |
 | Packaging an application without the project tree | root [`README`](../../README.md#what-is-next) |
-| No network client of any kind | [library.md](library.md#others) |
 | No editable / autocompleting combo | [ISSUE-editable-combo](../issues/ISSUE-editable-combo.md) |
 | No printer — no dialog, no copies, no preview, no control laid onto a page (a PDF **is** written: `SavePdf`) | [ISSUE-printing](../issues/ISSUE-printing.md) |
 | No audio or video | [ISSUE-multimedia](../issues/ISSUE-multimedia.md) |

@@ -256,7 +256,11 @@ Named because a deferral without triggers is a punt:
 - **Network.** There is no `fetch`, no socket, nothing that talks to a server.
   The day there is, every request is an asynchronous operation and the count of
   eight stops meaning anything. This is by far the most likely trigger, and it is the one
-  that has forced the question in every other language.
+  that has forced the question in every other language. **Tried, since this
+  was written, and it did not reopen anything**: `Http` speaks both ways now
+  (a client and a server, dozens of asynchronous operations), and every one
+  of them is one callback -- a sequence that hurts has still not shown up.
+  The trigger stands for whatever arrives with one.
 - **A second real case of chaining.** One site is a call site; three are a
   pattern.
 - **Two children at once.** Nothing has ever asked. `Exec.Wait` in a loop is the

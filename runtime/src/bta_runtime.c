@@ -460,6 +460,34 @@ static JSValue js_log(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
+/*
+ * A Debug line from C code that has no argv to join: threshold, Handler,
+ * sink -- everything js_log does once the line exists.
+ */
+void bta_log_debug(JSContext *ctx, const char *text)
+{
+    if (BTA_LOG_DEBUG < log_threshold || logging)
+        return;
+    logging = true;
+    if (!log_handled_by_app(ctx, BTA_LOG_DEBUG, text))
+        log_write(BTA_LOG_DEBUG, text);
+    logging = false;
+}
+
+/*
+ * Same, minus the Handler: for lines arriving where JS must not run. A Wait
+ * iterates a context of its own, and a Handler closing the form under the
+ * blocked caller is the crash DoEvents was refused for -- so traffic logged
+ * from inside one goes to the terminal or the journal, and never to a
+ * function.
+ */
+void bta_log_debug_plain(const char *text)
+{
+    if (BTA_LOG_DEBUG < log_threshold)
+        return;
+    log_write(BTA_LOG_DEBUG, text);
+}
+
 static JSValue js_log_get_level(JSContext *ctx, JSValueConst this_val)
 {
     return JS_NewString(ctx, log_level_names[log_threshold]);
@@ -870,6 +898,7 @@ static void install_globals(BtaApp *app)
     bta_day_init(ctx, global);
     bta_database_init(ctx, global);
     bta_sqlite_init(ctx, global);
+    bta_http_init(ctx, global);
 
     bta_widgets_init(ctx, global);
     bta_menu_init(ctx);
@@ -1476,6 +1505,7 @@ void bta_app_free(BtaApp *app)
     if (app->forms)
         g_hash_table_unref(app->forms);
     bta_sys_cleanup();
+    bta_http_cleanup();
     bta_locale_cleanup();
     bta_widgets_cleanup(app->ctx);
     JS_FreeContext(app->ctx);
@@ -1599,7 +1629,7 @@ static gboolean console_idle(gpointer user_data)
 {
     BtaApp *app = user_data;
 
-    if (bta_sys_pending() > 0)
+    if (bta_sys_pending() + bta_http_pending() > 0)
         return G_SOURCE_CONTINUE;
 
     g_main_loop_quit(app->loop);
@@ -1642,7 +1672,7 @@ static int run_console(BtaApp *app)
      * noticing 20 ms late costs an exit 20 ms later.  It cannot end a program
      * early -- while a callback runs, the loop is not dispatching this.
      */
-    if (!app->quitting && bta_sys_pending() > 0) {
+    if (!app->quitting && bta_sys_pending() + bta_http_pending() > 0) {
         app->loop  = g_main_loop_new(NULL, FALSE);
         guint tick = g_timeout_add(20, console_idle, app);
 

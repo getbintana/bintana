@@ -1,0 +1,6 @@
+{
+  "name": "http",
+  "main": "Main",
+  "version": "1.0",
+  "description": "Http client against a public JSON API: list, read and create posts"
+}

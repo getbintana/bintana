@@ -75,6 +75,11 @@ const GLOBAL_TABLES = {
     screen_props:    "Screen",
     env_props:       "Environment",
     conn_props:      "Database and Table",
+    http_props:      "Http",
+    http_client_props: "Http",
+    multipart_props: "Http",
+    http_server_props: "Http Server",
+    http_request_props: "Http Server",
     /*
      * These two are documented with the **forms** and not with the globals,
      * which is where they belong: a menu item and a command are parts of a

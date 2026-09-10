@@ -67,7 +67,10 @@ reference:
 is *missing*; an issue kept past its answer is a second description of the same
 feature, written by somebody who did not have it yet, sitting in the one
 directory whose whole meaning is that nothing in it exists. Three went that way
-when `Painter.Image`, `Text` and `SavePdf` landed. What the runtime can do is in
+when `Painter.Image`, `Text` and `SavePdf` landed. Completed plans go the same
+way: `docs/http-plan.md` was deleted once its staging was built, with its one
+live leftover (`Done` sequencing) already living in `async-plan.md` — a plan
+kept past its building is the same second description. What the runtime can do is in
 `docs/llm/`, which is where anybody looks; git holds what the asking looked like.
 A refusal goes the same way, with the argument written into *what is deliberately
 not here* in `llm/controls.md` — an issue whose answer is *no* is not a gap
@@ -828,7 +831,11 @@ person who wrote it either.
   how a catalogue probe went onto his screen twice, sixty seconds each. Run an
   ad-hoc project with **`tests/try.sh <dir>`**, which is `xvfb-run` and cannot be
   forgotten; going back to a real screen there is `HEADLESS= tests/try.sh`, and
-  it should be a question you can say out loud (an icon, a theme).
+  it should be a question you can say out loud (an icon, a theme). Debugging
+  under `gdb` changes nothing about this: `gdb --args xvfb-run -a ./build/bintana
+  <project>` debugs the same binary on a display nobody uses, and a bare
+  `gdb ./build/bintana tests/widgets` is a windowed suite on his screen held
+  open by a breakpoint.
 - **Run the suite with `HEADLESS=1`.** `DISPLAY` is set on a desktop, so
   `tests/run.sh` puts every window it opens *on the user's screen* — dozens of
   them, taking the focus, and a stray click on one moves the focus and breaks
@@ -2174,3 +2181,98 @@ person who wrote it either.
   a *button's* handler are gone with them, which was the clearest smell there
   was: there had been nowhere to put the command, so one of the four became its
   owner.
+- **A `JSValue` in a wrapper's opaque slot wants `gc_mark`, and its finaliser
+  wants `JS_FreeValueRT` -- not a `JSContext*` carried beside it.** `Http`'s
+  client was built the other way first: the defaults object `Dup`'d into
+  `HttpClientData`, the `JSContext*` kept in the struct to free it with, a
+  `GList` of every live client, and a sweep in `bta_http_cleanup` -- the
+  `ExecJob` mold, applied where it does not belong. `ExecJob` needs all that
+  because a job is owned by a list and reachable from nowhere the collector
+  looks; a *wrapper's* opaque struct is reachable, and the runtime already
+  hands its finaliser the `JSRuntime*`. Two costs to getting this wrong: the
+  scaffolding, and the cycle -- `srv.Request = (req) => { ... srv ... }` is
+  the shape every server is written in, and without `gc_mark` that pair is a
+  listening socket nothing can reach and nothing can free. `bta_menu.c`'s
+  `action_gc_mark` was the answer the whole time. What a list is still for is
+  a resource outside the process: `http_servers` survives because a held port
+  is not the collector's problem.
+- **The globals' check needed `http_props` *and* `http_client_props` in
+  `tests/api/Check.js`**, since the client's verbs live on its prototype and
+  not on `Http`.
+- **A chain of callbacks that holds its own list is garbage, and whether it is
+  collected before teardown is luck.** `testHttp` kept its steps in an array
+  every step closed over, so the finished chain was a cycle nothing referenced
+  -- collected only if the collector happened to run before `JS_FreeRuntime`,
+  which aborts on whatever is left. Two runs in three aborted with every
+  assertion green, and one passed for no reason at all. The last step empties
+  the array (`steps.length = 0`); with no cycle the refcounts fall to zero on
+  their own and no collection has to happen. Anything that chains callbacks
+  through a shared table wants the same last line.
+- **And a chain nobody counts ends the run early instead of failing.** The same
+  `testHttp` once reported six assertions fewer with nothing red: on a loaded
+  machine `Exec`'s tail reached `finish()` mid-chain, and `finish()` only waits
+  for `waiting`. The chain is `waiting++` at its start and `waiting--` at its
+  end now -- every request in it carries a `Timeout`, so the counter cannot
+  stick. An async helper that neither counts nor times out is a hang or a
+  silence, and this codebase has had both.
+- **libsoup3 has no session `authenticate` signal, and connecting one is a
+  `GLib-GObject-CRITICAL`, not a `NULL` or a no-op.** The plan assumed the
+  soup2 shape; measured, the signal is in neither `soup-session.h` nor any
+  other header (nor on `SoupAuthManager`, per `gi` introspection), and the
+  replacement (`use_auth` off a challenge) is a second round trip. So `Auth`
+  is Basic preemptive in the header -- the same bytes with no signal -- and a
+  401 from anything else is answered. Check a signal exists (`g_signal_lookup`)
+  before designing on the assumption that it does.
+- **The two famous echo services sit on the Public Suffix List, where no
+  cookie may live.** `httpbin.org` and `postman-echo.com` are both in
+  `public_suffix_list.dat` (15291, 15294), so soup's jar -- like any
+  PSL-respecting client -- refuses their `Set-Cookie`, and it looks exactly
+  like a jar that never stores: manual `set_cookie` answers 0 while
+  `localhost` answers 1. `examples/session` runs against `httpbingo.org`,
+  which is not listed. When cookies vanish only on one domain, read the list
+  before reading the code.
+- **Soup normalizes a request's dot-segments before the handler runs, so a
+  `".."` refusal in a file server is dead code that teaches the wrong
+  lesson.** `/a/../../x` arrives as `/x`, encoded or not -- measured with a
+  probe echoing `req.Path` -- which means `File.Join` under a root cannot
+  escape it, and a test asserting the `400` fails. `examples/serve` relies on
+  the normalization and says so, instead of carrying a guard that never fires.
+  The reference claimed the opposite for a while (`routing, Bytes, statuses,
+  and the ".." refusal`), copied out of the plan that predated the
+  measurement: a sentence describing a guard nobody wrote, sitting in the
+  file people read to find out what the runtime does.
+- **A server lives as long as its object, so an example keeps it at module
+  scope.** Dropping a listening server disconnects (a port is not left held
+  past whoever held it), which means a `const` inside `Main` dies with the
+  return, before the first request ever arrives -- and it looks exactly like
+  `Start` never listened. The suite never notices, because its chain closes
+  over the server to stop it at the end.
+- **One feature instance on two sessions corrupts the heap on the way out.**
+  A `SoupCookieJar` added to both of a client's sessions dies twice -- once
+  per session finalizer -- and the crash lands in `soup_session_finalize`,
+  pages away from the `add_feature` that caused it, with wrong answers (open
+  gates, empty parts) as the first symptom. A `Wait` borrows the jar for the
+  flight instead, which is exclusive by construction since a `Wait` freezes
+  the loop every async flight is parked on.
+- **Two argument splits reading the same object with two key lists is one
+  call answering two ways.** `Http`'s async spelling decided "body or
+  options?" by looking for seven names; the blocking one looked for six, and
+  the one it lacked was `FollowRedirects` -- so `PostWait(url, {
+  FollowRedirects: false })` serialized its own options and posted them as
+  JSON, configuring nothing, with nothing saying so. It is one `static const`
+  table now, read by both. Where the same question is answered twice, the
+  answer is a table, not a second copy of the list.
+- **A `Kind` matched on `err->message` is right only where it was written.**
+  Three arms of `http_kind_for` compared English substrings (`"Connection
+  refused"`, `"Name or service not known"`), which on a Spanish desktop match
+  nothing -- and a `Kind` that is wrong only on some machines is worse than
+  `Error`, because it looks reliable. The domain and the code say the same
+  thing in every locale. The same function also called every error in soup's
+  domain a `Redirect`, `ftp://` included.
+- **Changing what a list tracks without changing every writer leaves the
+  stale one.** `http_servers` went from *running* to *live* when the
+  finalizer took over disconnecting, but `Start` kept its own prepend: every
+  start registered twice, the finalizer removed once, and teardown walked a
+  dangling pointer -- straight into `remove_auth_domain` on garbage, which
+  reads as a bug in auth. The one writer nobody re-read is the regression to
+  watch for.

@@ -1,0 +1,52 @@
+{
+  "format": "bintana-form/1",
+  "class": "JokesForm",
+  "properties": {
+    "Text": "Jokes",
+    "Width": 480,
+    "Height": 364
+  },
+  "children": [
+    {
+      "type": "ComboBox",
+      "name": "CmbCategory",
+      "properties": { "Height": 34, "Width": 180, "X": 12, "Y": 12 }
+    },
+    {
+      "type": "CheckButton",
+      "name": "ChkSafe",
+      "properties": { "Active": true, "Height": 34, "Text": "Safe mode", "Width": 130, "X": 200, "Y": 12 }
+    },
+    {
+      "type": "Button",
+      "name": "BtnJoke",
+      "properties": { "Default": true, "HAlign": "End", "Height": 34, "Text": "Again", "Width": 88, "X": 380, "Y": 12 }
+    },
+    {
+      "type": "Label",
+      "name": "LblJoke",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 248,
+        "VAlign": "Fill",
+        "Width": 456,
+        "Wrap": true,
+        "X": 12,
+        "Y": 58
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblStatus",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 22,
+        "Style": "dim-label",
+        "VAlign": "End",
+        "Width": 456,
+        "X": 12,
+        "Y": 330
+      }
+    }
+  ]
+}

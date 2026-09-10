@@ -30,6 +30,10 @@ pkg_check_modules(SQLITE3 IMPORTED_TARGET sqlite3)
 # the terminal; asking for the journal then says so instead of pretending.
 pkg_check_modules(SYSTEMD IMPORTED_TARGET libsystemd)
 
+# Optional: libsoup is what Http speaks. Without it the runtime still builds
+# and Http exists, saying which package is missing when called.
+pkg_check_modules(SOUP IMPORTED_TARGET libsoup-3.0)
+
 # ---------------------------------------------------------------- QuickJS ---
 # quickjs-ng, vendored under vendor/quickjs (see vendor/quickjs/VERSION).
 add_library(quickjs STATIC
@@ -84,6 +88,7 @@ add_executable(bintana
     runtime/src/bta_decimal.c
     runtime/src/bta_day.c
     runtime/src/bta_form.c
+    runtime/src/bta_http.c
     ${PRELUDE_H}
 )
 target_include_directories(bintana PRIVATE
@@ -103,6 +108,14 @@ endif()
 if(SYSTEMD_FOUND)
     target_link_libraries(bintana PRIVATE PkgConfig::SYSTEMD)
     target_compile_definitions(bintana PRIVATE BTA_HAVE_JOURNAL=1)
+endif()
+
+if(SOUP_FOUND)
+    target_link_libraries(bintana PRIVATE PkgConfig::SOUP)
+    target_compile_definitions(bintana PRIVATE BTA_HAVE_SOUP=1)
+    message(STATUS "libsoup ${SOUP_VERSION}: Http is available")
+else()
+    message(STATUS "no libsoup: Http will say so when called")
 endif()
 target_compile_definitions(bintana PRIVATE BTA_VERSION_STRING="${PROJECT_VERSION}")
 target_compile_options(bintana PRIVATE -Wall -Wextra -Wno-unused-parameter)
