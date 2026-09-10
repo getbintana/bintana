@@ -1,0 +1,167 @@
+{
+  "format": "bintana-form/1",
+  "class": "VideoForm",
+  "properties": {
+    "Height": 430,
+    "Text": "Video player",
+    "Width": 640
+  },
+  "children": [
+    {
+      "type": "Video",
+      "name": "Vid",
+      "properties": {
+        "Fit": "Contain",
+        "Height": 300,
+        "Width": 400,
+        "X": 16,
+        "Y": 16
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblClip",
+      "properties": {
+        "Height": 24,
+        "Text": "Clip:",
+        "Width": 190,
+        "X": 432,
+        "Y": 16
+      }
+    },
+    {
+      "type": "ComboBox",
+      "name": "CmbClips",
+      "properties": {
+        "Height": 34,
+        "Width": 190,
+        "X": 432,
+        "Y": 42
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnPlay",
+      "properties": {
+        "Height": 34,
+        "Text": "Play",
+        "Width": 90,
+        "X": 432,
+        "Y": 90
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnPause",
+      "properties": {
+        "Height": 34,
+        "Text": "Pause",
+        "Width": 92,
+        "X": 530,
+        "Y": 90
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnStop",
+      "properties": {
+        "Height": 34,
+        "Text": "Stop",
+        "Width": 190,
+        "X": 432,
+        "Y": 132
+      }
+    },
+    {
+      "type": "CheckButton",
+      "name": "ChkLoop",
+      "properties": {
+        "Height": 28,
+        "Text": "Loop",
+        "Width": 190,
+        "X": 432,
+        "Y": 176
+      }
+    },
+    {
+      "type": "CheckButton",
+      "name": "ChkMuted",
+      "properties": {
+        "Height": 28,
+        "Text": "Muted",
+        "Width": 190,
+        "X": 432,
+        "Y": 204
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblVol",
+      "properties": {
+        "Height": 24,
+        "Text": "Volume",
+        "Width": 190,
+        "X": 432,
+        "Y": 238
+      }
+    },
+    {
+      "type": "Slider",
+      "name": "SldVol",
+      "properties": {
+        "Height": 36,
+        "Max": 100,
+        "Min": 0,
+        "Value": 100,
+        "Width": 190,
+        "X": 432,
+        "Y": 262
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnAudio",
+      "properties": {
+        "Height": 34,
+        "Text": "Play audio cue",
+        "Width": 190,
+        "X": 432,
+        "Y": 312
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblPos",
+      "properties": {
+        "Height": 24,
+        "Text": "0.0 / --",
+        "Width": 200,
+        "X": 16,
+        "Y": 324
+      }
+    },
+    {
+      "type": "ProgressBar",
+      "name": "PrgBuf",
+      "properties": {
+        "Height": 24,
+        "ShowText": true,
+        "Visible": false,
+        "Width": 200,
+        "X": 216,
+        "Y": 324
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblStatus",
+      "properties": {
+        "Height": 60,
+        "Width": 606,
+        "Wrap": true,
+        "X": 16,
+        "Y": 352
+      }
+    }
+  ]
+}

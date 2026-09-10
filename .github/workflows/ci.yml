@@ -23,7 +23,17 @@ jobs:
             build-essential cmake pkg-config \
             libgtk-4-dev libgtksourceview-5-dev libvte-2.91-gtk4-dev \
             libsqlite3-dev libsoup-3.0-dev \
+            libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+            gstreamer1.0-tools \
             xvfb xdotool desktop-file-utils
+
+          # The GTK4 video sink lives in gst-plugins-rs, which not every
+          # release packages -- and a Video is the only thing that needs it, so
+          # a runner without it skips the video half of the media test and runs
+          # the audio one. Its own line, and allowed to fail, because an
+          # unavailable package in the list above would abort the whole install.
+          sudo apt-get install -y --no-install-recommends gstreamer1.0-gtk4 \
+            || echo "no gstreamer1.0-gtk4: the media test will skip the video half"
 
       - name: Build
         run: |
@@ -60,7 +70,11 @@ jobs:
             build-essential cmake pkg-config clang \
             libgtk-4-dev libgtksourceview-5-dev libvte-2.91-gtk4-dev \
             libsqlite3-dev libsoup-3.0-dev \
+            libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+            gstreamer1.0-tools \
             xvfb
+          sudo apt-get install -y --no-install-recommends gstreamer1.0-gtk4 \
+            || echo "no gstreamer1.0-gtk4: the media test will skip the video half"
 
       # What this catches is what a machine catches and a person does not: both
       # memory bugs this codebase has had were use-after-free that crashed on

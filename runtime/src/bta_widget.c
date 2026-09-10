@@ -3519,6 +3519,7 @@ BtaClass *bta_class_table(int *count)
         bta_terminal_register();
         bta_tree_register();
         bta_table_register();
+        bta_media_register();
     }
     *count = (int)class_rows->len;
     return (BtaClass *)class_rows->data;

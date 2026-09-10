@@ -1,0 +1,7 @@
+{
+  "name": "Video player",
+  "version": "1.0",
+  "description": "Video and AudioPlayer against lorem.video: clips, a live HLS stream, and an audio-only cue",
+  "startup": "VideoForm",
+  "sources": ["VideoForm.js"]
+}

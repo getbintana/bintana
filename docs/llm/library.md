@@ -889,6 +889,62 @@ and returning to answer later gets the `500`. `examples/serve` is a static file
 server in ten lines of handler; it carries no `".."` refusal because soup
 normalizes dot-segments before the handler runs.
 
+## AudioPlayer
+
+Sound with no window: an alarm cue, a stream listened to, the audio half of
+anything [`Video`](controls.md#video) shows. One playbin3 per player, with the
+video branch switched off and never decoded — several may play at once.
+
+```js
+const cue = new AudioPlayer();
+cue.Uri = "done.ogg";
+cue.OnEnded = () => print("ding");
+cue.OnError = (msg) => print(`no cue: ${msg}`);
+cue.Play();
+```
+
+| | |
+|---|---|
+| `new AudioPlayer()` | a player of its own. Takes no arguments; everything below is assigned |
+| `Uri` | what to play: a URI (`file://`, `http(s)://`, `rtsp://`) or a plain local path, which is turned into one |
+| `User` | RTSP digest identity, applied to the source the playbin builds. `""` for none |
+| `Password` | the secret beside it. **Write-only**: reads back `""`, so it is never written down anywhere |
+| `Latency` | ms the RTSP jitterbuffer may hold. Default `2000`, the source's own. Read when the source is built, so a change lands on the next `Play` from a stopped player |
+| `Volume` | `0`…`1`. Default `1` |
+| `Muted` | silence without touching `Volume` |
+| `Loop` | reseek instead of ending. A live stream cannot seek, so it ends anyway |
+| `Buffering` (ro) | how full the buffer is, `0`…`100`; `100` is nothing to wait for, less is a stream refilling |
+| `Position` (ro) | seconds in, `0` when unknown — which includes playing live |
+| `Duration` (ro) | seconds long, `-1` while unknown — which is always, on a live stream |
+| `Playing` (ro) | whether it is going: what `Play` asked for, until `Pause`, `Stop`, the end or an error |
+| `Seekable` (ro) | whether `Seek` has anything to work on |
+| `OnEnded` | assign `() => …`; `null` takes it off. Anything else is refused where assigned, not silently never called |
+| `OnError` | assign `(message, kind) => …`. `message` names the player and the clip; `kind` is one of `NotFound`, `NotAuthorized`, `Unreachable`, `Decode`, `Error` |
+| `Play()` | plays; replays from the top after the end. Refused with no `Uri` |
+| `Pause()` | holds the position |
+| `Stop()` | parks it: back to no state, position forgotten |
+| `Seek(seconds)` | jumps there. Refused on a stream that cannot seek |
+
+**A cue nobody keeps is still heard.** A playing player holds itself up, so
+the shape a confirmation sound actually has works:
+
+```js
+function ding() {                        // nothing keeps the player
+    const a = new AudioPlayer();
+    a.Uri = "done.ogg";
+    a.Play();
+}
+```
+
+It is released at the end, at an error, or at `Pause`/`Stop` — so a paused
+player is a deliberate hold that keeps nothing alive, and a console project
+that returned from `main` with one playing stays for its end or its error
+(with `Loop`, that is until something stops it). As with `Video`, `Play`
+replays from the top after the end, setting `Uri` stops whatever was playing,
+a stream that runs its buffer dry is held until it refills (`Buffering` says
+how far along that is), and GStreamer is optional at build time — without it the constructor says which package is
+missing.
+
 ## Others
 
 `print(...)` — a line to stdout, arguments joined with a space.

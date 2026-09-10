@@ -540,6 +540,7 @@ did nothing:
 | `TableView` | `scrolledwindow` | `> columnview > row` |
 | `TextEditor`, `SourceEditor` | `scrolledwindow` | `> textview` |
 | `Terminal` | `scrolledwindow` | `> vte-terminal` |
+| `Video` | `picture` | the paintable GStreamer draws into |
 | `DrawingArea` | `widget` | nothing: what is inside it is ink, not widgets |
 | `Flow` | `scrolledwindow` | `> viewport > flowbox > flowboxchild` |
 | `Scroller` | `scrolledwindow` | `> viewport > fixed` |
@@ -1968,6 +1969,83 @@ Two things about how the click is read, both of which cost time:
 A button event's position is in the surface's coordinates and what VTE checks a
 match at are the terminal's, so the point is translated through
 `gtk_widget_compute_point`.
+
+### Video
+
+A `GtkPicture` whose paintable is GStreamer's, not a file's: one playbin3 per
+control, with the `gtk4paintablesink` as its video sink. `GtkVideo` was refused
+for this -- `GtkMediaFile` takes a `GFile` and nothing else, so a camera asking
+for digest auth has nothing to say to it. Sound with no window is `AudioPlayer`,
+the same pipeline with the video branch switched off.
+
+`Uri` takes a URI or a plain path (`file://`, `http(s)://`, `rtsp://`); one
+property for both, so there is nothing to disagree. `User`/`Password` ride the
+playbin's `source-setup` into whatever source it built -- an `rtspsrc` answers
+with its digest challenge, anything without an identity ignores them. A secret
+in the URI works too and loses: it puts the password in every log that prints
+the property. `Password` reads back `""` and is never serialised, for the same
+reason. `Latency` is the `rtspsrc` jitterbuffer in ms (`2000`, the source's
+own); lower it for a live camera, not for a file.
+
+`Play` with no `Uri` is refused, and so is a `Seek` with nowhere to go. `Duration`
+is `-1` while unknown -- which is always on a live stream -- and `Seekable`
+answers once the stream is known rather than with the first frame;
+`SourceWidth`/`SourceHeight` answer later again, with the first decoded frame,
+because that is when the paintable has anything to measure. `Save(path)`
+writes that frame out as a PNG. `Ended` leaves the last frame up (`Pause`, not
+a black `Stop`); `Error` parks instead and carries a sentence and a `kind`
+(`NotFound`, `NotAuthorized`, `Unreachable`, `Decode`, `Error`) so a form can
+tell a password to ask for from a camera to retry. Setting `Uri` stops whatever
+was playing; `Loop` reseeks instead of ending, which a live stream refuses by
+ending anyway.
+
+`Playing` is what `Play` asked for -- cleared by `Pause`, `Stop`, the end and
+an error -- and not a sample of the pipeline's state. Sampling was wrong twice
+over: a flushing seek (which is what `Loop` is) and a network stream refilling
+its buffer both read back as not-PLAYING, and the console loop asks this to
+know whether anything is still owed an answer, so a looping cue ended the
+program at a loop boundary at random. Buffering is handled rather than
+watched: a stream that runs its queue dry is held at PAUSED until it refills,
+which playbin leaves to whoever owns the pipeline, and a live source is left
+alone because `NO_PREROLL` said it has nothing to catch up on. `Buffering`
+(`0`…`100`) is that state made visible, polled beside `Position` rather than
+announced -- it changes per cent, several times a second. Measured against a
+local server throttled to just above the clip's bitrate: it read 5, 38, 80,
+then 100, and playback started at 100 and ran to the end, with `Playing` true
+throughout because that is what `Play` asked for.
+
+Five things learnt plumbing it, each measured rather than argued:
+
+- **The sink is owned, not borrowed.** The playbin takes the video sink into one
+  of its own bins, sinking the floating reference the factory gave -- the
+  `gst_bin_add` ownership. An `unref` after the set destroys the sink while the
+  playbin still points at it, and its finalizer then touches freed memory (two
+  `GStreamer-CRITICAL`s at teardown, found with a three-variant probe). The
+  tutorial pattern of set-then-unref is the bug here.
+- **Teardown waits for NULL, capped.** The state change is async, and unref-ing
+  with it still in flight finalises the playbin under its own feet. The wait is
+  two seconds so a wedged network source cannot hold teardown hostage.
+- **A password in `user:pw@host` form reaches `rtspsrc` too**, but it stays in
+  the URI every log prints. `User`/`Password` exist so it does not have to.
+  They are read on GStreamer's thread (`source-setup` runs wherever the source
+  was built, and again on a redirect), so the two strings are behind a mutex:
+  a setter freeing the old one is otherwise a free under a reader.
+- **`gst_init` costs 6 ms warm and 573 ms cold**, so it happens on first use
+  and not at startup. Every program in the tree was paying it, the IDE
+  included, for a feature most of them never touch.
+- **A build without the engine must still draw a form.** The designer reads
+  every value of the selected control and the serialiser reads them all again
+  to save, so a getter that threw for want of GStreamer meant a runtime that
+  could not lay out -- or even load -- a form with a `Video` in it. What
+  refuses without the engine is the verbs.
+
+GStreamer is optional at build time, like `Http`'s libsoup and `Database`'s
+sqlite: without it the control still places (a `GtkPicture` with nothing in it),
+every property still answers and is still serialised, and the verbs refuse:
+`Play` and `Seek` name the package, `Save` says what it always says when
+nothing has been decoded, and `Pause`/`Stop` have nothing to stop. The frames need one plugin beyond the base
+ones -- the GTK4 sink from gst-plugins-rs -- and where it is missing `Play`
+says which element it is, while `AudioPlayer` plays on.
 
 ## Containers
 

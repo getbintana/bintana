@@ -80,6 +80,7 @@ const GLOBAL_TABLES = {
     multipart_props: "Http",
     http_server_props: "Http Server",
     http_request_props: "Http Server",
+    audioplayer_props: "AudioPlayer",
     /*
      * These two are documented with the **forms** and not with the globals,
      * which is where they belong: a menu item and a command are parts of a

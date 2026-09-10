@@ -37,12 +37,13 @@ LANGUAGE=es ./build/bintana ide examples/hello    # the IDE itself, from ide/po/
 ./build/bintana examples/drawing     # DrawingArea: a sparkline, a gauge and a pie — and what a frame really costs
 ./build/bintana examples/charts      # Charts from lib/charts: five shapes, two axes, and 21 600 readings you can zoom into
 ./build/bintana examples/report      # Report from lib/report: the Crystal Reports bands, grouped and totalled, out as one PDF
+./build/bintana examples/video       # Video + AudioPlayer: clips from lorem.video, a live HLS stream, and an audio-only cue
 ./build/bintana examples/jokes       # Http on a window: async, and a Stop that means it
 ./build/bintana examples/http        # Http from the console: the blocking spelling, against a public API
 ./build/bintana examples/session     # Http with cookies and Basic auth: a login the next request remembers
 ./build/bintana examples/serve       # Http.Server: a static file server on :8080. Runs until Ctrl-C
 LANGUAGE=es ./build/bintana examples/agenda   # ...and the long date the catalogue rewrites
-HEADLESS=1 ./tests/run.sh         # 4723 assertions in 4 projects, on a virtual display
+HEADLESS=1 ./tests/run.sh         # 4799 assertions in 4 projects, on a virtual display
 ./tests/run.sh                    # the same, on *your* screen: it only falls back to
                                   # Xvfb when there is no DISPLAY, so on a desktop this
                                   # opens three windows and takes the keyboard
@@ -300,7 +301,7 @@ Widget ├── Control ── Label, Button, Image, TextBox, CheckButton,
        │              ProgressBar, DatePicker, Calendar, ColorButton,
        │              FontButton, TreeView, TableView, Terminal,
        │              Editor ── TextEditor, SourceEditor,
-       │              DrawingArea
+       │              DrawingArea, Video
        └── Container ── Form, Panel, Grid, Frame, Split, Notebook, Switcher,
                         Overlay, RowList, Scroller, Flow
 ```
@@ -423,6 +424,7 @@ before reaching for a screenshot.
 | `SourceEditor` | the same, plus what a source file needs: `Language`, `Theme`, `ShowLineNumbers`, `ShowMarks`, `Completion`, `CompletionTitle`, `Mark`/`Unmark`/`Marks`/`ClearMarks` | `Change`, `Cursor`, `Complete` |
 | ...searching (a `SourceEditor`'s) | `Search(text, {CaseSensitive, WholeWord, Regex})` → how many, `Matches` (ro), `MatchIndex` (ro), `FindNext()`, `FindPrevious()`, `Replace(with)`, `ReplaceAll(with)` | |
 | `Terminal` | `Text` (ro), `Running` (ro), `ScrollbackLines`, `FontScale`, `LinkPattern`, `Run(argv,cwd)`, `Stop()`, `Kill()`, `Feed(text)`, `Clear()` | `Exit(code)`, `Link(text)` |
+| `Video` | a clip that plays, in the window: `Uri` (a URI or a plain path), `User`/`Password` (RTSP digest; the secret never reads back), `Latency`, `Volume`, `Muted`, `Loop`, `Fit`, `Position`/`Duration`/`Playing`/`Seekable`/`Buffering`/`SourceWidth`/`SourceHeight` (ro), `Play()`, `Pause()`, `Stop()`, `Seek(s)`, `Save(path)` — sound with no window is `AudioPlayer` (see §7) | `Ended()`, `Error(message, kind)` |
 | `DrawingArea` | a surface to draw on: `Redraw()`, `Dump()`, `Save(path,[w],[h])`, `SavePdf(path,w,h,[pages],[before])` — the `Draw` event hands over a `Painter` | `Draw` |
 
 **There are two editors and they are one class apart.** `TextEditor` is a
@@ -1235,6 +1237,7 @@ its `image-missing`) or ship an SVG that renders to nothing.
 | `Timer` | `Timer.After(ms, fn)`, `Timer.Every(ms, fn)`; `new Timer(delay, tick)`: `Delay`, `Tick`, `Enabled`, `Start`, `Stop`, `Once` |
 | `Logger` | `Debug`, `Info`, `Warning`, `Error`; `Level`, `Target`, `Handler` |
 | `Http` | a client (`Client`, `Get`/`Post`/…, `GetWait`/…, always `Bytes` bodies) and a server (`Server`, `Request`, `Answer`) over libsoup3 |
+| `AudioPlayer` | `new AudioPlayer()`: sound with no window — `Uri`, `User`/`Password` (RTSP digest), `Latency`, `Volume`, `Muted`, `Loop`, `Position`/`Duration`/`Playing`/`Seekable`/`Buffering` (ro), `OnEnded`/`OnError`, `Play()`, `Pause()`, `Stop()`, `Seek(s)` — over GStreamer, like `Video`, and a cue nobody keeps is still heard to its end |
 | `Multipart` | `new Multipart()`: `Field`, `File`, `Part`, `Length` — a file upload as a value, for `Http` in either direction |
 | `Record` / `Field` | the shape data has, declared once — see below |
 | | `print`, `BTA_VERSION` |

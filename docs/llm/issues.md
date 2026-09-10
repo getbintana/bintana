@@ -179,7 +179,7 @@ needed and what it did instead.
 | Packaging an application without the project tree | root [`README`](../../README.md#what-is-next) |
 | No editable / autocompleting combo | [ISSUE-editable-combo](../issues/ISSUE-editable-combo.md) |
 | No printer — no dialog, no copies, no preview, no control laid onto a page (a PDF **is** written: `SavePdf`) | [ISSUE-printing](../issues/ISSUE-printing.md) |
-| No audio or video | [ISSUE-multimedia](../issues/ISSUE-multimedia.md) |
+| A control that cannot say whether it can run on this build — `Video` without GStreamer (or without the GTK4 sink) is still offered by the palette | [ISSUE-video-availability](../issues/ISSUE-video-availability.md) |
 
 ## One more thing
 

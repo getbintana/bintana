@@ -498,6 +498,19 @@ void  bta_http_init(JSContext *ctx, JSValue global);
 void  bta_http_cleanup(void);   /* cancels requests still in flight */
 guint bta_http_pending(void);   /* requests owed an answer */
 
+/* --- media: Video and AudioPlayer --------------------------------------
+ *
+ * Playback over GStreamer, one playbin3 per player. The Video widget shows
+ * its frames through the gtk4paintablesink in a GtkPicture; an AudioPlayer
+ * is the same pipeline with the video branch switched off and no window.
+ * Optional at build time (BTA_HAVE_GST); without it both exist and say which
+ * package is missing when asked to play -- the bta_sqlite.c mold.
+ */
+void  bta_media_register(void); /* the Video widget row */
+void  bta_media_init(JSContext *ctx, JSValue global);
+void  bta_media_cleanup(void);  /* stops players still going */
+guint bta_media_pending(void);  /* players owed an answer (console loop) */
+
 /* --- File / Dir / Exec -------------------------------------------------- */
 void bta_sys_init(JSContext *ctx, JSValue global);
 void bta_sys_cleanup(void);   /* cancels children still running */

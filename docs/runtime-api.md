@@ -2264,6 +2264,57 @@ and statuses. It carries no `".."` refusal, and says why -- soup normalizes a
 request's dot-segments before the handler runs, so `/a/../../x` arrives as
 `/x` and a guard for it would be dead code teaching the wrong lesson.
 
+## AudioPlayer
+
+Sound with no window, over GStreamer -- the `Video` widget's engine without
+the widget. One playbin3 per player, with the video branch switched off and
+never decoded, so several may play at once:
+
+```js
+const cue = new AudioPlayer();
+cue.Uri = "done.ogg";
+cue.OnEnded = () => print("ding");
+cue.OnError = (msg) => print(`no cue: ${msg}`);
+cue.Play();
+```
+
+| | |
+|---|---|
+| `new AudioPlayer()` | takes no arguments; everything is assigned, like `Video` without the frame |
+| `Uri`, `User`, `Password`, `Latency`, `Volume`, `Muted`, `Loop` | as `Video`'s: a URI or a plain path, RTSP digest identity via `source-setup`, a write-only secret, the `rtspsrc` jitterbuffer in ms (`2000`), `0…1`, silence, reseek |
+| `Position`, `Duration`, `Playing`, `Seekable`, `Buffering` | read-only facts about the stream; `Duration -1` is live or unknown, and `Buffering` is `0`…`100` with `100` meaning nothing to wait for |
+| `OnEnded`, `OnError(message, kind)` | assign a function, `null` takes it off; anything else is refused where assigned. The DOM's `onended` spelling, since a player outlives any one `Play` and per-call callbacks would be the wrong shape |
+| `Play()`, `Pause()`, `Stop()`, `Seek(seconds)` | as `Video`'s: replay from the top, hold, park, jump (refused where there is nowhere to go) |
+
+**A playing player holds a reference to its own JS object**, released at the
+end, at an error, or at `Pause`/`Stop`. Without it a cue was a local variable
+and the shape a confirmation sound has -- `function ding() { const a = new
+AudioPlayer(); a.Uri = "done.ogg"; a.Play(); }` -- played *nothing*: the
+refcount hit zero on the way out and the finalizer stopped the pipeline. The
+reference is deliberately invisible to `gc_mark`: it is the pipeline's claim on
+the object rather than one the object owns, and a cycle detector that could see
+it would collect exactly what it protects. It is also what makes `OnEnded`
+safe to write anything in -- dropping the last reference from inside the
+handler used to free the struct under the callback that was emitting.
+
+Honest limits, shared with `Video`: `Seek` on a live stream is refused rather
+than pretended; `Position` reads `0` when unknown, which includes playing live;
+`Playing` is what `Play` asked for and not a sample of the pipeline, which
+reads as stopped during a loop's flushing seek and while a network stream
+refills; a paused player is a deliberate hold and keeps nothing alive.
+Handlers are `Dup`'d and reported via `gc_mark` (a player whose `OnEnded`
+closes over the player is the `Http` client's cycle again), and duplicated
+again for the length of a call, so a handler may reassign itself.
+`Error`/`OnError` carry a `kind` alongside the sentence -- `NotFound`,
+`NotAuthorized`, `Unreachable`, `Decode`, `Error`, the `Http` client's
+vocabulary and for the same reason. GStreamer is optional at build time
+(`BTA_HAVE_GST`); without it the constructor says which package is missing,
+the `Http`/`Database` mold, while a `Video`'s properties keep answering so the
+designer and the serialiser do not depend on the engine. `gst_init` runs on
+first use and not at startup: it reads the plugin registry, which is 6 ms warm
+and 573 ms cold, and no program should pay that for a feature it never calls.
+`examples/video` plays an audio-only clip from lorem.video through one.
+
 ## Others
 
 - `print(...)` — a line to stdout. What a program that talks to a terminal

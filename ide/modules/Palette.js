@@ -48,7 +48,7 @@ const PALETTE_TABS = [
                               "DatePicker", "Calendar", "ColorButton", "FontButton",
                               "ProgressBar", "LevelBar", "Spinner"] },
     { name: "Views",  types: ["TreeView", "TableView", "TextEditor", "SourceEditor",
-                              "Terminal", "RowList", "Flow", "DrawingArea"] },
+                              "Terminal", "RowList", "Flow", "DrawingArea", "Video"] },
     { name: "Boxes",  types: ["Panel", "Grid", "Frame", "Expander", "Scroller"] },
     { name: "Split",  types: ["Split", "Notebook", "Switcher", "Overlay"] },
 ];
@@ -155,6 +155,14 @@ const PALETTE_ICON = {
      * it -- `applications-graphics-symbolic` is a drawing *application*, and on
      * this desktop it is one of the ones that resolve and draw nothing. */
     DrawingArea: ["bta-drawing-symbolic"],
+    /* Motion rather than a moment: a strip of film, which is what the theme
+     * draws for anything video. `video-display-symbolic` was first here and
+     * lost: it is a *monitor* -- the icon a display-settings panel uses -- so
+     * on the palette it read as a screen and not as a clip.
+     * `video-x-generic-symbolic` is in Adwaita and on this desktop alike, with
+     * ours (a frame with a play triangle) behind it like every other first
+     * name here. */
+    Video: ["video-x-generic-symbolic", "bta-video-symbolic"],
 
     /* --- the containers ---------------------------------------------------- */
     /* A box is not a grid: `view-grid-symbolic` was first on both of these and
@@ -268,6 +276,9 @@ const DEFAULT_SIZE = {
     TextEditor:   [280, 110],
     SourceEditor: [280, 160],
     Terminal:     [320, 180],
+    /* Room for 16:9 footage with a little chrome to spare, like the terminal:
+     * a video narrower than this is the first thing anybody widens. */
+    Video:        [320, 180],
 };
 
 Ide.Palette = class Palette {

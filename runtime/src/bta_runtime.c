@@ -899,6 +899,7 @@ static void install_globals(BtaApp *app)
     bta_database_init(ctx, global);
     bta_sqlite_init(ctx, global);
     bta_http_init(ctx, global);
+    bta_media_init(ctx, global);
 
     bta_widgets_init(ctx, global);
     bta_menu_init(ctx);
@@ -1506,6 +1507,7 @@ void bta_app_free(BtaApp *app)
         g_hash_table_unref(app->forms);
     bta_sys_cleanup();
     bta_http_cleanup();
+    bta_media_cleanup();
     bta_locale_cleanup();
     bta_widgets_cleanup(app->ctx);
     JS_FreeContext(app->ctx);
@@ -1629,7 +1631,7 @@ static gboolean console_idle(gpointer user_data)
 {
     BtaApp *app = user_data;
 
-    if (bta_sys_pending() + bta_http_pending() > 0)
+    if (bta_sys_pending() + bta_http_pending() + bta_media_pending() > 0)
         return G_SOURCE_CONTINUE;
 
     g_main_loop_quit(app->loop);
@@ -1672,7 +1674,7 @@ static int run_console(BtaApp *app)
      * noticing 20 ms late costs an exit 20 ms later.  It cannot end a program
      * early -- while a callback runs, the loop is not dispatching this.
      */
-    if (!app->quitting && bta_sys_pending() + bta_http_pending() > 0) {
+    if (!app->quitting && bta_sys_pending() + bta_http_pending() + bta_media_pending() > 0) {
         app->loop  = g_main_loop_new(NULL, FALSE);
         guint tick = g_timeout_add(20, console_idle, app);
 

@@ -1,8 +1,8 @@
 # Controls
 
 **This is the complete surface, not a selection.** Every property, method and
-event of every class is below — 362 rows, covering 199 distinct members and 29
-events across 40 classes. If something is not here, the runtime does not have it,
+event of every class is below — 384 rows, covering 217 distinct members and 31
+events across 41 classes. If something is not here, the runtime does not have it,
 and you should not have to open the project tree to find that out.
 
 It is generated from the runtime and checked against it, which is what makes that
@@ -34,7 +34,7 @@ Widget                            (abstract)
 │   ├── ToggleButton  Picture  Spinner  LinkButton  LevelBar  ProgressBar
 │   ├── ListBox  ComboBox  SpinBox  Slider  DatePicker  Calendar  ColorButton
 │   ├── FontButton
-│   ├── TreeView  TableView  Terminal  DrawingArea
+│   ├── TreeView  TableView  Terminal  DrawingArea  Video
 │   └── Editor  (abstract)
 │       ├── TextEditor      a plain GtkTextView: a note, a log, observations
 │       └── SourceEditor    GtkSourceView: languages, gutter, search, marks
@@ -53,7 +53,7 @@ are what a project's own classes extend.
 
 **Inherited by everything:** [`Widget`](#widget--inherited-by-everything) · [`Container`](#container--inherited-by-every-container)
 
-**Controls:** [`Label`](#label) · [`Button`](#button) · [`ToggleButton`](#togglebutton) · [`CheckButton`](#checkbutton) · [`Switch`](#switch) · [`Spinner`](#spinner) · [`Separator`](#separator) · [`LinkButton`](#linkbutton) · [`Image`](#image) · [`Picture`](#picture) · [`TextBox`](#textbox) · [`SpinBox`](#spinbox) · [`Slider`](#slider) · [`ProgressBar`](#progressbar) · [`LevelBar`](#levelbar) · [`DatePicker`](#datepicker) · [`Calendar`](#calendar) · [`ColorButton`](#colorbutton) · [`FontButton`](#fontbutton) · [`ListBox`](#listbox) · [`ComboBox`](#combobox) · [`TreeView`](#treeview) · [`TableView`](#tableview) · [`TextEditor`](#texteditor) · [`SourceEditor`](#sourceeditor) · [`Terminal`](#terminal) · [`DrawingArea`](#drawingarea)
+**Controls:** [`Label`](#label) · [`Button`](#button) · [`ToggleButton`](#togglebutton) · [`CheckButton`](#checkbutton) · [`Switch`](#switch) · [`Spinner`](#spinner) · [`Separator`](#separator) · [`LinkButton`](#linkbutton) · [`Image`](#image) · [`Picture`](#picture) · [`Video`](#video) · [`TextBox`](#textbox) · [`SpinBox`](#spinbox) · [`Slider`](#slider) · [`ProgressBar`](#progressbar) · [`LevelBar`](#levelbar) · [`DatePicker`](#datepicker) · [`Calendar`](#calendar) · [`ColorButton`](#colorbutton) · [`FontButton`](#fontbutton) · [`ListBox`](#listbox) · [`ComboBox`](#combobox) · [`TreeView`](#treeview) · [`TableView`](#tableview) · [`TextEditor`](#texteditor) · [`SourceEditor`](#sourceeditor) · [`Terminal`](#terminal) · [`DrawingArea`](#drawingarea)
 
 **Containers:** [`Panel`](#panel) · [`Frame`](#frame) · [`Expander`](#expander) · [`Grid`](#grid) · [`Flow`](#flow) · [`Scroller`](#scroller) · [`RowList`](#rowlist) · [`Overlay`](#overlay) · [`Split`](#split) · [`Notebook`](#notebook) · [`Switcher`](#switcher) · [`Form`](#form) · [`Component`](#component)
 
@@ -836,6 +836,56 @@ VTE with a real pty, so colours, prompts and interactive input all work. Use it 
 | `Stop()` | SIGTERM to the child's process group |
 | **event** `Exit(code)` | the terminal's child ended |
 | **event** `Link(text)` | text matching `LinkPattern` was clicked |
+
+## Video
+
+A clip that plays, in the window. One playbin3 per control, shown through the
+paintable sink in a `GtkPicture` — which is why it styles as one (see
+`Picture`). Audio without a window is [`AudioPlayer`](library.md#audioplayer).
+
+| Member | |
+|---|---|
+| `Uri` | what to play: a URI (`file://`, `http(s)://`, `rtsp://`) or a plain local path, which is turned into one. One property for both, so there is nothing to disagree |
+| `User` | RTSP digest identity, applied to the source the playbin builds. `""` for none |
+| `Password` | the secret beside it. **Write-only**: it reads back `""` and is never serialised, so no `.form` carries it in clear text |
+| `Latency` | ms the RTSP jitterbuffer may hold. Default `2000`, the source's own. Read when the source is built, so a change lands on the next `Play` from a stopped player |
+| `Volume` | `0`…`1`. Default `1` |
+| `Muted` | silence without touching `Volume` |
+| `Loop` | reseek instead of ending. A live stream cannot seek, so it ends anyway |
+| `Fit` | `Fill` `Contain` `Cover` `ScaleDown`. Default `"Contain"` |
+| `Buffering` (ro) | how full the buffer is, `0`…`100`. `100` is nothing to wait for (a local file never says otherwise); less is a stream refilling, which holds the picture while `Playing` stays true. `ProgressBar.Value`'s range, since that is where a form puts it |
+| `Position` (ro) | seconds in, `0` when unknown — which includes playing live |
+| `Duration` (ro) | seconds long, `-1` while unknown — which is always, on a live stream |
+| `Playing` (ro) | whether it is going: what `Play` asked for, until `Pause`, `Stop`, the end or an error. Not a sample of the pipeline, which reads as stopped mid-loop and mid-rebuffer |
+| `Seekable` (ro) | whether `Seek` has anything to work on. Answered once the stream is known, not with the first frame |
+| `SourceWidth` (ro) | the clip's own width, `0` until a frame has been decoded — `Picture`'s spelling |
+| `SourceHeight` (ro) | the clip's own height |
+| `Play()` | plays; replays from the top after `Ended` |
+| `Pause()` | holds the frame and the position |
+| `Stop()` | parks it: back to no state, position forgotten |
+| `Seek(seconds)` | jumps there. Refused on a stream that cannot seek, naming it |
+| `Save(path)` | the frame on screen, as a PNG — `DrawingArea.Save`'s spelling. Refused before anything has been decoded |
+| **event** `Ended()` | the clip ran out |
+| **event** `Error(message, kind)` | it failed. `message` names the control and the clip and says why; `kind` is one of `NotFound`, `NotAuthorized`, `Unreachable`, `Decode`, `Error` — a password to ask for and a camera to retry are not the same answer |
+
+`Play` with no `Uri` is refused, and so is a `Seek` with nowhere to go.
+`Ended` leaves the last frame up (`Pause`, not a black `Stop`), and `Error`
+parks instead. Setting `Uri` stops whatever was playing. A stream that runs
+its buffer dry is held until it refills rather than left to stutter, and
+`Buffering` is what says so — poll it beside `Position`, on the same `Timer`
+(`examples/video` puts it in a bar that is only there while it is filling). A
+live source is left alone: it has nothing to catch up on.
+
+GStreamer is optional at build time. Without it the *verbs* refuse — `Play`
+and `Seek` name the package, `Save` says there is no frame (which without an
+engine there never is), and `Pause`/`Stop` have nothing to stop and do
+nothing (`Buffering` answers `100`, since nothing is ever waited for) — while
+every property above still answers,
+because a `.form` assigns them and the designer reads them back: a runtime
+that cannot play a clip is still one a form with a `Video` in it can be drawn,
+loaded and saved in. The frames themselves need GStreamer's GTK4 sink
+(gst-plugins-rs); where only the base plugins are installed, `Play` says which
+element is missing and `AudioPlayer` still works.
 
 ---
 

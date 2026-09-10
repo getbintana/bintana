@@ -365,7 +365,7 @@ const TESTS = [
      * the note below. */
     "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "FormMargin", "HideOnClose", "PointerEvents", "Field", "Separator", "TableView", "TableTree", "TableOnDemand", "TableSort", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
-    "Expand", "Spacing", "Scrolling", "FileInfo", "FileWatch", "Picture", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorMarks", "Search", "Tree", "TreeIcons", "TreeExpand",
+    "Expand", "Spacing", "Scrolling", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorMarks", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
     "ContextMenu", "Combo", "Spin", "Focus", "Record", "Nested", "Database", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "Date", "Calendar", "Drawing", "Metrics", "Library", "ListMulti", "MenuState",
@@ -405,6 +405,9 @@ const NEEDS = {
     TableOnDemand:  ["Exec"],
     /* Its zoom assertions measure an allocation, which is a frame away. */
     Picture:        ["Exec"],
+    /* Its clips play on later turns of the loop, so the run has to still be
+     * going when EOS and the error arrive. */
+    Media:          ["Exec"],
     /* Its two measurements are a window being laid out, twice. */
     Scrollbars:     ["Exec"],
     /* Its second window has to be shown, closed and shown again. */
@@ -2646,6 +2649,440 @@ class WidgetsForm extends Form {
         });
     }
 
+    /* --- Video and AudioPlayer ----------------------------------------------
+     *
+     * Playback over GStreamer, one playbin3 per player. The Video widget shows
+     * its frames through the gtk4paintablesink in a GtkPicture; an
+     * AudioPlayer is the same pipeline with the video branch off and no
+     * window.
+     *
+     * **What they play is generated, not committed.** A second of test
+     * pattern and a third of a second of silence, made with `gst-launch-1.0`
+     * into a temporary directory -- the TLS certificate's bargain, for the
+     * same two reasons: a fixture nobody can regenerate is a fixture nobody
+     * can change, and a tree with media files in it grows them. No
+     * `gst-launch` skips the parts that need a file; no GTK4 sink skips the
+     * video half and still runs the audio one, which is what a machine with
+     * only GStreamer's base plugins has (CI included).
+     *
+     * A container of its own, per the tab-order trap: what other tests left
+     * in Fixed1 is none of this test's business.
+     */
+    testMedia() {
+        /* Whether there is an engine at all, asked of the one thing that
+         * answers it without a pipeline, a clip or a plugin: the constructor
+         * of an AudioPlayer, which is where a build without GStreamer
+         * refuses. Probing with `Play()` cannot say it -- the refusal for a
+         * player with no Uri and the refusal for a runtime with no GStreamer
+         * are both throws, and a machine with the base plugins but no GTK4
+         * sink throws a third thing. */
+        let hasGst = true;
+        let refusal = "";
+
+        try {
+            new AudioPlayer();
+        } catch (e) {
+            hasGst  = false;
+            refusal = e.message;
+        }
+
+        if (!hasGst) {
+            /*
+             * Without the engine the *verbs* refuse and the properties
+             * answer, which is not a nicety: the designer reads every value
+             * of a selected control and the serialiser reads them all again
+             * to save, so a getter that threw made a runtime with no
+             * GStreamer one that could not draw a form with a Video in it --
+             * or load one, since a declared `Uri` is assigned like any other.
+             */
+            const v = new Video();
+
+            check("the missing package is named", /GStreamer/.test(refusal), refusal);
+            throws("and the audio spelling refuses again", () => { new AudioPlayer(); });
+
+            v.Uri     = "clip.mp4";
+            v.Volume  = 0.5;
+            v.Latency = 300;
+            v.Loop    = true;
+
+            /* With somewhere to go, so what refuses is the engine and not the
+             * missing Uri: the message has to be the one that names the
+             * package. */
+            let said = "";
+
+            try {
+                v.Play();
+            } catch (e) {
+                said = e.message;
+            }
+            check("Play names the package too", /GStreamer/.test(said), said);
+            said = "";
+            try {
+                v.Seek(1);
+            } catch (e) {
+                said = e.message;
+            }
+            check("and so does Seek", /GStreamer/.test(said), said);
+            /* Save refuses for want of a frame, which is the truth here: with
+             * no engine there is never going to be one. */
+            throws("and Save has no frame to write",
+                   () => { v.Save(File.Join(Environment.TempDirectory, "bta-no.png")); });
+            eq("but Uri is kept, so a .form still loads", v.Uri, "clip.mp4");
+            eq("and Volume with it",  v.Volume, 0.5);
+            eq("and Latency",         v.Latency, 300);
+            eq("and Loop",            v.Loop, true);
+            eq("nothing is playing",  v.Playing, false);
+            eq("nothing is seekable", v.Seekable, false);
+            eq("no length either",    v.Duration, -1);
+            eq("and nothing is ever waited for", v.Buffering, 100);
+            eq("and no frame to measure", v.SourceWidth, 0);
+            eq("what it shows is saved", v.Serialize().properties.Uri, "clip.mp4");
+            eq("the control is still placeable",
+               Widget.New("Video").CssNode(), "picture");
+            return;
+        }
+
+        const box = new Panel();
+        this.Fixed1.Add(box);
+        box.Move(0, 0);
+        box.Resize(340, 200);
+
+        const v = new Video();
+        box.Add(v);
+        v.Name = "MediaVid";
+        v.Resize(320, 180);
+
+        eq("a fresh video holds nothing", v.Uri, "");
+        eq("no identity either",          v.User, "");
+        eq("and the password never reads back", v.Password, "");
+        eq("rtspsrc's own jitterbuffer default", v.Latency, 2000);
+        eq("full volume",  v.Volume, 1);
+        eq("unmuted",      v.Muted, false);
+        eq("no loop",      v.Loop, false);
+        eq("letterboxes by default", v.Fit, "Contain");
+        eq("nothing playing",        v.Playing, false);
+        eq("nowhere to be",          v.Position, 0);
+        eq("a live length until something loads", v.Duration, -1);
+        eq("nothing seekable either", v.Seekable, false);
+        eq("nothing to wait for",     v.Buffering, 100);
+        eq("and no frame to measure yet", v.SourceWidth, 0);
+        eq("nor a height",                v.SourceHeight, 0);
+        eq("the event a double click writes", v.EventNames()[0], "Ended");
+        eq("what Fit accepts is published",
+           JSON.stringify(v.PropertyOptions("Fit")),
+           '["Fill","Contain","Cover","ScaleDown"]');
+
+        throws("Play with nowhere to go", () => { v.Play(); });
+        throws("Volume past full",        () => { v.Volume = 2; });
+        throws("Volume in words",         () => { v.Volume = "loud"; });
+        eq("the refused volume did not stick", v.Volume, 1);
+        throws("a negative Latency",      () => { v.Latency = -1; });
+        throws("Fit in words of its own", () => { v.Fit = "Squash"; });
+        throws("Seek with nothing loaded", () => { v.Seek(1); });
+        throws("Save with nothing decoded",
+               () => { v.Save(File.Join(Environment.TempDirectory, "bta-no-frame.png")); });
+
+        v.Fit = "Cover";
+        eq("Fit round-trips", v.Fit, "Cover");
+        v.Fit = "Contain";
+
+        /* Write-only on purpose: a password that read back would be
+         * serialised into the .form in clear text on the next save. */
+        v.Password = "s3cret";
+        check("the secret stays out of the file",
+              !("Password" in v.Serialize().properties),
+              JSON.stringify(v.Serialize().properties));
+
+        /* The declarative half, which is where a Video actually comes from:
+         * a node with the properties a .form would carry, applied by the same
+         * loader, and serialised back to the same thing. */
+        const declared = box.AddNode({
+            type: "Video", name: "MediaDeclared",
+            properties: { Uri: "camera.mp4", Fit: "Cover", Loop: true, Volume: 0.5 },
+        });
+
+        eq("a declared Uri arrives",  declared.Uri, "camera.mp4");
+        eq("a declared Fit with it",  declared.Fit, "Cover");
+        eq("and a declared Loop",     declared.Loop, true);
+        eq("what came from the file goes back to it",
+           JSON.stringify(declared.Serialize().properties),
+           '{"Fit":"Cover","Loop":true,"Uri":"camera.mp4","Volume":0.5}');
+        declared.Delete();
+
+        /*
+         * The clips. Generated once per run into the temporary directory, and
+         * skipped -- never failed -- where there is no gst-launch to make
+         * them with.
+         */
+        const dir = File.Join(Environment.TempDirectory,
+                              `bintana-media-${Environment.ProcessId}`);
+        const clip = File.Join(dir, "short.ogv");
+        const cue  = File.Join(dir, "short.wav");
+        let   made = Application.HasCommand("gst-launch-1.0");
+
+        if (made) {
+            Directory.Make(dir);
+            /* A second of 160x120 Theora in Ogg, and a third of a second of
+             * silence in WAV: both decode with GStreamer's base plugins
+             * alone, which is the point of choosing them. */
+            const video = Exec.Wait(["gst-launch-1.0", "-q",
+                                     "videotestsrc", "num-buffers=30", "!",
+                                     "video/x-raw,width=160,height=120,framerate=30/1", "!",
+                                     "theoraenc", "!", "oggmux", "!",
+                                     "filesink", `location=${clip}`], { Timeout: 30000 });
+            const audio = Exec.Wait(["gst-launch-1.0", "-q",
+                                     "audiotestsrc", "num-buffers=16", "wave=silence", "!",
+                                     "audioconvert", "!", "wavenc", "!",
+                                     "filesink", `location=${cue}`], { Timeout: 30000 });
+
+            made = video.ExitCode === 0 && audio.ExitCode === 0 &&
+                   File.Exists(clip) && File.Exists(cue);
+            if (!made)
+                print(`  (skipping the clips: gst-launch exited ${video.ExitCode}/${audio.ExitCode})`);
+        } else {
+            print("  (skipping the clips: they need gst-launch-1.0 to be made)");
+        }
+
+        if (!made) {
+            v.Delete();
+            this.mediaBadPhase(box);
+            return;
+        }
+
+        v.Uri = clip;
+        eq("a path is taken as a path", v.Uri, clip);
+        eq("what it shows is saved", v.Serialize().properties.Uri, clip);
+
+        /*
+         * A machine with GStreamer's base plugins and no gst-plugins-rs has
+         * no GTK4 sink, so there is nowhere to put the frames -- which is
+         * exactly the shape CI has, and the audio half is unaffected.
+         *
+         * The rule is the invariant rather than the wording: a *throw* out of
+         * Play means the pipeline could not be built (a missing element,
+         * named), and anything that goes wrong while playing arrives as an
+         * Error event instead. So any throw here skips the video half and
+         * says why, whichever element it was.
+         */
+        let started = true;
+
+        try {
+            v.Play();
+        } catch (e) {
+            started = false;
+            print(`  (skipping the video half: ${e.message})`);
+        }
+        if (!started) {
+            eq("a Video that could not start is not playing", v.Playing, false);
+            v.Delete();
+            this.mediaAudioPhase(cue, box);
+            return;
+        }
+
+        this.mediaEnded = 0;
+        eq("Playing is what Play asked for", v.Playing, true);
+        until("...and it learns its length", () => v.Duration > 0, () => {
+            /* Length and seekability arrive once the demuxer has seen the
+             * stream, which is after the first frame -- not with it. */
+            check("it is seekable once it runs", v.Seekable === true,
+                  `seekable=${v.Seekable}`);
+            check("Duration is the clip's length",
+                  v.Duration > 0.5 && v.Duration < 1.5, String(v.Duration));
+            /* A local file never waits for data, so this is the one thing the
+             * suite can say about it without a slow server to play against:
+             * playing does not make it drop. Below 100 was measured by hand,
+             * against a server throttled to just above the bitrate. */
+            eq("a local clip never waits for data", v.Buffering, 100);
+
+            this.mediaFramePhase(v, dir, cue, box);
+        });
+    }
+
+    /*
+     * The frame itself, which arrives later again than the length: the
+     * paintable has nothing to measure, and nothing to write out, until
+     * something has been decoded into it.
+     *
+     * A method of its own rather than a fourth `until` inside the third: the
+     * phases of this test read as a list here and as a staircase there.
+     */
+    mediaFramePhase(v, dir, cue, box) {
+        until("...and a frame arrives", () => v.SourceWidth > 0, () => {
+            eq("the frame's own width",  v.SourceWidth, 160);
+            eq("and its own height",     v.SourceHeight, 120);
+
+            /* A still of what is on screen, which is what a viewer of a clip
+             * it just recorded wants next. */
+            const shot = File.Join(dir, "frame.png");
+
+            v.Save(shot);
+            check("a frame saves as a PNG", File.Exists(shot) && File.Info(shot).Size > 0,
+                  JSON.stringify(shot));
+
+            /* Pause holds the frame and the position: it is not a Stop. */
+            v.Pause();
+            eq("Pause is not playing", v.Playing, false);
+            check("and it holds a position", v.Position > 0, String(v.Position));
+            v.Play();
+            eq("and Play picks it up again", v.Playing, true);
+
+            until("...and reaches its end", () => this.mediaEnded > 0, () => {
+                check("Position got there too",
+                      v.Position > 0.5, String(v.Position));
+                eq("EOS leaves it paused, not playing", v.Playing, false);
+                v.Seek(0.2);
+                v.Play();
+                eq("and Play after the end starts it again", v.Playing, true);
+                v.Stop();
+                eq("Stop parks it", v.Playing, false);
+                v.Delete();
+                this.mediaAudioPhase(cue, box);
+            });
+        });
+    }
+
+    MediaVid_Ended() { this.mediaEnded = (this.mediaEnded || 0) + 1; }
+    MediaBad_Error(msg, kind) { this.mediaError = msg; this.mediaKind = kind; }
+
+    mediaAudioPhase(cue, box) {
+        const a = new AudioPlayer();
+
+        eq("audio starts empty too", a.Uri, "");
+        eq("no identity either",     a.User, "");
+        eq("and no secret to read",  a.Password, "");
+        eq("same jitterbuffer default", a.Latency, 2000);
+        eq("nothing playing",        a.Playing, false);
+        eq("a live length",          a.Duration, -1);
+        eq("and nothing to wait for", a.Buffering, 100);
+
+        throws("a handler is a function or nothing",
+               () => { a.OnEnded = "soon"; });
+        throws("Play with nowhere to go", () => { a.Play(); });
+
+        a.User     = "camara";
+        a.Password = "s3cret";
+        a.Latency  = 500;
+        eq("User round-trips",    a.User, "camara");
+        eq("Password never does", a.Password, "");
+        eq("Latency round-trips", a.Latency, 500);
+
+        /* Assigned, read back, and taken off again: `null` is how a handler
+         * stops being called, and it is the only value besides a function
+         * that is not refused. */
+        const noop = () => {};
+
+        a.OnEnded = noop;
+        eq("a handler reads back", a.OnEnded, noop);
+        a.OnEnded = null;
+        eq("and null takes it off", a.OnEnded, undefined);
+
+        this.audioEnded = false;
+        this.audioError = undefined;
+        a.OnEnded = () => { this.audioEnded = true; };
+        a.OnError = (msg) => { this.audioError = msg; };
+        a.Uri = cue;
+        a.Play();
+        /*
+         * Ended **or** a reason: a machine with no audio output at all -- a CI
+         * runner with no sound card -- cannot play a cue, and that is a skip
+         * rather than a failure. What is never skipped is that one of the two
+         * arrived and that a failure is well formed, so the error path stays
+         * covered on the machines that take it.
+         */
+        until("a cue answers, one way or the other",
+              () => this.audioEnded === true || this.audioError !== undefined, () => {
+            if (this.audioError !== undefined) {
+                check("a cue that cannot play says what and why",
+                      this.audioError.startsWith(`AudioPlayer: cannot play '${cue}'`),
+                      JSON.stringify(this.audioError));
+                print(`  (skipping the rest of the cue: ${this.audioError})`);
+                this.mediaBadPhase(box);
+                return;
+            }
+            check("its length is the file's",
+                  a.Duration > 0.2 && a.Duration < 0.6, String(a.Duration));
+            eq("and it played to its end", this.audioEnded, true);
+
+            /* Looping reseeks instead of ending: past one length it is still
+             * going and no Ended arrived. */
+            const b = new AudioPlayer();
+
+            b.Uri  = cue;
+            b.Loop = true;
+            let bEnded = false;
+            b.OnEnded = () => { bEnded = true; };
+            b.Play();
+            const t0 = Date.now();
+            until("a looped cue is still going past its length",
+                  () => Date.now() - t0 > 800 && b.Playing, () => {
+                check("and no Ended arrived", bEnded === false,
+                      `ended=${bEnded}`);
+                b.Stop();
+                eq("Stop ends the loop", b.Playing, false);
+                this.mediaBadPhase(box);
+            });
+        });
+    }
+
+    /*
+     * What failure says. Neither of these needs a clip of its own, so this
+     * phase runs even on a machine that could not generate one -- and the
+     * Video half of it is skipped, not failed, where there is no sink to
+     * build a pipeline with.
+     */
+    mediaBadPhase(box) {
+        /* A file that is not there is an Error event with something to say,
+         * not a silent black frame. */
+        this.mediaError = null;
+        const w = new Video();
+
+        box.Add(w);
+        w.Name = "MediaBad";
+        w.Uri = "file:///nonexistent-bta-media-clip.mp4";
+        try {
+            w.Play();
+        } catch (e) {
+            print(`  (skipping the Video failure: ${e.message})`);
+            w.Delete();
+            this.mediaRtspOnly(box);
+            return;
+        }
+        until("a missing file answers with an error",
+              () => !!this.mediaError, () => {
+            check("and it names the player and the clip",
+                  /^Video: cannot play 'file:\/\/\/nonexistent-bta-media-clip\.mp4': ./
+                      .test(this.mediaError),
+                  JSON.stringify(this.mediaError));
+            eq("and says what kind of failure it was", this.mediaKind, "NotFound");
+            eq("a failed clip is not playing", w.Playing, false);
+            w.Delete();
+            this.mediaRtspOnly(box);
+        });
+    }
+
+    /* An unreachable camera answers the same way, through the RTSP branch:
+     * refused on loopback is instant, which is the whole point of that
+     * address. */
+    mediaRtspOnly(box) {
+        this.rtspError = null;
+        const r = new AudioPlayer();
+
+        r.Uri = "rtsp://127.0.0.1:9/nothing";
+        r.OnError = (msg, kind) => { this.rtspError = msg; this.rtspKind = kind; };
+        r.Play();
+        until("an unreachable camera answers with an error",
+              () => !!this.rtspError, () => {
+            check("and it names what it could not play",
+                  this.rtspError.startsWith("AudioPlayer: cannot play 'rtsp://127.0.0.1:9/nothing'"),
+                  JSON.stringify(this.rtspError));
+            check("with a kind a form can act on",
+                  ["Unreachable", "NotFound", "NotAuthorized", "Error"].includes(this.rtspKind),
+                  JSON.stringify(this.rtspKind));
+            eq("and it is not playing", r.Playing, false);
+            r.Stop();
+            box.Delete();
+        }, 600);
+    }
     /* --- three small controls the vocabulary was missing -------------------
      *
      * A `ProgressBar` says how far along; a `Spinner` says only that there is
@@ -8475,6 +8912,9 @@ class Spike extends Form {
             SpinBox: "spinbutton", ComboBox: "dropdown", Switch: "switch",
             Slider: "scale", ProgressBar: "progressbar", LevelBar: "levelbar",
             Image: "image", Picture: "picture", Separator: "separator",
+            /* A GtkPicture wearing a paintable: the node is what the widget
+             * is, and a video frame is still a picture to a stylesheet. */
+            Video: "picture",
             /* GTK gives a plain GtkDrawingArea no name of its own, so the node is
              * the generic one -- which means a stylesheet reaches a drawing
              * through the class `Style` puts on it and never through the node. */

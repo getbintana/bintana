@@ -14,21 +14,21 @@ in the same form.
 |---|---|
 | [ISSUE-editable-combo.md](ISSUE-editable-combo.md) | No editable / autocompleting combo |
 | [ISSUE-printing.md](ISSUE-printing.md) | No printer — no dialog, no copies, no preview, and no way to lay a control onto a page |
-| [ISSUE-multimedia.md](ISSUE-multimedia.md) | No audio or video |
+| [ISSUE-video-availability.md](ISSUE-video-availability.md) | A control whose engine is missing is still offered — `Video` cannot say whether it can play |
 
 **A gap that is filled is deleted, not archived.** What the runtime can do is in
 [`llm/`](../llm/README.md), which is where anybody looks for it; an issue kept
 past its answer is a second description of the same feature, written by somebody
 who did not have it yet, in the directory of things that are missing.
 
-Eleven have gone that way — ten filled and one refused. Filled: a drawing that
+Twelve have gone that way — eleven filled and one refused. Filled: a drawing that
 could not carry an image, text that could not be measured outside a `Draw`, a
 document that could only leave as one PNG per page, a program that had to run
 `sha256sum` to hash anything, an application that could not ask how big the
 screen was, a `Scroller` that could not say where it was scrolled to, a window
 that ignored a file dropped on it, a schedule with nowhere to keep `"10:00"`, a
-language with no value for the bytes of a file, and a hierarchy that could not
-carry a column.
+language with no value for the bytes of a file, a hierarchy that could not
+carry a column, and a program with no word for sound or motion.
 
 Refused: a list of check boxes. A tick the *list* keeps is state in the view,
 which is the wrong place for it — the argument is with the other things that are

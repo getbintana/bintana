@@ -539,7 +539,7 @@ Three things that will waste your time:
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `HEADLESS=1 ./tests/run.sh ide designer` runs the prefix ending at that phase —
-  349 assertions in 4 s against 1653 in 45, which is what makes iterating on an
+  351 assertions in 4 s against 1740 in 45, which is what makes iterating on an
   early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.
@@ -2287,3 +2287,93 @@ person who wrote it either.
   dangling pointer -- straight into `remove_auth_domain` on garbage, which
   reads as a bug in auth. The one writer nobody re-read is the regression to
   watch for.
+- **A playbin3 owns the sink it was given, so unref-ing after the set is a
+  double free.** `g_object_set(playbin, "video-sink", sink)` takes the sink
+  into one of its own bins, sinking the floating reference the factory gave --
+  the `gst_bin_add` ownership, not a `gst_object_replace` one. The tutorial
+  pattern of set-then-unref destroys the sink while the playbin still points
+  at it, and the playbin's own finalizer then touches freed memory: two
+  `GStreamer-CRITICAL`s (`set_state` on a non-element, `unref` past zero) at
+  teardown, nothing while playing. Measured with a three-variant C probe
+  (`/tmp` never kept it): flags-only finalises clean, flags+fakesink dies,
+  and skipping the unref both lives and finalises the sink with the pipeline
+  (weak-ref proved, so it is ownership and not a leak wearing a fix).
+- **Teardown waits for NULL, capped, before the unref.** The state change is
+  async, and finalising a playbin with one still in flight tears its children
+  down under it. Two seconds, so a wedged network source cannot hold teardown
+  hostage -- the same shape as every other guard here.
+- **Length and seekability arrive after the first frame, not with it -- and
+  the frame's own size after that.** `Playing` flips true while `Duration`
+  still answers -1 and `Seekable` false; the demuxer has not seen the stream
+  yet. A test asserting seekability the moment playback starts fails about one
+  way in one; `until(Duration > 0)` first, and `until(SourceWidth > 0)` before
+  measuring or saving a frame, because the paintable has nothing in it until
+  something is decoded. The same async lag is why `Seek(0.2)` reads
+  `Position 0` back on the next line.
+- **A player that plays must hold its own JS object.** `function ding() {
+  const a = new AudioPlayer(); a.Uri = "done.ogg"; a.Play(); }` played
+  *nothing*: the local went out of scope, the refcount hit zero, and the
+  finalizer stopped the pipeline -- while the reference documentation said a
+  player left playing keeps the program alive. The keepalive is taken in
+  `Play` and released at the end, at an error, and at `Pause`/`Stop`, and it
+  is deliberately absent from `gc_mark`: it is the pipeline's claim on the
+  object, and a cycle detector that could see it would collect exactly what it
+  protects. It also closed a segfault -- an `OnEnded` that dropped the last
+  reference freed the struct under the emit, and the next line read `m->ctx`
+  (`list_del` on 0x0, in `bta_drain_jobs`).
+- **Never ask a pipeline whether it is playing.** `gst_element_get_state`
+  with a zero timeout reads not-PLAYING during a flushing seek -- which is
+  what `Loop` is -- and while a network stream refills. The console loop asks
+  "is anything still owed an answer" 50 times a second, so a looping cue
+  ended the program at a loop boundary, at random: a 0.3 s clip exited after
+  2.5 s, 4.3 s and 4.6 s in three runs, and a 5.8 s clip once at 11.8 s and
+  once not at all in 40 s. `Playing` is now what `Play` asked for, cleared by
+  `Pause`, `Stop`, the end and an error -- one flag, and the same answer for
+  JS and for the loop.
+- **An optional dependency may not break the *designer*.** Without GStreamer
+  every `Video` getter threw, which sounds like the sqlite mold and is not:
+  the property grid reads every value of the selected control and the
+  serialiser reads them all again to save, so a runtime built without
+  GStreamer could not draw, save or even *load* a form with a `Video` in it (a
+  declared `Uri` is assigned like any other property, and the load died with a
+  dialog). The rule the optional-dependency mold actually needs: the verbs
+  refuse, the state is kept, the properties answer.
+- **One surface, two engines.** `Video` and `AudioPlayer` are the same
+  seventeen members over the same struct, so the accessors are written once
+  and both `JSCFunctionListEntry` tables point at them -- the resolver answers
+  for either (opaque first, then the picture's qdata). What differs by build
+  is behind ten `engine_*` functions with a GStreamer version and a version
+  that refuses. Written the other way it was 230 lines of accessor said twice
+  and a 200-line stub saying it a third time.
+- **`gst_init` is 6 ms warm and 573 ms cold**, measured with a three-line
+  probe against a thrown-away registry, so it happens on first use and not in
+  `bta_media_init`. It was a bill every program in the tree paid, the IDE
+  included, for a feature most of them never call.
+- **`Buffering` is a percentage of the queue's target, not of the download.**
+  Held at PAUSED until it reads 100, a stream served *below* its own bitrate
+  never starts at all -- the percentage sat at 1 for as long as it was
+  watched. That is not the holding logic being wrong: `gst-launch` on the same
+  URL does not reach the end either, because there is nothing there to play
+  through. Served just *above* the bitrate, the same clip read 1, 2, 12, 22,
+  ..., 81 and then started, and the picture ran to the end. Both measured
+  against a local server throttled by hand, which is the only way to see any
+  of this -- and worth rebuilding (`python3` + `time.sleep`) before touching
+  the buffering path again. Two things that will waste an afternoon there: the
+  throttling server must be threaded (a single-threaded one blocks on the
+  probe connection souphttpsrc abandons, which looks exactly like a stream
+  that never fills), and `pkill -f serve.py` kills the shell that is editing
+  `serve.py`.
+- **An event dispatched through a variable is an event nothing checks.**
+  `media_emit(m, "Ended", ...)` calling `bta_emit(w, event, argc, argv)` was
+  invisible to `tests/api/Check.js`, whose regex wants `bta_emit` beside a
+  literal name -- so `Error` grew a second argument with nothing to notice
+  that three documents said `Error(message)`. Both events are now emitted with
+  their names spelled out at the call site.
+- **The engine is playbin3 plus the paintable sink, and neither GstPlayer nor
+  GtkVideo.** `GstPlayer` (`gstreamer-player-1.0`) is the deprecated API
+  `GstPlay` replaces, and neither ships a GTK4 renderer -- both would still be
+  handed a `gtk4paintablesink` through an adapter of our own, a dependency for
+  no feature this surface uses. `GtkVideo` takes a `GFile` and nothing else:
+  no RTSP URI, no digest credentials, no pipeline to tune. What a camera needs
+  is `source-setup` into `rtspsrc`'s `user-id`/`user-pw`, which only a pipeline
+  of our own has.
