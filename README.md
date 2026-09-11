@@ -44,7 +44,7 @@ LANGUAGE=es ./build/bintana ide examples/hello    # the IDE itself, from ide/po/
 ./build/bintana examples/session     # Http with cookies and Basic auth: a login the next request remembers
 ./build/bintana examples/serve       # Http.Server: a static file server on :8080. Runs until Ctrl-C
 LANGUAGE=es ./build/bintana examples/agenda   # ...and the long date the catalogue rewrites
-HEADLESS=1 ./tests/run.sh         # 4917 assertions in 4 projects, on a virtual display
+HEADLESS=1 ./tests/run.sh         # 4957 assertions in 4 projects, on a virtual display
 ./tests/run.sh                    # the same, on *your* screen: it only falls back to
                                   # Xvfb when there is no DISPLAY, so on a desktop this
                                   # opens three windows and takes the keyboard
@@ -309,7 +309,7 @@ Widget ├── Control ── Label, Button, Image, TextBox, CheckButton,
        │              Editor ── TextEditor, SourceEditor,
        │              DrawingArea, Video
        └── Container ── Form, Panel, Grid, Frame, Split, Notebook, Switcher,
-                        Overlay, RowList, Scroller, Flow
+                        Overlay, AspectFrame, RowList, Scroller, Flow
 ```
 
 Each JS object carries a `BtaWidget` in its opaque slot: `gtk` is what the parent
@@ -718,7 +718,8 @@ layer, the one that fills. A `Fixed` refuses, and it is the only one that does:
 there the order is the painting order, which `Raise`/`Lower` already say.
 
 `Placement` is which of those a container does, asked of the runtime rather than
-guessed from the class: `Coordinates`, `Order`, `Layers`, `Pages` or `Halves`.
+guessed from the class: `Coordinates`, `Order`, `Layers`, `Pages`, `Halves` or
+`Single`.
 Every container answers, including the six that refuse `Arrangement` — it is what
 an editor needs in order to know what a drag means, and the designer asks nothing
 else.
@@ -732,6 +733,7 @@ else.
 | `Notebook` | in tabs: `Tabs` (the strip as strings), `Count` (ro), `Current`, `Append(child,[label])`, `Remove(i)`, `SetTabLabel(i,label)`, `SetAction(control,[where])`, event `Switch(index)` |
 | `Switcher` | in pages picked from a strip of linked buttons: `Tabs` (the strip as strings), `Strip` (`Top`/`Bottom`/`Start`/`End`/`None` — `None` is a bare stack only code switches), `Count` (ro), `Current`, `Append(child,[name])`, `Remove(i)`, event `Switch(index)` |
 | `Overlay` | stacked: the first child fills and the rest float on top, placed by `HAlign`/`VAlign`/`Margin` and layered by the order. `Reorder(child,0)` makes a layer the base; X/Y mean nothing in here |
+| `AspectFrame` | one child, given the biggest rectangle of a proportion that fits, centred: `Ratio` (`"16:9"`, or `0` for the child's own). Its minimum is its child's, so a wall of them is not a wall of floors — what it is *for* is giving a picture's rectangle to whatever rides on it |
 | `RowList` | one row per child, with scrolling and selection — and the list vocabulary the other three have: `Index`, `Count` (ro), `MultiSelect`, `Selection` (ro), `ActivateOnSingleClick`, `Select(i)`, `Deselect(i)`, `SelectAll`, `DeselectAll`, `Activate([i])`, `Remove(i)`, `Refilter()`; events `Select`, `Activate`, `Filter` |
 | `Scroller` | coordinates, with scrollbars: the view is the room there is, the content as big as it needs |
 | `Flow` | a gallery: children wrap into as many columns as fit, and it scrolls itself: `Spacing`, `MinPerLine`, `MaxPerLine` |

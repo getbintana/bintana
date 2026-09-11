@@ -3383,6 +3383,18 @@ bool bta_container_attach(JSContext *ctx, BtaWidget *parent, BtaWidget *child)
             gtk_overlay_set_child(GTK_OVERLAY(slot), child->gtk);
         else
             gtk_overlay_add_overlay(GTK_OVERLAY(slot), child->gtk);
+    } else if (GTK_IS_ASPECT_FRAME(slot)) {
+        /* One child, which is given the whole rectangle the proportion works
+         * out -- so an `Overlay` in here is the picture's rectangle and nothing
+         * inside it has to be measured. A second child is refused where it is
+         * asked for, the way a split refuses a third: the alternative is GTK
+         * dropping the first one without a word. */
+        if (gtk_aspect_frame_get_child(GTK_ASPECT_FRAME(slot))) {
+            JS_ThrowRangeError(ctx, "%s holds one child",
+                               parent->name ? parent->name : "an aspect frame");
+            return false;
+        }
+        gtk_aspect_frame_set_child(GTK_ASPECT_FRAME(slot), child->gtk);
     } else if (GTK_IS_LIST_BOX(slot)) {
         /* Appended, not put: GTK wraps it in a row, which is what gives the
          * highlight and the keyboard navigation. */
@@ -3549,6 +3561,12 @@ bool bta_container_detach(JSContext *ctx, BtaWidget *child)
         } else
             gtk_overlay_remove_overlay(o, child->gtk);
     }
+    else if (GTK_IS_ASPECT_FRAME(slot))
+        /* Through the property, not unparented: GTK keeps its own pointer, and
+         * the container would go on believing it was full -- the fault a cleared
+         * `Split` and a cleared `Overlay` both had, and the reason every branch
+         * here mirrors its attach exactly. */
+        gtk_aspect_frame_set_child(GTK_ASPECT_FRAME(slot), NULL);
     else if (GTK_IS_FRAME(slot))
         gtk_widget_unparent(child->gtk);
     else {

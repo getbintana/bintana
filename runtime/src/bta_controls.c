@@ -727,14 +727,16 @@ static JSValue cont_get_arrangement(JSContext *ctx, JSValueConst this_val)
  *
  * `Arrangement` is what a person may *choose* and reads `""` on a container
  * whose nature settles it; this is the answer for every container, which is a
- * different question and the one an editor has to ask. Five words, because
- * there are five kinds of answer a gesture has to be written against:
+ * different question and the one an editor has to ask. Six words, because
+ * there are six kinds of answer a gesture has to be written against:
  *
  *   Coordinates  a drawing surface: X/Y mean something, dragging moves
  *   Order        a box, a grid, a flow, a list of rows: the place in the line
  *   Layers       a stack: the order is the z-order, index 0 is what fills
  *   Pages        one at a time behind a strip: there is no "where the pointer is"
  *   Halves       a split: two places, and the index names which
+ *   Single       one child and one place: an `AspectFrame`, which gives it the
+ *                whole rectangle its proportion works out
  *
  * It exists because the designer was deciding this by class name -- a table of
  * six names in JavaScript, which is how `Overlay`, `Flow` and `RowList` came to
@@ -765,8 +767,18 @@ static JSValue cont_get_placement(JSContext *ctx, JSValueConst this_val)
     if (bta_container_order(w->slot))
         return JS_NewString(ctx, "Order");
 
-    /* A slot that packs one child and asks nothing about where it goes -- a
-     * Frame's, before it was a surface. Nothing to say rather than a guess. */
+    /* One child, and one place to put it: there is no coordinate to give it, no
+     * order to put it in and nothing to choose -- an `AspectFrame` hands its
+     * child the whole rectangle the proportion works out. A gesture there is
+     * *land*, which is why it needs a word of its own: told `Coordinates` an
+     * editor offers X/Y that do nothing, told `Order` it asks for an order the
+     * container has not got. */
+    if (GTK_IS_ASPECT_FRAME(w->slot))
+        return JS_NewString(ctx, "Single");
+
+    /* Nothing answers this today -- every container the runtime has is one of
+     * the six above. It stays as the answer for a slot nobody has classified,
+     * because a guess would be worse than a blank. */
     return JS_NewString(ctx, "");
 }
 

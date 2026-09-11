@@ -1,0 +1,7 @@
+<!-- A proportion kept: the box it is given, and the shape it keeps inside it,
+     with the bands that are left over. No transform: GTK 4.20+ ignores one and
+     draws the icon blank (see AGENTS.md). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path fill-rule="evenodd" d="M1 2h14v12H1z M2.2 3.2v9.6h11.6V3.2z" opacity="0.45"/>
+  <path d="M2.2 5.6h11.6v4.8H2.2z"/>
+</svg>

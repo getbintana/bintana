@@ -56,7 +56,7 @@ const PALETTE_TABS = [
                               "ProgressBar", "LevelBar", "Spinner"] },
     { name: "Views",  types: ["TreeView", "TableView", "TextEditor", "SourceEditor",
                               "Terminal", "RowList", "Flow", "DrawingArea", "Video"] },
-    { name: "Boxes",  types: ["Panel", "Grid", "Frame", "Expander", "Scroller"] },
+    { name: "Boxes",  types: ["Panel", "Grid", "Frame", "Expander", "Scroller", "AspectFrame"] },
     { name: "Split",  types: ["Split", "Notebook", "Switcher", "Overlay"] },
 ];
 
@@ -189,6 +189,10 @@ const PALETTE_ICON = {
      * overlay shows all of them at once. */
     Overlay:  ["bta-overlay-symbolic"],
     Scroller: ["view-continuous-symbolic", "bta-panel-symbolic"],
+    /* A proportion kept inside the room there is, which is what "fit best" has
+     * meant since every image viewer had that button -- and the one drawn here
+     * says the same thing with the leftover bands in it. */
+    AspectFrame: ["zoom-fit-best-symbolic", "bta-aspect-symbolic"],
 
     /* Not on the palette, but on the control tree -- which shows whatever the
      * form holds, and a form is not on the palette either. One table for both,
@@ -272,6 +276,9 @@ const DEFAULT_SIZE = {
     Notebook: [220, 140],
     Switcher: [220, 140],
     Overlay:  [200, 140],
+    /* 16:9 of the 220 a container gets here, so what is placed already shows the
+     * proportion it exists for rather than a square that happens to be one. */
+    AspectFrame: [220, 124],
     Flow:     [220, 140],
     /* A month is as big as a month, and this is the measured size of one rather
      * than a round number: `Width` is a *minimum*, so a calendar asked for 160

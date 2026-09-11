@@ -855,6 +855,14 @@ msgid_plural "{0} matches for \"{1}\", in {2} files"
 msgstr[0] "Una coincidencia de \"{1}\", en {2} archivos"
 msgstr[1] "{0} coincidencias de \"{1}\", en {2} archivos"
 
+#: modules/Designer.js:497
+msgid ""
+"An aspect frame holds one child.\n"
+"Put a container in it to hold more."
+msgstr ""
+"Un marco de proporción sostiene un solo hijo.\n"
+"Poné un contenedor adentro para tener más."
+
 #: modules/Designer.js:443 modules/Designer.js:1627
 msgid ""
 "A split holds exactly two children.\n"
@@ -1065,6 +1073,10 @@ msgstr "Llenar con una muestra"
 #: modules/PropertyGrid.js:644
 msgid "Edit the columns"
 msgstr "Editar las columnas"
+
+#: modules/PropertyGrid.js:1347
+msgid "This container gives its one child the whole of its room."
+msgstr "Este contenedor le da a su único hijo todo su espacio."
 
 #: modules/PropertyGrid.js:1345
 msgid "An overlay stacks its children: HAlign and VAlign place this one."

@@ -39,7 +39,7 @@ Widget                            (abstract)
 │       ├── TextEditor      a plain GtkTextView: a note, a log, observations
 │       └── SourceEditor    GtkSourceView: languages, gutter, search, marks
 └── Container  (abstract)
-    ├── Panel  Frame  Expander  Grid  Flow  Scroller  RowList  Overlay
+    ├── Panel  Frame  Expander  Grid  Flow  Scroller  RowList  Overlay  AspectFrame
     ├── Split  Notebook  Switcher
     ├── Form
     └── Component
@@ -77,7 +77,7 @@ JavaScript, and JavaScript this runtime can always run.
 
 **Controls:** [`Label`](#label) · [`Button`](#button) · [`ToggleButton`](#togglebutton) · [`CheckButton`](#checkbutton) · [`Switch`](#switch) · [`Spinner`](#spinner) · [`Separator`](#separator) · [`LinkButton`](#linkbutton) · [`Image`](#image) · [`Picture`](#picture) · [`Video`](#video) · [`TextBox`](#textbox) · [`SpinBox`](#spinbox) · [`Slider`](#slider) · [`ProgressBar`](#progressbar) · [`LevelBar`](#levelbar) · [`DatePicker`](#datepicker) · [`Calendar`](#calendar) · [`ColorButton`](#colorbutton) · [`FontButton`](#fontbutton) · [`ListBox`](#listbox) · [`ComboBox`](#combobox) · [`TreeView`](#treeview) · [`TableView`](#tableview) · [`TextEditor`](#texteditor) · [`SourceEditor`](#sourceeditor) · [`Terminal`](#terminal) · [`DrawingArea`](#drawingarea)
 
-**Containers:** [`Panel`](#panel) · [`Frame`](#frame) · [`Expander`](#expander) · [`Grid`](#grid) · [`Flow`](#flow) · [`Scroller`](#scroller) · [`RowList`](#rowlist) · [`Overlay`](#overlay) · [`Split`](#split) · [`Notebook`](#notebook) · [`Switcher`](#switcher) · [`Form`](#form) · [`Component`](#component)
+**Containers:** [`Panel`](#panel) · [`Frame`](#frame) · [`Expander`](#expander) · [`Grid`](#grid) · [`Flow`](#flow) · [`Scroller`](#scroller) · [`RowList`](#rowlist) · [`Overlay`](#overlay) · [`AspectFrame`](#aspectframe) · [`Split`](#split) · [`Notebook`](#notebook) · [`Switcher`](#switcher) · [`Form`](#form) · [`Component`](#component)
 
 ## Widget — inherited by everything
 
@@ -231,7 +231,7 @@ about cost and not the only thing that works.
 |---|---|
 | `Panel`, `Frame`, `Expander`, `Scroller`, `Form`, `Component` | `Fixed` (default), `Horizontal`, `Vertical` |
 | `Split` | `Horizontal` (default), `Vertical` — there is no `Fixed` half |
-| `Grid`, `Flow`, `RowList`, `Overlay`, `Notebook`, `Switcher` | **refused**, reads `""`: *this container arranges its children by its own nature* |
+| `Grid`, `Flow`, `RowList`, `Overlay`, `AspectFrame`, `Notebook`, `Switcher` | **refused**, reads `""`: *this container arranges its children by its own nature* |
 
 **`Placement` is the same question with an answer for every container**, which
 is what an editor needs: `Arrangement` is what a *person* may choose, and it is
@@ -242,6 +242,7 @@ is what an editor needs: `Arrangement` is what a *person* may choose, and it is
 | `Panel`, `Frame`, `Expander`, `Scroller`, `Form`, `Component` | `Coordinates` arranged `Fixed`, `Order` as a row or a column |
 | `Grid`, `Flow`, `RowList` | `Order` |
 | `Overlay` | `Layers` |
+| `AspectFrame` | `Single` |
 | `Notebook`, `Switcher` | `Pages` |
 | `Split` | `Halves` |
 
@@ -1060,6 +1061,39 @@ A message over the content instead of in front of it, which is what
 this.Toast.Visible = true;                  /* over the content, not over the app */
 this.Spn.Raise();                           /* and above the toast while it spins */
 ```
+
+## AspectFrame
+
+A rectangle of a given proportion, centred in the room there is. One child, and it gets the whole of that rectangle.
+
+| Member | |
+|---|---|
+| `Ratio` | the proportion to keep, as `"16:9"` (or `"16/9"`, or a number). **`0` or `""` is the child's own**, which is the default. Kept as written, so the `.form` and the grid answer with `"16:9"` and not with `1.7778`. Settable while the program runs, which is when a stream's shape arrives |
+
+**What it is for is not the picture but the rectangle the picture occupies.**
+`Picture` and `Video` already letterbox inside themselves with
+`Fit: "Contain"` — what they cannot do is tell anything else *where* the image
+ended up, so a caption in the corner of a 16:9 stream lands out on the black.
+Put the picture in here and an `Overlay` over it, and `HAlign`/`VAlign` mean the
+image's corners:
+
+```json
+{ "type": "AspectFrame", "name": "Tile", "properties": { "Ratio": "16:9", "Expand": true },
+  "children": [
+    { "type": "Overlay", "name": "Stage", "children": [
+      { "type": "Video", "name": "Vid" },
+      { "type": "Panel", "name": "NameChip",
+        "properties": { "HAlign": "Start", "VAlign": "End", "Style": "osd" } } ] } ] }
+```
+
+**Its minimum is its child's**, which is what makes it usable in a wall of them:
+a frame over a child that asks for nothing asks for nothing, so twenty tiles are
+not twenty floors under the window. Measured: a child requesting 200x100 under
+`Ratio: "16:9"` gives the frame a minimum of 200x113 — the child's own on one
+axis and the proportion on the other — and a child requesting nothing gives 0x0.
+
+`Placement` is `Single`: there is no coordinate to give the child and no order to
+put it in, so a second `Add` is refused rather than silently replacing the first.
 
 ## Split
 

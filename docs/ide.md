@@ -1288,9 +1288,12 @@ added is the one shown. A split holds exactly two halves, so a third child is
 refused before anything is created -- the runtime would have thrown, and a throw
 mid-gesture is not an answer a designer can give.
 
-**Which of the five it is, the runtime says**: `Container.Placement` answers
-`Coordinates`, `Order`, `Layers`, `Pages` or `Halves`, and `placementOf()` is the
-only place the designer asks. It used to be decided here from `Arrangement` plus
+**Which of the six it is, the runtime says**: `Container.Placement` answers
+`Coordinates`, `Order`, `Layers`, `Pages`, `Halves` or `Single`, and
+`placementOf()` is the only place the designer asks. `reorders()` is the
+question every gesture that moves a child asks first, and it is *not* "is it a
+box": `Coordinates` is a position rather than an order, and `Single` — an
+`AspectFrame`, one child and one place — has nothing to move a child to. It used to be decided here from `Arrangement` plus
 a table of class names in `pages()` and `split()` -- and that table is how
 `Overlay`, `Flow` and `RowList` reached the palette classified as rows: every
 gesture reached for an order the runtime refused, *this container has no order to
@@ -2259,8 +2262,8 @@ The tabs are `Basic` (`Button`, `Label`, `Image`, `Picture`, `Separator`,
 (`ComboBox`, `SpinBox`, `ListBox`, `Slider`, `DatePicker`, `Calendar`,
 `ColorButton`, `FontButton`, `ProgressBar`, `LevelBar`, `Spinner`), `Views`
 (`TreeView`, `TableView`, `TextEditor`, `SourceEditor`, `Terminal`, `RowList`,
-`Flow`), `Boxes`
-(`Panel`, `Grid`, `Frame`, `Expander`, `Scroller`) and
+`Flow`, `DrawingArea`, `Video`), `Boxes`
+(`Panel`, `Grid`, `Frame`, `Expander`, `Scroller`, `AspectFrame`) and
 `Split` (`Split`, `Notebook`, `Switcher`, `Overlay`) -- the containers a window
 like the IDE's is actually built from -- plus `Project` when the project has
 components of its own (see below).

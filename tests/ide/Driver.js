@@ -5503,6 +5503,55 @@ function* p_projects(ide) {
     }
 
     /*
+     * An `AspectFrame` is the sixth kind of container the designer has to know
+     * about: one child, one place, and a proportion. Nothing to order, no
+     * coordinate to give -- so a gesture there is *land*, and the two questions
+     * are whether it lands and whether the grid says the truth about X/Y.
+     */
+    ide.designer.select(null);
+    palette(ide, "AspectFrame").Click();
+    yield;
+
+    const shaped = ide.designer.selected;
+    eq("the palette offers an aspect frame", shaped.constructor.name, "AspectFrame");
+    eq("and the runtime says it has one place", shaped.Placement, "Single");
+
+    yield* until(() => ide.designer.rectOf(shaped).h > 8);
+    ide.Glass_Drop("Overlay", ...middleOf(shaped));
+    yield* settled(ide);
+
+    eq("a drop into it lands in it", shaped.Children.length, 1);
+    check("and is selected", ide.designer.selected === shaped.Children[0]);
+    eq("and dirties the form", ide.designer.dirty, true);
+
+    /* A second is refused before anything is created, the way a split's third
+     * is: the runtime would have thrown, and a throw mid-gesture is not an
+     * answer a designer can give. */
+    ide.designer.select(shaped);
+    palette(ide, "Label").Click();
+    yield;
+    eq("a second child is refused rather than thrown", shaped.Children.length, 1);
+
+    ide.designer.select(shaped.Children[0]);
+    yield* settled(ide);
+    check("its child is not placed by coordinates",
+          !editor(ide, "X").Enabled && !editor(ide, "Y").Enabled);
+    check("and the reason is its own, not the box's",
+          editor(ide, "X").Tooltip.includes("one child"), editor(ide, "X").Tooltip);
+
+    /* The proportion is an ordinary property, so it is in the grid and in the
+     * file with no designer code at all -- which is the invariant this tree is
+     * built on. */
+    ide.designer.select(shaped);
+    yield* settled(ide);
+    check("the grid offers the proportion",
+          ide.designer.grid.propKeys.includes("Ratio"),
+          JSON.stringify(ide.designer.grid.propKeys));
+    typeInto(ide, "Ratio", "16:9");
+    yield* settled(ide);
+    eq("set from the grid", shaped.Ratio, "16:9");
+
+    /*
      * **Every container the palette offers answers the gesture the palette
      * makes**, asked of the runtime rather than of a second list here -- which
      * is the only version of this check worth having, because the version that
@@ -5521,7 +5570,12 @@ function* p_projects(ide) {
         let ordered = true;
         try { c.Reorder(c.Children[0], 0); } catch (e) { ordered = false; }
 
-        if (ordered !== (places !== "Coordinates"))
+        /* The two that have nothing to move a child *to*: a coordinate is a
+         * position and not an order, and a container with one place has only
+         * the one. Everything else answers. */
+        const movable = places !== "Coordinates" && places !== "Single";
+
+        if (ordered !== movable)
             mismatched.push(`${type}: ${places} but ${ordered ? "orders" : "refuses"}`);
         c.Delete();
     }
@@ -5534,6 +5588,10 @@ function* p_projects(ide) {
     const withStack = JSON.parse(File.Load(File.Join(TMP, "Elastic.form")));
     const savedTile = withStack.children.find((n) => n.type === "Overlay");
 
+    const savedShaped = withStack.children.find((n) => n.type === "AspectFrame");
+
+    eq("the aspect frame is saved with its one child", savedShaped.children.length, 1);
+    eq("and with the proportion it was given", savedShaped.properties.Ratio, "16:9");
     eq("the overlay is saved with its layers", savedTile.children.length, 2);
     eq("in the order they are stacked in",
        savedTile.children.map((c) => c.name).join(","), layers());

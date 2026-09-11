@@ -534,6 +534,7 @@ did nothing:
 | `Panel`, `Component` | `fixed` | the children, directly |
 | `Grid` / `Split` / `Overlay` / `Notebook` | `grid` / `paned` / `overlay` / `notebook` | the children |
 | `Frame` | `frame` | `> fixed` |
+| `AspectFrame` | `aspectframe` | its one child. **Not `frame`**: a `GtkAspectFrame` is not a `GtkFrame`, it descends straight from `GtkWidget` and has no caption |
 | `Form` | `window` | `> fixed`, or `> box > fixed` once it has a menu bar |
 | `ListBox`, `RowList` | `scrolledwindow` | `> viewport > list > row` |
 | `TreeView` | `scrolledwindow` | `> listview` |
@@ -2385,16 +2386,17 @@ Widget.New("Grid").Arrangement = "Vertical";
 ```
 
 `Grid` is a table, `Flow` wraps, `RowList` is rows, `Notebook` and `Switcher` are
-pages behind a strip, an `Overlay` is a stack. They read `""` — not `"Fixed"`,
+pages behind a strip, an `Overlay` is a stack, an `AspectFrame` is one rectangle. They read `""` — not `"Fixed"`,
 which would be a claim about coordinates that do not apply — and the serialiser
 skips them under its rule about values equal to a fresh control's, so no `.form`
 carries an `Arrangement` its container would refuse.
 
 **`Placement` is the question they *do* all answer**, and it exists because an
-editor has to ask it: `Coordinates`, `Order`, `Layers`, `Pages`, `Halves`. Five
-words and not a boolean, because there are five kinds of gesture — a coordinate
-to move, a place in a line, a layer to stack, a page at a time, one of two
-halves. Read-only: it is a fact about the class and its arrangement, not a
+editor has to ask it: `Coordinates`, `Order`, `Layers`, `Pages`, `Halves`,
+`Single`. Six words and not a boolean, because there are six kinds of gesture — a
+coordinate to move, a place in a line, a layer to stack, a page at a time, one of
+two halves, and one child with one place (an `AspectFrame`, where a drop simply
+lands). Read-only: it is a fact about the class and its arrangement, not a
 property of the file.
 
 It was a table of class names in `Designer.js` until this existed, and that table
@@ -2733,6 +2735,64 @@ A message over the content rather than in front of it is
 content as the base, a spinner `Center`/`Center` while something is going, a
 banner `Center`/`Start` with `Style: "osd"` — and all three declared in the
 `.form`, where a designer can draw them.
+
+### AspectFrame
+
+A `GtkAspectFrame`: one child, given the biggest rectangle of a declared
+proportion that fits, centred in what is left over.
+
+**What it exists for is the rectangle and not the picture.** `Picture` and
+`Video` letterbox inside themselves with `Fit: "Contain"` already — what neither
+can do is say *where* the image ended up, so a caption meant for the corner of a
+16:9 stream lands out on the black beside it. This makes that rectangle a
+container: the picture goes in here, an `Overlay` goes over the picture, and
+`HAlign`/`VAlign` then mean the image's own corners. The application that asked
+for it was sizing the video widget from code instead — sixty lines of
+measurement, a `Timer` and a settling loop, none of it about cameras.
+
+**Four numbers, measured against GTK 4.22 rather than assumed**, because the
+first two are what decide whether it is usable at all:
+
+```
+a child asking 200x100, Ratio "16:9"  ->  the frame's minimum is 200x113
+a child asking nothing                ->  the frame's minimum is 0x0
+Ratio 0, i.e. the child's own          ->  200x100, the child's exactly
+in a 640x480 box                      ->  the child gets 640x360 at (0,60)
+```
+
+That `0x0` is the whole reason this is a container. Sizing the child from code
+makes the size request a *minimum*, so the largest tile a full screen ever
+needed becomes the window's floor — after a full screen the window could not be
+made smaller again, which read as a zoom that would not undo. A frame asks for
+what its child asks for, and the proportion is applied to the room it is given
+rather than demanded from its parent.
+
+`Ratio` is written the way people mean it: `"16:9"`, or `"16/9"`, or a number for
+whoever has one. The text is **kept as it was given**, so the getter, the
+property grid and the `.form` answer `"16:9"` and not `1.7778` — a reconstruction
+from the float could not be exact anyway. `0` and `""` are GTK's `obey-child`
+said once instead of as a second property, the same trade `Scrollbars` makes
+with GTK's two policies, and it is the default: a frame that does not know the
+proportion yet has no business imposing one, since a stream's shape arrives when
+the server answers.
+
+Two traps, both paid for once:
+
+- **It is not a `GtkFrame`.** `GTK_IS_FRAME` does not catch it, so
+  `bta_container_attach` and `bta_container_detach` need a branch each — and the
+  detach goes through `gtk_aspect_frame_set_child(af, NULL)` rather than
+  unparenting, or GTK keeps its pointer and the container goes on believing it
+  is full. That is the fault a cleared `Split` and a cleared `Overlay` both had.
+- **`printf("%g")` writes the locale's decimal separator.** `Ratio = 1.5` came
+  back `"1,5"` on this machine, which is what the `.form` would then carry and
+  what `JSON.parse` would read as nothing — the same fault the QuickJS number
+  patch exists for, one layer up. `g_ascii_dtostr` on the way out and
+  `g_ascii_strtod` on the way in.
+
+`Arrangement` is refused, as on a `RowList`, and `Placement` answers `Single`:
+one child and one place, so there is no coordinate to give it and no order to
+put it in. A second `Add` is refused where it is asked for, because GTK would
+drop the first one without a word.
 
 ### RowList
 

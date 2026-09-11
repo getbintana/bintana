@@ -1343,6 +1343,8 @@ Ide.PropertyGrid = class PropertyGrid {
 
         if (places === "Layers" && PLACED_BY_BOX.includes(key))
             return Locale.Text("An overlay stacks its children: HAlign and VAlign place this one.");
+        if (places === "Single" && PLACED_BY_BOX.includes(key))
+            return Locale.Text("This container gives its one child the whole of its room.");
         if (places !== "Coordinates" && PLACED_BY_BOX.includes(key))
             return Locale.Text("The box this control is in decides where it goes.");
         if (places === "Coordinates" && PLACED_BY_ANCHORS.includes(key))

@@ -831,6 +831,10 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: modules/Designer.js:443
+#: modules/Designer.js:497
+msgid "An aspect frame holds one child.\nPut a container in it to hold more."
+msgstr ""
+
 #: modules/Designer.js:1627
 msgid "A split holds exactly two children.\nPut a container in one of its halves to hold more."
 msgstr ""
@@ -1018,6 +1022,10 @@ msgstr ""
 
 #: modules/PropertyGrid.js:644
 msgid "Edit the columns"
+msgstr ""
+
+#: modules/PropertyGrid.js:1347
+msgid "This container gives its one child the whole of its room."
 msgstr ""
 
 #: modules/PropertyGrid.js:1345

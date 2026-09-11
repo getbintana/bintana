@@ -369,7 +369,7 @@ const TESTS = [
     "CloseVeto",
     "ContextMenu", "Combo", "Spin", "Focus", "Record", "Nested", "Database", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "Date", "Calendar", "Drawing", "Metrics", "Library", "ListMulti", "MenuState",
-    "RowList", "RowFilter", "PropertyOptions", "CssNode", "TabAction", "Image", "Switcher", "Reorder",
+    "RowList", "RowFilter", "PropertyOptions", "CssNode", "TabAction", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "NumericSetters",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
     "CuratedLanguage", "Dictionary", "Regex", "Bytes", "Hash", "Screen", "JsonFiles", "Log", "Apply", "TimerShorthand", "Terminal",
@@ -6120,6 +6120,128 @@ class Spike extends Form {
 
     Sw_Switch(index) { this.switched.push(index); }
 
+    /* --- AspectFrame: a rectangle of a given proportion ---------------------
+     *
+     * The claim is not that a picture can be letterboxed -- `Fit: "Contain"`
+     * already does that inside the picture -- but that **the rectangle the
+     * picture occupies is a container**, so something else can be put on it: a
+     * camera's name in the corner of its image and not out on the black.
+     *
+     * The two numbers that decide whether it is usable in a wall are the
+     * minimums: a frame whose child asks for nothing must ask for nothing, or
+     * twenty tiles are twenty floors under the window.
+     */
+    testAspect() {
+        const frame = new AspectFrame();
+        this.Add(frame);
+
+        eq("a fresh frame keeps the child's own proportion", frame.Ratio, "");
+        eq("and it holds one child, which gets all of it", frame.Placement, "Single");
+        throws("Arrangement is refused: its nature settles it",
+               () => { frame.Arrangement = "Vertical"; });
+        eq("and reads as nothing", frame.Arrangement, "");
+
+        /* Written as anybody means it, and kept as written: 1.7778 in a
+         * property grid is a number nobody recognises. */
+        frame.Ratio = "16:9";
+        eq("a ratio is kept as it was written", frame.Ratio, "16:9");
+        frame.Ratio = "4/3";
+        eq("and a slash says the same thing", frame.Ratio, "4/3");
+        frame.Ratio = 1.5;
+        eq("a number is taken too", frame.Ratio, "1.5");
+        frame.Ratio = 0;
+        eq("zero is the child's own again", frame.Ratio, "");
+        frame.Ratio = "";
+        eq("and so is nothing", frame.Ratio, "");
+
+        throws("a word is not a ratio",      () => { frame.Ratio = "wide"; });
+        throws("nor is a negative number",   () => { frame.Ratio = -2; });
+        throws("nor a division by nothing",  () => { frame.Ratio = "16:0"; });
+        eq("and a refused ratio changes nothing", frame.Ratio, "");
+
+        /* One child: a second is refused where it is asked for rather than
+         * dropping the first without a word, which is what GTK would do. */
+        const stage = new Overlay();
+        frame.Add(stage);
+        throws("an aspect frame holds one child", () => frame.Add(new Label()));
+        eq("and it is the one it was given", frame.Children[0] === stage, true);
+
+        /* Emptied and refilled, the round trip every container is held to. */
+        frame.Clear();
+        eq("cleared", frame.Children.length, 0);
+        const again = new Panel();
+        frame.Add(again);
+        eq("and filled again", frame.Children[0] === again, true);
+
+        /*
+         * **A frame whose child asks for nothing asks for nothing**, which is
+         * the whole reason this is a container: the application that asked for
+         * it sized the video from code instead, and the largest frame a full
+         * screen ever needed became the window's floor.
+         */
+        frame.Ratio = "16:9";
+        eq("a frame over a child with no size of its own has none either",
+           `${again.SizeRequest()[0]},${frame.SizeRequest()[0]}`, "-1,-1");
+
+        /* And the child is centred in the room there is, at the proportion
+         * asked for -- measured on a frame the form stretches. */
+        const host = new Panel();
+        host.Arrangement = "Vertical";
+        this.Add(host);
+        host.Resize(320, 320);
+
+        const shaped = new AspectFrame();
+        shaped.Ratio  = "16:9";
+        shaped.Expand = true;
+        host.Add(shaped);
+
+        const inner = new Panel();
+        shaped.Add(inner);
+
+        until("the frame is laid out", () => inner.Bounds().Width > 1, () => {
+            const box = shaped.Bounds();
+            const kid = inner.Bounds();
+            const wide = Math.round(kid.Width / kid.Height * 100) / 100;
+
+            eq("the child keeps the proportion it was given", wide, 1.78);
+
+            /*
+             * **The biggest rectangle of that shape that fits**, which is the
+             * whole sentence: it reaches the box on the axis that runs out
+             * first and is centred on the other. Which axis that is depends on
+             * the room, so asserting a particular one would be asserting the
+             * size of this test's host and not the rule.
+             */
+            check("inside the room there is",
+                  kid.Width <= box.Width && kid.Height <= box.Height,
+                  `${kid.Width}x${kid.Height} in ${box.Width}x${box.Height}`);
+            check("and as big as that allows",
+                  kid.Width === box.Width || kid.Height === box.Height,
+                  `${kid.Width}x${kid.Height} in ${box.Width}x${box.Height}`);
+
+            const slackX = box.Width  - kid.Width;
+            const slackY = box.Height - kid.Height;
+            check("centred in whatever is left over",
+                  Math.abs((kid.X - box.X) * 2 - slackX) <= 1 &&
+                  Math.abs((kid.Y - box.Y) * 2 - slackY) <= 1,
+                  `at ${kid.X - box.X},${kid.Y - box.Y} of ${slackX}x${slackY}`);
+
+            /* Settable while it runs, which is the case it exists for: a
+             * stream's proportion arrives when the server answers. */
+            shaped.Ratio = "1:2";
+            until("it reshapes", () => inner.Bounds().Height > inner.Bounds().Width, () => {
+                const tall = inner.Bounds();
+
+                check("a new ratio reshapes what is in it",
+                      Math.abs(tall.Height / tall.Width - 2) < 0.05,
+                      `${tall.Width}x${tall.Height}`);
+                host.Delete();
+            });
+        });
+
+        frame.Delete();
+    }
+
     testReorder() {
         const box = new Panel();
         box.Arrangement = "Vertical";
@@ -6330,11 +6452,15 @@ class Spike extends Form {
             mark.HAlign = "Start";
             mark.VAlign = "Start";
 
-            until("the layer moves", () => mark.Bounds().X === whole.X, () => {
-                const moved = mark.Bounds();
+            /* Both read again in here, never against the rectangle measured
+             * above: anything else added to this form moves the stack, and a
+             * remembered rectangle then reads as a failure that is not one. */
+            until("the layer moves", () => mark.Bounds().X === stack.Bounds().X, () => {
+                const at  = stack.Bounds();
+                const now = mark.Bounds();
 
                 eq("changing a layer's alignment moves it, with no other help",
-                   `${moved.X},${moved.Y}`, `${whole.X},${whole.Y}`);
+                   `${now.X},${now.Y}`, `${at.X},${at.Y}`);
                 stack.Delete();
             });
         });
@@ -9167,6 +9293,9 @@ class Spike extends Form {
             Panel: "fixed", Component: "fixed",
             Grid: "grid", Split: "paned", Overlay: "overlay",
             Notebook: "notebook", Switcher: "box", Frame: "frame",
+            /* GTK's own, and **not** `frame`: a GtkAspectFrame is not a
+             * GtkFrame -- it descends from GtkWidget and has no caption. */
+            AspectFrame: "aspectframe",
             Expander: "expander-widget", Form: "window",
         };
 

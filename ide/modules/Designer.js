@@ -475,8 +475,28 @@ Ide.Designer = class Designer {
         return this.placementOf(container) === "Layers";
     }
 
+    /*
+     * Whether a child of this one can be moved among its siblings at all -- which
+     * is what the arrows, the drag and the drop have to know before they reach
+     * for `Reorder`.
+     *
+     * `Coordinates` is a position and not an order; `Single` is one child and one
+     * place, so there is nothing to move it to. Everything else answers: a box
+     * and a grid by the line, a stack by the layer, a notebook by the page, a
+     * split by the half.
+     */
+    reorders(container) {
+        const places = this.placementOf(container);
+        return places !== "Coordinates" && places !== "Single";
+    }
+
     /* Says no, and says why, before anything has been added. */
     canTake(container) {
+        if (this.placementOf(container) === "Single" && container.Children.length >= 1) {
+            /* One literal, like the split's below. */
+            Message.Warning("An aspect frame holds one child.\nPut a container in it to hold more.");
+            return false;
+        }
         if (this.split(container) && container.Children.length >= 2) {
             /* One literal and not two joined: a msgid built by concatenation
              * extracts as its first piece only, which reads like a valid entry
@@ -1034,7 +1054,7 @@ Ide.Designer = class Designer {
             /* In a box there is nowhere to move to: dragging reorders instead,
              * and this is where the answer to "which container" is settled, once,
              * before anything has moved. */
-            box: this.isFixed(this.parentOf(s)) ? null : this.parentOf(s),
+            box: this.reorders(this.parentOf(s)) ? this.parentOf(s) : null,
             index: null,
             before: this.snapshot(),
         };
@@ -1429,8 +1449,8 @@ Ide.Designer = class Designer {
          * to nudge, and the keyboard should reach what the mouse can do. In a
          * stack that is one layer up or down, which is the same sentence -- the
          * order *is* the z-order there. */
-        const box = this.isFixed(this.parentOf(this.selected)) ? null
-                                                               : this.parentOf(this.selected);
+        const box = this.reorders(this.parentOf(this.selected))
+            ? this.parentOf(this.selected) : null;
         if (box) {
             const by = { Left: -1, Up: -1, Right: 1, Down: 1 }[key];
             if (by === undefined) return false;
@@ -1518,6 +1538,7 @@ Ide.Designer = class Designer {
                     ? this.insertionIndex(target, x, y, null)
                     : null;
 
+
         this.pushUndo();
         const widget = this.newControl(type, target);
         widget.Resize(w, h);
@@ -1539,6 +1560,8 @@ Ide.Designer = class Designer {
             target.Current = target.Count - 1;
         } else if (kind === "Halves") {
             /* The runtime put it in whichever half was free. */
+        } else if (kind === "Single") {
+            /* One place, and `Add` already used it. */
         } else if (kind === "Coordinates") {
             const corner = [x - w / 2, y - h / 2];
             const local  = target === this.surface

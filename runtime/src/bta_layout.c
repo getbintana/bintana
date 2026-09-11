@@ -9,6 +9,8 @@
  */
 #include "bta.h"
 
+#include <math.h>        /* isfinite, for the ratio a string may carry */
+
 /* ------------------------------------------------------------------ Split */
 
 /*
@@ -351,6 +353,175 @@ static void build_overlay(BtaWidget *w)
     w->gtk  = gtk_overlay_new();
     w->slot = w->gtk;
 }
+
+/* -------------------------------------------------------- AspectFrame */
+
+/*
+ * A rectangle of a given proportion, centred in the room there is.
+ *
+ * What it exists for is not the picture -- `Picture` and `Video` already letter-
+ * box inside themselves with `Fit: "Contain"` -- but **the rectangle the picture
+ * really occupies**, so that something else can be put on it: a camera's name in
+ * the corner of its image, not out on the black beside it. The picture goes in
+ * here, an `Overlay` over the picture, and `HAlign`/`VAlign` then mean what they
+ * say, with no measuring and no timer.
+ *
+ * `GtkAspectFrame` and not arithmetic of ours, and the two numbers that decide
+ * it were measured (GTK 4.22) rather than assumed:
+ *
+ *   a child asking 200x100, ratio 16:9   -> the frame's minimum is 200x113
+ *   a child asking nothing               -> the frame's minimum is 0x0
+ *   ratio 0, i.e. the child's own        -> 200x100, the child's exactly
+ *   in a 640x480 box                     -> the child gets 640x360 at (0,60)
+ *
+ * That `0x0` is the whole reason this is a container and not a size computed in
+ * the application: a wall of twenty tiles must not carry twenty minimums. The
+ * application that asked for it sized the video widget from code instead, and
+ * the largest frame a full screen ever needed became the window's floor.
+ *
+ * It is **not** a `GtkFrame` -- it descends straight from `GtkWidget` and has no
+ * caption -- so `GTK_IS_FRAME` does not catch it and `bta_container_attach` and
+ * `bta_container_detach` need a branch each of their own. Its CSS node is
+ * `aspectframe`.
+ */
+static void build_aspect_frame(BtaWidget *w)
+{
+    /* Centred, and obeying the child until something says otherwise: a frame
+     * with no ratio yet must not squeeze what is in it. */
+    w->gtk  = gtk_aspect_frame_new(0.5f, 0.5f, 1.0f, TRUE);
+    w->slot = w->gtk;
+}
+
+/*
+ * Ratio: the proportion to keep, as `"16:9"` or as a number, and `0` for the
+ * child's own.
+ *
+ * Two spellings for one property because the number is unreadable and the
+ * written ratio is what anybody means: `1.7778` in a property grid is a value
+ * nobody recognises, `"16:9"` is the thing itself. `Radius` and `Padding` made
+ * the same bargain with their composite strings, and like them this keeps the
+ * text it was given so the getter and the `.form` answer with what was written
+ * rather than with a rounded reconstruction of it.
+ *
+ * `0` or `""` is GTK's `obey-child` said once instead of as a second property --
+ * the same trade `Scrollbars` makes with GTK's two policies. It is the default,
+ * because a frame that does not know the proportion yet has no business
+ * imposing one: a stream's shape is known when the server answers, which is
+ * after the form is built.
+ */
+#define ASPECT_RATIO_KEY "bta-ratio"
+
+static bool aspect_parse(JSContext *ctx, JSValueConst val, double *ratio,
+                         char **text)
+{
+    char *given = NULL;
+
+    if (JS_IsNumber(val)) {
+        double n = 0;
+        if (JS_ToFloat64(ctx, &n, val) < 0)
+            return false;
+        if (!isfinite(n) || n < 0) {
+            JS_ThrowRangeError(ctx, "Ratio must be a positive number, \"16:9\" or 0");
+            return false;
+        }
+        *ratio = n;
+
+        /*
+         * `g_ascii_dtostr` and **not** `g_strdup_printf("%g")`: printf writes
+         * the decimal separator of the locale, and this machine writes a comma
+         * -- so a `Ratio = 1.5` came back `"1,5"`, which is what the `.form`
+         * would then carry and what `JSON.parse` would read as nothing. The
+         * same fault the QuickJS number patch exists for, one layer up.
+         */
+        if (n > 0) {
+            char buf[G_ASCII_DTOSTR_BUF_SIZE];
+            *text = g_strdup(g_ascii_dtostr(buf, sizeof buf, n));
+        } else {
+            *text = NULL;
+        }
+        return true;
+    }
+
+    const char *s = JS_ToCString(ctx, val);
+    if (!s)
+        return false;
+    given = g_strstrip(g_strdup(s));
+    JS_FreeCString(ctx, s);
+
+    if (!*given) {                       /* "" is "the child's own", like 0 */
+        g_free(given);
+        *ratio = 0;
+        *text  = NULL;
+        return true;
+    }
+
+    /* "16:9", and "16/9" for whoever writes it that way. */
+    char **parts = g_strsplit_set(given, ":/", -1);
+    double num = 0, den = 1;
+    bool   ok  = true;
+
+    for (int i = 0; parts[i] && ok; i++) {
+        char  *end = NULL;
+        double v   = g_ascii_strtod(g_strstrip(parts[i]), &end);
+
+        if (end == parts[i] || (end && *end) || i > 1 || !isfinite(v))
+            ok = false;
+        else if (i == 0)
+            num = v;
+        else
+            den = v;
+    }
+    g_strfreev(parts);
+
+    if (!ok || num <= 0 || den <= 0) {
+        JS_ThrowRangeError(ctx,
+            "Ratio must be a positive number, \"16:9\" or 0, not '%s'", given);
+        g_free(given);
+        return false;
+    }
+
+    *ratio = num / den;
+    *text  = given;                      /* as written: "16:9" comes back "16:9" */
+    return true;
+}
+
+static JSValue aspect_get_ratio(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    const char *text = g_object_get_data(G_OBJECT(w->gtk), ASPECT_RATIO_KEY);
+    return JS_NewString(ctx, text ? text : "");
+}
+
+static JSValue aspect_set_ratio(JSContext *ctx, JSValueConst this_val,
+                                JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    double ratio = 0;
+    char  *text  = NULL;
+    if (!aspect_parse(ctx, val, &ratio, &text))
+        return JS_EXCEPTION;
+
+    GtkAspectFrame *af = GTK_ASPECT_FRAME(w->gtk);
+
+    /* Settable while the program runs, which is the case it was asked for: the
+     * proportion arrives with the stream. */
+    gtk_aspect_frame_set_obey_child(af, ratio <= 0);
+    if (ratio > 0)
+        gtk_aspect_frame_set_ratio(af, (float)ratio);
+
+    g_object_set_data_full(G_OBJECT(w->gtk), ASPECT_RATIO_KEY, text, g_free);
+    return JS_UNDEFINED;
+}
+
+static const JSCFunctionListEntry aspect_props[] = {
+    JS_CGETSET_DEF("Ratio", aspect_get_ratio, aspect_set_ratio),
+};
 
 /* ------------------------------------------------------------------- Flow */
 
@@ -1310,6 +1481,9 @@ void bta_layout_register(void)
                        "Select,Activate,Filter"),
         BTA_CLASS_ENUM("Scroller", "Container", build_scroller, scroller_props,
                        false, scroller_options, "Scroll"),
+        /* A proportion to keep, and a rectangle for whatever rides on it. */
+        BTA_CLASS     ("AspectFrame", "Container", build_aspect_frame,
+                       aspect_props, false, NULL),
         BTA_CLASS     ("Flow",     "Container", build_flow,    flow_props,   false, NULL),
         BTA_CLASS     ("Grid",     "Container", build_grid,    grid_props,   false, NULL),
     };

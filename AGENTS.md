@@ -834,6 +834,22 @@ person who wrote it either.
   selected while `Index` answers `-1`, and nothing but a click gets out of it.
   One more, for the future: `insert` ignores its position when a sort function is
   set, so a `Sorted` property on either would make `Reorder` a silent no-op.
+- **A `GtkAspectFrame` is not a `GtkFrame`**, and that one fact is most of what
+  `AspectFrame` cost. It descends straight from `GtkWidget`, has no caption, and
+  its CSS node is `aspectframe` -- so `GTK_IS_FRAME` does not catch it, both
+  `bta_container_attach` and `bta_container_detach` need a branch of their own,
+  and the detach goes through `gtk_aspect_frame_set_child(af, NULL)` rather than
+  an unparent, or GTK keeps its pointer and the container goes on believing it is
+  full. Its `Placement` is `Single`, the sixth word: one child and one place, so
+  a gesture there is *land* -- told `Coordinates` an editor offers X/Y that do
+  nothing, told `Order` it asks for an order the container has not got.
+- **`printf("%g")` writes the locale's decimal separator, and this machine writes
+  a comma.** `Ratio = 1.5` came back `"1,5"`, which is what the `.form` would
+  then carry and what `JSON.parse` would read as **nothing** -- the same fault
+  the QuickJS number patch exists for, one layer up, and it was caught by a test
+  asserting the round trip rather than by anybody reading the code.
+  `g_ascii_dtostr` on the way out, `g_ascii_strtod` on the way in, for any
+  property that keeps a number as text.
 - **In an `Overlay` the bottom of the stack is the layer that fills.** The base
   is a GTK *property* (`gtk_overlay_set_child`) and the floaters are a list, so
   `Reorder(child, 0)` swaps the property rather than moving a sibling — both
