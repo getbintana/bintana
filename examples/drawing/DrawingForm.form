@@ -34,7 +34,8 @@
               "name": "Line",
               "properties": {
                 "Expand": true,
-                "Margin": 6
+                "Margin": 6,
+                "Cursor": "Crosshair"
               }
             }
           ]

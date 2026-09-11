@@ -50,11 +50,51 @@ static gboolean on_close_request(GtkWindow *win, gpointer user_data)
  * heard from the window's own GdkSurface -- which exists from `realize` on. */
 static void on_form_realized(GtkWidget *win, gpointer user_data);
 
+/*
+ * The desktop changed the theme under a running window.
+ *
+ * Raised on the form and on nothing else: what a change of theme costs is the
+ * icons and colours an application chose for itself, and that is a decision a
+ * *form* made -- one handler that walks its own controls, rather than the same
+ * event delivered to forty of them. `Form_Resize` is the same shape for the
+ * same reason.
+ *
+ * **The colours are already the new ones inside the handler** (measured: the
+ * ink goes 0.20 to 0.93 between the two sides of this call), so `Dark` read
+ * from here is the answer to the change that caused it, and no idle hop is
+ * needed to wait for GTK to catch up.
+ *
+ * Two properties, because a desktop can move either one, so **one change may
+ * raise it twice**. That is deliberate rather than debounced: the event carries
+ * nothing, a handler re-reads state and restyles, and doing that twice is the
+ * same picture. A handler that is not idempotent is a handler that was already
+ * wrong.
+ */
+static void on_theme_change(GObject *settings, GParamSpec *spec, gpointer data)
+{
+    bta_emit(data, "ThemeChange", 0, NULL);
+}
+
 static void build_form(BtaWidget *w)
 {
     w->gtk = gtk_window_new();
 
     g_signal_connect(w->gtk, "realize", G_CALLBACK(on_form_realized), w);
+
+    /*
+     * The settings object belongs to the display and outlives every window on
+     * it, so this is exactly the case `bta_widget_watch` exists for: a handler
+     * left on it after the form is gone would fire on freed memory the next
+     * time somebody switched themes.
+     */
+    GtkSettings *settings = gtk_settings_get_default();
+    if (settings) {
+        g_signal_connect(settings, "notify::gtk-application-prefer-dark-theme",
+                         G_CALLBACK(on_theme_change), w);
+        g_signal_connect(settings, "notify::gtk-theme-name",
+                         G_CALLBACK(on_theme_change), w);
+        bta_widget_watch(w, settings);
+    }
 
     /*
      * The window's child is the surface, and nothing in between.
@@ -3568,6 +3608,52 @@ static const char *orient_options(const char *prop)
  * with a wait cursor and a cancellable, because a large photograph takes long
  * enough to freeze a window. `File` here is synchronous and honest about it.
  */
+/*
+ * A texture out of bytes in memory, which is the half of showing a picture this
+ * runtime could not do.
+ *
+ * `Http` answers a body as `Bytes` and `File.LoadBytes` reads one, and the only
+ * thing that could *show* an image wanted a path -- so the whole of "download it
+ * and show it" was a temporary file, written and deleted around a control that
+ * would rather have been handed the bytes. GDK decodes from memory as readily as
+ * from a file (`gdk_texture_new_from_bytes`, which sniffs the format the way the
+ * filename version does), so the gap was never GTK's.
+ *
+ * The complaint is the setter's, and it names what it got rather than what it
+ * wanted: `Bytes` that are not an image is the ordinary failure here -- an HTTP
+ * error page answered with 200, most often -- and *cannot show 1.2 kB: unknown
+ * image format* is the sentence that ends that hunt.
+ */
+GdkTexture *bta_texture_from_bytes(JSContext *ctx, JSValueConst val,
+                                   const char *who)
+{
+    size_t         len  = 0;
+    const uint8_t *data = bta_bytes_get(val, &len);
+
+    if (!data) {
+        JS_ThrowTypeError(ctx, "%s expects Bytes -- what Http answers with and "
+                               "File.LoadBytes reads", who);
+        return NULL;
+    }
+    if (!len) {
+        JS_ThrowRangeError(ctx, "%s: no bytes at all", who);
+        return NULL;
+    }
+
+    GBytes     *held    = g_bytes_new(data, len);
+    GError     *error   = NULL;
+    GdkTexture *texture = gdk_texture_new_from_bytes(held, &error);
+
+    g_bytes_unref(held);
+    if (!texture) {
+        JS_ThrowTypeError(ctx, "%s: cannot show %zu bytes: %s", who, len,
+                          error ? error->message : "not an image");
+        g_clear_error(&error);
+        return NULL;
+    }
+    return texture;
+}
+
 #define PIC_FILE_KEY "bta-picture-file"
 #define PIC_ZOOM_KEY "bta-picture-zoom"
 
@@ -3754,6 +3840,38 @@ static JSValue picture_set_file(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
+/*
+ * The same picture, out of memory instead of off the disk.
+ *
+ * A verb and not a property, which is the decision worth writing down: a
+ * property in this runtime is a promise that the designer can edit it and the
+ * `.form` can carry it, and a megabyte of JPEG is neither. `File` stays the
+ * property -- it is a name, it round-trips, a form can declare one -- and what
+ * arrives at run time arrives through a call.
+ *
+ * **One source at a time, the last one wins**, which is the rule `Image` already
+ * had: bytes clear `File`, so reading it back says `""` rather than naming a
+ * file that is not what is on screen.
+ */
+static JSValue picture_load_bytes(JSContext *ctx, JSValueConst this_val,
+                                  int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "LoadBytes expects (bytes)");
+
+    GdkTexture *texture = bta_texture_from_bytes(ctx, argv[0], "LoadBytes");
+    if (!texture)
+        return JS_EXCEPTION;
+
+    g_object_set_data_full(G_OBJECT(w->gtk), PIC_TEXTURE_KEY, texture, g_object_unref);
+    g_object_set_data(G_OBJECT(w->gtk), PIC_FILE_KEY, NULL);
+    picture_apply_zoom(w);      /* these bytes' size, not the last file's */
+    return JS_UNDEFINED;
+}
+
 static const char *const PIC_FIT[] = { "Fill", "Contain", "Cover", "ScaleDown" };
 
 static JSValue picture_get_fit(JSContext *ctx, JSValueConst this_val)
@@ -3862,6 +3980,7 @@ static JSValue picture_set_zoom(JSContext *ctx, JSValueConst this_val,
 
 static const JSCFunctionListEntry picture_props[] = {
     JS_CGETSET_DEF("File", picture_get_file, picture_set_file),
+    JS_CFUNC_DEF("LoadBytes", 1, picture_load_bytes),
     JS_CGETSET_DEF("Fit",  picture_get_fit,  picture_set_fit),
     JS_CGETSET_DEF("Zoom", picture_get_zoom, picture_set_zoom),
     JS_CGETSET_MAGIC_DEF("SourceWidth",  picture_get_source, NULL, PIC_SOURCE_W),
@@ -4520,6 +4639,61 @@ static const char *slider_options(const char *prop)
 #define FORMAT_KEY "bta-date-format"
 #define DATE_ISO   "%Y-%m-%d"
 
+/*
+ * No date at all, which is a state GTK does not have.
+ *
+ * A `GtkCalendar` always holds a day -- there is no null in it and nowhere to
+ * put one -- so a picker that starts on today answered *today* for a field
+ * nobody filled in, and an optional date could not come back empty from the
+ * screen it was edited on. That is not a missing convenience: `Field.Date`
+ * already spells the empty one `""` and lets it through when the field is not
+ * required, so the control was writing a date the program never meant, silently
+ * and into the record. Found by `data-plan.md`, which wrote it down as the limit
+ * that keeps an optional date from making the round trip.
+ *
+ * So the flag is ours and the calendar underneath is left holding whatever it
+ * held: that is what the popover opens on, and it is why browsing months in an
+ * empty picker does not fill it in. The empty state ends when a day is chosen,
+ * which is the one gesture that means *this date*.
+ *
+ * **It is the field's and not the month's.** A `Calendar` is a drawing of a
+ * month with a day on it, and there is no way to draw one with none -- so it
+ * refuses `""` rather than accepting it and lying, which is the same call
+ * `Style` makes about a class name it could never resolve.
+ */
+#define EMPTY_KEY  "bta-date-empty"
+/* What the button reads with no date in it. An em dash and not a blank, which
+ * is a button the size of its own padding and reads as broken; `Placeholder`
+ * is there for the form that wants to say it in words, and is prose like a
+ * `TextBox`'s. */
+#define HOLDER_KEY "bta-date-placeholder"
+#define DATE_NONE  "\u2014"
+
+/* A DatePicker is a menu button with a calendar in its popover; a Calendar is
+ * the calendar. Only the first can be empty, and this is the question the rest
+ * of the file already asks to tell them apart. */
+static gboolean date_is_picker(BtaWidget *w)
+{
+    return GTK_IS_MENU_BUTTON(w->gtk);
+}
+
+static gboolean date_empty(BtaWidget *w)
+{
+    return g_object_get_data(G_OBJECT(w->gtk), EMPTY_KEY) != NULL;
+}
+
+static void date_set_empty(BtaWidget *w, gboolean empty)
+{
+    g_object_set_data(G_OBJECT(w->gtk), EMPTY_KEY,
+                      empty ? GINT_TO_POINTER(1) : NULL);
+}
+
+static const char *date_placeholder(BtaWidget *w)
+{
+    const char *t = g_object_get_data(G_OBJECT(w->gtk), HOLDER_KEY);
+    return t && *t ? t : DATE_NONE;
+}
+
 /* A `Calendar` *is* the calendar; a `DatePicker` keeps one in its popover.  That
  * is the whole difference between the two controls, so it is the only thing the
  * code below asks about. */
@@ -4565,6 +4739,11 @@ static void date_relabel(BtaWidget *w)
     if (!GTK_IS_MENU_BUTTON(w->gtk))
         return;
 
+    if (date_empty(w)) {
+        gtk_menu_button_set_label(GTK_MENU_BUTTON(w->gtk), date_placeholder(w));
+        return;
+    }
+
     GDateTime *when = gtk_calendar_get_date(date_calendar(w));
     char      *text = g_date_time_format(when, date_format(w));
 
@@ -4573,10 +4752,13 @@ static void date_relabel(BtaWidget *w)
     g_date_time_unref(when);
 }
 
+/* Choosing a day is the gesture that means *this date*, so it is what ends the
+ * empty state -- and the only thing that does. */
 static void on_date_selected(GtkCalendar *cal, gpointer user_data)
 {
     BtaWidget *w = user_data;
 
+    date_set_empty(w, FALSE);
     date_relabel(w);
     bta_emit(w, "Change", 0, NULL);
 }
@@ -4655,7 +4837,13 @@ static void on_date_page(GObject *cal, GParamSpec *spec, gpointer user_data)
 
     cal_apply_marks(w);
     date_relabel(w);
-    bta_emit(w, "Change", 0, NULL);
+
+    /* Unless there is no date: then the page is a page and nothing else --
+     * looking through the months of an empty picker for the one wanted must not
+     * fill it in on the way, and `Value` did not change, so neither did
+     * anything to raise `Change` about. */
+    if (!date_empty(w))
+        bta_emit(w, "Change", 0, NULL);
 }
 
 static void build_datepicker(BtaWidget *w)
@@ -4685,6 +4873,12 @@ static JSValue date_get_value(JSContext *ctx, JSValueConst this_val)
     if (!w)
         return JS_EXCEPTION;
 
+    /* `""` and not null: it is what `Field.Date` calls an empty date, what a
+     * `.form` can write down, and what a `TextBox` answers when it holds
+     * nothing. One spelling for the whole road. */
+    if (date_empty(w))
+        return JS_NewString(ctx, "");
+
     GDateTime *when = gtk_calendar_get_date(date_calendar(w));
     char      *iso  = g_date_time_format(when, DATE_ISO);
     JSValue    out  = JS_NewString(ctx, iso ? iso : "");
@@ -4705,6 +4899,23 @@ static JSValue date_set_value(JSContext *ctx, JSValueConst this_val,
     if (!s)
         return JS_EXCEPTION;
 
+    if (!*s) {
+        JS_FreeCString(ctx, s);
+
+        if (!date_is_picker(w))
+            return JS_ThrowRangeError(ctx, "Value: a Calendar always has a day "
+                                           "on it and cannot be empty -- the "
+                                           "empty date is a DatePicker's");
+
+        /* The calendar keeps the date it had: it is what the popover opens on,
+         * and picking a day out of the month one was already looking at is the
+         * ordinary way back out of empty. */
+        date_set_empty(w, TRUE);
+        date_relabel(w);
+        bta_emit(w, "Change", 0, NULL);
+        return JS_UNDEFINED;
+    }
+
     int y = 0, m = 0, d = 0;
     if (!date_parse(s, &y, &m, &d)) {
         JSValue e = date_refuse(ctx, "Value", s);
@@ -4712,6 +4923,8 @@ static JSValue date_set_value(JSContext *ctx, JSValueConst this_val,
         return e;
     }
     JS_FreeCString(ctx, s);
+
+    date_set_empty(w, FALSE);
 
     GtkCalendar *cal = date_calendar(w);
 
@@ -4765,9 +4978,39 @@ static JSValue date_set_format(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
+static JSValue date_get_placeholder(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    return JS_NewString(ctx, date_placeholder(w));
+}
+
+static JSValue date_set_placeholder(JSContext *ctx, JSValueConst this_val,
+                                    JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    const char *t = JS_ToCString(ctx, val);
+    if (!t)
+        return JS_EXCEPTION;
+
+    /* `""` restores the em dash rather than blanking the button, the way `""`
+     * on a colour restores the theme's: nothing said is not the same as *say
+     * nothing*, and a button with no label at all is the size of its padding. */
+    g_object_set_data_full(G_OBJECT(w->gtk), HOLDER_KEY, g_strdup(t), g_free);
+    JS_FreeCString(ctx, t);
+
+    date_relabel(w);
+    return JS_UNDEFINED;
+}
+
 static const JSCFunctionListEntry datepicker_props[] = {
     JS_CGETSET_DEF("Value",  date_get_value,  date_set_value),
     JS_CGETSET_DEF("Format", date_get_format, date_set_format),
+    JS_CGETSET_DEF("Placeholder", date_get_placeholder, date_set_placeholder),
 };
 
 /* ------------------------------------------- Calendar: the month itself */
@@ -5239,8 +5482,13 @@ static const JSCFunctionListEntry fontbutton_props[] = {
  * beside the property, so a property editor never has to know these names. */
 static const char *widget_options(const char *prop)
 {
-    return !strcmp(prop, "HAlign") || !strcmp(prop, "VAlign")
-        ? "Auto,Start,End,Center,Fill" : NULL;
+    if (!strcmp(prop, "HAlign") || !strcmp(prop, "VAlign"))
+        return "Auto,Start,End,Center,Fill";
+    /* Built in bta_widget.c out of the same table the setter checks, which is
+     * what keeps a list of twenty-eight names honest. */
+    if (!strcmp(prop, "Cursor"))
+        return bta_widget_cursor_options();
+    return NULL;
 }
 
 static const char *container_options(const char *prop)
@@ -5301,6 +5549,17 @@ static JSValue image_store(JSContext *ctx, JSValueConst this_val,
     const char *other = !strcmp(key, IMG_ICON_KEY) ? IMG_FILE_KEY : IMG_ICON_KEY;
     g_object_set_data(G_OBJECT(w->gtk), other, NULL);
     g_object_set_data_full(G_OBJECT(w->gtk), key, g_strdup(s), g_free);
+
+    /*
+     * **And the icon the widget was told to *keep* re-resolving**, which is a
+     * second thing and was the bug: `bta_image_set_icon` leaves the name on the
+     * widget and hooks the icon theme, so that an icon follows a change of theme
+     * or of scale. Clearing `Icon` here left that name behind -- and the next
+     * theme change put the old icon back over the file (or the bytes) that had
+     * replaced it. Nothing showed it until something else was shown.
+     */
+    if (strcmp(key, IMG_ICON_KEY))
+        g_object_set_data(G_OBJECT(w->gtk), IMG_NAME_KEY, NULL);
 
     if (!*s)
         gtk_image_clear(GTK_IMAGE(w->gtk));
@@ -5375,9 +5634,43 @@ static JSValue image_set_size(JSContext *ctx, JSValueConst this_val, JSValueCons
     return JS_UNDEFINED;
 }
 
+/*
+ * The third source, and the only one that is a verb: an image already in memory.
+ *
+ * `Icon` and `File` are names -- a `.form` can declare either and the designer
+ * can edit both -- and bytes are neither, so they arrive through a call. The
+ * rule above holds all the same: the last source wins, so `Icon` and `File` both
+ * read `""` afterwards and cannot name something that is not what is drawn.
+ *
+ * `Size` still applies, because it is the widget's and not the image's: GTK
+ * scales a paintable into the pixel size the image was given.
+ */
+static JSValue image_load_bytes(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "LoadBytes expects (bytes)");
+
+    GdkTexture *texture = bta_texture_from_bytes(ctx, argv[0], "LoadBytes");
+    if (!texture)
+        return JS_EXCEPTION;
+
+    g_object_set_data(G_OBJECT(w->gtk), IMG_ICON_KEY, NULL);
+    g_object_set_data(G_OBJECT(w->gtk), IMG_FILE_KEY, NULL);
+    g_object_set_data(G_OBJECT(w->gtk), IMG_NAME_KEY, NULL);
+
+    gtk_image_set_from_paintable(GTK_IMAGE(w->gtk), GDK_PAINTABLE(texture));
+    g_object_unref(texture);    /* the image holds its own reference now */
+    return JS_UNDEFINED;
+}
+
 static const JSCFunctionListEntry image_props[] = {
     JS_CGETSET_DEF("Icon", image_get_icon, image_set_icon),
     JS_CGETSET_DEF("File", image_get_file, image_set_file),
+    JS_CFUNC_DEF("LoadBytes", 1, image_load_bytes),
     JS_CGETSET_DEF("Size", image_get_size, image_set_size),
 };
 
@@ -5400,7 +5693,7 @@ void bta_core_register(void)
         BTA_CLASS_BARE("Control",   "Widget",    NULL,                            false, NULL),
         /* A window's title is prose; so is the caption of everything below. */
         BTA_CLASS_TEXT("Form",      "Container", build_form,     form_props,      true, "Text",
-                       "Open,Close,Resize"),
+                       "Open,Close,Resize,ThemeChange"),
         BTA_CLASS_BARE("Panel",     "Container", build_panel,                     false, NULL),
         BTA_CLASS_BARE("Component", "Container", build_component,                 false, NULL),
         BTA_CLASS_ENUM_TEXT("Label", "Control",  build_label,    label_props, false,
@@ -5447,8 +5740,11 @@ void bta_core_register(void)
                        progressbar_props, false, orient_options, "Text", NULL),
         BTA_CLASS_ENUM("Slider",       "Control", build_slider,
                        slider_props, false, slider_options, "Change"),
-        BTA_CLASS     ("DatePicker",   "Control", build_datepicker,
-                       datepicker_props, false, "Change"),
+        /* `Placeholder` is prose and `Format` is not, which is the same line
+         * `TextBox` draws: one is read by a person, the other is a strftime
+         * pattern that a catalogue would turn into a different date. */
+        BTA_CLASS_TEXT("DatePicker",   "Control", build_datepicker,
+                       datepicker_props, false, "Placeholder", "Change"),
         BTA_CLASS     ("Calendar",     "Control", build_calendar,
                        calendar_props, false, "Change"),
         BTA_CLASS     ("ColorButton", "Control",  build_colorbutton,

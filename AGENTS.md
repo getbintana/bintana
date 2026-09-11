@@ -34,9 +34,10 @@ public (`get Type()`, `Refresh()`), a lower-case one is the class talking to
 itself (`view()`, `reduce()`), an underscore is a handler. `static Events` gives
 the names and each `Emit` gives the arity. The page is `docs/llm/<library>.md`,
 and a library with no page at all is the first thing it reports.
-- `run.sh` does not default to `HEADLESS=1` and `asan.sh` does; that asymmetry was
-  walked into four times, twice after being apologised for, because the command
-  block showed the bare form first.
+- `run.sh` did not default to `HEADLESS=1` and `asan.sh` did; that asymmetry was
+  walked into five times, most of them after being apologised for. It is gone —
+  both default to the virtual display now — and it stayed a documented rule for
+  four of those five times, which is the lesson rather than the fix.
 - A `GtkGrid` had no removal branch, so a grid could be filled once and never
   rebuilt. Nothing said so anywhere, and it took an application written against
   `docs/llm/` to find it.
@@ -81,7 +82,7 @@ teach the form and says so.
 **And the numbers in a document are part of it.** Assertion totals, phase lists,
 class counts, per-test timings: every one of those was stale at some point in this
 repository, and a stale number reads exactly as authoritative as a fresh one.
-`HEADLESS=1 ./tests/run.sh` prints the three that matter.
+`./tests/run.sh` prints the three that matter.
 
 Two rules of thumb for whether a change belongs here at all. If you had to *read
 the C* to find something out, that is a candidate — the point of this file is that
@@ -92,14 +93,14 @@ the whole signal.
 
 ```sh
 cmake -S . -B build && cmake --build build -j    # build (needed after any C change)
-HEADLESS=1 ./tests/run.sh                         # whole suite
-HEADLESS=1 ./tests/run.sh widgets                 # one project
-HEADLESS=1 ./tests/run.sh widgets record          # one test of it
-HEADLESS=1 ./tests/run.sh ide designer            # one project, up to one phase
-HEADLESS=1 ./tests/run.sh ide list                # what a project can be asked for
-BINTANA=/other/bintana HEADLESS=1 ./tests/run.sh          # suite against another build
-TIMEOUT=300 HEADLESS=1 ./tests/run.sh             # a slower machine than this one
-./tests/asan.sh                                   # suite under AddressSanitizer (headless on its own)
+./tests/run.sh                                    # whole suite
+./tests/run.sh widgets                            # one project
+./tests/run.sh widgets record                     # one test of it
+./tests/run.sh ide designer                       # one project, up to one phase
+./tests/run.sh ide list                           # what a project can be asked for
+BINTANA=/other/bintana ./tests/run.sh             # suite against another build
+TIMEOUT=300 ./tests/run.sh                        # a slower machine than this one
+./tests/asan.sh                                   # suite under AddressSanitizer
 tests/try.sh <project> [args...]                  # run any project, on a virtual display
 ./tests/api.sh                                    # is docs/llm/ still the whole public surface?
 ./tests/icons.sh                                  # which declared icons this desktop has, and which draw
@@ -107,12 +108,16 @@ tests/try.sh <project> [args...]                  # run any project, on a virtua
 ./tests/install.sh                                # what `make install` produces, run out of a staging prefix
 ```
 
-**`HEADLESS=1` is part of the command, not an option.** `run.sh` falls back to
-`xvfb-run` only when there is **no** `DISPLAY`, so on a machine somebody is using
-the bare form opens the suite over their work and takes the keyboard. `asan.sh`
-exports `HEADLESS=${HEADLESS:-1}` and `run.sh` does not — that asymmetry is the
-whole trap, and it has been walked into repeatedly. Anything that draws goes
-through `tests/try.sh`, which cannot make the mistake.
+**Nothing here opens a window, and that is the scripts' doing rather than
+yours.** `run.sh` and `asan.sh` both export `HEADLESS=${HEADLESS-1}`, so the
+suite draws on a virtual display whatever the machine has; `HEADLESS=` — empty,
+not `0` — is the way back to a real screen. It was a rule before it was a
+default, written in three documents, and it was still walked into five times:
+the runner falls back to `xvfb-run` only when there is **no** `DISPLAY`, which
+is CI and never a desktop, so the bare form opened the suite over somebody's
+work and took the keyboard for a minute. A rule that has to be remembered on
+every invocation is a rule that will be forgotten on one of them. Anything else
+that draws goes through `tests/try.sh`, which cannot make the mistake either.
 
 These need a real screen and so need saying out loud before running one:
 
@@ -142,15 +147,14 @@ no display) with a ten-line `.sh` in front of it that finds the binary. There is
 no Python left in the repository, and adding a desk tool means writing a project,
 not a script.
 
-`tests/install.sh` is the only one that is safe to run *without* `HEADLESS`, and
-it is not an exception to the rule below: it never uses the caller's display at
-all. It brings up an `Xvfb` of its own, because the check is a second command
+`tests/install.sh` is the only one that needs no `HEADLESS` of its own, and it is
+not an exception to the rule above: it never uses the caller's display at all. It brings up an `Xvfb` of its own, because the check is a second command
 asking that display what the first one drew — which is precisely what `xvfb-run`
 cannot do, since it owns its display for the length of one command.
 
-The suite needs a display but not yours: with no `DISPLAY`/`WAYLAND_DISPLAY` it
-falls back to `xvfb-run` (`HEADLESS=1` forces it), which is what `.github/workflows/ci.yml`
-relies on. Anything you drive by hand still needs a real display. Build deps:
+The suite needs a display but not yours: it runs under `xvfb-run` by default, and
+falls back to it anyway when there is no `DISPLAY`/`WAYLAND_DISPLAY`, which is
+what `.github/workflows/ci.yml` relies on. Anything you drive by hand still needs a real display. Build deps:
 `gtk4`, `gtksourceview-5` (with headers), pkg-config. QuickJS is vendored, so
 nothing to install for it. Five are optional and CMake says what it found either
 way: `sqlite3`, `libsystemd`, `libsoup-3.0`, `gstreamer-1.0` and
@@ -159,7 +163,7 @@ dependency with no Windows port. **Build both ways before touching anything unde
 an `#ifdef`**: a wrapper `pkg-config` that exits 1 for one module name and
 delegates the rest is the whole of it
 (`cmake -S . -B build-x -DPKG_CONFIG_EXECUTABLE=<wrapper>`), and
-`BINTANA=<path> BINTANA_LIB_PATH=$PWD/lib HEADLESS=1 ./tests/run.sh` runs the
+`BINTANA=<path> BINTANA_LIB_PATH=$PWD/lib ./tests/run.sh` runs the
 suite against it -- the library path because `lib/` is found relative to the
 *executable*, so a build in another directory fails twelve chart assertions for
 a reason that has nothing to do with what was turned off.
@@ -557,7 +561,7 @@ Three things that will waste your time:
   either brings the other. A test whose deferred half lives in the tail and does not
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
-  `HEADLESS=1 ./tests/run.sh ide designer` runs the prefix ending at that phase —
+  `./tests/run.sh ide designer` runs the prefix ending at that phase —
   351 assertions in 4 s against 1768 in 45, which is what makes iterating on an
   early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
@@ -907,11 +911,13 @@ person who wrote it either.
   shown as a form. The cost is that the declaration is settled at Show and a
   later assignment does not move an open form's default, which is written down
   where the setter is.
-- **Run the suite with `HEADLESS=1` -- and that includes `tests/asan.sh`, which
-  did not.** It exports `HEADLESS=${HEADLESS:-1}` now, because "remember to" is
-  not a mechanism: four sanitizer runs went onto the user's desktop before
-  anybody noticed, each of them the whole suite, dozens of windows over whatever
-  he was doing. The same goes for a probe of your own under `/tmp` -- `xvfb-run`
+- **The suite is headless by default, and that is a mechanism replacing a rule
+  that failed five times.** `asan.sh` exported `HEADLESS=${HEADLESS:-1}` first,
+  after four sanitizer runs went onto the user's desktop -- each of them the
+  whole suite, dozens of windows over whatever he was doing. `run.sh` went on
+  needing the prefix by hand for a while longer, and was walked into again; both
+  export `HEADLESS=${HEADLESS-1}` now, with `-` so an explicitly empty one still
+  reaches a real screen. "Remember to" is not a mechanism. The same goes for a probe of your own under `/tmp` -- `xvfb-run`
   is one word. Even driving one by hand does not need his screen: xvfb is a real
   X server and `xdotool` works against it, so a resize or a click done "for
   real" belongs there too.
@@ -926,11 +932,14 @@ person who wrote it either.
   <project>` debugs the same binary on a display nobody uses, and a bare
   `gdb ./build/bintana tests/widgets` is a windowed suite on his screen held
   open by a breakpoint.
-- **Run the suite with `HEADLESS=1`.** `DISPLAY` is set on a desktop, so
-  `tests/run.sh` puts every window it opens *on the user's screen* — dozens of
-  them, taking the focus, and a stray click on one moves the focus and breaks
-  whatever was measuring. That is a plausible source of any
-  one-run-in-three failure, and xvfb has no stray input at all. The exception is
+- **And a real screen is worse than an inconvenience: it fails assertions.** A
+  run on the user's desktop put every window *on his screen* — dozens of them,
+  taking the focus, and a stray click on one moves the focus and breaks whatever
+  was measuring, which is a plausible source of any one-run-in-three failure.
+  Measurements differ too: the same `tests/ide` that passes under xvfb failed a
+  `Calendar`'s drawn size on his session, because the theme and the font are not
+  the ones the numbers were written against. So `HEADLESS=` is for a question
+  about the real desktop, never for an ordinary run. The exception is
   the one AGENTS.md already names: icons resolve against Adwaita under xvfb, so a
   run that is about an icon has to be a real one (`tests/ide` answers two
   assertions more on a real theme, which is that difference and not a bug).
@@ -1163,6 +1172,76 @@ person who wrote it either.
   `inner` and, for a `GtkEditable`, its delegate. Found by a tab-order test
   expecting Tab to skip a `TextBox`, which is the only way it *could* be found:
   the getter agreed with the setter the whole time.
+- **An image in memory is a verb, not a property.** `Picture.LoadBytes(bytes)`,
+  `Image.LoadBytes(bytes)`, `Painter.Image` taking a string *or* `Bytes`, and
+  `DrawingArea.ToPng()` answering `Bytes` -- the circle `Http` (which answers
+  `Bytes`) and `File.LoadBytes`/`SaveBytes` left open, which used to be crossed
+  with a temporary file. Verbs because a property here promises the designer can
+  edit it and the `.form` can carry it, and a megabyte of JPEG is neither; the
+  `File` properties stay, and the old rule holds -- last source wins, so bytes
+  clear `File` and `Icon`. **The painter's image cache is the path's alone**: a
+  freed buffer's address can be handed out again, so a cache keyed on bytes
+  would eventually paint the wrong picture. Measured cost of that choice: 2.7 ms
+  a call against 0.045 ms cached, for a 640x480 PNG.
+- **Clearing `Image.Icon` has to clear `IMG_NAME_KEY` too**, which it did not:
+  `bta_image_set_icon` leaves the name on the widget and hooks the icon theme so
+  the icon survives a change of theme or scale, and that name outlived the
+  `File` that replaced it -- so the next theme change put the old icon back over
+  the picture. Invisible until something else was shown.
+- **Neither GTK setting answers "is the desktop dark".** `gtk-theme-name` is
+  `"Default"` under Adwaita and `gtk-application-prefer-dark-theme` is `false`
+  under `GTK_THEME=Adwaita:dark` -- both measured -- so `Widget.Dark` is derived
+  from `gtk_widget_get_color()`, the ink really being drawn, which is what
+  `Painter.Dark` always did and is now the same function (`bta_widget_dark`).
+  Two traps around it: **an unrooted widget has no resolved style** and answers
+  white in every theme, so the fallback is the application's first window; and
+  the `GtkSettings` the `ThemeChange` handlers hang off outlives every window,
+  so they go through `bta_widget_watch` or they fire on a freed form. Inside the
+  handler the colours are already the new ones, measured -- no idle hop needed.
+- **The IDE copies its dirty tabs aside every thirty seconds, and never writes
+  to the project to do it.** `Recovery.js`, into
+  `Application.ConfigDirectory/recovery/<digest of the project path>.json`. An
+  autosave that saved in place would take away what closing without saving is
+  for, so this one cannot: the only thing it can cost is a stale file in the
+  config directory. It is read once, when a project opens, and `quit()` deletes
+  it on every ordinary way out -- *quit without saving* is an answer, and a
+  snapshot that outlived it would offer to undo a decision. `TabSet.contentOf`
+  reads the **live** editor or surface rather than `state`, because the active
+  tab is the one whose saved state is stalest and the one a crash takes. How
+  often is `Settings`' `recovery.seconds` (File > Autosave...), `0` for off, and
+  turning it off keeps whatever snapshot exists: it may be the only copy of that
+  work.
+- **A control that cannot say *nothing* answers something, and that is a data
+  bug wearing a widget's clothes.** A `GtkCalendar` always holds a day, so a
+  `DatePicker` answered today for a field nobody filled in and an optional
+  `Field.Date` -- which spells the empty date `""` and has always let it through
+  -- took a date the program never meant, with no error anywhere. The empty
+  state is a flag of ours (`bta-date-empty`) with the calendar left holding what
+  it had, so the popover opens on a sensible month; choosing a day ends it, a
+  page turn does not and raises no `Change`. **`Calendar` refuses `""`** instead
+  of sharing it: a month is drawn with a day on it. The one still open is
+  `ComboBox`, which has no empty text for the same kind of reason.
+- **`Cursor` is the same rule, arrived at from the other side.** A cursor set on
+  an ancestor reaches a descendant only while the descendant has none, and the
+  ones that matter have one: the `GtkText` inside a `TextBox` and a `SpinBox`
+  and the `GtkTextView` inside an `Editor` all carry `text`, a `LinkButton`
+  carries `pointer`. So `cursor_apply` walks `gtk`, `inner` and the editable's
+  delegate exactly as `w_set_flag` does. Two things follow that are not
+  obvious. **`Auto` restores rather than clears** -- each part remembers what it
+  had under `bta-cursor-kept` the first time it is touched, or clearing would
+  leave a link with no hand for the rest of the run. And **`Form.Cursor` is not
+  a busy pointer for the window**: a child with its own wins, GTK has no way
+  down, and that is documented rather than worked around.
+- **The names `Cursor` takes are ours, and that is deliberate.** The runtime
+  passes vocabularies through when they are the platform's -- icon names, font
+  families, `Shortcut`'s accelerators -- and this one does not, because it is
+  the only one that is closed *and* abbreviated. It also has to be checked here:
+  `gdk_cursor_new_from_name` is documented to answer NULL for a name no theme
+  knows and **does not** -- it answers a live cursor for `bogus-name-xyz` --
+  so an unchecked typo would be a property that reads back correctly and draws
+  an arrow. The table in `bta_widget.c` is the single place the CSS spelling
+  appears, and `bta_widget_cursor_options()` builds the drop-down out of it so
+  the two cannot drift.
 - **Tab order cannot ride the child list, because paint order already does.**
   GTK4 walks the focus in child-list order and removed `GtkContainer`'s focus
   chain, so on a `BtaFixed` the drawn order is the tab order -- and that same list

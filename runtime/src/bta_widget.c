@@ -2403,6 +2403,214 @@ static JSValue w_set_tooltip(JSContext *ctx, JSValueConst this_val, JSValueConst
     return JS_UNDEFINED;
 }
 
+/* ----------------------------------------------------------------- cursor
+ *
+ * What the pointer looks like over this widget.
+ *
+ * **It cannot go through the stylesheet**, which is where `Opacity`, `Radius`
+ * and the colours go: GTK's CSS has no `cursor` property -- `button { cursor:
+ * pointer }` is answered with *No property named "cursor"* -- so a widget
+ * property is the only road. The mirror of `Opacity`, which is in CSS
+ * precisely because CSS has it.
+ *
+ * **The list is closed and checked here, because nothing downstream ever
+ * checks it.** `gdk_cursor_new_from_name` is documented to answer NULL for a
+ * name no theme knows and does not: it hands back a live cursor carrying the
+ * name, which is resolved -- or quietly replaced by the arrow -- when it
+ * reaches a surface. So a typo would be a property that reads back correctly
+ * and does nothing, which is the failure `Style` refuses a non-identifier to
+ * avoid.
+ *
+ * The names are ours rather than CSS's, which is the one place this runtime
+ * translates a vocabulary it could have passed through. The reason is that
+ * this one is closed *and* abbreviated -- `ew-resize`, `nesw-resize` -- unlike
+ * an icon name, a font family or a `Shortcut`, which are open and readable and
+ * do pass through. Two of the rows are what the translation is worth:
+ *
+ * - **`Move` is `all-resize` and not `move`**, because Adwaita links `move` to
+ *   `default`: the value that says "this can be dragged" would have drawn a
+ *   plain arrow.
+ * - **`ResizeColumn` is `col-resize`**, CSS's own meaning-based name. The
+ *   toolkits that name it by orientation disagree with each other about which
+ *   one it is: Delphi's `crHSplit` and WinForms' `HSplit` are opposite things.
+ *
+ * The eight one-headed arrows (`n-resize`, `se-resize`, …) are deliberately
+ * not offered. They are X11's vocabulary for a window manager resizing a
+ * window by an edge; not one of VB6, Delphi, WinForms, WPF or Qt has them, and
+ * what an application resizes -- a splitter, a corner, a designer's handle --
+ * is two-headed. Leaving them out is also what frees `ResizeTopLeft` to be a
+ * corner rather than a pair of axes spelled out.
+ */
+static const struct { const char *name; const char *css; } CURSOR_NAMES[] = {
+    /* Nothing said: the widget inherits whatever its parent has, which is what
+     * every widget starts with. First, so it is the head of the drop-down. */
+    { "Auto",             NULL },
+    /* And not `Default`, which beside `Auto` reads as the same answer. Qt's
+     * word for the same thing, and the arrow really is a decision: a widget
+     * inside one that set a cursor may want the plain pointer back. */
+    { "Arrow",            "default" },
+    { "Hand",             "pointer" },
+    { "Grab",             "grab" },
+    { "Grabbing",         "grabbing" },
+    { "Text",             "text" },
+    { "VerticalText",     "vertical-text" },
+    /* The pair every toolkit has: blocked, against working but usable. */
+    { "Wait",             "wait" },
+    { "Progress",         "progress" },
+    { "Help",             "help" },
+    { "Crosshair",        "crosshair" },
+    { "Cell",             "cell" },
+    { "ContextMenu",      "context-menu" },
+    { "Move",             "all-resize" },
+    { "Scroll",           "all-scroll" },
+    { "Copy",             "copy" },
+    { "Link",             "alias" },
+    { "NoDrop",           "no-drop" },
+    { "NotAllowed",       "not-allowed" },
+    { "ZoomIn",           "zoom-in" },
+    { "ZoomOut",          "zoom-out" },
+    { "None",             "none" },
+    /* An edge is an axis and a corner is a corner. The same arrow serves the
+     * opposite corner, which is why there are two and not four. */
+    { "ResizeHorizontal", "ew-resize" },
+    { "ResizeVertical",   "ns-resize" },
+    { "ResizeTopLeft",    "nwse-resize" },
+    { "ResizeTopRight",   "nesw-resize" },
+    { "ResizeColumn",     "col-resize" },
+    { "ResizeRow",        "row-resize" },
+};
+
+/*
+ * The names, comma separated, for the class row's `options`.
+ *
+ * Built from the table rather than written beside it, so the drop-down and
+ * what the setter accepts cannot drift -- the same bargain `SourceEditor`
+ * makes by asking GtkSourceView which languages it has.
+ */
+const char *bta_widget_cursor_options(void)
+{
+    static char *list = NULL;
+
+    if (!list) {
+        GString *s = g_string_new(NULL);
+        for (unsigned i = 0; i < G_N_ELEMENTS(CURSOR_NAMES); i++)
+            g_string_append_printf(s, i ? ",%s" : "%s", CURSOR_NAMES[i].name);
+        list = g_string_free(s, FALSE);
+    }
+    return list;
+}
+
+/*
+ * The cursor a part had before this property ever touched it, put back when
+ * the property returns to `Auto`.
+ *
+ * Without it `Auto` would mean *no cursor at all* rather than *nothing said*,
+ * and the difference is visible: a `LinkButton` carries `pointer` from GTK and
+ * the `GtkText` inside a `TextBox` carries `text`, so setting a cursor and
+ * clearing it again would leave a link with no hand and an entry with no
+ * I-beam -- permanently, and only for whoever touched the property.
+ *
+ * Two keys because NULL is a real answer: most widgets had no cursor, and
+ * "had none" has to be told apart from "never asked".
+ */
+#define CURSOR_KEPT "bta-cursor-kept"
+#define CURSOR_HELD "bta-cursor-held"
+
+static void cursor_apply_part(GtkWidget *part, const char *css)
+{
+    if (!part)
+        return;
+
+    if (!g_object_get_data(G_OBJECT(part), CURSOR_HELD)) {
+        GdkCursor *had = gtk_widget_get_cursor(part);
+        if (had)
+            g_object_set_data_full(G_OBJECT(part), CURSOR_KEPT,
+                                   g_object_ref(had), g_object_unref);
+        g_object_set_data(G_OBJECT(part), CURSOR_HELD, GINT_TO_POINTER(1));
+    }
+
+    if (css)
+        gtk_widget_set_cursor_from_name(part, css);
+    else
+        gtk_widget_set_cursor(part, g_object_get_data(G_OBJECT(part), CURSOR_KEPT));
+}
+
+/*
+ * On `gtk`, on `inner`, and on the entry's delegate -- which is `Focusable`'s
+ * rule, and for the same reason turned around.
+ *
+ * A cursor set on an ancestor reaches a descendant only while the descendant
+ * has none of its own, and the commonest controls have one: the `GtkText`
+ * inside a `TextBox` and a `SpinBox` and the `GtkTextView` inside an `Editor`
+ * all carry `text`. Set on `gtk` alone, `TextBox.Cursor = "Wait"` would read
+ * back correctly and never be seen over the text -- exactly the shape of the
+ * bug a tab-order test found in `Focusable`.
+ */
+static void cursor_apply(BtaWidget *w, const char *css)
+{
+    cursor_apply_part(w->gtk, css);
+    if (w->inner && w->inner != w->gtk)
+        cursor_apply_part(w->inner, css);
+    if (GTK_IS_EDITABLE(w->gtk)) {
+        GtkEditable *d = gtk_editable_get_delegate(GTK_EDITABLE(w->gtk));
+        if (d)
+            cursor_apply_part(GTK_WIDGET(d), css);
+    }
+}
+
+static JSValue w_get_cursor(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    GdkCursor  *cursor = gtk_widget_get_cursor(w->gtk);
+    const char *css    = cursor ? gdk_cursor_get_name(cursor) : NULL;
+
+    /*
+     * A name this table does not hold answers `Auto`, and not the name itself:
+     * a widget can only have got one from GTK, and handing it back would put a
+     * value in the `.form` that the loader's own setter refuses.
+     */
+    if (css)
+        for (unsigned i = 1; i < G_N_ELEMENTS(CURSOR_NAMES); i++)
+            if (!strcmp(css, CURSOR_NAMES[i].css))
+                return JS_NewString(ctx, CURSOR_NAMES[i].name);
+
+    return JS_NewString(ctx, CURSOR_NAMES[0].name);
+}
+
+static JSValue w_set_cursor(JSContext *ctx, JSValueConst this_val, JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    const char *name = JS_ToCString(ctx, val);
+    if (!name)
+        return JS_EXCEPTION;
+
+    int found = -1;
+    for (unsigned i = 0; i < G_N_ELEMENTS(CURSOR_NAMES); i++)
+        if (!g_ascii_strcasecmp(name, CURSOR_NAMES[i].name))
+            found = (int)i;
+
+    if (found < 0) {
+        /* The list is twenty-eight names long, so the message points at it
+         * rather than reciting it: a RangeError nobody can read is what the
+         * property grid would show the user. */
+        JSValue e = JS_ThrowRangeError(ctx,
+            "Cursor: '%s' is not a cursor name -- PropertyOptions(\"Cursor\") lists them",
+            name);
+        JS_FreeCString(ctx, name);
+        return e;
+    }
+    JS_FreeCString(ctx, name);
+
+    cursor_apply(w, CURSOR_NAMES[found].css);
+    return JS_UNDEFINED;
+}
+
 /* ----------------------------------------------------------- drag and drop
  *
  * Two properties and one event.  A widget with DragData can be dragged and
@@ -2942,6 +3150,55 @@ static JSValue w_set_opacity(JSContext *ctx, JSValueConst this_val, JSValueConst
     return JS_UNDEFINED;
 }
 
+/* ------------------------------------------------------------------- theme
+ *
+ * Light or dark, which GTK will not answer directly.
+ *
+ * **The two settings that look like the answer are not.** `gtk-theme-name`
+ * reads `"Default"` on a desktop running Adwaita, and
+ * `gtk-application-prefer-dark-theme` is `false` under `GTK_THEME=Adwaita:dark`
+ * -- both measured here -- so either of them as the source of truth is a
+ * property that answers *light* on a dark screen. What is true is what is being
+ * drawn: `gtk_widget_get_color()` is the ink this widget's text really uses, and
+ * if the ink is light the ground is dark. The same derivation `Painter.Dark`
+ * has always made, and the same function now, because two spellings of one
+ * derivation is one that drifts.
+ *
+ * **A widget that is in no window has no resolved style**, and answers white in
+ * every theme -- so it would report *dark* on the lightest desktop there is.
+ * Measured, and the reason for the fallback: a control that has not been added
+ * to anything yet asks the application's first window instead, which is the
+ * answer it will have the moment it is added. A form is always its own root, so
+ * `this.Dark` in `Form_Open` needs none of this -- nor does a control on it,
+ * even before the window is presented (also measured).
+ */
+bool bta_widget_dark(GtkWidget *at)
+{
+    if (at && !gtk_widget_get_root(at)) {
+        BtaApp *app  = bta_current_app();
+        GList  *wins = app && app->gapp ? gtk_application_get_windows(app->gapp)
+                                        : NULL;
+        if (wins)
+            at = GTK_WIDGET(wins->data);
+    }
+    if (!at)
+        return false;
+
+    GdkRGBA ink = { 0, 0, 0, 1 };
+    gtk_widget_get_color(at, &ink);
+
+    /* Rec. 601 luma, which is what everything else uses for this question. */
+    return 0.299 * ink.red + 0.587 * ink.green + 0.114 * ink.blue > 0.5;
+}
+
+static JSValue w_get_dark(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    return JS_NewBool(ctx, bta_widget_dark(w->gtk));
+}
+
 static const JSCFunctionListEntry widget_props[] = {
     JS_CGETSET_DEF("Name",    w_get_name, w_set_name),
     JS_CGETSET_MAGIC_DEF("X",       w_get_geom, w_set_geom, GEOM_X),
@@ -2977,7 +3234,11 @@ static const JSCFunctionListEntry widget_props[] = {
     JS_CGETSET_DEF("Border", w_get_border, w_set_border),
     JS_CGETSET_DEF("FontScale", w_get_scale, w_set_scale),
     JS_CGETSET_DEF("Opacity", w_get_opacity, w_set_opacity),
+    /* Read-only, so the serialiser skips it: it is the desktop's answer and
+     * never a form's declaration. */
+    JS_CGETSET_DEF("Dark", w_get_dark, NULL),
     JS_CGETSET_DEF("Tooltip",    w_get_tooltip,     w_set_tooltip),
+    JS_CGETSET_DEF("Cursor",     w_get_cursor,      w_set_cursor),
     JS_CGETSET_DEF("DragData",   w_get_drag_data,   w_set_drag_data),
     JS_CGETSET_DEF("AcceptDrop", w_get_accept_drop, w_set_accept_drop),
     JS_CGETSET_DEF("AcceptFiles", w_get_accept_files, w_set_accept_files),

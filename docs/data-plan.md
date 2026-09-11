@@ -213,12 +213,17 @@ write the line in the first place.
 
 **3. Two widget limits leak into the shape, and neither is in this document.** A
 `ComboBox` has no empty text (`""` is refused: the text is one of the items, and
-nothing is `Index = -1`), and a **`DatePicker` has no empty state at all** — its
-default is today and no value means *no date*. So an optional `Field.Date` cannot
-round-trip through one, and `Client.Since` is declared `required` **because of
-the control rather than because of the domain**. A binding that writes a value
-into a control has to have an answer for what it does with a field that is empty
-and a control that cannot be.
+nothing is `Index = -1`), and a `DatePicker` had no empty state at all — its
+default is today, so an optional `Field.Date` could not round-trip through one
+and `Client.Since` was declared `required` **because of the control rather than
+because of the domain**.
+
+**The date half is fixed**: `DatePicker.Value = ""` is no date, spelled the way
+`Field.Date` already spelled it, with a `Placeholder` for what the button reads
+while it is empty (see [widgets.md](widgets.md#datepicker)). The `ComboBox` half
+stands. A binding that writes a value into a control still has to have an answer
+for what it does with a field that is empty and a control that cannot be — there
+is just one control fewer in that set.
 
 ### And two things a shape cannot say at all
 
@@ -457,8 +462,8 @@ foresee, both found by writing the screens by hand: **a guard**, because
 assigning to a control raises a real `Change` and a form that shows a record
 reads it straight back — the thing a declaration would own once instead of once
 per form; and **a control with no empty state**, since a `ComboBox` has no empty
-text and a `DatePicker` has no *no date*, so an optional `Field.Date` cannot
-round-trip through one.
+text — the `DatePicker` half of that pair is done, and an optional `Field.Date`
+round-trips through one now.
 
 **Wanted, and waiting for a caller** — which is the same reason every other
 deferral in this tree gives, and the reason it is not any of the usual ones. Not a

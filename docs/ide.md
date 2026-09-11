@@ -1505,6 +1505,11 @@ repositioned on every change, all inside `Glass`. Secondary selections get outli
 sets from a pool, created on demand and reused. The selection rectangle borrows the
 same pool, which is why a test asserts no bar is left switched on after a release.
 
+Each handle carries the `Cursor` that says what dragging it does — the two
+diagonals for the corners, the two axes for the edges — which is the property's
+first user in this tree and the reason it exists as a property rather than a
+note in the documentation. The form's own grips take theirs from the same table.
+
 `selection` is an array whose **last element is the primary**: the one the grid
 shows, the one that can be resized, and the one alignment is measured against —
 every designer's convention, and the only one that lets the user decide the result.
@@ -2153,7 +2158,7 @@ kind** of control, then how it **looks**, where it **sits**, and how it
 | *the class's name* | what this kind of widget adds: a `Slider`'s `Min`/`Max`/`Marks`, a `CheckButton`'s `Active`/`Group` |
 | **Appearance** | `Background`, `Foreground`, `Font`, `FontScale`, `Opacity`, `Style`, `Radius`, `Shadow`, `Padding` |
 | **Layout** | `X`/`Y`, `Width`/`Height`, the minimums, `Margin`, `ColumnSpan`, the alignments and expands |
-| **Behaviour** | what is left: `Enabled`, `Visible`, `Focusable`, `TabIndex`, `Tooltip`, `Menu`, drag and drop |
+| **Behaviour** | what is left: `Enabled`, `Visible`, `Focusable`, `TabIndex`, `Tooltip`, `Cursor`, `Menu`, drag and drop |
 
 Three of those five are written down in `PropertyGrid.js`. **The one that
 matters is not, and cannot be**: which properties are the widget's own has to

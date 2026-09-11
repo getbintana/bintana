@@ -367,7 +367,7 @@ const TESTS = [
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
     "Expand", "Spacing", "Scrolling", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorMarks", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
-    "ContextMenu", "Combo", "Spin", "Focus", "Record", "Nested", "Database", "Action", "Groups",
+    "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "Record", "Nested", "Database", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "Date", "Calendar", "Drawing", "Metrics", "Library", "ListMulti", "MenuState",
     "RowList", "RowFilter", "PropertyOptions", "CssNode", "TabAction", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "NumericSetters",
@@ -2580,6 +2580,48 @@ class WidgetsForm extends Form {
         eq("clearing it empties the frame", pic.File, "");
         eq("and there is nothing left to measure", pic.SourceWidth, 0);
 
+        /*
+         * --- the same picture, out of memory ---------------------------------
+         *
+         * The circle `Http` and `File.LoadBytes` left open: both answer `Bytes`,
+         * and until this the only thing that could *show* one wanted a path, so
+         * "download it and show it" meant a temporary file written and deleted
+         * around the control that would rather have been handed the bytes.
+         *
+         * A verb and not a property on purpose: a property here is a promise
+         * that the designer can edit it and the `.form` can carry it, and a
+         * megabyte of JPEG is neither.
+         */
+        const bytes = File.LoadBytes(File.Join(dir, "wide.png"));
+
+        pic.LoadBytes(bytes);
+        eq("bytes are measured like a file",  pic.SourceWidth, 120);
+        eq("in both directions",              pic.SourceHeight, 80);
+        eq("and no file is claimed for them", pic.File, "");
+        check("so nothing about them reaches the .form",
+              !("File" in pic.Serialize().properties),
+              JSON.stringify(pic.Serialize().properties));
+        check("...and it stays a verb, which is why",
+              !pic.PropertyNames().includes("LoadBytes"),
+              JSON.stringify(pic.PropertyNames()));
+
+        /* The last source wins, whichever way round. */
+        pic.File = File.Join(dir, "tall.png");
+        eq("a file after bytes replaces them", pic.SourceHeight, 140);
+        pic.LoadBytes(bytes);
+        eq("and bytes after a file replace it", pic.SourceHeight, 80);
+        eq("with the name gone, not left lying", pic.File, "");
+
+        throws("bytes that are not an image are refused",
+               () => { pic.LoadBytes(new Bytes("this is not a picture")); });
+        throws("and so are none at all",
+               () => { pic.LoadBytes(new Bytes()); });
+        throws("and a path, which is the other verb's",
+               () => { pic.LoadBytes(File.Join(dir, "wide.png")); });
+        eq("none of which disturbed what is shown", pic.SourceHeight, 80);
+
+        pic.File = "";
+
         pic.File = File.Join(dir, "small.png");
         pic.Fit  = "Cover";
         eq("what it shows is saved",  pic.Serialize().properties.File,
@@ -3149,6 +3191,145 @@ class WidgetsForm extends Form {
         lv.Delete();
     }
 
+    /*
+     * The pointer over a control: one name out of a closed list, on every part
+     * the control is made of.
+     *
+     * **What no assertion here can see is the pointer itself.** Nothing in JS
+     * can ask what GTK is drawing, and a run has no pointer over anything, so
+     * this measures the property and not the picture -- the same honesty as the
+     * calendar's page turn. What the property has to get right, and what is
+     * here: the list is closed, a name outside it is refused rather than
+     * silently drawn as an arrow (GDK answers a live cursor for any name at
+     * all), and `Auto` puts back what the control had instead of stripping it.
+     */
+    testCursor() {
+        const p = new Panel();
+        this.Fixed1.Add(p);
+
+        eq("nothing said is Auto", p.Cursor, "Auto");
+        p.Cursor = "Crosshair";
+        eq("round-trip", p.Cursor, "Crosshair");
+        p.Cursor = "crosshair";
+        eq("and the case is the caller's, like HAlign", p.Cursor, "Crosshair");
+
+        /*
+         * The CSS spelling is refused on purpose: the names here are the
+         * project's -- `ResizeTopLeft`, not `nwse-resize` -- and GDK would have
+         * taken the other one and drawn nothing in particular.
+         */
+        throws("a css name is not one of ours", () => { p.Cursor = "nwse-resize"; });
+        try {
+            p.Cursor = "Finger";
+        } catch (e) {
+            check("the message shows the value", e.message.includes("Finger"), e.message);
+            check("and points at the list", e.message.includes("PropertyOptions"), e.message);
+        }
+        eq("and the refusal changed nothing", p.Cursor, "Crosshair");
+
+        const names = p.PropertyOptions("Cursor");
+        eq("the whole list is published", names.length, 28);
+        eq("Auto heads it", names[0], "Auto");
+        check("an edge is an axis and a corner is a corner",
+              names.includes("ResizeHorizontal") && names.includes("ResizeTopLeft"),
+              names.join(","));
+        check("and the window manager's one-headed arrows are not offered",
+              !names.some((n) => /^Resize(Top|Bottom|Left|Right)$/.test(n)),
+              names.join(","));
+
+        /* A property on Widget is a property on all forty classes, so what it
+         * costs every `.form` in the tree is worth an assertion of its own. */
+        const fresh = new Panel();
+        this.Fixed1.Add(fresh);
+        check("a control nobody asked writes nothing",
+              !("Cursor" in fresh.Serialize().properties),
+              JSON.stringify(fresh.Serialize().properties));
+        fresh.Cursor = "Hand";
+        eq("one that was asked writes it", fresh.Serialize().properties.Cursor, "Hand");
+        fresh.Delete();
+
+        /*
+         * GTK gives a link its own hand, so `Auto` there cannot mean *no
+         * cursor*: the property would take the hand away for good the first
+         * time anybody touched it.
+         */
+        const link = new LinkButton();
+        this.Fixed1.Add(link);
+        eq("a link comes with the hand GTK gave it", link.Cursor, "Hand");
+        check("which is its default, so it is not written either",
+              !("Cursor" in link.Serialize().properties),
+              JSON.stringify(link.Serialize().properties));
+        link.Cursor = "Wait";
+        eq("it can be overridden", link.Cursor, "Wait");
+        link.Cursor = "Auto";
+        eq("and Auto hands it back", link.Cursor, "Hand");
+        link.Delete();
+
+        /* The entry is the case the whole `cursor_apply` walk exists for: its
+         * text sits in a `GtkText` of its own carrying `text`, so a cursor set
+         * on the outside alone would read back and never be seen. Measured with
+         * a probe in C, since from here only the round trip shows. */
+        const t = new TextBox();
+        this.Fixed1.Add(t);
+        eq("an entry says nothing of its own", t.Cursor, "Auto");
+        t.Cursor = "Progress";
+        eq("takes one", t.Cursor, "Progress");
+        t.Cursor = "Auto";
+        eq("and gives it back", t.Cursor, "Auto");
+        t.Delete();
+
+        p.Delete();
+    }
+
+    /*
+     * Light or dark, which is the one thing a form with colours or icons of its
+     * own has to know and could not ask.
+     *
+     * **The two settings that look like the answer are not**, measured here:
+     * `gtk-theme-name` reads `"Default"` under Adwaita and
+     * `gtk-application-prefer-dark-theme` reads `false` under
+     * `GTK_THEME=Adwaita:dark`. What is true is the ink being drawn, so that is
+     * what `Dark` is derived from -- and the assertions below are about the
+     * shape of the answer rather than its value, because the value is the
+     * desktop's and a test that pinned it would fail on half of them.
+     *
+     * **That the event fires is not here and cannot be**: nothing in JS can
+     * change the desktop's theme, so raising `ThemeChange` is C on both sides.
+     * Measured with a probe that flipped the setting from `build_form` and is
+     * gone again: the event arrives, and `Dark` read inside the handler is
+     * already the new answer rather than the one that was true a moment ago.
+     */
+    testTheme() {
+        const b = new Button();
+        this.Fixed1.Add(b);
+
+        eq("a form answers whether it is drawn dark", typeof this.Dark, "boolean");
+        eq("and so does every control", typeof b.Dark, "boolean");
+        eq("with the same answer, since it is the same desktop", b.Dark, this.Dark);
+
+        /* A widget in no window has no resolved style and answers white in
+         * every theme -- which would be *dark* on the lightest desktop there
+         * is. The fallback is the application's first window, so a control
+         * answers before it is added what it will answer after. */
+        const loose = new Button();
+        eq("a control that is in no window yet answers anyway",
+           loose.Dark, this.Dark);
+        loose.Delete();
+
+        check("it is read-only, so no .form ever carries it",
+              !("Dark" in this.Serialize().properties),
+              JSON.stringify(this.Serialize().properties));
+
+        check("a form says it raises ThemeChange",
+              this.EventNames().includes("ThemeChange"),
+              this.EventNames().join(","));
+        check("...and a control does not: it is the form that restyles",
+              !b.EventNames().includes("ThemeChange"),
+              b.EventNames().join(","));
+
+        b.Delete();
+    }
+
     /* --- a field: how much, what kind, and what is highlighted ------------- */
     testField() {
         const t = new TextBox();
@@ -3671,6 +3852,59 @@ class WidgetsForm extends Form {
         eq("Format round-trip", d.Format, "%d/%m/%Y");
         eq("and how it reads does not change what it is", d.Value, "2026-02-28");
 
+        /*
+         * No date at all, which is what an optional one needs and GTK does not
+         * have: a `GtkCalendar` always holds a day. Without this the control
+         * answered *today* for a field nobody filled in -- a date the program
+         * never meant, written into the record without a word, which is the
+         * limit `data-plan.md` named.
+         *
+         * **What no assertion here can reach is the popover**: that choosing a
+         * day ends the empty state and that turning the page does not is C on
+         * both sides of a widget JS cannot see into, measured with a probe in
+         * `build_datepicker` and gone again. The same hole the calendar's own
+         * page turn is in.
+         */
+        const said = this.dateSaid;
+        d.Value = "";
+        eq("a date can be none at all", d.Value, "");
+        eq("and emptying it is a Change like any other", this.dateSaid, said + 1);
+        eq("which is the same empty Field.Date spells", typeof d.Value, "string");
+
+        throws("a refusal still refuses while it is empty",
+               () => { d.Value = "the other day"; });
+        eq("and leaves it empty", d.Value, "");
+
+        d.Value = "2026-02-28";
+        eq("and a date fills it again", d.Value, "2026-02-28");
+
+        eq("empty reads as an em dash until somebody says otherwise",
+           d.Placeholder, "\u2014");
+        d.Placeholder = "Sin fecha";
+        eq("Placeholder round-trip", d.Placeholder, "Sin fecha");
+        check("and it is prose, so it travels through the catalogue",
+              d.TextProperties().includes("Placeholder"),
+              JSON.stringify(d.TextProperties()));
+        d.Placeholder = "";
+        eq("emptying it restores the dash rather than blanking the button",
+           d.Placeholder, "\u2014");
+
+        /* A control that declared the empty state has to carry it across a save,
+         * which is the whole point: it is the one value that differs from a
+         * fresh picker's and the serialiser writes exactly those. */
+        d.Value = "";
+        eq("an empty date survives the round trip through the .form",
+           d.Serialize().properties.Value, "");
+
+        /* The month is not a field: there is no way to draw a month with no day
+         * on it, so it says so instead of accepting and lying. */
+        const cal = new Calendar();
+        this.Fixed1.Add(cal);
+        const held = cal.Value;
+        throws("a Calendar refuses the empty date", () => { cal.Value = ""; });
+        eq("and keeps the day it had", cal.Value, held);
+        cal.Delete();
+
         d.Delete();
     }
 
@@ -4068,6 +4302,30 @@ class Spike extends Form {
         shown.File = png;
         eq("the file is an image of the size asked for", shown.SourceWidth, 200);
         eq("...in both directions",                      shown.SourceHeight, 100);
+
+        /*
+         * --- and the same frame without a file -------------------------------
+         *
+         * `ToPng` closes the circle from the other end: `Http` answers `Bytes`,
+         * `File.SaveBytes` writes them, and until this the only way *out* of a
+         * drawing was a path -- so a chart to be posted or attached was a
+         * temporary file written and deleted around the one call that mattered.
+         * The same frame, the same refusals, and nothing on disk.
+         */
+        const inMemory = area.ToPng(200, 100);
+        check("ToPng answers Bytes", inMemory instanceof Bytes);
+        eq("which really are a PNG", inMemory.Slice(1, 3).ToText(), "PNG");
+        eq("and are the same picture the file holds",
+           inMemory.Length, File.LoadBytes(png).Length);
+
+        shown.LoadBytes(inMemory);
+        eq("so a Picture reads them back at that size", shown.SourceWidth, 200);
+        eq("...in both directions",                     shown.SourceHeight, 100);
+
+        throws("a size a surface never had has to be given, here too",
+               () => { new DrawingArea().ToPng(); });
+        throws("and one no allocator should be asked for is refused",
+               () => { area.ToPng(40000, 40000); });
         shown.Delete();
 
         /* Everything the painter refuses, which is everything a drawing can get
@@ -4089,7 +4347,8 @@ class Spike extends Form {
          * makes.** `tests/widgets/images/wide.png` is 120x80, so its proportions
          * are what a single given side has to reproduce.
          */
-        this.plotWhat = "image";
+        this.plotWhat  = "image";
+        this.plotBytes = File.LoadBytes(File.Join(IMAGES, "wide.png"));
         area.Save(png, 200, 100);
         eq("an image is drawn at its natural size, and says so",
            area.Dump().split("\n").filter((l) => l.startsWith("Image"))[0],
@@ -4100,6 +4359,17 @@ class Spike extends Form {
         eq("one side given scales the other with it",
            area.Dump().split("\n").filter((l) => l.startsWith("Image"))[1],
            `Image "${File.Join(IMAGES, "wide.png")}" at (5,95) 60x40`);
+
+        /*
+         * **And the bytes themselves are the same argument.** A string is a file
+         * and `Bytes` are the image, which is the whole of the choice -- there
+         * is nothing to configure. The dump names what it was given: a path, or
+         * how many bytes there were, which is what a test can assert and a person
+         * can recognise without the picture.
+         */
+        eq("bytes are drawn like a file, named by their size",
+           area.Dump().split("\n").filter((l) => l.startsWith("Image"))[2],
+           `Image "${this.plotBytes.Length} bytes" at (120,5) 30x20`);
 
         /*
          * **A frame that threw is not a file.** The handler's throw is reported
@@ -4206,6 +4476,11 @@ class Spike extends Form {
               /^rgba?\(\d+,\d+,\d+/.test(this.plotInk), this.plotInk);
         eq("and whether the ground is dark, derived from it",
            typeof this.plotDark, "boolean");
+        /* One derivation and not two: `Painter.Dark` and `Widget.Dark` are the
+         * same function, so a drawing and the form around it cannot disagree
+         * about which way the desktop is. */
+        eq("which is the same answer the control itself gives",
+           this.plotDark, this.plotArea.Dark);
 
         /*
          * **And the control's own `Foreground` is what it reads**, resolved
@@ -4261,6 +4536,9 @@ class Spike extends Form {
         if (this.plotWhat === "image") {
             p.Image(File.Join(IMAGES, "wide.png"), 5, 5);
             p.Image(File.Join(IMAGES, "wide.png"), 5, 95, undefined, 40);
+            /* The same picture by the other road: the bytes themselves, which
+             * is what Http answers with and File.LoadBytes reads. */
+            p.Image(this.plotBytes, 120, 5, 30, 20);
             return;
         }
         if (this.plotWhat === "bad image") {
@@ -5988,6 +6266,28 @@ class Spike extends Form {
 
         img.Icon = "";
         eq("nothing at all is a picture of nothing", img.Icon, "");
+
+        /*
+         * The third source, and the only one that is a verb: an image already in
+         * memory. `Icon` and `File` are names -- a `.form` declares either -- and
+         * bytes are neither, so they arrive through a call and the same rule
+         * holds: the last source wins, and the two names read back empty rather
+         * than claiming something that is not what is drawn.
+         */
+        const shot = File.LoadBytes(File.Join(IMAGES, "small.png"));
+
+        img.Icon = "folder";
+        img.LoadBytes(shot);
+        eq("bytes take the icon's place", img.Icon, "");
+        eq("and name no file either",     img.File, "");
+        check("and carry nothing into the .form",
+              !("Icon" in img.Serialize().properties) &&
+              !("File" in img.Serialize().properties),
+              JSON.stringify(img.Serialize().properties));
+
+        throws("bytes that are not an image are refused",
+               () => { img.LoadBytes(new Bytes("no")); });
+        throws("and a path is not bytes", () => { img.LoadBytes("folder"); });
 
         /* Designable and serialisable like everything else: both getters have a
          * setter, which is the whole test the .form applies. */

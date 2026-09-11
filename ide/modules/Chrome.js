@@ -49,6 +49,15 @@ const HANDLES = {
  * dragging the top-left would mean moving every control instead. */
 const FORM_HANDLES = ["e", "s", "se"];
 
+/* What the pointer says over each one, laid out like the table above it.  A
+ * corner and the corner across from it are one arrow -- which is why `Cursor`
+ * offers two diagonals and not four. */
+const HANDLE_CURSOR = {
+    nw: "ResizeTopLeft",    n: "ResizeVertical",   ne: "ResizeTopRight",
+    w:  "ResizeHorizontal",                        e:  "ResizeHorizontal",
+    sw: "ResizeTopRight",   s: "ResizeVertical",   se: "ResizeTopLeft",
+};
+
 Ide.Chrome = class Chrome {
 
     /* Four thin bars for the outline and eight little squares for the handles,
@@ -64,6 +73,7 @@ Ide.Chrome = class Chrome {
         for (const id in HANDLES) {
             const h = this.bar(SELECT_COLOR);
             h.Resize(HANDLE, HANDLE);
+            h.Cursor = HANDLE_CURSOR[id];
             this.handles[id] = h;
         }
 
@@ -77,6 +87,7 @@ Ide.Chrome = class Chrome {
         for (const id of FORM_HANDLES) {
             const h = this.bar(FORM_HANDLE_COLOR);
             h.Resize(HANDLE, HANDLE);
+            h.Cursor = HANDLE_CURSOR[id];
             this.formHandles[id] = h;
         }
 

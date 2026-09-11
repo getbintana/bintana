@@ -133,7 +133,12 @@ class DrawingForm extends Form {
 
     /* The index under the pointer, and a redraw only when it changed: a chart
      * that redraws on every motion event is a chart that redraws sixty times
-     * while nothing moves. */
+     * while nothing moves.
+     *
+     * The pointer says so before it is moved: this surface is the only one of
+     * the three that answers the mouse, and its `Cursor` is `Crosshair` in the
+     * `.form` -- which is the whole of telling the user that this one can be
+     * read and the other two only looked at. */
     Line_MouseMove(x, y) {
         const n   = this.data.length;
         const pad = 6;

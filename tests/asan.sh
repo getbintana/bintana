@@ -34,15 +34,19 @@ rm -f "$LOG".*
 export ASAN_OPTIONS="detect_leaks=1:log_path=$LOG:abort_on_error=0"
 export LSAN_OPTIONS="suppressions=$PWD/tests/lsan.supp"
 
-# **Virtual display, always.** `run.sh` uses the real one when there is one, and
-# a sanitizer run is dozens of windows over whatever the user is doing -- taking
-# the focus, and taking a stray click with it, which is the other half of why it
-# is wrong: an input meant for something else lands in a test that is measuring.
-# Nobody watches this run, so there is nothing to lose by not showing it.
-# `HEADLESS= tests/asan.sh` -- empty, not 0 -- is the way back to the real screen
-# for the one case that needs a real icon theme: run.sh tests the variable for
-# being *set*, so 0 forces the virtual display just as 1 does.
-export HEADLESS=${HEADLESS:-1}
+# **Virtual display, always**, which `run.sh` does too now -- this script got
+# there first. A sanitizer run is dozens of windows over whatever the user is
+# doing, taking the focus and a stray click with it, which is the other half of
+# why it is wrong: an input meant for something else lands in a test that is
+# measuring. Nobody watches this run, so there is nothing to lose by not showing
+# it. `HEADLESS= tests/asan.sh` -- empty, not 0 -- is the way back to the real
+# screen for the one case that needs a real icon theme: the runner tests the
+# variable for being *non-empty*, so 0 forces the virtual display just as 1 does.
+#
+# `-` and not `:-`, which is a real fix and not a tidy-up: with `:-` an
+# explicitly empty HEADLESS was replaced by 1 right here, so the way back this
+# comment offers did not work.
+export HEADLESS=${HEADLESS-1}
 
 # A sanitized binary is about twice as slow, and run.sh's hang guard is set for an
 # ordinary one: tests/ide takes ~55 s normally and ~100 s here, so the guard fired

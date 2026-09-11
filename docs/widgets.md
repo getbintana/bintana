@@ -340,6 +340,96 @@ whole thing exists to draw.
 
 **Tooltip** is plain text; `""` means none, not an empty balloon.
 
+**Dark** is whether the control is drawn on a dark ground, and it is read-only:
+the desktop's answer, never a form's declaration. What it is derived from is the
+one thing that is actually true — `gtk_widget_get_color()`, the ink this widget's
+text is really drawn in, whose Rec. 601 luma over 0.5 means the ground under it
+is dark. `Painter.Dark` has always said this and it is now literally the same
+function, so a drawing and the form around it cannot disagree.
+
+**The two settings that look like the answer both lie**, and it is worth writing
+down rather than discovering twice. Measured here: `gtk-theme-name` reads
+`"Default"` on a desktop running Adwaita, and
+`gtk-application-prefer-dark-theme` reads `false` under `GTK_THEME=Adwaita:dark`.
+Either of them as the source of truth is a property that answers *light* on a
+dark screen.
+
+**A widget that is in no window answers white in every theme** — it has no
+resolved style — which would be *dark* on the lightest desktop there is. So a
+control that has not been added to anything falls back to the application's
+first window, which is the answer it will have the moment it is added. A control
+that is on a form needs none of that, and neither does the form: both answer
+correctly **before** the window is presented, which is what makes `Dark` usable
+in `Form_Open`.
+
+A `Form` raises **`ThemeChange`** when the desktop moves it, out of `GtkSettings`'
+`gtk-theme-name` and `gtk-application-prefer-dark-theme`. Three things about it:
+the colours are already the new ones inside the handler (measured: the ink goes
+from 0.20 to 0.93 luma across that call), so nothing has to wait an idle for GTK
+to catch up; **one change may raise it twice**, since a desktop can move either
+property, which is fine because the event carries nothing and a handler re-reads
+state; and it is the **form's** event and no other control's — what a theme
+change costs is the icons and colours an application chose for itself, and that
+is a decision a form made. `Form_Resize` is the same shape for the same reason.
+
+The settings object belongs to the display and outlives every window on it, so
+the handlers go through `bta_widget_watch`: one left behind would fire on a freed
+form the next time somebody switched themes.
+
+**Cursor** is what the pointer looks like over the control, one name out of a
+closed list of twenty-eight: `Auto` `Arrow` `Hand` `Grab` `Grabbing` `Text`
+`VerticalText` `Wait` `Progress` `Help` `Crosshair` `Cell` `ContextMenu` `Move`
+`Scroll` `Copy` `Link` `NoDrop` `NotAllowed` `ZoomIn` `ZoomOut` `None`
+`ResizeHorizontal` `ResizeVertical` `ResizeTopLeft` `ResizeTopRight`
+`ResizeColumn` `ResizeRow`. `Auto` is nothing said.
+
+It is **not** a CSS property — `button { cursor: pointer }` is answered by GTK
+with *No property named "cursor"*, so unlike `Opacity` and the colours this one
+could not go through the stylesheet even if one wanted it to.
+
+Three things about it are decisions rather than plumbing:
+
+- **The names are ours, and the list is closed.** `gdk_cursor_new_from_name` is
+  documented to answer NULL for a name no theme knows and does not: it hands
+  back a live cursor carrying whatever it was given, resolved at the surface or
+  quietly replaced by the arrow. So a typo would be a property that reads back
+  correctly and draws nothing in particular — the failure `Style` refuses a
+  non-identifier to avoid. The setter checks the list and throws. This is the
+  one vocabulary this runtime translates rather than passes through, because it
+  is the only one that is closed *and* abbreviated: an icon name, a font family
+  and a `Shortcut` are open and readable, `nesw-resize` is neither.
+- **Two rows earn the translation.** `Move` is CSS's `all-resize` and not its
+  `move`, because Adwaita links `move` to `default` — the value meaning "this
+  can be dragged" would have drawn a plain arrow. And `ResizeColumn` is
+  `col-resize` under CSS's own meaning-based name: the toolkits that name it by
+  orientation disagree with each other, Delphi's `crHSplit` and WinForms'
+  `HSplit` being opposite things.
+- **The one-headed arrows are not offered.** `n-resize`, `se-resize` and the
+  other six are X11's vocabulary for a window manager dragging a window by an
+  edge; not one of VB6, Delphi, WinForms, WPF or Qt has them, and what an
+  application resizes — a splitter, a corner, a designer's handle — is
+  two-headed. Leaving them out is what lets `ResizeTopLeft` name a corner
+  instead of a pair of axes spelled out.
+
+**It is set on every part the control is made of**, which is `Focusable`'s rule
+and for the same reason turned around: a cursor reaches a descendant only while
+the descendant has none of its own, and the commonest controls have one — the
+`GtkText` inside a `TextBox` and a `SpinBox` and the `GtkTextView` inside an
+`Editor` all carry `text`, a `LinkButton` carries `pointer`. Set on the outside
+alone, `TextBox.Cursor = "Wait"` would read back correctly and never be seen
+over the text.
+
+The same fact is the property's limit, and it is GTK's rather than ours:
+**`Form.Cursor = "Wait"` is not a busy pointer for the whole window.** It covers
+the window except over the controls that declare their own, and there is no way
+down from an ancestor. A window that is working says so with a `Spinner` or a
+`ProgressBar`; the pointer can only speak for the control it is over.
+
+`Auto` puts back what the control had before the property was ever touched,
+which is not the same as having no cursor: a `LinkButton` reads `Hand` before
+anybody assigns anything, and `Auto` after a `Wait` gives the hand back rather
+than leaving a link with no pointer of its own for the rest of the run.
+
 **Focus.** `Focusable` has to be turned on for a container that wants keys: it is
 how the designer's glass layer receives Delete, the arrows and Escape.
 
@@ -745,6 +835,21 @@ thing at a time, and remembering the other would be state GTK does not have — 
 `.form` that wrote both would come back showing whichever was applied last.
 Reading gives back what was assigned, so either round-trips.
 
+**`LoadBytes(bytes)` is the third source and the only one that is a verb**, for
+the reason the other two are properties: a property here is a promise that the
+designer can edit it and the `.form` can carry it, and a megabyte of JPEG is
+neither. It takes what `Http` answers with and what `File.LoadBytes` reads, and
+it clears both names — after it, `Icon` and `File` read `""` rather than naming
+something that is not what is drawn. See [`Picture`](#picture) for why this
+exists at all.
+
+**And clearing `Icon` now clears the name GTK was told to keep re-resolving**,
+which is a fix and worth the sentence: an icon is kept by name on the widget and
+re-asked for when the theme or the scale changes (see below), and that name used
+to survive a `File` or a `LoadBytes` — so the next change of theme put the old
+icon back over the picture that had replaced it. Nothing showed it until
+something else was shown.
+
 An icon name the desktop cannot draw is **dropped**, exactly as a `Button` drops
 one — [`Application.HasIcon`](runtime-api.md) is the question about that. The name
 still reads back: what a `.form` wrote round-trips whether or not this machine can
@@ -946,8 +1051,24 @@ and does nothing while it is disabled -- as `Button.Click()` does.
 
 ### Picture
 
-A `GtkPicture`: `File`, `Fit`, `Zoom`, and `SourceWidth` / `SourceHeight`
-read-only.
+A `GtkPicture`: `File`, `Fit`, `Zoom`, `LoadBytes()`, and `SourceWidth` /
+`SourceHeight` read-only.
+
+**An image already in memory is `LoadBytes(bytes)`**, and it is the half of
+showing a picture this runtime did not have. `Http` answers a body as `Bytes`
+and `File.LoadBytes` reads one, and the only thing that could *show* an image
+wanted a path — so the whole of "download it and show it" was a temporary file,
+written and deleted around a control that would rather have been handed the
+bytes. The gap was never GTK's: `gdk_texture_new_from_bytes` sniffs the format
+exactly as the filename version does.
+
+It is a **verb** and `File` stays a property, which is the same line `Image`
+draws: a property is designable and serialisable, and bytes are neither. The
+rule that matters is unchanged — one source at a time, the last one wins — so
+bytes clear `File` and `SourceWidth`/`SourceHeight` measure what is really
+shown. The complaint names what it got rather than what it wanted (*cannot show
+17 bytes: unknown image format*), because bytes that are not an image are the
+ordinary failure here: an error page answered with 200, most often.
 
 **`Image` and `Picture` are two controls because they answer two questions.**
 `Image` is a `GtkImage` and draws an *icon* -- a name from the desktop's theme,
@@ -1092,6 +1213,41 @@ either end, and `examples/agenda` is that line. A string that is not a date is r
 at, `2026-02-30` included, and a tail after one is refused too. `Format` is what the
 button *reads* (strftime), so the string a program compares and the text a person
 recognises need not be the same one.
+
+**`Value = ""` is no date at all**, and it is the one piece of state GTK does not
+have: a `GtkCalendar` always holds a day, with no null in it and nowhere to put
+one. So the flag is ours and the calendar underneath keeps whatever it held --
+which is what the popover opens on, and why browsing the months of an empty
+picker does not fill it in on the way. **Choosing a day is what ends the empty
+state**, because it is the one gesture that means *this date*; and a page turn
+while empty raises no `Change`, since nothing changed.
+
+This is not a convenience. `Field.Date` already spells an empty date `""` and
+lets it through when the field is not required, so before this the control
+answered *today* for a field nobody filled in -- a date the program never meant,
+going into the record with no error and no warning, which is the one failure in
+this widget set that was invisible rather than merely wrong.
+[`data-plan.md`](data-plan.md) had written it down as the limit that kept an
+optional date from making the round trip.
+
+`Placeholder` is what the button reads while there is no date, an em dash by
+default and prose when a form wants words (`"Sin fecha"`). Prose, so it is
+declared as `texts` and travels through the catalogue -- `Format` beside it is
+**not**, for the reason `SourceEditor` declares none: a strftime pattern put
+through a translation comes back as a different date. `""` restores the dash
+rather than blanking the button, which would be a button the size of its own
+padding.
+
+**There is no gesture for emptying one**, and that is deliberate rather than
+missing: a calendar has no "none" to click, and inventing one -- a checkbox
+beside the field, which is what Delphi and WinForms do -- would be a second
+control grown inside this one. A form that offers it says so itself, with a
+button and `Fecha.Value = ""`.
+
+A [`Calendar`](#calendar) **refuses** `""` instead of accepting it: there is no
+way to draw a month with no day on it, so accepting would be a value the control
+could not show. The same call `Style` makes about a class name it could never
+resolve.
 
 One assignment is one `Change`. GTK offers no way to set a whole date without
 raising the floor to 4.20, so it is set as year, month and day -- with the day put to
@@ -1724,10 +1880,36 @@ half -- the last frame as text, one call per line -- and it is what `tests/widge
 asserts a drawing with, on the same argument `Widget.Dump()` makes: a picture
 proves nothing twice and cannot be diffed.
 
+**`ToPng([width], [height])` is that same frame as `Bytes`**, and it closes a
+circle the runtime had open at both ends. `Http` answers `Bytes`,
+`File.LoadBytes` reads them and `File.SaveBytes` writes them -- but the only way
+*out* of a drawing was a path, so a chart to be posted, mailed or put in a reply
+meant a temporary file written and deleted around the one call that mattered.
+`Picture.LoadBytes` is the way in and this is the way out. It shares every line
+of `Save` but the disposal of the pixels, `area_frame`, so the two refusals (a
+surface that was never allocated has no size; 16384 a side) and the rule that **a
+frame whose handler threw is not an answer** hold for both without being written
+twice. `To`-something is what this tree already calls the same thing in another
+form -- `Bytes.ToText`, `ToBase64`, `ToHex` -- and PNG is in the name because it
+is a decision: lossless, alpha kept, read by everything.
+
+**`Painter.Image` takes either too**: a string is a file and `Bytes` are the
+image, which is the whole of the choice. One thing to know before drawing in a
+loop -- **bytes are decoded on every call**. The image cache is keyed on the
+path, with the file's mtime and size behind it; bytes have no key that stays
+true, since a freed buffer's address can be handed out again and a cache keyed
+on one would eventually paint the wrong picture. Measured here, painting a 640x480 PNG
+costs **2.7 ms from bytes against 0.045 ms from the cached path** -- sixty times
+the work, and still nothing worth naming for a report drawing a logo on every
+page. A handler painting the same bytes sixty times a second is the case that
+cannot afford it, and wants a `Picture` instead, which decodes once.
+
 Numbers in a `Dump()` go through `g_ascii_formatd` and not `%g`, which is not
 pedantry: printf follows `LC_NUMERIC`, so the point `(380, 142.449)` came out as
 `(380,142,449)` on the machine this was written on -- a decimal comma in the
-middle of a comma-separated pair, in the one output a test reads.
+middle of a comma-separated pair, in the one output a test reads. An image drawn
+from bytes is named in the dump by how many there were (`Image "24630 bytes" at
+(120,5) 30x20`), since there is no path to name.
 
 ### Editor, TextEditor and SourceEditor
 

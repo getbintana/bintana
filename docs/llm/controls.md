@@ -91,6 +91,7 @@ Every control and every container has all of this.
 | `Border` | `"2 dashed #3584e4"` — width, style, colour |
 | `ColumnSpan` | how many columns of a `Grid` it runs under. `1` |
 | `DragData` | the string that travels when this is dragged. Empty turns dragging off |
+| `Cursor` | what the pointer looks like over it: `Auto` (nothing said) `Arrow` `Hand` `Grab` `Grabbing` `Text` `VerticalText` `Wait` `Progress` `Help` `Crosshair` `Cell` `ContextMenu` `Move` `Scroll` `Copy` `Link` `NoDrop` `NotAllowed` `ZoomIn` `ZoomOut` `None` `ResizeHorizontal` `ResizeVertical` `ResizeTopLeft` `ResizeTopRight` `ResizeColumn` `ResizeRow`. Reaches the parts a control is made of, so it is seen over an entry's text too — but a *child* control with one of its own wins, which is why `Form.Cursor = "Wait"` is not a busy pointer for the whole window |
 | `Action` | the **command** this control points at, or `""`. A control that has one takes its `Enabled` — and its `Text` and `Icon`, when it declared neither — from the command, and **refuses** to be told an `Enabled` of its own. Only a control that is pressed can have one; a name that is not one of the form's `actions` is refused. See [forms.md](forms.md#actions-one-command-in-several-places) |
 | `Enabled` | answers the mouse and the keyboard. `true` by default. Read-only in effect when `Action` is set |
 | `Expand` | absorbs slack on both axes, in a row or a column |
@@ -114,6 +115,7 @@ Every control and every container has all of this.
 | `Style` | the CSS classes it wears, space separated: `"card title-3"`. A name that could not be a class is refused |
 | `TabIndex` | where Tab reaches it, on a container laying out by coordinate. Sparse, never renumbered. `0` means "in drawn order" |
 | `Tooltip` | plain text; `""` is none, not an empty balloon. **Translated** |
+| `Dark` (ro) | whether it is drawn on a dark ground, derived from the ink its text uses. The same answer `Painter.Dark` gives, and a `Form` raises `ThemeChange` when the desktop moves it |
 | `VAlign` | the same, vertically |
 | `VExpand` | absorbs vertical slack |
 | `Visible` | shown or not. `true` by default; a `Form` starts `false` |
@@ -349,6 +351,7 @@ An icon or a small picture, drawn at a size. `Icon` **or** `File`, one at a time
 |---|---|
 | `File` | a path. Setting it clears `Icon` |
 | `Icon` | a theme icon name. Setting it clears `File` |
+| `LoadBytes(bytes)` | an image already in memory — what `Http` answers with and `File.LoadBytes` reads. Clears both names, since neither is what is drawn any more. A verb and not a property: a `.form` could not carry a megabyte of JPEG |
 | `Size` | pixels; `-1` is the icon's natural size. Default `-1` |
 
 ## Picture
@@ -358,6 +361,7 @@ A photograph, which is not an icon.
 | Member | |
 |---|---|
 | `File` | the photograph's path |
+| `LoadBytes(bytes)` | the photograph out of memory instead — a download shown without a temporary file. Clears `File`; `SourceWidth`/`SourceHeight` measure it the same way |
 | `Fit` | `Fill` `Contain` `Cover` `ScaleDown`. Default `"Contain"` |
 | `Zoom` | a factor, for when `Fit` is not what is wanted |
 | `SourceWidth` (ro) | the file's own width, `0` with no file |
@@ -451,14 +455,27 @@ A date on one line, with a calendar in its popover.
 | Member | |
 |---|---|
 | `Format` | a strftime pattern for what the button reads. Default `"%Y-%m-%d"` |
-| `Value` | `"YYYY-MM-DD"`, the same text a `Day` works in. Default is today |
+| `Value` | `"YYYY-MM-DD"`, the same text a `Day` works in, or `""` for no date at all. Default is today |
+| `Placeholder` | what the button reads while `Value` is `""`. Default `"—"`; `""` restores the dash. **Translated** |
 | **event** `Change()` | the value changed, including from an assignment in code — the round trip goes out to GTK and back |
+
+**`Value = ""` is no date**, which is what an optional one needs: `Field.Date`
+already spells the empty date that way and lets it through when the field is not
+required, and until this existed the control answered *today* for a field nobody
+filled in — a date the program never meant, written into the record in silence.
+The popover still opens on the month it was showing, browsing it does **not** fill
+the date in, and choosing a day does. There is no gesture for emptying one again:
+a form that offers it puts a button beside the field and writes `Fecha.Value = ""`.
+
+A `Calendar` **refuses** `""`: a month is drawn with a day on it and there is no
+way to draw one without.
 
 **Turning the page in the popover is a change of value.** GTK has one date and no
 separate notion of the month on screen, so browsing to another month moves `Value`
 with it — and raises `Change`, like any other way of changing it. A form that must
 not be moved by browsing should read the value when the user says *done*
-(`Form_Close`, an OK button) rather than trust the last `Change`.
+(`Form_Close`, an OK button) rather than trust the last `Change`. The exception is
+the empty one, which browsing leaves empty and silent.
 
 ## Calendar
 
@@ -773,6 +790,7 @@ else in this widget set puts ink on the screen.
 | `Dump()` | the last frame as text, one call per line — empty until something has been drawn |
 | `Redraw()` | the drawing may have changed: ask again |
 | `Save(path, [width], [height])` | run the same `Draw` against an image surface and write it as a PNG. Without a size it uses the widget's own, and a surface that has never been allocated has none — so pass one. Refused from inside a `Draw` (one painter, one frame at a time) and above 16384 a side. **A `Draw` that throws writes no file** and the throw reaches the caller |
+| `ToPng([width], [height])` | the same frame as `Save`, answered as `Bytes` instead of written: a chart to be posted, attached or put in a reply, with nothing on disk. Same sizes, same refusals, same rule that a `Draw` which throws answers nothing |
 | `SavePdf(path, width, height, [pages], [before])` | the same `Draw`, once per page, into one **PDF**. The size is in **points**, 72 to the inch (A4 is 595×842, Letter 612×792) and is what the handler is given as its frame size; the surface is vector, so text stays text. `pages` defaults to 1. `before(page)` is called before each page — that is how the handler knows which one it is drawing, since `Draw`'s own arguments do not say. A page that throws leaves **no file** |
 | **event** `Draw(painter, width, height)` | paint it. The size is the frame's, in logical pixels |
 
@@ -823,7 +841,7 @@ widget's own font.
 | `ClosePath()` | back to where the path started |
 | `CurveTo(x1, y1, x2, y2, x, y)` | a cubic Bézier: two control points and the end |
 | `Fill()` | fill the path, and clear it |
-| `Image(path, x, y, [width], [height])` | a picture file, put down with its top-left corner there. **One of `width`/`height` is enough** — the other follows the file's own proportions. With neither it is drawn at its natural size, one image pixel to one. The path is a file, absolute or relative to the working directory; a file that is missing or is not an image **throws**, which ends the frame. Decoded once and cached, so a drawing may paint the same logo every frame |
+| `Image(path or bytes, x, y, [width], [height])` | a picture, put down with its top-left corner there. **One of `width`/`height` is enough** — the other follows the image's own proportions. With neither it is drawn at its natural size, one image pixel to one. A **string** is a file, absolute or relative to the working directory; **`Bytes`** are the image itself, which is what `Http` answers with. Missing, or not an image, **throws** and ends the frame. A path is decoded once and cached, so a drawing may paint the same logo every frame; **bytes are decoded on every call** — the cache is keyed on the path, and bytes have no key that stays true. Measured: 2.7 ms a call for a 640×480 PNG against 0.045 ms for the same file cached. A handler painting the same bytes every frame wants a `Picture` with `LoadBytes` instead |
 | `LineTo(x, y)` | a segment |
 | `MoveTo(x, y)` | start somewhere |
 | `Polygon(points)` | the same, closed |
@@ -1163,6 +1181,7 @@ The window. See [forms.md](forms.md#form-the-window) for the behaviour a table c
 | **event** `Open()` | the first time the form is shown, **before `Show()` returns** |
 | **event** `Close()` | the window is closing. **Returning `true` keeps it open**; returning nothing lets it go |
 | **event** `Resize(width, height)` | the size GTK settled on — the same numbers `Bounds()` gives. Fires when the window is first given a size too |
+| **event** `ThemeChange()` | the desktop changed the theme. `Dark` read inside the handler is already the new answer; it may fire twice for one change, so a handler re-reads and restyles rather than counting |
 
 ### And on a `Form`
 

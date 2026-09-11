@@ -501,8 +501,22 @@ bool       bta_container_order(GtkWidget *slot);
  * throws when the slot has no order or the child is not in it. */
 bool       bta_container_reorder(JSContext *ctx, BtaWidget *parent,
                                  BtaWidget *child, int index);
+/* An image out of bytes in memory: what `Http` answers with and `File.LoadBytes`
+ * reads, decoded by GDK the way a file is. NULL with an exception pending when
+ * the value is not `Bytes`, is empty, or holds no image `gdk-pixbuf` knows;
+ * `who` names the caller in that complaint. The caller owns the texture. */
+GdkTexture *bta_texture_from_bytes(JSContext *ctx, JSValueConst val, const char *who);
+/* Whether this widget is drawn on a dark ground, derived from the ink its text
+ * uses -- the one answer GTK really has (see the definition; the two settings
+ * that look like this question answer wrongly). Takes a GtkWidget rather than a
+ * BtaWidget because a Painter asks it about the surface it is painting. */
+bool bta_widget_dark(GtkWidget *at);
 /* The Widget prototype's own accessors, shared by the class table. */
 const JSCFunctionListEntry *bta_widget_base_props(int *count);
+/* The values `Cursor` accepts, comma separated, for Widget's `options`. Built
+ * from the same table the setter checks against, so the drop-down cannot drift
+ * from what is allowed. */
+const char *bta_widget_cursor_options(void);
 /* Whether `prop` is one of the properties holding prose for this object's class
  * or any it inherits from (see BtaClass.texts).  Answers about the prototype
  * chain, so it works on anything the loader is applying properties to. */

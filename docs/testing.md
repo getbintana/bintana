@@ -1,23 +1,27 @@
 # Testing
 
 ```sh
-HEADLESS=1 ./tests/run.sh               # all four projects, 4957 assertions
-HEADLESS=1 ./tests/run.sh widgets       # one project
-HEADLESS=1 ./tests/run.sh widgets record  # one test of it
-HEADLESS=1 ./tests/run.sh ide designer  # one project, stopping after a phase of it
-HEADLESS=1 ./tests/run.sh ide list      # what it can be asked for
-BINTANA=/other/bintana HEADLESS=1 ./tests/run.sh
-TIMEOUT=300 HEADLESS=1 ./tests/run.sh   # a slower machine than the one this was written on
-./tests/run.sh                          # ...on your own screen; see below
+./tests/run.sh                          # all four projects, 5103 assertions
+./tests/run.sh widgets                  # one project
+./tests/run.sh widgets record           # one test of it
+./tests/run.sh ide designer             # one project, stopping after a phase of it
+./tests/run.sh ide list                 # what it can be asked for
+BINTANA=/other/bintana ./tests/run.sh
+TIMEOUT=300 ./tests/run.sh              # a slower machine than the one this was written on
+HEADLESS= ./tests/run.sh                # ...on your own screen; see below
 ```
 
-**`HEADLESS=1` is written first here because `run.sh` does not default to it.** It
-falls back to `xvfb-run` only when there is **no** `DISPLAY`, which is the CI case
-and never the desktop case — so the bare command on a machine somebody is using
-opens the suite over their work and takes the keyboard for a minute. `tests/asan.sh`
-exports `HEADLESS=${HEADLESS:-1}` for exactly this reason and `run.sh` does not,
-which is the asymmetry to remember. `HEADLESS=` (empty) is the way back to a real
-screen, for the questions that need one.
+**The suite runs on a virtual display by default**, and `HEADLESS=` — empty, not
+`0` — is the way back to a real screen for the questions that need one. It used to
+be the other way round, and the prefix was written first in every example here:
+the runner falls back to `xvfb-run` only when there is **no** `DISPLAY`, which is
+the CI case and never the desktop case, so the bare command on a machine somebody
+is using opened the suite over their work and took the keyboard for a minute.
+That happened five times, every one of them by somebody who knew the rule — which
+is the argument for a default rather than a rule. `tests/asan.sh` had reached the
+same conclusion first, and both now export `HEADLESS=${HEADLESS-1}`: with `-`
+rather than `:-`, so that an explicitly empty one survives and the way back
+works.
 
 The second argument goes through to the project as its own second argument — the
 first is always the runner's pid, which the projects use to name their scratch
@@ -149,9 +153,9 @@ own says so with `reportsItself`.
 
 ### tests/widgets selects
 
-`tests/widgets` is 131 tests listed in `TESTS`, and a filter there **selects** rather
-than running a prefix — `HEADLESS=1 ./tests/run.sh widgets record` is 71 assertions
-in a fifth of a second against 2990 in about three. It can select because these tests are
+`tests/widgets` is 133 tests listed in `TESTS`, and a filter there **selects** rather
+than running a prefix — `./tests/run.sh widgets record` is 71 assertions
+in a fifth of a second against 3056 in about three. It can select because these tests are
 independent: each builds the controls it needs and deletes them again. The two that
 are not say so in the file:
 
@@ -495,7 +499,7 @@ check("nothing was pushed out of the panel", box.Dump().includes("hidden") === f
 
 **An ad-hoc probe is a project, and `tests/try.sh <dir>` runs one** without
 putting it on anybody's screen. It is `xvfb-run` around the binary, and it exists
-because `HEADLESS=1` is read by the runner and *not* by `bintana`: `HEADLESS=1
+because `HEADLESS` is read by the runner and *not* by `bintana`: `HEADLESS=1
 ./build/bintana <dir>` looks like the safe thing right up until the window opens. Two
 files under a scratch directory and a `print` of what they measured is how most
 questions in this document were answered — what a property really does to an

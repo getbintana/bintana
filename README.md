@@ -44,10 +44,11 @@ LANGUAGE=es ./build/bintana ide examples/hello    # the IDE itself, from ide/po/
 ./build/bintana examples/session     # Http with cookies and Basic auth: a login the next request remembers
 ./build/bintana examples/serve       # Http.Server: a static file server on :8080. Runs until Ctrl-C
 LANGUAGE=es ./build/bintana examples/agenda   # ...and the long date the catalogue rewrites
-HEADLESS=1 ./tests/run.sh         # 4957 assertions in 4 projects, on a virtual display
-./tests/run.sh                    # the same, on *your* screen: it only falls back to
-                                  # Xvfb when there is no DISPLAY, so on a desktop this
-                                  # opens three windows and takes the keyboard
+./tests/run.sh                   # 5103 assertions in 4 projects, on a virtual display
+HEADLESS= ./tests/run.sh          # the same, on *your* screen -- empty, not 0. Three
+                                  # windows and the keyboard for a minute, and a couple
+                                  # of assertions measure your theme and not the one
+                                  # the numbers were written against
 sudo cmake --install build        # ...or install it: see below
 ./tests/install.sh                # what that would produce, tried without installing it
 ```
@@ -1743,7 +1744,7 @@ Four Bintana projects under `tests/`, each printing `N passed, M failed` and
 quitting with a non-zero status on failure. They are applications, not a harness.
 
 ```sh
-HEADLESS=1 ./tests/run.sh   # all four, on a virtual display
+./tests/run.sh                  # all four, on a virtual display: that is the default
 ./build/bintana tests/widgets   # one of them, on your own screen
 ```
 

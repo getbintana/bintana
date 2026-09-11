@@ -913,6 +913,15 @@ function* p_designer(ide) {
     eq("Delete becomes available", ide.ActDelCtl.Enabled, true);
     check("the selection handles show", ide.designer.chrome.handles.se.Visible);
 
+    /* A corner and the corner across from it are one arrow, which is why
+     * `Cursor` offers two diagonals and not four. */
+    eq("a corner handle says what dragging it does",
+       ide.designer.chrome.handles.se.Cursor, "ResizeTopLeft");
+    eq("and so does the one across from it",
+       ide.designer.chrome.handles.nw.Cursor, "ResizeTopLeft");
+    eq("an edge one says the axis instead",
+       ide.designer.chrome.handles.e.Cursor, "ResizeHorizontal");
+
     /*
      * The highlight has to land on the box the control *draws*, which is not the
      * one it asked for: Width is a request, and a theme's margins make a Button's

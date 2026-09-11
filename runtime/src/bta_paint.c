@@ -154,6 +154,9 @@ static double arg_num(JSContext *ctx, JSValueConst v, bool *bad)
  * `Dark` is the other half, and it is a derivation stated plainly: if the ink is
  * light, the ground is dark.  That is enough to choose a palette, and it is
  * honest about being computed from the foreground rather than asked of the theme.
+ * It lives in `bta_widget.c` now, because every widget answers it as
+ * `Widget.Dark` and a second copy of the arithmetic here would be a second
+ * answer to one question.
  */
 static void painter_ink(BtaPainter *p, GdkRGBA *rgba)
 {
@@ -193,11 +196,10 @@ static JSValue painter_get_dark(JSContext *ctx, JSValueConst this_val)
     if (!p)
         return JS_EXCEPTION;
 
-    GdkRGBA ink;
-    painter_ink(p, &ink);
-    /* Rec. 601 luma, which is what everything else uses for this question. */
-    double luma = 0.299 * ink.red + 0.587 * ink.green + 0.114 * ink.blue;
-    return JS_NewBool(ctx, luma > 0.5);
+    /* The widget's own, through the same function `Widget.Dark` answers with:
+     * one derivation, so a drawing and the form around it can never disagree
+     * about which way the desktop is. */
+    return JS_NewBool(ctx, bta_widget_dark(p->w ? p->w->inner : NULL));
 }
 
 /* ----------------------------------------------------------------- Color */
@@ -628,6 +630,41 @@ static bool image_stat(const char *path, gint64 *mtime, gint64 *size)
  */
 #define IMAGE_CACHE_MAX 32
 
+/*
+ * A texture, downloaded into a cairo surface cairo can paint from.
+ *
+ * Shared by the two roads into `Painter.Image` -- a path and a `Bytes` -- so the
+ * ceiling check and the `mark_dirty` that the first one learned the hard way
+ * apply to the second without being written twice. `what` only names the thing
+ * in the complaint: a file name, or how many bytes there were.
+ */
+static cairo_surface_t *surface_of_texture(JSContext *ctx, GdkTexture *texture,
+                                           const char *what)
+{
+    int w = gdk_texture_get_width(texture);
+    int h = gdk_texture_get_height(texture);
+
+    cairo_surface_t *surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
+
+    /* A surface cairo refused -- a picture too big for the allocator, most of
+     * them -- has no data to write into, and downloading into that NULL is a
+     * crash rather than a bad drawing. */
+    if (cairo_surface_status(surface) != CAIRO_STATUS_SUCCESS) {
+        JS_ThrowRangeError(ctx, "Image: %s is %dx%d, which is too big to draw (%s)",
+                           what, w, h,
+                           cairo_status_to_string(cairo_surface_status(surface)));
+        cairo_surface_destroy(surface);
+        return NULL;
+    }
+
+    gdk_texture_download(texture, cairo_image_surface_get_data(surface),
+                         cairo_image_surface_get_stride(surface));
+    /* Written behind cairo's back, so it has to be told. Without this the first
+     * paint shows whatever the surface was allocated with, which is nothing. */
+    cairo_surface_mark_dirty(surface);
+    return surface;
+}
+
 static cairo_surface_t *image_surface(JSContext *ctx, const char *path)
 {
     static GHashTable *cache;
@@ -652,29 +689,10 @@ static cairo_surface_t *image_surface(JSContext *ctx, const char *path)
         return NULL;
     }
 
-    int w = gdk_texture_get_width(texture);
-    int h = gdk_texture_get_height(texture);
-
-    cairo_surface_t *surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
-
-    /* A surface cairo refused -- a picture too big for the allocator, most of
-     * them -- has no data to write into, and downloading into that NULL is a
-     * crash rather than a bad drawing. */
-    if (cairo_surface_status(surface) != CAIRO_STATUS_SUCCESS) {
-        JS_ThrowRangeError(ctx, "Image: %s is %dx%d, which is too big to draw (%s)",
-                           path, w, h,
-                           cairo_status_to_string(cairo_surface_status(surface)));
-        cairo_surface_destroy(surface);
-        g_object_unref(texture);
-        return NULL;
-    }
-
-    gdk_texture_download(texture, cairo_image_surface_get_data(surface),
-                         cairo_image_surface_get_stride(surface));
-    /* Written behind cairo's back, so it has to be told. Without this the first
-     * paint shows whatever the surface was allocated with, which is nothing. */
-    cairo_surface_mark_dirty(surface);
+    cairo_surface_t *surface = surface_of_texture(ctx, texture, path);
     g_object_unref(texture);
+    if (!surface)
+        return NULL;
 
     if (g_hash_table_size(cache) >= IMAGE_CACHE_MAX)
         g_hash_table_remove_all(cache);
@@ -694,7 +712,8 @@ static JSValue painter_image(JSContext *ctx, JSValueConst this_val,
     if (!p)
         return JS_EXCEPTION;
     if (argc < 3)
-        return JS_ThrowTypeError(ctx, "Image expects (path, x, y, [width], [height])");
+        return JS_ThrowTypeError(ctx,
+            "Image expects (path or bytes, x, y, [width], [height])");
 
     bool   bad = false;
     double x   = arg_num(ctx, argv[1], &bad);
@@ -704,19 +723,55 @@ static JSValue painter_image(JSContext *ctx, JSValueConst this_val,
     if (bad)
         return JS_EXCEPTION;
 
-    const char *path = JS_ToCString(ctx, argv[0]);
-    if (!path)
-        return JS_EXCEPTION;
+    /*
+     * A path or the bytes themselves, which is the same picture arriving by the
+     * other road: `Http` answers `Bytes` and `File.LoadBytes` reads them, and a
+     * drawing that had to write a temporary file to paint a downloaded logo was
+     * the gap. The argument decides, because there is nothing to configure: a
+     * string is a file and `Bytes` are the image.
+     *
+     * **Bytes are decoded on every call and the cache is the path's alone.** A
+     * path is a stable key with an mtime behind it; bytes are a pointer that can
+     * be freed and another allocated at the same address, so a cache keyed on
+     * them would eventually paint the wrong picture -- the one failure this is
+     * not worth risking. Measured on this machine, a 640x480 PNG decodes in
+     * about 1.5 ms, so a report drawing a logo per page pays nothing worth
+     * naming; a handler that paints the same bytes sixty times a second wants a
+     * `Picture` with `LoadBytes` instead, which decodes once.
+     */
+    size_t           blen  = 0;
+    const char      *path  = NULL;
+    cairo_surface_t *img   = NULL;
+    cairo_surface_t *owned = NULL;
 
-    cairo_surface_t *img = image_surface(ctx, path);
-    if (!img) {
-        JS_FreeCString(ctx, path);
-        return JS_EXCEPTION;
+    if (bta_bytes_get(argv[0], &blen)) {
+        char        named[32];
+        GdkTexture *texture = bta_texture_from_bytes(ctx, argv[0], "Image");
+
+        if (!texture)
+            return JS_EXCEPTION;
+
+        g_snprintf(named, sizeof named, "%zu bytes", blen);
+        owned = img = surface_of_texture(ctx, texture, named);
+        g_object_unref(texture);
+        if (!img)
+            return JS_EXCEPTION;
+    } else {
+        path = JS_ToCString(ctx, argv[0]);
+        if (!path)
+            return JS_EXCEPTION;
+
+        img = image_surface(ctx, path);
+        if (!img) {
+            JS_FreeCString(ctx, path);
+            return JS_EXCEPTION;
+        }
     }
 
     double iw = cairo_image_surface_get_width(img);
     double ih = cairo_image_surface_get_height(img);
     if (iw <= 0 || ih <= 0) {
+        if (owned) cairo_surface_destroy(owned);
         JS_FreeCString(ctx, path);
         return JS_UNDEFINED;
     }
@@ -739,9 +794,19 @@ static JSValue painter_image(JSContext *ctx, JSValueConst this_val,
     cairo_paint(p->cr);
     cairo_restore(p->cr);
 
-    char nb[NUMLEN], nb2[NUMLEN], nb3[NUMLEN], nb4[NUMLEN];
-    note(p, "Image \"%s\" at (%s,%s) %sx%s", path,
+    char nb[NUMLEN], nb2[NUMLEN], nb3[NUMLEN], nb4[NUMLEN], named[32];
+
+    if (!path)
+        g_snprintf(named, sizeof named, "%zu bytes", blen);
+
+    /* The dump names the source the caller gave: a file by its path, and bytes
+     * by how many -- which is what a test can assert and a person can recognise
+     * without the picture. */
+    note(p, "Image \"%s\" at (%s,%s) %sx%s", path ? path : named,
          num(nb, x), num(nb2, y), num(nb3, dw), num(nb4, dh));
+
+    if (owned)
+        cairo_surface_destroy(owned);
     JS_FreeCString(ctx, path);
     return JS_UNDEFINED;
 }
@@ -1454,6 +1519,62 @@ static JSValue area_dump(JSContext *ctx, JSValueConst this_val,
  * Without a size it uses the widget's own, and a surface that has never been
  * allocated has none, so a size is required then rather than guessed at.
  */
+/*
+ * One frame, drawn into an image surface of the size asked for.
+ *
+ * The whole of `Save` except what becomes of the pixels, because `ToPng` wants
+ * exactly the same frame and none of the file: the size defaulting to the
+ * widget's, the two refusals, and the rule that **a frame whose handler threw is
+ * not an answer** -- a picture of whatever had been drawn before the throw,
+ * reported as a success, is the bug that made `bta_emit_ok` exist.
+ *
+ * `who` names the caller in the complaints, and the size arguments are read
+ * from `argv + at` so the two verbs can take them in the places they take them.
+ */
+static cairo_surface_t *area_frame(JSContext *ctx, BtaWidget *w, const char *who,
+                                   int argc, JSValueConst *argv, int at)
+{
+    int32_t width  = gtk_widget_get_width(w->gtk);
+    int32_t height = gtk_widget_get_height(w->gtk);
+
+    if (argc > at && !JS_IsUndefined(argv[at]) && JS_ToInt32(ctx, &width, argv[at]))
+        return NULL;
+    if (argc > at + 1 && !JS_IsUndefined(argv[at + 1]) &&
+        JS_ToInt32(ctx, &height, argv[at + 1]))
+        return NULL;
+
+    if (width <= 0 || height <= 0) {
+        JS_ThrowRangeError(ctx, "%s: %dx%d is not a size -- a surface that has "
+                                "not been drawn yet has none, so pass one",
+                           who, width, height);
+        return NULL;
+    }
+    /* Refused rather than attempted: cairo's own ceiling is 32767 a side, and a
+     * transposed digit would otherwise ask the allocator for gigabytes before
+     * failing. 16384 square is a 1 GB surface, which is already past anything a
+     * chart in a report is. */
+    if (width > 16384 || height > 16384) {
+        JS_ThrowRangeError(ctx, "%s: %dx%d is too big to draw (16384 a side)",
+                           who, width, height);
+        return NULL;
+    }
+
+    cairo_surface_t *surface =
+        cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
+    cairo_t *cr = cairo_create(surface);
+
+    bool drawn = paint_frame(w, cr, width, height);
+
+    cairo_destroy(cr);
+    cairo_surface_flush(surface);
+
+    if (!drawn) {
+        cairo_surface_destroy(surface);
+        return NULL;        /* the handler's exception is the one to report */
+    }
+    return surface;
+}
+
 static JSValue area_save(JSContext *ctx, JSValueConst this_val,
                          int argc, JSValueConst *argv)
 {
@@ -1467,49 +1588,8 @@ static JSValue area_save(JSContext *ctx, JSValueConst this_val,
     if (!path)
         return JS_EXCEPTION;
 
-    int32_t width  = gtk_widget_get_width(w->gtk);
-    int32_t height = gtk_widget_get_height(w->gtk);
-
-    if (argc > 1 && !JS_IsUndefined(argv[1]) && JS_ToInt32(ctx, &width, argv[1])) {
-        JS_FreeCString(ctx, path);
-        return JS_EXCEPTION;
-    }
-    if (argc > 2 && !JS_IsUndefined(argv[2]) && JS_ToInt32(ctx, &height, argv[2])) {
-        JS_FreeCString(ctx, path);
-        return JS_EXCEPTION;
-    }
-
-    if (width <= 0 || height <= 0) {
-        JSValue e = JS_ThrowRangeError(ctx, "Save: %dx%d is not a size -- a "
-                                            "surface that has not been drawn yet "
-                                            "has none, so pass one", width, height);
-        JS_FreeCString(ctx, path);
-        return e;
-    }
-    /* Refused rather than attempted: cairo's own ceiling is 32767 a side, and a
-     * transposed digit would otherwise ask the allocator for gigabytes before
-     * failing. 16384 square is a 1 GB surface, which is already past anything a
-     * chart in a report is. */
-    if (width > 16384 || height > 16384) {
-        JSValue e = JS_ThrowRangeError(ctx, "Save: %dx%d is too big to draw "
-                                            "(16384 a side)", width, height);
-        JS_FreeCString(ctx, path);
-        return e;
-    }
-
-    cairo_surface_t *surface =
-        cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
-    cairo_t *cr = cairo_create(surface);
-
-    bool drawn = paint_frame(w, cr, width, height);
-
-    cairo_destroy(cr);
-    cairo_surface_flush(surface);
-
-    /* A frame that threw is not a file: writing one would leave a PNG of
-     * whatever had been drawn before the throw and report success. */
-    if (!drawn) {
-        cairo_surface_destroy(surface);
+    cairo_surface_t *surface = area_frame(ctx, w, "Save", argc, argv, 1);
+    if (!surface) {
         JS_FreeCString(ctx, path);
         return JS_EXCEPTION;
     }
@@ -1525,6 +1605,55 @@ static JSValue area_save(JSContext *ctx, JSValueConst this_val,
     }
     JS_FreeCString(ctx, path);
     return JS_UNDEFINED;
+}
+
+/* Where `ToPng` puts the bytes cairo hands it, one chunk at a time. */
+static cairo_status_t png_chunk(void *closure, const unsigned char *data,
+                                unsigned int length)
+{
+    g_byte_array_append(closure, data, length);
+    return CAIRO_STATUS_SUCCESS;
+}
+
+/*
+ * `ToPng([width], [height])`: the same frame as `Save`, as `Bytes`.
+ *
+ * The other half of the circle this runtime had open. `Http` answers `Bytes`,
+ * `File.LoadBytes` reads them and `File.SaveBytes` writes them, and the only way
+ * out of a drawing was a file name -- so a chart that had to be *posted*, mailed
+ * or put in a reply was a temporary file written and deleted around the one call
+ * that mattered. `LoadBytes` on a `Picture` is the way in; this is the way out.
+ *
+ * `To`-something is what this tree already calls "the same thing in another
+ * form" (`Bytes.ToText`, `ToBase64`, `ToHex`), and PNG is in the name because it
+ * is a decision and not an implementation detail: it is lossless, it keeps the
+ * alpha a drawing has, and every reader takes it.
+ */
+static JSValue area_to_png(JSContext *ctx, JSValueConst this_val,
+                           int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    cairo_surface_t *surface = area_frame(ctx, w, "ToPng", argc, argv, 0);
+    if (!surface)
+        return JS_EXCEPTION;
+
+    GByteArray    *out    = g_byte_array_new();
+    cairo_status_t status = cairo_surface_write_to_png_stream(surface, png_chunk, out);
+
+    cairo_surface_destroy(surface);
+
+    if (status != CAIRO_STATUS_SUCCESS) {
+        g_byte_array_unref(out);
+        return JS_ThrowInternalError(ctx, "ToPng: %s",
+                                     cairo_status_to_string(status));
+    }
+
+    JSValue bytes = bta_bytes_new(ctx, out->data, out->len);
+    g_byte_array_unref(out);
+    return bytes;
 }
 
 /*
@@ -1662,6 +1791,7 @@ static const JSCFunctionListEntry area_props[] = {
     JS_CFUNC_DEF("Redraw", 0, area_redraw),
     JS_CFUNC_DEF("Dump",   0, area_dump),
     JS_CFUNC_DEF("Save",    3, area_save),
+    JS_CFUNC_DEF("ToPng",   2, area_to_png),
     JS_CFUNC_DEF("SavePdf", 5, area_save_pdf),
 };
 
