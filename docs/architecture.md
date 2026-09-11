@@ -475,9 +475,30 @@ including on the way back from a box, which cannot hold it at all.
 
 Positions come from each child's `BtaWidget` — already the authority, since
 `GtkFixed`'s per-child layout data only mirrored it. Not keeping that second
-copy is why `Raise`/`Lower` is an ordinary sibling reorder rather than taking
-every child out and putting it back, and why attaching is a bare
+copy is why `Raise`/`Lower` is an ordinary sibling reorder *here* rather than
+taking every child out and putting it back, and why attaching is a bare
 `gtk_widget_set_parent()` with no coordinates to hand over.
+
+### Three functions, one per question a container is asked
+
+`bta_container_attach`, `bta_container_detach` and `bta_container_reorder` live
+side by side in `bta_widget.c`, each a branch per kind of slot and each the
+inverse or the sibling of the others. That is not tidiness: every defect this
+area has had came from one of them knowing something the other two did not. A
+`GtkGrid` with no detach branch could be filled once and never rebuilt; a
+`GtkOverlay` unparented rather than cleared through the property holding it left
+GTK believing the container was full; `Raise`/`Lower` moving a sibling directly
+left an overlay's base filling while painting over its own floaters. So the three
+questions — put a child in, take it out, move it among the others — are answered
+in one place and by one vocabulary, and `Raise`/`Lower` and the designer's drag
+are callers of the third rather than implementations of it.
+
+**`Container.Placement` is that same knowledge published**: `Coordinates`,
+`Order`, `Layers`, `Pages`, `Halves`. Only the runtime knows what a slot is, and
+an editor that keeps its own table of which class is which will drift from it —
+the IDE's did, which is how three containers reached its palette classified as
+rows. Read-only, so nothing serialises it: it is a fact about the class and its
+arrangement, not a property of the file.
 
 `Width`/`Height` are `gtk_widget_set_size_request`, i.e. a **minimum**. `w->w` and
 `w->h` remember what was asked for, so the getters report the request rather than

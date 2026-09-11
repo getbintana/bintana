@@ -13,6 +13,8 @@ in the same form.
 | Issue | The missing capability |
 |---|---|
 | [ISSUE-editable-combo.md](ISSUE-editable-combo.md) | No editable / autocompleting combo |
+| [ISSUE-fixed-fill-child.md](ISSUE-fixed-fill-child.md) | A `Fixed` container does not stretch a `Fill` child when it grows |
+| [ISSUE-fill-and-scroll.md](ISSUE-fill-and-scroll.md) | No container that fills the room it is given and scrolls when it cannot |
 | [ISSUE-printing.md](ISSUE-printing.md) | No printer — no dialog, no copies, no preview, and no way to lay a control onto a page |
 | [ISSUE-video-availability.md](ISSUE-video-availability.md) | A control whose engine is missing is still offered — `Video` cannot say whether it can play |
 
@@ -21,14 +23,15 @@ in the same form.
 past its answer is a second description of the same feature, written by somebody
 who did not have it yet, in the directory of things that are missing.
 
-Twelve have gone that way — eleven filled and one refused. Filled: a drawing that
+Thirteen have gone that way — twelve filled and one refused. Filled: a drawing that
 could not carry an image, text that could not be measured outside a `Draw`, a
 document that could only leave as one PNG per page, a program that had to run
 `sha256sum` to hash anything, an application that could not ask how big the
 screen was, a `Scroller` that could not say where it was scrolled to, a window
 that ignored a file dropped on it, a schedule with nowhere to keep `"10:00"`, a
 language with no value for the bytes of a file, a hierarchy that could not
-carry a column, and a program with no word for sound or motion.
+carry a column, a program with no word for sound or motion, and a stack that
+could be written by hand and not built with the mouse.
 
 Refused: a list of check boxes. A tick the *list* keeps is state in the view,
 which is the wrong place for it — the argument is with the other things that are

@@ -327,6 +327,7 @@ Ide.Chrome = class Chrome {
     }
 
     hideGuides() {
+        this.hideBand();                       /* the stack's mark, if there is one */
         this.guides.v.Visible = false;
         this.guides.h.Visible = false;
     }
@@ -350,6 +351,22 @@ Ide.Chrome = class Chrome {
      */
     showBand(r) {
         this.frameBars(this.outlinePool(1)[0], r);
+    }
+
+    /*
+     * Where a drop into a stack would land: the outline of the layer it would go
+     * on top of.
+     *
+     * Not a line, which is what every other container gets, because in a stack
+     * there is no boundary to draw one at -- every child has the whole of the
+     * container, so what the drag chooses is which of them it lands over.
+     *
+     * Drawn with the band's own bars: a rubber band is a gesture on the surface
+     * and this is a drag over one container, so the two are never asked for at
+     * once -- and `hideGuides`, which every gesture ends with, takes it down.
+     */
+    layerMark(r) {
+        this.showBand(r);
     }
 
     hideBand() {

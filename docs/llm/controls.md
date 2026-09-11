@@ -184,6 +184,7 @@ Written in `rad.js` rather than in C, and on every widget just the same:
 |---|---|
 | `Anchored` | off, children stay where they were drawn however big it gets — a drawing board, not a window. Default `true` |
 | `Arrangement` | `Fixed` `Horizontal` `Vertical` — coordinates, a row, or a column. **Not on every container**; see the table above |
+| `Placement` (ro) | how this one places a child, which is the question an editor asks: `Coordinates` `Order` `Layers` `Pages` `Halves`. Every container answers, including the ones that refuse `Arrangement` |
 | `Homogeneous` | every child the same size along the axis |
 | `Spacing` | pixels between children, in a row or a column |
 | `Children` (ro) | its real children, one level deep, in order |
@@ -194,7 +195,7 @@ Written in `rad.js` rather than in C, and on every widget just the same:
 | `FocusPrevious()` | → the same, backwards |
 | `LocalPoint(x, y, from)` | → `[x, y]`: a point in another widget's space, in this container's |
 | `PickAt(x, y)` | → the topmost child at that point, or `null` |
-| `Reorder(child, index)` | moves a child among its siblings. The index counts them *without* the one being moved. A `Fixed` refuses — there the order is `Raise`/`Lower` |
+| `Reorder(child, index)` | moves a child among its siblings. The index counts them *without* the one being moved. **Every container with an order answers it**: a box, a `Grid`, a `Flow`, a `RowList`, a `Notebook`, a `Switcher`, a `Split` (the index names the half) and an `Overlay` (index `0` is the base layer, the one that fills). A `Fixed` refuses — there the order is the painting order, which is `Raise`/`Lower` |
 | `AddNode(node)` | builds a live widget from a `.form` node and adds it |
 | `BuildChildren(node)` | replaces the contents with that node's children |
 
@@ -231,6 +232,18 @@ about cost and not the only thing that works.
 | `Panel`, `Frame`, `Expander`, `Scroller`, `Form`, `Component` | `Fixed` (default), `Horizontal`, `Vertical` |
 | `Split` | `Horizontal` (default), `Vertical` — there is no `Fixed` half |
 | `Grid`, `Flow`, `RowList`, `Overlay`, `Notebook`, `Switcher` | **refused**, reads `""`: *this container arranges its children by its own nature* |
+
+**`Placement` is the same question with an answer for every container**, which
+is what an editor needs: `Arrangement` is what a *person* may choose, and it is
+`""` on the six above. Read-only, so no `.form` carries it.
+
+| | `Placement` |
+|---|---|
+| `Panel`, `Frame`, `Expander`, `Scroller`, `Form`, `Component` | `Coordinates` arranged `Fixed`, `Order` as a row or a column |
+| `Grid`, `Flow`, `RowList` | `Order` |
+| `Overlay` | `Layers` |
+| `Notebook`, `Switcher` | `Pages` |
+| `Split` | `Halves` |
 
 On the ones that accept it, it may be changed at any time, children and all:
 they are kept in order, and a `Fixed` container that becomes a row and goes back
@@ -1015,9 +1028,38 @@ One row per child, each row **a widget of its own**, with scrolling and selectio
 
 ## Overlay
 
-Stacked: the first child fills, the rest float on top. It adds nothing to `Container`.
+Stacked: the first child fills, the rest float on top. It adds no *member* to `Container` and gives two of them a meaning of their own.
 
-*Nothing of its own.*
+| Member | |
+|---|---|
+| `Children[0]` | **the base layer**: the one child the stack hands its whole size to. There is exactly one whenever an overlay holds anything, and if it leaves the layer above it takes over |
+| `Reorder(child, 0)` | make that child the base. Any other index is a place in the paint order |
+| `Raise()` / `Lower()` | one layer up, one layer down — and the bottom of a stack is the layer that fills, so `Lower()` on a floater makes it the base |
+| `HAlign` / `VAlign` | **where a floating layer sits.** A layer that says nothing fills the stack like the base does; `Center`/`Center` is a spinner over a picture, `Center`/`Start` a banner at the top. With `Margin`, that is the whole placement vocabulary a stack has |
+
+**`X`/`Y` mean nothing in an overlay and are not saved.** A stack is not a
+drawing surface: there is no coordinate to give a layer, so a hand-written
+`.form` carrying `X`/`Y` on one loses those two numbers the first time it is
+saved. The property grid says so on the row.
+
+A message over the content instead of in front of it, which is what
+[`examples/notify`](../../examples/notify) is:
+
+```json
+{ "type": "Overlay", "name": "Stage", "properties": { "Expand": true },
+  "children": [
+    { "type": "Panel",   "name": "Content", "properties": { "Arrangement": "Vertical" } },
+    { "type": "Spinner", "name": "Spn",
+      "properties": { "HAlign": "Center", "VAlign": "Center", "Visible": false } },
+    { "type": "Panel",   "name": "Toast",
+      "properties": { "HAlign": "Center", "VAlign": "Start", "Margin": 12,
+                      "Style": "osd", "Visible": false } } ] }
+```
+
+```js
+this.Toast.Visible = true;                  /* over the content, not over the app */
+this.Spn.Raise();                           /* and above the toast while it spins */
+```
 
 ## Split
 

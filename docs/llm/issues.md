@@ -180,6 +180,8 @@ needed and what it did instead.
 | No editable / autocompleting combo | [ISSUE-editable-combo](../issues/ISSUE-editable-combo.md) |
 | No printer — no dialog, no copies, no preview, no control laid onto a page (a PDF **is** written: `SavePdf`) | [ISSUE-printing](../issues/ISSUE-printing.md) |
 | A control that cannot say whether it can run on this build — `Video` without GStreamer (or without the GTK4 sink) is still offered by the palette | [ISSUE-video-availability](../issues/ISSUE-video-availability.md) |
+| A `Fixed` container that does not stretch a `Fill` child when it itself grows — a reusable component that wants to fill its cell has to change its `Arrangement` | [ISSUE-fixed-fill-child](../issues/ISSUE-fixed-fill-child.md) |
+| No container that fills the room it is given **and** scrolls once it cannot — `Grid` fills without scrolling, `Flow` scrolls without filling | [ISSUE-fill-and-scroll](../issues/ISSUE-fill-and-scroll.md) |
 
 ## One more thing
 

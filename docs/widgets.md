@@ -2390,6 +2390,20 @@ which would be a claim about coordinates that do not apply — and the serialise
 skips them under its rule about values equal to a fresh control's, so no `.form`
 carries an `Arrangement` its container would refuse.
 
+**`Placement` is the question they *do* all answer**, and it exists because an
+editor has to ask it: `Coordinates`, `Order`, `Layers`, `Pages`, `Halves`. Five
+words and not a boolean, because there are five kinds of gesture — a coordinate
+to move, a place in a line, a layer to stack, a page at a time, one of two
+halves. Read-only: it is a fact about the class and its arrangement, not a
+property of the file.
+
+It was a table of class names in `Designer.js` until this existed, and that table
+is how `Overlay`, `Flow` and `RowList` came to be on the palette with every
+gesture treating them as rows — dropping a control into one added it and *then*
+asked for an order the runtime refused, so the drag read as failed and left a
+child behind that nothing had selected. The runtime is the only thing that knows
+what its slot is; the same trade `Widget.Available` made for the palette.
+
 ### Frame
 
 A `GtkFrame` holding a `BtaFixed`: a `Panel` with a title (`Text`), and arranged
@@ -2453,8 +2467,14 @@ owns each child. Their `X`/`Y` stay on the `BtaWidget` untouched, so going
 Order is position in a box: a child has no `X`/`Y` that means anything, and
 `Reorder(child, index)` is what moves it. The index counts the siblings *without*
 the child being moved, so carrying one forward has to account for the hole it
-leaves behind. A `Fixed` refuses `Reorder` — there the order is the painting
-order, and `Raise`/`Lower` already say that.
+leaves behind. **Every container that has an order answers it** — a box, a
+`Grid`, a `Flow`, a `RowList`, a `Notebook`, a `Switcher`, a `Split` whose index
+names the half, and an `Overlay` whose index `0` is the layer that fills — and a
+`Fixed` is the only one that refuses: there the order is the painting order, and
+`Raise`/`Lower` already say that. One function answers all of them
+(`bta_container_reorder`, beside the attach and detach it mirrors), because
+`Raise`/`Lower` and the designer's drag ask the same question and an index has to
+mean the same thing to all three.
 
 Children do not expand unless asked: `Expand`, `HExpand`, `VExpand` are what
 decides who absorbs the slack. A container does not expand unless asked either,
@@ -2667,10 +2687,52 @@ fistful of switches the user never made.
 
 ### Overlay
 
-A `GtkOverlay`: the first child fills, the rest float on top at their own
-coordinates. It is what makes the designer possible — a transparent `Panel` over
-the surface, taking the mouse so that clicking a `Button` selects it instead of
-pressing it.
+A `GtkOverlay`: the first child fills and the rest float on top of it. It is what
+makes the designer possible — a transparent `Panel` over the surface, taking the
+mouse so that clicking a `Button` selects it instead of pressing it.
+
+**Not at their own coordinates**, which this page said for a while and which sent
+somebody looking for a coordinate that is not there. A `GtkOverlay` places a
+floating layer by `HAlign`/`VAlign`/`Margin` and by nothing else; `X`/`Y` are
+stored on the widget, read by no layout, and dropped by the serialiser like any
+other child of a container that is not a surface. So a hand-written `.form` with
+`X: 16, Y: 16` on a layer loses those two numbers the first time it is saved —
+now visible rather than silent, since the property grid greys those rows and says
+why.
+
+**The first child is a *property* of the overlay and the rest are a list**
+(`gtk_overlay_set_child` against `gtk_overlay_add_overlay`), and everything about
+the order follows from that. The base is the layer the stack hands its whole
+allocation to; GTK keeps it as the first sibling, so `Children[0]` **is** the
+base, and the layout tells it apart by comparing against
+`gtk_overlay_get_child()` rather than by any position of its own. Three
+consequences, each of which was a defect:
+
+- **`Reorder(child, index)` works**, and index `0` means *be the base*. It swaps
+  the two through `set_child`, both referenced across the swap — GTK refuses a
+  widget that still has a parent, and `set_child` unparents whoever was base,
+  which is the last reference it holds. Every other index is a place in the paint
+  order, which is the ordinary sibling reorder every container shares.
+- **`Raise`/`Lower` go through the same door.** `Raise()` on the base used to move
+  it to last sibling while `overlay->child` still pointed at it: it went on
+  filling and painted *over* its own floaters, and `Children[0]` stopped being the
+  base. In a stack the bottom is the layer that fills, so `Lower()` means *become
+  the base* — and `Raise` then `Lower` is a round trip.
+- **The layer above takes over when the base leaves.** Detaching it used to leave
+  an overlay holding floaters with nothing filling, and `Children[0]` no longer
+  the base. Attach makes the first child one, so removal has to promote the next
+  — the symmetry every branch of `bta_container_detach` is held to.
+
+`Arrangement` is refused, as on a `RowList`, and `Placement` answers `Layers`.
+That is the property an editor asks, and it is how the designer tells a stack
+from a row without a table of class names — the table that let `Overlay`, `Flow`
+and `RowList` onto its palette while every gesture treated them as boxes.
+
+A message over the content rather than in front of it is
+[`examples/notify`](../examples/notify): one overlay, three layers — the form's
+content as the base, a spinner `Center`/`Center` while something is going, a
+banner `Center`/`Start` with `Style: "osd"` — and all three declared in the
+`.form`, where a designer can draw them.
 
 ### RowList
 
@@ -2680,6 +2742,22 @@ settings page or a list of results needs.
 
 `Index` is the selected row or `-1`, `Count` the number of rows, `Select` fires on
 selection. `Arrangement` is refused: the rows *are* its arrangement.
+
+**`Reorder(child, index)` works, and it goes out through the list and back in.**
+A `GtkListBox` and a `GtkFlowBox` keep their wrappers in a sequence of GTK's own,
+which the sibling order does not move — indices, the keyboard walk, headers and
+the filter all read that sequence — so a reorder is `remove` plus `insert` at the
+position asked for, and three things have to be got right. The wrapper is
+referenced across the two calls, because the list holds the only reference to it
+and `remove` ends in `gtk_widget_unparent`: a row finalised between them takes
+the control's parent with it, leaving a control that still exists, still answers,
+and is in no list. The handlers are blocked for the duration, or a move that ends
+where it began reports a `Select` nobody made. And **the row is unselected before
+the remove**: `gtk_list_box_remove` clears the box's pointer but leaves the row's
+own flag set, and `select_row` returns early on a row that already claims to be
+selected — so without it the row comes back drawing selected while `Index`
+answers `-1`, with nothing but a click to get out of it. `tests/widgets`'
+`Reorder` asserts the selection survives and that no event was raised.
 
 **And the rest of the list vocabulary is `ListBox`'s, because underneath they are
 the same widget.** `MultiSelect`, `Selection`, `Select(i)`, `Deselect(i)`,

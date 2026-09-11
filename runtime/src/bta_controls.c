@@ -722,6 +722,54 @@ static JSValue cont_get_arrangement(JSContext *ctx, JSValueConst this_val)
             == GTK_ORIENTATION_HORIZONTAL ? "Horizontal" : "Vertical");
 }
 
+/*
+ * Placement: how this container decides where a child goes.
+ *
+ * `Arrangement` is what a person may *choose* and reads `""` on a container
+ * whose nature settles it; this is the answer for every container, which is a
+ * different question and the one an editor has to ask. Five words, because
+ * there are five kinds of answer a gesture has to be written against:
+ *
+ *   Coordinates  a drawing surface: X/Y mean something, dragging moves
+ *   Order        a box, a grid, a flow, a list of rows: the place in the line
+ *   Layers       a stack: the order is the z-order, index 0 is what fills
+ *   Pages        one at a time behind a strip: there is no "where the pointer is"
+ *   Halves       a split: two places, and the index names which
+ *
+ * It exists because the designer was deciding this by class name -- a table of
+ * six names in JavaScript, which is how `Overlay`, `Flow` and `RowList` came to
+ * be on its palette while every gesture treated them as boxes and raised *this
+ * container has no order to give*. The runtime is the only thing that knows what
+ * its slot is; asking it is one sentence instead of a second list to keep in
+ * step. The same trade `Widget.Available` made.
+ *
+ * Read-only, so the serialiser passes over it: it is not a property of the file,
+ * it is a fact about the class and its arrangement.
+ */
+static JSValue cont_get_placement(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    if (!w->slot)
+        return JS_ThrowTypeError(ctx, "not a container");
+
+    if (BTA_IS_FIXED(w->slot) && bta_surface_is_fixed(w->slot))
+        return JS_NewString(ctx, "Coordinates");
+    if (GTK_IS_OVERLAY(w->slot))
+        return JS_NewString(ctx, "Layers");
+    if (GTK_IS_NOTEBOOK(w->slot) || GTK_IS_STACK(w->slot))
+        return JS_NewString(ctx, "Pages");
+    if (GTK_IS_PANED(w->slot))
+        return JS_NewString(ctx, "Halves");
+    if (bta_container_order(w->slot))
+        return JS_NewString(ctx, "Order");
+
+    /* A slot that packs one child and asks nothing about where it goes -- a
+     * Frame's, before it was a surface. Nothing to say rather than a guess. */
+    return JS_NewString(ctx, "");
+}
+
 static JSValue cont_set_arrangement(JSContext *ctx, JSValueConst this_val,
                                     JSValueConst val)
 {
@@ -1071,11 +1119,16 @@ static JSValue cont_local_point(JSContext *ctx, JSValueConst this_val,
  *
  * In a box, order *is* position -- there are no coordinates to move a control
  * by, so this is what dragging one has to do.  A notebook orders its pages the
- * same way, and a split has exactly two halves, so ordering there is putting a
- * child in the half the index names.
+ * same way, a split has exactly two halves, a flow and a list of rows are
+ * sequences, and in an `Overlay` the order is the stack: index 0 is the base
+ * layer, the child that fills.
  *
  * In a Fixed the order is the painting order and Raise/Lower already say it, so
  * this refuses: silently doing something else would be worse than saying no.
+ *
+ * The work is `bta_container_reorder`, beside the attach and detach it mirrors,
+ * because `Raise`/`Lower` and the designer's drag ask the same question and an
+ * index has to mean the same thing to all three.
  */
 static JSValue cont_reorder(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv)
@@ -1083,9 +1136,7 @@ static JSValue cont_reorder(JSContext *ctx, JSValueConst this_val,
     BtaWidget *p = bta_this(ctx, this_val);
     if (!p)
         return JS_EXCEPTION;
-    if (!p->slot ||
-        !(bta_surface_is_box(p->slot) || GTK_IS_NOTEBOOK(p->slot) ||
-          GTK_IS_PANED(p->slot) || GTK_IS_STACK(p->slot) || GTK_IS_GRID(p->slot)))
+    if (!bta_container_order(p->slot))
         return JS_ThrowTypeError(ctx, "this container has no order to give");
 
     BtaWidget *child = argc > 0 ? bta_widget_of(argv[0]) : NULL;
@@ -1096,85 +1147,8 @@ static JSValue cont_reorder(JSContext *ctx, JSValueConst this_val,
     if (argc < 2 || JS_ToInt32(ctx, &index, argv[1]))
         return JS_ThrowTypeError(ctx, "Reorder(child, index) expects an index");
 
-    /* A notebook keeps its pages in a stack of its own, so a page's parent is
-     * not the notebook -- ask the notebook instead. */
-    if (GTK_IS_NOTEBOOK(p->slot)) {
-        GtkNotebook *nb   = GTK_NOTEBOOK(p->slot);
-        gint         page = gtk_notebook_page_num(nb, child->gtk);
-
-        if (page < 0)
-            return JS_ThrowTypeError(ctx, "%s is not a page of this notebook",
-                                     child->name ? child->name : "the widget");
-
-        gtk_notebook_reorder_child(nb, child->gtk, index);
-        return JS_UNDEFINED;
-    }
-
-    if (gtk_widget_get_parent(child->gtk) != p->slot)
-        return JS_ThrowTypeError(ctx, "%s is not a child of this container",
-                                 child->name ? child->name : "the widget");
-
-    /* A stack cannot be reordered in place -- GTK offers nothing to say it --
-     * so the switcher takes its pages out and puts them back. */
-    if (GTK_IS_STACK(p->slot)) {
-        if (!bta_switcher_reorder(p, child->gtk, index))
-            return JS_ThrowTypeError(ctx, "%s is not a page of this switcher",
-                                     child->name ? child->name : "the widget");
-        return JS_UNDEFINED;
-    }
-
-    /*
-     * A split has two halves and no third place to go: ordering one is putting
-     * it in the half the index names, and whatever was there takes the other.
-     */
-    if (GTK_IS_PANED(p->slot)) {
-        GtkPaned  *paned = GTK_PANED(p->slot);
-        GtkWidget *start = gtk_paned_get_start_child(paned);
-        GtkWidget *end   = gtk_paned_get_end_child(paned);
-        bool       first = index <= 0;
-
-        if ((first && child->gtk == start) || (!first && child->gtk == end))
-            return JS_UNDEFINED;                    /* already there */
-
-        /* Both are unparented before either is re-parented: GTK 4 refuses a
-         * widget that still has one. */
-        g_object_ref(start);
-        g_object_ref(end);
-        gtk_paned_set_start_child(paned, NULL);
-        gtk_paned_set_end_child(paned, NULL);
-        gtk_paned_set_start_child(paned, first ? child->gtk : (start == child->gtk ? end : start));
-        gtk_paned_set_end_child(paned, first ? (start == child->gtk ? end : start) : child->gtk);
-        g_object_unref(start);
-        g_object_unref(end);
-        return JS_UNDEFINED;
-    }
-
-    /* The sibling to sit after: index 0 is "first", i.e. after nobody. */
-    GtkWidget *after = NULL;
-    int        at    = 0;
-
-    for (GtkWidget *c = gtk_widget_get_first_child(p->slot);
-         c && at < index; c = gtk_widget_get_next_sibling(c)) {
-        if (c == child->gtk)
-            continue;           /* it is moving: it does not count on the way */
-        after = c;
-        at++;
-    }
-
-    /*
-     * A grid's order *is* its layout, so moving one child moves every child
-     * after it -- which is what re-flowing does. The sibling order is GTK's own
-     * and moving it there is one call; where each one then sits follows.
-     */
-    if (GTK_IS_GRID(p->slot)) {
-        gtk_widget_insert_after(child->gtk, p->slot, after);
-        bta_grid_reflow(p->slot);
-        return JS_UNDEFINED;
-    }
-
-    /* One call, and the box layout reads the sibling order it finds. */
-    gtk_widget_insert_after(child->gtk, p->slot, after);
-    return JS_UNDEFINED;
+    return bta_container_reorder(ctx, p, child, index)
+         ? JS_UNDEFINED : JS_EXCEPTION;
 }
 
 /*
@@ -1213,6 +1187,7 @@ static const JSCFunctionListEntry container_props[] = {
     JS_CFUNC_MAGIC_DEF("FocusNext",     0, cont_focus_step, 0),
     JS_CFUNC_MAGIC_DEF("FocusPrevious", 0, cont_focus_step, 1),
     JS_CGETSET_DEF("Arrangement", cont_get_arrangement, cont_set_arrangement),
+    JS_CGETSET_DEF("Placement",   cont_get_placement,   NULL),
     JS_CGETSET_DEF("Spacing",     cont_get_spacing,     cont_set_spacing),
     JS_CGETSET_DEF("Homogeneous", cont_get_homogeneous, cont_set_homogeneous),
     JS_CGETSET_DEF("Anchored",    cont_get_anchored,    cont_set_anchored),

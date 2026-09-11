@@ -1,0 +1,9 @@
+{
+  "name": "Notify",
+  "startup": "NotifyForm",
+  "sources": [
+    "NotifyForm.js"
+  ],
+  "version": "1.0",
+  "description": "Overlay: a message over the content instead of in front of it, and a spinner over the work"
+}

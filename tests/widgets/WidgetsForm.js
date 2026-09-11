@@ -6196,6 +6196,185 @@ class Spike extends Form {
         late.Delete();
         paned.Delete();
 
+        /*
+         * **Every container that has an order answers the same four questions**,
+         * and the loop is the test: three of these used to refuse `Reorder`
+         * outright -- a `Flow`, a `RowList` and an `Overlay`, all three on the
+         * designer's palette, so dropping a control into one raised *this
+         * container has no order to give* after the control had been added.
+         *
+         * The same indices mean the same thing in all five, which is what makes
+         * one gesture in the designer enough: `index` counts the siblings
+         * without the one being moved.
+         */
+        for (const type of ["Flow", "RowList", "Grid", "Overlay"]) {
+            const c = Widget.New(type);
+            this.Add(c);
+
+            const kids = ["a", "b", "c"].map((name) => {
+                const b = new Button();
+                b.Name = `${type}${name}`;
+                b.Text = name;
+                c.Add(b);
+                return b;
+            });
+            const at = () => c.Children.map((k) => k.Text).join("");
+
+            eq(`${type} keeps the order it was given`, at(), "abc");
+            c.Reorder(kids[2], 0);
+            eq(`${type}: to the front`, at(), "cab");
+            c.Reorder(kids[2], 2);
+            eq(`${type}: and back to the end`, at(), "abc");
+            c.Reorder(kids[0], 1);
+            eq(`${type}: and to the middle`, at(), "bac");
+            c.Reorder(kids[0], 99);
+            eq(`${type}: past the end is the end`, at(), "bca");
+
+            c.Delete();
+        }
+
+        /*
+         * What an index *means*, asked of the runtime rather than decided by
+         * class name -- which is what the designer used to do, and why three
+         * containers reached its palette with every gesture treating them as
+         * boxes. Five answers, because there are five kinds of gesture.
+         */
+        const placements = {
+            Grid: "Order", Flow: "Order", RowList: "Order", Overlay: "Layers",
+            Notebook: "Pages", Switcher: "Pages", Split: "Halves",
+        };
+        for (const type in placements) {
+            const c = Widget.New(type);
+            eq(`a ${type} places by ${placements[type]}`, c.Placement, placements[type]);
+            c.Delete();
+        }
+
+        const surface = new Panel();
+        eq("a Fixed panel places by coordinates", surface.Placement, "Coordinates");
+        surface.Arrangement = "Vertical";
+        eq("and as a column, by order", surface.Placement, "Order");
+        eq("Placement is read-only", surface.PropertyNames().includes("Placement"), false);
+        surface.Delete();
+
+        /*
+         * An `Overlay` is a stack: the order **is** the z-order, and index 0 is
+         * the bottom of it -- which is the base layer, the one child GTK hands
+         * the whole allocation to. So `Children[0]` is the base at every moment,
+         * and that is what makes an index mean something here.
+         */
+        const stack = new Overlay();
+        this.Add(stack);
+
+        const base = new Panel();
+        const over = new Label();
+        over.Text = "encima";
+        stack.Add(base);
+        stack.Add(over);
+        stack.Resize(220, 90);
+
+        eq("the first child of a stack is its base", stack.Children[0] === base, true);
+
+        stack.Reorder(over, 0);
+        eq("ordering a layer to 0 makes it the base", stack.Children[0] === over, true);
+        eq("and the old base is the layer above", stack.Children[1] === base, true);
+
+        /* Raise and Lower go through the same door, or Raise on a base would
+         * leave it filling while painting over its own floaters. */
+        over.Raise();
+        eq("Raise puts a layer on top", stack.Children[1] === over, true);
+        over.Lower();
+        eq("Lower in a stack means become the base", stack.Children[0] === over, true);
+
+        /* Whoever is left has to be a base: an overlay with floaters and no base
+         * has nothing that fills. */
+        over.Delete();
+        eq("the survivor of a stack is one child", stack.Children.length, 1);
+        eq("and it is the base", stack.Children[0] === base, true);
+        const mark = new Label();        /* would trip an assertion with no base */
+        mark.Text   = "cargando";
+        mark.HAlign = "Center";
+        mark.VAlign = "Center";
+        stack.Add(mark);
+        eq("and a stack whose base left takes children again", stack.Children.length, 2);
+
+        /*
+         * The base is the one that fills, which is the whole claim -- measured a
+         * frame later, since nothing is allocated until the loop runs again.
+         *
+         * And note what the floater's alignment is doing: a layer left alone
+         * fills too (GTK aligns `Fill` by default), so `HAlign`/`VAlign` is how
+         * a spinner ends up centred over a picture rather than stretched across
+         * it. That is the whole placement vocabulary a stack has.
+         */
+        until("a stack allocates", () => stack.Children[0].Bounds().Width > 1, () => {
+            const whole  = stack.Bounds();
+            const fills  = stack.Children[0].Bounds();
+            const floats = mark.Bounds();
+
+            eq("the base layer is given the whole stack",
+               `${fills.Width}x${fills.Height}`, `${whole.Width}x${whole.Height}`);
+            check("and a centred layer keeps its own size",
+                  floats.Width < whole.Width, `${floats.Width} of ${whole.Width}`);
+            check("and is where its alignment put it",
+                  floats.X > whole.X, `${floats.X} of ${whole.X}`);
+
+            /*
+             * **And moving it is enough: nothing else has to happen.**
+             * `gtk_widget_set_halign` queues an allocate on the *child*, which
+             * re-allocates it into the rectangle it already had -- so the
+             * alignment was stored and never carried out, and the layer sat
+             * where it was until something made the overlay lay out again.
+             * Found by hand, by changing it in the property grid and then
+             * hiding the layer and showing it, which moved it.
+             */
+            mark.HAlign = "Start";
+            mark.VAlign = "Start";
+
+            until("the layer moves", () => mark.Bounds().X === whole.X, () => {
+                const moved = mark.Bounds();
+
+                eq("changing a layer's alignment moves it, with no other help",
+                   `${moved.X},${moved.Y}`, `${whole.X},${whole.Y}`);
+                stack.Delete();
+            });
+        });
+
+        /*
+         * A `RowList` keeps its rows in a sequence of GTK's own, so a reorder
+         * goes out and back in through the list -- and the selection has to
+         * survive it. `gtk_list_box_remove` leaves the row's own flag set and
+         * `select_row` refuses a row that already claims to be selected, so
+         * getting this wrong leaves a row drawing selected while `Index` answers
+         * -1, with nothing but a click to get out of it.
+         */
+        const ordered = new RowList();
+        ordered.Name = "Ordered";
+        this.Add(ordered);
+
+        const lines = ["uno", "dos", "tres"].map((text) => {
+            const l = new Label();
+            l.Text = text;
+            ordered.Add(l);
+            return l;
+        });
+
+        this.orderedSelects = 0;
+        ordered.Index = 2;
+        eq("the last row is selected", ordered.Index, 2);
+        eq("and it said so once", this.orderedSelects, 1);
+
+        ordered.Reorder(lines[2], 0);
+        eq("reordering moves the row", ordered.Children[0] === lines[2], true);
+        eq("the selection follows the row", ordered.Index, 0);
+        eq("Selection agrees", JSON.stringify(ordered.Selection), "[0]");
+        eq("and no Select was reported for a move nobody made",
+           this.orderedSelects, 1);
+
+        /* Selectable again afterwards, which is the half the flag would eat. */
+        ordered.Index = 1;
+        eq("and the list still selects", ordered.Index, 1);
+        ordered.Delete();
+
         throws("a Fixed has no order to give",
                () => this.Fixed1.Reorder(this.Fixed1.Children[0], 0));
         throws("nor is a stranger a child of it",
@@ -6203,6 +6382,8 @@ class Spike extends Form {
 
         box.Delete();
     }
+
+    Ordered_Select() { this.orderedSelects++; }
 
     /* --- Label.Wrap ---------------------------------------------------------
      *

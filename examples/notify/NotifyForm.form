@@ -1,0 +1,169 @@
+{
+  "format": "bintana-form/1",
+  "class": "NotifyForm",
+  "properties": {
+    "Arrangement": "Vertical",
+    "Height": 380,
+    "Text": "Inline notifications",
+    "Width": 520
+  },
+  "children": [
+    {
+      "type": "Overlay",
+      "name": "Stage",
+      "properties": {
+        "Expand": true
+      },
+      "children": [
+        {
+          "type": "Panel",
+          "name": "Content",
+          "properties": {
+            "Arrangement": "Vertical",
+            "Padding": 20,
+            "Spacing": 12
+          },
+          "children": [
+            {
+              "type": "Label",
+              "name": "LblTitle",
+              "properties": {
+                "Alignment": "Start",
+                "HAlign": "Fill",
+                "Style": "title-2",
+                "Text": "Contact"
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblHelp",
+              "properties": {
+                "Alignment": "Start",
+                "HAlign": "Fill",
+                "Style": "dim-label",
+                "Text": "Every button answers where you are looking, and nothing takes the keyboard away.",
+                "Wrap": true
+              }
+            },
+            {
+              "type": "TextBox",
+              "name": "TxtName",
+              "properties": {
+                "HAlign": "Fill",
+                "Height": 34,
+                "Text": "Ana Ñanculeo"
+              }
+            },
+            {
+              "type": "Panel",
+              "name": "Buttons",
+              "properties": {
+                "Arrangement": "Horizontal",
+                "HAlign": "Start",
+                "Spacing": 8
+              },
+              "children": [
+                {
+                  "type": "Button",
+                  "name": "BtnSave",
+                  "properties": {
+                    "Height": 34,
+                    "Style": "suggested-action",
+                    "Text": "Save",
+                    "Width": 100
+                  }
+                },
+                {
+                  "type": "Button",
+                  "name": "BtnDelete",
+                  "properties": {
+                    "Height": 34,
+                    "Text": "Delete",
+                    "Width": 100
+                  }
+                },
+                {
+                  "type": "Button",
+                  "name": "BtnSend",
+                  "properties": {
+                    "Height": 34,
+                    "Text": "Send",
+                    "Width": 100
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "Panel",
+          "name": "Busy",
+          "properties": {
+            "Arrangement": "Horizontal",
+            "HAlign": "Center",
+            "Padding": "14 18",
+            "Radius": 12,
+            "Shadow": "0 2 10 0 rgba(0,0,0,0.35)",
+            "Spacing": 12,
+            "Style": "osd",
+            "VAlign": "Center",
+            "Visible": false
+          },
+          "children": [
+            {
+              "type": "Spinner",
+              "name": "Spn",
+              "properties": {
+                "Height": 20,
+                "Width": 20
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblBusy",
+              "properties": {
+                "Text": "Sending…"
+              }
+            }
+          ]
+        },
+        {
+          "type": "Panel",
+          "name": "Toast",
+          "properties": {
+            "Arrangement": "Horizontal",
+            "HAlign": "Center",
+            "Margin": 12,
+            "Padding": "8 8 8 14",
+            "Radius": 12,
+            "Shadow": "0 2 10 0 rgba(0,0,0,0.35)",
+            "Spacing": 12,
+            "Style": "osd",
+            "VAlign": "Start",
+            "Visible": false
+          },
+          "children": [
+            {
+              "type": "Label",
+              "name": "LblToast",
+              "properties": {
+                "VAlign": "Center"
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnDismiss",
+              "properties": {
+                "Height": 28,
+                "Style": "flat",
+                "Text": "✕",
+                "Tooltip": "Dismiss",
+                "Width": 28
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

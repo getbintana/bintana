@@ -1275,12 +1275,12 @@ In a `Fixed` form the designer is what it always was: coordinates, snapping,
 guides. In a box there are no coordinates at all, so the same gestures mean
 something else:
 
-| | Fixed | box |
-|---|---|---|
-| drag | moves, snapped to 4 px, with alignment guides | reorders, with a mark at the boundary |
-| arrows | nudge by a pixel, or by the grid with Shift | move one place along |
-| drop from the palette | lands where the pointer is | inserted at the place in the row |
-| what is saved | `X`/`Y` per child | order, and no coordinates |
+| | Fixed | box | stack |
+|---|---|---|---|
+| drag | moves, snapped to 4 px, with alignment guides | reorders, with a mark at the boundary | restacks |
+| arrows | nudge by a pixel, or by the grid with Shift | move one place along | one layer up or down |
+| drop from the palette | lands where the pointer is | inserted at the place in the row | on top of the layer under the pointer |
+| what is saved | `X`/`Y` per child | order, and no coordinates | order, and no coordinates |
 
 A **notebook** and a **split** are neither: adding to a notebook makes a page,
 which is named after the control so the tab says something, and the page just
@@ -1288,11 +1288,43 @@ added is the one shown. A split holds exactly two halves, so a third child is
 refused before anything is created -- the runtime would have thrown, and a throw
 mid-gesture is not an answer a designer can give.
 
+**Which of the five it is, the runtime says**: `Container.Placement` answers
+`Coordinates`, `Order`, `Layers`, `Pages` or `Halves`, and `placementOf()` is the
+only place the designer asks. It used to be decided here from `Arrangement` plus
+a table of class names in `pages()` and `split()` -- and that table is how
+`Overlay`, `Flow` and `RowList` reached the palette classified as rows: every
+gesture reached for an order the runtime refused, *this container has no order to
+give*, **raised after the control had been added**. So a drag read as failed and
+left something behind -- a child nothing had selected, the insertion mark still
+on screen, and the form not even marked as modified. The editor cannot keep a
+second list of what the runtime's containers are; it asks.
+
+`dropControl` is written in that order for the same reason: **decide, add,
+commit, place**. Where the control goes is a function of the pointer and the
+children already there, so it is worked out before anything exists; the selection
+and the modified flag are set before the container is asked to do anything else.
+From there a refusal can only leave a control in the wrong place -- a whole drop,
+badly ordered -- and never a control nothing points at.
+
+In a **stack** there is no line to draw a mark at, because every layer occupies
+the whole container: what the drag chooses is *which layer it lands over*, so the
+mark is that layer's outline (`Chrome.layerMark`, drawn with the band's own bars)
+and `PickAt` is what answers it. X/Y are greyed with a sentence of their own --
+*an overlay stacks its children: HAlign and VAlign place this one* -- because
+telling somebody "the box decides" about a control in an `Overlay` sends them
+looking for a box that is not there.
+
 `Container.Reorder(child, index)` is the runtime primitive underneath, and it
 refuses on a `Fixed`: there the order is the painting order, which `Raise` and
 `Lower` already say. The index it takes counts siblings *without* the child being
 moved, so dragging something forward has to account for the hole it leaves --
-that off-by-one is in `mouseUp`.
+that off-by-one is in `mouseUp`. In a stack, index `0` is the base layer, so the
+arrows reach *which layer fills* as well as which paints on top.
+
+And the arrows take their undo snapshot **before** the move and push it after,
+which is what `mouseUp` already did: pushing first left a dead step behind every
+nudge that could not happen -- at either end of a row, and on every container
+that used to refuse the move outright.
 
 Before this, an elastic form arrived piled at the origin with negative
 coordinates, which is the concrete sense in which the IDE could not be written in

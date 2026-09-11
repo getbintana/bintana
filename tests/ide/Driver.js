@@ -5387,6 +5387,160 @@ function* p_projects(ide) {
        back.Tabs.join(","), savedBook.properties.Tabs.join(","));
     reload.Delete();
 
+    /* --- stacks, flows and lists in the designer ----------------------------
+     *
+     * Three containers that reached the palette while every gesture in the
+     * designer treated them as boxes: `Overlay`, `Flow` and `RowList` read no
+     * `Arrangement`, so the editor classified them as rows and reached for an
+     * order the runtime refused -- *this container has no order to give*, raised
+     * **after** the control had been added, so a drag read as failed and left
+     * something behind: added, unselected, and the form not even dirty.
+     *
+     * The gestures are asserted per container, from the runtime's own answer to
+     * how it places a child.
+     */
+    ide.designer.select(null);
+    palette(ide, "Overlay").Click();
+    yield;
+
+    const tile = ide.designer.selected;
+    eq("the palette offers an overlay", tile.constructor.name, "Overlay");
+    eq("and the runtime says it stacks", tile.Placement, "Layers");
+
+    /*
+     * A base to stack over, dropped from the palette onto the overlay itself --
+     * the gesture that used to raise. An `Image` and not a `Panel`: a container
+     * that fills the stack is what the next drop would land *in*, which is
+     * right and would be testing something else. This is the issue's own tile:
+     * a picture with something floating over it.
+     */
+    /* **Measured again before every drop**, never once and reused: what is in a
+     * container changes its own rectangle, so a point taken before the first
+     * drop can be outside the stack by the second -- which is a test that
+     * passes on a fast machine and fails under a sanitizer. */
+    const middleOf = (c) => {
+        const r = ide.designer.rectOf(c);
+        return [r.x + r.w / 2, r.y + r.h / 2];
+    };
+
+    yield* until(() => ide.designer.rectOf(tile).h > 8);
+    ide.Glass_Drop("Image", ...middleOf(tile));
+    yield* settled(ide);
+
+    eq("a drop into a stack lands in it", tile.Children.length, 1);
+    check("and the control it left behind is the one selected",
+          ide.designer.selected === tile.Children[0]);
+    eq("and it dirties the form", ide.designer.dirty, true);
+
+    yield* until(() => ide.designer.rectOf(tile).h > 8);
+    ide.Glass_Drop("Spinner", ...middleOf(tile));
+    yield* settled(ide);
+    eq("a second drop is a second layer", tile.Children.length, 2);
+    check("dropped over the one that was there", ide.designer.selected === tile.Children[1],
+          `${ide.designer.selected && ide.designer.selected.Name}`);
+
+    const layers = () => tile.Children.map((c) => c.Name).join(",");
+    const stacked = layers();
+
+    /* The arrows restack, which is what an order means in a stack -- and the
+     * bottom of it is the layer that fills. */
+    ide.designer.keyPress("Up", false, false);
+    yield* settled(ide);
+    check("the arrows move a layer", layers() !== stacked, layers());
+    eq("and that dirties the form too", ide.designer.dirty, true);
+
+    /* At the end of the stack a nudge that cannot happen is not an edit: it used
+     * to push an undo step for every arrow that did nothing. */
+    const steps = ide.designer.undoStack.length;
+    ide.designer.keyPress("Up", false, false);
+    yield;
+    eq("a nudge with nowhere to go adds no undo step",
+       ide.designer.undoStack.length, steps);
+
+    /* X/Y are not the sentence to show here: an overlay is not a box, and
+     * sending the author to look for one is worse than saying nothing. */
+    ide.designer.select(tile.Children[1]);
+    yield* settled(ide);
+    check("a layer is not placed by coordinates",
+          !editor(ide, "X").Enabled && !editor(ide, "Y").Enabled);
+    check("and the reason names the stack rather than a box",
+          editor(ide, "X").Tooltip.includes("overlay"), editor(ide, "X").Tooltip);
+    check("while the alignment that does place it is live",
+          editor(ide, "HAlign").Enabled && editor(ide, "VAlign").Enabled);
+
+    /* A flow and a list of rows are sequences, so there the gesture is the box's
+     * one and the same drop has to work. */
+    for (const type of ["Flow", "RowList"]) {
+        ide.designer.select(null);
+        palette(ide, type).Click();
+        yield;
+
+        const seq = ide.designer.selected;
+        eq(`the palette offers a ${type}`, seq.constructor.name, type);
+        eq(`and the runtime says it has an order`, seq.Placement, "Order");
+
+        /* One child first, through the path that always worked: both of these
+         * are a scrolled window around an empty list, so until something is in
+         * one there is no rectangle on screen to aim a drop at. */
+        palette(ide, "Label").Click();
+        yield;
+        eq(`the palette button appends to a ${type}`, seq.Children.length, 1);
+
+        yield* until(() => ide.designer.rectOf(seq).h > 8);
+        ide.Glass_Drop("Button", ...middleOf(seq));
+        yield* settled(ide);
+
+        eq(`a drop into a ${type} lands in it`, seq.Children.length, 2);
+        check(`and leaves it selected`, ide.designer.selected === seq.Children.at(-1),
+              `${ide.designer.selected && ide.designer.selected.Name}`);
+        eq(`and dirties the form`, ide.designer.dirty, true);
+
+        const order = seq.Children.map((c) => c.Name).join(",");
+        seq.Reorder(seq.Children[0], 1);
+        check(`and a ${type} answers Reorder`,
+              seq.Children.map((c) => c.Name).join(",") !== order,
+              seq.Children.map((c) => c.Name).join(","));
+    }
+
+    /*
+     * **Every container the palette offers answers the gesture the palette
+     * makes**, asked of the runtime rather than of a second list here -- which
+     * is the only version of this check worth having, because the version that
+     * was not asked let three containers sit on the palette refusing it. Both
+     * directions: a `Placement` that answered "Order" for everything would pass
+     * the first half on its own.
+     */
+    const mismatched = [];
+    for (const type of PALETTE) {
+        const c = Widget.New(type);
+        if (!("Placement" in c)) { c.Delete(); continue; }
+
+        const places = c.Placement;
+        try { c.Add(new Label()); c.Add(new Label()); } catch (e) { /* a split takes two */ }
+
+        let ordered = true;
+        try { c.Reorder(c.Children[0], 0); } catch (e) { ordered = false; }
+
+        if (ordered !== (places !== "Coordinates"))
+            mismatched.push(`${type}: ${places} but ${ordered ? "orders" : "refuses"}`);
+        c.Delete();
+    }
+    eq("every container the palette offers answers what its placement promises",
+       JSON.stringify(mismatched), "[]");
+
+    /* All of it survives the round trip, and a layer carries no coordinates --
+     * which is what the file already did silently and the grid now says. */
+    ide.BtnSave.Click();
+    const withStack = JSON.parse(File.Load(File.Join(TMP, "Elastic.form")));
+    const savedTile = withStack.children.find((n) => n.type === "Overlay");
+
+    eq("the overlay is saved with its layers", savedTile.children.length, 2);
+    eq("in the order they are stacked in",
+       savedTile.children.map((c) => c.name).join(","), layers());
+    check("and no layer carries coordinates",
+          savedTile.children.every((c) => !("X" in (c.properties || {}))),
+          JSON.stringify(savedTile.children.map((c) => c.properties)));
+
     /* --- a component the IDE cannot build -------------------------------------
      *
      * A component is a class of the *project*, and the designer runs in the

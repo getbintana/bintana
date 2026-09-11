@@ -485,6 +485,22 @@ JSValue    bta_container_clear(JSContext *ctx, JSValueConst this_val);
  * child is not ours. A GtkListBox wraps each child in a row of its own, so the
  * widget can be one level below what the slot reports. */
 BtaWidget *bta_slot_child(GtkWidget *child);
+/* The direct GTK child of the slot that carries `child`: itself, or the row or
+ * cell a RowList or a Flow wrapped it in. The inverse of bta_slot_child(). */
+GtkWidget *bta_child_holder(GtkWidget *child);
+/* How many of ours a slot holds, wrappers looked through -- what an index in
+ * `Reorder` is counted against. */
+int        bta_container_count(GtkWidget *slot);
+/* Whether this slot has an order to give: a box, a grid, a notebook, a stack, a
+ * split, a flow, a list of rows or a stack of layers. A drawing surface has
+ * none -- there the order is the painting order, which is `Raise`/`Lower`. */
+bool       bta_container_order(GtkWidget *slot);
+/* Moves `child` to that position among its siblings, however this slot keeps
+ * their order. `index` counts them *without* the one being moved; in an
+ * `Overlay` index 0 is the base layer, the child that fills. Returns false and
+ * throws when the slot has no order or the child is not in it. */
+bool       bta_container_reorder(JSContext *ctx, BtaWidget *parent,
+                                 BtaWidget *child, int index);
 /* The Widget prototype's own accessors, shared by the class table. */
 const JSCFunctionListEntry *bta_widget_base_props(int *count);
 /* Whether `prop` is one of the properties holding prose for this object's class

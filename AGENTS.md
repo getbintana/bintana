@@ -434,6 +434,15 @@ until something is true instead of counting frames by hand. A text change
 re-measures on a frame of GTK's choosing, and a machine under a sanitizer takes
 more of them -- counting is what made two of these tests flaky.
 
+**And a rectangle is not a promise either: measure it again before every
+gesture.** The stack assertions took the overlay's rectangle once and aimed two
+drops at it -- and what lands in a container changes that container's own
+rectangle, so by the second drop the point was outside it. Green here, red under
+`asan.sh`, which is the signature of this mistake rather than of a bug in the
+code being tested. `middleOf(c)` re-reads `rectOf` each time and `settled(ide)`
+goes between the gestures; three assertions came back green under the sanitizer
+with nothing else changed.
+
 **Anything that depends on layout needs a frame first.** `PickAt`, `OriginIn`
 and an unset `Width`/`Height` all read GTK's allocation, and a widget that was
 just created, or whose container was just made visible, has none until the main
@@ -729,6 +738,12 @@ person who wrote it either.
     property holding them, so GTK kept its pointer and the container went on
     believing it was full — a cleared split refused the next `Add`, a cleared
     overlay tripped an assertion. Latent until something refilled one.
+  - And a fourth, later: taking the **base layer** out of a `GtkOverlay` left
+    floaters with nothing filling, and `Children[0]` no longer the base — which
+    is the whole of what an index means in a stack. Attach makes the first child
+    the base, so detach promotes the next one, guarded by
+    `gtk_widget_in_destruction` because GTK unparents everything in dispose and
+    promoting a child on its way out is handing `set_child` a corpse.
   The test to keep is `tests/widgets`' `Removal`: fill, empty, fill again, on
   every container. Nothing had asked for that round trip before.
 - **Open: two `GLib-GObject-CRITICAL: instance has no handler with id` at
@@ -764,6 +779,18 @@ person who wrote it either.
   moves. (It used to refuse once a container held something, which is what made
   the property useless for the one thing it exists for; that restriction is gone
   and so is the note that used to be here.)
+- **An alignment is carried out by the *parent's* layout, so the parent is what
+  has to be told.** `gtk_widget_set_halign` queues an allocate on the **child**,
+  and that only re-allocates the child into the rectangle it already had -- so
+  the value is stored and never applied. Measured on a layer of an `Overlay`:
+  declared `Center`, then set to `Start` from code, it stayed at (185, 91) and
+  moved to (0, 0) only when something else made the overlay lay out, which is
+  how it was found -- hiding the layer and showing it again. `widget_apply_align`
+  queues the allocate on the parent for that reason, for every kind of container
+  and not only a `BtaFixed` (which had its own queue in `bta_widget_relayout`
+  because it reads x/y off the child). Anything a person changes in a property
+  grid is exactly that sequence, so this is the shape of bug that only ever
+  shows up by hand: `tests/widgets`' `Reorder` now asserts the move.
 - **`HAlign`/`VAlign` are carried out by two different things, and the container
   decides which.** In a box they are GTK's `halign`/`valign`; on a `BtaFixed`
   they are the anchor rule and GTK's must stay `Fill`, or GTK would align the
@@ -781,6 +808,41 @@ person who wrote it either.
   blocking the `Switch` handler for the duration, or a rebuild that ends where it
   started reports a fistful of switches nobody made. A page's title lives on the
   `GtkStackPage`, which goes away with the page, so it is carried across by hand.
+- **An order lives in one function, `bta_container_reorder`, and three callers
+  ask it**: `Reorder(child, index)`, `Raise`/`Lower`, and the designer's drag.
+  It sits beside `bta_container_attach`/`detach` because it is the same
+  knowledge — what a slot does with a child — and because an index has to mean
+  the same thing to all three. It did not: `Raise()` on an overlay's base moved
+  it to last sibling while `overlay->child` still pointed at it, so the base went
+  on filling and painted *over* its own floaters. `Container.Placement` is the
+  same knowledge published (`Coordinates` `Order` `Layers` `Pages` `Halves`),
+  because the IDE was keeping a table of class names instead and it drifted:
+  `Overlay`, `Flow` and `RowList` reached the palette classified as boxes.
+- **A `GtkListBox` and a `GtkFlowBox` keep their children in a `GSequence` of
+  their own, so a sibling move is not a reorder.** Indices, the keyboard walk,
+  headers and the filter all read that sequence, and `gtk_widget_insert_after`
+  does not touch it — so a reorder goes out through `remove` and back in through
+  `insert`, at which point three things bite. The wrapper must be referenced
+  across the two calls: the box holds the only reference and `remove` ends in
+  `gtk_widget_unparent`, so a row finalised between them takes the control's
+  parent with it and leaves a control that exists, answers, and is in no list.
+  The handlers must be blocked, or a move that ends where it began reports a
+  `Select` nobody made. And **the row must be unselected before the remove**:
+  `gtk_list_box_remove` clears the box's own pointer but leaves
+  `ROW_PRIV(row)->selected` set, and `gtk_list_box_select_row` returns early on a
+  row that already claims to be selected — so the row comes back *drawing*
+  selected while `Index` answers `-1`, and nothing but a click gets out of it.
+  One more, for the future: `insert` ignores its position when a sort function is
+  set, so a `Sorted` property on either would make `Reorder` a silent no-op.
+- **In an `Overlay` the bottom of the stack is the layer that fills.** The base
+  is a GTK *property* (`gtk_overlay_set_child`) and the floaters are a list, so
+  `Reorder(child, 0)` swaps the property rather than moving a sibling — both
+  widgets referenced across it, since `set_child` refuses a widget that still has
+  a parent and unparents whoever was base. That makes `Lower()` on a floater mean
+  *become the base*, which is a change in what that verb does in one container
+  and is written down in `llm/controls.md` and `widgets.md` for that reason. A
+  base swap reparents two widgets (unrealize/realize); a move among floaters is
+  one `insert_after` and reparents nothing.
 - `GtkTreeListModel`'s child-model callback must never return `NULL`. Returning
   it for a childless node marks that node a leaf permanently, and children
   added later never appear. `bta_tree.c` returns the empty store instead and

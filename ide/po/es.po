@@ -1066,6 +1066,10 @@ msgstr "Llenar con una muestra"
 msgid "Edit the columns"
 msgstr "Editar las columnas"
 
+#: modules/PropertyGrid.js:1345
+msgid "An overlay stacks its children: HAlign and VAlign place this one."
+msgstr "Un overlay apila sus hijos: HAlign y VAlign colocan a este."
+
 #: modules/PropertyGrid.js:904
 msgid "The box this control is in decides where it goes."
 msgstr "La caja en la que está este control decide dónde va."

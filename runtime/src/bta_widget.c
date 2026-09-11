@@ -661,6 +661,22 @@ static void widget_apply_align(BtaWidget *w)
 
     gtk_widget_set_halign(w->gtk, drawn ? GTK_ALIGN_FILL : align_gtk(w->halign));
     gtk_widget_set_valign(w->gtk, drawn ? GTK_ALIGN_FILL : align_gtk(w->valign));
+
+    /*
+     * ...and the **parent** has to lay out again, because the parent's layout is
+     * what carries an alignment out -- ours reads it off the child's `BtaWidget`
+     * and a `GtkOverlay` reads GTK's own. `gtk_widget_set_halign` queues an
+     * allocate on the *child*, which only re-allocates it into the rectangle it
+     * already had, so the new alignment is stored and never applied.
+     *
+     * Measured, on a layer of an overlay: told `Center` in the `.form` and then
+     * `Start` from code, it stayed at (185, 91) until something else made the
+     * overlay lay out -- hiding it and showing it again, which is how it was
+     * found, moved it to (0, 0). Anything a person changes in the property grid
+     * is exactly this sequence.
+     */
+    if (parent)
+        gtk_widget_queue_allocate(parent);
 }
 
 /* ------------------------------------------------------------------ Shortcut
@@ -1740,9 +1756,18 @@ static JSValue w_get_focused(JSContext *ctx, JSValueConst this_val)
  * Stacking order.  Children paint in list order, so a control dragged under
  * another one simply disappears -- unacceptable in a designer.
  *
- * The same reorder works in every container: our own fixed surface keeps no
+ * On a fixed surface it is a bare sibling reorder: the surface keeps no
  * per-child layout data to lose, so nothing has to be taken out and put back
  * the way GtkFixed once forced.
+ *
+ * **A slot that keeps bookkeeping of its own goes through `Reorder` instead**,
+ * with the index worked out here, because a sibling move there is not the whole
+ * of the order and saying it twice is how the two drift apart. Three of them:
+ * an `Overlay`, whose bottom layer is a property and not merely a position --
+ * `Raise` on the base used to leave it filling while painting over its own
+ * floaters -- and a `Flow` and a `RowList`, whose wrappers GTK keeps in a
+ * sequence the sibling list does not move. In a stack the bottom is the layer
+ * that fills, so `Lower` there means *become the base*.
  */
 enum { STACK_RAISE, STACK_LOWER };
 
@@ -1753,9 +1778,21 @@ static JSValue w_restack(JSContext *ctx, JSValueConst this_val,
     if (!w)
         return JS_EXCEPTION;
 
-    GtkWidget *slot = gtk_widget_get_parent(w->gtk);
+    GtkWidget *slot = gtk_widget_get_parent(bta_child_holder(w->gtk));
     if (!slot)
         return JS_UNDEFINED;
+
+    if (GTK_IS_OVERLAY(slot) || GTK_IS_FLOW_BOX(slot) || GTK_IS_LIST_BOX(slot)) {
+        BtaWidget *own = g_object_get_data(G_OBJECT(slot), BTA_WIDGET_QUARK);
+        int        n   = bta_container_count(slot);
+
+        if (!own || n < 2)
+            return JS_UNDEFINED;
+
+        return bta_container_reorder(ctx, own, w,
+                                     magic == STACK_RAISE ? n - 1 : 0)
+             ? JS_UNDEFINED : JS_EXCEPTION;
+    }
 
     if (magic == STACK_RAISE) {
         GtkWidget *last = gtk_widget_get_last_child(slot);
@@ -3292,6 +3329,24 @@ BtaWidget *bta_slot_child(GtkWidget *child)
     return NULL;
 }
 
+GtkWidget *bta_child_holder(GtkWidget *child)
+{
+    GtkWidget *p = child ? gtk_widget_get_parent(child) : NULL;
+
+    return (p && (GTK_IS_LIST_BOX_ROW(p) || GTK_IS_FLOW_BOX_CHILD(p))) ? p : child;
+}
+
+int bta_container_count(GtkWidget *slot)
+{
+    int n = 0;
+
+    for (GtkWidget *c = gtk_widget_get_first_child(slot); c;
+         c = gtk_widget_get_next_sibling(c))
+        if (bta_slot_child(c))
+            n++;
+    return n;
+}
+
 bool bta_container_attach(JSContext *ctx, BtaWidget *parent, BtaWidget *child)
 {
     GtkWidget *slot = parent->slot;
@@ -3470,9 +3525,28 @@ bool bta_container_detach(JSContext *ctx, BtaWidget *child)
          * `gtk_overlay_add_overlay: assertion 'widget != overlay->child'`. */
         GtkOverlay *o = GTK_OVERLAY(slot);
 
-        if (gtk_overlay_get_child(o) == child->gtk)
+        if (gtk_overlay_get_child(o) == child->gtk) {
             gtk_overlay_set_child(o, NULL);
-        else
+
+            /*
+             * ...and the layer above it becomes the base, because attach makes
+             * the first child one: an overlay left with floaters and no base has
+             * nothing that fills, and `Children[0]` stops being the base --
+             * which is the whole of what an index means in a stack.
+             *
+             * Not while the overlay itself is going: GTK unparents everything in
+             * dispose, and promoting a child in the middle of that would hand
+             * `set_child` a widget on its way out.
+             */
+            GtkWidget *next = gtk_widget_get_first_child(slot);
+
+            if (next && !gtk_widget_in_destruction(slot)) {
+                g_object_ref(next);
+                gtk_overlay_remove_overlay(o, next);
+                gtk_overlay_set_child(o, next);
+                g_object_unref(next);
+            }
+        } else
             gtk_overlay_remove_overlay(o, child->gtk);
     }
     else if (GTK_IS_FRAME(slot))
@@ -3490,6 +3564,254 @@ bool bta_container_detach(JSContext *ctx, BtaWidget *child)
     BtaWidget *parent = g_object_get_data(G_OBJECT(slot), BTA_WIDGET_QUARK);
     if (parent)
         bta_widget_release(ctx, parent->self, child->self);
+    return true;
+}
+
+/* ----------------------------------------------------------- the order */
+
+bool bta_container_order(GtkWidget *slot)
+{
+    return slot && (bta_surface_is_box(slot) || GTK_IS_NOTEBOOK(slot) ||
+                    GTK_IS_PANED(slot)       || GTK_IS_STACK(slot)    ||
+                    GTK_IS_GRID(slot)        || GTK_IS_OVERLAY(slot)  ||
+                    GTK_IS_FLOW_BOX(slot)    || GTK_IS_LIST_BOX(slot));
+}
+
+/*
+ * Moving a child among its siblings, per kind of slot -- the mirror of the
+ * attach and detach above, and here for the same reason: this is where the
+ * knowledge of what a slot does with a child already lives.
+ *
+ * Three callers: `Reorder(child, index)`, `Raise`/`Lower` (which are this with
+ * the index worked out), and the designer's drag. Written once because an index
+ * has to mean the same thing whichever of the three asked -- `Raise` on an
+ * overlay's base used to move it to last sibling while `overlay->child` still
+ * pointed at it, so it went on filling and painted over its own floaters.
+ *
+ * `index` counts the siblings **without** the one being moved, which is what
+ * makes "put it back where it was" the index it came from.
+ */
+bool bta_container_reorder(JSContext *ctx, BtaWidget *parent, BtaWidget *child,
+                           int index)
+{
+    GtkWidget *slot = parent->slot;
+
+    if (!bta_container_order(slot)) {
+        JS_ThrowTypeError(ctx, "this container has no order to give");
+        return false;
+    }
+
+    /* A notebook keeps its pages in a stack of its own, so a page's parent is
+     * not the notebook -- ask the notebook instead. */
+    if (GTK_IS_NOTEBOOK(slot)) {
+        GtkNotebook *nb   = GTK_NOTEBOOK(slot);
+        gint         page = gtk_notebook_page_num(nb, child->gtk);
+
+        if (page < 0) {
+            JS_ThrowTypeError(ctx, "%s is not a page of this notebook",
+                              child->name ? child->name : "the widget");
+            return false;
+        }
+        gtk_notebook_reorder_child(nb, child->gtk, index);
+        return true;
+    }
+
+    /* Asked through the holder: in a Flow or a RowList the child's GTK parent
+     * is the cell or row GTK wrapped it in, and the slot holds that. */
+    GtkWidget *holder = bta_child_holder(child->gtk);
+
+    if (!holder || gtk_widget_get_parent(holder) != slot) {
+        JS_ThrowTypeError(ctx, "%s is not a child of this container",
+                          child->name ? child->name : "the widget");
+        return false;
+    }
+
+    /* A stack cannot be reordered in place -- GTK offers nothing to say it --
+     * so the switcher takes its pages out and puts them back. */
+    if (GTK_IS_STACK(slot)) {
+        if (!bta_switcher_reorder(parent, child->gtk, index)) {
+            JS_ThrowTypeError(ctx, "%s is not a page of this switcher",
+                              child->name ? child->name : "the widget");
+            return false;
+        }
+        return true;
+    }
+
+    /*
+     * A split has two halves and no third place to go: ordering one is putting
+     * it in the half the index names, and whatever was there takes the other.
+     */
+    if (GTK_IS_PANED(slot)) {
+        GtkPaned  *paned = GTK_PANED(slot);
+        GtkWidget *start = gtk_paned_get_start_child(paned);
+        GtkWidget *end   = gtk_paned_get_end_child(paned);
+        bool       first = index <= 0;
+
+        if ((first && child->gtk == start) || (!first && child->gtk == end))
+            return true;                            /* already there */
+
+        /* Both are unparented before either is re-parented: GTK 4 refuses a
+         * widget that still has one. */
+        g_object_ref(start);
+        g_object_ref(end);
+        gtk_paned_set_start_child(paned, NULL);
+        gtk_paned_set_end_child(paned, NULL);
+        gtk_paned_set_start_child(paned, first ? child->gtk : (start == child->gtk ? end : start));
+        gtk_paned_set_end_child(paned, first ? (start == child->gtk ? end : start) : child->gtk);
+        g_object_unref(start);
+        g_object_unref(end);
+        return true;
+    }
+
+    /*
+     * A Flow and a RowList wrap every child in a cell of its own and keep those
+     * wrappers in a sequence of GTK's, so the sibling order is **not** the
+     * order: moving one with gtk_widget_insert_after would leave that sequence
+     * -- indices, the keyboard walk, headers, the filter -- pointing at the old
+     * places. It goes out through the box's own remove and back in at the
+     * position asked for, which is the one call that keeps both in step.
+     */
+    if (GTK_IS_LIST_BOX(slot) || GTK_IS_FLOW_BOX(slot)) {
+        int        n   = bta_container_count(slot);
+        BtaWidget *own = g_object_get_data(G_OBJECT(slot), BTA_WIDGET_QUARK);
+        bool       was = GTK_IS_LIST_BOX_ROW(holder) &&
+                         gtk_list_box_row_is_selected(GTK_LIST_BOX_ROW(holder));
+
+        if (index < 0)
+            index = 0;
+        if (index >= n)
+            index = n - 1;                          /* the last place there is */
+
+        /* Blocked for the duration: the remove says the selection is gone and
+         * the insert says a row arrived, so a move that ends where it began
+         * would report a `Select` nobody made. The bargain
+         * `bta_switcher_reorder` makes, one level down. */
+        if (own)
+            g_signal_handlers_block_matched(slot, G_SIGNAL_MATCH_DATA,
+                                            0, 0, NULL, NULL, own);
+
+        /* The wrapper is referenced across the two calls because the box holds
+         * the only reference to it: gtk_list_box_remove ends in
+         * gtk_widget_unparent(row), and a row finalised between them would take
+         * the control's parent with it -- a control that still exists, still
+         * answers, and is in no list. */
+        g_object_ref(holder);
+
+        if (GTK_IS_LIST_BOX(slot)) {
+            /*
+             * Unselected **before** the remove. `gtk_list_box_remove` clears the
+             * box's own pointer but leaves the row's `selected` flag set, and
+             * `gtk_list_box_select_row` returns early on a row that already
+             * claims to be selected -- so the row would come back drawing
+             * selected while `Index` answered -1, with nothing but a click to
+             * get out of it.
+             */
+            if (was)
+                gtk_list_box_unselect_row(GTK_LIST_BOX(slot),
+                                          GTK_LIST_BOX_ROW(holder));
+
+            gtk_list_box_remove(GTK_LIST_BOX(slot), holder);
+            gtk_list_box_insert(GTK_LIST_BOX(slot), holder, index);
+
+            if (was)
+                gtk_list_box_select_row(GTK_LIST_BOX(slot),
+                                        GTK_LIST_BOX_ROW(holder));
+        } else {
+            /* A Flow selects nothing (`GTK_SELECTION_NONE` at build), so there
+             * is no selection to put back -- the shape is the same anyway, or
+             * the two would drift. */
+            gtk_flow_box_remove(GTK_FLOW_BOX(slot), holder);
+            gtk_flow_box_insert(GTK_FLOW_BOX(slot), holder, index);
+        }
+
+        g_object_unref(holder);
+
+        if (own)
+            g_signal_handlers_unblock_matched(slot, G_SIGNAL_MATCH_DATA,
+                                              0, 0, NULL, NULL, own);
+        return true;
+    }
+
+    /*
+     * An Overlay is a stack and index 0 is the bottom of it -- which is the
+     * **base layer**, the child GTK hands the whole allocation to. So ordering a
+     * child to 0 says *be the one that fills*, the same bargain the split above
+     * makes with its halves, and `Children[0]` is the base at every moment.
+     *
+     * Only that question is settled here. GTK keeps no positional bookkeeping
+     * for an overlay -- its layout tells the base apart by comparing against
+     * `gtk_overlay_get_child()` and by nothing else -- so the paint order is the
+     * ordinary sibling reorder at the end of this function.
+     */
+    if (GTK_IS_OVERLAY(slot)) {
+        GtkOverlay *o    = GTK_OVERLAY(slot);
+        GtkWidget  *base = gtk_overlay_get_child(o);
+
+        if (index <= 0 && child->gtk != base) {
+            /* Both referenced across the swap: `set_child` refuses a widget
+             * that still has a parent, and it unparents whoever was base --
+             * which is the last reference GTK holds on it. */
+            g_object_ref(child->gtk);
+            if (base)
+                g_object_ref(base);
+
+            gtk_overlay_remove_overlay(o, child->gtk);
+            gtk_overlay_set_child(o, child->gtk);   /* GTK puts a base first */
+
+            if (base) {
+                gtk_overlay_add_overlay(o, base);   /* appended, then placed */
+                gtk_widget_insert_after(base, slot, child->gtk);
+                g_object_unref(base);
+            }
+            g_object_unref(child->gtk);
+            return true;
+        }
+
+        if (index > 0 && child->gtk == base) {
+            /* Leaving the bottom: the layer above becomes the base, because a
+             * stack holding anything has exactly one child that fills. */
+            GtkWidget *next = gtk_widget_get_next_sibling(child->gtk);
+
+            if (!next)
+                return true;                  /* the only child: nowhere to go */
+
+            g_object_ref(child->gtk);
+            g_object_ref(next);
+            gtk_overlay_remove_overlay(o, next);
+            gtk_overlay_set_child(o, next);          /* unparents the old base */
+            gtk_overlay_add_overlay(o, child->gtk);
+            g_object_unref(next);
+            g_object_unref(child->gtk);
+            /* ...and on to the walk below, which puts it where it was asked
+             * for: `after` has to be read off the list as it is now. */
+        }
+    }
+
+    /* The sibling to sit after: index 0 is "first", i.e. after nobody. */
+    GtkWidget *after = NULL;
+    int        at    = 0;
+
+    for (GtkWidget *c = gtk_widget_get_first_child(slot); c && at < index;
+         c = gtk_widget_get_next_sibling(c)) {
+        if (c == child->gtk)
+            continue;           /* it is moving: it does not count on the way */
+        after = c;
+        at++;
+    }
+
+    /*
+     * A grid's order *is* its layout, so moving one child moves every child
+     * after it -- which is what re-flowing does. The sibling order is GTK's own
+     * and moving it there is one call; where each one then sits follows.
+     */
+    if (GTK_IS_GRID(slot)) {
+        gtk_widget_insert_after(child->gtk, slot, after);
+        bta_grid_reflow(slot);
+        return true;
+    }
+
+    /* One call, and the box layout reads the sibling order it finds. */
+    gtk_widget_insert_after(child->gtk, slot, after);
     return true;
 }
 

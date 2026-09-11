@@ -196,7 +196,14 @@ There is no separate box class: a container arranged as a row *is* one. It may b
 changed at any time — the children are kept in order, and going back to `Fixed`
 restores their coordinates. Not every container accepts it: `Grid`, `Flow`,
 `RowList`, `Overlay`, `Notebook` and `Switcher` arrange by their own nature and
-refuse it. See [controls.md](controls.md#container--inherited-by-every-container).
+refuse it — `Placement` is the read-only property that answers for all of them.
+See [controls.md](controls.md#container--inherited-by-every-container).
+
+**In an `Overlay` the children are layers**, and a layer is placed by
+`HAlign`/`VAlign`/`Margin`: the first child fills, and one that says nothing
+fills too. `X`/`Y` mean nothing there and **are not written**, so a file
+hand-written with coordinates on a layer loses them the first time the form is
+saved. The order in the file is the stack, bottom first.
 
 **`Width`/`Height` are a minimum, not an exact size.** A control whose natural
 size exceeds the request renders larger — a `Label` with long text will. This is

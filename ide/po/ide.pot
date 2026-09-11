@@ -1020,6 +1020,10 @@ msgstr ""
 msgid "Edit the columns"
 msgstr ""
 
+#: modules/PropertyGrid.js:1345
+msgid "An overlay stacks its children: HAlign and VAlign place this one."
+msgstr ""
+
 #: modules/PropertyGrid.js:904
 msgid "The box this control is in decides where it goes."
 msgstr ""

@@ -1333,12 +1333,19 @@ Ide.PropertyGrid = class PropertyGrid {
         if (this.designMode || !target) return "";
 
         /* Where a control sits is the parent's rule, and each half is inert
-         * under the other. A stand-in is placed like anything else. */
-        const inBox = !this.designer.isFixed(this.designer.parentOf(target));
+         * under the other. A stand-in is placed like anything else.
+         *
+         * Asked of the container rather than of a boolean, because there are
+         * three answers and not two: a stack does not place a child either, and
+         * telling the author that "the box decides" about a control in an
+         * `Overlay` sends them looking for a box that is not there. */
+        const places = this.designer.placementOf(this.designer.parentOf(target));
 
-        if (inBox && PLACED_BY_BOX.includes(key))
+        if (places === "Layers" && PLACED_BY_BOX.includes(key))
+            return Locale.Text("An overlay stacks its children: HAlign and VAlign place this one.");
+        if (places !== "Coordinates" && PLACED_BY_BOX.includes(key))
             return Locale.Text("The box this control is in decides where it goes.");
-        if (!inBox && PLACED_BY_ANCHORS.includes(key))
+        if (places === "Coordinates" && PLACED_BY_ANCHORS.includes(key))
             return Locale.Text("On a fixed surface a control keeps the place and size it was given.");
 
         /* And the pairs inside one widget, asked of the widget itself. A

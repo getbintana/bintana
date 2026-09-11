@@ -455,7 +455,12 @@ one node. They are the exact inverse of the loader, and what to write is
    once, and caches it.
 3. Skip `Name` (written as the node's `name`), `Caption` (an alias of `Text`, which
    would be written twice) and `Modified` (editing state, not design state).
-4. Skip `X`/`Y` unless the parent lays out by coordinate.
+4. Skip `X`/`Y` unless the parent lays out by coordinate -- which a box, a
+   `Grid`, a `Flow`, a `RowList` and an **`Overlay`** do not: a layer of a stack
+   is placed by `HAlign`/`VAlign`/`Margin`, so a hand-written file carrying
+   coordinates on one loses those two numbers the first time it is saved.
+   `Container.Placement` is the property that answers which model a container
+   uses, and the designer's grid greys the rows and says why.
 5. Skip `Width`/`Height` for a child of a box **unless one was declared** -- see
    below.
 6. Write `Arrangement` first when present, so the sizes and coordinates that

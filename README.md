@@ -38,12 +38,13 @@ LANGUAGE=es ./build/bintana ide examples/hello    # the IDE itself, from ide/po/
 ./build/bintana examples/charts      # Charts from lib/charts: five shapes, two axes, and 21 600 readings you can zoom into
 ./build/bintana examples/report      # Report from lib/report: the Crystal Reports bands, grouped and totalled, out as one PDF
 ./build/bintana examples/video       # Video + AudioPlayer: clips from lorem.video, a live HLS stream, and an audio-only cue
+./build/bintana examples/notify      # Overlay: a message over the content, and a spinner over the work
 ./build/bintana examples/jokes       # Http on a window: async, and a Stop that means it
 ./build/bintana examples/http        # Http from the console: the blocking spelling, against a public API
 ./build/bintana examples/session     # Http with cookies and Basic auth: a login the next request remembers
 ./build/bintana examples/serve       # Http.Server: a static file server on :8080. Runs until Ctrl-C
 LANGUAGE=es ./build/bintana examples/agenda   # ...and the long date the catalogue rewrites
-HEADLESS=1 ./tests/run.sh         # 4837 assertions in 4 projects, on a virtual display
+HEADLESS=1 ./tests/run.sh         # 4917 assertions in 4 projects, on a virtual display
 ./tests/run.sh                    # the same, on *your* screen: it only falls back to
                                   # Xvfb when there is no DISPLAY, so on a desktop this
                                   # opens three windows and takes the keyboard
@@ -696,9 +697,9 @@ is a container and not a panel hidden from code because the *window* has to
 know — folding it takes its height back.
 
 All of them have `Add(widget)`, `Clear()`, `Children` (ro), `Arrangement`,
-`Anchored`, `Reorder(child,index)`, `FocusNext()` / `FocusPrevious()`, plus
-`PickAt(x,y)`, `ContainerAt(x,y,[ignore])` and `LocalPoint(x,y,from)` for asking
-the layout what is where.
+`Placement` (ro), `Anchored`, `Reorder(child,index)`, `FocusNext()` /
+`FocusPrevious()`, plus `PickAt(x,y)`, `ContainerAt(x,y,[ignore])` and
+`LocalPoint(x,y,from)` for asking the layout what is where.
 
 `Anchored` is on by default. Off, the children stay exactly where they were
 drawn however big the container gets — what a **drawing board** wants as opposed
@@ -711,9 +712,16 @@ inside it is as big as what is on it, and the difference scrolls — which is wh
 makes the IDE's own 1100-wide window editable in a 520-wide canvas.
 
 `Reorder` moves a child among its siblings: in a box that *is* its position, a
-notebook moves the page with its tab, and a split has two halves so the index
-says which one. A `Fixed` refuses — there the order is the painting order, which
-`Raise`/`Lower` already say.
+notebook moves the page with its tab, a split has two halves so the index says
+which one, and in an `Overlay` the order is the stack — index `0` is the base
+layer, the one that fills. A `Fixed` refuses, and it is the only one that does:
+there the order is the painting order, which `Raise`/`Lower` already say.
+
+`Placement` is which of those a container does, asked of the runtime rather than
+guessed from the class: `Coordinates`, `Order`, `Layers`, `Pages` or `Halves`.
+Every container answers, including the six that refuse `Arrangement` — it is what
+an editor needs in order to know what a drag means, and the designer asks nothing
+else.
 
 | Class | How it places its children |
 |---|---|
@@ -723,7 +731,7 @@ says which one. A `Fixed` refuses — there the order is the painting order, whi
 | `Split` | two children with a draggable divider, per `Arrangement`: `Position` |
 | `Notebook` | in tabs: `Tabs` (the strip as strings), `Count` (ro), `Current`, `Append(child,[label])`, `Remove(i)`, `SetTabLabel(i,label)`, `SetAction(control,[where])`, event `Switch(index)` |
 | `Switcher` | in pages picked from a strip of linked buttons: `Tabs` (the strip as strings), `Strip` (`Top`/`Bottom`/`Start`/`End`/`None` — `None` is a bare stack only code switches), `Count` (ro), `Current`, `Append(child,[name])`, `Remove(i)`, event `Switch(index)` |
-| `Overlay` | stacked: the first fills, the rest float on top |
+| `Overlay` | stacked: the first child fills and the rest float on top, placed by `HAlign`/`VAlign`/`Margin` and layered by the order. `Reorder(child,0)` makes a layer the base; X/Y mean nothing in here |
 | `RowList` | one row per child, with scrolling and selection — and the list vocabulary the other three have: `Index`, `Count` (ro), `MultiSelect`, `Selection` (ro), `ActivateOnSingleClick`, `Select(i)`, `Deselect(i)`, `SelectAll`, `DeselectAll`, `Activate([i])`, `Remove(i)`, `Refilter()`; events `Select`, `Activate`, `Filter` |
 | `Scroller` | coordinates, with scrollbars: the view is the room there is, the content as big as it needs |
 | `Flow` | a gallery: children wrap into as many columns as fit, and it scrolls itself: `Spacing`, `MinPerLine`, `MaxPerLine` |

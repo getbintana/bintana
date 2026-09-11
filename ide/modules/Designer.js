@@ -443,14 +443,36 @@ Ide.Designer = class Designer {
      * shown one at a time -- so there is no "where the pointer is" to drop onto
      * either.
      */
+    /*
+     * How this container places a child, which is the only thing every gesture
+     * here needs to know: `Coordinates`, `Order`, `Layers`, `Pages`, `Halves`.
+     *
+     * **Asked of the runtime**, which is the one thing that knows what its slot
+     * is. It used to be decided here by class name, and that table is how
+     * `Overlay`, `Flow` and `RowList` came to be on the palette while every
+     * gesture treated them as boxes: dropping into one raised *this container
+     * has no order to give* after the control had already been added. A table of
+     * names in the editor is a second list to keep in step, and it was not.
+     *
+     * No container is `Coordinates`, so the form itself answers for nothing.
+     */
+    placementOf(container) {
+        if (!container || !("Placement" in container)) return "Coordinates";
+        return container.Placement || "Coordinates";
+    }
+
     pages(container) {
-        const kind = container.constructor.name;
-        return kind === "Notebook" || kind === "Switcher";
+        return this.placementOf(container) === "Pages";
     }
 
     split(container) {
-        const kind = container.constructor.name;
-        return kind === "Split";
+        return this.placementOf(container) === "Halves";
+    }
+
+    /* A stack: every child has the whole of it, so what a drop chooses is which
+     * layer it lands over and `HAlign`/`VAlign` place it. */
+    layers(container) {
+        return this.placementOf(container) === "Layers";
     }
 
     /* Says no, and says why, before anything has been added. */
@@ -563,11 +585,21 @@ Ide.Designer = class Designer {
         return container.Arrangement === "Horizontal";
     }
 
-    /* Where X/Y mean something.  In a box the parent decides the position, so
-     * dragging a control has to reorder it instead of moving it. */
+    /* Where X/Y mean something.  Anywhere else the parent decides the position,
+     * so dragging a control has to reorder it instead of moving it. */
     isFixed(container) {
-        return !container || !("Arrangement" in container) ||
-               container.Arrangement === "Fixed";
+        return this.placementOf(container) === "Coordinates";
+    }
+
+    /* The topmost child of `box` at a point given in the surface's coordinates
+     * -- `PickAt` asks in the container's own, and the two differ for anything
+     * that is not the surface itself. */
+    pickIn(box, x, y) {
+        const local = box === this.surface
+            ? [x, y]
+            : (box.LocalPoint(x, y, this.surface) || [x, y]);
+
+        return box.PickAt(local[0], local[1]);
     }
 
     /* The container a control sits in, which is not always the surface. */
@@ -1077,9 +1109,22 @@ Ide.Designer = class Designer {
      * past the middle of a child is past that child.
      */
     insertionIndex(box, x, y, ignore) {
+        const kids = box.Children;
+
+        /*
+         * A stack has no boundary to read: every child has the whole of it, so
+         * what a drag chooses is *which layer it lands over*.  The runtime
+         * answers that already -- `PickAt` is the topmost child at a point --
+         * and one past it is where the new layer goes.
+         */
+        if (this.layers(box)) {
+            const over = this.pickIn(box, x, y);
+            const at   = over && over !== ignore ? kids.indexOf(over) : -1;
+            return at < 0 ? kids.length : at + 1;
+        }
+
         const horizontal = this.runsHorizontal(box);
         const along      = horizontal ? x : y;
-        const kids       = box.Children;
 
         for (let i = 0; i < kids.length; i++) {
             if (kids[i] === ignore) continue;
@@ -1094,10 +1139,19 @@ Ide.Designer = class Designer {
      * guide bars again, which is what they are for: saying where something is
      * about to go. */
     showInsertion(box, index) {
-        const horizontal = this.runsHorizontal(box);
-        const kids       = box.Children;
-        const area       = this.rectOf(box);
+        const kids = box.Children;
+        const area = this.rectOf(box);
         if (!area) return;
+
+        /* In a stack the mark is the layer it will land on top of, because a
+         * line between two things that occupy the same rectangle says nothing. */
+        if (this.layers(box)) {
+            const under = index > 0 ? this.rectOf(kids[index - 1]) : null;
+            this.chrome.layerMark(under || area);
+            return;
+        }
+
+        const horizontal = this.runsHorizontal(box);
 
         let at;
         if (index < kids.length) {
@@ -1371,8 +1425,10 @@ Ide.Designer = class Designer {
             return true;
         }
 
-        /* In a box the arrows reorder: there is no coordinate to nudge, and the
-         * keyboard should reach what the mouse can do. */
+        /* Anywhere but on a surface the arrows reorder: there is no coordinate
+         * to nudge, and the keyboard should reach what the mouse can do. In a
+         * stack that is one layer up or down, which is the same sentence -- the
+         * order *is* the z-order there. */
         const box = this.isFixed(this.parentOf(this.selected)) ? null
                                                                : this.parentOf(this.selected);
         if (box) {
@@ -1383,8 +1439,13 @@ Ide.Designer = class Designer {
             const at   = kids.indexOf(this.selected) + by;
             if (at < 0 || at >= kids.length) return true;
 
-            this.pushUndo();
+            /* Taken before and pushed after, which is what `mouseUp` already
+             * does: pushing first left a dead undo step behind every nudge that
+             * could not happen -- at either end of the list, and on every
+             * container that used to refuse the move outright. */
+            const before = this.snapshot();
             box.Reorder(this.selected, at);
+            this.pushUndo(before);
             this.chrome.position();
             this.touch();
             return true;
@@ -1440,18 +1501,45 @@ Ide.Designer = class Designer {
         const target = this.surface.ContainerAt(x, y) || this.surface;
         if (!this.canTake(target)) return false;
 
+        /*
+         * **Where it goes is worked out before anything is created**, and that
+         * order is the whole of this method.
+         *
+         * It used to add the control and *then* ask the container for a place,
+         * so a container the editor had misjudged was left holding a child that
+         * nothing had selected, with the insertion mark still on screen and the
+         * form not even marked as modified -- a drag that read as failed and
+         * left something behind. Both halves are answerable up here: the place
+         * is a function of the pointer and the children already there, and
+         * `canTake` above has already said no if the container cannot take one.
+         */
+        const kind  = this.placementOf(target);
+        const place = kind === "Order" || kind === "Layers"
+                    ? this.insertionIndex(target, x, y, null)
+                    : null;
+
         this.pushUndo();
         const widget = this.newControl(type, target);
         widget.Resize(w, h);
 
-        if (this.pages(target)) {
+        /* The gesture is finished here, before the container is asked for
+         * anything else: from this point a refusal is a control in the wrong
+         * place -- a whole drop, badly ordered -- and never a control nothing
+         * points at. */
+        this.chrome.hideGuides();
+        this.tool = type;
+        this.showTool();
+        this.select(widget);
+        this.touch();
+
+        if (kind === "Pages") {
             /* A page goes at the end: a notebook shows one at a time, so there
              * is no "where the pointer is" to read. */
             this.nameTab(target, widget);
             target.Current = target.Count - 1;
-        } else if (this.split(target)) {
+        } else if (kind === "Halves") {
             /* The runtime put it in whichever half was free. */
-        } else if (this.isFixed(target)) {
+        } else if (kind === "Coordinates") {
             const corner = [x - w / 2, y - h / 2];
             const local  = target === this.surface
                 ? corner
@@ -1459,16 +1547,14 @@ Ide.Designer = class Designer {
 
             widget.Move(Math.max(0, snap(local[0])), Math.max(0, snap(local[1])));
         } else {
-            /* A box has no coordinates to drop onto: what the pointer chooses is
-             * the place in the row. */
-            target.Reorder(widget, this.insertionIndex(target, x, y, widget));
+            /* Nothing to drop *onto*: what the pointer chose is the place in
+             * the row, or the layer of the stack. `Add` already put it last, so
+             * this is the only move there is to make. */
+            target.Reorder(widget, place);
         }
-        this.chrome.hideGuides();
 
-        this.tool = type;
-        this.showTool();
-        this.select(widget);
-        this.touch();
+        /* The outline follows it to wherever the placement put it. */
+        this.chrome.position();
         return true;
     }
 
