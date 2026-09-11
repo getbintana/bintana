@@ -37,6 +37,8 @@
     "../../ide/forms/SearchForm.js",
     "../../ide/modules/Runner.js",
     "../../ide/modules/Manifest.js",
+    "../../ide/modules/Recovery.js",
+    "../../ide/modules/Session.js",
     "../../ide/forms/MainForm.js",
     "Driver.js"
   ]

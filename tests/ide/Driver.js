@@ -35,6 +35,30 @@ function neq(name, got, unwanted) {
     check(name, got !== unwanted, `expected something other than ${JSON.stringify(unwanted)}`);
 }
 
+/*
+ * Opening a project the way somebody who has never opened it before does.
+ *
+ * `Session` gives a project back the tabs it was left with, so `openProject` is
+ * no longer the reset it was when these phases were written: reopening TMP in
+ * the middle of a run would drag the previous phase's strip along with it, and
+ * three phases assert what a fresh one looks like. Forgetting what is
+ * remembered first *is* a first open -- and it is also what keeps one run of
+ * the suite out of the next one's settings, since `examples/hello` and `ide/`
+ * are the same two paths every time.
+ *
+ * The phase that tests the remembering is `session`, and it is the only one
+ * that must not come through here.
+ */
+function openFresh(ide, dir) {
+    /* The tabs first: `openProject` writes the session of the project it is
+     * *leaving* before it closes anything, so clearing the map and then opening
+     * the same project again would put it straight back. Nothing open is not a
+     * session, so closing is what empties the entry. */
+    ide.closeAllTabs();
+    Settings.Set("session.projects", {});
+    ide.openProject(dir);
+}
+
 /* Undo rebuilds the widget tree, so a held reference goes stale: look up by
  * name after anything that can restore. */
 /* The whole tree and not the first level: a form's controls are nested as deep
@@ -302,7 +326,7 @@ function* p_welcome(ide) {
     /* A relative path has to end up absolute: when running, the child starts
      * with the project as its cwd and the relative one would stop resolving.
      * (run.sh runs from the repo root.) */
-    ide.openProject("examples/hello");
+    openFresh(ide, "examples/hello");
     eq("opening one turns the window into the workspace", ide.Pages.Current, 1);
     check("a relative project path is made absolute",
           ide.project.startsWith("/"), ide.project);
@@ -310,7 +334,7 @@ function* p_welcome(ide) {
           ide.project.endsWith("examples/hello"), ide.project);
 
     makeChildProject();
-    ide.openProject(TMP);
+    openFresh(ide, TMP);
 
     /* --- recent projects -------------------------------------------------
      * The submenu is built from what there is: a dynamic list, not items
@@ -3402,7 +3426,7 @@ function* p_namespaces(ide) {
  * check that the three fit together in something real rather than in fixtures.
  */
 function* p_selfns(ide) {
-    ide.openProject(File.Join(Application.Directory, "..", "..", "ide"));
+    openFresh(ide, File.Join(Application.Directory, "..", "..", "ide"));
     yield;
 
     check("its own modules are a namespace", ide.FileTree.Exists("ns:Ide"));
@@ -3422,7 +3446,7 @@ function* p_selfns(ide) {
     check("with the startup form among them", ide.FileTree.Exists("form:forms/MainForm"));
 
     /* Back to the project the phases after this one work in. */
-    ide.openProject(TMP);
+    openFresh(ide, TMP);
     yield;
     eq("and the tests go on where they were", ide.project, TMP);
 }
@@ -4105,7 +4129,7 @@ function* p_nested(ide) {
               '    Ok_Click() {}\n' +
               '}\n');
 
-    ide.openProject(TMP);
+    openFresh(ide, TMP);
     ide.openNamed("Tabs.js");
     eq("opening a file is a one-tab strip", ide.Tabs.Count, 1);
     eq("and the file is the active one", ide.activeFile, "Tabs.js");
@@ -5114,7 +5138,7 @@ function* p_projects(ide) {
 
 
     /* Back to the project the rest of the test uses. */
-    ide.openProject(TMP);
+    openFresh(ide, TMP);
     ide.openNamed("project.json");
 
     /* --- elastic containers -------------------------------------------------
@@ -6563,7 +6587,7 @@ function* p_folders(ide) {
     Directory.Make(File.Join(FLAT, "arte"));
     File.Save(File.Join(FLAT, "arte", "Suelto.js"), "class Suelto {\n}\n");
 
-    ide.openProject(FLAT);
+    openFresh(ide, FLAT);
     yield;
 
     const plan    = ide.tidyPlan();
@@ -6623,7 +6647,7 @@ function* p_folders(ide) {
 
     eq("tidying again has nothing to do", ide.tidyPlan().length, 0);
 
-    ide.openProject(TMP);
+    openFresh(ide, TMP);
     yield;
     removeTree(FLAT);
 
@@ -8444,6 +8468,355 @@ function* p_running(ide) {
  * but cannot start late -- which is exactly what selecting one is for, iterating
  * on a phase without paying for the ones after it.
  */
+
+/* --- recovery: what a crash would have taken ------------------------------
+ *
+ * The net under the dirty tabs. What is asserted is the whole road and not the
+ * timer: a snapshot is written aside, it holds what the *live* editor holds
+ * rather than what the tab last saved, opening the project offers it, and
+ * recovering puts the text back into a dirty tab -- with the file on disk
+ * untouched at every step, which is the property the whole design rests on.
+ *
+ * The timer itself is not driven: thirty seconds of a run waiting for one tick
+ * would be thirty seconds of nothing, and what it does is call `snapshot`,
+ * which is called here directly.
+ *
+ * A fixture of its own, like `search`'s, because what is asserted is the exact
+ * content on both sides of the crash.
+ */
+function* p_recovery(ide) {
+    const SOURCE = [
+        "class Recover extends Form {",
+        "    Form_Open() {",
+        "    }",
+        "}",
+        "",
+    ].join("\n");
+    const FORM = {
+        format: "bintana-form/1",
+        class: "Recover",
+        properties: { Width: 300, Height: 120 },
+        children: [],
+    };
+
+    const path = File.Join(TMP, "Recover.js");
+    File.Save(path, SOURCE);
+    File.SaveJson(File.Join(TMP, "Recover.form"), FORM);
+    ide.listFiles();
+
+    ide.openInTab("Recover.js");
+    yield* settled(ide);
+
+    const typed = `${SOURCE}/* a line nobody saved */\n`;
+    ide.Editor.Text = typed;
+    yield* settled(ide);
+
+    check("the tab is dirty", ide.tabs.hasDirty(), ide.tabs.dirtyNames().join(","));
+
+    const file = ide.recovery.fileFor(ide.project);
+    check("a snapshot is written", ide.recovery.snapshot() && File.Exists(file), file);
+    eq("and the project file is not touched", File.Load(path), SOURCE);
+
+    const shot = ide.recovery.pending(ide.project);
+    check("it names the project it came from",
+          shot && shot.project === ide.project, JSON.stringify(shot && shot.project));
+    const mine = shot.files.filter((f) => f.name === "Recover.js");
+    eq("and holds the dirty file", mine.length, 1);
+    /* The live editor and not `state.text`: the active tab is the one a crash
+     * is most likely to take, and the one whose saved state is stalest. */
+    eq("with what is on screen, not what was last switched away from",
+       mine[0].text, typed);
+
+    eq("a tick that changed nothing writes nothing", ide.recovery.snapshot(), false);
+
+    /* What the user would have lost: the tab back to the file, as a fresh
+     * session would open it. */
+    ide.Editor.Text = SOURCE;
+    ide.Editor.Modified = false;
+    yield* settled(ide);
+
+    const asked = ide.recovery.offer(ide.project);
+    check("a project with one pending asks", !!asked);
+    asked.BtnYes.Emit("Click");
+    yield* settled(ide);
+
+    ide.tabs.switchTo("Recover.js");
+    yield* settled(ide);
+    eq("recovering puts the work back", ide.Editor.Text, typed);
+    check("in a tab that says it is unsaved",
+          ide.tabs.dirtyNames().includes("Recover.js"),
+          ide.tabs.dirtyNames().join(","));
+    eq("and still without touching the file", File.Load(path), SOURCE);
+    check("the answered snapshot is gone", !File.Exists(file));
+
+    /* A form tab travels as its tree, which is the half of what the IDE edits
+     * that a text snapshot could not have carried. */
+    ide.openInTab("Recover.form");
+    yield* settled(ide);
+    const design = ide.tabs.contentOf("Recover.form");
+    eq("a form tab snapshots as a design", design.mode, "design");
+    eq("holding the tree the surface is drawing", design.root.class, "Recover");
+
+    /* --- how often, which is the user's and not ours --------------------- */
+    eq("thirty seconds until somebody says otherwise", ide.recovery.seconds(), 30);
+    check("and the tick is running", ide.recovery.timer !== null);
+
+    const askWin = ide.MnuRecovery_Click();
+    yield;
+    check("the menu item asks", !!askWin);
+    eq("with what is in force now", askWin.TxtValue.Text, "30");
+
+    askWin.TxtValue.Text = "120";
+    askWin.BtnOk.Emit("Click");
+    yield* settled(ide);
+    eq("a new interval is remembered", ide.recovery.seconds(), 120);
+    eq("...and is what the timer now waits", ide.recovery.timer.Delay, 120000);
+
+    /* Below the floor is not a refusal: it is a person saying *as often as you
+     * can*, and the floor is what that means. */
+    Settings.Set("recovery.seconds", 1);
+    eq("under the floor reads as the floor", ide.recovery.seconds(), 5);
+    /* And a hand-edited setting file that says something else does not take the
+     * IDE down with it. */
+    Settings.Set("recovery.seconds", "often");
+    eq("nonsense falls back to the default", ide.recovery.seconds(), 30);
+
+    /* Turning it off must not delete what the last tick saw: it is somebody's
+     * only copy of that work until they save it. */
+    ide.recovery.snapshot();
+    check("there is a snapshot to keep", File.Exists(file), file);
+
+    Settings.Set("recovery.seconds", 0);
+    ide.recovery.start();
+    eq("zero is off", ide.recovery.timer, null);
+    check("and turning it off leaves the snapshot where it was",
+          File.Exists(file), file);
+
+    Settings.Set("recovery.seconds", 30);
+    ide.recovery.start();
+    check("and it comes back on", ide.recovery.timer !== null);
+
+    /* Nothing dirty means nothing to recover: a snapshot left behind would
+     * offer to restore what is already in the project. */
+    ide.tabs.switchTo("Recover.js");
+    yield* settled(ide);
+    ide.Editor.Text = SOURCE;
+    ide.Editor.Modified = false;
+    yield* settled(ide);
+    ide.recovery.snapshot();
+    check("a clean session leaves no snapshot", !File.Exists(file));
+    check("and has nothing to offer", ide.recovery.offer(ide.project) === null);
+}
+
+/*
+ * The desk, as it was left: the window's own furniture, and the tabs of the
+ * project that is open.
+ *
+ * The two are asserted apart because they are kept apart -- one entry for the
+ * window, one per project -- and the reason is the whole design of `Session`:
+ * how wide the tree is is an answer about a screen, and what is open is an
+ * answer about the work.
+ */
+function* p_session(ide) {
+    ide.closeAllTabs();
+    yield* settled(ide);
+
+    /* --- the window ------------------------------------------------------- */
+
+    const wasWide = ide.Width, wasTall = ide.Height;
+    const home    = ide.Split.Position;
+    const wasConsole = ide.RightSplit.Position;
+
+    /* Down and not up: the pane over the console has a minimum height of its
+     * own, and a divider asked for a position GTK will not give it is a test
+     * asserting about the toolkit rather than about this file. */
+    const console_ = wasConsole + 30;
+
+    ide.Split.Position      = home + 40;
+    ide.RightSplit.Position = console_;
+    ide.session.noteSize(980, 640);
+    ide.session.saveWindow();
+
+    const win = Settings.Get("session.window", null);
+    check("the window is written down", !!win, JSON.stringify(win));
+    eq("with the size it was last seen at", win.width, 980);
+    eq("and its height", win.height, 640);
+    eq("and where the tree divider was", win.dividers.Split, home + 40);
+    eq("and where the console one was", win.dividers.RightSplit, console_);
+
+    /* A number that could not have come from a resize is a file somebody has
+     * edited by hand, and the last real size stands. */
+    ide.session.noteSize(12, 12);
+    ide.session.saveWindow();
+    eq("nonsense is not a size", Settings.Get("session.window", {}).width, 980);
+
+    /*
+     * The size, asked of the form itself: `Width` is what the window requests,
+     * which is the same number a `.form` declares and the same one this puts
+     * back -- and it is an answer no window manager has a vote in, which is
+     * what makes it assertable on a virtual display.
+     */
+    Settings.Set("session.window", { width: 1200, height: 800, dividers: {} });
+    ide.session.restoreWindow();
+    yield* settled(ide);
+    eq("the window asks for the size it was left at", ide.Width, 1200);
+    eq("and the height", ide.Height, 800);
+
+    /*
+     * The dividers, put back where they were -- and with two names in the same
+     * file that are not dividers at all. **The list is read in one direction**:
+     * what the file holds is what each divider is worth, never which control to
+     * touch, so `Tabs` and `FileTree` here name nothing and move nothing while
+     * the two real ones are restored around them.
+     */
+    ide.Split.Position      = home;
+    ide.RightSplit.Position = wasConsole;
+    yield* settled(ide);
+    eq("moved away", ide.Split.Position, home);
+
+    Settings.Set("session.window",
+                 { dividers: { Split: home + 40, RightSplit: console_,
+                               Tabs: 3, FileTree: 7 } });
+    ide.session.restoreWindow();
+    yield* settled(ide);
+    eq("a divider is put back where it was left", ide.Split.Position, home + 40);
+    eq("...and so is the one under it", ide.RightSplit.Position, console_);
+
+    /* --- what was open ---------------------------------------------------- */
+
+    File.Save(File.Join(TMP, "Desk.js"),
+              "class Desk {\n    one() {}\n    two() {}\n    three() {}\n}\n");
+    ide.listFiles();
+
+    ide.openInTab("Desk.js");
+    yield* settled(ide);
+    ide.Editor.GotoLine(4);
+    yield* settled(ide);
+    ide.openInTab("Recover.form");
+    yield* settled(ide);
+
+    eq("two tabs to remember", ide.Tabs.Count, 2);
+    ide.session.saveTabs();
+
+    const mine = ide.session.tabsOf(ide.project);
+    check("the project has a session", !!mine, JSON.stringify(mine));
+    eq("holding what was open, in the order the strip had it",
+       mine.files.map((f) => f.name).join(","), "Desk.js,Recover.form");
+    eq("and which one was in front", mine.active, "Recover.form");
+    eq("with the line the caret was on", mine.files[0].line, 4);
+    check("and nothing about the form's, which has no line",
+          mine.files[1].line === undefined, JSON.stringify(mine.files[1]));
+
+    /* ...and back, which is what opening the project again does. */
+    ide.closeAllTabs();
+    yield* settled(ide);
+    eq("the desk is clear", ide.Tabs.Count, 0);
+
+    eq("both come back", ide.session.restoreTabs(ide.project), 2);
+    yield* settled(ide);
+    eq("in the strip", ide.Tabs.Count, 2);
+    eq("with the one that was in front in front", ide.activeFile, "Recover.form");
+
+    ide.tabs.switchTo("Desk.js");
+    yield* settled(ide);
+    eq("and the caret where it was left", ide.Editor.Line, 4);
+
+    /*
+     * A file the project no longer has is skipped and nothing is said. Saying
+     * something is right when a person asked for that file by name and wrong
+     * six times over when a `git checkout` has taken half of them away -- and a
+     * dialog here would be one nobody is in front of.
+     */
+    const all = ide.session.projects();
+    all[ide.project] = { files: [{ name: "Desk.js" }, { name: "Gone.js" }],
+                         active: "Gone.js" };
+    Settings.Set("session.projects", all);
+
+    ide.closeAllTabs();
+    yield* settled(ide);
+    eq("only what is still there is reopened",
+       ide.session.restoreTabs(ide.project), 1);
+    yield* settled(ide);
+    eq("and it is the one that exists", ide.activeFile, "Desk.js");
+
+    /*
+     * And a file that is there and cannot be *read* is stepped over the same
+     * way. Before a session there was no way for this to happen except to
+     * somebody who had just clicked on the file; now it happens while a project
+     * opens, with the recovery offer still to come, so one broken `.form` must
+     * not take the rest of the desk -- or the project -- with it.
+     */
+    File.Save(File.Join(TMP, "Broken.form"), "{ this is not a form");
+    const broken = ide.session.projects();
+    broken[ide.project] = { files: [{ name: "Broken.form" }, { name: "Desk.js" }],
+                            active: "Desk.js" };
+    Settings.Set("session.projects", broken);
+
+    ide.closeAllTabs();
+    yield* settled(ide);
+    eq("one that cannot be read does not take the others with it",
+       ide.session.restoreTabs(ide.project), 1);
+    yield* settled(ide);
+    eq("and the one that can is open", ide.activeFile, "Desk.js");
+    File.Delete(File.Join(TMP, "Broken.form"));
+
+    /* Nothing open is not a session: the entry goes rather than being kept
+     * empty. */
+    ide.closeAllTabs();
+    yield* settled(ide);
+    ide.session.saveTabs();
+    check("a project with nothing open is not remembered",
+          ide.session.tabsOf(ide.project) === null);
+
+    /*
+     * And the map is bounded by the recent list: a project the menu no longer
+     * offers to reopen takes its session with it, which is what keeps the file
+     * from growing for ever.
+     */
+    const stale = ide.session.projects();
+    stale["/tmp/a-project-nobody-remembers"] = { files: [{ name: "x.js" }] };
+    Settings.Set("session.projects", stale);
+
+    ide.openInTab("Desk.js");
+    yield* settled(ide);
+    ide.session.saveTabs();
+
+    check("one the recent list has dropped is dropped here too",
+          ide.session.projects()["/tmp/a-project-nobody-remembers"] === undefined,
+          JSON.stringify(ide.session.projects()));
+    check("and the one it still offers is kept",
+          ide.session.tabsOf(ide.project) !== null);
+
+    /*
+     * And the door that is easy to miss: the window's own X. `Form_Close`
+     * closes by *returning*, so it never reaches `quit()` -- which is why what
+     * is owed on the way out is a list of its own (`leaving`) and not a step
+     * inside one of the two ways of leaving. Found by reading the settings file
+     * after a real session and seeing nothing in it.
+     */
+    Settings.Set("session.projects", {});
+    check("nothing is remembered yet",
+          ide.session.tabsOf(ide.project) === null);
+
+    check("closing the window asks nothing with everything saved",
+          !ide.Form_Close());
+    check("and the desk is written down on the way out",
+          ide.session.tabsOf(ide.project) !== null,
+          JSON.stringify(ide.session.projects()));
+
+    /* Back to what the phases after this one expect: the window the size it
+     * was, a clear desk, and no session to reopen it from. */
+    ide.closeAllTabs();
+    ide.Resize(wasWide, wasTall);
+    ide.Split.Position      = home;
+    ide.RightSplit.Position = wasConsole;
+    yield* settled(ide);
+    Settings.Set("session.projects", {});
+    Settings.Delete("session.window");
+    File.Delete(File.Join(TMP, "Desk.js"));
+    ide.listFiles();
+}
+
 const PHASES = [
     { name: "welcome", run: p_welcome },
     { name: "files", run: p_files },
@@ -8468,6 +8841,8 @@ const PHASES = [
     { name: "columns", run: p_columns },
     { name: "export", run: p_export },
     { name: "errors", run: p_errors },
+    { name: "recovery", run: p_recovery },
+    { name: "session", run: p_session },
     { name: "search", run: p_search },
     { name: "running", run: p_running },
 ];

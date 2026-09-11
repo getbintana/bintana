@@ -103,14 +103,14 @@ drift. A change to the IDE that breaks the IDE breaks this test.
 Both large projects can be asked for a part of themselves, and **they mean
 different things by it**, because they are different shapes of test.
 
-`tests/ide` is twenty-five **phases**, each a generator with a scope of its own,
+`tests/ide` is twenty-seven **phases**, each a generator with a scope of its own,
 listed in `PHASES` at the bottom of `Driver.js`. `./tests/run.sh ide <name>` runs
 every phase up to and including the last one whose name contains `<name>`:
 
 ```
 welcome files designer palette clipboard completion handlers images watch tooldirs
 namespaces selfns views forms nested projects menus folders strings settings
-columns export errors search running
+columns export errors recovery session search running
 ```
 
 `./tests/run.sh ide list` prints that list, which is the copy that cannot go
@@ -125,6 +125,15 @@ later — it follows from what the test *is*. The phases are a narrative: each o
 works on the project the ones before it built, renamed and edited, so a run can
 stop early but cannot start late. Making them independent would mean each building
 its own fixture, which is a different and much larger test.
+
+**And a phase that opens a project goes through `openFresh`**, not through
+`ide.openProject`. Since `Session`, opening a project gives it back the tabs it
+was left with — so reopening the temporary project in the middle of a run would
+drag the previous phase's strip along, and three phases assert what a fresh one
+looks like. `openFresh` closes the tabs and forgets the remembered sessions
+first, which is what a first open really is; it also keeps one run of the suite
+out of the next one's settings, since `examples/hello` and `ide/` are the same
+two paths every time. The `session` phase is the one that must *not* use it.
 
 A partial run says so — `ide: 351 passed, 0 failed  [only welcome, files,
 designer]` — because a green line that reads like the whole suite when eight of

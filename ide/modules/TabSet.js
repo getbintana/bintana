@@ -766,4 +766,57 @@ Ide.TabSet = class TabSet {
     }
 
     hasDirty() { return this.dirtyNames().length > 0; }
+
+    /*
+     * What one open tab holds *right now*, as something `File.SaveJson` can
+     * write. `Recovery` is the caller, and the knowledge of where a tab keeps
+     * its content stays here, where the tabs are made.
+     *
+     * The live widget and not `state`, for the same reason `saveActiveState`
+     * exists: the active tab's text is in its editor and its tree is on its
+     * surface, and `state` is only caught up when the tab is switched away
+     * from -- which is exactly the tab a crash is most likely to take.
+     */
+    contentOf(name) {
+        const state = this.openTabs.get(name);
+        if (!state) return null;
+
+        if (state.mode === "design") {
+            return { name, mode: "design",
+                     root: state.designer ? state.designer.serializeForm()
+                                          : state.root };
+        }
+        return { name, mode: "edit",
+                 text: state.editor ? state.editor.Text : state.text };
+    }
+
+    /*
+     * ...and back again, into a tab opened for it, left **dirty**: what is on
+     * screen is not what is in the file, and the tab has to say so.
+     *
+     * The mode is checked against the tab's own rather than trusted: a snapshot
+     * outlives the project it was taken from, and a `.form` that has since
+     * become something else would otherwise be handed a tree to draw.
+     */
+    restore(snap) {
+        if (!snap || !snap.name || !this.open(snap.name)) return false;
+
+        const state = this.openTabs.get(snap.name);
+        if (!state || state.mode !== snap.mode) return false;
+
+        if (snap.mode === "design") {
+            if (!state.designer) return false;
+            state.designer.loadRoot(snap.root,
+                                    File.Join(this.ide.project, snap.name));
+            state.designer.dirty = true;
+        } else {
+            if (!state.editor) return false;
+            state.editor.Text     = snap.text;
+            state.editor.Modified = true;
+        }
+
+        state.dirty = true;
+        this.render();
+        return true;
+    }
 };

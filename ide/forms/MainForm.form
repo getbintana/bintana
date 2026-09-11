@@ -102,6 +102,10 @@
           "shortcut": "<Control><Shift>s"
         },
         {
+          "name": "MnuRecovery",
+          "text": "Autosave..."
+        },
+        {
           "separator": true
         },
         {

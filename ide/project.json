@@ -37,6 +37,8 @@
     "forms/SearchForm.js",
     "modules/Runner.js",
     "modules/Manifest.js",
+    "modules/Recovery.js",
+    "modules/Session.js",
     "forms/MainForm.js"
   ]
 }

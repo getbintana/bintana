@@ -199,7 +199,7 @@ which one. See the note above it, and [`docs/ide.md`](docs/ide.md#folders-and-na
 
 **The classes in `ide/modules/` are `Ide.<name>`.** Each file declares
 `Namespace("Ide")` and assigns one class, and its name is the file's:
-`Ide.Designer`, `Ide.TabSet`, `Ide.Classes`. Seventeen generic names are off the
+`Ide.Designer`, `Ide.TabSet`, `Ide.Classes`. Twenty-three generic names are off the
 global lexical scope, where a top-level `class` silently wins over a runtime
 global of the same name -- and the largest Bintana program there is now uses the
 feature it offers everyone else. The namespace is **declared by the code**: it is
@@ -1141,6 +1141,14 @@ person who wrote it either.
   leftover definition of the same name further down would win over the delegation
   and the helper would sit there unused. `grep -n "^    <name>(" ide/*/*.js` should
   answer exactly twice -- once in the helper, once as the delegation.
+- **`Form_Close` closes by returning, so the X never reaches `quit()`.** A true
+  answer keeps the window open and a falsy one lets it go -- so the path with
+  *nothing to ask* closes without calling anything, and anything owed on the way
+  out that is only written in `quit()` is owed on the commonest way out and never
+  paid. `MainForm.leaving()` is the list both doors pass through (the terminal's
+  shell, the session); put new work there and not in `quit()`. Found by reading
+  the settings file after a real session and finding nothing in it -- no test
+  could have failed, because the test drove `quit()`.
 - **Every `ide/**/*.js` shares one global scope.** They are separate
   `JS_Eval(JS_EVAL_TYPE_GLOBAL)` calls in one context, which is what lets `Runner`
   use `MainForm`'s `SOURCE_LINK` and `Palette` use `Chrome`'s `SELECT_COLOR` -- and

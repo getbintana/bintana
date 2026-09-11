@@ -158,6 +158,8 @@ class MainForm extends Form {
     exporter  = new Ide.Exporter(this);      // the project tree as one .tar
     tabs      = new Ide.TabSet(this);        // the open files
     completion = new Ide.Completion(this);   // what the editor proposes
+    recovery  = new Ide.Recovery(this);      // the dirty tabs, copied aside
+    session   = new Ide.Session(this);       // the desk, as it was left
     /* The palette is one widget for every open form, so it is the window's and
      * not a designer's: what it offers is the project's components, and the
      * designer on screen only says which tool is marked. */
@@ -211,12 +213,20 @@ class MainForm extends Form {
     shellPage = -1;
 
     Form_Open() {
+        /* First, because this is the one moment a window's size is not a resize
+         * somebody watches happen: `Form_Open` runs before the window is
+         * presented, so what is restored here is what it is mapped at. */
+        this.session.restoreWindow();
+
         this.dressTabActions();
         this.dressViews();
         this.buildTerminal();
         this.renderTabs();          /* no pages yet: no strip either */
         this.setMode(false);        /* ...and so no editor nor designer either */
         this.loadRecent();
+        /* Before the project opens, so the net is up for whatever the session
+         * does -- including a project opened from the welcome page. */
+        this.recovery.start();
 
         const arg = Application.Arguments[0];
         if (arg) {
@@ -229,6 +239,10 @@ class MainForm extends Form {
             this.refresh();
         }
     }
+
+    /* Every resize, and all it does is keep the two numbers: what is written
+     * down, and when, is `Session`'s. */
+    Form_Resize(width, height) { this.session.noteSize(width, height); }
 
     /*
      * The tab strip's action menu is declared in MainForm.form, on the notebook
@@ -243,6 +257,10 @@ class MainForm extends Form {
     MnuTabClose_Click()   { this.closeActiveTab(); }
     MnuTabAll_Click()     { this.closeAllTabs(); }
     MnuTabSaveAll_Click() { this.saveAllDirty(); }
+
+    /* How often the dirty tabs are copied aside, which is the user's and not
+     * ours: `Recovery` owns the question and the setting. */
+    MnuRecovery_Click() { return this.recovery.ask(); }
 
     MnuTabOthers_Click() {
         const keep = this.activeFile;
@@ -265,6 +283,10 @@ class MainForm extends Form {
             Message.Warning("{0} has no project.json.\nIt can still be edited, but it will not be able to run.", File.Name(dir));
         }
 
+        /* Before the tabs go: what was open in the project being left is that
+         * project's session, and `closeAllTabs` is about to make it unanswerable. */
+        this.session.saveTabs();
+
         this.project = dir;
         this.closeAllTabs();
         this.Text = Locale.Text("Bintana IDE -- {0}", File.Name(dir));
@@ -277,6 +299,16 @@ class MainForm extends Form {
         this.rememberRecent(dir);
         this.log(`Project: ${dir}\n`);
         this.reportProject();
+
+        /* What was open the last time this project was, reopened before anything
+         * is offered: the recovered text below lands in these same tabs. */
+        const back = this.session.restoreTabs(dir);
+        if (back) this.log(`Reopened ${back} file${back === 1 ? "" : "s"}\n`);
+
+        /* Last, and only here: whatever was left unsaved the last time this
+         * project was open is offered once, with the tree and the tabs already
+         * in place for the answer to land in. */
+        this.recovery.offer(dir);
     }
 
     /* --------------------------------------------------------- recent list
@@ -632,20 +664,42 @@ class MainForm extends Form {
      * quitting the main loop asks nobody: a second trip through this handler
      * would be a second dialog for a question already answered.
      *
-     * And the way out goes through `quit()` rather than through
-     * `Application.Quit` directly, because there is now something owed on the
-     * way: the terminal tab's shell is a child of this process.
+     * And neither door calls `Application.Quit` bare, because there is something
+     * owed on the way out -- the terminal tab's shell is a child of this
+     * process, and the desk is worth having back next time. `leaving()` is that
+     * list, and both doors pass through it.
      */
     Form_Close() {
         const asked = this.confirmQuit();
-        if (!asked) this.stopShell();       /* nothing to ask: it really closes */
+        /* Nothing to ask, so it really closes -- and it closes by *returning*,
+         * which is the one way out that never reaches `quit()`. Whatever is
+         * owed on the way is owed here too, and `leaving()` is the one list of
+         * it; the X button being the commonest way out of any window is what
+         * makes this the door to get right. */
+        if (!asked) this.leaving();
         return asked;
     }
 
-    /* Everything owed before the window goes, in the one place every way out
-     * passes through. */
-    quit() {
+    /*
+     * Everything owed before the window goes.
+     *
+     * The shell is a child of this process and the desk is worth having back:
+     * neither of them is about *why* the window is closing, which is what makes
+     * this a list rather than a step in one of the two ways out.
+     */
+    leaving() {
         this.stopShell();
+        this.session.save();
+    }
+
+    /* ...and the way out that has an answer behind it: the dialog said quit, so
+     * the main loop ends here rather than by letting a window close. */
+    quit() {
+        this.leaving();
+        /* The question has been asked and answered by the time anything reaches
+         * here -- `confirmQuit` is the only way past a dirty tab -- so keeping
+         * the snapshot would be offering to undo a decision the user made. */
+        this.recovery.forget();
         Application.Quit(0);
     }
 

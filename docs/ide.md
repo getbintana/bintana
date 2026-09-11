@@ -29,6 +29,8 @@ ide/
     Finder.js        the find bar
     Runner.js        running the project, and reading what it printed
     Manifest.js      project.json, and everything that writes to it
+    Recovery.js      the dirty tabs, copied aside against a crash
+    Session.js       the desk as it was left: the window, and what was open
     ProjectFile.js   project.json as a Record: what it may say -- name, version,
                      startup, sources, description
     Strings.js       every string the project shows, walked out of its sources
@@ -40,7 +42,7 @@ ide/
 
 **The file name is the class name, and the class is in `Ide`.** Every file in
 `modules/` declares `Namespace("Ide")` and assigns one class — `Ide.Designer`,
-`Ide.TabSet`, `Ide.Classes` — so eighteen names like `Classes`, `Runner`,
+`Ide.TabSet`, `Ide.Classes` — so twenty-three names like `Classes`, `Runner`,
 `Export` and `Chrome` stop standing in the global lexical scope where a
 top-level `class` quietly wins over a runtime global of the same name. It is
 also the project that should be using the feature: this is the largest Bintana
@@ -756,6 +758,131 @@ read.
 **And it never refuses the save.** Code that does not compile is exactly what one
 has written when one stops to go and look something up.
 
+## What a crash would have taken
+
+Every thirty seconds — or whatever **File > Autosave...** says — the dirty tabs
+are copied into
+`~/.config/bintana/Bintana IDE/recovery/<digest>.json`, one file per project,
+named after a digest of the project's path — not its name, since two directories
+can share one and recovering the wrong `hello` is worse than recovering nothing.
+
+**The project directory is never written to.** That is the whole design and not a
+detail of it: an autosave that saved *in place* takes away the one thing closing
+without saving is for, and takes it away silently. So what a crash costs is at
+most thirty seconds of typing, and what an ordinary session costs is nothing at
+all — the files on disk are exactly what the user last saved. VS Code's hot exit,
+LibreOffice's AutoRecovery and vim's swap files are the same bargain.
+
+**A tab travels as what it is.** A code tab is its text, read from the live
+`SourceEditor` and not from `state.text` — the active tab is the one whose saved
+state is stalest and the one a crash is most likely to take. A form tab is its
+tree, `serializeForm()` of the surface, so a design half-moved is a design and
+not a `.form` that was never written.
+
+**The snapshot is read once, when a project opens**, and only if one was left
+behind. Every ordinary way out goes through `quit()`, which throws it away first:
+*quit without saving* is an answer, and offering to undo it next time would be
+second-guessing the user. What is left behind is therefore what the IDE never got
+to ask about — a crash, a kill, a power cut, a session that ended. The dialog
+offers **Recover** or **Discard**; recovering opens the tabs and leaves them
+dirty, because what is on screen is not what is in the file and the asterisk is
+the honest answer. Nothing is written to the project by recovering either.
+
+**How often is the user's**, under **File > Autosave...**, kept in `Settings` as
+`recovery.seconds` beside the external translation editor — the IDE's other
+preference about how it behaves rather than about a project. Thirty seconds by
+default, five the least (below that the tick stops being a net and becomes a
+process writing files while somebody types), and **`0` turns it off**, which is a
+real answer: a snapshot is a copy of your source in a directory you did not
+choose. A prompt and not a preferences window, which the IDE does not have and
+should not grow for one number. Turning it off **leaves any snapshot behind** —
+it may be the only copy of that work, and deleting it because a setting changed
+would be the one unforgivable thing this could do. A value under the floor reads
+as the floor rather than being refused: it is somebody saying *as often as you
+can*.
+
+Two smaller decisions worth knowing. A tick whose content is identical to the
+last write does nothing, so thinking between bursts of typing costs a
+`JSON.stringify` and no disk. And a session that ends with nothing dirty deletes
+the snapshot rather than leaving one that would offer to restore what is already
+in the project.
+
+What this is **not** is a history: one snapshot per project, replaced in place.
+Versions of a file over time are a feature about the past, and this is a net
+under the present.
+
+## The desk, as it was left
+
+The window comes back the size it was, with its four dividers where they were
+left, and a project reopens with the tabs it was closed with — each code tab on
+the line its caret was on and the tab that was in front in front. `Session.js`,
+and it is two memories rather than one, which is the whole design:
+
+| | |
+|---|---|
+| `session.window` | the size, whether it was maximised, and the four dividers — **the person's**: one screen, one pair of eyes, and the same answer in every project |
+| `session.projects` | one entry per project: the open files in the order the strip had them, the active one, and a line each — **the work's**, and the next project has its own |
+
+**It is kept in `Settings` and never beside the project.** Delphi writes a `.dsk`
+next to the `.dpr` and Lazarus an `.lps` next to the `.lpi`, and the first thing
+every one of their users does is put it in `.gitignore` — because a project is a
+thing one hands to somebody else, and where *my* divider is is not part of it.
+`Recovery` settled the same question the same way; this is the cheaper half of
+it, since what it protects is a minute of rearranging and not work.
+
+**The map is pruned to the recent list.** The IDE remembers a session for exactly
+the projects it offers to reopen, so a directory that has fallen off the menu
+takes its session with it and the file cannot grow without end. One list decides
+which projects the IDE knows about, and `loadRecent` already drops the ones that
+are gone.
+
+**The size is the one seen while the window was not maximised.** A maximised
+window reports the screen, and remembering *that* and restoring it un-maximised
+gives back a window with no frame left to grab — the bug every toolkit's users
+know and none of them can name. `Form_Resize` keeps the last ordinary size, the
+flag goes down beside it, and restoring does both: the size first, because it is
+what un-maximising has to give back.
+
+**There is no position.** GTK4 cannot place its own window and Wayland will not
+let it, so a remembered X and Y would be a setting that lies: written every
+time, read every time, obeyed by nothing.
+
+**It is restored in `Form_Open`**, which runs before the window is presented — so
+what is written down is the size the window is *mapped* at, and never a resize
+somebody watches happen. That is the same moment the `.form`'s own `Width` and
+`Height` take effect, which is why this can simply take their place. The
+dividers are read the other way round from what one would expect, and on
+purpose: the four names are a list in the code, and what the file holds is what
+each of them is worth. A file edited by hand — or left by a version that had five
+— can then say nothing that reaches a widget this one did not mean to move.
+
+**Reopening a project is no longer a reset.** The tabs come back whenever that
+project is opened, by the recent menu or by the tree, which is what `.dsk` and
+VS Code both do; what changed with it is that `openProject` saves the session of
+the project it is *leaving* before it closes anything. A file that is gone since
+is skipped **silently** — a dialog is right when a person asked for that file by
+name and wrong six times over when a `git checkout` has taken half of them away.
+
+**And nothing it opens is ever dirty.** Unsaved work is `Recovery`'s, and the two
+meet in the right order: the session opens the tabs, then the recovery offer
+lands in those same tabs. What is *not* remembered is the selection in a
+designer, an editor's scroll and its undo history — those belong to a tab that is
+being kept, which is how `TabSet` gives them back across a switch for free;
+across a restart there is no tab to keep them in, and writing them down would be
+inventing a second, staler notion of what the widget holds. The line survives
+because it is the one of them a person can name: *I was at line 400*.
+
+**Both doors write it, and one of them is easy to miss.** `Form_Close` closes by
+*returning* — a true answer keeps the window open, a falsy one lets it go — so
+the X, which is how most windows are closed, never reaches `quit()`. What is
+owed on the way out is therefore a list of its own, `leaving()`: the terminal's
+shell, and the desk. The first real session this was tried on left an empty
+settings file, which is how the gap was found.
+
+What is **not** remembered either, and is a decision rather than an omission:
+the IDE does not reopen the last project on its own. The welcome page is what
+starts a session with no argument, and the recent list is one click away on it.
+
 ## Running
 
 `BtnRun` saves every dirty tab first — a `.form` and its `.js` travel together, and
@@ -877,9 +1004,9 @@ Three decisions, and each of them is a line of code:
   which is the whole point of it being here -- or in the user's home when there
   is no project open.
 - **And leaving asks it to end.** `stopShell()` sends SIGTERM (reaching the whole
-  process group) on the way out, and every way out of the IDE goes through one
-  method for that reason: `Form_Close` when there is nothing to ask, and `quit()`
-  from the answer when there was. It is **not** what ends an interactive shell --
+  process group) on the way out, and every way out of the IDE owes it —
+  `leaving()` is that list and both doors pass through it: `Form_Close` when
+  there is nothing to ask, and `quit()` from the answer when there was. It is **not** what ends an interactive shell --
   bash ignores SIGTERM -- and what does is the pty being closed, which hangs up
   its foreground process group the way closing a terminal window always has.
   Measured: nothing is left behind. So the signal is for everything that does
