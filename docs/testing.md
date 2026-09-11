@@ -282,7 +282,9 @@ from the `controls.md` check and *nothing asked anything else*, so 46 members of
 at all. It reads both shapes the runtime builds a global with — a
 `JSCFunctionListEntry` table and a run of `JS_SetPropertyStr` — and it found
 three real gaps the day it was written: `Application.LibraryPath`, which the IDE
-calls, and `Decimal`'s `toString` and `toJSON`. Which globals those are is an
+calls, and `Decimal`'s `toString` and `toJSON`. It has gone on earning it:
+`Application.Libraries` was added to the runtime for the project dialog and the
+check named it as undocumented before any test of it had been run. Which globals those are is an
 explicit list in `tests/api/Check.js`, because the same C shape builds half the
 runtime's *return values* and a scan that guessed would demand a heading for
 every one of them.

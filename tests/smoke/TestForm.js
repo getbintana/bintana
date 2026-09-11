@@ -217,5 +217,26 @@ class TestForm extends Form {
               /^\d+\.\d+\.\d+$/.test(BTA_VERSION), BTA_VERSION);
         eq("and a project that declares none answers with nothing",
            Application.Version, "");
+
+        /*
+         * The two halves of the library lookup, and the point of asserting them
+         * together is that they are one search: `Libraries` says which names
+         * there are and `LibraryPath` says where one of them is, over the same
+         * six places. A name the first offers that the second cannot find would
+         * mean two implementations had already drifted -- which is the whole
+         * reason neither of them lives in the IDE.
+         */
+        const libs = Application.Libraries();
+        check("the libraries that ship here are offered",
+              libs.includes("charts") && libs.includes("report"),
+              JSON.stringify(libs));
+        check("every name it offers resolves",
+              libs.every((name) => Application.LibraryPath(name) !== ""),
+              JSON.stringify(libs.filter((n) => !Application.LibraryPath(n))));
+        check("each one once, and in order",
+              JSON.stringify(libs) === JSON.stringify([...new Set(libs)].sort()),
+              JSON.stringify(libs));
+        eq("and a name nothing has resolves to nothing",
+           Application.LibraryPath("no-such-library-here"), "");
     }
 }

@@ -745,10 +745,12 @@ static JSValue js_icons(JSContext *ctx, JSValueConst this_val,
     return out;
 }
 
-/* Below, with the library search path it shares with `uses`: the IDE opens other
+/* Below, with the library search path they share with `uses`: the IDE opens other
  * projects, so it asks about their libraries and not its own. */
 static JSValue js_library_path(JSContext *ctx, JSValueConst this_val,
                               int argc, JSValueConst *argv);
+static JSValue js_libraries(JSContext *ctx, JSValueConst this_val,
+                            int argc, JSValueConst *argv);
 
 static void install_globals(BtaApp *app)
 {
@@ -864,6 +866,23 @@ static void install_globals(BtaApp *app)
      */
     JS_SetPropertyStr(ctx, application, "LibraryPath",
                       JS_NewCFunction(ctx, js_library_path, "LibraryPath", 2));
+
+    /*
+     * `Application.Libraries([project])`: the names there are to be used.
+     *
+     * The other direction of the same lookup, and here for the same reason. A
+     * name can be *resolved* one at a time, which is what a program that already
+     * knows what it uses needs; **a tool that offers a choice needs the list**,
+     * and the IDE had nowhere to get one -- so `uses` was the one thing in
+     * `project.json` that could only be written by hand.
+     *
+     * Walking the six places is the runtime's business either way: the IDE
+     * doing it would be the second copy of the search path that `LibraryPath`
+     * exists to prevent, and it would be the copy that goes stale, because the
+     * first one is the one every program runs.
+     */
+    JS_SetPropertyStr(ctx, application, "Libraries",
+                      JS_NewCFunction(ctx, js_libraries, "Libraries", 1));
 
     /* Where the runtime binary lives, so a project can re-invoke it. */
     char *exe = g_file_read_link("/proc/self/exe", NULL);
@@ -1270,6 +1289,74 @@ static JSValue js_library_path(JSContext *ctx, JSValueConst this_val,
     if (project)
         JS_FreeCString(ctx, project);
     JS_FreeCString(ctx, name);
+    return out;
+}
+
+/*
+ * Every library a project could name, out of the same six places.
+ *
+ * **A directory is a library**, which is exactly what `lib_resolve` decides
+ * with: anything stricter here -- "it must hold a `.js`" -- would be a second
+ * opinion about what a library is, and the two would disagree about some
+ * directory on somebody's machine. A name found twice is listed once and means
+ * the first one, because that is the one `uses` would load.
+ *
+ * Sorted, for the reason `Icons` is sorted: whoever asks is about to show them
+ * in a list, and the order they came off the disk in is not one. That the list
+ * no longer says where each came from is not a loss -- `LibraryPath` answers
+ * that for any name, with the same search, which is the point of there being
+ * only one.
+ */
+static JSValue js_libraries(JSContext *ctx, JSValueConst this_val,
+                            int argc, JSValueConst *argv)
+{
+    const char *project = NULL;
+    if (argc > 0 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0]))
+        project = JS_ToCString(ctx, argv[0]);
+
+    BtaApp    *app   = bta_current_app();
+    GPtrArray *where = g_ptr_array_new_with_free_func(g_free);
+
+    lib_candidates(project ? project : (app ? app->dir : NULL), where);
+
+    JSValue     out  = JS_NewArray(ctx);
+    /* Owning the keys, so the names outlive the `GDir` they were read from. */
+    GHashTable *seen = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+    uint32_t    n    = 0;
+
+    for (guint i = 0; i < where->len; i++) {
+        const char *place = g_ptr_array_index(where, i);
+        GDir       *dir   = g_dir_open(place, 0, NULL);
+
+        /* A place that is not there is most of them, on most machines. */
+        if (!dir)
+            continue;
+
+        const char *entry;
+        while ((entry = g_dir_read_name(dir))) {
+            /* A name beginning with a dot is not one anybody wrote in `uses`. */
+            if (*entry == '.' || g_hash_table_contains(seen, entry))
+                continue;
+
+            char *path = g_build_filename(place, entry, NULL);
+            if (g_file_test(path, G_FILE_TEST_IS_DIR)) {
+                g_hash_table_add(seen, g_strdup(entry));
+                JS_SetPropertyUint32(ctx, out, n++, JS_NewString(ctx, entry));
+            }
+            g_free(path);
+        }
+        g_dir_close(dir);
+    }
+
+    g_hash_table_destroy(seen);
+    g_ptr_array_free(where, TRUE);
+    if (project)
+        JS_FreeCString(ctx, project);
+
+    JSValue sort = JS_GetPropertyStr(ctx, out, "sort");
+    JSValue r    = JS_Call(ctx, sort, out, 0, NULL);
+    JS_FreeValue(ctx, r);
+    JS_FreeValue(ctx, sort);
     return out;
 }
 

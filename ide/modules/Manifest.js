@@ -152,8 +152,30 @@ Ide.Manifest = class Manifest {
         /* Kept while it is open, for the same reason the menu editor is: it is
          * what lets a test drive it. */
         ide.projectEditor = ProjectForm.edit(
-            config, ide.classNames(), this.loadOrder(),
+            config, ide.classNames(), this.loadOrder(), this.libraries(),
             (edited) => this.apply(edited));
+    }
+
+    /*
+     * Every library the open project could name, with where each one is.
+     *
+     * **Asked of the runtime, about *this* project.** The IDE opens other
+     * people's projects, so the answer depends on the project directory -- a
+     * library in its own `lib/` is one nothing else on the machine can see --
+     * and the six-place search that decides it exists once, in C, for the reason
+     * `Application.LibraryPath` was published with: a second copy of a search
+     * path drifts, and the copy that drifts is the one nobody runs from a shell.
+     *
+     * The path comes along because it is the only thing that tells a library
+     * the project carries from one the system installed, and that is the
+     * difference somebody about to tick a box wants to know.
+     */
+    libraries() {
+        const dir = this.ide.project;
+
+        return Application.Libraries(dir)
+                   .map((name) => ({ Name: name,
+                                     Path: Application.LibraryPath(name, dir) }));
     }
 
     /*

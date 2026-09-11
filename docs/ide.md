@@ -1071,8 +1071,8 @@ the loader read.
 ## The project's own settings
 
 `Ctrl+Shift+P`, or *Project settings...* from the menu bar or from the tree's own
-menu, opens `ProjectForm`: the name, the form it starts at, the description, and
-the order its code is loaded in.
+menu, opens `ProjectForm`: the name, the form it starts at, the description, the
+libraries it uses, and the order its code is loaded in.
 
 The dialog **checks nothing itself**. It assigns to a `ProjectFile` and reports
 whichever setter refused, which is how the field that is wrong gets named without
@@ -1094,11 +1094,49 @@ Two things it knows that a text field could not:
   a text field for a function, because the IDE never loads the project's code and
   has no functions to offer. One is filled and the other emptied on the way to the
   file, so a manifest written from here cannot declare both.
+- **The libraries are ticked, and what is offered is what this machine has.**
+  `uses` was the last thing in a manifest that could only be written in a text
+  editor: the runtime resolved it and the palette offered whatever it found, but
+  nothing in the IDE could add one. What was missing was the *other direction* of
+  the same lookup — `Application.LibraryPath` answers about a name you already
+  have, and a dialog that offers a choice needs the list — so
+  `Application.Libraries` was added to the runtime, walking the same six places,
+  and the IDE still owns no copy of that search path. See below for the two
+  things the list has to get right.
 - **The load order can only be arranged by a project that has one.** A project
   declaring no `sources` is loaded by directory, so the list is shown greyed with
   the order it *would* load in, and *Decide* writes that same order down — nothing
   changes today, and from then on it is arrangeable. That is the one place the
   choice to freeze the order is made on purpose.
+
+### The libraries list
+
+A `RowList` of `CheckButton`s, which is the shape `docs/llm/controls.md` names
+for a list of check boxes and for the reason it gives: **the ticks live in the
+record**, not in the list. A tick the view keeps is the wrong row's the moment
+anything is rebuilt, and a dialog is exactly where that gets discovered late.
+
+Two things it has to get right, and both are about honesty rather than
+convenience:
+
+- **A library the project names and the machine does not have is still shown**,
+  ticked, dimmed, and saying it was not found — with a tooltip that says the
+  runtime will refuse to start the project. It is the same argument the startup
+  drop-down makes for a class that is gone: the project being opened is exactly
+  the one somebody is opening to find out why it will not run, and a list that
+  quietly dropped the name would hide the answer.
+- **The ones in use come first, in the order they load.** A library's classes are
+  evaluated before the project's own, and two libraries in the order `uses` names
+  them — so a new tick is *appended*, never inserted, and unticking leaves the
+  rest as they were. The order is a decision the file is making, not a way of
+  showing the list.
+
+Each row's tooltip is where that library is, which is the only thing that tells
+one the project carries in its own `lib/` from one the system installed — and the
+difference somebody about to tick a box wants to know.
+
+Accepting re-lists the project (`Manifest.apply` ends in `listFiles`), so the
+library's components are on the palette from the moment the box is ticked.
 
 ## Which form the project starts at
 

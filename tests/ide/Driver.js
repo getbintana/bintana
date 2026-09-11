@@ -7656,6 +7656,87 @@ function* p_settings(ide) {
     check("with the function dropped", !backToForm.main,
           JSON.stringify(backToForm.main));
 
+    /*
+     * --- the libraries it uses -----------------------------------------------
+     *
+     * `uses` was the one thing in a manifest that could only be written in a
+     * text editor: the runtime resolved it, the palette offered what it found,
+     * and nothing in the IDE could add one. What made it possible is the other
+     * direction of the same lookup -- `Application.Libraries`, the same six
+     * places `LibraryPath` searches, which is why the IDE still owns no copy of
+     * that path.
+     */
+    ide.MnuProjectSettings.Click();
+    const pd7    = ide.projectEditor;
+    const boxes  = pd7.useBoxes;
+    const offered = boxes.map((b) => b.Text);
+
+    check("what ships with the runtime is offered",
+          offered.includes("charts") && offered.includes("report"),
+          offered.join(","));
+    check("with nothing ticked in a project that uses none",
+          boxes.every((b) => !b.Active));
+    check("and each says where it is",
+          boxes.every((b) => b.Tooltip.includes("/lib/")),
+          boxes.map((b) => b.Tooltip).join(" | "));
+
+    /* It is a copy until OK, like every other field here. */
+    boxes.find((b) => b.Text === "charts").Active = true;
+    eq("a tick lands in the record", pd7.record.Uses.join(","), "charts");
+    pd7.BtnPrCancel_Click();
+    check("and cancelling writes none of it",
+          !(File.LoadJson(manifestPath).uses || []).length,
+          JSON.stringify(File.LoadJson(manifestPath).uses));
+
+    ide.MnuProjectSettings.Click();
+    const pd8 = ide.projectEditor;
+    pd8.useBoxes.find((b) => b.Text === "charts").Active = true;
+    pd8.BtnPrOk_Click();
+    yield* settled(ide);
+
+    eq("accepting writes it to the manifest",
+       (File.LoadJson(manifestPath).uses || []).join(","), "charts");
+    /* The payoff, and the reason this is worth a dialog at all: the library's
+     * components are on the palette from the moment the box is ticked. */
+    check("and the library's components are on the palette",
+          ide.components.some((c) => c.library === "charts"),
+          ide.components.map((c) => `${c.library}:${c.name}`).join(","));
+
+    /*
+     * A project that names a library nothing here has. It is shown, ticked, and
+     * says it is missing -- the same argument the startup drop-down makes for a
+     * class that is gone: the project being opened to find out why it will not
+     * run is exactly the one a list that quietly dropped it would fail.
+     */
+    ide.withConfig((config) => { config.Uses = ["charts", "nosuchlib"]; });
+    ide.MnuProjectSettings.Click();
+    const pd9  = ide.projectEditor;
+    const gone = pd9.useBoxes.find((b) => b.Text.includes("nosuchlib"));
+
+    check("one the machine does not have is still shown", !!gone,
+          pd9.useBoxes.map((b) => b.Text).join(","));
+    check("...ticked, because the project names it", gone && gone.Active);
+    check("...and saying so rather than reading like the others",
+          gone && gone.Text !== "nosuchlib", gone && gone.Text);
+    eq("the ones in use come first, in the order they load",
+       pd9.useBoxes[0].Text, "charts");
+
+    gone.Active = false;
+    pd9.BtnPrOk_Click();
+    yield* settled(ide);
+    eq("unticking takes it out and leaves the rest in order",
+       (File.LoadJson(manifestPath).uses || []).join(","), "charts");
+
+    /* Back to a project that uses nothing, which is what the phases after this
+     * one built and run. */
+    ide.MnuProjectSettings.Click();
+    const pd10 = ide.projectEditor;
+    pd10.useBoxes.find((b) => b.Text === "charts").Active = false;
+    pd10.BtnPrOk_Click();
+    yield* settled(ide);
+    check("and a project can stop using one",
+          !(File.LoadJson(manifestPath).uses || []).length,
+          JSON.stringify(File.LoadJson(manifestPath).uses));
 }
 
 /*

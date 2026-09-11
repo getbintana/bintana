@@ -1507,7 +1507,12 @@ person who wrote it either.
   already made for the launcher, now inside the runtime. **A library's forms are
   indexed with the project's** (`form_path` in `bta_form.c`), which is the part
   that makes `"type": "Chart"` work in a `.form`; forgetting it would have looked
-  like the class loading and the form silently not.
+  like the class loading and the form silently not. The search is published in
+  **both directions** and neither belongs anywhere else: `Application.LibraryPath`
+  resolves one name, `Application.Libraries` says which names there are, and both
+  walk `lib_candidates` in `bta_runtime.c`. The IDE ticks libraries in its project
+  dialog off the second; a copy of that path in JavaScript would be the copy that
+  goes stale, because the C one is what every program runs.
 - **A `MoveTo` in the middle of a shape is a second subpath, and a fill runs the
   winding rule across both.** A ring segment written as `Arc` out, `MoveTo` in,
   and line segments back cut white wedges through the middle of the first doughnut

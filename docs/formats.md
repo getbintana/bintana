@@ -220,6 +220,14 @@ A name that is not found **stops the program**, printing every path it tried.
 Carrying on would fail a moment later with `unknown widget type 'Chart'`, which
 says nothing about a missing library.
 
+**The search is published in both directions**, which is what lets a tool write
+this key rather than only read it: `Application.LibraryPath(name, [project])`
+resolves one name, and `Application.Libraries([project])` says which names those
+six places offer — sorted, each once, the nearest copy winning exactly as `uses`
+would resolve it. The IDE's project dialog ticks them off the second one; it is
+in the runtime because a second copy of a six-entry search path drifts, and the
+copy that drifts is the one nobody runs from a shell.
+
 Two ship here. `lib/charts` is [`examples/charts`](../examples/charts)' chart
 component, and `lib/report` is the banded `Report` that
 [`examples/report`](../examples/report) draws a statement of account with. Both

@@ -4,7 +4,7 @@
   "properties": {
     "Text": "Project",
     "Width": 560,
-    "Height": 476
+    "Height": 652
   },
   "children": [
     {
@@ -125,10 +125,46 @@
     },
     {
       "type": "Label",
-      "name": "LblPrOrder",
+      "name": "LblPrUses",
       "properties": {
         "X": 16,
         "Y": 204,
+        "Width": 200,
+        "Height": 24,
+        "Text": "Libraries:"
+      }
+    },
+    {
+      "type": "RowList",
+      "name": "LstPrUses",
+      "properties": {
+        "X": 16,
+        "Y": 232,
+        "Width": 528,
+        "Height": 110,
+        "HAlign": "Fill"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblPrUsesHint",
+      "properties": {
+        "X": 16,
+        "Y": 350,
+        "Width": 528,
+        "Height": 36,
+        "Text": "",
+        "Wrap": true,
+        "Style": "dim-label",
+        "HAlign": "Fill"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblPrOrder",
+      "properties": {
+        "X": 16,
+        "Y": 396,
         "Width": 200,
         "Height": 24,
         "Text": "Load order:"
@@ -139,9 +175,9 @@
       "name": "LstPrSources",
       "properties": {
         "X": 16,
-        "Y": 232,
+        "Y": 424,
         "Width": 424,
-        "Height": 150,
+        "Height": 120,
         "HAlign": "Fill",
         "VAlign": "Fill"
       }
@@ -151,7 +187,7 @@
       "name": "BtnPrUp",
       "properties": {
         "X": 452,
-        "Y": 232,
+        "Y": 424,
         "Width": 92,
         "Height": 32,
         "Text": "Up",
@@ -163,7 +199,7 @@
       "name": "BtnPrDown",
       "properties": {
         "X": 452,
-        "Y": 270,
+        "Y": 462,
         "Width": 92,
         "Height": 32,
         "Text": "Down",
@@ -175,7 +211,7 @@
       "name": "BtnPrDecide",
       "properties": {
         "X": 452,
-        "Y": 318,
+        "Y": 510,
         "Width": 92,
         "Height": 32,
         "Text": "Decide",
@@ -188,7 +224,7 @@
       "name": "LblPrHint",
       "properties": {
         "X": 16,
-        "Y": 390,
+        "Y": 556,
         "Width": 528,
         "Height": 40,
         "Text": "",
@@ -203,7 +239,7 @@
       "name": "BtnPrCancel",
       "properties": {
         "X": 354,
-        "Y": 432,
+        "Y": 604,
         "Width": 90,
         "Height": 32,
         "Text": "Cancel",
@@ -217,7 +253,7 @@
       "name": "BtnPrOk",
       "properties": {
         "X": 454,
-        "Y": 432,
+        "Y": 604,
         "Width": 90,
         "Height": 32,
         "Text": "OK",

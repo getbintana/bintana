@@ -18,6 +18,7 @@ Every name here is a global: ambient, always present, no import.
 | `DecorationLayout` | how this desktop arranges a title bar |
 | `CheckSource(text)` | `null` if the text is valid JavaScript, else `{ Message, Line, Column }` |
 | `LibraryPath(name, [project])` | where a library by that name is, or `""` — the same six-place search the runtime does for `uses`. Published so a tool that opens *other* projects asks about theirs rather than keeping a second copy of the path |
+| `Libraries([project])` | the names of every library those same six places offer, sorted, each one once. The other direction of the lookup: `LibraryPath` resolves a name you already know, this is what a dialog that offers a choice needs |
 | `OnError` | assign `(message, stack) => …` to take over uncaught errors |
 | `Quit(code)` | quit with that exit status |
 

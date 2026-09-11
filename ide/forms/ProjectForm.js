@@ -1,6 +1,6 @@
 /*
- * The project's own settings: what it is called, where it starts, and in which
- * order its code is loaded.
+ * The project's own settings: what it is called, where it starts, which
+ * libraries it uses, and in which order its code is loaded.
  *
  * All four are `project.json`, which the IDE already reads as a `ProjectFile`
  * record -- so this dialog does not check anything itself.  It assigns to the
@@ -20,19 +20,23 @@ const openProjectForms = [];
 class ProjectForm extends Form {
 
     /*
-     * ProjectForm.edit(record, classNames, filesInOrder, onAccept)
+     * ProjectForm.edit(record, classNames, filesInOrder, libraries, onAccept)
      *
      * `classNames` is what the startup may be -- the project's own classes, so
      * the field is a choice and not a name to remember.  `filesInOrder` is the
      * order the runtime would load a project that declares none, which is what
      * *Decide* writes: freezing the order it already has changes nothing today
-     * and makes it changeable tomorrow.
+     * and makes it changeable tomorrow.  `libraries` is every name this project
+     * could use, which is `Application.Libraries` and nothing this file worked
+     * out -- the same bargain as the other two: the dialog is handed what there
+     * is and owns only where the boxes go.
      */
-    static edit(record, classNames, filesInOrder, onAccept) {
+    static edit(record, classNames, filesInOrder, libraries, onAccept) {
         const dlg = new ProjectForm();
 
         dlg.record    = record.Clone();
         dlg.scanned   = filesInOrder || [];
+        dlg.available = libraries || [];
         dlg.onAccept  = onAccept;
         dlg.Modal     = true;
 
@@ -60,6 +64,7 @@ class ProjectForm extends Form {
         dlg.CmbPrKind.Text = record.Main ? Ide.Kind.Function : Ide.Kind.Form;
         dlg.showKind(record.Main || record.Startup);
 
+        dlg.showUses();
         dlg.showSources();
 
         openProjectForms.push(dlg);
@@ -99,6 +104,92 @@ class ProjectForm extends Form {
     startsAt() {
         return (this.TxtPrMain.Visible ? this.TxtPrMain.Text
                                        : this.CmbPrStartup.Text).trim();
+    }
+
+    /*
+     * The libraries this project uses, as ticks.
+     *
+     * What is offered is what the runtime can find (`Application.Libraries`)
+     * *together with* whatever the project already declares, and the two are not
+     * the same set: a project may name a library that is not installed here, and
+     * that project is exactly the one somebody is opening to find out why it
+     * will not run. A name that is gone is shown, ticked, and says it is
+     * missing -- the same argument the startup drop-down makes for a class that
+     * no longer exists, and the same one a list that silently dropped it would
+     * lose.
+     *
+     * **In use first, in the order they load**: a library's classes are
+     * evaluated before the project's own, and two libraries in the order `uses`
+     * names them -- so that order is a decision and not a display.
+     *
+     * **And the ticks live in the record.** That is the rule `docs/llm/controls.md`
+     * states for a list of check boxes, and the reason this is a `RowList`
+     * carrying `CheckButton`s rather than a list that keeps its own ticks: a
+     * tick the *view* keeps is the wrong row's the moment anything is rebuilt.
+     * Nothing here rebuilds, and it still is not where the answer is kept.
+     */
+    showUses() {
+        const used  = this.record.Uses;
+        const found = this.available.map((lib) => lib.Name);
+        const names = [...used, ...found.filter((name) => !used.includes(name))];
+
+        this.LstPrUses.Clear();
+        /* The widgets, kept the way the class chooser keeps its own: a handle on
+         * the rows for whoever is driving this dialog rather than clicking it.
+         * Not a second copy of the answer -- what is ticked is the record's. */
+        this.useBoxes = [];
+
+        names.forEach((name, i) => {
+            const lib = this.available.find((one) => one.Name === name);
+            const box = new CheckButton();
+
+            box.Name   = `Use${i}`;
+            box.Active = used.includes(name);
+            box.Margin = 4;
+
+            if (lib) {
+                box.Text    = name;
+                box.Tooltip = lib.Path;
+            } else {
+                /* One literal with a placeholder in it, and not a name added to
+                 * a phrase: the msgid has to be the whole sentence or a
+                 * catalogue cannot reorder it. */
+                box.Text    = Locale.Text("{0} -- not found", name);
+                box.Style   = "dim-label";
+                box.Tooltip = Locale.Text("This project names it and nothing on this machine has it. The runtime refuses to start a project whose library is missing.");
+            }
+
+            this.LstPrUses.Add(box);
+            this.useBoxes.push(box);
+            /* Events dispatch by name on the form, so the handler goes there --
+             * the same way the class chooser wires its page of boxes. */
+            this[`Use${i}_Click`] = () => this.use(name, box.Active);
+        });
+
+        /* One literal each, however long: the extractor reads the source, and a
+         * message built by adding two of them together is a msgid that arrives
+         * at the catalogue with half of itself missing. It says so out loud when
+         * Project > Update translations runs, which is how these two were
+         * caught. */
+        this.LblPrUsesHint.Text = names.length
+            ? Locale.Text("Directories of shared classes, loaded before this project's own. Offered here are the ones this machine has, nearest first: the project's own lib/ before anything installed.")
+            : Locale.Text("A library is a directory of shared classes that several projects can load. There is none on this machine, and none named here.");
+    }
+
+    /*
+     * One tick, into the record.
+     *
+     * Appended when it goes on, so a library added today loads after the ones
+     * that were already there -- which is the answer that cannot break a project
+     * whose second library extends its first. Removing leaves the rest in the
+     * order they were.
+     */
+    use(name, on) {
+        const list = this.record.Uses.filter((one) => one !== name);
+        if (on) list.push(name);
+
+        /* Through the setter, which is what checks it. */
+        this.record.Uses = list;
     }
 
     /*
