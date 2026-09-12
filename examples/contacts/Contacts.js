@@ -121,39 +121,27 @@ class Contacts extends Form {
         this.TxtFind.SetFocus();
     }
 
-    /* A row is three controls, which is what a `RowList` is for and what no
-     * `ListBox` of strings can hold. */
+    /*
+     * A row is three controls, which is what a `RowList` is for and what no
+     * `ListBox` of strings can hold -- and the three are in `Contact.form`
+     * rather than here.
+     *
+     * This used to be forty lines that made a `Panel`, three `Label`s and set
+     * eight properties on them. It is a component now, which buys two things
+     * this file was paying for: the row is **drawn** rather than assembled, and
+     * `Contacts.form` can say what the list holds while it is being designed
+     * (`"item": { "of": "Contact", "count": 3 }`) instead of showing an empty
+     * box for a window to be laid out around.
+     *
+     * `Person` and not `Name`, because a widget's `Name` is the runtime's:
+     * see the head of `Contact.js`.
+     */
     row(contact) {
-        const row = new Panel();
-        row.Arrangement = "Horizontal";
-        row.Spacing = 10;
-        row.Margin  = 5;
+        const row = new Contact();
 
-        const name = new Label();
-        name.Text      = contact.Name;
-        name.HExpand   = true;
-        name.Ellipsize = true;      /* a long name gives up its tail, not the row */
-        row.Add(name);
-
-        const city = new Label();
-        city.Text      = contact.City;
-        city.Alignment = "Right";
-        city.Width     = 140;
-        city.Style     = "dim-label";
-        row.Add(city);
-
-        /*
-         * Not `Selectable`, deliberately: a label that takes a text selection
-         * swallows the click that was picking the row, so the contact one meant
-         * to copy from is the one that never gets selected.  Copying is the
-         * button's job, and giving it two answers would be worse than one.
-         */
-        const phone = new Label();
-        phone.Text      = contact.Phone;
-        phone.Alignment = "Right";
-        phone.Width     = 150;
-        phone.Style     = "dim-label";
-        row.Add(phone);
+        row.Person = contact.Name;
+        row.City   = contact.City;
+        row.Phone  = contact.Phone;
 
         return row;
     }

@@ -2,6 +2,7 @@
   "name": "Contacts",
   "startup": "Contacts",
   "sources": [
+    "Contact.js",
     "Contacts.js"
   ],
   "version": "1.0",

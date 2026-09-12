@@ -1,0 +1,51 @@
+{
+  "format": "bintana-form/1",
+  "class": "Contact",
+  "properties": {
+    "Arrangement": "Horizontal",
+    "HAlign": "Fill",
+    "Height": 30,
+    "Margin": 5,
+    "Spacing": 10,
+    "VAlign": "Fill",
+    "Width": 600
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblPerson",
+      "properties": {
+        "Ellipsize": true,
+        "HExpand": true,
+        "Width": 260
+      },
+      "design": {
+        "Text": "Ana María Rodríguez"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblCity",
+      "properties": {
+        "Alignment": "Right",
+        "Style": "dim-label",
+        "Width": 140
+      },
+      "design": {
+        "Text": "San Miguel de Tucumán"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblPhone",
+      "properties": {
+        "Alignment": "Right",
+        "Style": "dim-label",
+        "Width": 150
+      },
+      "design": {
+        "Text": "381 4 55 66 77"
+      }
+    }
+  ]
+}
