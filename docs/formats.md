@@ -315,9 +315,51 @@ precedent for a node key that is neither a type nor a property.
 than by a check: the only code that applies one is `Container.AddNode(node,
 true)`, the designing branch, and the C loader has no idea the key exists.
 
+**It is worth whatever the property is worth**, not only text: the block is
+applied over `properties`, so anything settable can carry one. A list that is
+filled at run time is the case that needs it — `"design": { "Items": ["Ana",
+"Beto"] }` on a `ListBox`, `"design": { "Count": 3 }` on a `TableView`, which is
+its on-demand mode and draws that many rows under the headings.
+
 The IDE's property grid edits this block behind its *Design values* switch, and
 its sample button fills one with **literal words** — so the file holds text
 rather than a token the loader would have to understand.
+
+### `item`: what a list holds while it is being designed
+
+```json
+{ "type": "RowList", "name": "Contacts",
+  "properties": { "X": 16, "Y": 48, "Width": 380, "Height": 200 },
+  "item":       { "of": "Partes.Chip", "count": 3 } }
+```
+
+A list is filled by the program, so a designer draws it as an empty box — and a
+form is laid out *around* one: how tall a row is decides whether what sits under
+the list collides with it. `item` names a **component** and how many of it to
+draw. Android's `tools:listitem` is the same idea; pointing at a class rather
+than at a layout file is the one change, and it is what lets the form's own code
+build the same thing, so the drawing and the program are one widget instead of
+two that drift.
+
+**A key of its own and not a design value**, which is forced rather than chosen:
+`design` is applied over `properties` by `AddNode(node, true)`, so a key that is
+not a property throws there and the control falls back to a stand-in. `strip` is
+the precedent for a node saying something that is neither its type nor a
+property.
+
+[`examples/contacts`](../examples/contacts) is the one that has one, and it is
+worth reading as the argument for the shape: its row used to be a forty-line
+`row(contact)` method — a class with the word `class` left out — and is a
+`Contact` component now, so the designer draws the same class the program builds.
+The row's own labels carry `design` values, which is what puts a plausible name
+and city in the drawn rows.
+
+**The runtime carries it and applies nothing.** It is written by the serialiser
+(`SetItem`/`Item`) so the key survives a round trip through a designer that
+opened the file — a designer cannot put it back by itself, because `Serialize`
+recurses past anything nested. While it is set the serialiser writes **no
+children** for that container, so a save can never turn three drawn rows into
+three real ones.
 
 ### Prose, and the catalogue
 

@@ -2268,11 +2268,33 @@ dirty, which is the lesson `ColorButton` taught this file — and it needs no fl
 because `setDesignMode` returns at once when the mode already matches, so the
 switch being filled in from `adopt()` can only ever be a no-op.
 
-In that mode the grid shows **only the properties that hold prose**, asked of the
+In that mode the grid shows **the properties that hold prose**, asked of the
 control (`TextProperties()`) and never matched against a list of names here. Where
 a control sits *is* the design, so a geometry has no design value to speak of —
 which is what keeps the mode a short, unambiguous list, and what keeps a
 `SourceEditor`'s source text out of it entirely.
+
+**And one kind of row that is counted rather than named.** A design value is for
+what the code fills in, and prose is the commonest shape of that rather than the
+definition: a `Label` whose text arrives at run time lays out against a sample
+sentence, and a `TableView` whose rows arrive at run time lays out against a
+*count*. There is no sentence that can stand in for three rows. `Count` is
+settable — it is the on-demand mode — so a design value for it puts that many
+rows on the canvas with the columns already drawn over them, writes a real number
+into the block, and reaches no running application like every other design value.
+It is refused where it is typed if it is not a whole number, and the sample
+button is not offered on it: a menu proposing *Lorem ipsum* for how many rows a
+table shows would be the field saying something false about what it wants.
+
+`DESIGN_NUMBERS` in `PropertyGrid.js` is that list, and it has **one entry**
+(`TableView.Count`), which is the honest size of it: `ListBox.Items`,
+`ComboBox.Items` and `Notebook.Tabs` are already prose, so those fill from the
+mode as it stood, and a table's rows were the only list in the runtime counted
+instead of named. It is a list in the IDE and not a question for the control on
+purpose — `TextProperties()` exists because the *loader* consumes it, and nothing
+in a running program would ever read "which properties may carry a design count".
+The palette's list of types is in the IDE for the same reason: what the designer
+offers is the IDE's business.
 
 Three details make it work with no new widget:
 
@@ -2292,6 +2314,50 @@ A stand-in is the honest exception: the designer does not have the component's
 class, so it cannot know which of its properties are prose and offers all of them.
 They go into the node either way, which round-trips because a stand-in's node is
 written back as it came.
+
+### What a list holds while it is being designed
+
+Nineteen of this tree's fifty-one forms hold a list, and every one of them is
+drawn as an empty box: a `RowList`'s rows are widgets the program builds, so
+there is nothing in the file to show. The form is laid out *around* that box, and
+how tall a row is decides whether the buttons under it collide.
+
+Select the list, switch to **Design values**, and two rows appear that no control
+has as a property — `Item.of`, a drop-down of the project's components, and
+`Item.count`. Picking one draws that many rows, built from the component's own
+`.form`; the count's placeholder shows the three it draws when the file does not
+say. It is Android's `tools:listitem`, with the change this tree's shape forces:
+it names a **class** and not a layout file, so the form's own code can build the
+same component and the drawing stops being a fiction maintained by hand.
+
+Four things make it safe, and each one is a place something could have leaked:
+
+- **The rows are not controls of the form.** `allControls` does not walk into a
+  list that is showing an item, so the control tree does not list them, a name
+  cannot collide with one, and aligning or deleting cannot reach them.
+- **A click on a row means the list.** `PickAt` answers with the topmost widget
+  at a point *at any depth*, which inside a preview is a component's own label;
+  `Designer.owner` maps it back to the list that is drawing it.
+- **The file never gets them.** The runtime's serialiser writes the `item` key
+  and no children while it is set — in the runtime and not here, because
+  `Serialize` recurses past anything nested and the designer never sees it.
+- **A list that holds controls of its own is refused.** It has nothing to preview
+  and clearing it to draw a drawing would delete somebody's work.
+
+[`examples/contacts`](../examples/contacts) is the one project here that
+declares one. Converting it is the argument in miniature: `row(contact)` was
+forty lines building a `Panel` and three `Label`s, nothing else could use it, and
+the designer drew the list it filled as an empty box. As a `Contact` component
+the rows are drawn rather than assembled, the list shows three of them while the
+form is laid out, and the running application is **unchanged to the pixel** —
+608x19 rows at the same three offsets, the same window minimum, measured before
+and after.
+
+What it does not do is guess: a component that is gone, or whose `.form` cannot
+be read, draws nothing and **keeps the name**, so the next save does not quietly
+lose it. One level deep, too — a component whose own form shows a list of itself
+would otherwise draw for ever, and two rows of a row is not a layout question
+anybody has.
 
 ### The catalogues
 
@@ -2628,12 +2694,34 @@ The scan feeds two things, both from `listFiles()`:
   listed under the name a `.form` will use for it — `Partes.Chip`, not `Chip`.
 
 Placing one creates a **stand-in**: the designer has the runtime's widgets and none
-of the project's, so there is nothing to instantiate. The stand-in is a `Label`
-marked `[Type]` carrying the original node in `__node`, and `nodeOf()` writes that
-node back with the geometry and the name the designer gave it. Its property grid
-offers only `Name`, `X`, `Y`, `Width` and `Height` -- what the designer really owns.
-Everything else belongs to the component, and a property one could edit and lose on
-the next save would be worse than one that is not shown.
+of the project's, so there is nothing to instantiate. The stand-in is a `Component`
+carrying the original node in `__node`, and `nodeOf()` writes that node back with
+the geometry and the name the designer gave it. Its property grid offers only
+`Name`, `X`, `Y`, `Width` and `Height` -- what the designer really owns. Everything
+else belongs to the component, and a property one could edit and lose on the next
+save would be worse than one that is not shown.
+
+**And it is drawn rather than named**, out of the component's own `.form`, by the
+machinery a list's [design-time item](#what-a-list-holds-while-it-is-being-designed)
+already needed: the same `buildNode`, the same rule that nothing under it is a
+control of this form. It is safer here than there and needs no mark at all -- the
+widget is a `Component`, and the runtime's serialiser has written a component as a
+black box since components existed, so what is inside cannot reach the file.
+
+What the designer still cannot do is **run** the component's class, and three
+cases come out of that looking identical: a type this project has no `.form` for,
+a component whose form is empty, and the painted half -- a `Chart` declares one
+`DrawingArea` and everything one recognises about it is painted by code. All three
+would be a tinted rectangle with nothing in it, which says less than the
+`[Chart]` box this replaced, so **a component whose drawing shows no prose says
+what it is**: the component icon and its type, in a row. The icon is the pair
+`Palette` and `ControlTree` already name a component with -- the desktop's
+`application-x-addon-symbolic` first and the project's own
+`bta-component-symbolic.svg` behind it -- so the canvas, the tree and the palette
+cannot come to disagree about what a component looks like.
+
+The tint stays either way, and it is the only thing left saying *this one is not
+yours*: the grey box used to say it in words and a drawing cannot.
 
 The same mechanism carries a form that uses a component the IDE cannot build:
 opening it, moving things around and saving leaves the component exactly as it was.

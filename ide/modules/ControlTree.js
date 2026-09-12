@@ -63,7 +63,9 @@ Ide.ControlTree = class ControlTree {
         const walk = (container, depth) => {
             for (const c of container.Children) {
                 parts.push(`${depth}:${c.Name}:${this.typeOf(c)}`);
-                if ("Children" in c) walk(c, depth + 1);
+                /* Not into a list showing its design-time item: what is in it is a
+                 * drawing of a component, not a control of this form. */
+                if ("Children" in c && !c.Item && !c.__node) walk(c, depth + 1);
             }
         };
         walk(this.designer.surface, 0);
@@ -88,7 +90,7 @@ Ide.ControlTree = class ControlTree {
             for (const c of container.Children) {
                 tree.Add(c.Name, `${c.Name} (${this.typeOf(c)})`, parentKey,
                          this.iconFor(c));
-                if ("Children" in c) walk(c, c.Name);
+                if ("Children" in c && !c.Item && !c.__node) walk(c, c.Name);
             }
         };
         walk(this.designer.surface, TREE_ROOT);

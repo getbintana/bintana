@@ -986,8 +986,11 @@ inside comes from its own `.form`.
 The IDE creates one with *File -> New component...*, lists the project's
 components in a `Project` tab of the palette, and places them like any control.
 Its designer runs in its own process and does not have the project's classes, so
-what it places is a stand-in marked `[Stepper]`: it can be named, moved, resized
-and written back exactly as it came. **Its own properties are editable too** —
+what it places is a stand-in: it can be named, moved, resized and written back
+exactly as it came. It is **drawn from the component's own `.form`** -- the half
+that is declared -- and one whose drawing shows nothing to read (a `Chart` is a
+`DrawingArea` and a thousand lines of painting) falls back to the component icon
+and its type. **Its own properties are editable too** —
 the grid reads them out of the component's source by the rule the serialiser
 uses, an accessor with both a getter and a setter, and writes the value into the
 node the runtime will read it from.

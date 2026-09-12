@@ -51,6 +51,23 @@ const PASTE_STEP = 12;
 const FORM_MIN         = 40;    // px: a form smaller than this cannot be aimed at
 const MIN_SIZE = 12;
 
+/*
+ * How many rows a list draws for its design-time item when the node does not
+ * say, and the most it will draw when it does.
+ *
+ * Three, because what a drawn list answers is *how tall a row is and where the
+ * next thing starts*, and the second row is what proves the first was a row and
+ * not the whole list. Android's editor draws ten; ten of anything here is a
+ * scroll, and a list that scrolls in the designer hides the form under it.
+ */
+/* The mark on a component that draws nothing one can recognise. Square, and
+ * small enough to leave the type beside it in a box drawn at a component's own
+ * size -- which for the smallest of them is a row 30 tall. */
+const STANDIN_ICON = 16;
+
+const PREVIEW_ROWS = 3;
+const PREVIEW_MAX  = 20;
+
 /* A control the IDE cannot build: a component of the project, whose class lives
  * in the project's process and not in this one. */
 const STANDIN_BG    = "#d0cfcc";
@@ -406,7 +423,13 @@ Ide.Designer = class Designer {
              * is applied over the properties, which is how a label whose text the
              * code fills in has something to be laid out by.
              */
-            return parent.AddNode(node, true);
+            const built = parent.AddNode(node, true);
+
+            /* ...and what a list holds while it is being drawn, which is the
+             * other half of the same idea and cannot be a property: see
+             * `showItem`. */
+            if (node.item) this.showItem(built, node.item);
+            return built;
         } catch (e) {
             for (const built of parent.Children.slice(had)) built.Delete();
             return this.standIn(parent, node);
@@ -416,19 +439,226 @@ Ide.Designer = class Designer {
     /* The node, shown as itself and carrying itself: what goes back to the file
      * is what came out of it, plus whatever geometry the user gave it. */
     standIn(parent, node) {
-        const standIn = new Label();
+        const props = node.properties || {};
+        const tree  = this.ide.classes.componentTree(node.type);
+
+        /*
+         * **A component is drawn rather than named when its own `.form` can be
+         * read**, which is the same drawing a list makes of its `item` and the
+         * same reason it is safe: the widget is a `Component`, and the runtime's
+         * serialiser has always written a component as a black box. So what is
+         * inside cannot reach the file whatever happens here.
+         *
+         * A `Component` even when there is nothing to draw, and not the `Label`
+         * this used to be: then the two cases end in the same place -- a
+         * container that says what it is -- instead of one of them being a
+         * different widget with a different set of methods on it.
+         *
+         * What the designer still cannot do is *run* the component's class, so
+         * this shows the half that is declared. A component that paints itself
+         * -- `Chart`, `Report`: a `DrawingArea` and a thousand lines -- draws the
+         * empty box it really is, and one whose class fills its labels in shows
+         * whatever its `design` blocks say. Both are the truth about what the
+         * file declares, which is the only thing a designer can be honest about.
+         */
+        const standIn = Widget.New("Component");
         parent.Add(standIn);
 
         standIn.Name       = node.name || node.type;
-        standIn.Text       = `  [${node.type}]`;
-        standIn.Background = STANDIN_BG;
         standIn.__node     = node;
+        /*
+         * The tint stays even when the component is drawn, and it is the only
+         * thing left saying *this one is not yours*: the grey `[Stepper]` box
+         * used to say it in words, and a drawing cannot. What is inside belongs
+         * to another file and nothing here can edit it, so the surface it sits
+         * on says so quietly rather than by refusing to show it.
+         */
+        standIn.Background = STANDIN_BG;
 
-        const props = node.properties || {};
-        standIn.Resize(props.Width || 120, props.Height || 30);
+        if (tree) {
+            const root = tree.properties || {};
+            if (root.Arrangement) standIn.Arrangement = root.Arrangement;
+            if (root.Spacing !== undefined) standIn.Spacing = root.Spacing;
+            if (root.Margin  !== undefined) standIn.Margin  = root.Margin;
+
+            /* One deep, the same guard `showItem` makes and for the same
+             * reason: a component holding itself would draw for ever. */
+            if (!this.showingItem) {
+                this.showingItem = true;
+                try {
+                    for (const child of tree.children || [])
+                        this.buildNode(standIn, child);
+                } finally {
+                    this.showingItem = false;
+                }
+            }
+        }
+
+        /*
+         * ...and when the drawing says nothing, the component says what it is.
+         *
+         * Three cases arrive here and they look identical on the canvas: a type
+         * this project has no `.form` for, a component whose form is empty, and
+         * **the painted half** -- a `Chart` declares one `DrawingArea` and
+         * everything one recognises about it is painted by code the designer
+         * cannot run. All three would be a tinted rectangle with nothing in it,
+         * which says less than the `[Chart]` box this replaced.
+         *
+         * So the test is what the drawing *shows*, not what it holds: a subtree
+         * with no prose anywhere in it has nothing to recognise, whatever it is
+         * made of.
+         */
+        if (!this.showsAnything(standIn)) {
+            standIn.Clear();
+            standIn.Arrangement = "Horizontal";
+            standIn.Spacing     = 6;
+            standIn.Margin      = 6;
+
+            /*
+             * The desktop's icon first and ours behind it, which is this tree's
+             * rule for every icon and the same pair `Palette` and `ControlTree`
+             * already name a component with -- so the canvas, the tree and the
+             * palette cannot come to disagree about what a component looks like.
+             * A desktop that has neither leaves an empty name and the row is
+             * just the type, which is where this started.
+             */
+            const mark = COMPONENT_ICON.find((n) => Application.HasIcon(n)) || "";
+            if (mark) {
+                const icon = new Image();
+                icon.Icon = mark;
+                icon.Resize(STANDIN_ICON, STANDIN_ICON);
+                standIn.Add(icon);
+            }
+
+            const says = new Label();
+            says.Text = node.type;
+            standIn.Add(says);
+        }
+
+        /* The size the node asks for, or the component's own, or the last
+         * resort -- which is what a type nothing here knows is left with. */
+        const size = this.isComponent(node.type) ? this.componentSize(node.type)
+                                                 : [120, 30];
+        standIn.Resize(props.Width || size[0], props.Height || size[1]);
         if (this.isFixed(parent)) standIn.Move(props.X || 0, props.Y || 0);
 
         return standIn;
+    }
+
+    /*
+     * Whether anything in this subtree would be read by a person.
+     *
+     * Prose and nothing else, asked of each control the way the rest of this
+     * IDE asks -- `TextProperties()` is what the runtime says holds words. An
+     * icon or a drawing is not prose and deliberately does not count: a
+     * component that is one `DrawingArea` looks like an empty box until its
+     * code runs, and saying so is the honest answer.
+     */
+    showsAnything(control) {
+        for (const c of control.Children || []) {
+            for (const key of c.TextProperties())
+                if (String(c[key] ?? "").trim()) return true;
+            if ("Children" in c && this.showsAnything(c)) return true;
+        }
+        return false;
+    }
+
+    /*
+     * A list, drawn with something in it.
+     *
+     * A list is filled by the program, so in a designer it is an empty box --
+     * and a form is laid out *around* one: how tall a row is decides whether
+     * what sits under the list collides with it. `item` names a **component**
+     * and how many of it to draw, which is Android's `tools:listitem` with the
+     * one change this tree's shape forces: pointing at a class rather than at a
+     * layout file is what lets the form's own code build the same thing, so the
+     * drawing and the program are one widget and not two that drift.
+     *
+     * Each row is a real `Component` filled from the component's own `.form`,
+     * through `buildNode` -- so a component inside the item gets the stand-in it
+     * would get anywhere else, and a `.form` that cannot be read draws nothing
+     * rather than taking the form down.
+     *
+     * `SetItem` is what makes the whole thing safe: from then on the runtime's
+     * serialiser writes the `item` key and **not** the children, so a save can
+     * never turn three drawn rows into three real ones.
+     */
+    showItem(control, item) {
+        if (!control || !("Children" in control)) return false;
+
+        const of = String((item && item.of) || "").trim();
+        if (!of) return false;
+
+        const count = Math.min(Math.max(Math.round(Number(item.count) || PREVIEW_ROWS), 1),
+                               PREVIEW_MAX);
+
+        /* Marked first and whatever happens next: a container that is showing an
+         * item has no children of its own to save, and one that failed to draw
+         * the rows still has none. */
+        control.SetItem(of, count);
+
+        /* A component that is gone, or whose `.form` cannot be read, draws
+         * nothing -- and the list keeps its `item`, so the name survives the
+         * save that follows. */
+        const root = this.ide.classes.componentTree(of);
+        if (!root) return false;
+
+        /*
+         * One deep, and said with a counter rather than trusted to the data: a
+         * component whose own form holds a list showing *this* component would
+         * otherwise draw for ever. Two rows of a row is not a layout question
+         * anybody has.
+         */
+        if (this.showingItem) return false;
+        this.showingItem = true;
+
+        try {
+            const props = root.properties || {};
+            for (let i = 0; i < count; i++) {
+                const row = Widget.New("Component");
+                control.Add(row);
+
+                if (props.Arrangement) row.Arrangement = props.Arrangement;
+                row.Resize(props.Width || 120, props.Height || 30);
+
+                for (const child of root.children || []) this.buildNode(row, child);
+            }
+        } finally {
+            this.showingItem = false;
+        }
+        return true;
+    }
+
+    /*
+     * The item a list shows, changed from the grid: the rows go and are drawn
+     * again, or go for good when the name is cleared.
+     *
+     * **Refused on a list that holds controls of its own.** A list whose rows
+     * are written down in the `.form` has nothing to preview -- it is already
+     * showing what it holds -- and clearing it to draw a drawing would delete
+     * somebody's controls. The two states are exclusive by construction, which
+     * is also what lets `Item` alone tell the runtime's serialiser that nothing
+     * under here is the form's.
+     */
+    setItem(control, of, count) {
+        if (!control || !("Children" in control)) return false;
+
+        if (control.Children.length && !control.Item) {
+            Message.Warning("{0} holds controls of its own, so there is nothing to draw an item in.",
+                            control.Name);
+            return false;
+        }
+
+        this.pushUndo();
+        control.Clear();
+        control.SetItem("", 0);
+
+        if (String(of || "").trim()) this.showItem(control, { of, count });
+
+        this.chrome.position();
+        this.grid.fill();
+        this.touch();
+        return true;
     }
 
     /*
@@ -912,7 +1142,33 @@ Ide.Designer = class Designer {
      * Frame, whose border and label shift the content by whatever the theme
      * decides. */
     hitTest(x, y) {
-        return this.surface.PickAt(x, y);
+        return this.owner(this.surface.PickAt(x, y));
+    }
+
+    /*
+     * The control a hit belongs to.
+     *
+     * `PickAt` answers with the topmost widget at a point *at any depth*, and
+     * inside a list showing an item that widget is part of a drawing rather than
+     * of the form -- selecting it would put a component's own label in the
+     * property grid. What the pointer means there is the list.
+     */
+    owner(widget) {
+        /*
+         * The climb is only to find out *whether* this is inside a preview: what
+         * comes back is the widget that was hit, unless one of its ancestors is
+         * a list showing an item -- and then it is that list. Returning the
+         * ancestor in the ordinary case instead is a control inside a `Panel`
+         * selecting the panel, which is what the first version of this did.
+         */
+        for (let w = widget; w; ) {
+            const parent = this.parentOf(w);
+
+            if (!parent || parent === this.surface) return widget;
+            if (parent.Item || parent.__node) return parent;
+            w = parent;
+        }
+        return widget;
     }
 
     /* Every control of the form, at any depth.  Which is what `ControlTree`
@@ -920,7 +1176,14 @@ Ide.Designer = class Designer {
     allControls(container = this.surface, out = []) {
         for (const c of container.Children) {
             out.push(c);
-            if ("Children" in c) this.allControls(c, out);
+            /*
+             * A list showing its design-time item is not walked into: what is in
+             * it is a drawing of a component and not this form's controls, so
+             * the tree must not list it, a name must not collide with it, and
+             * aligning or deleting must not reach it. The list itself is a
+             * control like any other and is pushed above.
+             */
+            if ("Children" in c && !c.Item && !c.__node) this.allControls(c, out);
         }
         return out;
     }

@@ -178,6 +178,8 @@ Written in `rad.js` rather than in C, and on every widget just the same:
 | `Fill(...args)` | fills the declared `Text` as a template: `"{0} files"` and the value stays out of the catalogue |
 | `SetDesign(name, value)` | what the *designer* shows instead; `""` removes it. Unreachable from a running application |
 | `DesignValue(name)` | → that value |
+| `SetItem(of, count)` | a container: the component the **designer** draws in it while a form is being laid out, and how many. `of: ""` removes it. Unreachable from a running application, which builds the real rows itself |
+| `Item` (ro) | → `{ of, count }`, or `null`. While it is set the serialiser writes that key and **no children**: what is in the container is a drawing and not the form's |
 | `Caption` | an alias of `Text` on `Form`, `Label`, `Button`, `TextBox` and `CheckButton` |
 
 ## Container — inherited by every container

@@ -1158,6 +1158,13 @@ person who wrote it either.
   shell, the session); put new work there and not in `quit()`. Found by reading
   the settings file after a real session and finding nothing in it -- no test
   could have failed, because the test drove `quit()`.
+- **A `design` key that is not a property makes `AddNode` throw, and the control
+  silently becomes a stand-in.** The designing branch applies the block *over*
+  `properties`, so `"design": { "Item": "Chip" }` on a `RowList` does not do
+  nothing -- it raises, `Designer.buildNode` catches it, and a real control turns
+  into a grey `[RowList]` box. That is why what a list draws is the node's own
+  `item` key beside `design` and not inside it. It is also the good case: a typo
+  in a design block cannot be a value that quietly never applies.
 - **Every `ide/**/*.js` shares one global scope.** They are separate
   `JS_Eval(JS_EVAL_TYPE_GLOBAL)` calls in one context, which is what lets `Runner`
   use `MainForm`'s `SOURCE_LINK` and `Palette` use `Chrome`'s `SELECT_COLOR` -- and

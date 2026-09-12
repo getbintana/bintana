@@ -83,6 +83,48 @@ const SAMPLES = [
 ];
 
 /*
+ * The design values that are not prose, by the class that has them.
+ *
+ * **A design value is for what the code fills in**, and prose is the commonest
+ * shape of that rather than the definition of it. A `Label` whose text arrives
+ * at run time lays out against a sample sentence; a `TableView` whose rows
+ * arrive at run time lays out against a *count*, and there is no sentence that
+ * can stand in for three rows. `Count` is settable and is the on-demand mode, so
+ * writing one puts that many rows on the canvas with the columns already drawn
+ * over them -- which is the whole of what a table looks like.
+ *
+ * **A list here and not a question for the control**, which is the exception to
+ * this file's habit of asking. `TextProperties()` exists because the *loader*
+ * consumes it: those are the properties it looks up in the catalogue. Nothing in
+ * a running program would ever read "which properties may carry a design
+ * count", so a runtime member for it would be published for one reader, and that
+ * reader is the designer. The palette's list of types is in the IDE for the same
+ * reason: what the designer offers is the IDE's business.
+ *
+ * One entry, and that is the honest size of it today. `ListBox.Items`,
+ * `ComboBox.Items` and `Notebook.Tabs` are already prose, so the three of them
+ * fill from the mode as it was; a `TableView`'s rows were the only list in the
+ * runtime that is counted rather than named.
+ */
+const DESIGN_NUMBERS = { TableView: ["Count"] };
+
+/*
+ * The two rows a list gets in design mode, which are not properties of anything.
+ *
+ * They are the node's `item` key -- what a list draws while it is being designed
+ * and the application never sees -- so they are spelled the way the file spells
+ * them, and dotted the way `Columns.Text` already is: one row per thing that can
+ * be worth something, and no invented vocabulary between the grid and the file.
+ *
+ * Offered only where a container's children come from code, which is what
+ * `Placement: "Order"` says (a `RowList`, a `Flow`). A container drawn in
+ * coordinates has its children in the file: there is nothing to stand in for.
+ */
+const ITEM_OF    = "Item.of";
+const ITEM_COUNT = "Item.count";
+const ITEM_KEYS  = [ITEM_OF, ITEM_COUNT];
+
+/*
  * What a top-level window has no use for.  Everything else its class offers is
  * offered here, so a property added to Form in C turns up in the grid with
  * nothing changed -- which is the invariant the whole project rests on, and
@@ -539,7 +581,13 @@ Ide.PropertyGrid = class PropertyGrid {
             return this.designer.componentTexts(type) ||
                    this.designer.componentProps(type);
         }
-        if (this.target) return this.target.TextProperties();
+        /* The prose, and after it whatever this class counts instead of
+         * naming -- see DESIGN_NUMBERS. Last, because the prose is what the
+         * mode is mostly for and a row order is a reading order. */
+        if (this.target) {
+            return [...this.target.TextProperties(), ...this.designNumbers(),
+                    ...(this.canShowItem() ? ITEM_KEYS : [])];
+        }
 
         /* The form itself: its title is prose, and a window has nothing to
          * hover, so Tooltip is out for the same reason it is out of the normal
@@ -547,6 +595,28 @@ Ide.PropertyGrid = class PropertyGrid {
         return this.formProbe().TextProperties()
                    .filter((key) => !FORM_HIDDEN.includes(key));
     }
+
+    /* The numeric design values this target has, or none. A stand-in has none:
+     * what a component counts is its own class's business and the designer
+     * cannot ask it. */
+    designNumbers() {
+        if (!this.target || this.target.__node) return [];
+        return DESIGN_NUMBERS[this.typeName()] || [];
+    }
+
+    isDesignNumber(key) {
+        return this.designMode &&
+               (this.designNumbers().includes(key) || key === ITEM_COUNT);
+    }
+
+    /* Whether this target is a list whose rows the program builds -- the only
+     * kind of container with anything to stand in for. */
+    canShowItem() {
+        return !!this.target && !this.target.__node &&
+               "Children" in this.target && this.target.Placement === "Order";
+    }
+
+    isItemKey(key) { return ITEM_KEYS.includes(key); }
 
     /*
      * The form being designed is not running -- the surface stands in for it --
@@ -766,10 +836,27 @@ Ide.PropertyGrid = class PropertyGrid {
          * empty one shows the real value (see `sync`), which is what makes
          * "no design value" and "a design value of nothing" stop looking alike.
          */
+        if (this.designMode && key === ITEM_OF) {
+            /* The project's components, and "" for none: what a list may draw is
+             * a closed list, unlike prose, so it is a drop-down and not a field
+             * somebody has to spell a class name into. */
+            const combo = new ComboBox();
+            combo.Items = ["", ...this.designer.components.map((c) => c.name)];
+            return combo;
+        }
+
         if (this.designMode) {
             const box = new TextBox();
-            box.Icon    = ICON_SAMPLE.find((n) => Application.HasIcon(n)) || "";
-            box.Tooltip = Locale.Text("Fill with a sample");
+
+            /* The sample button is for prose. A menu offering *Lorem ipsum* and
+             * *San Miguel de Tucumán* for how many rows a table shows would be
+             * the widget saying something false about what it wants. */
+            if (!this.isDesignNumber(key)) {
+                box.Icon    = ICON_SAMPLE.find((n) => Application.HasIcon(n)) || "";
+                box.Tooltip = Locale.Text("Fill with a sample");
+            } else {
+                box.Tooltip = Locale.Text("How many the designer shows; the application decides the real number");
+            }
             return box;
         }
 
@@ -1153,6 +1240,13 @@ Ide.PropertyGrid = class PropertyGrid {
     /* What the designer is showing instead of the declared value, wherever this
      * target keeps it. */
     designValue(key) {
+        /* The `item` key is the node's own and lives on the control, which is
+         * where the serialiser reads it from. */
+        if (this.isItemKey(key)) {
+            const item = this.target && this.target.Item;
+            if (!item) return undefined;
+            return key === ITEM_OF ? item.of : item.count;
+        }
         if (!this.target) {
             const bag = (this.designer.root && this.designer.root.design) || {};
             return bag[key];
@@ -1164,6 +1258,13 @@ Ide.PropertyGrid = class PropertyGrid {
     /* And what the file actually says, which is what shows through an empty
      * field as its placeholder. */
     declaredFor(key) {
+        /* Nothing stands behind the item's name; behind the count stands the
+         * number the designer draws when the file does not say. */
+        if (key === ITEM_OF)    return "";
+        /* `PREVIEW_ROWS` is Designer's: every file under `ide` shares one
+         * lexical scope, which is the same reason `Palette` reads `Chrome`'s
+         * SELECT_COLOR. */
+        if (key === ITEM_COUNT) return PREVIEW_ROWS;
         if (!this.target) return this.formProperty(key);
         if (this.target.__node) return (this.target.__node.properties || {})[key];
         return this.target.Declared(key);
@@ -1472,6 +1573,53 @@ Ide.PropertyGrid = class PropertyGrid {
     }
 
     /*
+     * What goes into the block: the text as typed, or a real number for the rows
+     * that are counted.
+     *
+     * **A number and not the digits**, so the `.form` holds `3` and the loader's
+     * own setter gets what it expects -- the same care `componentValue` takes
+     * with a component's property. Empty is empty in both cases: it is how a
+     * design value is removed.
+     *
+     * `undefined` means the value was refused and said so, which is the one
+     * answer the caller must not write.
+     */
+    designTyped(key, text) {
+        const typed = String(text).trim();
+
+        if (!this.isDesignNumber(key) || typed === "") return text;
+
+        const n = Number(typed);
+        if (!Number.isFinite(n) || n < 0 || Math.round(n) !== n) {
+            Message.Error("{0}: {1} is not a number of rows.", key, typed);
+            this.sync();
+            return undefined;
+        }
+        return n;
+    }
+
+    /*
+     * The item a list draws, which is one key made of two rows: whichever was
+     * edited is taken from the grid and the other from what is already there.
+     *
+     * It goes through the designer rather than being written here, because
+     * changing it is not a value changing -- the rows on the canvas have to go
+     * and be drawn again, and a list that holds controls of its own has to be
+     * told no.
+     */
+    applyItem(key, value) {
+        const item  = (this.target && this.target.Item) || {};
+        const of    = key === ITEM_OF    ? String(value).trim() : (item.of || "");
+        const count = key === ITEM_COUNT ? value : item.count;
+
+        if (key === ITEM_OF && of === (item.of || "")) return;
+        if (key === ITEM_COUNT && count === item.count) return;
+
+        this.designer.setItem(this.target, of, count);
+        this.sync();
+    }
+
+    /*
      * A design value, written wherever this target keeps it.
      *
      * Undoable and dirtying like any other edit, and it needs nothing of its own
@@ -1502,7 +1650,11 @@ Ide.PropertyGrid = class PropertyGrid {
         if (this.updating || !this.propKeys.includes(key)) return;
 
         if (this.designMode) {
-            this.applyDesign(key, this.editors[key].Text);
+            const typed = this.designTyped(key, this.editors[key].Text);
+            if (typed === undefined) return;
+
+            if (this.isItemKey(key)) this.applyItem(key, typed);
+            else                     this.applyDesign(key, typed);
             return;
         }
 

@@ -5693,7 +5693,74 @@ function* p_projects(ide) {
 
     const standIn = byName(ide, "Step");
     check("named after the control it stands for", !!standIn, "no stand-in");
-    check("and saying which type it is", standIn.Text.includes("Stepper"), standIn.Text);
+    /*
+     * **Which type it is, asked of the node and not of the drawing.** A
+     * component whose `.form` can be read is now drawn rather than named, so
+     * what says `Stepper` is the node it carries and the row the control tree
+     * shows -- the grey `[Stepper]` box is what a type with nothing to draw
+     * still falls back to.
+     */
+    eq("and carrying the type it stands for", standIn.__node.type, "Stepper");
+    eq("which is what the control tree shows it as",
+       ide.designer.tree.typeOf(standIn), "Stepper");
+
+    /*
+     * **A component that draws nothing one can read says what it is**, which is
+     * the case the drawing replaced and had to give back: a type with no `.form`
+     * here, a form with nothing in it, and the painted half -- a `Chart` is one
+     * `DrawingArea` and everything one recognises about it is painted by code
+     * the designer cannot run. All three are a tinted rectangle otherwise.
+     *
+     * The mark is the icon `Palette` and `ControlTree` already name a component
+     * with -- the desktop's first and the project's own SVG behind it -- so the
+     * canvas, the tree and the palette cannot come to disagree.
+     */
+    /* This one has a `.form` with a label in it, so what the canvas shows is the
+     * component: its own `Shown`, reading what the file declares. */
+    const drawn = standIn.Children.map((c) => c.Text).filter(Boolean);
+    check("a component whose form can be read is drawn, not named",
+          drawn.includes("0"), JSON.stringify(drawn));
+
+    /*
+     * **And one that draws nothing one can read says what it is instead**, which
+     * is the case the drawing replaced and had to give back: a form with nothing
+     * in it here, and in a real project the painted half -- a `Chart` is one
+     * `DrawingArea`, and everything one recognises about it is painted by code
+     * the designer cannot run. Both are a tinted rectangle otherwise.
+     *
+     * The mark is the icon `Palette` and `ControlTree` already name a component
+     * with -- the desktop's first and the project's own SVG behind it -- so the
+     * canvas, the tree and the palette cannot come to disagree about it.
+     */
+    File.Save(File.Join(TMP, "Blank.js"), "class Blank extends Component {\n}\n");
+    File.SaveJson(File.Join(TMP, "Blank.form"), {
+        format: "bintana-form/1", class: "Blank",
+        properties: { Width: 120, Height: 30 }, children: [],
+    });
+    ide.listFiles();
+    yield* settled(ide);
+
+    ide.designer.addControl("Blank");
+    yield* settled(ide);
+
+    const blank = ide.designer.selected;
+    const says  = blank.Children.map((c) => c.Text).filter(Boolean);
+    check("a component with nothing to draw says what it is",
+          says.includes("Blank"), JSON.stringify(says));
+    check("...beside the mark the tree names a component with",
+          blank.Children.some((c) => c.Icon), 
+          JSON.stringify(blank.Children.map((c) => c.Icon)));
+
+    /* Placing a component registers its source, so taking it away is three
+     * steps and not one: the control, the files, and the line in project.json
+     * that would otherwise make the project fail to load a class that is gone.
+     * `p_running` runs this project for real, which is what catches it. */
+    blank.Delete();
+    ide.dropSource("Blank.js");
+    File.Delete(File.Join(TMP, "Blank.js"));
+    File.Delete(File.Join(TMP, "Blank.form"));
+    ide.listFiles();
+    yield* settled(ide);
 
     /*
      * Selectable and movable like anything else -- and its own properties are
@@ -6875,6 +6942,157 @@ function* p_strings(ide) {
           lbl.Text.length > 4 && lbl.Text !== "{0} archivos", lbl.Text);
     eq("and it is a design value like any other",
        ide.designer.nodeOf(lbl, true).properties.Text, "{0} archivos");
+
+    /*
+     * --- and the design value that is not prose ------------------------------
+     *
+     * A table's rows are **counted, not named**: there is no sentence that can
+     * stand in for three rows, and a table with none draws as an empty box with
+     * headings over it. `Count` is settable -- it is the on-demand mode -- so a
+     * design value for it puts that many rows on the canvas and nothing in the
+     * running application.
+     *
+     * It is also the one row in this mode that does not come from
+     * `TextProperties()`, which is why the two claims above are asserted
+     * together: a `Label` gets no number and a `TableView` does.
+     */
+    ide.designer.addControl("TableView");
+    yield* settled(ide);
+
+    const tbl = ide.designer.selected;
+    tbl.Name    = "TblSample";
+    tbl.Columns = [["Nombre", 120], ["Ciudad", 120]];
+    yield* settled(ide);
+
+    ide.PropDesign.Active = true;
+    ide.PropDesign_Click();
+    yield* settled(ide);
+
+    check("a table offers the count beside its prose",
+          grid.propKeys.includes("Count") && grid.propKeys.includes("Columns.Text"),
+          JSON.stringify(grid.propKeys));
+    check("and still not the geometry",
+          !grid.propKeys.includes("X") && !grid.propKeys.includes("Height"),
+          JSON.stringify(grid.propKeys));
+
+    grid.editors.Count.Text = "3";
+    grid.applyEditor("Count");
+    yield* settled(ide);
+
+    eq("the canvas draws that many rows", tbl.Count, 3);
+
+    const tnode = ide.designer.nodeOf(tbl, true);
+    eq("written into the design block", tnode.design.Count, 3);
+    eq("as a number and not as its digits", typeof tnode.design.Count, "number");
+    check("while properties says nothing about it",
+          !("Count" in (tnode.properties || {})),
+          JSON.stringify(tnode.properties));
+
+    /* Refused where it is written, like any other value the grid cannot use:
+     * what must not happen is `"tres"` reaching the loader. */
+    grid.editors.Count.Text = "tres";
+    grid.applyEditor("Count");
+    yield* settled(ide);
+    eq("nonsense leaves the count where it was", tbl.Count, 3);
+    eq("and writes nothing", ide.designer.nodeOf(tbl, true).design.Count, 3);
+
+    grid.editors.Count.Text = "";
+    grid.applyEditor("Count");
+    yield* settled(ide);
+    eq("clearing takes the rows away again", tbl.Count, 0);
+
+    tbl.Delete();
+    yield* settled(ide);
+
+    /*
+     * --- and what a list holds while it is being drawn -----------------------
+     *
+     * A list is filled by the program, so in a designer it is an empty box and a
+     * form is laid out *around* one. `item` names a component and how many of it
+     * to draw: Android's `tools:listitem`, pointing at a class rather than at a
+     * layout file, which is what lets the form's own code build the same thing.
+     *
+     * Not a design *value*: a key that is not a property makes `AddNode` throw
+     * and the control falls back to a stand-in, so it is a node key of its own
+     * beside `design` -- the shape `strip` already has.
+     */
+    File.Save(File.Join(TMP, "Chip.js"),
+              "class Chip extends Component {\n}\n");
+    File.SaveJson(File.Join(TMP, "Chip.form"), {
+        format: "bintana-form/1", class: "Chip",
+        properties: { Width: 180, Height: 34, Arrangement: "Horizontal" },
+        children: [
+            { type: "Label", name: "ChipName",
+              properties: { Width: 110, Height: 20, Text: "Ana María" } },
+        ],
+    });
+    ide.listFiles();
+    yield* settled(ide);
+
+    ide.designer.addControl("RowList");
+    yield* settled(ide);
+
+    const list = ide.designer.selected;
+    list.Name = "LstSample";
+    yield* settled(ide);
+
+    check("a list offers an item to draw, and a label does not",
+          grid.propKeys.includes("Item.of") && grid.propKeys.includes("Item.count"),
+          JSON.stringify(grid.propKeys));
+    check("the component is picked from a list and not spelled",
+          grid.editors["Item.of"].Items.includes("Chip"),
+          JSON.stringify(grid.editors["Item.of"].Items));
+    eq("and the count shows what it draws when the file does not say",
+       grid.editors["Item.count"].Placeholder, "3");
+
+    grid.editors["Item.of"].Text = "Chip";
+    grid.applyEditor("Item.of");
+    yield* settled(ide);
+
+    eq("choosing one draws that many rows", list.Children.length, 3);
+    eq("each built from the component's own .form",
+       list.Children[0].Children[0].Text, "Ana María");
+
+    grid.editors["Item.count"].Text = "5";
+    grid.applyEditor("Item.count");
+    yield* settled(ide);
+    eq("and the count redraws them", list.Children.length, 5);
+
+    /*
+     * The rows are the designer's, so nothing that walks the form may see them:
+     * not the control tree, not a click, and above all not the file.
+     */
+    const walked = ide.designer.allControls().map((c) => c.Name);
+    check("the rows are not controls of the form",
+          walked.includes("LstSample") && !walked.includes("ChipName"),
+          JSON.stringify(walked));
+
+    const where = ide.designer.rectOf(list);
+    const hit   = ide.designer.hitTest(where.x + 8, where.y + 8);
+    eq("and clicking one means the list", hit && hit.Name, "LstSample");
+    neq("...which PickAt on its own does not answer",
+        ide.designer.surface.PickAt(where.x + 8, where.y + 8).Name, "LstSample");
+
+    const lnode = ide.designer.nodeOf(list, true);
+    eq("saving writes the item", JSON.stringify(lnode.item),
+       JSON.stringify({ of: "Chip", count: 5 }));
+    check("and not one of the rows", !lnode.children,
+          JSON.stringify(lnode.children));
+
+    /* Clearing the name takes the drawing away and the key with it. */
+    grid.editors["Item.of"].Text = "";
+    grid.applyEditor("Item.of");
+    yield* settled(ide);
+    eq("clearing it empties the list", list.Children.length, 0);
+    eq("and writes no item", ide.designer.nodeOf(list, true).item, undefined);
+
+    list.Delete();
+    File.Delete(File.Join(TMP, "Chip.js"));
+    File.Delete(File.Join(TMP, "Chip.form"));
+    ide.listFiles();
+
+    ide.designer.select(lbl);
+    yield* settled(ide);
 
     ide.PropDesign.Active = false;
     ide.PropDesign_Click();

@@ -1074,6 +1074,15 @@ function serializeChildren(container) {
      */
     if (container instanceof Component) return null;
 
+    /*
+     * ...and so is a list showing its design-time item. What is in it is a
+     * drawing of the `item` the node declares, not this form's: writing it here
+     * would turn three drawn rows into three real ones that the application then
+     * builds again underneath. The same bargain one line up, for the same
+     * reason.
+     */
+    if (container.Item) return null;
+
     const kids = container.Children;
     if (!kids || kids.length === 0) return null;
 
@@ -1103,6 +1112,10 @@ Widget.prototype.Serialize = function (parentIsFixed = true) {
 
     const design = collectDesign(this);
     if (design) node.design = design;
+
+    /* Written as it was set, and read by nothing here: see SetItem. */
+    const item = this.Item;
+    if (item) node.item = item;
 
     const children = "Children" in this ? serializeChildren(this) : null;
     if (children) node.children = children;
@@ -1276,6 +1289,55 @@ Widget.prototype.Fill = function (...args) {
  * the design value to `design`.  An empty value removes it -- a design value of
  * nothing would show nothing, which is the state it is there to avoid.
  */
+/*
+ * What a list holds while it is being designed: a component, some number of
+ * times.
+ *
+ * A list is filled by the program, so in a designer it is an empty box, and a
+ * form is laid out *around* one -- how tall its rows are decides whether what is
+ * under it collides. This is the answer Android's `tools:listitem` gives, and
+ * the same one: a design-time item the editor draws and the application never
+ * sees. Here it names a **component**, because that is the only thing the two
+ * sides can agree on -- the form's own code can build the same class, so the
+ * drawing and the program are the same widget rather than two that drift.
+ *
+ * **The runtime carries it and applies nothing**, which is what `design` already
+ * does and for the same reason: the file has to survive a round trip through a
+ * designer that opened it, and only the serialiser sees every node. A designer
+ * cannot put the key back by itself, because `Serialize` recurses past it for
+ * anything nested.
+ *
+ * It is a hidden note and not a property, so `settableProperties` never finds
+ * it: it must not turn up in a property grid, in `properties`, or in
+ * `PropertyNames()`. `Item` hands back exactly what the node will hold, so there
+ * is one spelling of it and not two.
+ */
+Widget.prototype.SetItem = function (of, count) {
+    const name = String(of || "").trim();
+
+    if (!name) {
+        if (this.__item) delete this.__item.of;
+        return this;
+    }
+    const n = Math.round(Number(count));
+    const bag = hiddenBag(this, "__item");
+
+    bag.of = name;
+    if (Number.isFinite(n) && n > 0) bag.count = n;
+    else delete bag.count;
+    return this;
+};
+
+defineProperty(Widget.prototype, "Item", {
+    get() {
+        const bag = this.__item;
+        if (!bag || !bag.of) return null;
+        return bag.count === undefined ? { of: bag.of }
+                                       : { of: bag.of, count: bag.count };
+    },
+    configurable: true,
+});
+
 Widget.prototype.SetDesign = function (name, value) {
     const declared = this.Declared(name);
 

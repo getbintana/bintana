@@ -807,6 +807,31 @@ Ide.Classes = class Classes {
 
     /* Most derived first: what the class declares, then what any widget raises.
      * The head of it is what a double click writes. */
+    /*
+     * A component's own `.form`, parsed -- what the designer draws when a list
+     * declares it as its item.
+     *
+     * The path knowledge is here and not at the call site because there are two
+     * of them: a component of the *project* is listed by a path relative to it,
+     * and one out of a library by an absolute one. Every other reader of a
+     * component goes through this class for exactly that reason.
+     *
+     * `null` for a name nothing here has, and for a file that cannot be read --
+     * which are the same answer to whoever is drawing: nothing to draw.
+     */
+    componentTree(type) {
+        const spec = this.components.find((c) => c.name === type);
+        if (!spec || !spec.file) return null;
+
+        const path = spec.library ? spec.file
+                                  : File.Join(this.ide.project, spec.file);
+        try {
+            return File.LoadJson(path);
+        } catch (e) {
+            return null;
+        }
+    }
+
     componentEvents(type) {
         const found = this.componentClass(type);
         return found ? ownThenInherited(found.events,
