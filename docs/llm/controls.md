@@ -774,7 +774,7 @@ own. It is [`Editor`](#editor--inherited-by-both-editors) plus everything below.
 | `Search(text, [{CaseSensitive, WholeWord, Regex}])` | → how many there are, highlighting every one. **It does not move the cursor**: typing in a find field and jumping to a match happen at different moments |
 | `ShowCompletion()` | opens the completion popup from code |
 | `Unmark(line, [kind])` | takes marks off that line |
-| **event** `Complete(word, line, column, text)` | a completion was asked for. Answer with a list of words, or nothing |
+| **event** `Complete(word, line, column, text)` | a completion was asked for. Answer with a list, or nothing. An entry is a **word**, or `{ Text, Detail }` for one that says what it is beside itself — a type, a one-line description. An entry that is neither is skipped, not refused |
 
 It was called `TextEditor` until there was a real one. A `.form` that still says
 `TextEditor` where it means this one now loads the plain editor — and the

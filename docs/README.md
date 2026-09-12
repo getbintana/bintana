@@ -8,6 +8,7 @@ side.
 
 | Document | What is in it |
 |---|---|
+| **[reference/](reference/README.md)** | **One page per class, for the person writing an application**: what the control is, which neighbour to use instead, an example off the tree, every member explained, and what goes wrong. The long form of `llm/controls.md`, and what the IDE shows as help |
 | **[llm/](llm/README.md)** | **The public contract**: everything needed to write an application, and nothing about the runtime. Eight files, addressed to whoever writes one — a person or a language model. Start here if you are writing an application rather than the runtime |
 | [architecture.md](architecture.md) | Boot sequence, the C/JS split, the class table, event dispatch, the object model, lifetimes and teardown |
 | [formats.md](formats.md) | `project.json`, the `.form` grammar, serialisation rules, the icon directory |

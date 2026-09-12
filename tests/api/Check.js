@@ -332,6 +332,144 @@ function sources(root) {
                     .filter((path) => !File.Name(path).startsWith("."));
 }
 
+
+/*
+ * ------------------------------------------------------------ the reference
+ *
+ * `docs/reference/widgets/<Class>.md` is the long form of one class: the same members as
+ * `llm/controls.md`, each with a real explanation, for the person writing an
+ * application rather than for a model writing a file. **The two references hold
+ * the same rows and differ only in how much each cell says**, so the check is
+ * the same check: a member that exists and has no row.
+ *
+ * Which members belong to which class is read out of the **class registration**
+ * and not from a list kept here: `BTA_CLASS_ENUM_TEXT("TableView", "Control",
+ * build_table, table_props, ...)` names the class and its table of members in
+ * one line, which is the only place those two facts are already together. A
+ * variant with no table (`BTA_CLASS_BARE`) names a boolean in that position and
+ * simply matches nothing.
+ *
+ * The globals get the same treatment under `docs/reference/globals/`, by the
+ * same rule and with a check of their own, when the first of them is written.
+ *
+ * **A class with no page is counted and not failed.** The pages are being
+ * written one at a time, and a check that failed on the ones not written yet
+ * would be a red suite for as long as that takes -- which is how a rule gets
+ * turned off. What it must never allow is a page that is *there* and incomplete.
+ */
+const CLASS_NAME = new Regex("BTA_CLASS(?:_\\w+)?\\s*\\(\\s*\"(\\w+)\"");
+const CLASS_REG = new Regex(
+    "BTA_CLASS(?:_\\w+)?\\s*\\(\\s*\"(\\w+)\"\\s*,\\s*(?:\"\\w+\"|NULL)\\s*,\\s*\\w+\\s*,\\s*(\\w+)");
+
+function checkReference(root, members, events, problems) {
+    const dir = File.Join(root, "docs/reference/widgets");
+    if (!File.IsDir(dir)) return { checked: 0, pages: 0, missing: 0 };
+
+    /*
+     * table -> class, off the registrations.
+     *
+     * **One class does not name its table in the registration**: `Widget`'s
+     * members are handed over by `bta_widget_base_props()` and arrive there as a
+     * local called `base`, so the line says `base` where every other says
+     * `label_props`. One alias, which is cheaper than either teaching this to
+     * follow a C function or leaving the root class of the whole set unchecked.
+     */
+    const ALIAS = { base: "widget_props" };
+    const owner = {};
+    const known = {};
+
+    for (const c of sources(root)) {
+        const src = File.Load(c);
+
+        for (const m of CLASS_REG.Matches(src))
+            owner[ALIAS[m.Group(2)] || m.Group(2)] = m.Group(1);
+        /* Every registered class, whatever it publishes. **A class with no
+         * members of its own is still a class somebody places** -- `Panel` is
+         * the commonest container in this tree and declares nothing beyond what
+         * it inherits -- so its page is about which container to reach for, and
+         * it has nothing to be held to but the heading. */
+        for (const m of CLASS_NAME.Matches(src))
+            known[m.Group(1)] = true;
+    }
+
+    /* class -> its own members, which is what its page has to document: what it
+     * inherits is on the page of the class it inherits from. */
+    const mine = {};
+    for (const m of members) {
+        const cls = owner[m.table];
+        if (!cls) continue;
+        if (!mine[cls]) mine[cls] = [];
+        if (!mine[cls].some((one) => one.name === m.name && one.kind === m.kind))
+            mine[cls].push(m);
+    }
+
+    let checked = 0, pages = 0, counted = 0;
+
+    for (const path of Directory.Files(dir, "*.md")) {
+        const name = File.BaseName(path);
+        if (name === "README") continue;
+        pages++;
+
+        if (!known[name]) {
+            problems.push(`docs/reference/widgets/${name}.md documents ` +
+                          `${name}, which the runtime does not register`);
+            continue;
+        }
+        if (mine[name]) counted++;      /* a page whose class has members to check */
+
+        const text = File.Load(path);
+
+        /*
+         * **Twice, and that is the point.** A page opens with `## Every member`
+         * -- the whole surface at a glance, so a name can be found by eye -- and
+         * explains each of them further down under the task it belongs to. A
+         * member listed in the summary and explained nowhere is the failure this
+         * split catches; without it, the summary alone would satisfy the check
+         * and the long page would quietly become a short one.
+         */
+        const at   = text.indexOf("\n## Every member");
+        const ends = at < 0 ? -1 : text.indexOf("\n## ", at + 4);
+
+        if (at < 0) {
+            problems.push(`${name}.md has no "## Every member" section`);
+            continue;
+        }
+        const summary = text.slice(at, ends < 0 ? text.length : ends);
+        const body    = text.slice(0, at) + (ends < 0 ? "" : text.slice(ends));
+
+        for (const m of mine[name] || []) {
+            const row = m.kind === "method"
+                ? new Regex("^\\|\\s*`" + Regex.Escape(m.name) + "\\(", { Multiline: true })
+                : new Regex("^\\|\\s*`" + Regex.Escape(m.name) + "`", { Multiline: true });
+
+            if (!row.IsMatch(summary))
+                problems.push(`${name}.md: ${m.kind} ${m.name} is not in "Every member"`);
+            else if (!row.IsMatch(body))
+                problems.push(`${name}.md: ${m.kind} ${m.name} is listed and never explained`);
+            checked++;
+        }
+
+        /* And an event documented here is documented with its arguments, the
+         * same rule `controls.md` is held to -- a signature that is confidently
+         * wrong reads as authoritative. */
+        for (const m of new Regex("\\*\\*event\\*\\* `(\\w+)\\(([^)]*)\\)`").Matches(text)) {
+            const event = m.Group(1);
+            if (!(event in events)) {
+                problems.push(`${name}.md: event ${event} is not one the runtime raises`);
+                continue;
+            }
+            const args = m.Group(2).trim();
+            const n    = args === "" ? 0 : args.split(",").length;
+
+            if (n !== events[event])
+                problems.push(`${name}.md: event ${event} is documented with ${n} ` +
+                              `argument(s), the runtime passes ${events[event]}`);
+            checked++;
+        }
+    }
+    return { checked, pages, missing: Dictionary.Count(mine) - counted };
+}
+
 function Main() {
     const root = Application.Arguments[0] || File.Directory(Application.Directory);
     const doc  = File.Join(root, "docs/llm/controls.md");
@@ -406,6 +544,7 @@ function Main() {
 
     const lib     = checkLibraries(root, problems);
     const globals = checkGlobals(root, problems);
+    const ref     = checkReference(root, members, events, problems);
 
     for (const p of problems) print(`  ${p}`);
     print(problems.length
@@ -414,6 +553,8 @@ function Main() {
           `and ${lib} in lib/`
         : `api: ${seen.size} widget members and ${Dictionary.Count(events)} events, ` +
           `plus ${globals} on the globals and ${lib} published by lib/, ` +
-          `all documented`);
+          `all documented -- and ${ref.checked} of them again in the ${ref.pages} ` +
+          `long page${ref.pages === 1 ? "" : "s"} of docs/reference/widgets, ` +
+          `${ref.missing} more with members of their own still to write`);
     Application.Quit(problems.length ? 1 : 0);
 }

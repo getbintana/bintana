@@ -303,6 +303,17 @@ explicit list in `tests/api/Check.js`, because the same C shape builds half the
 runtime's *return values* and a scan that guessed would demand a heading for
 every one of them.
 
+**And `docs/reference/widgets/` is held to a stricter one.** A long page
+documents the same members as `llm/controls.md` with a real explanation of each,
+so the check asks for every member **twice**: once in the page's `## Every
+member` summary — the index somebody scans — and once outside it, where it is
+explained. A member listed and never explained is a long page quietly turning
+back into a short one; a member the summary forgot is a reader concluding the
+control cannot do it. Which members belong to which class is read out of the
+class registration in the C (`BTA_CLASS_ENUM_TEXT("TableView", …, table_props,
+…)`), so there is no list here to fall behind. A class with no page at all is
+**counted, not failed**, and the run ends with how many are left.
+
 **The libraries in `lib/` are held to the same rule**, against
 `docs/llm/<library>.md`. They ship with the runtime, so a project reaching one
 with `uses` is using a public API and not reading somebody's example: the check
