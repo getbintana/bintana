@@ -574,6 +574,104 @@ function checkGlobalPages(root, problems) {
     return { checked, pages };
 }
 
+/*
+ * ------------------------------------------------ the libraries, at length
+ *
+ * `docs/reference/libraries/<Class>.md` is to `llm/<library>.md` what a widget
+ * page is to `llm/controls.md`. **A library that ships with the runtime is part
+ * of the contract** -- a project says `uses: ["charts"]` and gets its classes --
+ * so its long page is held to the same rule as a control's, from the same place
+ * `checkLibraries` already reads the surface: the Bintana source itself.
+ *
+ * The page is found by the class's **file name**, so a library that adds a class
+ * is a page this asks for without a list here to update.
+ */
+function checkLibraryPages(root, problems) {
+    const dir = File.Join(root, "docs/reference/libraries");
+    if (!File.IsDir(dir)) return { checked: 0, pages: 0, missing: 0 };
+
+    /* class -> { members, events }, out of lib/<name>/<Class>.js. */
+    const mine = {};
+
+    for (const lib of Directory.Folders(File.Join(root, "lib")))
+        for (const src of Directory.Files(lib, "*.js")) {
+            const code   = File.Load(src);
+            const seen   = new Set();
+            const events = {};
+
+            for (const m of LIB_GET.Matches(code))    seen.add(m.Group(2));
+            for (const m of LIB_METHOD.Matches(code)) {
+                const w = m.Group(1);
+                if (w !== "get" && w !== "set" && w !== "static") seen.add(w + "()");
+            }
+            for (const m of LIB_EVENTS.Matches(code))
+                for (const q of m.Group(1).split(","))
+                    if (q.trim()) events[q.trim().replace(/["' ]/g, "")] = 0;
+            for (const m of LIB_EMIT.Matches(code))
+                if (m.Group(1) in events)
+                    events[m.Group(1)] = Math.max(events[m.Group(1)], emitArity(m.Group(2)));
+
+            mine[File.BaseName(src)] = { members: [...seen], events };
+        }
+
+    let checked = 0, pages = 0;
+
+    for (const path of Directory.Files(dir, "*.md")) {
+        const name = File.BaseName(path);
+        if (name === "README") continue;
+        pages++;
+
+        if (!mine[name]) {
+            problems.push(`docs/reference/libraries/${name}.md documents ` +
+                          `${name}, which no library in lib/ publishes`);
+            continue;
+        }
+        const text = File.Load(path);
+        const at   = text.indexOf("\n## Every member");
+        const ends = at < 0 ? -1 : text.indexOf("\n## ", at + 4);
+
+        if (at < 0) {
+            problems.push(`${name}.md has no "## Every member" section`);
+            continue;
+        }
+        const summary = text.slice(at, ends < 0 ? text.length : ends);
+        const body    = text.slice(0, at) + (ends < 0 ? "" : text.slice(ends));
+
+        for (const member of mine[name].members) {
+            if (member in mine[name].events) continue;
+
+            const bare = member.endsWith("()") ? member.slice(0, -2) : member;
+            const row  = new Regex("^\\|\\s*`" + Regex.Escape(bare) + "(?:`|\\()",
+                                   { Multiline: true });
+
+            if (!row.IsMatch(summary))
+                problems.push(`${name}.md: ${member} is not in "Every member"`);
+            else if (!row.IsMatch(body))
+                problems.push(`${name}.md: ${member} is listed and never explained`);
+            checked++;
+        }
+
+        for (const event in mine[name].events) {
+            const sig = new Regex("\\*\\*event\\*\\* `" + Regex.Escape(event) +
+                                  "\\(([^)]*)\\)`");
+            const m = sig.Match(text);
+
+            if (!m) {
+                problems.push(`${name}.md: event ${event} has no signature`);
+                continue;
+            }
+            const args = m.Group(1).trim();
+            const n    = args === "" ? 0 : args.split(",").length;
+
+            if (n !== mine[name].events[event])
+                problems.push(`${name}.md: event ${event} is documented with ${n} ` +
+                              `argument(s), the component emits ${mine[name].events[event]}`);
+            checked++;
+        }
+    }
+    return { checked, pages, missing: Dictionary.Count(mine) - pages };
+}
+
 function Main() {
     const root = Application.Arguments[0] || File.Directory(Application.Directory);
     const doc  = File.Join(root, "docs/llm/controls.md");
@@ -650,6 +748,7 @@ function Main() {
     const globals = checkGlobals(root, problems);
     const ref     = checkReference(root, members, events, problems);
     const glob    = checkGlobalPages(root, problems);
+    const libs    = checkLibraryPages(root, problems);
 
     for (const p of problems) print(`  ${p}`);
     print(problems.length
@@ -661,6 +760,8 @@ function Main() {
           `all documented -- and ${ref.checked} of them again in the ${ref.pages} ` +
           `long page${ref.pages === 1 ? "" : "s"} of docs/reference/widgets, ` +
           `${ref.missing} more with members of their own still to write, ` +
-          `and ${glob.checked} in the ${glob.pages} of docs/reference/globals`);
+          `${glob.checked} in the ${glob.pages} of docs/reference/globals, ` +
+          `and ${libs.checked} in the ${libs.pages} of docs/reference/libraries ` +
+          `(${libs.missing} still to write)`);
     Application.Quit(problems.length ? 1 : 0);
 }

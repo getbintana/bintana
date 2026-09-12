@@ -314,7 +314,10 @@ class registration in the C (`BTA_CLASS_ENUM_TEXT("TableView", …, table_props,
 …)`), so there is no list here to fall behind. A class with no page at all is
 **counted, not failed**, and the run ends with how many are left.
 
-`docs/reference/globals/` is held the same way, against the C tables and the
+`docs/reference/libraries/` is held the same way against the Bintana source of
+each shipped library — a page is found by its class's file name, so a library
+that adds a class is a page the check asks for with no list to update — and
+`docs/reference/globals/` against the C tables and the
 object-building runs `checkGlobals` already reads — one line per page in
 `GLOBAL_PAGES` saying which of them make it up, which is the same discipline
 `GLOBAL_TABLES` has and for the same reason. The eight globals built in ways this

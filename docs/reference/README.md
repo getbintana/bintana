@@ -70,7 +70,8 @@ from the C, from a probe written to ask, or from an example that does it.
 | | |
 |---|---|
 | `widgets/` | one page per **class**: `TableView`, `Label`, `Split`, `Form`. `Widget` is what they all inherit from, containers included, which is why the folder is called that and not `controls/` |
-| `globals/` | one page per **global**: `File`, `Logger`, `Timer`, `Locale`, `Decimal`, `Record`. It is what the rest of this tree calls them and what [`llm/library.md`](../llm/library.md) is the short form of. Nothing in it yet |
+| `globals/` | one page per **global**: `File`, `Logger`, `Timer`, `Locale`, `Decimal`, `Record`. It is what the rest of this tree calls them and what [`llm/library.md`](../llm/library.md) is the short form of |
+| `libraries/` | one page per **component a shipped library publishes**: `Chart`, `Report`, `Markdown`. They are reached with `uses` in `project.json`, which makes what they publish part of the contract exactly as a control's properties are |
 
 A page's name is the class or the global it documents, exactly as it is spelt in
 code — `widgets/TableView.md`, `globals/File.md` — so the IDE can find the page
@@ -78,9 +79,9 @@ for a control without a table in the middle.
 
 ## What is here
 
-**Every class the runtime registers has a page, and every global**: 46 and
-27. `tests/api.sh` holds each one to its members, twice — once in its
-summary and once where it is explained.
+**Every name this runtime publishes has a page**: 46 classes, 27 globals and the
+3 components the shipped libraries publish. `tests/api.sh` holds each one to its
+members, twice — once in its summary and once where it is explained.
 
 ### widgets/
 
@@ -165,6 +166,14 @@ summary and once where it is explained.
 | [Time](globals/Time.md) | the clock half of [`Day`](Day.md), and the same bargain |
 | [Timer](globals/Timer.md) | doing something later, or repeatedly |
 
+### libraries/
+
+| | |
+|---|---|
+| [Chart](libraries/Chart.md) | a chart, as a component: one class, and `Type` says which kind |
+| [Markdown](libraries/Markdown.md) | a Markdown document, as a component |
+| [Report](libraries/Report.md) | a banded report, as a component |
+
 **A small class gets a short page, not a padded one.** `Label` has seven members
 and `Button` has five: the sections a page has are the sections it needs, and the
 two that are always there are the summary and the tables that explain each
@@ -188,6 +197,11 @@ Eight globals are held to nothing but existing — `Message`, `Exec`, `Settings`
 `Timer`, `Stopwatch`, `Dictionary`, `Regex` and `Clipboard` — because they are
 built in ways `tests/api` does not parse. That is written down in the check
 rather than left to be discovered.
+
+A library page is found by its class's **file name**, so a library that adds a
+class is a page the check asks for with no list here to update — and a library
+that ships with the runtime is part of the contract, since a project says
+`uses: ["charts"]` and gets its classes.
 
 **And this is what the IDE shows.** A `.md` opens in the IDE as the document it
 is, so these pages are the help: F1 over a selected control lands on its page,
