@@ -54,12 +54,18 @@ const NOISE = /Gdk-WARNING|Gtk-WARNING|libEGL warning/;
  * forever.
  *
  * It has to stay well clear of how long a project legitimately takes -- `tests/ide`
- * drives the whole IDE and takes about a minute, twice that under a sanitizer,
- * which is what `TIMEOUT` is for (`tests/asan.sh` raises it).  A guard set just
- * above the real time turns a slow machine into a red suite, and that is worse
- * than waiting.
+ * drives the whole IDE, twice that under a sanitizer, which is what `TIMEOUT` is
+ * for (`tests/asan.sh` raises it).  A guard set just above the real time turns a
+ * slow machine into a red suite, and that is worse than waiting.
+ *
+ * **Three hundred, because `tests/ide` measures 3m30 here** and the comment above
+ * this line said *about a minute* when the guard was 180. The suite grew into it
+ * over many changes rather than in one: everything up to and including the
+ * `help` phase is 25 seconds, so what takes the time is the second half -- the
+ * phases that open and reopen projects. That is worth a look one day; a guard
+ * that a passing run trips is worth nothing today.
  */
-const TIMEOUT = Number(Environment.Get("TIMEOUT")) || 180;
+const TIMEOUT = Number(Environment.Get("TIMEOUT")) || 300;
 
 /*
  * The grace between the guard's two signals, handed to `Exec` as `KillAfter`.
