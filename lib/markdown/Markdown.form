@@ -1,0 +1,12 @@
+{
+  "format": "bintana-form/1",
+  "class": "Markdown",
+  "properties": { "Width": 480, "Height": 640, "Arrangement": "Vertical" },
+  "children": [
+    {
+      "type": "DrawingArea",
+      "name": "Canvas",
+      "properties": { "Expand": true, "Focusable": true }
+    }
+  ]
+}

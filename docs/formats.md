@@ -228,19 +228,23 @@ would resolve it. The IDE's project dialog ticks them off the second one; it is
 in the runtime because a second copy of a six-entry search path drifts, and the
 copy that drifts is the one nobody runs from a shell.
 
-Two ship here. `lib/charts` is [`examples/charts`](../examples/charts)' chart
-component, and `lib/report` is the banded `Report` that
-[`examples/report`](../examples/report) draws a statement of account with. Both
+Three ship here. `lib/charts` is [`examples/charts`](../examples/charts)' chart
+component, `lib/report` is the banded `Report` that
+[`examples/report`](../examples/report) draws a statement of account with, and
+`lib/markdown` is the document viewer
+[`examples/markdown`](../examples/markdown) reads its own guide in. All three
 use none of the three optional files, which is the ordinary case for a library of
 one class. What they publish is documented like the runtime's own surface, in
-[llm/charts.md](llm/charts.md) and [llm/report.md](llm/report.md), and
+[llm/charts.md](llm/charts.md), [llm/report.md](llm/report.md) and
+[llm/markdown.md](llm/markdown.md), and
 `tests/api.sh` holds those pages to the same completeness rule it holds
 `llm/controls.md` to: **a library that ships with the runtime is part of the
 contract**, and a property nobody wrote down is a property nobody can use.
 
 Completeness is not correctness, though, and for a library that draws, the page
-being complete says nothing about the drawing being right: `tests/report` is the
-other half, and it asserts what landed on each page off `DrawingArea.Dump()`.
+being complete says nothing about the drawing being right: `tests/report` and
+`tests/markdown` are the other half, and each asserts what landed on the page off
+`DrawingArea.Dump()`.
 
 ## The .form format
 

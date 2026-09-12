@@ -1,0 +1,13 @@
+{
+  "format": "bintana-form/1",
+  "class": "MarkdownTest",
+  "properties": {
+    "Text": "markdown",
+    "Width": 700,
+    "Height": 500,
+    "Arrangement": "Vertical"
+  },
+  "children": [
+    { "type": "Markdown", "name": "Doc", "properties": { "Expand": true } }
+  ]
+}

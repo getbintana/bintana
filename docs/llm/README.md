@@ -14,8 +14,9 @@ these eight files are what you need and the only thing you should be reading.
 | [controls.md](controls.md) | **The complete reference**: every class, and every property, method and event it has — with signatures, defaults and accepted values. Checked by `tests/api.sh`, so it cannot fall behind the runtime |
 | [library.md](library.md) | **Every global**: files, processes, dialogs, settings, dates, money, text. Checked by `tests/api.sh` as well, so it cannot fall behind either |
 | [validation.md](validation.md) | How to prove what you wrote works, without a screen and without asking |
-| [charts.md](charts.md) | **One of the two libraries that ship with the runtime**: `uses: ["charts"]`, and everything the `Chart` component takes |
-| [report.md](report.md) | **The other**: `uses: ["report"]`, and everything the banded `Report` component takes — bands, groups, totals, pages |
+| [charts.md](charts.md) | **One of the three libraries that ship with the runtime**: `uses: ["charts"]`, and everything the `Chart` component takes |
+| [report.md](report.md) | **The second**: `uses: ["report"]`, and everything the banded `Report` component takes — bands, groups, totals, pages |
+| [markdown.md](markdown.md) | **The third**: `uses: ["markdown"]`, and everything the `Markdown` viewer takes — what it reads, how it scrolls, and the document out as a PDF |
 | [issues.md](issues.md) | What to do when the runtime is missing something you need |
 
 The technical documentation — the C/JS split, per-widget internals, how to add a

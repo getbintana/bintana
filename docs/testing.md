@@ -1,7 +1,7 @@
 # Testing
 
 ```sh
-./tests/run.sh                          # all four projects, 5103 assertions
+./tests/run.sh                          # all five projects, 5289 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -68,19 +68,20 @@ place to have a GL context), which is what makes the suite runnable over ssh and
 in CI: `.github/workflows/ci.yml` installs the dependencies plus `xvfb` and runs
 `./tests/run.sh` unchanged.
 
-## The four projects
+## The five projects
 
 | Project | What it covers |
 |---|---|
 | `tests/smoke` | The `.form` loader, event dispatch, the basic controls, nesting |
 | `tests/widgets` | Containers, `Arrangement`, `HAlign`/`VAlign`, boxes and splits, `Notebook`, `RowList`, `TreeView`, both editors and the source one's search, radio grouping, the value controls (`Slider`, `ProgressBar`, `DatePicker`, `Calendar` and its marks, `ToggleButton`, `Switch`), multiple selection, menu items that hold a state, drag and drop, icons, `PropertyOptions`, removing a child from every container and refilling it (`Removal`), a container that keeps a proportion (`Aspect`: the ratio written four ways and refused three, one child and a second refused, and the two numbers that make it usable -- its minimum is its child's, and the child is the biggest rectangle of that shape that fits, centred, reshaped when the ratio changes while it runs), moving a child in every container that has an order and what an index means in each (`Reorder`: the same four moves asserted on a box, a `Grid`, a `Flow`, a `RowList` and an `Overlay`; `Placement` per class; a stack's base layer, which is `Children[0]` and the one that fills, through `Reorder`, `Raise`/`Lower` and the base being deleted; and a `RowList` row reordered **with the selection on it**, which has to survive the round trip through GTK's own remove and raise no event), what every numeric setter refuses (`NumericSetters`), the serialiser round trip, a command several places point at (`Action`: the shared `Enabled`, and the four things a bound control refuses), `Record`/`Field` and records inside records (`Nested`: a list of them, a shape that contains itself, and a cycle refused rather than hung on), a record over a sqlite table (`Database`: the driver, `Table`, and the four ways a shape can fail to fit a table — **120 assertions with sqlite and one without**, since it is an optional build dependency and the claim there is that it says which package is missing), moving pictures and sound (`Media`: a `Video` played to its end and replayed, seekable once known, its frame measured and saved as a PNG, `Pause` holding a position, a node with declared properties round-tripping back to the same file, `Loop` still going past one length, `Buffering` reading `100` on a local clip that never waits for data (below 100 needs a server throttled under the bitrate, which is a measurement by hand and not a test), a missing file and an unreachable RTSP camera answering `Error` with a message that names the clip and a `kind` a form can branch on, an `AudioPlayer` cue played and looped — **and the properties still answering without GStreamer, where only the verbs refuse**, since the designer and the serialiser read every value of a control and must not depend on an optional build dependency. **The clips are generated with `gst-launch-1.0` into a temporary directory rather than committed**, the TLS certificate's bargain; where there is no `gst-launch` the parts that need a file are skipped, and where GStreamer has its base plugins but not the GTK4 sink — a CI runner, say — the video half skips and the audio half runs), `TextProperties`/`Locale`/`Locale.Read`/`Fill` and design values, `Locale.Compare` and `Locale.Matches`, `Day`, `Stopwatch`, `Exec` and its `Stop`, a `File.Watch` that stops itself, a form shown narrower than it was drawn, the `Grid`, what this build can run and what it merely *has* (`Available`: an ordinary control, an abstract class, a component of the project, a name that is no class at all — and `Terminal` either way, **with a branch for each**: with VTE the pty, the pattern and the scrollback; without it the state still answering, a `.form`'s `LinkPattern` still round-tripping, and `Run`/`Stop`/`Kill` refusing by name, since a build with no pty must still be able to draw and save a form that has a `Terminal` in it), the CSS node of every control, a `DrawingArea` rendered without a screen (`Save` into a PNG, and `Dump` asserted call by call), `File`/`Directory`/`Exec`, an HTTP client against servers of its own on 127.0.0.1 (`HttpWait`: the blocking spelling, the verbs, a built upload, the stub without libsoup; `Http`: the callbacks, every verb echoed, a multipart framed and reposted, Basic auth, `Accept-Language`, no proxy, a jar that sends back, a proxy proved by transit, tuned pools, redirect, cancel and guard, and two requests in flight with one of them stopped — each callback handed its own handle, which is what lets a form drop the answer to a request it replaced) and serving over the same transport (`HttpServer`, dogfooded through the client: ephemeral port, echo, `404`, silence is `500`, `Stop` true then false; `Allow`, `Auth`, uploads parsed back, and `Tls` probed over real HTTPS — **the three HTTP tests need `python3` for the servers the client is aimed at, and the TLS step also needs `openssl`, which makes its own throwaway certificate into a temporary directory rather than keeping one in the tree; each is skipped, not failed, where the tool is missing**) |
 | `tests/report` | `lib/report`: pagination, the group ladder, the totals, the masthead, the bands that grow, the PDF, and the five regressions the library shipped once |
+| `tests/markdown` | `lib/markdown`: what the parser makes of each block, the markup a paragraph is drawn as, the pictures (including the one that is not there), scrolling and `ScrollTo`, the export at the width it was asked for, and a pagination that cuts between blocks and never through one. **The selection and the links are asserted on the words and on the frame**: what a drag covers, what a double click takes, that the highlight is painted behind the text and that an export carries none, that a selection survives the column changing under it — which is what it is a pair of offsets for — and, for a link, that a click follows it, that a click past the words follows nothing, that a drag is not a click, and that an anchor nobody claimed scrolls. It also loads `examples/markdown/Guide.md`, so the library's shop window is read by something |
 | `tests/ide` | The IDE itself, driven the way a user drives it |
 
 **A shipped library is held to its page the way the runtime is.** `tests/api.sh`
 proves `docs/llm/report.md` documents everything `Report` publishes; it cannot
 prove any of it is true, and for a library that draws, *true* is what the reader
-needs. `tests/report` is the other half, and its shape is the reusable part:
+needs. `tests/report` -- and `tests/markdown`, which is the same shape -- is the other half, and its shape is the reusable part:
 `Save()` runs the same `Canvas_Draw` synchronously against an image surface, so
 `Canvas.Dump()` on the next line is **that page's** calls — which is how a banded
 document is asserted page by page with no screen and no waiting for a frame,
@@ -307,8 +308,10 @@ every one of them.
 with `uses` is using a public API and not reading somebody's example: the check
 reads what a component publishes out of the Bintana -- accessors and methods with
 a capital initial, `static Events`, and the arity of each `Emit` -- and reports a
-library with no reference page at all before anything else. `lib/charts` is the
-one there is, and [`llm/charts.md`](llm/charts.md) is its page.
+library with no reference page at all before anything else. Three ship --
+`lib/charts`, `lib/report` and `lib/markdown` -- and
+[`llm/charts.md`](llm/charts.md), [`llm/report.md`](llm/report.md) and
+[`llm/markdown.md`](llm/markdown.md) are their pages.
 
 **The event arity is the half worth having.** A missing row is obvious the first
 time somebody looks for it; a signature that is confidently wrong is not.

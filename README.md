@@ -37,6 +37,7 @@ LANGUAGE=es ./build/bintana ide examples/hello    # the IDE itself, from ide/po/
 ./build/bintana examples/drawing     # DrawingArea: a sparkline, a gauge and a pie — and what a frame really costs
 ./build/bintana examples/charts      # Charts from lib/charts: five shapes, two axes, and 21 600 readings you can zoom into
 ./build/bintana examples/report      # Report from lib/report: the Crystal Reports bands, grouped and totalled, out as one PDF
+./build/bintana examples/markdown    # Markdown from lib/markdown: a document drawn at a readable measure, its headings beside it, out as one PDF
 ./build/bintana examples/video       # Video + AudioPlayer: clips from lorem.video, a live HLS stream, and an audio-only cue
 ./build/bintana examples/notify      # Overlay: a message over the content, and a spinner over the work
 ./build/bintana examples/jokes       # Http on a window: async, and a Stop that means it
@@ -44,7 +45,7 @@ LANGUAGE=es ./build/bintana ide examples/hello    # the IDE itself, from ide/po/
 ./build/bintana examples/session     # Http with cookies and Basic auth: a login the next request remembers
 ./build/bintana examples/serve       # Http.Server: a static file server on :8080. Runs until Ctrl-C
 LANGUAGE=es ./build/bintana examples/agenda   # ...and the long date the catalogue rewrites
-./tests/run.sh                   # 5103 assertions in 4 projects, on a virtual display
+./tests/run.sh                   # 5289 assertions in 5 projects, on a virtual display
 HEADLESS= ./tests/run.sh          # the same, on *your* screen -- empty, not 0. Three
                                   # windows and the keyboard for a minute, and a couple
                                   # of assertions measure your theme and not the one
@@ -218,11 +219,14 @@ classes extend each other needs. It is looked for in the project's own `lib/`, i
 `~/.local/share/bintana/lib`, and then **one hop from the runtime's own
 binary** — `../lib` in the source tree, `../share/bintana/lib` installed, which
 is the same hop because `bin/` and `share/bintana/` move together. A name that
-is not there stops the program and prints every place it looked. Two libraries
+is not there stops the program and prints every place it looked. Three libraries
 ship here — `charts` (a `Chart` component in five shapes, documented in
-[docs/llm/charts.md](docs/llm/charts.md)) and `report` (a banded `Report`
-component, documented in [docs/llm/report.md](docs/llm/report.md)) — and
-[`examples/charts`](examples/charts) and [`examples/report`](examples/report)
+[docs/llm/charts.md](docs/llm/charts.md)), `report` (a banded `Report`
+component, documented in [docs/llm/report.md](docs/llm/report.md)) and
+`markdown` (a `Markdown` document viewer, documented in
+[docs/llm/markdown.md](docs/llm/markdown.md)) — and
+[`examples/charts`](examples/charts), [`examples/report`](examples/report) and
+[`examples/markdown`](examples/markdown)
 are the projects that use them; the full list of
 places and the reasons are in
 [docs/formats.md](docs/formats.md#libraries-uses).

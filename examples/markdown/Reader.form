@@ -1,0 +1,58 @@
+{
+  "format": "bintana-form/1",
+  "class": "Reader",
+  "properties": {
+    "Text": "Reader",
+    "Width": 980,
+    "Height": 720,
+    "Arrangement": "Vertical",
+    "Spacing": 8,
+    "Margin": 8,
+    "AcceptFiles": true
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "Bar",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Spacing": 8,
+        "Height": 34
+      },
+      "children": [
+        { "type": "Button", "name": "BtnOpen", "properties": { "Text": "Open", "Width": 90 } },
+        { "type": "Button", "name": "BtnPdf", "properties": { "Text": "Export PDF", "Width": 110 } },
+        {
+          "type": "Button",
+          "name": "BtnCopy",
+          "properties": { "Text": "Copy", "Width": 90, "Enabled": false }
+        },
+        {
+          "type": "Label",
+          "name": "LblWhere",
+          "properties": { "Text": "", "Style": "dim-label", "Alignment": "Start", "Expand": true }
+        }
+      ]
+    },
+    {
+      "type": "Split",
+      "name": "Halves",
+      "properties": { "Arrangement": "Horizontal", "Position": 230, "Grows": "End", "Expand": true },
+      "children": [
+        {
+          "type": "Frame",
+          "name": "FrmContents",
+          "properties": { "Text": "Contents", "Arrangement": "Vertical" },
+          "children": [
+            { "type": "ListBox", "name": "Contents", "properties": { "Expand": true, "ActivateOnSingleClick": true } }
+          ]
+        },
+        {
+          "type": "Markdown",
+          "name": "Doc",
+          "properties": { "Expand": true, "MaxWidth": 720, "Margins": 28 }
+        }
+      ]
+    }
+  ]
+}

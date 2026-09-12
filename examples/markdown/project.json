@@ -1,0 +1,12 @@
+{
+  "name": "Markdown",
+  "startup": "Reader",
+  "uses": [
+    "markdown"
+  ],
+  "sources": [
+    "Reader.js"
+  ],
+  "version": "1.0",
+  "description": "A Markdown reader: a document drawn at a readable measure, its headings as a table of contents, and the whole thing out as one PDF"
+}
