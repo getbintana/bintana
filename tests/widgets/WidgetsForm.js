@@ -4549,6 +4549,25 @@ class Spike extends Form {
             p.Font = this.metricsFont;
             this.metricsPainter = { Width: p.TextWidth(this.metricsText),
                                     Height: p.TextHeight(this.metricsText) };
+
+            /* The same three options `Text` measures with, on the painter:
+             * a wrapped run, a styled one, and the two together -- which is
+             * what a paragraph of `lib/markdown` is. */
+            this.metricsWrapped = p.TextHeight(this.metricsLong, { Width: 120 });
+            this.metricsMarkup  = p.TextWidth(this.metricsStyled, { Markup: true });
+            this.metricsPlain   = p.TextWidth(this.metricsText);
+
+            p.Text(this.metricsStyled, 0, 0, { Width: 120, Markup: true, Align: "Right" });
+            p.Text(this.metricsText, 0, 60);
+
+            this.metricsBad = [];
+            const refused = (fn) => {
+                try { fn(); this.metricsBad.push("NOT REFUSED"); }
+                catch (e) { this.metricsBad.push(e.message); }
+            };
+            refused(() => p.Text("a <b>b", 0, 0, { Markup: true }));
+            refused(() => p.Text("x", 0, 0, { Align: "Middle" }));
+            refused(() => p.Text("x", 0, 0, "wide"));
             return;
         }
         if (this.plotWhat === "refusals") {
@@ -5100,9 +5119,12 @@ class Spike extends Form {
         Directory.Make(SCRATCH);
         const png = File.Join(SCRATCH, "metrics.png");
 
-        this.metricsFont = "Cantarell Bold 12";
-        this.metricsText = "Statement of account";
-        this.plotWhat    = "metrics";
+        this.metricsFont   = "Cantarell Bold 12";
+        this.metricsText   = "Statement of account";
+        this.metricsLong   = "Design of the catalogue, the corrections, and the " +
+                             "meeting on the 9th";
+        this.metricsStyled = "a <b>bold</b> word";
+        this.plotWhat      = "metrics";
         area.Save(png, 200, 100);
 
         const painter = this.metricsPainter;
@@ -5161,6 +5183,132 @@ class Spike extends Form {
         throws("measuring needs something to measure", () => Text.Width());
         eq("a number is measured as its digits",
            Text.Width(12, Text.Font), Text.Width("12", Text.Font));
+
+        /*
+         * **Markup**, which is what a paragraph whose font changes halfway is
+         * measured and drawn as. `Label` has had it since the beginning; this is
+         * the same answer where the text is drawn rather than packed, and
+         * `lib/markdown` is the library that asked for it.
+         */
+        const styled = "a <b>bold</b> word";
+        eq("markup lays out its text and not its tags",
+           Text.Width(styled, Text.Font, { Markup: true }) >
+           Text.Width("a bold word", Text.Font), true);
+        check("which is nothing like measuring the tags",
+              Text.Width(styled, Text.Font, { Markup: true }) <
+              Text.Width(styled, Text.Font));
+        eq("and without the flag the tags are text",
+           Text.Width(styled, Text.Font), Text.Width(styled, Text.Font, {}));
+
+        /* The state is not left on the shared layout: a measurement after a
+         * markup one is a plain measurement again. */
+        eq("markup does not leak into the next measurement",
+           Text.Width("a bold word", Text.Font),
+           (Text.Width(styled, Text.Font, { Markup: true }),
+            Text.Width("a bold word", Text.Font)));
+
+        const wrapped = Text.Size("a <b>bold</b> word in a narrow column indeed",
+                                  Text.Font, { Width: 80, Markup: true });
+        check("markup wraps like anything else", wrapped.Lines > 1, JSON.stringify(wrapped));
+
+        throws("bad markup is refused where it was written",
+               () => Text.Width("a <b>b", Text.Font, { Markup: true }));
+        throws("and so is an alignment that is not one",
+               () => Text.Width("x", Text.Font, { Align: "Middle" }));
+        throws("the lines of a styled paragraph are not strings",
+               () => Text.Lines(styled, Text.Font, { Markup: true }));
+
+        eq("Escape makes a document's characters into markup that says them",
+           Text.Escape("a < b & c"), "a &lt; b &amp; c");
+        eq("and what it escapes measures as what it was",
+           Text.Width(Text.Escape("a < b & c"), Text.Font, { Markup: true }),
+           Text.Width("a < b & c", Text.Font));
+
+        /* The painter's side of the same surface, measured inside a real frame:
+         * `TextWidth`/`TextHeight` take the options `Text` takes. */
+        check("the painter wraps too", this.metricsWrapped > painter.Height,
+              JSON.stringify([this.metricsWrapped, painter.Height]));
+        check("and reads markup", this.metricsMarkup > 0 &&
+              this.metricsMarkup < Text.Width(this.metricsStyled, this.metricsFont),
+              this.metricsMarkup);
+        eq("its plain measurement is the one it always was",
+           this.metricsPlain, painter.Width);
+        eq("and its refusals are three", this.metricsBad.length, 3);
+        check("none of them drew anything",
+              this.metricsBad.every((m) => m !== "NOT REFUSED"),
+              JSON.stringify(this.metricsBad));
+
+        /*
+         * **Where a character is**, which is the pair of questions a selection
+         * asks and the one thing a caller cannot work out for itself.
+         */
+        const line = "The quick brown fox jumps over the lazy dog";
+
+        eq("the left edge is the first character", Text.IndexAt(line, 0, 0), 0);
+        eq("and past the right edge is the last",
+           Text.IndexAt(line, 9999, 0), line.length);
+        check("a point inside lands inside",
+              Text.IndexAt(line, 40, 0) > 0 && Text.IndexAt(line, 40, 0) < line.length,
+              Text.IndexAt(line, 40, 0));
+        check("further along is further in",
+              Text.IndexAt(line, 120, 0) > Text.IndexAt(line, 40, 0));
+
+        /* Above the text is its beginning and below it is its end -- which is
+         * this call's own answer and not Pango's, whose clamp put a drag that
+         * left the paragraph on the *left* back at the start of the last line. */
+        eq("above the text is the beginning", Text.IndexAt(line, 200, -50), 0);
+        eq("below it is the end",
+           Text.IndexAt(line, 0, 9999, Text.Font, { Width: 120 }), line.length);
+
+        /* Markup is measured on its text: the index is into what Pango laid
+         * out, with the tags already consumed. */
+        eq("markup is indexed by its text and not its tags",
+           Text.IndexAt("The <b>quick</b> brown fox", 40, 0, Text.Font, { Markup: true }),
+           Text.IndexAt("The quick brown fox", 40, 0));
+
+        const boxes = Text.Bounds(line, 0, 3);
+        eq("a range on one line is one rectangle", boxes.length, 1);
+        eq("starting at the left", boxes[0].X, 0);
+        check("as wide as those characters are",
+              Math.abs(boxes[0].Width - Text.Width("The")) <= 1,
+              `${boxes[0].Width} against ${Text.Width("The")}`);
+
+        const across = Text.Bounds(line, 0, 30, Text.Font, { Width: 120 });
+        check("a range that wraps is a rectangle a line", across.length > 1,
+              JSON.stringify(across));
+        check("each below the last",
+              across.every((b, i) => i === 0 || b.Y > across[i - 1].Y),
+              JSON.stringify(across.map((b) => b.Y)));
+
+        eq("an empty range covers nothing", Text.Bounds(line, 5, 5).length, 0);
+        eq("and a backwards one is the same as forwards",
+           JSON.stringify(Text.Bounds(line, 3, 0)), JSON.stringify(Text.Bounds(line, 0, 3)));
+
+        /* A JS string index and not a code point: the caller slices with it. */
+        const emoji = "a\u{1F600}b";
+        eq("the index is a JS string index", Text.IndexAt(emoji, 9999, 0), emoji.length);
+
+        /* The options are an object a caller hands over, so its properties may
+         * be getters and a getter may throw. Every option checks its
+         * conversion: the alternative is a failed one read as `true` with an
+         * exception already pending. */
+        throws("an option that throws is a throw and not a value",
+               () => Text.Width("x", Text.Font,
+                                { get Markup() { throw new Error("no"); } }));
+
+        throws("a hit test needs a point", () => Text.IndexAt(line));
+        throws("and a range needs two ends", () => Text.Bounds(line, 1));
+
+        /* And the dump says what was asked for, which is what a drawing is
+         * asserted on: the options are on the line or they are not there. */
+        const drawn = this.plotArea.Dump().split("\n");
+        check("a wrapped, aligned, styled run says so in the dump",
+              drawn.some((l) => l.includes("width 120") && l.includes("right") &&
+                                l.includes("markup")),
+              JSON.stringify(drawn.filter((l) => l.startsWith("Text"))));
+        check("and a plain one says nothing extra",
+              drawn.some((l) => l.startsWith(`Text "${this.metricsText}" at (0,60)`) &&
+                                !l.includes("markup")));
 
         area.Delete();
     }

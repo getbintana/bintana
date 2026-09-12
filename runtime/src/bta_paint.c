@@ -448,6 +448,147 @@ static JSValue painter_set_join(JSContext *ctx, JSValueConst this_val,
 /* ------------------------------------------------------------------- text */
 
 /*
+ * What a caller may say about a run of text, on the painter and on `Text` alike:
+ * `{ Width, Markup, Align }`.
+ *
+ * **`Markup` is the one that is not a convenience.** A paragraph whose font
+ * changes mid-line -- a word in bold, a name in italic, a code span in a
+ * monospace -- cannot be laid out by measuring a string and breaking it: the
+ * break has to be decided by whatever knows how wide each piece is, and that is
+ * Pango. `Label` has had `Markup` since the beginning for exactly this reason;
+ * this is the same answer where the text is *drawn* rather than packed, and it
+ * is what `lib/markdown` renders a paragraph with.
+ *
+ * `Width` wraps (the same wrap `Text.Size` has always measured with) and `Align`
+ * is what the wrapped lines are aligned to inside it -- a right-aligned column
+ * of numbers, a centred caption -- which is the one thing a caller could not do
+ * for itself once Pango, and not the caller, is breaking the lines.
+ */
+typedef struct {
+    int            width;        /* wrap to this many pixels; 0 for no wrap */
+    bool           markup;       /* the text is Pango markup */
+    PangoAlignment align;
+} TextOpts;
+
+static bool text_opts(JSContext *ctx, JSValueConst v, const char *where,
+                      TextOpts *o)
+{
+    o->width  = 0;
+    o->markup = false;
+    o->align  = PANGO_ALIGN_LEFT;
+
+    if (JS_IsUndefined(v) || JS_IsNull(v))
+        return true;
+    if (!JS_IsObject(v) || JS_IsArray(v)) {
+        JS_ThrowTypeError(ctx, "%s: the options are { Width, Markup, Align }", where);
+        return false;
+    }
+
+    JSValue w = JS_GetPropertyStr(ctx, v, "Width");
+    if (!JS_IsUndefined(w) && JS_ToInt32(ctx, &o->width, w)) {
+        JS_FreeValue(ctx, w);
+        return false;
+    }
+    JS_FreeValue(ctx, w);
+
+    JSValue m = JS_GetPropertyStr(ctx, v, "Markup");
+    if (!JS_IsUndefined(m)) {
+        /* `JS_ToBool` answers -1 for a conversion that threw -- a getter on the
+         * options object, which is a thing a caller may hand us -- and -1 into a
+         * `bool` is `true`, so the failure would have been a markup run laid out
+         * with an exception already pending. Every other option here checks; so
+         * does this one. */
+        int on = JS_ToBool(ctx, m);
+
+        JS_FreeValue(ctx, m);
+        if (on < 0)
+            return false;
+        o->markup = on != 0;
+    } else {
+        JS_FreeValue(ctx, m);
+    }
+
+    JSValue a = JS_GetPropertyStr(ctx, v, "Align");
+    if (!JS_IsUndefined(a) && !JS_IsNull(a)) {
+        const char *s = JS_ToCString(ctx, a);
+        JS_FreeValue(ctx, a);
+        if (!s)
+            return false;
+
+        bool ok = true;
+        if      (!strcmp(s, "Left"))   o->align = PANGO_ALIGN_LEFT;
+        else if (!strcmp(s, "Center")) o->align = PANGO_ALIGN_CENTER;
+        else if (!strcmp(s, "Right"))  o->align = PANGO_ALIGN_RIGHT;
+        else {
+            JS_ThrowRangeError(ctx, "%s: Align '%s' is not Left, Center or Right",
+                               where, s);
+            ok = false;
+        }
+        JS_FreeCString(ctx, s);
+        return ok;
+    }
+    JS_FreeValue(ctx, a);
+    return true;
+}
+
+/*
+ * The text into the layout, with everything the options say -- and with
+ * everything they do not say **put back**, because both layouts here are kept
+ * and reused: a width, an alignment or an attribute list left over from the last
+ * call is a paragraph that wraps where nobody asked it to.
+ *
+ * Markup goes through `pango_parse_markup` rather than
+ * `pango_layout_set_markup`, which swallows a parse error as a warning on the
+ * console and lays out nothing. A `<b>` that was never closed -- or a `&` that
+ * should have been escaped -- is a mistake in the caller's string, and it throws
+ * where it was written.
+ */
+static bool layout_text(JSContext *ctx, PangoLayout *l, const char *s,
+                        const TextOpts *o, const char *where)
+{
+    if (o->markup) {
+        PangoAttrList *attrs = NULL;
+        char          *plain = NULL;
+        GError        *err   = NULL;
+
+        if (!pango_parse_markup(s, -1, 0, &attrs, &plain, NULL, &err)) {
+            JS_ThrowTypeError(ctx, "%s: the markup is not valid -- %s", where,
+                              err ? err->message : "parse error");
+            g_clear_error(&err);
+            return false;
+        }
+        pango_layout_set_text(l, plain, -1);
+        pango_layout_set_attributes(l, attrs);
+        pango_attr_list_unref(attrs);
+        g_free(plain);
+    } else {
+        pango_layout_set_attributes(l, NULL);
+        pango_layout_set_text(l, s, -1);
+    }
+
+    /* **`WORD_CHAR` and not `WORD`**: a word wider than the box has to go
+     * somewhere, and breaking it is the only answer that stays inside the width
+     * the caller asked about. Wrapping that silently overflows would make the
+     * measurement a lie. */
+    pango_layout_set_wrap(l, PANGO_WRAP_WORD_CHAR);
+    pango_layout_set_width(l, o->width > 0 ? o->width * PANGO_SCALE : -1);
+    pango_layout_set_alignment(l, o->align);
+    return true;
+}
+
+/* What a `Dump()` line says about the options, or nothing when there are none:
+ * a drawing asserted off its dump is asserted on the wrap and the markup too,
+ * and a line that read the same either way could not be. */
+static void note_opts(GString *out, const TextOpts *o)
+{
+    if (o->width > 0)                  g_string_append_printf(out, " width %d", o->width);
+    if (o->align == PANGO_ALIGN_CENTER) g_string_append(out, " center");
+    if (o->align == PANGO_ALIGN_RIGHT)  g_string_append(out, " right");
+    if (o->markup)                      g_string_append(out, " markup");
+}
+
+
+/*
  * One `PangoLayout`, kept and reused.  Measured: 200 labels laid out and drawn
  * cost 1.84 ms, and measuring alone 0.75 ms -- so measuring is 40% of drawing
  * and a layout built per call would be most of a chart's text budget.
@@ -508,19 +649,30 @@ static JSValue painter_set_font(JSContext *ctx, JSValueConst this_val,
 }
 
 /* The text laid out, and the two numbers a caller wants from it.  Both measure
- * the string given: a chart asking for the height of a line passes "0". */
+ * the string given: a chart asking for the height of a line passes "0".
+ *
+ * The options are the same ones `Text` draws with, so a wrapped run is measured
+ * at the width it will be drawn at and a markup run measures what the markup
+ * really lays out as -- the alternative being the caller measuring the tags. */
 static bool painter_measure(JSContext *ctx, BtaPainter *p, JSValueConst v,
+                            JSValueConst opts, const char *where,
                             int *width, int *height)
 {
+    TextOpts o;
+    if (!text_opts(ctx, opts, where, &o))
+        return false;
+
     const char *s = JS_ToCString(ctx, v);
     if (!s)
         return false;
 
-    PangoLayout *l = painter_layout(p);
-    pango_layout_set_text(l, s, -1);
-    pango_layout_get_pixel_size(l, width, height);
+    PangoLayout *l  = painter_layout(p);
+    bool         ok = layout_text(ctx, l, s, &o, where);
+
+    if (ok)
+        pango_layout_get_pixel_size(l, width, height);
     JS_FreeCString(ctx, s);
-    return true;
+    return ok;
 }
 
 enum { MEASURE_WIDTH, MEASURE_HEIGHT };
@@ -533,7 +685,10 @@ static JSValue painter_measure_js(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     int w = 0, h = 0;
-    if (argc < 1 || !painter_measure(ctx, p, argv[0], &w, &h))
+    if (argc < 1 || !painter_measure(ctx, p, argv[0],
+                                     argc > 1 ? argv[1] : JS_UNDEFINED,
+                                     magic == MEASURE_WIDTH ? "TextWidth" : "TextHeight",
+                                     &w, &h))
         return JS_EXCEPTION;
     return JS_NewInt32(ctx, magic == MEASURE_WIDTH ? w : h);
 }
@@ -545,12 +700,16 @@ static JSValue painter_text(JSContext *ctx, JSValueConst this_val,
     if (!p)
         return JS_EXCEPTION;
     if (argc < 3)
-        return JS_ThrowTypeError(ctx, "Text expects (text, x, y)");
+        return JS_ThrowTypeError(ctx, "Text expects (text, x, y, [options])");
 
     bool   bad = false;
     double x   = arg_num(ctx, argv[1], &bad);
     double y   = arg_num(ctx, argv[2], &bad);
     if (bad)
+        return JS_EXCEPTION;
+
+    TextOpts o;
+    if (!text_opts(ctx, argc > 3 ? argv[3] : JS_UNDEFINED, "Text", &o))
         return JS_EXCEPTION;
 
     const char *s = JS_ToCString(ctx, argv[0]);
@@ -560,7 +719,10 @@ static JSValue painter_text(JSContext *ctx, JSValueConst this_val,
     char         nb[NUMLEN], nb2[NUMLEN];
     PangoLayout *l = painter_layout(p);
 
-    pango_layout_set_text(l, s, -1);
+    if (!layout_text(ctx, l, s, &o, "Text")) {
+        JS_FreeCString(ctx, s);
+        return JS_EXCEPTION;
+    }
     cairo_move_to(p->cr, x, y);
     pango_cairo_show_layout(p->cr, l);
     /*
@@ -573,7 +735,12 @@ static JSValue painter_text(JSContext *ctx, JSValueConst this_val,
      */
     cairo_new_path(p->cr);
 
-    note(p, "Text \"%s\" at (%s,%s)", s, num(nb, x), num(nb2, y));
+    GString *line = g_string_new(NULL);
+    g_string_append_printf(line, "Text \"%s\" at (%s,%s)", s, num(nb, x), num(nb2, y));
+    note_opts(line, &o);
+    note(p, "%s", line->str);
+    g_string_free(line, TRUE);
+
     JS_FreeCString(ctx, s);
     return JS_UNDEFINED;
 }
@@ -909,16 +1076,11 @@ static PangoLayout *metrics_prepare(JSContext *ctx, const char *who,
         chosen = metrics_default_font();
     }
 
-    int32_t wrap = 0;
-    if (argc > 2 && JS_IsObject(argv[2])) {
-        JSValue w = JS_GetPropertyStr(ctx, argv[2], "Width");
-        if (!JS_IsUndefined(w) && JS_ToInt32(ctx, &wrap, w)) {
-            JS_FreeValue(ctx, w);
-            JS_FreeCString(ctx, text);
-            g_free(chosen);
-            return NULL;
-        }
-        JS_FreeValue(ctx, w);
+    TextOpts o;
+    if (!text_opts(ctx, argc > 2 ? argv[2] : JS_UNDEFINED, who, &o)) {
+        JS_FreeCString(ctx, text);
+        g_free(chosen);
+        return NULL;
     }
 
     PangoLayout *l = metrics_layout();
@@ -930,16 +1092,9 @@ static PangoLayout *metrics_prepare(JSContext *ctx, const char *who,
     }
     g_free(chosen);
 
-    pango_layout_set_text(l, text, -1);
-    /* **`WORD_CHAR` and not `WORD`**: a word wider than the box has to go
-     * somewhere, and breaking it is the only answer that stays inside the width
-     * the caller asked about. Wrapping that silently overflows would make the
-     * measurement a lie. */
-    pango_layout_set_wrap(l, PANGO_WRAP_WORD_CHAR);
-    pango_layout_set_width(l, wrap > 0 ? wrap * PANGO_SCALE : -1);
-
+    bool ok = layout_text(ctx, l, text, &o, who);
     JS_FreeCString(ctx, text);
-    return l;
+    return ok ? l : NULL;
 }
 
 enum { TEXT_WIDTH, TEXT_HEIGHT, TEXT_SIZE, TEXT_LINES };
@@ -949,6 +1104,26 @@ static JSValue js_text_measure(JSContext *ctx, JSValueConst this_val,
 {
     static const char *const NAMES[] = { "Text.Width", "Text.Height",
                                          "Text.Size", "Text.Lines" };
+
+    /*
+     * **`Lines` and `Markup` are refused together**, and it is not a gap.
+     * The lines of a styled paragraph are runs and not strings: what comes back
+     * is the text with the tags already consumed, so drawing them one by one
+     * would draw a paragraph that had lost its bold. A caller that reached for
+     * this wants `Painter.Text(markup, x, y, { Width, Markup: true })`, which
+     * draws the whole block in one call -- broken by the same Pango that
+     * measured it.
+     */
+    if (magic == TEXT_LINES && argc > 2 && JS_IsObject(argv[2])) {
+        JSValue m  = JS_GetPropertyStr(ctx, argv[2], "Markup");
+        bool    on = !JS_IsUndefined(m) && JS_ToBool(ctx, m);
+
+        JS_FreeValue(ctx, m);
+        if (on)
+            return JS_ThrowTypeError(ctx, "Text.Lines: markup lays out as one "
+                                          "block -- draw it with Painter.Text "
+                                          "(text, x, y, { Width, Markup: true })");
+    }
 
     PangoLayout *l = metrics_prepare(ctx, NAMES[magic], argc, argv);
     if (!l)
@@ -987,6 +1162,212 @@ static JSValue js_text_measure(JSContext *ctx, JSValueConst this_val,
     return arr;
 }
 
+/* ------------------------------------------------------- where a character is
+ *
+ * The two questions a *selection* asks, and the two this surface could not
+ * answer: **which character is under the pointer**, and **which rectangles
+ * cover a range of them**. Everything else a drawn document needs was already
+ * here -- it could measure a paragraph and draw it -- and neither of these can
+ * be worked out by a caller: the layout knows where the lines broke, which run
+ * is in which font, and which way the text is going, and none of that survives
+ * being handed back as a list of strings.
+ *
+ * **The offsets are JS string indices**, not bytes and not code points, because
+ * what the caller does with one is `plain.slice(from, to)`. Pango counts bytes,
+ * so both directions are converted here rather than in every caller -- and the
+ * conversion is UTF-16, so a document with an emoji in it still slices where it
+ * was clicked.
+ */
+
+/* Byte index into a UTF-8 string -> JS string index. */
+static int utf16_of_byte(const char *s, int at)
+{
+    const char *p   = s;
+    const char *end = s + at;
+    int         out = 0;
+
+    while (p < end && *p) {
+        out += g_utf8_get_char(p) > 0xFFFF ? 2 : 1;
+        p = g_utf8_next_char(p);
+    }
+    return out;
+}
+
+/* And back: a JS string index -> byte index, clamped to the string. */
+static int byte_of_utf16(const char *s, int at)
+{
+    const char *p   = s;
+    int         out = 0;
+
+    while (*p && out < at) {
+        out += g_utf8_get_char(p) > 0xFFFF ? 2 : 1;
+        p = g_utf8_next_char(p);
+    }
+    return (int) (p - s);
+}
+
+/* `metrics_prepare` reads (text, font, options); these two carry two numbers in
+ * between, so the arguments it wants are handed to it in the order it wants
+ * them. A second copy of that function would be a second place for the font
+ * defaulting and the markup to drift. */
+static PangoLayout *metrics_prepare_at(JSContext *ctx, const char *who,
+                                       int argc, JSValueConst *argv)
+{
+    JSValueConst shifted[3] = {
+        argv[0],
+        argc > 3 ? argv[3] : JS_UNDEFINED,
+        argc > 4 ? argv[4] : JS_UNDEFINED,
+    };
+    return metrics_prepare(ctx, who, 3, shifted);
+}
+
+/*
+ * The character at a point, as a JS string index into the text as it was laid
+ * out -- the *plain* text, with a markup run's tags already consumed.
+ *
+ * A point past the end of a line answers the end of that line and a point below
+ * the last one answers the end of the text: a drag that leaves the paragraph
+ * selects to where it left, which is what every text view does and what a
+ * caller cannot do for itself without knowing where the lines are.
+ *
+ * The trailing half of a character counts as the next one, which is what makes
+ * clicking between two letters land between them.
+ */
+static JSValue js_text_index_at(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv)
+{
+    if (argc < 3)
+        return JS_ThrowTypeError(ctx, "Text.IndexAt(text, x, y, [font], [options]) "
+                                      "needs the text and a point");
+
+    bool   bad = false;
+    double x   = arg_num(ctx, argv[1], &bad);
+    double y   = arg_num(ctx, argv[2], &bad);
+    if (bad)
+        return JS_EXCEPTION;
+
+    PangoLayout *l = metrics_prepare_at(ctx, "Text.IndexAt", argc, argv);
+    if (!l)
+        return JS_EXCEPTION;
+
+    const char *laid = pango_layout_get_text(l);
+
+    /* **Above and below the text are the two ends of it**, and that is this
+     * call's own answer rather than Pango's: `xy_to_index` clamps a point below
+     * the last line onto that line at the given x, so a drag that left the
+     * paragraph downwards on the left-hand side selected *backwards*. What a
+     * pointer past the bottom means is "and all the rest of this one". */
+    int width = 0, height = 0;
+    pango_layout_get_pixel_size(l, &width, &height);
+
+    if (y < 0)
+        return JS_NewInt32(ctx, 0);
+    if (y >= height)
+        return JS_NewInt32(ctx, utf16_of_byte(laid, (int) strlen(laid)));
+
+    int index = 0, trailing = 0;
+    pango_layout_xy_to_index(l, (int) (x * PANGO_SCALE), (int) (y * PANGO_SCALE),
+                             &index, &trailing);
+
+    const char *at   = laid + index;
+
+    for (int i = 0; i < trailing && *at; i++)
+        at = g_utf8_next_char(at);
+
+    return JS_NewInt32(ctx, utf16_of_byte(laid, (int) (at - laid)));
+}
+
+/*
+ * The rectangles that cover the characters `from`..`to` -- one per line the
+ * range crosses, and more than one on a line whose text changes direction.
+ * This is what a selection is painted with, and it is the reason the range is
+ * a pair of offsets rather than a pair of points: the offsets survive a resize
+ * and a re-measure, and the rectangles do not.
+ */
+static JSValue js_text_bounds(JSContext *ctx, JSValueConst this_val,
+                              int argc, JSValueConst *argv)
+{
+    if (argc < 3)
+        return JS_ThrowTypeError(ctx, "Text.Bounds(text, from, to, [font], [options]) "
+                                      "needs the text and a range");
+
+    int32_t from = 0, to = 0;
+    if (JS_ToInt32(ctx, &from, argv[1]) || JS_ToInt32(ctx, &to, argv[2]))
+        return JS_EXCEPTION;
+
+    PangoLayout *l = metrics_prepare_at(ctx, "Text.Bounds", argc, argv);
+    if (!l)
+        return JS_EXCEPTION;
+
+    if (to < from) { int32_t swap = from; from = to; to = swap; }
+
+    const char *laid  = pango_layout_get_text(l);
+    int         start = byte_of_utf16(laid, from < 0 ? 0 : from);
+    int         end   = byte_of_utf16(laid, to   < 0 ? 0 : to);
+
+    JSValue out = JS_NewArray(ctx);
+    uint32_t n  = 0;
+
+    PangoLayoutIter *iter = pango_layout_get_iter(l);
+    do {
+        PangoLayoutLine *line = pango_layout_iter_get_line_readonly(iter);
+        int y0 = 0, y1 = 0;
+
+        pango_layout_iter_get_line_yrange(iter, &y0, &y1);
+
+        int a = MAX(start, line->start_index);
+        int b = MIN(end,   line->start_index + line->length);
+        if (a >= b)
+            continue;
+
+        int *ranges = NULL, count = 0;
+        pango_layout_line_get_x_ranges(line, a, b, &ranges, &count);
+
+        for (int i = 0; i < count; i++) {
+            JSValue box = JS_NewObject(ctx);
+
+            JS_SetPropertyStr(ctx, box, "X", JS_NewInt32(ctx, ranges[2 * i] / PANGO_SCALE));
+            JS_SetPropertyStr(ctx, box, "Y", JS_NewInt32(ctx, y0 / PANGO_SCALE));
+            JS_SetPropertyStr(ctx, box, "Width",
+                              JS_NewInt32(ctx, (ranges[2 * i + 1] - ranges[2 * i]) / PANGO_SCALE));
+            JS_SetPropertyStr(ctx, box, "Height", JS_NewInt32(ctx, (y1 - y0) / PANGO_SCALE));
+            JS_SetPropertyUint32(ctx, out, n++, box);
+        }
+        g_free(ranges);
+    } while (pango_layout_iter_next_line(iter));
+
+    pango_layout_iter_free(iter);
+    return out;
+}
+
+/*
+ * The text as markup that says exactly it: `&`, `<` and `>` are what a document
+ * carries and what a tag is made of, and the difference is one call.
+ *
+ * It is here rather than in the caller for the same reason the measurement is:
+ * a library that escapes with three `replace`s of its own is a library whose
+ * idea of markup and Pango's agree until they do not, and the failure is a
+ * paragraph that throws -- or worse, one that quietly loses a `<` somebody
+ * wrote. `lib/markdown` builds every paragraph through this.
+ */
+static JSValue js_text_escape(JSContext *ctx, JSValueConst this_val,
+                              int argc, JSValueConst *argv)
+{
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "Text.Escape(text) needs the text");
+
+    const char *s = JS_ToCString(ctx, argv[0]);
+    if (!s)
+        return JS_EXCEPTION;
+
+    char   *out = g_markup_escape_text(s, -1);
+    JSValue v   = JS_NewString(ctx, out);
+
+    g_free(out);
+    JS_FreeCString(ctx, s);
+    return v;
+}
+
 static JSValue js_text_get_font(JSContext *ctx, JSValueConst this_val)
 {
     char   *name = metrics_default_font();
@@ -1001,6 +1382,9 @@ static const JSCFunctionListEntry text_props[] = {
     JS_CFUNC_MAGIC_DEF("Height", 3, js_text_measure, TEXT_HEIGHT),
     JS_CFUNC_MAGIC_DEF("Size",   3, js_text_measure, TEXT_SIZE),
     JS_CFUNC_MAGIC_DEF("Lines",  3, js_text_measure, TEXT_LINES),
+    JS_CFUNC_DEF("Escape", 1, js_text_escape),
+    JS_CFUNC_DEF("IndexAt", 5, js_text_index_at),
+    JS_CFUNC_DEF("Bounds",  5, js_text_bounds),
     JS_CGETSET_DEF("Font", js_text_get_font, NULL),
 };
 
@@ -1305,10 +1689,10 @@ static const JSCFunctionListEntry painter_props[] = {
     JS_CFUNC_MAGIC_DEF("ArcNegative", 5, painter_arc, 1),
     JS_CFUNC_MAGIC_DEF("Polyline", 1, painter_polyline, POLY_OPEN),
     JS_CFUNC_MAGIC_DEF("Polygon",  1, painter_polyline, POLY_CLOSED),
-    JS_CFUNC_DEF("Text", 3, painter_text),
+    JS_CFUNC_DEF("Text", 4, painter_text),
     JS_CFUNC_DEF("Image", 5, painter_image),
-    JS_CFUNC_MAGIC_DEF("TextWidth",  1, painter_measure_js, MEASURE_WIDTH),
-    JS_CFUNC_MAGIC_DEF("TextHeight", 1, painter_measure_js, MEASURE_HEIGHT),
+    JS_CFUNC_MAGIC_DEF("TextWidth",  2, painter_measure_js, MEASURE_WIDTH),
+    JS_CFUNC_MAGIC_DEF("TextHeight", 2, painter_measure_js, MEASURE_HEIGHT),
     JS_CFUNC_MAGIC_DEF("Push", 0, painter_state, STATE_PUSH),
     JS_CFUNC_MAGIC_DEF("Pop",  0, painter_state, STATE_POP),
     JS_CFUNC_MAGIC_DEF("Translate", 2, painter_transform, XFORM_TRANSLATE),

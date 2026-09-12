@@ -852,10 +852,27 @@ widget's own font.
 | `Rotate(degrees)` | degrees, like `Arc` |
 | `Scale(x, [y])` | one argument scales both |
 | `Stroke()` | stroke the path, and clear it |
-| `Text(text, x, y)` | the text with its top-left corner there, in `Font`. Leaves no path behind |
-| `TextHeight(text)` | how tall it would be. A chart asking for a line's height passes `"0"` |
-| `TextWidth(text)` | how wide it would be, which is how a label is right-aligned |
+| `Text(text, x, y, [options])` | the text with its top-left corner there, in `Font`. Leaves no path behind. `options` is `{ Width, Markup, Align }` — see below |
+| `TextHeight(text, [options])` | how tall it would be. A chart asking for a line's height passes `"0"`; the same options, so a wrapped or styled run measures as what it will be |
+| `TextWidth(text, [options])` | how wide it would be, which is how a label is right-aligned |
 | `Translate(x, y)` | move the origin |
+
+**`Width`, `Markup` and `Align`** are the three things a run of text may be told,
+and they are the same three [`Text`](library.md#text) measures with:
+
+| | |
+|---|---|
+| `Width` | wrap to that many pixels. A word wider than the box is **broken**, never left to overflow |
+| `Markup` | the string is **Pango markup** — `<b>`, `<i>`, `<tt>`, `<s>`, `<span foreground=… underline=…>`. Invalid markup **throws where it was written**; `Text.Escape` is how a document's own `<` and `&` get in safely |
+| `Align` | `Left` `Center` `Right` — what the wrapped lines are aligned to *inside* `Width` |
+
+**Markup is what a paragraph whose font changes halfway needs.** A line with a
+bold word, a name in italic and a code span in it cannot be broken by measuring
+strings: the break belongs to whatever knows how wide each piece is, which is
+Pango. One call measures it and one call draws it, and they agree because they
+are the same layout — the rule every measurement here follows. `Label.Markup` is
+the same facility where text is *packed* rather than drawn; `lib/markdown` is
+what asked for this one.
 
 **There is no `Background`.** GTK4 has no per-widget answer for what colour the
 ground is — the supported way to paint one is the widget's own CSS — so

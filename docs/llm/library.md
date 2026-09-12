@@ -441,6 +441,10 @@ What a string measures, asked where there is no [`Painter`](controls.md#painter)
 Text.Width("Statement of account", "Bold 18")        // 178
 Text.Size(description, "", { Width: 300 })           // { Width, Height, Lines }
 Text.Lines(description, "", { Width: 300 })          // the lines it breaks into
+Text.Size(markup, "", { Width: 300, Markup: true })   // a paragraph with bold in it
+Text.Escape("a < b & c")                             // "a &lt; b &amp; c"
+Text.IndexAt(paragraph, 40, 12, "", { Width: 300 })   // 37 -- the character there
+Text.Bounds(paragraph, 10, 37, "", { Width: 300 })    // [{ X, Y, Width, Height }, …]
 Text.Font                                            // "Cantarell 11"
 ```
 
@@ -449,14 +453,39 @@ Text.Font                                            // "Cantarell 11"
 | `Width(text, [font], [options])` | how wide it lays out, in pixels |
 | `Height(text, [font], [options])` | how tall — one line's height, or the whole block's when it wraps |
 | `Size(text, [font], [options])` | `{ Width, Height, Lines }` in one measurement, which is one layout instead of three |
-| `Lines(text, [font], [options])` | the lines it breaks into, as an array |
+| `Lines(text, [font], [options])` | the lines it breaks into, as an array. **Refused with `Markup`** — see below |
+| `Escape(text)` | the text as markup that says exactly it: `&`, `<` and `>` escaped |
+| `IndexAt(text, x, y, [font], [options])` | → which character is at that point, as an index into the text **as it was laid out** — a markup run's tags already consumed. Above it is `0` and below it is the end |
+| `Bounds(text, from, to, [font], [options])` | → the rectangles covering those characters: `{ X, Y, Width, Height }`, one per line the range crosses and more than one on a line that changes direction |
 | `Font` (ro) | the desktop's UI font, which is what a control draws with unless CSS says otherwise. `""` where there is no display to ask |
 
 `font` is a Pango description (`"Cantarell Bold 10"`); `""` or nothing means
-`Text.Font`. `options` is `{ Width }` — wrap to that many pixels, which is what
-makes `Height` and `Lines` interesting. A word wider than the box is **broken**
-rather than left to overflow, so the measurement never promises a width the text
-will not keep.
+`Text.Font`. `options` is `{ Width, Markup, Align }`, the same three
+[`Painter`](controls.md#painter) draws with: `Width` wraps to that many pixels,
+which is what makes `Height` and `Lines` interesting; `Markup` says the string is
+Pango markup; `Align` is what wrapped lines are aligned to inside `Width` and
+means nothing to a measurement. A word wider than the box is **broken** rather
+than left to overflow, so the measurement never promises a width the text will
+not keep.
+
+**`IndexAt` and `Bounds` are the two questions a selection asks**, and neither
+can be answered by a caller: where the lines broke, which run is in which font
+and which way the text runs are all the layout's, and none of it survives being
+handed back as strings. They are a pair — a pointer becomes an offset, and an
+offset becomes the rectangles to paint behind the words — and the offsets are
+**JS string indices**, so `plain.slice(from, to)` is the text and a document with
+an emoji in it still slices where it was clicked. Pass the same `font` and
+`options` the text was measured and drawn with, or the answer is about a layout
+nobody can see. `lib/markdown` selects with these two and nothing else.
+
+**`Markup` is for the paragraph whose font changes halfway** — a bold word, a
+name in italic, a code span. `Text.Lines` refuses it, and that is not a gap: the
+lines of a styled paragraph are runs and not strings, so drawing them one by one
+would draw a paragraph that had lost its bold. Measure it here and draw it with
+`Painter.Text(markup, x, y, { Width, Markup: true })`, which is one layout for
+both. Markup that does not parse **throws where it was written**, rather than
+laying out nothing and warning on the console; `Escape` is how the `<` a document
+actually contains gets in. `lib/markdown` is the library this was added for.
 
 **The numbers are the ones a `Painter` gives**: the same fonts and the same
 desktop resolution, so `Text.Width(s, f)` equals `p.TextWidth(s)` with
