@@ -1,0 +1,92 @@
+# Application
+
+The running program: what it is called, where its files are, and how it ends.
+
+## Every member
+
+| | | |
+|---|---|---|
+| `Arguments` | whatever followed the project directory on the command line | [the project](#the-project) |
+| `CheckSource(text)` | → `null` if the text is valid JavaScript, else `{ Message, Line, Column }` | [asking about the machine](#asking-about-the-machine) |
+| `ConfigDirectory` | `~/.config/bintana/<name>`, created at startup | [where its files are](#where-its-files-are) |
+| `DecorationLayout` | how this desktop arranges a title bar | [asking about the machine](#asking-about-the-machine) |
+| `Directory` | the project directory, absolute | [where its files are](#where-its-files-are) |
+| `Executable` | the `bintana` binary, so a project can re-invoke it | [where its files are](#where-its-files-are) |
+| `HasCommand(name)` | → whether that program is on the PATH | [asking about the machine](#asking-about-the-machine) |
+| `HasIcon(name)` | → whether that icon will actually **draw** something | [asking about the machine](#asking-about-the-machine) |
+| `Icons([contains])` | → every icon name available, sorted | [asking about the machine](#asking-about-the-machine) |
+| `Libraries([project])` | → the names of every library the six places offer | [libraries](#libraries) |
+| `LibraryPath(name, [project])` | → where a library by that name is, or `""` | [libraries](#libraries) |
+| `Name` | from `project.json` | [the project](#the-project) |
+| `OnError` | assign `(message, stack) => …` to take over uncaught errors | [when something throws](#when-something-throws) |
+| `Quit(code)` | quit with that exit status | [ending](#ending) |
+| `Version` | what the **project** calls its release | [the project](#the-project) |
+
+## The project
+
+| | |
+|---|---|
+| `Name` | from `project.json` |
+| `Version` | what the **project** calls its release; `""` when it declares none. **`BTA_VERSION` is the runtime's** and is not this — showing the wrong one is what an About box does until it knows the difference |
+| `Arguments` | whatever followed the project directory on the command line, as an array |
+
+## Where its files are
+
+| | |
+|---|---|
+| `Directory` | the project directory, absolute. What a relative path in a project resolves against — an image a report draws, a document a viewer opens, a data file that ships with the application |
+| `ConfigDirectory` | `~/.config/bintana/<name>`, **created at startup**, which is where anything the application remembers belongs. [`Settings`](Settings.md) writes there; nothing of yours should go in the project directory, which is a thing people hand to each other |
+| `Executable` | the `bintana` binary that is running this, so a project can re-invoke it — which is how the IDE runs a project and how the test runner runs the suites |
+
+## Asking about the machine
+
+| | |
+|---|---|
+| `HasIcon(name)` | whether that icon will actually **draw** something. Not whether the theme claims it: an icon that cannot be rasterised here is the same nothing as one that is missing |
+| `Icons([contains])` | every icon name available, sorted, narrowed by substring — what an icon picker is built from |
+| `HasCommand(name)` | whether that program is on the PATH. **The question that does not need an exception**, since [`Exec`](Exec.md) throws when the program is not there |
+| `DecorationLayout` | how this desktop arranges a title bar — which buttons, and on which side. What a drawn title bar reads to look like the real one |
+| `CheckSource(text)` | `null` when the text is valid JavaScript, else `{ Message, Line, Column }`. What an editor checks a file with before saving it, and the answer `new Function(src)` is not allowed to give |
+
+## Libraries
+
+| | |
+|---|---|
+| `LibraryPath(name, [project])` | where a library by that name is, or `""` — **the same six-place search the runtime does for `uses`**. Published so that a tool which opens *other* projects asks about theirs rather than keeping a second copy of the path |
+| `Libraries([project])` | the names of every library those six places offer, sorted, each once. The other direction of the lookup: one resolves a name you have, the other is what a dialog offering a choice needs |
+
+## When something throws
+
+| | |
+|---|---|
+| `OnError` | assign `(message, stack) => …` and uncaught errors arrive there instead of ending the program |
+
+For an application that wants to log them, show them, or keep going. A test
+suite assigns it to fail loudly; the IDE assigns it to put the error in its log
+with a link to the line.
+
+## Ending
+
+| | |
+|---|---|
+| `Quit(code)` | quit with that exit status. `0` is *it worked*, and a console tool that answers a question answers with this |
+
+A window closing does not end a program by itself: what ends it is the last
+window going and the main loop running out, or this.
+
+## What goes wrong
+
+- **An About box shows the runtime's version.** `BTA_VERSION` is not
+  `Application.Version`.
+- **A relative path found nothing.** It resolved against the *working directory*,
+  which is where the program was started from; `File.Join(Application.Directory,
+  …)` is what a project's own file wants.
+- **Settings ended up in the project.** `ConfigDirectory`.
+- **An icon is missing on one machine.** Ask `HasIcon`, and keep a fallback —
+  the icon theme is the user's, not the application's.
+- **`Exec` threw on a machine without the tool.** `HasCommand` first.
+
+## See also
+
+[`Environment`](Environment.md) · [`Settings`](Settings.md) ·
+[`Exec`](Exec.md) · [`File`](File.md)

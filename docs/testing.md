@@ -314,6 +314,14 @@ class registration in the C (`BTA_CLASS_ENUM_TEXT("TableView", …, table_props,
 …)`), so there is no list here to fall behind. A class with no page at all is
 **counted, not failed**, and the run ends with how many are left.
 
+`docs/reference/globals/` is held the same way, against the C tables and the
+object-building runs `checkGlobals` already reads — one line per page in
+`GLOBAL_PAGES` saying which of them make it up, which is the same discipline
+`GLOBAL_TABLES` has and for the same reason. The eight globals built in ways this
+does not parse (`Message`, `Exec`, `Settings`, `Timer`, `Stopwatch`,
+`Dictionary`, `Regex`, `Clipboard`) have pages held to nothing but existing, and
+the check says so in its own comment rather than leaving it to be discovered.
+
 **The libraries in `lib/` are held to the same rule**, against
 `docs/llm/<library>.md`. They ship with the runtime, so a project reaching one
 with `uses` is using a public API and not reading somebody's example: the check

@@ -78,9 +78,11 @@ for a control without a table in the middle.
 
 ## What is here
 
-**Every class the runtime registers has a page** — all 46 of them, and
-`tests/api.sh` holds each one to its members, twice: once in its summary and
-once where it is explained.
+**Every class the runtime registers has a page, and every global**: 46 and
+27. `tests/api.sh` holds each one to its members, twice — once in its
+summary and once where it is explained.
+
+### widgets/
 
 | | |
 |---|---|
@@ -131,6 +133,38 @@ once where it is explained.
 | [Video](widgets/Video.md) | a clip that plays, in the window |
 | [Widget](widgets/Widget.md) | what every control is, before it is anything in particular |
 
+### globals/
+
+| | |
+|---|---|
+| [Application](globals/Application.md) | the running program: what it is called, where its files are, and how it ends |
+| [AudioPlayer](globals/AudioPlayer.md) | sound with no window |
+| [Bytes](globals/Bytes.md) | a file's contents, when they are not text |
+| [Clipboard](globals/Clipboard.md) | copy and paste, which are not symmetrical |
+| [Database](globals/Database.md) | a [`Record`](Record.md) over a table |
+| [Day](globals/Day.md) | the calendar date, which is the value JavaScript does not have |
+| [Decimal](globals/Decimal.md) | exact base-10 arithmetic, with the ordinary operators. **This is what money is.** |
+| [Dialog](globals/Dialog.md) | asking the user for a file, a folder or a colour — with the desktop's own |
+| [Dictionary](globals/Dictionary.md) | what a bag of data holds |
+| [Directory](globals/Directory.md) | what is in a folder, and making and removing them |
+| [Environment](globals/Environment.md) | the context the program was started in |
+| [Exec](globals/Exec.md) | running another program, and reading what it prints |
+| [File](globals/File.md) | reading and writing files, and the names of the paths they live at |
+| [Hash](globals/Hash.md) | a checksum, of a string or of a file |
+| [Http](globals/Http.md) | a native HTTP client, and a server of its own |
+| [HttpServer](globals/HttpServer.md) | serving over the same transport, on the loop the application already runs |
+| [Locale](globals/Locale.md) | the user's language, and their way of writing numbers, money, dates and names |
+| [Logger](globals/Logger.md) | what a program writes down for itself |
+| [Message](globals/Message.md) | telling the user something, with no question attached |
+| [Record](globals/Record.md) | the shape data has, declared once |
+| [Regex](globals/Regex.md) | a pattern, with nothing remembered between questions |
+| [Screen](globals/Screen.md) | how big the desktop is, and how many pieces it is in |
+| [Settings](globals/Settings.md) | what the application remembers between runs |
+| [Stopwatch](globals/Stopwatch.md) | how long something took |
+| [Text](globals/Text.md) | what a string measures, asked where there is no painter |
+| [Time](globals/Time.md) | the clock half of [`Day`](Day.md), and the same bargain |
+| [Timer](globals/Timer.md) | doing something later, or repeatedly |
+
 **A small class gets a short page, not a padded one.** `Label` has seven members
 and `Button` has five: the sections a page has are the sections it needs, and the
 two that are always there are the summary and the tables that explain each
@@ -142,16 +176,18 @@ wrong member of, and each page carries the same comparison table so that whichev
 one you land on tells you about the other three — four pages that agree rather
 than four opinions.
 
-**`widgets/` is finished**: every class the runtime registers has a page, and
-`tests/api.sh` ends with *0 more with members of their own still to write*. A
-class added to the runtime from now on arrives with a page or the check says so —
-counted rather than failed while it is being written, because a check that went
-red for a page nobody has started yet is a check somebody turns off before the
-week is out. What it refuses outright is a page that is **there** and incomplete.
+**Both folders are written.** Every class the runtime registers has a page and so
+does every global, and `tests/api.sh` ends with *0 more with members of their own
+still to write*. A class or a global added from now on arrives with a page or the
+check says so — counted rather than failed while it is being written, because a
+check that went red for a page nobody has started yet is a check somebody turns
+off before the week is out. What it refuses outright is a page that is **there**
+and incomplete.
 
-`globals/` is next, and gets the same shape and the same rule: `File`,
-`Directory`, `Dialog`, `Locale`, `Decimal`, `Day`, `Record`, `Http`, `Database`
-and the rest of what [`llm/library.md`](../llm/library.md) is the short form of.
+Eight globals are held to nothing but existing — `Message`, `Exec`, `Settings`,
+`Timer`, `Stopwatch`, `Dictionary`, `Regex` and `Clipboard` — because they are
+built in ways `tests/api` does not parse. That is written down in the check
+rather than left to be discovered.
 
 **And this is what the IDE shows.** A `.md` opens in the IDE as the document it
 is, so these pages are the help: F1 over a selected control lands on its page,

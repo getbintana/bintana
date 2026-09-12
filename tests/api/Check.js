@@ -470,6 +470,110 @@ function checkReference(root, members, events, problems) {
     return { checked, pages, missing: Dictionary.Count(mine) - counted };
 }
 
+/*
+ * ------------------------------------------------------- the globals, at length
+ *
+ * `docs/reference/globals/<Name>.md` is to [`llm/library.md`](../llm/library.md)
+ * what a widget page is to `llm/controls.md`: the same members, each explained.
+ * Which members those are comes from the same two places the completeness check
+ * already reads -- a C table, or the run of `JS_SetPropertyStr` calls that builds
+ * an object -- and **the list below is what says which of them make up a page**.
+ *
+ * A line per page, on purpose, exactly as `GLOBAL_TABLES` is: the same shape
+ * builds half the runtime's return values, so a scan that guessed would demand a
+ * page for every one of them.
+ *
+ * **Not every global has a source to read.** `Message`, `Exec`, `Settings`,
+ * `Timer`, `Stopwatch`, `Dictionary`, `Regex` and `Clipboard` are built in ways
+ * this file does not parse, so their pages are written by hand and held to
+ * nothing but existing -- the same bargain a widget with no members of its own
+ * gets.
+ */
+const GLOBAL_PAGES = {
+    AudioPlayer: ["audioplayer_props"],
+    Application: ["application"],
+    Bytes:       ["bytes_proto_funcs"],
+    Database:    ["conn_props"],
+    Day:         ["day_props"],
+    Decimal:     ["dec_proto_funcs"],
+    Dialog:      ["dialog"],
+    Directory:   ["dir"],
+    Environment: ["env_props", "env"],
+    File:        ["file"],
+    Hash:        ["hash_props"],
+    Http:        ["http_props", "http_client_props", "multipart_props"],
+    HttpServer:  ["http_server_props", "http_request_props"],
+    Locale:      ["locale_props"],
+    Logger:      ["log_props"],
+    Screen:      ["screen_props"],
+    Text:        ["text_props"],
+    Time:        ["time_props"],
+};
+
+function checkGlobalPages(root, problems) {
+    const dir = File.Join(root, "docs/reference/globals");
+    if (!File.IsDir(dir)) return { checked: 0, pages: 0 };
+
+    /* name -> its members, from the tables and from the object-building runs. */
+    const mine = {};
+    const put = (page, name) => {
+        if (!mine[page]) mine[page] = [];
+        if (!mine[page].includes(name)) mine[page].push(name);
+    };
+
+    for (const c of sources(root)) {
+        const src = File.Load(c);
+
+        for (const page in GLOBAL_PAGES) {
+            for (const from of GLOBAL_PAGES[page]) {
+                for (const t of TABLE.Matches(src)) {
+                    if (t.Group(1) !== from) continue;
+                    for (const g of GETSET.Matches(t.Group(2))) put(page, g.Group(1));
+                    for (const f of CFUNC.Matches(t.Group(2)))  put(page, f.Group(1) + "()");
+                }
+                for (const m of setPropOn(from).Matches(src)) put(page, m.Group(1));
+            }
+        }
+    }
+
+    let checked = 0, pages = 0;
+
+    for (const path of Directory.Files(dir, "*.md")) {
+        const name = File.BaseName(path);
+        if (name === "README") continue;
+        pages++;
+
+        const text = File.Load(path);
+        const at   = text.indexOf("\n## Every member");
+        const ends = at < 0 ? -1 : text.indexOf("\n## ", at + 4);
+
+        if (at < 0) {
+            problems.push(`${name}.md has no "## Every member" section`);
+            continue;
+        }
+        const summary = text.slice(at, ends < 0 ? text.length : ends);
+        const body    = text.slice(0, at) + (ends < 0 ? "" : text.slice(ends));
+
+        for (const member of mine[name] || []) {
+            /* A row may spell a verb either way -- `` `Load` `` or
+             * `` `Load(path)` `` -- because the two sources these names come from
+             * do not agree: a C table says `Load` and the object-building run
+             * says `Load` too, while the page that explains it wants the
+             * arguments in the cell. Both are the same member. */
+            const bare = member.endsWith("()") ? member.slice(0, -2) : member;
+            const row  = new Regex("^\\|\\s*`" + Regex.Escape(bare) + "(?:`|\\()",
+                                   { Multiline: true });
+
+            if (!row.IsMatch(summary))
+                problems.push(`${name}.md: ${member} is not in "Every member"`);
+            else if (!row.IsMatch(body))
+                problems.push(`${name}.md: ${member} is listed and never explained`);
+            checked++;
+        }
+    }
+    return { checked, pages };
+}
+
 function Main() {
     const root = Application.Arguments[0] || File.Directory(Application.Directory);
     const doc  = File.Join(root, "docs/llm/controls.md");
@@ -545,6 +649,7 @@ function Main() {
     const lib     = checkLibraries(root, problems);
     const globals = checkGlobals(root, problems);
     const ref     = checkReference(root, members, events, problems);
+    const glob    = checkGlobalPages(root, problems);
 
     for (const p of problems) print(`  ${p}`);
     print(problems.length
@@ -555,6 +660,7 @@ function Main() {
           `plus ${globals} on the globals and ${lib} published by lib/, ` +
           `all documented -- and ${ref.checked} of them again in the ${ref.pages} ` +
           `long page${ref.pages === 1 ? "" : "s"} of docs/reference/widgets, ` +
-          `${ref.missing} more with members of their own still to write`);
+          `${ref.missing} more with members of their own still to write, ` +
+          `and ${glob.checked} in the ${glob.pages} of docs/reference/globals`);
     Application.Quit(problems.length ? 1 : 0);
 }
