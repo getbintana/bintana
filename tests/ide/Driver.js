@@ -3462,9 +3462,14 @@ function* p_selfns(ide) {
 
 function* p_views(ide) {
     const readme = "README.md";
+    const stray  = "notes.txt";
     const blob   = "notes.bin";
 
     File.Save(File.Join(TMP, readme), "# el proyecto\n");
+    /* Text, and not a kind of file the project knows: what this view is for. A
+     * `.md` used to be this example and is a project file now -- it opens as a
+     * document, which is `p_document` below. */
+    File.Save(File.Join(TMP, stray), "un apunte\n");
     File.Copy(File.Join(Application.Directory, "..", "widgets", "images", "small.png"),
               File.Join(TMP, blob));
 
@@ -3479,10 +3484,13 @@ function* p_views(ide) {
     eq("the tree offers two views", ide.CmbView.Count, 2);
     eq("and starts on the project's", ide.CmbView.Index, 0);
 
-    check("neither file is in the project view",
-          !ide.FileTree.Exists(readme) && !ide.FileTree.Exists(blob));
+    check("neither stray file is in the project view",
+          !ide.FileTree.Exists(stray) && !ide.FileTree.Exists(blob));
     check("...because the project does not recognise them",
-          !ide.files.includes(readme), JSON.stringify(ide.files.slice(0, 6)));
+          !ide.files.includes(stray), JSON.stringify(ide.files.slice(0, 6)));
+    check("a document of the project is in it, though",
+          ide.FileTree.Exists(readme) && ide.files.includes(readme),
+          JSON.stringify(ide.files.slice(0, 8)));
 
     /* --- what is really there ----------------------------------------------- */
     ide.CmbView.Index = 1;
@@ -3490,7 +3498,7 @@ function* p_views(ide) {
     yield;
 
     check("the files view shows what the project does not know about",
-          ide.FileTree.Exists(readme) && ide.FileTree.Exists(blob));
+          ide.FileTree.Exists(stray) && ide.FileTree.Exists(blob));
     check("and the folders as they really are", ide.FileTree.Exists("dir:notas"));
     check("with what is inside them, where it lives",
           ide.FileTree.Exists("notas/leeme.md"));
@@ -3498,12 +3506,12 @@ function* p_views(ide) {
           !ide.FileTree.Exists("cat:forms") && !ide.FileTree.Exists("cat:images"));
 
     /* --- and what activating one does ---------------------------------------- */
-    ide.FileTree.Key = readme;
+    ide.FileTree.Key = stray;
     ide.FileTree_Select();
     yield;
 
-    eq("a file the desktop calls text opens in a tab", ide.activeFile, readme);
-    check("read into the editor", ide.Editor.Text.includes("el proyecto"),
+    eq("a file the desktop calls text opens in a tab", ide.activeFile, stray);
+    check("read into the editor", ide.Editor.Text.includes("un apunte"),
           ide.Editor.Text);
 
     /*
@@ -3527,15 +3535,133 @@ function* p_views(ide) {
 
     check("the project view is back", ide.FileTree.Exists("cat:forms"));
     check("and the stray files are out of sight again",
-          !ide.FileTree.Exists(readme));
+          !ide.FileTree.Exists(stray));
     eq("the choice is written down, so it survives closing the IDE",
        Settings.Get("tree.view", -1), 0);
 
-    ide.closeTabByName(readme, true);
+    ide.closeTabByName(stray, true);
+    File.Delete(File.Join(TMP, stray));
     File.Delete(File.Join(TMP, readme));
     File.Delete(File.Join(TMP, blob));
     File.Delete(File.Join(TMP, "notas", "leeme.md"));
     File.Delete(File.Join(TMP, "notas"));
+    ide.listFiles();
+    yield;
+}
+
+/*
+ * A Markdown file, shown as the document it is.
+ *
+ * The IDE's one reader: `.md` is a project file, it opens rendered, the editor
+ * is a click behind it, and a project nobody has opened here before opens on its
+ * README. What is asserted is what a person would see -- the headings the page
+ * really laid out, which widget is on screen, and the tab still being an
+ * ordinary code tab underneath.
+ */
+function* p_document(ide) {
+    const readme = "README.md";
+    const text   = "# El proyecto\n\nUn parrafo con **negrita** y un " +
+                   "[enlace](Child.form) al formulario.\n\n## Notas\n\nFin.\n";
+
+    File.Save(File.Join(TMP, readme), text);
+    ide.listFiles();
+    yield;
+
+    ide.FileTree.Key = readme;
+    ide.FileTree_Select();
+    yield;
+
+    check("a document is in a category of its own",
+          ide.FileTree.Exists("cat:docs") && ide.FileTree.Exists(readme));
+
+    eq("a document opens like any other file", ide.activeFile, readme);
+    check("and the tab holds one", !!ide.document);
+    check("showing the document and not its source", !ide.document.editing());
+    eq("with the file's headings laid out", ide.document.doc.Headings.length, 2);
+    eq("the first of them the title", ide.document.doc.Headings[0].Text, "El proyecto");
+    check("and a real height to it", ide.document.doc.ContentHeight > 60,
+          ide.document.doc.ContentHeight);
+
+    /* Underneath it is a code tab like any other: the editor holds the text,
+     * which is what makes the save, the reload and the session work here with
+     * nothing added to them. */
+    check("the editor is there, holding the file", ide.Editor.Text === text);
+    eq("in the markdown highlighting", ide.Editor.Language, "markdown");
+    eq("but not on screen", ide.Editor.Visible, false);
+
+    /* --- the toggle ---------------------------------------------------------- */
+    ide.document.toggle.Click();
+    yield;
+
+    check("the toggle shows the source", ide.document.editing());
+    eq("which is the editor", ide.Editor.Visible, true);
+    eq("and the page steps aside", ide.document.doc.Visible, false);
+
+    ide.Editor.Text = "# Otro titulo\n\nY otra cosa.\n";
+    ide.document.toggle.Click();
+    yield;
+
+    check("going back renders what was typed", !ide.document.editing());
+    eq("and not what was on disk",
+       ide.document.doc.Headings[0].Text, "Otro titulo");
+    eq("only one heading now", ide.document.doc.Headings.length, 1);
+
+    /* It is dirty the way any edited tab is, and saving it is the same verb. */
+    check("an edited document is a dirty tab", ide.tabs.liveDirty(ide.tabs.activeState()));
+    ide.BtnSave_Click();
+    yield;
+    check("saved to the file", File.Load(File.Join(TMP, readme)).includes("Otro titulo"));
+
+    /* --- what a link does ---------------------------------------------------- */
+    ide.Editor.Text = text;
+    ide.document.toggle.Click();       /* to the source... */
+    ide.document.toggle.Click();       /* ...and back, which re-renders */
+    yield;
+
+    const opened = ide.Doc_Link("Child.form", "el formulario");
+    yield;
+
+    check("a link to a file of the project opens it", opened);
+    eq("as a tab", ide.activeFile, "Child.form");
+
+    ide.tabs.switchTo(readme);
+    yield;
+
+    check("a web address is nobody's here", ide.Doc_Link("https://example.org", "x"));
+    eq("and opens no tab", ide.activeFile, readme);
+    check("a link to a file that is not there says so",
+          ide.Doc_Link("no-such-file.md", "x"));
+    eq("and opens nothing either", ide.activeFile, readme);
+
+    /* --- and the README a project opens on ----------------------------------- */
+    ide.BtnSave_Click();
+    openFresh(ide, TMP);
+    yield;
+
+    eq("a project nobody has been in here opens on its README",
+       ide.activeFile, readme);
+    eq("and on nothing else", ide.Tabs.Count, 1);
+    check("rendered", !!ide.document && !ide.document.editing());
+
+    /* A project that was in the middle of something reopens *that*, and the
+     * README does not push in front of it. Left with one file open and opened
+     * again: `openProject` writes the strip down on the way out and restores it
+     * on the way in, which is the whole of what a session is. */
+    ide.closeTabByName(readme, true);
+    ide.openInTab("Child.js");
+    yield;
+
+    ide.openProject(TMP);
+    yield;
+
+    check("a session that gave something back is not interrupted",
+          ide.tabs.openTabs.has("Child.js"), JSON.stringify(ide.tabs.tabOrder));
+    check("and the README does not push in front of it",
+          !ide.tabs.openTabs.has(readme), JSON.stringify(ide.tabs.tabOrder));
+
+    /* Back to a clean desk for the phases after this one. */
+    for (const name of [...ide.tabs.tabOrder]) ide.closeTabByName(name, true);
+    File.Delete(File.Join(TMP, readme));
     ide.listFiles();
     yield;
 }
@@ -9058,6 +9184,7 @@ const PHASES = [
     { name: "namespaces", run: p_namespaces },
     { name: "selfns", run: p_selfns },
     { name: "views", run: p_views },
+    { name: "document", run: p_document },
     { name: "forms", run: p_forms },
     { name: "nested", run: p_nested },
     { name: "projects", run: p_projects },

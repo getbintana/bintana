@@ -37,6 +37,12 @@ const EDITABLE = {
     form: "json",
     json: "json",
     css:  "css",    /* app.css: the classes a control wears through Style */
+    /* A README is the one file a project writes for a person to *read*, and the
+     * IDE showed it the way it shows a source file, when it showed it at all. It
+     * opens as the document it is -- see `Ide.Document` -- with the editor a
+     * click away, because a tab that could not edit it would be the IDE refusing
+     * to let anybody fix a typo in their own project. */
+    md:   "markdown",
     po:   false,    /* a catalogue: shown, and handed to a translation editor */
     pot:  false,    /* ...and the template it is updated from */
 
@@ -56,6 +62,11 @@ const EDITABLE = {
 /* Whether a file of this extension opens in a tab at all. */
 function opensInTab(file) {
     return EDITABLE[File.Extension(file).toLowerCase()] !== false;
+}
+
+/* And whether it opens as a rendered document rather than as its source. */
+function isDocument(file) {
+    return File.Extension(file).toLowerCase() === "md";
 }
 
 /* How far the board sits from the corner of the room it is drawn in. */
@@ -83,6 +94,11 @@ const CANVAS_MENU = [
 ];
 
 Ide.TabSet = class TabSet {
+
+    /* Which files open here at all, asked from outside: a link in a document
+     * points at a file of the project and has to know whether the answer is a
+     * tab or the desktop. The table is this module's, so the question is too. */
+    static opensInTab(file) { return opensInTab(file); }
 
     constructor(ide) {
         this.ide       = ide;
@@ -152,7 +168,6 @@ Ide.TabSet = class TabSet {
             ed.Name            = "Editor";
             ed.Expand          = true;
             ed.ShowLineNumbers = true;
-            view.Add(ed);
 
             /*
              * The words already in the file, offered as you type. The floor of
@@ -177,6 +192,21 @@ Ide.TabSet = class TabSet {
             ed.Text     = state.text;
             ed.Modified = false;
             state.editor = ed;
+
+            /*
+             * A document tab is this tab with a preview in front of it: the
+             * editor stays, holding the text, so the modified flag, the save,
+             * the reload from disk, the find bar, the session and the recovery
+             * are the ones every other code tab has. `Ide.Document` adds the bar
+             * and the rendered page, and puts the editor in itself -- which is
+             * why this branch does not.
+             */
+            if (isDocument(name)) {
+                state.document = new Ide.Document(
+                    this.ide, view, ed, File.Join(this.ide.project, name));
+            } else {
+                view.Add(ed);
+            }
         } else {
             /*
              * A form tab gets a canvas of its own, and a Designer driving it.
@@ -532,6 +562,10 @@ Ide.TabSet = class TabSet {
                 state.editor.Modified = false;
                 if (targetLine) state.editor.GotoLine(targetLine);
             }
+            /* And the page that is drawn from that text. A tab showing its
+             * source is left where it is: what changed is the text it is
+             * editing, which the editor above already has. */
+            if (state.document && !state.document.editing()) state.document.refresh();
         }
     }
 
@@ -581,6 +615,7 @@ Ide.TabSet = class TabSet {
          */
         this.ide.Editor   = state ? state.editor   || null : null;
         this.ide.designer = state ? state.designer || null : null;
+        this.ide.document = state ? state.document || null : null;
 
         if (state && state.canvas) {
             this.ide.CanvasScroll = state.canvas.scroll;

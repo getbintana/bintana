@@ -96,6 +96,10 @@ const TAB_ACTION_ICON = [
 /* How many projects the "Recent projects" menu remembers.  Where they are kept
  * is Settings' business, and Settings is per application, so the IDE's list
  * never collides with any other project's (nor with the tests'). */
+/* The file a project opens on when there is no session to restore: the one it
+ * was written for a person to read. */
+const README = "README.md";
+
 const RECENT_MAX = 8;
 const RECENT_KEY = "recent";
 
@@ -304,6 +308,15 @@ class MainForm extends Form {
          * is offered: the recovered text below lands in these same tabs. */
         const back = this.session.restoreTabs(dir);
         if (back) this.log(`Reopened ${back} file${back === 1 ? "" : "s"}\n`);
+
+        /*
+         * **A project nobody has worked in here opens on its README**, which is
+         * the file it was written to be read from. Only when the session gave
+         * nothing back: a project one was in the middle of reopens what was
+         * being worked on, and a welcome page in front of that would be the IDE
+         * having an opinion about where somebody left off.
+         */
+        if (!back && File.Exists(File.Join(dir, README))) this.openInTab(README);
 
         /* Last, and only here: whatever was left unsaved the last time this
          * project was open is offered once, with the tree and the tabs already
@@ -1317,6 +1330,25 @@ class MainForm extends Form {
 
     Editor_Cursor() {
         this.refresh();
+    }
+
+    /*
+     * --- the document tabs ---------------------------------------------------
+     *
+     * Both of these dispatch by name, so they arrive from whichever document is
+     * on screen -- the same arrangement `Editor_Change` has -- and the tab is
+     * looked up rather than the widget asked which one it belongs to.
+     */
+    DocSource_Click() {
+        const doc = this.document;
+        if (doc) doc.showSource(doc.toggle.Active);
+    }
+
+    /* A link in a document. Answering `true` says the IDE dealt with it; a
+     * `#anchor` never arrives here, because the component scrolls to it when
+     * nobody claims it. */
+    Doc_Link(href, text) {
+        return this.document ? this.document.follow(href, text) : false;
     }
 
     /* --- teclado ----------------------------------------------------------

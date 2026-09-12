@@ -31,6 +31,7 @@
     "../../ide/modules/Translations.js",
     "../../ide/modules/Exporter.js",
     "../../ide/forms/PoForm.js",
+    "../../ide/modules/Document.js",
     "../../ide/modules/TabSet.js",
     "../../ide/modules/Completion.js",
     "../../ide/modules/Finder.js",
@@ -41,5 +42,8 @@
     "../../ide/modules/Session.js",
     "../../ide/forms/MainForm.js",
     "Driver.js"
+  ],
+  "uses": [
+    "markdown"
   ]
 }

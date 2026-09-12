@@ -31,6 +31,7 @@
     "modules/Translations.js",
     "modules/Exporter.js",
     "forms/PoForm.js",
+    "modules/Document.js",
     "modules/TabSet.js",
     "modules/Completion.js",
     "modules/Finder.js",
@@ -40,5 +41,8 @@
     "modules/Recovery.js",
     "modules/Session.js",
     "forms/MainForm.js"
+  ],
+  "uses": [
+    "markdown"
   ]
 }

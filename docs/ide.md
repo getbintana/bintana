@@ -517,6 +517,7 @@ Per-tab state lives in `openTabs`, keyed by file name:
 ```js
 { name, mode: "edit" | "design", view, label,
   text, language, line, column,     // edit
+  document,                         // edit, and a .md: the preview in front of it
   root,                             // design: the .form node as read
   dirty }
 ```
@@ -535,6 +536,57 @@ not nothing either: it is an expanding widget with an empty body, and it took
 209px between the toolbar and a blank editor. So `renderTabs` hides the strip
 when there is no page, and the single `SourceEditor` waits in `WorkArea` — where
 the `.form` declares it — between files.
+
+## A document, rather than its source
+
+`.md` is a file of the project like any other -- it is in `TabSet`'s table, so
+the tree lists it, under a **Documents** category for the reason the catalogues
+and the images have one: it is opened as a different kind of thing, and it is the
+category a stranger looks in first. What opens is the **document**,
+drawn by [`lib/markdown`](llm/markdown.md). Every project here has a `README.md`
+and the IDE could not show it: the one file a project writes for a person to
+*read* was the one file it pretended was not there.
+
+**A document tab is an ordinary code tab with a preview in front of it**, and
+that is the whole of the design. The tab still owns its `SourceEditor` holding
+the text, so the modified flag, saving, reloading when the file changes on disk,
+the find bar, the session and the recovery of unsaved work are the ones every
+other code tab has, with nothing added to any of them. `Ide.Document` adds a bar
+with a *Source* toggle and a `Markdown` beside the editor, and decides which of
+the two is on screen; `this.document` is the one on screen, repointed by
+`placeContent()` beside `this.Editor`, and `null` when the tab is anything else.
+
+A viewer that could not edit would be the wrong answer here -- the IDE would be
+listing a file of the project and refusing to let anybody fix a typo in it -- so
+the preview is what a `.md` opens on and the editor is one click away. Going back
+to the preview renders **what has been typed**, not what was on disk.
+
+**A stretched component asks for its floor and not for the size it was drawn
+at.** `Markdown`'s own `.form` says 480x640, which is where a designer would
+place one; in a page it would be a 640px floor under the editor pane, and the
+console divider stopped 238px short of where the session had left it. `HAlign`
+and `VAlign` of `Fill` make the request `MinWidth`/`MinHeight` -- nothing -- which
+is the same rule a control drawn in a `.form` and stretched already follows.
+
+**What a link does is the IDE's**, not the library's: the component reports the
+click and `Document.follow` decides. A `#anchor` never gets that far -- the
+component scrolls to it on its own, which is what makes a table of contents in a
+README work with no code at all. A file of this project opens the way clicking it
+in the tree would, which makes a project's documentation browsable here the way
+it is on a forge; a file that is not one the IDE opens goes to the desktop; and an
+address is nobody here -- a URI wants a browser, and the runtime hands one over
+through a `LinkButton` and nowhere else -- so it is said in the log rather than
+swallowed.
+
+**And a project nobody has opened here before opens on its README.** Only when
+the session gave nothing back: a project one was in the middle of reopens what
+was being worked on, and a welcome page in front of that would be the IDE having
+an opinion about where somebody left off.
+
+What is not here yet is the *runtime's* documentation -- the widgets, their
+properties -- shown the same way. That is the same page with a different source
+of text, which is why the rendering is a module of its own rather than four lines
+inside `TabSet`.
 
 ## Find and replace
 

@@ -45,7 +45,7 @@ LANGUAGE=es ./build/bintana ide examples/hello    # the IDE itself, from ide/po/
 ./build/bintana examples/session     # Http with cookies and Basic auth: a login the next request remembers
 ./build/bintana examples/serve       # Http.Server: a static file server on :8080. Runs until Ctrl-C
 LANGUAGE=es ./build/bintana examples/agenda   # ...and the long date the catalogue rewrites
-./tests/run.sh                   # 5289 assertions in 5 projects, on a virtual display
+./tests/run.sh                   # 5319 assertions in 5 projects, on a virtual display
 HEADLESS= ./tests/run.sh          # the same, on *your* screen -- empty, not 0. Three
                                   # windows and the keyboard for a minute, and a couple
                                   # of assertions measure your theme and not the one
@@ -1467,6 +1467,8 @@ Forms
     code          Form1.js
 Modules
   Util.js
+Documents
+  README.md
 Other
   project.json
 ```
@@ -1489,6 +1491,13 @@ Other
   rewriting someone else's code.
 - Tabs keep per-file state: switching loses no unsaved change, and the status bar
   keeps an asterisk on what is dirty.
+- **A `.md` opens as the document it is**, drawn by `lib/markdown` -- headings,
+  lists, tables, code blocks and the project's own pictures -- with a *Source*
+  toggle a click away, because a tab that could not edit it would be the IDE
+  refusing to let anybody fix a typo in their own README. A link to another file
+  of the project opens it the way clicking it in the tree would. **A project
+  nobody has opened here before opens on its README**; one that was in the middle
+  of something reopens what was being worked on.
 - **Find and replace** (`Ctrl+F`, `Ctrl+H`, `F3`, `Shift+F3`) is a bar under the
   editor, not a dialog: the text stays visible while one types in it. It counts as
   you type (`3/12`), matches case, whole words or a regular expression, and wraps.

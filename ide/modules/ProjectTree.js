@@ -187,6 +187,12 @@ Ide.ProjectTree = class ProjectTree {
              * "this is an image", which is what the viewer opens. */
             images:     ["image-x-generic-symbolic", "bta-image-symbolic"],
             image:      ["image-x-generic-symbolic", "bta-image-symbolic"],
+            /* A document and the category it is in: what the desktop draws for
+             * a page of text, with the runtime's own file behind it. */
+            docs:       ["x-office-document-symbolic", "text-x-generic-symbolic",
+                         "folder-symbolic"],
+            document:   ["x-office-document-symbolic", "text-x-generic-symbolic",
+                         "bta-file-symbolic"],
             other:      ["folder-symbolic"],
             form:       ["window-new-symbolic", "bta-frame-symbolic"],
             /* The one the project starts at. A play triangle and not a star:
@@ -394,7 +400,9 @@ Ide.ProjectTree = class ProjectTree {
          * programmer chose, so it is the category that carries the meaning. */
         const langs = scope ? [] : this.ide.files.filter((f) => Ide.Translations.isCatalogue(f));
         const pics  = loose.filter((f) => isImageFile(f));
-        const rest  = loose.filter((f) => ext(f) !== "js" && !Ide.Translations.isCatalogue(f) &&
+        const docs  = loose.filter((f) => ext(f) === "md");
+        const rest  = loose.filter((f) => ext(f) !== "js" && ext(f) !== "md" &&
+                                          !Ide.Translations.isCatalogue(f) &&
                                           !isImageFile(f));
 
         if (mods.length) {
@@ -439,6 +447,19 @@ Ide.ProjectTree = class ProjectTree {
                               this.icon("images"));
             for (const f of pics)
                 this.addLeaf(f, File.Name(f), catKey("images"), "image");
+        }
+        /*
+         * And the documents, for the third time the same reason: a `.md` is
+         * opened as the document it is and not as its source, which is a
+         * different kind of thing from the modules beside it. It is also the
+         * category a stranger looks in first -- a project's README is what they
+         * came to read.
+         */
+        if (docs.length) {
+            this.ide.FileTree.Add(catKey("docs"), Locale.Text("Documents"), parentKey,
+                              this.icon("docs"));
+            for (const f of docs)
+                this.addLeaf(f, File.Name(f), catKey("docs"), "document");
         }
         if (rest.length) {
             this.ide.FileTree.Add(catKey("other"), Locale.Text("Other"), parentKey,
