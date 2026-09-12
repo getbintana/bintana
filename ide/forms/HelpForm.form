@@ -1,0 +1,51 @@
+{
+  "format": "bintana-form/1",
+  "class": "HelpForm",
+  "properties": {
+    "Text": "Reference",
+    "Width": 980,
+    "Height": 720,
+    "Arrangement": "Vertical",
+    "HideOnClose": true
+  },
+  "children": [
+    {
+      "type": "Split",
+      "name": "Halves",
+      "properties": { "Arrangement": "Horizontal", "Position": 230, "Grows": "End", "Expand": true },
+      "children": [
+        {
+          "type": "TreeView",
+          "name": "Pages",
+          "properties": { "HAlign": "Fill", "VAlign": "Fill", "MinWidth": 140 }
+        },
+        {
+          "type": "Panel",
+          "name": "Right",
+          "properties": { "Arrangement": "Vertical" },
+          "children": [
+            {
+              "type": "Panel",
+              "name": "Bar",
+              "properties": { "Arrangement": "Horizontal", "Height": 36, "Spacing": 6, "Style": "toolbar" },
+              "children": [
+                { "type": "Button", "name": "BtnBack",
+                  "properties": { "Text": "Back", "Width": 80, "Height": 28, "Style": "flat", "Enabled": false } },
+                { "type": "Label", "name": "LblWhere",
+                  "properties": { "Text": "", "Style": "dim-label", "Alignment": "Start", "Expand": true, "Ellipsize": true } },
+                { "type": "TextBox", "name": "TxtFind",
+                  "properties": { "Width": 200, "Height": 28, "Placeholder": "Find", "Icon": "edit-find-symbolic" } }
+              ]
+            },
+            {
+              "type": "Markdown",
+              "name": "Doc",
+              "properties": { "Expand": true, "HAlign": "Fill", "VAlign": "Fill",
+                              "MaxWidth": 760, "Margins": 28 }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

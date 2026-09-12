@@ -3666,6 +3666,89 @@ function* p_document(ide) {
     yield;
 }
 
+/*
+ * F1 and the reference window.
+ *
+ * The pages are `docs/reference/`, drawn by `lib/markdown` in a window of their
+ * own. What is asserted here is the two halves that are the IDE's: **which page
+ * F1 is about**, and that the window really lands on it.
+ */
+function* p_help(ide) {
+    const root = HelpForm.root();
+
+    check("the reference is found beside this build", !!root, root);
+    if (!root) return;
+
+    check("a class has a page", HelpForm.pageFor("TableView").endsWith("widgets/TableView.md"));
+    check("a global has one too", HelpForm.pageFor("File").endsWith("globals/File.md"));
+    check("and so does a library's component",
+          HelpForm.pageFor("Chart").endsWith("libraries/Chart.md"));
+    eq("a name that is nothing has none", HelpForm.pageFor("Nonesuch"), "");
+
+    /* --- which page F1 is about ------------------------------------------- */
+    ide.openInTab("Child.js");
+    yield;
+
+    ide.Editor.Text = "const t = File.Load(path);\n";
+    ide.Editor.Select(1, 12);          /* inside `File.Load` */
+    yield;
+
+    const topic = ide.helpTopic();
+    check("the word under the cursor decides the page",
+          !!topic && topic.page.endsWith("globals/File.md"), JSON.stringify(topic));
+    eq("and the member after the dot", topic.member, "Load");
+
+    /* A form tab with a control selected asks about the control's class. */
+    ide.openInTab("Child.form");
+    yield;
+    ide.designer.addControl("Label");
+    yield;
+
+    const about = ide.helpTopic();
+    check("a selected control asks about its own class",
+          !!about && about.page.endsWith("widgets/Label.md"),
+          JSON.stringify(about) + " for " +
+          (ide.designer.selected ? ide.designer.tree.typeOf(ide.designer.selected) : "nothing"));
+
+    /* --- the window -------------------------------------------------------- */
+    const help = HelpForm.open(HelpForm.pageFor("TableView"), "Sortable");
+    yield* settled(ide);
+
+    check("the window shows the page", help.Doc.Path.endsWith("widgets/TableView.md"));
+    check("with the document really laid out", help.Doc.ContentHeight > 1000,
+          help.Doc.ContentHeight);
+    eq("and it landed on the member", help.Doc.Selection, "Sortable");
+    check("which is not at the top of the page", help.Doc.Scroll > 0, help.Doc.Scroll);
+
+    check("every page is in the tree", help.Pages.Count > 70, help.Pages.Count);
+    check("under a category each", help.Pages.Exists("cat:widgets") &&
+          help.Pages.Exists("cat:globals") && help.Pages.Exists("cat:libraries"));
+
+    /* A link between two pages is how the reference is browsed. */
+    const was = help.Doc.Path;
+    help.Doc_Link("ListBox.md", "ListBox");
+    yield;
+
+    check("a link opens the page it names", help.Doc.Path.endsWith("widgets/ListBox.md"));
+    check("and Back is offered", help.BtnBack.Enabled);
+
+    help.BtnBack_Click();
+    yield;
+    eq("which goes back where it was", help.Doc.Path, was);
+
+    /* The find box, which is the same verb F1 lands with. */
+    help.TxtFind.Text = "Sortable";
+    help.TxtFind_Activate();
+    yield;
+    check("the find box finds", help.Doc.Selection.includes("Sortable"),
+          JSON.stringify(help.Doc.Selection));
+    eq("and F3 takes the next one", help.Form_KeyPress("F3"), true);
+
+    help.Close();
+    yield;
+    check("the window closes and keeps its page", help.Doc.Path.length > 0);
+}
+
 function* p_forms(ide) {
     /* --- prompt dialog ---------------------------------------------------
      * AskForm is an ordinary Bintana form, not a runtime primitive. */
@@ -9185,6 +9268,7 @@ const PHASES = [
     { name: "selfns", run: p_selfns },
     { name: "views", run: p_views },
     { name: "document", run: p_document },
+    { name: "help", run: p_help },
     { name: "forms", run: p_forms },
     { name: "nested", run: p_nested },
     { name: "projects", run: p_projects },

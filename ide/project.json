@@ -40,6 +40,7 @@
     "modules/Manifest.js",
     "modules/Recovery.js",
     "modules/Session.js",
+    "forms/HelpForm.js",
     "forms/MainForm.js"
   ],
   "uses": [

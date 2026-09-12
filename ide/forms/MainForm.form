@@ -335,6 +335,14 @@
       "text": "_Help",
       "children": [
         {
+          "name": "MnuReference",
+          "text": "Reference",
+          "shortcut": "F1"
+        },
+        {
+          "separator": true
+        },
+        {
           "name": "MnuAbout",
           "text": "About Bintana"
         }

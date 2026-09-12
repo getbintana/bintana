@@ -40,6 +40,7 @@
     "../../ide/modules/Manifest.js",
     "../../ide/modules/Recovery.js",
     "../../ide/modules/Session.js",
+    "../../ide/forms/HelpForm.js",
     "../../ide/forms/MainForm.js",
     "Driver.js"
   ],

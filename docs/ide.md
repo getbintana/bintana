@@ -588,6 +588,48 @@ properties -- shown the same way. That is the same page with a different source
 of text, which is why the rendering is a module of its own rather than four lines
 inside `TabSet`.
 
+## F1, and the reference in a window
+
+`docs/reference/` is a page per class, per global and per component the shipped
+libraries publish, and the IDE can already draw a Markdown document — so the help
+is not a viewer somebody had to write: it is
+[`lib/markdown`](llm/markdown.md) pointed at those files.
+
+**A window of its own and not a tab.** A tab belongs to a file of the *project* —
+watched, saved, remembered in the session — and a page of the reference is none
+of those: it is the manual, open beside the work and staying open while somebody
+switches files. `HelpForm` has `HideOnClose`, so the one window keeps its page
+between openings; Qt Creator and Delphi both put help in a place of its own for
+the same reason.
+
+**What F1 is about is `MainForm`'s to answer**, and it is three answers in the
+order the question is usually asked: a selected control asks about its class, an
+editor with the focus asks about the word the cursor is on — `File.Load` opens
+`File` and lands on `Load` — and neither asks about the index. The type comes
+from `ControlTree.typeOf`, which knows a stand-in from a control, so a component
+of the project falls through to the word rather than opening nothing.
+
+**Landing on a member is a search and not an anchor.** The finest anchor a page
+has is its class, and what F1 on a property means is *the row that describes it*:
+`Markdown.Find(text)` selects the first run holding it and scrolls it into view.
+The first mention is the member's own row, and that is not luck — every page
+opens with `## Every member` before any prose. Searching for the name in
+backticks would find nothing: a code span's backticks are markup by the time the
+document is laid out.
+
+The window is the tree of pages, the document, a back button and a find box.
+Links between pages are followed in place — `Doc_Link` resolves them against the
+page being read — which is what makes the *see also* lists and the neighbour
+tables worth having, and it is the same event any other host of that component
+gets.
+
+**Where the pages are is looked for, not configured**: `<repo>/docs/reference`
+from the IDE's own directory, one hop from the binary for anything else in a
+source tree, and `share/doc/bintana/docs/reference` installed. It is the argument
+`lib_candidates` makes in the runtime, applied here — `bin/` and `share/` move
+together under a prefix and under a packager's DESTDIR, where a path baked in at
+configure time does not.
+
 ## Find and replace
 
 A bar under the notebook, hidden until `Ctrl+F` (or `Ctrl+H`, which opens the

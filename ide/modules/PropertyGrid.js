@@ -820,6 +820,21 @@ Ide.PropertyGrid = class PropertyGrid {
         this.bindEditor(key, editor);
     }
 
+    /*
+     * Which property the user is pointing at: the row whose editor has the
+     * focus, or `""` when none of them has it.
+     *
+     * Asked by F1, and answered by asking the editors rather than by keeping a
+     * *current row* of our own -- the grid is built out of ordinary controls, so
+     * where the focus is *is* the answer, and a second copy of it would be one
+     * more thing to keep in step with the rebuilds this class does.
+     */
+    currentProperty() {
+        for (const key in this.editors)
+            if (this.editors[key] && this.editors[key].Focused) return key;
+        return "";
+    }
+
     /* Which rows carry that button: the two whose control cannot say "none" on
      * its own, which is the same pair that is edited by a chooser. */
     clearable(key) {

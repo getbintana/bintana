@@ -1638,6 +1638,75 @@ class MainForm extends Form {
         if (event && control) this.openHandler(control.Name, event);
     }
 
+    /*
+     * --- F1 -----------------------------------------------------------------
+     *
+     * The reference, opened at whatever is being pointed at. Three answers, in
+     * the order the question is usually being asked:
+     *
+     *   a control is selected     its class's page
+     *   the editor has the focus  the word the cursor is on -- `File.Load` opens
+     *                             `File` and lands on `Load`
+     *   neither                   the index
+     *
+     * Everything about *showing* it is `HelpForm`'s; what is here is only which
+     * page, which is the one question this form can answer and that one cannot.
+     */
+    MnuReference_Click() {
+        const root = HelpForm.root();
+        if (!root) {
+            Message.Warning("The reference is not installed beside this build.");
+            return;
+        }
+
+        const at = this.helpTopic();
+        if (at) HelpForm.open(at.page, at.member);
+        else    HelpForm.open(File.Join(root, "README.md"));
+    }
+
+    /* What F1 is about, or `null` for *the reference itself*. */
+    helpTopic() {
+        const control = this.designing ? this.designer.selected : null;
+
+        if (control) {
+            /* The tree's own answer, which knows a stand-in from a control: a
+             * component's name has no page here, and falling through to the word
+             * under the cursor is the right thing when it does not. */
+            const page = HelpForm.pageFor(this.designer.tree.typeOf(control));
+            const grid = this.designer ? this.designer.grid : null;
+            if (page) return { page, member: grid ? grid.currentProperty() : "" };
+        }
+
+        const word = this.wordAtCursor();
+        if (!word) return null;
+
+        /* `File.Load` is a page and a member; `TableView` is a page. */
+        const dot  = word.indexOf(".");
+        const name = dot > 0 ? word.slice(0, dot) : word;
+        const page = HelpForm.pageFor(name);
+
+        return page ? { page, member: dot > 0 ? word.slice(dot + 1) : "" } : null;
+    }
+
+    /* The word the caret is in, as a name: letters, digits and the dot that
+     * joins an object to one of its members. `""` where there is no editor or
+     * nothing under the cursor. */
+    wordAtCursor() {
+        const editor = this.Editor;
+        if (!editor || !editor.Visible) return "";
+
+        const line = (editor.Text.split("\n")[editor.Line - 1] || "");
+        const at   = Math.max(0, Math.min(line.length, editor.Column));
+
+        let from = at, to = at;
+        const part = (c) => c !== undefined && /[\w.]/.test(c);
+
+        while (from > 0 && part(line[from - 1])) from--;
+        while (to < line.length && part(line[to])) to++;
+
+        return line.slice(from, to).replace(/^\.+|\.+$/g, "");
+    }
+
     MnuRecent_Click(index) {
         const dir = this.recent[index];
         if (dir) this.openProject(dir);
