@@ -266,6 +266,39 @@ class MarkdownTest extends Form {
 
         check("a thematic break is a rule", lines.some((l) => l.startsWith("LineTo (576,")));
 
+        /* **A header row with nothing in it is not a header.** Every reference
+         * page in this tree writes its member list as a table whose headings are
+         * `| | |`, and a heading band drawn over each of them is an empty grey
+         * strip per table. */
+        this.Doc.Text = "| | |\n|---|---|\n| `Count` | how many |\n| `Index` | which one |";
+        const bare = this.drawn(600);
+        check("a table with no headings draws no heading band",
+              !bare.some((l) => l.startsWith("Color #f2f1f0")), JSON.stringify(bare));
+        check("and its first row is at the top of it",
+              bare.some((l) => l.startsWith("Text ") && l.includes("Count")),
+              JSON.stringify(bare.filter((l) => l.startsWith("Text"))));
+
+        this.Doc.Text = "| a | b |\n|---|---|\n| 1 | 2 |";
+        check("a table with headings still has one",
+              this.drawn(600).some((l) => l.startsWith("Color #f2f1f0")));
+
+        /* **A word in a code span is measured in the code font.** A monospace is
+         * wider than the body face, so a column of member names -- which is what
+         * every reference page is -- was given a floor it did not fit in and
+         * `Background` came out hyphenated. */
+        this.Doc.CodeFont = "Monospace 10";
+        this.Doc.Text = "| | |\n|---|---|\n| `Background` | any CSS colour, and a " +
+                        "long explanation after it so the table has to squeeze " +
+                        "something somewhere to fit the column it is given |";
+
+        const tight = this.textLine(this.drawn(420), "Background");
+        const width = Number(new Regex("width (\\d+)").Match(tight).Group(1));
+        const needs = Text.Width("Background", "Monospace 10");
+
+        check("a column is never narrower than the code word in it",
+              width >= needs, `${width} for a word of ${needs}: ${tight}`);
+        this.Doc.CodeFont = "";
+
         /* Two levels of heading get a rule under them and the rest do not. */
         this.Doc.Text = "# One\n\n### Three\n\ntext";
         const rules = this.drawn(600).filter((l) => l.startsWith("Stroke")).length;

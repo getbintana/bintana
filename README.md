@@ -45,7 +45,7 @@ LANGUAGE=es ./build/bintana ide examples/hello    # the IDE itself, from ide/po/
 ./build/bintana examples/session     # Http with cookies and Basic auth: a login the next request remembers
 ./build/bintana examples/serve       # Http.Server: a static file server on :8080. Runs until Ctrl-C
 LANGUAGE=es ./build/bintana examples/agenda   # ...and the long date the catalogue rewrites
-./tests/run.sh                   # 5319 assertions in 5 projects, on a virtual display
+./tests/run.sh                   # 5323 assertions in 5 projects, on a virtual display
 HEADLESS= ./tests/run.sh          # the same, on *your* screen -- empty, not 0. Three
                                   # windows and the keyboard for a minute, and a couple
                                   # of assertions measure your theme and not the one
