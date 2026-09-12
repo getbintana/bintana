@@ -58,6 +58,8 @@ It is a [`Component`](../widgets/Component.md), so everything on
 |---|---|---|
 | `Scroll` | how far down it is scrolled, in pixels | [scrolling](#scrolling) |
 | `ScrollMax` (ro) | the largest `Scroll` that still shows text | [scrolling](#scrolling) |
+| `Find(text)` | the first run holding that text: select it and show it | [finding your way](#finding-your-way) |
+| `FindNext()` | the next one, wrapping | [finding your way](#finding-your-way) |
 | `ScrollTo(id)` | put a heading at the top of the view | [finding your way](#finding-your-way) |
 | `Selection` (ro) | what the reader has selected, as text | [selecting](#selecting) |
 | `SelectAll()` | every word — what Ctrl+A does | [selecting](#selecting) |
@@ -122,8 +124,10 @@ drawing has no size of its own to ask with.
 |---|---|
 | `Headings` (ro) | every heading in order: `{ Level, Text, Id, Y }`. `Text` is the words without their emphasis and `Id` the anchor GitHub would give them |
 | `ScrollTo(id)` | put a heading at the top of the view. Takes an `Id`, a `#anchor` or the heading's own words; → whether one was found |
+| `Find(text)` | the first run holding that text: **selects it and scrolls it into view**; → whether there was one. Case is folded and nothing else is |
+| `FindNext()` | the next one after the selection, **wrapping** round to the top |
 
-Those two are a table of contents: fill a [`ListBox`](../widgets/ListBox.md) from
+Those first two are a table of contents: fill a [`ListBox`](../widgets/ListBox.md) from
 the first and call the second on `Select`.
 
 ## Selecting
@@ -135,6 +139,10 @@ the first and call the second on `Select`.
 | `Deselect()` | nothing; → whether there had been something |
 | `Copy()` | `Selection` onto the clipboard; → whether there was anything to copy |
 | **event** `Select(text)` | the selection settled. **Not raised while the pointer is still moving** — a host enabling a *Copy* button does not want sixty a second |
+
+**`Find` is a search with a selection on the end of it**, which is what the IDE
+opens a page *at a member* with: an anchor is no use there, since the finest one a
+heading gives is the class.
 
 Drag to select, double click for a word, Ctrl+A, Ctrl+C, Escape. **A selection is
 a pair of offsets into runs of text and not a pair of points**, which is what
@@ -175,7 +183,9 @@ picture of somebody's pointer.
 - **A missing image is a dashed box with its alt text in it, not a throw** —
   where this parts company with [`Report`](Report.md), whose missing masthead
   must stop the page.
-- **No search and no caret**, and a drag that leaves the view does not scroll it.
+- **No caret**, and a drag that leaves the view does not scroll it. The search is
+  `Find`/`FindNext` and nothing more: no regular expressions, no whole-word, no
+  accent folding — an editor has those and this is not one.
 
 ## See also
 

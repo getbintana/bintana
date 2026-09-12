@@ -106,6 +106,7 @@ class MarkdownTest extends Form {
         this.scrolling();
         this.selecting();
         this.linking();
+        this.finding();
         this.exporting();
         this.theGuide();
 
@@ -617,6 +618,45 @@ class MarkdownTest extends Form {
            this.Doc.Canvas.Cursor, "Text");
         this.Doc.pointer(jump.X, on.Y + 400);
         eq("and nothing in particular off the text", this.Doc.Canvas.Cursor, "Auto");
+    }
+
+    /* ---------------------------------------------------------- finding
+     *
+     * A search with a selection on the end of it, which is how the IDE opens a
+     * page at a member.
+     */
+    finding() {
+        this.Doc.Text = "# One\n\nA paragraph naming `Ellipsize` once.\n\n" +
+                        "Filler.\n\n".repeat(60) +
+                        "## Two\n\nAnd another that names Ellipsize again.";
+        this.Doc.ContentHeight;
+        this.picked = [];
+
+        check("a text that is there is found", this.Doc.Find("Ellipsize"));
+        eq("and selected", this.Doc.Selection, "Ellipsize");
+        eq("which was announced", this.picked.length, 1);
+
+        const first = this.Doc.Scroll;
+        check("the next one is found too", this.Doc.FindNext());
+        check("and it is further down", this.Doc.Scroll > first,
+              `${this.Doc.Scroll} after ${first}`);
+        eq("still the same words", this.Doc.Selection, "Ellipsize");
+
+        check("and it wraps round to the first", this.Doc.FindNext());
+        eq("which is where it started", this.Doc.Scroll, first);
+
+        check("case is folded", this.Doc.Find("ELLIPSIZE"));
+        eq("and what is selected is what the document says",
+           this.Doc.Selection, "Ellipsize");
+
+        eq("a text that is not there is not found", this.Doc.Find("Nonesuch"), false);
+        eq("and finds nothing next either", this.Doc.FindNext(), false);
+
+        /* Text already on screen is left where it is: a find that jumps the page
+         * when it did not have to is a find that loses the reader. */
+        this.Doc.Scroll = 0;
+        this.Doc.Find("paragraph naming");
+        eq("a match already in view does not move the page", this.Doc.Scroll, 0);
     }
 
     Doc_Link(href, text) {

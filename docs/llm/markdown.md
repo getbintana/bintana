@@ -49,6 +49,8 @@ designable and serialised.
 | `Selection` (ro) | what the reader has selected, as text. Runs are joined with a newline, so three paragraphs paste as three paragraphs. `""` when nothing is |
 | `SelectAll()` | every word in the document — what Ctrl+A does; → whether there was anything |
 | `Deselect()` | nothing selected — what Escape does; → whether there had been something |
+| `Find(text)` | the first run holding that text: selects it and scrolls it into view; → whether there was one. Case folded, nothing else |
+| `FindNext()` | the next one after the selection, wrapping; → whether there was one |
 | `Copy()` | `Selection` onto the clipboard — what Ctrl+C does; → whether there was anything to copy |
 | `Load(path)` | the file into `Text`, remembering `Path` so its pictures resolve |
 | `Refresh()` | measure again and repaint. Nothing needs it — every property does it already — except a document whose **pictures** changed on disk |
@@ -103,10 +105,10 @@ These are decisions, filed here rather than discovered:
   print; a broken image in somebody's notes is Tuesday.
 - **A picture is never enlarged**, only fitted: a 40px icon in a 700px column is
   a 40px icon.
-- **There is no search**, and no caret: what is here is a selection made with the
-  pointer and copied. Finding a word would want the same two calls pointed at
-  every block instead of the one under the pointer, which is a feature and not a
-  gap in the surface.
+- **There is no caret**, and the search is one verb: `Find` selects and shows the
+  first run holding a text, `FindNext` the one after it. No regular expressions,
+  no whole-word, no accent folding — a caller that needs those wants
+  [`SourceEditor`](controls.md#sourceeditor), which is an editor.
 - **A drag that leaves the view does not scroll it.** Select what is on screen,
   scroll, then extend with the pointer — or take the whole document with Ctrl+A.
 - **There is still no printer.** `SavePdf` writes the document as a file;
