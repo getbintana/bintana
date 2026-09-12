@@ -942,7 +942,10 @@ should.
 ### Component — a form that is not a window
 
 A component is its own `.form` and its own class, used inside another form as if
-it were a control:
+it were a control. [`examples/hello`](examples/hello) has one, `About`: an icon
+and a line of text, placed at the bottom of `Form1` and told what to say from
+`Form_Open`. It is the small version of what follows — a `.form` drawn in the
+designer, one published accessor, and no behaviour at all.
 
 ```js
 class Stepper extends Component {

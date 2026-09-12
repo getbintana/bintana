@@ -2,8 +2,34 @@
   "format": "bintana-form/1",
   "class": "About",
   "properties": {
-    "Width": 200,
-    "Height": 60
+    "Height": 44,
+    "Width": 220
   },
-  "children": []
+  "children": [
+    {
+      "type": "Image",
+      "name": "Logo",
+      "properties": {
+        "Height": 24,
+        "Icon": "applications-development",
+        "Width": 24,
+        "X": 8,
+        "Y": 10
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblCaption",
+      "properties": {
+        "Height": 20,
+        "Style": "dim-label",
+        "Width": 172,
+        "X": 40,
+        "Y": 12
+      },
+      "design": {
+        "Text": "hello 1.0"
+      }
+    }
+  ]
 }

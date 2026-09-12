@@ -315,21 +315,21 @@ marked dirty and closed, for a file most projects have two of.
 
 ```
 ┌ Translations — po/es.po ─────────────────────────────────┐
-│ 1 of 9 left to translate            [x] Only untranslated│
+│ 1 of 7 left to translate            [x] Only untranslated│
 ├──────────────────────────────────────────────────────────┤
-│   Hello Bintana                                         │
+│   Hello Bintana                                          │
 │   Your name:                                             │
-│ ● Button1                       ● nothing in it          │
+│ ● Upper case                    ● nothing in it          │
 │ ~ Greet                         ~ needs work             │
 ├──────────────────────────────────────────────────────────┤
 │ Source                                                   │
-│ Button1                                                  │
+│ Upper case                                               │
 │ Translation                                              │
 │ ┌──────────────────────────────────────────────────────┐ │
-│ │ Botón 1                                              │ │
+│ │ Mayúsculas                                           │ │
 │ └──────────────────────────────────────────────────────┘ │
 │ [ ] Needs work                                           │
-│ Form2.form: Button1.Text                                 │
+│ Form1.form: CheckBox1.Text                               │
 │                                    [  Save  ] [ Close ]  │
 └──────────────────────────────────────────────────────────┘
 ```

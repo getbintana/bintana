@@ -25,22 +25,14 @@ msgstr ""
 msgid "Upper case"
 msgstr ""
 
-#: Form2.form: Form2.Text
-msgid "Form2"
-msgstr ""
-
-#: Form2.form: Button1.Text
-msgid "Button1"
-msgstr ""
-
-#: Form1.js:38
+#: Form1.js:55
 msgid "Hello {0}!"
 msgstr ""
 
-#: Form1.js:48
+#: Form1.js:65
 msgid "Hello Bintana -- {0}"
 msgstr ""
 
-#: Form1.js:22
+#: Form1.js:39
 msgid "Type a name first."
 msgstr ""
