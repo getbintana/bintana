@@ -862,6 +862,7 @@ const r = Http.GetWait("https://example.com/", { Timeout: 5000 });
 | `Post(url, body, [opts], onDone, [onError])` | `body` is text, `Bytes` or an object (canonical JSON, `application/json`) |
 | `Put(url, body, [opts], onDone, [onError])`, `Patch(…)` | with body, like `Post` |
 | `Delete(url, [opts], onDone, [onError])`, `Head(…)` | no body, like `Get` |
+| `Stream(method, url, [body], [opts], onLine, [onDone], [onError])` | the answer **as it arrives**: `onLine(line, handle)` once per text line, the newline stripped, blank lines included. Method-first like `Request`, so a `POST` whose answer comes in pieces needs no second name |
 | `RequestWait(method, url, [body], [opts])` | the blocking spelling: answers with the record, **throws** on transport failure — and what it throws carries the same `Kind` and `Status` the callback would have been handed |
 | `GetWait(url, [opts])`, `PostWait(url, body, [opts])` | same, per verb |
 | `PutWait(url, body, [opts])`, `PatchWait(…)` | same, with body |
@@ -885,7 +886,34 @@ later. The handle answers `Running`, `TimedOut`, `Url`, `Method` and `Stop()`
 `Headers`, `Query: {k:v}` (appended escaped), `Body`, `ContentType`, `Timeout`,
 `FollowRedirects`, `Auth` — and naming any of them is what makes an object
 options rather than a JSON body. A repeated response header keeps the last of
-them, `Set-Cookie` included, which is what `Cookies: true` is for. libsoup is optional at build time; without it `Http`
+them, `Set-Cookie` included, which is what `Cookies: true` is for.
+
+**`Stream` reads before EOF**, which is the difference: the other verbs answer
+once, when the response is complete, and a feed that never completes is
+therefore never read at all.
+
+```js
+this.feed = Http.Stream("GET", `${addr}/event`, { Timeout: 0 },
+    (line) => { if (line.startsWith("data: ")) this.event(JSON.parse(line.slice(6))); },
+    (res)  => this.ended(res),
+    (err)  => this.failed(err));
+this.feed.Stop();      // and the onError still arrives, a turn later
+```
+
+Five things it promises. The **end** is the usual `onDone`, with the usual
+record — and an **empty `Body`**, since what already went out line by line is
+not sent twice. Only a **2xx streams**: a `4xx`/`5xx` is an answer, so it
+arrives whole in `onDone` with `onLine` never called, and a line arriving at
+all therefore means the status was 2xx. `Timeout` is still the deadline for
+the **whole flight** and not the gap between lines, so a feed meant to stay
+open asks with `Timeout: 0` — but what arrived before a deadline or a `Stop()`
+stays arrived, which is the part the buffered verbs cannot do. `Stop()` is
+safe **from inside `onLine`**, which is where an application usually stops
+following. And there is no `StreamWait`: a blocking spelling that calls back
+per line while the loop is frozen is a contradiction. The framing is yours —
+`data:` is one `startsWith` — and a body that is not valid UTF-8 ends the
+flight through `onError` rather than arriving as mojibake, the same bargain
+`Bytes.ToText()` makes. libsoup is optional at build time; without it `Http`
 says which package is missing. `examples/http` (a console tool),
 `examples/jokes` (a window on JokeAPI), `examples/session` (auth plus cookies
 against httpbingo) and `examples/serve` (a static file server) are the whole

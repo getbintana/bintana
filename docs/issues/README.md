@@ -23,7 +23,7 @@ in the same form.
 past its answer is a second description of the same feature, written by somebody
 who did not have it yet, in the directory of things that are missing.
 
-Fourteen have gone that way — thirteen filled and one refused. Filled: a drawing that
+Fifteen have gone that way — fourteen filled and one refused. Filled: a drawing that
 could not carry an image, text that could not be measured outside a `Draw`, a
 document that could only leave as one PNG per page, a program that had to run
 `sha256sum` to hash anything, an application that could not ask how big the
@@ -31,8 +31,9 @@ screen was, a `Scroller` that could not say where it was scrolled to, a window
 that ignored a file dropped on it, a schedule with nowhere to keep `"10:00"`, a
 language with no value for the bytes of a file, a hierarchy that could not
 carry a column, a program with no word for sound or motion, a stack that could be
-written by hand and not built with the mouse, and a picture whose rectangle
-nothing else could be put on.
+written by hand and not built with the mouse, a picture whose rectangle
+nothing else could be put on, and an answer that could only be read once all of
+it had arrived.
 
 Refused: a list of check boxes. A tick the *list* keeps is state in the view,
 which is the wrong place for it — the argument is with the other things that are

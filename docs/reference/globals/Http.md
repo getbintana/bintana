@@ -27,6 +27,7 @@ const r = Http.GetWait("https://example.com/", { Timeout: 5000 });
 | `Put(url, body, [opts], onDone, [onError])` | with a body | [the verbs](#the-verbs) |
 | `Patch(url, body, [opts], onDone, [onError])` | with a body | [the verbs](#the-verbs) |
 | `Request(method, url, [body], [opts], onDone, [onError])` | any of the six | [the verbs](#the-verbs) |
+| `Stream(method, url, [body], [opts], onLine, [onDone], [onError])` | the answer as it arrives, a line at a time | [following a stream](#following-a-stream) |
 | `GetWait(url, [opts])` | the blocking spelling | [waiting](#waiting) |
 | `HeadWait(url, [opts])` | likewise | [waiting](#waiting) |
 | `DeleteWait(url, [opts])` | likewise | [waiting](#waiting) |
@@ -96,6 +97,53 @@ is what makes an object options rather than a JSON body**.
 
 A `Post` body is text, `Bytes`, or an object — which is sent as canonical JSON
 with `application/json`.
+
+## Following a stream
+
+| | |
+|---|---|
+| `Stream(method, url, [body], [opts], onLine, [onDone], [onError])` | `onLine(line, handle)` once per text line **as it arrives**, the newline stripped |
+
+The other verbs answer **once, when the response is complete**. A server-sent
+event stream is never complete — so read with `Get` it delivers nothing at all
+while the feed is running, and read with `Stream` it delivers a line a second.
+
+```js
+this.feed = Http.Stream("GET", `${addr}/event`, { Timeout: 0 },
+    (line) => { if (line.startsWith("data: ")) this.event(JSON.parse(line.slice(6))); },
+    (res)  => this.ended(res),
+    (err)  => this.failed(err));
+```
+
+Method-first, like `Request`, because a `POST` whose answer arrives in pieces
+is the other half of this — it is how a completions endpoint talks — and one
+name covers both rather than a `Stream` per verb.
+
+**The end is the usual `onDone`**, with the usual record and an **empty
+`Body`**: what already went out line by line is not sent a second time.
+`Status`, `Reason`, `Headers` and `Url` are all there.
+
+**Only a `2xx` streams.** A `4xx` or `5xx` is an answer, and its body *is* the
+answer — an API's error JSON. So it is read whole and handed to `onDone` the
+way `Get` would have, with `onLine` never called. A line arriving at all
+therefore means the status was 2xx.
+
+**`Timeout` is the whole flight, not the gap between lines.** A feed meant to
+stay open asks with `Timeout: 0`; a client with a `Timeout` of its own cuts one
+at its deadline. What arrived before a deadline or a `Stop()` **stays
+arrived** — which is exactly what the buffered verbs cannot do, since a
+cancelled one answers with no body at all.
+
+**`Stop()` is safe from inside `onLine`**, which is where an application
+usually stops following: the line that says the turn ended. The answer still
+comes a turn later, as `Kind: "Cancelled"`.
+
+There is **no `StreamWait`**: a blocking spelling that calls back per line
+while the loop is frozen is a contradiction. And there is no framing here —
+`data:` is one `startsWith`, and teaching `Http` the SSE grammar would drag in
+`event:`, `id:`, `retry:` and reconnection while leaving NDJSON and a log tail
+second-class. A body that is not valid UTF-8 ends the flight through `onError`
+rather than arriving as mojibake, the same bargain `ToText()` makes.
 
 ## Waiting
 
@@ -168,6 +216,11 @@ Sent as the body of a `Post`/`Put`/`Patch`, which sets **its own**
 - **The window froze.** A `…Wait` in a form.
 - **A login did not stick.** `Cookies: true` on the client.
 - **`MaxConns` threw.** Constructor-only.
+- **`onLine` never fired.** The status was not `2xx`: an error page is an
+  answer, not a feed. It is on `onDone`, whole.
+- **A streamed `Body` was empty.** It already went out, line by line.
+- **A feed stopped after a minute.** The client's `Timeout`. A feed asks
+  `Timeout: 0`.
 - **`Http` says a package is missing.** libsoup is optional at build time.
 
 ## See also

@@ -382,6 +382,10 @@ const TESTS = [
     /* Async, and last but one: its callbacks land on later turns of the loop,
      * like Exec's, and it stops its own server before the run ends. */
     "Http",
+    /* Async as well, and it dribbles on purpose: its server writes a line
+     * every fifth of a second, so the run has to still be going a second
+     * later. */
+    "HttpStream",
     /* Async too, and answered on this same loop: it dogfoods the client, so
      * both must be going when either is. A Wait would freeze the loop the
      * server answers on -- that dogfood is async or it is a deadlock. */
@@ -435,6 +439,7 @@ const NEEDS = {
      * be going when they do -- otherwise `run.sh widgets http` answers with
      * the synchronous half and looks complete. */
     Http:           ["Exec"],
+    HttpStream:     ["Exec"],
     HttpServer:     ["Exec"],
     /* Its round trip happens once the window is up, which is not now: Form_Open
      * runs before the window is presented and a completion asked for off screen
@@ -12008,6 +12013,7 @@ class Spike extends Form {
                 ["Get", () => Http.Get("http://127.0.0.1:9/", () => 0)],
                 ["Post", () => Http.Post("http://127.0.0.1:9/", "x", () => 0)],
                 ["Request", () => Http.Request("GET", "http://127.0.0.1:9/", () => 0)],
+                ["Stream", () => Http.Stream("GET", "http://127.0.0.1:9/", () => 0)],
                 ["GetWait", () => Http.GetWait("http://127.0.0.1:9/")],
                 ["PostWait", () => Http.PostWait("http://127.0.0.1:9/", "x")],
                 ["RequestWait", () => Http.RequestWait("GET", "http://127.0.0.1:9/")],
@@ -12892,6 +12898,231 @@ class Spike extends Form {
              * does -- which reads as a smaller total with nothing red, the
              * same silence `until` was taught to refuse. */
             waiting++;
+            steps[0]();
+        });
+    }
+
+    /* --- HttpStream -----------------------------------------------------
+     *
+     * The answer read as it arrives, against a server of our own that
+     * dribbles: `/feed` writes five lines a fifth of a second apart, so the
+     * claim being measured is that the first line lands long before the last
+     * one could possibly have been sent. Both halves of that are asserted --
+     * without the second, a server that answered all at once would pass.
+     *
+     * A test of its own rather than steps bolted onto `testHttp`, whose chain
+     * is indexed by hand: inserting into it renumbers a dozen callbacks.
+     */
+    testHttpStream() {
+        if (!Application.HasCommand("python3")) {
+            failures.push("Http tests need python3 on the PATH");
+            return;
+        }
+
+        let noSoup = false;
+        try {
+            Http.Stream("GET", "http://127.0.0.1:9/", () => 0).Stop();
+        } catch (e) {
+            noSoup = /without libsoup/.test(e.message);
+        }
+        if (noSoup)
+            return;   /* the Wait test already asserts what the stub says */
+
+        /* `python3 -u`: a buffered interpreter holds the dribble back and the
+         * whole point of the test with it. */
+        const srv = Exec(["python3", "-u", "-c", [
+            "from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer",
+            "import json, time",
+            "class H(BaseHTTPRequestHandler):",
+            "    def feed(self, sep, n, gap):",
+            "        self.send_response(200)",
+            "        self.send_header(\"Content-Type\", \"text/event-stream\")",
+            "        self.end_headers()",
+            "        try:",
+            "            for i in range(n):",
+            "                self.wfile.write(('data: %d' % i).encode() + sep + sep)",
+            "                self.wfile.flush()",
+            "                time.sleep(gap)",
+            "        except (BrokenPipeError, ConnectionResetError):",
+            "            pass",
+            "    def do_GET(self):",
+            "        if self.path == \"/feed\":",
+            "            self.feed(b\"\\n\", 5, 0.2)",
+            "            return",
+            "        if self.path == \"/crlf\":",
+            "            self.feed(b\"\\r\\n\", 3, 0.05)",
+            "            return",
+            "        if self.path == \"/forever\":",
+            "            self.feed(b\"\\n\", 100000, 0.1)",
+            "            return",
+            "        if self.path == \"/gone\":",
+            "            b = json.dumps({\"error\": \"no such feed\"}).encode()",
+            "            self.send_response(404)",
+            "            self.send_header(\"Content-Type\", \"application/json\")",
+            "            self.send_header(\"Content-Length\", str(len(b)))",
+            "            self.end_headers()",
+            "            self.wfile.write(b)",
+            "            return",
+            "        self.send_error(404)",
+            "    def do_POST(self):",
+            "        n = int(self.headers.get(\"Content-Length\", 0))",
+            "        words = json.loads(self.rfile.read(n).decode())[\"words\"]",
+            "        self.send_response(200)",
+            "        self.send_header(\"Content-Type\", \"text/plain\")",
+            "        self.end_headers()",
+            "        for w in words:",
+            "            self.wfile.write((w + \"\\n\").encode())",
+            "            self.wfile.flush()",
+            "            time.sleep(0.05)",
+            "    def log_message(self, *a):",
+            "        pass",
+            "ThreadingHTTPServer((\"127.0.0.1\", 8474), H).serve_forever()",
+        ].join("\n")]);
+
+        const api = Http.Client({ BaseUrl: "http://127.0.0.1:8474", Timeout: 5000 });
+        const steps = [
+            /* The measurement the issue asked for, the other way round. */
+            () => {
+                const t0 = Date.now();
+                const got = [];
+                let first = -1, last = -1;
+                const h = api.Stream("GET", "/feed", { Timeout: 0 }, (line, handle) => {
+                    if (first < 0) {
+                        first = Date.now() - t0;
+                        check("a streamed line is handed its own handle", handle === h);
+                    }
+                    last = Date.now() - t0;
+                    got.push(line);
+                }, (r) => {
+                    check("the first line arrives long before the answer is finished",
+                          first >= 0 && first < 500, `${first}ms`);
+                    check("...and the last one much later, so it was read as it arrived",
+                          last - first > 600, `${first}ms then ${last}ms`);
+                    eq("every line arrives", got.filter((l) => l !== "").length, 5);
+                    eq("...in order", got.filter((l) => l !== "").join("|"),
+                       "data: 0|data: 1|data: 2|data: 3|data: 4");
+                    check("...blank lines included, since that is what separates two events",
+                          got.includes(""), JSON.stringify(got.slice(0, 4)));
+                    eq("a streamed answer still carries its status", r.Status, 200);
+                    eq("...and its headers", r.Headers["content-type"], "text/event-stream");
+                    eq("...and an empty Body, because it already went out line by line",
+                       r.Body.Length, 0);
+                    eq("...whose ToText is the empty string rather than a throw",
+                       r.Body.ToText(), "");
+                    check("the handle is finished before onDone runs", h.Running === false);
+                    steps[1]();
+                }, (e) => {
+                    failures.push(`the feed errored: ${e.Message}`);
+                    steps[1]();
+                });
+                check("a streaming request is running like any other", h.Running === true);
+                eq("...and names its method", h.Method, "GET");
+            },
+            /* HTTP is a CRLF protocol and GLib's default newline is LF. */
+            () => {
+                const got = [];
+                api.Stream("GET", "/crlf", (line) => got.push(line), () => {
+                    check("a CRLF feed arrives with no carriage return left on it",
+                          got.length > 0 && got.every((l) => !l.includes("\r")),
+                          JSON.stringify(got));
+                    check("...and its blank separator is empty, not a stray \\r",
+                          got.includes(""), JSON.stringify(got));
+                    steps[2]();
+                }, (e) => {
+                    failures.push(`the CRLF feed errored: ${e.Message}`);
+                    steps[2]();
+                });
+            },
+            /* An error page is an answer, not a feed. */
+            () => {
+                let called = 0;
+                api.Stream("GET", "/gone", () => called++, (r) => {
+                    eq("a 404 answers 404 even asked for as a stream", r.Status, 404);
+                    eq("...without calling the line callback once", called, 0);
+                    check("...and carries its whole body, which is the point of it",
+                          r.Body.ToText().includes("no such feed"), r.Body.ToText());
+                    steps[3]();
+                }, (e) => {
+                    failures.push(`a 404 must not error: ${e.Message}`);
+                    steps[3]();
+                });
+            },
+            /* Stopping from inside the line callback: the segfault File.Watch
+             * learned about, and the reason for the calling/dead pair. */
+            () => {
+                let n = 0;
+                const h = api.Stream("GET", "/forever", { Timeout: 0 }, (line, handle) => {
+                    if (line !== "" && ++n === 3)
+                        handle.Stop();
+                }, () => {
+                    failures.push("a stopped stream must not answer onDone");
+                    steps[4]();
+                }, (e) => {
+                    eq("stopping from inside the line callback answers Cancelled",
+                       e.Kind, "Cancelled");
+                    eq("...and no line arrives after it", n, 3);
+                    check("...leaving TimedOut false", h.TimedOut === false);
+                    check("...and the handle finished", h.Running === false && h.Stop() === false);
+                    steps[4]();
+                });
+            },
+            /* The guard cuts a feed like any other flight -- and what already
+             * arrived stays arrived, which is what a short Timeout could not
+             * give before. */
+            () => {
+                const kept = [];
+                api.Stream("GET", "/forever", { Timeout: 700 },
+                           (line) => { if (line !== "") kept.push(line); }, () => {
+                    failures.push("a timed-out stream must not answer onDone");
+                    steps[5]();
+                }, (e) => {
+                    eq("a guard cuts a stream like any other flight", e.Kind, "Timeout");
+                    check("...and the lines from before the deadline are not taken back",
+                          kept.length > 0, kept.length);
+                    steps[5]();
+                });
+            },
+            /* A body, and an answer that arrives in pieces: the shape a
+             * completions endpoint has. */
+            () => {
+                const got = [];
+                const h = api.Stream("POST", "/echo", { words: ["uno", "dos", "tres"] },
+                                     (line) => { if (line !== "") got.push(line); }, (r) => {
+                    eq("a streamed POST sends its body", got.join(","), "uno,dos,tres");
+                    eq("...and answers 200", r.Status, 200);
+                    eq("...with the method on its handle", h.Method, "POST");
+                    steps[6]();
+                }, (e) => {
+                    failures.push(`the streamed POST errored: ${e.Message}`);
+                    steps[6]();
+                });
+            },
+            /* The refusals, and the end of the chain. */
+            () => {
+                throws("a Stream with no line callback is refused",
+                       () => api.Stream("GET", "/feed"));
+                throws("...and so is one whose line callback is not a function",
+                       () => api.Stream("GET", "/feed", 7));
+                throws("a Stream refuses a verb it does not know",
+                       () => api.Stream("FETCH", "/feed", () => 0));
+                throws("Http.Stream needs a method before the url",
+                       () => Http.Stream());
+                srv.Stop();
+                /* The chain holds itself -- see testHttp, and AGENTS.md. */
+                steps.length = 0;
+                waiting--;
+            },
+        ];
+
+        until("the stream server answers", () => {
+            try {
+                Http.GetWait("http://127.0.0.1:8474/gone", { Timeout: 200 });
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }, () => {
+            waiting++;   /* counted, like an until: see testHttp's tail */
             steps[0]();
         });
     }

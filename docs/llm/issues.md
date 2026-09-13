@@ -186,6 +186,6 @@ needed and what it did instead.
 ## One more thing
 
 If what you are missing is not a runtime capability but a *sentence in this
-documentation* — something you had to find out by trial, or that these eight files
+documentation* — something you had to find out by trial, or that these nine files
 say wrongly — that is worth reporting too, and it is cheaper to fix. Say which
 file, what you expected it to tell you, and what you had to do instead.

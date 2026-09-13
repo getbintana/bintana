@@ -2469,6 +2469,42 @@ person who wrote it either.
   `Error`, because it looks reliable. The domain and the code say the same
   thing in every locale. The same function also called every error in soup's
   domain a `Redirect`, `ftp://` included.
+- **`GDataInputStream`'s default newline is LF, and HTTP is a CRLF
+  protocol.** `Exec` never had to know: a pipe ends its lines with `\n`. A
+  conforming server-sent-event stream is allowed `\r\n`, so `Http.Stream`
+  read with the default handed every line back with a carriage return still
+  on the end of it -- `JSON.parse` failing on the last character, and the
+  blank line that separates two events never comparing equal to `""`.
+  `g_data_input_stream_set_newline_type(..., G_DATA_STREAM_NEWLINE_TYPE_ANY)`,
+  the moment the reader is made. The test that catches it is `/crlf` in
+  `testHttpStream`, and it exists because the LF-only feed passed happily.
+- **`on_http_stream_line`'s `CANCELLED` branch is *not* `on_exec_line`'s**,
+  and the two functions otherwise read as twins. In `Exec` a cancelled read
+  means the teardown already freed the job, so the callback returns and says
+  nothing. In `Http` only the guard and `Stop()` cancel: the job is alive and
+  owes an answer, so that branch *delivers* `Timeout`/`Cancelled` like the
+  buffered road. The teardown case is caught by `http_job_alive` instead --
+  membership of `http_jobs`, checked first thing in every streaming
+  completion, because a stream has a read armed on it for its whole life and
+  the teardown frees jobs with those reads outstanding.
+- **A stream is routinely stopped from inside its own line callback**, which
+  is the `File.Watch` segfault again -- the line that says the turn ended is
+  exactly where an application stops following. The `calling`/`dead` pair
+  lives **inside `http_job_free`** and not at each caller: there are three
+  callers already (both deliverers and the teardown) and a fourth added later
+  would reopen it in silence. Coming off `http_jobs` before the mark is what
+  keeps the teardown's `while (http_jobs)` terminating.
+- **The next read is armed after the JS callback returns, not before**, and
+  that is the whole of the back-pressure: one read outstanding at a time, so a
+  slow handler slows the feed instead of queueing it. It is also why nothing
+  needs a reassembly buffer -- `GDataInputStream` holds the partial line, the
+  way it already does for `Exec`.
+- **`HTTP_OPT_KEYS` was deliberately not touched.** Streaming is a verb
+  (`Stream`) and not an option, so there is no new key to keep in step across
+  the two argument splits, no rejection to invent in the seven `*Wait`
+  spellings -- and, unlike an option, `tests/api.sh` can *see* it: the check
+  reads member tables, so an option would have been the one large capability
+  the documentation was not obliged to name.
 - **Changing what a list tracks without changing every writer leaves the
   stale one.** `http_servers` went from *running* to *live* when the
   finalizer took over disconnecting, but `Start` kept its own prepend: every

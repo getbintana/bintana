@@ -45,7 +45,7 @@ LANGUAGE=es ./build/bintana ide examples/hello    # the IDE itself, from ide/po/
 ./build/bintana examples/session     # Http with cookies and Basic auth: a login the next request remembers
 ./build/bintana examples/serve       # Http.Server: a static file server on :8080. Runs until Ctrl-C
 LANGUAGE=es ./build/bintana examples/agenda   # ...and the long date the catalogue rewrites
-./tests/run.sh                   # 5357 assertions in 5 projects, on a virtual display
+./tests/run.sh                   # 5388 assertions in 5 projects, on a virtual display
 HEADLESS= ./tests/run.sh          # the same, on *your* screen -- empty, not 0. Three
                                   # windows and the keyboard for a minute, and a couple
                                   # of assertions measure your theme and not the one
@@ -1272,7 +1272,7 @@ its `image-missing`) or ship an SVG that renders to nothing.
 | `Settings` | `Get(key, fallback)`, `Set`, `Has`, `Delete`, `Keys`, `Clear`, `Path` |
 | `Timer` | `Timer.After(ms, fn)`, `Timer.Every(ms, fn)`; `new Timer(delay, tick)`: `Delay`, `Tick`, `Enabled`, `Start`, `Stop`, `Once` |
 | `Logger` | `Debug`, `Info`, `Warning`, `Error`; `Level`, `Target`, `Handler` |
-| `Http` | a client (`Client`, `Get`/`Post`/…, `GetWait`/…, always `Bytes` bodies) and a server (`Server`, `Request`, `Answer`) over libsoup3 |
+| `Http` | a client (`Client`, `Get`/`Post`/…, `GetWait`/…, `Stream` for an answer read as it arrives, always `Bytes` bodies) and a server (`Server`, `Request`, `Answer`) over libsoup3 |
 | `AudioPlayer` | `new AudioPlayer()`: sound with no window — `Uri`, `User`/`Password` (RTSP digest), `Latency`, `Volume`, `Muted`, `Loop`, `Position`/`Duration`/`Playing`/`Seekable`/`Buffering` (ro), `OnEnded`/`OnError`, `Play()`, `Pause()`, `Stop()`, `Seek(s)` — over GStreamer, like `Video`, and a cue nobody keeps is still heard to its end |
 | `Multipart` | `new Multipart()`: `Field`, `File`, `Part`, `Length` — a file upload as a value, for `Http` in either direction |
 | `Record` / `Field` | the shape data has, declared once — see below |

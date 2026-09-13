@@ -60,12 +60,18 @@ static JSClassID http_client_class_id;
 
 typedef struct {
     JSContext    *ctx;
+    JSValue       on_line;   /* Stream's per-line callback; UNDEFINED on the rest */
     JSValue       on_done;
     JSValue       on_error;
     JSValue       handle;
     SoupSession  *sess;      /* referenced for the flight */
     SoupMessage  *msg;
     GCancellable *cancellable;
+    /* A streamed 2xx is read line by line off this; a streamed anything-else
+     * is spliced whole into `sink` instead, because an error page is an
+     * answer and not a feed. Both NULL on the buffered road. */
+    GDataInputStream *lines;
+    GOutputStream    *sink;
     guint         guard;
     int           id;
     bool          timed_out;
@@ -73,6 +79,19 @@ typedef struct {
      * handler asking the handle what happened is answered), and a Stop from
      * inside one must find nothing left to signal -- the reaped mold. */
     bool          finished;
+    /*
+     * Whether this job is inside its own line callback, and whether it was
+     * freed while it was.
+     *
+     * **A stream is routinely stopped from within its own callback**: the
+     * line that says the turn ended is exactly where an application stops
+     * following. `File.Watch` learned this the hard way and the comment at
+     * `bta_sys.c:420` is the long version -- the job was freed and then read
+     * back by the lines after the call. So a free in here only *marks*, and
+     * the frame that owns the job does it once it is finished with it.
+     */
+    bool          calling;
+    bool          dead;
     char         *who;       /* the caller's name, for the error text */
     char         *url;       /* what was asked, for the same */
 } HttpJob;
@@ -86,10 +105,30 @@ static void http_job_free(HttpJob *job)
 {
     http_jobs = g_list_remove(http_jobs, job);
 
+    /*
+     * Freed from inside its own line callback: mark, and let the reading frame
+     * do it. The mark lives here rather than at each caller because there are
+     * three of them already -- the two deliverers and the teardown -- and a
+     * fourth added later would reopen the segfault in silence. Coming off
+     * `http_jobs` first is what makes that safe: the teardown's `while
+     * (http_jobs)` still terminates, and a second `Stop()` answers false.
+     */
+    if (job->calling) {
+        job->dead = true;
+        return;
+    }
+
     /* Before anything else: a guard firing on a freed job is the UAF. */
     if (job->guard)
         g_source_remove(job->guard);
 
+    /* The line reader first: it holds a ref of its own on soup's stream, and
+     * a GFilterInputStream closes its base, which is what drops a feed that
+     * is still talking instead of leaving the socket held. */
+    g_clear_object(&job->lines);
+    g_clear_object(&job->sink);
+
+    JS_FreeValue(job->ctx, job->on_line);
     JS_FreeValue(job->ctx, job->on_done);
     JS_FreeValue(job->ctx, job->on_error);
     JS_FreeValue(job->ctx, job->handle);
@@ -100,6 +139,18 @@ static void http_job_free(HttpJob *job)
     g_free(job->who);
     g_free(job->url);
     g_free(job);
+}
+
+/* Still ours? A stream has a read armed on it for its whole life, and the
+ * teardown frees jobs with those reads outstanding -- the completion still
+ * fires, with `data` pointing at freed memory. Every live job is on
+ * `http_jobs` and a freed one is off it before anything else happens, so
+ * membership is the liveness test; the list is one request deep in practice.
+ * (`on_exec_line` gets away without this by returning on CANCELLED, which
+ * works only because its teardown cancels first.) */
+static bool http_job_alive(HttpJob *job)
+{
+    return g_list_find(http_jobs, job) != NULL;
 }
 
 static HttpClientData *http_client_data(JSValueConst v)
@@ -1112,6 +1163,33 @@ static void http_deliver_error(HttpJob *job, const char *kind, const char *detai
     http_job_free(job);
 }
 
+/* A failed read, in the words the caller gets. One place, because four
+ * transports now end here -- the buffered read, the streamed send, each line
+ * of a stream and the splice of an error page -- and a decision copied four
+ * times is the drift `HTTP_OPT_KEYS` already has a paragraph about. A
+ * cancelled flight is a Timeout or a Cancel depending on who asked, which is
+ * the only thing the GError cannot say on its own. */
+static void http_deliver_send_error(HttpJob *job, GError *err)
+{
+    const char *kind = NULL;
+    char       *detail = NULL;
+
+    if (g_error_matches(err, G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
+        if (job->timed_out) {
+            kind = "Timeout";
+            detail = g_strdup("timeout");
+        } else {
+            kind = "Cancelled";
+            detail = g_strdup("cancelled");
+        }
+    } else {
+        kind = http_kind_for(err);
+        detail = g_strdup(err ? err->message : "unknown error");
+    }
+    http_deliver_error(job, kind, detail);
+    g_free(detail);
+}
+
 static void on_http_done(GObject *src, GAsyncResult *res, gpointer data)
 {
     HttpJob *job = data;
@@ -1119,29 +1197,175 @@ static void on_http_done(GObject *src, GAsyncResult *res, gpointer data)
     GBytes  *bytes = soup_session_send_and_read_finish(job->sess, res, &err);
 
     if (!bytes) {
-        const char *kind = NULL;
-        char       *detail = NULL;
-
-        if (g_error_matches(err, G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
-            if (job->timed_out) {
-                kind = "Timeout";
-                detail = g_strdup("timeout");
-            } else {
-                kind = "Cancelled";
-                detail = g_strdup("cancelled");
-            }
-        } else {
-            kind = http_kind_for(err);
-            detail = g_strdup(err ? err->message : "unknown error");
-        }
+        http_deliver_send_error(job, err);
         g_clear_error(&err);
-        http_deliver_error(job, kind, detail);
-        g_free(detail);
         return;
     }
 
     http_deliver_done(job, bytes);
     g_bytes_unref(bytes);
+}
+
+/* ------------------------------------------------------------- streaming */
+
+static void http_stream_read_next(HttpJob *job);
+
+/*
+ * One line, the `Exec` mold (`bta_sys.c:on_exec_line`) -- with two differences
+ * that are worth the words, since the two functions otherwise read as twins.
+ *
+ * **CANCELLED does not return silently here.** In `Exec` a cancelled read
+ * means the teardown already freed the job; in `Http` only the guard and
+ * `Stop()` cancel, the job is alive and owes an answer, so a cancel goes
+ * through the funnel and comes out as `Timeout` or `Cancelled` exactly as the
+ * buffered road answers it. The teardown case is caught by `http_job_alive`
+ * instead, one line up.
+ *
+ * **And a body that is not UTF-8 ends the flight** rather than being read as
+ * EOF: this is the streamed twin of `Bytes.ToText()`, which refuses what is
+ * not text instead of handing back mojibake.
+ */
+static void on_http_stream_line(GObject *src, GAsyncResult *res, gpointer data)
+{
+    HttpJob *job = data;
+    GError  *err = NULL;
+    gsize    len = 0;
+    char    *line;
+
+    if (!http_job_alive(job))
+        return;
+
+    line = g_data_input_stream_read_line_finish_utf8(G_DATA_INPUT_STREAM(src),
+                                                     res, &len, &err);
+    if (err) {
+        g_free(line);
+        http_deliver_send_error(job, err);
+        g_clear_error(&err);
+        return;
+    }
+    if (!line) {
+        /* EOF. The record as always, and an empty `Body`: what already went
+         * out line by line is not sent a second time. */
+        http_deliver_done(job, NULL);
+        return;
+    }
+
+    if (JS_IsFunction(job->ctx, job->on_line)) {
+        JSContext *ctx = job->ctx;   /* read before the call: the job may not survive it */
+        JSValue    argv[2] = { JS_NewString(ctx, line), job->handle };
+
+        job->calling = true;
+
+        JSValue r = JS_Call(ctx, job->on_line, JS_UNDEFINED, 2, (JSValueConst *)argv);
+
+        if (JS_IsException(r))
+            bta_dump_error(ctx);
+        JS_FreeValue(ctx, r);
+        JS_FreeValue(ctx, argv[0]);
+        bta_drain_jobs(JS_GetRuntime(ctx));   /* which can also stop this stream */
+        job->calling = false;
+        if (job->dead) {   /* freed while we were in there: now it is ours to do */
+            http_job_free(job);
+            g_free(line);
+            return;
+        }
+    }
+    g_free(line);
+
+    /*
+     * Re-armed last, and that is the back-pressure: there is never more than
+     * one read outstanding, so a slow handler slows the feed instead of
+     * queueing it. A `Stop()` from inside the callback leaves the cancellable
+     * cancelled, so this read completes CANCELLED on the next turn of the loop
+     * and *that* frame answers -- which keeps the published promise that a
+     * cancelled request still answers a turn later.
+     */
+    http_stream_read_next(job);
+}
+
+static void http_stream_read_next(HttpJob *job)
+{
+    g_data_input_stream_read_line_async(job->lines, G_PRIORITY_DEFAULT,
+                                        job->cancellable, on_http_stream_line, job);
+}
+
+/* The non-2xx body, read whole. */
+static void on_http_stream_spliced(GObject *src, GAsyncResult *res, gpointer data)
+{
+    HttpJob *job = data;
+    GError  *err = NULL;
+    GBytes  *bytes;
+
+    if (!http_job_alive(job)) {
+        g_output_stream_splice_finish(G_OUTPUT_STREAM(src), res, NULL);
+        return;
+    }
+    if (g_output_stream_splice_finish(G_OUTPUT_STREAM(src), res, &err) < 0) {
+        http_deliver_send_error(job, err);
+        g_clear_error(&err);
+        return;
+    }
+
+    bytes = g_memory_output_stream_steal_as_bytes(G_MEMORY_OUTPUT_STREAM(job->sink));
+    g_clear_object(&job->sink);   /* before delivering: delivering frees the job */
+    http_deliver_done(job, bytes);
+    g_bytes_unref(bytes);
+}
+
+/*
+ * The headers are in, and the body has not been read yet -- which is the one
+ * moment at which the destination of those bytes can still be chosen.
+ *
+ * A 2xx is the feed the caller asked to follow. Anything else is an answer:
+ * a 404's JSON, a 500's page. Shredding that into the line callback would put
+ * the status in one callback and the explanation in the other, in pieces, with
+ * nothing to tell those pieces from feed data -- so it is read whole and
+ * delivered the way `Get` would have delivered it, with `onLine` never called.
+ * The caller gets a fact for free: a line arriving at all means a 2xx.
+ */
+static void on_http_stream_headers(GObject *src, GAsyncResult *res, gpointer data)
+{
+    HttpJob      *job = data;
+    GError       *err = NULL;
+    GInputStream *in;
+
+    if (!http_job_alive(job)) {
+        in = soup_session_send_finish(SOUP_SESSION(src), res, NULL);
+        g_clear_object(&in);
+        return;
+    }
+
+    in = soup_session_send_finish(job->sess, res, &err);
+    if (!in) {
+        http_deliver_send_error(job, err);
+        g_clear_error(&err);
+        return;
+    }
+
+    if (SOUP_STATUS_IS_SUCCESSFUL(soup_message_get_status(job->msg))) {
+        job->lines = g_data_input_stream_new(in);
+        /*
+         * **HTTP is a CRLF protocol and GLib's default newline is LF.** `Exec`
+         * never had to know, because a pipe ends its lines with `\n`; a
+         * conforming SSE server is allowed `\r\n`, and with the default every
+         * line would arrive with a carriage return still on the end of it --
+         * `JSON.parse` failing on the last character, and the blank line that
+         * separates two events never comparing equal to "".
+         */
+        g_data_input_stream_set_newline_type(job->lines,
+                                             G_DATA_STREAM_NEWLINE_TYPE_ANY);
+        g_object_unref(in);
+        http_stream_read_next(job);
+        return;
+    }
+
+    job->sink = g_memory_output_stream_new_resizable();
+    g_output_stream_splice_async(job->sink, in,
+                                 G_OUTPUT_STREAM_SPLICE_CLOSE_SOURCE |
+                                 G_OUTPUT_STREAM_SPLICE_CLOSE_TARGET,
+                                 G_PRIORITY_DEFAULT, job->cancellable,
+                                 on_http_stream_spliced, job);
+    g_object_unref(in);
 }
 
 static gboolean on_http_guard(gpointer data)
@@ -1778,13 +2002,15 @@ static bool http_build(JSContext *ctx, HttpClientData *c, const char *method,
 static JSValue http_start(JSContext *ctx, HttpClientData *c, SoupSession *sess,
                           const char *method, const char *url,
                           JSValueConst body, JSValueConst opts,
+                          JSValueConst on_line,
                           JSValueConst on_done, JSValueConst on_error,
                           const char *who)
 {
     SoupMessage *msg;
     char        *full;
+    bool         streaming = JS_IsFunction(ctx, on_line);
 
-    if (!JS_IsFunction(ctx, on_done) && !JS_IsFunction(ctx, on_error))
+    if (!streaming && !JS_IsFunction(ctx, on_done) && !JS_IsFunction(ctx, on_error))
         return JS_ThrowTypeError(ctx, "%s: a callback is required: http is async", who);
     if (!http_build(ctx, c, method, url, body, opts, who, false, &msg, &full))
         return JS_EXCEPTION;
@@ -1792,6 +2018,7 @@ static JSValue http_start(JSContext *ctx, HttpClientData *c, SoupSession *sess,
     HttpJob *job = g_new0(HttpJob, 1);
 
     job->ctx = ctx;
+    job->on_line = JS_DupValue(ctx, on_line);
     job->on_done = JS_DupValue(ctx, on_done);
     job->on_error = JS_DupValue(ctx, on_error);
     job->sess = sess ? g_object_ref(sess) : NULL;
@@ -1831,14 +2058,28 @@ static JSValue http_start(JSContext *ctx, HttpClientData *c, SoupSession *sess,
     if (timeout > 0)
         job->guard = g_timeout_add((guint)timeout, on_http_guard, job);
 
-    soup_session_send_and_read_async(job->sess, job->msg, G_PRIORITY_DEFAULT,
-                                     job->cancellable, on_http_done, job);
+    /* Only a streamed request changes road: everything else keeps the one
+     * call it has always made, so redirects, auth, cookies, the logger and
+     * the multipart bodies carry no regression risk -- and the stream gets
+     * all of them for free, since `http_build` above is the same. */
+    if (streaming)
+        soup_session_send_async(job->sess, job->msg, G_PRIORITY_DEFAULT,
+                                job->cancellable, on_http_stream_headers, job);
+    else
+        soup_session_send_and_read_async(job->sess, job->msg, G_PRIORITY_DEFAULT,
+                                         job->cancellable, on_http_done, job);
     return handle;
 }
 
-/* Split (method, url, [body], [opts], onDone, [onError]) for Request/Get/Post. */
+/*
+ * Split (url, [body], [opts], onDone, [onError]) for Request/Get/Post -- and
+ * (url, [body], [opts], onLine, [onDone], [onError]) when `stream` is set, one
+ * callback further along. One splitter and not two, so that the
+ * body-or-options rule, the Multipart refusal and the too-many-arguments
+ * answer cannot drift between `Stream` and `Post`.
+ */
 static JSValue http_call(JSContext *ctx, HttpClientData *c, SoupSession *sess,
-                         const char *method, bool takes_body,
+                         const char *method, bool takes_body, bool stream,
                          int argc, JSValueConst *argv, const char *who)
 {
     int at = 0;
@@ -1846,11 +2087,14 @@ static JSValue http_call(JSContext *ctx, HttpClientData *c, SoupSession *sess,
     char       *url_free = NULL;
     JSValueConst body = JS_UNDEFINED;
     JSValueConst opts = JS_UNDEFINED;
+    JSValueConst on_line = JS_UNDEFINED;
     JSValueConst on_done = JS_UNDEFINED;
     JSValueConst on_error = JS_UNDEFINED;
 
     if (argc < 1)
-        return JS_ThrowTypeError(ctx, "%s(url, [body], [opts], onDone, [onError]): needs a URL", who);
+        return JS_ThrowTypeError(ctx, stream
+            ? "%s(url, [body], [opts], onLine, [onDone], [onError]): needs a URL"
+            : "%s(url, [body], [opts], onDone, [onError]): needs a URL", who);
     {
         const char *s = JS_ToCString(ctx, argv[0]);
 
@@ -1890,6 +2134,14 @@ static JSValue http_call(JSContext *ctx, HttpClientData *c, SoupSession *sess,
         !JS_IsArray(argv[at])) {
         opts = argv[at++];
     }
+    /* The streamed spelling puts the per-line callback first, and the two
+     * that every verb has shift one along behind it. */
+    if (stream) {
+        if (at < argc && (JS_IsUndefined(argv[at]) || JS_IsNull(argv[at])))
+            at++;
+        else if (at < argc && JS_IsFunction(ctx, argv[at]))
+            on_line = argv[at++];
+    }
     if (at < argc && (JS_IsUndefined(argv[at]) || JS_IsNull(argv[at])))
         at++;
     else if (at < argc && JS_IsFunction(ctx, argv[at]))
@@ -1903,8 +2155,15 @@ static JSValue http_call(JSContext *ctx, HttpClientData *c, SoupSession *sess,
         g_free(url_free);
         return JS_ThrowTypeError(ctx, "%s: too many arguments", who);
     }
+    if (stream && !JS_IsFunction(ctx, on_line)) {
+        g_free(url_free);
+        return JS_ThrowTypeError(ctx,
+            "%s(method, url, [body], [opts], onLine, [onDone], [onError]): "
+            "the line callback is what streaming is for", who);
+    }
 
-    JSValue r = http_start(ctx, c, sess, method, url, body, opts, on_done, on_error, who);
+    JSValue r = http_start(ctx, c, sess, method, url, body, opts,
+                           on_line, on_done, on_error, who);
 
     g_free(url_free);
     return r;
@@ -1956,7 +2215,33 @@ static JSValue http_client_request(JSContext *ctx, JSValueConst this_val,
     if (!method)
         return JS_EXCEPTION;
     /* Shift method off and delegate. */
-    JSValue r = http_call(ctx, c, c->sess, method, true, argc - 1, argv + 1, "Http.Request");
+    JSValue r = http_call(ctx, c, c->sess, method, true, false, argc - 1, argv + 1, "Http.Request");
+
+    g_free(method);
+    return r;
+}
+
+/* The streamed twin of Request, and method-first for the same reason: a POST
+ * whose answer arrives in pieces is how a completions endpoint talks, and one
+ * name covers it rather than a Stream per verb. */
+static JSValue http_client_stream(JSContext *ctx, JSValueConst this_val,
+                                  int argc, JSValueConst *argv)
+{
+    HttpClientData *c = http_client_or_null(ctx, this_val);
+
+    if (!c)
+        return JS_ThrowTypeError(ctx, "Stream: not an Http client");
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx,
+            "Stream(method, url, [body], [opts], onLine, [onDone], [onError]): "
+            "needs a method");
+    char *method = http_verb_arg(ctx, argv[0], "Http.Stream");
+
+    if (!method)
+        return JS_EXCEPTION;
+
+    JSValue r = http_call(ctx, c, c->sess, method, true, true,
+                          argc - 1, argv + 1, "Http.Stream");
 
     g_free(method);
     return r;
@@ -1969,7 +2254,7 @@ static JSValue http_client_get(JSContext *ctx, JSValueConst this_val,
 
     if (!c)
         return JS_ThrowTypeError(ctx, "Get: not an Http client");
-    return http_call(ctx, c, c->sess, "GET", false, argc, argv, "Http.Get");
+    return http_call(ctx, c, c->sess, "GET", false, false, argc, argv, "Http.Get");
 }
 
 static JSValue http_client_post(JSContext *ctx, JSValueConst this_val,
@@ -1979,7 +2264,7 @@ static JSValue http_client_post(JSContext *ctx, JSValueConst this_val,
 
     if (!c)
         return JS_ThrowTypeError(ctx, "Post: not an Http client");
-    return http_call(ctx, c, c->sess, "POST", true, argc, argv, "Http.Post");
+    return http_call(ctx, c, c->sess, "POST", true, false, argc, argv, "Http.Post");
 }
 
 /* ------------------------------------------------------- sync Wait */
@@ -2198,7 +2483,7 @@ static JSValue http_client_verb(JSContext *ctx, JSValueConst this_val,
 
     if (!c)
         return JS_ThrowTypeError(ctx, "%s: not an Http client", method);
-    return http_call(ctx, c, c->sess, method, takes_body, argc, argv, who);
+    return http_call(ctx, c, c->sess, method, takes_body, false, argc, argv, who);
 }
 
 static JSValue http_client_put(JSContext *ctx, JSValueConst this_val,
@@ -2303,6 +2588,7 @@ static const JSCFunctionListEntry http_client_props[] = {
     JS_CFUNC_DEF("Patch",       5, http_client_patch),
     JS_CFUNC_DEF("Delete",      4, http_client_delete),
     JS_CFUNC_DEF("Head",        4, http_client_head),
+    JS_CFUNC_DEF("Stream",      6, http_client_stream),
     JS_CFUNC_DEF("RequestWait", 4, http_client_requestwait),
     JS_CFUNC_DEF("GetWait",     2, http_client_getwait),
     JS_CFUNC_DEF("PostWait",    3, http_client_postwait),
@@ -2523,8 +2809,26 @@ static JSValue js_http_request(JSContext *ctx, JSValueConst this_val,
 
     if (!method)
         return JS_EXCEPTION;
-    JSValue r = http_call(ctx, NULL, http_default_session, method, true,
+    JSValue r = http_call(ctx, NULL, http_default_session, method, true, false,
                           argc - 1, argv + 1, "Http.Request");
+
+    g_free(method);
+    return r;
+}
+
+static JSValue js_http_stream(JSContext *ctx, JSValueConst this_val,
+                              int argc, JSValueConst *argv)
+{
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx,
+            "Http.Stream(method, url, [body], [opts], onLine, [onDone], [onError]): "
+            "needs a method");
+    char *method = http_verb_arg(ctx, argv[0], "Http.Stream");
+
+    if (!method)
+        return JS_EXCEPTION;
+    JSValue r = http_call(ctx, NULL, http_default_session, method, true, true,
+                          argc - 1, argv + 1, "Http.Stream");
 
     g_free(method);
     return r;
@@ -2533,13 +2837,13 @@ static JSValue js_http_request(JSContext *ctx, JSValueConst this_val,
 static JSValue js_http_get(JSContext *ctx, JSValueConst this_val,
                            int argc, JSValueConst *argv)
 {
-    return http_call(ctx, NULL, http_default_session, "GET", false, argc, argv, "Http.Get");
+    return http_call(ctx, NULL, http_default_session, "GET", false, false, argc, argv, "Http.Get");
 }
 
 static JSValue js_http_post(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv)
 {
-    return http_call(ctx, NULL, http_default_session, "POST", true, argc, argv, "Http.Post");
+    return http_call(ctx, NULL, http_default_session, "POST", true, false, argc, argv, "Http.Post");
 }
 
 static JSValue js_http_requestwait(JSContext *ctx, JSValueConst this_val,
@@ -2575,7 +2879,7 @@ static JSValue js_http_postwait(JSContext *ctx, JSValueConst this_val,
 static JSValue js_http_verb(JSContext *ctx, int argc, JSValueConst *argv,
                             const char *method, bool takes_body, const char *who)
 {
-    return http_call(ctx, NULL, http_default_session, method, takes_body,
+    return http_call(ctx, NULL, http_default_session, method, takes_body, false,
                      argc, argv, who);
 }
 
@@ -2647,6 +2951,7 @@ static const JSCFunctionListEntry http_props[] = {
     JS_CFUNC_DEF("Patch",       5, js_http_patch),
     JS_CFUNC_DEF("Delete",      4, js_http_delete),
     JS_CFUNC_DEF("Head",        4, js_http_head),
+    JS_CFUNC_DEF("Stream",      6, js_http_stream),
     JS_CFUNC_DEF("RequestWait", 4, js_http_requestwait),
     JS_CFUNC_DEF("GetWait",     2, js_http_getwait),
     JS_CFUNC_DEF("PostWait",    3, js_http_postwait),
@@ -3841,7 +4146,7 @@ static const struct { const char *name; int arity; } http_missing_names[] = {
     { "Client",      1 }, { "Server",      1 },
     { "Request",     5 }, { "Get",         4 }, { "Post",        5 },
     { "Put",         5 }, { "Patch",       5 }, { "Delete",      4 },
-    { "Head",        4 },
+    { "Head",        4 }, { "Stream",      6 },
     { "RequestWait", 4 }, { "GetWait",     2 }, { "PostWait",    3 },
     { "PutWait",     3 }, { "PatchWait",   3 }, { "DeleteWait",  2 },
     { "HeadWait",    2 },

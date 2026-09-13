@@ -5,7 +5,7 @@ working Bintana application, and nothing about how the runtime is built.
 
 It is addressed to whoever is writing the application — a person or a language
 model. If you are a model and someone has asked you for a Bintana application,
-these eight files are what you need and the only thing you should be reading.
+these nine files are what you need and the only thing you should be reading.
 
 | Read | For |
 |---|---|

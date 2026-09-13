@@ -2181,6 +2181,7 @@ refused rather than breaking the framing silently:
 | `Post(url, body, [opts], onDone, [onError])` | with body |
 | `Put(url, body, …)`, `Patch(url, body, …)` | with body, like `Post` |
 | `Delete(url, …)`, `Head(url, …)` | no body, like `Get` |
+| `Stream(method, url, [body], [opts], onLine, [onDone], [onError])` | the answer **as it arrives**: `soup_session_send_async` instead of `send_and_read_async`, the `GInputStream` read through a `GDataInputStream` one line at a time, the next read armed only once the callback returns (which is the back-pressure). `onLine(line, handle)` per text line, newline stripped, blank lines included |
 | `RequestWait(method, url, [body], [opts])` | blocking: answers with the record, **throws** on transport failure |
 | `GetWait(url, [opts])`, `PostWait(url, body, [opts])` | blocking per verb |
 | `PutWait`, `PatchWait` (with body), `DeleteWait`, `HeadWait` (without) | blocking per verb |
@@ -2205,8 +2206,26 @@ resolve from a deadline without reading the prose back. A callback is required
 an object`; a relative URL with no `BaseUrl` is refused where it is asked.
 `Wait` freezes the window like `Exec.Wait` — no handler runs inside it.
 
+`Stream` is the only verb that answers before EOF, and it keeps five promises.
+The end is the ordinary `onDone` with an **empty `Body`** -- what already went
+out line by line is not sent twice, and `http_response_object` builds that for
+free from a NULL `GBytes`. **Only a 2xx streams**: the status is known when
+`soup_session_send_finish` returns, which is the one moment the destination of
+those bytes can still be chosen, so a `4xx`/`5xx` is spliced whole into memory
+and delivered the way `Get` would have, `onLine` uncalled -- a line arriving at
+all means 2xx. `Timeout` is unchanged and means the whole flight, so a live
+feed asks `Timeout: 0`; but what arrived before a guard or a `Stop()` **stays
+arrived**, which is what the buffered road cannot do. `Stop()` from inside
+`onLine` is safe (the `File.Watch` `calling`/`dead` mold) and answers a turn
+later as `Cancelled`, since the freshly armed read completes cancelled. There
+is no `StreamWait`. A body that is not UTF-8 ends the flight through `onError`
+rather than arriving as mojibake. And `bta_http_pending` counts a live feed, so
+a console program following one does not return from `Main` until EOF or
+`Stop()`.
+
 Honest limits: `404 goes to onDone`, `Wait freezes`, `cancel calls onError
-Cancelled`, credentials never belong in a `.form`. `Auth` is Basic sent
+Cancelled`, `a streamed Body is empty`, `only a 2xx streams`, `Timeout cuts a
+stream too`, credentials never belong in a `.form`. `Auth` is Basic sent
 preemptively -- libsoup3 has no session `authenticate` signal (connecting one
 is a `GLib-GObject-CRITICAL`), and its replacement wants a challenge round
 trip; a 401 from anything else is answered, like any other status. An explicit
