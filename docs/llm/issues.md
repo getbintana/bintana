@@ -177,7 +177,6 @@ needed and what it did instead.
 | A **form** bound to a table — a control that names a field and fills itself | [`docs/data-plan.md`](../data-plan.md). The records-over-a-table half exists: [`Database.Sqlite` and `Table`](library.md#database-and-table) |
 | No watch, no immediate window, and no changing a value while stopped — the debugger stops, steps and **shows** what a frame holds, and that is where it ends | [`docs/debug-plan.md`](../debug-plan.md), stages 3 to 6. A loop written entirely on one line also stops only once |
 | No git in the IDE — no status, no diff before committing, no stage or push | [`docs/git-plan.md`](../git-plan.md). What there is instead: the `Terminal` tab, a real shell in the project directory. The plan's core is a side-by-side diff viewer; its one open gap is below |
-| An editor that cannot say where it is scrolled to — two panes cannot lock | [ISSUE-editor-scroll](../issues/ISSUE-editor-scroll.md) |
 | A word for *do this, then that* | [`docs/async-plan.md`](../async-plan.md) |
 | Packaging an application without the project tree | root [`README`](../../README.md#what-is-next) |
 | No editable / autocompleting combo | [ISSUE-editable-combo](../issues/ISSUE-editable-combo.md) |

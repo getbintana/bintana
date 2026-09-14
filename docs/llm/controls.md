@@ -719,6 +719,8 @@ shape — a `GtkSourceView` *is* a `GtkTextView`.
 | `Selection` (ro) | the selected text |
 | `CanUndo` (ro) | whether there is anything to undo |
 | `CanRedo` (ro) | likewise |
+| `ScrollX` / `ScrollY` | how far it is scrolled, in pixels, and assignable — clamped to what there is to scroll. **Not** the cursor: `Line` and `GotoLine` are about that, with the scroll following as a side effect |
+| `ScrollMaxX` / `ScrollMaxY` (ro) | the furthest either can go, and `0` when it all fits |
 | `Append(text)` | at the end, scrolling there, whatever the cursor was doing |
 | `Clear()` | empties it |
 | `GotoLine(line)` | puts the cursor there and scrolls to it |
@@ -728,6 +730,7 @@ shape — a `GtkSourceView` *is* a `GtkTextView`.
 | `Undo()` | one step back |
 | **event** `Change()` | the value changed, including from an assignment in code — the round trip goes out to GTK and back |
 | **event** `Cursor()` | the cursor moved. `Line` and `Column` say where |
+| **event** `Scroll(x, y)` | it was scrolled — by the wheel, a scrollbar, the keyboard or an assignment. One event for a diagonal move. Two panes locked together is `Before_Scroll(x, y) { this.After.ScrollY = y; }`, and it does not loop: assigning a value it already has emits nothing |
 
 ## TextEditor
 

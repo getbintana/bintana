@@ -65,6 +65,18 @@ void bta_text_view_setup(BtaWidget *w, GtkWidget *view)
                                    GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
     gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(w->gtk), view);
 
+    /*
+     * Where it is scrolled to, which until now it could not say.
+     *
+     * An editor scrolls *itself* -- the line above is where its
+     * GtkScrolledWindow is built -- so wrapping one in a `Scroller` to find out
+     * measured the wrong thing, and `Line`/`GotoLine` answer about the cursor
+     * with the scroll following as a side effect. Two panes of a diff cannot be
+     * kept in step by a cursor. This publishes the scrolled window it already
+     * had, under the four names `Scroller` already uses.
+     */
+    bta_scroll_watch(w);
+
     GtkTextBuffer *buf = gtk_text_view_get_buffer(GTK_TEXT_VIEW(view));
     g_signal_connect(buf, "changed", G_CALLBACK(on_buffer_changed), w);
     g_signal_connect(buf, "notify::cursor-position",
@@ -443,6 +455,10 @@ static JSValue ed_select(JSContext *ctx, JSValueConst this_val,
 
 static const JSCFunctionListEntry editor_props[] = {
     JS_CGETSET_DEF("Text",      ed_get_text,      ed_set_text),
+    JS_CGETSET_MAGIC_DEF("ScrollX",    bta_scroll_get, bta_scroll_set, BTA_SCROLL_X),
+    JS_CGETSET_MAGIC_DEF("ScrollY",    bta_scroll_get, bta_scroll_set, BTA_SCROLL_Y),
+    JS_CGETSET_MAGIC_DEF("ScrollMaxX", bta_scroll_get, NULL, BTA_SCROLL_MAX_X),
+    JS_CGETSET_MAGIC_DEF("ScrollMaxY", bta_scroll_get, NULL, BTA_SCROLL_MAX_Y),
     JS_CGETSET_DEF("Line",      ed_get_line,      NULL),
     JS_CGETSET_DEF("Column",    ed_get_column,    NULL),
     JS_CGETSET_DEF("Selection", ed_get_selection, NULL),
@@ -471,7 +487,8 @@ void bta_text_register(void)
          * once, and `EventNames()[0]` is what the designer's double click
          * writes, so `Change` has to stay at the head.
          */
-        BTA_CLASS("Editor", "Control", NULL, editor_props, false, "Change,Cursor"),
+        BTA_CLASS("Editor", "Control", NULL, editor_props, false,
+                  "Change,Cursor,Scroll"),
         /*
          * **`Text` is prose here and not in a `SourceEditor`**, which is the
          * whole reason `Editor` exists (see the note at the top of this file). A

@@ -19,6 +19,10 @@ everything here works the same in both.
 | `Line` (ro) | the cursor's line, counting from 1 | [the cursor](#the-cursor) |
 | `Modified` | the editing flag | [what is in it](#what-is-in-it) |
 | `ReadOnly` | shown but not editable | [what is in it](#what-is-in-it) |
+| `ScrollMaxX` (ro) | the furthest it can scroll sideways | [where it is scrolled to](#where-it-is-scrolled-to) |
+| `ScrollMaxY` (ro) | and downwards | [where it is scrolled to](#where-it-is-scrolled-to) |
+| `ScrollX` | how far it is scrolled sideways, in pixels | [where it is scrolled to](#where-it-is-scrolled-to) |
+| `ScrollY` | and downwards | [where it is scrolled to](#where-it-is-scrolled-to) |
 | `Selection` (ro) | the selected text | [the cursor](#the-cursor) |
 | `Text` | everything in the buffer | [what is in it](#what-is-in-it) |
 | `Wrap` | wrap long lines | [what is in it](#what-is-in-it) |
@@ -31,6 +35,7 @@ everything here works the same in both.
 | `Undo()` | one step back | [undo](#undo) |
 | **event** `Change()` | the value changed, **including from code** | [what is in it](#what-is-in-it) |
 | **event** `Cursor()` | the cursor moved | [the cursor](#the-cursor) |
+| **event** `Scroll(x, y)` | it was scrolled | [where it is scrolled to](#where-it-is-scrolled-to) |
 
 ## What is in it
 
@@ -65,6 +70,51 @@ in the same breath, and the view has had no frame in which to be laid out. Both
 reveal the place through a text *mark*, so the scroll is carried out on the frame
 there is one. A jump that scrolled nowhere and left the cursor in the right place
 is what that avoids.
+
+## Where it is scrolled to
+
+| | |
+|---|---|
+| `ScrollX` | how far it is scrolled sideways, **in pixels**, and assignable. Clamped to what there is to scroll |
+| `ScrollY` | the same downwards, which is the one a diff view keeps in step |
+| `ScrollMaxX` (ro) | the furthest `ScrollX` can go — the content's width less the part on screen, and `0` when it all fits |
+| `ScrollMaxY` (ro) | the same for `ScrollY`, which is how a program tells a long file from one that fits |
+| **event** `Scroll(x, y)` | it was scrolled, by the wheel, a scrollbar, the keyboard or an assignment. **One event for a diagonal move**, not two |
+
+**This is not the cursor.** `Line`, `Column`, `GotoLine` and `Select` are all
+about where the *cursor* is, with the scroll following as a side effect — so a
+wheel movement with the cursor parked was unobservable, and two editors could
+not be kept in step by following it.
+
+```js
+/* Two panes of a diff, locked: the whole of what a diff view needs. */
+Before_Scroll(x, y) { this.After.ScrollY = y; }
+```
+
+**It does not loop back.** Assigning a value an adjustment already has emits
+nothing, so two panes pointed at each other settle after one event rather than
+bouncing.
+
+**A scroll one of the cursor verbs asks for lands on the next frame.**
+`GotoLine` and `Select` reveal their place through a text mark so that the
+request survives a view that has not been laid out yet — which means reading
+`ScrollY` on the line after `GotoLine(n)` answers where the view still *is*.
+Assigning `ScrollY` is immediate; asking to be shown a line is not.
+
+**And the end of a file exists only once it has been measured — which for a long
+one takes more than a turn.** A `GtkTextView` validates its text a little at a
+time, so `ScrollMaxY` *grows* while it works: text assigned in this turn has no
+height at all, and a 400-line file answers a small number before it answers the
+real one. Anything that needs a position should say it as a fraction of
+`ScrollMaxY` read in the same breath, or wait for the number to settle. What is
+always true is the relation — an assignment lands where it is told inside the
+range, and stops at the ends.
+
+**An editor scrolls itself**, which is why these are here rather than reached
+through a [`Scroller`](Scroller.md): putting one inside a scroller is refused,
+and it would measure the outer box and not the text. The four names and the
+event are `Scroller`'s own, and mean the same number in both — which is the
+point, for anything keeping two of them together.
 
 ## Undo
 

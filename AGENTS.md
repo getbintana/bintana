@@ -1364,11 +1364,13 @@ person who wrote it either.
   anywhere says so. **The rule has no exceptions worth writing down**: if it
   scrolls, it goes through a mark.
 
-  It is also **not assertable with what the runtime publishes** -- an `Editor`
-  answers where its *cursor* is and never where it is scrolled to, and adding a
-  scroll position to prove this would be a public property that exists for a
-  test. So this one is verified by looking, and the thing to do is jump to a
-  handler near the end of a long file in a tab that is not open yet.
+  It was **not assertable** while an `Editor` answered where its *cursor* was
+  and never where it was scrolled to; `ScrollY` exists now -- asked for by a
+  diff viewer and not by this -- and `tests/widgets` (`EditorScroll`) asserts
+  the jump. One thing that test had to learn and anything reading a scroll has
+  to know: **the mark is honoured on the next frame**, so `ScrollY` on the line
+  after `GotoLine(n)` still answers where the view was. Assigning a scroll is
+  immediate; asking to be shown a line is not.
 - **`GtkSourceSearchContext`'s `occurrences-count` is filled in by a background
   scan and answers `-1` until it lands.** Same for `get_occurrence_position`. A
   find bar built on either shows "12 matches" some frames after the search, and a

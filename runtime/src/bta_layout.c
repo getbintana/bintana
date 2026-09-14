@@ -839,9 +839,19 @@ static void build_scroller(BtaWidget *w)
                                    GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
     gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(w->gtk), w->slot);
 
-    /* The adjustments are not the widget, so the finaliser's sweep over
-     * gtk/inner/slot cannot find these handlers: they have to be watched, or
-     * they fire into a freed `BtaWidget` after the scroller is gone. */
+    bta_scroll_watch(w);
+}
+
+/*
+ * Both adjustments of a widget that has a GtkScrolledWindow, reporting through
+ * one `Scroll`.
+ *
+ * The adjustments are not the widget, so the finaliser's sweep over
+ * gtk/inner/slot cannot find these handlers: they have to be watched, or they
+ * fire into a freed `BtaWidget` after the scroller is gone.
+ */
+void bta_scroll_watch(BtaWidget *w)
+{
     GtkAdjustment *h = gtk_scrolled_window_get_hadjustment(GTK_SCROLLED_WINDOW(w->gtk));
     GtkAdjustment *v = gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(w->gtk));
 
@@ -933,19 +943,17 @@ static GtkAdjustment *scroller_adjustment(BtaWidget *w, bool vertical)
                     : gtk_scrolled_window_get_hadjustment(sw);
 }
 
-enum { SCROLL_X, SCROLL_Y, SCROLL_MAX_X, SCROLL_MAX_Y };
-
-static JSValue scroller_get_scroll(JSContext *ctx, JSValueConst this_val, int magic)
+JSValue bta_scroll_get(JSContext *ctx, JSValueConst this_val, int magic)
 {
     BtaWidget *w = bta_this(ctx, this_val);
     if (!w)
         return JS_EXCEPTION;
 
-    GtkAdjustment *a = scroller_adjustment(w, magic == SCROLL_Y || magic == SCROLL_MAX_Y);
+    GtkAdjustment *a = scroller_adjustment(w, magic == BTA_SCROLL_Y || magic == BTA_SCROLL_MAX_Y);
     if (!a)
         return JS_NewInt32(ctx, 0);
 
-    if (magic == SCROLL_X || magic == SCROLL_Y)
+    if (magic == BTA_SCROLL_X || magic == BTA_SCROLL_Y)
         return JS_NewInt32(ctx, (int)(gtk_adjustment_get_value(a) + 0.5));
 
     double room = gtk_adjustment_get_upper(a) - gtk_adjustment_get_page_size(a);
@@ -964,8 +972,8 @@ static JSValue scroller_get_scroll(JSContext *ctx, JSValueConst this_val, int ma
  * the next turn -- is where that belongs, which is the same rule every
  * measurement in this runtime follows.
  */
-static JSValue scroller_set_scroll(JSContext *ctx, JSValueConst this_val,
-                                   JSValueConst val, int magic)
+JSValue bta_scroll_set(JSContext *ctx, JSValueConst this_val,
+                       JSValueConst val, int magic)
 {
     BtaWidget *w = bta_this(ctx, this_val);
     if (!w)
@@ -976,9 +984,9 @@ static JSValue scroller_set_scroll(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
     if (!isfinite(to))
         return JS_ThrowRangeError(ctx, "%s expects a number of pixels",
-                                  magic == SCROLL_Y ? "ScrollY" : "ScrollX");
+                                  magic == BTA_SCROLL_Y ? "ScrollY" : "ScrollX");
 
-    GtkAdjustment *a = scroller_adjustment(w, magic == SCROLL_Y);
+    GtkAdjustment *a = scroller_adjustment(w, magic == BTA_SCROLL_Y);
     if (!a)
         return JS_UNDEFINED;
 
@@ -1007,10 +1015,10 @@ static void on_scroller_moved(GtkAdjustment *a, gpointer user_data)
 
 static const JSCFunctionListEntry scroller_props[] = {
     JS_CGETSET_DEF("Scrollbars", scroller_get_bars, scroller_set_bars),
-    JS_CGETSET_MAGIC_DEF("ScrollX", scroller_get_scroll, scroller_set_scroll, SCROLL_X),
-    JS_CGETSET_MAGIC_DEF("ScrollY", scroller_get_scroll, scroller_set_scroll, SCROLL_Y),
-    JS_CGETSET_MAGIC_DEF("ScrollMaxX", scroller_get_scroll, NULL, SCROLL_MAX_X),
-    JS_CGETSET_MAGIC_DEF("ScrollMaxY", scroller_get_scroll, NULL, SCROLL_MAX_Y),
+    JS_CGETSET_MAGIC_DEF("ScrollX", bta_scroll_get, bta_scroll_set, BTA_SCROLL_X),
+    JS_CGETSET_MAGIC_DEF("ScrollY", bta_scroll_get, bta_scroll_set, BTA_SCROLL_Y),
+    JS_CGETSET_MAGIC_DEF("ScrollMaxX", bta_scroll_get, NULL, BTA_SCROLL_MAX_X),
+    JS_CGETSET_MAGIC_DEF("ScrollMaxY", bta_scroll_get, NULL, BTA_SCROLL_MAX_Y),
 };
 
 static const char *scroller_options(const char *prop)

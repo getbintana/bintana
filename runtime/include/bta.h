@@ -580,6 +580,24 @@ void  bta_media_init(JSContext *ctx, JSValue global);
 void  bta_media_cleanup(void);  /* stops players still going */
 guint bta_media_pending(void);  /* players owed an answer (console loop) */
 
+/* --- Scrolling, shared by Scroller and Editor -------------------------- */
+/*
+ * Where a widget is scrolled to, for the two that can answer.
+ *
+ * A `Scroller` *is* a GtkScrolledWindow and an `Editor` *builds* one around its
+ * view (`bta_text_view_setup`), so both have the same thing underneath and both
+ * publish the same four names and the same `Scroll` event.  One implementation,
+ * in `bta_layout.c`, because two would be two answers to one question -- and
+ * because `ScrollY` has to mean the same number in both places for a caller
+ * that keeps two of them in step.
+ */
+enum { BTA_SCROLL_X, BTA_SCROLL_Y, BTA_SCROLL_MAX_X, BTA_SCROLL_MAX_Y };
+JSValue bta_scroll_get(JSContext *ctx, JSValueConst this_val, int magic);
+JSValue bta_scroll_set(JSContext *ctx, JSValueConst this_val, JSValueConst val,
+                       int magic);
+/* Both adjustments, reporting through one `Scroll(x, y)`. */
+void bta_scroll_watch(BtaWidget *w);
+
 /* --- File / Dir / Exec -------------------------------------------------- */
 void bta_sys_init(JSContext *ctx, JSValue global);
 

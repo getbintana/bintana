@@ -365,7 +365,7 @@ const TESTS = [
      * the note below. */
     "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "FormMargin", "HideOnClose", "PointerEvents", "Field", "Separator", "TableView", "TableTree", "TableOnDemand", "TableSort", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
-    "Expand", "Spacing", "Scrolling", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorMarks", "Search", "Tree", "TreeIcons", "TreeExpand",
+    "Expand", "Spacing", "Scrolling", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "EditorMarks", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
     "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "Record", "Nested", "Database", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "Date", "Calendar", "Drawing", "Metrics", "Library", "ListMulti", "MenuState",
@@ -1025,6 +1025,131 @@ class WidgetsForm extends Form {
      * call having been made -- a mark is exactly the kind of feature that can
      * read back while nothing was ever drawn.
      */
+    /*
+     * Where an editor is scrolled to, which it could not say until now.
+     *
+     * `Line`, `Column`, `GotoLine` and `Select` are all about the *cursor*, with
+     * the scroll following as a side effect -- so a wheel movement with the
+     * cursor parked was unobservable and two panes could not be kept in step.
+     * That gap is what `ISSUE-editor-scroll` reported, from a diff viewer that
+     * had to follow the cursor instead of locking the views.
+     *
+     * The four names and the event are `Scroller`'s own, because an editor
+     * *builds* a GtkScrolledWindow around its view: it is the same thing
+     * underneath and the same number has to come out of both.
+     */
+    testEditorScroll() {
+        /*
+         * Its own editor on the surface, and not the `.form`'s.
+         *
+         * `this.Ed` lives on a page nothing is looking at during a full run, and
+         * a view that is never laid out never measures its text -- so the end of
+         * the file stays zero and every assertion below waits forever. It passed
+         * on its own and failed in the suite, which is the shape of that bug.
+         * `testScrolling` puts its `Scroller` on `Fixed1` for the same reason.
+         */
+        const ed = new TextEditor();
+        this.Fixed1.Add(ed);
+        ed.Name = "Ed2";
+        ed.Wrap = false;
+        ed.Resize(200, 120);
+
+        let text = "";
+        for (let i = 1; i <= 400; i++) text += `line ${i}\n`;
+        ed.Text = text;
+
+        eq("a fresh editor is at the top", ed.ScrollY, 0);
+
+        /* **The text has to have been laid out before the end exists.** It was
+         * assigned this turn and has no measured height yet, so the adjustment
+         * still describes an empty view -- the same rule `testScrolling` above
+         * follows, and the same one `Bounds()` does. */
+        until("a long file is measured", () => ed.ScrollMaxY > 0, () => {
+            check("and then it has somewhere to go", ed.ScrollMaxY > 0,
+                  String(ed.ScrollMaxY));
+
+            /*
+             * **Nothing here is a fixed number of pixels**, and that is the
+             * lesson rather than a convenience. A `GtkTextView` validates its
+             * text a little at a time, so the end of a long file *grows* while
+             * it is being measured: a test that asked for 300 got 10, then 46,
+             * and the same assignment twice emitted twice because the ceiling
+             * had moved between them. What is stable is the relation -- it goes
+             * where it is told inside the range, and stops at the ends.
+             */
+            this.scrolls = [];
+            const half = Math.floor(ed.ScrollMaxY / 2);
+
+            ed.ScrollY = half;
+            eq("assigning it moves it", ed.ScrollY, half);
+            eq("and says so once", this.scrolls.length, 1);
+            eq("with where it went", this.scrolls[0][1], half);
+
+            /* Assigning what it already has emits nothing, which is what keeps
+             * two panes pointed at each other from bouncing off one another. */
+            ed.ScrollY = half;
+            eq("assigning the same value again says nothing", this.scrolls.length, 1);
+
+            /*
+             * Clamped, not refused: past the end is the end, the way `GotoLine`
+             * treats a line past the last one.
+             *
+             * Asserted as `<=` and not as equality, and that is the same lesson
+             * again: setting a value validates more text, so the ceiling read
+             * after the assignment is already higher than the one the clamp
+             * used. `10` against a `ScrollMaxY` of `28`, measured. What cannot
+             * happen is going past it.
+             */
+            ed.ScrollY = 999999;
+            check("past the end does not go past the end",
+                  ed.ScrollY <= ed.ScrollMaxY, `${ed.ScrollY} of ${ed.ScrollMaxY}`);
+            check("and goes as far as there was", ed.ScrollY >= half,
+                  `${ed.ScrollY} from ${half}`);
+            ed.ScrollY = -50;
+            eq("and before the start is the start", ed.ScrollY, 0);
+
+            throws("a scroll that is not a number is refused",
+                   () => { ed.ScrollY = NaN; });
+
+            /*
+             * **And this is what makes `GotoLine`'s scroll assertable at all.**
+             * It revealed its line through an iter, and `scroll_to_iter` on a
+             * view with no allocation does nothing and says nothing -- so
+             * jumping in a tab opened in the same turn left the cursor right and
+             * the view at the top. There was no way to see that from here until
+             * an editor could say where it was scrolled to.
+             */
+            ed.GotoLine(380);
+            eq("GotoLine puts the cursor there", ed.Line, 380);
+
+            /*
+             * **The scroll it asks for lands on the next frame, not on this
+             * line.** That is the point of revealing through a mark: the request
+             * survives until there is something laid out to carry it out on.
+             * Reading `ScrollY` in the same turn answers where the view still
+             * is, which is what anybody writing `GotoLine(n); ed.ScrollY` has to
+             * know.
+             */
+            eq("...and has not scrolled yet, in this same turn", ed.ScrollY, 0);
+
+            until("the jump is carried out", () => ed.ScrollY > 0, () => {
+                check("GotoLine really scrolls to its line", ed.ScrollY > 0,
+                      `ScrollY=${ed.ScrollY} of ${ed.ScrollMaxY}`);
+
+                /* A file that fits has nowhere to scroll, and says zero rather
+                 * than something negative -- once it has been measured. */
+                ed.Text = "una sola\n";
+                until("the short file is measured", () => ed.ScrollMaxY === 0, () => {
+                    eq("a file that fits cannot scroll", ed.ScrollMaxY, 0);
+                    eq("and is at the top", ed.ScrollY, 0);
+                    ed.Delete();          /* off the surface it was borrowed from */
+                });
+            });
+        });
+    }
+
+    Ed2_Scroll(x, y) { if (this.scrolls) this.scrolls.push([x, y]); }
+
     testEditorMarks() {
         this.Ed.Text = "uno\ndos\ntres\ncuatro\n";
 
