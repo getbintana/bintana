@@ -1182,6 +1182,13 @@ The design, the measurements and what was refused are in
 | `Ctrl+F8` | pause a program that is running |
 | `F8` / `Shift+F8` / `Ctrl+Shift+F8` | step into, over, out |
 
+*Debug → Stop where something is thrown* is a switch, and it is **every** throw
+and not only the uncaught ones: whether something above will catch it is not a
+question the engine can answer at the moment it is raised. Which is what one
+wants it for anyway -- catching the throw that should not be happening -- and
+stopping at the `catch` instead would be useless, because by then the frames
+that built the failure are gone.
+
 **The keys are Visual Basic's**, which is the lineage this project claims, and
 `F9` for a breakpoint is also Gambas's, Delphi's, Lazarus's, Visual Studio's and
 VS Code's. *Run* gave it up and kept `Ctrl+R`: `F9` meaning *run* was this IDE's
@@ -1213,7 +1220,35 @@ beside *Output*. Choosing a frame goes to its line and shows **that frame's**
 arguments and variables -- arguments in bold, because which names came in and
 which the body made is the first thing anyone wants from such a list. The values
 are text the child rendered: a live object is not serialisable in general, and a
-debugger that could not show one would be useless exactly where it matters.
+debugger that could not show one would be useless exactly where it matters. An
+object is rendered **by what is in it** -- `{ nombre: "Ana", saldo: 31 }`, one
+level and a handful of fields -- because `[object Object]` is what a debugger
+shows when it has given up.
+
+**And the box under it asks.** An expression typed there is answered where the
+program is standing, in the frame that is chosen; the answer goes to the log,
+the way Visual Basic's immediate window keeps a conversation rather than one
+label. *Watch* keeps the expression and asks it again at **every** stop, and the
+watches sit above the frame's own values in the same list -- one list, because
+they answer the same question, and a panel this tall cannot afford a second
+heading. Activating a watch takes it off; activating a value offers to change
+it, and the new one is an *expression*, so `n + 1` and `this.Ok` work and not
+only literals.
+
+**What the box can name is exactly what the list shows**, and that is not a
+coincidence. The obvious way to evaluate in a frame is a *direct* eval -- the
+one that sees an enclosing scope -- and it reaches arguments and `var`s and
+stops there, because QuickJS compiles one against a lexical scope index the
+compiler wrote into each `OP_eval` and there is no such number for an arbitrary
+line. In a language where almost everything is `let`, a box that could read `n`
+and not `total` is not an immediate window. So the runtime compiles the
+expression as a function of the frame's own names and calls it with the frame's
+own values: the panel and the box cannot disagree about what is in scope.
+
+**A breakpoint can carry a condition**, evaluated in the frame before the stop
+is reported -- so a breakpoint inside a loop stops on the turn that matters
+instead of on all of them. One whose condition is broken does **not** stop: that
+is a line in the log, not a stop on every pass.
 
 **One Stop for both.** Whichever of *Run* and *Debug* started a child, the Stop
 button is what ends it -- a second button for *stop the one being debugged*
@@ -1221,6 +1256,14 @@ would be a second answer to a question that has one.
 
 ### What it cannot do yet
 
+- **A breakpoint that only logs**, which every environment in this family also
+  has: it would be a condition that never holds plus a message, and the channel
+  already carries both halves.
+- **Run to cursor**, which is a temporary breakpoint and the one piece of stage
+  2 that was not built.
+- **The hook costs what it costs.** A branch per opcode is +12 to +16 % with the
+  debugger off, measured; the fix is stage 5 of the plan -- patching the
+  bytecode where a breakpoint is armed, which costs nothing while none is.
 - **A breakpoint past the last statement of a function moves into the next
   one.** What it moves to is the first line *of the file* that can stop at or
   after the one asked for, and the file is all the debugger knows about: a
@@ -1232,9 +1275,6 @@ would be a second answer to a question that has one.
   i++) total += i;` never leaves its line, and what the debugger watches is the
   line changing. Telling those apart wants the pc rather than the line, which is
   stage 5 of the plan.
-- **No conditional breakpoint, no watch, and no immediate window.** Stages 3 and
-  4. The channel already carries what they need.
-- **Nothing is evaluated in a frame**, so a value can be read and not changed.
 
 ## The terminal tab
 

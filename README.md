@@ -48,7 +48,7 @@ LANGUAGE=es ./build/bintana ide examples/hello    # the IDE itself, from ide/po/
 ./build/bintana examples/session     # Http with cookies and Basic auth: a login the next request remembers
 ./build/bintana examples/serve       # Http.Server: a static file server on :8080. Runs until Ctrl-C
 LANGUAGE=es ./build/bintana examples/agenda   # ...and the long date the catalogue rewrites
-./tests/run.sh                   # 5499 assertions in 5 projects, on a virtual display
+./tests/run.sh                   # 5513 assertions in 5 projects, on a virtual display
 HEADLESS= ./tests/run.sh          # the same, on *your* screen -- empty, not 0. Three
                                   # windows and the keyboard for a minute, and a couple
                                   # of assertions measure your theme and not the one
@@ -1585,11 +1585,22 @@ step into, over and out, `Ctrl+F8` pauses a program that is running, and
 Gambas, Delphi, Lazarus and Visual Studio got theirs; *Run* gave `F9` up and
 kept `Ctrl+R`, because `F9` meaning *run* was this IDE's alone.
 
-The bottom panel grows a *Debug* page: the call stack, and the arguments and
+The bottom panel grows a *Debug* page: the call stack, the arguments and
 variables of whichever frame is chosen -- **that frame's**, so standing one
-level up shows what the caller was holding. Arguments are in bold. The gutter
-mark *is* the breakpoint, which is what `SourceEditor.Mark`'s `Bookmark` kind
-was written for, so there is no second list to disagree with what is on screen.
+level up shows what the caller was holding -- and a box that asks. An expression
+typed in it is answered where the program is standing; *Watch* keeps it and asks
+it again at every stop; activating a value offers to change it, and the new one
+is an expression rather than a literal. A breakpoint can carry a condition, and
+*Stop where something is thrown* stops on the line that threw, with the frame
+that built the failure still alive.
+
+An object is shown **by what is in it** -- `{ nombre: "Ana", saldo: 31 }` --
+because `[object Object]` is what a debugger shows when it has given up. And
+what the box can name is exactly what the list shows: the runtime compiles the
+expression as a function of the frame's own names, which is the only way a
+`let` is in scope at all. The gutter mark *is* the breakpoint, which is what
+`SourceEditor.Mark`'s `Bookmark` kind was written for, so there is no second
+list to disagree with what is on screen.
 
 **A breakpoint can move, and says so.** QuickJS gives a line number only where
 the line changes, so a statement the compiler ran together with the one above it

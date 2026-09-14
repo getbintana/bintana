@@ -14858,7 +14858,7 @@ class Spike extends Form {
                 check("a local not yet initialised is not offered",
                       !("doubled" in by), JSON.stringify(by));
 
-                this.testExecKill();
+                this.testDebuggerAsks();
             });
 
         check("Write answers whether there was a child to write to",
@@ -14875,6 +14875,151 @@ class Spike extends Form {
      * hang guard left an X server orphaned to init once per timeout, which is
      * what this measures now.
      */
+    /*
+     * What a stopped program can be **asked**, and told.
+     *
+     * The stage-1 test above proves it stops; this one proves the three things
+     * that make stopping worth anything: an expression answered where the
+     * program is standing, a value written back, and a breakpoint that only
+     * stops when its condition holds. Plus stopping where a throw happens,
+     * which is the one place the frames that built a failure are still alive.
+     */
+    testDebuggerAsks() {
+        const proj = File.Join(SCRATCH, "dbg2");
+
+        Directory.Make(proj);
+        File.Save(File.Join(proj, "project.json"),
+                  JSON.stringify({ name: "dbg2", main: "Main", sources: ["Main.js"] }));
+        /*
+         * `let` and `const` on purpose: a *direct* eval reaches arguments and
+         * `var`s and stops there, so an immediate window built on one could read
+         * `n` and not `total` -- which in this language is most of what there is
+         * to read. What the runtime does instead is compile the expression as a
+         * function of the frame's own names.
+         */
+        File.Save(File.Join(proj, "Main.js"),
+                  '"use strict";\n' +
+                  'function twice(n) {\n' +
+                  '    const doubled = n * 2;\n' +
+                  '    if (n === 9) throw new Error("nueve");\n' +
+                  '    return doubled;\n' +
+                  '}\n' +
+                  'function Main() {\n' +
+                  '    const cliente = { nombre: "Ana", saldo: 7 };\n' +
+                  '    let total = 0;\n' +
+                  '    for (let i = 0; i < 4; i++) total += twice(i);\n' +
+                  '    try { twice(9); } catch (e) { total += 1; }\n' +
+                  '    print(`total ${total}`);\n' +
+                  '    Application.Quit(0);\n' +
+                  '}\n');
+
+        const stops = [];
+        const said  = {};
+        const out   = [];
+        let   locals = null;
+        let   step   = 0;
+
+        /* One script, driven by what comes back: each stop asks its questions
+         * and then lets it go, so the run is the assertions in order. */
+        const atStop = [
+            /* i === 2, by the condition: read a const of this frame and one of
+             * the caller's, then change this frame's and carry on. */
+            (job) => {
+                job.Write(JSON.stringify({ do: "eval", frame: 0, text: "doubled" }));
+                job.Write(JSON.stringify({ do: "eval", frame: 1, text: "cliente.nombre" }));
+                job.Write(JSON.stringify({ do: "eval", frame: 1, text: "total" }));
+                job.Write(JSON.stringify({ do: "eval", frame: 0, text: "no.such.thing" }));
+                job.Write(JSON.stringify({ do: "set", frame: 0, name: "doubled",
+                                           text: "1000" }));
+                job.Write(JSON.stringify({ do: "clear", id: 1 }));
+                job.Write(JSON.stringify({ do: "stopOnThrow", value: true }));
+                job.Write(JSON.stringify({ do: "continue" }));
+            },
+            /* the throw */
+            (job) => {
+                job.Write(JSON.stringify({ do: "locals", frame: 0 }));
+                job.Write(JSON.stringify({ do: "stopOnThrow", value: false }));
+                job.Write(JSON.stringify({ do: "continue" }));
+            },
+        ];
+
+        const job = Exec([Application.Executable, "--debug", proj],
+            {
+                Timeout: 20000,
+                Control: (line) => {
+                    const msg  = JSON.parse(line);
+                    const kind = msg.event || msg.reply;
+
+                    if (kind === "ready") {
+                        /* A condition, which is what makes one breakpoint out of
+                         * four passes the one that matters. */
+                        /* Line 4 and not 3: on the line that *declares*
+                         * `doubled` it is still the hole, and a value written
+                         * there would be overwritten by the declaration a
+                         * moment later. A debugger reads a variable after the
+                         * line that makes it. */
+                        job.Write(JSON.stringify({ do: "break", file: "Main.js",
+                                                   line: 4, id: 1, when: "n === 2" }));
+                        job.Write(JSON.stringify({ do: "continue" }));
+                    } else if (kind === "stopped") {
+                        stops.push(msg);
+                        if (atStop[step]) atStop[step++](job);
+                    } else if (kind === "eval") {
+                        said[msg.text] = msg;
+                    } else if (kind === "locals") {
+                        locals = msg.items;
+                    }
+                },
+            },
+            (line) => out.push(line),
+            (code) => {
+                eq("a program asked questions still finishes", code, 0);
+
+                /* --- the condition ---------------------------------------- */
+                eq("a conditional breakpoint stops once", stops.length, 2);
+                eq("...and only where its condition held",
+                   stops[0].frames[0].Line, 4);
+                eq("which is the call it names", stops[0].frames[0].Name, "twice");
+
+                /* --- the immediate ---------------------------------------- */
+                eq("a const of the stopped frame is readable",
+                   said["doubled"] && said["doubled"].value, "4");
+                eq("...and a field of an object in the caller's frame",
+                   said["cliente.nombre"] && said["cliente.nombre"].value, '"Ana"');
+                eq("...and a `let` of the caller, which a direct eval cannot see",
+                   said["total"] && said["total"].value, "2");
+
+                /* An expression that throws answers its message and leaves
+                 * nothing behind for the program to find. */
+                check("a broken expression answers instead of failing",
+                      said["no.such.thing"] && said["no.such.thing"].failed === true,
+                      JSON.stringify(said["no.such.thing"]));
+
+                /*
+                 * --- the write-back ---------------------------------------
+                 *
+                 * `twice` returns `doubled`, so 1000 instead of 4 on the third
+                 * turn: 0 + 2 + 1000 + 6, and one more from the catch.
+                 */
+                check("a value written back reaches the program",
+                      out.join("").includes("total 1009"), JSON.stringify(out));
+
+                /* --- the throw -------------------------------------------- */
+                eq("it stops where the throw happens", stops[1].reason, "exception");
+                eq("in the function that threw", stops[1].frames[0].Name, "twice");
+                eq("on the line that threw", stops[1].frames[0].Line, 4);
+
+                /* The whole point of stopping there rather than at the catch:
+                 * the frame that built the failure is still alive. */
+                const by = {};
+                for (const item of locals || []) by[item.Name] = item.Value;
+                eq("with the values that led to it", by.n, "9");
+                eq("...including what it had worked out", by.doubled, "18");
+
+                this.testExecKill();
+            });
+    }
+
     testExecKill() {
         const said = [];
         const job = Exec(["/bin/sh", "-c", "sleep 30 & echo $!; wait"],

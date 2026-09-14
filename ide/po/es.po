@@ -1534,10 +1534,6 @@ msgstr "Valores"
 msgid "The frames the program is stopped in. Choosing one shows its own values"
 msgstr "Los cuadros en los que el programa está detenido. Al elegir uno se ven sus propios valores"
 
-#: forms/MainForm.form: LocalList.Tooltip
-msgid "The arguments and variables of the chosen frame. Arguments are in bold"
-msgstr "Los argumentos y las variables del cuadro elegido. Los argumentos van en negrita"
-
 #: modules/Debugger.js:69
 msgid "Stop here while debugging"
 msgstr "Parar acá mientras se depura"
@@ -1549,3 +1545,35 @@ msgstr "{0}:{1} no puede parar; el punto de corte se movió a la línea {2}."
 #: modules/Debugger.js:334
 msgid "Stopped here"
 msgstr "Detenido acá"
+
+#: forms/MainForm.form: menu MnuStopThrow
+msgid "Stop where something is thrown"
+msgstr "Parar donde algo se lanza"
+
+#: forms/MainForm.form: BtnWatch.Text
+msgid "Watch"
+msgstr "Vigilar"
+
+#: forms/MainForm.form: BtnWatch.Tooltip
+msgid "Keep this expression and answer it again at every stop"
+msgstr "Mantener esta expresión y contestarla de nuevo en cada parada"
+
+#: forms/MainForm.form: TxtImmediate.Placeholder
+msgid "An expression, in the chosen frame"
+msgstr "Una expresión, en el cuadro elegido"
+
+#: forms/MainForm.form: TxtImmediate.Tooltip
+msgid "Evaluated where the program is stopped. Enter answers; Watch keeps it and re-asks at every stop"
+msgstr "Se evalúa donde el programa está detenido. Enter contesta; Vigilar la guarda y la vuelve a preguntar en cada parada"
+
+#: forms/MainForm.form: LocalList.Tooltip
+msgid "The watches and then the chosen frame's own values. Arguments are in bold; double click one to change it"
+msgstr "Las vigías y después los valores propios del cuadro elegido. Los argumentos van en negrita; doble clic en uno para cambiarlo"
+
+#: modules/Debugger.js:381
+msgid "Change a value"
+msgstr "Cambiar un valor"
+
+#: modules/Debugger.js:382
+msgid "{0} is"
+msgstr "{0} es"

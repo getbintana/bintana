@@ -66,6 +66,14 @@ static struct {
     GHashTable *lines;          /* a project file -> the lines it can stop on */
     BtaRunMode  mode;
     int         depth;          /* the stack depth a step began at */
+    /*
+     * True while the debugger is running JavaScript of its own -- an expression
+     * from the immediate box, a watch, a breakpoint's condition. Without it the
+     * hook fires *inside* that expression and the debugger stops itself, which
+     * is a hang with the program's own stack underneath it.
+     */
+    bool        evaluating;
+    bool        stop_on_throw;
 
 } dbg;
 
@@ -215,7 +223,21 @@ static void emit(const char *json)
     }
 }
 
-/* A JS value as the one string a debugger can always show. */
+/* How much of an object is worth putting on one line before it stops being a
+ * value and starts being a wall. */
+#define RENDER_FIELDS 6
+#define RENDER_WIDTH  120
+
+/*
+ * A JS value as the one string a debugger can always show.
+ *
+ * **An object is shown by what is in it**, one level deep, because
+ * `[object Object]` is what a debugger shows when it has given up: the whole
+ * question at a breakpoint is usually *what is in this thing*. One level and a
+ * handful of fields, since the panel has a line and not a tree -- and what is
+ * past that is what the immediate box is for: `this.Ok.Text` names the field
+ * rather than hunting for it.
+ */
 static char *render(JSContext *ctx, JSValueConst value)
 {
     const char *s;
@@ -226,6 +248,90 @@ static char *render(JSContext *ctx, JSValueConst value)
         out = g_strdup_printf("\"%s\"", s ? s : "");
         JS_FreeCString(ctx, s);
         return out;
+    }
+
+    if (JS_IsArray(value)) {
+        JSValue  lv = JS_GetPropertyStr(ctx, value, "length");
+        uint32_t n = 0, i;
+        GString *b;
+
+        JS_ToUint32(ctx, &n, lv);
+        JS_FreeValue(ctx, lv);
+
+        b = g_string_new("[");
+        for (i = 0; i < n && i < RENDER_FIELDS; i++) {
+            JSValue item = JS_GetPropertyUint32(ctx, value, i);
+            char   *text = render(ctx, item);
+
+            if (i)
+                g_string_append(b, ", ");
+            g_string_append(b, text);
+            g_free(text);
+            JS_FreeValue(ctx, item);
+        }
+        if (n > RENDER_FIELDS)
+            g_string_append_printf(b, ", … %u more", n - RENDER_FIELDS);
+        g_string_append_c(b, ']');
+        return g_string_free(b, FALSE);
+    }
+
+    if (JS_IsFunction(ctx, value)) {
+        JSValue nv   = JS_GetPropertyStr(ctx, value, "name");
+        const char *n = JS_ToCString(ctx, nv);
+
+        out = g_strdup_printf("function %s()", n && *n ? n : "");
+        JS_FreeCString(ctx, n);
+        JS_FreeValue(ctx, nv);
+        return out;
+    }
+
+    /* A plain object, by its own fields. A control or a Record answers here
+     * too, which is the case that matters: `{ Name: "Ana", Age: 31 }` rather
+     * than the name of its class and nothing else. */
+    if (JS_IsObject(value)) {
+        JSPropertyEnum *keys = NULL;
+        uint32_t        n = 0, i;
+        GString        *b;
+
+        if (JS_GetOwnPropertyNames(ctx, &keys, &n, value, JS_GPN_STRING_MASK |
+                                   JS_GPN_ENUM_ONLY) < 0) {
+            JS_FreeValue(ctx, JS_GetException(ctx));
+            keys = NULL;
+            n    = 0;
+        }
+
+        b = g_string_new("{ ");
+        for (i = 0; i < n && i < RENDER_FIELDS; i++) {
+            JSValue     item = JS_GetProperty(ctx, value, keys[i].atom);
+            const char *name = JS_AtomToCString(ctx, keys[i].atom);
+            char       *text;
+
+            if (JS_IsException(item)) {
+                JS_FreeValue(ctx, JS_GetException(ctx));
+                item = JS_UNDEFINED;
+            }
+            /* One level: a field that is an object is named and not opened, or
+             * a cycle would be a hang rather than a value. */
+            text = JS_IsObject(item) && !JS_IsFunction(ctx, item)
+                 ? g_strdup(JS_IsArray(item) ? "[…]" : "{…}")
+                 : render(ctx, item);
+
+            if (i)
+                g_string_append(b, ", ");
+            g_string_append_printf(b, "%s: %s", name ? name : "?", text);
+            g_free(text);
+            JS_FreeCString(ctx, name);
+            JS_FreeValue(ctx, item);
+        }
+        if (n > RENDER_FIELDS)
+            g_string_append_printf(b, ", … %u more", n - RENDER_FIELDS);
+        g_string_append(b, " }");
+
+        JS_FreePropertyEnum(ctx, keys, n);
+
+        if (b->len > RENDER_WIDTH)
+            g_string_truncate(b, RENDER_WIDTH);
+        return g_string_free(b, FALSE);
     }
 
     /* An object's own `toString` can throw, and a debugger asking a question
@@ -257,6 +363,66 @@ static void emit_object(JSContext *ctx, JSValue object)
     char *json = to_json(ctx, object);
     emit(json);
     g_free(json);
+}
+
+/*
+ * An expression, evaluated where the program is standing, rendered.
+ *
+ * Two things it must not do, and both were real. It must not let the hook fire
+ * inside itself -- the debugger would stop in its own expression, with the
+ * program's stack underneath. And it must not leave an exception behind: a
+ * question asked by a debugger is not something the program should then find
+ * itself handling. What a throwing expression answers is the message, which is
+ * what a person typing in an immediate box wants to see anyway.
+ */
+static char *evaluate(JSContext *ctx, int frame, const char *expr, bool *failed)
+{
+    JSValue out;
+    char   *text;
+    bool    was = dbg.evaluating;
+
+    dbg.evaluating = true;
+    out = JS_DebugEval(ctx, frame, expr);
+    dbg.evaluating = was;
+
+    if (JS_IsException(out)) {
+        JSValue      err = JS_GetException(ctx);
+        const char  *msg = JS_ToCString(ctx, err);
+
+        text = g_strdup(msg ? msg : "error");
+        JS_FreeCString(ctx, msg);
+        JS_FreeValue(ctx, err);
+        if (failed)
+            *failed = true;
+        return text;
+    }
+
+    text = render(ctx, out);
+    JS_FreeValue(ctx, out);
+    if (failed)
+        *failed = false;
+    return text;
+}
+
+/* Whether an expression is true where the program is standing. A condition that
+ * throws does **not** stop: a breakpoint whose test is broken should be a line
+ * in the log and not a stop on every pass. */
+static bool condition_holds(JSContext *ctx, const char *expr)
+{
+    JSValue out;
+    bool    yes, was = dbg.evaluating;
+
+    dbg.evaluating = true;
+    out = JS_DebugEval(ctx, 0, expr);
+    dbg.evaluating = was;
+
+    if (JS_IsException(out)) {
+        JS_FreeValue(ctx, JS_GetException(ctx));
+        return false;
+    }
+    yes = JS_ToBool(ctx, out);
+    JS_FreeValue(ctx, out);
+    return yes;
 }
 
 /* ------------------------------------------------------------- the stop */
@@ -434,6 +600,66 @@ static bool obey(JSContext *ctx, const char *line, int depth_now)
         JS_ToInt32(ctx, &frame, fv);
         JS_FreeValue(ctx, fv);
         say_locals(ctx, frame);
+    } else if (!strcmp(verb, "eval")) {
+        JSValue     fv   = JS_GetPropertyStr(ctx, cmd, "frame");
+        JSValue     tv   = JS_GetPropertyStr(ctx, cmd, "text");
+        const char *text = JS_ToCString(ctx, tv);
+        int         frame = 0;
+        bool        failed = false;
+
+        JS_ToInt32(ctx, &frame, fv);
+        if (text) {
+            char   *answer = evaluate(ctx, frame, text, &failed);
+            JSValue out    = JS_NewObject(ctx);
+
+            JS_SetPropertyStr(ctx, out, "reply", JS_NewString(ctx, "eval"));
+            JS_SetPropertyStr(ctx, out, "frame", JS_NewInt32(ctx, frame));
+            JS_SetPropertyStr(ctx, out, "text", JS_NewString(ctx, text));
+            JS_SetPropertyStr(ctx, out, "value", JS_NewString(ctx, answer));
+            JS_SetPropertyStr(ctx, out, "failed", JS_NewBool(ctx, failed));
+            emit_object(ctx, out);
+            g_free(answer);
+        }
+        JS_FreeCString(ctx, text);
+        JS_FreeValue(ctx, tv);
+        JS_FreeValue(ctx, fv);
+    } else if (!strcmp(verb, "set")) {
+        /* A value changed from the debugger, which is the half of an immediate
+           window that is not a question. The new value is an *expression*, so
+           `n + 1` and `this.Ok` work and not only literals. */
+        JSValue     fv   = JS_GetPropertyStr(ctx, cmd, "frame");
+        JSValue     nv   = JS_GetPropertyStr(ctx, cmd, "name");
+        JSValue     tv   = JS_GetPropertyStr(ctx, cmd, "text");
+        const char *name = JS_ToCString(ctx, nv);
+        const char *text = JS_ToCString(ctx, tv);
+        int         frame = 0;
+
+        JS_ToInt32(ctx, &frame, fv);
+        if (name && text) {
+            JSValue value;
+            bool    was = dbg.evaluating;
+
+            dbg.evaluating = true;
+            value = JS_DebugEval(ctx, frame, text);
+            dbg.evaluating = was;
+
+            if (JS_IsException(value)) {
+                JS_FreeValue(ctx, JS_GetException(ctx));
+            } else if (JS_DebugSetLocal(ctx, frame, name, value)) {
+                say_locals(ctx, frame);       /* the panel, brought up to date */
+            }
+        }
+        JS_FreeCString(ctx, name);
+        JS_FreeCString(ctx, text);
+        JS_FreeValue(ctx, tv);
+        JS_FreeValue(ctx, nv);
+        JS_FreeValue(ctx, fv);
+    } else if (!strcmp(verb, "stopOnThrow")) {
+        JSValue bv = JS_GetPropertyStr(ctx, cmd, "value");
+
+        dbg.stop_on_throw = JS_ToBool(ctx, bv);
+        JS_DebugStopOnThrow(JS_GetRuntime(ctx), dbg.stop_on_throw);
+        JS_FreeValue(ctx, bv);
     } else if (!strcmp(verb, "pause")) {
         /* Not a stop of its own: the mode says *the next line, wherever it is*,
            and the stop happens where the program actually is. Asking twice, or
@@ -534,6 +760,30 @@ static void take_messages(JSContext *ctx, int depth_now)
     }
 }
 
+/*
+ * Something was thrown, and the debugger was asked to stop where that happens.
+ *
+ * Here rather than where it is caught, which is the whole point: by the time a
+ * `catch` runs, the frames that built the value are gone and so is everything
+ * they held. `pc` is NULL, so the backtrace falls back on each frame's own
+ * `cur_pc`.
+ */
+static void on_throw(JSContext *ctx)
+{
+    int depth_now;
+
+    if (dbg.evaluating || !dbg.attached)
+        return;
+
+    /* An expression of the debugger's own that throws -- a broken watch, a
+     * mistyped immediate -- must not stop the program it is inspecting. */
+    depth_now = JS_DebugDepth(JS_GetRuntime(ctx));
+
+    dbg.mode = RUN;
+    say_stopped(ctx, NULL, "exception");
+    wait_for_orders(ctx, depth_now);
+}
+
 static void on_step(JSContext *ctx, const uint8_t *pc, void *opaque)
 {
     JSAtom    file_atom;
@@ -545,6 +795,14 @@ static void on_step(JSContext *ctx, const uint8_t *pc, void *opaque)
 
     (void)opaque;
 
+    /* A throw, not an opcode -- `build_backtrace` calls the same handler with
+     * no pc, because a second handler for one debugger would be two places to
+     * keep in step. */
+    if (!pc) {
+        on_throw(ctx);
+        return;
+    }
+
     /*
      * The free half: with nothing armed and nobody attached there is nothing to
      * work out.  Being attached is enough to keep looking, because *Pause* has
@@ -552,6 +810,11 @@ static void on_step(JSContext *ctx, const uint8_t *pc, void *opaque)
      * whose speed nobody is measuring.
      */
     if (dbg.mode == RUN && dbg.breaks->len == 0 && !dbg.attached)
+        return;
+
+    /* The debugger is running an expression of its own -- an immediate, a watch,
+     * a condition. Stopping inside it would stop the debugger in itself. */
+    if (dbg.evaluating)
         return;
 
     /* True only where the program has moved to a new line of a new frame:
@@ -579,6 +842,12 @@ static void on_step(JSContext *ctx, const uint8_t *pc, void *opaque)
         bp   = file ? break_at(file, line) : NULL;
         JS_FreeCString(ctx, file);
         if (!bp)
+            return;
+
+        /* A condition is asked **here**, where the program is standing, and
+           only for the breakpoint that matched: a stop nobody wanted costs a
+           round trip to the IDE and a jump in the editor. */
+        if (bp->when && !condition_holds(ctx, bp->when))
             return;
     }
 

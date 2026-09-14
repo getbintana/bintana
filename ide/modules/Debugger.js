@@ -46,6 +46,11 @@ Ide.Debugger = class Debugger {
         this.stopped = null;      /* the frames, innermost first */
         this.frame   = 0;         /* which of them the panel is about */
         this.nextId  = 1;
+        /* Expressions kept between stops, answered again at each one. */
+        this.watches = [];
+        /* The last answer per watch, so the list can be drawn before the
+         * replies come back and not flicker through empty. */
+        this.answers = new Map();
     }
 
     get running()  { return this.job !== null; }
@@ -206,6 +211,7 @@ Ide.Debugger = class Debugger {
         else if (kind === "armed")   this.armed(msg);
         else if (kind === "stopped") this.halt(msg);
         else if (kind === "locals")  this.showLocals(msg);
+        else if (kind === "eval")    this.answered(msg);
     }
 
     /*
@@ -254,6 +260,7 @@ Ide.Debugger = class Debugger {
         /* `showFrame` goes to the line and asks for that frame's values, so
          * asking here as well would be the same question twice. */
         this.showFrame(0);
+        for (const text of this.watches) this.ask(text);
         this.ide.refresh();
     }
 
@@ -265,7 +272,9 @@ Ide.Debugger = class Debugger {
 
         list.Clear();
         if (!this.stopped) {
-            this.ide.LocalList.Clear();
+            this.locals = [];
+            this.answers.clear();
+            this.fillValues();
             return;
         }
 
@@ -293,32 +302,85 @@ Ide.Debugger = class Debugger {
     }
 
     showLocals(msg) {
+        this.locals = msg.items || [];
+        this.fillValues();
+    }
+
+    /*
+     * The values pane: the watches, then the frame's own.
+     *
+     * One list and not two, because they answer the same question -- *what is
+     * true here* -- and a panel 170 pixels tall cannot afford a second heading.
+     * A watch is marked by carrying the expression as its name, which is what
+     * it is, and by being removable.
+     */
+    fillValues() {
         const list = this.ide.LocalList;
 
         list.Clear();
-        for (const item of msg.items || []) {
+
+        for (const text of this.watches) {
+            const seen = this.answers.get(text);
+            this.addValue(text, seen ? seen.value : "…", false,
+                          seen && seen.failed);
+        }
+        for (const item of this.locals || [])
+            this.addValue(item.Name, item.Value, item.Argument, false);
+    }
+
+    addValue(name, value, argument, failed) {
+        const list = this.ide.LocalList;
+        {
             const row = new Panel();
             row.Arrangement = "Horizontal";
             row.Spacing     = 6;
             row.Margin      = 2;
             list.Add(row);
 
-            const name = new Label();
-            name.Markup = true;
+            const label = new Label();
+            label.Markup = true;
             /* An argument is shown in bold: which names came in and which the
-             * body made is the first thing one wants off a list like this. */
-            name.Text   = item.Argument ? `<b>${item.Name}</b>` : item.Name;
-            name.Width  = 120;
-            name.HAlign = "Start";
-            row.Add(name);
+             * body made is the first thing one wants off a list like this.
+             * The escaping is the reason this is not `Text` alone -- a watch's
+             * name is an expression and can hold a `<`. */
+            label.Text   = argument ? `<b>${escapeMarkup(name)}</b>`
+                                    : escapeMarkup(name);
+            label.Width  = 120;
+            label.HAlign = "Start";
+            label.Tooltip = name;
+            row.Add(label);
 
-            const value = new Label();
-            value.Text     = item.Value;
-            value.Ellipsize = true;
-            value.HExpand  = true;
-            value.HAlign   = "Start";
-            row.Add(value);
+            const shown = new Label();
+            shown.Text      = value;
+            shown.Ellipsize = true;
+            shown.HExpand   = true;
+            shown.HAlign    = "Start";
+            /* An expression that threw is dimmed rather than hidden: the
+             * message is the answer, and a watch that cannot be answered in
+             * this frame is a fact about the frame. */
+            if (failed) shown.Style = "dim-label";
+            row.Add(shown);
         }
+    }
+
+    /*
+     * A row activated: a watch comes off the list, a value is changed.
+     *
+     * The two are told apart by where the row is, which is what makes one
+     * gesture do the right thing on both halves of a list that holds both.
+     */
+    activated(index) {
+        if (index < this.watches.length) {
+            this.unwatch(this.watches[index]);
+            return;
+        }
+
+        const item = (this.locals || [])[index - this.watches.length];
+        if (!item || !this.halted) return;
+
+        AskForm.prompt(Locale.Text("Change a value"),
+                       Locale.Text("{0} is", item.Name), item.Value,
+                       (text) => this.poke(item.Name, text));
     }
 
     /* Selecting a frame of the stack goes to its line and asks for its values. */
@@ -336,6 +398,7 @@ Ide.Debugger = class Debugger {
             }
         }
         this.send({ do: "locals", frame: index });
+        for (const text of this.watches) this.ask(text);
     }
 
     clearHere() {
@@ -353,6 +416,72 @@ Ide.Debugger = class Debugger {
         return path && path.startsWith(root) ? path.slice(root.length) : path;
     }
 
+    /* --- what a stopped program can be asked --------------------------------- */
+
+    /*
+     * An expression, answered where the program is standing.
+     *
+     * What it can name is exactly what the values list shows, which is not a
+     * coincidence: the runtime compiles it as a function of the frame's own
+     * names and calls it with the frame's own values, so the panel and the box
+     * can never disagree about what is in scope.
+     */
+    ask(text) {
+        if (!this.halted || !text) return false;
+        return this.send({ do: "eval", frame: this.frame, text });
+    }
+
+    /* An expression kept, and asked again at every stop. */
+    watch(text) {
+        if (!text || this.watches.includes(text)) return false;
+
+        this.watches.push(text);
+        if (this.halted) this.ask(text);
+        return true;
+    }
+
+    unwatch(text) {
+        this.watches = this.watches.filter((w) => w !== text);
+        this.answers.delete(text);
+        this.fillValues();
+    }
+
+    /*
+     * An answer arriving.
+     *
+     * It is matched by the expression and not by arrival: the replies come back
+     * in their own time and a watch list redrawn per reply would land them in
+     * whatever order the pipe delivered.
+     */
+    answered(msg) {
+        this.answers.set(msg.text, { value: msg.value, failed: !!msg.failed });
+
+        if (this.watches.includes(msg.text)) {
+            this.fillValues();
+            return;
+        }
+
+        /*
+         * A one-off from the box goes to the **log**, and not to a label beside
+         * the box: an immediate window is a conversation, and the answer to the
+         * question before last is worth as much as this one. It is what Visual
+         * Basic's does, and it costs no room in a panel that has none.
+         */
+        this.ide.log(`${msg.text} => ${msg.value}\n`);
+    }
+
+    /* A value changed from the panel. The new one is an *expression*, so
+     * `n + 1` and `this.Ok` work and not only literals. */
+    poke(name, text) {
+        if (!this.halted) return false;
+        return this.send({ do: "set", frame: this.frame, name, text });
+    }
+
+    stopOnThrow(on) {
+        this.throwing = on;
+        return this.send({ do: "stopOnThrow", value: on });
+    }
+
     /* --- the commands ------------------------------------------------------- */
 
     step(kind) {
@@ -366,3 +495,16 @@ Ide.Debugger = class Debugger {
 
     pause() { return this.running ? this.send({ do: "pause" }) : false; }
 };
+
+/*
+ * A name put into markup.
+ *
+ * A local's name is an identifier and needs none of this; a **watch**'s name is
+ * whatever was typed, and `a < b` in a label with markup on is a parse error
+ * that swallows the rest of the line.
+ */
+function escapeMarkup(text) {
+    return String(text).replace(/&/g, "&amp;")
+                       .replace(/</g, "&lt;")
+                       .replace(/>/g, "&gt;");
+}

@@ -615,6 +615,11 @@ JS_EXTERN void JS_SetDebugHandler(JSRuntime *rt, JSDebugHandler *cb, void *opaqu
    `compiled` is what JS_Eval with JS_EVAL_FLAG_COMPILE_ONLY handed back. The
    answer is unsorted and may repeat; what a caller wants from it is the set. */
 JS_EXTERN JSValue JS_DebugLines(JSContext *ctx, JSValueConst compiled);
+/* Stop where a throw happens, rather than where it is caught: the handler is
+   called with a NULL pc. It is *every* throw and not only the uncaught ones --
+   whether something above will catch it is not a question the engine can answer
+   at the moment it is raised. */
+JS_EXTERN void JS_DebugStopOnThrow(JSRuntime *rt, bool on);
 JS_EXTERN int JS_DebugDepth(JSRuntime *rt);
 /* Where the running frame is, and **only when it has moved to a new line** --
    which is the question asked once per opcode and has to be cheap. The filename
@@ -629,6 +634,14 @@ JS_EXTERN bool JS_DebugPosition(JSContext *ctx, const uint8_t *pc,
 JS_EXTERN JSValue JS_DebugBacktrace(JSContext *ctx, const uint8_t *pc);
 /* → [{ Name, Value, Argument }] for one frame, `this` last. */
 JS_EXTERN JSValue JS_DebugLocals(JSContext *ctx, int frame);
+/* An expression evaluated in a frame's own scope -- the function's scope, not
+   an inner block's: see the note on the definition. The exception is the
+   caller's to catch. */
+JS_EXTERN JSValue JS_DebugEval(JSContext *ctx, int frame, const char *expr);
+/* One local written back by name; false when the frame has no such name. Takes
+   ownership of `value` either way. */
+JS_EXTERN bool JS_DebugSetLocal(JSContext *ctx, int frame, const char *name,
+                                JSValue value);
 JS_EXTERN int JS_AddIntrinsicWeakRef(JSContext *ctx);
 JS_EXTERN int JS_AddPerformance(JSContext *ctx);
 JS_EXTERN int JS_AddIntrinsicDOMException(JSContext *ctx);

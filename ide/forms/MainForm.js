@@ -995,6 +995,11 @@ class MainForm extends Form {
          * set whether or not anything is running, which is the point of it. */
         this.MnuBreakpoint.Enabled = !design && !!this.Editor;
 
+        /* Asking is only a question a stopped program can answer; keeping one is
+         * not, so a watch can be written down before anything runs. */
+        this.TxtImmediate.Enabled = halted;
+        this.BtnWatch.Enabled     = this.TxtImmediate.Text.trim() !== "";
+
         let status;
         if (!this.project) {
             status = Locale.Text("No project");
@@ -1788,6 +1793,24 @@ class MainForm extends Form {
     MnuStepOver_Click()   { this.debugger_.step("over"); }
     MnuStepOut_Click()    { this.debugger_.step("out"); }
     MnuBreakpoint_Click() { this.debugger_.toggle(); }
+
+    /* Stopping where a throw happens, which is **every** throw and not only the
+     * ones nobody catches: whether something above will catch it is not a
+     * question the engine can answer at the moment it is raised. */
+    MnuStopThrow_Click() { this.debugger_.stopOnThrow(this.MnuStopThrow.Value); }
+
+    /* The immediate box: Enter answers, the button keeps the question. */
+    TxtImmediate_Activate() {
+        this.debugger_.ask(this.TxtImmediate.Text.trim());
+    }
+
+    BtnWatch_Click() {
+        if (this.debugger_.watch(this.TxtImmediate.Text.trim()))
+            this.TxtImmediate.Text = "";
+    }
+
+    /* A row of the values: a watch comes off, a value is changed. */
+    LocalList_Activate() { this.debugger_.activated(this.LocalList.Index); }
 
     /* A frame of the stack chosen: go to its line, and show *its* values. */
     StackList_Select() { this.debugger_.showFrame(this.StackList.Index); }

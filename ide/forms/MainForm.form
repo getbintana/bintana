@@ -305,6 +305,14 @@
           "name": "MnuBreakpoint",
           "text": "Toggle breakpoint",
           "shortcut": "F9"
+        },
+        {
+          "separator": true
+        },
+        {
+          "name": "MnuStopThrow",
+          "text": "Stop where something is thrown",
+          "check": true
         }
       ]
     },
@@ -1198,15 +1206,26 @@
                           }
                         },
                         {
+                          "type": "Panel",
+                          "name": "DebugPage",
+                          "properties": {
+                            "Arrangement": "Vertical",
+                            "Expand": true,
+                            "HAlign": "Fill",
+                            "HExpand": true,
+                            "Spacing": 2,
+                            "VAlign": "Fill",
+                            "VExpand": true
+                          },
+                          "children": [
+                        {
                           "type": "Split",
                           "name": "DebugBox",
                           "properties": {
                             "Arrangement": "Horizontal",
                             "Expand": true,
-                            "HAlign": "Fill",
                             "HExpand": true,
                             "Position": 320,
-                            "VAlign": "Fill",
                             "VExpand": true
                           },
                           "children": [
@@ -1264,12 +1283,42 @@
                                   "properties": {
                                     "Expand": true,
                                     "HExpand": true,
-                                    "Tooltip": "The arguments and variables of the chosen frame. Arguments are in bold",
+                                    "Tooltip": "The watches and then the chosen frame's own values. Arguments are in bold; double click one to change it",
                                     "VExpand": true
                                   }
                                 }
                               ]
                             }
+                          ]
+                        },
+                        {
+                          "type": "Panel",
+                          "name": "ImmediateRow",
+                          "properties": {
+                            "Arrangement": "Horizontal",
+                            "HAlign": "Fill",
+                            "Spacing": 4
+                          },
+                          "children": [
+                            {
+                              "type": "TextBox",
+                              "name": "TxtImmediate",
+                              "properties": {
+                                "HExpand": true,
+                                "Placeholder": "An expression, in the chosen frame",
+                                "Tooltip": "Evaluated where the program is stopped. Enter answers; Watch keeps it and re-asks at every stop"
+                              }
+                            },
+                            {
+                              "type": "Button",
+                              "name": "BtnWatch",
+                              "properties": {
+                                "Text": "Watch",
+                                "Tooltip": "Keep this expression and answer it again at every stop"
+                              }
+                            }
+                          ]
+                        }
                           ]
                         }
                       ]

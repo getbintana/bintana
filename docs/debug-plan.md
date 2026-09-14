@@ -1,9 +1,12 @@
 # Debugging: what was built, and the plan for the rest
 
-**Stages 1 and 2 are built** (2026-09-13): breakpoints, stopping, the call
-stack, standing in a frame further up, its arguments and variables by name, and
-step into / over / out. What is left is listed under [staging](#staging) and the
-one thing deliberately not built first is [at the end](#dap-the-plan-to-evaluate).
+**Stages 1 to 4 and 6 are built** (2026-09-13): breakpoints and conditional
+breakpoints, stopping, stopping where a throw happens, the call stack, standing
+in a frame further up, its arguments and variables by name, step into / over /
+out, an immediate window, watches, and changing a value. **Ten of the eleven.**
+What is left is stage 5 — the bytecode patch, which is about what the hook costs
+and not about what the debugger does — and the one thing deliberately not built
+first is [at the end](#dap-the-plan-to-evaluate).
 
 This document is the design as well as the record: what *is* settled is recorded
 as settled, with the number or the prior art that settled it, so that whoever
@@ -206,12 +209,26 @@ From the IDE, on stdin:
 {"do":"locals","frame":0}                             ← built
    → {"reply":"locals","frame":0,"items":[{"Name":"n","Value":"3","Argument":true}, …]}
 
-{"do":"break", … ,"when":"n > 3"}                      stage 4
-{"do":"runto","file":"Form1.js","line":88}            stage 2's other half
-{"do":"eval","frame":0,"text":"this.Ok.Text"}         stage 3
-{"do":"set","frame":0,"name":"n","text":"4"}          stage 3
-{"do":"stopOnThrow","value":true}                     stage 6
+{"do":"break", … ,"when":"n > 3"}                      ← built
+{"do":"eval","frame":0,"text":"this.Ok.Text"}         ← built
+   → {"reply":"eval","frame":0,"text":…,"value":"\"ok\"","failed":false}
+{"do":"set","frame":0,"name":"n","text":"4"}          ← built (the value is an
+                                                        expression, not a literal)
+{"do":"stopOnThrow","value":true}                     ← built
+
+{"do":"runto","file":"Form1.js","line":88}            not built
 ```
+
+**A value comes back as text the child rendered**, and an object is rendered by
+what is *in* it — one level, a handful of fields — because `[object Object]` is
+what a debugger shows when it has given up, and the question at a breakpoint is
+usually *what is in this thing*. Past one level is what the immediate box is
+for: `cliente.notas` names the field rather than hunting for it.
+
+**An expression that throws answers its message** and leaves no exception
+behind. A debugger asking a question must never leave one for the program to
+find, and a broken condition does **not** stop — a breakpoint whose test cannot
+be answered should be a line in the log, not a stop on every pass.
 
 **A verb this build does not have is ignored and not refused**, which is what
 lets a newer IDE talk to an older runtime at all. What it must never do is
@@ -231,10 +248,32 @@ useless exactly where it matters. Expanding is a second `locals` against a path.
 |---|---|---|---|
 | **1** | `JS_SetDebugHandler` in the vendor (technique 1), `bta_debug.c` with the channel and the stack, `bintana --debug`, breakpoints in the gutter through `SourceEditor.Mark(line, "Bookmark")`, a *Debug* page on `ConsoleBox`, Continue, Pause and Stop | 1, 4, 6, 11 | **built** |
 | **2** | step over / into / out, standing in a frame, and locals/arguments/`this` by name off `vardefs` | 5, 6, 7 | **built** |
-| **3** | expanding an object, watches, the immediate window, changing a value | 8–10 | |
-| **4** | conditional and logging breakpoints — with stage 3 done, the condition is evaluated in the frame before the stop is reported | 2 | |
-| **5** | technique 2, the bytecode patch, measured against the same benchmark | — | |
-| **6** | stopping on an uncaught exception, with the locals still alive | 3 | |
+| **3** | an object shown by what is in it, watches, the immediate window, changing a value | 8–10 | **built** |
+| **4** | conditional breakpoints — the condition is evaluated in the frame, and only for the breakpoint that matched | 2 (a logging one is not built) | **built** |
+| **6** | stopping where a throw happens, with the frame that built it still alive | 3 (see below) | **built** |
+| **5** | technique 2, the bytecode patch, measured against the same benchmark | — | the one left |
+
+Three things stages 3, 4 and 6 turned out to need, none of them foreseen here:
+
+- **A direct eval is not enough to read a frame.** It is the eval that sees an
+  enclosing scope, and it was the first way this worked — but QuickJS compiles
+  one against a lexical scope index the *compiler* wrote into each `OP_eval`,
+  and there is no such number for an arbitrary pc. Without one, arguments and
+  `var`s are in scope and a `let` or a `const` is not, which in this language is
+  most of what there is to read. `JS_DebugEval` wraps the expression in a
+  function of the frame's own names and calls it with the frame's own values,
+  so **what the immediate box can name is exactly what the values panel shows**.
+- **The stack does not begin where the runtime's does.** A throw is reported
+  from inside `Error`'s own constructor, which is a native frame with no line
+  and no locals. Frame 0 is the topmost frame *running code*, and skipping them
+  in one place is what keeps `frame: 1` meaning the same frame to the
+  backtrace, to `locals` and to `eval`.
+- **Point 3 is *every* throw and not only the uncaught ones.** Whether something
+  above will catch it is not a question the engine can answer at the moment it
+  is raised, so what is offered is a switch — which is what stopping on a throw
+  is used for anyway: catching the one that should not be happening. Stopping at
+  the `catch` instead would be useless, since by then the frames that built the
+  failure are gone.
 
 Two things stage 1 needed that this document did not foresee, both found by
 running it:
@@ -258,6 +297,43 @@ running it:
   contained a call stop twice — once going in and again coming back.
   `JSStackFrame` grew a `debug_line` of its own; the memory belongs to the frame
   because the question does.
+
+## Stage 5, which is the one left
+
+It is about what the hook **costs** and not about what the debugger does, which
+is why it is last: everything in the eleven points works without it, and what it
+buys back is the +12 to +16 % measured above.
+
+The shape is settled, and working through it while building the rest answered
+the question that made it look hard:
+
+- **An opcode is one byte; its operands are the rest.** So replacing the opcode
+  *byte* of an instruction with one of our own is safe at any instruction, and
+  the alignment scare -- "you cannot put a 1-byte opcode where a 5-byte one was"
+  -- is about the whole instruction and not about the byte that names it.
+- So `OP_bta_break` calls the hook and then **dispatches to the opcode it
+  replaced**, with the pc already past the opcode byte, which is exactly where
+  that opcode expects its operands. No restore-step-rearm dance; the interpreter
+  does what it would have done, one indirect jump later.
+- Which means a table of `(pc → opcode it replaced)` per armed breakpoint, and
+  nothing at all when none is armed: **the bytecode with no breakpoints in it is
+  byte for byte today's**, and the branch in `SWITCH` goes away with it.
+
+Two things to work out that are not yet answered, and they are the real cost:
+
+- **Holding on to a `JSFunctionBytecode`.** Today `JS_DebugLines` walks the
+  compiled form and lets it go; arming a breakpoint needs to keep the function
+  that owns the line, which means a reference the collector honours and a way to
+  hear about one being freed.
+- **Adding an opcode.** `quickjs-opcode.h` is read by more than the dispatch --
+  the bytecode reader and writer among them -- so the new one has to be placed
+  where it cannot renumber anything that is serialised. This is the part to
+  measure twice: an interpreter that is subtly wrong is the failure mode this
+  whole patch already had to be careful about once, in the arithmetic.
+
+Until it is built, `--debug` is what pays: a program run under the debugger is
+not a program being timed, and the branch is what an ordinary run pays for
+having the feature at all.
 
 ## What it costs outside the code
 

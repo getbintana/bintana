@@ -373,9 +373,9 @@ CI's. Check it after any QuickJS upgrade.
 
 ### 3. The debugger
 
-`quickjs.h` gains `JS_SetDebugHandler` and four readers -- `JS_DebugPosition`,
-`JS_DebugBacktrace`, `JS_DebugLocals` and `JS_DebugLines` -- and `JSStackFrame`
-gains two fields. Everything that *decides* anything is in
+`quickjs.h` gains `JS_SetDebugHandler`, `JS_DebugStopOnThrow` and six readers --
+`JS_DebugPosition`, `JS_DebugBacktrace`, `JS_DebugLocals`, `JS_DebugLines`,
+`JS_DebugEval` and `JS_DebugSetLocal` -- and `JSStackFrame` gains two fields. Everything that *decides* anything is in
 `runtime/src/bta_debug.c`; the vendor only exposes what its own frames already
 hold. `docs/debug-plan.md` is the design and the measurements.
 
@@ -403,6 +403,29 @@ hold. `docs/debug-plan.md` is the design and the measurements.
   `bta_debug.c` move it to the next line that exists and tell the IDE where it
   went -- which is why a file is compiled and run in two steps under `--debug`
   and in one otherwise.
+- **A direct eval cannot read a frame, and that is not a bug to work around.**
+  It is the eval that sees an enclosing scope, and QuickJS compiles one against
+  a lexical scope index the *compiler* wrote into each `OP_eval`; there is no
+  such number for an arbitrary pc, so with none of them arguments and `var`s are
+  in scope and a `let` is not. `JS_DebugEval` wraps the expression in a function
+  of the frame's own names and calls it with the frame's own values instead,
+  which also buys the property worth having: **what an immediate window can name
+  is exactly what the values panel shows.**
+- **Frame 0 is the topmost frame running *code*.** A throw is reported from
+  inside `Error`'s own constructor -- a native frame with no line and no locals
+  -- so the numbering skips native frames *at the top*, in one place
+  (`bta_frame_first`), and `frame: 1` means the same frame to the backtrace, to
+  `locals` and to `eval`. A native frame *between* two JavaScript ones is a real
+  part of the stack and is reported as `(native)`.
+- **Stopping on a throw is every throw.** Whether something above will catch it
+  is not a question the engine can answer when it is raised. The hook is in
+  `build_backtrace`, after `in_build_stack_trace` is back down so the handler
+  can build one of its own, and it is told apart from the per-opcode call by a
+  **NULL pc** -- one handler, because two would be two places to keep in step.
+- **The debugger must not stop inside its own expression.** A watch, a condition
+  or an immediate runs JavaScript while the program is held; without a flag the
+  hook fires inside it and the debugger stops in itself, with the program's
+  stack underneath. `dbg.evaluating` is that flag and every entry point sets it.
 - **Dropping this patch does not fail to build.** The handler is never called,
   `--debug` waits for a debugger that can never stop anything, and the IDE's
   Debug menu does nothing at all. `tests/widgets` asserts it (`testDebugger`):
