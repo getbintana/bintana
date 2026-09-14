@@ -23,7 +23,7 @@ are made of.
 | `FindPrevious()` | and backwards | [search](#search) |
 | `Unmark(line, [kind])` | takes marks off one line | [marks](#marks) |
 | `Mark(line, kind, [text])` | a gutter mark | [marks](#marks) |
-| `Marks([kind])` | → the lines that carry one | [marks](#marks) |
+| `Marks([kind])` | → a record per mark: `{ Line, Kind, Text }` | [marks](#marks) |
 | `Replace(with)` | the match the cursor is on | [search](#search) |
 | `ReplaceAll(with)` | every match | [search](#search) |
 | `Search(text, [options])` | → how many, highlighting every one | [search](#search) |
@@ -59,7 +59,7 @@ catalogue must never rewrite code.
 |---|---|
 | `Mark(line, kind, [text])` | a gutter mark. `kind` is `Error` `Warning` `Info` or `Bookmark`, and `text` is its tooltip |
 | `Unmark(line, [kind])` | takes marks off that line |
-| `Marks([kind])` | → the lines that carry one |
+| `Marks([kind])` | → **a record per mark**, in line order: `{ Line, Kind, Text }` — not a list of line numbers, which is what "the lines that carry one" was read as by the first thing that used it |
 | `ClearMarks([kind])` | takes them off every line |
 | `ShowMarks` | whether the gutter draws them |
 

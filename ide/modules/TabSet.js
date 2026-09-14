@@ -194,6 +194,14 @@ Ide.TabSet = class TabSet {
             state.editor = ed;
 
             /*
+             * The breakpoints this file had.  They belong to the gutter and the
+             * gutter belongs to the tab, so closing one would lose them: the
+             * debugger keeps the lines of every file it has seen marked, and
+             * puts them back on the editor that opens next.
+             */
+            this.ide.debugger_.restore(name, ed);
+
+            /*
              * A document tab is this tab with a preview in front of it: the
              * editor stays, holding the text, so the modified flag, the save,
              * the reload from disk, the find bar, the session and the recovery

@@ -807,14 +807,17 @@ function* p_designer(ide) {
           ide.TabActions.Icon !== "" || ide.TabActions.Text !== "",
           `icon="${ide.TabActions.Icon}" text="${ide.TabActions.Text}"`);
     /*
-     * The panel is two views of one selection, and the strip is what says which
-     * is on screen: the property grid on one page, the palette and the control
-     * tree on the other.  A column 280 wide cannot show both at once, and what
-     * it used to do instead was give each a third of the height.
+     * The panel is three views of one selection, and the strip is what says
+     * which is on screen: what the selection *is* on the first page, what it
+     * *does* on the second, and the palette and the control tree -- which are
+     * about the shape of the form rather than about the selection -- on the
+     * third.  A column 280 wide cannot show them at once, and what it used to
+     * do instead was give each a share of the height.
      */
-    eq("the side panel is a switcher", ide.SideTabs.Count, 2);
+    eq("the side panel is a switcher", ide.SideTabs.Count, 3);
     eq("with a page for each half of designing",
-       JSON.stringify(ide.SideTabs.Tabs), JSON.stringify(["Properties", "Controls"]));
+       JSON.stringify(ide.SideTabs.Tabs),
+       JSON.stringify(["Properties", "Events", "Controls"]));
 
     /* Nothing in the side panel may hang out of it.  A control anchored inside
      * a container keeps the gap it was *drawn* with, so a coordinate guessed
@@ -825,8 +828,8 @@ function* p_designer(ide) {
      * Each page is put on screen before it is measured: a page nobody is looking
      * at has no allocation, and a 0x0 satisfies every inequality below while
      * saying nothing at all. */
-    for (const [page, content] of [[0, ide.PropGrid], [1, ide.Palette],
-                                   [1, ide.WidgetTree]]) {
+    for (const [page, content] of [[0, ide.PropGrid], [1, ide.EventList],
+                                   [2, ide.Palette], [2, ide.WidgetTree]]) {
         ide.SideTabs.Current = page;
         yield* until(() => content.Bounds().Height > 0);
 
@@ -3107,6 +3110,328 @@ function* p_watch(ide) {
     ide.closeTabByName(name, true);
     yield;
     eq("and the file is as it was", File.Load(path), was);
+}
+
+/*
+ * The events page of the side panel.
+ *
+ * What it has to prove is that it is a *view* and not a second opinion: the
+ * rows are what `eventsOf` says, in that order, and the marks are what the
+ * `.js` actually answers.  So every assertion here compares the drawn rows
+ * against the same two sources the rest of the IDE asks, rather than against a
+ * list written down in this file -- a control that grows an event in C must
+ * show up here without this test being edited.
+ */
+function* p_events(ide) {
+    const jsPath = File.Join(TMP, "Child.js");
+    const wasJs  = File.Load(jsPath);        /* put back at the end */
+
+    ide.openInTab("Child.form");
+    yield* settled(ide);
+
+    ide.SideTabs.Current = 1;
+    yield* until(() => ide.EventList.Bounds().Height > 0);
+
+    /* --- a control's events ------------------------------------------------ */
+    ide.designer.select(null);
+    palette(ide, "Button").Click();
+    yield;
+
+    const button = ide.designer.selected;
+    const raised = ide.designer.eventsOf(button);
+
+    eq("the page draws a row per event the control raises",
+       eventRows(ide).length, raised.length);
+    eq("in the order the control gives them, which is most derived first",
+       JSON.stringify(eventRows(ide).map((r) => r.event)), JSON.stringify(raised));
+    eq("and Click is the head of it, which is what a double click writes",
+       raised[0], "Click");
+    eq("each row shows the method it would be written as",
+       eventRows(ide)[0].method, `${button.Name}_Click`);
+    check("and nothing is marked, since nothing is written",
+          eventRows(ide).every((r) => !r.written),
+          JSON.stringify(eventRows(ide).filter((r) => r.written)));
+
+    /* --- activating a row writes the handler -------------------------------- */
+    ide.events.activated(0);
+    yield;
+
+    eq("activating a row writes that handler",
+       JSON.stringify(Ide.FormFiles.handlersIn(File.Load(jsPath), button.Name)),
+       '["Click"]');
+
+    /* The page is behind the editor now -- writing a handler goes to it -- so
+     * the row is read after coming back to the form. */
+    ide.openInTab("Child.form");
+    yield* settled(ide);
+    ide.designer.select(byName(ide, button.Name));
+    ide.SideTabs.Current = 1;
+    yield;
+
+    check("and the row for it is marked afterwards",
+          eventRows(ide)[0].written,
+          JSON.stringify(eventRows(ide)[0]));
+    check("while the rest still are not",
+          eventRows(ide).slice(1).every((r) => !r.written));
+
+    /* Twice is a jump, not a second copy: `openHandler` decides, and this page
+     * never has to know which of the two it asked for. */
+    ide.events.activated(0);
+    yield;
+    eq("activating it again does not write it twice",
+       Ide.FormFiles.handlersIn(File.Load(jsPath), button.Name).length, 1);
+
+    /* --- the form's own events ---------------------------------------------- */
+    ide.openInTab("Child.form");
+    yield* settled(ide);
+    ide.designer.select(null);
+    ide.SideTabs.Current = 1;
+    yield;
+
+    const formEvents = ide.designer.grid.formProbe().EventNames();
+
+    eq("with nothing selected the page is about the form",
+       JSON.stringify(eventRows(ide).map((r) => r.event)), JSON.stringify(formEvents));
+    check("whose handlers are written under the name a double click uses",
+          eventRows(ide).every((r) => r.method.startsWith("Form_")),
+          JSON.stringify(eventRows(ide).map((r) => r.method).slice(0, 3)));
+    check("and Open is among them", formEvents.includes("Open"),
+          JSON.stringify(formEvents));
+
+    /* --- what makes it cheap enough to hang off refresh() ------------------- */
+    const drawn = ide.events.drawn;
+    ide.refresh();
+    eq("a refresh that changes nothing redraws nothing", ide.events.drawn, drawn);
+
+    ide.SideTabs.Current = 0;
+    yield;
+    const hidden = ide.EventList.Count;
+    ide.designer.select(byName(ide, button.Name));
+    ide.refresh();
+    eq("and a selection while the page is hidden costs nothing",
+       ide.EventList.Count, hidden);
+
+    ide.SideTabs.Current = 1;
+    yield;
+    eq("which is caught up the moment it is looked at",
+       eventRows(ide)[0].method, `${button.Name}_Click`);
+
+    /* --- back to what the phases after this one expect ---------------------- */
+    ide.ActDelCtl_Click();
+    ide.BtnSave_Click();
+    yield;
+
+    File.Save(jsPath, wasJs);
+    ide.SideTabs.Current = 0;
+    yield* settled(ide);
+}
+
+/*
+ * F12: where a name is declared.
+ *
+ * Almost everything here drives `find()` rather than the key, because that is
+ * where the behaviour is -- a string in, a file and a line out, no caret and no
+ * tab.  The gesture itself is asserted once at the end, with the caret really
+ * put on a word, since what joins the two is `wordAtCursor` and that is worth
+ * proving once rather than mocking.
+ *
+ * The negatives matter as much as the positives: this looks names up and never
+ * infers, so a name nothing declares has to go **nowhere**.  A wrong jump is
+ * the one outcome worse than no jump.
+ */
+function* p_goto(ide) {
+    const jsPath = File.Join(TMP, "Child.js");
+    const wasJs  = File.Load(jsPath);        /* put back at the end */
+
+    /* An earlier phase left a tab open on this file, and a tab is what the
+     * navigator reads -- so writing the file under it would prove nothing. */
+    ide.closeTabByName("Child.js", true);
+    yield;
+
+    /* A method to find, and a control mentioned from the code. */
+    File.Save(jsPath,
+              'class Child extends Form {\n' +
+              '    Form_Open() {\n' +
+              '        this.Ok.Text = "ok";\n' +
+              '        this.greet();\n' +
+              '    }\n' +
+              '\n' +
+              '    greet() {\n' +
+              '        print("hello from the child");\n' +
+              '        Application.Quit(0);\n' +
+              '    }\n' +
+              '}\n');
+
+    ide.openInTab("Child.js");
+    yield* settled(ide);
+
+    const nav = ide.navigator;
+
+    /* --- a class of the project -------------------------------------------- */
+    const cls = nav.find("Child");
+    eq("a class of the project is found", cls && cls.file, "Child.js");
+    eq("at the line it is declared on", cls && cls.line, 1);
+
+    /* `Ide.Events` and `Events` are one class: the tail is its name. */
+    const qualified = nav.find("Whatever.Child");
+    eq("a qualified name resolves to the same class",
+       qualified && qualified.file, "Child.js");
+
+    /* A class the project reaches through `uses`, which lives under lib/ and is
+     * in the listing like any other file of the tree. */
+    const dial = nav.find("Dial");
+    eq("a class in the project's own lib/ is found too",
+       dial && dial.file, File.Join("lib", "gadgets", "Dial.js"));
+
+    /* --- a method of the file being edited ---------------------------------- */
+    const method = nav.find("greet");
+    eq("a method of the open file is found", method && method.file, "Child.js");
+    eq("at its own line", method && method.line, 7);
+
+    const viaThis = nav.find("this.greet");
+    eq("and `this.` reaches the same one", viaThis && viaThis.line, 7);
+
+    /*
+     * **What the tab says, not what the file says.** A method written a moment
+     * ago and not yet saved is still a method, and jumping to where the file on
+     * disk has it would land on the wrong line -- which is the same bargain
+     * `FormFiles.siblingSource` makes for the handler marks.
+     */
+    const onScreen = ide.Editor.Text;
+
+    ide.Editor.Text = `    later() {\n    }\n${onScreen}`;
+    yield;
+    const unsaved = nav.find("later");
+    eq("a method typed and not saved is found", unsaved && unsaved.line, 1);
+    eq("and the ones under it have moved with it", nav.find("greet").line, 9);
+
+    ide.Editor.Text = onScreen;
+    yield;
+    eq("and taking it back out puts the lines back", nav.find("greet").line, 7);
+
+    /* --- a control of the .form beside the code ----------------------------- */
+    const control = nav.find("this.Ok");
+    eq("`this.` on a control names the form", control && control.file, "Child.form");
+    eq("and which control it is", control && control.control, "Ok");
+    check("a control is not given a line, because a designer has no lines",
+          control && !("line" in control), JSON.stringify(control));
+
+    /* --- and what it refuses ------------------------------------------------ */
+    check("a name nothing declares goes nowhere", nav.find("NoSuchThing") === null);
+    check("and neither does nothing at all", nav.find("") === null);
+    check("nor a control of some other form",
+          nav.find("this.Face") === null, JSON.stringify(nav.find("this.Face")));
+    /*
+     * The runtime's own names are F1's question, not this one: there is no
+     * definition in this project to go to.
+     */
+    check("a runtime class is left to F1", nav.find("TableView") === null);
+
+    /* --- what a declaration is, which is not a mention ---------------------- */
+    const syms = nav.symbols(File.Load(jsPath));
+    eq("every method the file declares is listed", syms.length, 2);
+    eq("in the order they are written",
+       JSON.stringify(syms.map((s) => s.name)), '["Form_Open","greet"]');
+    eq("with the line each is on", syms[1].line, 7);
+    eq("a mention in a call is not a declaration",
+       nav.symbolLine("        this.greet();\n", "greet"), 0);
+
+    /* --- the gesture, with a real caret ------------------------------------- */
+    ide.Editor.Select(1, 8);                    /* inside `Child` */
+    eq("the caret is on the class's name", ide.wordAtCursor(), "Child");
+
+    ide.openInTab("Child.form");
+    yield* settled(ide);
+    check("a form tab has no word to be on, so F12 is off", !ide.MnuGoto.Enabled);
+
+    ide.openInTab("Child.js");
+    yield* settled(ide);
+    check("and a code tab has", ide.MnuGoto.Enabled);
+
+    ide.Editor.Select(3, 15);                   /* inside `this.Ok.Text` */
+    /* The whole dotted run is the word, and trimming it to the part that can
+     * be looked up is `find`'s job -- `this.Ok.Text` is the control `Ok`. */
+    eq("the caret is on a control", ide.wordAtCursor(), "this.Ok.Text");
+
+    /* Through the menu item, which is the road the key takes -- what it
+     * answers is asserted below, by where the IDE ended up. */
+    ide.MnuGoto_Click();
+    yield* settled(ide);
+
+    eq("which opens the form", ide.activeFile, "Child.form");
+    eq("with that control selected", ide.designer.selected.Name, "Ok");
+
+    /* A name that goes nowhere says so, rather than doing nothing in silence. */
+    ide.openInTab("Child.js");
+    yield* settled(ide);
+    ide.LogView.Clear();
+    ide.Editor.Select(8, 10);                   /* inside `print` */
+    check("F12 on a name nothing declares does not move", !nav.go());
+    check("and says so in the log", ide.LogView.Text.includes("print"),
+          JSON.stringify(ide.LogView.Text.slice(0, 120)));
+
+    /* --- Ctrl+Shift+O: the methods as a list, and a line number ------------- */
+    ide.MnuGotoSymbol_Click();
+    const dlg = ide.symbolPicker;
+    yield;
+
+    check("the go-to dialog opens", dlg !== undefined && dlg !== null);
+    eq("with a row per method the file declares", dlg.List.Count, 2);
+    eq("in the order they are written", dlg.symbols[0].name, "Form_Open");
+    eq("and it says how many", dlg.LblCount.Text, Locale.Plural("{0} method",
+                                                                "{0} methods", 2));
+
+    /* Typing narrows it, and the same question answers both the filter and
+     * Enter -- which is why they cannot disagree. */
+    dlg.TxtFind.Text = "gre";
+    dlg.TxtFind_Change();
+    check("typing hides what does not match", !dlg.matches(0));
+    check("and keeps what does", dlg.matches(1));
+    eq("Enter would take the first one still showing", dlg.firstShowing(), 7);
+
+    /* Digits are a line, which is what lets one box be both. */
+    dlg.TxtFind.Text = "5";
+    dlg.TxtFind_Change();
+    eq("a number is a line", dlg.lineWanted(), 5);
+    check("and then nothing in the list matches", !dlg.matches(0) && !dlg.matches(1));
+
+    dlg.TxtFind.Text = "999";
+    dlg.TxtFind_Change();
+    eq("a line past the end of the file is not a line", dlg.lineWanted(), 0);
+    /* 12 and not 11: the file ends in a newline, so there is a last empty line
+     * a caret can sit on -- which is what the editor itself counts. */
+    check("and the bar says how many there are",
+          dlg.LblCount.Text.includes("12"), dlg.LblCount.Text);
+
+    dlg.TxtFind.Text = "7";
+    dlg.TxtFind_Change();
+    dlg.BtnOk_Click();
+    yield* settled(ide);
+
+    eq("going to a line goes there", ide.Editor.Line, 7);
+    check("and the dialog is gone", ide.symbolPicker.Visible === false);
+
+    /* --- back to what the phases after this one expect ---------------------- */
+    ide.closeTabByName("Child.js", true);
+    yield;
+    File.Save(jsPath, wasJs);
+    yield* settled(ide);
+}
+
+/*
+ * The rows as they are drawn, which is what a reader of the panel sees: the
+ * mark, the event and the method.  Read off the labels rather than asked of
+ * `Ide.Events`, because a page that agrees with itself proves nothing.
+ */
+function eventRows(ide) {
+    return ide.EventList.Children.map((row) => {
+        const [mark, name, method] = row.Children;
+        return {
+            written: mark.Text !== "",
+            event:   name.Text.replace("<b>", "").replace("</b>", ""),
+            method:  method.Text,
+        };
+    });
 }
 
 /*
@@ -6204,7 +6529,10 @@ function* p_projects(ide) {
     })(selfSaved);
     const savedOf = (name) => savedNode(name).properties;
 
-    eq("saving keeps its menu bar", selfSaved.menus.length, 5);
+    /* Six: File, Edit, Project, Debug, Form, Help. The number is here rather
+     * than a list because what is being asserted is that the bar survived the
+     * round trip, not which menus the IDE happens to have. */
+    eq("saving keeps its menu bar", selfSaved.menus.length, 6);
     /* Fixed is the default, so it is saved by being absent -- the same rule
      * that keeps an unanchored control from writing HAlign "Start". */
     eq("and its arrangement", selfSaved.properties.Arrangement, undefined);
@@ -8452,13 +8780,14 @@ function* p_errors(ide) {
     eq("...and the tab says what it is", ide.ConsoleBox.Tabs[0], "Output");
 
     /*
-     * The second page exists only where a child can be run in it, which is
-     * `Widget.Available`'s question: a runtime built without VTE gets one page
-     * and no tab promising a terminal that would refuse.  This build has VTE,
-     * so both branches are stated and the one that holds here is checked.
+     * *Output* and *Debug* are declared in the `.form`; the terminal is a third
+     * page that exists only where a child can be run in it, which is
+     * `Widget.Available`'s question -- a runtime built without VTE gets no tab
+     * promising a terminal that would refuse.  This build has VTE, so both
+     * branches are stated and the one that holds here is checked.
      */
     eq("there is a terminal page exactly when this build can run one",
-       ide.ConsoleBox.Count, Widget.Available("Terminal") ? 2 : 1);
+       ide.ConsoleBox.Count, Widget.Available("Terminal") ? 3 : 2);
     eq("...and a Shell to go with it", ide.Shell !== null, Widget.Available("Terminal"));
 
     if (Widget.Available("Terminal")) {
@@ -8845,6 +9174,85 @@ function* p_search(ide) {
     File.Delete(File.Join(TMP, "Needle.js"));
     ide.listFiles();
     yield;
+}
+
+/*
+ * The debugger, as far as the IDE owns it.
+ *
+ * **The whole loop is asserted in `tests/widgets` (`testDebugger`)**, where a
+ * program really is stopped on a line, the stack really names its frames and an
+ * argument is really read by name -- and where it also guards the third patch
+ * in `vendor/`, whose absence builds fine and stops nothing. Driving a child
+ * from here would say the same thing again, slower and through a window.
+ *
+ * What is the IDE's own is everything before the child starts: the commands
+ * exist, `F9` puts a mark in the gutter, the gutter *is* the state, and a file
+ * closed and opened again keeps its breakpoints. Those are what this asserts.
+ */
+function* p_debug(ide) {
+    for (const name of ["MnuDebug", "MnuPause", "MnuStepInto", "MnuStepOver",
+                        "MnuStepOut", "MnuBreakpoint"])
+        check(`the Debug menu has ${name}`, ide[name] !== undefined);
+
+    check("and the bottom panel has a page for it",
+          ide.ConsoleBox.Tabs.includes("Debug"), JSON.stringify(ide.ConsoleBox.Tabs));
+    check("with the stack and the values on it",
+          ide.StackList !== undefined && ide.LocalList !== undefined);
+
+    /* Nothing is stopped, so stepping is not offered and the stack is empty. */
+    check("stepping is off until something stops", !ide.MnuStepInto.Enabled);
+    eq("and the stack is empty", ide.StackList.Count, 0);
+
+    /* The startup form's code, whatever the phases above renamed it to. */
+    const startup = ide.manifest.read().Startup;
+    const form    = ide.classes.formOfClass(startup);
+    const js      = `${form.slice(0, form.length - 4)}js`;
+
+    ide.openInTab(js);
+    yield* settled(ide);
+    eq("its code is open", ide.activeFile, js);
+
+    const at = ide.navigator.find("Form_Open");
+    check("the startup form answers Form_Open", at !== null);
+
+    /* --- the gutter is the state ------------------------------------------- */
+    ide.Editor.GotoLine(at.line);
+    check("F9 puts a breakpoint down", ide.MnuBreakpoint_Click() !== false);
+
+    /* `Marks` answers records and not line numbers, which is what the debugger
+     * itself got wrong first -- so this reads them the way it now does. */
+    const lines = () => ide.Editor.Marks("Bookmark").map((m) => m.Line);
+
+    check("the gutter carries it", lines().includes(at.line), JSON.stringify(lines()));
+    eq("and the debugger knows of exactly one", ide.debugger_.all().length, 1);
+    eq("in the file it was set in", ide.debugger_.all()[0].file, js);
+    eq("on the line the caret was on", ide.debugger_.all()[0].line, at.line);
+
+    /* Twice is off again: there is one state and it is the mark. */
+    ide.MnuBreakpoint_Click();
+    check("pressing it again takes it off", !lines().includes(at.line));
+    eq("and the debugger agrees", ide.debugger_.all().length, 0);
+
+    /* --- and it outlives the tab -------------------------------------------- */
+    ide.MnuBreakpoint_Click();
+    ide.closeTabByName(js, true);
+    yield* settled(ide);
+
+    eq("closing the file does not lose it", ide.debugger_.all().length, 1);
+
+    ide.openInTab(js);
+    yield* settled(ide);
+    check("and opening it again puts the mark back",
+          lines().includes(at.line), JSON.stringify(lines()));
+
+    /* --- back to what the phase after this one expects ----------------------- */
+    /* The caret went back to the top when the tab reopened, and F9 acts where
+     * the caret is -- without this it would *add* a second one on line 1. */
+    ide.Editor.GotoLine(at.line);
+    ide.MnuBreakpoint_Click();
+    eq("the breakpoint is gone", ide.debugger_.all().length, 0);
+    ide.closeTabByName(js, true);
+    yield* settled(ide);
 }
 
 function* p_running(ide) {
@@ -9261,6 +9669,8 @@ const PHASES = [
     { name: "clipboard", run: p_clipboard },
     { name: "completion", run: p_completion },
     { name: "handlers", run: p_handlers },
+    { name: "events", run: p_events },
+    { name: "goto", run: p_goto },
     { name: "images", run: p_images },
     { name: "watch", run: p_watch },
     { name: "tooldirs", run: p_tooldirs },
@@ -9282,6 +9692,7 @@ const PHASES = [
     { name: "recovery", run: p_recovery },
     { name: "session", run: p_session },
     { name: "search", run: p_search },
+    { name: "debug", run: p_debug },
     { name: "running", run: p_running },
 ];
 

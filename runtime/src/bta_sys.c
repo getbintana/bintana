@@ -9,6 +9,8 @@
  */
 #include "bta.h"
 
+#include <gio/gunixinputstream.h>
+
 #include <glib/gstdio.h>
 
 #include <errno.h>
@@ -998,6 +1000,17 @@ typedef struct {
     /* NULL unless the caller asked for the two streams apart; stderr is folded
      * into stdout otherwise, which is what keeps the order. */
     GDataInputStream *err;
+    /*
+     * The third stream, and the way back.
+     *
+     * `control` is descriptor 3 in the child, read here a line at a time, for a
+     * child that speaks a protocol as well as printing: stdout is what it says
+     * to a person and this is what it says to a program. `in` is its stdin,
+     * which is what `Write` writes to. Both NULL unless asked for.
+     */
+    GDataInputStream *control;
+    JSValue           on_control;
+    GOutputStream    *in;
     GCancellable     *cancel;
     bool              eof;       /* stdout drained */
     bool              err_eof;   /* stderr drained, or there is no second pipe */
@@ -1037,6 +1050,8 @@ static void exec_job_free(ExecJob *job)
         g_source_remove(job->force);
 
     JS_FreeValue(job->ctx, job->on_line);
+    JS_FreeValue(job->ctx, job->on_control);
+    g_clear_object(&job->control);
     JS_FreeValue(job->ctx, job->on_exit);
     JS_FreeValue(job->ctx, job->handle);
     g_clear_object(&job->out);
@@ -1143,6 +1158,7 @@ static void on_exec_line(GObject *src, GAsyncResult *res, gpointer user_data)
      * the callback is already given. */
     GDataInputStream *stream = G_DATA_INPUT_STREAM(src);
     bool              is_err = job->err && stream == job->err;
+    bool              is_ctl = job->control && stream == job->control;
 
     char *line = g_data_input_stream_read_line_finish_utf8(stream, res, &len, &err);
 
@@ -1154,11 +1170,31 @@ static void on_exec_line(GObject *src, GAsyncResult *res, gpointer user_data)
     g_clear_error(&err);
 
     if (!line) {
+        /* The control stream ending is not the child ending: it closes when the
+           program stops speaking the protocol, and what says the run is over is
+           still stdout draining and the process being reaped. */
+        if (is_ctl)
+            return;
         if (is_err)
             job->err_eof = true;
         else
             job->eof = true;
         exec_maybe_finish(job);
+        return;
+    }
+
+    if (is_ctl) {
+        if (JS_IsFunction(job->ctx, job->on_control)) {
+            JSValue arg = JS_NewString(job->ctx, line);
+            JSValue r   = JS_Call(job->ctx, job->on_control, JS_UNDEFINED, 1,
+                                  (JSValueConst *)&arg);
+            if (JS_IsException(r))
+                bta_dump_error(job->ctx);
+            JS_FreeValue(job->ctx, r);
+            JS_FreeValue(job->ctx, arg);
+        }
+        g_free(line);
+        exec_read_next(job, stream);
         return;
     }
 
@@ -1353,6 +1389,62 @@ static void exec_child_setup(gpointer user_data)
  * had: a child stopped by a signal did not exit, so its status is -1 and the
  * difference between "failed" and "was stopped" is known to whoever stopped it.
  */
+/*
+ * Say something to a child.
+ *
+ * `Stop` and `Kill` are the two things that could be said to one before this,
+ * and both of them end it.  What was missing was the ordinary thing: a child
+ * that reads a line and answers -- a debugger, a compiler with a REPL, `sort`.
+ *
+ * A newline is added when there is not one, because a line is what the other
+ * side is waiting on and a `Write` without one hangs both of them for a reason
+ * that is invisible from either side.  It answers whether there was still a
+ * child to write to, the way `Stop` and `Kill` do, so a caller that races the
+ * exit gets `false` rather than an exception.
+ */
+static JSValue exec_write(JSContext *ctx, JSValueConst this_val,
+                          int argc, JSValueConst *argv, int magic,
+                          JSValue *data)
+{
+    int32_t  id = 0;
+    ExecJob *job;
+    GError  *err = NULL;
+    gsize    written = 0;
+
+    (void)this_val; (void)magic;
+    JS_ToInt32(ctx, &id, data[0]);
+
+    job = NULL;
+    for (GList *l = exec_jobs; l; l = l->next) {
+        ExecJob *j = l->data;
+        if (j->id == id) {
+            job = j;
+            break;
+        }
+    }
+    if (!job || !job->in || job->reaped)
+        return JS_FALSE;
+
+    const char *text = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    if (!text)
+        return JS_ThrowTypeError(ctx, "Write(text) needs text");
+
+    char *line = g_str_has_suffix(text, "\n") ? g_strdup(text)
+                                              : g_strdup_printf("%s\n", text);
+    JS_FreeCString(ctx, text);
+
+    gboolean ok = g_output_stream_write_all(job->in, line, strlen(line),
+                                            &written, NULL, &err);
+    /* Flushed, because the other side is blocked on a read: a line sitting in a
+     * buffer here is a program waiting there. */
+    if (ok)
+        g_output_stream_flush(job->in, NULL, NULL);
+    g_free(line);
+    g_clear_error(&err);
+
+    return ok ? JS_TRUE : JS_FALSE;
+}
+
 static JSValue exec_signal(JSContext *ctx, JSValueConst this_val,
                            int argc, JSValueConst *argv, int magic,
                            JSValue *data)
@@ -1440,11 +1532,54 @@ static GPtrArray *exec_build_argv(JSContext *ctx, JSValueConst list,
  * the honest consequence is that a `Wait` with no `Timeout` has no ending the
  * caller controls.
  */
+/*
+ * The third stream, when the caller asked for one.
+ *
+ * A pipe whose writing end becomes descriptor 3 in the child, and whose reading
+ * end this side keeps. Three, because 0, 1 and 2 are spoken for and a protocol
+ * cannot share stdout with what the program prints: marking its lines with a
+ * prefix would mean a program that prints the prefix breaks its own tooling,
+ * silently. `-1` when no `Control` was given, which is every caller but one.
+ */
+static int exec_control_fd(JSContext *ctx, JSValueConst opts,
+                           GSubprocessLauncher *launcher)
+{
+    JSValue cb;
+    int     ends[2];
+
+    if (JS_IsUndefined(opts))
+        return -1;
+
+    cb = JS_GetPropertyStr(ctx, opts, "Control");
+    if (!JS_IsFunction(ctx, cb)) {
+        JS_FreeValue(ctx, cb);
+        return -1;
+    }
+    JS_FreeValue(ctx, cb);
+
+    if (pipe(ends) != 0)
+        return -1;
+
+    /* The launcher takes the writing end and closes it here after the spawn,
+       which is what makes the child's descriptor 3 the only one left open on
+       it -- and so what makes the reading end see an end of file when the
+       child goes away. */
+    g_subprocess_launcher_take_fd(launcher, ends[1], 3);
+    return ends[0];
+}
+
 static GSubprocessLauncher *exec_launcher(JSContext *ctx, JSValueConst opts,
                                           bool split)
 {
+    /*
+     * **stdin is always a pipe.** Without it a child inherits whatever the
+     * parent had -- the terminal the IDE was started from -- which is a thing
+     * no `Exec` caller wants and the reason `Write` had nowhere to write. A
+     * child that reads stdin and is written nothing waits, which is what it did
+     * before this too.
+     */
     GSubprocessLauncher *launcher = g_subprocess_launcher_new(
-        G_SUBPROCESS_FLAGS_STDOUT_PIPE |
+        G_SUBPROCESS_FLAGS_STDOUT_PIPE | G_SUBPROCESS_FLAGS_STDIN_PIPE |
         (split ? G_SUBPROCESS_FLAGS_STDERR_PIPE : G_SUBPROCESS_FLAGS_STDERR_MERGE));
 
     g_subprocess_launcher_set_child_setup(launcher, exec_child_setup, NULL, NULL);
@@ -1480,6 +1615,7 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
     bool split = exec_wants_split(ctx, opts);
 
     GSubprocessLauncher *launcher = exec_launcher(ctx, opts, split);
+    int                  ctl_fd  = exec_control_fd(ctx, opts, launcher);
 
     GError      *err  = NULL;
     GSubprocess *proc = g_subprocess_launcher_spawnv(
@@ -1491,6 +1627,8 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
         JSValue e = JS_ThrowInternalError(ctx, "Exec failed: %s",
                                           err ? err->message : "unknown error");
         g_clear_error(&err);
+        if (ctl_fd >= 0)
+            close(ctl_fd);
         return e;
     }
 
@@ -1522,6 +1660,13 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
     job->err     = split ? g_data_input_stream_new(g_subprocess_get_stderr_pipe(proc))
                          : NULL;
     job->err_eof = !split;   /* no second pipe is a second pipe already drained */
+    job->in      = g_subprocess_get_stdin_pipe(proc);
+    job->on_control = JS_UNDEFINED;
+    if (ctl_fd >= 0) {
+        job->control    = g_data_input_stream_new(
+            g_unix_input_stream_new(ctl_fd, TRUE));
+        job->on_control = JS_GetPropertyStr(ctx, opts, "Control");
+    }
 
     job->kill_after = exec_millis(ctx, opts, "KillAfter", EXEC_KILL_AFTER);
 
@@ -1530,6 +1675,8 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
     exec_read_next(job, job->out);
     if (job->err)
         exec_read_next(job, job->err);
+    if (job->control)
+        exec_read_next(job, job->control);
     g_subprocess_wait_async(proc, job->cancel, on_exec_done, job);
 
     /*
@@ -1554,6 +1701,8 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
                       JS_NewCFunctionData(ctx, exec_signal, 0, 0, 1, &idv));
     JS_SetPropertyStr(ctx, handle, "Kill",
                       JS_NewCFunctionData(ctx, exec_signal, 0, 1, 1, &idv));
+    JS_SetPropertyStr(ctx, handle, "Write",
+                      JS_NewCFunctionData(ctx, exec_write, 1, 0, 1, &idv));
     JS_FreeValue(ctx, idv);
 
     job->handle = JS_DupValue(ctx, handle);

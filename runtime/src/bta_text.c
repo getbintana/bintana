@@ -243,10 +243,26 @@ static JSValue ed_goto_line(JSContext *ctx, JSValueConst this_val,
 
     gtk_text_buffer_get_iter_at_line(buf, &it, CLAMP(line - 1, 0, last));
     gtk_text_buffer_place_cursor(buf, &it);
-    /* 0.0 puts the line against the top edge; 0.3 (the value used originally)
+
+    /*
+     * Through the cursor's *mark* and not the iter, for the reason `Select`
+     * gives next door: `scroll_to_iter` on a view with no allocation does
+     * nothing and says nothing, so a tab opened in this same turn kept the
+     * cursor on the right line and left the view at the top of the file.
+     *
+     * This used to be an iter, with a note in `AGENTS.md` saying `GotoLine` was
+     * "called where a frame has already passed".  That was true of the two
+     * callers it had -- a traceback clicked in the log, and the find bar -- and
+     * false the day a third arrived: the events page opens the `.js` and jumps
+     * to the handler without returning to the main loop in between.
+     *
+     * 0.0 puts the line against the top edge; 0.3 (the value used originally)
      * pushed the first line 30% down the view, and that looked like an empty
-     * block between the tabs and the editor when the file was short. */
-    gtk_text_view_scroll_to_iter(GTK_TEXT_VIEW(w->inner), &it, 0.0, TRUE, 0.0, 0.0);
+     * block between the tabs and the editor when the file was short.
+     */
+    gtk_text_view_scroll_to_mark(GTK_TEXT_VIEW(w->inner),
+                                 gtk_text_buffer_get_insert(buf),
+                                 0.0, TRUE, 0.0, 0.0);
     return JS_UNDEFINED;
 }
 

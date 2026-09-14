@@ -22,7 +22,8 @@ read asynchronously and split into lines, and both callbacks are optional.
 | `Exec.Wait(argv, [options])` | runs it and **waits**, answering what it printed | [waiting for one](#waiting-for-one) |
 
 **The handle**: `ProcessId`, `Running`, `ExitCode` (`null` while it runs, `-1`
-for a child stopped by a signal), `TimedOut`, `Stop()` and `Kill()`.
+for a child stopped by a signal), `TimedOut`, `Stop()`, `Kill()` and
+`Write(text)`.
 
 **The options**:
 
@@ -33,6 +34,7 @@ for a child stopped by a signal), `TimedOut`, `Stop()` and `Kill()`.
 | `Stderr` | `"separate"` keeps the streams apart — the line callback then gets `"out"`/`"err"` as its second argument. Merged is the default, and merging is what keeps the order |
 | `Timeout` | milliseconds before the child is ended; absent waits forever |
 | `KillAfter` | milliseconds between SIGTERM and SIGKILL, `5000` by default |
+| `Control` | a callback for a **third stream** — descriptor 3 in the child, one line at a time — for a child that speaks a protocol as well as printing |
 
 ## Running one
 
@@ -72,6 +74,43 @@ pane**, and it is what to reach for rather than a
 there whatever the cursor was doing, and it works with `ReadOnly` on. A pty buys
 typing, colour and `less`; if the program does none of those, it is a dependency
 paid for nothing. The IDE's own output pane is exactly this.
+
+## Talking to one
+
+`Stop` and `Kill` were the only two things that could be said to a child, and
+both of them end it. What was missing was the ordinary thing: a child that reads
+a line and answers.
+
+| | |
+|---|---|
+| `Write(text)` | writes a line to the child's stdin. A newline is added when there is not one, because a line is what the other side is waiting on. Answers whether there was still a child to write to, the way `Stop` does |
+| `Control` | an option: a callback for the child's **descriptor 3**, called once per line |
+
+```js
+const job = Exec(["some-tool", "--protocol"],
+                 { Control: (line) => answer(JSON.parse(line)) },
+                 (line) => log(line),
+                 (code) => done(code));
+
+job.Write('{"do":"begin"}');
+```
+
+**Why a third stream and not a marker on stdout.** stdout is what the child says
+to a *person* — it is what a log pane shows — and marking the protocol lines
+with a prefix means a child that prints the prefix breaks its own tooling,
+silently and rarely. stderr is taken too, by whatever the language prints when
+something goes wrong. A descriptor of its own is the only spelling with no
+failure mode. It is what `bintana --debug` writes on, and the IDE's debugger is
+its first caller.
+
+**The control stream ending is not the child ending.** It closes when the child
+stops speaking the protocol; what says the run is over is still stdout draining
+and the process being reaped, which is what the exit callback waits for.
+
+**A child's stdin is a pipe whether or not anything writes to it**, which is a
+change from inheriting the parent's. A child that reads stdin and is written
+nothing waits — as it did before — but it can no longer take the terminal the
+application was started from.
 
 ## What goes wrong
 

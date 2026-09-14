@@ -329,9 +329,9 @@ a test runner, a build step, a tool that reads the icon themes off the disk. It 
 about a GTK binding, which is the whole point of `tests/`. See
 [`docs/formats.md`](docs/formats.md#main-a-project-with-no-window).
 
-## The two patches in vendor/
+## The three patches in vendor/
 
-Both are marked `Bintana patch` in the source, and an upgrade that drops either
+All three are marked `Bintana patch` in the source, and an upgrade that drops
 one takes a feature or brings a bug back with it. Grep for the marker after any
 QuickJS upgrade; there is no build-time check that they survived.
 
@@ -370,6 +370,47 @@ path in that file already uses.
 `tests/widgets` asserts it (`JsonFiles`), and that assertion only means anything
 in a locale with a comma -- which is the machine this is developed on, and not
 CI's. Check it after any QuickJS upgrade.
+
+### 3. The debugger
+
+`quickjs.h` gains `JS_SetDebugHandler` and four readers -- `JS_DebugPosition`,
+`JS_DebugBacktrace`, `JS_DebugLocals` and `JS_DebugLines` -- and `JSStackFrame`
+gains two fields. Everything that *decides* anything is in
+`runtime/src/bta_debug.c`; the vendor only exposes what its own frames already
+hold. `docs/debug-plan.md` is the design and the measurements.
+
+- **The hook is a branch in the `SWITCH` macro of `JS_CallInternal`**, both
+  spellings of it (the `switch` and the computed-goto one). With no handler
+  installed it is one predictable branch, and what that costs is the number in
+  the plan: **+12.5 % on tight arithmetic and +16.4 % on property reads**, off,
+  against the same tree built without it and measured back to back. That is why stage 5
+  of the plan is the bytecode patch and why this one is called scaffolding in
+  its own comment.
+- **`JSStackFrame.this_obj`** exists because `this` is a *parameter* of the call
+  and had no slot on the frame: a debugger could read every local of a method
+  and not the one name its body uses most. Borrowed like `cur_func` -- the
+  caller holds it for the length of the call -- so it is neither duplicated nor
+  marked.
+- **`JSStackFrame.debug_line`** is the line that frame was last reported at.
+  One line is many opcodes, so something has to say when the program *left* it,
+  and a single global "last line" cannot: returning from a call lands back on
+  the line that made it, which stopped twice. The memory belongs to the frame
+  because the question does.
+- **A line with no pc2line entry of its own cannot stop.** QuickJS emits an
+  entry where the line *changes*, so two statements it runs together share one:
+  `let total = 0;` right under `function Main() {` has none. A breakpoint there
+  would arm and never fire, silently. `JS_DebugLines` is what lets
+  `bta_debug.c` move it to the next line that exists and tell the IDE where it
+  went -- which is why a file is compiled and run in two steps under `--debug`
+  and in one otherwise.
+- **Dropping this patch does not fail to build.** The handler is never called,
+  `--debug` waits for a debugger that can never stop anything, and the IDE's
+  Debug menu does nothing at all. `tests/widgets` asserts it (`testDebugger`):
+  it runs a real program under `--debug` through `Exec`'s `Control` and `Write`,
+  and *the debugger stopped it once* is zero without the hook. `tests/ide`'s
+  `debug` phase covers the IDE's half -- the commands, and the gutter mark being
+  the state -- and deliberately starts no child, because driving one from there
+  says the same thing again, slower and through a window.
 
 ## Memory rules
 
@@ -547,7 +588,7 @@ Three things that will waste your time:
   which is what the File menu's Rename and Delete already did; the left button is
   what opens, so *select then ask* is the gesture. Found by right-clicking a form
   and getting a menu greyed out for the previous selection.
-- **`tests/ide/Driver.js` is twenty-five phases, and the phase is the scope.** It used
+- **`tests/ide/Driver.js` is thirty-two phases, and the phase is the scope.** It used
   to be one 4000-line generator where every `const` shared one scope, so a name
   near the top collided with one added at the bottom and the suite died with
   `SyntaxError: invalid redefinition of lexical identifier` — three times in one
@@ -597,6 +638,17 @@ entry below is something that cost somebody a debugging session and now costs a
 paragraph. Add to it when you are surprised; nothing here was obvious to the
 person who wrote it either.
 
+- **A field initialiser does not beat the `.form` load.** A form's controls are
+  built inside `Form`'s own constructor, i.e. inside `super()`, and a subclass's
+  field initialisers run only after `super()` returns. So a handler for an event
+  the **load itself** raises finds every helper on the class still `undefined` —
+  a `Switcher` raises `Switch` when its first page makes `Current` go from nothing
+  to zero, and a `Notebook` does the same when a page is added. `MainForm.js` said
+  the opposite in a comment for as long as nobody added a handler for one of those:
+  being a field rather than `Form_Open` fixes every event raised *after* the window
+  exists, and nothing about the ones raised while it is being built. The traceback
+  when it happens names `at Form (native)`. Such a handler guards
+  (`if (this.events) …`) and says why.
 - A widget must be attached to its parent **before** X/Y are applied, or the
   coordinates never reach a live surface. The loader and `Container.AddNode`
   both do this in that order.
@@ -1301,8 +1353,22 @@ person who wrote it either.
   somewhere else -- which reads as the jump being wrong rather than early.
   `scroll_to_mark` keeps the request and carries it out on the frame there is one,
   so anything that scrolls right after building or switching a view has to go
-  through a mark. `Editor.Select` does; `GotoLine` predates this and is called
-  where a frame has already passed.
+  through a mark. **`Editor.Select` and `GotoLine` both do, and the second one
+  only since somebody called it from a third place.** This entry used to end
+  "`GotoLine` predates this and is called where a frame has already passed",
+  which was true of the two callers it had -- a traceback clicked in the log and
+  the find bar, both inside a tab already on screen -- and false the day the
+  events page opened the `.js` and jumped to the handler in the same turn. The
+  symptom is the one this whole entry is about and it is easy to misread: the
+  cursor is on the right line, the view is at the top of the file, and nothing
+  anywhere says so. **The rule has no exceptions worth writing down**: if it
+  scrolls, it goes through a mark.
+
+  It is also **not assertable with what the runtime publishes** -- an `Editor`
+  answers where its *cursor* is and never where it is scrolled to, and adding a
+  scroll position to prove this would be a public property that exists for a
+  test. So this one is verified by looking, and the thing to do is jump to a
+  handler near the end of a long file in a tab that is not open yet.
 - **`GtkSourceSearchContext`'s `occurrences-count` is filled in by a background
   scan and answers `-1` until it lands.** Same for `get_occurrence_position`. A
   find bar built on either shows "12 matches" some frames after the search, and a

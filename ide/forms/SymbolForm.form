@@ -1,0 +1,84 @@
+{
+  "format": "bintana-form/1",
+  "class": "SymbolForm",
+  "properties": {
+    "Height": 420,
+    "Icon": "format-justify-fill-symbolic",
+    "Text": "Go to",
+    "Width": 380
+  },
+  "children": [
+    {
+      "type": "TextBox",
+      "name": "TxtFind",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 34,
+        "Icon": "edit-clear-symbolic",
+        "Placeholder": "A method, or a line number",
+        "Tooltip": "Type part of a method's name, or a number to go to that line",
+        "Width": 348,
+        "X": 16,
+        "Y": 16
+      }
+    },
+    {
+      "type": "RowList",
+      "name": "List",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 288,
+        "MinHeight": 120,
+        "MinWidth": 240,
+        "Style": "frame",
+        "VAlign": "Fill",
+        "Width": 348,
+        "X": 16,
+        "Y": 58
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblCount",
+      "properties": {
+        "Ellipsize": true,
+        "HAlign": "Fill",
+        "Height": 22,
+        "Style": "dim-label",
+        "VAlign": "End",
+        "Width": 200,
+        "X": 16,
+        "Y": 354
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnCancel",
+      "properties": {
+        "Cancel": true,
+        "HAlign": "End",
+        "Height": 32,
+        "Text": "Cancel",
+        "VAlign": "End",
+        "Width": 90,
+        "X": 176,
+        "Y": 372
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnOk",
+      "properties": {
+        "Default": true,
+        "HAlign": "End",
+        "Height": 32,
+        "Style": "suggested-action",
+        "Text": "Go",
+        "VAlign": "End",
+        "Width": 90,
+        "X": 274,
+        "Y": 372
+      }
+    }
+  ]
+}

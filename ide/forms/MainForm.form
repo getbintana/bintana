@@ -193,6 +193,22 @@
           "name": "MnuComplete",
           "text": "Complete",
           "shortcut": "<Control>space"
+        },
+        {
+          "separator": true
+        },
+        {
+          "name": "MnuGoto",
+          "text": "Go to definition",
+          "shortcut": "F12"
+        },
+        {
+          "name": "MnuGotoSymbol",
+          "text": "Go to...",
+          "shortcut": [
+            "<Control><Shift>o",
+            "<Control>l"
+          ]
         }
       ]
     },
@@ -203,10 +219,7 @@
         {
           "name": "MnuRun",
           "text": "Run",
-          "shortcut": [
-            "<Control>r",
-            "F9"
-          ]
+          "shortcut": "<Control>r"
         },
         {
           "name": "MnuStop",
@@ -250,6 +263,48 @@
           "name": "MnuProjectSettings",
           "text": "Project settings...",
           "shortcut": "<Control><Shift>p"
+        }
+      ]
+    },
+    {
+      "name": "MnuDebugMenu",
+      "text": "_Debug",
+      "children": [
+        {
+          "name": "MnuDebug",
+          "text": "Debug",
+          "shortcut": "<Control>F9"
+        },
+        {
+          "name": "MnuPause",
+          "text": "Pause",
+          "shortcut": "<Control>F8"
+        },
+        {
+          "separator": true
+        },
+        {
+          "name": "MnuStepInto",
+          "text": "Step into",
+          "shortcut": "F8"
+        },
+        {
+          "name": "MnuStepOver",
+          "text": "Step over",
+          "shortcut": "<Shift>F8"
+        },
+        {
+          "name": "MnuStepOut",
+          "text": "Step out",
+          "shortcut": "<Control><Shift>F8"
+        },
+        {
+          "separator": true
+        },
+        {
+          "name": "MnuBreakpoint",
+          "text": "Toggle breakpoint",
+          "shortcut": "F9"
         }
       ]
     },
@@ -911,6 +966,7 @@
                                 "HExpand": true,
                                 "Tabs": [
                                   "Properties",
+                                  "Events",
                                   "Controls"
                                 ],
                                 "VExpand": true
@@ -968,6 +1024,26 @@
                                       "properties": {
                                         "Expand": true,
                                         "HExpand": true,
+                                        "VExpand": true
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "Panel",
+                                  "name": "EventsBox",
+                                  "properties": {
+                                    "Arrangement": "Vertical",
+                                    "Spacing": 2
+                                  },
+                                  "children": [
+                                    {
+                                      "type": "RowList",
+                                      "name": "EventList",
+                                      "properties": {
+                                        "Expand": true,
+                                        "HExpand": true,
+                                        "Tooltip": "Double click an event to write its handler, or to go to it",
                                         "VExpand": true
                                       }
                                     }
@@ -1102,7 +1178,8 @@
                       "properties": {
                         "Height": 173,
                         "Tabs": [
-                          "Output"
+                          "Output",
+                          "Debug"
                         ]
                       },
                       "children": [
@@ -1119,6 +1196,81 @@
                             "VExpand": true,
                             "Wrap": false
                           }
+                        },
+                        {
+                          "type": "Split",
+                          "name": "DebugBox",
+                          "properties": {
+                            "Arrangement": "Horizontal",
+                            "Expand": true,
+                            "HAlign": "Fill",
+                            "HExpand": true,
+                            "Position": 320,
+                            "VAlign": "Fill",
+                            "VExpand": true
+                          },
+                          "children": [
+                            {
+                              "type": "Panel",
+                              "name": "StackBox",
+                              "properties": {
+                                "Arrangement": "Vertical",
+                                "Spacing": 2
+                              },
+                              "children": [
+                                {
+                                  "type": "Label",
+                                  "name": "LblStack",
+                                  "properties": {
+                                    "HAlign": "Start",
+                                    "Margin": 4,
+                                    "Style": "caption-heading",
+                                    "Text": "Call stack"
+                                  }
+                                },
+                                {
+                                  "type": "RowList",
+                                  "name": "StackList",
+                                  "properties": {
+                                    "Expand": true,
+                                    "HExpand": true,
+                                    "Tooltip": "The frames the program is stopped in. Choosing one shows its own values",
+                                    "VExpand": true
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "Panel",
+                              "name": "LocalBox",
+                              "properties": {
+                                "Arrangement": "Vertical",
+                                "Spacing": 2
+                              },
+                              "children": [
+                                {
+                                  "type": "Label",
+                                  "name": "LblLocals",
+                                  "properties": {
+                                    "HAlign": "Start",
+                                    "Margin": 4,
+                                    "Style": "caption-heading",
+                                    "Text": "Values"
+                                  }
+                                },
+                                {
+                                  "type": "RowList",
+                                  "name": "LocalList",
+                                  "properties": {
+                                    "Expand": true,
+                                    "HExpand": true,
+                                    "Tooltip": "The arguments and variables of the chosen frame. Arguments are in bold",
+                                    "VExpand": true
+                                  }
+                                }
+                              ]
+                            }
+                          ]
                         }
                       ]
                     }

@@ -768,7 +768,7 @@ own. It is [`Editor`](#editor--inherited-by-both-editors) plus everything below.
 | `FindNext()` | moves to the next match, wrapping around |
 | `FindPrevious()` | and backwards |
 | `Mark(line, kind, [text])` | a gutter mark. `kind` is `Error` `Warning` `Info` or `Bookmark` |
-| `Marks([kind])` | → the lines that carry one |
+| `Marks([kind])` | → a record per mark, in line order: `{ Line, Kind, Text }` |
 | `Replace(with)` | the match the cursor is standing on |
 | `ReplaceAll(with)` | every match |
 | `Search(text, [{CaseSensitive, WholeWord, Regex}])` | → how many there are, highlighting every one. **It does not move the cursor**: typing in a find field and jumping to a match happen at different moments |

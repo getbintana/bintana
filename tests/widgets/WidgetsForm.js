@@ -14633,9 +14633,113 @@ class Spike extends Form {
                  check("and nothing arrives as anything else", odd.length === 0,
                        JSON.stringify(odd));
 
-                 this.testExecKill();
+                 this.testDebugger();
              });
     }
+
+    /*
+     * The debugger, end to end, and the assertion that guards the third patch
+     * in `vendor/`.
+     *
+     * `bintana --debug` stops the program and speaks a line of JSON at a time:
+     * out on descriptor 3, which is `Exec`'s `Control`, and in on stdin, which
+     * is the handle's `Write`. So one test covers four things that arrived
+     * together -- the patch, the two new pieces of `Exec`, and the flag.
+     *
+     * **It is here and not only in `tests/ide` because of what dropping the
+     * patch looks like**: the build succeeds, `--debug` waits for a debugger
+     * that can never stop anything, and every other test passes. The two
+     * patches beside it in `AGENTS.md` are asserted here for the same reason.
+     */
+    testDebugger() {
+        const proj = File.Join(SCRATCH, "dbg");
+
+        Directory.Make(proj);
+        File.Save(File.Join(proj, "project.json"),
+                  JSON.stringify({ name: "dbg", main: "Main", sources: ["Main.js"] }));
+        /* Three lines that each have an opcode of their own, so the breakpoint
+         * needs no moving and the assertion below is about stopping and not
+         * about pc2line. */
+        File.Save(File.Join(proj, "Main.js"),
+                  '"use strict";\n' +
+                  'function twice(n) {\n' +
+                  '    const doubled = n * 2;\n' +
+                  '    return doubled;\n' +
+                  '}\n' +
+                  'function Main() {\n' +
+                  '    print(`answer ${twice(21)}`);\n' +
+                  '    Application.Quit(0);\n' +
+                  '}\n');
+
+        const stops = [];
+        const out   = [];
+        let   locals = null;
+        let   armed  = null;
+
+        const job = Exec([Application.Executable, "--debug", proj],
+            {
+                Timeout: 20000,
+                Control: (line) => {
+                    const msg  = JSON.parse(line);
+                    const kind = msg.event || msg.reply;
+
+                    if (kind === "ready") {
+                        job.Write(JSON.stringify(
+                            { do: "break", file: "Main.js", line: 3, id: 1 }));
+                        job.Write(JSON.stringify({ do: "continue" }));
+                    } else if (kind === "armed") {
+                        armed = msg;
+                    } else if (kind === "stopped") {
+                        stops.push(msg);
+                        job.Write(JSON.stringify({ do: "locals", frame: 0 }));
+                    } else if (kind === "locals") {
+                        locals = msg.items;
+                        job.Write(JSON.stringify({ do: "continue" }));
+                    }
+                },
+            },
+            (line) => out.push(line),
+            (code) => {
+                eq("a program run under the debugger finishes", code, 0);
+                check("and printed what it was going to print",
+                      out.join("").includes("answer 42"), JSON.stringify(out));
+
+                /* The patch, said as plainly as it can be: without the hook in
+                 * the interpreter nothing ever stops, and this is zero. */
+                eq("the debugger stopped it once", stops.length, 1);
+
+                const at = stops[0];
+                eq("on a breakpoint", at.reason, "breakpoint");
+                eq("in the function the line is in", at.frames[0].Name, "twice");
+                eq("on the line it was armed on", at.frames[0].Line, 3);
+                eq("with the caller under it", at.frames[1].Name, "Main");
+
+                check("the breakpoint reported where it landed", armed !== null);
+                eq("...which is where it was asked for", armed && armed.line, 3);
+
+                /* The frame's own arguments, by name, read out of `vardefs` --
+                 * and `this`, which is a parameter of the call and has a slot on
+                 * the frame only because the patch put one there. */
+                const by = {};
+                for (const item of locals || []) by[item.Name] = item.Value;
+
+                eq("an argument is read by name", by.n, "21");
+                check("and is marked as an argument",
+                      (locals || []).some((i) => i.Name === "n" && i.Argument === true));
+                check("`this` is among them", "this" in by, JSON.stringify(by));
+                /* `doubled` is declared on the line it stopped *at*, so it is
+                 * still the hole -- and a hole shown as a value would be a lie
+                 * about the program. */
+                check("a local not yet initialised is not offered",
+                      !("doubled" in by), JSON.stringify(by));
+
+                this.testExecKill();
+            });
+
+        check("Write answers whether there was a child to write to",
+              typeof job.Write === "function");
+    }
+
 
     /*
      * Stopping a child, and stopping **what the child started**.

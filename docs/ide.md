@@ -175,6 +175,7 @@ Split                   HAlign/VAlign Fill: the whole window below the toolbar
       SidePanel (Panel, a column)  shared; hidden unless a form is showing.
                         SideTabs (Switcher), and nothing else
                             "Properties"  PropGrid, the whole page
+                            "Events"      EventsBox: EventList, the whole page
                             "Controls"    ControlsBox: SideSplit (Palette +
                                           WidgetTree) with DesignBar under it
     ConsoleBox (Notebook) the bottom panel: two pages, both Fill
@@ -229,15 +230,21 @@ screen, and shows the side panel when that tab is a form. They are not controls
 of the `.form` any more; they are words for "the active one", and `null` when
 there is none.
 
-The side panel is **not** one column of three. A `Switcher` divides it in two —
-**Properties**, and **Controls** with the palette above the tree — because 280
-pixels of width cannot show a property grid, a palette and a tree at once, and
-what it did instead was give each of them a third of the height. The two pages
-are the two halves of designing, and the strip says which is on screen without
-anything having to be read. `Properties` is the page it opens on: selecting a
-control is the commonest thing anyone does here, and that page is where the
-answer shows. Nothing switches the page by itself — a selection made from the
-tree would pull the tree out from under the pointer.
+The side panel is **not** one column of everything. A `Switcher` divides it —
+**Properties**, **Events**, and **Controls** with the palette above the tree —
+because 280 pixels of width cannot show a property grid, an event list, a palette
+and a tree at once, and what it did instead was give each of them a share of the
+height. The strip says which is on screen without anything having to be read.
+`Properties` is the page it opens on: selecting a control is the commonest thing
+anyone does here, and that page is where the answer shows. Nothing switches the
+page by itself — a selection made from the tree would pull the tree out from
+under the pointer.
+
+**The order is Delphi's, and so is the reason.** `Properties` and `Events` are
+the two questions about *the selection* — what it is, and what it does — so they
+are neighbours; the palette and the tree are about the shape of the form and are
+the other thing. Which is why the new page went in the middle rather than on the
+end.
 
 The design actions — delete, bring to front, send to back — go **inside** the
 `Controls` page and not under the switcher, because that is what they are about:
@@ -720,6 +727,89 @@ Two things it says out loud rather than silently:
   the label when the two differ. A list that silently stops reads exactly like a
   project with nothing else in it.
 
+## F12, and where a name is declared
+
+The gesture every environment in this family has — Shift+F2 in Visual Basic,
+Ctrl+click in Gambas and Lazarus, F12 everywhere since — and the one this IDE
+could only answer with *Find in project*, which is a search and not an answer: it
+finds the mentions and leaves the choosing to whoever asked.
+
+It is the same doctrine as the completion below, word for word: **table lookups,
+never inference, and silence where nothing says what a name is.** Four questions,
+asked in this order:
+
+| the word under the caret | where it goes |
+|---|---|
+| `this.greet` | the method declared in the file being edited |
+| `this.Ok` | the control on the `.form` beside it — which opens the designer and **selects** it, since a designer has no lines to scroll to |
+| `Child`, or `Whatever.Child` | the class of that name, wherever the project declares it — the tail of a qualified name is the class |
+| `greet` | a method of the file being edited |
+
+`this.` is the one prefix worth understanding, because it is the one whose answer
+is not ambiguous: inside a form's class, `this.X` is either a method of that class
+or a control of its form, and nothing else.
+
+**What it refuses is the point.** A name nothing in the project declares goes
+nowhere and says so in the log, because a key that silently does nothing is
+indistinguishable from a key that is not bound. `const x = makeThing(); x.` goes
+nowhere for the same reason the completion proposes nothing for it: answering
+would mean writing a JavaScript analyser, and **a wrong jump is worse than no
+jump**. And the runtime's own names — `TableView`, `File` — are not here either,
+which is not a gap: they have no definition in this project to go to, and F1
+already opens their page. Two keys, two questions.
+
+**A declaration is not a mention.** What it looks for is a method four spaces into
+a class body, which is the same anchor `FormFiles.handlersIn` uses and for the
+same reason: `\bgreet\s*\(` finds `this.greet()` in a *call* and calls it a
+declaration.
+
+**What a tab says beats what the file says.** A method written a moment ago and
+not yet saved is still a method, and jumping to where the file on disk has it
+would land on the wrong line. Same bargain as the handler marks.
+
+### Go to... (`Ctrl+Shift+O`, `Ctrl+L`)
+
+The other half of the same question. F12 answers *where is the name I am looking
+at*; this one answers *where is the method called something*, which a long file
+makes somebody ask twenty times an hour and which, before this, was answered by
+scrolling.
+
+A list of the methods the open file declares, **in the order they are written** —
+which is the order somebody scrolling would meet them, and the only order that
+needs no explaining; alphabetical would put `Form_Open` between two things it has
+nothing to do with. Typing narrows it, Enter takes the first one still showing.
+
+*Prior art:* Visual Basic's procedure drop-down over the code, Lazarus's Code
+Explorer, and `Ctrl+Shift+O` in every editor since.
+
+**One box and not two.** A line number is the same gesture with a different kind
+of answer, so digits offer the line instead of filtering — `2` is a line and `t2`
+is a search, which is the rule that lets one box do both with no mode to be in —
+and `Ctrl+L` is a second key on the same command rather than a second window. A
+number past the end of the file is not a line, and the bar under the list says how
+many there are instead.
+
+**The filter and Enter ask one function.** `matches(index)` is what the list calls
+per row while it filters and what Enter calls to find the first row still showing.
+A second expression for the second question is how the two come to disagree — the
+same argument the design commands' `Action` settled elsewhere in this file.
+
+Which methods there are is `Navigator.symbols`, so the one regular expression that
+knows what a declaration looks like has one home and `SymbolForm` does no parsing:
+it is handed a list and hands back a line.
+
+A permanent *Outline* panel would be the larger version of this, and it is not
+here: the side panel is hidden unless a form is showing, and a code tab getting one
+is a bigger change than the question warrants.
+
+**Nothing is cached**, and that is deliberate. An index of the project's classes
+would have to be thrown away whenever a class is renamed, a file is added or a tab
+is edited, and getting that wrong sends F12 to a line that no longer declares
+anything — which is the one outcome worse than none. What it costs instead is
+reading the project's `.js` files and stopping at the first declaration: 40 files
+and 20 000 lines for the IDE's own project, once per keypress, which is less than
+*Find in project* does on every search.
+
 ## What the editor proposes
 
 Two providers, and the difference between them is the whole point.
@@ -1076,6 +1166,75 @@ when the program died of something that named no line at all. It looked ten time
 thirty milliseconds apart while the pane was a terminal, because VTE digests what
 it is fed on its own time and the exit signal could arrive before the last of the
 traceback was on screen. `Exec` and a text buffer have nothing to wait for.
+
+## Debugging
+
+*Debug* (`Ctrl+F9`) runs the project the way *Run* does and stops it where you
+said. What does the stopping is the runtime (`bintana --debug`, and
+`runtime/src/bta_debug.c`); what is here talks to it and draws what it says.
+The design, the measurements and what was refused are in
+[debug-plan.md](debug-plan.md).
+
+| | |
+|---|---|
+| `F9` | toggle a breakpoint on the caret's line |
+| `Ctrl+F9` | **Debug**, and **Continue** once it is stopped |
+| `Ctrl+F8` | pause a program that is running |
+| `F8` / `Shift+F8` / `Ctrl+Shift+F8` | step into, over, out |
+
+**The keys are Visual Basic's**, which is the lineage this project claims, and
+`F9` for a breakpoint is also Gambas's, Delphi's, Lazarus's, Visual Studio's and
+VS Code's. *Run* gave it up and kept `Ctrl+R`: `F9` meaning *run* was this IDE's
+alone, and `F9` meaning *breakpoint* is what everybody who arrives here already
+knows.
+
+**The gutter mark is the state.** `SourceEditor.Mark` has had a `Bookmark` kind
+since it was written, and its reference page says in as many words that a
+breakpoint is what it is for. So there is no second list beside the marks to
+disagree with them; what a file that is closed keeps is its lines, put back on
+the editor that opens next.
+
+**A breakpoint can move, and says so.** QuickJS emits a line-number entry where
+the line *changes*, so two statements it runs together share one -- `let total =
+0;` right under `function Main() {` has none of its own and can never stop. A
+mark beside a line like that is a lie the programmer then acts on, so the
+runtime answers where it really landed and the mark follows, with a line in the
+log saying what moved and why. It is what every editor does with a click on a
+blank line.
+
+**Breakpoints go down before the program runs.** `--debug` stops the runtime
+after the globals are installed and before a line of the project is read, and
+waits; the IDE arms everything there and then says *continue*. A breakpoint
+armed after the program had started would miss whatever it had already gone
+past.
+
+**The panel is the stack and the values**, on a page of the bottom notebook
+beside *Output*. Choosing a frame goes to its line and shows **that frame's**
+arguments and variables -- arguments in bold, because which names came in and
+which the body made is the first thing anyone wants from such a list. The values
+are text the child rendered: a live object is not serialisable in general, and a
+debugger that could not show one would be useless exactly where it matters.
+
+**One Stop for both.** Whichever of *Run* and *Debug* started a child, the Stop
+button is what ends it -- a second button for *stop the one being debugged*
+would be a second answer to a question that has one.
+
+### What it cannot do yet
+
+- **A breakpoint past the last statement of a function moves into the next
+  one.** What it moves to is the first line *of the file* that can stop at or
+  after the one asked for, and the file is all the debugger knows about: a
+  breakpoint on a closing brace has nothing left in that function to move to.
+  It is visible rather than silent -- the mark moves and the log says so -- but
+  landing in the next method is a surprise. Fixing it wants the line ranges per
+  function and not just the set, which is the same table stage 5 needs.
+- **A loop written entirely on one line stops once.** `for (let i = 0; i < 3;
+  i++) total += i;` never leaves its line, and what the debugger watches is the
+  line changing. Telling those apart wants the pc rather than the line, which is
+  stage 5 of the plan.
+- **No conditional breakpoint, no watch, and no immediate window.** Stages 3 and
+  4. The channel already carries what they need.
+- **Nothing is evaluated in a frame**, so a value can be read and not changed.
 
 ## The terminal tab
 
@@ -2688,6 +2847,54 @@ oddly.
 
 The `.form` is saved first: the `.js` is about to be written, and the two files must
 not end up describing different forms.
+
+### And the events page, which is the list that gesture guesses at
+
+A double click writes **one** event — the head of `EventNames()`, which is the one
+the control is really about — and every other event a control raises was reachable
+only through *Form → Write handler*, a dynamic menu. That is a fine way to reach a
+command and a poor way to read a list: it says nothing until it is opened, and it
+closes the moment it is used.
+
+So the list is drawn, as the side panel's second page. One row per event the
+selection raises, in `EventNames()`'s own order; the method each one would be
+written as; and a bullet on the ones the `.js` already answers. Activating a row
+calls `openHandler`, which is the same call the double click makes — so an event
+already answered is **jumped to** rather than written twice, and the page never has
+to know which of the two it asked for.
+
+*Prior art:* the **Events** tab of Delphi's and Lazarus's Object Inspector, and
+Visual Basic's right-hand procedure drop-down. Every environment this one is in the
+spirit of shows a control's events beside its properties.
+
+**It decides nothing.** Which events exist is `Designer.eventsOf`, which already
+tells a project's component (`static Events`) from a control; which are written is
+`FormFiles.handlersIn`; writing or jumping is `FormFiles.openHandler`. The page is
+three lookups and a list of rows, which is why a control that grows an event in C
+shows up here without the IDE learning anything — the same bargain the property
+grid makes with `PropertyNames()`.
+
+With nothing selected it is about the **form**, whose handlers are written under the
+name `Form` — which is what a double click on the bare canvas already spells
+(`openHandler("Form", "Open")`). The list comes from the probe the property grid
+keeps: the form being designed is not running, so there is no instance to ask and
+one is built and never shown.
+
+**What makes it cheap enough to hang off `refresh()`.** That call runs on every
+edit, every selection *and* every pixel of a form resize. The page answers *nothing
+changed* twice over: it does nothing at all while it is not the page on screen, and
+when it is, it compares a signature of what it last drew — the target, the events,
+the written ones — before touching a row. Reading which handlers exist is **one**
+read of the `.js` and not one per event, which is what `hasHandler` costs and what
+the menu beside it still pays.
+
+**One trap, measured.** A `Switcher` raises `Switch` when its first page makes
+`Current` go from nothing to zero, and the pages are built by the `.form` — which is
+read inside `Form`'s own constructor. A subclass's field initialisers run *after*
+`super()` returns, so `SideTabs_Switch` fires with every helper on `MainForm` still
+`undefined`. The note beside those fields claimed an initialiser runs before any
+event can; that is true of every event raised after the window exists and false of
+the ones the load itself raises. A handler reachable that way guards, and says so.
 
 ## Folders, and namespaces, which are not the same thing
 

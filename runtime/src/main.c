@@ -17,7 +17,11 @@ static void usage(void)
           "sources, then instantiates and shows the startup form named in\n"
           "project.json.  A project that declares \"main\" instead calls that\n"
           "function and opens no display at all.  Anything after the directory\n"
-          "is handed to the project as Application.Arguments.\n", stderr);
+          "is handed to the project as Application.Arguments.\n"
+          "\n"
+          "  --debug   stop and wait for a debugger before the project runs.\n"
+          "            Events go out on descriptor 3 and commands come in on\n"
+          "            stdin; the IDE is what speaks it.\n", stderr);
 }
 
 int main(int argc, char **argv)
@@ -48,6 +52,12 @@ int main(int argc, char **argv)
             usage();
             g_ptr_array_unref(rest);
             return 0;
+        }
+        /* Debugging is asked for before the project, like every other option,
+         * and what it does is in runtime/src/bta_debug.c. */
+        if (!dir && !strcmp(argv[i], "--debug")) {
+            bta_debug_want();
+            continue;
         }
         if (!dir && argv[i][0] == '-') {
             fprintf(stderr, "bintana: unknown option '%s'\n", argv[i]);

@@ -59,6 +59,13 @@ everything here works the same in both.
 `Line`/`Column` in a status bar is `Cursor` plus two reads — and it is the one
 event that fires often, so what hangs off it should be cheap.
 
+**`GotoLine` and `Select` work in a view that has not been drawn yet**, which is
+the case that matters: opening a file in a tab and jumping to a line in it happen
+in the same breath, and the view has had no frame in which to be laid out. Both
+reveal the place through a text *mark*, so the scroll is carried out on the frame
+there is one. A jump that scrolled nowhere and left the cursor in the right place
+is what that avoids.
+
 ## Undo
 
 | | |

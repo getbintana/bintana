@@ -15,6 +15,10 @@ endif()
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GTK4 REQUIRED IMPORTED_TARGET gtk4)
 pkg_check_modules(GTKSOURCE REQUIRED IMPORTED_TARGET gtksourceview-5)
+# Part of glib, and already installed wherever gtk4 is: `Exec`'s third stream
+# wraps a descriptor the child inherits, which is `g_unix_input_stream_new`.
+# bta_sys.c was already POSIX-only (setsid, killpg), so this costs no port.
+pkg_check_modules(GIOUNIX REQUIRED IMPORTED_TARGET gio-unix-2.0)
 
 # Optional: VTE is the pty behind `Terminal`, and it is the only dependency
 # with no Windows port -- which is why it stopped being required. Without it
@@ -97,6 +101,7 @@ add_executable(bintana
     runtime/src/bta_menu.c
     runtime/src/bta_tree.c
     runtime/src/bta_table.c
+    runtime/src/bta_debug.c
     runtime/src/bta_sys.c
     runtime/src/bta_database.c
     runtime/src/bta_sqlite.c
@@ -113,7 +118,8 @@ target_include_directories(bintana PRIVATE
     ${CMAKE_SOURCE_DIR}/runtime/include
     ${CMAKE_BINARY_DIR}/generated
 )
-target_link_libraries(bintana PRIVATE quickjs PkgConfig::GTK4 PkgConfig::GTKSOURCE)
+target_link_libraries(bintana PRIVATE quickjs PkgConfig::GTK4 PkgConfig::GTKSOURCE
+                                       PkgConfig::GIOUNIX)
 
 if(VTE_FOUND)
     target_link_libraries(bintana PRIVATE PkgConfig::VTE)

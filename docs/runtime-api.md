@@ -777,6 +777,7 @@ arrives as `out` however this is asked for.
 | `Stop()` | ask it to end (SIGTERM) |
 | `Kill()` | make it end (SIGKILL) |
 | `TimedOut` | whether the guard is what ended it, rather than the child itself |
+| `Write(text)` | a line to the child's stdin. A newline is added when there is not one, because a line is what the other side is blocked on; answers whether there was still a child to write to |
 
 `Running` and `ExitCode` are written onto the handle rather than asked of the
 child, because the question outlives the child: the ordinary place to read an exit
@@ -789,6 +790,23 @@ there was never anything left to signal. Reading the pid a moment later instead 
 at once was a NULL dereference: a crash that appears about once in two hundred
 spawns under a sanitizer, and that a plain build had waiting for a slow enough
 machine.
+
+**A third stream, for a child that speaks a protocol.** `Control` in the options
+is a callback for the child's **descriptor 3**, called once per line, and
+`Write` is the way back on its stdin. stdout is what a child says to a *person*
+-- it is what a log pane shows -- so a protocol cannot share it: marking its
+lines with a prefix means a child that prints the prefix breaks its own tooling,
+silently and rarely. stderr is taken as well. A descriptor of its own is the one
+spelling with no failure mode, and `bintana --debug` is what writes on it.
+
+The control stream ending is **not** the child ending: it closes when the child
+stops speaking, and what says the run is over is still stdout draining and the
+process being reaped.
+
+And **stdin is a pipe whether or not anything writes to it**, which is a change
+from inheriting the parent's: a child of `Exec` can no longer take the terminal
+the application was started from, and one that reads stdin and is written
+nothing waits exactly as it did before.
 
 **Two verbs and no flag.** `Stop` is a request a well-behaved program answers by
 exiting and `Kill` is one nothing can decline — and `Stop` is what `Timer` already

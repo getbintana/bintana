@@ -147,9 +147,18 @@ class MainForm extends Form {
      * A control's event can arrive as early as the .form *loading* -- the
      * Notebook fires Switch when a page is added -- which is before `Form_Open`
      * runs, and a handler that reached for a helper that was not there yet blew
-     * up.  A field initialiser runs at construction, so every one of these is
-     * there before any event can be.  None of them touches a widget to be
+     * up.  Being fields and not `Form_Open` is what fixes that for every event
+     * raised after the window exists.  None of them touches a widget to be
      * built, which is what makes that safe.
+     *
+     * **It does not cover the load itself, and that was written here as though
+     * it did.** The `.form` is read inside `Form`'s constructor, i.e. inside
+     * `super()`, and a subclass's field initialisers run after `super()`
+     * returns -- so a handler for an event the *load* raises still finds
+     * `undefined`. Measured by adding one: `SideTabs_Switch` fires while the
+     * switcher's first page is being added, with `at Form (native)` in the
+     * traceback and every field below still unset. A handler that can be reached
+     * that way guards, and says so; see `SideTabs_Switch`.
      */
     finder    = new Ide.Finder(this);        // the find bar
     runner    = new Ide.Runner(this);        // running the project, and its output
@@ -168,6 +177,14 @@ class MainForm extends Form {
      * not a designer's: what it offers is the project's components, and the
      * designer on screen only says which tool is marked. */
     palette   = new Ide.Palette(this);
+    /* And the events page, beside the properties: one instance for the same
+     * reason the palette is one, since what it shows is the one selection. */
+    events    = new Ide.Events(this);
+    /* F12: where a name is declared, by looking it up rather than guessing. */
+    navigator = new Ide.Navigator(this);
+    /* Breakpoints, the stack and the values: what the runtime's `--debug` says,
+     * drawn. */
+    debugger_ = new Ide.Debugger(this);
 
     /*
      * The catalogue the left button last selected, or null.
@@ -888,6 +905,10 @@ class MainForm extends Form {
         this.MnuCloseTab.Enabled = this.activeFile !== null;
         this.MnuAdd.Enabled    = design;
         this.showHandlers(picked);
+        /* The same list the menu above is offering, drawn: it answers "nothing
+         * changed" without reading anything, which is what lets it hang off a
+         * call that also runs on every pixel of a form resize. */
+        this.events.fill();
         /*
          * `ActDelCtl`, `ActRaise` and `ActLower` are **not** set here any more:
          * they are commands, and `Designer.refresh` owns whether a command that
@@ -952,6 +973,27 @@ class MainForm extends Form {
          * for a name across a project one has just opened is exactly when
          * nothing is up yet. */
         this.MnuFindAll.Enabled = open;
+
+        /* F12 reads the caret, so it wants a code editor and not merely a
+         * project: on a form tab there is no word to be on. */
+        this.MnuGoto.Enabled = !design && !!this.Editor;
+        this.MnuGotoSymbol.Enabled = !design && !!this.Editor;
+
+        /*
+         * Debugging.  *Debug* is *Continue* while it is stopped, so it is
+         * available in both states and unavailable only while the program is
+         * running freely -- which is when *Pause* is the thing to press.
+         */
+        const halted = this.debugger_.halted;
+
+        this.MnuDebug.Enabled    = open && (!this.running || halted);
+        this.MnuPause.Enabled    = this.debugger_.running && !halted;
+        this.MnuStepInto.Enabled = halted;
+        this.MnuStepOver.Enabled = halted;
+        this.MnuStepOut.Enabled  = halted;
+        /* A breakpoint is set on a line, so it wants a code editor -- and it is
+         * set whether or not anything is running, which is the point of it. */
+        this.MnuBreakpoint.Enabled = !design && !!this.Editor;
 
         let status;
         if (!this.project) {
@@ -1034,7 +1076,7 @@ class MainForm extends Form {
     }
 
     BtnStop_Click() {
-        this.runner.stop();
+        this.stopRun();
     }
 
     /*
@@ -1066,6 +1108,27 @@ class MainForm extends Form {
     WidgetTree_Activate() {
         if (this.designing) this.designer.tree.renameFromKey(this.WidgetTree.Key);
     }
+
+    /* The events page: activating a row writes that handler, or goes to it --
+     * `openHandler` decides which, exactly as a double click on the canvas does. */
+    EventList_Activate() { this.events.activated(this.EventList.Index); }
+
+    /*
+     * The side panel changed page.  What is on the events page was drawn for
+     * whatever was selected when it was last on screen, so arriving at it is a
+     * reason to look again -- and it is the only moment that is, since `fill()`
+     * does nothing at all while the page is hidden.
+     *
+     * **Guarded, because this one really does arrive before the fields exist.**
+     * A `Switcher` emits `Switch` when its first page makes `Current` go from
+     * nothing to zero, and the pages are built by the `.form` -- which is loaded
+     * inside `Form`'s own constructor, i.e. inside `super()`. A subclass's field
+     * initialisers run *after* that, so `this.events` is genuinely undefined
+     * here on the way up. (The note beside those fields said an initialiser runs
+     * before any event can; that is true of every event the IDE raises later and
+     * false of the ones the load itself raises.)
+     */
+    SideTabs_Switch() { if (this.events) this.events.shown(); }
 
     /*
      * The property grid's design-value switch.
@@ -1707,6 +1770,50 @@ class MainForm extends Form {
         return line.slice(from, to).replace(/^\.+|\.+$/g, "");
     }
 
+    /* F12. Everything about *which* definition is `Navigator`'s; what is here
+     * is the key, the way `MnuReference_Click` is F1's and nothing more. */
+    MnuGoto_Click() { this.navigator.go(); }
+
+    /*
+     * --- debugging ----------------------------------------------------------
+     *
+     * Everything about *what* happens is `Ide.Debugger`'s; these are the keys.
+     * *Debug* is also *Continue*, the way F5 is in every environment since
+     * Visual Basic: what one presses to get going is the same whether it has
+     * started or not.
+     */
+    MnuDebug_Click()      { this.debugger_.start(); }
+    MnuPause_Click()      { this.debugger_.pause(); }
+    MnuStepInto_Click()   { this.debugger_.step("into"); }
+    MnuStepOver_Click()   { this.debugger_.step("over"); }
+    MnuStepOut_Click()    { this.debugger_.step("out"); }
+    MnuBreakpoint_Click() { this.debugger_.toggle(); }
+
+    /* A frame of the stack chosen: go to its line, and show *its* values. */
+    StackList_Select() { this.debugger_.showFrame(this.StackList.Index); }
+
+    /*
+     * Ctrl+Shift+O, and Ctrl+L on the same command: the methods of the file as a
+     * list, or a line number.  `SymbolForm` filters and hands back a line; which
+     * methods there are is `Navigator.symbols`, which is where the one regular
+     * expression that knows what a declaration looks like lives.
+     */
+    MnuGotoSymbol_Click() {
+        if (!this.Editor) return;
+
+        const text = this.Editor.Text;
+
+        /* Kept the way `columnEditor` is: a modal dialog is a window with no
+         * other reference, and a test has to be able to reach the one that is
+         * open. */
+        this.symbolPicker =
+            SymbolForm.go(this.navigator.symbols(text), text.split("\n").length,
+                          (line) => {
+                              this.Editor.GotoLine(line);
+                              this.Editor.SetFocus();
+                          });
+    }
+
     MnuRecent_Click(index) {
         const dir = this.recent[index];
         if (dir) this.openProject(dir);
@@ -1718,7 +1825,15 @@ class MainForm extends Form {
     MnuQuit_Click()   { if (!this.confirmQuit()) this.quit(); }
 
     MnuRun_Click()    { this.run(); }
-    MnuStop_Click()   { this.runner.stop(); }
+    /* One Stop for both: whichever of the two started a child, this is what
+     * ends it -- a second button for "stop the one being debugged" would be a
+     * second answer to a question with one. */
+    MnuStop_Click()   { this.stopRun(); }
+
+    stopRun() {
+        this.runner.stop();
+        this.debugger_.stop();
+    }
 
     /* Undo is split by mode, so Ctrl+Z does not steal the text editor's undo
      * when the editor is what is on screen. */

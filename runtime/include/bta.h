@@ -582,6 +582,21 @@ guint bta_media_pending(void);  /* players owed an answer (console loop) */
 
 /* --- File / Dir / Exec -------------------------------------------------- */
 void bta_sys_init(JSContext *ctx, JSValue global);
+
+/*
+ * The debugger (`runtime/src/bta_debug.c`), which exists only under `--debug`.
+ *
+ * `bta_debug_want` is the flag the command line sets; `bta_debug_start` installs
+ * the hook and waits for the IDE to say what it wants stopped at, before a line
+ * of the project has run.  With no `--debug` all three are no-ops and QuickJS
+ * never gets a handler, which is the whole of what an ordinary run pays.
+ */
+void bta_debug_want(void);
+bool bta_debug_enabled(void);
+void bta_debug_start(JSContext *ctx);
+void bta_debug_stopping(JSContext *ctx, int code);
+/* A project file just compiled: what lines it can stop on. */
+void bta_debug_compiled(JSContext *ctx, const char *path, JSValueConst compiled);
 void bta_sys_cleanup(void);   /* cancels children still running */
 /*
  * How much of the program is still owed an answer: children running, timers

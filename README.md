@@ -17,6 +17,9 @@ cmake -S . -B build && cmake --build build -j
 
 ./build/bintana examples/hello        # an application
 ./build/bintana ide examples/hello    # the IDE, opening a project
+./build/bintana --debug examples/hello   # ...and the same program stopped for a
+                                  # debugger: events out on descriptor 3, commands
+                                  # in on stdin. The IDE is what speaks it
 
 LANGUAGE=es ./build/bintana examples/hello    # ...in Spanish, from examples/hello/po/es.po
 LANGUAGE=es ./build/bintana ide examples/hello    # the IDE itself, from ide/po/es.po
@@ -45,7 +48,7 @@ LANGUAGE=es ./build/bintana ide examples/hello    # the IDE itself, from ide/po/
 ./build/bintana examples/session     # Http with cookies and Basic auth: a login the next request remembers
 ./build/bintana examples/serve       # Http.Server: a static file server on :8080. Runs until Ctrl-C
 LANGUAGE=es ./build/bintana examples/agenda   # ...and the long date the catalogue rewrites
-./tests/run.sh                   # 5388 assertions in 5 projects, on a virtual display
+./tests/run.sh                   # 5484 assertions in 5 projects, on a virtual display
 HEADLESS= ./tests/run.sh          # the same, on *your* screen -- empty, not 0. Three
                                   # windows and the keyboard for a minute, and a couple
                                   # of assertions measure your theme and not the one
@@ -54,8 +57,10 @@ sudo cmake --install build        # ...or install it: see below
 ./tests/install.sh                # what that would produce, tried without installing it
 ```
 
-Dependencies: `gtk4`, `gtksourceview-5` (with headers) and pkg-config. QuickJS is
-vendored in `vendor/quickjs` (quickjs-ng v0.16.1).
+Dependencies: `gtk4`, `gtksourceview-5` (with headers), `gio-unix-2.0` (part of
+glib, and already there wherever gtk4 is) and pkg-config. QuickJS is
+vendored in `vendor/quickjs` (quickjs-ng v0.16.1), with three patches of our own
+in it -- see [AGENTS.md](AGENTS.md).
 
 Five more are **optional**, and CMake says what it found either way. `libsystemd` only
 adds `Logger.Target = "Journal"`; without it the build is the same and logging
@@ -1452,10 +1457,9 @@ sqlite and not about this runtime. The full reference for both is in
 `ide/` is a Bintana project like any other: `project.json`, `MainForm`, a class per
 subject beside it (`Designer`, `TabSet`, `Classes`, ... — see
 [docs/ide.md](docs/ide.md)), the `AskForm` / `ConfirmForm` / `NewProjectForm` /
-`IconForm` dialogs, and
-`icons/`. It has a project tree, a tabbed editor with highlighting, run/stop with
-the output in a log pane, a real VTE terminal in a tab beside it, menus with
-accelerators, and a **form designer**.
+`SymbolForm` / `IconForm` dialogs, and `icons/`. It has a project tree, a tabbed
+editor with highlighting, run/stop with the output in a log pane, a real VTE terminal in a tab beside it, menus with
+accelerators, a **debugger**, and a **form designer**.
 
 The project tree groups each form with its code: a form is one thing even though
 it lives in two files.
@@ -1504,6 +1508,20 @@ Other
   What it is a view of is *the active tab's* search — the highlight belongs to the
   editor, and every code tab owns its editor — so switching tabs re-counts there
   and a form tab, having no text, closes it.
+- **Go to definition** (`F12`) answers what *Find in project* could only search
+  for. The word under the caret, looked up and never guessed: `this.greet` is the
+  method declared in this file, `this.Ok` is the control on the `.form` beside it
+  — which opens the designer and selects it, since a designer has no lines — and
+  `Child` or `Whatever.Child` is the class of that name wherever the project
+  declares it. A name nothing declares goes **nowhere** and says so in the log,
+  which is the same answer completion gives to `const x = makeThing(); x.` and for
+  the same reason: a wrong jump is worse than no jump. The runtime's own names are
+  F1's question, not this one.
+- **Go to...** (`Ctrl+Shift+O`, `Ctrl+L`) is the methods of the open file as a
+  list, in the order they are written, narrowed as one types — the procedure
+  list Visual Basic kept over the code, and Lazarus's Code Explorer. **One box and not two:** digits
+  are a line number rather than a filter, so `2` goes to line 2 and `t2` searches,
+  and `Ctrl+L` is a second key on the same command instead of a second window.
 - **Find in project** (`Ctrl+Shift+F`) is a window of its own: the same term
   against every file the project owns, with the three switches, a filter built
   from the project's own extensions, and the hits as a tree — a node per file, a
@@ -1559,6 +1577,33 @@ Other
   waiting to be clicked: pressing Run and being left in front of a wall of text
   with the file it names one click away is the thing that fixes. Only files of the
   project — a traceback runs through the runtime's own frames too.
+
+**Debugging** (`Ctrl+F9`) runs the project and stops it where you said. `F9`
+toggles a breakpoint on the caret's line, `F8` / `Shift+F8` / `Ctrl+Shift+F8`
+step into, over and out, `Ctrl+F8` pauses a program that is running, and
+`Ctrl+F9` again carries on. The keys are Visual Basic's, which is also where
+Gambas, Delphi, Lazarus and Visual Studio got theirs; *Run* gave `F9` up and
+kept `Ctrl+R`, because `F9` meaning *run* was this IDE's alone.
+
+The bottom panel grows a *Debug* page: the call stack, and the arguments and
+variables of whichever frame is chosen -- **that frame's**, so standing one
+level up shows what the caller was holding. Arguments are in bold. The gutter
+mark *is* the breakpoint, which is what `SourceEditor.Mark`'s `Bookmark` kind
+was written for, so there is no second list to disagree with what is on screen.
+
+**A breakpoint can move, and says so.** QuickJS gives a line number only where
+the line changes, so a statement the compiler ran together with the one above it
+can never stop; the runtime answers where the breakpoint really landed and the
+mark follows it, with a line in the log. A mark beside a line that will never
+stop is worse than no mark.
+
+What does the stopping is `bintana --debug`, which blocks the program and
+speaks a line of JSON at a time -- out on a third stream and in on stdin, which
+is what `Exec`'s `Control` option and the handle's `Write` were added for. Both
+are ordinary capabilities now: any application can drive a child that speaks a
+protocol. The design, what *complete* would mean, what a branch per opcode costs
+measured, and DAP as the plan to evaluate are in
+[docs/debug-plan.md](docs/debug-plan.md).
 
 ### The designer
 
@@ -1742,6 +1787,18 @@ in the IDE — there was such a list, fifteen types by hand, and five controls w
 missing from it. *Form → Write handler* offers **every** event the selection
 raises, marking the ones already written, since those it jumps to rather than
 writing twice.
+
+**And that list is drawn, not only offered.** The side panel's second page is
+**Events**: a row per event the selection raises, the method each one would be
+written as, and a bullet on the ones the `.js` already answers — which is the
+Object Inspector's *Events* tab in Delphi and Lazarus, and Visual Basic's
+procedure drop-down. Activating a row goes through the same `openHandler` the
+double click does, so an event already answered is jumped to rather than written
+twice. With nothing selected it is the form's own events, under the name `Form`.
+It decides nothing: the events come from the control, the marks from the `.js`,
+and a control that grows an event in C appears here with no list to update — the
+same bargain the property grid makes with `PropertyNames()`.
+
 Renaming a control from the grid carries its handlers along in the `.js` — with
 word boundaries, so renaming `Button1` never touches `Button10`.
 
@@ -1878,15 +1935,29 @@ Written down so the argument is not had twice.
 
 ## What is next
 
-1. Packaging an application for distribution without the project tree. *Export
+1. **A debugger.** It is the one thing in this family's toolbox with no substitute
+   here at all — packaging has *Export project*, printing has `SavePdf`, a screen
+   over a table is written by hand — and debugging is `Logger.Debug`, save, run,
+   read the pane. The design, what *complete* means in eleven points, why the
+   answer is a third patch to the vendored QuickJS, what a branch per opcode costs
+   measured, and the channel it would speak are in
+   [docs/debug-plan.md](docs/debug-plan.md); so is DAP, written down as the plan to
+   evaluate rather than the thing to build first.
+
+2. Packaging an application for distribution without the project tree. *Export
    project* is not that and does not replace it: it hands over the tree itself,
    which is the question that comes before this one.
 
-2. **A live preview of a component in the designer.** A component is a class in
+3. **A live preview of a component in the designer.** A component is a class in
    the *project's* process, so the designer places a stand-in reading `[Chart]`
    and a `design` block gives it sample data. Teaching the designer to instantiate
    a project's own components would fix it for every component at once, which is
    why it is not the chart set's problem — see [docs/ide.md](docs/ide.md).
+
+4. **Git in the IDE.** The bottom panel's terminal is a real shell, so git
+   *runs* — what has no home is seeing the diff before committing. The design
+   is IDE plus one helper and no C, over the git CLI, with a side-by-side diff
+   viewer as the core: [docs/git-plan.md](docs/git-plan.md).
 
 Records over a database — a form bound to a table, the way every tool in this
 family does it — is designed but **deliberately not built**: what stage one would

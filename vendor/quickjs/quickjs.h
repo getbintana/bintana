@@ -595,6 +595,40 @@ typedef enum {
 
 typedef int JSArithHandler(JSContext *ctx, JSValue *sp, JSArithOp op);
 JS_EXTERN void JS_SetArithHandler(JSRuntime *rt, JSArithHandler *handler);
+
+/* Bintana patch: what a debugger needs, and nothing it does not.
+
+   The handler is called before each opcode with the pc about to run -- which is
+   the only place the running frame's position exists, since `cur_pc` is written
+   only when a frame calls out. What it does while it is in there is the
+   embedder's business: Bintana blocks reading commands, which is what stopping
+   at a breakpoint is.
+
+   The other three read the frames QuickJS already keeps, and answer with
+   ordinary values an embedder frees with JS_FreeValue. Frame 0 is the one
+   running; the numbering is the same in all of them.
+
+   See runtime/src/bta_debug.c for the only consumer there is. */
+typedef void JSDebugHandler(JSContext *ctx, const uint8_t *pc, void *opaque);
+JS_EXTERN void JS_SetDebugHandler(JSRuntime *rt, JSDebugHandler *cb, void *opaque);
+/* Every line a compiled function and its nested functions can actually stop on.
+   `compiled` is what JS_Eval with JS_EVAL_FLAG_COMPILE_ONLY handed back. The
+   answer is unsorted and may repeat; what a caller wants from it is the set. */
+JS_EXTERN JSValue JS_DebugLines(JSContext *ctx, JSValueConst compiled);
+JS_EXTERN int JS_DebugDepth(JSRuntime *rt);
+/* Where the running frame is, and **only when it has moved to a new line** --
+   which is the question asked once per opcode and has to be cheap. The filename
+   comes back as an atom, so a caller with breakpoints in three files compares
+   integers. False for a native frame, for one with no position, and for the
+   many opcodes that are still on the line the last one was: each frame keeps
+   the line it was last reported at, so returning from a call does not read as
+   arriving somewhere new. */
+JS_EXTERN bool JS_DebugPosition(JSContext *ctx, const uint8_t *pc,
+                                JSAtom *file, int *line);
+/* → [{ Name, File, Line, Column }], innermost first. */
+JS_EXTERN JSValue JS_DebugBacktrace(JSContext *ctx, const uint8_t *pc);
+/* → [{ Name, Value, Argument }] for one frame, `this` last. */
+JS_EXTERN JSValue JS_DebugLocals(JSContext *ctx, int frame);
 JS_EXTERN int JS_AddIntrinsicWeakRef(JSContext *ctx);
 JS_EXTERN int JS_AddPerformance(JSContext *ctx);
 JS_EXTERN int JS_AddIntrinsicDOMException(JSContext *ctx);

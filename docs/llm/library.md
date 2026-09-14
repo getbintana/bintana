@@ -204,7 +204,14 @@ An options object may come between the argv and the callbacks:
 | `KillAfter` | milliseconds between SIGTERM and SIGKILL, `5000` by default |
 
 The handle: `ProcessId`, `Running`, `ExitCode` (`null` while it runs; `-1` for a
-child stopped by a signal), `TimedOut`, `Stop()` (SIGTERM), `Kill()` (SIGKILL).
+child stopped by a signal), `TimedOut`, `Stop()` (SIGTERM), `Kill()` (SIGKILL),
+`Write(text)` (a line to its stdin; a newline is added when there is not one,
+and it answers whether there was still a child to write to).
+
+A child that speaks a protocol as well as printing gets a stream of its own:
+`Control` in the options is a callback for the child's **descriptor 3**, one
+line at a time. stdout is what a child says to a person, so a protocol must not
+share it -- a child that printed the marker would break its own tooling.
 Both signal the child's whole process group, so a wrapper's children go too.
 
 ```js

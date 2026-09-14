@@ -160,7 +160,25 @@ int bta_eval_file(JSContext *ctx, const char *path)
         return -1;
     }
 
-    JSValue r = JS_Eval(ctx, src, len, path, JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_STRICT);
+    /*
+     * Under `--debug` the file is compiled first and run second, with the
+     * debugger shown the compiled form in between: that is the only moment the
+     * lines it can stop on exist to be read. An ordinary run does neither and
+     * evaluates in one step, as it always did.
+     */
+    JSValue r;
+    if (bta_debug_enabled()) {
+        r = JS_Eval(ctx, src, len, path,
+                    JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_STRICT |
+                    JS_EVAL_FLAG_COMPILE_ONLY);
+        if (!JS_IsException(r)) {
+            bta_debug_compiled(ctx, path, r);
+            r = JS_EvalFunction(ctx, r);
+        }
+    } else {
+        r = JS_Eval(ctx, src, len, path,
+                    JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_STRICT);
+    }
     g_free(src);
 
     if (JS_IsException(r)) {
@@ -1730,6 +1748,7 @@ static int run_console(BtaApp *app)
     JSContext *ctx = app->ctx;
 
     install_globals(app);
+    bta_debug_start(ctx);
 
     for (guint i = 0; i < app->sources->len; i++)
         if (bta_eval_file(ctx, app->sources->pdata[i]) < 0)
@@ -1804,6 +1823,13 @@ static void on_activate(GtkApplication *gapp, gpointer user_data)
     register_app_styles(app);
     install_globals(app);
 
+    /*
+     * Before a line of the project has run, and it **waits**: the IDE has
+     * breakpoints to set and a program that started first would have gone past
+     * them.  A run with no `--debug` returns from this at once.
+     */
+    bta_debug_start(ctx);
+
     for (guint i = 0; i < app->sources->len; i++) {
         if (bta_eval_file(ctx, app->sources->pdata[i]) < 0) {
             app->exit_code = 1;
@@ -1850,8 +1876,11 @@ int bta_app_run(BtaApp *app, int argc, char **argv)
 {
     /* A project that declares `main` never opens a display: no GtkApplication,
      * no activate, no GTK. */
-    if (app->entry)
-        return run_console(app);
+    if (app->entry) {
+        int rc = run_console(app);
+        bta_debug_stopping(app->ctx, rc);
+        return rc;
+    }
 
     app->gapp = gtk_application_new(NULL, G_APPLICATION_NON_UNIQUE);
     g_signal_connect(app->gapp, "activate", G_CALLBACK(on_activate), app);
@@ -1866,5 +1895,10 @@ int bta_app_run(BtaApp *app, int argc, char **argv)
     /* Frees what the init registered. Not housekeeping: without it the
      * library's static data is what `tests/asan.sh` reports as ours. */
     gtk_source_finalize();
-    return app->exit_code ? app->exit_code : rc;
+    rc = app->exit_code ? app->exit_code : rc;
+
+    /* The last thing the debugger hears, so the IDE knows the run is over
+     * rather than waiting for a stop that is not coming. */
+    bta_debug_stopping(app->ctx, rc);
+    return rc;
 }

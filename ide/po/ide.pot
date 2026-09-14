@@ -1336,3 +1336,128 @@ msgstr ""
 #: modules/Translations.js:362
 msgid "{0} is not installed, or not on the PATH."
 msgstr ""
+
+#: forms/MainForm.form: SideTabs.Tabs
+msgid "Events"
+msgstr ""
+
+#: forms/MainForm.form: EventList.Tooltip
+msgid "Double click an event to write its handler, or to go to it"
+msgstr ""
+
+#: modules/Events.js:149
+msgid "Nothing here raises an event."
+msgstr ""
+
+#: modules/Events.js:194
+msgid "Go to this handler"
+msgstr ""
+
+#: modules/Events.js:195
+msgid "Write this handler"
+msgstr ""
+
+#: forms/MainForm.form: menu MnuGoto
+msgid "Go to definition"
+msgstr ""
+
+#: modules/Navigator.js:72
+msgid "Nothing in this project declares {0}."
+msgstr ""
+
+#: modules/Navigator.js:73
+msgid "Put the cursor on a name first."
+msgstr ""
+
+#: forms/MainForm.form: menu MnuGotoSymbol
+msgid "Go to..."
+msgstr ""
+
+#: forms/SymbolForm.form: SymbolForm.Text
+msgid "Go to"
+msgstr ""
+
+#: forms/SymbolForm.form: TxtFind.Placeholder
+msgid "A method, or a line number"
+msgstr ""
+
+#: forms/SymbolForm.form: TxtFind.Tooltip
+msgid "Type part of a method's name, or a number to go to that line"
+msgstr ""
+
+#: forms/SymbolForm.form: BtnOk.Text
+msgid "Go"
+msgstr ""
+
+#: forms/SymbolForm.js:131
+msgid "line {0}"
+msgstr ""
+
+#: forms/SymbolForm.js:137
+msgid "the file has {0} line"
+msgid_plural "the file has {0} lines"
+msgstr[0] ""
+msgstr[1] ""
+
+#: forms/SymbolForm.js:145
+msgid "{0} method"
+msgid_plural "{0} methods"
+msgstr[0] ""
+msgstr[1] ""
+
+#: forms/MainForm.form: menu MnuDebugMenu
+msgid "_Debug"
+msgstr ""
+
+#: forms/MainForm.form: menu MnuDebug
+#: forms/MainForm.form: ConsoleBox.Tabs
+msgid "Debug"
+msgstr ""
+
+#: forms/MainForm.form: menu MnuPause
+msgid "Pause"
+msgstr ""
+
+#: forms/MainForm.form: menu MnuStepInto
+msgid "Step into"
+msgstr ""
+
+#: forms/MainForm.form: menu MnuStepOver
+msgid "Step over"
+msgstr ""
+
+#: forms/MainForm.form: menu MnuStepOut
+msgid "Step out"
+msgstr ""
+
+#: forms/MainForm.form: menu MnuBreakpoint
+msgid "Toggle breakpoint"
+msgstr ""
+
+#: forms/MainForm.form: LblStack.Text
+msgid "Call stack"
+msgstr ""
+
+#: forms/MainForm.form: LblLocals.Text
+msgid "Values"
+msgstr ""
+
+#: forms/MainForm.form: StackList.Tooltip
+msgid "The frames the program is stopped in. Choosing one shows its own values"
+msgstr ""
+
+#: forms/MainForm.form: LocalList.Tooltip
+msgid "The arguments and variables of the chosen frame. Arguments are in bold"
+msgstr ""
+
+#: modules/Debugger.js:69
+msgid "Stop here while debugging"
+msgstr ""
+
+#: modules/Debugger.js:246
+msgid "{0}:{1} cannot stop; the breakpoint moved to line {2}."
+msgstr ""
+
+#: modules/Debugger.js:334
+msgid "Stopped here"
+msgstr ""
