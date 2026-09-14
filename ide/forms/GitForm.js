@@ -86,6 +86,8 @@ class GitForm extends Form {
      * disagree.
      */
     reload() {
+        if (!this.ready) return;
+
         const git = this.ide.git;
         const keep = [this.Unstaged.Index, this.Staged.Index];
 
@@ -131,11 +133,26 @@ class GitForm extends Form {
         return said[letter] || letter;
     }
 
+    /*
+     * Whether this window is built yet.
+     *
+     * **A `Switcher` raises `Switch` while the `.form` is still loading** --
+     * when its first page makes `Current` go from nothing to zero -- and the
+     * `.form` is read inside `Form`'s own constructor, so the handler runs
+     * before `open()` has had a chance to say which IDE this belongs to, and
+     * before the loader has finished naming the controls. `AGENTS.md` has the
+     * entry; this is the second window to walk into it, which is why the guard
+     * is one question asked in one place rather than a check per handler.
+     */
+    get ready() { return this.ide !== undefined && this.Which !== undefined; }
+
     /* Which list is showing, and what is chosen in it. */
-    side()  { return this.Which.Current === 1 ? 1 : 0; }
+    side()  { return this.ready && this.Which.Current === 1 ? 1 : 0; }
     table() { return this.side() ? this.Staged : this.Unstaged; }
 
     chosen() {
+        if (!this.ready) return [];
+
         const table = this.table();
         const all   = this.paths[this.side()];
         const rows  = table.Selection.length ? table.Selection
@@ -157,6 +174,8 @@ class GitForm extends Form {
      * milliseconds.
      */
     showChosen() {
+        if (!this.ready) return;
+
         const path = this.chosen()[0];
 
         if (!path) {
@@ -316,8 +335,8 @@ class GitForm extends Form {
      * Assigning a value an adjustment already has emits nothing, so the two
      * pointing at each other settle after one event rather than bouncing.
      */
-    Before_Scroll(x, y) { this.After.ScrollY = y; }
-    After_Scroll(x, y)  { this.Before.ScrollY = y; }
+    Before_Scroll(x, y) { if (this.ready) this.After.ScrollY = y; }
+    After_Scroll(x, y)  { if (this.ready) this.Before.ScrollY = y; }
 
     Unstaged_Select() { this.showChosen(); }
     Staged_Select()   { this.showChosen(); }
@@ -343,6 +362,8 @@ class GitForm extends Form {
     }
 
     say() {
+        if (!this.ready) return;
+
         const git = this.ide.git;
         this.LblGitStatus.Text = git.summary();
         this.BtnStage.Enabled   = this.side() === 0;

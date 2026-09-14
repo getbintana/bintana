@@ -9890,6 +9890,25 @@ function* runIdeTests(ide) {
     const phases = chosenPhases();
     partial = phases.length !== PHASES.length;
 
+    /*
+     * **An uncaught error is a failure**, and until this it was a paragraph on
+     * stderr that nothing read.
+     *
+     * The runtime prints one and carries on, which is right for an application
+     * -- a handler that throws should not take the window with it -- and wrong
+     * for a suite: `GitForm` shipped with a `Switcher` raising `Switch` during
+     * its own `.form` load, threw six TypeErrors into a green run, and the
+     * phase that opened it asserted the window existed and moved on. Every
+     * assertion it made was true and the window was broken.
+     *
+     * `Application.OnError` takes them over, so what a handler throws lands
+     * here with a name and a place instead of scrolling past.
+     */
+    Application.OnError = (message, stack) => {
+        const where = (stack || "").split("\n")[1] || "";
+        failures.push(`uncaught in a handler: ${message}${where ? ` (${where.trim()})` : ""}`);
+    };
+
     for (const phase of phases) {
         ran.push(phase.name);
         yield* phase.run(ide);

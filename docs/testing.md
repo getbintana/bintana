@@ -108,6 +108,13 @@ drift. A change to the IDE that breaks the IDE breaks this test.
 Both large projects can be asked for a part of themselves, and **they mean
 different things by it**, because they are different shapes of test.
 
+**An uncaught error in a handler is a failure.** The runtime prints one and
+carries on -- right for an application, wrong for a suite -- so the driver takes
+them over with `Application.OnError` and counts each as a failure with the place
+it came from. It was added the day a window shipped throwing six of them into a
+run that said *0 failed*: every assertion the phase made was true, and the
+window was broken.
+
 `tests/ide` is thirty-three **phases**, each a generator with a scope of its own,
 listed in `PHASES` at the bottom of `Driver.js`. `./tests/run.sh ide <name>` runs
 every phase up to and including the last one whose name contains `<name>`:

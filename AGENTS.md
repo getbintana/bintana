@@ -611,6 +611,16 @@ Three things that will waste your time:
   which is what the File menu's Rename and Delete already did; the left button is
   what opens, so *select then ask* is the gesture. Found by right-clicking a form
   and getting a menu greyed out for the previous selection.
+- **An uncaught error in a handler used to be a paragraph on stderr that nothing
+  read.** The runtime prints one and carries on, which is right for an
+  application -- a handler that throws should not take the window down -- and
+  wrong for the suite: `GitForm` threw six TypeErrors into a run that reported
+  *0 failed*, because the phase that opened it asserted the window existed and
+  moved on. Every assertion it made was true and the window was broken.
+  `tests/ide` installs `Application.OnError` now and counts one as a failure,
+  with the first frame of its stack. **A new phase does not have to remember
+  this**, which is the point; what it does mean is that a test deliberately
+  provoking an error has to catch it.
 - **`tests/ide/Driver.js` is thirty-three phases, and the phase is the scope.** It used
   to be one 4000-line generator where every `const` shared one scope, so a name
   near the top collided with one added at the bottom and the suite died with
@@ -684,6 +694,13 @@ person who wrote it either.
   exists, and nothing about the ones raised while it is being built. The traceback
   when it happens names `at Form (native)`. Such a handler guards
   (`if (this.events) …`) and says why.
+
+  **It happened twice**, months of comments apart. `GitForm` shipped with its
+  `Which` switcher raising `Switch` during its own `.form` load, and the handler
+  read `this.Which.Current` on a window whose controls were not named yet. So a
+  window whose `.form` holds a `Switcher` or a `Notebook` gets one `ready`
+  question -- *do I have my IDE and my controls* -- that every handler the load
+  can reach asks, rather than a check per handler that the next one forgets.
 - A widget must be attached to its parent **before** X/Y are applied, or the
   coordinates never reach a live surface. The loader and `Container.AddNode`
   both do this in that order.
