@@ -31,6 +31,7 @@
     "../../ide/modules/Navigator.js",
     "../../ide/modules/Debugger.js",
     "../../ide/modules/Git.js",
+    "../../ide/modules/Changes.js",
     "../../ide/modules/Strings.js",
     "../../ide/modules/Translations.js",
     "../../ide/modules/Exporter.js",

@@ -1247,6 +1247,44 @@ with no undo, and it sits one button over from something harmless. An untracked
 file is not restored but *deleted* -- `git restore` has nothing to restore it
 from -- which is a different sentence and is said as one.
 
+### The Changes page, beside the tree
+
+The *Changes* window is where a diff is **read**; it is not a place to live. It
+covers the editor, and three small commits over an afternoon meant opening and
+closing it three times. So the same list also sits where the project tree is, as
+the third entry of the side bar's chooser -- *Project*, *Files*, *Changes* --
+because they all answer the same question, *what is on the left*, and a second
+chooser stacked over one column is the shape that makes people hunt.
+
+What is in it is a small commit and nothing else: the changed files, a one-line
+message box and two buttons. `●` marks a row that is in the next commit and `○`
+one that is not, followed by git's own letter. A file that is **both** -- staged
+and then edited again -- is in the list twice, which is not a bug to hide: those
+are two different things to do with it.
+
+- **Double click** opens the *Changes* window on that file. A diff in a
+  260-pixel column would be a worse answer than the one that already exists.
+- **Stage** and the row's menu -- *Stage*, *Unstage*, *Discard changes...*,
+  *Stage everything* -- are the same commands the window's buttons press, and
+  literally so: they are `Ide.Git`'s methods, so *stage* has one spelling and
+  one set of guards wherever it is pressed.
+- **Enter in the message box commits**, which is what makes it quick. What gets
+  committed is **what is staged**, never what is selected -- a button that
+  quietly staged something first would make *Commit* mean two different things
+  depending on where the pointer had been. A message with a body is written in
+  the window, which has a text editor for it.
+- *Discard* is the one command here with no undo, so it asks, by count, and says
+  *deleted* rather than *restored* about a file git has never been told about --
+  because that is what happens to it.
+
+An empty table says **which** kind of empty it is: *nothing has changed* is not
+the same news as *this project is not in a git repository*, and a blank
+rectangle is what an empty list must never be.
+
+Prior art: this is Android Studio's *Commit* tool window, and Visual Studio's
+*Git Changes* pane -- a list of changed files and a message box docked beside
+the project tree rather than floating over it.
+
 ### Branches, and the history
 
 *Git → Branch* is the branches as a menu, the one you are standing on marked

@@ -63,6 +63,30 @@ class GitForm extends Form {
         return win;
     }
 
+    /*
+     * The same window, opened **on one file**.
+     *
+     * What a double click in the side panel means: that row's diff, which is
+     * this window's whole subject. It picks the list the file is actually in --
+     * a file staged and then edited again is in both, and the unstaged half is
+     * what *there is still something to do here* means -- and selects it, so the
+     * panes fill through the ordinary `Select` path and nothing here draws a
+     * diff of its own.
+     */
+    static openAt(ide, path, staged) {
+        const win = GitForm.open(ide);
+        const side = staged ? 1 : 0;
+
+        const where = win.paths[side].indexOf(path);
+        if (where < 0) return win;
+
+        win.Which.Current = side;
+        win.table().Index = where;
+        win.showChosen();
+        win.say();
+        return win;
+    }
+
     setup() {
         const columns = [{ Text: Locale.Text("File") },
                          { Text: Locale.Text("State"), Width: 70 }];
@@ -93,6 +117,10 @@ class GitForm extends Form {
 
         git.refresh();
         git.markTree();
+        /* The side panel is the same list in a narrower place: staging here and
+         * leaving it saying something else is two answers about one repository,
+         * which is the argument this window is a single instance for. */
+        this.ide.changes.reload();
 
         this.Unstaged.Clear();
         this.Staged.Clear();
@@ -243,15 +271,16 @@ class GitForm extends Form {
      * anywhere -- so `--` is what separates them from anything git could read as
      * an option, and a file called `-f` is a file and not a flag.
      */
-    BtnStage_Click()   { this.act(["add", "--"]); }
-    BtnUnstage_Click() { this.act(["restore", "--staged", "--"]); }
+    BtnStage_Click()   { this.act((git, files) => git.stage(files)); }
+    BtnUnstage_Click() { this.act((git, files) => git.unstage(files)); }
 
-    act(command) {
+    /* The commands themselves are `Ide.Git`'s -- the side panel offers the same
+     * three, and two spellings of *stage* would be two sets of guards. */
+    act(what) {
         const files = this.chosen();
         if (!files.length) return;
 
-        const r = this.ide.git.run([...command, ...files]);
-        if (!r.ok) this.ide.log(`git: ${r.out.trim()}\n`);
+        what(this.ide.git, files);
 
         this.reload();
         this.ide.refresh();
@@ -270,8 +299,7 @@ class GitForm extends Form {
         if (!files.length) return;
 
         const git   = this.ide.git;
-        const fresh = files.filter((f) => git.stateOf(f) === "?");
-        const known = files.filter((f) => git.stateOf(f) !== "?");
+        const fresh = git.untracked(files);
 
         ConfirmForm.ask(
             Locale.Text("Discard changes"),
@@ -284,8 +312,7 @@ class GitForm extends Form {
                                 files.length),
             Locale.Text("Discard"),
             () => {
-                if (known.length) git.run(["restore", "--", ...known]);
-                for (const f of fresh) File.Delete(File.Join(this.ide.project, f));
+                git.discard(files);
 
                 /* The worktree changed underneath: the tabs are watching their
                  * files and will offer to reload, which is what that bar is for. */
@@ -314,8 +341,7 @@ class GitForm extends Form {
             return;
         }
 
-        const r = this.ide.git.run(["commit", "-m", message]);
-        this.ide.log(`${r.out.trim()}\n`);
+        const r = this.ide.git.commit(message);
 
         if (r.ok) this.Message.Text = "";
         this.reload();

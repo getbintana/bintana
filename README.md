@@ -1594,6 +1594,13 @@ meanings depend on whether the name turns out to be a branch or a path.
 *History* (`Ctrl+Shift+H`) is the commits, what each one touched, and the same
 side-by-side pair between a commit and the one before it.
 
+The same list is also a page of the side bar -- the third entry of the chooser
+that picks *Project* or *Files* -- with a one-line message box where Enter is the
+button, because a window that covers the editor is a poor place to make three
+small commits in an afternoon. Double click a row and the window opens on that
+file; the row's menu stages, unstages, discards and stages everything, and they
+are the same commands the window presses.
+
 *Fetch*, *Pull* and *Push* are the only git here that takes as long as somebody
 else's server does, so they are the only git here that does not block: an `Exec`
 into the log pane, one at a time, with Stop reaching them -- and the status bar

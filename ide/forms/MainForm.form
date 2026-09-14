@@ -757,6 +757,119 @@
                         "VExpand": true,
                         "Width": 260
                       }
+                    },
+                    {
+                      "type": "Panel",
+                      "name": "ChangesBox",
+                      "properties": {
+                        "Arrangement": "Vertical",
+                        "HAlign": "Fill",
+                        "Spacing": 4,
+                        "VAlign": "Fill",
+                        "VExpand": true,
+                        "Visible": false,
+                        "Width": 260
+                      },
+                      "children": [
+                        {
+                          "type": "TableView",
+                          "name": "ChangeTable",
+                          "properties": {
+                            "Expand": true,
+                            "HExpand": true,
+                            "Menu": [
+                              {
+                                "name": "MnuChDiff",
+                                "text": "Show the diff"
+                              },
+                              {
+                                "name": "MnuChOpen",
+                                "text": "Open the file"
+                              },
+                              {
+                                "separator": true
+                              },
+                              {
+                                "name": "MnuChStage",
+                                "text": "Stage"
+                              },
+                              {
+                                "name": "MnuChUnstage",
+                                "text": "Unstage"
+                              },
+                              {
+                                "name": "MnuChDiscard",
+                                "text": "Discard changes..."
+                              },
+                              {
+                                "separator": true
+                              },
+                              {
+                                "name": "MnuChAll",
+                                "text": "Stage everything"
+                              },
+                              {
+                                "name": "MnuChWindow",
+                                "text": "Changes window..."
+                              }
+                            ],
+                            "Tooltip": "Double click a file to read what changed in it",
+                            "VExpand": true
+                          }
+                        },
+                        {
+                          "type": "Label",
+                          "name": "LblChanges",
+                          "properties": {
+                            "HAlign": "Start",
+                            "Margin": 4,
+                            "Style": "dim-label",
+                            "Visible": false,
+                            "Wrap": true
+                          }
+                        },
+                        {
+                          "type": "TextBox",
+                          "name": "TxtCommit",
+                          "properties": {
+                            "HAlign": "Fill",
+                            "Height": 30,
+                            "Placeholder": "Message, then Enter",
+                            "Tooltip": "Commit what is staged. Enter is the button"
+                          }
+                        },
+                        {
+                          "type": "Panel",
+                          "name": "CommitRow",
+                          "properties": {
+                            "Arrangement": "Horizontal",
+                            "HAlign": "Fill",
+                            "Height": 32,
+                            "Spacing": 4
+                          },
+                          "children": [
+                            {
+                              "type": "Button",
+                              "name": "BtnChStage",
+                              "properties": {
+                                "HExpand": true,
+                                "Text": "Stage",
+                                "Tooltip": "Put the chosen files in the next commit"
+                              }
+                            },
+                            {
+                              "type": "Button",
+                              "name": "BtnChCommit",
+                              "properties": {
+                                "HExpand": true,
+                                "Style": "suggested-action",
+                                "Text": "Commit",
+                                "Tooltip": "Commit what is staged, with the message above"
+                              }
+                            }
+                          ]
+                        }
+                      ]
                     }
                   ]
                 },
@@ -1282,107 +1395,107 @@
                             "VExpand": true
                           },
                           "children": [
-                        {
-                          "type": "Split",
-                          "name": "DebugBox",
-                          "properties": {
-                            "Arrangement": "Horizontal",
-                            "Expand": true,
-                            "HExpand": true,
-                            "Position": 320,
-                            "VExpand": true
-                          },
-                          "children": [
                             {
-                              "type": "Panel",
-                              "name": "StackBox",
+                              "type": "Split",
+                              "name": "DebugBox",
                               "properties": {
-                                "Arrangement": "Vertical",
-                                "Spacing": 2
-                              },
-                              "children": [
-                                {
-                                  "type": "Label",
-                                  "name": "LblStack",
-                                  "properties": {
-                                    "HAlign": "Start",
-                                    "Margin": 4,
-                                    "Style": "caption-heading",
-                                    "Text": "Call stack"
-                                  }
-                                },
-                                {
-                                  "type": "RowList",
-                                  "name": "StackList",
-                                  "properties": {
-                                    "Expand": true,
-                                    "HExpand": true,
-                                    "Tooltip": "The frames the program is stopped in. Choosing one shows its own values",
-                                    "VExpand": true
-                                  }
-                                }
-                              ]
-                            },
-                            {
-                              "type": "Panel",
-                              "name": "LocalBox",
-                              "properties": {
-                                "Arrangement": "Vertical",
-                                "Spacing": 2
-                              },
-                              "children": [
-                                {
-                                  "type": "Label",
-                                  "name": "LblLocals",
-                                  "properties": {
-                                    "HAlign": "Start",
-                                    "Margin": 4,
-                                    "Style": "caption-heading",
-                                    "Text": "Values"
-                                  }
-                                },
-                                {
-                                  "type": "RowList",
-                                  "name": "LocalList",
-                                  "properties": {
-                                    "Expand": true,
-                                    "HExpand": true,
-                                    "Tooltip": "The watches and then the chosen frame's own values. Arguments are in bold; double click one to change it",
-                                    "VExpand": true
-                                  }
-                                }
-                              ]
-                            }
-                          ]
-                        },
-                        {
-                          "type": "Panel",
-                          "name": "ImmediateRow",
-                          "properties": {
-                            "Arrangement": "Horizontal",
-                            "HAlign": "Fill",
-                            "Spacing": 4
-                          },
-                          "children": [
-                            {
-                              "type": "TextBox",
-                              "name": "TxtImmediate",
-                              "properties": {
+                                "Arrangement": "Horizontal",
+                                "Expand": true,
                                 "HExpand": true,
-                                "Placeholder": "An expression, in the chosen frame",
-                                "Tooltip": "Evaluated where the program is stopped. Enter answers; Watch keeps it and re-asks at every stop"
-                              }
+                                "Position": 320,
+                                "VExpand": true
+                              },
+                              "children": [
+                                {
+                                  "type": "Panel",
+                                  "name": "StackBox",
+                                  "properties": {
+                                    "Arrangement": "Vertical",
+                                    "Spacing": 2
+                                  },
+                                  "children": [
+                                    {
+                                      "type": "Label",
+                                      "name": "LblStack",
+                                      "properties": {
+                                        "HAlign": "Start",
+                                        "Margin": 4,
+                                        "Style": "caption-heading",
+                                        "Text": "Call stack"
+                                      }
+                                    },
+                                    {
+                                      "type": "RowList",
+                                      "name": "StackList",
+                                      "properties": {
+                                        "Expand": true,
+                                        "HExpand": true,
+                                        "Tooltip": "The frames the program is stopped in. Choosing one shows its own values",
+                                        "VExpand": true
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "Panel",
+                                  "name": "LocalBox",
+                                  "properties": {
+                                    "Arrangement": "Vertical",
+                                    "Spacing": 2
+                                  },
+                                  "children": [
+                                    {
+                                      "type": "Label",
+                                      "name": "LblLocals",
+                                      "properties": {
+                                        "HAlign": "Start",
+                                        "Margin": 4,
+                                        "Style": "caption-heading",
+                                        "Text": "Values"
+                                      }
+                                    },
+                                    {
+                                      "type": "RowList",
+                                      "name": "LocalList",
+                                      "properties": {
+                                        "Expand": true,
+                                        "HExpand": true,
+                                        "Tooltip": "The watches and then the chosen frame's own values. Arguments are in bold; double click one to change it",
+                                        "VExpand": true
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
                             },
                             {
-                              "type": "Button",
-                              "name": "BtnWatch",
+                              "type": "Panel",
+                              "name": "ImmediateRow",
                               "properties": {
-                                "Text": "Watch",
-                                "Tooltip": "Keep this expression and answer it again at every stop"
-                              }
+                                "Arrangement": "Horizontal",
+                                "HAlign": "Fill",
+                                "Spacing": 4
+                              },
+                              "children": [
+                                {
+                                  "type": "TextBox",
+                                  "name": "TxtImmediate",
+                                  "properties": {
+                                    "HExpand": true,
+                                    "Placeholder": "An expression, in the chosen frame",
+                                    "Tooltip": "Evaluated where the program is stopped. Enter answers; Watch keeps it and re-asks at every stop"
+                                  }
+                                },
+                                {
+                                  "type": "Button",
+                                  "name": "BtnWatch",
+                                  "properties": {
+                                    "Text": "Watch",
+                                    "Tooltip": "Keep this expression and answer it again at every stop"
+                                  }
+                                }
+                              ]
                             }
-                          ]
-                        }
                           ]
                         }
                       ]

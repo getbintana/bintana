@@ -161,7 +161,7 @@ msgid "Add"
 msgstr "Agregar"
 
 #: forms/ColumnForm.form: BtnColDel.Text forms/ConfirmForm.form: BtnYes.Text
-#: forms/MenuForm.form: BtnDelete.Text forms/MainForm.js:2017
+#: forms/MenuForm.form: BtnDelete.Text forms/MainForm.js:2050
 msgid "Delete"
 msgstr "Eliminar"
 
@@ -195,7 +195,7 @@ msgstr ""
 "Un ancho de 0 deja que la columna se dimensione sola. Toda columna se puede "
 "arrastrar, diga lo que diga acá."
 
-#: forms/GitForm.form: GitForm.Text
+#: forms/GitForm.form: GitForm.Text forms/MainForm.js:1557
 msgid "Changes"
 msgstr "Cambios"
 
@@ -219,11 +219,11 @@ msgstr "Unificado"
 msgid "Commit message"
 msgstr "Mensaje del commit"
 
-#: forms/GitForm.form: BtnStage.Text
+#: forms/GitForm.form: BtnStage.Text forms/MainForm.form: BtnChStage.Text
 msgid "Stage"
 msgstr "Poner"
 
-#: forms/GitForm.form: BtnStage.Tooltip
+#: forms/GitForm.form: BtnStage.Tooltip forms/MainForm.form: BtnChStage.Tooltip
 msgid "Put the chosen files in the next commit"
 msgstr "Poner los archivos elegidos en el próximo commit"
 
@@ -235,8 +235,8 @@ msgstr "Sacar"
 msgid "Take the chosen files back out of the next commit"
 msgstr "Sacar los archivos elegidos del próximo commit"
 
-#: forms/GitForm.form: BtnDiscard.Text forms/GitForm.js:285
-#: modules/Recovery.js:262
+#: forms/GitForm.form: BtnDiscard.Text forms/GitForm.js:313
+#: modules/Changes.js:255 modules/Recovery.js:262
 msgid "Discard"
 msgstr "Descartar"
 
@@ -244,11 +244,13 @@ msgstr "Descartar"
 msgid "Throw away what was written in the chosen files. There is no undo"
 msgstr "Tirar lo que se escribió en los archivos elegidos. No hay vuelta atrás"
 
-#: forms/GitForm.form: BtnCommit.Text forms/LogForm.js:55
+#: forms/GitForm.form: BtnCommit.Text forms/MainForm.form: BtnChCommit.Text
+#: forms/LogForm.js:55
 msgid "Commit"
 msgstr "Commit"
 
-#: forms/GitForm.form: BtnCommit.Tooltip
+#: forms/GitForm.form: BtnCommit.Tooltip forms/MainForm.form:
+#: BtnChCommit.Tooltip modules/Changes.js:148
 msgid "Commit what is staged, with the message above"
 msgstr "Commitear lo que está en el commit, con el mensaje de arriba"
 
@@ -353,7 +355,7 @@ msgstr "Guardar todo"
 msgid "Autosave..."
 msgstr "Autoguardado..."
 
-#: forms/MainForm.form: menu MnuQuit forms/MainForm.js:770
+#: forms/MainForm.form: menu MnuQuit forms/MainForm.js:773
 msgid "Quit"
 msgstr "Salir"
 
@@ -601,7 +603,7 @@ msgstr "Abrí un proyecto, o empezá uno nuevo."
 msgid "Recent"
 msgstr "Recientes"
 
-#: forms/MainForm.form: LblStatus.Text forms/MainForm.js:1058
+#: forms/MainForm.form: LblStatus.Text forms/MainForm.js:1061
 msgid "No project"
 msgstr "Sin proyecto"
 
@@ -609,7 +611,19 @@ msgstr "Sin proyecto"
 msgid "What this tree shows"
 msgstr "Qué muestra este árbol"
 
-#: forms/MainForm.form: BtnTakeDisk.Text forms/MainForm.js:1604
+#: forms/MainForm.form: ChangeTable.Tooltip
+msgid "Double click a file to read what changed in it"
+msgstr "Doble clic en un archivo para leer qué cambió en él"
+
+#: forms/MainForm.form: TxtCommit.Placeholder
+msgid "Message, then Enter"
+msgstr "Mensaje, y Enter"
+
+#: forms/MainForm.form: TxtCommit.Tooltip
+msgid "Commit what is staged. Enter is the button"
+msgstr "Commitear lo que está en el próximo commit. Enter es el botón"
+
+#: forms/MainForm.form: BtnTakeDisk.Text forms/MainForm.js:1636
 msgid "Reload"
 msgstr "Recargar"
 
@@ -849,7 +863,7 @@ msgstr "Descripción:"
 msgid "Base folder:"
 msgstr "Carpeta base:"
 
-#: forms/NewProjectForm.form: BtnCreate.Text forms/MainForm.js:1905
+#: forms/NewProjectForm.form: BtnCreate.Text forms/MainForm.js:1937
 msgid "Create"
 msgstr "Crear"
 
@@ -1021,72 +1035,72 @@ msgstr "La columna {0} no tiene encabezado."
 msgid "Changes -- {0}"
 msgstr "Cambios -- {0}"
 
-#: forms/GitForm.js:67 forms/LogForm.js:59
+#: forms/GitForm.js:91 forms/LogForm.js:59 modules/Changes.js:122
 msgid "File"
 msgstr "Archivo"
 
-#: forms/GitForm.js:68 forms/LogForm.js:60
+#: forms/GitForm.js:92 forms/LogForm.js:60 modules/Changes.js:121
 msgid "State"
 msgstr "Estado"
 
-#: forms/GitForm.js:125 forms/LogForm.js:119
+#: forms/GitForm.js:153 forms/LogForm.js:119
 msgid "changed"
 msgstr "cambiado"
 
-#: forms/GitForm.js:126 forms/LogForm.js:119
+#: forms/GitForm.js:154 forms/LogForm.js:119
 msgid "added"
 msgstr "agregado"
 
-#: forms/GitForm.js:127 forms/LogForm.js:120
+#: forms/GitForm.js:155 forms/LogForm.js:120
 msgid "deleted"
 msgstr "borrado"
 
-#: forms/GitForm.js:128 forms/LogForm.js:120
+#: forms/GitForm.js:156 forms/LogForm.js:120
 msgid "renamed"
 msgstr "renombrado"
 
-#: forms/GitForm.js:129 forms/LogForm.js:121
+#: forms/GitForm.js:157 forms/LogForm.js:121
 msgid "copied"
 msgstr "copiado"
 
-#: forms/GitForm.js:130
+#: forms/GitForm.js:158
 msgid "conflicted"
 msgstr "en conflicto"
 
-#: forms/GitForm.js:131
+#: forms/GitForm.js:159
 msgid "untracked"
 msgstr "sin seguir"
 
-#: forms/GitForm.js:199
+#: forms/GitForm.js:227
 msgid "Too big to show side by side. The unified tab has it."
 msgstr ""
 "Demasiado grande para mostrarlo lado a lado. La solapa unificada lo tiene."
 
-#: forms/GitForm.js:277
+#: forms/GitForm.js:305 modules/Changes.js:247
 msgid "Discard changes"
 msgstr "Descartar los cambios"
 
-#: forms/GitForm.js:309
+#: forms/GitForm.js:336
 msgid "A commit needs a message."
 msgstr "Un commit necesita un mensaje."
 
-#: forms/GitForm.js:313
+#: forms/GitForm.js:340
 msgid "Nothing is staged."
 msgstr "No hay nada en el próximo commit."
 
-#: forms/GitForm.js:279
+#: forms/GitForm.js:307 modules/Changes.js:249
 msgid "Throw away {0} file, and delete it if it is new?"
 msgid_plural "Throw away {0} files, deleting the new ones?"
 msgstr[0] "¿Tirar {0} archivo, y borrarlo si es nuevo?"
 msgstr[1] "¿Tirar {0} archivos, borrando los nuevos?"
 
-#: forms/GitForm.js:282
+#: forms/GitForm.js:310 modules/Changes.js:252
 msgid "Throw away what was written in {0} file?"
 msgid_plural "Throw away what was written in {0} files?"
 msgstr[0] "¿Tirar lo que se escribió en {0} archivo?"
 msgstr[1] "¿Tirar lo que se escribió en {0} archivos?"
 
-#: forms/HelpForm.js:101 forms/MainForm.js:1789
+#: forms/HelpForm.js:101 forms/MainForm.js:1821
 msgid "The reference is not installed beside this build."
 msgstr ""
 
@@ -1129,122 +1143,122 @@ msgid_plural "{0} files in this commit"
 msgstr[0] "{0} archivo en este commit"
 msgstr[1] "{0} archivos en este commit"
 
-#: forms/MainForm.js:322
+#: forms/MainForm.js:325
 msgid "Bintana IDE -- {0}"
 msgstr "IDE de Bintana — {0}"
 
-#: forms/MainForm.js:404
+#: forms/MainForm.js:407
 msgid "(select a control)"
 msgstr "(elegí un control)"
 
-#: forms/MainForm.js:419 forms/MainForm.js:426
+#: forms/MainForm.js:422 forms/MainForm.js:429
 msgid "(none yet)"
 msgstr "(todavía ninguno)"
 
-#: forms/MainForm.js:774
+#: forms/MainForm.js:777
 msgid "Quit without saving"
 msgstr "Salir sin guardar"
 
-#: forms/MainForm.js:776
+#: forms/MainForm.js:779
 msgid "Save all and quit"
 msgstr "Guardar todo y salir"
 
-#: forms/MainForm.js:850
+#: forms/MainForm.js:853
 msgid "Terminal"
 msgstr "Terminal"
 
-#: forms/MainForm.js:878
+#: forms/MainForm.js:881
 msgid "the shell ended"
 msgstr "el shell terminó"
 
-#: forms/MainForm.js:1063
+#: forms/MainForm.js:1066
 msgid "{0}   double click to edit"
 msgstr "{0}   doble clic para editar"
 
-#: forms/MainForm.js:1077
+#: forms/MainForm.js:1080
 msgid "   form {0}x{1}"
 msgstr "   formulario {0}x{1}"
 
-#: forms/MainForm.js:1080
+#: forms/MainForm.js:1083
 msgid "   Ln {0}, Col {1}"
 msgstr "   Lín {0}, Col {1}"
 
-#: forms/MainForm.js:1580
+#: forms/MainForm.js:1612
 msgid "{0} is no longer on disk."
 msgstr "{0} ya no está en el disco."
 
-#: forms/MainForm.js:1582
+#: forms/MainForm.js:1614
 msgid "{0} changed on disk, and there are unsaved changes here."
 msgstr "{0} cambió en el disco, y acá hay cambios sin guardar."
 
-#: forms/MainForm.js:1584
+#: forms/MainForm.js:1616
 msgid "{0} changed on disk."
 msgstr "{0} cambió en el disco."
 
-#: forms/MainForm.js:1605
+#: forms/MainForm.js:1637
 msgid "{0} changed on disk. Take the newer file and lose what is unsaved here?"
 msgstr ""
 "{0} cambió en el disco. ¿Tomar el archivo nuevo y perder lo que no está "
 "guardado acá?"
 
-#: forms/MainForm.js:1606
+#: forms/MainForm.js:1638
 msgid "Reload without saving"
 msgstr "Recargar sin guardar"
 
-#: forms/MainForm.js:1903
+#: forms/MainForm.js:1935
 msgid "Start a repository"
 msgstr "Empezar un repositorio"
 
-#: forms/MainForm.js:1904
+#: forms/MainForm.js:1936
 msgid "Create a git repository in {0}?"
 msgstr "¿Crear un repositorio git en {0}?"
 
-#: forms/MainForm.js:1940
+#: forms/MainForm.js:1973
 msgid "(no branches yet)"
 msgstr "(todavía no hay ramas)"
 
-#: forms/MainForm.js:1947
+#: forms/MainForm.js:1980
 msgid "(no other branch)"
 msgstr "(no hay otra rama)"
 
-#: forms/MainForm.js:1976
+#: forms/MainForm.js:2009
 msgid "Switch branch"
 msgstr "Cambiar de rama"
 
-#: forms/MainForm.js:1980
+#: forms/MainForm.js:2013
 msgid "Switch"
 msgstr "Cambiar"
 
-#: forms/MainForm.js:1995
+#: forms/MainForm.js:2028
 msgid "New branch"
 msgstr "Rama nueva"
 
-#: forms/MainForm.js:1995
+#: forms/MainForm.js:2028
 msgid "Called"
 msgstr "Se llama"
 
-#: forms/MainForm.js:2015
+#: forms/MainForm.js:2048
 msgid "Delete a branch"
 msgstr "Borrar una rama"
 
-#: forms/MainForm.js:2016
+#: forms/MainForm.js:2049
 msgid ""
 "Delete {0}? Anything committed only there would be refused rather than lost."
 msgstr "¿Borrar {0}? Lo que esté commiteado sólo ahí se rechaza, no se pierde."
 
-#: forms/MainForm.js:2073
+#: forms/MainForm.js:2131
 msgid "Clone a repository"
 msgstr "Clonar un repositorio"
 
-#: forms/MainForm.js:2073
+#: forms/MainForm.js:2131
 msgid "From"
 msgstr "Desde"
 
-#: forms/MainForm.js:2080
+#: forms/MainForm.js:2138
 msgid "Clone into"
 msgstr "Dónde clonarlo"
 
-#: forms/MainForm.js:771
+#: forms/MainForm.js:774
 msgid "{1} has unsaved changes."
 msgid_plural ""
 "{0} files have unsaved changes:\n"
@@ -1254,13 +1268,13 @@ msgstr[1] ""
 "{0} archivos tienen cambios sin guardar:\n"
 "{1}"
 
-#: forms/MainForm.js:1065
+#: forms/MainForm.js:1068
 msgid "{0} file"
 msgid_plural "{0} files"
 msgstr[0] "{0} archivo"
 msgstr[1] "{0} archivos"
 
-#: forms/MainForm.js:1977
+#: forms/MainForm.js:2010
 msgid ""
 "There is {0} change here. Switching keeps it, unless the two branches "
 "disagree about the same file."
@@ -1274,11 +1288,11 @@ msgstr[1] ""
 "Hay {0} cambios acá. Cambiar de rama los conserva, salvo que las dos ramas "
 "no coincidan en el mismo archivo."
 
-#: forms/MainForm.js:1274 modules/Exporter.js:39
+#: forms/MainForm.js:1277 modules/Exporter.js:39
 msgid "Open a project first."
 msgstr "Abrí un proyecto primero."
 
-#: forms/MainForm.js:1435
+#: forms/MainForm.js:1438
 msgid ""
 "There is no template yet. Run Project > Update translations first: it "
 "gathers every string the project shows and writes the .pot a translation "
@@ -1288,7 +1302,7 @@ msgstr ""
 "traducciones: junta cada cadena que el proyecto muestra y escribe el .pot "
 "del que arranca una traducción."
 
-#: forms/MainForm.js:312
+#: forms/MainForm.js:315
 msgid ""
 "{0} has no project.json.\n"
 "It can still be edited, but it will not be able to run."
@@ -1296,7 +1310,7 @@ msgstr ""
 "{0} no tiene project.json.\n"
 "Se puede editar igual, pero no va a poder ejecutarse."
 
-#: forms/MainForm.js:1128
+#: forms/MainForm.js:1131
 msgid ""
 "{0}\n"
 "is not there any more."
@@ -1304,11 +1318,11 @@ msgstr ""
 "{0}\n"
 "ya no está."
 
-#: forms/MainForm.js:2181
+#: forms/MainForm.js:2239
 msgid "Open a form's design to edit its menus."
 msgstr "Abrí el diseño de un formulario para editar sus menús."
 
-#: forms/MainForm.js:304
+#: forms/MainForm.js:307
 msgid ""
 "No such directory:\n"
 "{0}"
@@ -1316,15 +1330,15 @@ msgstr ""
 "No existe el directorio:\n"
 "{0}"
 
-#: forms/MainForm.js:530
+#: forms/MainForm.js:533
 msgid "{0} already exists and is not a folder."
 msgstr "{0} ya existe y no es una carpeta."
 
-#: forms/MainForm.js:540
+#: forms/MainForm.js:543
 msgid "{0} is already a project."
 msgstr "{0} ya es un proyecto."
 
-#: forms/MainForm.js:1384
+#: forms/MainForm.js:1387
 msgid ""
 "Cannot open {0}:\n"
 "{1}"
@@ -1332,7 +1346,7 @@ msgstr ""
 "No se pudo abrir {0}:\n"
 "{1}"
 
-#: forms/MainForm.js:2097 modules/FormFiles.js:430 modules/FormFiles.js:582
+#: forms/MainForm.js:2155 modules/FormFiles.js:430 modules/FormFiles.js:582
 msgid "{0} already exists."
 msgstr "{0} ya existe."
 
@@ -1497,6 +1511,18 @@ msgid "{0} method"
 msgid_plural "{0} methods"
 msgstr[0] "{0} método"
 msgstr[1] "{0} métodos"
+
+#: modules/Changes.js:147
+msgid "Nothing is staged"
+msgstr "No hay nada en el próximo commit"
+
+#: modules/Changes.js:157
+msgid "This project is not in a git repository."
+msgstr "Este proyecto no está en un repositorio git."
+
+#: modules/Changes.js:158
+msgid "Nothing has changed."
+msgstr "No cambió nada."
 
 #: modules/Classes.js:357
 msgid "Put the class in {0}, like the others here"
@@ -1682,15 +1708,15 @@ msgstr ""
 "Agregar {0}() a {1} lo rompería:\n"
 "{2}"
 
-#: modules/Git.js:584
+#: modules/Git.js:644
 msgid "detached"
 msgstr "suelto"
 
-#: modules/Git.js:586
+#: modules/Git.js:646
 msgid "{0} staged"
 msgstr "{0} en el próximo commit"
 
-#: modules/Git.js:587
+#: modules/Git.js:647
 msgid "{0} changed"
 msgstr "{0} cambiado"
 

@@ -193,6 +193,9 @@ class MainForm extends Form {
     debugger_ = new Ide.Debugger(this);
     /* What git says about the project, and the only thing here that runs one. */
     git       = new Ide.Git(this);
+    /* The changed files as a page of the side bar, with the message box: the
+     * Changes window is for reading a diff, and this is for living in. */
+    changes   = new Ide.Changes(this);
 
     /*
      * The catalogue the left button last selected, or null.
@@ -1547,12 +1550,41 @@ class MainForm extends Form {
      * taught this project once.
      */
     dressViews() {
-        this.CmbView.Items = Ide.ProjectTree.views;
-        this.CmbView.Index = this.projectTree.view;
+        /* The tree's two, and then the third thing the side bar can be. It is in
+         * the same chooser and not a tab strip of its own because it answers the
+         * same question -- *what is on the left* -- and two choosers stacked over
+         * one column is the shape that makes people hunt. */
+        this.CmbView.Items = [...Ide.ProjectTree.views, Locale.Text("Changes")];
+        this.CmbView.Index = this.sideView;
+    }
+
+    /*
+     * Which of the three is up, remembered across runs.
+     *
+     * The tree's own view is `ProjectTree`'s and stays there -- it is what the
+     * tree is built from. What this adds is *the tree at all*, which is why the
+     * two are not one number: coming back to the Changes page and choosing
+     * Project again must find the view it was left in.
+     */
+    get sideView() {
+        return Settings.Get("side.changes", false) ? Ide.Changes.view
+                                                  : this.projectTree.view;
     }
 
     CmbView_Select() {
-        this.projectTree.setView(this.CmbView.Index);
+        const which = this.CmbView.Index;
+        /* Filling `Items` moves the chooser to nothing on the way past, and
+         * *nothing* is not a view to switch to. */
+        if (which < 0) return;
+
+        const changes = which === Ide.Changes.view;
+
+        Settings.Set("side.changes", changes);
+        this.FileTree.Visible   = !changes;
+        this.ChangesBox.Visible = changes;
+
+        if (changes) this.changes.shown();
+        else         this.projectTree.setView(which);
     }
 
     /* --- what happened to the file while it was open -----------------------
@@ -1915,6 +1947,7 @@ class MainForm extends Form {
     refreshGit() {
         this.git.refresh();
         this.git.markTree();
+        this.changes.reload();
         this.showBranches();
         this.refresh();
     }
@@ -2023,6 +2056,31 @@ class MainForm extends Form {
     }
 
     MnuGitLog_Click() { LogForm.open(this); }
+
+    /*
+     * --- the Changes page of the side bar -----------------------------------
+     *
+     * The handlers are one line each and the decisions are all in
+     * `Ide.Changes`: this is the wiring between a control and a method, which
+     * is what a `.form` and its class are for.
+     */
+    ChangeTable_Select()   { this.changes.say(); }
+    ChangeTable_Activate() { this.changes.show(this.ChangeTable.Index); }
+
+    TxtCommit_Change()   { this.changes.say(); }
+    /* Enter in the box is the button: that is what makes it quick. */
+    TxtCommit_Activate() { this.changes.commit(); }
+
+    BtnChStage_Click()  { this.changes.stage(); }
+    BtnChCommit_Click() { this.changes.commit(); }
+
+    MnuChDiff_Click()    { this.changes.show(this.ChangeTable.Index); }
+    MnuChOpen_Click()    { this.changes.open(this.ChangeTable.Index); }
+    MnuChStage_Click()   { this.changes.stage(); }
+    MnuChUnstage_Click() { this.changes.unstage(); }
+    MnuChDiscard_Click() { this.changes.discard(); }
+    MnuChAll_Click()     { this.changes.stageAll(); }
+    MnuChWindow_Click()  { GitForm.open(this); }
 
     /*
      * --- the remotes --------------------------------------------------------

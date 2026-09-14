@@ -3806,7 +3806,7 @@ function* p_views(ide) {
     yield;
 
     /* --- the chooser -------------------------------------------------------- */
-    eq("the tree offers two views", ide.CmbView.Count, 2);
+    eq("the side bar offers three views", ide.CmbView.Count, 3);
     eq("and starts on the project's", ide.CmbView.Index, 0);
 
     check("neither stray file is in the project view",
@@ -9033,7 +9033,11 @@ function* p_search(ide) {
     eq("...and not when whole words were asked for", win.search(), 0);
     win.ChkWord.Active = false;
 
-    win.TxtTerm.Text = "ag..a";
+    /* A pattern that can only match the needle: this searches the *whole*
+     * project, and one phase of this suite copies the IDE's own `MainForm.form`
+     * into it -- so a loose pattern counts whatever the IDE happens to say this
+     * month, which is a count that changes for reasons that are not the search. */
+    win.TxtTerm.Text = "ag.ja";
     eq("a dot is a dot unless it is a pattern", win.search(), 0);
     win.ChkRegex.Active = true;
     eq("and a pattern when it is", win.search(), 3);
@@ -9393,6 +9397,130 @@ function* p_git(ide) {
     yield* settled(ide);
 
     /*
+     * --- the Changes page of the side bar ------------------------------------
+     *
+     * The same repository read in the narrow place. What is asserted is that it
+     * is the *same* answer -- the rows are `split()`'s two lists and not a
+     * second reading -- and the three gestures that are the point of it: stage
+     * from the panel, commit from the box, and a double click landing on that
+     * file's diff in the window that exists for it.
+     */
+    File.Save(File.Join(repo, "Uno.js"), "class Uno extends Form {\n    // tres\n}\n");
+    File.Save(File.Join(repo, "cuatro.txt"), "nuevo\n");
+
+    ide.CmbView.Index = Ide.Changes.view;
+    ide.CmbView_Select();
+    yield* settled(ide);
+
+    check("choosing Changes puts the panel up", ide.ChangesBox.Visible);
+    check("and takes the tree down", !ide.FileTree.Visible);
+    eq("the choice is written down like the tree's",
+       Settings.Get("side.changes", false), true);
+
+    const panel = ide.changes;
+    const both  = git.split();
+
+    eq("every changed file is a row",
+       ide.ChangeTable.Count, both.staged.length + both.unstaged.length);
+    check("with the path in it",
+          panel.rows.some((r) => r.path === "cuatro.txt"), JSON.stringify(panel.rows));
+    check("and an untracked file among them",
+          panel.rows.some((r) => r.path === "cuatro.txt" && r.state === "?"));
+
+    /* Staging from the panel, asserted by asking git. */
+    ide.ChangeTable.Index = panel.rows.findIndex((r) => r.path === "Uno.js");
+    ide.ChangeTable_Select();
+    check("a row chosen offers to stage it", ide.MnuChStage.Enabled);
+    check("and to throw it away", ide.MnuChDiscard.Enabled);
+    check("but not to unstage what was never staged", !ide.MnuChUnstage.Enabled);
+
+    ide.BtnChStage_Click();
+    yield* settled(ide);
+
+    eq("staging from the panel reaches git",
+       git.split().staged.map((r) => r.path).join(), "Uno.js");
+    check("and the row says so now",
+          panel.rows.some((r) => r.path === "Uno.js" && r.staged),
+          JSON.stringify(panel.rows));
+
+    /* And back out again, through the menu the row offers. */
+    ide.ChangeTable.Index = panel.rows.findIndex((r) => r.path === "Uno.js" && r.staged);
+    ide.ChangeTable_Select();
+    check("a staged row offers to unstage it", ide.MnuChUnstage.Enabled);
+    ide.MnuChUnstage_Click();
+    yield* settled(ide);
+
+    eq("unstaging reaches git too", git.split().staged.length, 0);
+
+    /* Everything at once, which is what a small commit is. `add -A`, so the
+     * untracked file goes in too -- a number here would be a count of whatever
+     * the phases above happened to leave, which is not what is being tested. */
+    const loose = git.split().unstaged.length;
+    ide.MnuChAll_Click();
+    yield* settled(ide);
+
+    check("stage everything stages the untracked one as well", loose > 0);
+    eq("and leaves nothing outside the commit", git.split().unstaged.length, 0);
+
+    /* The commit, from the one-line box: a message and Enter. */
+    check("an empty message commits nothing", !ide.BtnChCommit.Enabled);
+    ide.TxtCommit.Text = "tercero";
+    ide.TxtCommit_Change();
+    check("with a message and something staged it is on", ide.BtnChCommit.Enabled);
+
+    ide.TxtCommit_Activate();
+    yield* settled(ide);
+
+    check("Enter in the box commits",
+          run("log", "--oneline").Output.includes("tercero"));
+    eq("and empties the box", ide.TxtCommit.Text, "");
+    eq("leaving nothing staged", git.split().staged.length, 0);
+    eq("nor anything else to show", ide.ChangeTable.Count, 0);
+
+    /* A double click is the diff, in the window that reads one. */
+    File.Save(File.Join(repo, "Uno.js"), "class Uno extends Form {\n    // cuatro\n}\n");
+    ide.refreshGit();
+    yield* settled(ide);
+
+    eq("a new change comes back into the panel", ide.ChangeTable.Count, 1);
+
+    ide.ChangeTable.Index = 0;
+    ide.ChangeTable_Activate();
+    yield* settled(ide);
+
+    const opened = GitForm.open(ide);
+    check("double clicking a row opens the window on that file",
+          opened.chosen()[0] === "Uno.js", JSON.stringify(opened.chosen()));
+    check("with its diff in the panes", opened.After.Text.includes("cuatro"),
+          opened.After.Text);
+    opened.Close();
+    yield* settled(ide);
+
+    /* Rollback, which is the one command with no undo and therefore asks. */
+    ide.ChangeTable.Index = 0;
+    ide.ChangeTable_Select();
+    ide.MnuChDiscard_Click();
+    yield;
+    ide.changes.ask.BtnYes_Click();
+    yield* settled(ide);
+
+    check("discarding from the panel puts the file back",
+          !File.Load(File.Join(repo, "Uno.js")).includes("cuatro"));
+    eq("and leaves nothing to show", ide.ChangeTable.Count, 0);
+
+    /* An empty table says which kind of empty it is: *nothing has changed* is
+     * not the same news as *this is not a repository*. */
+    check("an empty panel says so", ide.LblChanges.Visible);
+    check("and says nothing has changed", ide.LblChanges.Text.includes("changed"),
+          ide.LblChanges.Text);
+
+    /* Back to the tree, which is where the phases after this one look. */
+    ide.CmbView.Index = 0;
+    ide.CmbView_Select();
+    yield* settled(ide);
+    check("the tree comes back", ide.FileTree.Visible && !ide.ChangesBox.Visible);
+
+    /*
      * --- the remotes ---------------------------------------------------------
      *
      * A **bare repository beside this one**, which is what `origin` is as far
@@ -9495,6 +9623,21 @@ function* p_git(ide) {
     ide.openProject(TMP);
     yield* settled(ide);
     eq("the suite's own project is back", ide.project, TMP);
+
+    /* And the other kind of empty, which is this project: the panel over
+     * something that is not a repository says that rather than nothing. */
+    ide.CmbView.Index = Ide.Changes.view;
+    ide.CmbView_Select();
+    yield* settled(ide);
+
+    eq("a project with no repository shows no rows", ide.ChangeTable.Count, 0);
+    check("and says why", ide.LblChanges.Text.includes("repository"),
+          ide.LblChanges.Text);
+    check("with nothing to type a message into", !ide.TxtCommit.Enabled);
+
+    ide.CmbView.Index = 0;
+    ide.CmbView_Select();
+    yield* settled(ide);
 }
 
 /*

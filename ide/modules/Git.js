@@ -379,6 +379,66 @@ Ide.Git = class Git {
         return this.remote(args, done);
     }
 
+    /* --- changing what is about to be committed ----------------------------- */
+
+    /*
+     * Staging, unstaging, and the `--` that is not decoration.
+     *
+     * What these act on are **paths git itself named** -- the porcelain's own
+     * output, never a string typed anywhere -- and `--` is what keeps a file
+     * called `-f` a file and not a flag. They live here rather than in the
+     * window that has the buttons because the side panel has the same commands,
+     * and two implementations of *stage* would be two sets of guards.
+     */
+    stage(paths)   { return this.act(["add", "--"], paths); }
+    unstage(paths) { return this.act(["restore", "--staged", "--"], paths); }
+
+    act(command, paths) {
+        if (!paths || !paths.length) return { ok: true, out: "", code: 0 };
+
+        const r = this.run([...command, ...paths]);
+        if (!r.ok) this.ide.log(`git: ${r.out.trim()}\n`);
+        return r;
+    }
+
+    /*
+     * Throwing work away, which is the one thing here with no undo.
+     *
+     * **An untracked file is deleted and not restored**: `git restore` has
+     * nothing to restore it from, so the two halves are two different
+     * operations, and the caller's question ("are you sure?") is two different
+     * sentences. Asking is the caller's job -- a module does not open windows --
+     * and telling them apart is `untracked` below, which is what the caller asks
+     * to word it.
+     */
+    discard(paths) {
+        const known = paths.filter((f) => this.stateOf(f) !== UNTRACKED);
+        const fresh = paths.filter((f) => this.stateOf(f) === UNTRACKED);
+
+        if (known.length) this.run(["restore", "--", ...known]);
+        for (const f of fresh) File.Delete(File.Join(this.ide.project, f));
+    }
+
+    /* Which of these git has never been told about, so a caller can say
+     * *deleted* rather than *restored* about them. */
+    untracked(paths) {
+        return paths.filter((f) => this.stateOf(f) === UNTRACKED);
+    }
+
+    /*
+     * The commit.
+     *
+     * `-m` with the message as its **own argument**, which is already safe:
+     * `Exec` takes an argv and not a command line, so nothing between here and
+     * git can read a newline or a quote in it as anything. `-F -` would be the
+     * answer if there were a shell in the way, and there is not.
+     */
+    commit(message) {
+        const r = this.run(["commit", "-m", message]);
+        this.ide.log(`${r.out.trim()}\n`);
+        return r;
+    }
+
     /* --- branches -------------------------------------------------------- */
 
     /*

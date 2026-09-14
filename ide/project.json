@@ -31,6 +31,7 @@
     "modules/Navigator.js",
     "modules/Debugger.js",
     "modules/Git.js",
+    "modules/Changes.js",
     "modules/Strings.js",
     "modules/Translations.js",
     "modules/Exporter.js",

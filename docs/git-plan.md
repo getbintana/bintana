@@ -1,9 +1,10 @@
 # Git: what was built, and the plan for the rest
 
-**All five stages are built** (2026-09-13/14): status in the tree, the branch in
+**All seven stages are built** (2026-09-13/14): status in the tree, the branch in
 the status bar, the Changes window with the two lists and the side-by-side diff,
 stage / unstage / discard / commit per file, branches, switching, the History
-window, and now fetch, pull, push and clone. `git init` came with stage 3,
+window, fetch, pull, push and clone, and the changed files as a page of the
+side bar with a one-line commit box. `git init` came with stage 3,
 because a project without a repository is the one case where a menu of disabled
 items is a dead end. **The seven of [the core](#why-this-matters-and-what-the-core-is)
 are answered.**
@@ -136,6 +137,7 @@ counts join `LblStatus`; every literal sits at the call site inside
 | **4** | log, branches, checkout | **built** |
 | **5** | remotes async, clone | **built** |
 | **6** | catalogues, docs, and a `git` phase in `tests/ide` over a scratch repo (skip-green when git is missing, never red for the machine) | **built** |
+| **7** | the changed files as a page of the side bar, with a one-line commit box | **built**, and not in the original plan |
 
 **What stage 1 needed and this document did not foresee: `Exec.Wait` stopped at
 the first NUL.** It was built on `g_subprocess_communicate_utf8`, which hands
@@ -184,6 +186,23 @@ go through `-C <project>` -- it is still `Ide.Git`'s child, because *nothing els
 in `ide/` runs a child of its own* is what keeps the worktree one file's
 business, and it takes the same job slot, so Stop reaches a clone of something
 big exactly as it reaches a fetch.
+
+**Stage 7 was not in this document, and the use of the thing asked for it.** The
+window answers *what am I about to commit*, and it answers it well; what it
+cannot be is where you work, because it covers the editor and every small commit
+means opening and closing it. The list therefore also lives in the side bar, as
+the third entry of the chooser that already picks *Project* or *Files* -- the
+same question, *what is on the left*, so the same chooser. A one-line message box
+with Enter as the button is the whole of a small commit; anything with a body is
+written in the window, which has an editor for it. **What it commits is what is
+staged and never what is selected**: a button that quietly staged first would
+make *Commit* mean two different things depending on where the pointer had been.
+
+It runs no git of its own -- and that is what made it cheap. `stage`, `unstage`,
+`discard` and `commit` moved out of `GitForm` and into `Ide.Git`, where the
+readers already were, so the panel and the window press *the same* commands with
+the same guards rather than two spellings of each. Prior art for the shape:
+Android Studio's *Commit* tool window and Visual Studio's *Git Changes* pane.
 
 ## What it costs outside the code
 
