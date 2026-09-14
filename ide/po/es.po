@@ -1722,3 +1722,95 @@ msgstr "Un commit necesita un mensaje."
 #: forms/GitForm.js:295
 msgid "Nothing is staged."
 msgstr "No hay nada en el próximo commit."
+
+#: forms/MainForm.form: menu MnuGitLog
+msgid "History..."
+msgstr "Historia..."
+
+#: forms/MainForm.form: menu MnuGitBranch
+msgid "Branch"
+msgstr "Rama"
+
+#: forms/MainForm.form: menu MnuGitNewBranch
+msgid "New branch..."
+msgstr "Rama nueva..."
+
+#: forms/MainForm.form: menu MnuGitDropBranch
+msgid "Delete branch"
+msgstr "Borrar una rama"
+
+#: forms/LogForm.form: LogForm.Text
+msgid "History"
+msgstr "Historia"
+
+#: forms/LogForm.form: Commits.Tooltip
+msgid "The last commits, newest first"
+msgstr "Los últimos commits, el más nuevo primero"
+
+#: forms/LogForm.form: Touched.Tooltip
+msgid "What that commit touched. Choosing one shows what it did to it"
+msgstr "Lo que ese commit tocó. Al elegir uno se ve qué le hizo"
+
+#: forms/LogForm.js:41
+msgid "History -- {0}"
+msgstr "Historia -- {0}"
+
+#: forms/LogForm.js:55
+msgid "Commit"
+msgstr "Commit"
+
+#: forms/LogForm.js:56
+msgid "Subject"
+msgstr "Asunto"
+
+#: forms/LogForm.js:57
+msgid "Who"
+msgstr "Quién"
+
+#: forms/LogForm.js:58
+msgid "When"
+msgstr "Cuándo"
+
+#: forms/LogForm.js:103
+msgid "{0} file in this commit"
+msgid_plural "{0} files in this commit"
+msgstr[0] "{0} archivo en este commit"
+msgstr[1] "{0} archivos en este commit"
+
+#: forms/MainForm.js:1923
+msgid "(no branches yet)"
+msgstr "(todavía no hay ramas)"
+
+#: forms/MainForm.js:1930
+msgid "(no other branch)"
+msgstr "(no hay otra rama)"
+
+#: forms/MainForm.js:1959
+msgid "Switch branch"
+msgstr "Cambiar de rama"
+
+#: forms/MainForm.js:1960
+msgid "There is {0} change here. Switching keeps it, unless the two branches disagree about the same file."
+msgid_plural "There are {0} changes here. Switching keeps them, unless the two branches disagree about the same file."
+msgstr[0] "Hay {0} cambio acá. Cambiar de rama lo conserva, salvo que las dos ramas no coincidan en el mismo archivo."
+msgstr[1] "Hay {0} cambios acá. Cambiar de rama los conserva, salvo que las dos ramas no coincidan en el mismo archivo."
+
+#: forms/MainForm.js:1963
+msgid "Switch"
+msgstr "Cambiar"
+
+#: forms/MainForm.js:1978
+msgid "New branch"
+msgstr "Rama nueva"
+
+#: forms/MainForm.js:1978
+msgid "Called"
+msgstr "Se llama"
+
+#: forms/MainForm.js:1998
+msgid "Delete a branch"
+msgstr "Borrar una rama"
+
+#: forms/MainForm.js:1999
+msgid "Delete {0}? Anything committed only there would be refused rather than lost."
+msgstr "¿Borrar {0}? Lo que esté commiteado sólo ahí se rechaza, no se pierde."

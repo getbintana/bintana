@@ -42,6 +42,7 @@
     "../../ide/forms/SearchForm.js",
     "../../ide/forms/SymbolForm.js",
     "../../ide/forms/GitForm.js",
+    "../../ide/forms/LogForm.js",
     "../../ide/modules/Runner.js",
     "../../ide/modules/Manifest.js",
     "../../ide/modules/Recovery.js",

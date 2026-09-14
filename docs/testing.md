@@ -1,7 +1,7 @@
 # Testing
 
 ```sh
-./tests/run.sh                          # all five projects, 5541 assertions
+./tests/run.sh                          # all five projects, 5561 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it

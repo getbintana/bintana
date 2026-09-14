@@ -260,6 +260,110 @@ Ide.Git = class Git {
         return r.ok ? r.out : null;
     }
 
+    /* --- branches -------------------------------------------------------- */
+
+    /*
+     * Every local branch, in git's own order.
+     *
+     * `for-each-ref` and not `branch`: the latter draws a `*` beside the current
+     * one and indents the rest, which is a display and not a list -- and it
+     * translates nothing but is still formatting meant for a person. A ref name
+     * cannot contain a newline, so one per line is unambiguous here in a way it
+     * is not for paths.
+     */
+    branches() {
+        const r = this.run(["for-each-ref", "--format=%(refname:short)",
+                            "refs/heads"]);
+
+        return r.ok ? r.out.split("\n").filter((n) => n !== "") : [];
+    }
+
+    /*
+     * Moving to another branch, or making one.
+     *
+     * `switch` and not `checkout`: they overlap, and the overlap is the problem
+     * -- `git checkout <name>` moves to a branch or throws away a file's changes
+     * depending on what the name turns out to be, which is the ambiguity `switch`
+     * and `restore` were split out to end. A branch name that is also a path is
+     * not a hypothetical in a project whose folders are called `forms` and
+     * `modules`.
+     */
+    switchTo(name) {
+        return this.run(["switch", "--", name]);
+    }
+
+    newBranch(name) {
+        return this.run(["switch", "-c", name]);
+    }
+
+    /*
+     * Deleting one, and never with `-D`.
+     *
+     * `-d` refuses a branch whose commits are on no other branch, which is git
+     * saying *this would lose work*. Offering a force here would be offering to
+     * ignore the one check that matters; what the IDE does with the refusal is
+     * show it, and the Terminal tab is where somebody who means it goes.
+     */
+    deleteBranch(name) {
+        return this.run(["branch", "-d", "--", name]);
+    }
+
+    /* --- the log ----------------------------------------------------------- */
+
+    /*
+     * The last commits, as records.
+     *
+     * `-z` between commits and `%x1f` between the fields of one: a subject can
+     * contain anything a person can type, including the tabs and newlines that
+     * every other separator would be. Which is the same argument `status -z`
+     * makes, and it only became possible when `Exec.Wait` stopped ending its
+     * answer at the first NUL.
+     */
+    log(count) {
+        const r = this.run(["log", "-z", `--max-count=${count || 60}`,
+                            "--format=%h%x1f%an%x1f%ar%x1f%s"]);
+        if (!r.ok) return [];
+
+        return r.out.split("\0").filter((c) => c !== "").map((record) => {
+            const [sha, who, when, subject] = record.split("\x1f");
+            return { sha, who, when, subject: subject || "" };
+        });
+    }
+
+    /* Which files one commit touched, and what it did to each. */
+    filesIn(sha) {
+        const r = this.run(["show", "--name-status", "--format=", "-z", sha]);
+        if (!r.ok) return [];
+
+        /* `-z` here is `STATUS<NUL>path<NUL>`, and a rename is three fields. */
+        const parts = r.out.split("\0").filter((p) => p !== "");
+        const out   = [];
+
+        for (let i = 0; i < parts.length; i += 2) {
+            const state = parts[i][0];
+            if (state === "R" || state === "C") {
+                out.push({ path: parts[i + 2], state });
+                i++;                              /* three fields, not two */
+                continue;
+            }
+            out.push({ path: parts[i + 1], state });
+        }
+        return out;
+    }
+
+    /* One file as a commit left it, and as the commit before it had it. */
+    fileAt(sha, name)     { return this.show(sha, name); }
+    fileBefore(sha, name) { return this.show(`${sha}^`, name); }
+
+    /* What one commit changed, as a diff. */
+    commitDiff(sha, name) {
+        const args = ["show", "--no-color", "--no-ext-diff", "--format=", sha];
+        if (name) args.push("--", name);
+
+        const r = this.run(args);
+        return r.ok ? r.out : "";
+    }
+
     /*
      * The changes, split into the two questions the viewer asks.
      *

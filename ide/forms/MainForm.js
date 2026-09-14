@@ -109,6 +109,12 @@ const RECENT_KEY = "recent";
  * Written means choosing it goes there; the rest are a method that does not exist
  * yet, and choosing one writes it.
  */
+/* The branch one is standing on, in a list of them.  The same bullet the Form
+ * menu marks a written handler with, because it is the same kind of fact: this
+ * one, of the ones offered. */
+const BRANCH_HERE  = "\u2022 ";
+const BRANCH_OTHER = "  ";
+
 const HANDLER_WRITTEN = "\u2022 ";   /* • already in the .js */
 const HANDLER_NEW     = "  ";
 /*
@@ -1026,6 +1032,8 @@ class MainForm extends Form {
 
         this.MnuGitRefresh.Enabled = repo;
         this.MnuGitChanges.Enabled = repo;
+        this.MnuGitLog.Enabled     = repo;
+        this.MnuGitNewBranch.Enabled = repo;
         this.MnuGitInit.Enabled    = git && !repo;
 
         let status;
@@ -1890,8 +1898,114 @@ class MainForm extends Form {
     refreshGit() {
         this.git.refresh();
         this.git.markTree();
+        this.showBranches();
         this.refresh();
     }
+
+    /*
+     * The branches, in the two menus that list them.
+     *
+     * Filled **here** and not in `refresh()`, which runs on every keystroke and
+     * every selection: asking git costs a child process, and the branches change
+     * when somebody does something rather than continuously. It is the same
+     * reason `refreshGit` exists at all.
+     */
+    showBranches() {
+        const on   = this.git.isRepo;
+        const all  = on ? this.git.branches() : [];
+        const here = this.git.branchName;
+
+        /* The current one is marked and stays in the list: a list that dropped
+         * it would make *where am I* a question with no answer on screen. */
+        this.branchNames = all;
+        this.MnuGitBranch.Items = all.length
+            ? all.map((n) => (n === here ? `${BRANCH_HERE}${n}` : `${BRANCH_OTHER}${n}`))
+            : [Locale.Text("(no branches yet)")];
+
+        /* Deleting is the other list, and the one you are standing on is not in
+         * it: git refuses that anyway, and offering it is offering an error. */
+        this.dropNames = all.filter((n) => n !== here);
+        this.MnuGitDropBranch.Items = this.dropNames.length
+            ? this.dropNames.slice()
+            : [Locale.Text("(no other branch)")];
+
+        this.MnuGitBranch.Enabled     = on && all.length > 0;
+        this.MnuGitDropBranch.Enabled = on && this.dropNames.length > 0;
+    }
+
+    /*
+     * Moving to another branch.
+     *
+     * Saved first -- the Run and Export precedent: never operate on something
+     * other than what is on screen, and a checkout with an unsaved buffer is a
+     * file whose two versions are both wrong. Asked first as well when git says
+     * there is something uncommitted, because a switch can refuse halfway and
+     * leave the worktree spread across two branches.
+     *
+     * What happens to the files afterwards is not this method's problem: each
+     * open tab watches its own file and the reload bar is what a file changing
+     * underneath already looks like. That is the case those were written for.
+     */
+    MnuGitBranch_Click(index) {
+        const name = (this.branchNames || [])[index];
+        if (!name || name === this.git.branchName) return;
+
+        this.saveAllDirty();
+
+        const dirty = this.git.staged + this.git.changed;
+        if (!dirty) return this.switchBranch(name);
+
+        this.branchAsk = ConfirmForm.ask(
+            Locale.Text("Switch branch"),
+            Locale.Plural("There is {0} change here. Switching keeps it, unless the two branches disagree about the same file.",
+                          "There are {0} changes here. Switching keeps them, unless the two branches disagree about the same file.",
+                          dirty),
+            Locale.Text("Switch"),
+            () => this.switchBranch(name));
+    }
+
+    switchBranch(name) {
+        const r = this.git.switchTo(name);
+
+        this.log(r.out.trim() ? `${r.out.trim()}\n` : "");
+        this.refreshGit();
+        this.listFiles();
+    }
+
+    MnuGitNewBranch_Click() {
+        /* Kept the way `columnEditor` is: a modal dialog is a window with no
+         * other reference, and a test has to reach the one that is open. */
+        this.branchAsk = AskForm.prompt(Locale.Text("New branch"), Locale.Text("Called"), "",
+                       (name) => {
+                           const r = this.git.newBranch(name.trim());
+                           this.log(`${r.out.trim()}\n`);
+                           this.refreshGit();
+                           this.listFiles();
+                       });
+    }
+
+    /*
+     * Deleting one, which git refuses when it would lose commits -- and the
+     * refusal is shown rather than worked around. `-D` is not offered: it would
+     * be offering to ignore the one check that matters, and somebody who means
+     * it has the Terminal tab.
+     */
+    MnuGitDropBranch_Click(index) {
+        const name = (this.dropNames || [])[index];
+        if (!name) return;
+
+        this.branchAsk = ConfirmForm.ask(
+            Locale.Text("Delete a branch"),
+            Locale.Text("Delete {0}? Anything committed only there would be refused rather than lost.", name),
+            Locale.Text("Delete"),
+            () => {
+                const r = this.git.deleteBranch(name);
+                this.log(`${r.out.trim()}\n`);
+                this.refreshGit();
+            });
+    }
+
+    MnuGitLog_Click() { LogForm.open(this); }
 
     /*
      * Ctrl+Shift+O, and Ctrl+L on the same command: the methods of the file as a

@@ -1,0 +1,153 @@
+{
+  "format": "bintana-form/1",
+  "class": "LogForm",
+  "properties": {
+    "Height": 620,
+    "Icon": "document-open-recent-symbolic",
+    "Text": "History",
+    "Width": 980
+  },
+  "children": [
+    {
+      "type": "Split",
+      "name": "Outer",
+      "properties": {
+        "Arrangement": "Vertical",
+        "HAlign": "Fill",
+        "Height": 540,
+        "Position": 220,
+        "VAlign": "Fill",
+        "Width": 948,
+        "X": 16,
+        "Y": 16
+      },
+      "children": [
+        {
+          "type": "TableView",
+          "name": "Commits",
+          "properties": {
+            "Expand": true,
+            "HExpand": true,
+            "Tooltip": "The last commits, newest first",
+            "VExpand": true
+          }
+        },
+        {
+          "type": "Split",
+          "name": "Below",
+          "properties": {
+            "Arrangement": "Horizontal",
+            "Expand": true,
+            "HExpand": true,
+            "Position": 260,
+            "VExpand": true
+          },
+          "children": [
+            {
+              "type": "TableView",
+              "name": "Touched",
+              "properties": {
+                "Expand": true,
+                "HExpand": true,
+                "Tooltip": "What that commit touched. Choosing one shows what it did to it",
+                "VExpand": true
+              }
+            },
+            {
+              "type": "Switcher",
+              "name": "How",
+              "properties": {
+                "HExpand": true,
+                "Tabs": [
+                  "Side by side",
+                  "Unified"
+                ]
+              },
+              "children": [
+                {
+                  "type": "Split",
+                  "name": "Pair",
+                  "properties": {
+                    "Arrangement": "Horizontal",
+                    "Expand": true,
+                    "HExpand": true,
+                    "Position": 330,
+                    "VExpand": true
+                  },
+                  "children": [
+                    {
+                      "type": "SourceEditor",
+                      "name": "Before",
+                      "properties": {
+                        "Expand": true,
+                        "Font": "Monospace 10",
+                        "HExpand": true,
+                        "ReadOnly": true,
+                        "VExpand": true,
+                        "Wrap": false
+                      }
+                    },
+                    {
+                      "type": "SourceEditor",
+                      "name": "After",
+                      "properties": {
+                        "Expand": true,
+                        "Font": "Monospace 10",
+                        "HExpand": true,
+                        "ReadOnly": true,
+                        "VExpand": true,
+                        "Wrap": false
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "SourceEditor",
+                  "name": "Unified",
+                  "properties": {
+                    "Expand": true,
+                    "Font": "Monospace 10",
+                    "HExpand": true,
+                    "Language": "diff",
+                    "ReadOnly": true,
+                    "VExpand": true,
+                    "Wrap": false
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Label",
+      "name": "LblWhat",
+      "properties": {
+        "Ellipsize": true,
+        "HAlign": "Fill",
+        "Height": 22,
+        "Style": "dim-label",
+        "VAlign": "End",
+        "Width": 700,
+        "X": 16,
+        "Y": 572
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnClose",
+      "properties": {
+        "Cancel": true,
+        "Default": true,
+        "HAlign": "End",
+        "Height": 32,
+        "Text": "Close",
+        "VAlign": "End",
+        "Width": 96,
+        "X": 868,
+        "Y": 566
+      }
+    }
+  ]
+}

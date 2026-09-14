@@ -1,11 +1,11 @@
 # Git: what was built, and the plan for the rest
 
-**Stages 1 to 3 are built** (2026-09-13): status in the tree, the branch in the
-status bar, the Changes window with the two lists and the side-by-side diff, and
-stage / unstage / discard / commit per file. `git init` came with them, because a
-project without a repository is the one case where a menu of disabled items is a
-dead end. What is left is [staging](#staging) 4 and 5 -- the log, branches and
-checkout, and the remotes.
+**Stages 1 to 4 are built** (2026-09-13/14): status in the tree, the branch in
+the status bar, the Changes window with the two lists and the side-by-side diff,
+stage / unstage / discard / commit per file, and branches, switching and the
+History window. `git init` came with them, because a project without a
+repository is the one case where a menu of disabled items is a dead end. What is
+left is [staging](#staging) 5 -- the remotes.
 
 This document is the design as well as the record: what *is* settled is recorded
 as settled, with the precedent or the measurement that settled it.
@@ -132,7 +132,7 @@ counts join `LblStatus`; every literal sits at the call site inside
 | **1** | `Ide.Git` readers (`available`, `isRepo`, `status`, `branch`, `show`, `diff`, `split`), menu Refresh, branch in the status bar, indicators in the tree | **built** |
 | **2** | the viewer: side by side plus unified, caps and binaries | **built** |
 | **3** | stage / unstage / commit / discard per file | **built**, plus `init` |
-| **4** | log, branches, checkout | |
+| **4** | log, branches, checkout | **built** |
 | **5** | remotes async, clone | |
 | **6** | catalogues, docs, and a `git` phase in `tests/ide` over a scratch repo (skip-green when git is missing, never red for the machine) | catalogues and docs done; the phase is not |
 
@@ -147,6 +147,16 @@ of them parsed as a single entry, which is the shape of bug this plan's own
 
 **And "cursor-follow" is gone from stage 2**, because the gap it worked around
 was filled: an `Editor` answers `ScrollY` now, so the panes lock properly.
+
+**Stage 4 chose `switch` over `checkout`**, which this document did not say and
+should have: they overlap, and `git checkout <name>` moves to a branch *or*
+throws away a file's changes depending on what the name turns out to be. That
+ambiguity is what `switch` and `restore` were split out to end, and a branch
+name that is also a path is not hypothetical in a project with folders called
+`forms` and `modules`. The log is a **window** and not a page of the Changes
+one, for the reason that window's own buttons give: it stages, discards and
+commits, and a read-only history behind them would make each of them ask
+whether it applies.
 
 ## What it costs outside the code
 

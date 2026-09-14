@@ -1247,11 +1247,53 @@ with no undo, and it sits one button over from something harmless. An untracked
 file is not restored but *deleted* -- `git restore` has nothing to restore it
 from -- which is a different sentence and is said as one.
 
+### Branches, and the history
+
+*Git → Branch* is the branches as a menu, the one you are standing on marked
+with the same bullet the Form menu marks a written handler with -- it is the
+same kind of fact, *this one of the ones offered* -- and choosing another one
+switches. It stays in the list, because a list that dropped it would make
+*where am I* a question with no answer on screen. *Delete branch* is the other
+list and never holds the current one: git refuses that anyway, and offering it
+is offering an error.
+
+**Switching saves first and asks second.** Saving is the Run and Export
+precedent -- never operate on something other than what is on screen -- and the
+question comes when git says there is something uncommitted, because a switch
+can refuse halfway and leave the worktree spread across two branches. What
+happens to the open files afterwards is nobody's special case: each tab watches
+its own file, and the reload bar is what a file changing underneath already
+looks like.
+
+**`switch` and not `checkout`.** They overlap, and the overlap is the problem:
+`git checkout <name>` moves to a branch *or* throws away a file's changes
+depending on what the name turns out to be, which is the ambiguity `switch` and
+`restore` were split out to end. A branch name that is also a path is not
+hypothetical in a project whose folders are called `forms` and `modules`.
+
+**Deleting uses `-d` and never `-D`**, so git refuses a branch whose commits are
+on no other. Offering a force would be offering to ignore the one check that
+matters; the refusal is shown, and somebody who means it has the Terminal tab.
+
+*History* (`Ctrl+Shift+H`) is a window of its own and deliberately not a page of
+*Changes*: that window is about the change you are **making** -- it stages, it
+discards, it commits -- and this one is about changes that are over. Putting a
+read-only history behind those buttons would make every one of them ask *does
+this apply here*.
+
+Three panes, in the order the question is asked: which commit, then which of its
+files, then what it did to that file. The last is the same side-by-side pair the
+Changes window has, between `sha^` and `sha` -- a file the commit *added* has no
+version before it, which is the empty pane and is exactly what "added" means.
+Double clicking a file opens **the version in the worktree**, not the one in the
+commit: history is read on the way to changing something, and a read-only buffer
+of an old version is not what anybody wanted to edit.
+
 ### What is not built
 
-The plan is [git-plan.md](git-plan.md); stages 1 to 3 are here. Left: the log,
-branches and checkout; remotes (pull, push, fetch) as async jobs into the log
-pane; and clone. `git init` is here because a project without a repository is
+The plan is [git-plan.md](git-plan.md); stages 1 to 4 are here. Left: the
+remotes -- pull, push and fetch as async jobs into the log pane, the `Runner`
+mould -- and clone. `git init` is here because a project without a repository is
 the one case where a menu full of disabled items is a dead end.
 
 ## Debugging

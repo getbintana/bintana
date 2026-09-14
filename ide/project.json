@@ -42,6 +42,7 @@
     "forms/SearchForm.js",
     "forms/SymbolForm.js",
     "forms/GitForm.js",
+    "forms/LogForm.js",
     "modules/Runner.js",
     "modules/Manifest.js",
     "modules/Recovery.js",

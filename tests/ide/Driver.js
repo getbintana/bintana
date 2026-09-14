@@ -9311,6 +9311,87 @@ function* p_git(ide) {
     win.Close();
     yield* settled(ide);
 
+    /* --- branches ------------------------------------------------------------ */
+    const started = git.branchName;
+
+    eq("there is one branch to start with", git.branches().length, 1);
+
+    ide.MnuGitNewBranch_Click();
+    ide.branchAsk.TxtValue.Text = "otra";
+    ide.branchAsk.BtnOk_Click();
+    yield* settled(ide);
+
+    eq("a new branch is made and stood on", git.branchName, "otra");
+    eq("and both are listed", git.branches().sort().join("|"),
+       [started, "otra"].sort().join("|"));
+
+    /* The menu marks the one you are on and keeps it in the list: a list that
+     * dropped it would make *where am I* a question with no answer on screen. */
+    const current = ide.MnuGitBranch.Items.filter((t) => t.startsWith("\u2022"));
+    eq("the menu marks exactly one branch as current", current.length, 1);
+    check("and it is the one we are on", current[0].includes("otra"), current[0]);
+    check("the one you are on cannot be deleted from the menu",
+          !ide.MnuGitDropBranch.Items.some((t) => t === "otra"),
+          JSON.stringify(ide.MnuGitDropBranch.Items));
+
+    /*
+     * Switching back, through the menu rather than by calling git -- and it
+     * **asks first**, because there are uncommitted changes here. A switch can
+     * refuse halfway and leave the worktree spread across two branches, so the
+     * guard is the point and answering it is part of the gesture.
+     */
+    ide.branchAsk = null;
+    ide.MnuGitBranch_Click(ide.branchNames.indexOf(started));
+    yield;
+
+    check("switching with changes about asks first", ide.branchAsk !== null);
+    ide.branchAsk.BtnYes_Click();
+    yield* settled(ide);
+
+    eq("and then goes to the other branch", git.branchName, started);
+
+    /* And deleting the one we are no longer on. */
+    ide.MnuGitDropBranch_Click(ide.dropNames.indexOf("otra"));
+    yield;
+    /* Yes, deliberately: this dialog focuses No and declares nothing default,
+     * so that Enter cannot delete anything. */
+    ide.branchAsk.BtnYes_Click();
+    yield* settled(ide);
+    eq("deleting one leaves the other", git.branches().join("|"), started);
+
+    /* --- the history ---------------------------------------------------------- */
+    const commits = git.log(10);
+    check("the log has the commits", commits.length >= 2, `${commits.length}`);
+    eq("newest first", commits[0].subject, "segundo");
+    check("with who and when", commits[0].who !== "" && commits[0].when !== "",
+          JSON.stringify(commits[0]));
+
+    const touched = git.filesIn(commits[0].sha);
+    check("and what each commit touched",
+          touched.some((f) => f.path === "Uno.js"), JSON.stringify(touched));
+
+    const win2 = LogForm.open(ide);
+    yield* settled(ide);
+
+    check("the History window opens", win2 !== undefined && win2 !== null);
+    eq("with a row per commit", win2.Commits.Count, commits.length);
+    check("asking again raises the same one", LogForm.open(ide) === win2);
+    check("choosing a commit lists what it touched", win2.Touched.Count > 0);
+
+    /*
+     * The two versions of one file: what the commit left, and what was there
+     * before it. A file the commit *added* has no version before, which is the
+     * empty pane and is exactly what "added" means.
+     */
+    win2.Touched.Index = 0;
+    win2.showOne();
+    check("and the after pane has the version it left", win2.After.Text !== "");
+    check("with the diff beside it", win2.Unified.Text.includes("diff --git"),
+          JSON.stringify(win2.Unified.Text.slice(0, 60)));
+
+    win2.Close();
+    yield* settled(ide);
+
     /*
      * --- back to what the phases after this one expect ----------------------
      *

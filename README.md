@@ -48,7 +48,7 @@ LANGUAGE=es ./build/bintana ide examples/hello    # the IDE itself, from ide/po/
 ./build/bintana examples/session     # Http with cookies and Basic auth: a login the next request remembers
 ./build/bintana examples/serve       # Http.Server: a static file server on :8080. Runs until Ctrl-C
 LANGUAGE=es ./build/bintana examples/agenda   # ...and the long date the catalogue rewrites
-./tests/run.sh                   # 5541 assertions in 5 projects, on a virtual display
+./tests/run.sh                   # 5561 assertions in 5 projects, on a virtual display
 HEADLESS= ./tests/run.sh          # the same, on *your* screen -- empty, not 0. Three
                                   # windows and the keyboard for a minute, and a couple
                                   # of assertions measure your theme and not the one
@@ -1585,8 +1585,15 @@ side by side on the right -- in the file's own language, which is how a person
 reads what they are about to commit, with a unified tab underneath for what two
 panes cannot show. Stage, unstage, discard and commit per file. The engine is
 the git CLI, asked for with `HasCommand` the way `msgmerge` and `tar` already
-are; nothing here is a new dependency. The design and what is left of it are in
-[docs/git-plan.md](docs/git-plan.md).
+are; nothing here is a new dependency.
+
+*Git → Branch* lists the branches with the one you are on marked and switches to
+another -- saving first, and asking when there is something uncommitted, because
+a switch can refuse halfway. It is `switch` and not `checkout`, whose two
+meanings depend on whether the name turns out to be a branch or a path.
+*History* (`Ctrl+Shift+H`) is the commits, what each one touched, and the same
+side-by-side pair between a commit and the one before it. The design and what is
+left -- the remotes -- are in [docs/git-plan.md](docs/git-plan.md).
 
 **Debugging** (`Ctrl+F9`) runs the project and stops it where you said. `F9`
 toggles a breakpoint on the caret's line, `F8` / `Shift+F8` / `Ctrl+Shift+F8`
@@ -1965,9 +1972,9 @@ Written down so the argument is not had twice.
    [docs/debug-plan.md](docs/debug-plan.md); so is DAP, written down as the plan to
    evaluate rather than the thing to build first.
 
-2. **The rest of git**: the log, branches and checkout, and the remotes as async
-   jobs into the log pane. What is built — status, the diff before the commit,
-   staging and committing — and what is not are in
+2. **The remotes**: pull, push and fetch as async jobs into the log pane, and
+   clone. Everything else of git is built — status, the diff before the commit,
+   staging, committing, branches and the history; see
    [docs/git-plan.md](docs/git-plan.md).
 
 3. Packaging an application for distribution without the project tree. *Export

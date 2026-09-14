@@ -281,6 +281,28 @@
           "shortcut": "<Control><Shift>d"
         },
         {
+          "name": "MnuGitLog",
+          "text": "History...",
+          "shortcut": "<Control><Shift>h"
+        },
+        {
+          "separator": true
+        },
+        {
+          "name": "MnuGitBranch",
+          "text": "Branch",
+          "dynamic": true
+        },
+        {
+          "name": "MnuGitNewBranch",
+          "text": "New branch..."
+        },
+        {
+          "name": "MnuGitDropBranch",
+          "text": "Delete branch",
+          "dynamic": true
+        },
+        {
           "separator": true
         },
         {
