@@ -894,6 +894,14 @@ handler runs inside the wait and nothing can close the form the caller is
 standing in. A frozen window is visible; a live window that is lying is where
 lifetime crashes come from.
 
+**The output is captured as bytes and handed over whole**, so a NUL in it is a
+character of the answer and not the end of it. That matters for exactly the
+tools this is for: `git status -z`, `find -print0` and `xargs -0` separate their
+records with a NUL *because* it is the one byte a file name cannot contain, and
+a capture that stopped at the first one read one record and lost the rest --
+silently, which is the worst shape a bug can have. A file name with a space in
+it was readable; a list of them was not.
+
 **`Timeout` works here too**, and answers `TimedOut` on the record. That takes a
 main context of the call's own: GTK's sources, our own `Timer`s and every pending
 asynchronous `Exec` all live on the *default* context, so iterating a private one

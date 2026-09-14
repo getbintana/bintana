@@ -1720,11 +1720,20 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
     return handle;
 }
 
-/* What the blocking wait is waiting for: communicate's answer, or its failure. */
+/*
+ * What the blocking wait is waiting for: communicate's answer, or its failure.
+ *
+ * **Bytes and not `_utf8`**, which is a change and the reason for it is a NUL.
+ * The utf8 spelling hands back a C string, so everything past the first NUL is
+ * gone -- and a NUL is what the tools that have to be unambiguous separate
+ * their answers with: `git status -z`, `find -print0`, `xargs -0`. A file name
+ * with a space in it was readable and one in a list was not, silently, which is
+ * the worst shape a bug can have.
+ */
 typedef struct {
     bool    done;
-    char   *out;
-    char   *errs;
+    GBytes *out;
+    GBytes *errs;
     GError *err;
 } ExecWaitState;
 
@@ -1732,9 +1741,18 @@ static void on_exec_wait_done(GObject *src, GAsyncResult *res, gpointer data)
 {
     ExecWaitState *w = data;
 
-    g_subprocess_communicate_utf8_finish(G_SUBPROCESS(src), res,
-                                         &w->out, &w->errs, &w->err);
+    g_subprocess_communicate_finish(G_SUBPROCESS(src), res,
+                                    &w->out, &w->errs, &w->err);
     w->done = true;
+}
+
+/* A captured stream as a string, NULs and all. */
+static JSValue exec_captured(JSContext *ctx, GBytes *bytes)
+{
+    gsize       len  = 0;
+    const char *data = bytes ? g_bytes_get_data(bytes, &len) : NULL;
+
+    return JS_NewStringLen(ctx, data ? data : "", data ? len : 0);
 }
 
 /* A deadline on a private context, as a flag going true.  No JS runs from here
@@ -1871,7 +1889,19 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
      * The async spelling of it, because a timeout needs a loop to fire on.
      */
     ExecWaitState w = { false, NULL, NULL, NULL };
-    g_subprocess_communicate_utf8_async(proc, NULL, NULL, on_exec_wait_done, &w);
+    /*
+     * An **empty** stdin and not none.
+     *
+     * The utf8 spelling takes a NULL there; the bytes one asserts on it when the
+     * child has a stdin pipe -- which every child has had since `Write` was
+     * added. Empty means the same thing it always meant: nothing is written, and
+     * the pipe is closed, so a child that reads stdin sees the end of it rather
+     * than waiting for a `Wait` that is already blocked on the child.
+     */
+    GBytes *nothing = g_bytes_new_static("", 0);
+
+    g_subprocess_communicate_async(proc, nothing, NULL, on_exec_wait_done, &w);
+    g_bytes_unref(nothing);
 
     bool     late  = false;
     GSource *guard = exec_wait_guard(priv, timeout, &late);
@@ -1902,14 +1932,14 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
     g_main_context_pop_thread_default(priv);
     g_main_context_unref(priv);
 
-    char *out = w.out, *errs = w.errs;
+    GBytes *out = w.out, *errs = w.errs;
 
     if (w.err) {
         JSValue e = JS_ThrowInternalError(ctx, "Exec.Wait failed: %s",
                                           w.err->message);
         g_clear_error(&w.err);
-        g_free(out);
-        g_free(errs);
+        g_clear_pointer(&out, g_bytes_unref);
+        g_clear_pointer(&errs, g_bytes_unref);
         g_object_unref(proc);
         return e;
     }
@@ -1924,7 +1954,7 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
 
     JSValue result = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, result, "ExitCode", JS_NewInt32(ctx, status));
-    JS_SetPropertyStr(ctx, result, "Output", JS_NewString(ctx, out ? out : ""));
+    JS_SetPropertyStr(ctx, result, "Output", exec_captured(ctx, out));
     JS_SetPropertyStr(ctx, result, "TimedOut", JS_NewBool(ctx, late));
 
     /*
@@ -1935,10 +1965,10 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
      * a line when the streams are merged.
      */
     if (split)
-        JS_SetPropertyStr(ctx, result, "Errors", JS_NewString(ctx, errs ? errs : ""));
+        JS_SetPropertyStr(ctx, result, "Errors", exec_captured(ctx, errs));
 
-    g_free(out);
-    g_free(errs);
+    g_clear_pointer(&out, g_bytes_unref);
+    g_clear_pointer(&errs, g_bytes_unref);
     g_object_unref(proc);
     return result;
 }

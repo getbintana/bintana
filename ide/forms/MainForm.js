@@ -185,6 +185,8 @@ class MainForm extends Form {
     /* Breakpoints, the stack and the values: what the runtime's `--debug` says,
      * drawn. */
     debugger_ = new Ide.Debugger(this);
+    /* What git says about the project, and the only thing here that runs one. */
+    git       = new Ide.Git(this);
 
     /*
      * The catalogue the left button last selected, or null.
@@ -309,6 +311,7 @@ class MainForm extends Form {
         this.session.saveTabs();
 
         this.project = dir;
+        this.git.forget();      /* another project is another repository */
         this.closeAllTabs();
         this.Text = Locale.Text("Bintana IDE -- {0}", File.Name(dir));
 
@@ -316,6 +319,9 @@ class MainForm extends Form {
          * back to the welcome page, because nothing closes a project. */
         this.Pages.Current = PAGE_WORK;
 
+        /* Asked once per project opened, before the tree is drawn: every row's
+         * indicator and the branch in the bar read the same answer. */
+        this.git.refresh();
         this.listFiles();
         this.rememberRecent(dir);
         this.log(`Project: ${dir}\n`);
@@ -445,6 +451,16 @@ class MainForm extends Form {
          * would propose is a different answer now. */
         this.completion.forget();
         this.projectTree.build();
+
+        /*
+         * And what git says about each row, put on after the rows exist.
+         *
+         * Here rather than inside the tree, because the tree's job is to say
+         * what the project holds and git's is to say what has changed about it:
+         * two questions, and only one of them costs a child process. It is a
+         * no-op without git or outside a repository.
+         */
+        this.git.markTree();
 
         /* What the palette offers changes with the project, so it is set from
          * the same scan that lists its files -- for every form open, since each
@@ -1000,6 +1016,18 @@ class MainForm extends Form {
         this.TxtImmediate.Enabled = halted;
         this.BtnWatch.Enabled     = this.TxtImmediate.Text.trim() !== "";
 
+        /*
+         * Git. The whole menu needs the tool and a project; the commands need a
+         * repository and *Start a repository here* needs the opposite, which is
+         * the one entry that is on when the rest are off.
+         */
+        const git = open && this.git.available;
+        const repo = git && this.git.isRepo;
+
+        this.MnuGitRefresh.Enabled = repo;
+        this.MnuGitChanges.Enabled = repo;
+        this.MnuGitInit.Enabled    = git && !repo;
+
         let status;
         if (!this.project) {
             status = Locale.Text("No project");
@@ -1027,6 +1055,16 @@ class MainForm extends Form {
                     status += Locale.Text("   Ln {0}, Col {1}", this.Editor.Line, this.Editor.Column);
             }
         }
+        /*
+         * And what git says, on the end of whatever the bar was already saying.
+         *
+         * On the end and not in a corner of its own: the bar is one sentence
+         * about where you are, and a branch is part of that. It is `""` when
+         * there is no repository, so nothing moves for a project without one.
+         */
+        const where = this.git.summary();
+        if (where) status += `   ${where}`;
+
         this.LblStatus.Text = status;
     }
 
@@ -1814,6 +1852,46 @@ class MainForm extends Form {
 
     /* A frame of the stack chosen: go to its line, and show *its* values. */
     StackList_Select() { this.debugger_.showFrame(this.StackList.Index); }
+
+    /*
+     * --- git ----------------------------------------------------------------
+     *
+     * Everything that runs one is `Ide.Git`; these are the commands. Asking
+     * again is explicit rather than on a timer: a repository changes because
+     * somebody did something, and a tree that redrew itself every few seconds
+     * would move under the pointer.
+     */
+    MnuGitRefresh_Click() { this.refreshGit(); }
+
+    MnuGitChanges_Click() { GitForm.open(this); }
+
+    /*
+     * A repository where there was none.
+     *
+     * Asked first, because it writes to the project's directory and a `.git`
+     * appearing in a tree somebody did not ask for is the kind of surprise this
+     * IDE does not spring. What it does not do is commit anything: what to put
+     * in the first commit is the programmer's question, and the Changes window
+     * is where it is answered.
+     */
+    MnuGitInit_Click() {
+        ConfirmForm.ask(Locale.Text("Start a repository"),
+                        Locale.Text("Create a git repository in {0}?", this.project),
+                        Locale.Text("Create"),
+                        () => {
+                            const r = this.git.run(["init"]);
+                            this.log(r.out.trim() ? `${r.out.trim()}\n` : "");
+                            this.git.forget();
+                            this.refreshGit();
+                            this.listFiles();
+                        });
+    }
+
+    refreshGit() {
+        this.git.refresh();
+        this.git.markTree();
+        this.refresh();
+    }
 
     /*
      * Ctrl+Shift+O, and Ctrl+L on the same command: the methods of the file as a

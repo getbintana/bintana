@@ -611,7 +611,7 @@ Three things that will waste your time:
   which is what the File menu's Rename and Delete already did; the left button is
   what opens, so *select then ask* is the gesture. Found by right-clicking a form
   and getting a menu greyed out for the previous selection.
-- **`tests/ide/Driver.js` is thirty-two phases, and the phase is the scope.** It used
+- **`tests/ide/Driver.js` is thirty-three phases, and the phase is the scope.** It used
   to be one 4000-line generator where every `const` shared one scope, so a name
   near the top collided with one added at the bottom and the suite died with
   `SyntaxError: invalid redefinition of lexical identifier` — three times in one
@@ -661,6 +661,18 @@ entry below is something that cost somebody a debugging session and now costs a
 paragraph. Add to it when you are surprised; nothing here was obvious to the
 person who wrote it either.
 
+- **`Exec.Wait` used to stop at the first NUL, and nothing said so.** It was
+  built on `g_subprocess_communicate_utf8`, which hands back a C string: a child
+  whose answer contains a NUL had everything past it silently thrown away. That
+  is exactly the tools this call exists for -- `git status -z`, `find -print0`,
+  `xargs -0` all separate records with the one byte a file name cannot hold, so
+  one file name with a space in it read fine and a *list* of them read as one
+  entry. It captures `GBytes` now and builds the string with `JS_NewStringLen`.
+  Two things that came with it: the bytes spelling of `communicate` **asserts**
+  on a NULL stdin buffer where the utf8 one accepted it, so an empty `GBytes` is
+  passed (every child has had a stdin pipe since `Write`); and a child whose
+  output is not valid UTF-8 no longer fails the call, which is a widening and
+  not a loss.
 - **A field initialiser does not beat the `.form` load.** A form's controls are
   built inside `Form`'s own constructor, i.e. inside `super()`, and a subclass's
   field initialisers run only after `super()` returns. So a handler for an event

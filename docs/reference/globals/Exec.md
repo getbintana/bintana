@@ -75,6 +75,14 @@ there whatever the cursor was doing, and it works with `ReadOnly` on. A pty buys
 typing, colour and `less`; if the program does none of those, it is a dependency
 paid for nothing. The IDE's own output pane is exactly this.
 
+**The output is captured as bytes and handed over whole**, so a NUL in it is a
+character of the answer and not the end of it. That matters for exactly the
+tools this is for: `git status -z`, `find -print0` and `xargs -0` separate their
+records with a NUL *because* it is the one byte a file name cannot contain, and
+a capture that stopped at the first one read one record and lost the rest --
+silently, which is the worst shape a bug can have. A file name with a space in
+it was readable; a list of them was not.
+
 ## Talking to one
 
 `Stop` and `Kill` were the only two things that could be said to a child, and

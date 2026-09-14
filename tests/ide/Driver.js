@@ -6529,10 +6529,10 @@ function* p_projects(ide) {
     })(selfSaved);
     const savedOf = (name) => savedNode(name).properties;
 
-    /* Six: File, Edit, Project, Debug, Form, Help. The number is here rather
-     * than a list because what is being asserted is that the bar survived the
-     * round trip, not which menus the IDE happens to have. */
-    eq("saving keeps its menu bar", selfSaved.menus.length, 6);
+    /* Seven: File, Edit, Project, Git, Debug, Form, Help. The number is here
+     * rather than a list because what is being asserted is that the bar
+     * survived the round trip, not which menus the IDE happens to have. */
+    eq("saving keeps its menu bar", selfSaved.menus.length, 7);
     /* Fixed is the default, so it is saved by being absent -- the same rule
      * that keeps an unanchored control from writing HAlign "Start". */
     eq("and its arrangement", selfSaved.properties.Arrangement, undefined);
@@ -9177,6 +9177,154 @@ function* p_search(ide) {
 }
 
 /*
+ * Git, over a repository this phase makes.
+ *
+ * **Skipped and not failed where there is no git**, which is the rule every
+ * optional tool in this suite follows: a machine without one is a machine this
+ * cannot say anything about, and a red line there is a lie about the code.
+ *
+ * What it asserts is the parse and the doors, never a pixel: the porcelain read
+ * with a name that has a space and an accent in it -- which is the case `-z`
+ * was chosen for and the one that found a bug in `Exec.Wait` -- the two lists
+ * meaning what they say, the before/after pair of a diff, and staging and
+ * committing going through git rather than through a file written here.
+ */
+function* p_git(ide) {
+    if (!Application.HasCommand("git")) {
+        print("  (skipping git: not installed)");
+        return;
+    }
+
+    const repo = File.Join(TMP, "gitrepo");
+    const run  = (...args) => Exec.Wait(["git", "-C", repo, ...args], { Timeout: 8000 });
+
+    /* Made and then emptied, in that order: `wipe` lists the directory and a
+     * directory that has never existed cannot be listed. */
+    Directory.Make(repo);
+    wipe(repo);
+    run("init", "-q");
+    /* A repository with no identity cannot commit, and a machine running the
+     * suite is not required to have one configured. */
+    run("config", "user.email", "suite@bintana");
+    run("config", "user.name", "Suite");
+
+    File.Save(File.Join(repo, "project.json"),
+              JSON.stringify({ name: "gitrepo", startup: "Uno", sources: ["Uno.js"] }));
+    File.Save(File.Join(repo, "Uno.js"), "class Uno extends Form {\n}\n");
+    /* The name the whole `-z` decision exists for. */
+    File.Save(File.Join(repo, "con espacio y ñ.txt"), "viejo\n");
+    run("add", "-A");
+    run("commit", "-qm", "first");
+
+    ide.openProject(repo);
+    yield* settled(ide);
+
+    const git = ide.git;
+
+    check("git is available", git.available);
+    check("and the project is a repository", git.isRepo);
+    check("with a branch", git.branchName !== "", git.branchName);
+
+    /* --- the parse ---------------------------------------------------------- */
+    File.Save(File.Join(repo, "Uno.js"), "class Uno extends Form {\n    // dos\n}\n");
+    File.Save(File.Join(repo, "con espacio y ñ.txt"), "nuevo\n");
+    File.Save(File.Join(repo, "suelto.txt"), "sin seguir\n");
+    run("add", "--", "con espacio y ñ.txt");
+
+    ide.refreshGit();
+
+    eq("a changed file is seen", git.stateOf("Uno.js"), "M");
+    eq("a name with a space and an accent survives the parse",
+       git.stateOf("con espacio y ñ.txt"), "M");
+    eq("an untracked file is seen as one", git.stateOf("suelto.txt"), "?");
+    eq("and something that is not there is nothing", git.stateOf("no.txt"), "");
+
+    /*
+     * The two lists are the two questions, and a file can be in both: this one
+     * is staged and the others are not.
+     */
+    const split = git.split();
+    const paths = (rows) => rows.map((r) => r.path).sort().join("|");
+
+    eq("what is staged is in the staged list", paths(split.staged),
+       "con espacio y ñ.txt");
+    eq("and what is not, is not", paths(split.unstaged), "Uno.js|suelto.txt");
+
+    /* The bar says where it is. */
+    check("the status bar carries the branch",
+          ide.LblStatus.Text.includes(git.branchName), ide.LblStatus.Text);
+    check("...and that something is staged", ide.LblStatus.Text.includes("1"),
+          ide.LblStatus.Text);
+
+    /* The tree marks it. Read off the tree rather than off the state, which is
+     * the thing being asserted. */
+    const marked = [];
+    for (const key of Dictionary.Keys(ide.projectTree.labels))
+        if (ide.projectTree.labels[key] !== undefined) marked.push(key);
+    check("the tree has rows to mark", marked.length > 0);
+
+    /* --- the two halves of a diff ------------------------------------------- */
+    eq("the index has what was staged", git.show("", "con espacio y ñ.txt"), "nuevo\n");
+    eq("and the last commit has what came before",
+       git.show("HEAD", "con espacio y ñ.txt"), "viejo\n");
+    eq("a file the commit does not have answers nothing",
+       git.show("HEAD", "suelto.txt"), null);
+
+    const diff = git.diff("Uno.js", false);
+    check("and git's own diff names the line", diff.includes("+    // dos"),
+          JSON.stringify(diff.slice(0, 120)));
+
+    /* --- staging and committing --------------------------------------------- */
+    const win = GitForm.open(ide);
+    yield* settled(ide);
+
+    check("the Changes window opens", win !== undefined && win !== null);
+    eq("with the unstaged files on its first page", win.paths[0].length, 2);
+    eq("and the staged one on its second", win.paths[1].length, 1);
+
+    /*
+     * Asking for it twice raises the one there is rather than stacking two.
+     *
+     * `check` and not `eq`: `eq` builds its *expected/got* message whether or
+     * not it passes, and a `Form` put through `JSON.stringify` is a circular
+     * reference -- a window holds its children and they hold it back.
+     */
+    check("asking again raises the same window", GitForm.open(ide) === win);
+
+    /* Staging goes through git: assert it by asking git and not the window. */
+    win.Unstaged.Index = win.paths[0].indexOf("Uno.js");
+    win.BtnStage_Click();
+    yield* settled(ide);
+
+    eq("staging a file puts it in the index", git.split().staged.length, 2);
+    eq("and takes it out of the other list",
+       git.split().unstaged.map((r) => r.path).join(), "suelto.txt");
+
+    win.Message.Text = "segundo";
+    win.BtnCommit_Click();
+    yield* settled(ide);
+
+    eq("committing empties the index", git.split().staged.length, 0);
+    check("and the commit is really there",
+          run("log", "--oneline").Output.includes("segundo"));
+
+    win.Close();
+    yield* settled(ide);
+
+    /*
+     * --- back to what the phases after this one expect ----------------------
+     *
+     * This one opened a **project of its own**, which nothing else here does:
+     * git needs a repository and the suite's project is not one. So it puts the
+     * suite's project back, or every phase below would be looking at a
+     * two-file repository instead of the tree they were written against.
+     */
+    ide.openProject(TMP);
+    yield* settled(ide);
+    eq("the suite's own project is back", ide.project, TMP);
+}
+
+/*
  * The debugger, as far as the IDE owns it.
  *
  * **The whole loop is asserted in `tests/widgets` (`testDebugger`)**, where a
@@ -9692,6 +9840,7 @@ const PHASES = [
     { name: "recovery", run: p_recovery },
     { name: "session", run: p_session },
     { name: "search", run: p_search },
+    { name: "git", run: p_git },
     { name: "debug", run: p_debug },
     { name: "running", run: p_running },
 ];

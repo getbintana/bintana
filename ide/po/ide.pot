@@ -1489,3 +1489,148 @@ msgstr ""
 #: modules/Debugger.js:382
 msgid "{0} is"
 msgstr ""
+
+#: forms/MainForm.form: menu MnuGitMenu
+msgid "_Git"
+msgstr ""
+
+#: forms/MainForm.form: menu MnuGitRefresh
+msgid "Refresh status"
+msgstr ""
+
+#: forms/MainForm.form: menu MnuGitChanges
+msgid "Changes..."
+msgstr ""
+
+#: forms/MainForm.form: menu MnuGitInit
+msgid "Start a repository here..."
+msgstr ""
+
+#: forms/GitForm.form: GitForm.Text
+msgid "Changes"
+msgstr ""
+
+#: forms/GitForm.form: Which.Tabs
+msgid "Not staged"
+msgstr ""
+
+#: forms/GitForm.form: Which.Tabs
+msgid "Staged"
+msgstr ""
+
+#: forms/GitForm.form: How.Tabs
+msgid "Side by side"
+msgstr ""
+
+#: forms/GitForm.form: How.Tabs
+msgid "Unified"
+msgstr ""
+
+#: forms/GitForm.form: LblMessage.Text
+msgid "Commit message"
+msgstr ""
+
+#: forms/GitForm.form: BtnStage.Text
+msgid "Stage"
+msgstr ""
+
+#: forms/GitForm.form: BtnStage.Tooltip
+msgid "Put the chosen files in the next commit"
+msgstr ""
+
+#: forms/GitForm.form: BtnUnstage.Text
+msgid "Unstage"
+msgstr ""
+
+#: forms/GitForm.form: BtnUnstage.Tooltip
+msgid "Take the chosen files back out of the next commit"
+msgstr ""
+
+#: forms/GitForm.form: BtnDiscard.Tooltip
+msgid "Throw away what was written in the chosen files. There is no undo"
+msgstr ""
+
+#: forms/GitForm.form: BtnCommit.Tooltip
+msgid "Commit what is staged, with the message above"
+msgstr ""
+
+#: modules/Git.js:361
+msgid "detached"
+msgstr ""
+
+#: modules/Git.js:363
+msgid "{0} staged"
+msgstr ""
+
+#: modules/Git.js:364
+msgid "{0} changed"
+msgstr ""
+
+#: forms/GitForm.js:58
+msgid "Changes -- {0}"
+msgstr ""
+
+#: forms/GitForm.js:67
+msgid "File"
+msgstr ""
+
+#: forms/GitForm.js:68
+msgid "State"
+msgstr ""
+
+#: forms/GitForm.js:123
+msgid "changed"
+msgstr ""
+
+#: forms/GitForm.js:124
+msgid "added"
+msgstr ""
+
+#: forms/GitForm.js:125
+msgid "deleted"
+msgstr ""
+
+#: forms/GitForm.js:126
+msgid "renamed"
+msgstr ""
+
+#: forms/GitForm.js:127
+msgid "copied"
+msgstr ""
+
+#: forms/GitForm.js:128
+msgid "conflicted"
+msgstr ""
+
+#: forms/GitForm.js:129
+msgid "untracked"
+msgstr ""
+
+#: forms/GitForm.js:180
+msgid "Too big to show side by side. The unified tab has it."
+msgstr ""
+
+#: forms/GitForm.js:259
+msgid "Discard changes"
+msgstr ""
+
+#: forms/GitForm.js:261
+msgid "Throw away {0} file, and delete it if it is new?"
+msgid_plural "Throw away {0} files, deleting the new ones?"
+msgstr[0] ""
+msgstr[1] ""
+
+#: forms/GitForm.js:264
+msgid "Throw away what was written in {0} file?"
+msgid_plural "Throw away what was written in {0} files?"
+msgstr[0] ""
+msgstr[1] ""
+
+
+#: forms/GitForm.js:291
+msgid "A commit needs a message."
+msgstr ""
+
+#: forms/GitForm.js:295
+msgid "Nothing is staged."
+msgstr ""

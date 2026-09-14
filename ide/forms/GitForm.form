@@ -1,0 +1,251 @@
+{
+  "format": "bintana-form/1",
+  "class": "GitForm",
+  "properties": {
+    "Height": 620,
+    "Icon": "document-edit-symbolic",
+    "Text": "Changes",
+    "Width": 980
+  },
+  "children": [
+    {
+      "type": "Split",
+      "name": "Top",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "HAlign": "Fill",
+        "Height": 430,
+        "Position": 260,
+        "VAlign": "Fill",
+        "Width": 948,
+        "X": 16,
+        "Y": 16
+      },
+      "children": [
+        {
+          "type": "Panel",
+          "name": "LeftBox",
+          "properties": {
+            "Arrangement": "Vertical",
+            "Spacing": 2
+          },
+          "children": [
+            {
+              "type": "Switcher",
+              "name": "Which",
+              "properties": {
+                "HExpand": true,
+                "Tabs": [
+                  "Not staged",
+                  "Staged"
+                ]
+              },
+              "children": [
+                {
+                  "type": "TableView",
+                  "name": "Unstaged",
+                  "properties": {
+                    "Expand": true,
+                    "HExpand": true,
+                    "VExpand": true
+                  }
+                },
+                {
+                  "type": "TableView",
+                  "name": "Staged",
+                  "properties": {
+                    "Expand": true,
+                    "HExpand": true,
+                    "VExpand": true
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "Panel",
+          "name": "RightBox",
+          "properties": {
+            "Arrangement": "Vertical",
+            "Spacing": 2
+          },
+          "children": [
+            {
+              "type": "Switcher",
+              "name": "How",
+              "properties": {
+                "HExpand": true,
+                "Tabs": [
+                  "Side by side",
+                  "Unified"
+                ]
+              },
+              "children": [
+                {
+                  "type": "Split",
+                  "name": "Pair",
+                  "properties": {
+                    "Arrangement": "Horizontal",
+                    "Expand": true,
+                    "HExpand": true,
+                    "Position": 340,
+                    "VExpand": true
+                  },
+                  "children": [
+                    {
+                      "type": "SourceEditor",
+                      "name": "Before",
+                      "properties": {
+                        "Expand": true,
+                        "Font": "Monospace 10",
+                        "HExpand": true,
+                        "ReadOnly": true,
+                        "VExpand": true,
+                        "Wrap": false
+                      }
+                    },
+                    {
+                      "type": "SourceEditor",
+                      "name": "After",
+                      "properties": {
+                        "Expand": true,
+                        "Font": "Monospace 10",
+                        "HExpand": true,
+                        "ReadOnly": true,
+                        "VExpand": true,
+                        "Wrap": false
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "SourceEditor",
+                  "name": "Unified",
+                  "properties": {
+                    "Expand": true,
+                    "Font": "Monospace 10",
+                    "HExpand": true,
+                    "Language": "diff",
+                    "ReadOnly": true,
+                    "VExpand": true,
+                    "Wrap": false
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Label",
+      "name": "LblMessage",
+      "properties": {
+        "HAlign": "Start",
+        "Height": 20,
+        "Style": "caption-heading",
+        "Text": "Commit message",
+        "Width": 200,
+        "X": 16,
+        "Y": 456
+      }
+    },
+    {
+      "type": "TextEditor",
+      "name": "Message",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 76,
+        "VAlign": "End",
+        "Width": 948,
+        "X": 16,
+        "Y": 478
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnStage",
+      "properties": {
+        "Height": 32,
+        "Text": "Stage",
+        "Tooltip": "Put the chosen files in the next commit",
+        "VAlign": "End",
+        "Width": 96,
+        "X": 16,
+        "Y": 566
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnUnstage",
+      "properties": {
+        "Height": 32,
+        "Text": "Unstage",
+        "Tooltip": "Take the chosen files back out of the next commit",
+        "VAlign": "End",
+        "Width": 96,
+        "X": 120,
+        "Y": 566
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnDiscard",
+      "properties": {
+        "Height": 32,
+        "Style": "destructive-action",
+        "Text": "Discard",
+        "Tooltip": "Throw away what was written in the chosen files. There is no undo",
+        "VAlign": "End",
+        "Width": 96,
+        "X": 224,
+        "Y": 566
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblGitStatus",
+      "properties": {
+        "Ellipsize": true,
+        "HAlign": "Fill",
+        "Height": 22,
+        "Style": "dim-label",
+        "VAlign": "End",
+        "Width": 420,
+        "X": 336,
+        "Y": 571
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnClose",
+      "properties": {
+        "Cancel": true,
+        "HAlign": "End",
+        "Height": 32,
+        "Text": "Close",
+        "VAlign": "End",
+        "Width": 96,
+        "X": 764,
+        "Y": 566
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnCommit",
+      "properties": {
+        "Default": true,
+        "HAlign": "End",
+        "Height": 32,
+        "Style": "suggested-action",
+        "Text": "Commit",
+        "Tooltip": "Commit what is staged, with the message above",
+        "VAlign": "End",
+        "Width": 96,
+        "X": 868,
+        "Y": 566
+      }
+    }
+  ]
+}

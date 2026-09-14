@@ -99,6 +99,11 @@ Ide.ProjectTree = class ProjectTree {
         ide.muted = true;
         ide.FileTree.Clear();
         this.byKey = {};
+        /* What each file row was labelled with, so something that decorates one
+         * -- git's indicator today -- can put the label back rather than
+         * decorating its own decoration. Only file rows: a category has nothing
+         * to say about itself that changes. */
+        this.labels = {};
 
         if (ide.project) {
             if (this.view === VIEW_FILES) {
@@ -158,9 +163,22 @@ Ide.ProjectTree = class ProjectTree {
             const info = File.Info(File.Join(here, entry.name));
             const icon = (info && info.Icon) || this.icon("file");
 
-            this.ide.FileTree.Add(entry.rel, entry.name, parentKey, icon);
+            this.addFile(entry.rel, entry.name, parentKey, icon);
             this.byKey[entry.rel] = entry.rel;
         }
+    }
+
+    /*
+     * A file row, remembered by its label.
+     *
+     * Every row that stands for a file goes through here and nothing else does:
+     * a decoration is put on a label and has to be able to find the label
+     * again, and reading it back off the tree is not possible -- `TreeView.Text`
+     * answers for the *selected* row and a decoration is applied to all of them.
+     */
+    addFile(key, text, parentKey, icon) {
+        this.ide.FileTree.Add(key, text, parentKey, icon);
+        this.labels[key] = text;
     }
 
     /* What each kind of node in the project tree is shown with. The first name
@@ -377,7 +395,7 @@ Ide.ProjectTree = class ProjectTree {
                  * that is what `startup` has to name to be found. */
                 const starts = this.ide.startupClass &&
                                this.ide.qualifiedName(form) === this.ide.startupClass;
-                this.ide.FileTree.Add(group, File.BaseName(form), cat.key,
+                this.addFile(group, File.BaseName(form), cat.key,
                                   this.icon(starts ? "startup" : "form"));
                 this.byKey[group] = form;
 
@@ -469,7 +487,7 @@ Ide.ProjectTree = class ProjectTree {
     }
 
     addLeaf(fileName, text, parentKey, kind) {
-        this.ide.FileTree.Add(fileName, text, parentKey, this.icon(kind || "file"));
+        this.addFile(fileName, text, parentKey, this.icon(kind || "file"));
         this.byKey[fileName] = fileName;
     }
 };

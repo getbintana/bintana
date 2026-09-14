@@ -267,6 +267,29 @@
       ]
     },
     {
+      "name": "MnuGitMenu",
+      "text": "_Git",
+      "children": [
+        {
+          "name": "MnuGitRefresh",
+          "text": "Refresh status",
+          "shortcut": "<Control><Shift>g"
+        },
+        {
+          "name": "MnuGitChanges",
+          "text": "Changes...",
+          "shortcut": "<Control><Shift>d"
+        },
+        {
+          "separator": true
+        },
+        {
+          "name": "MnuGitInit",
+          "text": "Start a repository here..."
+        }
+      ]
+    },
+    {
       "name": "MnuDebugMenu",
       "text": "_Debug",
       "children": [

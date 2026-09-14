@@ -1167,6 +1167,93 @@ thirty milliseconds apart while the pane was a terminal, because VTE digests wha
 it is fed on its own time and the exit signal could arrive before the last of the
 traceback was on screen. `Exec` and a text buffer have nothing to wait for.
 
+## Git, and the diff before the commit
+
+The IDE has always had a way to *run* git: the Terminal tab is a real shell in
+the project's directory, and it was kept for exactly this kind of thing. What
+had no home is the one thing git is for in daily work -- **seeing what is about
+to be committed** -- which was `git diff` read as monochrome text with no file
+list, no staging and no way back to the editor.
+
+**The engine is the git CLI**, which is the bargain `Translations` makes with
+`msgmerge` and `Exporter` with `tar`: ask `Application.HasCommand`, say the
+sentence when it is missing, run the tool. A binding would be a new dependency
+for something every machine with a project in git already has. `Ide.Git` is the
+only thing in `ide/` that runs one, so where the worktree is disagreed with is
+one file.
+
+**Questions block, the network does not.** `rev-parse`, `status`, `branch`,
+`show` and `diff` answer in milliseconds and go through `Exec.Wait`, which is
+what it was written for. Anything talking to a server would go through `Exec`
+into the log pane, the `Runner` mould -- and none of it is built yet.
+
+**`status --porcelain=v1 -z`, parsed on NUL.** The human output is translated
+(this IDE would read `modificado` on the machine it is written on) and the
+porcelain is a documented contract. `-z` is what survives a file name with a
+space or an accent in it, which in a project written in Spanish is not an edge
+case. Parsing it needed a runtime fix: `Exec.Wait` stopped at the first NUL, so
+one such name read fine and a *list* of them read as one entry.
+
+**The tree says what changed, the status bar says where you are.** A row gets
+`name [M]` through `SetText`, put on after the rows exist -- the tree's job is
+to say what the project holds and git's to say what has changed about it, and
+only one of those costs a child process. A form's two files are one row, and
+either of them changing changes the form. The branch and the counts join
+`LblStatus` on the end of what it was already saying, because the bar is one
+sentence about where you are and a branch is part of that.
+
+Asking again is explicit (`Ctrl+Shift+G`) and never on a timer: a repository
+changes because somebody did something, and a tree that redrew itself every few
+seconds would move under the pointer.
+
+### The Changes window
+
+`Ctrl+Shift+D`, and a window of its own rather than a tab -- one raised rather
+than stacked, which is `SearchForm`'s argument again: the point of reading a
+diff is to go back to the code behind it. Two windows over one repository would
+answer differently the moment one of them staged something.
+
+The left switcher is the two questions: **Not staged** is what you have not put
+in yet and **Staged** is what you have. Which is also where each half of the
+diff comes from:
+
+| | before | after |
+|---|---|---|
+| Not staged | the index (`git show :path`) | the file on disk |
+| Staged | the last commit (`HEAD:path`) | the index |
+
+**Side by side is the view that answers the question.** A unified hunk is a
+format for sending a change somewhere; two panes in the file's own language are
+how a person reads what they are about to commit. The unified tab is the net
+underneath -- a rename, a binary, a file too big to put in two buffers -- where
+saying so beats filling the panes with something unreadable. `diff` costs
+nothing to highlight: it is a GtkSourceView id the machine already has.
+
+**The diff shows on `Select` and not on `Activate`**, which is the opposite of
+the project tree's rule and for the opposite reason. In the tree, selection
+walks with the arrow keys and opening a file per row walked through would be
+unusable. Here there is nothing to open: the panes *are* the answer, and a list
+where one had to double click to see anything would make reading eight files
+eight double clicks. Double clicking opens the file in the IDE behind, which is
+where a diff is usually read on the way to.
+
+**Staging is per file**, on purpose. Per-hunk staging needs a hunk parser and
+`git apply --cached`, which is a second feature wearing the first one's name.
+What would trigger it is file-level proving too coarse in use -- said by
+somebody using it, not guessed here.
+
+**Discard asks, and says which sentence it means.** It is the one thing here
+with no undo, and it sits one button over from something harmless. An untracked
+file is not restored but *deleted* -- `git restore` has nothing to restore it
+from -- which is a different sentence and is said as one.
+
+### What is not built
+
+The plan is [git-plan.md](git-plan.md); stages 1 to 3 are here. Left: the log,
+branches and checkout; remotes (pull, push, fetch) as async jobs into the log
+pane; and clone. `git init` is here because a project without a repository is
+the one case where a menu full of disabled items is a dead end.
+
 ## Debugging
 
 *Debug* (`Ctrl+F9`) runs the project the way *Run* does and stops it where you

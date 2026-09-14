@@ -11959,6 +11959,21 @@ class Spike extends Form {
         eq("Output is what it wrote", r.Output, "hola\n");
 
         /*
+         * **A NUL is a character of the answer and not the end of it.**
+         *
+         * This was built on `communicate_utf8`, which hands back a C string, so
+         * everything past the first NUL was thrown away -- and a NUL is what the
+         * tools this call exists for separate their records with, *because* it
+         * is the one byte a file name cannot contain. `git status -z` read as
+         * one entry and lost the rest, silently.
+         */
+        const zero = Exec.Wait(["printf", "uno\\0dos y dos\\0tres\\0"]);
+        eq("a NUL does not end the output", zero.Output.length, 19);
+        eq("so a NUL-separated answer arrives whole",
+           JSON.stringify(zero.Output.split("\0")),
+           JSON.stringify(["uno", "dos y dos", "tres", ""]));
+
+        /*
          * `Errors` is absent when the streams are merged: an empty string there
          * would read as *it wrote nothing to stderr*, which is a different claim
          * -- the same reason the callback spelling passes `undefined` rather than

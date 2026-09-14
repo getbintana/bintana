@@ -228,6 +228,8 @@ r.ExitCode          // the status
 r.Output            // everything it wrote
 r.Errors            // only with { Stderr: "separate" }
 r.TimedOut          // with a Timeout
+// Output is the bytes the child wrote, whole: a NUL in it is part of the
+// answer, which is what `git status -z` and `find -print0` need.
 ```
 
 The blocking spelling, for a tool that runs a command it knows ends, looks at

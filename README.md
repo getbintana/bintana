@@ -48,7 +48,7 @@ LANGUAGE=es ./build/bintana ide examples/hello    # the IDE itself, from ide/po/
 ./build/bintana examples/session     # Http with cookies and Basic auth: a login the next request remembers
 ./build/bintana examples/serve       # Http.Server: a static file server on :8080. Runs until Ctrl-C
 LANGUAGE=es ./build/bintana examples/agenda   # ...and the long date the catalogue rewrites
-./tests/run.sh                   # 5513 assertions in 5 projects, on a virtual display
+./tests/run.sh                   # 5541 assertions in 5 projects, on a virtual display
 HEADLESS= ./tests/run.sh          # the same, on *your* screen -- empty, not 0. Three
                                   # windows and the keyboard for a minute, and a couple
                                   # of assertions measure your theme and not the one
@@ -1578,6 +1578,16 @@ Other
   with the file it names one click away is the thing that fixes. Only files of the
   project — a traceback runs through the runtime's own frames too.
 
+**Git shows the diff before the commit.** The tree marks what changed
+(`name [M]`), the status bar carries the branch and the counts, and *Changes*
+(`Ctrl+Shift+D`) is a window with the files on the left and the two versions
+side by side on the right -- in the file's own language, which is how a person
+reads what they are about to commit, with a unified tab underneath for what two
+panes cannot show. Stage, unstage, discard and commit per file. The engine is
+the git CLI, asked for with `HasCommand` the way `msgmerge` and `tar` already
+are; nothing here is a new dependency. The design and what is left of it are in
+[docs/git-plan.md](docs/git-plan.md).
+
 **Debugging** (`Ctrl+F9`) runs the project and stops it where you said. `F9`
 toggles a breakpoint on the caret's line, `F8` / `Shift+F8` / `Ctrl+Shift+F8`
 step into, over and out, `Ctrl+F8` pauses a program that is running, and
@@ -1955,11 +1965,16 @@ Written down so the argument is not had twice.
    [docs/debug-plan.md](docs/debug-plan.md); so is DAP, written down as the plan to
    evaluate rather than the thing to build first.
 
-2. Packaging an application for distribution without the project tree. *Export
+2. **The rest of git**: the log, branches and checkout, and the remotes as async
+   jobs into the log pane. What is built — status, the diff before the commit,
+   staging and committing — and what is not are in
+   [docs/git-plan.md](docs/git-plan.md).
+
+3. Packaging an application for distribution without the project tree. *Export
    project* is not that and does not replace it: it hands over the tree itself,
    which is the question that comes before this one.
 
-3. **A live preview of a component in the designer.** A component is a class in
+4. **A live preview of a component in the designer.** A component is a class in
    the *project's* process, so the designer places a stand-in reading `[Chart]`
    and a `design` block gives it sample data. Teaching the designer to instantiate
    a project's own components would fix it for every component at once, which is
