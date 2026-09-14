@@ -1592,8 +1592,19 @@ another -- saving first, and asking when there is something uncommitted, because
 a switch can refuse halfway. It is `switch` and not `checkout`, whose two
 meanings depend on whether the name turns out to be a branch or a path.
 *History* (`Ctrl+Shift+H`) is the commits, what each one touched, and the same
-side-by-side pair between a commit and the one before it. The design and what is
-left -- the remotes -- are in [docs/git-plan.md](docs/git-plan.md).
+side-by-side pair between a commit and the one before it.
+
+*Fetch*, *Pull* and *Push* are the only git here that takes as long as somebody
+else's server does, so they are the only git here that does not block: an `Exec`
+into the log pane, one at a time, with Stop reaching them -- and the status bar
+grows `↑2` / `↓1` once the branch follows one, counting what was last fetched and
+never going to the network. Pull saves first and is `--ff-only`; push carries
+`--set-upstream` on a branch that follows nothing, so git never answers with a
+command to retype. **None of them can ask for a password**: with no credential
+helper they fail fast and say so rather than opening an askpass window or waiting
+on a prompt nobody can see, and answering like a person is what the Terminal tab
+is for. *Clone a repository...* is the one that runs where there is no project,
+and opens what lands. The design is in [docs/git-plan.md](docs/git-plan.md).
 
 **Debugging** (`Ctrl+F9`) runs the project and stops it where you said. `F9`
 toggles a breakpoint on the caret's line, `F8` / `Shift+F8` / `Ctrl+Shift+F8`
@@ -1963,34 +1974,25 @@ Written down so the argument is not had twice.
 
 ## What is next
 
-1. **A debugger.** It is the one thing in this family's toolbox with no substitute
-   here at all — packaging has *Export project*, printing has `SavePdf`, a screen
-   over a table is written by hand — and debugging is `Logger.Debug`, save, run,
-   read the pane. The design, what *complete* means in eleven points, why the
-   answer is a third patch to the vendored QuickJS, what a branch per opcode costs
-   measured, and the channel it would speak are in
-   [docs/debug-plan.md](docs/debug-plan.md); so is DAP, written down as the plan to
-   evaluate rather than the thing to build first.
+1. **What the debugger costs when it is off.** The debugger itself is built and
+   complete in function — breakpoints and conditional ones, the three steps, the
+   stack with a frame you can stand in, values by name, watches, the immediate
+   box, and stopping where an uncaught exception was thrown. What is left is a
+   number: the branch per opcode that makes it possible measures 12–16 % with the
+   debugger *off*, which is why it is scaffolding. The bytecode patch that
+   replaces it — a software breakpoint, the `0xCC` of gdb — is designed in
+   [docs/debug-plan.md](docs/debug-plan.md), along with DAP, written down as the
+   plan to evaluate rather than the thing to build first.
 
-2. **The remotes**: pull, push and fetch as async jobs into the log pane, and
-   clone. Everything else of git is built — status, the diff before the commit,
-   staging, committing, branches and the history; see
-   [docs/git-plan.md](docs/git-plan.md).
-
-3. Packaging an application for distribution without the project tree. *Export
+2. Packaging an application for distribution without the project tree. *Export
    project* is not that and does not replace it: it hands over the tree itself,
    which is the question that comes before this one.
 
-4. **A live preview of a component in the designer.** A component is a class in
+3. **A live preview of a component in the designer.** A component is a class in
    the *project's* process, so the designer places a stand-in reading `[Chart]`
    and a `design` block gives it sample data. Teaching the designer to instantiate
    a project's own components would fix it for every component at once, which is
    why it is not the chart set's problem — see [docs/ide.md](docs/ide.md).
-
-4. **Git in the IDE.** The bottom panel's terminal is a real shell, so git
-   *runs* — what has no home is seeing the diff before committing. The design
-   is IDE plus one helper and no C, over the git CLI, with a side-by-side diff
-   viewer as the core: [docs/git-plan.md](docs/git-plan.md).
 
 Records over a database — a form bound to a table, the way every tool in this
 family does it — is designed but **deliberately not built**: what stage one would

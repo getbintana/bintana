@@ -1,11 +1,12 @@
 # Git: what was built, and the plan for the rest
 
-**Stages 1 to 4 are built** (2026-09-13/14): status in the tree, the branch in
+**All five stages are built** (2026-09-13/14): status in the tree, the branch in
 the status bar, the Changes window with the two lists and the side-by-side diff,
-stage / unstage / discard / commit per file, and branches, switching and the
-History window. `git init` came with them, because a project without a
-repository is the one case where a menu of disabled items is a dead end. What is
-left is [staging](#staging) 5 -- the remotes.
+stage / unstage / discard / commit per file, branches, switching, the History
+window, and now fetch, pull, push and clone. `git init` came with stage 3,
+because a project without a repository is the one case where a menu of disabled
+items is a dead end. **The seven of [the core](#why-this-matters-and-what-the-core-is)
+are answered.**
 
 This document is the design as well as the record: what *is* settled is recorded
 as settled, with the precedent or the measurement that settled it.
@@ -133,8 +134,8 @@ counts join `LblStatus`; every literal sits at the call site inside
 | **2** | the viewer: side by side plus unified, caps and binaries | **built** |
 | **3** | stage / unstage / commit / discard per file | **built**, plus `init` |
 | **4** | log, branches, checkout | **built** |
-| **5** | remotes async, clone | |
-| **6** | catalogues, docs, and a `git` phase in `tests/ide` over a scratch repo (skip-green when git is missing, never red for the machine) | catalogues and docs done; the phase is not |
+| **5** | remotes async, clone | **built** |
+| **6** | catalogues, docs, and a `git` phase in `tests/ide` over a scratch repo (skip-green when git is missing, never red for the machine) | **built** |
 
 **What stage 1 needed and this document did not foresee: `Exec.Wait` stopped at
 the first NUL.** It was built on `g_subprocess_communicate_utf8`, which hands
@@ -157,6 +158,32 @@ name that is also a path is not hypothetical in a project with folders called
 one, for the reason that window's own buttons give: it stages, discards and
 commits, and a read-only history behind them would make each of them ask
 whether it applies.
+
+**Stage 5 added one thing the design did not name: the environment that forbids
+asking.** *No authentication of its own* was written as *use the credential
+helper*, which is only half of it -- a remote that wants a password and finds no
+helper reaches for an askpass program, opening a window of its own from inside
+the IDE, or blocks on a prompt in a child with no terminal to show it, and then
+the Stop button is the only way out and nothing on screen says why.
+`GIT_TERMINAL_PROMPT=0` and `SSH_ASKPASS_REQUIRE=never` make that **fail fast
+and say so**, which is the line in the log the design wanted; a configured helper
+still answers, because a helper is not a prompt.
+
+**And one the code found: the menu may not ask git.** *Is there a remote to fetch
+from* is read on every keystroke by `refresh()`, and `git remote` is a child
+process -- the same trap the branches avoided by filling their menus in
+`refreshGit()` instead. The remotes are read where the rest of the per-refresh
+state is read and kept in `remoteNames`.
+
+**`--ff-only` on pull, and `--set-upstream` on the first push.** A pull that
+would need a merge stops and says so rather than opening an editor for a merge
+message inside a child nobody is looking at; and a push on a branch that follows
+nothing carries the flag git would otherwise print an instruction to retype.
+Cloning is the one command that runs where there is *no* project, so it cannot
+go through `-C <project>` -- it is still `Ide.Git`'s child, because *nothing else
+in `ide/` runs a child of its own* is what keeps the worktree one file's
+business, and it takes the same job slot, so Stop reaches a clone of something
+big exactly as it reaches a fetch.
 
 ## What it costs outside the code
 

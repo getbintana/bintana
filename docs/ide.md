@@ -1289,12 +1289,55 @@ Double clicking a file opens **the version in the worktree**, not the one in the
 commit: history is read on the way to changing something, and a read-only buffer
 of an old version is not what anybody wanted to edit.
 
+### The remotes
+
+*Fetch*, *Pull* and *Push* are the only git here that is not a question answered
+in milliseconds, so they are the only git here that does not block: an `Exec`
+into the log pane, the same mould *Run* uses, with the IDE usable while they take
+as long as the network does and the **Stop button reaching them** -- and reaching
+the whole process group, since git spawns ssh and ssh is the one actually
+waiting. One at a time: a second *Fetch* while the first is running is refused
+rather than queued, and the menu is off while one is in flight so the refusal is
+not something you can press.
+
+**Pull saves first** -- the Run and Export precedent again -- and is `--ff-only`,
+so a pull that would need a merge stops and says so instead of opening an editor
+for a merge message inside a child nobody is looking at. **Push carries
+`--set-upstream` on a branch that follows nothing**, because the alternative is
+git refusing with an instruction to re-run the command with that flag, which is a
+computer asking a person to retype what it already knows.
+
+The status bar grows git's own arrows once the branch follows one: `↑2` is two
+commits made here and not pushed, `↓1` one fetched and not merged. They count
+what was **last fetched** and never go to the network -- a number that did would
+put the status bar behind a round trip on every keystroke -- so *Fetch* is what
+makes them current, which is what *Fetch* means everywhere else too.
+
+**None of them can ask for a password.** A remote that wants one and finds no
+credential helper would reach for an askpass program -- a window opening out of
+the IDE -- or sit on a prompt in a child with no terminal to show it, with Stop
+as the only way out and nothing on screen saying why. `GIT_TERMINAL_PROMPT=0`
+and `SSH_ASKPASS_REQUIRE=never` make it fail fast and say so instead, in a line
+in the log; a configured helper still answers, because a helper is not a prompt.
+Somebody who has to answer like a person has the Terminal tab, which is where
+that has always been.
+
+*Clone a repository...* is the one git command that runs where there is **no
+project**, which is how somebody with an empty IDE gets one. It asks twice --
+where from, then where to with the desktop's own folder chooser -- works out the
+name git would give it so it can say *that is already there* before anything
+runs, and opens what lands as a project. A clone of something that is not a
+Bintana project opens too, and says it has no `project.json`, which is a sentence
+the IDE already had.
+
 ### What is not built
 
-The plan is [git-plan.md](git-plan.md); stages 1 to 4 are here. Left: the
-remotes -- pull, push and fetch as async jobs into the log pane, the `Runner`
-mould -- and clone. `git init` is here because a project without a repository is
-the one case where a menu full of disabled items is a dead end.
+The plan is [git-plan.md](git-plan.md), and all five of its stages are here:
+status, the viewer, staging and committing, branches and the history, and the
+remotes. `git init` is here because a project without a repository is the one
+case where a menu full of disabled items is a dead end. What is deliberately not
+here is merging and rebasing: both are conversations with conflicts, and the
+Terminal tab is a real shell in the project's directory.
 
 ## Debugging
 

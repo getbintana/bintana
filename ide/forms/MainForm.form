@@ -306,8 +306,27 @@
           "separator": true
         },
         {
+          "name": "MnuGitFetch",
+          "text": "Fetch"
+        },
+        {
+          "name": "MnuGitPull",
+          "text": "Pull"
+        },
+        {
+          "name": "MnuGitPush",
+          "text": "Push"
+        },
+        {
+          "separator": true
+        },
+        {
           "name": "MnuGitInit",
           "text": "Start a repository here..."
+        },
+        {
+          "name": "MnuGitClone",
+          "text": "Clone a repository..."
         }
       ]
     },

@@ -683,6 +683,13 @@ person who wrote it either.
   passed (every child has had a stdin pipe since `Write`); and a child whose
   output is not valid UTF-8 no longer fails the call, which is a widening and
   not a loss.
+- **`refresh()` runs on every keystroke, so nothing in it may spawn a child.**
+  The IDE's `refresh()` is called from typing, from selecting, from every tab
+  switch; asking a tool a question there costs a process per event. `Git`'s
+  branches were already filled in `refreshGit()` for this reason, and the
+  remotes joined them: *is there anywhere to fetch from* reads `remoteNames`,
+  which the last refresh worked out, and never `git remote`. The general shape:
+  anything in `refresh()` must be a field somebody else filled.
 - **A field initialiser does not beat the `.form` load.** A form's controls are
   built inside `Form`'s own constructor, i.e. inside `super()`, and a subclass's
   field initialisers run only after `super()` returns. So a handler for an event

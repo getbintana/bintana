@@ -1034,6 +1034,23 @@ class MainForm extends Form {
         this.MnuGitChanges.Enabled = repo;
         this.MnuGitLog.Enabled     = repo;
         this.MnuGitNewBranch.Enabled = repo;
+
+        /*
+         * The remotes need somewhere to talk to, and only one of them may be in
+         * flight: `Ide.Git` keeps one job, and a second Fetch while the first is
+         * running would be silently dropped rather than queued.
+         */
+        const talking  = this.git.job !== null;
+        const anywhere = repo && !talking && this.git.remoteNames.length > 0;
+
+        this.MnuGitFetch.Enabled = anywhere;
+        this.MnuGitPull.Enabled  = anywhere;
+        /* Push is the one that can create the upstream, so it does not need one
+         * to already exist -- only a remote to push to. */
+        this.MnuGitPush.Enabled  = anywhere;
+        /* Clone is the one that does not want a project: it is how somebody
+         * with an empty IDE gets one. */
+        this.MnuGitClone.Enabled = this.git.available && !talking;
         this.MnuGitInit.Enabled    = git && !repo;
 
         let status;
@@ -2008,6 +2025,87 @@ class MainForm extends Form {
     MnuGitLog_Click() { LogForm.open(this); }
 
     /*
+     * --- the remotes --------------------------------------------------------
+     *
+     * The three that talk to somebody else's server, and the only git here that
+     * is not a question answered in milliseconds. They go through `Exec` into
+     * the log pane -- the `Runner` mould -- so the IDE stays usable while they
+     * take as long as the network does, and Stop reaches them.
+     *
+     * **None of them can ask for a password.** A prompt with no terminal to
+     * show it is a child waiting forever with nothing on screen saying why, so
+     * the environment tells git and ssh to fail instead. What comes back is a
+     * line in the log, and the Terminal tab is one click away for somebody who
+     * needs to answer like a person.
+     */
+    MnuGitFetch_Click() { this.git.fetch(() => this.refreshGit()); }
+
+    /*
+     * Pull saves first, the way Run and Export and a branch switch do: never
+     * operate on something other than what is on screen. `--ff-only`, so a pull
+     * that would need a merge stops and says so rather than opening an editor
+     * for a commit message inside a child nobody is looking at.
+     */
+    MnuGitPull_Click() {
+        this.saveAllDirty();
+        this.git.pull((ok) => {
+            this.refreshGit();
+            /* The worktree may be another one now, and the open tabs are already
+             * watching their own files -- this is the tree catching up. */
+            if (ok) this.listFiles();
+        });
+    }
+
+    MnuGitPush_Click() { this.git.push(() => this.refreshGit()); }
+
+    /*
+     * Cloning, which is the one git command that runs where there is no project.
+     *
+     * Asked in two steps because it needs two answers -- where from and where to
+     * -- and the folder is asked with the desktop's own chooser rather than a
+     * path typed into a box. What lands is opened as a project, which is what
+     * somebody cloning one wanted; a clone of something that is not a Bintana
+     * project opens anyway and says it has no `project.json`, which is the
+     * sentence `openProject` already has.
+     */
+    MnuGitClone_Click() {
+        this.cloneAsk = AskForm.prompt(
+            Locale.Text("Clone a repository"), Locale.Text("From"), "",
+            (url) => this.cloneFrom(url.trim()));
+    }
+
+    cloneFrom(url) {
+        if (!url) return;
+
+        Dialog.SelectFolder(Locale.Text("Clone into"),
+                            { Folder: Environment.HomeDirectory },
+                            (into) => this.cloneInto(url, into));
+    }
+
+    /*
+     * The name git would give it, which is what a person expects to find: the
+     * last piece of the URL without its `.git`. Worked out here rather than left
+     * to git because the IDE has to know what to open afterwards, and refusing a
+     * destination that exists is better than letting git refuse it -- the answer
+     * arrives before anything runs.
+     */
+    cloneInto(url, into) {
+        const name  = File.BaseName(url.replace(/\/+$/, ""));
+        const where = File.Join(into, name);
+
+        if (File.Exists(where)) {
+            Message.Error("{0} already exists.", where);
+            return;
+        }
+
+        this.git.clone(url, where, (ok) => {
+            this.refreshGit();
+            if (ok) this.openProject(where);
+        });
+        this.refresh();
+    }
+
+    /*
      * Ctrl+Shift+O, and Ctrl+L on the same command: the methods of the file as a
      * list, or a line number.  `SymbolForm` filters and hands back a line; which
      * methods there are is `Navigator.symbols`, which is where the one regular
@@ -2048,6 +2146,9 @@ class MainForm extends Form {
     stopRun() {
         this.runner.stop();
         this.debugger_.stop();
+        /* A fetch over a slow link is a child like any other, and Stop is the
+         * one button that ends whichever of them is going. */
+        this.git.stop();
     }
 
     /* Undo is split by mode, so Ctrl+Z does not steal the text editor's undo

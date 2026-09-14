@@ -27,6 +27,30 @@
 
 Namespace("Ide");
 
+/*
+ * What a remote is **never** allowed to do: ask.
+ *
+ * This is the practical half of *no authentication of its own*. A `git push`
+ * whose remote wants a password has a tty in a terminal and does not here, so
+ * it would reach for an askpass helper -- opening a window of its own from
+ * inside the IDE -- or sit there waiting on a prompt nobody can see, with the
+ * Stop button as the only way out and no line in the log saying why.
+ *
+ * `GIT_TERMINAL_PROMPT=0` makes it **fail fast and say so**, which is exactly
+ * the answer the plan wants: a line in the log pointing at the Terminal tab,
+ * where a person can answer a prompt like a person. A configured credential
+ * helper still works -- that is a helper answering, not a prompt -- which is
+ * the case somebody who has set one up expects to keep working.
+ *
+ * `SSH_ASKPASS_REQUIRE=never` is the same sentence to ssh, which has its own
+ * idea about opening a dialog.
+ */
+const NO_PROMPT = {
+    GIT_TERMINAL_PROMPT:  "0",
+    SSH_ASKPASS_REQUIRE:  "never",
+    GIT_ASKPASS:          "",
+};
+
 /* Long enough for a big repository, short enough that a hung child does not
  * take the IDE with it. `Exec.Wait` blocks the main loop: that is the whole
  * reason it is only used for questions that answer in milliseconds. */
@@ -55,6 +79,11 @@ Ide.Git = class Git {
         this.changed = 0;
         /* A network job while there is one, for Stop to reach. */
         this.job = null;
+        /* The remotes as of the last refresh. Kept for the same reason the
+         * branches are filled outside `refresh()`: the menu asks whether there
+         * is anywhere to fetch from on every keystroke, and the answer costs a
+         * child process. */
+        this.remoteNames = [];
     }
 
     /* --- what this machine and this project can do -------------------------- */
@@ -97,6 +126,8 @@ Ide.Git = class Git {
         this.states = new Map();
         this.branchName = "";
         this.staged = this.changed = 0;
+        this.distance = null;
+        this.remoteNames = [];
     }
 
     /* --- running it --------------------------------------------------------- */
@@ -130,7 +161,7 @@ Ide.Git = class Git {
 
         this.ide.log(`> git ${args.join(" ")}\n`);
         this.job = Exec(["git", "-C", this.ide.project, ...args],
-                        { Directory: this.ide.project },
+                        { Directory: this.ide.project, Environment: NO_PROMPT },
                         (line) => this.ide.log(`${line}\n`),
                         (code) => {
                             this.job = null;
@@ -237,8 +268,10 @@ Ide.Git = class Git {
             return;
         }
 
-        this.states     = this.status();
-        this.branchName = this.branch();
+        this.states      = this.status();
+        this.branchName  = this.branch();
+        this.distance    = this.aheadBehind();
+        this.remoteNames = this.remotes();
     }
 
     /* The letter for a path of the project, or `""`. */
@@ -258,6 +291,92 @@ Ide.Git = class Git {
     show(where, name) {
         const r = this.run(["show", `${where}:${name}`]);
         return r.ok ? r.out : null;
+    }
+
+    /* --- remotes ----------------------------------------------------------- */
+
+    /* Whether there is anywhere to push to. A repository with no remote is an
+     * ordinary thing -- `git init` makes one -- and the commands that need one
+     * are off rather than failing when they are pressed. */
+    remotes() {
+        const r = this.run(["remote"]);
+        return r.ok ? r.out.split("\n").filter((n) => n !== "") : [];
+    }
+
+    /*
+     * How far the branch is from the one it follows, as `{ ahead, behind }`.
+     *
+     * `null` when the branch follows nothing, which is not a failure: a branch
+     * made here and never pushed has no upstream, and answering `0, 0` would say
+     * *you are in step with something* about a thing there is nothing to be in
+     * step with.
+     *
+     * **It counts what was last fetched** and never talks to the server -- that
+     * is `fetch`'s job and it is the one command here that takes as long as the
+     * network does. A number that went to the network on every refresh would put
+     * the status bar behind a round trip.
+     */
+    aheadBehind() {
+        const r = this.run(["rev-list", "--left-right", "--count", "@{u}...HEAD"]);
+        if (!r.ok) return null;
+
+        const [behind, ahead] = r.out.trim().split(/\s+/).map(Number);
+        return { ahead: ahead || 0, behind: behind || 0 };
+    }
+
+    /*
+     * The three that talk to a server.
+     *
+     * All through `remote`, which is `Exec` into the log pane and not
+     * `Exec.Wait`: these take as long as somebody else's server does, and a
+     * `Wait` would freeze the IDE for that long with no way to stop it. The Stop
+     * button reaches them, and reaches the whole process group -- git spawns ssh
+     * and ssh is the one actually waiting.
+     */
+    fetch(done) { return this.remote(["fetch", "--all", "--prune"], done); }
+
+    /*
+     * Cloning, which is the one command here that runs where there is no
+     * project: `run` and `remote` both pass `-C <project>` and there is not one
+     * yet. It is still this class's child, because *nothing else in `ide/` runs
+     * a child of its own* is what makes the worktree one file's business -- and
+     * it takes `this.job`, so the Stop button reaches a clone of something big
+     * exactly as it reaches a fetch.
+     */
+    clone(url, where, done) {
+        if (this.job || !this.available) return false;
+
+        this.ide.log(`> git clone ${url}\n`);
+        this.job = Exec(["git", "clone", "--", url, where],
+                        { Directory: File.Directory(where), Environment: NO_PROMPT },
+                        (line) => this.ide.log(`${line}\n`),
+                        (code) => {
+                            this.job = null;
+                            this.ide.log(code === 0 ? "[git ok]\n"
+                                                    : `[git failed: ${code}]\n`);
+                            this.ide.refresh();
+                            if (done) done(code === 0);
+                        });
+        this.ide.refresh();
+        return true;
+    }
+    pull(done)  { return this.remote(["pull", "--ff-only"], done); }
+
+    /*
+     * Pushing, and the one flag it carries.
+     *
+     * `--set-upstream` on a branch that follows nothing, because the alternative
+     * is git refusing with an instruction to re-run the command with that flag,
+     * which is a computer asking a person to retype what it already knows. On a
+     * branch that has one it is absent and the push is an ordinary push.
+     */
+    push(done) {
+        const args = ["push"];
+
+        if (!this.aheadBehind() && this.branchName)
+            args.push("--set-upstream", "origin", this.branchName);
+
+        return this.remote(args, done);
     }
 
     /* --- branches -------------------------------------------------------- */
@@ -466,6 +585,17 @@ Ide.Git = class Git {
 
         if (this.staged)  bits.push(Locale.Text("{0} staged", this.staged));
         if (this.changed) bits.push(Locale.Text("{0} changed", this.changed));
+
+        /*
+         * And how far from what it follows, in git's own arrows -- which mean
+         * the same thing in every tool that draws them, so there is nothing to
+         * learn. Absent when the branch follows nothing, which is a state and
+         * not a zero.
+         */
+        if (this.distance) {
+            if (this.distance.ahead)  bits.push(`\u2191${this.distance.ahead}`);
+            if (this.distance.behind) bits.push(`\u2193${this.distance.behind}`);
+        }
 
         return bits.join("  ");
     }

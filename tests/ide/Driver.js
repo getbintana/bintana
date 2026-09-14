@@ -9393,6 +9393,98 @@ function* p_git(ide) {
     yield* settled(ide);
 
     /*
+     * --- the remotes ---------------------------------------------------------
+     *
+     * A **bare repository beside this one**, which is what `origin` is as far
+     * as git is concerned: push, fetch and pull are the real commands against a
+     * real remote, and there is no network and nothing to authenticate against.
+     * A test that needed a server would be a test that is skipped on the machine
+     * that matters.
+     *
+     * The three are asynchronous -- `Exec` and not `Exec.Wait`, which is the
+     * whole point of them -- so each is waited for by asking whether the job is
+     * over, never by counting frames.
+     */
+    const bare = File.Join(TMP, "gitbare");
+    Directory.Make(bare);
+    wipe(bare);
+    Exec.Wait(["git", "init", "-q", "--bare", bare], { Timeout: 8000 });
+
+    eq("a repository with no remote has none", git.remoteNames.length, 0);
+    check("so there is nothing to fetch from", !ide.MnuGitFetch.Enabled);
+    eq("and no distance to anything", git.aheadBehind(), null);
+
+    run("remote", "add", "origin", bare);
+    ide.refreshGit();
+
+    eq("the remote is listed once there is one", git.remoteNames.join(), "origin");
+    check("and now the remotes are on", ide.MnuGitPush.Enabled);
+    eq("a branch that follows nothing has no distance", git.distance, null);
+
+    /* Pushing, which is also what makes the branch follow one: the plan's
+     * `--set-upstream`, so git never answers with a command to retype. */
+    ide.MnuGitPush_Click();
+    check("a job is in flight", git.job !== null);
+    check("and a second one is refused rather than queued", !ide.git.push());
+    yield* until(() => git.job === null, 300);
+    yield* settled(ide);
+
+    check("pushing ends", git.job === null);
+    check("and says so in the log", ide.LogView.Text.includes("[git ok]"),
+          ide.LogView.Text.slice(-80));
+    ide.refreshGit();
+    check("the branch follows one afterwards", git.distance !== null,
+          JSON.stringify(git.distance));
+    eq("and is in step with it", `${git.distance.ahead}/${git.distance.behind}`, "0/0");
+
+    /* Somebody else's commit, made the only honest way: another clone of the
+     * same bare repository, pushing to it. */
+    const other = File.Join(TMP, "gitother");
+    Exec.Wait(["git", "clone", "-q", bare, other], { Timeout: 8000 });
+    Exec.Wait(["git", "-C", other, "config", "user.email", "otro@bintana"], { Timeout: 8000 });
+    Exec.Wait(["git", "-C", other, "config", "user.name", "Otro"], { Timeout: 8000 });
+    File.Save(File.Join(other, "tres.txt"), "desde otro\n");
+    Exec.Wait(["git", "-C", other, "add", "-A"], { Timeout: 8000 });
+    Exec.Wait(["git", "-C", other, "commit", "-qm", "tercero"], { Timeout: 8000 });
+    Exec.Wait(["git", "-C", other, "push", "-q"], { Timeout: 8000 });
+
+    eq("what was not fetched is not counted yet", git.distance.behind, 0);
+
+    ide.MnuGitFetch_Click();
+    yield* until(() => git.job === null, 300);
+    yield* settled(ide);
+
+    eq("fetching finds the commit somebody else pushed", git.distance.behind, 1);
+    check("and has not brought the file down", !File.Exists(File.Join(repo, "tres.txt")));
+
+    ide.MnuGitPull_Click();
+    yield* until(() => git.job === null, 300);
+    yield* settled(ide);
+
+    check("pulling brings it down", File.Exists(File.Join(repo, "tres.txt")));
+    eq("and the branch is in step again", git.distance.behind, 0);
+    check("which the status bar says", ide.LblStatus.Text.indexOf("\u2193") === -1,
+          ide.LblStatus.Text);
+
+    /*
+     * Cloning, which is the one command that runs where there is no project --
+     * driven from `cloneInto` because the two answers before it are a prompt and
+     * the desktop's folder chooser, and neither is a thing a test can answer.
+     */
+    const into = File.Join(TMP, "clones");
+    Directory.Make(into);
+    wipe(into);
+
+    ide.cloneInto(bare, into);
+    yield* until(() => git.job === null, 300);
+    yield* settled(ide);
+
+    const landed = File.Join(into, "gitbare");
+    check("cloning leaves a working tree", File.Exists(File.Join(landed, "Uno.js")));
+    eq("named the way git would name it", ide.project, landed);
+    check("and what landed is a repository", git.isRepo);
+
+    /*
      * --- back to what the phases after this one expect ----------------------
      *
      * This one opened a **project of its own**, which nothing else here does:
