@@ -2299,6 +2299,16 @@ WinForms' docking with anchoring inside it — and both halves are here already:
 `Arrangement` on a container, coordinates inside it, and the designer swaps the
 slot when it changes.
 
+**And the one that bit after it was written**, in the IDE's own *Changes*
+window: a `Split` whose two halves were bare `Panel`s, inside a `Fixed` root.
+`VExpand` on a control is a claim on the room **its parent has**, and a parent
+that claims none has none to give — so the two `SourceEditor`s asking to expand
+got the natural height of the tab strip above them, and a diff drawn in a
+620-pixel window was **46 pixels tall**. It is worth saying plainly because the
+`.form` looked right: every leaf said `VExpand: true`, and the one container in
+the middle said nothing. Expansion is a chain, and it breaks at the quietest
+link.
+
 **Two things that bit while measuring it.** `MinWidth` *"only means something on
 an axis whose `HAlign` is `Fill`"* — the split's halves had a `MinWidth` and no
 `HAlign`, so squeezing the window dragged the divider down to 46 pixels instead

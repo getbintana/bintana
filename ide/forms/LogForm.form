@@ -2,6 +2,7 @@
   "format": "bintana-form/1",
   "class": "LogForm",
   "properties": {
+    "Arrangement": "Vertical",
     "Height": 620,
     "Icon": "document-open-recent-symbolic",
     "Text": "History",
@@ -13,13 +14,13 @@
       "name": "Outer",
       "properties": {
         "Arrangement": "Vertical",
+        "Expand": true,
         "HAlign": "Fill",
-        "Height": 540,
+        "HExpand": true,
+        "Margin": 8,
         "Position": 220,
         "VAlign": "Fill",
-        "Width": 948,
-        "X": 16,
-        "Y": 16
+        "VExpand": true
       },
       "children": [
         {
@@ -27,8 +28,10 @@
           "name": "Commits",
           "properties": {
             "Expand": true,
+            "HAlign": "Fill",
             "HExpand": true,
             "Tooltip": "The last commits, newest first",
+            "VAlign": "Fill",
             "VExpand": true
           }
         },
@@ -38,8 +41,10 @@
           "properties": {
             "Arrangement": "Horizontal",
             "Expand": true,
+            "HAlign": "Fill",
             "HExpand": true,
             "Position": 260,
+            "VAlign": "Fill",
             "VExpand": true
           },
           "children": [
@@ -48,8 +53,11 @@
               "name": "Touched",
               "properties": {
                 "Expand": true,
+                "HAlign": "Fill",
                 "HExpand": true,
+                "MinWidth": 180,
                 "Tooltip": "What that commit touched. Choosing one shows what it did to it",
+                "VAlign": "Fill",
                 "VExpand": true
               }
             },
@@ -57,11 +65,15 @@
               "type": "Switcher",
               "name": "How",
               "properties": {
+                "Expand": true,
+                "HAlign": "Fill",
                 "HExpand": true,
                 "Tabs": [
                   "Side by side",
                   "Unified"
-                ]
+                ],
+                "VAlign": "Fill",
+                "VExpand": true
               },
               "children": [
                 {
@@ -70,8 +82,10 @@
                   "properties": {
                     "Arrangement": "Horizontal",
                     "Expand": true,
+                    "HAlign": "Fill",
                     "HExpand": true,
                     "Position": 330,
+                    "VAlign": "Fill",
                     "VExpand": true
                   },
                   "children": [
@@ -81,8 +95,11 @@
                       "properties": {
                         "Expand": true,
                         "Font": "Monospace 10",
+                        "HAlign": "Fill",
                         "HExpand": true,
+                        "MinWidth": 120,
                         "ReadOnly": true,
+                        "VAlign": "Fill",
                         "VExpand": true,
                         "Wrap": false
                       }
@@ -93,8 +110,11 @@
                       "properties": {
                         "Expand": true,
                         "Font": "Monospace 10",
+                        "HAlign": "Fill",
                         "HExpand": true,
+                        "MinWidth": 120,
                         "ReadOnly": true,
+                        "VAlign": "Fill",
                         "VExpand": true,
                         "Wrap": false
                       }
@@ -107,9 +127,11 @@
                   "properties": {
                     "Expand": true,
                     "Font": "Monospace 10",
+                    "HAlign": "Fill",
                     "HExpand": true,
                     "Language": "diff",
                     "ReadOnly": true,
+                    "VAlign": "Fill",
                     "VExpand": true,
                     "Wrap": false
                   }
@@ -121,33 +143,38 @@
       ]
     },
     {
-      "type": "Label",
-      "name": "LblWhat",
+      "type": "Panel",
+      "name": "Foot",
       "properties": {
-        "Ellipsize": true,
+        "Arrangement": "Horizontal",
         "HAlign": "Fill",
-        "Height": 22,
-        "Style": "dim-label",
-        "VAlign": "End",
-        "Width": 700,
-        "X": 16,
-        "Y": 572
-      }
-    },
-    {
-      "type": "Button",
-      "name": "BtnClose",
-      "properties": {
-        "Cancel": true,
-        "Default": true,
-        "HAlign": "End",
-        "Height": 32,
-        "Text": "Close",
-        "VAlign": "End",
-        "Width": 96,
-        "X": 868,
-        "Y": 566
-      }
+        "Margin": 8,
+        "Spacing": 8
+      },
+      "children": [
+        {
+          "type": "Label",
+          "name": "LblWhat",
+          "properties": {
+            "Ellipsize": true,
+            "HAlign": "Fill",
+            "HExpand": true,
+            "Height": 22,
+            "Style": "dim-label"
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnClose",
+          "properties": {
+            "Cancel": true,
+            "Default": true,
+            "Height": 32,
+            "Text": "Close",
+            "Width": 96
+          }
+        }
+      ]
     }
   ]
 }

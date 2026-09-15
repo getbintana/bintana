@@ -9295,6 +9295,49 @@ function* p_git(ide) {
      */
     check("asking again raises the same window", GitForm.open(ide) === win);
 
+    /*
+     * --- and the panes take the window ---------------------------------------
+     *
+     * The bug this asserts against: the window was drawn as a `Fixed` -- every
+     * region at an X, a Y and a height of its own -- so making it taller gave
+     * the extra room to nothing, and the diff stayed the 430 pixels it had been
+     * drawn at however big the screen was. Which is the general rule this repo
+     * measured once and then broke anyway: **a window of regions is boxes.**
+     *
+     * Measured and not read off the `.form`: what is asserted is that the pane
+     * really grew when the window did, which is the thing a person sees.
+     */
+    win.Show();
+    yield* settled(ide);
+
+    const wasTall = win.Before.Bounds().Height;
+    const wasWide = win.Before.Bounds().Width;
+
+    check("the diff pane has most of the window's height",
+          wasTall > win.Bounds().Height / 2, `${wasTall} of ${win.Bounds().Height}`);
+
+    win.Height = win.Bounds().Height + 220;
+    yield* until(() => win.Before.Bounds().Height > wasTall, 60);
+    yield* settled(ide);
+
+    check("a taller window is a taller diff",
+          win.Before.Bounds().Height > wasTall,
+          `${wasTall} -> ${win.Before.Bounds().Height}`);
+
+    win.Width = win.Bounds().Width + 200;
+    yield* until(() => win.Before.Bounds().Width > wasWide, 60);
+    yield* settled(ide);
+
+    check("and a wider window a wider one",
+          win.Before.Bounds().Width > wasWide,
+          `${wasWide} -> ${win.Before.Bounds().Width}`);
+
+    check("the file list is still there beside it", win.Unstaged.Bounds().Width > 100,
+          JSON.stringify(win.Unstaged.Bounds()));
+    check("and the buttons are still under it",
+          win.BtnCommit.Bounds().Y > win.Before.Bounds().Y,
+          `${win.BtnCommit.Bounds().Y} vs ${win.Before.Bounds().Y}`);
+
     /* Staging goes through git: assert it by asking git and not the window. */
     win.Unstaged.Index = win.paths[0].indexOf("Uno.js");
     win.BtnStage_Click();
@@ -9378,6 +9421,20 @@ function* p_git(ide) {
     yield* settled(ide);
 
     check("the History window opens", win2 !== undefined && win2 !== null);
+
+    /* The same window of regions, and the same rule: taller window, taller
+     * panes. It was drawn as a `Fixed` too. */
+    const logTall = win2.Before.Bounds().Height;
+    win2.Height = win2.Bounds().Height + 220;
+    yield* until(() => win2.Before.Bounds().Height > logTall, 60);
+    yield* settled(ide);
+
+    check("the history's panes grow with it too",
+          win2.Before.Bounds().Height > logTall,
+          `${logTall} -> ${win2.Before.Bounds().Height}`);
+    check("with the close button still under them",
+          win2.BtnClose.Bounds().Y > win2.Before.Bounds().Y);
+
     eq("with a row per commit", win2.Commits.Count, commits.length);
     check("asking again raises the same one", LogForm.open(ide) === win2);
     check("choosing a commit lists what it touched", win2.Touched.Count > 0);
@@ -9414,6 +9471,18 @@ function* p_git(ide) {
 
     check("choosing Changes puts the panel up", ide.ChangesBox.Visible);
     check("and takes the tree down", !ide.FileTree.Visible);
+
+    /* The same rule as the window: the list takes the room, and the message box
+     * and its buttons keep theirs. A panel whose table was its natural height
+     * would be four rows in a column six hundred pixels tall. */
+    const tree = ide.SideBar.Bounds().Height;
+    check("the list takes the side bar's height",
+          ide.ChangeTable.Bounds().Height > tree / 2,
+          `${ide.ChangeTable.Bounds().Height} of ${tree}`);
+    check("with the message box under it",
+          ide.TxtCommit.Bounds().Y > ide.ChangeTable.Bounds().Y);
+    check("and the buttons under that",
+          ide.BtnChCommit.Bounds().Y > ide.TxtCommit.Bounds().Y);
     eq("the choice is written down like the tree's",
        Settings.Get("side.changes", false), true);
 

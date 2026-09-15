@@ -683,6 +683,19 @@ person who wrote it either.
   passed (every child has had a stdin pipe since `Write`); and a child whose
   output is not valid UTF-8 no longer fails the call, which is a widening and
   not a loss.
+- **A `Split` inside a `Fixed` gave its diff 46 pixels of a 620-pixel window.**
+  Two mistakes that look like one. The window was a `Fixed` root with every
+  region at an `X`, a `Y` and a height of its own, so a taller window gave the
+  extra room to nobody -- that half is the rule
+  [`docs/widgets.md`](docs/widgets.md#which-of-the-two-models-a-form-should-use)
+  already states, *a window of regions is boxes*, written and then broken anyway.
+  The half that made it unusable rather than merely rigid: the `Split`'s two
+  children were bare `Panel`s with `Spacing` and nothing else, so **the
+  expansion stopped there** -- everything inside them had `VExpand` and it
+  counted for nothing, and the panes came out at the tab strip's natural height.
+  `VExpand` on a control is a claim on the room *its parent has*; a parent that
+  claims none has none to give. Measured both ways in `tests/ide` (`git`), which
+  is what the assertion there is for: 46 pixels before, 395 after.
 - **`refresh()` runs on every keystroke, so nothing in it may spawn a child.**
   The IDE's `refresh()` is called from typing, from selecting, from every tab
   switch; asking a tool a question there costs a process per event. `Git`'s
