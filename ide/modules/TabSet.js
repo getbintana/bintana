@@ -670,6 +670,7 @@ Ide.TabSet = class TabSet {
         /* A saved `.form` is a different set of controls to propose. */
         this.ide.completion.forget();
         this.render();
+        this.ide.afterSave();
         this.ide.refresh();
         return true;
     }
@@ -721,16 +722,39 @@ Ide.TabSet = class TabSet {
     watch(name, state) {
         const path = File.Join(this.ide.project, name);
 
-        state.watch = File.Watch(path, (event) => {
+        state.watch = File.Watch(path, () => {
             const tab = this.openTabs.get(name);
             if (!tab) return;
 
-            if (event === "Deleted") {
-                tab.goneFromDisk = true;
+            /*
+             * **The event is a hint; the disk is the answer.** A `"Deleted"`
+             * does not mean the file is gone -- it means something happened to
+             * that path, and plenty of programs rewrite a file by taking the
+             * old one away and putting a new one there. `git restore` is one of
+             * them, so discarding a change said *ClientsForm.js is no longer on
+             * disk* about a file that was sitting right there, restored.
+             *
+             * Asking is one `File.Exists`, and it cannot be wrong in the way
+             * believing the event can.
+             */
+            const gone = !File.Exists(path);
+            const was  = tab.goneFromDisk;
+
+            tab.goneFromDisk = gone;
+            if (gone) {
+                this.ide.showReloadBar();
+                return;
+            }
+
+            let now;
+            try { now = File.Load(path); } catch (e) { return; }
+
+            if (now === tab.onDisk) {
+                /* Our own save, or a file that came back exactly as it was --
+                 * which still has a notice to take down if one went up. */
+                if (!was) return;
+                tab.changedOnDisk = false;
             } else {
-                let now;
-                try { now = File.Load(path); } catch (e) { return; }
-                if (now === tab.onDisk) return;      /* our own save, or no change */
                 tab.changedOnDisk = true;
             }
             this.ide.showReloadBar();
@@ -784,6 +808,7 @@ Ide.TabSet = class TabSet {
         }
         if (wasActive && this.ide.activeFile !== wasActive) this.switchTo(wasActive);
         this.render();
+        this.ide.afterSave();
         this.ide.refresh();
     }
 

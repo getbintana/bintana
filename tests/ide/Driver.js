@@ -3104,6 +3104,38 @@ function* p_watch(ide) {
     check("and what is open is still what was open",
           !ide.Editor.Text.includes("/* again */"));
 
+    /*
+     * --- replaced, which is not the same as gone ---------------------------
+     *
+     * **Plenty of programs do not write a file in place**: the old one goes and
+     * a new one takes its name. `git restore` is one of them, so discarding a
+     * change reported *ClientsForm.js is no longer on disk* about a file that
+     * was sitting right there, restored a moment earlier -- the watch believed
+     * the word `"Deleted"` instead of looking.
+     */
+    const tab = ide.tabs.openTabs.get(name);
+
+    File.Delete(path);
+    File.Save(path, was + "\n/* replaced */\n");
+    yield* until(() => tab.changedOnDisk, 80);
+
+    check("a file replaced rather than rewritten is not a file that is gone",
+          !tab.goneFromDisk);
+    eq("and it is still offered", ide.BtnTakeDisk.Enabled, true);
+
+    /* And the branch that must keep working: one that really is gone. */
+    File.Delete(path);
+    yield* until(() => tab.goneFromDisk, 80);
+
+    check("a file that really went is still reported", tab.goneFromDisk);
+    eq("with nothing to take from it", ide.BtnTakeDisk.Enabled, false);
+
+    File.Save(path, was + "\n/* again */\n");
+    yield* until(() => !tab.goneFromDisk, 80);
+    check("and the notice is taken back when it comes back", !tab.goneFromDisk);
+
+    ide.BtnReloadHide_Click();
+
     /* Put the project back the way the phases after this one expect it. */
     ide.Editor.Text = was;
     ide.save();
@@ -9642,6 +9674,34 @@ function* p_git(ide) {
     check("an empty panel says so", ide.LblChanges.Visible);
     check("and says nothing has changed", ide.LblChanges.Text.includes("changed"),
           ide.LblChanges.Text);
+
+    /*
+     * --- and a save is what changes it -------------------------------------
+     *
+     * The commonest thing that happens in an IDE, and the panel did not hear
+     * about it: the list, the tree's `[M]` and the counts in the status bar all
+     * answered about the file as it was *before* it was written, which is the
+     * moment somebody is most likely to look at them. Driven through the IDE's
+     * own save, with nothing asking git again by hand.
+     */
+    ide.openInTab("Uno.js");
+    yield* settled(ide);
+
+    ide.Editor.Text = `${ide.Editor.Text}\n// desde el editor\n`;
+    ide.save();
+    yield* settled(ide);
+
+    eq("saving puts the file in the list", ide.ChangeTable.Count, 1);
+    check("under its own name",
+          panel.rows.some((r) => r.path === "Uno.js"), JSON.stringify(panel.rows));
+    eq("and the tree hears about it too", git.stateOf("Uno.js"), "M");
+    check("so the panel has nothing left to apologise for", !ide.LblChanges.Visible);
+
+    git.discard(["Uno.js"]);
+    ide.closeTabByName("Uno.js", true);
+    ide.refreshGit();
+    yield* settled(ide);
+    eq("and putting it back empties the list again", ide.ChangeTable.Count, 0);
 
     /* Back to the tree, which is where the phases after this one look. */
     ide.CmbView.Index = 0;

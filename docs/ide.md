@@ -1314,6 +1314,12 @@ Prior art: this is Android Studio's *Commit* tool window, and Visual Studio's
 *Git Changes* pane -- a list of changed files and a message box docked beside
 the project tree rather than floating over it.
 
+**Saving is what changes the list**, so a save refreshes it -- along with the
+tree's `[M]` and the counts in the status bar, which all come out of one
+`git status`. Deliberately not the whole of *Refresh status*: the branch, the
+remotes and how far ahead you are cannot change because a buffer was written, and
+a save is not the place to spend four child processes.
+
 ### Branches, and the history
 
 *Git → Branch* is the branches as a menu, the one you are standing on marked

@@ -683,6 +683,14 @@ person who wrote it either.
   passed (every child has had a stdin pipe since `Write`); and a child whose
   output is not valid UTF-8 no longer fails the call, which is a widening and
   not a loss.
+- **A `"Deleted"` from `File.Watch` does not mean the file is gone.** It means
+  something happened to that path, and plenty of programs rewrite a file by
+  taking the old one away and putting a new one there -- `git restore` among
+  them, which is how discarding a change came to report *ClientsForm.js is no
+  longer on disk* about a file that was sitting right there, restored. The event
+  is a hint; the disk is the answer, and asking is one `File.Exists`. The same
+  shape as every other trap in this list: a flag believed instead of a fact
+  looked at.
 - **A side by side diff is not two files side by side.** The viewer showed the
   old version on the left and the new one on the right, scrolled together, and
   that is genuinely useless: nothing says which lines are the change, and after

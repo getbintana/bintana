@@ -312,10 +312,28 @@ Ide.Git = class Git {
             return;
         }
 
-        this.states      = this.status();
+        this.refreshStatus();
         this.branchName  = this.branch();
         this.distance    = this.aheadBehind();
         this.remoteNames = this.remotes();
+    }
+
+    /*
+     * Only what **writing a file** can change, which is one child process.
+     *
+     * The split is not premature: saving is the commonest thing that happens in
+     * an IDE, and three of the four questions above cannot have a different
+     * answer because of it -- the branch is the branch, the remotes are the
+     * remotes, and how far ahead it is changes when something is committed or
+     * fetched, not when a buffer is written. `refresh` is still the door for
+     * everything that acts on the repository.
+     */
+    refreshStatus() {
+        if (!this.isRepo) {
+            this.forget();
+            return;
+        }
+        this.states = this.status();
     }
 
     /* The letter for a path of the project, or `""`. */

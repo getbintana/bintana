@@ -1944,6 +1944,25 @@ class MainForm extends Form {
                         });
     }
 
+    /*
+     * A file was written, so what git says about the project is older than the
+     * project is.
+     *
+     * The tree's `[M]`, the counts in the status bar and the Changes page all
+     * come from one `git status`, and without this they answered about the file
+     * as it was before the save -- which is the moment somebody is most likely
+     * to look at them. It is deliberately **not** `refreshGit`: the branches and
+     * the distance from the remote cannot change because a buffer was written,
+     * and a save is not the place to spend four child processes.
+     */
+    afterSave() {
+        if (!this.git.available || !this.project) return;
+
+        this.git.refreshStatus();
+        this.git.markTree();
+        this.changes.reload();
+    }
+
     refreshGit() {
         this.git.refresh();
         this.git.markTree();
