@@ -80,6 +80,8 @@ class LogForm extends Form {
     }
 
     clearPanes() {
+        this.Before.ClearMarks();
+        this.After.ClearMarks();
         this.Before.Text = this.After.Text = this.Unified.Text = "";
         this.LblWhat.Text = "";
     }
@@ -142,16 +144,22 @@ class LogForm extends Form {
         const before = git.fileBefore(commit.sha, file.path);
         const after  = git.fileAt(commit.sha, file.path);
 
-        this.Before.Text = before === null ? "" : before;
-        this.After.Text  = after  === null ? "" : after;
+        this.Unified.Text = git.commitDiff(commit.sha, file.path);
+
+        /* Aligned and marked, out of the same diff that is in the tab beside
+         * it -- the `Changes` window's argument, and the same class. */
+        const pair = Ide.Diff.sideBySide(before, after, this.Unified.Text);
+
+        this.Before.Text = Ide.Diff.text(pair.left);
+        this.After.Text  = Ide.Diff.text(pair.right);
+        Ide.Diff.mark(this.Before, pair.left);
+        Ide.Diff.mark(this.After,  pair.right);
 
         const lang = this.languageOf(file.path);
         this.Before.Language = lang;
         this.After.Language  = lang;
         this.Before.ScrollY  = 0;
         this.After.ScrollY   = 0;
-
-        this.Unified.Text = git.commitDiff(commit.sha, file.path);
     }
 
     languageOf(path) {

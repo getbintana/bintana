@@ -225,10 +225,22 @@ class GitForm extends Form {
 
         if (tooBig(before) || tooBig(after)) {
             const note = Locale.Text("Too big to show side by side. The unified tab has it.");
+            this.Before.ClearMarks();
+            this.After.ClearMarks();
             this.Before.Text = this.After.Text = note;
         } else {
-            this.Before.Text = before === null ? "" : before;
-            this.After.Text  = after  === null ? "" : after;
+            /*
+             * The two columns, aligned and marked -- `Ide.Diff` reads git's own
+             * answer rather than working out a second one. Without it these are
+             * two files: the change is not shown, and the lines stop facing
+             * each other at the first one that was added.
+             */
+            const pair = Ide.Diff.sideBySide(before, after, this.Unified.Text);
+
+            this.Before.Text = Ide.Diff.text(pair.left);
+            this.After.Text  = Ide.Diff.text(pair.right);
+            Ide.Diff.mark(this.Before, pair.left);
+            Ide.Diff.mark(this.After,  pair.right);
         }
 
         /*

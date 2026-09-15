@@ -1190,6 +1190,23 @@ class WidgetsForm extends Form {
 
         throws("a kind nobody defined is refused", () => this.Ed.Mark(1, "Fatal"));
 
+        /*
+         * The three kinds that are about the *line* and not about a message:
+         * they paint it, which is what lets two panes be a diff rather than two
+         * files. Read back like any other mark -- the painting itself is
+         * GtkSourceView's and is not something a test can see.
+         */
+        this.Ed.ClearMarks();
+        this.Ed.Mark(1, "Removed");
+        this.Ed.Mark(2, "Added");
+        this.Ed.Mark(3, "Gap");
+
+        eq("a diff's three kinds are kinds like the others",
+           JSON.stringify(this.Ed.Marks().map((m) => m.Kind)),
+           '["Removed","Added","Gap"]');
+        eq("and each can be asked for on its own", this.Ed.Marks("Added").length, 1);
+        this.Ed.ClearMarks();
+
         /* --- Select: reaching a match, not just a line --- */
         this.Ed.Select(4, 2, 3);
         eq("Select lands on the line", this.Ed.Line, 4);

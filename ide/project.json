@@ -30,6 +30,7 @@
     "modules/Events.js",
     "modules/Navigator.js",
     "modules/Debugger.js",
+    "modules/Diff.js",
     "modules/Git.js",
     "modules/Changes.js",
     "modules/Strings.js",

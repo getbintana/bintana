@@ -770,7 +770,7 @@ own. It is [`Editor`](#editor--inherited-by-both-editors) plus everything below.
 | `ClearMarks([kind])` | takes them off every line |
 | `FindNext()` | moves to the next match, wrapping around |
 | `FindPrevious()` | and backwards |
-| `Mark(line, kind, [text])` | a gutter mark. `kind` is `Error` `Warning` `Info` or `Bookmark` |
+| `Mark(line, kind, [text])` | a gutter mark. `kind` is `Error` `Warning` `Info` `Bookmark`, or `Added` `Removed` `Gap`, which tint the line — a diff |
 | `Marks([kind])` | → a record per mark, in line order: `{ Line, Kind, Text }` |
 | `Replace(with)` | the match the cursor is standing on |
 | `ReplaceAll(with)` | every match |

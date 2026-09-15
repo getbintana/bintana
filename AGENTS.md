@@ -683,6 +683,15 @@ person who wrote it either.
   passed (every child has had a stdin pipe since `Write`); and a child whose
   output is not valid UTF-8 no longer fails the call, which is a widening and
   not a loss.
+- **A side by side diff is not two files side by side.** The viewer showed the
+  old version on the left and the new one on the right, scrolled together, and
+  that is genuinely useless: nothing says which lines are the change, and after
+  the first added line the two columns are off by one, so the locked scrolling
+  lines up code with unrelated code. What makes it a diff is the padding -- a
+  `Gap` row facing every added line -- and the paint. `Ide.Diff` reads git's own
+  unified output for both; it never computes a diff, and the reason is worth
+  keeping: the pair a viewer is handed can be four thousand lines, and an LCS of
+  that is a table of sixteen million cells.
 - **git names a file from the root of the repository; the IDE names it from the
   root of the project.** They are the same sentence only when the project *is*
   the repository, which is what every test and every hand-run had been. Open

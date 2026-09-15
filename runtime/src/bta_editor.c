@@ -1092,13 +1092,49 @@ static JSValue ed_show_completion(JSContext *ctx, JSValueConst this_val,
  * under Xvfb, where GTK falls back to Adwaita.  The first one that really
  * renders wins, which is what code picking an icon is supposed to do.
  */
-typedef struct { const char *kind; const char *icons[3]; int priority; } MarkKind;
+/*
+ * And three kinds that say something about the line rather than about a
+ * message: **the ones a diff needs**.
+ *
+ * A side by side diff whose two panes are just two files is two files: what
+ * makes it a diff is that the lines which differ are *shown* to. GtkSourceView
+ * already paints the line a mark is on -- `background` on the attributes -- so
+ * what this adds is three names for it and no new machinery.
+ *
+ * The colours carry an alpha and are therefore **blended over whatever the
+ * theme paints**, which is what keeps one pair of numbers right in a light
+ * scheme and in a dark one; a solid green would be a hole in a dark editor.
+ * They are a tint and not a highlight: the text on top is the file's own
+ * syntax colouring and has to stay readable.
+ *
+ * `Gap` is the third because a side by side diff has to pad: ten added lines on
+ * the right face ten lines that are **not there** on the left, and without a
+ * band saying so they read as ten blank lines in the file. It is the one of the
+ * three that is not about the file's content at all, which is why it is dim and
+ * carries no icon.
+ *
+ * Added and Removed keep an icon as well as the colour, because a diff read by
+ * somebody who cannot tell the two tints apart is a diff with no information in
+ * it -- the same argument the tree's `[M]` suffix makes beside its icon.
+ */
+typedef struct {
+    const char *kind;
+    const char *icons[3];
+    int         priority;
+    const char *background;          /* NULL: the line is not painted */
+} MarkKind;
 
 static const MarkKind MARK_KINDS[] = {
-    { "Error",    { "dialog-error-symbolic",       "dialog-error",       NULL }, 3 },
-    { "Warning",  { "dialog-warning-symbolic",     "dialog-warning",     NULL }, 2 },
-    { "Info",     { "dialog-information-symbolic", "dialog-information", NULL }, 1 },
-    { "Bookmark", { "user-bookmarks-symbolic",     "user-bookmarks",     NULL }, 0 },
+    { "Error",    { "dialog-error-symbolic",       "dialog-error",       NULL }, 3, NULL },
+    { "Warning",  { "dialog-warning-symbolic",     "dialog-warning",     NULL }, 2, NULL },
+    { "Info",     { "dialog-information-symbolic", "dialog-information", NULL }, 1, NULL },
+    { "Bookmark", { "user-bookmarks-symbolic",     "user-bookmarks",     NULL }, 0, NULL },
+    { "Added",    { "list-add-symbolic",           "list-add",           NULL }, 0,
+      "rgba(64,190,96,0.22)" },
+    { "Removed",  { "list-remove-symbolic",        "list-remove",        NULL }, 0,
+      "rgba(224,80,80,0.22)" },
+    { "Gap",      { NULL,                          NULL,                 NULL }, 0,
+      "rgba(128,128,128,0.12)" },
 };
 
 
@@ -1142,6 +1178,12 @@ static void mark_attributes(BtaWidget *w, const MarkKind *k)
     GtkSourceMarkAttributes *attrs = gtk_source_mark_attributes_new();
     if (icon)
         gtk_source_mark_attributes_set_icon_name(attrs, icon);
+
+    /* The line itself, for the kinds that are about the line. */
+    GdkRGBA tint;
+    if (k->background && gdk_rgba_parse(&tint, k->background))
+        gtk_source_mark_attributes_set_background(attrs, &tint);
+
     g_signal_connect(attrs, "query-tooltip-text",
                      G_CALLBACK(on_mark_tooltip), NULL);
     gtk_source_view_set_mark_attributes(sv, k->kind, attrs, k->priority);
@@ -1176,7 +1218,8 @@ static JSValue ed_mark(JSContext *ctx, JSValueConst this_val,
     const MarkKind *k = mark_kind(name);
     if (!k) {
         JSValue e = JS_ThrowTypeError(ctx,
-            "Mark: \"%s\" is not a kind -- Error, Warning, Info or Bookmark", name);
+            "Mark: \"%s\" is not a kind -- Error, Warning, Info, Bookmark, "
+            "Added, Removed or Gap", name);
         JS_FreeCString(ctx, name);
         return e;
     }
@@ -1223,7 +1266,8 @@ static int mark_category(JSContext *ctx, int argc, JSValueConst *argv, int at,
     const MarkKind *k = mark_kind(name);
     JS_FreeCString(ctx, name);
     if (!k) {
-        JS_ThrowTypeError(ctx, "not a mark kind -- Error, Warning, Info or Bookmark");
+        JS_ThrowTypeError(ctx, "not a mark kind -- Error, Warning, Info, "
+                               "Bookmark, Added, Removed or Gap");
         return -1;
     }
     *out = k->kind;

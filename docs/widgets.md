@@ -2085,8 +2085,14 @@ Ed.Unmark(12, "Error");  // that kind, that line
 Ed.ClearMarks("Error");  // that kind, everywhere; no argument is every kind
 ```
 
-Four kinds, named after what they mean rather than after an icon: `Error`,
-`Warning`, `Info` and `Bookmark`. Anything else is refused, because the
+Seven kinds, named after what they mean rather than after an icon: `Error`,
+`Warning`, `Info` and `Bookmark`, which put an icon in the gutter — and `Added`,
+`Removed` and `Gap`, which **paint the line**, because a side-by-side diff whose
+two panes are two files is two files. The tints carry an alpha and are therefore
+blended over whatever the theme paints, which is what keeps one pair of numbers
+right in a light scheme and in a dark one; `Gap` is a line that is not there on
+this side, which is how ten added lines on the right can face the place they were
+added on the left. Anything else is refused, because the
 alternative — a free-form category — makes every caller pick an icon name, and one
 the desktop turns out not to have draws a blank square with nothing to say why.
 Each kind carries a list of icons and the first that really renders wins: this

@@ -9338,6 +9338,66 @@ function* p_git(ide) {
           win.BtnCommit.Bounds().Y > win.Before.Bounds().Y,
           `${win.BtnCommit.Bounds().Y} vs ${win.Before.Bounds().Y}`);
 
+    /*
+     * --- the diff is a diff and not two files ---------------------------------
+     *
+     * What was missing and is the whole point of the pane: the lines that
+     * changed are **marked**, and the two columns **face each other** -- an
+     * added line on the right has a gap opposite it on the left, so the pair
+     * stays level and locked scrolling keeps showing the same place.
+     *
+     * `Uno.js` here is one line added to a two-line file, which is the smallest
+     * case that can tell alignment from luck: without it the right column is one
+     * line longer and everything below the change is off by one.
+     */
+    win.Which.Current = 0;
+    win.table().Index = win.paths[0].indexOf("Uno.js");
+    win.showChosen();
+    yield* settled(ide);
+
+    const leftLines  = win.Before.Text.split("\n");
+    const rightLines = win.After.Text.split("\n");
+
+    eq("the two columns are the same height", leftLines.length, rightLines.length);
+    check("the added line is on the right", rightLines.includes("    // dos"),
+          win.After.Text);
+
+    const added = win.After.Marks("Added");
+    eq("and it is marked as added", added.length, 1);
+    eq("on the line it really is on",
+       rightLines[added[0].Line - 1], "    // dos");
+
+    const gaps = win.Before.Marks("Gap");
+    eq("with a gap facing it on the left", gaps.length, 1);
+    eq("on the same row, which is what keeps the two level",
+       gaps[0].Line, added[0].Line);
+    eq("and the gap's line is empty", leftLines[gaps[0].Line - 1], "");
+
+    check("nothing is marked as removed here", win.Before.Marks("Removed").length === 0);
+    check("and the lines that did not change are not marked",
+          win.After.Marks().length === 1, JSON.stringify(win.After.Marks()));
+
+    /*
+     * A file git has never been told about has no diff at all -- `git diff` says
+     * nothing about an untracked one -- and showing it unmarked would say
+     * *nothing changed here* about a file that is entirely new.
+     */
+    win.table().Index = win.paths[0].indexOf("suelto.txt");
+    win.showChosen();
+    yield* settled(ide);
+
+    check("an untracked file is all additions",
+          win.After.Marks("Added").length > 0, JSON.stringify(win.After.Marks()));
+    eq("with nothing to face them on the left",
+       win.Before.Marks("Gap").length, win.After.Marks("Added").length);
+
+    /* Choosing another file does not leave the last one's marks behind. */
+    win.table().Index = win.paths[0].indexOf("Uno.js");
+    win.showChosen();
+    yield* settled(ide);
+    eq("the marks are the chosen file's and not the last one's",
+       win.After.Marks("Added").length, 1);
+
     /* Staging goes through git: assert it by asking git and not the window. */
     win.Unstaged.Index = win.paths[0].indexOf("Uno.js");
     win.BtnStage_Click();
@@ -9766,6 +9826,52 @@ function* p_git(ide) {
     ide.openProject(repo);
     yield* settled(ide);
     eq("back at the root the prefix is empty", git.prefix, "");
+
+    /*
+     * --- two hunks, which is where a parser that guessed would drift ---------
+     *
+     * The alignment above is one change in a two-line file. This is a twelve
+     * line file changed near the top *and* near the bottom, read through the
+     * same call the window makes: if the second hunk's position were read
+     * wrongly -- or the unchanged run between the two counted a line out -- the
+     * columns would be different heights and the tail would not face itself.
+     */
+    const twelve = [];
+    for (let i = 1; i <= 12; i++) twelve.push(`linea ${i}`);
+
+    File.Save(File.Join(repo, "muchas.txt"), `${twelve.join("\n")}\n`);
+    run("add", "-A");
+    run("commit", "-qm", "doce lineas");
+
+    const changed = twelve.slice();
+    changed[1]  = "linea dos, cambiada";
+    changed[10] = "linea once, cambiada";
+    File.Save(File.Join(repo, "muchas.txt"), `${changed.join("\n")}\n`);
+    ide.refreshGit();
+
+    const pair = Ide.Diff.sideBySide(git.show("", "muchas.txt"),
+                                     File.Load(File.Join(repo, "muchas.txt")),
+                                     git.diff("muchas.txt", false));
+
+    eq("two hunks keep the columns the same height",
+       pair.left.length, pair.right.length);
+    eq("and nothing is invented or lost", pair.left.length, 12);
+
+    eq("the first change is a removal facing an addition",
+       `${pair.left[1].kind}/${pair.right[1].kind}`, "Removed/Added");
+    eq("the second one too, ten rows further down",
+       `${pair.left[10].kind}/${pair.right[10].kind}`, "Removed/Added");
+    eq("with the new text on the right", pair.right[10].text, "linea once, cambiada");
+
+    const between = pair.left.slice(2, 10);
+    check("everything between them is unchanged",
+          between.every((r, i) => r.kind === "" && r.text === pair.right[i + 2].text),
+          JSON.stringify(between));
+    eq("and the last line still faces itself", pair.left[11].text, pair.right[11].text);
+
+    /* Put it back, so what follows sees the repository it expects. */
+    git.discard(["muchas.txt"]);
+    ide.refreshGit();
 
     /*
      * --- back to what the phases after this one expect ----------------------

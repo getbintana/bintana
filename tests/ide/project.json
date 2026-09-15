@@ -30,6 +30,7 @@
     "../../ide/modules/Events.js",
     "../../ide/modules/Navigator.js",
     "../../ide/modules/Debugger.js",
+    "../../ide/modules/Diff.js",
     "../../ide/modules/Git.js",
     "../../ide/modules/Changes.js",
     "../../ide/modules/Strings.js",

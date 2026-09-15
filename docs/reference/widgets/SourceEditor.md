@@ -57,15 +57,36 @@ catalogue must never rewrite code.
 
 | | |
 |---|---|
-| `Mark(line, kind, [text])` | a gutter mark. `kind` is `Error` `Warning` `Info` or `Bookmark`, and `text` is its tooltip |
+| `Mark(line, kind, [text])` | a gutter mark. `kind` is `Error` `Warning` `Info` `Bookmark` — or `Added` `Removed` `Gap`, which **paint the line** — and `text` is its tooltip |
 | `Unmark(line, [kind])` | takes marks off that line |
 | `Marks([kind])` | → **a record per mark**, in line order: `{ Line, Kind, Text }` — not a list of line numbers, which is what "the lines that carry one" was read as by the first thing that used it |
 | `ClearMarks([kind])` | takes them off every line |
 | `ShowMarks` | whether the gutter draws them |
 
+### The three that paint the line
+
+`Added`, `Removed` and `Gap` are about the **line** rather than about a message,
+and they tint it: a translucent green, a translucent red and a dim grey, blended
+over whatever the theme paints, so one pair of numbers is right in a light scheme
+and in a dark one. `Added` and `Removed` carry a gutter icon as well, because a
+diff read by somebody who cannot tell the two tints apart is a diff with nothing
+in it.
+
+`Gap` is the odd one: a line that is **not there** on this side. A side-by-side
+diff pads, so that ten added lines on the right face the place they were added on
+the left — and a blank line meaning *nothing here* must not look like a blank
+line that is in the file.
+
+```js
+Before.Mark(12, "Removed");
+After.Mark(12, "Added");
+After.Mark(13, "Gap");        // the line 13 on the left has and this one has not
+```
+
 What they are *for* is yours: an error from a compiler, a breakpoint, the line a
 search came from. The IDE marks the line an exception names, which is how a
-message in its log becomes a place in a file.
+message in its log becomes a place in a file — and its *Changes* window is these
+three.
 
 ## Completion
 

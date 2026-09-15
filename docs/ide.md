@@ -1256,6 +1256,26 @@ repository can hold more than one thing and the panel must not offer to stage
 somebody else's folder. What is committed is still whatever is staged, which is
 git's rule and not something an IDE gets to narrow.
 
+**And the panes are a diff, not two files.** The lines that changed are painted
+-- green where something was added, red where something was taken away -- and the
+two columns are **padded so they face each other**: an added line on the right has
+a dim band opposite it on the left, so the pair stays level and the locked
+scrolling keeps showing the same place. Without that padding the columns drift
+apart at the first change and everything below it is compared against the wrong
+line.
+
+**The diff is git's own**, parsed out of the unified output that is already in
+the tab beside it ([`Ide.Diff`](../ide/modules/Diff.js)). Nothing here computes
+one: a second opinion about the same two files would be a second opinion, and an
+expensive one -- the pair can be four thousand lines and a table of that is
+sixteen million cells. Where git offers no diff at all -- a file it has never been
+told about -- the whole of it is shown as added, which is what it is.
+
+The painting is `SourceEditor.Mark`, which grew three kinds for it: `Added`,
+`Removed` and `Gap`. That is the one rule again -- what the IDE needed is a
+capability every application has now, and a tint blended over the theme rather
+than a colour, so it is right in a light scheme and in a dark one.
+
 ### The Changes page, beside the tree
 
 The *Changes* window is where a diff is **read**; it is not a place to live. It
