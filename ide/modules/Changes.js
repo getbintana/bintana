@@ -222,7 +222,9 @@ Ide.Changes = class Changes {
     stageAll() {
         if (!this.ide.git.isRepo) return;
 
-        this.ide.git.run(["add", "-A"]);
+        /* `-- .` and not the whole repository: a project in a subdirectory of a
+         * bigger one must not stage somebody else's folder. */
+        this.ide.git.run(["add", "-A", ...this.ide.git.here()]);
         this.after();
     }
 

@@ -1247,6 +1247,15 @@ with no undo, and it sits one button over from something harmless. An untracked
 file is not restored but *deleted* -- `git restore` has nothing to restore it
 from -- which is a different sentence and is said as one.
 
+**A project need not be the root of its repository**, and that is not a detail:
+`examples/clients` lives inside this one. git names a file from the root of the
+*repository* and the IDE names it from the root of the *project*, so `Ide.Git`
+keeps git's own answer to *where am I* and translates every path across that
+boundary -- and every listing is scoped to the project with `-- .`, because a
+repository can hold more than one thing and the panel must not offer to stage
+somebody else's folder. What is committed is still whatever is staged, which is
+git's rule and not something an IDE gets to narrow.
+
 ### The Changes page, beside the tree
 
 The *Changes* window is where a diff is **read**; it is not a place to live. It

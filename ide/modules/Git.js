@@ -117,12 +117,56 @@ Ide.Git = class Git {
 
         this.repoOf = this.ide.project;
         this.inRepo = r.ok && r.out.trim() === "true";
+        this.prefix = this.inRepo
+            ? this.run(["rev-parse", "--show-prefix"]).out.trim()
+            : "";
         return this.inRepo;
     }
+
+    /*
+     * --- the two ways of saying where a file is -----------------------------
+     *
+     * **git speaks in paths from the root of the repository and the IDE speaks
+     * in paths from the root of the project**, and they are the same sentence
+     * only when the project *is* the repository. A project in a subdirectory --
+     * `examples/clients` of this very repository, which is how it was found --
+     * has git saying `examples/clients/Main.js` where every door in the IDE
+     * (`openInTab`, the tree's keys, `File.Join(project, …)`) says `Main.js`.
+     *
+     * The failure is quiet and total: the tree marks nothing because no name
+     * ever matches, and the diff's second pane is **empty**, because the file
+     * it went looking for was `<project>/examples/clients/Main.js`. Which is
+     * exactly what it looked like from outside -- the original on the left, a
+     * blank editor on the right, and no changes in either.
+     *
+     * So `prefix` is git's own answer (`rev-parse --show-prefix`, empty at the
+     * root), and everything crossing the boundary goes through one of these
+     * two. Nothing else in `ide/` needs to know that the boundary exists.
+     */
+    strip(path) {
+        const at = this.prefix || "";
+        return at && path.startsWith(at) ? path.slice(at.length) : path;
+    }
+
+    full(name) { return `${this.prefix || ""}${name}`; }
+
+    /*
+     * And the other half of the same fact: a repository can hold more than this
+     * project. `status` in a subdirectory lists the whole repository, so the
+     * panel would offer to stage somebody else's folder and the tree would try
+     * to mark a file it does not have.
+     *
+     * `-- .` is the pathspec that says *here and below*, relative to the `-C`
+     * this class already passes. The commit itself is still git's -- what is
+     * staged is what is committed, wherever it was staged from -- because
+     * inventing a narrower commit would be inventing a different git.
+     */
+    here() { return ["--", "."]; }
 
     /* The project is another one, or has become a repository since. */
     forget() {
         this.repoOf = null;
+        this.prefix = "";
         this.states = new Map();
         this.branchName = "";
         this.staged = this.changed = 0;
@@ -212,7 +256,7 @@ Ide.Git = class Git {
      */
     status() {
         const out = new Map();
-        const r   = this.run(["status", "--porcelain=v1", "-z"]);
+        const r   = this.run(["status", "--porcelain=v1", "-z", ...this.here()]);
 
         if (!r.ok) return out;
 
@@ -225,14 +269,14 @@ Ide.Git = class Git {
 
             const index = record[0];
             const tree  = record[1];
-            const path  = record.slice(3);
+            const path  = this.strip(record.slice(3));
 
             /* A rename's second path is the next record, and belongs to this
              * one: consuming it here is what stops it being read as a file
              * whose state is the first letter of its own name. */
             if (index === "R" || index === "C") {
                 const to = parts[++i];
-                if (to) out.set(to, index);
+                if (to) out.set(this.strip(to), index);
                 out.set(path, "D");
                 staged++;
                 continue;
@@ -289,7 +333,7 @@ Ide.Git = class Git {
      * wrong for anything that asks whether it is there.
      */
     show(where, name) {
-        const r = this.run(["show", `${where}:${name}`]);
+        const r = this.run(["show", `${where}:${this.full(name)}`]);
         return r.ok ? r.out : null;
     }
 
@@ -500,7 +544,7 @@ Ide.Git = class Git {
      */
     log(count) {
         const r = this.run(["log", "-z", `--max-count=${count || 60}`,
-                            "--format=%h%x1f%an%x1f%ar%x1f%s"]);
+                            "--format=%h%x1f%an%x1f%ar%x1f%s", ...this.here()]);
         if (!r.ok) return [];
 
         return r.out.split("\0").filter((c) => c !== "").map((record) => {
@@ -511,7 +555,8 @@ Ide.Git = class Git {
 
     /* Which files one commit touched, and what it did to each. */
     filesIn(sha) {
-        const r = this.run(["show", "--name-status", "--format=", "-z", sha]);
+        const r = this.run(["show", "--name-status", "--format=", "-z", sha,
+                            ...this.here()]);
         if (!r.ok) return [];
 
         /* `-z` here is `STATUS<NUL>path<NUL>`, and a rename is three fields. */
@@ -521,11 +566,11 @@ Ide.Git = class Git {
         for (let i = 0; i < parts.length; i += 2) {
             const state = parts[i][0];
             if (state === "R" || state === "C") {
-                out.push({ path: parts[i + 2], state });
+                out.push({ path: this.strip(parts[i + 2]), state });
                 i++;                              /* three fields, not two */
                 continue;
             }
-            out.push({ path: parts[i + 1], state });
+            out.push({ path: this.strip(parts[i + 1]), state });
         }
         return out;
     }
@@ -537,7 +582,7 @@ Ide.Git = class Git {
     /* What one commit changed, as a diff. */
     commitDiff(sha, name) {
         const args = ["show", "--no-color", "--no-ext-diff", "--format=", sha];
-        if (name) args.push("--", name);
+        args.push("--", name || ".");
 
         const r = this.run(args);
         return r.ok ? r.out : "";
@@ -554,7 +599,7 @@ Ide.Git = class Git {
      */
     split() {
         const out = { staged: [], unstaged: [] };
-        const r   = this.run(["status", "--porcelain=v1", "-z"]);
+        const r   = this.run(["status", "--porcelain=v1", "-z", ...this.here()]);
 
         if (!r.ok) return out;
 
@@ -566,7 +611,7 @@ Ide.Git = class Git {
 
             const index = record[0];
             const tree  = record[1];
-            const path  = record.slice(3);
+            const path  = this.strip(record.slice(3));
 
             if (index === "?") {
                 out.unstaged.push({ path, state: UNTRACKED });
@@ -576,8 +621,8 @@ Ide.Git = class Git {
 
             /* A rename's new name is the next record; the pair is staged. */
             if (index === "R" || index === "C") {
-                const to = parts[++i] || path;
-                out.staged.push({ path: to, state: index });
+                const to = parts[++i];
+                out.staged.push({ path: to ? this.strip(to) : path, state: index });
                 continue;
             }
 

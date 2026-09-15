@@ -9682,6 +9682,92 @@ function* p_git(ide) {
     check("and what landed is a repository", git.isRepo);
 
     /*
+     * --- a project that is not the root of its repository ---------------------
+     *
+     * The shape that broke, and it broke completely and quietly: git answers in
+     * paths from the **repository** root and every door in the IDE speaks paths
+     * from the **project** root, so a project in a subdirectory -- which is what
+     * `examples/clients` is in this very repository -- had the tree marking
+     * nothing and the diff's right-hand pane empty, because the file it went
+     * looking for was `<project>/examples/clients/Main.js`.
+     *
+     * Everything here is asserted in the IDE's spelling: a row says `Dos.js`,
+     * never `sub/Dos.js`, and the worktree half of the diff has the line that
+     * was actually written.
+     */
+    const sub = File.Join(repo, "sub");
+
+    Directory.Make(sub);
+    File.Save(File.Join(sub, "project.json"),
+              JSON.stringify({ name: "sub", startup: "Dos", sources: ["Dos.js"] }));
+    File.Save(File.Join(sub, "Dos.js"), "class Dos extends Form {\n}\n");
+    run("add", "-A");
+    run("commit", "-qm", "el subproyecto");
+
+    ide.openProject(sub);
+    yield* settled(ide);
+
+    check("a project inside a repository is in one", git.isRepo);
+    eq("and git says where it is", git.prefix, "sub/");
+
+    File.Save(File.Join(sub, "Dos.js"),
+              "class Dos extends Form {\n    // cambiado\n}\n");
+    ide.refreshGit();
+
+    eq("a change is seen under the project's own name", git.stateOf("Dos.js"), "M");
+    eq("and not under git's", git.stateOf("sub/Dos.js"), "");
+
+    /* What is above the project is not this project's business: the repository
+     * root has files of its own, and none of them is in the list. */
+    check("nothing from outside the project is listed",
+          [...git.split().unstaged, ...git.split().staged]
+              .every((r) => !r.path.includes("/") || r.path.startsWith("Otros/")),
+          JSON.stringify(git.split()));
+
+    /* The two halves of the diff, which is the failure as it was reported: the
+     * original on the left and a blank editor on the right. */
+    const winSub = GitForm.open(ide);
+    yield* settled(ide);
+
+    winSub.Which.Current = 0;
+    winSub.table().Index = winSub.paths[0].indexOf("Dos.js");
+    winSub.showChosen();
+    yield* settled(ide);
+
+    check("the before pane has the committed version",
+          winSub.Before.Text.includes("class Dos"), winSub.Before.Text);
+    check("and the after pane has what is on disk",
+          winSub.After.Text.includes("cambiado"), winSub.After.Text);
+    check("with git's own diff beside it",
+          winSub.Unified.Text.includes("+    // cambiado"), winSub.Unified.Text);
+
+    /* And the commands, which take the IDE's spelling and reach the right file. */
+    winSub.BtnStage_Click();
+    yield* settled(ide);
+
+    eq("staging from a subdirectory stages the right file",
+       git.split().staged.map((r) => r.path).join(), "Dos.js");
+
+    winSub.Message.Text = "desde el subproyecto";
+    winSub.BtnCommit_Click();
+    yield* settled(ide);
+
+    check("and committing commits it",
+          run("log", "--oneline").Output.includes("desde el subproyecto"));
+    winSub.Close();
+    yield* settled(ide);
+
+    /* The history, which reads the same paths back out of a commit. */
+    eq("what a commit touched is named the project's way",
+       git.filesIn(git.log(1)[0].sha).map((f) => f.path).join(), "Dos.js");
+    check("and the file can be read out of it",
+          (git.fileAt(git.log(1)[0].sha, "Dos.js") || "").includes("cambiado"));
+
+    ide.openProject(repo);
+    yield* settled(ide);
+    eq("back at the root the prefix is empty", git.prefix, "");
+
+    /*
      * --- back to what the phases after this one expect ----------------------
      *
      * This one opened a **project of its own**, which nothing else here does:

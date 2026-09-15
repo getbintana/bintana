@@ -204,6 +204,16 @@ readers already were, so the panel and the window press *the same* commands with
 the same guards rather than two spellings of each. Prior art for the shape:
 Android Studio's *Commit* tool window and Visual Studio's *Git Changes* pane.
 
+**What none of the seven stages foresaw: the project may not be the repository.**
+The whole design says *paths*, and never which root they are counted from --
+git's answers are from the root of the repository and every door in the IDE takes
+a path from the root of the project. They agree exactly as long as the two are
+the same directory, which is what every test and every hand-run had been. In
+`examples/clients`, a project inside this repository, the tree marked nothing and
+the diff's worktree pane was blank. `prefix`, `strip` and `full` are the
+translation, and `-- .` is the other half: the listings are scoped to the
+project, since a repository can hold more than one.
+
 ## What it costs outside the code
 
 A section in [ide.md](ide.md); the row in the root README's *What is next*;

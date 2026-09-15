@@ -683,6 +683,18 @@ person who wrote it either.
   passed (every child has had a stdin pipe since `Write`); and a child whose
   output is not valid UTF-8 no longer fails the call, which is a widening and
   not a loss.
+- **git names a file from the root of the repository; the IDE names it from the
+  root of the project.** They are the same sentence only when the project *is*
+  the repository, which is what every test and every hand-run had been. Open
+  `examples/clients` -- a project inside *this* repository -- and git says
+  `examples/clients/ClientsForm.js` where `openInTab`, the tree's keys and
+  `File.Join(project, …)` all say `ClientsForm.js`. Nothing errors: the tree
+  marks nothing because no name ever matches, and the diff's worktree pane comes
+  up **empty**, because it went looking for
+  `<project>/examples/clients/ClientsForm.js`. `Ide.Git` keeps git's own answer
+  (`rev-parse --show-prefix`) and crosses the boundary in `strip`/`full`; and
+  every listing carries `-- .`, since a repository can hold more than this
+  project and the panel must not offer to stage somebody else's folder.
 - **A `Split` inside a `Fixed` gave its diff 46 pixels of a 620-pixel window.**
   Two mistakes that look like one. The window was a `Fixed` root with every
   region at an `X`, a `Y` and a height of its own, so a taller window gave the
