@@ -94,7 +94,7 @@ A child node:
 | Key | Meaning |
 |---|---|
 | `type` | a class name: a runtime control, or one of the project's own components |
-| `name` | becomes `Widget.Name`, is exposed as `this.<name>`, and prefixes its handlers. Must be a valid JS identifier, and unique on the form |
+| `name` | becomes `Widget.Name`, is exposed as `this.<name>`, and prefixes its handlers. Must be a valid JS identifier, unique on the form, and **not something a `Form` already answers to** — `Actions`, `Menus`, `Controls`, `DefaultButton` and `CancelButton` are read-only, so a control called one of them binds to nothing and the form refuses to load, saying which |
 | `properties` | applied **in the order written** |
 | `children` | nested, to any depth. A container's children are added to it |
 | `design` | what the *designer* shows instead; unreachable from a running application |

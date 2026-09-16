@@ -1,9 +1,10 @@
 # Strict checks: what has to move first is the runtime's own bookkeeping
 
-**Nothing in this document is implemented.** The idea is one line -- *make a
-widget refuse a property it does not have, so a misspelt name fails where it is
-written instead of doing nothing forever* -- and measuring it turned a one-line
-feature into a small cleanup with the check as its proof.
+**Nothing in this document is implemented, and one thing it used to propose no
+longer needs to be** -- see the note under *the obstacle*. The idea is one line
+-- *make a widget refuse a property it does not have, so a misspelt name fails
+where it is written instead of doing nothing forever* -- and measuring it turned
+a one-line feature into a small cleanup with the check as its proof.
 
 It is the runtime's half of the answer
 [`Ide.Live` and `Ide.Check`](ide.md#the-names-a-file-uses-checked-while-it-is-written)
@@ -65,6 +66,15 @@ They are **invisible today by arrangement**: a `__` name, the enumerable bit
 left off, and -- as `bta_table.c` puts it -- *invisible to the serialiser
 besides, which discovers accessors and not own properties*. The proposal here is
 to stop arranging it and make it true.
+
+> **One of the seven silences left this plan while it was being written.** A
+> control whose name is a *read-only* member of `Form` was lost without a word,
+> and the reason was not the language: `bta_form.c` bound it with
+> `JS_SetPropertyStr` and did not look at the answer, a hundred lines under a
+> loop that checks its own. It looks now, and the form refuses to load, saying
+> which control and why. That was **one line** and it needed none of what is
+> below -- which is worth knowing before starting: not every silence here wants
+> the cleanup.
 
 ### Why they live on the object, and why that argument has moved
 
@@ -148,6 +158,7 @@ both:
 |---|---|---|
 | `this.Lbl.Txt = "x"` | yes | yes, **and in the act, with the line** |
 | a control reached by name (`this[which].Txt`) | no | yes |
+| a control named `Actions` | no | **already done, and not by this**: the loader checks the answer now and refuses the form. Only the read-only members land there -- a *method* like `Close` is shadowed rather than refused, and stays the static check's |
 | a property of a component of the project | no -- the IDE never loads its code | yes |
 | a `.form` the IDE has never opened | no | yes |
 | `Btn_Clik()`, the handler nobody calls | **yes** | no: nothing is assigned |

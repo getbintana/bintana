@@ -4402,6 +4402,69 @@ class Spike extends Form {
                  check("...and down a pipe it says it with no escape in it",
                        !all.includes("\x1b"), JSON.stringify(all.slice(0, 120)));
                  waiting--;
+                 this.nameTakenByForm();
+             });
+    }
+
+    /*
+     * A control cannot be called what a `Form` already calls something.
+     *
+     * `form.Button1 = <widget>` is how a handler reaches a control, and when the
+     * name is already a member of `Form` the assignment **fails**: `Actions`,
+     * `Menus`, `Controls`, `DefaultButton` and `CancelButton` are getters with no
+     * setter. The loader used not to look at the answer -- a hundred lines above
+     * the same file checks its own -- so the form went on loading with a control
+     * that nothing could reach and nobody was told. This repository's own
+     * `examples/clients` had a `Panel` named `Actions`, and `this.Actions` there
+     * answered the form's action list.
+     *
+     * A *method* is a different case and is deliberately not here: `Close` is
+     * shadowed by the control rather than refusing it, the assignment succeeds,
+     * and finding that one is `Ide.Check`'s job. Both are written down in
+     * `docs/strict-plan.md`.
+     */
+    nameTakenByForm() {
+        waiting++;
+
+        const proj = File.Join(SCRATCH, "name-taken");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "taken", startup: "Taken", sources: ["Taken.js"] });
+        File.SaveJson(File.Join(proj, "Taken.form"), {
+            format: "bintana-form/1",
+            class: "Taken",
+            properties: { Width: 200, Height: 100 },
+            children: [{ type: "Panel", name: "Actions", properties: { X: 1, Y: 1 } }],
+        });
+        /*
+         * **`Application.OnError`, because otherwise this hangs.** A startup form
+         * that fails to load puts the runtime on a modal dialog and waits for
+         * somebody to dismiss it -- right for a person, a hung child for a test.
+         * The hook is evaluated with the sources, before the form is built, so it
+         * is already in place when the loader refuses.
+         */
+        File.Save(File.Join(proj, "Taken.js"),
+                  "Application.OnError = (m) => { print('caught: ' + m); };\n" +
+                  "class Taken extends Form { Form_Open() { print('ran'); } }\n");
+
+        const said = [];
+        Exec([Application.Executable, proj], { Timeout: 20000 },
+             (line) => said.push(line),
+             (code) => {
+                 const all = said.join("\n");
+                 /* `check` and not a `neq`, which this project does not have --
+                  * and reaching for one threw inside this very callback, which
+                  * stopped the chain and read as a *hang* rather than as a red
+                  * line. The exception was printed; the run still looked frozen. */
+                 check("a control named after a Form member stops the form",
+                       code !== 0, String(code));
+                 check("...saying which control and why",
+                       all.includes("Panel 'Actions'") &&
+                       all.includes("a Form already has a member of that name"), all);
+                 check("...and the form never opened", !all.includes("ran"), all);
+                 check("...with the hook reaching it too",
+                       all.includes("caught: TypeError"), all);
+                 waiting--;
              });
     }
 

@@ -394,11 +394,44 @@ static int build_one(JSContext *ctx, JSValueConst form_obj,
         goto out;
     }
 
-    /* form.Button1 = <widget>: how handlers reach it, and what keeps it alive. */
-    if (name)
-        JS_SetPropertyStr(ctx, form_obj, name, obj);
-    else
+    /*
+     * form.Button1 = <widget>: how handlers reach it, and what keeps it alive.
+     *
+     * **And the answer is looked at**, which it was not -- the one difference
+     * between this line and the property loop a hundred lines up, which has
+     * checked its own since it was written.
+     *
+     * A control whose name is already a member of `Form` binds to *nothing*:
+     * `Actions`, `Menus`, `Controls`, `DefaultButton` and `CancelButton` are
+     * getters with no setter, so the assignment fails and the form went on
+     * loading with a control that no handler could reach and nothing said a
+     * word. Found in this repository's own `examples/clients`, which had a
+     * `Panel` named `Actions` -- `this.Actions` there answered the *form's*
+     * action list, and the panel had no name at all.
+     *
+     * Fatal, like a property the class refuses, and for the better reason: a
+     * form that cannot bind its own controls is not a form that half works. The
+     * exception QuickJS raises travels too, so the dialog says *no setter for
+     * property* under this line's plainer sentence.
+     *
+     * Not every collision lands here: a name that is a *method* -- `Close`,
+     * `Show` -- is shadowed rather than refused, and the assignment succeeds.
+     * That one stays [Ide.Check]'s, and the two are written down together in
+     * `docs/strict-plan.md`.
+     *
+     * `JS_SetPropertyStr` consumes `obj` whichever way it goes, so there is
+     * nothing to free on this path.
+     */
+    if (name) {
+        if (JS_SetPropertyStr(ctx, form_obj, name, obj) < 0) {
+            fprintf(stderr, "bintana: %s '%s': a Form already has a member of "
+                            "that name, so nothing can reach this control\n",
+                    type, name);
+            goto out;
+        }
+    } else {
         JS_FreeValue(ctx, obj);
+    }
 
     rc = 0;
 out:
