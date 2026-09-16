@@ -338,6 +338,9 @@ class BadThunk extends Record {
  */
 const TESTS = [
     "Serializer",
+    /* Beside it: what it asserts is that the serialiser can reach the bottom of
+     * a tree at all, which is a property of the build and not of a widget. */
+    "DeepSerialize",
     /*
      * Second, and not near the other Exec: it is the one test that **holds the
      * main loop**, since every `Exec.Wait` blocks for as long as its child runs.
@@ -4361,7 +4364,93 @@ class Spike extends Form {
                        all.split("/nosuchlibrary").length - 1 >= 4, all);
                  check("and the main never ran", !all.includes("ran"), all);
                  waiting--;
+                 this.errorIsNotColoured();
              });
+    }
+
+    /*
+     * And what a program that throws writes into a **pipe** has no colour in it.
+     *
+     * `Bintana error:` is written in red, and it was written in red whether or
+     * not anything was listening in a terminal. That was true and invisible for
+     * as long as the IDE's output pane was a VTE, which ate the escapes; the day
+     * it became an ordinary text buffer they became six visible characters in
+     * front of every traceback -- and the same six are in a redirected log and in
+     * a CI capture, which is where most tracebacks are read from.
+     *
+     * `isatty` is the whole of the fix and this is the half of it that can be
+     * asserted: a child of this process writes down a pipe. The other half -- the
+     * red is still red on a terminal -- needs a pty and is checked by hand.
+     */
+    errorIsNotColoured() {
+        waiting++;
+
+        const proj = File.Join(SCRATCH, "throws");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "throws", main: "Main" });
+        File.Save(File.Join(proj, "Main.js"),
+                  "function Main() { throw new Error('a purpose'); }\n");
+
+        const said = [];
+        Exec([Application.Executable, proj], { Timeout: 20000 },
+             (line) => said.push(line),
+             () => {
+                 const all = said.join("\n");
+                 check("a traceback still says what went wrong",
+                       all.includes("a purpose"), all);
+                 check("...and down a pipe it says it with no escape in it",
+                       !all.includes("\x1b"), JSON.stringify(all.slice(0, 120)));
+                 waiting--;
+             });
+    }
+
+    /*
+     * A tree deeper than any real form still serialises -- **in this build,
+     * whichever build it is**.
+     *
+     * The walk that writes a `.form` is recursive with the data, and QuickJS
+     * enforces a stack budget in *bytes*. What matters is the number of levels
+     * that budget buys, and it is not the same number twice: measured, a tower
+     * of `Panel`s serialises a hundred levels deep in an ordinary build and used
+     * to stop at **ten** under AddressSanitizer, whose frames are about ten
+     * times fatter. Ten is exactly the depth of the IDE's own window, so the
+     * sanitized suite had no headroom at all and `tests/ide` was red there while
+     * green everywhere else -- which is the false failure that job exists to
+     * avoid producing, rather than one to produce.
+     *
+     * Fifteen is the number here because it is half again the deepest form this
+     * repository has and well inside what the tightest build allows. It is an
+     * assertion about the *ceiling*, so it belongs with the widgets and not with
+     * the IDE: what it is really asking is whether this build can save a form at
+     * all.
+     */
+    testDeepSerialize() {
+        const DEPTH = 15;
+
+        const root = new Panel();
+        let at = root;
+        for (let i = 0; i < DEPTH; i++) {
+            const box = new Panel();
+            box.Name = `Deep${i}`;
+            at.Add(box);
+            at = box;
+        }
+
+        let node = null;
+        try {
+            node = root.Serialize();
+        } catch (e) {
+            check(`a tree ${DEPTH} deep serialises`, false, e.message);
+            return;
+        }
+
+        /* Walked to the bottom, so the depth asserted is the depth written. */
+        let deep = 0;
+        for (let n = node; n && n.children && n.children.length; n = n.children[0])
+            deep++;
+
+        eq(`a tree ${DEPTH} deep serialises, all of it`, deep, DEPTH);
     }
 
     /* --- DrawingArea ----------------------------------------------------- */

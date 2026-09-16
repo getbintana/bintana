@@ -738,6 +738,44 @@ msgstr "Enviar al fondo"
 msgid "Output"
 msgstr "Salida"
 
+#: forms/MainForm.form: LblOutline.Text
+msgid "Outline"
+msgstr "Contenido"
+
+#: forms/MainForm.form: menu MnuGotoFile
+msgid "Go to file..."
+msgstr "Ir al archivo..."
+
+#: forms/MainForm.form: menu MnuCommands
+msgid "Run a command..."
+msgstr "Ejecutar un comando..."
+
+#: forms/QuickForm.form: QuickForm.Text forms/QuickForm.js:238
+msgid "Go to file"
+msgstr "Ir al archivo"
+
+#: forms/QuickForm.form: TxtFind.Placeholder
+msgid "A file, or > for a command"
+msgstr "Un archivo, o > para un comando"
+
+#: forms/QuickForm.form: TxtFind.Tooltip
+msgid "Type part of a file's name, or > to run a command"
+msgstr "Escribí parte del nombre de un archivo, o > para ejecutar un comando"
+
+#: forms/QuickForm.js:237
+msgid "Run a command"
+msgstr "Ejecutar un comando"
+
+#: forms/QuickForm.js:224
+msgid "{0} command"
+msgid_plural "{0} commands"
+msgstr[0] "{0} comando"
+msgstr[1] "{0} comandos"
+
+#: forms/MainForm.form: ConsoleBox.Tabs modules/Problems.js:198
+msgid "Problems"
+msgstr "Problemas"
+
 #: forms/MainForm.form: LblStack.Text
 msgid "Call stack"
 msgstr "Pila de llamadas"
@@ -1170,6 +1208,24 @@ msgstr "Terminal"
 #: forms/MainForm.js:881
 msgid "the shell ended"
 msgstr "el shell terminó"
+
+#: modules/Problems.js:144
+msgid "Place"
+msgstr "Lugar"
+
+#: modules/Problems.js:145
+msgid "Problem"
+msgstr "Problema"
+
+#: modules/Problems.js:197
+msgid "{0} problem"
+msgid_plural "{0} problems"
+msgstr[0] "{0} problema"
+msgstr[1] "{0} problemas"
+
+#: modules/Runner.js:243
+msgid "the run ended badly"
+msgstr "la ejecución terminó mal"
 
 #: forms/MainForm.js:1066
 msgid "{0}   double click to edit"

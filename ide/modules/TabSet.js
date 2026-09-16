@@ -350,11 +350,20 @@ Ide.TabSet = class TabSet {
         if (this.switching) return;
         this.switching = true;
 
+        /* A check put off for the tab being left would read the wrong file by
+         * the time it fired. What it already reported stays: a name that does
+         * not exist is wrong whether or not one is looking at it. */
+        this.ide.live.left();
+
         try {
             this.switchNow(name);
         } finally {
             this.switching = false;
         }
+
+        /* And the file arriving is checked without waiting for a keystroke:
+         * opening a file is exactly when one wants to know. */
+        this.ide.live.typed();
 
         /* The bar belongs to the tab on screen: a file that changed behind a tab
          * one was not looking at has its say when that tab comes forward. */
@@ -481,6 +490,11 @@ Ide.TabSet = class TabSet {
          * Nothing has to be rescued first, which is the point of a page owning
          * its content. */
         this.unwatch(state);          /* nothing to report about a file nobody has open */
+        /* And the names it was checked for.  **A source that cannot refresh
+         * itself must not leave rows behind**: the live check reads the *active*
+         * editor, so a row about a file that is no longer open could never be
+         * corrected -- it would sit in the panel being wrong. */
+        this.ide.live.forget(name);
         /* What the page did *not* keep to itself: the previewed menu bar hangs
          * its items and their handlers off the IDE's own form, which is the one
          * thing a closed page cannot take with it. */
@@ -634,9 +648,12 @@ Ide.TabSet = class TabSet {
             this.ide.Glass.Menu   = CANVAS_MENU;
         }
 
-        /* The panel speaks about a selection, and there is one only while a form
-         * is being designed. */
-        this.ide.SidePanel.Visible = this.ide.designing;
+        /* The panel used to speak about a selection alone, and so was hidden
+         * on every code tab -- 280 pixels of nothing beside the one kind of file
+         * that has wanted a list of what is in it since Visual Basic. It holds
+         * two things now and `Outline` decides which, because which one belongs
+         * there is the same question as what is in it. */
+        this.ide.outline.place();
 
         /* And the find bar speaks about an editor, which has just changed hands. */
         this.ide.finder.sync();
@@ -701,6 +718,14 @@ Ide.TabSet = class TabSet {
         editor.ClearMarks("Error");
 
         const bad = Application.CheckSource(editor.Text);
+
+        /* Its own source, keyed by the file: saving one file says nothing about
+         * whether another still compiles, and a collector that let it would
+         * clear a complaint nobody answered. */
+        this.ide.problems.report(`syntax:${name}`, bad
+            ? [{ kind: "Error", file: name, line: bad.Line, text: bad.Message }]
+            : []);
+
         if (!bad) return true;
 
         if (bad.Line > 0) editor.Mark(bad.Line, "Error", bad.Message);

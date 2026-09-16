@@ -1537,6 +1537,45 @@ Other
   On save and not on every keystroke: half a line is not a syntax error. It never
   refuses the save; broken code is what one has written when one stops to go and
   look something up.
+- **A name that no control has is said out loud** (`Ide.Live`). `this.Lbl.Txt =
+  "hola"` parses, runs, changes nothing and — until now — said nothing ever:
+  the runtime checks a *value* (`HAlign = "Centre"` names the five valid ones,
+  `Width = "ancho"` refuses by type) and never a *name*, because an assignment to
+  a widget is an ordinary JavaScript property. So four hundred milliseconds after
+  the typing stops, `this.Btn.Txt` and `Btn_Clik()` get a warning in the gutter
+  and a row in the panel. **Not a live syntax check**, which the save deliberately
+  keeps to itself — half a line is not a syntax error — and **what the caret is
+  inside is never reported**, because a diagnostic about the token the cursor is
+  in is a diagnostic about something still being typed. Nothing is inferred: the
+  `.form` beside the file says what every control is, which is the type
+  declaration a JavaScript editor normally does not have.
+- **Quick open and the command palette** (`Ctrl+P`, `Ctrl+Shift+P`) are one
+  window a character apart: it opens on the project's files, and a `>` turns it
+  into the commands — the same *one box, two kinds of answer* rule *Go to...*
+  already used for digits against letters. **It invents no commands**: the list
+  is the menu bar read back out of `Form.Menus`, with the accelerator each item
+  declares, the submenu it is in, and the enabled state the IDE already computes
+  — so one that would refuse is greyed rather than hidden. `Ctrl+Shift+P` used
+  to open *Project settings*, which gave the key up: a reflex brought from every
+  editor written since Sublime has to land on the thing it means.
+- **An outline beside the code** — the methods the file declares, in the side
+  panel that used to be hidden on every code tab because what it held spoke about
+  a designer's selection. Visual Basic's procedure dropdown, Delphi's *Code
+  Explorer*, VS Code's *Outline*: the same question, answered without a search
+  box, which is what separates it from `Ctrl+Shift+O`. It goes both ways — a row
+  takes the cursor there, and the cursor takes the row, which is most of what the
+  dropdown was for. No index: it reads the text on screen, for the same reason
+  F12 does.
+- **Problems** is the bottom panel's third page: everything wrong with the
+  project, worst first, each row a place to go to. It **finds nothing of its
+  own** — what it collects is the syntax error a save found, the warnings the
+  string lint has been writing to a terminal nobody reads, and where a failed run
+  died. A source replaces its own rows and nobody else's, which is what makes it
+  a collector rather than a second console; the count is on the tab, because a
+  panel one has to open before it can say whether anything is wrong is a panel
+  one stops opening. Visual Basic's *Messages*, Delphi's, Visual Studio's *Error
+  List* and VS Code's *Problems* are all the same object, and all four sit under
+  the editor for the same reason: a problem is about a line.
 - **Quitting with unsaved work asks first**, and the window's own X asks the same
   question — `Form_Close` is a veto now, so there is one road out of the IDE
   rather than a governed one and an ungovernable one. The answers are *quit

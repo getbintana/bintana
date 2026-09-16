@@ -45,6 +45,14 @@ that it hands over, and the binary it chose is the binary the runner reports as
 its own -- there is no path passed down and nothing that can disagree about which
 build ran.
 
+**A sanitized build is not just slower, it is shallower.** The stack budget
+`JS_SetMaxStackSize` sets is a number of bytes, and AddressSanitizer's frames are
+about ten times fatter -- so the same budget that walks a hundred levels of widget
+tree ordinarily walked ten under the sanitizer, which is the exact depth of the
+IDE's own window. `tests/ide` was red there and green everywhere else for that
+reason alone. The budget follows the build now, and `tests/widgets`'
+`DeepSerialize` is the assertion that says so in whichever one is running.
+
 The hang guard is `Timer.After` and `Kill`, which is where the shell's `timeout`
 went. It sends SIGTERM and then SIGKILL five seconds later, to the child's whole
 **process group**: killing `xvfb-run` alone left its X server orphaned to init
@@ -52,8 +60,11 @@ once per timeout, and the survivor held the output pipe open so the last of the
 project's output was never read. See [`runtime-api.md`](runtime-api.md#exec). That timeout is a guard against a
 hang -- an uncaught throw in `Form_Open` aborts before `Application.Quit` and the
 project would sit there forever -- so it has to stay well clear of how long a
-project legitimately takes: `tests/ide` drives the whole IDE and takes about a
-minute, twice that under a sanitizer. `TIMEOUT=<seconds>` overrides it, and
+project legitimately takes: `tests/ide` drives the whole IDE and takes **4m45
+here**, twice that under a sanitizer -- which is 95% of the whole suite's wall
+clock, against 8.8 seconds for `widgets` and about 3 each for the other three, so
+running the projects in parallel would buy nothing. The guard is 600 because it
+was 300 and a passing run tripped it. `TIMEOUT=<seconds>` overrides it, and
 `tests/asan.sh` raises it on its own. A guard set just above the real time makes a
 slow machine look like a broken one. There is no framework to learn: `check`,
 `eq`, `neq` and `throws` are ten lines at the top of each project.

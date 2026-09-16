@@ -236,6 +236,15 @@ is dismissed, which is what keeps a handler that throws on every timer tick from
 stacking dialogs forever. An error raised *inside* `OnError` only reaches the
 terminal — the guard is still up, so it cannot come back around.
 
+**`Bintana error:` is red only on a terminal.** It was red unconditionally, which
+was true and invisible for as long as the only thing reading it down a pipe was a
+VTE that ate the escapes. The IDE's output pane stopped being one, and six
+characters appeared in front of every traceback — and the same six are in a
+redirected log, in a CI capture and in anything that runs a project with `Exec`,
+which is where most tracebacks are actually read. `isatty(stderr)` is asked once
+and the sequences are empty strings when the answer is no; `tests/widgets` runs a
+child that throws and asserts its output carries none.
+
 ### Simplified over raw
 
 Where a low-level primitive and a Bintana way of doing the same thing both

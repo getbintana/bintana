@@ -77,6 +77,12 @@ Ide.Strings = class Strings {
          * shows when the pass is over. */
         this.entries  = new Map();
         this.warnings = [];
+
+        /* The same warnings as places rather than as prose, for the Problems
+         * panel. Two lists filled by one `warn` and never by hand: a panel that
+         * parsed `file:line: text` back out of the sentence above would be
+         * reading what this class had just finished writing. */
+        this.found    = [];
     }
 
     /*
@@ -86,7 +92,8 @@ Ide.Strings = class Strings {
      */
     collect() {
         this.entries  = new Map();      /* key -> { ctxt, msgid, plural, where } */
-        this.warnings = [];             /* both start over: this is a fresh scan */
+        this.warnings = [];             /* all of it starts over: a fresh scan */
+        this.found    = [];
 
         for (const path of this.projectFiles(".form")) this.fromForm(path);
         for (const path of this.projectFiles(".js"))   this.fromSource(path);
@@ -130,7 +137,7 @@ Ide.Strings = class Strings {
         try {
             root = File.LoadJson(path);
         } catch (e) {
-            this.warnings.push(`${rel}: ${e.message}`);
+            this.warn(rel, 0, e.message);
             return;
         }
 
@@ -261,6 +268,16 @@ Ide.Strings = class Strings {
     }
 
     /*
+     * One warning, said twice: as the sentence the console and the translation
+     * report print, and as the place the Problems panel lists. `line` is 0 for
+     * a warning about the whole file.
+     */
+    warn(rel, line, text) {
+        this.warnings.push(line ? `${rel}:${line}: ${text}` : `${rel}: ${text}`);
+        this.found.push({ kind: "Warning", file: rel, line, text });
+    }
+
+    /*
      * The lint: strings that will never reach a translator, and the IDE is the
      * only thing in a position to notice.
      *
@@ -288,11 +305,11 @@ Ide.Strings = class Strings {
                 if (!/\p{L}/u.test(prose)) continue;
 
                 const line = src.slice(0, m.index).split("\n").length;
-                this.warnings.push(
-                    `${rel}:${line}: a template literal in ${spec.call} cannot be ` +
-                    `translated -- the msgid arrives already filled in. ` +
-                    `Give ${spec.call} the text as one literal with {0} placeholders, ` +
-                    `and pass the values after it.`);
+                this.warn(rel, line,
+                    `a template literal in ${spec.call} cannot be translated -- ` +
+                    `the msgid arrives already filled in. Give ${spec.call} the ` +
+                    `text as one literal with {0} placeholders, and pass the ` +
+                    `values after it.`);
             }
         }
 
@@ -311,10 +328,9 @@ Ide.Strings = class Strings {
             let m;
             while ((m = re.exec(src)) !== null) {
                 const line = src.slice(0, m.index).split("\n").length;
-                this.warnings.push(
-                    `${rel}:${line}: the text in ${spec.call} is two literals ` +
-                    `joined, so only the first is extracted. Write it as one ` +
-                    `string, however long.`);
+                this.warn(rel, line,
+                    `the text in ${spec.call} is two literals joined, so only ` +
+                    `the first is extracted. Write it as one string, however long.`);
             }
         }
 
@@ -331,10 +347,10 @@ Ide.Strings = class Strings {
                 if (!value || !/\p{L}/u.test(value)) continue;
 
                 const line = src.slice(0, m.index).split("\n").length;
-                this.warnings.push(
-                    `${rel}:${line}: ${JSON.stringify(value)} is assigned to .${key} ` +
-                    `from code, so nothing extracts it. Declare it in the .form, or ` +
-                    `wrap it in Locale.Text.`);
+                this.warn(rel, line,
+                    `${JSON.stringify(value)} is assigned to .${key} from code, ` +
+                    `so nothing extracts it. Declare it in the .form, or wrap it ` +
+                    `in Locale.Text.`);
             }
 
             /*
@@ -352,10 +368,10 @@ Ide.Strings = class Strings {
                 if (!/\p{L}/u.test(prose)) continue;
 
                 const line = src.slice(0, m.index).split("\n").length;
-                this.warnings.push(
-                    `${rel}:${line}: a template literal is assigned to .${key}, so ` +
-                    `nothing extracts it. Wrap it in Locale.Text with {0} placeholders, ` +
-                    `or declare the template in the .form and call Fill().`);
+                this.warn(rel, line,
+                    `a template literal is assigned to .${key}, so nothing ` +
+                    `extracts it. Wrap it in Locale.Text with {0} placeholders, or ` +
+                    `declare the template in the .form and call Fill().`);
             }
         }
     }

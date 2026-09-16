@@ -765,6 +765,44 @@ msgstr ""
 msgid "Output"
 msgstr ""
 
+#: forms/MainForm.form: LblOutline.Text
+msgid "Outline"
+msgstr ""
+
+#: forms/MainForm.form: menu MnuGotoFile
+msgid "Go to file..."
+msgstr ""
+
+#: forms/MainForm.form: menu MnuCommands
+msgid "Run a command..."
+msgstr ""
+
+#: forms/QuickForm.form: QuickForm.Text forms/QuickForm.js:238
+msgid "Go to file"
+msgstr ""
+
+#: forms/QuickForm.form: TxtFind.Placeholder
+msgid "A file, or > for a command"
+msgstr ""
+
+#: forms/QuickForm.form: TxtFind.Tooltip
+msgid "Type part of a file's name, or > to run a command"
+msgstr ""
+
+#: forms/QuickForm.js:237
+msgid "Run a command"
+msgstr ""
+
+#: forms/QuickForm.js:224
+msgid "{0} command"
+msgid_plural "{0} commands"
+msgstr[0] ""
+msgstr[1] ""
+
+#: forms/MainForm.form: ConsoleBox.Tabs modules/Problems.js:198
+msgid "Problems"
+msgstr ""
+
 #: forms/MainForm.form: LblStack.Text
 msgid "Call stack"
 msgstr ""
@@ -1186,6 +1224,24 @@ msgstr ""
 
 #: forms/MainForm.js:881
 msgid "the shell ended"
+msgstr ""
+
+#: modules/Problems.js:144
+msgid "Place"
+msgstr ""
+
+#: modules/Problems.js:145
+msgid "Problem"
+msgstr ""
+
+#: modules/Problems.js:197
+msgid "{0} problem"
+msgid_plural "{0} problems"
+msgstr[0] ""
+msgstr[1] ""
+
+#: modules/Runner.js:243
+msgid "the run ended badly"
 msgstr ""
 
 #: forms/MainForm.js:1066

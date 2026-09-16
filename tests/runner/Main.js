@@ -58,14 +58,22 @@ const NOISE = /Gdk-WARNING|Gtk-WARNING|libEGL warning/;
  * for (`tests/asan.sh` raises it).  A guard set just above the real time turns a
  * slow machine into a red suite, and that is worse than waiting.
  *
- * **Three hundred, because `tests/ide` measures 3m30 here** and the comment above
- * this line said *about a minute* when the guard was 180. The suite grew into it
- * over many changes rather than in one: everything up to and including the
- * `help` phase is 25 seconds, so what takes the time is the second half -- the
- * phases that open and reopen projects. That is worth a look one day; a guard
- * that a passing run trips is worth nothing today.
+ * **Six hundred, because `tests/ide` measures 4m45 here** -- and the comment above
+ * this line said *3m30* when the guard was 300, which is the second time the
+ * suite has grown into its own guard. It did trip once: a passing run reported
+ * `timed out after 300s` and the next run of the same code passed in 285. A
+ * guard fifteen seconds from the real time is not a guard, it is a coin toss.
+ *
+ * The suite grows into it over many changes rather than in one: everything up to
+ * and including the `help` phase is 25 seconds, so what takes the time is the
+ * second half -- the phases that open and reopen projects. **That is measured
+ * and it is one project's doing**: `ide` is 285 seconds of a 300-second suite,
+ * against 8.8 for `widgets` and about 3 each for the other three. Running the
+ * projects in parallel would buy nothing; whatever is to be won is inside this
+ * one. Worth a look one day; a guard that a passing run trips is worth nothing
+ * today.
  */
-const TIMEOUT = Number(Environment.Get("TIMEOUT")) || 300;
+const TIMEOUT = Number(Environment.Get("TIMEOUT")) || 600;
 
 /*
  * The grace between the guard's two signals, handed to `Exec` as `KillAfter`.

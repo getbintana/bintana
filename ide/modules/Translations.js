@@ -403,6 +403,12 @@ Ide.Translations = class Translations {
         File.Save(pot, this.template(found));
 
         for (const line of this.ide.strings.warnings) Logger.Warning(line);
+
+        /* And where somebody will actually see them: `Logger.Warning` is the
+         * terminal the IDE was launched from, which nobody who started it from a
+         * desktop menu has. The console is what the lint had; the panel is what
+         * it never did. */
+        this.ide.problems.report("strings", this.ide.strings.found);
         Logger.Info(`translations: ${found.length} strings -> ${pot}`);
 
         const cats = Directory.List(this.dir, "*.po");
@@ -458,7 +464,7 @@ Ide.Translations = class Translations {
         }
         const warnings = this.ide.strings.warnings;
         if (warnings.length) {
-            lines.push(`${warnings.length} warning(s) in the console.`);
+            lines.push(`${warnings.length} warning(s), listed under Problems.`);
         }
         Message.Info(lines.join("\n"));
     }

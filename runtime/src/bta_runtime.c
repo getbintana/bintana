@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 static BtaApp *g_app;
 
@@ -108,6 +109,32 @@ static void report_error(JSContext *ctx, const char *msg, const char *stack)
     g_object_unref(d);
 }
 
+/*
+ * The red, and only where red is a colour rather than six characters.
+ *
+ * This was written unconditionally, and the day the IDE's output pane stopped
+ * being a VTE -- which ate them -- the escapes became visible: every traceback
+ * in that pane, in a redirected log and in a CI capture arrived spelled
+ * `<ESC>[1;31mBintana error:<ESC>[0m`. Measured through a pipe, which is where
+ * every one of those reads it from.
+ *
+ * `isatty` is the whole of the answer and is what every program that colours its
+ * output does. Asked once: stderr does not become a terminal halfway through a
+ * run, and this is called from a signal-ish place where the less done the
+ * better.
+ */
+static bool error_to_terminal(void)
+{
+    static int tty = -1;
+    if (tty < 0)
+        tty = isatty(STDERR_FILENO) ? 1 : 0;
+
+    return tty == 1;
+}
+
+static const char *error_red(void)   { return error_to_terminal() ? "\x1b[1;31m" : ""; }
+static const char *error_plain(void) { return error_to_terminal() ? "\x1b[0m"    : ""; }
+
 void bta_dump_error(JSContext *ctx)
 {
     JSValue exc = JS_GetException(ctx);
@@ -116,7 +143,8 @@ void bta_dump_error(JSContext *ctx)
     const char *trace = NULL;
     JSValue     stack = JS_UNDEFINED;
 
-    fprintf(stderr, "\n\x1b[1;31mBintana error:\x1b[0m %s\n", msg ? msg : "(unknown)");
+    fprintf(stderr, "\n%sBintana error:%s %s\n",
+            error_red(), error_plain(), msg ? msg : "(unknown)");
 
     if (JS_IsError(exc)) {
         stack = JS_GetPropertyStr(ctx, exc, "stack");
@@ -1548,12 +1576,27 @@ BtaApp *bta_app_new(const char *project_dir)
      * A widget tree is recursive data and the code that walks it -- the
      * serialiser, the loader, the designer -- is recursive with it.  QuickJS's
      * default ceiling is 256 KB of stack, which a form ten levels deep can reach
-     * once each level costs a few frames: the IDE's own window does, and under a
-     * sanitizer build (fatter frames) it threw where an ordinary build did not.
-     * Well below the 8 MB the thread actually has, so a runaway recursion still
-     * gets a clean exception rather than a crash.
+     * once each level costs a few frames: the IDE's own window does.
+     *
+     * **The budget is a number of bytes and what matters is the number of
+     * levels it buys, which is not the same number in the two builds.** Measured
+     * here, serialising a tower of `Panel`s: 2 MB is a hundred levels in an
+     * ordinary build and **ten** under AddressSanitizer, whose frames are about
+     * ten times fatter. Ten is exactly the depth of the IDE's own window, so the
+     * sanitized suite had no headroom at all and `tests/ide` failed there --
+     * green ordinarily, red under the sanitizer, on a tree nobody had changed.
+     * That is the false failure the sanitizer job exists to avoid producing.
+     *
+     * So the budget follows the build. Both numbers stay well below the 8 MB the
+     * thread actually has, so a runaway recursion still gets a clean exception
+     * rather than a crash -- checked by measuring where each one throws.
      */
+#if defined(__SANITIZE_ADDRESS__) || \
+    (defined(__has_feature) && __has_feature(address_sanitizer))
+    JS_SetMaxStackSize(app->rt, 6 * 1024 * 1024);
+#else
     JS_SetMaxStackSize(app->rt, 2 * 1024 * 1024);
+#endif
 
     app->ctx = build_context(app->rt);
     JS_SetRuntimeOpaque(app->rt, app);

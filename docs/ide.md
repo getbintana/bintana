@@ -172,14 +172,20 @@ Split                   HAlign/VAlign Fill: the whole window below the toolbar
                           and its own Designer driving them
         FindBar (Panel, a column)  hidden until asked for: FindRow always, and
                         ReplaceRow only when replacing
-      SidePanel (Panel, a column)  shared; hidden unless a form is showing.
-                        SideTabs (Switcher), and nothing else
+      SidePanel (Panel, a column)  shared; hidden only when nothing is open.
+                        One of its two halves shows, and Outline decides which
+                        SideTabs (Switcher)   a form tab: it speaks about the
+                                              selection
                             "Properties"  PropGrid, the whole page
                             "Events"      EventsBox: EventList, the whole page
                             "Controls"    ControlsBox: SideSplit (Palette +
                                           WidgetTree) with DesignBar under it
-    ConsoleBox (Notebook) the bottom panel: two pages, both Fill
+                        OutlineBox (Panel)    a .js tab: LblOutline over
+                                              OutlineList, the methods it declares
+    ConsoleBox (Notebook) the bottom panel: three declared pages, all Fill
                             "Output"    LogView, a read-only TextEditor
+                            "Debug"     DebugPage, the stack and the values
+                            "Problems"  ProblemView, a TableView of places
                             "Terminal"  Shell, built in code and only where
                                         Widget.Available("Terminal") says yes
 ```
@@ -214,9 +220,11 @@ Five things could not, and stayed containers:
   it needs a design size to keep them from. A view is created by code with no idea
   how big its page will be, so a control put in one would keep its natural size.
   A box has no such question.
-- **`ConsoleBox`.** Two pages, one of which is built in code and only on a build
-  that has VTE — so how many there are is not something written down, and a
-  notebook's pages are its own business exactly as a `Split`'s two halves are.
+- **`ConsoleBox`.** Three declared pages and a fourth built in code, and only on
+  a build that has VTE — so how many there are is not something written down, and
+  a notebook's pages are its own business exactly as a `Split`'s two halves are.
+  `Problems` asks the notebook which page it is rather than counting, so a page
+  added in front of it needs nothing told to it.
 
 **Every page owns what is in it.** A code tab makes its own `SourceEditor`; a form
 tab makes its own canvas — `Scroller` → `Overlay` → `Surface` + `Glass` — and its
@@ -1166,6 +1174,312 @@ when the program died of something that named no line at all. It looked ten time
 thirty milliseconds apart while the pane was a terminal, because VTE digests what
 it is fed on its own time and the exit signal could arrive before the last of the
 traceback was on screen. `Exec` and a text buffer have nothing to wait for.
+
+## Problems, in one list
+
+`ConsoleBox`'s third page, and **it finds nothing of its own.** Every check
+behind a row already existed and already ran; none of them had anywhere to be
+seen:
+
+| What found it | Where it went before | Where it goes now |
+|---|---|---|
+| `TabSet.checkSyntax`, on save | a gutter mark, and a line in the log | both, and a row |
+| `Strings`'s lint, on a translation pass | `Logger.Warning` | a row per warning |
+| `Runner.findErrorLine`, after a failed run | the file opened at the line | that, and a row |
+
+The gutter mark is for the file one is looking at; the panel is for the file one
+is not — and it is the one that survives closing the tab and running something
+else. `Logger.Warning` is worse than that: it is the terminal the IDE was
+launched from, which nobody who started it from a desktop menu has. The lint has
+been finding real things and telling nobody since it was written.
+
+Prior art, and it is old: Visual Basic's *Messages*, Delphi's and Lazarus's,
+Visual Studio's *Error List*, VS Code's *Problems*. All four are the same object
+— a docked list of places, worst first, each row a jump — and all four sit
+*under* the editor rather than beside it, because a problem is about a line and
+the line is what one wants to keep looking at.
+
+### A source replaces its own rows and nobody else's
+
+That is the one rule that makes a collector work rather than a second log.
+
+```js
+ide.problems.report("strings", ide.strings.found);   // everything the lint says now
+ide.problems.clear("run");                           // and nothing from the last run
+```
+
+`report(source, list)` is the whole interface: a list is everything that source
+currently has to say, and an empty one is how it says it is happy. A lint that
+now finds nothing clears its own rows without touching the syntax error in the
+file next door.
+
+Which is why the syntax source is **`syntax:<file>`**, one per file. Saving
+`A.js` says nothing whatever about whether `B.js` still compiles, and a collector
+that let one save clear the other would be throwing away a complaint nobody
+answered.
+
+A problem is `{ kind, file, line, text }` — `kind` one of `Error`, `Warning`,
+`Info`, `file` relative to the project the way a tab is keyed, `line` 1-based or
+`0` for a problem about the whole file. **The three severities are
+`SourceEditor.Mark`'s three words and not three of our own**: a problem and the
+mark in the gutter beside it are the same fact twice, and spelling them
+differently is how the two drift apart.
+
+### The order, the count, and what a row does
+
+Worst first, then by file, then by line — the order one reads a list of places
+in. `Locale.Compare` for the file names, which is this project's rule everywhere
+a person sees an order.
+
+The count is **on the tab**, through `Locale.Plural`, because a panel one has to
+turn to before it can say whether anything is wrong is a panel one stops turning
+to. It is the one thing all four of the prior art above agree on. The label has
+to be a `Label` widget and not a string: `Notebook.Tabs` replaces *every* label
+with a plain one, and would take the Terminal's with it.
+
+Activating a row goes there through **`Runner.open`**, which is already what a
+click on a traceback in the log does: it refuses a file outside the project,
+opens the tab, moves the cursor and takes the focus. A second way to go to a line
+would be a second set of those four decisions. `Activate` and not `Select`, so
+that walking the list with the arrow keys to read it does not open a file per
+row — the same mistake `Cursor` would have been on the log.
+
+### The one source that is not a collection
+
+Everything above already ran somewhere else. The fourth source does not:
+[the names a file uses](#the-names-a-file-uses-checked-while-it-is-written),
+checked while it is being written.
+
+## The names a file uses, checked while it is written
+
+`Ide.Live`, and **it is not a live syntax check** — refusing to be one is the
+design.
+
+`TabSet.checkSyntax` runs on save and [says why](#what-a-save-says-about-the-file):
+*half a line is not a syntax error, and an editor that says so while one is still
+typing it is an editor nobody leaves switched on.* That argument is right, and a
+debounce does not answer it: one pauses in the middle of an expression all day.
+
+What it answers instead is a different question, and the line between the two is
+exact. Measured, against a runtime built today:
+
+| Written | What happens |
+|---|---|
+| `this.Lbl.HAlign = "Centre"` | `RangeError`, naming the five valid values |
+| `this.Lbl.Width = "ancho"` | `RangeError`: not a number |
+| `this.Lbl.Txt = "hola"` | **accepted, the label never changes, nothing ever says so** |
+| `Btn_Clik() { … }` | **loaded, never called, nothing ever says so** |
+
+**The runtime validates the value and never the name** — the assignment lands on
+the widget as an ordinary JavaScript property, which is what a widget is. So the
+one thing a caret-side check can be trusted with is names, and the reason is that
+a name is a *finished fact* about a control the `.form` next door already
+describes. Nothing is inferred, parsed or guessed.
+
+### What the caret is inside is never reported
+
+That is the whole answer to the objection above, and it generalises past this
+class: **a diagnostic about the token the cursor is inside is a diagnostic about
+something still being typed.** `this.Lbl.Te` with the caret at the end is a word
+half written; the same text with the caret on another line is a mistake. One past
+the end counts as inside, because that is where the caret sits when the last
+character of a word is the one just pressed.
+
+### The two checks, and why they are lookups
+
+```
+this.Btn.Txt       Btn is a Button, and a Button has no Txt
+Btn_Clik()         Btn is a Button, and a Button does not raise Clik
+```
+
+Both go through **`Completion`**'s lookups — `controls()`, `typeOf()`,
+`sample()` — which is already the class that answers *what is this control and
+what does it really have*, once per form and cached. A second copy of that would
+be a second answer to drift from the first.
+
+The member test is **the `in` operator on a real control of that type**, and not
+a list from `PropertyNames()`: `Click` and `SetFocus` are methods, they live on
+the prototype, and a name list would report every method call in the project as a
+mistake.
+
+What it deliberately does *not* report:
+
+- **A control whose class this process does not have** — a component of the
+  project, which the IDE never loads. Skipped rather than guessed at.
+- **`Btnn_Click`, the control misspelled rather than the event.** `Btnn` is not a
+  control, so this is a method with an underscore in it and nothing here can tell
+  it from any other. Warning about those is how a check gets switched off.
+- **A menu item's members.** `Completion.controls()` flattens a form's
+  `children`, and a menu is not among them — so `this.MnuSave.Enabled` is not
+  checked rather than wrongly flagged. Teaching that lookup about menus would fix
+  it here and in the completion popup at once, which is where it belongs.
+- **A file with no `.form` beside it.** A module has no control to check a name
+  against.
+
+### Where it shows
+
+Both places, and they say different things. The gutter gets a `Warning` mark on
+the line — `Error` stays the save's, so a line carrying both says both — and the
+[Problems panel](#problems-in-one-list) gets a row, under the source
+`names:<file>`.
+
+The pass is put off by 400 ms on every keystroke and run on the pause; switching
+tabs drops a pass that is pending, because by the time it fired it would be
+reading a different file, and **closing a tab takes its rows back**. That last is
+a rule and not a convenience: the check reads the *active* editor, so a row about
+a file nobody has open could never be corrected — it would sit in the panel being
+wrong.
+
+Prior art: this is the shape of what Visual Basic did with `Option Explicit`, and
+of what Delphi's compiler does for nothing, in a language that has no compiler to
+do it. VS Code's TypeScript service does far more and needs a type system; this
+needs none, because **the `.form` is the type declaration**.
+
+## The outline, beside the code
+
+`Ide.Outline`: the methods the file on screen declares, in the side panel, for
+the tabs that never had one.
+
+That panel spoke about a *selection* — properties, events, the control tree — so
+`placeContent` hid it whenever a form was not being designed, which is to say on
+every code tab. Two hundred and eighty pixels of nothing, next to the one kind of
+file where a list of what is in it has been standard equipment since 1991.
+
+It holds two things now and **`Outline.place()` decides which**, because *which
+half belongs there* and *what is in it* are the same question:
+
+| The tab | The panel |
+|---|---|
+| a `.form` | `SideTabs`, as before |
+| a `.js` | `OutlineBox` |
+| a `.md`, a `.json`, nothing open | hidden |
+
+A document tab has an editor too, so the test is the extension and not the
+editor: a README has no methods to list.
+
+Prior art, and it is the oldest thing in this IDE: Visual Basic's **procedure
+dropdown**, the pair of combos over every code window. Delphi's *Code Explorer*
+and Lazarus's are the tree version; VS Code calls the panel *Outline*. All of
+them answer *what is in this file, and take me there* — **without a search box**,
+which is exactly what separates it from [`Ctrl+Shift+O`](#go-to-ctrlshifto-ctrll):
+that one asks you to know the name already.
+
+### No index, for the reason F12 gives
+
+`Navigator.symbols` reads the text on screen. An index would have to be thrown
+away whenever a method is renamed or a tab is edited, and getting that wrong
+points at a line that no longer declares anything — [the same bargain and the
+same argument](#f12-and-where-a-name-is-declared). What it costs is one regular
+expression over one file.
+
+It runs on the pause after typing, and **`Ide.Live` owns that timer**: one pause
+should mean one pass over the file however many readers it has. A pass that found
+the same methods compares a signature and stops there, which is what keeps the
+list from being rebuilt under somebody's cursor.
+
+### Both directions, which is the half that is easy to forget
+
+`Select` and not `Activate` — the opposite of what the
+[Problems panel](#problems-in-one-list) does, and for its own reason. A problem
+is a place in *another* file, so walking that list with the arrow keys must not
+open one per row. An outline is a list of places in the file already open, and
+moving through it *is* the gesture.
+
+And the cursor moves the list back: `Editor_Cursor` marks the method the caret is
+now inside, which is the last one declared at or above its line. That is most of
+what Visual Basic's dropdown was actually for — it did not only take you
+somewhere, it told you where you *were*.
+
+**Two guards, because the pair would otherwise eat the cursor.** Marking a row
+fires `Select`, which jumps to that row's declaration; so standing on line 40
+inside a method declared at line 30 would drag the caret ten lines back up the
+file while one was reading. `syncing` says *this class is the one moving the
+selection* and `moving` says *this class is the one moving the cursor*, and each
+is checked by the other's handler.
+
+## Quick open, and the palette
+
+`Ctrl+P` for a file of the project, `Ctrl+Shift+P` for a command — and they are
+**one window, a character apart**. `QuickForm` opens on the files; a `>` in the
+box turns it into the palette, and `Ctrl+Shift+P` is the same window with the `>`
+already typed.
+
+That is [`SymbolForm`'s rule](#go-to-ctrlshifto-ctrll) applied again: *one box and
+two kinds of answer, decided by what is typed* — digits against letters there,
+`>` against everything else here. A second window that looked the same and
+behaved the same would be a second set of the same decisions.
+
+Prior art: TextMate's `Cmd+T` is where a fuzzy file box came from, Sublime put a
+command palette behind `Ctrl+Shift+P`, and VS Code took both and made them one
+box. Visual Studio's *Quick Launch* and Delphi's *IDE Insight* are the same idea
+in this family. **Gambas and VB6 have neither**, which is the gap this closes for
+anybody arriving from an editor written after 2004.
+
+### It invents no commands
+
+The list is the IDE's own menu bar, read out of **`Form.Menus`** — the spec the
+`.form` was loaded from. So a menu item added to that file appears in the palette
+with nothing told to it, carrying:
+
+- **the accelerator it declares**, written the way a person reads it
+  (`<Control>r` → `Ctrl+R`) rather than the way GTK spells it;
+- **the submenu it is in**, which is what tells two *Refresh*es apart — the
+  project tree has one and so does git;
+- **the enabled state the IDE already computes.** `refresh()` decides whether
+  *Save* can be pressed; the palette asks that same menu item the same question.
+
+A command that would refuse is shown **greyed rather than hidden**, and Enter
+will not run it either — *where did Save go* is a worse answer than a row that
+says why by being dim. A separator has nothing to run, a submenu is not a
+command, and an item that points at an `action` has no name of its own: the three
+of those here are the designer's context menu, and a palette has no selection to
+act on.
+
+Matching is `Locale.Matches`, which folds accents — this project's own answer to
+*should a search for this find that*, and the reason `Facturación.js` is found by
+typing `factura`. A file is matched on its whole path, so `forms/main` finds what
+`main` finds and narrows it.
+
+### Three things using it found
+
+Each of them read as a small thing and each made the window wrong:
+
+- **The `>` was selected, so the first keystroke ate it.** `SetFocus` on a field
+  selects what is in it — right for a box one is about to retype, wrong for one
+  opened with a character already in it. The caret goes after it instead
+  (`Select(1, 0)`), and deleting it on purpose still switches back, because it is
+  the one character that says which half this is.
+- **`Go` took the first match, not the chosen row.** That is `SymbolForm`'s rule,
+  and there it is invisible because nothing in that dialog leaves a selection
+  behind. Here it meant walking the list with the arrows and then pressing the
+  button went somewhere else. `wanted()` is the two answers in order: the row that
+  is chosen when one is, otherwise the first still showing — which is what keeps
+  *type three letters and press Enter* the whole gesture. `SymbolForm` has the
+  same two lines now.
+- **Every row drew as `…` and nothing else.** Both labels of a row had
+  `Ellipsize`, which caps a label's *natural* width — that is what it is for,
+  stopping a long string from stretching its container — and a `RowList` row is
+  sized from what is in it. Two of them left the row nothing to divide. Measured
+  at **11 pixels** wide, which is the ellipsis alone; `tests/ide` asserts the
+  drawn width now, because `Text` was right the whole time.
+
+### What `Ctrl+Shift+P` used to be
+
+*Project settings*, which gave the key up. A reflex brought from every editor
+written since Sublime has to land on the thing it means, and project settings is
+still in the Project menu and in the tree's own context menu — it lost an
+accelerator, not a road.
+
+### And a `Cancel` button needs a handler
+
+Writing this one found that [*Go to...*](#go-to-ctrlshifto-ctrll) could not be
+closed with Escape **or with its own Cancel button**, and had not been able to
+since it was written. Escape emits `clicked` on whichever button carries
+`Cancel` and stops there — [this runtime deliberately does not close a window on
+a stray keystroke](formats.md) unless the window says so — and `SymbolForm` had
+no `BtnCancel_Click`. Every other dialog in this IDE has the line. Nothing
+noticed, the way nothing notices a handler that is never called: which is the
+same silence `Ide.Live` exists to break, one floor down.
 
 ## Git, and the diff before the commit
 

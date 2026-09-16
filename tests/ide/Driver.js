@@ -3435,6 +3435,29 @@ function* p_goto(ide) {
     check("and the bar says how many there are",
           dlg.LblCount.Text.includes("12"), dlg.LblCount.Text);
 
+    /*
+     * And *Go* acts on the row that is chosen, which it did not: it took the
+     * first match whatever the list was showing, so walking to a method with the
+     * arrows and pressing the button went somewhere else. `QuickForm` was
+     * written beside this one and found it.
+     */
+    dlg.TxtFind.Text = "";
+    dlg.TxtFind_Change();
+    dlg.List.Index = -1;
+    eq("with nothing chosen, Go takes the first match",
+       dlg.wanted(), dlg.firstShowing());
+
+    dlg.List.Index = 1;
+    eq("with a row chosen, Go takes that one", dlg.wanted(), dlg.symbols[1].line);
+    check("...which is not the first",
+          dlg.symbols[1].line !== dlg.firstShowing(),
+          `${dlg.symbols[1].line} vs ${dlg.firstShowing()}`);
+
+    /* A number still wins over both: it names a place the list does not hold. */
+    dlg.TxtFind.Text = "5";
+    dlg.TxtFind_Change();
+    eq("a line number beats the chosen row", dlg.lineWanted(), 5);
+
     dlg.TxtFind.Text = "7";
     dlg.TxtFind_Change();
     dlg.BtnOk_Click();
@@ -3442,6 +3465,27 @@ function* p_goto(ide) {
 
     eq("going to a line goes there", ide.Editor.Line, 7);
     check("and the dialog is gone", ide.symbolPicker.Visible === false);
+
+    /*
+     * And Escape closes it, which it did not.
+     *
+     * Escape emits `clicked` on whichever button carries `Cancel` and stops
+     * there -- this runtime will not close a window on a stray keystroke unless
+     * the window says so -- and this dialog had no handler on that button. So
+     * neither Escape nor the button itself dismissed it, and nothing noticed,
+     * the way nothing notices a handler that is never called. Every other dialog
+     * in this IDE has the line; this one got it when `QuickForm` was written
+     * beside it.
+     */
+    ide.MnuGotoSymbol_Click();
+    yield;
+    const escaping = ide.symbolPicker;
+    check("the dialog is up again", escaping.Visible);
+    eq("...and Escape is its Cancel button",
+       escaping.CancelButton, escaping.BtnCancel);
+    escaping.BtnCancel.Click();
+    yield* until(() => !escaping.Visible);
+    check("pressing it closes the window", !escaping.Visible);
 
     /* --- back to what the phases after this one expect ---------------------- */
     ide.closeTabByName("Child.js", true);
@@ -5267,6 +5311,21 @@ function* p_nested(ide) {
     neq("and the outline stops being the selection colour",
         ide.designer.chrome.outline[0].Background, "");
 
+    /*
+     * **The colour of an overflowing control, once it really is that colour.**
+     *
+     * This used to be read straight off the chrome, one line after an assertion
+     * that only said it was *not empty* -- so when the re-lay had not landed yet
+     * it captured the selection colour instead, and the comparison below then
+     * asked whether the selection colour differed from itself. That run went red
+     * on a change that had nothing to do with the designer; it went red three
+     * times in one afternoon and passed on every retry, which is what a flake
+     * looks like from the outside and what an unsettled read looks like from in
+     * here.
+     */
+    const selected = ide.designer.chrome.outline[0].Background;
+    yield* until(() => ide.designer.chrome.outline[0].Background !== selected ||
+                       !ide.designer.overflow(alignLbl));
     const fitting = ide.designer.chrome.outline[0].Background;
     ide.designer.select(alignBtn);
     yield* until(() => ide.designer.chrome.outline[0].Background !== fitting);
@@ -8794,10 +8853,12 @@ function* p_export(ide) {
 function* p_errors(ide) {
     /* --- the bottom panel --------------------------------------------------
      *
-     * Two pages now, and they are two different things: the output of a run is
-     * a **log**, which needs no pty and is an ordinary read-only `TextEditor`;
-     * a terminal is for working in, which is why `Terminal` was not removed
-     * when the console stopped being one.
+     * Three declared pages now, and they are three different things: the output
+     * of a run is a **log**, which needs no pty and is an ordinary read-only
+     * `TextEditor`; the debugger's is a panel of its own; and *Problems* is a
+     * list of places, which is a table. A terminal is a fourth, for working in,
+     * which is why `Terminal` was not removed when the console stopped being
+     * one.
      *
      * The label over the pane went with the change -- a notebook's tab already
      * says what the page is, and two of them saying it would be the `forms`
@@ -8812,14 +8873,14 @@ function* p_errors(ide) {
     eq("...and the tab says what it is", ide.ConsoleBox.Tabs[0], "Output");
 
     /*
-     * *Output* and *Debug* are declared in the `.form`; the terminal is a third
-     * page that exists only where a child can be run in it, which is
+     * *Output*, *Debug* and *Problems* are declared in the `.form`; the terminal
+     * is a fourth page that exists only where a child can be run in it, which is
      * `Widget.Available`'s question -- a runtime built without VTE gets no tab
      * promising a terminal that would refuse.  This build has VTE, so both
      * branches are stated and the one that holds here is checked.
      */
     eq("there is a terminal page exactly when this build can run one",
-       ide.ConsoleBox.Count, Widget.Available("Terminal") ? 3 : 2);
+       ide.ConsoleBox.Count, Widget.Available("Terminal") ? 4 : 3);
     eq("...and a Shell to go with it", ide.Shell !== null, Widget.Available("Terminal"));
 
     if (Widget.Available("Terminal")) {
@@ -8932,6 +8993,30 @@ function* p_errors(ide) {
        ide.errorLocation(`Bintana error: first\n    at A (${TMP}/project.json:1:1)\n` +
                          traceback).line, 2);
 
+    /*
+     * And what it died *of*, which is the other half of a row in the Problems
+     * panel: a place with no sentence beside it is a jump, not a report.
+     *
+     * The escapes are taken off, and it is a defence rather than a correction
+     * now: the runtime asks `isatty` before writing the red, so a child of this
+     * IDE writes none. A child that colours *its own* output still can, and a
+     * line of a traceback is not where that belongs.
+     */
+    eq("the message is the line the error was announced on",
+       ide.runner.errorMessage(traceback), "Error: boom");
+    eq("...with the colour the runtime writes taken off",
+       ide.runner.errorMessage("\x1b[1;31mBintana error:\x1b[0m Error: boom\n"),
+       "Error: boom");
+    check("and output that announced nothing still says something",
+          ide.runner.errorMessage("hello from tabs\n").length > 0);
+
+    /* A traceback writes an absolute path; everything in this IDE speaks the
+     * name a tab is keyed by. */
+    eq("a path of the project is made relative",
+       ide.runner.relative(`${TMP}/Main.js`), "Main.js");
+    eq("...and one that is not is left as it stands",
+       ide.runner.relative("/usr/lib/bintana/other.js"), "/usr/lib/bintana/other.js");
+
     check("clicking a place goes there", ide.runner.clicked(`${TMP}/Main.js:2`));
     eq("...opening that file",           ide.activeFile, "Main.js");
     eq("...at that line",                ide.Editor.Line, 2);
@@ -8961,6 +9046,504 @@ function* p_errors(ide) {
     eq("the same spot clicked is on a place", ide.LogView.Selection, "");
     check("...and goes there", ide.runner.followClick());
 
+}
+
+/*
+ * The Problems panel: what is wrong with the project, in one list.
+ *
+ * It finds nothing of its own, so what there is to test is the collecting --
+ * that a source replaces its own rows and nobody else's, the order they come
+ * out in, what the tab says, and that a row is a place one can go to.  The three
+ * real sources are tested where they live: the syntax one in `p_search` beside
+ * the gutter mark it shares a fact with, the lint in `p_strings`, and the failed
+ * run in `p_running`.
+ *
+ * **It does not start empty, and that is the feature working.** `p_strings` ran
+ * the extractor over this project several phases ago and the lint's warnings are
+ * still listed -- which is the whole point of a panel rather than a line in a
+ * console that scrolls away.  So everything here is measured against what was
+ * already there, and every row this phase plants is taken back out.
+ */
+function* p_problems(ide) {
+    const panel = ide.problems;
+
+    /* What the earlier phases left, which this phase must neither disturb nor
+     * assume anything about. */
+    const before   = panel.all.length;
+    const baseTab  = ide.ConsoleBox.Tabs[panel.page];
+    const mine     = () => panel.all.filter((x) => x.file.startsWith("probe/"));
+
+    eq("the panel is a table", ide.ProblemView.constructor.name, "TableView");
+    eq("...on a page of the bottom notebook",
+       ide.ConsoleBox.Children[panel.page].Name, "ProblemView");
+    check("...and the lint's warnings are still on it, phases later",
+          before > 0, String(before));
+
+    /* --- a source replaces its own rows, and only its own -------------------- */
+
+    panel.report("p1", [{ kind: "Error", file: "probe/A.js", line: 3, text: "first" }]);
+    panel.report("p2", [{ kind: "Error", file: "probe/B.js", line: 1, text: "second" }]);
+    eq("two sources are two rows", mine().length, 2);
+    eq("...and nothing else moved", panel.all.length, before + 2);
+
+    panel.report("p1", [{ kind: "Error", file: "probe/A.js", line: 9, text: "again" }]);
+    eq("a source reporting again replaces itself", mine().length, 2);
+    eq("...with what it now says",
+       mine().filter((x) => x.file === "probe/A.js")[0].line, 9);
+    eq("...and leaves the other alone",
+       mine().filter((x) => x.file === "probe/B.js").length, 1);
+
+    panel.clear("p1");
+    eq("a source with nothing to say clears itself", mine().length, 1);
+    eq("...and still not the other", mine()[0].file, "probe/B.js");
+
+    /* --- worst first, then where ------------------------------------------- */
+
+    panel.clear("p2");
+    panel.report("p3", [
+        { kind: "Info",    file: "probe/C.js", line: 1, text: "c" },
+        { kind: "Warning", file: "probe/B.js", line: 2, text: "b2" },
+        { kind: "Error",   file: "probe/Z.js", line: 5, text: "z" },
+        { kind: "Warning", file: "probe/B.js", line: 1, text: "b1" },
+    ]);
+    eq("severity decides first, whatever order they were reported in",
+       mine().map((x) => x.kind).join(","), "Error,Warning,Warning,Info");
+    /* Within one severity, the file and then the line: the order one reads a
+     * list of places in. */
+    eq("then the line, inside one file",
+       mine().filter((x) => x.kind === "Warning").map((x) => x.line).join(","), "1,2");
+
+    eq("the table drew every one of them", ide.ProblemView.Count, panel.all.length);
+    /* The table is the list, in the list's order: row 0 is the worst problem
+     * there is, and the place column says where it is. */
+    eq("and row 0 is the first of them",
+       ide.ProblemView.Cell(0, 1), panel.place(panel.all[0]));
+
+    /* --- what the tab says --------------------------------------------------- */
+
+    check("the tab carries the count",
+          ide.ConsoleBox.Tabs[panel.page].includes(String(panel.all.length)),
+          ide.ConsoleBox.Tabs[panel.page]);
+
+    panel.clear("p3");
+    eq("and taking them back out puts the tab back", ide.ConsoleBox.Tabs[panel.page],
+       baseTab);
+    eq("...with the rows that were there before still there", panel.all.length, before);
+
+    /* --- a row is a place ---------------------------------------------------- */
+
+    ide.openInTab("Main.js");
+    yield* settled(ide);
+    ide.Editor.GotoLine(1);
+
+    panel.report("p4", [{ kind: "Error", file: "Main.js", line: 3, text: "somewhere" }]);
+    ide.ProblemView.Select(panel.rows.findIndex((x) => x.text === "somewhere"));
+    check("activating a row goes to the place it names", panel.activated());
+    eq("...moving the cursor there", ide.Editor.Line, 3);
+
+    /* A row about a file that is not there goes nowhere rather than opening an
+     * empty tab: `Runner.open` is what refuses, which is the point of every jump
+     * going through it. */
+    panel.report("p4", [{ kind: "Error", file: "probe/NoSuch.js", line: 1, text: "gone" }]);
+    ide.ProblemView.Select(panel.rows.findIndex((x) => x.file === "probe/NoSuch.js"));
+    check("a row about a file that is not there goes nowhere", !panel.activated());
+
+    panel.clear("p4");
+    eq("and the panel is left as it was found", panel.all.length, before);
+}
+
+/*
+ * The names a file uses, checked while it is being written.
+ *
+ * The *timer* is not driven -- four hundred milliseconds of a run waiting for
+ * one tick would be four hundred milliseconds of nothing, and what it does is
+ * call `pass`, which is called here directly.  The same bargain `recovery` makes
+ * with its snapshot timer.
+ *
+ * Nothing here hardcodes a control or a type: the phase asks the form on screen
+ * what it has and builds the text from that, so it keeps working when an earlier
+ * phase changes what it drew.  What it *does* hardcode is `Txt`, which no widget
+ * in this language has and which is the exact mistake that started this --
+ * `this.Lbl.Txt = "hola"` parses, runs, changes nothing, and until now said
+ * nothing.
+ */
+function* p_names(ide) {
+    ide.openInTab("Main.js");
+    yield* settled(ide);
+
+    const editor = ide.Editor;
+    const kept   = editor.Text;
+
+    /* Whatever the form beside this file actually holds. */
+    const controls = ide.completion.controls();
+    check("the file being edited has a form beside it", controls.length > 0,
+          JSON.stringify(controls));
+
+    const one    = controls[0];
+    const sample = ide.completion.sample(one.type);
+    check("...and its first control is a class this process has", sample !== null,
+          one.type);
+
+    const mine = () => ide.problems.all.filter((p) => p.file === "Main.js" &&
+                                                      p.kind === "Warning");
+
+    /* --- a member the control does not have ---------------------------------- */
+
+    editor.Text = `class Main extends Form {\n` +
+                  `    Form_Open() {\n` +
+                  `        this.${one.name}.Txt = "hola";\n` +
+                  `    }\n}\n`;
+    editor.GotoLine(5);            /* away from the line being judged */
+    ide.live.pass();
+
+    eq("a member the control does not have is reported", mine().length, 1);
+    eq("...on its line",   mine()[0].line, 3);
+    check("...naming the type and the member",
+          mine()[0].text.includes(one.type) && mine()[0].text.includes("Txt"),
+          mine()[0].text);
+    eq("...and the gutter says so beside it",
+       editor.Marks("Warning").map((m) => m.Line).join(","), "3");
+
+    /*
+     * And the answer to the objection that keeps a syntax check off the
+     * keystroke: what the caret is inside is something still being typed.
+     */
+    editor.GotoLine(3);
+    editor.Select(3, `        this.${one.name}.Txt`.length);
+    ide.live.pass();
+    eq("what the caret is inside is not reported", mine().length, 0);
+    eq("...and nothing is marked either", editor.Marks("Warning").length, 0);
+
+    /* A member every widget really has, from anywhere. */
+    editor.Text = editor.Text.replace(".Txt", ".Name");
+    editor.GotoLine(5);
+    ide.live.pass();
+    eq("a member it does have is not reported", mine().length, 0);
+
+    /* --- an event the control does not raise --------------------------------- */
+
+    const events = sample.EventNames();
+    check("the control raises something", events.length > 0, JSON.stringify(events));
+
+    editor.Text = `class Main extends Form {\n` +
+                  `    ${one.name}_${events[0]}() { }\n` +
+                  `    ${one.name}_Clik() { }\n` +
+                  `}\n`;
+    editor.GotoLine(4);
+    ide.live.pass();
+
+    eq("a handler for an event it does not raise is reported", mine().length, 1);
+    eq("...on its line", mine()[0].line, 3);
+    check("...saying it will never be called",
+          mine()[0].text.includes("Clik"), mine()[0].text);
+
+    /*
+     * A method with an underscore whose first half is not a control is left
+     * alone: it cannot be told from any other method, and warning about those is
+     * how a check gets switched off.
+     */
+    editor.Text = `class Main extends Form {\n` +
+                  `    not_a_handler() { }\n` +
+                  `}\n`;
+    editor.GotoLine(4);
+    ide.live.pass();
+    eq("a method that is not about a control is left alone", mine().length, 0);
+
+    /* --- and it cleans up after itself --------------------------------------- */
+
+    editor.Text = kept;
+    editor.GotoLine(1);
+    ide.live.pass();
+    eq("the file put back has nothing wrong with it", mine().length, 0);
+    eq("...and no marks left over", editor.Marks("Warning").length, 0);
+
+    /* The editor is dirty now and every phase after this one expects it clean:
+     * the text is what it was, so saving writes the same bytes. */
+    ide.save();
+}
+
+/*
+ * The outline: what is in the file on screen, beside it.
+ *
+ * The side panel used to be hidden on every code tab, because what it held spoke
+ * about a designer's selection.  It holds two things now, and which one is
+ * showing is the question *what kind of file is this*.
+ *
+ * Like `names`, this drives `refresh` rather than the timer that calls it.
+ */
+function* p_outline(ide) {
+    ide.openInTab("Main.js");
+    yield* settled(ide);
+
+    /* --- which half of the panel is showing ---------------------------------- */
+
+    check("the side panel is showing over a code tab", ide.SidePanel.Visible);
+    check("...with the outline in it",  ide.OutlineBox.Visible);
+    check("...and not the switcher, which speaks about a selection",
+          !ide.SideTabs.Visible);
+
+    /* --- what is in it ------------------------------------------------------- */
+
+    const editor = ide.Editor;
+    const kept   = editor.Text;
+
+    editor.Text = `class Main extends Form {\n` +      /* 1 */
+                  `    Form_Open() {\n` +              /* 2 */
+                  `        this.uno();\n` +            /* 3 */
+                  `    }\n` +                          /* 4 */
+                  `\n` +                               /* 5 */
+                  `    uno() { }\n` +                  /* 6 */
+                  `\n` +                               /* 7 */
+                  `    dos() { }\n` +                  /* 8 */
+                  `}\n`;
+    ide.outline.refresh();
+
+    eq("the outline lists what the file declares", ide.OutlineList.Count, 3);
+    eq("...in the order they are written",
+       ide.OutlineList.Items.join(","), "Form_Open,uno,dos");
+
+    /* --- a row is a place ---------------------------------------------------- */
+
+    ide.OutlineList.Index = 2;
+    eq("choosing a row goes to its line", editor.Line, 8);
+
+    ide.OutlineList.Index = 0;
+    eq("...and another to another", editor.Line, 2);
+
+    /* --- and it says where the cursor already is ----------------------------- */
+
+    editor.GotoLine(3);
+    ide.outline.follow();
+    eq("standing inside a method marks it", ide.OutlineList.Index, 0);
+
+    editor.GotoLine(6);
+    ide.outline.follow();
+    eq("...the one the cursor is in, not the one above it",
+       ide.OutlineList.Index, 1);
+
+    /*
+     * And the pair does not eat the cursor.  Marking a row must not be read back
+     * as somebody choosing it, or standing on a line inside a method would drag
+     * the caret up to its declaration while one was reading.
+     */
+    editor.GotoLine(4);
+    ide.outline.follow();
+    eq("the row moves to the method the caret is in", ide.OutlineList.Index, 0);
+    eq("...and the caret stays where it was", editor.Line, 4);
+
+    /* Above every declaration there is no method to be in. */
+    editor.GotoLine(1);
+    ide.outline.follow();
+    eq("above the first declaration nothing is marked", ide.OutlineList.Index, -1);
+
+    /* --- a pass that found the same thing leaves the list alone -------------- */
+
+    ide.OutlineList.Index = 1;
+    ide.outline.refresh();
+    eq("a refresh that changed nothing keeps the selection",
+       ide.OutlineList.Index, 1);
+
+    /* --- and a form tab gets the switcher back ------------------------------- */
+
+    editor.Text = kept;
+    ide.save();
+
+    ide.openInTab("Main.form");
+    yield* settled(ide);
+    check("a form tab shows the switcher", ide.SideTabs.Visible);
+    check("...and not the outline", !ide.OutlineBox.Visible);
+
+    ide.openInTab("Main.js");
+    yield* settled(ide);
+}
+
+/*
+ * Quick open, and the palette: one window, a character apart.
+ *
+ * What is worth asserting is that it **invents nothing**.  The files are the
+ * project's own listing and the commands are the menu bar read back out of
+ * `Form.Menus`, with the enabled state `refresh()` has already decided -- so the
+ * test drives the same two questions the window asks rather than a list of its
+ * own.
+ */
+function* p_quick(ide) {
+    /* --- the keys ------------------------------------------------------------ */
+
+    const shortcutOf = (name) => {
+        let found = "";
+        const walk = (items) => {
+            for (const item of items || []) {
+                if (item.name === name && item.shortcut) found = item.shortcut;
+                walk(item.children);
+            }
+        };
+        walk(ide.Menus);
+        return Array.isArray(found) ? found[0] : found;
+    };
+
+    eq("Ctrl+P is go to file",        shortcutOf("MnuGotoFile"), "<Control>p");
+    eq("Ctrl+Shift+P is the palette", shortcutOf("MnuCommands"), "<Control><Shift>p");
+    /* It used to be this, and gave it up: the reflex has to land on the thing it
+     * means, and project settings is still two clicks away in its own menu. */
+    eq("...which project settings no longer claims",
+       shortcutOf("MnuProjectSettings"), "");
+
+    /* --- the files ----------------------------------------------------------- */
+
+    ide.MnuGotoFile.Click();
+    yield* until(() => QuickForm.open !== null);
+
+    const dlg = QuickForm.open;
+    check("the window is up", dlg !== null);
+    check("...on the files", !dlg.commanding);
+    eq("...holding the project's own listing",
+       dlg.entries.length, ide.classes.files.length);
+    eq("...every one of them showing", dlg.List.Count, dlg.entries.length);
+
+    /*
+     * And the rows are **drawn**, which is a different question from what they
+     * were told to say.
+     *
+     * Written with `Ellipsize` on both labels of a row, every row came out as
+     * `...` and nothing else: it caps a label's natural width -- that is what it
+     * is for, stopping a long string from stretching its container -- and a row
+     * of a `RowList` is sized from what is in it, so two of them left the row
+     * with no width to divide. The `Text` was right the whole time, which is why
+     * this is measured off the allocation and not off the property.
+     */
+    const firstRow = dlg.List.Children[0];
+    const nameLbl  = firstRow.Children[0];
+    yield* until(() => nameLbl.Bounds().Width > 0);
+    check("a row is drawn wide enough to read",
+          nameLbl.Bounds().Width > 40,
+          `${nameLbl.Text} drawn ${nameLbl.Bounds().Width}px wide`);
+
+    dlg.TxtFind.Text = "main";
+    dlg.TxtFind_Change();
+
+    const showing = dlg.entries.filter((f, i) => dlg.matches(i));
+    check("typing narrows it", showing.length > 0 && showing.length < dlg.entries.length,
+          `${showing.length} of ${dlg.entries.length}`);
+    check("...to the files that match",
+          showing.every((f) => f.toLowerCase().includes("main")),
+          JSON.stringify(showing));
+
+    /* The whole path and not the name alone, so a folder narrows a name. */
+    dlg.TxtFind.Text = "\u00f1o\u00f1o-no-such-file";
+    dlg.TxtFind_Change();
+    eq("a needle nothing matches leaves nothing", dlg.firstShowing(), null);
+    check("...and the bar says none", dlg.LblCount.Text.includes("0"),
+          dlg.LblCount.Text);
+
+    /* --- and the same box holds the commands --------------------------------- */
+
+    dlg.TxtFind.Text = ">";
+    dlg.TxtFind_Change();
+
+    check("a > turns it into the palette", dlg.commanding);
+    check("...holding the menu bar", dlg.entries.length > 20, String(dlg.entries.length));
+    check("...with the submenu each command is in",
+          dlg.entries.every((c) => c.path !== ""),
+          JSON.stringify(dlg.entries.slice(0, 3)));
+
+    const run = dlg.entries.find((c) => c.name === "MnuRun");
+    check("a command of the menu is in it", run !== undefined);
+    eq("...with the accelerator it declares, as a person reads it",
+       run.shortcut, "Ctrl+R");
+
+    /* Nothing invented: every command answers to a menu item of the window. */
+    check("every command is a menu item that exists",
+          dlg.entries.every((c) => !!ide[c.name]));
+    /* And a submenu is not a command: there is no row for the File menu itself. */
+    check("a submenu is not a command",
+          !dlg.entries.some((c) => c.name === "MnuFile"));
+
+    dlg.TxtFind.Text = ">quit";
+    dlg.TxtFind_Change();
+    const quit = dlg.firstShowing();
+    check("the palette finds a command by part of its name", quit !== null,
+          dlg.LblCount.Text);
+    eq("...and it is the one it says", quit.name, "MnuQuit");
+
+    /*
+     * And *Go* acts on the row that is chosen, not on the first one that
+     * matches.
+     *
+     * With nothing picked the first match is the answer -- which is what makes
+     * *type three letters and press Enter* the whole gesture -- but walking the
+     * list with the arrows and then pressing the button has to act on what was
+     * walked to. `SymbolForm` takes the first match unconditionally and gets
+     * away with it because nothing there leaves a selection behind.
+     */
+    dlg.TxtFind.Text = ">";
+    dlg.TxtFind_Change();
+    dlg.List.Index = -1;
+    eq("with nothing chosen, Go takes the first match",
+       dlg.wanted().name, dlg.firstShowing().name);
+
+    const third = dlg.entries[2];
+    dlg.List.Index = 2;
+    eq("with a row chosen, Go takes that one", dlg.wanted().name, third.name);
+    check("...which is not the first", third.name !== dlg.firstShowing().name,
+          third.name);
+
+    /*
+     * And typing again lets go of the row, which is `RowList`'s doing and not
+     * this window's: `Refilter` leaves no selection behind. Measured, because
+     * the guard in `wanted()` was written for the other answer -- it is kept as
+     * the cheap defence it is, and this says which of the two actually happens.
+     */
+    dlg.TxtFind.Text = ">quit";
+    dlg.TxtFind_Change();
+    eq("filtering lets go of the chosen row", dlg.List.Index, -1);
+    eq("...so Go is back to the first match", dlg.wanted().name, "MnuQuit");
+
+    /* --- the enabled state is the IDE's, not a copy of it -------------------- */
+
+    const anyCommand = dlg.entries.find((c) => ide[c.name]);
+    ide[anyCommand.name].Enabled = false;
+    check("a command the IDE has disabled is disabled here",
+          !dlg.enabled(anyCommand));
+    ide[anyCommand.name].Enabled = true;
+    check("...and enabled when it is", dlg.enabled(anyCommand));
+
+    dlg.BtnCancel.Click();
+    yield* until(() => QuickForm.open === null);
+    check("cancelling lets go of the window", QuickForm.open === null);
+
+    /* --- Ctrl+Shift+P starts on the other half ------------------------------- */
+
+    ide.MnuCommands.Click();
+    yield* until(() => QuickForm.open !== null);
+    check("the palette key opens it on the commands", QuickForm.open.commanding);
+
+    /*
+     * And it stays on them when one starts typing.
+     *
+     * `SetFocus` on a field selects what is in it -- right for a box one is
+     * about to retype, and exactly wrong for one opened with a character already
+     * in it: the `>` came up selected, so the first keystroke replaced it and
+     * the palette turned back into the file picker while somebody was typing.
+     */
+    eq("...with nothing selected, so typing does not eat the >",
+       QuickForm.open.TxtFind.SelectedText, "");
+
+    QuickForm.open.BtnCancel.Click();
+    yield* until(() => QuickForm.open === null);
+
+    /* --- and choosing a file opens it ---------------------------------------- */
+
+    ide.MnuGotoFile.Click();
+    yield* until(() => QuickForm.open !== null);
+
+    const picker = QuickForm.open;
+    picker.TxtFind.Text = "Main.js";
+    picker.TxtFind_Change();
+    picker.BtnOk_Click();
+    yield* settled(ide);
+
+    eq("choosing a file opens it", ide.activeFile, "Main.js");
+    check("...and the window is gone", QuickForm.open === null);
 }
 
 /*
@@ -9164,6 +9747,15 @@ function* p_search(ide) {
     check("with what it said", marks[0].Text.length > 0, JSON.stringify(marks[0]));
     eq("and the gutter is showing", ide.Editor.ShowMarks, true);
 
+    /* The mark is for the file one is looking at; the panel is for the file one
+     * is not.  Same fact, two places, and the panel is the one that survives
+     * closing the tab. */
+    const said = ide.problems.all.filter((x) => x.file === "Needle.js");
+    eq("and the panel says so too", said.length, 1);
+    eq("...as an error",            said[0].kind, "Error");
+    eq("...at the same line",       said[0].line, marks[0].Line);
+    eq("...saying the same thing",  said[0].text, marks[0].Text);
+
     /* Refusing the save would be worse than the error: broken code is what one
      * writes on the way to looking something up. */
     check("the file was saved anyway",
@@ -9172,6 +9764,8 @@ function* p_search(ide) {
     ide.Editor.Text = NEEDLE;
     ide.save();
     eq("fixing it and saving takes the mark off", ide.Editor.Marks("Error").length, 0);
+    eq("...and takes the row out of the panel with it",
+       ide.problems.all.filter((x) => x.file === "Needle.js").length, 0);
 
     /* --- quitting with unsaved work ------------------------------------------
      *
@@ -10474,6 +11068,10 @@ const PHASES = [
     { name: "columns", run: p_columns },
     { name: "export", run: p_export },
     { name: "errors", run: p_errors },
+    { name: "problems", run: p_problems },
+    { name: "names", run: p_names },
+    { name: "outline", run: p_outline },
+    { name: "quick", run: p_quick },
     { name: "recovery", run: p_recovery },
     { name: "session", run: p_session },
     { name: "search", run: p_search },

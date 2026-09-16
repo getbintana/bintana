@@ -38,6 +38,10 @@ Ide.Runner = class Runner {
         ide.saveAllDirty();
 
         ide.LogView.Clear();
+        /* The console is cleared, and what the last run said about itself goes
+         * with it: a place a program died at two runs ago is not a fact about
+         * the program on screen now. */
+        ide.problems.clear("run");
         ide.log(`> bintana ${ide.project}\n`);
         ide.running = true;
         ide.refresh();
@@ -221,7 +225,45 @@ Ide.Runner = class Runner {
      * something that named no line at all.
      */
     findErrorLine() {
-        const where = this.errorLocation(this.ide.LogView.Text);
-        if (where) this.open(where.path, where.line);
+        const text  = this.ide.LogView.Text;
+        const where = this.errorLocation(text);
+        if (!where) return;
+
+        this.ide.problems.report("run", [{
+            kind: "Error",
+            file: this.relative(where.path),
+            line: where.line,
+            text: this.errorMessage(text),
+        }]);
+        this.open(where.path, where.line);
+    }
+
+    /*
+     * What the run died of, as one line.
+     *
+     * The escapes are taken off, and **that is a defence and no longer a
+     * correction**. The runtime used to write `Bintana error:` in red whether or
+     * not anything was listening in a terminal, which was true and invisible
+     * while this pane was a VTE that ate them; finding them here the day it
+     * became a text buffer is what got `isatty` put in front of that `fprintf`,
+     * so a child of this IDE writes none. What a child may still write is
+     * colour of *its own* -- a program that paints its own output does not stop
+     * doing so because the IDE is reading it -- and one line of a traceback is
+     * not the place to show it.
+     */
+    errorMessage(text) {
+        const said = text.lastIndexOf("Bintana error:");
+        if (said < 0) return Locale.Text("the run ended badly");
+
+        const line = text.slice(said + "Bintana error:".length).split("\n")[0];
+        return line.replace(/\x1b\[[0-9;]*m/g, "").trim()
+            || Locale.Text("the run ended badly");
+    }
+
+    /* A path the traceback named, as a tab is keyed. Absolute is what a
+     * traceback writes; relative is what everything in this IDE speaks. */
+    relative(path) {
+        const root = `${this.ide.project}/`;
+        return path.startsWith(root) ? path.slice(root.length) : path;
     }
 };

@@ -196,6 +196,16 @@ class MainForm extends Form {
     /* The changed files as a page of the side bar, with the message box: the
      * Changes window is for reading a diff, and this is for living in. */
     changes   = new Ide.Changes(this);
+    /* Everything that is wrong, in one list. It runs no check of its own: what
+     * it collects is what the save, the lint and the failed run already found
+     * and had nowhere to say. */
+    problems  = new Ide.Problems(this);
+    /* And the one thing that puts rows in it on its own: the names a file uses,
+     * checked against the form beside it while it is being written. */
+    live      = new Ide.Live(this);
+    /* What is in the file on screen, beside it: the side panel's other half, for
+     * the tabs where there is no selection to speak about. */
+    outline   = new Ide.Outline(this);
 
     /*
      * The catalogue the left button last selected, or null.
@@ -1163,6 +1173,12 @@ class MainForm extends Form {
      */
     LogView_MouseUp() { this.runner.followClick(); }
 
+    /* A problem is a place, and the only thing to do with a place is go to it.
+     * `Activate` and not `Select`: moving through the list with the arrows to
+     * read it must not open a file per row, which is the same mistake `Cursor`
+     * would have been above. */
+    ProblemView_Activate() { this.problems.activated(); }
+
     /* Both delegate to `Runner`, and these two are here because `tests/ide`
      * drives them by name -- as good a reason as a handler's. */
     errorLocation(text)   { return this.runner.errorLocation(text); }
@@ -1450,7 +1466,25 @@ class MainForm extends Form {
 
     MnuTranslationEditor_Click() { this.catalogues.askEditor(); }
 
+    /*
+     * Quick open, and the palette, which are one window a character apart --
+     * `Ctrl+P` lands on the files and `Ctrl+Shift+P` on the commands. See
+     * `QuickForm`.
+     *
+     * `Ctrl+Shift+P` used to be *Project settings*, which gave it up: a reflex
+     * brought from every editor written after Sublime has to land on the thing
+     * it means, and project settings is two clicks away in the menu it has
+     * always been in, and in the tree's own context menu besides.
+     */
+    MnuGotoFile_Click()  { QuickForm.show(this, false); }
+    MnuCommands_Click()  { QuickForm.show(this, true); }
+
     Editor_Change() {
+        /* Put off whatever the pause was going to check, whether or not the rest
+         * of this returns early: the text changed, so what was about to be read
+         * is out of date either way. */
+        this.live.typed();
+
         if (this._loadingEditor) return;
         if (!this.activeFile) return;
         const state = this.openTabs.get(this.activeFile);
@@ -1464,7 +1498,15 @@ class MainForm extends Form {
 
     Editor_Cursor() {
         this.refresh();
+        /* And the outline marks the method the caret is now inside, which is the
+         * half of Visual Basic's procedure dropdown that was not the jump. */
+        this.outline.follow();
     }
+
+    /* A row of the outline is a place in the file already open, so `Select` is
+     * the gesture -- unlike the Problems panel, where a row is a place in
+     * another file and walking the list must not open one per row. */
+    OutlineList_Select() { this.outline.chosen(); }
 
     /*
      * --- the document tabs ---------------------------------------------------

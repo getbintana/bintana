@@ -209,6 +209,16 @@
             "<Control><Shift>o",
             "<Control>l"
           ]
+        },
+        {
+          "name": "MnuGotoFile",
+          "text": "Go to file...",
+          "shortcut": "<Control>p"
+        },
+        {
+          "name": "MnuCommands",
+          "text": "Run a command...",
+          "shortcut": "<Control><Shift>p"
         }
       ]
     },
@@ -261,8 +271,7 @@
         },
         {
           "name": "MnuProjectSettings",
-          "text": "Project settings...",
-          "shortcut": "<Control><Shift>p"
+          "text": "Project settings..."
         }
       ]
     },
@@ -1352,6 +1361,40 @@
                                   ]
                                 }
                               ]
+                            },
+                            {
+                              "type": "Panel",
+                              "name": "OutlineBox",
+                              "properties": {
+                                "Arrangement": "Vertical",
+                                "Expand": true,
+                                "HExpand": true,
+                                "VExpand": true,
+                                "Visible": false
+                              },
+                              "children": [
+                                {
+                                  "type": "Label",
+                                  "name": "LblOutline",
+                                  "properties": {
+                                    "HAlign": "Start",
+                                    "Margin": 4,
+                                    "Style": "caption-heading",
+                                    "Text": "Outline"
+                                  }
+                                },
+                                {
+                                  "type": "ListBox",
+                                  "name": "OutlineList",
+                                  "properties": {
+                                    "Expand": true,
+                                    "HAlign": "Fill",
+                                    "HExpand": true,
+                                    "VAlign": "Fill",
+                                    "VExpand": true
+                                  }
+                                }
+                              ]
                             }
                           ]
                         }
@@ -1364,7 +1407,8 @@
                         "Height": 173,
                         "Tabs": [
                           "Output",
-                          "Debug"
+                          "Debug",
+                          "Problems"
                         ]
                       },
                       "children": [
@@ -1497,6 +1541,18 @@
                               ]
                             }
                           ]
+                        },
+                        {
+                          "type": "TableView",
+                          "name": "ProblemView",
+                          "properties": {
+                            "Expand": true,
+                            "HAlign": "Fill",
+                            "HExpand": true,
+                            "RowLines": false,
+                            "VAlign": "Fill",
+                            "VExpand": true
+                          }
                         }
                       ]
                     }

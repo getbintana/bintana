@@ -671,6 +671,22 @@ entry below is something that cost somebody a debugging session and now costs a
 paragraph. Add to it when you are surprised; nothing here was obvious to the
 person who wrote it either.
 
+- **The JS stack budget is bytes, and what it buys is levels -- a different
+  number in each build.** `JS_SetMaxStackSize` is what stops a recursive walk of
+  a widget tree before it reaches the real end of the stack, and the walks are
+  recursive because the data is: the serialiser, the loader, the designer.
+  Measured, serialising a tower of `Panel`s: **2 MB is a hundred levels in an
+  ordinary build and ten under AddressSanitizer**, whose frames are about ten
+  times fatter. Ten is exactly the depth of `MainForm.form`, so the sanitized
+  suite had no headroom whatever and `tests/ide` failed in the `projects` phase
+  with `Maximum call stack size exceeded` -- green in every ordinary run, red
+  under the sanitizer, on a tree nobody had touched. Which is precisely the false
+  failure `tests/asan.sh` exists to avoid producing rather than to produce. The
+  budget follows the build now (6 MB under a sanitizer, 25 levels), both numbers
+  well under the thread's 8 MB so a runaway still throws instead of crashing, and
+  `tests/widgets`' `DeepSerialize` asserts fifteen levels in whatever build is
+  running. **If you make a walk of the tree deeper per level, that is the number
+  to re-measure.**
 - **`Exec.Wait` used to stop at the first NUL, and nothing said so.** It was
   built on `g_subprocess_communicate_utf8`, which hands back a C string: a child
   whose answer contains a NUL had everything past it silently thrown away. That

@@ -51,8 +51,9 @@ export HEADLESS=${HEADLESS-1}
 # A sanitized binary is about twice as slow, and run.sh's hang guard is set for an
 # ordinary one: the guard fired and reported a hang that was not one -- which is
 # exactly the false failure this whole script exists to avoid producing. The
-# ordinary guard is 300 now (tests/ide measures 3m30 unsanitized), so this one is
-# 900.
+# ordinary guard is 600 now (tests/ide measures 4m45 unsanitized, and tripped a
+# guard of 300), so this one stays at 900 -- which is still only about twice the
+# sanitized time and is the next one to grow into.
 export TIMEOUT=${TIMEOUT:-900}
 
 BINTANA="$BUILD/bintana" ./tests/run.sh
