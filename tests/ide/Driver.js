@@ -10931,11 +10931,234 @@ function* p_debug(ide) {
     yield* settled(ide);
 }
 
+/*
+ * How this project is run: three places, and the rule that joins them.
+ *
+ * The rule is the one thing worth asserting hardest, because it is the one that
+ * is easy to get wrong and impossible to see: the global suggestion is
+ * **copied** when a configuration is made and never consulted again. A cascade
+ * would look identical until somebody changed their own default and every
+ * project they had ever configured changed with it.
+ *
+ * Nothing here spawns a child. What the runner does with a plan is proved by
+ * `p_running`, which runs the real thing with the configuration this phase
+ * leaves behind -- one child, two questions.
+ */
+function* p_launch(ide) {
+    const launch = ide.launch;
+
+    /* --- a project that declares none ---------------------------------------
+     *
+     * Which is most projects, and the state Run was in before any of this: the
+     * project's own directory and nothing else. A feature everybody has to
+     * learn before they can press Run would be a worse feature.
+     */
+    launch.save([]);
+    launch.choose("");
+
+    const bare = launch.plan();
+    eq("with no configurations there is nothing to pass", bare.arguments.length, 0);
+    eq("...and the child starts where it always did",
+       bare.options.Directory, ide.project);
+    eq("...with no environment of its own", bare.options.Environment, undefined);
+    eq("...and nothing is chosen", launch.chosen, null);
+
+    /* --- the suggestion is a template, not a cascade ------------------------- */
+
+    launch.suggest({ Strict: true, StopOnThrow: true });
+
+    const made = launch.make("Demo");
+    eq("a new configuration starts from the suggestion", made.Strict, true);
+    eq("...both of them", made.StopOnThrow, true);
+
+    made.Arguments   = ["--data", "/tmp/facturas"];
+    made.Environment = ["BTA_DEMO=1"];
+    launch.save([made]);
+
+    /* **The measurement that tells a template from a cascade.** */
+    launch.suggest({ Strict: false, StopOnThrow: false });
+    eq("changing the suggestion does not change what exists",
+       launch.named("Demo").Strict, true);
+
+    const plain = launch.make("Plain");
+    eq("...and the next one made takes the new one", plain.Strict, false);
+
+    /* --- what a run is made of ---------------------------------------------- */
+
+    const plan = launch.plan();
+    eq("the arguments reach the plan", plan.arguments.join(" "), "--data /tmp/facturas");
+    eq("...and the environment, as an object Exec takes",
+       plan.options.Environment.BTA_DEMO, "1");
+    eq("an empty directory means the project's own",
+       plan.options.Directory, ide.project);
+    eq("and the configuration says this run is strict", plan.strict, true);
+
+    /* A directory of its own is used as it stands. */
+    const one = launch.named("Demo");
+    one.Directory = "/tmp";
+    launch.save([one]);
+    eq("a directory that is given is the one used",
+       launch.plan().options.Directory, "/tmp");
+    one.Directory = "";
+    launch.save([one]);
+
+    /* --- the tick only ever adds -------------------------------------------- */
+
+    ide.runner.chose(false);
+    check("a configuration that says strict is enough",
+          ide.runner.options().includes("--strict"));
+
+    launch.save([launch.make("Loose")]);      /* the suggestion is off now */
+    launch.choose("Loose");
+    eq("a configuration that does not say so is not strict",
+       ide.runner.options().length, 0);
+
+    ide.runner.chose(true);
+    check("...until the tick says so anyway",
+          ide.runner.options().includes("--strict"));
+    ide.runner.chose(false);
+
+    /* --- choosing, which is yours and not the project's ---------------------- */
+
+    const two = [launch.make("First"), launch.make("Second")];
+    two[1].Name = "Second";
+    launch.save(two);
+    launch.choose("");
+
+    eq("with nothing chosen the first one runs", launch.chosen.Name, "First");
+    launch.choose("Second");
+    eq("choosing one is remembered", launch.chosen.Name, "Second");
+
+    /* A choice that no longer names anything falls back rather than sticking:
+     * leaving it written down would make a later configuration of that name
+     * silently become the choice. */
+    launch.save([launch.make("First")]);
+    eq("a choice whose configuration went falls back to the first",
+       launch.chosen.Name, "First");
+
+    /* --- the menu ------------------------------------------------------------ */
+
+    launch.save(two);
+    launch.choose("Second");
+    ide.refresh();
+
+    eq("the menu offers every configuration", ide.MnuLaunch.Items.length, 2);
+    eq("...with the chosen one marked", ide.MnuLaunch.Value, 1);
+    check("...and it is enabled", ide.MnuLaunch.Enabled);
+
+    /* Choosing from the menu is what the radio item hands over: the entry, not
+     * the index, because a name is what the choice is written down as. */
+    ide.MnuLaunch_Click(0, "First");
+    eq("choosing from the menu chooses it", launch.chosen.Name, "First");
+
+    launch.save([]);
+    ide.refresh();
+    check("a project with none says so rather than offering an empty menu",
+          !ide.MnuLaunch.Enabled);
+
+    /* --- what a record refuses ----------------------------------------------- */
+
+    const bad = launch.make("Bad");
+    bad.Environment = ["PORT8080"];
+    check("an environment line that is not NAME=value is reported",
+          bad.Validate().some((w) => w.includes("NAME=value")),
+          JSON.stringify(bad.Validate()));
+
+    /* `check` and a `try`, because this file has `check`, `eq` and `neq` and no
+     * `throws` -- reaching for one is how a phase stops in the middle and reads
+     * as a hang rather than as a red line. */
+    let refused = false;
+    try { bad.Name = ""; } catch (e) { refused = true; }
+    check("and a configuration with no name is refused where it is set", refused);
+
+    /* --- the dialog, driven ---------------------------------------------------
+     *
+     * **Which is the half that was missing, and it is where the bug was.** This
+     * phase tested `Ide.Launch` and not `LaunchForm`, so eight assignments to a
+     * `CheckButton.Value` -- a property a `CheckButton` does not have; it is
+     * `Active` -- went in green and blew up the first time a person opened the
+     * window. Two other things would have caught it and neither was pointed at
+     * this file: `bintana --strict`, which is what finally did and named the
+     * property, and `Ide.Check`, which reads exactly this shape. A model without
+     * its window is half a test.
+     */
+    launch.save([]);
+    launch.suggest({ Strict: true, StopOnThrow: false });
+
+    let saved = null;
+    const dlg = LaunchForm.edit(launch.all, launch.suggestion(),
+                                (list, seed) => { saved = { list, seed }; });
+
+    check("the dialog opens on a project with none", dlg !== null);
+    eq("...with nothing to edit", dlg.LstLcNames.Count, 0);
+    eq("...the fields disabled", dlg.TxtLcName.Enabled, false);
+    eq("...and the ticks showing the suggestion", dlg.ChkLcStrict.Active, true);
+
+    dlg.BtnLcAdd_Click();
+    eq("Add makes one", dlg.LstLcNames.Count, 1);
+    eq("...selected", dlg.LstLcNames.Index, 0);
+    eq("...named so it can be chosen", dlg.TxtLcName.Text.length > 0, true);
+    eq("...with the fields enabled", dlg.TxtLcName.Enabled, true);
+    eq("...and the suggestion copied in", dlg.ChkLcStrict.Active, true);
+
+    dlg.TxtLcName.Text = "From the dialog";
+    dlg.TxtLcName_Change();
+    eq("renaming it renames the row", dlg.LstLcNames.Text, "From the dialog");
+    eq("...without losing the selection", dlg.LstLcNames.Index, 0);
+
+    dlg.TxtLcArgs.Text     = "uno\n\ndos";     /* a blank line is not an argument */
+    dlg.TxtLcEnv.Text      = "A=1";
+    dlg.ChkLcThrow.Active  = true;
+    dlg.BtnLcOk_Click();
+
+    check("Save hands the list back", saved !== null);
+    eq("...with the name", saved.list[0].Name, "From the dialog");
+    eq("...the arguments, blank lines dropped", saved.list[0].Arguments.join(","), "uno,dos");
+    eq("...the environment", saved.list[0].Environment.join(","), "A=1");
+    eq("...and both ticks", `${saved.list[0].Strict} ${saved.list[0].StopOnThrow}`,
+       "true true");
+    eq("and the suggestion for whatever is made next",
+       `${saved.seed.Strict} ${saved.seed.StopOnThrow}`, "true true");
+
+    /* Nothing was written: the dialog works on a copy, and this one was never
+     * handed to `save`. */
+    eq("the project is untouched until somebody saves it", launch.all.length, 0);
+
+    /* --- and what `p_running` will start -------------------------------------
+     *
+     * `Tabs.js`, because `Tabs` is what this project starts at by now -- the
+     * manifest says so and has since `p_views` rewrote it. Writing `Main.js`
+     * instead cost a green run: the child started, printed what it always
+     * printed, and the two questions this leaves for `p_running` were asked of a
+     * file nothing loads.
+     */
+    File.Save(File.Join(TMP, "Tabs.js"),
+              'class Tabs extends Form {\n' +
+              '    Form_Open() {\n' +
+              '        print("hello from tabs");\n' +
+              '        print("args: " + Application.Arguments.join(","));\n' +
+              '        print("env: " + Environment.Get("BTA_DEMO", "none"));\n' +
+              '        Application.Quit(0);\n' +
+              '    }\n' +
+              '    Ok_Click() {}\n' +
+              '}\n');
+
+    const run = launch.make("With arguments");
+    run.Arguments   = ["uno", "dos"];
+    run.Environment = ["BTA_DEMO=si"];
+    launch.save([run]);
+    launch.choose("With arguments");
+    ide.refresh();
+    yield;
+}
+
 function* p_running(ide) {
     /* --- running -----------------------------------------------------------
-     * By this point the child project was renamed (Child -> Main), so running
-     * it in another process proves the rename left something that really starts,
-     * not just files with another name. */
+     * By this point the child project has been renamed, rewritten and moved
+     * about by a dozen phases, so running it in another process proves all of
+     * that left something that really starts, not just files with other names.
+     * What it starts at is `Tabs`, which the manifest has said since `p_views`;
+     * `p_launch` writes that file and the configuration this run uses. */
     let out = "";
     const log = ide.log.bind(ide);
 
@@ -10962,6 +11185,17 @@ function* p_running(ide) {
             const shown = ide.LogView.Text;
             check("the child's output reaches the log",
                   shown.includes("hello from tabs"), JSON.stringify(shown));
+
+            /*
+             * And the chosen launch configuration really reached it: the
+             * arguments after the project directory, and a variable added to
+             * the environment. `p_launch` left them; this is the one child run
+             * in the phase list, so it answers both questions.
+             */
+            check("the configuration's arguments reach the child",
+                  shown.includes("args: uno,dos"), JSON.stringify(shown));
+            check("...and so does its environment",
+                  shown.includes("env: si"), JSON.stringify(shown));
             check("a clean exit is reported", out.includes("[finished ok]"),
                   JSON.stringify(out));
             eq("Run re-enables when the child exits", ide.BtnRun.Enabled, true);
@@ -11375,6 +11609,7 @@ const PHASES = [
     { name: "search", run: p_search },
     { name: "git", run: p_git },
     { name: "debug", run: p_debug },
+    { name: "launch", run: p_launch },
     { name: "running", run: p_running },
 ];
 

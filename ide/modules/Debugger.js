@@ -143,18 +143,34 @@ Ide.Debugger = class Debugger {
          * property of the run and not of the button that started it, and a
          * misspelt property is exactly the thing one would want to stop at. */
         const options = ["--debug", ...this.ide.runner.options()];
+        const plan    = this.ide.launch.plan();
 
-        this.ide.log(`> bintana ${[...options, this.ide.project].join(" ")}\n`);
+        this.ide.log(`> bintana ${[...options, this.ide.project,
+                                   ...plan.arguments].join(" ")}\n`);
         this.remember(this.ide.activeFile);
 
         this.stopped = null;
         this.ide.running = true;
 
-        this.job = Exec([Application.Executable, ...options, this.ide.project],
-                        { Directory: this.ide.project,
-                          Control: (line) => this.heard(line) },
+        /* The same plan Run uses -- arguments, directory and environment -- with
+         * the control channel added. Debugging a project with different
+         * arguments than running it would be a second answer to the question
+         * *how is this project started*. */
+        this.job = Exec([Application.Executable, ...options, this.ide.project,
+                         ...plan.arguments],
+                        { ...plan.options, Control: (line) => this.heard(line) },
                         (line) => this.ide.log(`${line}\n`),
                         (code) => this.finished(code));
+        /*
+         * What the configuration says about stopping, applied before anything
+         * runs -- which is the first memory this switch has ever had. It was a
+         * live command with nothing behind it, so it came up off in every
+         * session however often it was turned on, and the menu tick said so
+         * only until the next launch.
+         */
+        this.stopOnThrow(plan.stopOnThrow);
+        this.ide.MnuStopThrow.Value = plan.stopOnThrow;
+
         this.flush();
         this.ide.refresh();
         return true;

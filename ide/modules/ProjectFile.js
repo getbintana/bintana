@@ -73,6 +73,25 @@ Ide.ProjectFile = class ProjectFile extends Record {
         Version: Field.Text({ max: 40 }),
 
         Description: Field.Text({ max: 400 }),
+
+        /*
+         * How this project is run: named configurations, each with the
+         * arguments, the directory and the environment it needs
+         * (`Ide.LaunchConfig`). Versioned on purpose -- *what this project needs
+         * to start* is a fact about the project and not about whoever opened it,
+         * so it belongs beside `sources` and `uses` rather than in anybody's
+         * settings.
+         *
+         * Not required, and empty is the ordinary state: a project that needs no
+         * arguments is most projects, and Run does for it exactly what it always
+         * did.
+         *
+         * **Which one is chosen is not here.** That is personal and per project
+         * -- two people on one project may well be running different ones -- so
+         * it lives in `Settings` with the rest of what this window remembers
+         * about itself.
+         */
+        Launch: Field.List(Ide.LaunchConfig),
     };
 
     /*

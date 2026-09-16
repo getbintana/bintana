@@ -169,6 +169,7 @@ class MainForm extends Form {
     finder    = new Ide.Finder(this);        // the find bar
     runner    = new Ide.Runner(this);        // running the project, and its output
     manifest  = new Ide.Manifest(this);      // project.json
+    launch    = new Ide.Launch(this);        // how this project is run, in three places
     classes   = new Ide.Classes(this);       // what the project holds, and its names
     projectTree = new Ide.ProjectTree(this); // ...as the file tree shows it
     formFiles = new Ide.FormFiles(this);     // creating, renaming, deleting one
@@ -669,6 +670,7 @@ class MainForm extends Form {
     warnMissingStartup() { this.manifest.warnMissingStartup(); }
     reportProject()     { this.manifest.report(); }
     editProject()       { this.manifest.editSettings(); }
+    editLaunch()        { this.launch.edit(); }
 
     /* --- creating, renaming and deleting ------------------------------------
      *
@@ -1001,6 +1003,7 @@ class MainForm extends Form {
         this.MnuFtProject.Enabled = open;
         this.MnuProjectSettings.Enabled = open;
         this.MnuExport.Enabled = open;
+        this.launch.show();
 
         /* Searching needs text: a form tab is a tree, and Ctrl+F loses its
          * accelerator along with the item rather than doing nothing on it. */
@@ -2297,6 +2300,19 @@ class MainForm extends Form {
     /* A tick, and the runtime has already moved it: what is left is remembering
      * it. What it does is one argument to `bintana` -- see `Ide.Runner`. */
     MnuStrict_Click(on) { this.runner.chose(on); }
+
+    /*
+     * Which configuration this project runs with. A radio item, so the runtime
+     * has already moved the mark and hands over the entry that was chosen; what
+     * is left is writing it down, which is `Ide.Launch`'s -- it is yours and
+     * per project, not the project's.
+     */
+    MnuLaunch_Click(index, text) {
+        this.launch.choose(text);
+        this.refresh();
+    }
+
+    MnuLaunchEdit_Click() { this.editLaunch(); }
 
     stopRun() {
         this.runner.stop();

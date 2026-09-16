@@ -1,0 +1,217 @@
+{
+  "format": "bintana-form/1",
+  "class": "LaunchForm",
+  "properties": {
+    "Height": 520,
+    "Icon": "system-run",
+    "Text": "Run configurations",
+    "Width": 660
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblLcList",
+      "properties": {
+        "Height": 20,
+        "Style": "dim-label",
+        "Text": "Configurations:",
+        "Width": 180,
+        "X": 16,
+        "Y": 14
+      }
+    },
+    {
+      "type": "ListBox",
+      "name": "LstLcNames",
+      "properties": {
+        "Height": 376,
+        "MinHeight": 120,
+        "MinWidth": 150,
+        "Style": "frame",
+        "VAlign": "Fill",
+        "Width": 190,
+        "X": 16,
+        "Y": 36
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnLcAdd",
+      "properties": {
+        "Height": 30,
+        "Text": "Add",
+        "Tooltip": "A new configuration, with the defaults below copied into it",
+        "VAlign": "End",
+        "Width": 92,
+        "X": 16,
+        "Y": 420
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnLcRemove",
+      "properties": {
+        "Height": 30,
+        "Text": "Remove",
+        "VAlign": "End",
+        "Width": 92,
+        "X": 114,
+        "Y": 420
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblLcName",
+      "properties": {
+        "Height": 20,
+        "Text": "Name:",
+        "Width": 110,
+        "X": 226,
+        "Y": 36
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtLcName",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 32,
+        "Width": 406,
+        "X": 226,
+        "Y": 58
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblLcArgs",
+      "properties": {
+        "Height": 20,
+        "Text": "Arguments, one per line:",
+        "Width": 260,
+        "X": 226,
+        "Y": 98
+      }
+    },
+    {
+      "type": "TextEditor",
+      "name": "TxtLcArgs",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 96,
+        "Style": "frame",
+        "Width": 406,
+        "X": 226,
+        "Y": 120
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblLcDir",
+      "properties": {
+        "Height": 20,
+        "Text": "Directory, empty for the project’s own:",
+        "Width": 300,
+        "X": 226,
+        "Y": 226
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtLcDir",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 32,
+        "Width": 406,
+        "X": 226,
+        "Y": 248
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblLcEnv",
+      "properties": {
+        "Height": 20,
+        "Text": "Environment, NAME=value one per line:",
+        "Width": 300,
+        "X": 226,
+        "Y": 288
+      }
+    },
+    {
+      "type": "TextEditor",
+      "name": "TxtLcEnv",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 90,
+        "Style": "frame",
+        "Width": 406,
+        "X": 226,
+        "Y": 310
+      }
+    },
+    {
+      "type": "CheckButton",
+      "name": "ChkLcStrict",
+      "properties": {
+        "Height": 26,
+        "Text": "Strict checks",
+        "Tooltip": "A control refuses a property its class does not have",
+        "Width": 190,
+        "X": 226,
+        "Y": 410
+      }
+    },
+    {
+      "type": "CheckButton",
+      "name": "ChkLcThrow",
+      "properties": {
+        "Height": 26,
+        "Text": "Stop where something is thrown",
+        "Width": 260,
+        "X": 226,
+        "Y": 438
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblLcDefaults",
+      "properties": {
+        "Height": 20,
+        "Style": "dim-label",
+        "Text": "New configurations start with these two as they are now.",
+        "Width": 220,
+        "X": 226,
+        "Y": 466
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnLcCancel",
+      "properties": {
+        "Cancel": true,
+        "HAlign": "End",
+        "Height": 32,
+        "Text": "Cancel",
+        "VAlign": "End",
+        "Width": 92,
+        "X": 456,
+        "Y": 470
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnLcOk",
+      "properties": {
+        "Default": true,
+        "HAlign": "End",
+        "Height": 32,
+        "Style": "suggested-action",
+        "Text": "Save",
+        "VAlign": "End",
+        "Width": 92,
+        "X": 556,
+        "Y": 470
+      }
+    }
+  ]
+}

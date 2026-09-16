@@ -45,6 +45,17 @@ that it hands over, and the binary it chose is the binary the runner reports as
 its own -- there is no path passed down and nothing that can disagree about which
 build ran.
 
+**What the runner filters, it filters from the start of the line**, and that is
+worth a sentence because the coarse version cost two full runs. GTK's portal
+chatter and Mesa's complaint about a display with no GPU say nothing about the
+runtime, so the runner drops them; matching those words *anywhere* in a line also
+drops a test's own failure report, because `tests/ide` says what a check saw by
+quoting the log view and the log view had `libEGL warning` in it. The summary
+read `2 failed` with nothing above it naming them, and running the project
+directly -- outside the runner -- is what showed the two lines existing all
+along. A filter aimed at the toolkit must not be able to swallow what a project
+says *about* the toolkit.
+
 **A sanitized build is not just slower, it is shallower.** The stack budget
 `JS_SetMaxStackSize` sets is a number of bytes, and AddressSanitizer's frames are
 about ten times fatter -- so the same budget that walks a hundred levels of widget
@@ -68,6 +79,14 @@ was 300 and a passing run tripped it. `TIMEOUT=<seconds>` overrides it, and
 `tests/asan.sh` raises it on its own. A guard set just above the real time makes a
 slow machine look like a broken one. There is no framework to learn: `check`,
 `eq`, `neq` and `throws` are ten lines at the top of each project.
+
+**Not the same ten lines, and it is worth reading them before writing a test.**
+Each project has the helpers it needed and no others: `tests/ide` has `check`,
+`eq` and `neq`; `tests/widgets` and `tests/markdown` have `check`, `eq` and
+`throws`. Reaching for one a project does not have is not a red line, it is a
+`ReferenceError` in the middle of a phase -- which reads as a hang, since the
+phases after it never run and the window never closes. `check` and a `try` is
+what a project without `throws` writes instead.
 
 Everything needs a display, and that is deliberate: a test that does not go
 through GTK proves nothing about a GTK binding. It does not need *your* display,

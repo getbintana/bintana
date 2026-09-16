@@ -108,6 +108,7 @@ soon as it lists the files. Qualifying the name is the way out.
 | `sources` | `.js` files to evaluate, in this order, as paths relative to the project (`"widgets/Stepper.js"`) |
 | `uses` | libraries of shared classes to load **before** the project's own sources (`["charts"]`) — see [Libraries](#libraries-uses) |
 | `description` | not used by the runtime; the IDE writes it and leaves it alone |
+| `launch` | how the project is run, as named configurations — arguments, working directory, environment (below). **Read by the IDE and not by the runtime**, which takes its arguments from the command line like any program |
 
 Without `sources`, every `.js` under the project is loaded — subdirectories
 included — sorted by path, so at least the order is reproducible. **An empty list
@@ -127,6 +128,45 @@ arranged, `Field.List(() => Line)` defers the mention to the first use instead �
 see [runtime-api.md](runtime-api.md#a-record-inside-a-record). Creating a form from
 the IDE registers it in `sources`, and without that entry the class silently never
 loads.
+
+### `launch`: how the project is run
+
+```json
+"launch": [
+  { "name": "Demo",
+    "arguments": ["--data", "demo/facturas"],
+    "directory": "",
+    "environment": ["BTA_DEMO=1"],
+    "strict": true,
+    "stoponthrow": false }
+]
+```
+
+| Key | Meaning |
+|---|---|
+| `name` | what the *Project → Run configuration* menu shows. Required, and its own |
+| `arguments` | handed to the project as `Application.Arguments`, one entry per argument — not one string to split, because a path with a space in it is ordinary |
+| `directory` | where the child starts. Empty is the project's own, which is what most want |
+| `environment` | `NAME=value`, one a line. A **change** and not a replacement: what is not named here is inherited, since a child that lost `HOME` would not start |
+| `strict` | run it with [`--strict`](strict-plan.md) |
+| `stoponthrow` | the debugger stops where something is thrown |
+
+**Versioned on purpose.** *What this project needs in order to start* is a fact
+about the project and not about whoever opened it, so it sits beside `sources`
+and `uses` and the whole team gets it. Two things that are **not** here, because
+they are not that: which configuration you have chosen, and the IDE's *run
+strictly anyway* tick. Both are yours, both are in `Settings`, and neither is
+committed.
+
+**The switches are copied, not inherited.** The IDE keeps a global *suggestion*
+— which switches a new configuration should start with — and copies it in when
+one is made. Changing the suggestion afterwards changes nothing that exists,
+which is `git init`'s pattern rather than `git config`'s, and `/etc/skel`'s for a
+new account. What it buys is that this file says what will happen, whole: nothing
+in it depends on the machine of whoever reads it.
+
+A project with no `launch` is the ordinary case and runs exactly as it always
+did: its own directory, no arguments.
 
 ### `main`: a project with no window
 

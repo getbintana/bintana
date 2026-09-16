@@ -47,7 +47,10 @@ Ide.Runner = class Runner {
          * with it: a place a program died at two runs ago is not a fact about
          * the program on screen now. */
         ide.problems.clear("run");
-        ide.log(`> bintana ${[...this.options(), ide.project].join(" ")}\n`);
+        const plan = ide.launch.plan();
+
+        ide.log(`> bintana ${[...this.options(), ide.project,
+                             ...plan.arguments].join(" ")}\n`);
         ide.running = true;
         ide.refresh();
 
@@ -57,8 +60,15 @@ Ide.Runner = class Runner {
          * and stderr are merged on purpose -- a traceback interleaved with the
          * program's own output in the wrong order is worse than either.
          */
-        this.job = Exec([Application.Executable, ...this.options(), ide.project],
-                        { Directory: ide.project },
+        /*
+         * The chosen configuration says the rest: the arguments after the
+         * project directory, where to start, and what to put in the
+         * environment. A project that declares none plans an empty run, which
+         * is exactly what this line was before there were any.
+         */
+        this.job = Exec([Application.Executable, ...this.options(), ide.project,
+                         ...plan.arguments],
+                        plan.options,
                         (line) => ide.log(`${line}\n`),
                         (code) => this.finished(code));
     }
@@ -71,18 +81,22 @@ Ide.Runner = class Runner {
      * forever -- the half of that question `Ide.Live` and `Ide.Check` cannot
      * answer, because it needs the program to be running.
      *
-     * **Not in `project.json`, and the distinction is the point**: the same
-     * project is run under it and not under it, and what decides is whoever
-     * pressed the button. So it is remembered where every other thing this
-     * window remembers about itself is remembered, and shown as a tick in the
-     * menu rather than as a field in a dialog.
+     * **Two things can turn it on and they mean different things.** The chosen
+     * launch configuration may say a run is strict -- that is the project's, it
+     * is versioned, and the whole team gets it. The tick in the menu is yours
+     * and says *strictly anyway*, on top of whichever is chosen.
      *
-     * The first caller for launch configurations, which this is not: an argument
-     * decided here and nowhere else is exactly what a launch configuration would
-     * hold, and one switch is not a reason to build one.
+     * So they are an `||` and not a choice: the tick only ever **adds**
+     * strictness. A development switch that could quietly make checking looser
+     * than the project asked for would be a worse thing to have than not to
+     * have, and there is a way to say that already -- edit the configuration,
+     * which is where the project said it.
      */
     options() {
-        return Settings.Get(STRICT_KEY, false) ? ["--strict"] : [];
+        const strict = Settings.Get(STRICT_KEY, false) ||
+                       this.ide.launch.plan().strict;
+
+        return strict ? ["--strict"] : [];
     }
 
     /* The tick put back where the last session left it. A menu item's state

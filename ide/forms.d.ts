@@ -135,6 +135,26 @@ interface ImageForm {
     Shown: Picture;
 }
 
+interface LaunchForm {
+    LblLcList: Label;
+    LstLcNames: ListBox;
+    BtnLcAdd: Button;
+    BtnLcRemove: Button;
+    LblLcName: Label;
+    TxtLcName: TextBox;
+    LblLcArgs: Label;
+    TxtLcArgs: TextEditor;
+    LblLcDir: Label;
+    TxtLcDir: TextBox;
+    LblLcEnv: Label;
+    TxtLcEnv: TextEditor;
+    ChkLcStrict: CheckButton;
+    ChkLcThrow: CheckButton;
+    LblLcDefaults: Label;
+    BtnLcCancel: Button;
+    BtnLcOk: Button;
+}
+
 interface LogForm {
     Outer: Split;
     Commits: TableView;
@@ -276,6 +296,8 @@ interface MainForm {
     MnuRun: MenuItem;
     MnuStop: MenuItem;
     MnuStrict: MenuItem;
+    MnuLaunch: MenuItem;
+    MnuLaunchEdit: MenuItem;
     MnuTranslations: MenuItem;
     MnuTranslationNew: MenuItem;
     MnuTranslationEditor: MenuItem;

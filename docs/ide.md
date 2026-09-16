@@ -1139,6 +1139,42 @@ this.job = Exec([Application.Executable, ...this.options(), ide.project],
                 (code) => this.finished(code));
 ```
 
+### Run configurations
+
+*Project → Run configuration* is a list of named ways to start this project, and
+*Run configurations...* is where they are written. Each one holds what `Run`
+could not say before: **arguments**, a **working directory**, and additions to
+the **environment** — plus the two switches, strict checks and stop-on-throw.
+
+They live in three places and none of them means two things:
+
+| | where | versioned |
+|---|---|---|
+| the configurations themselves | `project.json`'s `launch` | **yes** — what a project needs to start is the project's |
+| which one is chosen | `Settings` | no — two people on one project may run different ones |
+| a *suggestion* for new ones | `Settings` | no |
+
+**The suggestion is copied, not inherited**, and that is the decision the whole
+shape rests on. When a configuration is made, the two switches are copied out of
+the suggestion and are the configuration's own from then on; changing the
+suggestion later changes nothing that exists. It is `git init`'s pattern rather
+than `git config`'s — `init.defaultBranch` seeds a new repository and never
+renames anybody's branch — and `/etc/skel`'s for a new Unix account.
+
+What it buys is the property that matters for a file a team shares: **what will
+run is written down whole**, and nothing in it depends on the machine of whoever
+opens it. What it costs is that changing your suggestion does not propagate, and
+that is the trade taken on purpose.
+
+It also removes a shape the alternative would have needed. A cascade resolves at
+read time, so every value has to be able to say *nothing* — and a `Record` cannot:
+`Field.Bool` is `{ def: false }`, so a field always says something. Copying at
+creation means no value ever has to mean *ask my parent*, and every field of
+`Ide.LaunchConfig` is an ordinary one.
+
+A project that declares none is the ordinary case, and Run does for it exactly
+what it always did.
+
 ### Strict checks, which are a property of the run
 
 *Project → Strict checks while running* is a tick, and what it does is add one
@@ -1150,12 +1186,19 @@ cannot answer, because it needs the program to be running. The other half is
 theirs and stays theirs: a handler nobody calls is a mistake no execution
 reaches.
 
-**Not in `project.json`**, and the distinction is the point: the same project is
-run under it and not under it, and what decides is whoever pressed the button. So
-it is remembered with everything else this window remembers about itself, and
-shown as a tick rather than as a field in a dialog. It is also the first real
-caller for launch configurations -- an argument decided here and nowhere else is
-exactly what one would hold -- and one switch is not a reason to build one.
+**Two things can turn it on, and they are not the same thing.** The chosen
+configuration may say a run is strict: that is the project's, it is versioned,
+and the whole team gets it. The tick is yours and says *strictly anyway*, on top
+of whichever is chosen — so they are an `||`, and the tick only ever **adds**
+strictness. A development switch that could quietly make checking *looser* than
+the project asked for would be worse to have than not to have, and there is
+already a way to say that: edit the configuration, which is where the project
+said it.
+
+This tick was the first caller launch configurations had -- an argument decided
+here and nowhere else is exactly what one would hold, and one switch was not a
+reason to build them. The arguments a project needs in order to start were the
+second, and two was.
 
 What it cost to make possible, and why a widget's own properties are now exactly
 its properties, is [`strict-plan.md`](strict-plan.md).

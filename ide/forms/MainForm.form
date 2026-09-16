@@ -242,6 +242,16 @@
           "check": true
         },
         {
+          "name": "MnuLaunch",
+          "text": "Run configuration",
+          "dynamic": true,
+          "radio": true
+        },
+        {
+          "name": "MnuLaunchEdit",
+          "text": "Run configurations..."
+        },
+        {
           "separator": true
         },
         {

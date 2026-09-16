@@ -233,9 +233,13 @@ Not `project.json`: it is a property of the **run**, not of the project. A flag
 on the command line, off unless asked for -- `bintana` is what the IDE spawns, so
 it is one argument.
 
-Which makes it the first real caller for **launch configurations**, where the
-IDE's Run is `Exec([Application.Executable, …options, ide.project], …)` and one
-switch is not a reason to build one.
+Which made it the first real caller for **launch configurations** -- and they
+exist now, because a second one turned up: the arguments a project needs in order
+to start, which the IDE had no way to pass at all. A configuration can say a run
+is strict, and that half is the project's and versioned; the tick stays yours and
+only ever adds. [`ide.md`](ide.md#run-configurations) has the three places and
+why the switches are **copied** into a new configuration rather than inherited
+from anywhere.
 
 ## What it catches, and what it does not
 

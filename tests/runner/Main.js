@@ -45,8 +45,18 @@ const BINTANA = Application.Executable;
  * so under the virtual display, which is the ordinary case, there is only one
  * stream to separate and every line arrives as `out`. Splitting would filter
  * nothing and look like it was filtering.
+ *
+ * **Anchored, and that is not tidiness.** It used to match anywhere in the line,
+ * which quietly ate a test's own failure report: `tests/ide` says what a check
+ * saw by quoting the log view, the log view had `libEGL warning` in it, and so
+ * two red lines never reached the terminal -- the summary said `2 failed` with
+ * nothing above it saying which. A filter aimed at the toolkit must not be able
+ * to swallow what a project says *about* the toolkit.
+ *
+ * The prefix is GLib's own `(name:pid): ` stamp, which these lines carry when
+ * they come from a running program and do not when they come from Mesa.
  */
-const NOISE = /Gdk-WARNING|Gtk-WARNING|libEGL warning/;
+const NOISE = /^(?:\([^)]*\): )?(?:Gdk-WARNING|Gtk-WARNING|libEGL warning)/;
 
 /*
  * The guard against a hang, which is a real failure mode here: an uncaught throw
