@@ -5711,20 +5711,28 @@ function* p_projects(ide) {
           np.CmbKind.Focused && !np.TxtName.Focused,
           `name ${np.TxtName.Focused}, kind ${np.CmbKind.Focused}`);
 
-    /* --- and what it will create says which kind it is --------------------- */
+    /*
+     * --- and what it will create says which kind it is ---------------------
+     *
+     * **Nothing here calls the handler by name, and that is the point.**  These
+     * assertions used to, and they were green while the feature was dead: the
+     * combo's handler was written `CmbKind_Change` and a `ComboBox` raises
+     * `Select`, so the runtime never dispatched it and the hint never followed
+     * the kind.  A test that drives a handler itself cannot tell you whether
+     * anything else does.  Assigning `Text` moves the selection, which is what
+     * raises the event, which is the whole road being asserted.
+     */
     eq("a new project is a form project unless asked otherwise",
        np.CmbKind.Text, "a form");
     check("the path it spells out says so",
           np.LblHint.Text.includes("forms/Form1.form"), np.LblHint.Text);
 
     np.CmbKind.Text = "a function";
-    np.CmbKind_Change();
     check("choosing a function says what that makes instead",
           np.LblHint.Text.includes("Main.js") && !np.LblHint.Text.includes("Form1"),
           np.LblHint.Text);
 
     np.CmbKind.Text = "a form";
-    np.CmbKind_Change();
 
     /* A name with a separator would escape the base folder. */
     np.TxtName.Text = "con/barra";
@@ -5752,7 +5760,6 @@ function* p_projects(ide) {
     const np2 = NewProjectForm.ask("/tmp", (info) => { asked = info; });
     np2.TxtName.Text = "MiHerramienta";
     np2.CmbKind.Text = "a function";
-    np2.CmbKind_Change();
     np2.BtnCreate_Click();
 
     check("asking for a console project answers so", asked !== null);
@@ -8429,13 +8436,11 @@ function* p_settings(ide) {
     eq("a project with a startup form says so", pdlg.CmbPrKind.Text, "a form");
 
     pdlg.CmbPrKind.Text = "a function";
-    pdlg.CmbPrKind_Change();
     check("choosing a function puts the name in a field one can type in",
           pdlg.TxtPrMain.Visible && !pdlg.CmbPrStartup.Visible);
     eq("carrying the name across the switch", pdlg.TxtPrMain.Text, otherClass);
 
     pdlg.CmbPrKind.Text = "a form";
-    pdlg.CmbPrKind_Change();
     check("choosing a form offers the project's classes again",
           pdlg.CmbPrStartup.Visible && !pdlg.TxtPrMain.Visible);
     eq("and it is still the one it was", pdlg.CmbPrStartup.Text, otherClass);
@@ -8511,7 +8516,6 @@ function* p_settings(ide) {
     ide.MnuProjectSettings.Click();
     const pd5 = ide.projectEditor;
     pd5.CmbPrKind.Text = "a function";
-    pd5.CmbPrKind_Change();
     pd5.TxtPrMain.Text = "Main";
     pd5.BtnPrOk_Click();
 
@@ -8526,7 +8530,6 @@ function* p_settings(ide) {
     eq("showing the function it calls", pd6.TxtPrMain.Text, "Main");
 
     pd6.CmbPrKind.Text = "a form";
-    pd6.CmbPrKind_Change();
     pd6.CmbPrStartup.Text = startedAt;
     pd6.BtnPrOk_Click();
 

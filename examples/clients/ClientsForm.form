@@ -297,7 +297,7 @@
             },
             {
               "type": "Panel",
-              "name": "Actions",
+              "name": "ActionRow",
               "properties": {
                 "Arrangement": "Horizontal",
                 "Spacing": 8

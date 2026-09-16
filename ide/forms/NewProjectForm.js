@@ -34,6 +34,16 @@ class NewProjectForm extends Form {
     /* Showing the path that will be created avoids the surprise of finding it out
      * afterwards. */
     updateHint() {
+        /*
+         * **Reachable before the form is finished.** The `.form` fills `CmbKind`,
+         * filling a list moves its selection, and `CmbKind_Select` arrives with
+         * every control declared after that combo still unset. Guarded on what
+         * this reads rather than on one field, so re-ordering the `.form` cannot
+         * make it wrong again.
+         */
+        if (!this.TxtName || !this.TxtBase || !this.CmbKind ||
+            !this.LblHint || !this.BtnCreate) return;
+
         const name = this.TxtName.Text.trim();
         const base = this.TxtBase.Text.trim();
 
@@ -90,7 +100,21 @@ class NewProjectForm extends Form {
 
     TxtName_Change() { this.updateHint(); }
     TxtBase_Change() { this.updateHint(); }
-    CmbKind_Change() { this.updateHint(); }
+
+    /*
+     * **`Select` and not `Change`**, which is what this said and why the hint
+     * never followed the kind: a `ComboBox` raises `Select` when the chosen row
+     * moves, and a handler named for an event its control does not raise is
+     * loaded, never called, and says nothing about it.
+     *
+     * **And it guards, because waking it up is what showed why.** The `.form`
+     * gives this combo its `Items`, and filling a list moves its selection --
+     * so this arrives *while the form is still being built*, with every field
+     * declared after it still unset. The same trap `SideTabs_Switch` names in
+     * `MainForm`, and the same answer: a handler that can be reached that way
+     * guards, and says so.
+     */
+    CmbKind_Select() { this.updateHint(); }
 
     /* The tab order decides which field is next, not this line. See
      * ProjectForm for why that matters. */

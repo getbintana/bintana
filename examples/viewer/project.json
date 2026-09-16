@@ -1,8 +1,9 @@
 {
-  "format": "bintana-project/1",
   "name": "Image viewer",
   "version": "1.0.0",
   "description": "A folder of images, shown one at a time: fit, zoom and pan.",
   "startup": "Viewer",
-  "sources": ["Viewer.js"]
+  "sources": [
+    "Viewer.js"
+  ]
 }
