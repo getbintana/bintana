@@ -9187,8 +9187,10 @@ function* p_names(ide) {
     check("...and its first control is a class this process has", sample !== null,
           one.type);
 
-    const mine = () => ide.problems.all.filter((p) => p.file === "Main.js" &&
-                                                      p.kind === "Warning");
+    /* This phase's source and no other: the project pass has rows about `Main.js`
+     * too -- the fixture plants files the manifest does not list -- and *which
+     * check said it* is the question being asked here. */
+    const mine = () => ide.problems.of("names:Main.js");
 
     /* --- a member the control does not have ---------------------------------- */
 
@@ -9358,6 +9360,115 @@ function* p_outline(ide) {
 
     ide.openInTab("Main.js");
     yield* settled(ide);
+}
+
+/*
+ * The pass over the whole project.
+ *
+ * Six checks, and each one is a thing the runtime was measured accepting in
+ * silence, so each is planted here on purpose and then taken away again. What is
+ * asserted is not only that they fire: it is that the pass **replaces its own
+ * rows** -- running it twice must not double anything, and a project with the
+ * mistakes taken out must end with nothing left over.
+ *
+ * It writes into the project the earlier phases built and puts every file back,
+ * the way `p_search` does with its own.
+ */
+function* p_check(ide) {
+    /* `pass` and not `check`: this file's own `check()` is the assertion, and
+     * a local of that name would shadow it -- which it did, once. */
+    const pass = ide.check;
+    const rows  = () => ide.problems.of("project");
+
+    /* What the fixture already has to answer for: the phases planted files by
+     * hand, and a manifest with a `sources` is a whitelist. Measured rather
+     * than assumed, because everything below is a delta from it. */
+    pass.run();
+    const before = rows().length;
+    check("the pass says something about the project as it stands", before > 0,
+          JSON.stringify(rows().slice(0, 3)));
+
+    /* --- a .form the runtime would take without a word ---------------------- */
+
+    File.Save(File.Join(TMP, "Bad.form"), JSON.stringify({
+        format: "bintana-form/1",
+        class: "Bad",
+        properties: { Width: 300, Height: 200 },
+        children: [
+            { type: "Label",  name: "Twice", properties: { Text: "uno" } },
+            { type: "Label",  name: "Twice", properties: { Text: "dos" } },
+            { type: "Panel",  name: "Close", properties: {} },
+            { type: "Button", name: "Btn",   properties: { Txt: "nope" } },
+        ],
+    }, null, 2));
+
+    File.Save(File.Join(TMP, "Bad.js"),
+              "class Bad extends Form {\n" +
+              "    Btn_Clik() { }\n" +                    /* Button raises Click */
+              "    Form_Open() { this.Btn.Txt = \"x\"; }\n" +
+              "}\n");
+
+    ide.listFiles();
+    pass.run();
+
+    const said = rows().filter((r) => r.file === "Bad.form" || r.file === "Bad.js");
+    const has  = (needle) => said.some((r) => r.text.includes(needle));
+
+    check("two controls of one name are reported", has("two controls are called Twice"),
+          JSON.stringify(said));
+    check("...as an error, because one of them is simply gone",
+          said.some((r) => r.text.includes("Twice") && r.kind === "Error"));
+    check("a control whose name is a member of Form is reported",
+          has("Close is also a member of Form"), JSON.stringify(said));
+    check("a property the class does not have is reported",
+          has("Button has no Txt"), JSON.stringify(said));
+    check("a handler for an event it does not raise is reported",
+          has("does not raise Clik"), JSON.stringify(said));
+    check("...and so is the member, in a file nobody has open",
+          said.some((r) => r.file === "Bad.js" && r.text.includes("has no Txt")),
+          JSON.stringify(said));
+
+    /* Running it again says the same thing once, not twice. */
+    const again = rows().length;
+    pass.run();
+    eq("the pass replaces its own rows", rows().length, again);
+
+    /* --- the manifest ------------------------------------------------------- */
+
+    const manifestPath = File.Join(TMP, "project.json");
+    const kept = File.Load(manifestPath);
+    const cfg  = JSON.parse(kept);
+    cfg.format = "bintana-project/1";              /* a key nothing reads */
+    cfg.sources = (cfg.sources || []).concat(["NoEsta.js"]);
+    File.SaveJson(manifestPath, cfg);
+
+    pass.run();
+    const about = rows().filter((r) => r.file === "project.json");
+    check("a key nothing reads is reported",
+          about.some((r) => r.text.includes('"format"')), JSON.stringify(about));
+    check("a source that is not there is reported",
+          about.some((r) => r.text.includes("NoEsta.js")), JSON.stringify(about));
+    check("...as an error, since that one stops the program",
+          about.some((r) => r.text.includes("NoEsta.js") && r.kind === "Error"));
+
+    File.Save(manifestPath, kept);
+
+    /* --- and it cleans up after itself -------------------------------------- */
+
+    File.Delete(File.Join(TMP, "Bad.form"));
+    File.Delete(File.Join(TMP, "Bad.js"));
+    ide.listFiles();
+    pass.run();
+
+    eq("with the mistakes gone the pass is back where it started",
+       rows().length, before);
+    check("and nothing is left about the files that went",
+          !rows().some((r) => r.file.startsWith("Bad.")),
+          JSON.stringify(rows()));
+
+    pass.forget();
+    eq("forgetting takes the whole pass back", rows().length, 0);
+    pass.run();                       /* the phases after this one see it as found */
 }
 
 /*
@@ -11074,6 +11185,7 @@ const PHASES = [
     { name: "problems", run: p_problems },
     { name: "names", run: p_names },
     { name: "outline", run: p_outline },
+    { name: "check", run: p_check },
     { name: "quick", run: p_quick },
     { name: "recovery", run: p_recovery },
     { name: "session", run: p_session },

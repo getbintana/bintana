@@ -202,7 +202,13 @@ class MainForm extends Form {
     problems  = new Ide.Problems(this);
     /* And the one thing that puts rows in it on its own: the names a file uses,
      * checked against the form beside it while it is being written. */
+    /* The two checks that read a name against the `.form` beside it, shared by
+     * the two things that ask: the pause, and the project pass. */
+    names     = new Ide.Names(this);
     live      = new Ide.Live(this);
+    /* ...and the pass itself: what is wrong with the project, asked of the whole
+     * of it rather than of the file on screen. */
+    check     = new Ide.Check(this);
     /* What is in the file on screen, beside it: the side panel's other half, for
      * the tabs where there is no selection to speak about. */
     outline   = new Ide.Outline(this);
@@ -345,6 +351,17 @@ class MainForm extends Form {
         this.rememberRecent(dir);
         this.log(`Project: ${dir}\n`);
         this.reportProject();
+
+        /*
+         * And what is wrong with it, once, here.
+         *
+         * Opening a project is the moment one is willing to be told -- before
+         * any of it is on screen, and not while typing in it. `Ide.Check` takes
+         * the project's own listing, which `listFiles` above has just rebuilt,
+         * and reads files rather than opening them.
+         */
+        this.check.forget();
+        this.check.run();
 
         /* What was open the last time this project was, reopened before anything
          * is offered: the recovered text below lands in these same tabs. */
@@ -1476,6 +1493,20 @@ class MainForm extends Form {
      * it means, and project settings is two clicks away in the menu it has
      * always been in, and in the tree's own context menu besides.
      */
+    /*
+     * The pass over the whole project, which is the half `Ide.Live` cannot be:
+     * it reads the file on screen, and a control lost to a name collision is
+     * lost in a file nobody has open.
+     *
+     * It runs on its own when a project is opened, so this is *run it again* --
+     * the one command a check needs once anybody has fixed something.
+     */
+    MnuCheck_Click() {
+        const found = this.check.run();
+        this.ConsoleBox.Current = this.problems.page;
+        if (!found.length) this.log(`${Locale.Text("Nothing wrong with the project")}\n`);
+    }
+
     MnuGotoFile_Click()  { QuickForm.show(this, false); }
     MnuCommands_Click()  { QuickForm.show(this, true); }
 

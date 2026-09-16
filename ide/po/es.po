@@ -742,6 +742,14 @@ msgstr "Salida"
 msgid "Outline"
 msgstr "Contenido"
 
+#: forms/MainForm.form: menu MnuCheck
+msgid "Check the project"
+msgstr "Comprobar el proyecto"
+
+#: forms/MainForm.js:1490
+msgid "Nothing wrong with the project"
+msgstr "No hay nada mal en el proyecto"
+
 #: forms/MainForm.form: menu MnuGotoFile
 msgid "Go to file..."
 msgstr "Ir al archivo..."

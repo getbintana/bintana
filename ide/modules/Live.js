@@ -19,7 +19,8 @@
  * reason is that a name is a **finished fact** about a control the `.form` next
  * door already describes: nothing has to be inferred, parsed or guessed.
  *
- * Two checks, and both are lookups:
+ * Two checks, and both are lookups -- `Ide.Names` has them, because the project
+ * pass runs the same two over files nobody has open:
  *
  *     this.Btn.Txt       Btn is a Button, and a Button has no Txt
  *     Btn_Clik()         Btn is a Button, and a Button does not raise Clik
@@ -53,18 +54,6 @@ Namespace("Ide");
  * the number is about the *feel* of it and not about the cost.
  */
 const LIVE_PAUSE = 400;
-
-/*
- * `this.Name.Member`, and a method that looks like a handler -- `Name_Event(`
- * at the start of a line, which is how every handler in every project of this
- * language is written.
- *
- * Sources and not `RegExp`s: a `g` pattern carries a `lastIndex`, and one shared
- * between two passes resumes the second where the first stopped. `Strings`
- * builds its own for the same reason.
- */
-const LIVE_MEMBER  = "\\bthis\\.([A-Za-z_$][\\w$]*)\\.([A-Za-z_$][\\w$]*)";
-const LIVE_HANDLER = "^[ \\t]*([A-Za-z_$][\\w$]*)_([A-Za-z_$][\\w$]*)[ \\t]*\\(";
 
 Ide.Live = class Live {
 
@@ -127,7 +116,12 @@ Ide.Live = class Live {
          * -- 5 ms for the largest file in this repository, measured -- and this
          * used to ask for it three times in four lines. */
         const text  = ide.Editor.Text;
-        const found = this.check(text, this.caret(ide.Editor, text), name);
+        /* **`Ide.Names` and not a copy of it.** `Ide.Check` walks the whole
+         * project with the same two checks, and *does this control have this
+         * member* has to have one answer. What belongs to this class is the
+         * *moment*: the pause, and the caret rule that goes with it. */
+        const found = ide.names.check(text, ide.completion.controls(), name,
+                                      this.caret(ide.Editor, text));
 
         ide.problems.report(`names:${name}`, found);
         this.mark(ide.Editor, found);
@@ -158,102 +152,6 @@ Ide.Live = class Live {
             if (p.line > 0) editor.Mark(p.line, "Warning", p.text);
     }
 
-    /* --- the two checks ------------------------------------------------------ */
-
-    check(text, caret, name) {
-        return [...this.members(text, caret, name),
-                ...this.handlers(text, caret, name)];
-    }
-
-    /*
-     * `this.Btn.Txt`: a member the control's class does not have.
-     *
-     * The test is the `in` operator on a real control of that type, which is
-     * exact where a list of property names would not be -- `Click` and
-     * `SetFocus` are methods and are on the prototype, so `PropertyNames()`
-     * would report every method call in the project as a mistake.
-     *
-     * A control whose class this process does not have -- a component of the
-     * project, which the IDE never loads -- is skipped rather than guessed at.
-     */
-    *members(text, caret, file) {
-        const re = new RegExp(LIVE_MEMBER, "g");
-        let m;
-
-        while ((m = re.exec(text)) !== null) {
-            if (this.underCaret(m, caret)) continue;
-
-            const sample = this.sampleFor(m[1]);
-            if (!sample || m[2] in sample) continue;
-
-            yield {
-                kind: "Warning",
-                file,
-                line: this.lineAt(text, m.index),
-                text: `${this.ide.completion.typeOf(m[1])} has no ${m[2]}: the ` +
-                      `assignment would be accepted and do nothing`,
-            };
-        }
-    }
-
-    /*
-     * `Btn_Clik()`: a handler for an event the control does not raise.
-     *
-     * Only where the name before the underscore **is** a control of this form:
-     * `Btnn_Click` -- the control misspelled rather than the event -- is a
-     * method this class cannot tell from any other method with an underscore in
-     * it, and warning about those is how a check gets switched off.
-     */
-    *handlers(text, caret, file) {
-        const re = new RegExp(LIVE_HANDLER, "gm");
-        let m;
-
-        while ((m = re.exec(text)) !== null) {
-            if (this.underCaret(m, caret)) continue;
-
-            const events = this.eventsOf(m[1]);
-            if (!events || events.includes(m[2])) continue;
-
-            yield {
-                kind: "Warning",
-                file,
-                line: this.lineAt(text, m.index),
-                text: `${this.ide.completion.typeOf(m[1])} does not raise ` +
-                      `${m[2]}: this method will never be called`,
-            };
-        }
-    }
-
-    /* --- what the form says -------------------------------------------------- */
-
-    /* A control of that type to ask, or nothing when the name is not a control
-     * of this form at all. `Completion`'s lookups, which are cached per form. */
-    sampleFor(name) {
-        const completion = this.ide.completion;
-        const type       = completion.typeOf(name);
-        if (!type) return null;
-
-        return completion.sample(type);
-    }
-
-    /* The events a control of that name raises, or null when it is not one. */
-    eventsOf(name) {
-        const completion = this.ide.completion;
-        const type       = completion.typeOf(name);
-        if (!type) return null;
-
-        const control = completion.sample(type);
-        if (control) return control.EventNames();
-
-        return this.ide.classes.componentEvents(type) || null;
-    }
-
-    /* Whether the cursor is inside this match, which is what says *still being
-     * typed*. One past the end counts: the caret sits there while the last
-     * character of a word is the one just pressed. */
-    underCaret(m, caret) {
-        return caret >= m.index && caret <= m.index + m[0].length;
-    }
 
     /* The 1-based line a character index falls on. A method and not a function
      * beside the class: `Navigator` already declares a `lineAt` at the top level

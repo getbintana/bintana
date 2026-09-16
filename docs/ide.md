@@ -1244,11 +1244,13 @@ would be a second set of those four decisions. `Activate` and not `Select`, so
 that walking the list with the arrow keys to read it does not open a file per
 row — the same mistake `Cursor` would have been on the log.
 
-### The one source that is not a collection
+### The two sources that are not collections
 
-Everything above already ran somewhere else. The fourth source does not:
+Everything above already ran somewhere else. Two do not:
 [the names a file uses](#the-names-a-file-uses-checked-while-it-is-written),
-checked while it is being written.
+checked while it is being written, and
+[the pass over the whole project](#checking-the-whole-project), which is the
+half the first one cannot be.
 
 ## The names a file uses, checked while it is written
 
@@ -1480,6 +1482,70 @@ a stray keystroke](formats.md) unless the window says so — and `SymbolForm` ha
 no `BtnCancel_Click`. Every other dialog in this IDE has the line. Nothing
 noticed, the way nothing notices a handler that is never called: which is the
 same silence `Ide.Live` exists to break, one floor down.
+
+## Checking the whole project
+
+`Ide.Check`, *Project → Check the project*, and once on its own when a project is
+opened.
+
+[`Ide.Live`](#the-names-a-file-uses-checked-while-it-is-written) reads the file
+on screen, which is one file. Most of what this language accepts in silence is
+not about the file on screen at all — a `.form` loses a control because another
+one has its name, a manifest lists a source that is not there, a `.js` sits on
+disk that nothing loads. Those are just as wrong in a file nobody has open, and
+until this nothing looked.
+
+**Six checks, and every one of them was measured before it was written** — by
+writing it wrong on purpose and watching what the runtime did:
+
+| Written | What happens |
+|---|---|
+| two controls of one name | the first is **gone**: two nodes in the file, one control on the window |
+| a control named `Actions` | `this.Actions` answers the *form's* actions, so the control has no name at all |
+| a control named `Close` | the other way: the control wins and the **method** is lost |
+| a property the class lacks | applied, ignored, never mentioned |
+| a `.js` `sources` does not list | never loaded; the symptom is a `ReferenceError` in another file |
+| a key nothing reads | ignored — `"format"` was in one of this repository's own examples |
+
+The collision pair is the subtle one, and it is why the test is `in` against a
+**bare `Form`**: the same mistake resolves two different ways depending on what
+it lands on — a method is shadowed by the control, a getter with no setter
+shadows it — and neither way says anything. Asked of `MainForm` instead, which is
+the obvious thing to reach for, it would answer yes for every control and method
+the IDE itself has and flag a user's `Tabs` or `Editor`.
+
+The manifest's legal keys are **`Ide.ProjectFile`'s own**: it is a `Record`, so
+what a `project.json` may hold is a list this class does not have to keep.
+
+### It shares its two hardest checks rather than copying them
+
+The sixth row above is `Ide.Names`, which is `Ide.Live`'s member and handler
+checks moved somewhere both can reach. *Does this control have this member* has
+to have one answer; a second copy is a second answer to drift from the first,
+which is the argument this project already made about `Ide.Git`'s commands, about
+`SOURCE_LINK` and about `Navigator.symbols`.
+
+What each caller keeps is its own half. `Ide.Live` owns the *moment* — the pause,
+and the rule that what the caret is inside is never reported. `Ide.Check` passes
+a caret of `-1`, because nobody is typing in a file it is reading.
+
+That is the check that found two real ones in the IDE's own dialogs: a
+`ComboBox`'s handler written `_Change` where a `ComboBox` raises `Select`,
+loaded, never called, and saying nothing about it.
+
+### What it costs
+
+It runs no compiler and opens no file in a tab — `File.LoadJson` and `File.Load`
+are the whole of it. **Measured over the largest project there is, which is this
+IDE: 19 forms, 311 nodes, 54 sources, 886 KB, in 156 ms.** That is a once-per-open
+cost and it is why the pass keeps one control per *type* rather than building a
+fresh `Button` for every `this.Btn.Text` — though that is the smaller half of it
+(176 ms down to 156); most of the time is reading 886 KB and running two regular
+expressions over it, which no cache helps.
+
+Everything it finds goes in under one source, `project`, so running it again
+replaces what it said last time and touches nothing else — the rule
+[every source of the panel keeps](#a-source-replaces-its-own-rows-and-nobody-elses).
 
 ## Git, and the diff before the commit
 

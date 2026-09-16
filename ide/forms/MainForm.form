@@ -270,6 +270,13 @@
           "separator": true
         },
         {
+          "separator": true
+        },
+        {
+          "name": "MnuCheck",
+          "text": "Check the project"
+        },
+        {
           "name": "MnuProjectSettings",
           "text": "Project settings..."
         }

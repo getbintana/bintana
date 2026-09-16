@@ -1566,6 +1566,16 @@ Other
   takes the cursor there, and the cursor takes the row, which is most of what the
   dropdown was for. No index: it reads the text on screen, for the same reason
   F12 does.
+- **Check the project** (*Project* menu, and once when one is opened) is the
+  half a live check cannot be: a control lost because another has its name is
+  lost in a file nobody has open. Six checks, each one measured against a runtime
+  that accepts it in silence — two controls of one name (the first is gone), a
+  control whose name is a member of `Form` (and it resolves *two different ways*
+  depending on what it collides with, neither of them out loud), a property the
+  class does not have, a `.js` the manifest does not list, a key nothing reads,
+  and the member and handler checks over every file rather than the open one. It
+  runs no compiler: 19 forms and 886 KB of source — this IDE itself, the largest
+  project there is — in 156 ms.
 - **Problems** is the bottom panel's third page: everything wrong with the
   project, worst first, each row a place to go to. It **finds nothing of its
   own** — what it collects is the syntax error a save found, the warnings the

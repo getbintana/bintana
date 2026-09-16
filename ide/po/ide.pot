@@ -769,6 +769,14 @@ msgstr ""
 msgid "Outline"
 msgstr ""
 
+#: forms/MainForm.form: menu MnuCheck
+msgid "Check the project"
+msgstr ""
+
+#: forms/MainForm.js:1490
+msgid "Nothing wrong with the project"
+msgstr ""
+
 #: forms/MainForm.form: menu MnuGotoFile
 msgid "Go to file..."
 msgstr ""

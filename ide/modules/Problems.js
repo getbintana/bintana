@@ -115,6 +115,17 @@ Ide.Problems = class Problems {
         });
     }
 
+    /*
+     * What one source currently says, which is the question `all` cannot answer:
+     * a problem carries where it is, not who found it. Two sources may have
+     * something to say about one file -- a name the live check does not like and
+     * a manifest that does not list it -- and telling them apart is what a test
+     * about one of them needs.
+     */
+    of(source) {
+        return this.bySource.get(source) || [];
+    }
+
     /* How many of one severity there are, for the tab and for a test. */
     count(kind) {
         return this.all.filter((p) => !kind || p.kind === kind).length;
