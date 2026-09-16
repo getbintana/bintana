@@ -406,7 +406,10 @@ Declared on the form, next to its controls, and handled like any other event.
 | `radio` | `true` on a `dynamic` item: marks the chosen entry, `Value` is its index |
 
 Each item is exposed by name with `Name`, `Enabled`, `Value`, `Click()` and —
-on a `dynamic` one — `Items`, the entries the application assigns.
+on a `dynamic` one — `Items`, the entries the application assigns. It answers
+`PropertyNames()` and `EventNames()` too, the way a control does: a menu item is
+not a widget, so `Widget.New` cannot make one to ask, and a tool that wants to
+know what one has had nothing to ask at all.
 
 ```js
 MnuSave_Click() { this.save(); }
@@ -486,6 +489,7 @@ this.ActDelete.Enabled = hasSelection;                   // and all of them foll
 | `Name`, `Text`, `Icon` (ro) | what the `.form` declared. The label goes through the catalogue **once**, however many places show it |
 | `Enabled` | the whole reason this exists: one assignment, and every button, menu item and accelerator naming the command follows |
 | `Click()` | pressed from code, the way a menu item can be |
+| `PropertyNames()`, `EventNames()` | what this class has, asked of it the way a control is asked. A command is not a widget, so nothing else can make one to ask |
 | **event** `Click()` | the command was invoked — by a button, a menu item or its key |
 
 **What makes it worth having is the shared `Enabled`, not the shared body.** A

@@ -21,6 +21,7 @@ Namespace("Ide");
 
 Ide.Finder = class Finder {
 
+    /** @param {MainForm} ide */
     constructor(ide) {
         this.ide = ide;
     }

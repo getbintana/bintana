@@ -93,6 +93,19 @@ const GLOBAL_TABLES = {
                        heading: "Actions: one command in several places" },
 };
 
+/*
+ * The one table that is not surface at all.
+ *
+ * `widget_notes` is what the runtime keeps *about* a widget -- `__declared`,
+ * `__children`, `__menus`, `__actions` -- accessors on the root prototype so
+ * that the values can live on the struct and not as own properties of the
+ * control (`docs/strict-plan.md`). Nothing outside the runtime may touch them,
+ * so demanding a documented row for each would be demanding that they be
+ * published, which is the opposite of what they are. Written down here rather
+ * than hidden from the scan, so the exception is one line and visible.
+ */
+const NOT_PUBLISHED = ["widget_notes"];
+
 const GLOBAL_VARS = {
     file:        "File",
     dir:         "Directory",
@@ -672,6 +685,110 @@ function checkLibraryPages(root, problems) {
     return { checked, pages, missing: Dictionary.Count(mine) - pages };
 }
 
+/*
+ * Is `tools/typings/bintana.d.ts` still the runtime's surface?
+ *
+ * That file is **generated**, which is the reason it needs guarding rather than
+ * the reason it does not: a generated file that nobody regenerates is a stale
+ * file, and nothing about it looks stale. `tests/typings.sh` writes it, this
+ * says when it stopped being true -- which is the same bargain `docs/llm/`
+ * makes, one step further out.
+ *
+ * What is compared is the **name**, and not the shape: the declaration types
+ * most things `any` on purpose (a getter that throws is not a type), so
+ * demanding a signature would be demanding something the generator never
+ * claimed. A member that exists in C and is nowhere in that file is the failure
+ * worth having, because it is the one that makes an editor say a real property
+ * does not exist.
+ */
+function checkTypings(root, members, problems) {
+    const path = File.Join(root, "tools/typings/bintana.d.ts");
+
+    if (!File.Exists(path)) {
+        problems.push("no declarations at tools/typings/bintana.d.ts -- " +
+                      "run tests/typings.sh");
+        return 0;
+    }
+    const text  = File.Load(path);
+    const seen  = new Set();
+    let   count = 0;
+
+    for (const m of members) {
+        if (seen.has(m.name)) continue;
+        seen.add(m.name);
+
+        /* A property is `Name:` and a method is `Name(`, at the start of a
+         * declaration line and after whatever qualifies it -- `readonly` for
+         * the ones `PropertyNames()` leaves out, `static` for the four on
+         * `Widget` itself. Narrow enough that the word turning up in a comment
+         * does not count as a declaration. */
+        const line = new Regex("^\\s*(?:readonly\\s+|static\\s+)?" +
+                               Regex.Escape(m.name) + "\\s*[:(]",
+                               { Multiline: true });
+
+        if (!line.IsMatch(text))
+            problems.push(`${m.name} (${m.table}) is not in bintana.d.ts -- ` +
+                          `run tests/typings.sh`);
+        count++;
+    }
+    return count + checkFormTypings(root, problems);
+}
+
+/*
+ * And the other half of the same bargain: `ide/forms.d.ts` against the `.form`
+ * files it was generated from.
+ *
+ * That one goes stale a different way -- not when the runtime gains a member,
+ * but when somebody draws a control -- and it is the file that makes the IDE's
+ * own sources navigable in an editor that is not the IDE. A `.form` under `ide/`
+ * that names something the declaration has no field for is a control an editor
+ * will say does not exist.
+ *
+ * All three blocks a `.form` binds by name, because the loader binds all three:
+ * `children`, `menus` and `actions`.
+ */
+function checkFormTypings(root, problems) {
+    const path = File.Join(root, "ide/forms.d.ts");
+
+    if (!File.Exists(path)) {
+        problems.push("no declarations at ide/forms.d.ts -- run tests/typings.sh");
+        return 0;
+    }
+    const text  = File.Load(path);
+    let   count = 0;
+
+    const named = (nodes, out) => {
+        for (const node of nodes || []) {
+            if (node.name) out.push(node.name);
+            named(node.children, out);
+        }
+        return out;
+    };
+
+    const walk = (folder) => {
+        for (const file of Directory.Files(folder, "*.form")) {
+            let spec;
+            try { spec = File.LoadJson(file); } catch (e) { continue; }
+
+            const names = named(spec.children, [])
+                .concat(named(spec.menus, []), named(spec.actions, []));
+
+            for (const name of names) {
+                const field = new Regex("^\\s*" + Regex.Escape(name) + "\\s*:",
+                                        { Multiline: true });
+                if (!field.IsMatch(text))
+                    problems.push(`${File.Name(file)} names ${name} and ` +
+                                  `ide/forms.d.ts has no field for it -- ` +
+                                  `run tests/typings.sh`);
+                count++;
+            }
+        }
+        for (const sub of Directory.Folders(folder)) walk(sub);
+    };
+    walk(File.Join(root, "ide"));
+    return count;
+}
+
 function Main() {
     const root = Application.Arguments[0] || File.Directory(Application.Directory);
     const doc  = File.Join(root, "docs/llm/controls.md");
@@ -691,6 +808,7 @@ function Main() {
 
         for (const t of TABLE.Matches(src)) {
             if (t.Group(1) in GLOBAL_TABLES) continue;
+            if (NOT_PUBLISHED.includes(t.Group(1))) continue;
             const body = t.Group(2);
 
             for (const g of GETSET.Matches(body))
@@ -745,6 +863,7 @@ function Main() {
     }
 
     const lib     = checkLibraries(root, problems);
+    const typings = checkTypings(root, members, problems);
     const globals = checkGlobals(root, problems);
     const ref     = checkReference(root, members, events, problems);
     const glob    = checkGlobalPages(root, problems);
@@ -753,11 +872,12 @@ function Main() {
     for (const p of problems) print(`  ${p}`);
     print(problems.length
         ? `api: ${problems.length} undocumented or wrong, of ${seen.size} widget ` +
-          `members, ${Dictionary.Count(events)} events, ${globals} on globals ` +
-          `and ${lib} in lib/`
+          `members, ${Dictionary.Count(events)} events, ${globals} on globals, ` +
+          `${lib} in lib/ and ${typings} declared for an editor`
         : `api: ${seen.size} widget members and ${Dictionary.Count(events)} events, ` +
           `plus ${globals} on the globals and ${lib} published by lib/, ` +
-          `all documented -- and ${ref.checked} of them again in the ${ref.pages} ` +
+          `all declared for an editor (${typings} names, the runtime's and the ` +
+          `IDE's own forms) and documented -- and ${ref.checked} again in the ${ref.pages} ` +
           `long page${ref.pages === 1 ? "" : "s"} of docs/reference/widgets, ` +
           `${ref.missing} more with members of their own still to write, ` +
           `${glob.checked} in the ${glob.pages} of docs/reference/globals, ` +

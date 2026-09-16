@@ -133,6 +133,7 @@ function retargetNamespace(source, klass, oldNs, newNs) {
 
 Ide.FormFiles = class FormFiles {
 
+    /** @param {MainForm} ide */
     constructor(ide) {
         this.ide = ide;
     }

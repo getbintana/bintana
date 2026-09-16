@@ -52,6 +52,7 @@ const CLASS_AT = new Regex(
 
 Ide.Navigator = class Navigator {
 
+    /** @param {MainForm} ide */
     constructor(ide) {
         this.ide = ide;
     }

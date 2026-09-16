@@ -22,6 +22,7 @@ Namespace("Ide");
 
 Ide.Exporter = class Exporter {
 
+    /** @param {MainForm} ide */
     constructor(ide) {
         this.ide = ide;
     }

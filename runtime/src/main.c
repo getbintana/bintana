@@ -21,7 +21,12 @@ static void usage(void)
           "\n"
           "  --debug   stop and wait for a debugger before the project runs.\n"
           "            Events go out on descriptor 3 and commands come in on\n"
-          "            stdin; the IDE is what speaks it.\n", stderr);
+          "            stdin; the IDE is what speaks it.\n"
+          "  --strict  a control refuses a property its class does not have,\n"
+          "            so a misspelt name throws where it is written instead\n"
+          "            of doing nothing forever.  For development: an\n"
+          "            application that keeps state on a control will throw.\n",
+          stderr);
 }
 
 int main(int argc, char **argv)
@@ -57,6 +62,15 @@ int main(int argc, char **argv)
          * and what it does is in runtime/src/bta_debug.c. */
         if (!dir && !strcmp(argv[i], "--debug")) {
             bta_debug_want();
+            continue;
+        }
+        /*
+         * A property of the **run** and not of the project, which is why it is
+         * here and not in project.json: the same project is run under it and
+         * not under it, and what decides is whoever pressed the button.
+         */
+        if (!dir && !strcmp(argv[i], "--strict")) {
+            bta_strict_want();
             continue;
         }
         if (!dir && argv[i][0] == '-') {

@@ -53,6 +53,7 @@ const EVENTS_PAGE = 1;
 
 Ide.Events = class Events {
 
+    /** @param {MainForm} ide */
     constructor(ide) {
         this.ide = ide;
         /* What the rows currently say, so an unchanged refresh does nothing. */

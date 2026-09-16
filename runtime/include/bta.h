@@ -16,6 +16,28 @@ typedef struct BtaWidget BtaWidget;
 typedef struct BtaApp    BtaApp;
 
 /*
+ * The runtime's own notes about a widget -- what it knows and the application
+ * does not, kept on the struct rather than as own properties of the wrapper.
+ * See the fields at the end of BtaWidget, and `docs/strict-plan.md` for why.
+ *
+ * `bta_widget_note` hands back the slot itself, so a caller reads it, frees it
+ * and writes it in place. Four of them are also readable from JavaScript,
+ * through accessors on `Widget.prototype` that this enum drives; `__declared` is
+ * the one JavaScript writes too, because `rad.js` leaves the same note the
+ * loader does.
+ */
+typedef enum {
+    BTA_NOTE_DECLARED,   /* [declared, applied] per substituted property */
+    BTA_NOTE_CHILDREN,   /* containers: the wrappers of what is inside */
+    BTA_NOTE_MENUS,      /* forms: the menu spec, as read */
+    BTA_NOTE_ACTIONS,    /* forms: the commands, as read */
+    BTA_NOTE_COLUMNS,    /* tables: the declared columns */
+    BTA_NOTE_PAINTER,    /* drawing areas: made on the first frame painted */
+} BtaNote;
+
+JSValue *bta_widget_note(BtaWidget *w, BtaNote which);
+
+/*
  * What becomes of a control when its container is not the size the
  * coordinates were written for.  GTK's own four words, because they mean the
  * same here as they do in a box -- and they are the same four cases WinForms
@@ -162,6 +184,44 @@ struct BtaWidget {
      * gc_mark. JS_UNDEFINED when the widget has no menu. */
     GtkWidget *popup;
     JSValue    menu;
+
+    /*
+     * The runtime's own notes about this widget -- held **here** and not as own
+     * properties of the wrapper, which is where they used to live.
+     *
+     * A widget's own properties ought to be its properties, and these were six
+     * that were not: `__declared`, `__children`, `__menus`, `__actions`,
+     * `__columns` and `__painter`, each defined on the object with the
+     * enumerable bit off so that nothing which looked would find them.  The
+     * argument for moving them, and what it buys, is
+     * [`docs/strict-plan.md`](../../docs/strict-plan.md); the short version is
+     * that a mode which refuses a property the widget does not have cannot tell
+     * a note from a typo, and most of these are created *later* than the widget
+     * -- `__columns` when an application assigns `Columns`, `__painter` on the
+     * first frame a `DrawingArea` paints -- so pre-creating them is not open
+     * either.
+     *
+     * The comment this reverses is in `bta_table.c`, and it was right about the
+     * thing it warned of: keeping a `JSValue` in C is a strong reference the
+     * collector cannot see, and `JS_FreeRuntime` aborts on anything still alive.
+     * What makes it safe is the line below it -- `gc_mark` -- which this class
+     * has had since `w->form` and `w->menu` needed it.  Every one of these is
+     * reported there and freed in the finalizer, or the assertion says so at
+     * teardown, loudly, and `tests/asan.sh` runs it on every project.
+     *
+     * JS_UNDEFINED until something writes one.  The four that JavaScript reads
+     * are reached through accessors on `Widget.prototype` (`__declared` is the
+     * only one it also writes), which are defined outside the published tables
+     * because they are not published surface.
+     */
+    JSValue    declared;   /* [declared, applied] per property the loader
+                            * substituted -- written by C and by rad.js both */
+    JSValue    children;   /* containers: the wrappers of what is inside */
+    JSValue    menus;      /* forms: the menu spec, as it was read */
+    JSValue    actions_spec; /* forms: the commands, likewise -- not `actions`,
+                              * which is the GSimpleActionGroup above */
+    JSValue    columns;    /* tables: the declared columns */
+    JSValue    painter;    /* drawing areas: made on the first frame painted */
 };
 
 struct BtaApp {
@@ -611,6 +671,36 @@ void bta_sys_init(JSContext *ctx, JSValue global);
  */
 void bta_debug_want(void);
 bool bta_debug_enabled(void);
+
+/*
+ * Strict checks (`--strict`): a control refuses a property it does not have.
+ *
+ * `widget.Txt = "x"` on a widget whose class has no `Txt` creates an own
+ * property and does nothing, forever -- the quietest failure this language has,
+ * and the one `Ide.Live` and `Ide.Check` answer statically. This is the other
+ * half: a control that has been built is made **non-extensible**, so the same
+ * line throws where it is written, with a traceback, in a file nobody has open
+ * and through a name nothing could have read (`this[which].Txt`).
+ *
+ * `preventExtensions` and not `freeze`: a widget's properties are accessors on
+ * its prototype, so assigning one is a setter call and creates nothing, while
+ * assigning a name the class lacks is an attempt to *add* an own property --
+ * which is exactly the one to refuse. Freezing would refuse both.
+ *
+ * It works because every project source is evaluated with `JS_EVAL_FLAG_STRICT`
+ * (see `bta_runtime.c`): in sloppy mode the refusal would be silent, which is
+ * the state it exists to end.
+ *
+ * Off unless asked for, and named for development: an application storing state
+ * on a control is ordinary JavaScript and would start throwing.
+ * `docs/strict-plan.md` has the whole argument, including why a *form* is never
+ * sealed -- it is the application's own object, and `Form_Open` assigning
+ * `this.anything` is what every program here does.
+ */
+void bta_strict_want(void);
+bool bta_strict(void);
+/* Seal one object, if the mode is on. Silent and cheap when it is not. */
+void bta_strict_seal(JSContext *ctx, JSValueConst obj);
 void bta_debug_start(JSContext *ctx);
 void bta_debug_stopping(JSContext *ctx, int code);
 /* A project file just compiled: what lines it can stop on. */

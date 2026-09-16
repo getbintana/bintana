@@ -45,6 +45,7 @@ Ide.Changes = class Changes {
      * shown is prose and what is compared must not be. */
     static get view() { return CHANGES_VIEW; }
 
+    /** @param {MainForm} ide */
     constructor(ide) {
         this.ide = ide;
         /* Parallel to the rows: what each one is about. `staged` is which half

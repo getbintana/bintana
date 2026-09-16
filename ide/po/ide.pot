@@ -453,6 +453,10 @@ msgstr ""
 msgid "Stop"
 msgstr ""
 
+#: forms/MainForm.form: menu MnuStrict
+msgid "Strict checks while running"
+msgstr ""
+
 #: forms/MainForm.form: menu MnuTranslations
 msgid "Update translations"
 msgstr ""

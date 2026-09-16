@@ -99,6 +99,10 @@ Ide.Designer = class Designer {
      * the IDE's, shared, because it is chrome about *the selection* and there is
      * one selection, the active tab's.  Whichever designer is showing drives it.
      */
+    /**
+     * @param {MainForm} ide
+     * @param {object} canvas
+     */
     constructor(ide, canvas) {
         this.ide      = ide;
         this.surface  = canvas.surface;

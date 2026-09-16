@@ -21,8 +21,13 @@
 
 Namespace("Ide");
 
+/* Where the tick is remembered. A property of this window and not of any
+ * project: the same project is run both ways. */
+const STRICT_KEY = "run.strict";
+
 Ide.Runner = class Runner {
 
+    /** @param {MainForm} ide */
     constructor(ide) {
         this.ide = ide;
         /* The child, while there is one: an Exec handle. */
@@ -42,7 +47,7 @@ Ide.Runner = class Runner {
          * with it: a place a program died at two runs ago is not a fact about
          * the program on screen now. */
         ide.problems.clear("run");
-        ide.log(`> bintana ${ide.project}\n`);
+        ide.log(`> bintana ${[...this.options(), ide.project].join(" ")}\n`);
         ide.running = true;
         ide.refresh();
 
@@ -52,10 +57,45 @@ Ide.Runner = class Runner {
          * and stderr are merged on purpose -- a traceback interleaved with the
          * program's own output in the wrong order is worse than either.
          */
-        this.job = Exec([Application.Executable, ide.project],
+        this.job = Exec([Application.Executable, ...this.options(), ide.project],
                         { Directory: ide.project },
                         (line) => ide.log(`${line}\n`),
                         (code) => this.finished(code));
+    }
+
+    /*
+     * What this run is, as against what the project is.
+     *
+     * `--strict` makes a control refuse a property its class does not have, so
+     * `this.Lbl.Txt = "x"` throws where it is written instead of doing nothing
+     * forever -- the half of that question `Ide.Live` and `Ide.Check` cannot
+     * answer, because it needs the program to be running.
+     *
+     * **Not in `project.json`, and the distinction is the point**: the same
+     * project is run under it and not under it, and what decides is whoever
+     * pressed the button. So it is remembered where every other thing this
+     * window remembers about itself is remembered, and shown as a tick in the
+     * menu rather than as a field in a dialog.
+     *
+     * The first caller for launch configurations, which this is not: an argument
+     * decided here and nowhere else is exactly what a launch configuration would
+     * hold, and one switch is not a reason to build one.
+     */
+    options() {
+        return Settings.Get(STRICT_KEY, false) ? ["--strict"] : [];
+    }
+
+    /* The tick put back where the last session left it. A menu item's state
+     * belongs to the runtime and starts at false, so a setting that nothing
+     * restores is a setting that is on in the file and off on the screen. */
+    restore() {
+        this.ide.MnuStrict.Value = Settings.Get(STRICT_KEY, false);
+    }
+
+    /* Chosen. The item has already moved its own tick and hands over what it
+     * became, so all that is left is writing it down. */
+    chose(on) {
+        Settings.Set(STRICT_KEY, on);
     }
 
     /* What the Stop button means, in the one place that knows there is a child

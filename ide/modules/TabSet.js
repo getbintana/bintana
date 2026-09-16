@@ -100,6 +100,7 @@ Ide.TabSet = class TabSet {
      * tab or the desktop. The table is this module's, so the question is too. */
     static opensInTab(file) { return opensInTab(file); }
 
+    /** @param {MainForm} ide */
     constructor(ide) {
         this.ide       = ide;
         this.openTabs  = new Map();     // name -> the tab's state

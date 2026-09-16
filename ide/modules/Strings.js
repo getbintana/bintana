@@ -69,6 +69,7 @@ function literalValue(text) {
 
 Ide.Strings = class Strings {
 
+    /** @param {MainForm} ide */
     constructor(ide) {
         this.ide = ide;
 

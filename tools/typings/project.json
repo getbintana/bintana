@@ -1,0 +1,7 @@
+{
+  "name": "typings",
+  "startup": "TypingsForm",
+  "version": "1.0",
+  "description": "Writes bintana.d.ts from the runtime's own introspection, so an editor that is not this IDE knows what a Bintana project has",
+  "sources": ["TypingsForm.js"]
+}

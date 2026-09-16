@@ -103,6 +103,7 @@ TIMEOUT=300 ./tests/run.sh                        # a slower machine than this o
 ./tests/asan.sh                                   # suite under AddressSanitizer
 tests/try.sh <project> [args...]                  # run any project, on a virtual display
 ./tests/api.sh                                    # is docs/llm/ still the whole public surface?
+./tests/typings.sh                                # rewrite bintana.d.ts (api.sh fails when it is stale)
 ./tests/icons.sh                                  # which declared icons this desktop has, and which draw
 ./tests/styles.sh                                 # which style classes its theme defines
 ./tests/install.sh                                # what `make install` produces, run out of a staging prefix
@@ -141,11 +142,24 @@ number of arguments. Both of those were real: `MouseWheel` was written
 `Application.LibraryPath` had been public and called by the IDE with no row
 anywhere.
 
+**It also holds `tools/typings/bintana.d.ts` to the same surface**, which is what
+makes a *generated* file worth having rather than a stale one nobody notices: run
+`./tests/typings.sh` after adding a member, or `api.sh` fails naming it. That
+check found sixteen read-only properties missing the hour it was written --
+`Children`, `Focused`, `Line`, `CanUndo` and twelve more -- because
+`PropertyNames()` answers *what a property grid can set*, which is the right
+answer to a different question.
+
 **Every one of those but `asan.sh` is a Bintana project now** — `tests/runner`,
 `tests/icons`, `tests/styles`, `tests/install`, each a console project (`"main"`,
 no display) with a ten-line `.sh` in front of it that finds the binary. There is
 no Python left in the repository, and adding a desk tool means writing a project,
 not a script.
+
+`tools/typings` is the exception that proves what a console project cannot do:
+it asks real controls what they have, and `Widget.New` refuses in a project with
+a `main` — *"a project with a `main` has no display, so it cannot make widgets"*.
+So it is a **form** project run headless, with a window nobody sees.
 
 `tests/install.sh` is the only one that needs no `HEADLESS` of its own, and it is
 not an exception to the rule above: it never uses the caller's display at all. It brings up an `Xvfb` of its own, because the check is a second command
@@ -329,9 +343,9 @@ a test runner, a build step, a tool that reads the icon themes off the disk. It 
 about a GTK binding, which is the whole point of `tests/`. See
 [`docs/formats.md`](docs/formats.md#main-a-project-with-no-window).
 
-## The three patches in vendor/
+## The four patches in vendor/
 
-All three are marked `Bintana patch` in the source, and an upgrade that drops
+All four are marked `Bintana patch` in the source, and an upgrade that drops
 one takes a feature or brings a bug back with it. Grep for the marker after any
 QuickJS upgrade; there is no build-time check that they survived.
 
@@ -371,7 +385,26 @@ path in that file already uses.
 in a locale with a comma -- which is the machine this is developed on, and not
 CI's. Check it after any QuickJS upgrade.
 
-### 3. The debugger
+### 3. Which property was refused
+
+Three sites that refuse an addition to a non-extensible object threw *"object is
+not extensible"*, and the atom was in hand at every one of them. They name it
+now: **`no 'Txt' to assign: the object is not extensible`**. Two lines of helper
+and three call sites, the same shape `JS_ThrowTypeErrorReadOnly` two lines above
+has always had.
+
+It matters because of `bintana --strict`, where a control is made
+non-extensible so a misspelt property throws where it is written
+(`docs/strict-plan.md`). The point of that mode is to be told *which* name the
+class does not have, and without this it says only that something was refused --
+which, on a line that assigns three properties in a row, is the wrong half of the
+answer.
+
+**Dropping this patch does not fail to build**, and nothing stops working: the
+refusal is still a refusal. The message goes back to the vague one, and
+`tests/widgets` says so (`strictChecks` asserts `no 'Txt' to assign`).
+
+### 4. The debugger
 
 `quickjs.h` gains `JS_SetDebugHandler`, `JS_DebugStopOnThrow` and six readers --
 `JS_DebugPosition`, `JS_DebugBacktrace`, `JS_DebugLocals`, `JS_DebugLines`,

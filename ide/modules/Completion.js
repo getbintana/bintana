@@ -11,18 +11,29 @@
  * completion engine for JavaScript normally needs a parser and a type
  * inferencer, because nothing in the language says what `x` is. Here the
  * runtime publishes what it knows about itself and the `.form` beside a class
- * says what every control on it is, so the four completions worth having are
- * table lookups:
+ * says what every control on it is, so the completions worth having are table
+ * lookups:
  *
- *     this.            the controls on this form, and the methods in this file
+ *     this.            everything this form names, and the methods in this file
  *     this.Btn1.       what a Button really has -- PropertyNames() on one
+ *     this.MnuSave.    the same, on a MenuItem
  *     Btn1_            what a Button raises  -- EventNames(), most derived first
  *     File.            Dictionary.Keys(File)
+ *     btn.             what `const btn = new Button()` says, read from the file
+ *     this.ide.        what `@param {MainForm} ide` says, likewise
  *
  * A control of the project's own -- a component -- is answered the same way and
  * from a different place: its class is not one of this process, so what it
  * declares is read out of its source. Same question, same order, same rule that
  * nothing is inferred.
+ *
+ * **The last two are declarations written in the file, not inference.** Which is
+ * what makes them a lookup like the others -- and why there are two of them and
+ * not a general answer: measured over `ide/` and `examples/`, of 1916
+ * declarations only 12 % state a type at all, and the largest bucket, 38 %, is
+ * the return of a call, which nothing writes down. The JSDoc one is the one that
+ * pays: `this.ide.` is 509 of the 1410 `this.<field>.` in this tree, it is a
+ * constructor parameter, and no `new` names it. See `docs/completion-plan.md`.
  *
  * **And the limit is stated rather than papered over**: `const x = makeThing();
  * x.` proposes nothing, because nothing in the project says what `makeThing`
@@ -69,8 +80,44 @@ const HANDLER_WORD = /^([A-Za-z_$][\w$]*)_[\w$]*$/;
  * shape `FormFiles` writes and reads when it inserts a handler. */
 const METHOD_LINE = /^ {4}(?:static\s+|get\s+|set\s+|async\s+)*([A-Za-z_$][\w$]*)\s*\(/gm;
 
+/*
+ * The two things written in a file that say what a name *is*.
+ *
+ * Measured over `ide/` and `examples/` before either was written, because the
+ * shape of this language is not the shape one expects: of 1916 declarations only
+ * 12 % state a type at all, and the largest bucket -- 38 % -- is the return of a
+ * call, which nothing in the project writes down. So these are not a general
+ * answer and are not offered as one. They are the two that are written:
+ *
+ *     new Foo()          a field or a local built here, 157 declarations
+ *     @param {Foo} x     a constructor parameter, which nothing else can say
+ *
+ * The second is why it is worth having at all. `this.ide.` is 509 of the 1410
+ * `this.<field>.` in this tree -- 36 % of every one of them -- and it is a
+ * constructor parameter, so no `new` names it and TypeScript infers `any` for it
+ * too. One JSDoc line fixes it there and here, and 32 of them cover the tree.
+ *
+ * Sources and not `RegExp`s: the name goes into the pattern, so one is built per
+ * question, and a `g` pattern kept between two of them would resume where the
+ * last one stopped.
+ */
+const BUILT_HERE = (name) =>
+    new RegExp(`(?:^|[;{}\\n]|\\bthis\\.)\\s*(?:const\\s+|let\\s+|var\\s+)?` +
+               `${name}\\s*=\\s*new\\s+([A-Za-z_$][\\w$.]*)\\s*\\(`);
+
+const DECLARED_JSDOC = (name) =>
+    new RegExp(`@param\\s*\\{\\s*([A-Za-z_$][\\w$.]*)\\s*\\}\\s*\\[?${name}\\b`);
+
+/* `this.thing = thing` -- the line that ties a field to the parameter whose
+ * JSDoc says what it is. Without it the JSDoc lookup would only answer for a
+ * field whose name happens to be the parameter's, which is the habit here and
+ * not a rule anybody has to keep. */
+const FIELD_FROM_PARAM = (name) =>
+    new RegExp(`\\bthis\\.${name}\\s*=\\s*([A-Za-z_$][\\w$]*)\\s*[;\\n]`);
+
 Ide.Completion = class Completion {
 
+    /** @param {MainForm} ide */
     constructor(ide) {
         this.ide = ide;
 
@@ -80,11 +127,18 @@ Ide.Completion = class Completion {
          * being the text in the editor. */
         this.forms   = new Map();
         this.methods = { names: [] };
+        /* And a third, for a class of the project asked about from another
+         * file: two reads per class, on the keystroke. Not `classes`, which is
+         * `Ide.Classes` two characters away and would read as the same thing. */
+        this.declared = new Map();
     }
 
     /* Called wherever the project's files change: a control renamed in the
      * designer is a different answer here. */
-    forget() { this.forms.clear(); }
+    forget() {
+        this.forms.clear();
+        this.declared.clear();
+    }
 
     /*
      * The answer for where the cursor is, or nothing.
@@ -114,7 +168,12 @@ Ide.Completion = class Completion {
 
         if (parts[0] === "this") {
             if (parts.length === 1) return this.membersOfForm(word);
-            if (parts.length === 2) return this.propertiesOf(parts[1]);
+            if (parts.length === 2) {
+                /* A control of the form beside this file, which is the answer
+                 * that costs nothing; a field this file *declares* otherwise. */
+                const own = this.propertiesOf(parts[1]);
+                return own.length ? own : this.membersOfDeclared(parts[1]);
+            }
             return [];                  /* deeper than the .form can answer */
         }
 
@@ -127,6 +186,9 @@ Ide.Completion = class Completion {
         if (parts.length === 1) {
             const members = this.ide.classes.namespaceMembers(parts[0]);
             if (members.length) return members.map((m) => ({ Text: m, Detail: "" }));
+
+            /* A local this file built: `const btn = new Button(); btn.` */
+            return this.membersOfDeclared(parts[0]);
         }
 
         /* A path this project says nothing about. The honest answer is nothing
@@ -134,26 +196,117 @@ Ide.Completion = class Completion {
         return [];
     }
 
+    /* --- what the file itself declares --------------------------------------- */
+
+    /*
+     * The type of a name, out of the file on screen, or `""`.
+     *
+     * Two lookups and no inference: a `new` written here, and a JSDoc line. The
+     * second is asked of the field's own name first and then of whatever the
+     * constructor assigned to it, so `constructor(ide) { this.ide = ide; }` is
+     * answered by `@param {MainForm} ide` whichever of the two names one writes.
+     */
+    declaredType(name) {
+        const editor = this.ide.Editor;
+        if (!editor) return "";
+
+        const text  = editor.Text;
+        const built = BUILT_HERE(name).exec(text);
+        if (built) return built[1];
+
+        const said = DECLARED_JSDOC(name).exec(text);
+        if (said) return said[1];
+
+        const from = FIELD_FROM_PARAM(name).exec(text);
+        if (!from) return "";
+
+        const param = DECLARED_JSDOC(from[1]).exec(text);
+        return param ? param[1] : "";
+    }
+
+    /*
+     * What a name of that type has, when the type is one this project wrote.
+     *
+     * A widget answers from the runtime, as everything else here does. A class
+     * of the project answers from **its two files** -- the controls its `.form`
+     * names and the methods its `.js` declares -- which is the same pair
+     * `membersOfForm` reads about the file on screen, asked about another one.
+     * Nothing is loaded and nothing is parsed: `Ide.Names` flattens the JSON and
+     * the methods are the same four-spaces-name-bracket shape.
+     */
+    membersOfDeclared(name) {
+        const type = this.declaredType(name);
+        if (!type) return [];
+
+        const control = this.sample(type);
+        if (control)
+            return control.PropertyNames().map((p) => ({ Text: p, Detail: type }));
+
+        return this.membersOfClass(type);
+    }
+
+    /*
+     * One class of the project, by name -- kept, because this reads two files
+     * and runs on the keystroke. Dropped with the rest by `forget()`, which is
+     * what every listing calls.
+     */
+    membersOfClass(type) {
+        if (this.declared.has(type)) return this.declared.get(type);
+
+        const out  = [];
+        const seen = new Set();
+        const add  = (text, detail) => {
+            if (seen.has(text)) return;
+            seen.add(text);
+            out.push({ Text: text, Detail: detail });
+        };
+
+        const form = this.ide.classes.formOfClass(type);
+        if (form) {
+            try {
+                for (const node of this.ide.names.tableOf(
+                         File.LoadJson(File.Join(this.ide.project, form))))
+                    add(node.name, node.type);
+            } catch (e) {
+                /* A form half written is not this feature's business to report. */
+            }
+        }
+
+        const js = this.ide.classes.fileOfClass(type);
+        if (js) {
+            try {
+                const text = File.Load(File.Join(this.ide.project, js));
+                for (const m of text.matchAll(METHOD_LINE)) add(m[1], "method");
+            } catch (e) {
+                /* Likewise. */
+            }
+        }
+
+        this.declared.set(type, out);
+        return out;
+    }
+
     /* --- what the sibling .form says ---------------------------------------- */
 
-    /* The nodes of the form that goes with the file being edited, flattened --
-     * a control is addressed by name whatever it is nested in, because a
-     * handler is `Name_Event` on the form and names are unique across it. */
+    /*
+     * Everything the form beside this file names, flattened -- a control is
+     * addressed by name whatever it is nested in, because a handler is
+     * `Name_Event` on the form and names are unique across it.
+     *
+     * The walk is `Ide.Names`'s and not one of this file's own. It was one of
+     * this file's own, and it read `children` alone, which is how three
+     * flatteners came to agree that a menu item is not a thing a form has.
+     */
     controls() {
         const form = this.ide.formOf(this.ide.activeFile);
         if (!form) return [];
 
         if (this.forms.has(form)) return this.forms.get(form);
 
-        const out = [];
+        let out = [];
         try {
-            const flatten = (nodes) => {
-                for (const node of nodes || []) {
-                    if (node.name) out.push({ name: node.name, type: node.type });
-                    flatten(node.children);
-                }
-            };
-            flatten(File.LoadJson(File.Join(this.ide.project, form)).children);
+            out = this.ide.names.tableOf(
+                File.LoadJson(File.Join(this.ide.project, form)));
         } catch (e) {
             /* A form half written is not this feature's business to report. */
         }
@@ -170,19 +323,16 @@ Ide.Completion = class Completion {
     /*
      * A control of that type, or nothing.
      *
-     * `Widget.New` is the same lookup the `.form` loader does. A component of
-     * the project is not a class of *this* process -- the IDE never loads the
-     * project's code -- so there is nothing here to ask, and the two answers
-     * below fall through to what its class declares instead (`Ide.Classes`,
-     * read from the source once per listing, so this stays a lookup).
+     * `Ide.Names` answers it -- one control per type, kept, and the two classes
+     * a `.form` declares outside `children` borrowed from this window's own menu
+     * bar. A component of the project is not a class of *this* process -- the
+     * IDE never loads the project's code -- so there is nothing to ask for one,
+     * and the two answers below fall through to what its class declares instead
+     * (`Ide.Classes`, read from the source once per listing, so this stays a
+     * lookup).
      */
     sample(type) {
-        if (!type) return null;
-        try {
-            return Widget.New(type);
-        } catch (e) {
-            return null;
-        }
+        return this.ide.names.sampleFor(type);
     }
 
     /* --- the four answers ---------------------------------------------------- */

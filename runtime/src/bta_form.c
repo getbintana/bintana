@@ -159,17 +159,18 @@ static void record_declared(JSContext *ctx, JSValueConst target, JSAtom key,
         bag = JS_NewObject(ctx);
 
         /*
-         * Defined and not assigned, so the note is **not enumerable**: a
-         * `JS_SetPropertyStr` makes it an own enumerable property, and then
-         * `Dictionary.Keys(control)` and `for...in` report `__declared` beside
-         * whatever the loader assigned by name -- bookkeeping showing up as
-         * data.  The same reason a form's `__menus` and a container's
-         * `__children` are defined rather than set.  Writable and configurable,
-         * because rad.js's SetDesign deletes the note again.
+         * Assigned, and it lands on the widget's own struct: `__declared` is an
+         * accessor on `Widget.prototype`, so nothing here becomes an own
+         * property of the control.
+         *
+         * It used to be a `JS_DefinePropertyValueStr` with the enumerable bit
+         * off, which kept it out of `Dictionary.Keys(control)` and out of
+         * `for...in` -- everything that *looked*. What it could not be kept out
+         * of was the count of what the widget has, which is what
+         * `preventExtensions` and honest introspection both read. See
+         * `bta_widget.c`, where the note now lives, and `docs/strict-plan.md`.
          */
-        JS_DefinePropertyValueStr(ctx, target, "__declared",
-                                  JS_DupValue(ctx, bag),
-                                  JS_PROP_CONFIGURABLE | JS_PROP_WRITABLE);
+        JS_SetPropertyStr(ctx, target, "__declared", JS_DupValue(ctx, bag));
     }
 
     JSValue pair = JS_NewArray(ctx);
@@ -393,6 +394,21 @@ static int build_one(JSContext *ctx, JSValueConst form_obj,
         JS_FreeValue(ctx, obj);
         goto out;
     }
+
+    /*
+     * Built, which under `--strict` is the moment it stops being extensible.
+     *
+     * **Here and not in the constructor**, because a component of the project is
+     * an ordinary class whose constructor sets its own fields, and a subclass
+     * body runs after `super()`. By this line the class is built, its `.form`
+     * has loaded, its properties are applied and its children are in: whatever
+     * it meant to put on itself, it has.
+     *
+     * The *form* is never sealed -- it is not built here, it is built by
+     * `bta_form_load`, and it is the application's own object: `Form_Open`
+     * assigning `this.anything` is what every program in this tree does.
+     */
+    bta_strict_seal(ctx, obj);
 
     /*
      * form.Button1 = <widget>: how handlers reach it, and what keeps it alive.

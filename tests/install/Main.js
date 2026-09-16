@@ -144,6 +144,10 @@ function contents(prefix) {
                         * its own binary -- so this path *is* the mechanism. */
                        "share/bintana/lib/charts/Chart.js",
                        "share/bintana/lib/charts/Chart.form",
+                       /* What an editor that is not the IDE reads about this
+                        * runtime: a `tsconfig.json` in somebody's project names
+                        * it, so it has to be somewhere a path can reach. */
+                       "share/bintana/bintana.d.ts",
                        "share/applications/bintana-ide.desktop",
                        "share/icons/hicolor/scalable/apps/bintana-ide.svg",
                        "share/doc/bintana/README.md",

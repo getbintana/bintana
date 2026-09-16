@@ -9139,6 +9139,26 @@ static JSValue JS_ThrowSyntaxErrorAtom(JSContext *ctx, const char *fmt, JSAtom a
 #pragma GCC diagnostic pop // ignored "-Wformat-nonliteral"
 #endif // __GNUC__
 
+/*
+ * Bintana patch 4: which name, and not merely that it was refused.
+ *
+ * `obj.Txt = "x"` on a non-extensible object throws "object is not extensible",
+ * and the whole reason Bintana seals a control under `--strict` is to be told
+ * that `Txt` is not a property of a Label. The name is in hand at every site
+ * that refuses an addition, so it is said -- the same shape
+ * `JS_ThrowTypeErrorReadOnly` has used all along one line below.
+ */
+static int JS_ThrowTypeErrorNotExtensible(JSContext *ctx, int flags, JSAtom atom)
+{
+    if ((flags & JS_PROP_THROW) ||
+        ((flags & JS_PROP_THROW_STRICT) && is_strict_mode(ctx))) {
+        JS_ThrowTypeErrorAtom(ctx, "no '%s' to assign: the object is not extensible", atom);
+        return -1;
+    } else {
+        return false;
+    }
+}
+
 static int JS_ThrowTypeErrorReadOnly(JSContext *ctx, int flags, JSAtom atom)
 {
     if ((flags & JS_PROP_THROW) ||
@@ -11323,7 +11343,7 @@ retry:
 
     if (p == JS_VALUE_GET_OBJ(obj)) {
         if (unlikely(!p->extensible)) {
-            ret = JS_ThrowTypeErrorOrFalse(ctx, flags, "object is not extensible");
+            ret = JS_ThrowTypeErrorNotExtensible(ctx, flags, prop);   /* Bintana patch */
             goto done;
         }
         if (p->is_exotic) {
@@ -11367,7 +11387,7 @@ retry:
                                 JS_PROP_HAS_VALUE);
     } else {
         if (unlikely(!p->extensible)) {
-            ret = JS_ThrowTypeErrorOrFalse(ctx, flags, "object is not extensible");
+            ret = JS_ThrowTypeErrorNotExtensible(ctx, flags, prop);   /* Bintana patch */
             goto done;
         }
     generic_create_prop:
@@ -11687,7 +11707,7 @@ static int JS_CreateProperty(JSContext *ctx, JSObject *p,
 
     if (!p->extensible) {
     not_extensible:
-        return JS_ThrowTypeErrorOrFalse(ctx, flags, "object is not extensible");
+        return JS_ThrowTypeErrorNotExtensible(ctx, flags, prop);   /* Bintana patch */
     }
 
     if (flags & (JS_PROP_HAS_GET | JS_PROP_HAS_SET)) {

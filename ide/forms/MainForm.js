@@ -272,6 +272,7 @@ class MainForm extends Form {
         this.renderTabs();          /* no pages yet: no strip either */
         this.setMode(false);        /* ...and so no editor nor designer either */
         this.loadRecent();
+        this.runner.restore();      /* the tick the last session left on */
         /* Before the project opens, so the net is up for whatever the session
          * does -- including a project opened from the welcome page. */
         this.recovery.start();
@@ -2292,6 +2293,10 @@ class MainForm extends Form {
      * ends it -- a second button for "stop the one being debugged" would be a
      * second answer to a question with one. */
     MnuStop_Click()   { this.stopRun(); }
+
+    /* A tick, and the runtime has already moved it: what is left is remembering
+     * it. What it does is one argument to `bintana` -- see `Ide.Runner`. */
+    MnuStrict_Click(on) { this.runner.chose(on); }
 
     stopRun() {
         this.runner.stop();

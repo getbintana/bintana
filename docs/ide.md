@@ -828,11 +828,52 @@ nothing more is claimed. `ide/modules/Completion.js` answers the other half, thr
 
 | typed | answered with |
 |---|---|
-| `this.` | the controls on the `.form` beside this file, and the methods this file declares |
+| `this.` | everything the `.form` beside this file names -- its controls, its **menu items** and its **commands** -- and the methods this file declares |
 | `this.Btn1.` | `PropertyNames()` on a real `Button` -- the class's own, not a list kept here |
+| `this.MnuSave.` | the same, on a real `MenuItem`: `Enabled`, `Items`, `Value` |
 | `Btn1_` | `EventNames()`, most derived first, so `Ok_Click` comes before the mouse events |
 | `File.` | `Dictionary.Keys(File)` -- so a global that gains a member in C gains it here. **Not for the ones that are classes**: a `class`'s statics are not enumerable, so `Timer.` and `Widget.` answer nothing. Whatever fixes that is not a different way of reading the object -- it is asking somewhere else, the way `PropertyNames()` answers for a control |
 | `Ide.` | what the project's own sources assign into that namespace |
+| `btn.`, `this.lbl.` | what a `new Foo()` **written in this file** says the name is: a widget class answers from the runtime, one of the project's from its own two files |
+| `this.ide.` | what a `/** @param {MainForm} ide */` line says. Nothing else can say it -- a constructor parameter has no `new` |
+
+### A menu item is a thing a form has
+
+It was not, for three flatteners at once. `Ide.Completion`, `Ide.Names` and
+`Ide.Check` each walked a `.form`'s `children`, and `menus` and `actions` are
+**not among them** -- they are blocks of their own, and the loader binds what
+they name on the form exactly as it binds a control. So `this.MnuSave.` proposed
+nothing, `MnuSave_Clik()` went unremarked, a menu item called `Actions` was a
+collision nothing looked for, and a command declared twice lost the first
+silently.
+
+One walk now, `Ide.Names.tableOf`, over all three blocks; the other two read it.
+Which is the rule this repository has kept about `Ide.Git`'s commands, about
+`SOURCE_LINK` and about `Navigator.symbols` -- a second copy of *what does this
+form have* is a second answer to drift from the first -- and here there were
+three copies and they had already drifted to the same wrong answer.
+
+**What a `MenuItem` has is asked of a real one**, which took a runtime addition:
+neither it nor an `Action` is a widget, so `Widget.New` cannot make one and
+nothing else can either -- the only thing that builds one is a `.form` loader
+reading a `menus` block. Both now answer `PropertyNames()` and `EventNames()`
+like a control, and the sample the IDE asks is borrowed from **its own menu bar**,
+which has both.
+
+### What a name is, when the file says so
+
+Two more lookups, and they are lookups: what is read is a `new` written in the
+file, or a JSDoc line. Both were measured before either was written, and the
+measurement is why there are two and not a general answer -- of 1916
+`const`/`let`/`var` declarations in `ide/` and `examples/`, **12 % state a type
+at all**. The largest bucket is the return of a call, 38 %, and nothing in the
+project writes that down.
+
+The JSDoc one is why it is worth having. `this.<field>.` is written 1410 times
+here and `this.ide.` is **509 of them** -- a constructor parameter, so no `new`
+names it, and TypeScript infers `any` for it too. One line fixes it for both, and
+32 lines cover the tree. They are in now, one per constructor that takes a
+parameter, and an editor outside this one reads the same lines.
 
 The last one is the one the project cannot be *asked*. A namespace is an
 ordinary object built at load time, and it belongs to the project — which runs in
@@ -859,11 +900,13 @@ in the file, which is most of what one wants from a local. Going further needs a
 
 **How far that limit could be pushed, and whether pushing it needs an analyser,
 is measured in [completion-plan.md](completion-plan.md)** -- and the measurement
-says the blocker is a *declaration* and not an analyser. Two numbers from it:
-only 12 % of this tree's declarations state their own type, and TypeScript,
-handed a complete `.d.ts`, resolves **exactly** what a table lookup resolves --
-`this.ide.` is `any` for it too, because a constructor parameter is not written
-down anywhere.
+says the blocker is a *declaration* and not an analyser. TypeScript, handed a
+complete `.d.ts`, resolves **exactly** what a table lookup resolves: `this.ide.`
+is `any` for it too, because a constructor parameter is not written down
+anywhere. The declarations are written now -- `tests/typings.sh` generates them
+-- so **VS Code works on a Bintana project with nothing installed**, and the
+analyser is still waiting for somebody who needs the two rows a lookup cannot
+answer.
 
 Two things it has to be careful about, both because the handler runs on the
 keystroke:
@@ -1090,11 +1133,32 @@ running with either unsaved would execute something other than what is on screen
 then spawns the runtime on the project with `Exec`:
 
 ```js
-this.job = Exec([Application.Executable, ide.project],
+this.job = Exec([Application.Executable, ...this.options(), ide.project],
                 { Directory: ide.project },
                 (line) => ide.log(`${line}\n`),
                 (code) => this.finished(code));
 ```
+
+### Strict checks, which are a property of the run
+
+*Project → Strict checks while running* is a tick, and what it does is add one
+argument: `bintana --strict`. Under it a control **refuses a property its class
+does not have**, so `this.Lbl.Txt = "x"` throws where it is written instead of
+doing nothing forever -- which is the half of that question
+[`Ide.Live` and `Ide.Check`](#the-names-a-file-uses-checked-while-it-is-written)
+cannot answer, because it needs the program to be running. The other half is
+theirs and stays theirs: a handler nobody calls is a mistake no execution
+reaches.
+
+**Not in `project.json`**, and the distinction is the point: the same project is
+run under it and not under it, and what decides is whoever pressed the button. So
+it is remembered with everything else this window remembers about itself, and
+shown as a tick rather than as a field in a dialog. It is also the first real
+caller for launch configurations -- an argument decided here and nowhere else is
+exactly what one would hold -- and one switch is not a reason to build one.
+
+What it cost to make possible, and why a widget's own properties are now exactly
+its properties, is [`strict-plan.md`](strict-plan.md).
 
 **The output pane is a log view, not a console**, and that is the whole of what
 changed here. It ran in a `Terminal` — a real pty — for a consumer that never

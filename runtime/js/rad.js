@@ -758,25 +758,51 @@ GLOBAL.Namespace = function (path) {
 };
 
 /*
- * A control's own bookkeeping bag, made once and hidden.
+ * A control's own bookkeeping, kept **off** the control.
  *
- * `__declared` and `__design` are notes this file leaves on a control -- what the
- * `.form` said before a translation or a design value stood in for it -- and a
- * plain `widget.__declared = {}` makes them **enumerable**, so they turn up in
- * `Dictionary.Keys(control)` and in `for...in` beside whatever the loader
- * assigned by name.  The C side never had the problem: `__children` is a
- * `JS_DefinePropertyValueStr` with `JS_PROP_CONFIGURABLE` and no enumerable bit.
+ * `__design` and `__item` are notes this file leaves on a widget -- what the
+ * designer is showing instead of the declared value, and which component a list
+ * draws its rows with.  They used to be own properties with the enumerable bit
+ * off, which kept them out of `Dictionary.Keys` and out of `for...in` and was
+ * enough for everything that looked.
  *
- * Configurable so the note can still be deleted -- `SetDesign("")` does exactly
- * that -- and writable so it can be replaced.
+ * It is not enough for the thing that does not look: a widget's own properties
+ * are supposed to be *its properties*, and these were two that were not.  See
+ * [`docs/strict-plan.md`](../../docs/strict-plan.md) -- the whole argument is
+ * there, and the short version is that `preventExtensions` cannot tell a note
+ * from a typo, and a note created **later** than the widget (a design value is
+ * written when the designer applies one) cannot be pre-created either.
+ *
+ * A `WeakMap` is private to this file, invisible to `for...in`, to
+ * `Dictionary.Keys`, to the serialiser and to `preventExtensions`, and it lets
+ * the widget go when the widget goes.  `Map`, `WeakMap` and `Set` are all here;
+ * `Symbol` is not, which is why this is keyed by the widget and not by one.
+ *
+ * `__declared` is **not** among them, and cannot be: `bta_form.c` defines and
+ * writes it as the loader substitutes prose, so a bag private to this file
+ * would make those writes invisible to the readers next to them.  It moved to
+ * the widget's own struct instead, where both sides reach it.
  */
-function hiddenBag(target, name) {
-    if (!target[name]) {
-        defineProperty(target, name, {
-            value: {}, writable: true, configurable: true, enumerable: false,
-        });
+const designNotes = new WeakMap();
+const itemNotes   = new WeakMap();
+
+function noteBag(notes, widget) {
+    let bag = notes.get(widget);
+    if (!bag) {
+        bag = {};
+        notes.set(widget, bag);
     }
-    return target[name];
+    return bag;
+}
+
+/*
+ * The one both sides write: `__declared` is a getter and a setter on
+ * `Widget.prototype`, answered from the widget's own struct, so what this file
+ * writes and what `bta_form.c` writes are the same bag -- and neither of them is
+ * an own property of the control.
+ */
+function declaredNotes(widget) {
+    return widget.__declared || (widget.__declared = {});
 }
 
 /*
@@ -1054,7 +1080,7 @@ function collectProperties(widget, isRoot, parentIsFixed) {
  * design value is AddNode's designing branch, which the runtime never takes.
  */
 function collectDesign(widget) {
-    const bag = widget.__design;
+    const bag = designNotes.get(widget);
     if (!bag) return null;
 
     const out = {};
@@ -1277,7 +1303,7 @@ Widget.prototype.Fill = function (...args) {
      * form whose labels had been filled in would write "1 unsaved of 7" into the
      * file where the template belongs, which is the trap this note exists for.
      */
-    hiddenBag(this, "__declared").Text = [declared, filled];
+    declaredNotes(this).Text = [declared, filled];
     return this;
 };
 
@@ -1316,11 +1342,12 @@ Widget.prototype.SetItem = function (of, count) {
     const name = String(of || "").trim();
 
     if (!name) {
-        if (this.__item) delete this.__item.of;
+        const had = itemNotes.get(this);
+        if (had) delete had.of;
         return this;
     }
     const n = Math.round(Number(count));
-    const bag = hiddenBag(this, "__item");
+    const bag = noteBag(itemNotes, this);
 
     bag.of = name;
     if (Number.isFinite(n) && n > 0) bag.count = n;
@@ -1330,7 +1357,7 @@ Widget.prototype.SetItem = function (of, count) {
 
 defineProperty(Widget.prototype, "Item", {
     get() {
-        const bag = this.__item;
+        const bag = itemNotes.get(this);
         if (!bag || !bag.of) return null;
         return bag.count === undefined ? { of: bag.of }
                                        : { of: bag.of, count: bag.count };
@@ -1342,21 +1369,23 @@ Widget.prototype.SetDesign = function (name, value) {
     const declared = this.Declared(name);
 
     if (value === undefined || value === "") {
-        if (this.__design) delete this.__design[name];
+        const design = designNotes.get(this);
+        if (design) delete design[name];
         if (this.__declared) delete this.__declared[name];
         this[name] = declared;
         return this;
     }
 
-    hiddenBag(this, "__design")[name]   = value;
-    this[name]                          = value;
-    hiddenBag(this, "__declared")[name] = [declared, value];
+    noteBag(designNotes, this)[name] = value;
+    this[name]                       = value;
+    declaredNotes(this)[name]        = [declared, value];
     return this;
 };
 
 /* What the designer is showing instead of the declared value, or undefined. */
 Widget.prototype.DesignValue = function (name) {
-    return this.__design ? this.__design[name] : undefined;
+    const bag = designNotes.get(this);
+    return bag ? bag[name] : undefined;
 };
 
 /*
@@ -1389,10 +1418,10 @@ function applyNode(widget, node, designing) {
 
         /* Every declared piece of prose leaves a note, substituted or not: see
          * Declared() and Fill(), which need to know what the file said about a
-         * control whose text has since been filled in.  Through hiddenBag, so the
-         * note is not something Dictionary.Keys reports about the control. */
+         * control whose text has since been filled in.  Through the accessor,
+         * so the note lives on the widget's struct and not on the widget. */
         if (texts.includes(key)) {
-            hiddenBag(widget, "__declared")[key] = [declared, applied];
+            declaredNotes(widget)[key] = [declared, applied];
         }
     }
 

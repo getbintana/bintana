@@ -20,6 +20,10 @@ cmake -S . -B build && cmake --build build -j
 ./build/bintana --debug examples/hello   # ...and the same program stopped for a
                                   # debugger: events out on descriptor 3, commands
                                   # in on stdin. The IDE is what speaks it
+./build/bintana --strict examples/hello  # ...and with every control refusing a
+                                  # property its class does not have, so
+                                  # `this.Lbl.Txt = "x"` throws where it is
+                                  # written instead of doing nothing forever
 
 LANGUAGE=es ./build/bintana examples/hello    # ...in Spanish, from examples/hello/po/es.po
 LANGUAGE=es ./build/bintana ide examples/hello    # the IDE itself, from ide/po/es.po
@@ -59,7 +63,7 @@ sudo cmake --install build        # ...or install it: see below
 
 Dependencies: `gtk4`, `gtksourceview-5` (with headers), `gio-unix-2.0` (part of
 glib, and already there wherever gtk4 is) and pkg-config. QuickJS is
-vendored in `vendor/quickjs` (quickjs-ng v0.16.1), with three patches of our own
+vendored in `vendor/quickjs` (quickjs-ng v0.16.1), with four patches of our own
 in it -- see [AGENTS.md](AGENTS.md).
 
 Five more are **optional**, and CMake says what it found either way. `libsystemd` only
@@ -170,6 +174,11 @@ nothing can manipulate a prototype any more — and a bag of properties is appli
 to a control with `widget.Apply({…})`, the inverse of `Serialize()`. A property
 is declared with `get` / `set`, which is also how the designer finds it. This is a smaller language to learn, not a sandbox: a
 project still holds every capability the runtime gave it.
+
+**Every project source is evaluated in strict mode**, whatever its pragma says,
+which is why `bintana --strict` can work at all: there a control refuses a
+property its class does not have, and in sloppy mode that refusal would be
+silent. `"use strict"` at the top of a `.js` is the habit here and is redundant.
 
 Where a raw primitive and a Bintana way of doing the same thing both exist, the
 Bintana one is what you write: `File.LoadJson` / `File.SaveJson` instead of
@@ -1941,6 +1950,11 @@ Event tests make the round trip: assigning `TextBox1.Text` from JS has to reach
 GTK, come back as a real `changed` signal and land on `TextBox1_Change`. Testing
 the JS side alone proves nothing.
 
+Beside the suite, four scripts answer questions it cannot: `tests/api.sh` (is
+`docs/llm/` still the whole public surface, and is `bintana.d.ts` still the
+runtime's), `tests/typings.sh` (rewrite it), `tests/icons.sh`, `tests/styles.sh`
+and `tests/install.sh`. See [docs/testing.md](docs/testing.md).
+
 ---
 
 ## 10. Known limitations
@@ -2049,6 +2063,15 @@ Written down so the argument is not had twice.
    and a `design` block gives it sample data. Teaching the designer to instantiate
    a project's own components would fix it for every component at once, which is
    why it is not the chart set's problem — see [docs/ide.md](docs/ide.md).
+
+A **language server** for editors that are not this one is designed and
+deliberately not built, and the reason is that most of what it would buy is
+already there without it: `tests/typings.sh` writes the declarations, so VS Code
+gives completion, go to definition and hover on a Bintana project with nothing
+installed. What an analyser would add over a table lookup is two rows —
+the return type of a call and arbitrary expressions — and
+[docs/completion-plan.md](docs/completion-plan.md) measures both, along with why
+the popup is the wrong place to put one.
 
 Records over a database — a form bound to a table, the way every tool in this
 family does it — is designed but **deliberately not built**: what stage one would

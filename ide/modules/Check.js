@@ -12,7 +12,9 @@
  * purpose and watching what happened:
  *
  *     two controls of one name      the first one is gone -- two nodes in the
- *                                   file, one control on the window
+ *                                   file, one control on the window. A menu item
+ *                                   and a command are bound by name too, so the
+ *                                   same is true of them
  *     a control named `Actions`     `this.Actions` answers the *form's* actions,
  *                                   so the control has no name at all
  *     a property the class lacks    applied, ignored, never mentioned
@@ -42,6 +44,7 @@ Namespace("Ide");
 
 Ide.Check = class Check {
 
+    /** @param {MainForm} ide */
     constructor(ide) {
         this.ide = ide;
 
@@ -164,26 +167,37 @@ Ide.Check = class Check {
             return;
         }
 
+        /*
+         * The names come from `Ide.Names`, which walks all three blocks a
+         * `.form` binds by name -- `children`, `menus` and `actions`. This
+         * class had a walk of its own that read `children` alone, so a menu
+         * item called `Close` was a collision nothing looked for.
+         */
         const seen = {};
+        for (const node of this.ide.names.tableOf(root)) {
+            if (seen[node.name])
+                found.push({
+                    kind: "Error", file: rel, line: 0,
+                    text: `two controls are called ${node.name}: only the ` +
+                          `last one is built`,
+                });
+            seen[node.name] = true;
+
+            if (node.name in this.formMembers())
+                found.push({
+                    kind: "Warning", file: rel, line: 0,
+                    text: `${node.name} is also a member of Form: one of ` +
+                          `the two is unreachable under that name`,
+                });
+        }
+
+        /*
+         * The properties, which is a walk of `children` and only of `children`:
+         * what a menu item or a command declares is `text`, `icon`, `shortcut`
+         * -- keys of the file, in lower case, and not properties of a class.
+         */
         const walk = (nodes) => {
             for (const node of nodes || []) {
-                if (node.name) {
-                    if (seen[node.name])
-                        found.push({
-                            kind: "Error", file: rel, line: 0,
-                            text: `two controls are called ${node.name}: only the ` +
-                                  `last one is built`,
-                        });
-                    seen[node.name] = true;
-
-                    if (node.name in this.formMembers())
-                        found.push({
-                            kind: "Warning", file: rel, line: 0,
-                            text: `${node.name} is also a member of Form: one of ` +
-                                  `the two is unreachable under that name`,
-                        });
-                }
-
                 const sample = node.type ? this.ide.names.sampleFor(node.type) : null;
                 if (sample && node.properties)
                     for (const key in node.properties)

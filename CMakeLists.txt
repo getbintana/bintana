@@ -213,6 +213,14 @@ install(DIRECTORY examples/ DESTINATION ${BTA_DATADIR}/examples
 install(DIRECTORY lib/ DESTINATION ${BTA_DATADIR}/lib
         PATTERN "*.pot" EXCLUDE)
 
+# The declarations an editor that is not the Bintana IDE reads, which is the
+# whole of what makes VS Code work on a Bintana project. Installed beside the
+# libraries rather than with the docs, because it is read by a tool and not by a
+# person: a `tsconfig.json` names it, the way `uses` names a library.
+# `tools/typings` writes it (tests/typings.sh) and `tests/api.sh` fails when it
+# and the runtime disagree.
+install(FILES tools/typings/bintana.d.ts DESTINATION ${BTA_DATADIR})
+
 install(FILES tools/bintana-ide.desktop
         DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 install(FILES tools/bintana-ide.svg

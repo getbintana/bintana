@@ -69,6 +69,7 @@ const UNTRACKED = "?";
 
 Ide.Git = class Git {
 
+    /** @param {MainForm} ide */
     constructor(ide) {
         this.ide = ide;
         /* What the last `status` said: path -> letter. Kept because the tree

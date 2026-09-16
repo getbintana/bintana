@@ -113,6 +113,7 @@ Ide.MenuBar = class MenuBar {
      * yet.  The first bar is built by the first `setSpec`, which comes from
      * `Designer.refresh`.
      */
+    /** @param {MainForm} ide */
     constructor(ide) {
         this.ide    = ide;
         this.serial = MenuBar.serial++;

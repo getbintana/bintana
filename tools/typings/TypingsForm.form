@@ -1,0 +1,11 @@
+{
+  "format": "bintana-form/1",
+  "class": "TypingsForm",
+  "properties": {
+    "Height": 80,
+    "Text": "Bintana typings",
+    "Visible": false,
+    "Width": 320
+  },
+  "children": []
+}

@@ -23,6 +23,7 @@ const TREE_ROOT = "@form";
 
 Ide.ControlTree = class ControlTree {
 
+    /** @param {Ide.Designer} designer */
     constructor(designer) {
         this.designer = designer;
 

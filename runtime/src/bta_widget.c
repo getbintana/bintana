@@ -113,13 +113,12 @@ void bta_widget_adopt(JSContext *ctx, JSValueConst parent_val, BtaWidget *parent
     if (!parent || !child)
         return;
 
-    JSValue kids = JS_GetPropertyStr(ctx, parent_val, "__children");
-    if (!JS_IsArray(kids)) {
-        JS_FreeValue(ctx, kids);
-        kids = JS_NewArray(ctx);
-        JS_DefinePropertyValueStr(ctx, parent_val, "__children",
-                                  JS_DupValue(ctx, kids), JS_PROP_CONFIGURABLE);
+    JSValue *slot = bta_widget_note(parent, BTA_NOTE_CHILDREN);
+    if (!JS_IsArray(*slot)) {
+        JS_FreeValue(ctx, *slot);
+        *slot = JS_NewArray(ctx);
     }
+    JSValue kids = *slot;
 
     JSValue  lenv = JS_GetPropertyStr(ctx, kids, "length");
     uint32_t len  = 0;
@@ -127,7 +126,6 @@ void bta_widget_adopt(JSContext *ctx, JSValueConst parent_val, BtaWidget *parent
     JS_FreeValue(ctx, lenv);
 
     JS_SetPropertyUint32(ctx, kids, len, JS_DupValue(ctx, child_val));
-    JS_FreeValue(ctx, kids);
 
     JSValueConst form = parent->is_form ? parent_val : parent->form;
     if (JS_IsUndefined(child->form))
@@ -3199,6 +3197,116 @@ static JSValue w_get_dark(JSContext *ctx, JSValueConst this_val)
     return JS_NewBool(ctx, bta_widget_dark(w->gtk));
 }
 
+/* ------------------------------------------------- the runtime's own notes
+ *
+ * Six things the runtime knows about a widget that the application does not:
+ * what the `.form` declared before a translation stood in for it, what a
+ * container holds, a form's menus and commands as they were read, a table's
+ * declared columns, and a drawing area's painter.
+ *
+ * **They used to be own properties of the wrapper** -- `__declared`,
+ * `__children`, `__menus`, `__actions`, `__columns`, `__painter` -- each defined
+ * with the enumerable bit off so that `Dictionary.Keys`, `for...in` and the
+ * serialiser would not report them. That was enough for everything that looks
+ * and not enough for the thing that does not: a widget's own properties are
+ * supposed to *be* its properties, and a mode that refuses a name the class does
+ * not have cannot tell one of these from a misspelling. Most of them are created
+ * later than the widget besides -- `__columns` when an application assigns
+ * `Columns`, `__painter` on the first frame -- so pre-creating them is not open
+ * either. The whole argument is `docs/strict-plan.md`.
+ *
+ * So they live on the struct, reported by `widget_gc_mark` and released by the
+ * finalizer, which is what `w->form` and `w->menu` have always done. The four
+ * that JavaScript reads keep their old names as **accessors on
+ * `Widget.prototype`**, defined below rather than in `widget_props`: an accessor
+ * on the prototype is not an own property of anything, so nothing about the
+ * widget has changed except where the value sits -- and `rad.js` goes on writing
+ * `widget.__declared` exactly as it did.
+ */
+JSValue *bta_widget_note(BtaWidget *w, BtaNote which)
+{
+    switch (which) {
+    case BTA_NOTE_DECLARED: return &w->declared;
+    case BTA_NOTE_CHILDREN: return &w->children;
+    case BTA_NOTE_MENUS:    return &w->menus;
+    case BTA_NOTE_ACTIONS:  return &w->actions_spec;
+    case BTA_NOTE_COLUMNS:  return &w->columns;
+    case BTA_NOTE_PAINTER:  return &w->painter;
+    }
+    g_assert_not_reached();
+}
+
+/*
+ * `JS_GetOpaque` and not `bta_this`, which throws: these answer for the runtime
+ * and not for an application, and the callers read them the way the own
+ * properties they replace were read -- `if (!JS_IsArray(kids)) return`. A throw
+ * there would be a pending exception nobody looks at, surfacing somewhere else.
+ * Nothing is not a widget here, and if something ever is, the answer is that it
+ * has no notes.
+ */
+static JSValue note_get(JSContext *ctx, JSValueConst this_val, int magic)
+{
+    BtaWidget *w = JS_GetOpaque(this_val, bta_widget_class_id);
+    if (!w)
+        return JS_UNDEFINED;
+
+    return JS_DupValue(ctx, *bta_widget_note(w, (BtaNote)magic));
+}
+
+static JSValue note_set(JSContext *ctx, JSValueConst this_val, JSValueConst val,
+                        int magic)
+{
+    BtaWidget *w = JS_GetOpaque(this_val, bta_widget_class_id);
+    if (!w)
+        return JS_UNDEFINED;
+
+    JSValue *slot = bta_widget_note(w, (BtaNote)magic);
+
+    JS_FreeValue(ctx, *slot);
+    *slot = JS_DupValue(ctx, val);
+    return JS_UNDEFINED;
+}
+
+/*
+ * The four names JavaScript still knows, put on the root prototype.
+ *
+ * **This table is not published surface**, which is the one thing to know about
+ * it: `tests/api.sh` reads every `JSCFunctionListEntry` in this tree and demands
+ * a documented row for each entry, and `tools/typings` writes each into
+ * `bintana.d.ts`. Both of them skip this one by name, and say so where they do
+ * -- an exception written down twice rather than a table hidden from a scanner.
+ *
+ * `__declared` is the only one with a setter, because `rad.js` leaves the same
+ * note the loader does -- a filled-in template, a design value -- and both sides
+ * have to reach the same bag. The other three are read from JavaScript and
+ * written only here: `Form.Menus`, `Form.Actions` and what `tests/widgets`
+ * counts to prove a container really let go of a child.
+ */
+static const JSCFunctionListEntry widget_notes[] = {
+    JS_CGETSET_MAGIC_DEF("__declared", note_get, note_set, BTA_NOTE_DECLARED),
+    JS_CGETSET_MAGIC_DEF("__children", note_get, NULL,     BTA_NOTE_CHILDREN),
+    JS_CGETSET_MAGIC_DEF("__menus",    note_get, NULL,     BTA_NOTE_MENUS),
+    JS_CGETSET_MAGIC_DEF("__actions",  note_get, NULL,     BTA_NOTE_ACTIONS),
+};
+
+/* ------------------------------------------------------------ strict checks
+ *
+ * The flag, and the one line that carries it out. See `bta.h` for what it is
+ * for and `docs/strict-plan.md` for why it took the cleanup above to become
+ * possible: until those six notes moved onto the struct, sealing a widget would
+ * have broken the runtime before it caught anybody's typo.
+ */
+static bool strict_checks = false;
+
+void bta_strict_want(void) { strict_checks = true; }
+bool bta_strict(void)      { return strict_checks; }
+
+void bta_strict_seal(JSContext *ctx, JSValueConst obj)
+{
+    if (strict_checks)
+        JS_PreventExtensions(ctx, obj);
+}
+
 static const JSCFunctionListEntry widget_props[] = {
     JS_CGETSET_DEF("Name",    w_get_name, w_set_name),
     JS_CGETSET_MAGIC_DEF("X",       w_get_geom, w_set_geom, GEOM_X),
@@ -4267,6 +4375,14 @@ static void widget_finalizer(JSRuntime *rt, JSValue val)
     bta_menu_popup_free(w);
     JS_FreeValueRT(rt, w->menu);
 
+    /* The six notes; every one of them is marked above. */
+    JS_FreeValueRT(rt, w->declared);
+    JS_FreeValueRT(rt, w->children);
+    JS_FreeValueRT(rt, w->menus);
+    JS_FreeValueRT(rt, w->actions_spec);
+    JS_FreeValueRT(rt, w->columns);
+    JS_FreeValueRT(rt, w->painter);
+
     if (w->gtk) {
         /*
          * The container may still hold a ref: leave no dangling back-pointer.
@@ -4297,12 +4413,29 @@ static void widget_finalizer(JSRuntime *rt, JSValue val)
 
 /* Controls point back at their form, so the graph has cycles; reporting the
  * edge lets QuickJS's cycle collector free forms that go out of scope. */
+/*
+ * Every JSValue this struct holds, reported to the collector.
+ *
+ * This is the line the `bta_table.c` comment did not know about, and the reason
+ * six notes could come off the wrapper and onto the struct: a value held in C is
+ * a strong reference the collector cannot see *unless something says so*, and
+ * this is where it is said. Anything added above and forgotten here is a cycle
+ * that never collects; anything freed in the finalizer and not marked here is
+ * `Assertion list_empty(&rt->gc_obj_list) failed` at teardown, which
+ * `tests/asan.sh` runs on every project.
+ */
 static void widget_gc_mark(JSRuntime *rt, JSValueConst val, JS_MarkFunc *mark_func)
 {
     BtaWidget *w = JS_GetOpaque(val, bta_widget_class_id);
     if (w) {
         JS_MarkValue(rt, w->form, mark_func);
         JS_MarkValue(rt, w->menu, mark_func);
+        JS_MarkValue(rt, w->declared, mark_func);
+        JS_MarkValue(rt, w->children, mark_func);
+        JS_MarkValue(rt, w->menus, mark_func);
+        JS_MarkValue(rt, w->actions_spec, mark_func);
+        JS_MarkValue(rt, w->columns, mark_func);
+        JS_MarkValue(rt, w->painter, mark_func);
     }
 }
 
@@ -4415,6 +4548,14 @@ static JSValue bta_ctor(JSContext *ctx, JSValueConst new_target,
     w->font_scale = 1.0;
     w->span     = 1;           /* one column, likewise */
     w->menu     = JS_UNDEFINED;
+    /* The runtime's notes about this widget: nothing said yet, and `g_new0`
+     * does not spell that -- JS_UNDEFINED is not all-zero on every build. */
+    w->declared = JS_UNDEFINED;
+    w->children = JS_UNDEFINED;
+    w->menus    = JS_UNDEFINED;
+    w->actions_spec = JS_UNDEFINED;
+    w->columns  = JS_UNDEFINED;
+    w->painter  = JS_UNDEFINED;
     JS_SetOpaque(obj, w);
 
     cls->build(w);
@@ -4645,6 +4786,11 @@ void bta_widgets_init(JSContext *ctx, JSValue global)
             /* ...and which of those this build can actually run. */
             JS_SetPropertyStr(ctx, ctor, "Available",
                               JS_NewCFunction(ctx, w_available, "Available", 1));
+
+            /* The runtime's own notes, reachable by the names they had when
+             * they were own properties. */
+            JS_SetPropertyFunctionList(ctx, proto, widget_notes,
+                                       G_N_ELEMENTS(widget_notes));
         }
 
         JS_SetPropertyStr(ctx, global, cls->name, JS_DupValue(ctx, ctor));

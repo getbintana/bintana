@@ -360,6 +360,53 @@ time somebody looks for it; a signature that is confidently wrong is not.
 `MouseWheel` was written `(dx, dy, ctrl, shift)` in three documents and passes
 two, for as long as nobody counted.
 
+**`tests/api.sh` runs in CI**, which the other four scripts do not: it parses C
+and Markdown, opens no window and costs a second, and every claim it checks is
+the kind that rots without looking rotten.
+
+## The declarations an editor that is not the IDE reads
+
+```sh
+tests/typings.sh                    # the runtime, and the IDE's own forms
+tests/typings.sh examples/clients   # ...and that project's too
+```
+
+`tools/typings` writes `tools/typings/bintana.d.ts` -- every class and global the
+runtime publishes -- plus a `forms.d.ts` and a `tsconfig.json` per project, so
+**VS Code works on a Bintana project with nothing installed**: completion, go to
+definition and hover. The argument, and the measurements that shaped it, are in
+[completion-plan.md](completion-plan.md).
+
+Three things about it belong here.
+
+**It is a form project run headless**, and it is the one desk tool in this tree
+that cannot be a console project: its whole method is to ask a real control what
+it has, and `Widget.New` refuses without a display -- *"a project with a `main`
+has no display, so it cannot make widgets"*.
+
+`bintana.d.ts` is **installed**, beside the libraries rather than with the docs,
+because it is read by a tool and not by a person: a project outside this tree
+points its `tsconfig.json` at `<prefix>/share/bintana/bintana.d.ts` the way a
+project names a library with `uses`. `tests/install.sh` asks for it by name.
+
+**`tests/api.sh` holds the generated file to the runtime**, which is what makes a
+generated file worth having rather than a stale one nobody notices: every member
+the C declares has to appear in it, by name, or the check fails saying which and
+telling you to run the generator. It earned that the hour it was written --
+sixteen read-only properties were missing (`Children`, `Focused`, `Line`,
+`Column`, `CanUndo`, `SelectedText`, `ScrollMaxX` and nine more), because
+`PropertyNames()` answers *what a property grid can set* and a declaration file
+wants the other ones too. It also checks `ide/forms.d.ts` against the `.form`
+files under `ide/`, which goes stale a different way: not when the runtime gains
+a member, but when somebody draws a control.
+
+**And the last step of writing it is running `tsc` over what came out**, which is
+the cheapest check it has and found two duplicate identifiers that nothing else
+would have: `Record` collides with TypeScript's own `Record<K, V>`, and `Marks`
+is a read-only property on a `Calendar` and a method on a `SourceEditor`. That
+step is by hand -- TypeScript is not a dependency of this repository and is not
+about to become one for a check that runs when somebody changes the generator.
+
 ## Two reproductions kept by hand
 
 `tests/manual/` holds two standalone C programs. Neither runs in the suite and

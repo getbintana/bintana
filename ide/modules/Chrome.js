@@ -62,6 +62,7 @@ Ide.Chrome = class Chrome {
 
     /* Four thin bars for the outline and eight little squares for the handles,
      * created once and repositioned on every change. */
+    /** @param {Ide.Designer} designer */
     constructor(designer) {
         this.designer = designer;
         this.glass    = designer.glass;

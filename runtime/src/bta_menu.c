@@ -316,13 +316,77 @@ static JSValue action_click(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
+/* ------------------------------------------------- what these two classes have
+ *
+ * A menu item and a command are not widgets, so `Widget.New` cannot make one to
+ * ask and neither can anything else: the only way to get one is to declare it in
+ * a `.form`.  That left the IDE with nothing to look up -- `this.MnuSave.`
+ * proposed nothing and `MnuSave_Clik()` went unremarked -- while every control
+ * beside them answered for itself.
+ *
+ * So they answer the two questions a control answers, and **out of the tables
+ * below rather than out of a second list**: the names come from the
+ * `JSCFunctionListEntry` array that defines them, so a property added there is
+ * one this reports with nothing else touched.  Settable ones only, which is what
+ * `Widget.PropertyNames()` means by the word -- `Name` is read-only and a
+ * property grid could do nothing with it.
+ */
+static JSValue members_of(JSContext *ctx, const JSCFunctionListEntry *tab, int n)
+{
+    JSValue  out = JS_NewArray(ctx);
+    uint32_t k   = 0;
+
+    for (int i = 0; i < n; i++) {
+        if (tab[i].def_type != JS_DEF_CGETSET)
+            continue;
+        if (!tab[i].u.getset.set.setter)
+            continue;                      /* read-only: nothing can assign it */
+        JS_SetPropertyUint32(ctx, out, k++, JS_NewString(ctx, tab[i].name));
+    }
+    return out;
+}
+
+/* One event, and it is the one every item and every command raises: choosing
+ * it.  Written here because it is emitted here -- `on_menu_activate` and
+ * `on_action_activate` are the two calls, and both say "Click". */
+static JSValue click_only(JSContext *ctx)
+{
+    JSValue out = JS_NewArray(ctx);
+
+    JS_SetPropertyUint32(ctx, out, 0, JS_NewString(ctx, "Click"));
+    return out;
+}
+
+static JSValue menuitem_property_names(JSContext *ctx, JSValueConst this_val,
+                                       int argc, JSValueConst *argv);
+static JSValue menuitem_event_names(JSContext *ctx, JSValueConst this_val,
+                                    int argc, JSValueConst *argv);
+static JSValue action_property_names(JSContext *ctx, JSValueConst this_val,
+                                     int argc, JSValueConst *argv);
+static JSValue action_event_names(JSContext *ctx, JSValueConst this_val,
+                                  int argc, JSValueConst *argv);
+
 static const JSCFunctionListEntry action_props[] = {
     JS_CGETSET_DEF("Name",    action_get_name,    NULL),
     JS_CGETSET_DEF("Text",    action_get_text,    NULL),
     JS_CGETSET_DEF("Icon",    action_get_icon,    NULL),
     JS_CGETSET_DEF("Enabled", action_get_enabled, action_set_enabled),
     JS_CFUNC_DEF("Click", 0, action_click),
+    JS_CFUNC_DEF("PropertyNames", 0, action_property_names),
+    JS_CFUNC_DEF("EventNames",    0, action_event_names),
 };
+
+static JSValue action_property_names(JSContext *ctx, JSValueConst this_val,
+                                     int argc, JSValueConst *argv)
+{
+    return members_of(ctx, action_props, (int)G_N_ELEMENTS(action_props));
+}
+
+static JSValue action_event_names(JSContext *ctx, JSValueConst this_val,
+                                  int argc, JSValueConst *argv)
+{
+    return click_only(ctx);
+}
 
 static void on_action_activate(GSimpleAction *action, GVariant *param,
                                gpointer user_data)
@@ -576,7 +640,21 @@ static const JSCFunctionListEntry menuitem_props[] = {
     JS_CGETSET_DEF("Items",   menuitem_get_items,   menuitem_set_items),
     JS_CGETSET_DEF("Value",   menuitem_get_value,   menuitem_set_value),
     JS_CFUNC_DEF("Click", 1, menuitem_click),
+    JS_CFUNC_DEF("PropertyNames", 0, menuitem_property_names),
+    JS_CFUNC_DEF("EventNames",    0, menuitem_event_names),
 };
+
+static JSValue menuitem_property_names(JSContext *ctx, JSValueConst this_val,
+                                       int argc, JSValueConst *argv)
+{
+    return members_of(ctx, menuitem_props, (int)G_N_ELEMENTS(menuitem_props));
+}
+
+static JSValue menuitem_event_names(JSContext *ctx, JSValueConst this_val,
+                                    int argc, JSValueConst *argv)
+{
+    return click_only(ctx);
+}
 
 /* ---------------------------------------------------------------- build */
 
@@ -711,8 +789,9 @@ int bta_actions_build(JSContext *ctx, JSValueConst form_obj, BtaWidget *w,
      * cannot be walked back into a declaration, so without this the serialiser
      * would drop a form's commands on the first save.
      */
-    JS_DefinePropertyValueStr(ctx, form_obj, "__actions",
-                              JS_DupValue(ctx, actions), JS_PROP_CONFIGURABLE);
+    JSValue *held = bta_widget_note(w, BTA_NOTE_ACTIONS);
+    JS_FreeValue(ctx, *held);
+    *held = JS_DupValue(ctx, actions);
 
     GSimpleActionGroup *group = bta_form_actions(w);
     JSValue             lenv  = JS_GetPropertyStr(ctx, actions, "length");
@@ -768,6 +847,9 @@ int bta_actions_build(JSContext *ctx, JSValueConst form_obj, BtaWidget *w,
         JS_SetPropertyFunctionList(ctx, obj, action_props,
                                    (int)G_N_ELEMENTS(action_props));
         JS_SetOpaque(obj, a);
+        /* Built: under `--strict` a command refuses a name it does not have,
+         * the same as a control. */
+        bta_strict_seal(ctx, obj);
         JS_SetPropertyStr(ctx, form_obj, name, obj);
 
         set_accels(a->path, ctx, spec);
@@ -835,6 +917,7 @@ static BtaMenuItem *make_item(JSContext *ctx, JSValueConst form, const char *nam
     JS_SetPropertyFunctionList(ctx, obj, menuitem_props,
                                (int)G_N_ELEMENTS(menuitem_props));
     JS_SetOpaque(obj, mi);
+    bta_strict_seal(ctx, obj);
 
     /* form.MnuSave, so handlers can enable and disable it. */
     JS_SetPropertyStr(ctx, form, name, obj);
@@ -1059,11 +1142,13 @@ int bta_menus_build(JSContext *ctx, JSValueConst form_obj, BtaWidget *w,
      * Keep the spec as it was read.  A GMenu cannot be walked back into one --
      * items are actions by then, separators are section boundaries, and the
      * nesting is gone -- so without this the serialiser would have nothing to
-     * write and saving a form would silently drop its menus.  Non-enumerable:
-     * it is the form's design, not one of its properties.
+     * write and saving a form would silently drop its menus.  On the form's own
+     * struct: it is the form's design, not one of its properties, and
+     * `Form.Menus` in rad.js reads it back through the accessor.
      */
-    JS_DefinePropertyValueStr(ctx, form_obj, "__menus",
-                              JS_DupValue(ctx, menus), JS_PROP_CONFIGURABLE);
+    JSValue *held = bta_widget_note(w, BTA_NOTE_MENUS);
+    JS_FreeValue(ctx, *held);
+    *held = JS_DupValue(ctx, menus);
 
     /* The form's own group, shared with its `actions` and with every control
      * bound to one: a command has one name, so it resolves in one place. */

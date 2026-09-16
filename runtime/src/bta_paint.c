@@ -1731,21 +1731,24 @@ void bta_painter_init(JSContext *ctx, JSValue global)
 /* ------------------------------------------------------------ DrawingArea */
 
 /*
- * The painter lives on the widget's own JS object, under a name a form cannot
- * use.  Not enumerable, the way `__children` is not: it is the widget's
- * bookkeeping and not a property of the control.
+ * The painter lives on the widget's own struct, beside the other five notes the
+ * runtime keeps about a widget.
+ *
+ * It used to be an own property of the wrapper called `__painter`, not
+ * enumerable, the way `__children` was not. **It is the latest-created of the
+ * six**: a drawing area gets one on the first frame it paints, which is later
+ * than anything else here and later than any moment a loader could be said to
+ * have finished -- so it is the note that decides the answer to *when is a
+ * widget built*. See `docs/strict-plan.md`.
  */
-#define PAINTER_PROP "__painter"
-
 static JSValue area_painter(JSContext *ctx, BtaWidget *w, BtaPainter **out)
 {
-    JSValue held = JS_GetPropertyStr(ctx, w->self, PAINTER_PROP);
+    JSValue held = *bta_widget_note(w, BTA_NOTE_PAINTER);
 
     if (JS_IsObject(held)) {
         *out = JS_GetOpaque(held, bta_painter_class_id);
-        return held;
+        return JS_DupValue(ctx, held);
     }
-    JS_FreeValue(ctx, held);
 
     JSValue proto = JS_GetClassProto(ctx, bta_painter_class_id);
     JSValue obj   = JS_NewObjectProtoClass(ctx, proto, bta_painter_class_id);
@@ -1758,8 +1761,10 @@ static JSValue area_painter(JSContext *ctx, BtaWidget *w, BtaPainter **out)
     p->dump = g_string_new(NULL);
     JS_SetOpaque(obj, p);
 
-    JS_DefinePropertyValueStr(ctx, w->self, PAINTER_PROP, JS_DupValue(ctx, obj),
-                              JS_PROP_CONFIGURABLE);
+    JSValue *slot = bta_widget_note(w, BTA_NOTE_PAINTER);
+    JS_FreeValue(ctx, *slot);
+    *slot = JS_DupValue(ctx, obj);
+
     *out = p;
     return obj;
 }
@@ -1882,13 +1887,11 @@ static JSValue area_dump(JSContext *ctx, JSValueConst this_val,
     if (!w)
         return JS_EXCEPTION;
 
-    JSValue     held = JS_GetPropertyStr(ctx, w->self, PAINTER_PROP);
+    JSValue     held = *bta_widget_note(w, BTA_NOTE_PAINTER);
     BtaPainter *p    = JS_IsObject(held)
                            ? JS_GetOpaque(held, bta_painter_class_id) : NULL;
-    JSValue     out  = JS_NewString(ctx, p && p->dump ? p->dump->str : "");
 
-    JS_FreeValue(ctx, held);
-    return out;
+    return JS_NewString(ctx, p && p->dump ? p->dump->str : "");
 }
 
 /*

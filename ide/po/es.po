@@ -431,6 +431,10 @@ msgstr "Ejecutar"
 msgid "Stop"
 msgstr "Detener"
 
+#: forms/MainForm.form: menu MnuStrict
+msgid "Strict checks while running"
+msgstr "Comprobaciones estrictas al ejecutar"
+
 #: forms/MainForm.form: menu MnuTranslations
 msgid "Update translations"
 msgstr "Actualizar las traducciones"

@@ -4465,6 +4465,111 @@ class Spike extends Form {
                  check("...with the hook reaching it too",
                        all.includes("caught: TypeError"), all);
                  waiting--;
+                 this.strictChecks();
+             });
+    }
+
+    /*
+     * `--strict`: a control refuses a property its class does not have.
+     *
+     * `this.Lbl.Txt = "x"` is accepted by JavaScript, creates an own property on
+     * the control and does nothing, forever. Under this switch the control is
+     * **non-extensible**, so the same line throws where it is written -- and the
+     * runtime's own strict mode is what makes that a throw rather than a silent
+     * failure, since every project source is evaluated with
+     * `JS_EVAL_FLAG_STRICT` whatever its pragma says.
+     *
+     * **This test is the proof that a cleanup landed, not only that a flag
+     * works.** Six things the runtime used to keep as own properties of a widget
+     * -- `__declared`, `__children`, `__menus`, `__actions`, `__columns`,
+     * `__painter` -- would each have thrown here, and two of them are created
+     * long after the control is (a table's columns when an application assigns
+     * `Columns`, a drawing area's painter on the first frame it paints). They
+     * live on the widget's struct now. If one ever comes back, this is what says
+     * so. `docs/strict-plan.md` is the argument.
+     *
+     * A child process, because the switch is a property of the run: it is one
+     * argument to `bintana` and there is nothing to turn on from inside.
+     *
+     * And the line that writes it **right** is beside the one that writes it
+     * wrong, which is the half that would otherwise go unnoticed: a mode that
+     * refused everything would pass a test that only looked for a throw.
+     */
+    strictChecks() {
+        waiting++;
+
+        const proj = File.Join(SCRATCH, "strict");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "strict", startup: "Strict", sources: ["Strict.js"] });
+        File.SaveJson(File.Join(proj, "Strict.form"), {
+            format: "bintana-form/1",
+            class: "Strict",
+            properties: { Width: 240, Height: 140 },
+            actions: [{ name: "ActGo", text: "Go" }],
+            menus: [{ name: "MnuFile", text: "F",
+                      children: [{ name: "MnuSave", text: "S" }] }],
+            children: [
+                { type: "Label",     name: "Lbl",  properties: { Text: "hi" } },
+                { type: "TableView", name: "Tbl",  properties: { X: 1, Y: 40 } },
+                { type: "DrawingArea", name: "Art", properties: { X: 1, Y: 80 } },
+            ],
+        });
+        File.Save(File.Join(proj, "Strict.js"),
+                  `const PNG = ${JSON.stringify(File.Join(proj, "frame.png"))};\n` +
+                  "class Strict extends Form {\n" +
+                  "    Art_Draw(p) { p.Rectangle(0, 0, 10, 10); p.Fill(); }\n" +
+                  "    Form_Open() {\n" +
+                  "        this.own = 1;                       /* a form is not sealed */\n" +
+                  "        print('form field: ' + this.own);\n" +
+                  "        this.Lbl.Text = 'written';          /* the setter still works */\n" +
+                  "        print('text: ' + this.Lbl.Text);\n" +
+                  "        this.Tbl.Columns = [{ title: 'A' }]; /* late, and used to be a note */\n" +
+                  "        this.Art.Save(PNG, 40, 40);          /* the painter, likewise */\n" +
+                  "        print('columns: ' + this.Tbl.Columns.length);\n" +
+                  "        print('painted: ' + (this.Art.Dump().length > 0));\n" +
+                  "        try { this.Lbl.Txt = 'typo'; print('accepted Txt'); }\n" +
+                  "        catch (e) { print('refused: ' + e.message); }\n" +
+                  "        try { this.MnuSave.Enabld = false; print('accepted Enabld'); }\n" +
+                  "        catch (e) { print('menu refused: ' + e.message); }\n" +
+                  "        try { this.ActGo.Enabld = false; print('accepted action'); }\n" +
+                  "        catch (e) { print('action refused: ' + e.message); }\n" +
+                  "        print('saved: ' + JSON.stringify(this.Serialize()).length);\n" +
+                  "        Application.Quit(0);\n" +
+                  "    }\n" +
+                  "}\n");
+
+        const said = [];
+        Exec([Application.Executable, "--strict", proj], { Timeout: 20000 },
+             (line) => said.push(line),
+             (code) => {
+                 const all = said.join("\n");
+
+                 check("the run finishes", code === 0, `${code}: ${all}`);
+                 check("a form still takes fields of its own",
+                       all.includes("form field: 1"), all);
+                 check("...and a real property still reaches its setter",
+                       all.includes("text: written"), all);
+                 check("a misspelt property throws where it is written",
+                       all.includes("refused: "), all);
+                 check("...naming the property, which is the whole point",
+                       all.includes("no 'Txt' to assign"), all);
+                 check("a menu item refuses one too",
+                       all.includes("no 'Enabld' to assign"), all);
+                 check("...and so does a command",
+                       all.split("no 'Enabld' to assign").length - 1 === 2, all);
+
+                 /* The two that used to arrive *after* the control was built,
+                  * and would have made this mode impossible. */
+                 check("a table still takes its columns under the mode",
+                       all.includes("columns: 1"), all);
+                 check("...and a drawing area still makes its painter",
+                       all.includes("painted: true"), all);
+                 check("...with nothing quietly accepted",
+                       !all.includes("accepted"), all);
+                 check("and the form still serialises",
+                       /saved: \d\d+/.test(all), all);
+                 waiting--;
              });
     }
 

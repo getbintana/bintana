@@ -320,10 +320,20 @@ codebase has had:
 
 **1. A child only GTK holds gets collected.** Every path that adds a child must
 call `bta_widget_adopt()`, which does the two things that matter: appends the
-child to the parent's hidden `__children` array (so JS keeps it alive) and binds
-it to the form (so its events dispatch). `Container.Add()` does it;
-`Notebook.Append()` and `SetTabLabel()` did not, and a garbage-collected page left
-a dangling pointer behind that the next mouse motion read.
+child to the parent's `__children` array (so JS keeps it alive) and binds
+it to the form (so its events dispatch).
+
+That array, and five more notes the runtime keeps about a widget, live on the
+`BtaWidget` struct and are reported by `widget_gc_mark`. They used to be own
+properties of the wrapper with the enumerable bit off -- invisible to everything
+that *looked*, and not invisible to the count of what the widget has, which is
+what honest introspection and `--strict` both read. `__declared`, `__children`,
+`__menus` and `__actions` are still readable from JavaScript under those names,
+as accessors on `Widget.prototype`; see [`strict-plan.md`](strict-plan.md).
+
+`Container.Add()` adopts; `Notebook.Append()` and `SetTabLabel()` did not, and a
+garbage-collected page left a dangling pointer behind that the next mouse motion
+read.
 
 Removing a child has to do the inverse: `bta_widget_release()` drops the parent's
 reference. `Container.Delete()`/`Remove()` go through it, and so does

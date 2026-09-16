@@ -57,6 +57,7 @@ const LIVE_PAUSE = 400;
 
 Ide.Live = class Live {
 
+    /** @param {MainForm} ide */
     constructor(ide) {
         this.ide   = ide;
         this.timer = null;

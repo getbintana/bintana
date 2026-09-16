@@ -247,6 +247,7 @@ function sibling(file, ext) {
 
 Ide.Classes = class Classes {
 
+    /** @param {MainForm} ide */
     constructor(ide) {
         this.ide = ide;
 
@@ -450,6 +451,33 @@ Ide.Classes = class Classes {
 
         const bare = forms.filter((f) => File.BaseName(f) === name);
         return bare.length === 1 ? bare[0] : null;
+    }
+
+    /*
+     * The `.js` that declares a class, by the name a `.form` or a `new` would
+     * use for it -- `Ide.Runner` answers `modules/Runner.js`, `MainForm`
+     * answers `forms/MainForm.js`.
+     *
+     * The companion of `formOfClass`, and the half it cannot do: most of a
+     * project's classes have no `.form` at all -- eighteen of the IDE's own --
+     * and a completion that can only reach the ones that do would answer for a
+     * form and go quiet for a module.
+     *
+     * By qualified name first, for the reason `formOfClass` does it: a bare name
+     * is accepted only while one class answers to it, because guessing which of
+     * two was meant is how a lookup starts lying.
+     */
+    fileOfClass(name) {
+        const sources = this.files.filter(
+            (f) => File.Extension(f).toLowerCase() === "js");
+
+        const dot  = String(name).lastIndexOf(".");
+        const ns   = dot < 0 ? "" : name.slice(0, dot);
+        const base = dot < 0 ? name : name.slice(dot + 1);
+
+        const mine = sources.filter((f) => File.BaseName(f) === base &&
+                                           this.namespaceOf(f) === ns);
+        return mine.length === 1 ? mine[0] : null;
     }
 
     /*

@@ -187,3 +187,13 @@ no pragma and assigns to an undeclared name -- it throws
 `noDeclarada is not defined` rather than making a global. The habit is worth
 keeping anyway, because it says out loud what the file is and it survives being
 read outside this runtime.
+
+**And it is what makes `bintana --strict` possible.** Under that switch a control
+is non-extensible, so `this.Lbl.Txt = "x"` -- a property no `Label` has -- throws
+where it is written instead of creating an own property and doing nothing
+forever. In sloppy mode that refusal would be silent, which would make the whole
+switch pointless for any file without the pragma; it is not sloppy.
+
+It is off unless asked for and is meant for development: an application that
+keeps state of its own on a control will throw under it. A **form** is never
+sealed, so `this.anything = …` in `Form_Open` is unaffected.

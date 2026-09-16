@@ -15,6 +15,7 @@ Namespace("Ide");
 
 Ide.Manifest = class Manifest {
 
+    /** @param {MainForm} ide */
     constructor(ide) {
         this.ide = ide;
     }

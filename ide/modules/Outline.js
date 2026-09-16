@@ -34,6 +34,7 @@ Namespace("Ide");
 
 Ide.Outline = class Outline {
 
+    /** @param {MainForm} ide */
     constructor(ide) {
         this.ide = ide;
 

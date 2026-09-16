@@ -115,6 +115,7 @@ function poLines(keyword, text) {
 
 Ide.Translations = class Translations {
 
+    /** @param {MainForm} ide */
     constructor(ide) {
         this.ide = ide;
     }

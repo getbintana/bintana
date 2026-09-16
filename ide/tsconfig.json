@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": [
+      "es2022"
+    ],
+    "module": "none",
+    "checkJs": false,
+    "allowJs": true,
+    "noEmit": true,
+    "strict": false
+  },
+  "include": [
+    "**/*.js",
+    "forms.d.ts",
+    "../tools/typings/bintana.d.ts"
+  ]
+}

@@ -63,6 +63,7 @@ const FOLDER = "recovery";
 
 Ide.Recovery = class Recovery {
 
+    /** @param {MainForm} ide */
     constructor(ide) {
         this.ide   = ide;
         this.timer = null;

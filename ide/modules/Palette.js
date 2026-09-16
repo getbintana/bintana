@@ -307,6 +307,7 @@ const DEFAULT_SIZE = {
 
 Ide.Palette = class Palette {
 
+    /** @param {MainForm} ide */
     constructor(ide) {
         this.ide     = ide;
         this.buttons = {};

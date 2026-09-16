@@ -203,19 +203,23 @@ static void table_model_set_count(BtaTableModel *self, guint n)
  * **The declared columns are not in here**, and that is the interesting part.
  * They have to be kept -- the getter must hand back what the `.form` said, and a
  * GtkColumnViewColumn cannot be walked back into a width and an alignment
- * without losing which of them were defaulted -- but keeping a `JSValue` in C is
- * a strong reference the collector cannot see, and `JS_FreeRuntime` aborts on
- * anything still alive (`Assertion list_empty(&rt->gc_obj_list) failed`, which is
- * how this was found).
+ * without losing which of them were defaulted.
  *
- * So they live on the widget's own wrapper as `__columns`, which is the pattern
- * a form's `__menus` and a control's `__declared` already use: the object graph
- * owns it, the collector sees it, and nothing here has to be freed. A `__` name
- * is invisible to the serialiser besides, which discovers accessors and not own
- * properties.
+ * The reason given here for putting them on the *wrapper*, as an own property
+ * called `__columns`, was that keeping a `JSValue` in C is a strong reference
+ * the collector cannot see, and `JS_FreeRuntime` aborts on anything still alive
+ * (`Assertion list_empty(&rt->gc_obj_list) failed`, which is how that was
+ * found). True for a value **nobody marks** -- and this class has had a mark
+ * function since controls needed to point back at their form. So they are on the
+ * widget's own struct now (`w->columns`), reported by `widget_gc_mark` and
+ * released by the finalizer, which is what `w->form` and `w->menu` already did.
+ *
+ * What that buys is in `docs/strict-plan.md`: the note was created **when an
+ * application assigned `Columns`**, so it was an own property that appeared at
+ * any moment in a program's life, and a widget whose own properties are exactly
+ * its properties cannot have one of those.
  */
 #define TABLE_STATE_KEY "bta-table-state"
-#define TABLE_COLUMNS   "__columns"
 
 typedef struct {
     GListStore    *rows;       /* held mode: the rows the table owns; tree mode:
@@ -1307,11 +1311,10 @@ static JSValue table_get_columns(JSContext *ctx, JSValueConst this_val)
      * width must not come back asking for the one it happens to be drawn at --
      * the same trap `Width` on a control had, where saving an allocation turned
      * today's measurement into tomorrow's floor. */
-    JSValue held = JS_GetPropertyStr(ctx, this_val, TABLE_COLUMNS);
+    JSValue held = *bta_widget_note(w, BTA_NOTE_COLUMNS);
     if (JS_IsArray(held))
-        return held;
+        return JS_DupValue(ctx, held);
 
-    JS_FreeValue(ctx, held);
     return JS_NewArray(ctx);
 }
 
@@ -1325,7 +1328,9 @@ static JSValue table_set_columns(JSContext *ctx, JSValueConst this_val,
     if (!table_build_columns(ctx, w, val))
         return JS_EXCEPTION;
 
-    JS_SetPropertyStr(ctx, this_val, TABLE_COLUMNS, JS_DupValue(ctx, val));
+    JSValue *slot = bta_widget_note(w, BTA_NOTE_COLUMNS);
+    JS_FreeValue(ctx, *slot);
+    *slot = JS_DupValue(ctx, val);
     return JS_UNDEFINED;
 }
 
@@ -1378,8 +1383,12 @@ static bool table_become_tree(JSContext *ctx, BtaWidget *w)
     g_object_unref(tree);
 
     /* The expander lives in a factory, and factories are made with the
-     * columns. Rebuilt from what was declared, which is kept on the wrapper. */
-    JSValue held = JS_GetPropertyStr(ctx, w->self, TABLE_COLUMNS);
+     * columns. Rebuilt from what was declared, which is kept on the struct.
+     *
+     * Duplicated for the length of the call, because reading a spec can run a
+     * getter of the caller's and a getter can assign `Columns` -- which would
+     * free the very array being walked. */
+    JSValue held = JS_DupValue(ctx, *bta_widget_note(w, BTA_NOTE_COLUMNS));
     bool    ok   = !JS_IsArray(held) || table_build_columns(ctx, w, held);
 
     JS_FreeValue(ctx, held);
@@ -1571,8 +1580,9 @@ static JSValue table_clear(JSContext *ctx, JSValueConst this_val,
         g_clear_pointer(&st->keys, g_hash_table_unref);
         table_use_model(w, G_LIST_MODEL(st->rows));
 
-        JSValue held = JS_GetPropertyStr(ctx, this_val, TABLE_COLUMNS);
+        JSValue held = JS_DupValue(ctx, *bta_widget_note(w, BTA_NOTE_COLUMNS));
         bool    ok   = !JS_IsArray(held) || table_build_columns(ctx, w, held);
+
         JS_FreeValue(ctx, held);
         if (!ok)
             return JS_EXCEPTION;

@@ -60,6 +60,7 @@ const VIEW_FILES   = 1;
 
 Ide.ProjectTree = class ProjectTree {
 
+    /** @param {MainForm} ide */
     constructor(ide) {
         this.ide = ide;
         /* Tree key -> the file it stands for.  Read by `FileTree_Select`, and

@@ -32,6 +32,7 @@ const HERE_MARK = "Info";
 
 Ide.Debugger = class Debugger {
 
+    /** @param {MainForm} ide */
     constructor(ide) {
         this.ide = ide;
         /* file -> [line], the breakpoints of files whether open or not.  A
@@ -138,13 +139,18 @@ Ide.Debugger = class Debugger {
 
         this.ide.saveAllDirty();
         this.ide.LogView.Clear();
-        this.ide.log(`> bintana --debug ${this.ide.project}\n`);
+        /* Whatever this run is, the debugger runs it too: `--strict` is a
+         * property of the run and not of the button that started it, and a
+         * misspelt property is exactly the thing one would want to stop at. */
+        const options = ["--debug", ...this.ide.runner.options()];
+
+        this.ide.log(`> bintana ${[...options, this.ide.project].join(" ")}\n`);
         this.remember(this.ide.activeFile);
 
         this.stopped = null;
         this.ide.running = true;
 
-        this.job = Exec([Application.Executable, "--debug", this.ide.project],
+        this.job = Exec([Application.Executable, ...options, this.ide.project],
                         { Directory: this.ide.project,
                           Control: (line) => this.heard(line) },
                         (line) => this.ide.log(`${line}\n`),

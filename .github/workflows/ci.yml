@@ -43,6 +43,15 @@ jobs:
       - name: Test
         run: ./tests/run.sh
 
+      # Is `docs/llm/` still the whole public surface, and is
+      # `tools/typings/bintana.d.ts` still the runtime's? Both are claims that
+      # cost nothing unless something fails when they stop being true, and the
+      # second is about a **generated** file -- which is exactly the kind that
+      # goes stale without looking stale. Cheap: it parses C and Markdown and
+      # opens no window.
+      - name: The documented surface, and the declared one
+        run: ./tests/api.sh
+
       # What `make install` produces, run out of a staging prefix under /tmp.
       # A step of this job and not one of its own: it installs the build the
       # step above just tested, and re-building it somewhere else would only

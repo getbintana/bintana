@@ -328,3 +328,5 @@ Each of these was a real bug in this repository.
 | A menu label built from data | GTK's mnemonic parser eats the letter after a `_` |
 | Returning `NULL` from `GtkTreeListModel`'s child-model callback | That node is a leaf forever, and children added later never appear |
 | Measuring in the same frame | `OriginIn`, `PickAt` and an unset `Width` all read an allocation that does not exist yet |
+| Keeping something about a widget as an own property of its wrapper | It is not a property of the control, and it is counted as one: `--strict` refuses it, `PropertyNames()` and `in` report it. The six the runtime kept that way are fields on `BtaWidget` now -- add one there, report it in `widget_gc_mark`, free it in the finaliser, and reach it through `bta_widget_note()` |
+| A `JSValue` on the struct that `widget_gc_mark` does not report | A cycle that never collects, or -- freed in the finaliser and not marked -- `Assertion list_empty(&rt->gc_obj_list) failed` at teardown. `tests/asan.sh` is what exercises it |

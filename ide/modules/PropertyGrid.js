@@ -375,6 +375,7 @@ function sameJsonValue(a, b) {
 
 Ide.PropertyGrid = class PropertyGrid {
 
+    /** @param {Ide.Designer} designer */
     constructor(designer) {
         this.designer = designer;
 

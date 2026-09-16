@@ -49,6 +49,7 @@ const PROBLEM_PLACE_W = 220;
 
 Ide.Problems = class Problems {
 
+    /** @param {MainForm} ide */
     constructor(ide) {
         this.ide = ide;
 

@@ -2868,6 +2868,111 @@ function* p_completion(ide) {
     yield;
     eq("and it goes with the files", answer("", "        Herr.").length, 0);
 
+    /* --- a menu item, which is a thing a form has --------------------------- *
+     *
+     * It was not, for three flatteners at once: `Ide.Completion`, `Ide.Names`
+     * and `Ide.Check` each walked a `.form`'s `children` and a menu is not among
+     * them, so `this.MnuSave.` proposed nothing and `MnuSave_Clik()` went
+     * unremarked. One walk now, in `Ide.Names`, over all three blocks that bind
+     * a name on the form.
+     *
+     * And what a `MenuItem` has is asked of a real one, not listed here: neither
+     * it nor an `Action` is a widget, so `Widget.New` cannot make one -- the
+     * sample is borrowed from this window's own menu bar, which has both.
+     */
+    File.Save(File.Join(TMP, "Barra.form"), JSON.stringify({
+        format: "bintana-form/1", class: "Barra",
+        properties: { Width: 300, Height: 200 },
+        actions: [{ name: "ActGo", text: "Go" }],
+        menus: [{ name: "MnuTop", text: "T",
+                  children: [{ name: "MnuSave", text: "S" },
+                             { separator: true },
+                             { name: "MnuRecent", text: "R", dynamic: true }] }],
+        children: [{ type: "Label", name: "LblOne", properties: { X: 4, Y: 4 } }],
+    }, null, 2));
+    File.Save(File.Join(TMP, "Barra.js"),
+              "class Barra extends Form {\n    MnuSave_Click() { }\n}\n");
+    ide.listFiles();
+    ide.openInTab("Barra.js");
+    yield* settled(ide);
+
+    const bar = answer("", "        this.");
+    check("`this.` offers a menu item and a command, not only the controls",
+          bar.includes("MnuSave") && bar.includes("ActGo") && bar.includes("LblOne"),
+          JSON.stringify(bar));
+    eq("...each saying what it is",
+       ask("", "        this.").find((p) => p.Text === "MnuSave").Detail, "MenuItem");
+
+    const item = answer("", "        this.MnuSave.");
+    check("`this.MnuSave.` offers what a menu item really has",
+          item.includes("Enabled") && item.includes("Items") && item.includes("Value"),
+          JSON.stringify(item));
+    check("and not a control's, which it is not",
+          !item.includes("Text"), JSON.stringify(item));
+
+    const menuEvents = answer("MnuSave_", "    ");
+    eq("`MnuSave_` writes the one event an item raises", menuEvents[0], "MnuSave_Click");
+    eq("...and it is the only one", menuEvents.length, 1);
+
+    const cmd = answer("", "        this.ActGo.");
+    check("a command answers for itself too", cmd.includes("Enabled"),
+          JSON.stringify(cmd));
+
+    /* --- a field or a local this file builds -------------------------------- *
+     *
+     * Still a lookup and still nothing inferred: what is read is a `new` written
+     * in the file, or a JSDoc line. Measured before it was written -- of 1916
+     * declarations in this tree only 12 % state a type at all -- so this is two
+     * shapes and not a general answer, and the second is the one that matters:
+     * `this.ide.` is 509 of the 1410 `this.<field>.` here, it is a constructor
+     * parameter, and no `new` names it. TypeScript infers `any` for it too.
+     */
+    File.Save(File.Join(TMP, "Usa.js"),
+              "class Usa {\n" +
+              "    /** @param {Child} otro */\n" +
+              "    constructor(otro) { this.otro = otro; }\n" +
+              "    go() {\n" +
+              "        const btn = new Button();\n" +
+              "        this.lbl = new Label();\n" +
+              "        this.suyo = new Barra();\n" +
+              "    }\n" +
+              "}\n");
+    ide.listFiles();
+    ide.openInTab("Usa.js");
+    yield* settled(ide);
+
+    const local = answer("", "        btn.");
+    check("a local built here offers that class's properties",
+          local.includes("Text") && local.includes("Default"), JSON.stringify(local));
+    const field = answer("", "        this.lbl.");
+    check("and so does a field", field.includes("Ellipsize"), JSON.stringify(field));
+    check("...a Label's and not a Button's", !field.includes("Default"),
+          JSON.stringify(field));
+
+    const ours = answer("", "        this.suyo.");
+    check("a class of the project answers with its own controls",
+          ours.includes("LblOne") && ours.includes("MnuSave"), JSON.stringify(ours));
+    check("...and the methods its file declares",
+          ours.includes("MnuSave_Click"), JSON.stringify(ours));
+
+    const said = answer("", "        this.otro.");
+    check("a constructor parameter answers from the JSDoc line that says what it is",
+          said.includes("Ok") && said.includes("Msg"), JSON.stringify(said));
+    check("which is the 509-use case, and nothing else can say it",
+          said.includes("Form_Open"), JSON.stringify(said));
+
+    /* The tabs go before the files do: an open tab whose file disappears is a
+     * question the IDE asks in a dialog, which is right for a person and a hung
+     * test. */
+    ide.closeTabByName("Usa.js", true);
+    ide.closeTabByName("Barra.js", true);
+    File.Delete(File.Join(TMP, "Usa.js"));
+    File.Delete(File.Join(TMP, "Barra.js"));
+    File.Delete(File.Join(TMP, "Barra.form"));
+    ide.listFiles();
+    ide.openInTab("Child.js");
+    yield* settled(ide);
+
     /* Half a handler for a control that is not one is not a handler: it falls
      * through to the paths, which say nothing about it either. */
     eq("a local that merely looks like a handler proposes nothing",
@@ -9013,6 +9118,31 @@ function* p_errors(ide) {
     check("and output that announced nothing still says something",
           ide.runner.errorMessage("hello from tabs\n").length > 0);
 
+    /*
+     * And what this run *is*, as against what the project is.
+     *
+     * `--strict` makes a control refuse a property its class does not have, so
+     * `this.Lbl.Txt = "x"` throws where it is written rather than doing nothing
+     * forever. It is one argument to `bintana` and nothing in `project.json`,
+     * because the same project is run both ways and what decides is whoever
+     * pressed the button -- so what is asserted is that the tick and the
+     * argument are the same fact.
+     */
+    const wasStrict = ide.MnuStrict.Value;
+
+    ide.runner.chose(false);
+    eq("with the tick off the run carries no argument", ide.runner.options().length, 0);
+
+    ide.runner.chose(true);
+    eq("with it on it carries one", ide.runner.options().join(" "), "--strict");
+
+    ide.MnuStrict.Value = false;
+    ide.runner.restore();
+    eq("and it is remembered across a session", ide.MnuStrict.Value, true);
+
+    ide.runner.chose(wasStrict);
+    ide.runner.restore();
+
     /* A traceback writes an absolute path; everything in this IDE speaks the
      * name a tab is keyed by. */
     eq("a path of the project is made relative",
@@ -9394,6 +9524,18 @@ function* p_check(ide) {
         format: "bintana-form/1",
         class: "Bad",
         properties: { Width: 300, Height: 200 },
+        /*
+         * A menu, because a `.form` binds what it names here on the form exactly
+         * as it binds a control -- and until the flatteners were made one, this
+         * whole block was invisible to the pass. The item named `Actions`
+         * collides with a getter of `Form` -- the same silence a *control* of
+         * that name had -- and the command declared twice loses the first.
+         */
+        actions: [{ name: "ActDup", text: "one" },
+                  { name: "ActDup", text: "two" }],
+        menus: [{ name: "MnuTop", text: "T",
+                  children: [{ name: "Actions", text: "A" },
+                             { name: "MnuOk", text: "O" }] }],
         children: [
             { type: "Label",  name: "Twice", properties: { Text: "uno" } },
             { type: "Label",  name: "Twice", properties: { Text: "dos" } },
@@ -9405,7 +9547,8 @@ function* p_check(ide) {
     File.Save(File.Join(TMP, "Bad.js"),
               "class Bad extends Form {\n" +
               "    Btn_Clik() { }\n" +                    /* Button raises Click */
-              "    Form_Open() { this.Btn.Txt = \"x\"; }\n" +
+              "    MnuOk_Chose() { }\n" +                 /* an item raises Click */
+              "    Form_Open() { this.Btn.Txt = \"x\"; this.MnuOk.Enabld = 1; }\n" +
               "}\n");
 
     ide.listFiles();
@@ -9426,6 +9569,23 @@ function* p_check(ide) {
           has("does not raise Clik"), JSON.stringify(said));
     check("...and so is the member, in a file nobody has open",
           said.some((r) => r.file === "Bad.js" && r.text.includes("has no Txt")),
+          JSON.stringify(said));
+
+    /*
+     * And the same three checks over what a `.form` names outside `children`,
+     * which is the hole three flatteners shared. Every one of these is a real
+     * silence: a command declared twice loses the first, a menu item called
+     * `Actions` binds to nothing at all, and a handler for an event an item does
+     * not raise is a method nothing will ever call.
+     */
+    check("two commands of one name are reported",
+          has("two controls are called ActDup"), JSON.stringify(said));
+    check("a menu item whose name is a member of Form is reported",
+          has("Actions is also a member of Form"), JSON.stringify(said));
+    check("a handler for an event a menu item does not raise is reported",
+          has("does not raise Chose"), JSON.stringify(said));
+    check("...and a member a menu item does not have",
+          said.some((r) => r.file === "Bad.js" && r.text.includes("has no Enabld")),
           JSON.stringify(said));
 
     /* Running it again says the same thing once, not twice. */

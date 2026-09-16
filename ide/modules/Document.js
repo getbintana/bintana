@@ -44,6 +44,12 @@ Ide.Document = class Document {
      * already made -- in that order, because the editor is what the toggle
      * swaps in and it starts hidden.
      */
+    /**
+     * @param {MainForm} ide
+     * @param {Panel} page
+     * @param {SourceEditor} editor
+     * @param {string} path
+     */
     constructor(ide, page, editor, path) {
         this.ide    = ide;
         this.editor = editor;

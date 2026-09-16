@@ -237,6 +237,11 @@
           "shortcut": "<Shift>F9"
         },
         {
+          "name": "MnuStrict",
+          "text": "Strict checks while running",
+          "check": true
+        },
+        {
           "separator": true
         },
         {
