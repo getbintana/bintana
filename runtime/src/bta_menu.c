@@ -812,10 +812,14 @@ int bta_actions_build(JSContext *ctx, JSValueConst form_obj, BtaWidget *w,
                    -1;
         }
 
+        /* `g_strdup` and not the pointer itself: a bind that is refused frees
+         * the wrapper, the wrapper owns `a`, and `a` would take this name with
+         * it -- leaving nothing to say in the message. The loop owns `name`
+         * and frees it on every way out. */
         BtaAction *a = g_new0(BtaAction, 1);
         a->ctx   = ctx;
         a->form  = JS_DupValue(ctx, form_obj);
-        a->name  = name;
+        a->name  = g_strdup(name);
         a->path  = g_strdup_printf("%s.%s", MENU_GROUP, name);
         a->text  = spec_str(ctx, spec, "text");
         a->icon  = spec_str(ctx, spec, "icon");
@@ -830,17 +834,12 @@ int bta_actions_build(JSContext *ctx, JSValueConst form_obj, BtaWidget *w,
             }
         }
 
-        a->action = g_simple_action_new(name, NULL);
-        g_signal_connect(a->action, "activate",
-                         G_CALLBACK(on_action_activate), a);
-        g_action_map_add_action(G_ACTION_MAP(group), G_ACTION(a->action));
-
         JSValue obj = JS_NewObjectClass(ctx, bta_action_class_id);
         if (JS_IsException(obj)) {
             JS_FreeValue(ctx, a->form);
-            g_object_unref(a->action);
             g_free(a->icon); g_free(a->text); g_free(a->path); g_free(a->name);
             g_free(a);
+            g_free(name);
             JS_FreeValue(ctx, spec);
             return -1;
         }
@@ -850,7 +849,38 @@ int bta_actions_build(JSContext *ctx, JSValueConst form_obj, BtaWidget *w,
         /* Built: under `--strict` a command refuses a name it does not have,
          * the same as a control. */
         bta_strict_seal(ctx, obj);
-        JS_SetPropertyStr(ctx, form_obj, name, obj);
+
+        /*
+         * form.ActDelete = <command>, **and the answer is looked at.**
+         *
+         * The same silence a control had until `bta_form.c` started checking
+         * this line, and for the same reason: `Actions`, `Menus`, `Controls`,
+         * `DefaultButton` and `CancelButton` are getters on `Form` with no
+         * setter, so the assignment fails and the command binds to nothing --
+         * `ActDelete_Click` never fires, `this.ActDelete.Enabled` reaches the
+         * wrong object, and the form loads as if all were well. A menu item and
+         * a command are bound on the form by name exactly as a control is, so
+         * they were exactly as quiet about it.
+         *
+         * **Nothing is wired until the name is ours**, which is why the action
+         * is built below this and not above it: a refused bind frees the
+         * wrapper, and a wrapper freed after `g_action_map_add_action` would
+         * leave the group holding a handler that points at freed memory. The
+         * order is what makes that impossible rather than something to undo.
+         */
+        if (JS_SetPropertyStr(ctx, form_obj, name, obj) < 0) {
+            fprintf(stderr, "bintana: action '%s': a Form already has a member "
+                            "of that name, so nothing can reach this command\n",
+                    name);
+            g_free(name);
+            JS_FreeValue(ctx, spec);
+            return -1;
+        }
+
+        a->action = g_simple_action_new(name, NULL);
+        g_signal_connect(a->action, "activate",
+                         G_CALLBACK(on_action_activate), a);
+        g_action_map_add_action(G_ACTION_MAP(group), G_ACTION(a->action));
 
         set_accels(a->path, ctx, spec);
 
@@ -861,6 +891,7 @@ int bta_actions_build(JSContext *ctx, JSValueConst form_obj, BtaWidget *w,
             g_simple_action_set_enabled(a->action, JS_ToBool(ctx, on));
         JS_FreeValue(ctx, on);
 
+        g_free(name);
         JS_FreeValue(ctx, spec);
     }
     return 0;
@@ -888,6 +919,45 @@ static BtaMenuItem *make_item(JSContext *ctx, JSValueConst form, const char *nam
      */
     const GVariantType *takes = many ? G_VARIANT_TYPE_INT32 : NULL;
 
+    JSValue obj = JS_NewObjectClass(ctx, bta_menuitem_class_id);
+    if (JS_IsException(obj)) {
+        JS_FreeValue(ctx, mi->form);
+        JS_FreeValue(ctx, mi->items);
+        g_free(mi->path);
+        g_free(mi->name);
+        g_free(mi);
+        return NULL;
+    }
+    JS_SetPropertyFunctionList(ctx, obj, menuitem_props,
+                               (int)G_N_ELEMENTS(menuitem_props));
+    JS_SetOpaque(obj, mi);
+    bta_strict_seal(ctx, obj);
+
+    /*
+     * form.MnuSave, so handlers can enable and disable it -- **and the answer
+     * is looked at.**
+     *
+     * The same silence a control had until `bta_form.c` started checking this
+     * line, and this is the same line: an item named `Actions`, `Menus`,
+     * `Controls`, `DefaultButton` or `CancelButton` lands on a getter of `Form`
+     * that has no setter, the assignment fails, and the item binds to nothing.
+     * `MnuActions_Click` never fires and `this.MnuActions` answers the *form's*
+     * action list. A menu item is bound on the form by name exactly as a
+     * control is, so it was exactly as quiet about it.
+     *
+     * **Nothing is wired until the name is ours**, which is why the action is
+     * built below this and not above it: a refused bind frees the wrapper, the
+     * wrapper owns `mi`, and an action already in the group would be left
+     * holding a handler that points at freed memory. The order is what makes
+     * that impossible rather than something to undo. `name` is the caller's, so
+     * it outlives the wrapper and there is still something to say.
+     */
+    if (JS_SetPropertyStr(ctx, form, name, obj) < 0) {
+        fprintf(stderr, "bintana: menu item '%s': a Form already has a member "
+                        "of that name, so nothing can reach this item\n", name);
+        return NULL;
+    }
+
     if (kind == ITEM_CHECK) {
         mi->action = g_simple_action_new_stateful(name, takes,
                                                  g_variant_new_boolean(FALSE));
@@ -902,25 +972,6 @@ static BtaMenuItem *make_item(JSContext *ctx, JSValueConst form, const char *nam
 
     g_signal_connect(mi->action, "activate", G_CALLBACK(on_menu_activate), mi);
     g_action_map_add_action(G_ACTION_MAP(group), G_ACTION(mi->action));
-
-    JSValue obj = JS_NewObjectClass(ctx, bta_menuitem_class_id);
-    if (JS_IsException(obj)) {
-        /* The action group owns the action; the wrapper is what failed. */
-        JS_FreeValue(ctx, mi->form);
-        JS_FreeValue(ctx, mi->items);
-        g_object_unref(mi->action);
-        g_free(mi->path);
-        g_free(mi->name);
-        g_free(mi);
-        return NULL;
-    }
-    JS_SetPropertyFunctionList(ctx, obj, menuitem_props,
-                               (int)G_N_ELEMENTS(menuitem_props));
-    JS_SetOpaque(obj, mi);
-    bta_strict_seal(ctx, obj);
-
-    /* form.MnuSave, so handlers can enable and disable it. */
-    JS_SetPropertyStr(ctx, form, name, obj);
 
     /* An accelerator can only name a command that takes no argument, so the two
      * that are many commands have none: which entry would it press? */

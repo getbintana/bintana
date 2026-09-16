@@ -94,7 +94,7 @@ A child node:
 | Key | Meaning |
 |---|---|
 | `type` | a class name: a runtime control, or one of the project's own components |
-| `name` | becomes `Widget.Name`, is exposed as `this.<name>`, and prefixes its handlers. Must be a valid JS identifier, unique on the form, and **not something a `Form` already answers to** — `Actions`, `Menus`, `Controls`, `DefaultButton` and `CancelButton` are read-only, so a control called one of them binds to nothing and the form refuses to load, saying which |
+| `name` | becomes `Widget.Name`, is exposed as `this.<name>`, and prefixes its handlers. Must be a valid JS identifier, unique on the form, and **not something a `Form` already answers to** — `Actions`, `Menus`, `Controls`, `DefaultButton` and `CancelButton` are read-only, so a control called one of them binds to nothing and the form refuses to load, saying which. The same rule holds for a **menu item** and a **command**: all three blocks bind what they name on the form, by name, in the same way |
 | `properties` | applied **in the order written** |
 | `children` | nested, to any depth. A container's children are added to it |
 | `design` | what the *designer* shows instead; unreachable from a running application |
@@ -397,7 +397,7 @@ Declared on the form, next to its controls, and handled like any other event.
 | Key | Meaning |
 |---|---|
 | `text` | the label. `_` marks the mnemonic, GTK style |
-| `name` | required on a leaf: it becomes `this.<name>` and `<name>_Click` |
+| `name` | required on a leaf: it becomes `this.<name>` and `<name>_Click`. Unique across the whole form and not something a `Form` already answers to, the same rule a control's name keeps and for the same reason — it is the same assignment |
 | `children` | makes it a submenu; a submenu needs no name |
 | `separator` | `true` for a rule between items |
 | `shortcut` | an accelerator, or a list of them: `["F2", "<Control><Shift>r"]` |
@@ -498,9 +498,12 @@ assignment, and its label is translated once. `Shortcut` on a control is not thi
 it says which key presses *that control*, and a command in two places is still
 written twice.
 
-Three rules, and each of them is a mistake the runtime refuses rather than a
+Four rules, and each of them is a mistake the runtime refuses rather than a
 convention to remember:
 
+- **A command's `name` is a member of the form**, so it may not be one the form
+  already has: `Actions`, `Menus`, `Controls`, `DefaultButton`, `CancelButton`.
+  One that is binds to nothing, and the form refuses to load saying which.
 - **A control bound to a command has no `Enabled` of its own.** Assigning one
   throws, naming the command. Two places deciding whether one command is
   available is the bug this exists to prevent.

@@ -1572,9 +1572,9 @@ writing it wrong on purpose and watching what the runtime did:
 
 | Written | What happens |
 |---|---|
-| two controls of one name | the first is **gone**: two nodes in the file, one control on the window |
-| a control named `Actions` | `this.Actions` answers the *form's* actions, so the control has no name at all |
-| a control named `Close` | the other way: the control wins and the **method** is lost |
+| two controls of one name | the first is **gone**: two nodes in the file, one control on the window. A menu item and a command are bound by name too, so two of either is the same loss |
+| a control named `Actions` | `this.Actions` answers the *form's* actions, so the control has no name at all. The runtime refuses such a form now -- control, menu item and command alike -- so this reports it as an **error**: the program will not start, and saying so before it is run is the whole of what is left to do about it |
+| a control named `Close` | the other way: the control wins and the **method** is lost. The form still runs, so this is a **warning**, and it is the only thing that will ever say so |
 | a property the class lacks | applied, ignored, never mentioned |
 | a `.js` `sources` does not list | never loaded; the symptom is a `ReferenceError` in another file |
 | a key nothing reads | ignored — `"format"` was in one of this repository's own examples |
@@ -1582,9 +1582,17 @@ writing it wrong on purpose and watching what the runtime did:
 The collision pair is the subtle one, and it is why the test is `in` against a
 **bare `Form`**: the same mistake resolves two different ways depending on what
 it lands on — a method is shadowed by the control, a getter with no setter
-shadows it — and neither way says anything. Asked of `MainForm` instead, which is
-the obvious thing to reach for, it would answer yes for every control and method
-the IDE itself has and flag a user's `Tabs` or `Editor`.
+shadows it. Asked of `MainForm` instead, which is the obvious thing to reach for,
+it would answer yes for every control and method the IDE itself has and flag a
+user's `Tabs` or `Editor`.
+
+**Which of the two it is, is asked by trying it** — `form[name] = undefined` on
+that same bare `Form`, taken back again — because a getter with no setter throws
+under strict mode and every source here is strict. That is the same question the
+loader asks, which is the only way the answer cannot drift from it, and it is one
+throw per collision found rather than per control. It matters because the two
+futures are different things to do about: a read-only member stops the program
+starting, a shadowed method does not.
 
 The manifest's legal keys are **`Ide.ProjectFile`'s own**: it is a `Record`, so
 what a `project.json` may hold is a list this class does not have to keep.

@@ -4465,6 +4465,96 @@ class Spike extends Form {
                  check("...with the hook reaching it too",
                        all.includes("caught: TypeError"), all);
                  waiting--;
+                 this.menuNameTakenByForm();
+             });
+    }
+
+    /*
+     * And a **menu item** cannot be called it either, nor a command.
+     *
+     * The loader binds all three blocks a `.form` names something in --
+     * `children`, `menus` and `actions` -- on the form by name, with the same
+     * `JS_SetPropertyStr`. The control one started looking at its answer and
+     * these two did not, so the form went on loading with an item that
+     * `MnuActions_Click` could never reach and `this.MnuActions` answered the
+     * *form's* action list. Found by closing the same gap in the IDE's checks
+     * and noticing the runtime had it twice more.
+     *
+     * Both are asserted, because they are two call sites and a fix to one is
+     * not a fix to the other -- which is the whole reason this was three
+     * silences and not one.
+     */
+    menuNameTakenByForm() {
+        waiting++;
+
+        const proj = File.Join(SCRATCH, "menu-taken");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "menutaken", startup: "Taken2", sources: ["Taken2.js"] });
+        File.SaveJson(File.Join(proj, "Taken2.form"), {
+            format: "bintana-form/1",
+            class: "Taken2",
+            properties: { Width: 200, Height: 100 },
+            /* One mistake per form, because the loader builds the commands
+             * before the menus and stops at the first: two in one file would
+             * assert the same call site twice and the other one never. */
+            menus: [{ name: "MnuTop", text: "T",
+                      children: [{ name: "Actions", text: "A" }] }],
+            children: [],
+        });
+        File.Save(File.Join(proj, "Taken2.js"),
+                  "Application.OnError = (m) => { print('caught: ' + m); };\n" +
+                  "class Taken2 extends Form { Form_Open() { print('ran'); } }\n");
+
+        const said = [];
+        Exec([Application.Executable, proj], { Timeout: 20000 },
+             (line) => said.push(line),
+             (code) => {
+                 const all = said.join("\n");
+
+                 check("a menu item named after a Form member stops the form",
+                       code !== 0, String(code));
+                 check("...saying which item and why",
+                       all.includes("menu item 'Actions'") &&
+                       all.includes("a Form already has a member of that name"), all);
+                 check("...and the form never opened", !all.includes("ran"), all);
+                 waiting--;
+                 this.commandNameTakenByForm();
+             });
+    }
+
+    /* The command half, which is a different call site in the same file. */
+    commandNameTakenByForm() {
+        waiting++;
+
+        const proj = File.Join(SCRATCH, "action-taken");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "acttaken", startup: "Taken3", sources: ["Taken3.js"] });
+        File.SaveJson(File.Join(proj, "Taken3.form"), {
+            format: "bintana-form/1",
+            class: "Taken3",
+            properties: { Width: 200, Height: 100 },
+            actions: [{ name: "Controls", text: "C" }],
+            children: [],
+        });
+        File.Save(File.Join(proj, "Taken3.js"),
+                  "Application.OnError = (m) => { print('caught: ' + m); };\n" +
+                  "class Taken3 extends Form { Form_Open() { print('ran'); } }\n");
+
+        const said = [];
+        Exec([Application.Executable, proj], { Timeout: 20000 },
+             (line) => said.push(line),
+             (code) => {
+                 const all = said.join("\n");
+
+                 check("a command named after a Form member stops the form too",
+                       code !== 0, String(code));
+                 check("...saying which command and why",
+                       all.includes("action 'Controls'") &&
+                       all.includes("a Form already has a member of that name"), all);
+                 check("...and the form never opened", !all.includes("ran"), all);
+                 waiting--;
                  this.strictChecks();
              });
     }

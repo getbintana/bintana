@@ -1291,6 +1291,15 @@ person who wrote it either.
   after the path and drop the shortcuts (`Ide.MenuBar.sanitise`). The same lookup
   is what makes it work at all: a handler assigned from code is found like any
   other, which is how a menu built at run time gets one.
+- **And that assignment is checked now.** `make_item` and `bta_actions_build`
+  both looked away from `JS_SetPropertyStr`, exactly as the control loader did
+  before `bta_form.c` was fixed: a menu item or a command named `Actions`,
+  `Menus`, `Controls`, `DefaultButton` or `CancelButton` bound to **nothing**,
+  `MnuActions_Click` never fired, and the form loaded as if all were well.
+  Both refuse the form now, saying which item and why. The rule the fix needed:
+  **nothing is wired until the name is ours** -- the `GSimpleAction` is built
+  *after* the bind, because a refused bind frees the wrapper and an action
+  already in the group would hold a handler pointing at freed memory.
 - **`Menu` needs the widget to be in a form's tree already.** It names handlers on
   `w->form`, and a widget that has not been added to anything has none -- the
   property setter says so where it is set. Build, `Add`, *then* assign `Menu`;

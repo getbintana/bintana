@@ -16,7 +16,10 @@
  *                                   and a command are bound by name too, so the
  *                                   same is true of them
  *     a control named `Actions`     `this.Actions` answers the *form's* actions,
- *                                   so the control has no name at all
+ *                                   so the control has no name at all. The
+ *                                   runtime refuses such a form now -- control,
+ *                                   menu item and command alike -- so what is
+ *                                   left here is saying so before it is run
  *     a property the class lacks    applied, ignored, never mentioned
  *     a `.js` sources does not list not loaded; the symptom is a ReferenceError
  *                                   in another file entirely
@@ -60,6 +63,32 @@ Ide.Check = class Check {
     formMembers() {
         if (!this.bareForm) this.bareForm = new Form();
         return this.bareForm;
+    }
+
+    /*
+     * Whether the loader will *refuse* this name or merely shadow what it
+     * lands on.
+     *
+     * Asked by trying the assignment, which is the same question the loader
+     * asks and the only one that cannot drift from it: a getter with no setter
+     * throws under strict mode, and every source of this project is strict
+     * whatever its pragma says. The note is taken back afterwards so the sample
+     * answers the same way next time -- a name that *did* assign left an own
+     * property behind, and `delete` on anything else does nothing.
+     *
+     * Only ever asked about a name that is already a member, which is rare:
+     * this is a throw per collision found and not per control.
+     */
+    refusedByForm(name) {
+        const form = this.formMembers();
+
+        try {
+            form[name] = undefined;
+        } catch (e) {
+            return true;
+        }
+        delete form[name];
+        return false;
     }
 
     /*
@@ -183,12 +212,27 @@ Ide.Check = class Check {
                 });
             seen[node.name] = true;
 
-            if (node.name in this.formMembers())
+            if (node.name in this.formMembers()) {
+                /*
+                 * Two different futures, and the reader does different things
+                 * about them -- so they are two different rows. A **read-only**
+                 * member (`Actions`, `Menus`, `Controls`, `DefaultButton`,
+                 * `CancelButton`) makes the bind fail, and all three loaders
+                 * refuse the form now: the program will not start. Anything
+                 * else is shadowed, the form runs, and this is the only thing
+                 * that will ever say so.
+                 */
+                const refused = this.refusedByForm(node.name);
+
                 found.push({
-                    kind: "Warning", file: rel, line: 0,
-                    text: `${node.name} is also a member of Form: one of ` +
+                    kind: refused ? "Error" : "Warning", file: rel, line: 0,
+                    text: refused
+                        ? `${node.name} is also a member of Form, and a ` +
+                          `read-only one: the form will not load`
+                        : `${node.name} is also a member of Form: one of ` +
                           `the two is unreachable under that name`,
                 });
+            }
         }
 
         /*

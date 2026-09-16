@@ -256,6 +256,14 @@ declares its fields.
    and `EventNames()` now, out of their own C tables rather than a second list,
    and the sample the IDE asks is borrowed from its own menu bar.
 
+   **And it found the runtime doing the same thing twice more.** Once the checks
+   started asking *what else does a form bind by name*, the obvious next question
+   was whether the loader looks at the answer when it binds them -- and
+   `bta_menu.c` had the unchecked `JS_SetPropertyStr` that `bta_form.c` had been
+   fixed for, in two places. A menu item called `Actions` bound to nothing and
+   nobody was told. Both refuse the form now; `docs/strict-plan.md` has it, since
+   that is where the first one was written down.
+
 None of this stops being *a lookup and nothing else*, which is the rule that path
 is held to.
 

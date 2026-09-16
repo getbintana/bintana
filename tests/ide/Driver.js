@@ -9012,6 +9012,15 @@ function* p_errors(ide) {
         yield* until(() => ide.Shell.Text.includes(TMP), 200);
         check("the terminal starts in the project's directory",
               ide.Shell.Text.includes(TMP), JSON.stringify(ide.Shell.Text));
+
+        /*
+         * **Waited for on its own**, because it is a second thing arriving down
+         * the same pty: `/bin/pwd` prints the directory and *then* exits, and
+         * what the IDE writes when it exits is a line of its own. Waiting only
+         * for the first and reading the second was a race that the ordinary
+         * build won and `tests/asan.sh` -- four times slower -- lost.
+         */
+        yield* until(() => ide.Shell.Text.includes("shell"), 200);
         check("...and says when the shell ended",
               ide.Shell.Text.includes("shell"), JSON.stringify(ide.Shell.Text));
 
@@ -9563,6 +9572,9 @@ function* p_check(ide) {
           said.some((r) => r.text.includes("Twice") && r.kind === "Error"));
     check("a control whose name is a member of Form is reported",
           has("Close is also a member of Form"), JSON.stringify(said));
+    check("...as a warning, because a method is shadowed and the form still runs",
+          said.some((r) => r.text.includes("Close is also") && r.kind === "Warning"),
+          JSON.stringify(said));
     check("a property the class does not have is reported",
           has("Button has no Txt"), JSON.stringify(said));
     check("a handler for an event it does not raise is reported",
@@ -9582,6 +9594,17 @@ function* p_check(ide) {
           has("two controls are called ActDup"), JSON.stringify(said));
     check("a menu item whose name is a member of Form is reported",
           has("Actions is also a member of Form"), JSON.stringify(said));
+    /*
+     * And as an **error**, which is the half that changed: `Actions` is
+     * read-only, so the bind fails and the runtime refuses the form -- for a
+     * control, a menu item and a command alike. A row that said "one of the two
+     * is unreachable" about a program that will not start was the wrong
+     * sentence, so the two futures are two rows now.
+     */
+    check("...as an error, since a read-only member stops the form loading",
+          said.some((r) => r.text.includes("Actions is also") &&
+                           r.text.includes("will not load") && r.kind === "Error"),
+          JSON.stringify(said));
     check("a handler for an event a menu item does not raise is reported",
           has("does not raise Chose"), JSON.stringify(said));
     check("...and a member a menu item does not have",
