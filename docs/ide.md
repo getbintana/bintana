@@ -857,6 +857,14 @@ in the file, which is most of what one wants from a local. Going further needs a
 -- is in
 [runtime-api.md](runtime-api.md#the-one-thing-eval-is-still-missing-from-and-the-shape-its-answer-has-to-take).
 
+**How far that limit could be pushed, and whether pushing it needs an analyser,
+is measured in [completion-plan.md](completion-plan.md)** -- and the measurement
+says the blocker is a *declaration* and not an analyser. Two numbers from it:
+only 12 % of this tree's declarations state their own type, and TypeScript,
+handed a complete `.d.ts`, resolves **exactly** what a table lookup resolves --
+`this.ide.` is `any` for it too, because a constructor parameter is not written
+down anywhere.
+
 Two things it has to be careful about, both because the handler runs on the
 keystroke:
 
