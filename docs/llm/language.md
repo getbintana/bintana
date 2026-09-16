@@ -180,5 +180,10 @@ hangs instead of failing. See [validation.md](validation.md).
 
 ## Strict mode
 
-`"use strict";` at the top of a `.js` is the habit in this repository. Nothing
-requires it.
+`"use strict";` at the top of a `.js` is the habit in this repository, and it is
+**redundant**: the runtime evaluates every source with `JS_EVAL_FLAG_STRICT`, so
+your code is strict whether it says so or not. Measured with a file that carries
+no pragma and assigns to an undeclared name -- it throws
+`noDeclarada is not defined` rather than making a global. The habit is worth
+keeping anyway, because it says out loud what the file is and it survives being
+read outside this runtime.
