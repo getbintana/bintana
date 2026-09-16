@@ -1487,6 +1487,51 @@ returning it for a childless node marks that node a leaf *permanently*, and
 children added later never appear. `bta_tree.c` returns an empty store instead
 and hides the expander reactively.
 
+#### Reaching a row, which is shared with TableView and used to be quadratic
+
+**A node's row is found by descending the tree by index, not by searching for
+it.** Both controls used to scan the whole flattened list looking for the row
+whose item was the node, each with its own copy, saying *"scanning is the only
+way: the tree model flattens on demand and has no node-to-row map"*. There is no
+map and it was not the only way: GTK3 addressed a row by `GtkTreePath` — a path
+of indices — and GTK4 only spelled it differently,
+`gtk_tree_list_model_get_child_row` for a root and
+`gtk_tree_list_row_get_child_row` for a child. Descending those *is* a
+`GtkTreePath`, and it costs one indexed step per level instead of one pass over
+everything on screen. The one copy is `bta_treerows.c`; each control declares
+its node type in three one-line accessors and nothing else.
+
+It mattered because `AutoExpand` is on unless turned off. Measured, filling with
+it on — a folder of nine files repeated, and flat (every node a root, which is
+what a project with its files in one directory looks like):
+
+| nodes | `TreeView` nested | flat | `TableView` nested | flat |
+|---|---|---|---|---|
+| 400 | 29 → 12 ms | 21 → 11 ms | 25 → 15 ms | 15 → 14 ms |
+| 800 | 133 → 25 ms | 84 → 24 ms | 79 → 28 ms | 28 → 27 ms |
+| **1600** | **578 → 57 ms** | **328 → 53 ms** | **317 → 67 ms** | 64 → 63 ms |
+
+Doubling the nodes used to roughly quadruple the time; now it about doubles.
+`TableView`'s flat column is the one that does not move, and that is the clue to
+the other half: **it never had the second bug.**
+
+**How a tree opens is the model's job, and `TreeView` was doing it by hand.**
+`TableView` passes `autoexpand` to `gtk_tree_list_model_new` and lets GTK open
+each row as it arrives; `TreeView` passed `FALSE` and opened every node itself on
+every `Add`, under a comment saying the model's own *"would undo every
+Collapse"*. Measured side by side, the two mechanisms answer the same on all
+three questions they can differ on — a childless node reads open, an explicit
+`CollapseNode` survives until that node gains another child, and with
+`AutoExpand` off nothing opens itself — so the fear was of something neither
+does, and the hand-rolled half cost a reveal per node.
+
+It takes **both** halves to keep those three answers, which is how the
+difference was found: GTK's autoexpand opens a row as it arrives but does *not*
+reopen one collapsed by hand, and the explicit reveal of the **parent** when a
+child arrives is what does. `TableView` had both; `TreeView` now has the same
+two, and `tests/widgets` pins the three answers against both controls rather
+than against one.
+
 A node opens and closes by name: `ExpandNode(key)`, `CollapseNode(key)`,
 `Expanded(key)`, and `ExpandAll`/`CollapseAll` for the lot. Opening a buried node
 opens the way to it, and so does selecting one — a closed node is not in the

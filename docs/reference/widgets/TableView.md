@@ -296,7 +296,7 @@ Give a row a `Key` and the table becomes a hierarchy with headings over it.
 | `Add(values, { Key, Parent, Icon })` | a node. `Key` is its name — any string, unique in this table; `Parent` is the key of the node it goes under, and no parent is a root; `Icon` decorates its first column |
 | `Key` | the selected node's key; assigning selects it, opening the way to it. `""` selects nothing |
 | `Exists(key)` | → whether that node is there. `false` on a flat table rather than a refusal: it is the question you ask *before* you know |
-| `AutoExpand` | a node comes open when it gains children. Default `true` |
+| `AutoExpand` | a node opens as it arrives, and again when it gains a child after being closed by hand. Default `true` |
 | `ExpandNode(key)` | opens it, and the way to it |
 | `CollapseNode(key)` | closes it |
 | `ExpandAll()` | opens every node |

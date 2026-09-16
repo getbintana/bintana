@@ -158,7 +158,7 @@ somebody pressed the down arrow would be unusable.
 | `ExpandAll()` | opens every node |
 | `CollapseAll()` | closes every node |
 | `Expanded(key)` | → whether it is open |
-| `AutoExpand` | a node comes open when it gains children. Default `true` |
+| `AutoExpand` | a node opens as it arrives, and again when it gains a child after being closed by hand. Default `true` |
 
 `ExpandNode` and not `Expand`: [`Expand`](Widget.md) is `Widget`'s layout
 property, on every control, and means *absorb the slack in the box*. A method of
@@ -168,6 +168,14 @@ that name here would shadow it.
 filling and the tree arrives with every branch closed, which is what a big tree
 wants; the alternative is `CollapseAll()` afterwards, which does the same work
 twice.
+
+Two halves do it, and both are `TableView`'s: `GtkTreeListModel`'s own
+autoexpand opens each row as it arrives -- which is also why a node with nothing
+under it reads as open, and why its arrow is hidden rather than drawn -- and an
+explicit reveal of the **parent** reopens a node that was closed by hand and then
+gained a child, which GTK's does not do. `TreeView` used to have neither, opening
+every node itself on every `Add`; what that cost is in
+[widgets.md](../../widgets.md#reaching-a-row-which-is-shared-with-tableview-and-used-to-be-quadratic).
 
 ## What goes wrong
 

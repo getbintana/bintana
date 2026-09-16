@@ -304,59 +304,45 @@ static GtkTreeListModel *table_tree_model(BtaWidget *w)
 }
 
 /*
- * The row a node is showing as, or NULL when an ancestor is collapsed and it is
- * therefore not in the flattened list at all. Scanning is the only way: the tree
- * model flattens on demand and has no node-to-row map. It is what `TreeView`
- * does, for the same reason.
+ * What this widget's nodes are, for the walk that reaches their rows.
+ *
+ * The walk is `bta_treerows.c`, shared with `TreeView`: the two are the same
+ * three pieces -- a store of roots, a `GtkTreeListModel` over it, and nodes that
+ * know their parent -- and each had its own copy of the same scan, comment and
+ * all. All that differs is the node type, so that is all this declares.
  */
+static gpointer table_shape_parent(gpointer node)
+{
+    return ((BtaTableRow *)node)->parent;
+}
+
+static GListModel *table_shape_children(gpointer node)
+{
+    return G_LIST_MODEL(((BtaTableRow *)node)->children);
+}
+
+static GListModel *table_shape_roots(BtaWidget *w)
+{
+    return G_LIST_MODEL(table_state(w)->rows);
+}
+
+static const BtaTreeShape table_shape = {
+    table_shape_parent, table_shape_children, table_shape_roots,
+};
+
 static GtkTreeListRow *table_row_of(BtaWidget *w, BtaTableRow *node)
 {
-    GtkTreeListModel *tree = table_tree_model(w);
-    if (!tree)
-        return NULL;
-
-    GListModel *model = G_LIST_MODEL(tree);
-    guint       n     = g_list_model_get_n_items(model);
-
-    for (guint i = 0; i < n; i++) {
-        GtkTreeListRow *row  = g_list_model_get_item(model, i);
-        BtaTableRow    *item = row ? gtk_tree_list_row_get_item(row) : NULL;
-        bool            hit  = (item == node);
-
-        g_clear_object(&item);
-        if (hit)
-            return row;                      /* the caller owns it */
-        g_clear_object(&row);
-    }
-    return NULL;
+    return bta_tree_row_of(w, table_tree_model(w), node, &table_shape);
 }
 
 static void table_set_expanded(BtaWidget *w, BtaTableRow *node, bool open)
 {
-    GtkTreeListRow *row = table_row_of(w, node);
-
-    if (!row)
-        return;
-    gtk_tree_list_row_set_expanded(row, open);
-    g_object_unref(row);
+    bta_tree_set_expanded(w, table_tree_model(w), node, open, &table_shape);
 }
 
-/* Opens everything between the root and this node, and the node itself when
- * asked. Top down, because each ancestor's row only comes into existence once
- * the one above it is open. */
 static void table_reveal(BtaWidget *w, BtaTableRow *node, bool with_node)
 {
-    GPtrArray *chain = g_ptr_array_new();
-
-    for (BtaTableRow *at = node->parent; at; at = at->parent)
-        g_ptr_array_insert(chain, 0, at);
-
-    for (guint i = 0; i < chain->len; i++)
-        table_set_expanded(w, chain->pdata[i], true);
-    g_ptr_array_free(chain, TRUE);
-
-    if (with_node)
-        table_set_expanded(w, node, true);
+    bta_tree_reveal(w, table_tree_model(w), node, with_node, &table_shape);
 }
 
 /* The node a key names, or NULL. */

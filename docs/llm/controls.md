@@ -622,7 +622,7 @@ Three things differ, and each for a reason worth knowing:
 
 | Member | |
 |---|---|
-| `AutoExpand` | expand a node when it gains children. Default `true` |
+| `AutoExpand` | open a node as it arrives, and again when it gains a child after being closed by hand. Default `true`. A node with nothing under it reads as open too, which hides nothing and is what turns the arrow off. `TableView`'s is the same mechanism and answers the same |
 | `Key` | the selected node's key; assigning selects. Keys are yours to choose — a path, an id |
 | `Text` (ro) | the selected node's text |
 | `Count` (ro) | how many nodes, at every level |
@@ -655,7 +655,7 @@ A list with columns, **and its rows may nest**. The control to reach for wheneve
 | `Sortable` | makes the headers clickable. **The table does not reorder itself** — it raises `Sort` |
 | `Selection` (ro) | the selected indices |
 | `Add(values, [options])` | one row, as an array of strings. A row shorter than there are columns reads `""` for the rest. Clears an on-demand `Count`. **`options` is `{ Key, Parent, Icon }`, and a row with a `Key` is a node**: the first one makes this table a tree, `Parent` is the key of the node it goes under (absent is a root), and `Icon` is the picture for its first column — the same one `TreeView.Add` takes, so a node need not be added and then decorated |
-| `AutoExpand` | a node comes open when it gains children. Default `true`. A tree only |
+| `AutoExpand` | opens a node as it arrives, and again when it gains a child after being closed by hand. Default `true`. A tree only. The same mechanism `TreeView` uses, answering the same |
 | `Key` | the selected node's key; assigning selects, opening the way to it. `""` selects nothing. A tree only |
 | `Exists(key)` | → whether that node is there. `false` on a flat table rather than a refusal: it is the question you ask before you know |
 | `ExpandNode(key)`, `CollapseNode(key)` | opens or closes it. Opening opens the way to it too, since a row only exists once its ancestors are open. Not `Expand`, which is `Widget`'s layout property |

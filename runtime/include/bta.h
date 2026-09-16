@@ -771,6 +771,37 @@ void bta_menu_popup_show(BtaWidget *w, double x, double y);
 /* Drops it: called from the widget finaliser, which owns the popover. */
 void bta_menu_popup_free(BtaWidget *w);
 
+/*
+ * Reaching the row a node shows as, for the two widgets that nest
+ * (`runtime/src/bta_treerows.c`).
+ *
+ * `TreeView` and `TableView` in tree mode are the same three pieces -- a store
+ * of roots, a `GtkTreeListModel` over it, and nodes that know their parent --
+ * and they had one copy each of the same walk. What differs between them is
+ * only the node type, so that is all a caller declares: three one-line
+ * accessors, and the walk is shared.
+ *
+ * `children` is the node's own child store and `roots` the top-level one, which
+ * is what a node with no parent lives in.
+ */
+typedef struct {
+    gpointer    (*parent)(gpointer node);     /* NULL for a root */
+    GListModel *(*children)(gpointer node);
+    GListModel *(*roots)(BtaWidget *w);
+} BtaTreeShape;
+
+/* The row, or NULL when an ancestor is collapsed and it is therefore not in the
+ * flattened list at all. The caller owns what comes back. */
+GtkTreeListRow *bta_tree_row_of(BtaWidget *w, GtkTreeListModel *tree,
+                                gpointer node, const BtaTreeShape *shape);
+/* Open or close one node, if it has a row to open. */
+void bta_tree_set_expanded(BtaWidget *w, GtkTreeListModel *tree, gpointer node,
+                           bool open, const BtaTreeShape *shape);
+/* Open everything between the root and this node -- and the node itself when
+ * asked, which is what makes a node added later show its own children. */
+void bta_tree_reveal(BtaWidget *w, GtkTreeListModel *tree, gpointer node,
+                     bool with_node, const BtaTreeShape *shape);
+
 /* Whether the icon search path (the desktop's, plus <project>/icons) has an
  * icon by that name. `widget` may be NULL for the default display. */
 bool bta_icon_available(GtkWidget *widget, const char *name);

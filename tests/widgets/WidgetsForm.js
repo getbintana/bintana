@@ -10576,6 +10576,47 @@ class Spike extends Form {
         throws("a key that is not there is refused", () => t.ExpandNode("nope"));
         eq("and Expanded just says no for it", t.Expanded("nope"), false);
 
+        /*
+         * **`TreeView` and `TableView` answer these three the same way**, and
+         * that is what is being pinned: they reach a node's row through one
+         * shared walk now (`bta_treerows.c`) and they expand through one
+         * mechanism, where before each had its own. Nothing here is a new
+         * promise -- every line was measured against both controls *before* the
+         * merge and says what they already did -- which is what makes it a
+         * merge and not a change.
+         *
+         * The third is the one a mechanism is easiest to get wrong on: GTK's
+         * own autoexpand re-opens a row when it gains a child, and an explicit
+         * `CollapseNode` has to survive until then.
+         */
+        for (const kind of ["TreeView", "TableView"]) {
+            const t = Widget.New(kind);
+            if (kind === "TableView") t.Columns = [{ title: "Name" }];
+
+            const put = (key, parent) => (kind === "TableView"
+                ? t.Add([key], parent ? { Key: key, Parent: parent } : { Key: key })
+                : t.Add(key, key, parent));
+
+            put("leaf");
+            eq(`${kind}: a childless node reads as open`, t.Expanded("leaf"), true);
+
+            put("p");
+            put("k1", "p");
+            t.CollapseNode("p");
+            eq(`${kind}: closing one closes it`, t.Expanded("p"), false);
+            put("k2", "p");
+            eq(`${kind}: and a new child opens it again`, t.Expanded("p"), true);
+
+            const shut = Widget.New(kind);
+            if (kind === "TableView") shut.Columns = [{ title: "Name" }];
+            shut.AutoExpand = false;
+            shut.Add(...(kind === "TableView" ? [["p"], { Key: "p" }] : ["p", "P"]));
+            shut.Add(...(kind === "TableView"
+                ? [["k"], { Key: "k", Parent: "p" }] : ["k", "K", "p"]));
+            eq(`${kind}: with AutoExpand off nothing opens itself`,
+               shut.Expanded("p"), false);
+        }
+
         /* Turned off, a tree comes up closed and the application says what to
          * open -- which is what a tree with thousands of nodes needs. */
         const shut = new TreeView();

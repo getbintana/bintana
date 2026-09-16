@@ -105,55 +105,45 @@ static bool tree_autoexpands(BtaWidget *w)
 }
 
 /*
- * The row a node is showing as, or NULL when an ancestor is collapsed and it
- * is therefore not in the flattened list at all.  Scanning is the only way:
- * the tree model flattens on demand and has no node-to-row map.
+ * What this widget's nodes are, for the walk that reaches their rows.
+ *
+ * The walk itself is `bta_treerows.c`, shared with `TableView` -- the two had a
+ * copy each of the same scan, down to the comment, and the scan is what made
+ * filling a tree quadratic. All that differs between them is the node type, so
+ * all that is declared here is the node type.
  */
+static gpointer tree_shape_parent(gpointer node)
+{
+    return BTA_TREE_NODE(node)->parent;
+}
+
+static GListModel *tree_shape_children(gpointer node)
+{
+    return G_LIST_MODEL(BTA_TREE_NODE(node)->children);
+}
+
+static GListModel *tree_shape_roots(BtaWidget *w)
+{
+    return G_LIST_MODEL(tree_roots(w));
+}
+
+static const BtaTreeShape tree_shape = {
+    tree_shape_parent, tree_shape_children, tree_shape_roots,
+};
+
 static GtkTreeListRow *tree_row_of(BtaWidget *w, BtaTreeNode *node)
 {
-    GListModel *model = G_LIST_MODEL(tree_model(w));
-    guint       n     = g_list_model_get_n_items(model);
-
-    for (guint i = 0; i < n; i++) {
-        GtkTreeListRow *row  = g_list_model_get_item(model, i);
-        BtaTreeNode    *item = row ? gtk_tree_list_row_get_item(row) : NULL;
-        bool            hit  = (item == node);
-
-        g_clear_object(&item);
-        if (hit)
-            return row;                 /* the caller owns it */
-        g_clear_object(&row);
-    }
-    return NULL;
+    return bta_tree_row_of(w, tree_model(w), node, &tree_shape);
 }
 
 static void tree_set_expanded(BtaWidget *w, BtaTreeNode *node, bool open)
 {
-    GtkTreeListRow *row = tree_row_of(w, node);
-    if (!row)
-        return;
-    gtk_tree_list_row_set_expanded(row, open);
-    g_object_unref(row);
+    bta_tree_set_expanded(w, tree_model(w), node, open, &tree_shape);
 }
 
-/*
- * Opens everything between the root and this node, so it can be seen -- and
- * the node itself when asked, which is what makes a node added later show its
- * own children.  Top down, because each ancestor's row only comes into
- * existence once the one above it is open.
- */
 static void tree_reveal(BtaWidget *w, BtaTreeNode *node, bool with_node)
 {
-    GPtrArray *chain = g_ptr_array_new();
-    for (BtaTreeNode *at = node->parent; at; at = at->parent)
-        g_ptr_array_insert(chain, 0, at);
-
-    for (guint i = 0; i < chain->len; i++)
-        tree_set_expanded(w, chain->pdata[i], true);
-    g_ptr_array_free(chain, TRUE);
-
-    if (with_node)
-        tree_set_expanded(w, node, true);
+    bta_tree_reveal(w, tree_model(w), node, with_node, &tree_shape);
 }
 
 /*
@@ -276,8 +266,8 @@ static void build_tree(BtaWidget *w)
     GtkTreeListModel *tree = gtk_tree_list_model_new(
         G_LIST_MODEL(roots),          /* takes ownership */
         FALSE,                        /* rows are GtkTreeListRow, not passthrough */
-        FALSE,                        /* autoexpand: ours, see tree_reveal --
-                                       * the model's would undo every Collapse */
+        TRUE,                         /* autoexpand: the model's, as TableView's
+                                       * has always been -- see below */
         tree_child_model, NULL, NULL);
 
     GtkSingleSelection *selection =
@@ -380,10 +370,32 @@ static JSValue tree_add(JSContext *ctx, JSValueConst this_val,
     /* The index borrows; the key string belongs to the node. */
     g_hash_table_insert(index, node->key, node);
 
-    /* What autoexpand on the model used to do, done here instead -- the model
-     * cannot do it and still allow a node to be closed again. */
-    if (tree_autoexpands(w))
-        tree_reveal(w, node, true);
+    /*
+     * **Opening is the model's job, which is what `TableView` always did.**
+     *
+     * This used to open the node by hand on every `Add`, under a comment saying
+     * the model's own autoexpand *"would undo every Collapse"*. `TableView` has
+     * passed `autoexpand` to `gtk_tree_list_model_new` since it grew a tree, and
+     * measured side by side the two answer the same on all three questions a
+     * mechanism can differ on: a childless node reads open, an explicit
+     * `CollapseNode` survives until the node gains another child, and with
+     * `AutoExpand` off nothing opens itself. `tests/widgets` pins all three
+     * against both controls.
+     *
+     * So the fear was of something neither does, and the hand-rolled version
+     * cost a reveal per node -- which, before the descent in `bta_treerows.c`,
+     * was a scan of everything on screen per node. Filling 1600 flat nodes was
+     * 328 ms and is 53; the table is in `docs/widgets.md`.
+     *
+     * **Both halves, because each answers a different one of the three.** The
+     * model's autoexpand opens a row as it arrives, which is what makes a
+     * childless node read open; it does *not* reopen a row that was collapsed
+     * by hand and then gained a child -- measured -- and this line is what
+     * does, exactly as `table_add_node` does it. One without the other is a
+     * behaviour change, which is how this was found.
+     */
+    if (node->parent && tree_autoexpands(w))
+        tree_reveal(w, node->parent, true);
 
     g_object_unref(node);
 
@@ -786,6 +798,7 @@ static JSValue tree_set_autoexpand(JSContext *ctx, JSValueConst this_val,
 
     g_object_set_data(G_OBJECT(w->inner), AUTOEXPAND_KEY,
                       on ? GINT_TO_POINTER(1) : NULL);
+    gtk_tree_list_model_set_autoexpand(tree_model(w), on != 0);
     return JS_UNDEFINED;
 }
 
