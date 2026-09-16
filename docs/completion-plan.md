@@ -43,7 +43,8 @@ But locals are not where the gap is. The shape that is actually written is
 
 | | |
 |---|---|
-| `this.<field>.` written | **1410 times** |
+| `this.<field>.` written -- a **lowercase** field, which is what the shape means here | **1410 times** |
+| ...against every `this.<anything>.`, capitals included | 2285 |
 | ...resolvable from a `new` in the same class | 314 (22 %) |
 | ...**`this.ide.` alone** | **509** (36 % of all of them) |
 | ...`this.designer.` | 103 |
@@ -57,8 +58,9 @@ TypeScript is the best JavaScript analyser there is, and it was run over this
 tree to find out. Two results.
 
 **It does not merely know nothing about Bintana; it knows something wrong.**
-Over `ide/modules/Runner.js`, ten errors, nine of them *"Cannot find name"* --
-and the tenth:
+Over `ide/modules/Runner.js`, most of what it says is the honest *"Cannot find
+name"* -- `Exec`, `Application`, `Locale`, `Namespace`, `Ide`. Two of them are
+not:
 
 ```
 Property 'Exists' does not exist on type
@@ -67,8 +69,26 @@ Property 'Exists' does not exist on type
 
 It resolved `File` against **the DOM's `File`**. The globals of this language
 collide with the web platform's -- `File`, `Screen`, `Image`, `Text`, `Message`
--- so declaring the surface and turning `lib.dom` off is not an optimisation, it
-is the difference between silence and a confident wrong answer.
+-- so the surface has to be declared *and* the web platform taken out of the
+picture, or the difference is not silence against knowledge but silence against a
+confident wrong answer.
+
+**Which knob does that was measured, because the obvious one is wrong.** Over the
+same file:
+
+| | errors | of them about the DOM |
+|---|---|---|
+| the default, with `lib.dom` | 9 | **2**, the `BlobPart` above |
+| `"lib": ["es2022"]` | 9 | **0** |
+| `noLib: true` | 8 | **8**, every one `TS2318` |
+
+`noLib` throws away the *language*, not the web: those eight are
+`Cannot find global type` for `Array`, `Boolean`, `Function`, `IArguments`,
+`Number`, `Object`, `RegExp` and `String` -- all of which this runtime has, and
+none of which the generator below would ever produce, since it reads
+`Dictionary.Keys` over Bintana's own globals and `Object` is empty here on
+purpose. **`lib` narrowed to the language is the knob**; `noLib` is the one that
+looks like it and leaves TypeScript unable to type a string literal.
 
 **And with a complete `.d.ts`, it resolves exactly what a lookup resolves.**
 Asked of the language service, at the position after the dot:
@@ -102,10 +122,14 @@ annotation is.
 2. **Let `tests/api.sh` guard it.** That check already counts exactly that
    surface; comparing it against the generated file is what stops the two
    drifting, the same bargain `docs/llm/` already has.
-3. **`noLib`, and it is not optional** -- see the DOM `File` above.
+3. **`"lib": ["es2022"]`, and it is not optional** -- see the table above. Not
+   `noLib`, which is the knob that looks right and takes the language with it.
 4. **A `.d.ts` per project, generated from the `.form` files**: each form is a
    class whose controls are typed fields. It comes out of the same table
-   `Ide.Names.tableOf` already builds.
+   `Ide.Names.tableOf` already builds -- **and inherits that table's blind spot**:
+   it flattens `children`, a menu is not among them, so the generated class would
+   have no `MnuSave` either. Point 8 below is the same hole and has to be closed
+   first, in all three places it lives.
 5. **The 32 JSDoc lines**, one per constructor that takes a parameter.
 
 **When stage 0 is done, VS Code works on a Bintana project** -- completion, go to
@@ -113,13 +137,28 @@ definition and type checking -- with no Bun, no Node and no change to this IDE.
 
 ## Stage 1 -- the lookups this IDE can do without any of it
 
-6. **A field or a local assigned `new X()`**: 471 places, and when `X` is a form
-   or component of the project the answer is its controls and its methods, which
-   is machinery `Ide.Check` already exercises over arbitrary files.
+6. **A field or a local assigned `new X()`**, and when `X` is a form or component
+   of the project the answer is its controls and its methods, which is machinery
+   `Ide.Check` already exercises over arbitrary files.
+
+   **Two numbers and not a total**, which is how this was first written down and
+   it was wrong to add them: **157** is a count of *declarations*
+   (`const x = new Foo()`), **314** is a count of *uses*
+   (`this.<field>.` where that field has a `new` in the same file). A sum of the
+   two counts nothing. The 314 reproduces -- 42 distinct names, led by
+   `this.git.` 30, `this.chrome.` 26, `this.tabs.` 22, each declared
+   `name = new Ide.Something` in the class that uses it -- and a review of this
+   document measured 121–139 for the same idea under three narrower readings. The
+   disagreement is about what counts as *the same class*, which is exactly the
+   thing to settle before sizing this, and is a reason to carry the reading with
+   the number rather than the number alone.
 7. **The JSDoc line from stage 0**, read the same way: the 509 case, as a lookup.
-8. **And the menu gap**, which lives in `Completion.controls()` -- it flattens
-   `children` and a menu is not among them, so `this.MnuSave.` proposes nothing.
-   Fixing it there fixes the popup, `Ide.Live` and `Ide.Check` at once.
+8. **And the menu gap, which lives in three places and not one.** Each flattens a
+   form's `children`, and a menu is not among them, so `this.MnuSave.` proposes
+   nothing and neither check looks at a menu item:
+   `Completion.js:153`, `Names.js:176` and `Check.js:197` -- `Ide.Check` does not
+   go through `Completion` at all, it has `Names.tableOf` *and* a walk of its
+   own. Three, and the `.d.ts` of point 4 is a fourth reader of the same table.
 
 None of this stops being *a lookup and nothing else*, which is the rule that path
 is held to.

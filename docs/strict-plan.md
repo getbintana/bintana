@@ -55,12 +55,32 @@ anybody's typo, because the runtime leaves its own notes on a widget as ordinary
 own properties -- and most are created **late**. `__columns` is written when an
 application assigns `Columns`, which is application code at any moment.
 
-| note | who writes it | where it is read |
-|---|---|---|
-| `__columns` | `bta_table.c`, on `Columns =` | four places in the same file |
-| `__children` | C, `JS_DefinePropertyValueStr` | `bta_widget.c` |
-| `__menus`, `__actions` | `bta_menu.c` | the serialiser, `Form.Menus` |
-| `__declared`, `__design`, `__item`, `__field` | `rad.js`, through `hiddenBag` | `rad.js` |
+| note | who writes it | where it is read | when |
+|---|---|---|---|
+| `__columns` | `bta_table.c`, on `Columns =` | four places in the same file | whenever `Columns` is assigned |
+| `__painter` | `bta_paint.c`, `PAINTER_PROP` | the paint path | **on the first frame**, later than any of the others |
+| `__children` | C, `JS_DefinePropertyValueStr` | `bta_widget.c` | at build |
+| `__menus`, `__actions` | `bta_menu.c` | the serialiser, `Form.Menus` | at build |
+| `__declared` | **both**: `bta_form.c` defines and writes it, `rad.js` writes it too | `rad.js` | at build, and on every `Fill()` |
+| `__design`, `__item` | `rad.js`, through `hiddenBag` | `rad.js` | designer only |
+
+**Five in C, two in `rad.js`, one shared** -- which is not how this table read
+when it was written, and the three corrections are worth keeping rather than
+quietly fixing:
+
+- **`__painter` was missing entirely** (`bta_paint.c`), and it is the one that
+  matters most to the staging below: it is created *on the first frame a
+  `DrawingArea` paints*, later than `__columns`, so stage 3's *once it is built*
+  is not late enough and the mode would throw on the first repaint.
+- **`__declared` is not `rad.js`'s alone.** C defines and writes it too, so a
+  `WeakMap` private to `rad.js` would make those writes invisible to the readers
+  next to it. It cannot move in stage 1.
+- **`__field` was in this table and is not a note on a widget at all** -- it is
+  the flag on the plain descriptor `makeField` returns, read as a type test for
+  `Field.List` and `Field.Record`. It never touches a widget and never goes
+  through `hiddenBag`, so `preventExtensions` does not affect it and a WeakMap
+  keyed by a widget has no widget to key on. (`__type` is rightly absent for a
+  different reason: it lives on the constructor.)
 
 They are **invisible today by arrangement**: a `__` name, the enumerable bit
 left off, and -- as `bta_table.c` puts it -- *invisible to the serialiser
@@ -94,8 +114,8 @@ rules out is holding a value *without* marking it, which is a different thing.
 
 | | to |
 |---|---|
-| the four C notes | a field on the struct, reported in `gc_mark` and released in the finalizer -- `w->form` and `w->menu` are the shape |
-| the four `rad.js` notes | a `WeakMap` in the module's own scope, keyed by the widget |
+| the six C writes -- `__columns`, `__painter`, `__children`, `__menus`, `__actions`, `__declared` | a field on the struct, reported in `gc_mark` and released in the finalizer -- `w->form` and `w->menu` are the shape |
+| the two that are `rad.js`'s alone -- `__design`, `__item` | a `WeakMap` in the module's own scope, keyed by the widget |
 
 `WeakMap` was checked and is there (`Map` and `Set` too; `Symbol` and `eval` are
 not). A `WeakMap` is private to the file that declares it, invisible to
@@ -104,7 +124,8 @@ and it lets the widget go when the widget goes.
 
 **No caller changes.** The methods that reach these notes already exist --
 `Declared()`, `SetDesign()`, `DesignValue()`, `Item`, `SetItem` -- and `hiddenBag`
-becomes their storage rather than their pattern. What moves is where the value
+becomes their storage rather than their pattern. `Declared()` is the one with two
+sides to satisfy, since C writes what it reads. What moves is where the value
 sits, not how anybody asks for it.
 
 ## What it buys beyond the check
@@ -126,14 +147,20 @@ the flag on says so.
 
 ## Staging
 
-1. **Move the four `rad.js` notes to a `WeakMap`.** No C, no flag, no behaviour
-   change -- `hiddenBag` is the only thing that knows, and the suite is the
-   proof.
-2. **Move the four C notes onto their structs**, reported in `gc_mark` and
-   released in the finalizer. The table's is the one with plumbing (below).
+1. **Move the two notes that are `rad.js`'s alone -- `__design` and `__item` --
+   to a `WeakMap`.** No C, no flag, no behaviour change: `hiddenBag` is the only
+   thing that knows, and the suite is the proof. **Two and not four**: `__field`
+   is not a widget note, and `__declared` is shared with C.
+2. **Move the six that C writes onto their structs** -- `__columns`, `__painter`,
+   `__children`, `__menus`, `__actions` and `__declared` -- reported in `gc_mark`
+   and released in the finalizer. `__declared` lands here rather than in stage 1
+   because both sides write it, and whatever holds it has to be reachable from
+   both. The table's is the one with plumbing (below).
 3. **Then `JS_PreventExtensions` on a widget once it is built**, behind the
    switch. Nothing to pre-create if 1 and 2 are done, which is how they are
-   checked.
+   checked -- and *once it is built* has to mean after the first frame, or it has
+   to mean nothing at all for a `DrawingArea`, because `__painter` arrives then.
+   That is the one place the moment is not obvious.
 4. **A test that writes a name wrong and demands the exception**, in
    `tests/widgets`, and one that writes it *right* beside it -- the second is
    what says the setters still work.
@@ -174,7 +201,9 @@ it cannot give is the half that needs no execution at all.
   assertion the comment above names -- an abort on `JS_FreeRuntime`, loud, at
   teardown, which `tests/asan.sh` exercises on every project.
 - **A widget that legitimately wants a note of its own.** Nothing in this tree
-  does one today -- measured, the eight above are all of them -- but an
+  does one today -- the eight in the table are all of them, and that count was
+  wrong once already, which is the reason to re-read it rather than trust it --
+  but an
   application storing state on a control is ordinary JavaScript, and under this
   mode it would start throwing. That is the mode doing its job, and it is also
   the reason it is off by default and named for development.
