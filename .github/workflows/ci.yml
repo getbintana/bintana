@@ -145,3 +145,210 @@ jobs:
           BINTANA: ./build-novte/bintana
           BINTANA_LIB_PATH: ${{ github.workspace }}/lib
         run: ./tests/run.sh
+
+  # The downloadable one: the same tree `cmake --install` lays down, as a
+  # tarball, so somebody without a compiler can run the IDE and the examples.
+  #
+  # **The IDE is data, not a binary.** It is the `ide/` project directory --
+  # `.js`, `.form`, `po/`, `icons/` -- interpreted by `bintana`, and the runtime
+  # finds everything relative to its own executable: the IDE at
+  # `<bin>/../share/bintana/ide` (that is what the `bintana-ide` launcher execs),
+  # the shipped libraries at `<bin>/../share/bintana/lib`, and the reference F1
+  # reads at `<bin>/../share/doc/bintana/docs/reference`. So the tarball *is* the
+  # install prefix, extracted anywhere:
+  #
+  #     tar xzf bintana-<version>-linux-<arch>.tar.gz
+  #     ./bin/bintana-ide                    # the IDE, from a shell
+  #     ./bin/bintana-ide ~/my-project       # ...opening a project
+  #     ./bin/bintana share/bintana/examples/hello
+  #
+  # **Built with the minimum dependencies on purpose.** The optional ones
+  # (sqlite, soup, GStreamer, VTE) would each become a shared library the
+  # downloader must have; without them the binary still runs, and the features
+  # that need one say which package is missing. A distribution package is the
+  # opposite trade and is a packager's to make.
+  #
+  # **What it does not bundle is GTK.** The tarball needs GTK 4.10+ and
+  # GtkSourceView 5 on the machine, and glibc at least as new as ubuntu-24.04's
+  # (2.39) because it is built here. An AppImage, or a build on an older base,
+  # is the next step if it has to reach further back.
+  package:
+    runs-on: ubuntu-24.04
+
+    # The default token is read-only on a new repository, and `gh release
+    # create` needs to write. Only this job asks for it.
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config \
+            libgtk-4-dev libgtksourceview-5-dev
+
+      # `--prefix <staging>` at install time, configured for `/usr`: the archive
+      # is then exactly a prefix tree -- `bin/`, `share/`, `lib/`, `include/` --
+      # and `bintana.pc` still says `/usr`, which is where a real install puts
+      # it.  The two paths that resolve from the binary are *relative* hops, so
+      # they do not care where the tree is extracted: that is the argument
+      # `tools/bintana-ide.in` and `lib_candidates` both make.
+      - name: Build and stage
+        run: |
+          set -euo pipefail
+          cmake -S . -B build -DCMAKE_INSTALL_PREFIX=/usr
+          cmake --build build -j"$(nproc)"
+
+          version=$(grep -m1 -oP 'project\(bintana VERSION \K[0-9][^ )]*' CMakeLists.txt)
+          name="bintana-${version}-linux-$(uname -m)"
+
+          cmake --install build --prefix "$PWD/stage/$name"
+          tar -C "stage/$name" -czf "$name.tar.gz" .
+
+          echo "$name.tar.gz" > tarball-name.txt
+          ls -l "$name.tar.gz"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bintana-linux
+          path: bintana-*.tar.gz
+          if-no-files-found: error
+
+      # And, when the push is a tag, the same file where a person looks for a
+      # download rather than in the run's artifacts. `gh` is on the runner and
+      # the token is the run's own; the release is created on the first tag that
+      # finds none.
+      - name: Attach it to the release, when this is a tag
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          file=$(cat tarball-name.txt)
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" \
+                               --generate-notes
+          gh release upload "$GITHUB_REF_NAME" "$file" --clobber
+
+  # A fourth job, and the first one that is not Linux: the port's Stage 0/1
+  # (docs/portability-plan.md), whose deliverable is an error list as much as a
+  # build.
+  #
+  # **What it proves today is the build, `tests/api.sh`, and that the zipped
+  # tree runs** (`tools/windows-portable.sh`): the console project reads
+  # `runtime/src` and the references, so it is the check that says the runtime
+  # *runs* on Windows and not merely compiles, and it is run again out of the
+  # staged tree -- which is what proves the DLL closure. The windowed projects
+  # are deliberately not here: they need a desktop session, and the suite's
+  # display handling (`xvfb-run`, `tests/icons`/`styles` reading a Linux theme
+  # off the disk) is Linux's as it stands. VTE does not exist on Windows and is
+  # not installed; `Terminal` refuses by name there, which is what
+  # `BTA_HAVE_VTE` was made optional for. The IDE is started once and left to a
+  # timeout as a diagnostic, not as a gate -- whether this runner has a desktop
+  # is not something this file can know.
+  #
+  # The packages are MSYS2's UCRT64 ones, which is the toolchain the plan named:
+  # MinGW-w64 with the UCRT C runtime, and GTK4 from the same ecosystem. **Never
+  # mix an MSVC GStreamer with a MinGW GTK4** -- two GTK4 copies in one process --
+  # which is why GStreamer is not in this list yet.
+  windows:
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    # The release the zip is attached to, when the push is a tag.
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-gtk4
+            mingw-w64-ucrt-x86_64-gtksourceview5
+            mingw-w64-ucrt-x86_64-sqlite3
+            mingw-w64-ucrt-x86_64-libsoup3
+
+      - name: Build
+        run: |
+          cmake -S . -B build -G Ninja
+          cmake --build build -j"$(nproc)"
+
+      # The same check the Linux jobs run, and it needs no display: it parses C
+      # and Markdown. `.exe` is named because the shell's `-x` test is what
+      # `tests/api.sh` uses to find the binary, and the answer differs by
+      # platform.
+      - name: The documented surface
+        env:
+          BINTANA: ./build/bintana.exe
+        run: ./tests/api.sh
+
+      # The download: the executable, everything it links, the GTK data GTK
+      # opens by name, the IDE as the project directory it is and the `.cmd`
+      # launcher -- `tools/windows-portable.sh`, which is where the recipe and
+      # its reasons live.
+      - name: Package the portable build
+        run: |
+          set -euo pipefail
+          version=$(grep -m1 -oP 'project\(bintana VERSION \K[0-9][^ )]*' CMakeLists.txt)
+          name="bintana-${version}-windows-$(uname -m)"
+
+          tools/windows-portable.sh build "stage/$name"
+          (cd "stage/$name" && cmake -E tar cf "$GITHUB_WORKSPACE/$name.zip" \
+                                              --format=zip -- .)
+          echo "$name.zip" > zip-name.txt
+          ls -l "$name.zip"
+
+      # And the staged tree is run, because a zip nobody opened is a guess.
+      # `--version` proves the DLL closure; the api check proves the runtime
+      # works out of a tree that is not the build one (`tests/api.sh` finds the
+      # repository from its own path, so the project is still the checkout).
+      - name: The staged tree runs
+        run: |
+          set -euo pipefail
+          name=$(basename "$(cat zip-name.txt)" .zip)
+          "stage/$name/bin/bintana.exe" --version
+          BINTANA="$PWD/stage/$name/bin/bintana.exe" ./tests/api.sh
+
+      # The first look at the IDE on Windows, and **not a hard step**: whether
+      # this runner has a desktop for a window to open on is not something this
+      # file can know. The log says what happened -- a timeout and no error is
+      # the good outcome.
+      - name: A first look at the IDE
+        continue-on-error: true
+        run: |
+          name=$(basename "$(cat zip-name.txt)" .zip)
+          timeout 20 "stage/$name/bin/bintana.exe" "stage/$name/share/bintana/ide" \
+            && echo "the IDE exited by itself" \
+            || echo "the IDE did not exit within 20s (exit $?) -- a timeout here is the good outcome"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bintana-windows
+          path: bintana-*.zip
+          if-no-files-found: error
+
+      - name: Attach it to the release, when this is a tag
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          file=$(cat zip-name.txt)
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" \
+                               --generate-notes
+          gh release upload "$GITHUB_REF_NAME" "$file" --clobber

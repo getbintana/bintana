@@ -968,7 +968,7 @@ static bool install_globals(BtaApp *app)
                       JS_NewCFunction(ctx, js_libraries, "Libraries", 1));
 
     /* Where the runtime binary lives, so a project can re-invoke it. */
-    char *exe = g_file_read_link("/proc/self/exe", NULL);
+    char *exe = bta_exe_path();
     JS_SetPropertyStr(ctx, application, "Executable",
                       JS_NewString(ctx, exe ? exe : "bintana"));
     g_free(exe);
@@ -1268,7 +1268,10 @@ static void lib_candidates(const char *project, GPtrArray *out)
 
     const char *env = g_getenv("BINTANA_LIB_PATH");
     if (env && *env) {
-        char **parts = g_strsplit(env, ":", -1);
+        /* `G_SEARCHPATH_SEPARATOR` and not a colon: the variable holds paths,
+         * and on Windows a path begins with `C:` -- splitting on the colon
+         * there cuts the first one in two. */
+        char **parts = g_strsplit(env, G_SEARCHPATH_SEPARATOR_S, -1);
         for (int i = 0; parts[i]; i++)
             if (*parts[i])
                 g_ptr_array_add(out, g_strdup(parts[i]));
@@ -1278,7 +1281,7 @@ static void lib_candidates(const char *project, GPtrArray *out)
     g_ptr_array_add(out, g_build_filename(g_get_user_data_dir(), "bintana",
                                           "lib", NULL));
 
-    char *exe = g_file_read_link("/proc/self/exe", NULL);
+    char *exe = bta_exe_path();
     if (exe) {
         char *bin = g_path_get_dirname(exe);
         char *up  = g_path_get_dirname(bin);

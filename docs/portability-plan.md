@@ -1,10 +1,26 @@
 # Portability: a plan, not a feature
 
-**Nothing in this document is implemented.** What it depended on is: the IDE's
-output pane is a read-only `TextEditor` over `Exec`, `Terminal` is optional at
-build time (`BTA_HAVE_VTE`) and `Widget.Available` is what hides a control this
-build cannot run — so nothing on the IDE's critical path needs VTE, which has no
-Windows port. See [`widgets.md`](widgets.md#a-build-without-vte) and
+**In progress.** The `windows` job in `.github/workflows/ci.yml` builds with
+MSYS2/UCRT64, runs `tests/api.sh` and stages a portable zip
+(`tools/windows-portable.sh`), which is Stage 0/1 as far as it has got: what it
+proves is the build, that the runtime runs, and that the staged tree it ships
+runs too; the windowed suite and a real terminal are still the out-of-scope list
+at the end, and the zip itself is unverified until somebody opens it on a
+Windows desktop. The
+Stage 1 pieces that are in: the CMake guards (`gio-unix`, `libm` and pthread
+only where they exist), the process layer (`setsid`/`killpg` compiled out,
+`g_subprocess_force_exit` as the one ending `Stop` and `Kill` have, `uname`
+asked of GLib, `HasDisplay` true), `bta_exe_path` in place of `/proc/self/exe`,
+`G_SEARCHPATH_SEPARATOR` for `BINTANA_LIB_PATH`, the console's UTF-8 code page,
+and `%'` replaced by the same grouping written out. `Exec`'s `Control` stream is
+**refused with a sentence** on Windows rather than accepted and ignored: it is a
+descriptor a child inherits by number, and there is no such thing there.
+
+What the port depended on is: the IDE's output pane is a read-only `TextEditor`
+over `Exec`, `Terminal` is optional at build time (`BTA_HAVE_VTE`) and
+`Widget.Available` is what hides a control this build cannot run — so nothing on
+the IDE's critical path needs VTE, which has no Windows port. See
+[`widgets.md`](widgets.md#a-build-without-vte) and
 [`ide.md`](ide.md#running).
 
 The target is **native Windows**, built with **MSYS2 / MinGW-w64 (UCRT64)**.

@@ -1272,6 +1272,40 @@ person who wrote it either.
   the one AGENTS.md already names: icons resolve against Adwaita under xvfb, so a
   run that is about an icon has to be a real one (`tests/ide` answers two
   assertions more on a real theme, which is that difference and not a bug).
+- **The platform guards are the Windows port, and nothing here compiles them.**
+  `#ifdef G_OS_WIN32` in `bta_sys.c` (`exec_signal_group`, `exec_control_fd`,
+  `bta_exe_path`, `env_has_display`, `env_os`), `locale_group_double` in
+  `bta_locale.c`, `SetConsoleOutputCP` in `main.c`, and the `GIOUNIX`/`pthread`
+  guards in `CMakeLists.txt` -- plus `runtime/src/bta_desktop.c`, which compiles
+  there and means nothing there. **There is no local way to compile any of
+  them**: the `windows` job in `.github/workflows/ci.yml` is the compiler, and
+  its first runs are the toolchain spike `docs/portability-plan.md` asked for.
+  The same job stages the downloadable zip through
+  [`tools/windows-portable.sh`](tools/windows-portable.sh) -- DLLs by `ldd`,
+  GTK's runtime data by hand, caches rewritten to bare names because an
+  absolute path is nobody's on the machine that unzips it. None of that script
+  has run on a Windows desktop either; the log, and whoever unzips it, are the
+  test.
+  Editing one blind and pushing is the loop, so keep each guard as small as it
+  can be and put the *why* next to it -- the CI log names a line, not a reason.
+- **When Xvfb is missing, ask for it; another virtual display is a false red
+  suite.** `run.sh` exports `HEADLESS=1` and the runner's only way to honour it
+  is `xvfb-run`, so a machine without `xorg-x11-server-Xvfb` stops with *no
+  display and no xvfb-run* — and the tempting next move is a display that is
+  already there. **Measured, on this machine, in one afternoon:** under
+  `weston --backend=headless` the windows map and are never allocated, and
+  `tests/widgets` came back **3215 passed, 75 failed** — `Bounds()` answering
+  0x0, `never became true`, `expected 372x200, got 400x229` — every one of them
+  a layout assertion reading as a real bug in code nobody had touched; the same
+  weston with Xwayland did not finish a run at all. With `Xvfb` installed the
+  same tree is **3263 passed, 0 failed**. The dependencies are in
+  [`docs/installing.md`](docs/installing.md#running-the-test-suite), and **when
+  one is missing the right move is to ask whoever is at the machine to install
+  it** — not to improvise a substitute and not to run on their screen. A
+  missing tool is one sentence; the alternatives cost more to disbelieve than
+  the install costs to do, and the half hour spent on them is the half hour
+  this note exists to save. `sudo dnf install xorg-x11-server-Xvfb xdotool` is
+  the whole of it here.
 - **A test that walks a focus order has to own every stop in it.** `Fixed1` in
   `tests/widgets` had five children by the time `testTabOrder` ran — a scroller
   another test left in it, focusable — so "past the last one the focus leaves"

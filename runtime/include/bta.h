@@ -743,6 +743,10 @@ void bta_scroll_watch(BtaWidget *w);
 
 /* --- File / Dir / Exec -------------------------------------------------- */
 void bta_sys_init(JSContext *ctx, JSValue global);
+/* Where this binary is -- `/proc/self/exe` or `GetModuleFileName`, one answer
+ * for the two callers that need it (`Application.Executable` and the library
+ * search). Newly allocated, or NULL where the platform will not say. */
+char *bta_exe_path(void);
 
 /* --- Desktop -------------------------------------------------------------
  *

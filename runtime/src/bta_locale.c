@@ -1059,22 +1059,55 @@ static int locale_decimals_for(double value)
 }
 
 /*
+ * A run of digits, prepended into `out` grouped from the right.
+ *
+ * The grouping follows `localeconv`'s rule and not a guess of three: the rule is
+ * a list, and its last entry repeats, which is how India groups the first three
+ * digits and then by twos.  A `CHAR_MAX` in it means *stop grouping here*.
+ *
+ * A function of its own because two callers group: an exact value's digits
+ * (`locale_group`) and a double already written out by `printf` (Windows, where
+ * the `%'` flag does not exist -- see `locale_group_double`).
+ */
+static void locale_group_run(GString *out, const char *digits, size_t n)
+{
+    struct lconv *lc   = localeconv();
+    const char   *sep  = lc->thousands_sep;
+    const char   *rule = lc->grouping;
+
+    size_t      left = n;
+    int         step = rule && *rule && *rule != CHAR_MAX ? *rule : 0;
+    const char *r    = rule;
+
+    while (left > 0) {
+        size_t take = (step > 0 && (size_t)step < left) ? (size_t)step : left;
+
+        g_string_prepend_len(out, digits + (left - take), take);
+        left -= take;
+
+        if (left > 0 && sep && *sep)
+            g_string_prepend(out, sep);
+
+        /* The next entry of the rule, and the last one repeats forever. */
+        if (step > 0 && r && *r) {
+            if (*(r + 1) && *(r + 1) != CHAR_MAX)
+                r++;
+            step = (*r == CHAR_MAX) ? 0 : *r;
+        }
+    }
+}
+
+/*
  * A run of digits with the locale's separators put in, and no double anywhere.
  *
  * `units` and `scale` are a decimal's own -- 1999 and 2 for 19.99 -- so this is
  * how an exact value reaches a label without being converted to floating point
  * on the way, which would be the one place the exactness could still be lost.
- *
- * The grouping follows `localeconv`'s rule and not a guess of three: the rule is
- * a list, and its last entry repeats, which is how India groups the first three
- * digits and then by twos.  A `CHAR_MAX` in it means *stop grouping here*.
  */
 static char *locale_group(int64_t units, int scale)
 {
     struct lconv *lc    = localeconv();
     const char   *point = lc->decimal_point[0] ? lc->decimal_point : ".";
-    const char   *sep   = lc->thousands_sep;
-    const char   *rule  = lc->grouping;
 
     bool neg = units < 0;
     /* On the absolute value, and via a string so INT64_MIN has nowhere to
@@ -1097,28 +1130,9 @@ static char *locale_group(int64_t units, int scale)
         g_string_append(frac, all + (n - scale));
     }
 
-    /* The whole part, grouped from the right. */
-    GString *out  = g_string_new(NULL);
-    int      left = (int)whole->len;
-    int      step = rule && *rule && *rule != CHAR_MAX ? *rule : 0;
-    const char *r = rule;
+    GString *out = g_string_new(NULL);
 
-    while (left > 0) {
-        int take = step > 0 && step < left ? step : left;
-
-        g_string_prepend_len(out, whole->str + (left - take), take);
-        left -= take;
-
-        if (left > 0 && sep && *sep)
-            g_string_prepend(out, sep);
-
-        /* The next entry of the rule, and the last one repeats forever. */
-        if (step > 0 && r && *r) {
-            if (*(r + 1) && *(r + 1) != CHAR_MAX)
-                r++;
-            step = (*r == CHAR_MAX) ? 0 : *r;
-        }
-    }
+    locale_group_run(out, whole->str, whole->len);
 
     if (scale > 0) {
         g_string_append(out, point);
@@ -1132,6 +1146,39 @@ static char *locale_group(int64_t units, int scale)
     g_free(digits);
     return g_string_free(out, FALSE);
 }
+
+#ifdef G_OS_WIN32
+/*
+ * The same grouping for a double, by hand: `%'.*f` is a POSIX extension that
+ * UCRT's printf does not implement, and it would come out with no separators
+ * at all -- or, worse, with a stray character where the flag was.
+ *
+ * The digits come from `printf`, which takes the locale's decimal point from
+ * `setlocale` the ordinary way; the separators are the only part put in here,
+ * by the same rule `locale_group_run` follows.
+ */
+static char *locale_group_double(double value, int decimals)
+{
+    struct lconv *lc    = localeconv();
+    const char   *point = lc->decimal_point[0] ? lc->decimal_point : ".";
+
+    char   *plain = g_strdup_printf("%.*f", decimals, value);
+    char   *at    = strstr(plain, point);
+    size_t  whole = at ? (size_t)(at - plain) : strlen(plain);
+    size_t  skip  = plain[0] == '-' ? 1 : 0;
+
+    GString *out = g_string_new(NULL);
+
+    if (skip)
+        g_string_append_c(out, '-');
+    locale_group_run(out, plain + skip, whole - skip);
+    if (at)
+        g_string_append(out, at);       /* the point and what follows it */
+
+    g_free(plain);
+    return g_string_free(out, FALSE);
+}
+#endif
 
 /*
  * Locale.Number(value, [decimals]) -- grouped, with the desktop's separators.
@@ -1189,8 +1236,12 @@ static JSValue js_locale_number(JSContext *ctx, JSValueConst this_val,
     /* g_strdup_printf rather than a buffer: the widest a double can print is
      * 432 characters with separators in it, and a number nobody sized is a
      * number somebody gets wrong. */
-    char   *shown = g_strdup_printf("%'.*f", decimals, value);
-    JSValue out   = JS_NewString(ctx, shown);
+#ifdef G_OS_WIN32
+    char *shown = locale_group_double(value, decimals);
+#else
+    char *shown = g_strdup_printf("%'.*f", decimals, value);
+#endif
+    JSValue out = JS_NewString(ctx, shown);
     g_free(shown);
     return out;
 }

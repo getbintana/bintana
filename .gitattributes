@@ -1,0 +1,11 @@
+# Line endings are part of what this repository is.
+#
+# The tests read the C and the Markdown as text and match patterns per line --
+# `tests/api` splits `docs/llm/controls.md` at `^## ` headings, and a heading
+# that arrived as `Desktop\r` is a section nothing can find.  A Windows checkout
+# with `core.autocrlf=true` (git for Windows' default) rewrites every text file,
+# so the `windows` job in CI would fail on the check for a reason that has
+# nothing to do with what it is checking.  `eol=lf` makes the working tree the
+# same bytes on every platform; binary files are detected by git's own rules and
+# left alone.
+* text=auto eol=lf

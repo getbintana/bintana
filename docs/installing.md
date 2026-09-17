@@ -124,9 +124,54 @@ bintana --version                        # the runtime's own release
 program and the `Version` of `bintana.pc`; an *application's* version is
 `Application.Version`, out of its own `project.json`.
 
+**Per-user is the other half**, and it is not this install at all: a project can
+put *itself* in the user's menu from the IDE — *Project → Install as user
+application…* — which writes one `.desktop` file under
+`~/.local/share/applications` pointing at the runtime and the project. No root,
+no prefix, and nothing here (`Desktop.Entries` is the runtime's own door to
+those files, in [`llm/library.md`](llm/library.md#desktopentries); the IDE's
+half is in [`ide.md`](ide.md#installing-it-in-the-menu)).
+
 `./tests/install.sh` does all of the above into a staging prefix under `/tmp`
 and starts the *installed* IDE through the installed launcher on a display of
 its own — so *would an install work* has an answer that installs nothing.
+
+### A downloadable build
+
+The `package` job in the CI produces exactly that tree as one file —
+`bintana-<version>-linux-<arch>.tar.gz` — and every push keeps it as an
+artifact of the run; a tag also attaches it to the release. The `windows` job
+does the same for Windows, as a `.zip` with the GTK runtime data
+(`tools/windows-portable.sh`), and that one **is unverified**: it is built and
+staged by the job, but the IDE on Windows is a first look and not a claim.
+
+It is the install prefix, so it is extracted anywhere and runs without
+installing:
+
+```sh
+tar xzf bintana-0.1.0-linux-x86_64.tar.gz
+./bin/bintana-ide                    # the IDE
+./bin/bintana share/bintana/examples/hello
+```
+
+**The IDE is in there because the IDE is data.** The runtime, the `ide/`
+project directory, the shipped libraries, the examples and the reference under
+`share/doc/` all resolve from the binary by *relative* hops, which is why
+moving the tree after the fact changes nothing. On Windows the same is true and
+the launcher is `bin\bintana-ide.cmd` — the IDE, from wherever the zip was
+unzipped to. What Windows needs that Linux does not is GTK's runtime data
+alongside: schemas, the icon themes, the gdk-pixbuf loaders and GtkSourceView's
+language specs, which the packaging script copies and arranges the way GLib's
+own prefix rule expects to find them.
+
+Three things it deliberately does not do: it does not bundle GTK (the machine
+needs GTK 4.10+ and GtkSourceView 5), it is built on `ubuntu-24.04` and so wants
+a glibc at least as new (2.39 — Fedora 40, Debian 13, Ubuntu 24.04), and it is
+built **without** the optional dependencies (`sqlite3`, `libsoup`, GStreamer,
+VTE) so that none of them becomes a shared library the downloader has to have.
+The features that need one say which package is missing, the same way a build
+without them always does. A distribution package makes the opposite trade, and
+that is the packager's to make.
 
 ## Uninstall
 
@@ -203,6 +248,13 @@ one for the few questions that need a real icon theme. `tests/install.sh` needs
 `Xvfb` and `xdotool` itself (it asks a display what the installed IDE drew), and
 `tests/asan.sh` expects **clang** plus its sanitizer runtime — Fedora's
 `compiler-rt` is enough, and `libasan` from gcc is not shipped there.
+
+**The suite is written against Xvfb, and a substitute display is a false red
+one.** Measured: under `weston --backend=headless` the windows map and are never
+allocated, so `tests/widgets` reported 75 failures — `Bounds()` answering 0x0 and
+`never became true` — every one of them a layout assertion in code nobody had
+touched; with `Xvfb` the same tree passes. When `xvfb-run` is missing, install it
+rather than borrowing whatever display is around.
 
 The HTTP tests start local servers with `python3`, and one of them makes a
 throwaway TLS certificate with `openssl`; where either tool is missing that step

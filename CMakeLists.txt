@@ -24,8 +24,12 @@ pkg_check_modules(GTK4 REQUIRED IMPORTED_TARGET gtk4>=4.10)
 pkg_check_modules(GTKSOURCE REQUIRED IMPORTED_TARGET gtksourceview-5>=5.0)
 # Part of glib, and already installed wherever gtk4 is: `Exec`'s third stream
 # wraps a descriptor the child inherits, which is `g_unix_input_stream_new`.
-# bta_sys.c was already POSIX-only (setsid, killpg), so this costs no port.
-pkg_check_modules(GIOUNIX REQUIRED IMPORTED_TARGET gio-unix-2.0)
+# **Unix only.**  Windows has no such stream and no gio-unix package at all;
+# `Exec`'s `Control` option is refused there with a sentence (bta_sys.c), and
+# the runtime needs none of it to build.
+if(NOT WIN32)
+    pkg_check_modules(GIOUNIX REQUIRED IMPORTED_TARGET gio-unix-2.0)
+endif()
 
 # Also part of glib: the plugin loader.  GModule is what makes `g_module_open`
 # one mechanism for a `.so`, a `.dll` and a `.dylib` alike -- and because a
@@ -79,8 +83,14 @@ add_library(quickjs STATIC
 target_include_directories(quickjs PUBLIC ${CMAKE_SOURCE_DIR}/vendor/quickjs)
 target_compile_definitions(quickjs PRIVATE _GNU_SOURCE)
 target_compile_options(quickjs PRIVATE -w)
-find_library(M_LIB m)
-target_link_libraries(quickjs PUBLIC ${M_LIB} pthread)
+# `libm` and pthread are POSIX: MinGW has neither, and QuickJS needs neither
+# there -- its Windows paths use the C runtime.  A `find_library` that fails
+# sets the variable to `M_LIB-NOTFOUND`, which is a configure error if it is
+# handed to `target_link_libraries`, so the whole line is guarded.
+if(NOT WIN32)
+    find_library(M_LIB m)
+    target_link_libraries(quickjs PUBLIC ${M_LIB} pthread)
+endif()
 
 # ------------------------------------------------------------- JS prelude ---
 # rad.js is baked into the binary so the runtime is a single self-contained
@@ -135,7 +145,10 @@ target_include_directories(bintana PRIVATE
     ${CMAKE_BINARY_DIR}/generated
 )
 target_link_libraries(bintana PRIVATE quickjs PkgConfig::GTK4 PkgConfig::GTKSOURCE
-                                       PkgConfig::GIOUNIX PkgConfig::GMODULE)
+                                       PkgConfig::GMODULE)
+if(GIOUNIX_FOUND)
+    target_link_libraries(bintana PRIVATE PkgConfig::GIOUNIX)
+endif()
 
 if(VTE_FOUND)
     target_link_libraries(bintana PRIVATE PkgConfig::VTE)

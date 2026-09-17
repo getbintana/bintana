@@ -9,6 +9,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifdef G_OS_WIN32
+#include <windows.h>
+#endif
+
 static void usage(void)
 {
     fputs("usage: bintana [run] <project-dir> [args...]\n"
@@ -49,6 +53,17 @@ int main(int argc, char **argv)
      * reason.  See the note above `Locale.Number` in bta_locale.c.
      */
     setlocale(LC_ALL, "");
+
+#ifdef G_OS_WIN32
+    /*
+     * And the console's own code page, which is not UTF-8 by default: without
+     * this every line this program prints -- `print`, `Logger`, a traceback --
+     * reaches a Windows terminal as mojibake, and the suite's output is
+     * unreadable in exactly the place it exists to be read from.
+     */
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+#endif
 
     const char *dir  = NULL;
     GPtrArray  *rest = g_ptr_array_new();

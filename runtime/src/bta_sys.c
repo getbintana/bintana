@@ -9,16 +9,60 @@
  */
 #include "bta.h"
 
-#include <gio/gunixinputstream.h>
-
 #include <glib/gstdio.h>
 
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/utsname.h>
 #include <unistd.h>
+
+/*
+ * The two things here that are Unix and not POSIX.
+ *
+ * `GUnixInputStream` is what this side reads an `Exec`'s third stream with: a
+ * pipe whose writing end becomes descriptor 3 in the child.  Windows has no
+ * `GUnixInputStream` and no descriptor a child inherits by number -- see
+ * `exec_control_fd`, which refuses that stream out loud there rather than
+ * accepting a callback that would never be called.  `uname` is the other one;
+ * `env_os` asks GLib instead where it does not exist.
+ */
+#ifndef G_OS_WIN32
+#include <gio/gunixinputstream.h>
+#include <sys/utsname.h>
+#endif
+
+#ifdef G_OS_WIN32
+#include <windows.h>
+#endif
+
+/*
+ * Where this binary is, which every platform answers its own way: `/proc` on
+ * Linux, `GetModuleFileName` on Windows.
+ *
+ * One helper because two callers ask it and neither may drift from the other:
+ * the runtime re-invokes itself (`Application.Executable`, which the IDE
+ * spawns a project with) and finds its libraries one hop from the binary
+ * (`lib_candidates`).  A path that resolves in one of those and not the other
+ * is a program that runs but cannot `uses` anything.
+ *
+ * NULL when it cannot be known, which is a state both callers handle: the
+ * library search falls back to its other five places, and `Executable` answers
+ * the bare word `bintana`.
+ */
+char *bta_exe_path(void)
+{
+#ifdef G_OS_WIN32
+    wchar_t wide[32768];
+    DWORD   n = GetModuleFileNameW(NULL, wide, G_N_ELEMENTS(wide));
+
+    if (n == 0 || n >= G_N_ELEMENTS(wide))
+        return NULL;
+    return g_utf16_to_utf8((const gunichar2 *)wide, (glong)n, NULL, NULL, NULL);
+#else
+    return g_file_read_link("/proc/self/exe", NULL);
+#endif
+}
 
 /* ------------------------------------------------------------------ File */
 
@@ -1088,15 +1132,35 @@ static void exec_maybe_finish(ExecJob *job)
     exec_job_free(job);
 }
 
-/* SIGTERM or SIGKILL to the child's whole group, falling back to the process
- * alone when the group is already gone -- which it can be, with the leader
- * exited and only what it started left. */
-static void exec_signal_group(pid_t pid, int sig)
+/*
+ * Ending a child, which is two verbs on Unix and one on Windows.
+ *
+ * POSIX: SIGTERM or SIGKILL to the child's whole group, falling back to the
+ * process alone when the group is already gone -- which it can be, with the
+ * leader exited and only what it started left.
+ *
+ * Windows: **there is no asking.** `Stop()` and `Kill()` are both
+ * `g_subprocess_force_exit`, because the platform has no SIGTERM for a process
+ * that is not looking at a console window, and a program that offers a
+ * graceful stop it cannot deliver is worse than one that says it cannot.  The
+ * process group is gone too: this reaches the child and not what a wrapper
+ * started under it, which is the documented cost and the reason the runner's
+ * hang guard is the thing to test Windows with.
+ */
+static void exec_signal_group(GSubprocess *proc, pid_t pid, bool force)
 {
+#ifdef G_OS_WIN32
+    (void)force;
+    if (proc)
+        g_subprocess_force_exit(proc);
+#else
+    int sig = force ? SIGKILL : SIGTERM;
+
     if (pid <= 0)
         return;
     if (killpg(pid, sig) != 0)
         kill(pid, sig);
+#endif
 }
 
 /*
@@ -1110,7 +1174,7 @@ static gboolean on_exec_force(gpointer data)
 
     job->force = 0;
     if (!job->reaped)
-        exec_signal_group(job->pid, SIGKILL);
+        exec_signal_group(job->proc, job->pid, true);
     return G_SOURCE_REMOVE;
 }
 
@@ -1134,7 +1198,7 @@ static gboolean on_exec_guard(gpointer data)
     if (JS_IsObject(job->handle))
         JS_SetPropertyStr(job->ctx, job->handle, "TimedOut", JS_TRUE);
 
-    exec_signal_group(job->pid, SIGTERM);
+    exec_signal_group(job->proc, job->pid, false);
 
     /* Zero means do not wait at all: SIGTERM and SIGKILL together, for a caller
      * that has no use for a graceful ending. */
@@ -1366,7 +1430,9 @@ static void exec_apply_options(JSContext *ctx, JSValueConst opts,
  */
 static void exec_child_setup(gpointer user_data)
 {
+#ifndef G_OS_WIN32
     setsid();
+#endif
 }
 
 /*
@@ -1466,14 +1532,10 @@ static JSValue exec_signal(JSContext *ctx, JSValueConst this_val,
         if (job->reaped || job->pid <= 0)
             return JS_FALSE;
 
-        int sig = magic ? SIGKILL : SIGTERM;
-
-        /* The group and not the process: killpg(pid) because the child was made
-         * the leader of its own group.  Falling back to the process alone if
-         * the group is gone -- which it can be, when the leader has exited and
-         * only what it started is left. */
-        if (killpg(job->pid, sig) != 0)
-            kill(job->pid, sig);
+        /* `Stop` asks and `Kill` makes -- where the platform has both.  On
+         * Windows there is one ending, and `exec_signal_group` is where that
+         * sentence lives. */
+        exec_signal_group(job->proc, job->pid, magic != 0);
         return JS_TRUE;
     }
     return JS_FALSE;
@@ -1540,6 +1602,13 @@ static GPtrArray *exec_build_argv(JSContext *ctx, JSValueConst list,
  * cannot share stdout with what the program prints: marking its lines with a
  * prefix would mean a program that prints the prefix breaks its own tooling,
  * silently. `-1` when no `Control` was given, which is every caller but one.
+ *
+ * **Windows refuses it rather than ignoring it** (`-2`, exception pending).
+ * A callback that is accepted and never called is the silent failure this
+ * whole runtime is written against, and there is no version of it to offer
+ * there: `g_subprocess_launcher_take_fd` is Unix-only, and so is
+ * `GUnixInputStream`. The debugger is the one caller in the tree, and it is
+ * Linux's for now.
  */
 static int exec_control_fd(JSContext *ctx, JSValueConst opts,
                            GSubprocessLauncher *launcher)
@@ -1557,6 +1626,11 @@ static int exec_control_fd(JSContext *ctx, JSValueConst opts,
     }
     JS_FreeValue(ctx, cb);
 
+#ifdef G_OS_WIN32
+    JS_ThrowInternalError(ctx,
+        "Exec: Control needs a descriptor a child inherits, which this platform has not got");
+    return -2;
+#else
     if (pipe(ends) != 0)
         return -1;
 
@@ -1566,6 +1640,7 @@ static int exec_control_fd(JSContext *ctx, JSValueConst opts,
        child goes away. */
     g_subprocess_launcher_take_fd(launcher, ends[1], 3);
     return ends[0];
+#endif
 }
 
 static GSubprocessLauncher *exec_launcher(JSContext *ctx, JSValueConst opts,
@@ -1617,6 +1692,13 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
     GSubprocessLauncher *launcher = exec_launcher(ctx, opts, split);
     int                  ctl_fd  = exec_control_fd(ctx, opts, launcher);
 
+    /* Refused, and the refusal is the answer: see exec_control_fd. */
+    if (ctl_fd == -2) {
+        g_object_unref(launcher);
+        g_ptr_array_unref(args);
+        return JS_EXCEPTION;
+    }
+
     GError      *err  = NULL;
     GSubprocess *proc = g_subprocess_launcher_spawnv(
         launcher, (const gchar * const *)args->pdata, &err);
@@ -1662,11 +1744,13 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
     job->err_eof = !split;   /* no second pipe is a second pipe already drained */
     job->in      = g_subprocess_get_stdin_pipe(proc);
     job->on_control = JS_UNDEFINED;
+#ifndef G_OS_WIN32
     if (ctl_fd >= 0) {
         job->control    = g_data_input_stream_new(
             g_unix_input_stream_new(ctl_fd, TRUE));
         job->on_control = JS_GetPropertyStr(ctx, opts, "Control");
     }
+#endif
 
     job->kill_after = exec_millis(ctx, opts, "KillAfter", EXEC_KILL_AFTER);
 
@@ -1912,7 +1996,7 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
     /* The two stages, the same ones the callback spelling arms on timers: asked
      * to end, then made to.  To the group, since the child leads one. */
     if (late) {
-        exec_signal_group(pid, SIGTERM);
+        exec_signal_group(proc, pid, false);
 
         bool     harder = kill_after == 0;
         GSource *force  = exec_wait_guard(priv, kill_after, &harder);
@@ -1921,7 +2005,7 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
             g_main_context_iteration(priv, TRUE);
 
         if (!w.done)
-            exec_signal_group(pid, SIGKILL);
+            exec_signal_group(proc, pid, true);
         while (!w.done)
             g_main_context_iteration(priv, TRUE);
 
@@ -2163,10 +2247,17 @@ static JSValue env_cwd_set(JSContext *ctx, JSValueConst this_val, JSValueConst v
  */
 static JSValue env_has_display(JSContext *ctx, JSValueConst this_val)
 {
+#ifdef G_OS_WIN32
+    /* A Windows session has a display and no variable says so: the two the
+     * Linux desktop publishes are about *which* one, and a runner asking this
+     * question must not go looking for Xvfb. */
+    return JS_TRUE;
+#else
     const char *x11     = g_getenv("DISPLAY");
     const char *wayland = g_getenv("WAYLAND_DISPLAY");
 
     return JS_NewBool(ctx, (x11 && *x11) || (wayland && *wayland));
+#endif
 }
 
 /*
@@ -3144,6 +3235,21 @@ void bta_sys_init(JSContext *ctx, JSValue global)
     JS_SetPropertyStr(ctx, env, "ProcessorCount",
                       JS_NewInt32(ctx, (int32_t)g_get_num_processors()));
 
+#ifdef G_OS_WIN32
+    {
+        /* The same two questions `uname` answers, asked of GLib: POSIX has
+         * `uname` and Windows has this. */
+        char *name    = g_get_os_info(G_OS_INFO_KEY_NAME);
+        char *version = g_get_os_info(G_OS_INFO_KEY_VERSION);
+
+        JS_SetPropertyStr(ctx, env, "OS",
+                          JS_NewString(ctx, name ? name : "Windows"));
+        JS_SetPropertyStr(ctx, env, "OSVersion",
+                          JS_NewString(ctx, version ? version : ""));
+        g_free(name);
+        g_free(version);
+    }
+#else
     struct utsname sys;
     if (uname(&sys) == 0) {
         JS_SetPropertyStr(ctx, env, "OS", JS_NewString(ctx, sys.sysname));
@@ -3152,6 +3258,7 @@ void bta_sys_init(JSContext *ctx, JSValue global)
         JS_SetPropertyStr(ctx, env, "OS", JS_NewString(ctx, ""));
         JS_SetPropertyStr(ctx, env, "OSVersion", JS_NewString(ctx, ""));
     }
+#endif
 
     JS_SetPropertyStr(ctx, global, "Environment", env);
 
