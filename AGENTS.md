@@ -1305,6 +1305,17 @@ person who wrote it either.
   test.
   Editing one blind and pushing is the loop, so keep each guard as small as it
   can be and put the *why* next to it -- the CI log names a line, not a reason.
+  **`windows.h` is a macro minefield and it arrives through GTK**: on Windows
+  `gdkwin32.h` includes it, so *every* file that includes `gtk.h` carries its
+  macros. `wincrypt.h` defines `PP_NAME` as `4`, which made
+  `enum { PP_NAME, PP_DIR, ... }` a syntax error three constants wide -- the
+  runtime's own enumerators are `BTA_PATH_*` for that reason. `vfw.h`'s
+  `SEARCH_KEY` is *not* reachable this way, so a name being in some Windows
+  header is not by itself a collision. And three Unix things compile out:
+  `poll.h` does not exist (`bta_debug.c`), `g_subprocess_launcher_set_child_setup`
+  is GLib's Unix API (`setsid`, in `bta_sys.c`), and `Exec`'s `Control` stream
+  is refused -- the same descriptor-inheritance that the debugger's channel
+  needs.
 - **When Xvfb is missing, ask for it; another virtual display is a false red
   suite.** `run.sh` exports `HEADLESS=1` and the runner's only way to honour it
   is `xvfb-run`, so a machine without `xorg-x11-server-Xvfb` stops with *no

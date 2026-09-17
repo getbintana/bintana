@@ -150,7 +150,14 @@ static JSValue sys_file_absolute(JSContext *ctx, JSValueConst this_val,
     return v;
 }
 
-enum { PP_NAME, PP_DIR, PP_EXT, PP_BASENAME };
+/*
+ * Path parts, and the names are prefixed for a reason worth keeping: this file
+ * includes `windows.h` on Windows, which is a macro minefield -- `PP_NAME` is
+ * `4` there (`wincrypt.h`), so a plain `enum { PP_NAME, PP_DIR, ... }` is
+ * `expected identifier before numeric constant` and every constant after it is
+ * never declared.  Ours are ours.
+ */
+enum { BTA_PATH_NAME, BTA_PATH_DIR, BTA_PATH_EXT, BTA_PATH_BASENAME };
 
 static JSValue sys_path_part(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv, int magic)
@@ -163,13 +170,13 @@ static JSValue sys_path_part(JSContext *ctx, JSValueConst this_val,
     JSValue v;
 
     switch (magic) {
-    case PP_NAME:
+    case BTA_PATH_NAME:
         out = g_path_get_basename(path);
         break;
-    case PP_DIR:
+    case BTA_PATH_DIR:
         out = g_path_get_dirname(path);
         break;
-    case PP_EXT: {
+    case BTA_PATH_EXT: {
         const char *dot = strrchr(path, '.');
         const char *sep = strrchr(path, G_DIR_SEPARATOR);
         out = (dot && (!sep || dot > sep)) ? g_strdup(dot + 1) : g_strdup("");
@@ -1427,13 +1434,18 @@ static void exec_apply_options(JSContext *ctx, JSValueConst opts,
  * interactive -- and interactive is `Terminal`, which has a real pty.
  *
  * Runs between fork and exec, so nothing here may allocate or take a lock.
+ *
+ * **Unix only, and so is the call that installs it**: `g_subprocess_launcher_
+ * set_child_setup` is part of GLib's Unix API and does not exist on Windows.
+ * There the child is a Windows process in Windows' own group, which is
+ * `exec_signal_group`'s problem and not one a `setsid` could solve.
  */
+#ifndef G_OS_WIN32
 static void exec_child_setup(gpointer user_data)
 {
-#ifndef G_OS_WIN32
     setsid();
-#endif
 }
+#endif
 
 /*
  * Ask a child to stop, or make it.
@@ -1614,7 +1626,9 @@ static int exec_control_fd(JSContext *ctx, JSValueConst opts,
                            GSubprocessLauncher *launcher)
 {
     JSValue cb;
+#ifndef G_OS_WIN32
     int     ends[2];
+#endif
 
     if (JS_IsUndefined(opts))
         return -1;
@@ -1657,7 +1671,9 @@ static GSubprocessLauncher *exec_launcher(JSContext *ctx, JSValueConst opts,
         G_SUBPROCESS_FLAGS_STDOUT_PIPE | G_SUBPROCESS_FLAGS_STDIN_PIPE |
         (split ? G_SUBPROCESS_FLAGS_STDERR_PIPE : G_SUBPROCESS_FLAGS_STDERR_MERGE));
 
+#ifndef G_OS_WIN32
     g_subprocess_launcher_set_child_setup(launcher, exec_child_setup, NULL, NULL);
+#endif
     if (!JS_IsUndefined(opts))
         exec_apply_options(ctx, opts, launcher);
 
@@ -3154,10 +3170,10 @@ void bta_sys_init(JSContext *ctx, JSValue global)
                                            JS_CFUNC_generic_magic, FT_ISDIR));
 
     static const struct { const char *name; int magic; } parts[] = {
-        { "Name",     PP_NAME },
-        { "Directory", PP_DIR },
-        { "Extension", PP_EXT },
-        { "BaseName", PP_BASENAME },
+        { "Name",      BTA_PATH_NAME },
+        { "Directory", BTA_PATH_DIR },
+        { "Extension", BTA_PATH_EXT },
+        { "BaseName",  BTA_PATH_BASENAME },
     };
     for (size_t i = 0; i < G_N_ELEMENTS(parts); i++)
         JS_SetPropertyStr(ctx, file, parts[i].name,

@@ -35,8 +35,19 @@
 
 #include <errno.h>
 #include <string.h>
-#include <poll.h>
 #include <unistd.h>
+
+/*
+ * `poll` is POSIX and MinGW has no `poll.h` at all.  It is here for one
+ * question -- has the IDE said anything while the program ran -- and the whole
+ * channel it asks about is Unix: descriptor 3 is opened by the parent and
+ * `Exec`'s `Control` is refused on Windows for exactly that reason.  So the
+ * question is asked where it can be answered, and `bta_debug_start` says out
+ * loud that `--debug` is not available there.
+ */
+#ifndef G_OS_WIN32
+#include <poll.h>
+#endif
 
 /* Where events go.  Descriptor 3 by convention: 0, 1 and 2 are spoken for. */
 #define CONTROL_FD 3
@@ -746,6 +757,7 @@ static bool step_wants_this(int depth_now)
  */
 static void take_messages(JSContext *ctx, int depth_now)
 {
+#ifndef G_OS_WIN32
     struct pollfd in = { .fd = STDIN_FILENO, .events = POLLIN };
     char          line[8192];
 
@@ -758,6 +770,10 @@ static void take_messages(JSContext *ctx, int depth_now)
         if (*line)
             obey(ctx, line, depth_now);
     }
+#else
+    (void)ctx;
+    (void)depth_now;
+#endif
 }
 
 /*
@@ -867,6 +883,18 @@ void bta_debug_start(JSContext *ctx)
 {
     if (!dbg.on)
         return;
+
+#ifdef G_OS_WIN32
+    /*
+     * The channel is a descriptor the parent opened (3) and this process's
+     * stdin -- a Unix arrangement, and the same one that makes `Exec`'s
+     * `Control` refuse on Windows.  Saying so beats a program that stops at
+     * `ready` waiting for a debugger nobody can drive.
+     */
+    fprintf(stderr, "bintana: --debug needs a control channel this platform has not got\n");
+    dbg.on = false;
+    return;
+#endif
 
     dbg.ctx    = ctx;
     dbg.breaks = g_ptr_array_new_with_free_func(free_break);
