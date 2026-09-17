@@ -25,7 +25,17 @@ jobs:
             libsqlite3-dev libsoup-3.0-dev \
             libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
             gstreamer1.0-tools \
-            xvfb xdotool desktop-file-utils
+            xvfb xdotool desktop-file-utils \
+            librsvg2-common fonts-cantarell
+
+          # The last two are named for a reason `--no-install-recommends`
+          # hides: they are recommends of GTK rather than dependencies, and the
+          # suite is about both.  **`librsvg2-common` is the SVG loader** --
+          # without it nothing renders an SVG, and `Application.HasIcon`
+          # *renders* and looks for ink, so every icon assertion fails with a
+          # picture that is not there.  **`fonts-cantarell` is the font the
+          # metrics assertions were written against** -- a label at `Cantarell
+          # 11.5` measured against a substituted font is a different number.
 
           # The GTK4 video sink lives in gst-plugins-rs, which not every
           # release packages -- and a Video is the only thing that needs it, so
@@ -81,7 +91,8 @@ jobs:
             libsqlite3-dev libsoup-3.0-dev \
             libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
             gstreamer1.0-tools \
-            xvfb
+            xvfb \
+            librsvg2-common fonts-cantarell
           sudo apt-get install -y --no-install-recommends gstreamer1.0-gtk4 \
             || echo "no gstreamer1.0-gtk4: the media test will skip the video half"
 
@@ -125,7 +136,8 @@ jobs:
             libsqlite3-dev libsoup-3.0-dev \
             libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
             gstreamer1.0-tools \
-            xvfb
+            xvfb \
+            librsvg2-common fonts-cantarell
           sudo apt-get install -y --no-install-recommends gstreamer1.0-gtk4 \
             || echo "no gstreamer1.0-gtk4: the media test will skip the video half"
 

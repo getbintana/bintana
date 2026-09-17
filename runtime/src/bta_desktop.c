@@ -174,6 +174,15 @@ static JSValue entries_exec(JSContext *ctx, JSValueConst this_val,
  * name and not the bytes between `=` and the newline.  Comments and blank lines
  * are not part of the shape and do not survive a rewrite -- this is for entries
  * a program installs and removes, not for editing a packager's file.
+ *
+ * **`G_KEY_FILE_KEEP_TRANSLATIONS` is load-bearing, and its absence is
+ * silent.**  Without it `GKeyFile` keeps a `Key[locale]` only when the locale
+ * is one of `g_get_language_names()`'s -- the desktop's language -- and drops
+ * the rest.  So `Name[es]` was a key on a machine set to Spanish and was not on
+ * one set to English, and an entry read on the wrong machine came back with its
+ * translations gone.  The failure is invisible where it is written: a test that
+ * passes in `es_AR` and fails on CI's `C`.  A file this runtime reads to write
+ * back wants every key it has, whatever language this machine speaks.
  */
 static JSValue entries_read(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv)
@@ -195,7 +204,8 @@ static JSValue entries_read(JSContext *ctx, JSValueConst this_val,
         GKeyFile *kf  = g_key_file_new();
         GError   *err = NULL;
 
-        if (!g_key_file_load_from_file(kf, path, G_KEY_FILE_NONE, &err)) {
+        if (!g_key_file_load_from_file(kf, path, G_KEY_FILE_KEEP_TRANSLATIONS,
+                                       &err)) {
             out = JS_ThrowInternalError(ctx, "cannot read %s: %s", path,
                                         err ? err->message : "unknown error");
             g_clear_error(&err);

@@ -1646,8 +1646,27 @@ BtaApp *bta_app_new(const char *project_dir)
      * thread actually has, so a runaway recursion still gets a clean exception
      * rather than a crash -- checked by measuring where each one throws.
      */
-#if defined(__SANITIZE_ADDRESS__) || \
-    (defined(__has_feature) && __has_feature(address_sanitizer))
+/*
+ * Two ways a compiler says "this build has AddressSanitizer", and **they must
+ * not be asked in one `#if`.** `__SANITIZE_ADDRESS__` is GCC's; Clang answers
+ * `__has_feature(address_sanitizer)` instead, and GCC only learned that
+ * spelling in version 15. On anything older the `defined(__has_feature) && …`
+ * guard reads as one but is not one: the preprocessor parses the whole
+ * expression and `&&` does not short-circuit a *syntax* error, so GCC 13 stops
+ * with `missing binary operator before token "("`. Ubuntu 24.04 is GCC 13, and
+ * that is the CI runner this was found on.
+ *
+ * So the question is nested inside the `#ifdef` that knows the name exists.
+ */
+#if defined(__SANITIZE_ADDRESS__)
+# define BTA_ASAN 1
+#elif defined(__has_feature)
+# if __has_feature(address_sanitizer)
+#  define BTA_ASAN 1
+# endif
+#endif
+
+#ifdef BTA_ASAN
     JS_SetMaxStackSize(app->rt, 6 * 1024 * 1024);
 #else
     JS_SetMaxStackSize(app->rt, 2 * 1024 * 1024);

@@ -1183,6 +1183,23 @@ person who wrote it either.
   `XDG_DATA_HOME` at a scratch directory (`bta-suite-<pid>/data`) for exactly
   this, and the test still removes what it installs, because `tests/try.sh` has
   no runner to isolate it.
+- **`GKeyFile` drops the translations this machine does not speak, unless it is
+  told not to.** Without `G_KEY_FILE_KEEP_TRANSLATIONS`, a `Key[locale]` is
+  kept only when the locale is one of `g_get_language_names()`'s -- so
+  `Name[es]` is a key on a desktop set to Spanish and is **not** on one set to
+  English, and `Desktop.Entries.Read` lost every translation on CI's `C` locale
+  while passing in `es_AR` here. A read-and-write-back is how a file loses what
+  nobody looked at, and this one is invisible where it is written: any
+  `GKeyFile` a program means to write back loads with the flag. Caught by the
+  first CI run that got as far as the suite (`tests/widgets`'s `Desktop`).
+- **The compiler in CI is older than the one here.** The runner is GCC 13 and
+  this machine is GCC 16, so a name the new one knows is a *syntax* error there:
+  `#if defined(__SANITIZE_ADDRESS__) || (defined(__has_feature) && __has_feature(address_sanitizer))`
+  reads as a guard and is not one -- `&&` does not short-circuit the token, and
+  GCC 13 stops with `missing binary operator before token "("`. Clang's
+  `__has_feature` question is nested inside the `#ifdef` that knows the name
+  exists (`bta_runtime.c`), and any compiler-version conditional added here is
+  the same shape of risk: the runner is the only GCC 13 this repository has.
 - **In an `Overlay` the bottom of the stack is the layer that fills.** The base
   is a GTK *property* (`gtk_overlay_set_child`) and the floaters are a list, so
   `Reorder(child, 0)` swaps the property rather than moving a sibling — both
