@@ -16,6 +16,13 @@ class Stepper extends Component {
     static Options        = { Step: ["1", "5", "10"] };
     static TextProperties = ["Caption"];
 
+    /* And its fields are declared, which is the fourth thing a component says
+     * about itself: under `--strict` it is sealed once it is built, so a field
+     * it only creates when somebody first assigns the property would throw
+     * there. `.form`s set `Value` and so hid it; `Step` and `Caption` are the
+     * two nothing here sets. `docs/strict-plan.md`. */
+    _value; _step; _caption;
+
     get Value() { return this._value || 0; }
 
     set Value(v) {

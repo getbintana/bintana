@@ -13,6 +13,10 @@ class Chip extends Stepper {
     static Options        = { Size: ["Small", "Large"] };
     static TextProperties = ["Legend"];
 
+    /* Its own, beside its own statics: a subclass declares what it adds and
+     * `Stepper` declares what it brought. */
+    _size; _legend;
+
     get Size()  { return this._size || "Small"; }
     set Size(v) { this._size = String(v); }
 
