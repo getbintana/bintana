@@ -675,6 +675,7 @@ declare class Video extends Widget {
     Uri: string;
     User: string;
     Volume: number;
+    readonly Available: boolean;
     readonly Buffering: number;
     readonly Duration: number;
     readonly Playing: boolean;

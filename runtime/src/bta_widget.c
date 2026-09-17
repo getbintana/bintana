@@ -4245,6 +4245,20 @@ BtaClass *bta_class_find(const char *name)
     return NULL;
 }
 
+/*
+ * What a palette has to have in order to offer a control: the class's own
+ * answer, which is a constant of the build for most of them and a question put
+ * to the machine for the few that declare a probe.  One function so the class
+ * table, the instance accessor and any future caller cannot disagree about
+ * which of the two it is.
+ */
+bool bta_class_runnable(const BtaClass *cls)
+{
+    if (!cls)
+        return false;
+    return cls->probe ? cls->probe() : cls->available;
+}
+
 /* ------------------------------------------------------- class lifecycle */
 
 /*
@@ -4648,16 +4662,18 @@ static JSValue w_types(JSContext *ctx, JSValueConst this_val,
 }
 
 /*
- * Widget.Available(type): whether this build can run one.
+ * Widget.Available(type): whether this machine can run one.
  *
  * The third of the questions a palette asks about a class it has only the name
  * of.  `Widget.Types()` says what classes there are and `Widget.New` makes one;
  * neither answers the one that matters before a control is offered, which is
- * whether the engine behind it was there when the runtime was built.
- * `Terminal` without VTE is the case: the class exists, a `.form` naming one
- * loads, every property answers -- and `Run` refuses, which is far too late for
- * a palette. So a class declares its own answer (BtaClass.available) and this
- * reads it.
+ * whether the engine behind it is there.  `Terminal` without VTE is the case
+ * the class table's `available` was added for: the class exists, a `.form`
+ * naming one loads, every property answers -- and `Run` refuses, which is far
+ * too late for a palette.  `Video` is the case that showed a build-time flag is
+ * not always the question, since GStreamer can be linked in and the machine's
+ * registry still lack the sink: a class may declare a `probe` instead, and
+ * `bta_class_runnable` is what answers with whichever of the two it has.
  *
  * A name the table does not have is one of the project's own classes, and there
  * the question is only whether it resolves: a component is JavaScript, and
@@ -4675,7 +4691,7 @@ static JSValue w_available(JSContext *ctx, JSValueConst this_val,
     BtaClass *cls = bta_class_find(type);
     if (cls) {
         JS_FreeCString(ctx, type);
-        return JS_NewBool(ctx, cls->available);
+        return JS_NewBool(ctx, bta_class_runnable(cls));
     }
 
     JSValue klass = bta_lookup_global(ctx, type);

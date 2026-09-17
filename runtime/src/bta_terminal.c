@@ -227,8 +227,7 @@ static JSValue term_get_available(JSContext *ctx, JSValueConst this_val)
     if (!bta_this(ctx, this_val))
         return JS_EXCEPTION;
 
-    BtaClass *cls = bta_class_find("Terminal");
-    return JS_NewBool(ctx, cls && cls->available);
+    return JS_NewBool(ctx, bta_class_runnable(bta_class_find("Terminal")));
 }
 
 /*

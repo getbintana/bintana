@@ -57,7 +57,7 @@ position a palette, a `.form` loader and an extractor are all in:
 |---|---|
 | `Widget.Types()` → array | every class the runtime has, in registration order |
 | `Widget.New(type)` → widget | makes one. The runtime's classes first, then the project's own and its libraries' — which is how a component appears in a `.form` as an ordinary `"type"`. Throws on a name that is neither |
-| `Widget.Available(type)` → boolean | whether **this build** can run one. `false` for a name that is no class at all, so it answers rather than throwing |
+| `Widget.Available(type)` → boolean | whether **this machine** can run one. `false` for a name that is no class at all, so it answers rather than throwing |
 
 `Types` and `Available` are not the same list, and the difference is the point:
 [`Terminal`](#terminal) is always in `Types()` because the class is always there
@@ -66,6 +66,13 @@ position a palette, a `.form` loader and an extractor are all in:
 a child refuses. **Offer from `Available`, load from `Types`**: a palette
 button for a control the user cannot finish is worse than a missing button, and
 a `.form` that already holds one still has to open.
+
+A class may also answer **at run time**, because a build-time flag is not always
+the question: [`Video`](#video) needs GStreamer *and* its GTK4 sink, and a
+runtime built with GStreamer on a machine whose registry lacks the sink cannot
+play one. `Available("Video")` asks the machine (once — the answer is cached)
+and answers `false` there, so the palette drops the button on exactly the
+machines that could never have made it work.
 
 A class of the project's own is available whenever it resolves: a component is
 JavaScript, and JavaScript this runtime can always run.
@@ -932,6 +939,7 @@ paintable sink in a `GtkPicture` — which is why it styles as one (see
 | `Muted` | silence without touching `Volume` |
 | `Loop` | reseek instead of ending. A live stream cannot seek, so it ends anyway |
 | `Fit` | `Fill` `Contain` `Cover` `ScaleDown`. Default `"Contain"` |
+| `Available` (ro) | whether this machine could play a clip at all: GStreamer's base plugins **and** the `gtk4paintablesink` element. The same answer `Widget.Available("Video")` gives, and the one a palette asks before offering the control. `false` also on a runtime built without GStreamer |
 | `Buffering` (ro) | how full the buffer is, `0`…`100`. `100` is nothing to wait for (a local file never says otherwise); less is a stream refilling, which holds the picture while `Playing` stays true. `ProgressBar.Value`'s range, since that is where a form puts it |
 | `Position` (ro) | seconds in, `0` when unknown — which includes playing live |
 | `Duration` (ro) | seconds long, `-1` while unknown — which is always, on a live stream |
@@ -965,6 +973,14 @@ that cannot play a clip is still one a form with a `Video` in it can be drawn,
 loaded and saved in. The frames themselves need GStreamer's GTK4 sink
 (gst-plugins-rs); where only the base plugins are installed, `Play` says which
 element is missing and `AudioPlayer` still works.
+
+**That second case is why `Available` is asked of the machine and not declared
+at build time.** A runtime can have GStreamer and still be on a machine whose
+registry lacks the sink — a runner with the base plugins is exactly that shape
+— and the palette has to know before a `Video` is offered, not when `Play`
+throws. The question costs the plugin registry on its first ask (6 ms with the
+cache warm, 573 ms without it) and is cached after, which is why it is asked
+lazily rather than at start-up.
 
 ---
 

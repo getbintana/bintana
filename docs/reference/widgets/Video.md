@@ -21,6 +21,7 @@ It is a `Widget` and a control like any other, so everything on
 
 | | | |
 |---|---|---|
+| `Available` (ro) | whether this machine could play one at all | [whether it can play](#whether-it-can-play) |
 | `Buffering` (ro) | how full the buffer is, `0`…`100` | [streams](#streams) |
 | `Duration` (ro) | seconds long, `-1` while unknown | [where it is](#where-it-is) |
 | `Fit` | `Fill` `Contain` `Cover` `ScaleDown`. Default `"Contain"` | [what it looks like](#what-it-looks-like) |
@@ -107,6 +108,24 @@ without the frame a corner is a corner of the black.
 
 A stream that runs its buffer dry is held until it refills rather than left to
 stutter; a live source is left alone, having nothing to catch up on.
+
+## Whether it can play
+
+| | |
+|---|---|
+| `Available` (ro) | whether **this machine** could play a clip: GStreamer's base plugins **and** the `gtk4paintablesink` element that puts frames in a `GtkPicture`. `Widget.Available("Video")` is the same answer asked of the class, and it is the one a palette asks before offering the control |
+
+**Why it is a question and not a constant.** GStreamer being linked in is not
+enough: the sink ships in gst-plugins-rs, so a runtime built with GStreamer on a
+machine whose registry lacks it can place a `Video` and never play one — a CI
+runner with the base plugins is exactly that shape. `Terminal`'s `Available` is
+the other kind, a constant of the build.
+
+The answer is cached after the first ask, because the question is a read of
+GStreamer's plugin registry — 6 ms with its cache warm and 573 ms without it.
+`false` is what a palette stops offering the control on; the class itself is
+always here, so a `.form` that already holds one still loads and every property
+still answers.
 
 ## When it fails
 

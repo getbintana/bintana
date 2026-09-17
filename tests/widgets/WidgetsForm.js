@@ -371,7 +371,7 @@ const TESTS = [
     "Expand", "Spacing", "Scrolling", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "EditorMarks", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
     "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "Record", "Nested", "Database", "Action", "Groups",
-    "Toggle", "Switch", "Progress", "Slider", "Date", "Calendar", "Drawing", "Metrics", "Library", "ListMulti", "MenuState",
+    "Toggle", "Switch", "Progress", "Slider", "Date", "Calendar", "Drawing", "Metrics", "Library", "Plugin", "ListMulti", "MenuState",
     "RowList", "RowFilter", "PropertyOptions", "CssNode", "TabAction", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "NumericSetters",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
@@ -4368,6 +4368,236 @@ class Spike extends Form {
              });
     }
 
+    /* --- a plugin: native code inside a library -------------------------- */
+    /*
+     * **A library may carry a shared object**, and this is the whole of that
+     * path: a real one, built by CMake from `tests/plugins/testplug.c` -- the
+     * reference implementation `docs/plugins.md` points at -- loaded by the
+     * same `uses` resolution as the library, before its `.js`, and driven
+     * through the callback table in `runtime/include/bta_plugin.h`.
+     *
+     * Three children, because the loader has three answers and each is a
+     * sentence somebody will meet: it loads and installs; a plugin built for
+     * another ABI stops the program naming both numbers; a shared object with
+     * no entry point stops it naming the file.  They are console projects,
+     * which is also the proof that a plugin has nothing to do with a display.
+     *
+     * The `.so` is copied from beside the running binary -- `testlibs/` under
+     * the build directory -- which is what makes the test follow `BINTANA=`.
+     * The suffix is spelled out because the suite is a Linux suite and always
+     * has been: `G_MODULE_SUFFIX` is the runtime's spelling, and a plugin for
+     * another platform is built with that platform's compiler anyway.
+     */
+    testPlugin() {
+        waiting++;
+
+        Directory.Make(SCRATCH);
+
+        const libs  = File.Join(SCRATCH, "plugpath");
+        const built = File.Join(File.Directory(Application.Executable), "testlibs");
+        const mine  = File.Join(libs, "testplug");
+        Directory.Make(mine);
+
+        File.Copy(File.Join(built, "testplug", "testplug.so"),
+                  File.Join(mine, "testplug.so"));
+
+        /*
+         * The library's JavaScript half, which has to find the global the
+         * native half installed: the load order is the whole reason a plugin
+         * and a library share a directory.
+         */
+        File.Save(File.Join(mine, "testplug.js"), `
+const GLUE_SAW = typeof TestPlug === "object";
+function plugGlue() { return "saw:" + GLUE_SAW; }
+`);
+
+        const proj = File.Join(SCRATCH, "plugproj");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "plug", main: "Main", uses: ["testplug"] });
+        File.Save(File.Join(proj, "Main.js"), `
+"use strict";
+function Main() {
+    print("echo:" + TestPlug.Echo("hola"));
+    print("add:" + TestPlug.Add(2, 3));
+    print("prims:" + [null, 1, "x", true, undefined]
+        .map((v) => TestPlug.Describe(v)).join(","));
+    print("pair:" + JSON.stringify(TestPlug.Pair(4, 5)));
+    print("fields:" + JSON.stringify(TestPlug.Fields()));
+    print("length:" + TestPlug.Length([1, 2, 3]));
+    print("arity:" + JSON.stringify(TestPlug.Arity()));
+    print("extra:" + JSON.stringify(TestPlug.Arity(7, 8, 9)));
+    print("values:" + JSON.stringify(TestPlug.Values()));
+    print("drop:" + TestPlug.Drop());
+    print("glue:" + plugGlue());
+    print("apply:" + TestPlug.Apply((v) => v + "!", "hola"));
+    try { TestPlug.Apply(() => { throw new Error("thrown in the callback"); }); }
+    catch (e) { print("called:" + e.message); }
+    try { TestPlug.Apply(7); }
+    catch (e) { print("notfn:" + (e instanceof TypeError)); }
+    Logger.Level = "Debug";
+    TestPlug.Log("from the plugin");
+    try { TestPlug.Boom("bang"); }
+    catch (e) { print("boom:" + e.message + "," + (e instanceof Error)); }
+    Application.Quit(0);
+}
+`);
+
+        const lines = [];
+        const said  = {};
+        Exec([Application.Executable, proj],
+             { Environment: { BINTANA_LIB_PATH: libs }, Timeout: 20000 },
+             (line) => {
+                 lines.push(line);
+                 const at = line.indexOf(":");
+                 if (at > 0) said[line.slice(0, at)] = line.slice(at + 1);
+             },
+             (code) => {
+                 eq("a project that uses a library with a plugin in it runs",
+                    code, 0);
+                 eq("a plugin function answers a string", said.echo, "hola");
+                 eq("...a number", said.add, "5");
+                 eq("...and kind() names what it was given",
+                    said.prims, "null,number,string,bool,undefined");
+                 eq("an array it built with push()", said.pair, "[4,5]");
+                 eq("an object it built with set()", said.fields,
+                    '{"Name":"testplug","Abi":1,"Native":true,"Nil":null,"Nested":{}}');
+                 eq("get() reads a property", said.length, "3");
+                 eq("a missing argument arrives undefined at the declared arity",
+                    said.arity, '[2,"undefined"]');
+                 eq("...and extra arguments are still there",
+                    said.extra, '[3,"number"]');
+                 eq("every value kind it can make", said.values,
+                    '[null,null,false,2.5,"hecho",{},[]]');
+                 eq("release() drops a value without complaint", said.drop, "true");
+                 eq("the library's .js ran after the .so", said.glue, "saw:true");
+                 eq("fail() raises an Error the caller can catch",
+                    said.boom, "bang,true");
+                 eq("a plugin can call a JavaScript function it was given",
+                    said.apply, "hola!");
+                 eq("...and the error that function throws reaches the caller",
+                    said.called, "thrown in the callback");
+                 eq("...while a value that is not a function is refused",
+                    said.notfn, "true");
+
+                 const all = lines.join("\n");
+                 check("its log() line reaches the application's logger",
+                       all.includes("Debug: from the plugin"), all);
+                 check("and cleanup() ran at teardown",
+                       all.includes("testplug: cleanup"), all);
+
+                 this.pluginOld(libs, built);
+             });
+    }
+
+    /* A `.so` that says it was built for another ABI: refused by name. */
+    pluginOld(libs, built) {
+        const dir = File.Join(libs, "oldplug");
+        Directory.Make(dir);
+        File.Copy(File.Join(built, "testplug-old", "testplug-old.so"),
+                  File.Join(dir, "oldplug.so"));
+
+        const proj = File.Join(SCRATCH, "plugold");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "old", main: "Main", uses: ["oldplug"] });
+        File.Save(File.Join(proj, "Main.js"),
+                  "function Main() { print('ran'); }\n");
+
+        const said = [];
+        Exec([Application.Executable, proj],
+             { Environment: { BINTANA_LIB_PATH: libs }, Timeout: 20000 },
+             (line) => said.push(line),
+             (code) => {
+                 eq("a plugin built for another ABI stops the program", code, 2);
+                 const all = said.join("\n");
+                 check("...saying which ABI it was built for and which this is",
+                       all.includes("ABI 0") && all.includes("speaks 1"), all);
+                 check("...and the project itself never ran",
+                       !all.includes("ran"), all);
+                 this.pluginBare(libs, built);
+             });
+    }
+
+    /* And a shared object that is not a plugin: refused, naming the file. */
+    pluginBare(libs, built) {
+        const dir = File.Join(libs, "bareplug");
+        Directory.Make(dir);
+        File.Copy(File.Join(built, "testplug-bare", "testplug-bare.so"),
+                  File.Join(dir, "bareplug.so"));
+
+        const proj = File.Join(SCRATCH, "plugbare");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "bare", main: "Main", uses: ["bareplug"] });
+        File.Save(File.Join(proj, "Main.js"),
+                  "function Main() { print('ran'); }\n");
+
+        const said = [];
+        Exec([Application.Executable, proj],
+             { Environment: { BINTANA_LIB_PATH: libs }, Timeout: 20000 },
+             (line) => said.push(line),
+             (code) => {
+                 eq("a shared object with no entry point stops the program",
+                    code, 2);
+                 const all = said.join("\n");
+                 check("...saying which file is not a Bintana plugin",
+                       all.includes("exports no bta_plugin"), all);
+                 check("...and the project itself never ran",
+                       !all.includes("ran"), all);
+                 this.pluginAbi1(libs, built);
+             });
+    }
+
+    /*
+     * **And a plugin built to the version-1 offsets still works**, which is the
+     * one claim the ABI number makes and the one nothing else here can check:
+     * this `.so` was compiled against the frozen copy of the header in
+     * `tests/plugins/abi1/`, so it calls the host table by the slots version 1
+     * had.  A field appended to `BtaHost` is fine -- old plugins read the
+     * prefix -- and a field *reordered* without the number moving is a wrong
+     * call here, which is the failure a plugin recompiled from the current
+     * source can never see.
+     */
+    pluginAbi1(libs, built) {
+        const dir = File.Join(libs, "abi1plug");
+        Directory.Make(dir);
+        File.Copy(File.Join(built, "testplug-abi1", "testplug-abi1.so"),
+                  File.Join(dir, "abi1plug.so"));
+
+        const proj = File.Join(SCRATCH, "plugabi1");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "abi1", main: "Main", uses: ["abi1plug"] });
+        File.Save(File.Join(proj, "Main.js"), `
+"use strict";
+function Main() {
+    print("echo:" + TestPlug.Echo("version 1"));
+    print("add:" + TestPlug.Add(2, 3));
+    print("fields:" + JSON.stringify(TestPlug.Fields()));
+    Application.Quit(0);
+}
+`);
+
+        const said = {};
+        Exec([Application.Executable, proj],
+             { Environment: { BINTANA_LIB_PATH: libs }, Timeout: 20000 },
+             (line) => {
+                 const at = line.indexOf(":");
+                 if (at > 0) said[line.slice(0, at)] = line.slice(at + 1);
+             },
+             (code) => {
+                 eq("a plugin built against the version-1 header still runs",
+                    code, 0);
+                 eq("...its strings arrive", said.echo, "version 1");
+                 eq("...its numbers arrive", said.add, "5");
+                 eq("...and its setters land where version 1 put them",
+                    said.fields,
+                    '{"Name":"testplug","Abi":1,"Native":true,"Nil":null,"Nested":{}}');
+                 waiting--;
+             });
+    }
+
     /*
      * And what a program that throws writes into a **pipe** has no colour in it.
      *
@@ -4578,6 +4808,16 @@ class Spike extends Form {
      * live on the widget's struct now. If one ever comes back, this is what says
      * so. `docs/strict-plan.md` is the argument.
      *
+     * **A component of the project is sealed with the controls**, and that is
+     * the half this test did not have: its scratch project was built out of
+     * built-in widgets only, so the mode went out with every component in this
+     * tree -- `lib/markdown`, `lib/report`, `lib/charts` -- creating its fields
+     * the first time it measured, drew or was pointed at, and throwing there.
+     * `Probe` is a component whose fields are declared and one property that is
+     * never set from a `.form`, so the line that assigns it is the line that
+     * used to throw; `Nope` beside it says a component still refuses a name its
+     * class does not have, which is the reason to seal one at all.
+     *
      * A child process, because the switch is a property of the run: it is one
      * argument to `bintana` and there is nothing to turn on from inside.
      *
@@ -4591,7 +4831,24 @@ class Spike extends Form {
         const proj = File.Join(SCRATCH, "strict");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.json"),
-                      { name: "strict", startup: "Strict", sources: ["Strict.js"] });
+                      { name: "strict", startup: "Strict",
+                        sources: ["Probe.js", "Strict.js"] });
+
+        /* A component of the project: its own `.form`, its own class, placed on
+         * the form below like any control. Its `.form` sets **nothing**, so
+         * `_lazy` exists only because the class body declares it. */
+        File.SaveJson(File.Join(proj, "Probe.form"), {
+            format: "bintana-form/1",
+            class: "Probe",
+            properties: { Width: 60, Height: 20 },
+            children: [],
+        });
+        File.Save(File.Join(proj, "Probe.js"),
+                  "class Probe extends Component {\n" +
+                  "    _lazy;\n" +
+                  "    get Lazy()  { return this._lazy || ''; }\n" +
+                  "    set Lazy(v) { this._lazy = String(v); }\n" +
+                  "}\n");
         File.SaveJson(File.Join(proj, "Strict.form"), {
             format: "bintana-form/1",
             class: "Strict",
@@ -4603,6 +4860,7 @@ class Spike extends Form {
                 { type: "Label",     name: "Lbl",  properties: { Text: "hi" } },
                 { type: "TableView", name: "Tbl",  properties: { X: 1, Y: 40 } },
                 { type: "DrawingArea", name: "Art", properties: { X: 1, Y: 80 } },
+                { type: "Probe",     name: "Cmp",  properties: { X: 1, Y: 110 } },
             ],
         });
         File.Save(File.Join(proj, "Strict.js"),
@@ -4624,6 +4882,10 @@ class Spike extends Form {
                   "        catch (e) { print('menu refused: ' + e.message); }\n" +
                   "        try { this.ActGo.Enabld = false; print('accepted action'); }\n" +
                   "        catch (e) { print('action refused: ' + e.message); }\n" +
+                  "        this.Cmp.Lazy = 'set';              /* a field its class declares */\n" +
+                  "        print('component: ' + this.Cmp.Lazy);\n" +
+                  "        try { this.Cmp.Nope = 1; print('accepted Nope'); }\n" +
+                  "        catch (e) { print('component refused: ' + e.message); }\n" +
                   "        print('saved: ' + JSON.stringify(this.Serialize()).length);\n" +
                   "        Application.Quit(0);\n" +
                   "    }\n" +
@@ -4655,6 +4917,13 @@ class Spike extends Form {
                        all.includes("columns: 1"), all);
                  check("...and a drawing area still makes its painter",
                        all.includes("painted: true"), all);
+
+                 /* The component, both ways round: the field its class declares
+                  * is writable, and the name it never declared is not. */
+                 check("a component takes the fields its class declares",
+                       all.includes("component: set"), all);
+                 check("...and refuses one it does not have",
+                       all.includes("no 'Nope' to assign"), all);
                  check("...with nothing quietly accepted",
                        !all.includes("accepted"), all);
                  check("and the form still serialises",
@@ -10775,6 +11044,21 @@ class Spike extends Form {
               Widget.Types().includes("Terminal"));
         eq("...and can still be made, which is what loading a .form needs",
            Widget.New("Terminal").CssNode(), "scrolledwindow");
+
+        /*
+         * `Video` is the class whose answer is **asked of the machine** rather
+         * than declared at build time: GStreamer can be linked in and its
+         * registry still lack the sink, so what is asserted is the agreement
+         * and not the value -- a machine with the base plugins and without
+         * gst-plugins-rs answers `false`, this build answers `true`, and both
+         * are right.
+         */
+        const video = new Video();
+        eq("a Video answers for itself what its class answers",
+           video.Available, Widget.Available("Video"));
+        check("...which is a boolean either way",
+              typeof video.Available === "boolean");
+        video.Delete();
 
         /* A class of the project's own is JavaScript, and JavaScript this
          * runtime can always run. */

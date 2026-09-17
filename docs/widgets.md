@@ -2318,6 +2318,16 @@ nothing has been decoded, and `Pause`/`Stop` have nothing to stop. The frames ne
 ones -- the GTK4 sink from gst-plugins-rs -- and where it is missing `Play`
 says which element it is, while `AudioPlayer` plays on.
 
+**`Available` is the one member that is asked of the machine** rather than
+declared at build time, because the sink is the case a build-time flag cannot
+see: a runtime linked against GStreamer on a machine whose registry lacks
+gst-plugins-rs can place a `Video` and never play one. `Widget.Available("Video")`
+and `Video.Available` answer *no* there, which is what the palette asks before
+offering the control -- it asks once, and the answer is cached, since the
+question is a registry read (6 ms warm, 573 ms cold). `Terminal`'s `Available`
+is the other kind, a constant of the build; `bta_class_runnable` is where a
+class says which of the two it is.
+
 ## Containers
 
 ### Which of the two models a form should use

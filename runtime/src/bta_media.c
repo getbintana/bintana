@@ -140,6 +140,7 @@ static JSValue media_seek(JSContext *ctx, JSValueConst this_val, int argc, JSVal
 /* The five that need the widget rather than the player. */
 static JSValue video_get_fit(JSContext *ctx, JSValueConst this_val);
 static JSValue video_set_fit(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+static JSValue media_get_available(JSContext *ctx, JSValueConst this_val);
 static JSValue video_get_source_width(JSContext *ctx, JSValueConst this_val);
 static JSValue video_get_source_height(JSContext *ctx, JSValueConst this_val);
 static JSValue video_save(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
@@ -153,6 +154,7 @@ static const JSCFunctionListEntry video_props[] = {
     JS_CGETSET_DEF("Muted",        media_get_muted,    media_set_muted),
     JS_CGETSET_DEF("Loop",         media_get_loop,     media_set_loop),
     JS_CGETSET_DEF("Fit",          video_get_fit,      video_set_fit),
+    JS_CGETSET_DEF("Available",    media_get_available, NULL),
     JS_CGETSET_DEF("Buffering",    media_get_buffering, NULL),
     JS_CGETSET_DEF("Position",     media_get_position, NULL),
     JS_CGETSET_DEF("Duration",     media_get_duration, NULL),
@@ -716,6 +718,20 @@ static int video_intrinsic(BtaWidget *w, bool height)
                   : gdk_paintable_get_intrinsic_width(p);
 }
 
+/*
+ * The instance's answer, read off the class row so it and
+ * `Widget.Available("Video")` cannot come to disagree -- one declaration, in
+ * the table, where the class says everything else about itself (Terminal's
+ * `Available` is the same shape).
+ */
+static JSValue media_get_available(JSContext *ctx, JSValueConst this_val)
+{
+    if (!bta_this(ctx, this_val))
+        return JS_EXCEPTION;
+
+    return JS_NewBool(ctx, bta_class_runnable(bta_class_find("Video")));
+}
+
 static JSValue video_get_source_width(JSContext *ctx, JSValueConst this_val)
 {
     BtaWidget *w = bta_this(ctx, this_val);
@@ -840,11 +856,66 @@ static const char *video_options(const char *prop)
     return !strcmp(prop, "Fit") ? "Fill,Contain,Cover,ScaleDown" : NULL;
 }
 
+/* ------------------------------------------------------------ availability */
+/*
+ * **Whether this machine could play a Video**, which is not a question the
+ * build answers: GStreamer can be linked in and its registry still lack the
+ * `gtk4paintablesink` element that puts frames in a `GtkPicture` -- a runner
+ * with the base plugins and without gst-plugins-rs is exactly that shape.
+ * A palette is who asks, before anything is played, and
+ * `Widget.Available("Video")` is the word; `Video.Available` is the same
+ * answer from an instance.
+ *
+ * Cached, because the first question pays for the plugin registry -- 6 ms with
+ * the cache warm and 573 ms without it (measured, and the reason
+ * `engine_ensure` initialises GStreamer lazily).  A process cannot grow a
+ * plugin while it runs, so the answer is asked once.
+ *
+ * `gst_element_factory_find` and not `_make`: this asks whether the pipeline
+ * *could* be built, and constructing a playbin to throw away is a heavier
+ * answer to the same question.  `AudioPlayer` is deliberately not part of it --
+ * sound needs no window and no sink, so a machine this answers `false` for can
+ * still play a cue.
+ */
+#ifndef BTA_HAVE_GST
+static bool video_available(void)
+{
+    return false;
+}
+#else
+static bool video_available(void)
+{
+    static int answer = -1;
+
+    if (answer < 0) {
+        GstElementFactory *play;
+        GstElementFactory *sink;
+
+        /* The same lazy init `engine_ensure` does: the registry cannot be
+         * asked before it. */
+        gst_init(NULL, NULL);
+
+        play = gst_element_factory_find("playbin3");
+        if (!play)
+            play = gst_element_factory_find("playbin");
+        sink = gst_element_factory_find("gtk4paintablesink");
+
+        answer = (play && sink) ? 1 : 0;
+        if (play)
+            gst_object_unref(play);
+        if (sink)
+            gst_object_unref(sink);
+    }
+    return answer == 1;
+}
+#endif
+
 void bta_media_register(void)
 {
     const BtaClass rows[] = {
-        BTA_CLASS_ENUM("Video", "Control", build_video, video_props,
-                       false, video_options, "Ended,Error"),
+        BTA_CLASS_ENUM_PROBE("Video", "Control", build_video, video_props,
+                             false, video_options, video_available,
+                             "Ended,Error"),
     };
     bta_register_classes(rows, (int)G_N_ELEMENTS(rows));
 }
