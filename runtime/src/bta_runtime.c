@@ -135,6 +135,41 @@ static bool error_to_terminal(void)
 static const char *error_red(void)   { return error_to_terminal() ? "\x1b[1;31m" : ""; }
 static const char *error_plain(void) { return error_to_terminal() ? "\x1b[0m"    : ""; }
 
+/* The fatal alert's answer, which is what lets the caller quit afterwards. */
+static void on_fatal_dismissed(GObject *src, GAsyncResult *res, gpointer data)
+{
+    gtk_alert_dialog_choose_finish(GTK_ALERT_DIALOG(src), res, NULL);
+    g_main_loop_quit(data);
+}
+
+void bta_report_fatal(BtaApp *app, const char *message)
+{
+    fprintf(stderr, "\n%sBintana error:%s %s\n", error_red(), error_plain(),
+            message ? message : "(unknown)");
+    fflush(stderr);
+
+    /*
+     * A console project is started from a shell and the line above is enough.
+     * A form project started from a menu has nowhere for stderr to go, so this
+     * is the one moment an error has to interrupt, and the nested loop is what
+     * makes it readable: the caller is about to quit, and returning first would
+     * take the window down with the alert.
+     */
+    if (!app || !app->gapp || !gtk_is_initialized())
+        return;
+
+    GtkAlertDialog *d    = gtk_alert_dialog_new("%s", message ? message : "Error");
+    GMainLoop      *loop = g_main_loop_new(NULL, FALSE);
+
+    gtk_alert_dialog_set_modal(d, TRUE);
+    gtk_alert_dialog_choose(d, gtk_application_get_active_window(app->gapp), NULL,
+                            on_fatal_dismissed, loop);
+    g_main_loop_run(loop);
+
+    g_main_loop_unref(loop);
+    g_object_unref(d);
+}
+
 void bta_dump_error(JSContext *ctx)
 {
     JSValue exc = JS_GetException(ctx);
@@ -798,7 +833,9 @@ static JSValue js_library_path(JSContext *ctx, JSValueConst this_val,
 static JSValue js_libraries(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv);
 
-static void install_globals(BtaApp *app)
+/* Answers false when a library carried a native plugin that cannot be used, in
+ * which case the caller stops the program. See bta_plugins_load. */
+static bool install_globals(BtaApp *app)
 {
     JSContext *ctx    = app->ctx;
     JSValue    global = JS_GetGlobalObject(ctx);
@@ -966,6 +1003,19 @@ static void install_globals(BtaApp *app)
     bta_http_init(ctx, global);
     bta_media_init(ctx, global);
 
+    /*
+     * A library the project named may carry native code -- `<name>/<name>.so`
+     * beside its `.js` -- and it installs its globals here: after the runtime's
+     * own (a plugin may ask for `Application` or `Logger`) and before `rad.js`,
+     * which the library's JavaScript half may want to build on. Widget classes
+     * are registered below and a plugin cannot add one; that is a decision, and
+     * bta_plugin.h says why. See bta_plugin.c.
+     */
+    if (!bta_plugins_load(app, ctx, global)) {
+        JS_FreeValue(ctx, global);
+        return false;
+    }
+
     bta_widgets_init(ctx, global);
     bta_menu_init(ctx);
     bta_sys_init(ctx, global);
@@ -980,6 +1030,7 @@ static void install_globals(BtaApp *app)
 
     /* Last, and only after rad.js: it captured what it needs. */
     close_hatches(ctx);
+    return true;
 }
 
 /*
@@ -1660,6 +1711,9 @@ void bta_app_free(BtaApp *app)
     bta_widgets_cleanup(app->ctx);
     JS_FreeContext(app->ctx);
     JS_FreeRuntime(app->rt);
+    /* After the context: a plugin's cleanup is C-only, and this is where the
+     * shared objects are let go. See the note on bta_plugins_cleanup. */
+    bta_plugins_cleanup(app);
     g_clear_object(&app->gapp);
     g_free(app->dir);
     g_free(app->name);
@@ -1790,7 +1844,8 @@ static int run_console(BtaApp *app)
 {
     JSContext *ctx = app->ctx;
 
-    install_globals(app);
+    if (!install_globals(app))
+        return 2;
     bta_debug_start(ctx);
 
     for (guint i = 0; i < app->sources->len; i++)
@@ -1864,7 +1919,11 @@ static void on_activate(GtkApplication *gapp, gpointer user_data)
 
     register_app_icons(app);
     register_app_styles(app);
-    install_globals(app);
+    if (!install_globals(app)) {
+        app->exit_code = 2;
+        g_application_quit(G_APPLICATION(gapp));
+        return;
+    }
 
     /*
      * Before a line of the project has run, and it **waits**: the IDE has

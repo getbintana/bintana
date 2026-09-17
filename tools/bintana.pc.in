@@ -1,0 +1,16 @@
+# pkg-config for writing a native plugin for the Bintana runtime.
+#
+# `pkg-config --cflags bintana` is the whole recipe: there is nothing to link.
+# A plugin reaches the runtime through the table in bta_plugin.h, so it links
+# neither the runtime nor QuickJS, and the runtime does not have to export any
+# symbols for it.  See docs/plugins.md.
+#
+# `prefix` is derived from the file's own location so a staged or relocated
+# install (DESTDIR, --prefix) still answers with the right paths.
+prefix=${pcfiledir}/../..
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: bintana
+Description: Write a native plugin for the Bintana runtime
+Version: @PROJECT_VERSION@
+Cflags: -I${includedir}/bintana

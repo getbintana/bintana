@@ -11,10 +11,12 @@ side.
 | **[reference/](reference/README.md)** | **One page per class and per global, for the person writing an application**: what it is, which neighbour to use instead, an example off the tree, every member explained, and what goes wrong. The long form of `llm/controls.md` and `llm/library.md`, and what the IDE shows as help |
 | **[llm/](llm/README.md)** | **The public contract**: everything needed to write an application, and nothing about the runtime. Nine files, addressed to whoever writes one — a person or a language model. Start here if you are writing an application rather than the runtime |
 | [architecture.md](architecture.md) | Boot sequence, the C/JS split, the class table, event dispatch, the object model, lifetimes and teardown |
+| [installing.md](installing.md) | Building and installing it on Fedora and Debian/Ubuntu: dependencies per distribution, the optional ones and what each turns on, staging an install, and what the test suites need |
 | [formats.md](formats.md) | `project.json`, the `.form` grammar, serialisation rules, the icon directory |
 | [runtime-api.md](runtime-api.md) | Everything a project sees as a global, plus what `rad.js` adds to the prototypes |
 | [widgets.md](widgets.md) | Per-widget semantics: what each control is made of in GTK, and the behaviour a table cannot state |
 | [extending.md](extending.md) | Adding a widget, a property, an enum, an event — and the traps that cost time |
+| [plugins.md](plugins.md) | Native code outside the tree: a `<name>.so` inside a library, the callback table a plugin is written against, how to build one, and the TagLib wrapper as the worked example |
 | [resources.md](resources.md) | Text as a resource: which properties hold prose, `po/` catalogues, `Locale`, design values, and extraction |
 | [ide.md](ide.md) | How the IDE and its designer work, as a Bintana application with no privileges |
 | [data-plan.md](data-plan.md) | **Not a feature**: the design for binding records to forms and reading them from a database, **wanted and waiting for a caller**, not for a prerequisite: every one it named is built (the focus events, the grid, a `Record` that holds a list of records, and `Database.Sqlite` + `Table`), so only the declarative half is left. Thirteen findings from two hand-written screens are in it, three of which corrected the design |

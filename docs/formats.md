@@ -231,6 +231,7 @@ Everything a project can have beside its classes, a library can have too:
 | `<lib>/po/<lang>.po` | its own catalogue, read **before** the project's. One table and several files, so a project that translates a string a library also translates has the last word; a language only a library ships is still offered by `Locale.Available` |
 | `<lib>/icons/` | on the icon search path after the project's, so a project can put its own drawing over a library's by shipping the same name |
 | `<lib>/app.css` | **not** read. A stylesheet belongs to an application: a library that restyled every `button` in the program would be the one thing here that cannot be overruled |
+| `<lib>/<name>.<suffix>` | **the native half**: a plugin, named after the directory and loaded before the library's `.js` so it can install a global the JavaScript then wraps. `so`, `dll` or `dylib` by platform. A directory with none is an ordinary JavaScript library; one that is there and cannot be used stops the program. See [plugins.md](plugins.md) |
 
 ### Where a library is looked for
 

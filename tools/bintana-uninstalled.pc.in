@@ -1,0 +1,25 @@
+# pkg-config for a plugin built against a Bintana **checkout**.
+#
+# The installed file (tools/bintana.pc.in) derives its prefix from its own
+# location, which is right under a prefix and meaningless in a build tree.  This
+# one spells the source paths outright, and CMake writes it to
+#
+#     <build>/pkgconfig/bintana.pc
+#
+# so a plugin is configured with no install at all:
+#
+#     PKG_CONFIG_PATH=<bintana>/build/pkgconfig cmake -S . -B build
+#
+# That directory holds only this file -- the one meant for `install` is written
+# beside it under `pkgconfig/installed/`, out of the way -- so pointing
+# PKG_CONFIG_PATH at `<build>/pkgconfig` cannot pick up the wrong one.
+#
+# Nothing is linked either way: a plugin reaches the runtime through the table
+# in bta_plugin.h, which is the only thing this output is for.
+prefix=@CMAKE_SOURCE_DIR@
+includedir=${prefix}/runtime/include
+
+Name: bintana
+Description: Write a native plugin for the Bintana runtime (uninstalled)
+Version: @PROJECT_VERSION@
+Cflags: -I${includedir}

@@ -13,12 +13,25 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(GTK4 REQUIRED IMPORTED_TARGET gtk4)
-pkg_check_modules(GTKSOURCE REQUIRED IMPORTED_TARGET gtksourceview-5)
+
+# **The floors are declared here and not just in the documentation.**  GTK 4.10
+# is where `GtkAlertDialog` and `GtkFileDialog` arrive, and the runtime uses both
+# unconditionally -- so an older GTK is a wall of implicit-declaration errors in
+# the middle of a build, which reads like a broken source tree rather than an
+# old distribution.  pkg-config answers the version question before a single
+# file is compiled, and says which one it found.
+pkg_check_modules(GTK4 REQUIRED IMPORTED_TARGET gtk4>=4.10)
+pkg_check_modules(GTKSOURCE REQUIRED IMPORTED_TARGET gtksourceview-5>=5.0)
 # Part of glib, and already installed wherever gtk4 is: `Exec`'s third stream
 # wraps a descriptor the child inherits, which is `g_unix_input_stream_new`.
 # bta_sys.c was already POSIX-only (setsid, killpg), so this costs no port.
 pkg_check_modules(GIOUNIX REQUIRED IMPORTED_TARGET gio-unix-2.0)
+
+# Also part of glib: the plugin loader.  GModule is what makes `g_module_open`
+# one mechanism for a `.so`, a `.dll` and a `.dylib` alike -- and because a
+# plugin calls the runtime through a table and not through symbols, nothing has
+# to be exported from this executable for it (runtime/include/bta_plugin.h).
+pkg_check_modules(GMODULE REQUIRED IMPORTED_TARGET gmodule-2.0)
 
 # Optional: VTE is the pty behind `Terminal`, and it is the only dependency
 # with no Windows port -- which is why it stopped being required. Without it
@@ -113,6 +126,7 @@ add_executable(bintana
     runtime/src/bta_form.c
     runtime/src/bta_http.c
     runtime/src/bta_media.c
+    runtime/src/bta_plugin.c
     ${PRELUDE_H}
 )
 target_include_directories(bintana PRIVATE
@@ -120,7 +134,7 @@ target_include_directories(bintana PRIVATE
     ${CMAKE_BINARY_DIR}/generated
 )
 target_link_libraries(bintana PRIVATE quickjs PkgConfig::GTK4 PkgConfig::GTKSOURCE
-                                       PkgConfig::GIOUNIX)
+                                       PkgConfig::GIOUNIX PkgConfig::GMODULE)
 
 if(VTE_FOUND)
     target_link_libraries(bintana PRIVATE PkgConfig::VTE)
@@ -160,6 +174,54 @@ else()
 endif()
 target_compile_definitions(bintana PRIVATE BTA_VERSION_STRING="${PROJECT_VERSION}")
 target_compile_options(bintana PRIVATE -Wall -Wextra -Wno-unused-parameter)
+
+# ----------------------------------------------------------- test plugins ---
+# The shared objects the suite loads, built here so `cmake --build build` is the
+# whole of what testing them takes.  They are **not installed**: what this tree
+# ships is the mechanism, and a plugin belongs to its library.
+#
+# **They link nothing.**  Not quickjs, not the runtime, not gtk4: a plugin calls
+# the host through the table in runtime/include/bta_plugin.h, so a capability
+# reached through a symbol is a link error here rather than something that
+# happens to work.
+#
+# The output lands in `<build>/testlibs/<name>/<name>.so`, which is the layout a
+# library directory has.  tests/widgets copies one from beside the running
+# binary into a scratch library and lets `uses` find it -- which is also how it
+# works against `BINTANA=<other-build>/bintana`.
+function(bta_test_plugin target source)
+    add_library(${target} MODULE ${source})
+    target_include_directories(${target} PRIVATE ${CMAKE_SOURCE_DIR}/runtime/include)
+    target_compile_options(${target} PRIVATE -Wall -Wextra -Wno-unused-parameter)
+    set_target_properties(${target} PROPERTIES
+        PREFIX ""
+        OUTPUT_NAME ${target}
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/testlibs/${target})
+endfunction()
+
+bta_test_plugin(testplug tests/plugins/testplug.c)
+# A shared object with no entry point at all: the loader has to say which file
+# and why, and the suite asserts that it does.
+bta_test_plugin(testplug-bare tests/plugins/bare.c)
+# The same source claiming an ABI this runtime does not speak.
+bta_test_plugin(testplug-old tests/plugins/testplug.c)
+target_compile_definitions(testplug-old PRIVATE TESTPLUG_ABI=0)
+
+# **The golden one**: `tests/plugins/testplug.c` compiled against the frozen
+# copy of the version-1 header instead of the live one, so the suite loads a
+# plugin built to the *offsets* of ABI 1.  A field reordered in `BtaHost`
+# without the number moving is invisible to a plugin recompiled from the
+# current source and fatal to this one -- which is the one thing the ABI
+# number promises and nothing else here can check.  The note at the top of
+# tests/plugins/abi1/bta_plugin.h says when it goes away.
+add_library(testplug-abi1 MODULE tests/plugins/testplug.c)
+target_include_directories(testplug-abi1 PRIVATE
+                           ${CMAKE_SOURCE_DIR}/tests/plugins/abi1)
+target_compile_options(testplug-abi1 PRIVATE -Wall -Wextra -Wno-unused-parameter)
+set_target_properties(testplug-abi1 PROPERTIES
+    PREFIX ""
+    OUTPUT_NAME testplug-abi1
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/testlibs/testplug-abi1)
 
 # ----------------------------------------------------------------- install ---
 # `cmake --install build` (or `make install`) puts the whole project where a
@@ -222,6 +284,28 @@ install(DIRECTORY lib/ DESTINATION ${BTA_DATADIR}/lib
 # and the runtime disagree.
 install(FILES tools/typings/bintana.d.ts DESTINATION ${BTA_DATADIR})
 
+# **One header, and that is the whole development surface a plugin needs.** Not
+# `bta.h` and not `quickjs.h`: a plugin links neither the runtime nor the
+# engine, so what it compiles against is the callback table and nothing else
+# (docs/plugins.md). The pkg-config file is the one line that points a compiler
+# at it; it carries no `Libs`, because there is nothing to link.
+#
+# **Two of them, because there are two situations.** The installed one is
+# relocatable -- its prefix comes from the file's own location, which is what
+# survives `--prefix` and a packager's `DESTDIR`. The other describes this
+# *source tree* and is what lets a plugin be built against a checkout without
+# installing anything: `PKG_CONFIG_PATH=<build>/pkgconfig`. They are written to
+# different directories so a path can never pick the wrong one.
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/pkgconfig/installed)
+configure_file(tools/bintana.pc.in
+               ${CMAKE_BINARY_DIR}/pkgconfig/installed/bintana.pc @ONLY)
+configure_file(tools/bintana-uninstalled.pc.in
+               ${CMAKE_BINARY_DIR}/pkgconfig/bintana.pc @ONLY)
+install(FILES runtime/include/bta_plugin.h
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/bintana)
+install(FILES ${CMAKE_BINARY_DIR}/pkgconfig/installed/bintana.pc
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
+
 install(FILES tools/bintana-ide.desktop
         DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 install(FILES tools/bintana-ide.svg
@@ -229,3 +313,12 @@ install(FILES tools/bintana-ide.svg
 
 install(FILES README.md LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
 install(DIRECTORY docs/ DESTINATION ${CMAKE_INSTALL_DOCDIR}/docs)
+
+# `cmake --build build --target uninstall` (or `make -C build uninstall`).
+# CMake has no uninstall of its own, and removing the manifest is the only
+# version of it that cannot take something else with it; tools/uninstall.cmake.in
+# is the script and carries the argument.
+configure_file(tools/uninstall.cmake.in ${CMAKE_BINARY_DIR}/uninstall.cmake @ONLY)
+add_custom_target(uninstall
+    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_BINARY_DIR}/uninstall.cmake
+    COMMENT "Removing what `cmake --install` recorded")

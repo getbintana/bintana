@@ -27,15 +27,21 @@ bta_locale.c      po/*.po, Locale, the plural-form expression evaluator, and how
 bta_decimal.c     Decimal: exact base-10 arithmetic, with the operators
 bta_form.c        the .form loader
 bta_sys.c         File, Dir, Exec, Dialog, timers
+bta_plugin.c      native plugins: the host table a library's `.so` is handed,
+                  and the loader that finds one in a library directory
+                  (runtime/include/bta_plugin.h is the whole contract)
 runtime/js/rad.js the JS half, baked into the binary
 ```
 
 `vendor/quickjs` is quickjs-ng v0.16.1, built as a static library, and it
-carries **two local patches** -- one that gives `Decimal` its operators and one
-that stops `JSON.parse` losing a decimal comma. Both are in
-[`AGENTS.md`](../AGENTS.md#the-two-patches-in-vendor). GTK4 and
-GtkSourceView 5 come from pkg-config and are required; sqlite3, libsystemd,
-libsoup-3.0, gstreamer-1.0 and VTE come from pkg-config and are not.
+carries **four local patches**: the arithmetic hook that gives `Decimal` its
+operators, `js_atod` so `JSON.parse` does not read the locale's decimal comma,
+the refusal message that names the property it would not add, and the
+debugger's hook with its six readers. All four are in
+[`AGENTS.md`](../AGENTS.md#the-four-patches-in-vendor), each with what dropping
+it costs. GTK4 (4.10 or newer) and GtkSourceView 5 come from pkg-config and are
+required; sqlite3, libsystemd, libsoup-3.0, gstreamer-1.0 and VTE come from
+pkg-config and are not.
 
 `rad.js` is turned into a C string at build time (`tools/embed_text.cmake`
 produces `bta_prelude.h`) and evaluated once, after the native classes are
@@ -113,9 +119,10 @@ main()                       first bare argument is the project directory
     g_application_run()
       on_activate()
         register_app_icons()   <project>/icons into the icon search path
-        install_globals()      print, console, Application, Message,
-                               widget classes, menus, sys, then rad.js,
-                               then close_hatches()
+        install_globals()      print, console, Application, Message, the
+                               libraries' plugins (<name>/<name>.so), widget
+                               classes, menus, sys, then rad.js, then
+                               close_hatches()
         eval each source       in the order sources gives, else every *.js
                                under the project, sorted by path
         bta_lookup_global(startup)   a bare name from the global lexical

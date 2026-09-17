@@ -16,6 +16,16 @@ typedef struct BtaWidget BtaWidget;
 typedef struct BtaApp    BtaApp;
 
 /*
+ * The runtime's own release: `Application`'s `BTA_VERSION` global, and what
+ * `bintana --version` prints.  CMake defines it from the one place it is
+ * declared (`project(bintana VERSION ...)`), so the binary and this header
+ * cannot disagree; the fallback is for a translation unit built outside that.
+ */
+#ifndef BTA_VERSION_STRING
+#define BTA_VERSION_STRING "unknown"
+#endif
+
+/*
  * The runtime's own notes about a widget -- what it knows and the application
  * does not, kept on the struct rather than as own properties of the wrapper.
  * See the fields at the end of BtaWidget, and `docs/strict-plan.md` for why.
@@ -251,6 +261,14 @@ struct BtaApp {
      * what makes its classes usable from a `.form`.
      */
     GPtrArray      *libs;
+    /*
+     * The native plugins the libraries carried and the runtime loaded, in load
+     * order.  Empty (NULL) for the ordinary project, whose libraries are all
+     * JavaScript.  `bta_plugins_load` fills it and `bta_plugins_cleanup`
+     * releases it; the entries are bta_plugin.c's own, which is why the type
+     * here is only GPtrArray.
+     */
+    GPtrArray      *plugins;
     GHashTable     *forms;    /* class name -> its .form, anywhere in the tree */
     char          **args;     /* NULL-terminated; argv after the project dir */
 
@@ -345,6 +363,26 @@ typedef struct BtaClass {
      */
     bool        available;
 
+    /*
+     * Whether **this machine** can run one right now, for a class whose answer
+     * is not a build-time constant.  `available` is the default and this, when
+     * set, is the answer: `Widget.Available(type)` and an instance's
+     * `Available` both come through `bta_class_runnable`.
+     *
+     * `Video` is the class that needed it.  `Terminal`'s answer is whether VTE
+     * was linked in, which is a constant of the build; a `Video` needs a
+     * GStreamer base and the `gtk4paintablesink` element, and either can be
+     * missing on a machine whose runtime has GStreamer -- and the program that
+     * asks is the palette, before anything is played.
+     *
+     * **The probe caches its own answer.**  It runs on the first question and
+     * the answer cannot change while the process lives; `Video`'s asks the
+     * GStreamer registry, which is 6 ms with the cache warm and 573 ms cold
+     * (measured), and that bill is why this is asked lazily rather than at
+     * start-up.
+     */
+    bool      (*probe)(void);
+
     JSValue     proto;                  /* filled in by bta_widgets_init */
     JSValue     ctor;
 } BtaClass;
@@ -407,18 +445,18 @@ void bta_table_register(void);      /* bta_tree.c     */
  * `BTA_CLASS_OPTIONAL` is how the exception says otherwise.
  */
 #define BTA_CLASS_AT(cname, parent_, build_, props_, nprops_, is_form_,   \
-                     options_, texts_, available_, events_)               \
+                     options_, texts_, available_, probe_, events_)       \
     { .name = cname, .parent = parent_, .build = build_,                  \
       .props = props_, .nprops = nprops_, .is_form = is_form_,            \
       .options = options_, .texts = texts_, .events = events_,            \
-      .available = available_,                                            \
+      .available = available_, .probe = probe_,                           \
       .proto = JS_UNDEFINED, .ctor = JS_UNDEFINED }
 
 /* Available, which all but the optional-engine classes are (see the field). */
 #define BTA_CLASS_FULL(cname, parent_, build_, props_, nprops_, is_form_, \
                        options_, texts_, events_)                         \
     BTA_CLASS_AT(cname, parent_, build_, props_, nprops_, is_form_,       \
-                 options_, texts_, true, events_)
+                 options_, texts_, true, NULL, events_)
 
 /*
  * Every variant takes `events` last, so a class states what it raises where it
@@ -449,7 +487,21 @@ void bta_table_register(void);      /* bta_tree.c     */
  */
 #define BTA_CLASS_OPTIONAL(cname, parent, build, props, is_form, available, events) \
     BTA_CLASS_AT(cname, parent, build, props, (int)G_N_ELEMENTS(props), \
-                 is_form, NULL, NULL, available, events)
+                 is_form, NULL, NULL, available, NULL, events)
+
+/*
+ * ...and for the class whose answer is **asked of the machine**, not declared
+ * at build time: `probe` is what `Widget.Available(type)` and the instance's
+ * `Available` answer with (see BtaClass.probe).  It takes `options` because
+ * `Video` -- the one class that needed this -- has enumerated properties.
+ */
+#define BTA_CLASS_ENUM_PROBE(cname, parent, build, props, is_form, options,  \
+                             probe, events)                                  \
+    BTA_CLASS_AT(cname, parent, build, props, (int)G_N_ELEMENTS(props),      \
+                 is_form, options, NULL, true, probe, events)
+
+/* The answer for a class, whichever way it declares it. */
+bool bta_class_runnable(const BtaClass *cls);
 
 BtaApp *bta_current_app(void);
 
@@ -461,6 +513,19 @@ int     bta_app_run(BtaApp *app, int argc, char **argv);
 char   *bta_read_file(const char *path, size_t *len);
 int     bta_eval_file(JSContext *ctx, const char *path);
 void    bta_dump_error(JSContext *ctx);
+/*
+ * A fatal error raised from C, before any project code has run: it always goes
+ * to stderr, and -- when there is a display and an application to own it -- into
+ * the same alert a JavaScript error gets.  A form project started from a menu
+ * has no terminal to read, and `bta_plugins_load` is the caller that made this
+ * necessary: a shared object that will not load stopped the program with
+ * nothing on screen.
+ *
+ * It returns once the alert has been dismissed, so the caller can quit knowing
+ * it was seen.  A console project is unaffected: stderr is where its reader
+ * already is.
+ */
+void    bta_report_fatal(BtaApp *app, const char *message);
 void    bta_drain_jobs(JSRuntime *rt);   /* run pending promise callbacks */
 
 /* A Debug line from C, where there is no argv to join: threshold, Handler,
@@ -621,6 +686,24 @@ bool              bta_surface_is_box(GtkWidget *widget);
  * on anything that is not one of ours. */
 void       bta_fixed_set_anchored(GtkWidget *fixed, bool on);
 bool       bta_fixed_get_anchored(GtkWidget *fixed);
+
+/* --- native plugins -----------------------------------------------------
+ *
+ * A library named by `uses` may carry `<name>/<name>.<G_MODULE_SUFFIX>` beside
+ * its `.js`, and the runtime loads it before the library's sources so the
+ * native half can install a global the JavaScript half wraps.  The contract a
+ * plugin is written against is `runtime/include/bta_plugin.h`, which is the
+ * only header a plugin needs and the only thing this installs.
+ *
+ * Loaded from `install_globals`, after the runtime's own globals and before
+ * `rad.js`.  `bta_plugins_load` answers false when a shared object is there and
+ * cannot be used -- not a plugin file at all, another ABI, an init that failed
+ * -- and the caller stops the program, because half a library is not a state to
+ * run in.  `bta_plugins_cleanup` runs the plugins' own cleanup and closes them,
+ * after the context is gone.
+ */
+bool bta_plugins_load(BtaApp *app, JSContext *ctx, JSValue global);
+void bta_plugins_cleanup(BtaApp *app);
 
 /* --- Http ------------------------------------------------------------- */
 void  bta_http_init(JSContext *ctx, JSValue global);

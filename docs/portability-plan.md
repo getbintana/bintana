@@ -50,6 +50,7 @@ shim below already has its place.
 | `runtime/src/bta_runtime.c` | `g_file_read_link("/proc/self/exe")` twice (`Application.Executable`, `lib_candidates`) becomes `GetModuleFileNameW`; `BINTANA_LIB_PATH` splits on `G_SEARCHPATH_SEPARATOR` (`:` splits `C:\...` in two); the `/usr/share/bintana/lib` fallback is harmless |
 | `runtime/src/bta_locale.c` | `%'.*f` is a POSIX printf flag UCRT does not implement; `Locale.Number`/`Currency` for doubles go through the hand-written grouping `locale_group` already does for decimals, or are proven against MinGW's ANSI printf. Asserted by `Locale.Number` and the `JsonFiles` decimal-comma test |
 | `runtime/src/main.c` | console UTF-8 (`SetConsoleOutputCP(CP_UTF8)` / the UCRT's `.UTF-8` locale) and the subsystem decision: a console build keeps `print`/`Logger` output when launched from a shell, which is what the IDE's Run and the suite want |
+| `runtime/src/bta_plugin.c` | no work of its own: GModule names the suffix (`.dll`) and does the load, and the plugin contract is a table of function pointers, so a plugin compiled by MSVC, MinGW or clang links nothing and needs no export list. `BTA_PLUGIN_EXPORT` is the one platform line, at the plugin's side of the header |
 | `bta_journal.c`, `bta_terminal.c` | no work: both are already stubbed without their dependency, and everything either stub needs (`signal.h`, `sys/wait.h`) is inside the `#ifdef` |
 
 QuickJS is already portable, and the two patches in `vendor/` — arithmetic on

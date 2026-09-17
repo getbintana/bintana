@@ -45,8 +45,15 @@ const BUILD = File.Directory(Application.Executable);
 
 /* GTK's portal and D-Bus chatter, and Mesa on a display with no GPU. The same
  * three the suite filters, and for the same reason: none of them says anything
- * about the runtime, let alone about where its files are. */
-const NOISE = /Gdk-WARNING|Gtk-WARNING|libEGL warning|Gtk-Message/;
+ * about the runtime, let alone about where its files are.
+ *
+ * `MESA-EGL` is the fourth, and it is the same bargain one layer down: an
+ * `Xvfb` has no DRI3, so Mesa's EGL loader says so on its way past -- before
+ * `GSK_RENDERER=cairo` has had any say -- and that line is the driver clearing
+ * its throat, not the IDE.  It arrived with a Mesa that started warning; the
+ * check is about what the *application* says, and a filter that let this
+ * through reports a failure about nothing the install controls. */
+const NOISE = /Gdk-WARNING|Gtk-WARNING|libEGL warning|MESA-EGL|Gtk-Message/;
 
 /* How long the IDE gets to put a window up, in quarter seconds. Generous: this
  * runs after a cold install, on a virtual display, and the cost of it being too
@@ -100,6 +107,7 @@ function Main() {
     }
 
     contents(prefix);
+    pluginDev(prefix, work);
     launcher(prefix);
     entry(prefix);
 
@@ -169,6 +177,86 @@ function contents(prefix) {
         check("every source in the installed project.json is there", gone.length === 0,
               gone.join(", "));
     }
+}
+
+/* -------------------------------------------------------------- plugins
+ *
+ * The development surface a native plugin needs, and it is deliberately one
+ * header and one pkg-config file.  **Compiled against and not merely listed**:
+ * the failure this exists for is a header that lands in the wrong directory or
+ * a `Cflags` line that points nowhere, and both look exactly like a successful
+ * install until somebody outside this tree tries to build a plugin.
+ *
+ * The source is the suite's own reference plugin, so what compiles here is what
+ * `tests/widgets` loads and `docs/plugins.md` points at.  It is compiled
+ * against the *staged* prefix and not the source tree: the point is that an
+ * installed runtime can be extended from outside, with nothing left over from
+ * the tree it was built in.
+ */
+function pluginDev(prefix, work) {
+    const header = File.Join(prefix, "include", "bintana", "bta_plugin.h");
+    check("installed include/bintana/bta_plugin.h", File.Exists(header));
+
+    const pcs = Directory.Files(prefix, { Pattern: "bintana.pc", Recursive: true });
+    check("installed a bintana.pc for pkg-config", pcs.length === 1, pcs.join(", "));
+    if (!pcs.length || !Application.HasCommand("cc")) {
+        check("a plugin compiles against the installed header", false,
+              pcs.length ? "no cc" : "no bintana.pc");
+        return;
+    }
+
+    const flags = Exec.Wait(["pkg-config", "--cflags", "bintana"],
+                            { Environment: { PKG_CONFIG_PATH: File.Directory(pcs[0]) },
+                              Timeout: 20000, Stderr: "separate" });
+    check("pkg-config finds the installed bintana", flags.ExitCode === 0,
+          flags.Errors || flags.Output);
+    if (flags.ExitCode !== 0)
+        return;
+
+    const out  = File.Join(work, "stage-testplug.so");
+    const argv = ["cc", "-shared", "-fPIC", "-o", out,
+                  File.Join(ROOT, "tests", "plugins", "testplug.c")]
+                     .concat(flags.Output.trim().split(/\s+/).filter((s) => s));
+    const r = Exec.Wait(argv, { Timeout: 60000, Stderr: "separate" });
+
+    check("a plugin compiles against the installed header", r.ExitCode === 0,
+          r.Errors || r.Output);
+    check("...and the shared object it produced is there", File.Exists(out));
+    if (r.ExitCode !== 0)
+        return;
+
+    /*
+     * **And the installed runtime has to load it and run it.**  A compile
+     * answers *does the header point somewhere*; this answers the rest -- the
+     * installed binary's loader, its GModule, its ABI check, and the global the
+     * plugin installs -- which is the whole reason a plugin exists.  A console
+     * project of our own, a library directory made of the one file, and the
+     * installed runtime run against both.
+     */
+    const lib  = File.Join(work, "plugins");
+    const mine = File.Join(lib, "testplug");
+    Directory.Make(mine);
+    File.Copy(out, File.Join(mine, "testplug.so"));
+
+    const proj = File.Join(work, "plugproj");
+    Directory.Make(proj);
+    File.SaveJson(File.Join(proj, "project.json"),
+                  { name: "stageplug", main: "Main", uses: ["testplug"] });
+    File.Save(File.Join(proj, "Main.js"), `
+"use strict";
+function Main() {
+    print("stage:" + TestPlug.Echo("ok"));
+    Application.Quit(0);
+}
+`);
+
+    const ran = Exec.Wait([File.Join(prefix, "bin", "bintana"), proj],
+                          { Environment: { BINTANA_LIB_PATH: lib },
+                            Timeout: 60000, Stderr: "separate" });
+    check("the installed runtime loads a plugin built against it",
+          ran.ExitCode === 0, ran.Errors || ran.Output);
+    check("...and the global it installs answers",
+          (ran.Output || "").includes("stage:ok"), ran.Output);
 }
 
 /* Every file of a tree, minus the .pot the install leaves out on purpose. */

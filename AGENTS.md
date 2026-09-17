@@ -59,8 +59,10 @@ reference:
 | a component in `lib/` (the shipped libraries) | [`docs/llm/<library>.md`](docs/llm/charts.md) — and `tests/api.sh` **fails** until it does, the same rule the runtime's own surface is held to |
 | a global (`File`, `Exec`, `Locale`, `Record` …) | [`docs/runtime-api.md`](docs/runtime-api.md) and [`docs/llm/library.md`](docs/llm/library.md) — **and a line in `GLOBAL_TABLES`/`GLOBAL_VARS` in `tests/api/Check.js`**, or the check cannot see it |
 | the `.form`, `project.json` or the serialiser | [`docs/formats.md`](docs/formats.md) and [`docs/llm/forms.md`](docs/llm/forms.md) |
+| what `cmake --install` lays down, or the `uninstall` target | [`docs/installing.md`](docs/installing.md) — and `tests/install.sh` must still pass, since it stages a real install, compiles a plugin against it and runs it |
 | the language: an intrinsic installed or removed | [`docs/llm/language.md`](docs/llm/language.md) and `runtime-api.md`'s *language underneath* |
 | how a widget, property or event is added | [`docs/extending.md`](docs/extending.md) |
+| the native plugin ABI or loader (`bta_plugin.h`, `bta_plugin.c`, a `.so` in a library) | [`docs/plugins.md`](docs/plugins.md), plus [`docs/formats.md`](docs/formats.md) and [`docs/llm/forms.md`](docs/llm/forms.md) for the `uses` half — and `tests/plugins/testplug.c` is the reference every verb is held to |
 | **filling a gap `docs/issues/` reported** | **delete the issue file**, and the row for it in [`docs/issues/README.md`](docs/issues/README.md) and in [`docs/llm/issues.md`](docs/llm/issues.md)'s *what is known to be missing* — see below |
 | anything a test now proves | [`docs/testing.md`](docs/testing.md), and the counts it quotes |
 
@@ -169,11 +171,15 @@ cannot do, since it owns its display for the length of one command.
 The suite needs a display but not yours: it runs under `xvfb-run` by default, and
 falls back to it anyway when there is no `DISPLAY`/`WAYLAND_DISPLAY`, which is
 what `.github/workflows/ci.yml` relies on. Anything you drive by hand still needs a real display. Build deps:
-`gtk4`, `gtksourceview-5` (with headers), pkg-config. QuickJS is vendored, so
+`gtk4` (**4.10 or newer** -- `GtkAlertDialog` and `GtkFileDialog`),
+`gtksourceview-5` (with headers), pkg-config, and `gmodule-2.0`, which is the
+plugin loader and comes with glib. QuickJS is vendored, so
 nothing to install for it. Five are optional and CMake says what it found either
 way: `sqlite3`, `libsystemd`, `libsoup-3.0`, `gstreamer-1.0` and
 **`vte-2.91-gtk4`** -- the last being the pty behind `Terminal`, and the only
-dependency with no Windows port. **Build both ways before touching anything under
+dependency with no Windows port. **Package names per distribution and what each
+one turns on are in [`docs/installing.md`](docs/installing.md)**, which is also
+where the `Xvfb`/`xdotool`/`python3`/`openssl` the suites want are listed. **Build both ways before touching anything under
 an `#ifdef`**: a wrapper `pkg-config` that exits 1 for one module name and
 delegates the rest is the whole of it
 (`cmake -S . -B build-x -DPKG_CONFIG_EXECUTABLE=<wrapper>`), and
@@ -487,11 +493,21 @@ hold. `docs/debug-plan.md` is the design and the measurements.
 
 ## Tests
 
-Four Bintana projects under `tests/`, each printing `N passed, M failed` and
-quitting with a non-zero status on failure. They are applications, not a
-harness — write assertions the way the suite already does. A project is any
-directory under `tests/` with a `project.json` that does not declare `main`, so
-adding one is adding a directory: nothing lists them.
+Five Bintana projects are run by the suite — `ide`, `markdown`, `report`,
+`smoke` and `widgets` — each printing `N passed, M failed` and quitting with a
+non-zero status on failure. They are applications, not a harness — write
+assertions the way the suite already does. A project is any directory under
+`tests/` with a `project.json` that does not declare `main`, so adding one is
+adding a directory: nothing lists them. (The console projects — `api`, `icons`,
+`install`, `runner`, `styles` — are tools and are driven by their own `.sh`.)
+
+**`tests/plugins/` is not a project**: it holds the C sources of the native
+plugins the suite loads (`testplug.c` — the reference implementation
+`docs/plugins.md` points at — plus a no-entry-point one and `abi1/`, a frozen
+copy of the version-1 header). CMake builds them into
+`<build>/testlibs/<name>/<name>.so`, and `tests/widgets` copies one from beside
+the running binary into a scratch library. No `project.json`, so the runner
+walks past it.
 
 **`tests/runner` is the suite's own runner, and it is a Bintana project too** —
 a console one (`"main"`), so it needs no display and can be the thing that decides
@@ -704,6 +720,82 @@ entry below is something that cost somebody a debugging session and now costs a
 paragraph. Add to it when you are surprised; nothing here was obvious to the
 person who wrote it either.
 
+- **Fedora's `pkg-config` does search `/usr/local`, and the way to ask whether
+  it does answers wrongly.** `pkg-config --variable pc_path pkg-config` prints
+  `/usr/lib64/pkgconfig:/usr/share/pkgconfig`, so `/usr/local/lib64/pkgconfig`
+  reads as unsearchable -- and `pkg-config --cflags bintana` finds a `.pc` there
+  anyway, because `/usr/bin/pkg-config` is a wrapper (`pkgconf-pkg-config`) that
+  sets `PKG_CONFIG_LIBDIR=/usr/local/lib64/pkgconfig:/usr/local/share/pkgconfig:/usr/lib64/pkgconfig:/usr/share/pkgconfig`
+  before exec'ing pkgconf, and a set `PKG_CONFIG_LIBDIR` **replaces** the
+  compiled-in default rather than adding to it. This produced a wrong
+  `docs/installing.md` once -- an "install to `/usr` on Fedora" that was never
+  necessary. The question with a true answer is `pkg-config --cflags bintana`;
+  the variable is a report about pkgconf and not about this machine's
+  `pkg-config`. (The pc under `<build>/pkgconfig` is a different case: it is for
+  building against a checkout with nothing installed at all.)
+- **A plugin is a table and not a link, and every corner of that decision was
+  arrived at by getting it wrong first.** The contract is
+  `runtime/include/bta_plugin.h` -- the *only* header a plugin compiles against,
+  installed with the runtime -- and a plugin links neither `bintana` nor
+  QuickJS. What follows, each of which was assumed the other way at least once:
+  - **`JS_NewCClosure` pads `argv` up to the declared arity but reports the
+    actual `argc`.** So a C function declared with two arguments and called with
+    none receives `argc == 0` and a pointer it may index to two entries. The
+    first trampoline passed that short `argc` on and the plugin's `argv[1]` read
+    NULL -- the fix is to carry the declared arity as the closure's `magic` and
+    hand the plugin `max(argc, magic)`, which is what makes the header's promise
+    true rather than aspirational.
+  - **`JSValue` is a 16-byte struct in this build, not a `uint64_t`.** The
+    public `BtaValue` is an opaque two-word struct and the host `memcpy`s in and
+    out, so the header does not change when the engine's boxing does; a
+    `G_STATIC_ASSERT(sizeof(JSValue) <= sizeof(BtaValue))` is what turns a
+    future engine that grows past it into a build failure.
+  - **Ownership is the API.** Everything a host verb returns is the plugin's;
+    everything passed into `set`, `push` or a return is handed over. The first
+    test plugin released a value it had already given to `set` and QuickJS
+    aborted in `gc_decref_child`. `argv` and `text()` are borrowed until the
+    callback returns -- and `text()`'s borrow is implemented here as a list of
+    `JS_ToCString` conversions freed when the outermost call ends, because
+    returning the engine's pointer would dangle and never freeing it would leak.
+  - **`bta.h` and `quickjs.h` are deliberately not installed.** The day a plugin
+    needs them the contract has become the runtime's internals, which is the
+    thing this design exists to avoid: `BtaHost` is append-only, `BTA_PLUGIN_ABI`
+    moves only for a real break, and a capability not in the table is a line to
+    add on purpose rather than a symbol that happens to resolve.  **`call` was
+    the first append** (a plugin handed a JavaScript function has to be able to
+    invoke it), and it needed no bump: the golden `testplug-abi1` keeps working
+    because a version-1 plugin never reads past `log`.  An appended capability
+    also gets a `BTA_PLUGIN_HAS_<NAME>` macro, which is what lets one source be
+    compiled against either header -- `testplug.c` guards `Apply` with it.
+  - **Do not add `-rdynamic`.** Nothing needs it: the plugin has no undefined
+    symbols, so there is nothing for the host to export and no collision to
+    have. `g_module_open(path, G_MODULE_BIND_LOCAL)` in a library directory
+    named `<name>/<name>.<G_MODULE_SUFFIX>` is the whole loader.
+- **`cleanup` runs after the JavaScript context is gone, so it must not call the
+  host.** The table's verbs all build values in a context that no longer exists,
+  and a plugin that stored the `BtaHost *` and used it there would build values
+  into freed memory. The contract says C resources only; the loader calls it
+  after `JS_FreeRuntime`, in reverse `uses` order, and then closes the shared
+  object.
+- **A plugin's `init` runs before `rad.js`.** The runtime's own globals are there
+  (`Application`, `Logger`), so `host->get(global, "Application")` answers -- but
+  `Dictionary`, `Record` and every prototype convenience are not, because the
+  prelude has not run. Anything that needs them belongs in the library's `.js`,
+  which loads after `init` returns; the suite asserts that order (a library's
+  `.js` sees the global the `.so` installed).
+- **The test plugins are built by CMake and are not installed.** They land in
+  `<build>/testlibs/<name>/<name>.so`, and `tests/widgets` copies one from beside
+  the running binary -- `File.Directory(Application.Executable)` -- into a scratch
+  library directory, which is what makes the test follow `BINTANA=<other-build>`.
+  A shared object that is *there* and cannot be used stops the program, while a
+  directory with no `.so` at all is an ordinary JavaScript library and says
+  nothing; that asymmetry is the loader's, and both halves are asserted (`Plugin`).
+  **One of them is the golden `testplug-abi1`**, compiled against the frozen
+  version-1 header in `tests/plugins/abi1/`: reorder a field in `BtaHost` without
+  bumping `BTA_PLUGIN_ABI` and the suite goes red -- measured by swapping
+  `object`/`array` and watching `Fields()` come back `[]` -- which no plugin
+  rebuilt from the current source can catch. A real bump deletes that directory,
+  and its note says so.
 - **The JS stack budget is bytes, and what it buys is levels -- a different
   number in each build.** `JS_SetMaxStackSize` is what stops a recursive walk of
   a widget tree before it reaches the real end of the stack, and the walks are
@@ -1166,6 +1258,33 @@ person who wrote it either.
 - A `GtkDragSource` goes in the **capture** phase. A `Button`'s own gesture
   claims the press, so a source in `bubble` never reaches the drag threshold: the
   control would be draggable everywhere except on the controls one drags from.
+- **No drag starts inside a `RowList`, in either phase.** A `GtkListBox` claims
+  the press for its own selection, so a card with `DragData` set selects and
+  nothing else -- measured with a one-row probe that printed `SELECTED` and no
+  `DROPPED`, while the same gesture from a bare `Button` dropped fine. It is the
+  VTE shape above seen from the list side. A column of draggable cards is a
+  `Scroller` over a `Panel`, which claims nothing, with selection (`MouseDown`
+  plus a class), filtering (`Visible`) and editing (double click) written by
+  hand. Found building `examples/kanban`.
+- **A component added from code keeps itself as its event target.** Only the
+  `.form` loader rebinds one to its host (`bta_widget_bind` in `build_one`);
+  `Container.Add` adopts it through `bta_widget_adopt`, which only binds what
+  has no form yet -- and a component's root already answers to itself. So
+  `<name>_<event>` on the host never fires for a card built with `new
+  TaskCard()`; the closures go onto the card (`card[card.Name +
+  "_MouseDown"] = …`) and die with it. `examples/contacts` never noticed,
+  because its rows are passive. Measured both ways with a probe: a `.form`
+  component answers on the host, a code-added one answers on itself.
+- **Submitting a modal with an xdotool key can haunt the run.** `key` sends
+  down, waits 12 ms, sends up; a dialog that submits and closes inside that gap
+  takes the up down with it -- `BadWindow` on the send, the release never
+  processed, the key held server-side. What follows is auto-repeat into the
+  newly focused window: the opener button re-fires and a phantom dialog sits
+  there, one per submit, each invisible to a window capture of the main form.
+  A thousand repeats were measured before anybody looked at the log. Submit
+  with a mouse click (clean), and read `BadWindow` after a dialog-submit key
+  as the signature. Real users cannot hit this: a physical release routes by
+  focus instead of at a corpse. Found driving `examples/kanban`.
 - An own `-symbolic` icon is drawn with **fills**: GTK's recolouring forces
   `fill`, and a stroke keeps the colour in the file (black on a dark theme).
 - **A property declared in a `.form` fires its event while the form is still
@@ -2838,8 +2957,24 @@ person who wrote it either.
   has a name and no control, and the instance publishes `Available` for one that
   has a control. **Offer from `Available`, load from `Types`** -- the IDE's
   palette filters on the first and `Widget.New` still builds the stub, because a
-  `.form` that already holds one has to open. `Video` is the same gap and cannot
-  answer it yet, which is `docs/issues/ISSUE-video-availability.md`.
+  `.form` that already holds one has to open.
+- **...and a build-time flag is a different question from a machine's answer, so
+  a class can now answer with a probe.** `Terminal`'s `available` is whether VTE
+  was linked in, which is a constant; `Video` needs GStreamer *and* the
+  `gtk4paintablesink` element, and a runtime built with GStreamer on a machine
+  whose registry lacks gst-plugins-rs is a real shape -- a CI runner.  So
+  `BtaClass.probe` is a function the class declares and `bta_class_runnable`
+  picks whichever of the two a class has (`Video` is the one row using
+  `BTA_CLASS_ENUM_PROBE`, and `AudioPlayer` is deliberately outside it: sound
+  needs no sink).  **The probe caches its own answer**, because the first
+  question reads the GStreamer registry: 6 ms warm, **573 ms cold** measured,
+  and that is why it is asked on the palette's first question rather than at
+  start-up.  The palette test already checked both directions generically
+  (available must be offered, unavailable must not), so `Video` dropping its
+  button on this build was already covered -- what the widgets test adds is that
+  `Video.Available` and `Widget.Available("Video")` cannot drift apart.  The
+  issue that asked for it, `docs/issues/ISSUE-video-availability.md`, is deleted
+  as answered.
 - **The IDE's output pane was a `Terminal` for nothing, and the audit is the
   lesson rather than the fix.** Consumer by consumer, everything that used it
   wanted `Run`, `Clear`, `Text`, `Stop` and `Exit` -- and *nothing* used stdin,

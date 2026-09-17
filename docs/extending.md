@@ -10,6 +10,15 @@ When it does belong in C, the shape is small. Any C change needs a rebuild
 (`cmake --build build -j`); `.js` and `.form` files are data read at run time and
 need none.
 
+**And before adding it *here*, check whether it belongs outside the tree.** A
+wrapper of a C library that most programs never use — an audio tag parser, a
+device, a format — is a **native plugin**: a `<name>.so` inside a library
+directory, written against `runtime/include/bta_plugin.h`, compiled by whoever
+needs it and loaded by `uses` like the library itself. It reaches JavaScript
+through a callback table, so it links neither the runtime nor QuickJS and costs
+this tree nothing to keep. [plugins.md](plugins.md) is the contract and the
+worked example.
+
 ## Adding a widget
 
 Three things in one module, and nothing anywhere else:
@@ -198,6 +207,28 @@ palette, which filters its buttons on it — and a read-only `Available` on the
 instance for a caller that has one. `Widget.Types()` keeps meaning *what classes
 there are*, and `Widget.New` keeps building it, because a `.form` that already
 holds one has to load.
+
+**A build-time flag is not always the question, so a class can answer with a
+probe instead.** `Terminal`'s answer is whether VTE was linked in, which is a
+constant; `Video` needs GStreamer *and* the `gtk4paintablesink` element, and a
+runtime built with GStreamer on a machine whose registry lacks the sink — a CI
+runner — cannot play one. Such a class declares `BtaClass.probe`, a function
+`bta_class_runnable` prefers over `available`:
+
+```c
+static bool video_available(void) { … }   /* cached: the answer cannot change */
+
+BTA_CLASS_ENUM_PROBE("Video", "Control", build_video, video_props,
+                     false, video_options, video_available, "Ended,Error")
+```
+
+**Cache the answer inside the probe**, and keep the work out of start-up: the
+first `Widget.Available("Video")` reads GStreamer's plugin registry, which is
+6 ms with its cache warm and **573 ms cold** (measured), so it is asked on the
+palette's first question and never at boot. The class keeps everything else the
+same — it constructs, draws, loads out of a `.form` and answers every property
+on a machine that answers `false` — and the instance publishes the same answer,
+read off the class row rather than recomputed, so the two cannot drift apart.
 
 In CMake, `pkg_check_modules` **without** `REQUIRED`, a `BTA_HAVE_*` definition,
 and a `message(STATUS …)` **either way** — the message is what a build reads back

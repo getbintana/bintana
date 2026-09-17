@@ -1,0 +1,71 @@
+# The inverse of `cmake --install`, run by `cmake --build build --target uninstall`.
+#
+# **CMake has no uninstall, and removing the prefix is not one.**  A prefix is
+# shared -- `/usr` especially -- and `rm -rf /usr/share/bintana` is a guess that
+# is right only while the layout is what this build expects.  What is exact is
+# what the install wrote down: `install_manifest.txt`, one path per installed
+# file.  This removes those, and then the directories among them that are
+# **empty**, so a reinstall starts clean and nothing that was not ours goes.
+#
+# The paths in the manifest are what the install was told: a `--prefix` is baked
+# in, a `DESTDIR` is not, so `DESTDIR` is applied here exactly as the install
+# applies it.
+#
+# Two things worth knowing.  A later `cmake --install` **overwrites** the
+# manifest, so it always describes the last install -- the one this undoes; and
+# what is *not* here is anything a program wrote while it ran (the user's
+# `~/.config/bintana/<project>` and its settings), because the install never
+# put it there.
+
+if(NOT EXISTS "@CMAKE_BINARY_DIR@/install_manifest.txt")
+    message(FATAL_ERROR
+        "install_manifest.txt is not there, so there is no install to undo.\n"
+        "It is written by `cmake --install`; a build that was never installed has none.")
+endif()
+
+file(STRINGS "@CMAKE_BINARY_DIR@/install_manifest.txt" installed)
+
+# Directory names a distribution owns and this install only puts files into.
+# They are left even when empty: `share/applications` being empty is not ours
+# to decide, and the same goes for the prefix's own `bin`, `lib`, `share`.
+set(system "bin;sbin;lib;lib64;libexec;include;share;local;etc;var;opt;usr;applications;icons;hicolor;scalable;apps;pkgconfig;doc;man;locale;pixmaps")
+
+set(files 0)
+set(dirs "")
+foreach(file ${installed})
+    if(IS_SYMLINK "$ENV{DESTDIR}${file}" OR EXISTS "$ENV{DESTDIR}${file}")
+        file(REMOVE "$ENV{DESTDIR}${file}")
+        math(EXPR files "${files} + 1")
+    endif()
+
+    get_filename_component(dir "$ENV{DESTDIR}${file}" DIRECTORY)
+    list(APPEND dirs "${dir}")
+endforeach()
+list(REMOVE_DUPLICATES dirs)
+
+# Repeated until a pass removes nothing: a parent becomes empty only after its
+# children are gone, and every directory a file sits in is already in the list,
+# so looping prunes the whole chain one level per pass.
+set(changed TRUE)
+while(changed)
+    set(changed FALSE)
+    foreach(dir ${dirs})
+        if(NOT IS_DIRECTORY "${dir}")
+            continue()
+        endif()
+
+        get_filename_component(base "${dir}" NAME)
+        list(FIND system "${base}" is_system)
+        if(NOT is_system EQUAL -1)
+            continue()
+        endif()
+
+        file(GLOB inside "${dir}/*")
+        if(NOT inside)
+            file(REMOVE_RECURSE "${dir}")
+            set(changed TRUE)
+        endif()
+    endforeach()
+endwhile()
+
+message(STATUS "uninstalled ${files} files, and the empty directories they were in")

@@ -41,6 +41,7 @@ LANGUAGE=es ./build/bintana ide examples/hello    # the IDE itself, from ide/po/
 ./build/bintana examples/usage        # Exec: a long child streaming, and a Stop that means it
 ./build/bintana examples/usage ~/     # ...on a folder of your own
 ./build/bintana examples/notes        # A folder of notes: the file name is the title, and it saves itself
+./build/bintana examples/kanban       # A kanban board: columns you arrange, cards you drag, and a file that keeps them
 ./build/bintana examples/drawing     # DrawingArea: a sparkline, a gauge and a pie — and what a frame really costs
 ./build/bintana examples/charts      # Charts from lib/charts: five shapes, two axes, and 21 600 readings you can zoom into
 ./build/bintana examples/report      # Report from lib/report: the Crystal Reports bands, grouped and totalled, out as one PDF
@@ -52,7 +53,7 @@ LANGUAGE=es ./build/bintana ide examples/hello    # the IDE itself, from ide/po/
 ./build/bintana examples/session     # Http with cookies and Basic auth: a login the next request remembers
 ./build/bintana examples/serve       # Http.Server: a static file server on :8080. Runs until Ctrl-C
 LANGUAGE=es ./build/bintana examples/agenda   # ...and the long date the catalogue rewrites
-./tests/run.sh                   # 5561 assertions in 5 projects, on a virtual display
+./tests/run.sh                   # 5920 assertions in 5 projects, on a virtual display
 HEADLESS= ./tests/run.sh          # the same, on *your* screen -- empty, not 0. Three
                                   # windows and the keyboard for a minute, and a couple
                                   # of assertions measure your theme and not the one
@@ -61,10 +62,12 @@ sudo cmake --install build        # ...or install it: see below
 ./tests/install.sh                # what that would produce, tried without installing it
 ```
 
-Dependencies: `gtk4`, `gtksourceview-5` (with headers), `gio-unix-2.0` (part of
-glib, and already there wherever gtk4 is) and pkg-config. QuickJS is
-vendored in `vendor/quickjs` (quickjs-ng v0.16.1), with four patches of our own
-in it -- see [AGENTS.md](AGENTS.md).
+Dependencies: `gtk4` (4.10 or newer), `gtksourceview-5` (both with headers),
+`gio-unix-2.0` and `gmodule-2.0` (part of glib, and already there wherever gtk4
+is) and pkg-config. QuickJS is vendored in `vendor/quickjs` (quickjs-ng
+v0.16.1), with four patches of our own in it -- see [AGENTS.md](AGENTS.md).
+Package names for Fedora and Debian/Ubuntu, the optional dependencies and what
+each one turns on, are in [docs/installing.md](docs/installing.md).
 
 Five more are **optional**, and CMake says what it found either way. `libsystemd` only
 adds `Logger.Target = "Journal"`; without it the build is the same and logging
@@ -91,11 +94,29 @@ application and has not read the rest.
 
 ## Installing
 
+GTK 4.10 or newer with its headers, GtkSourceView 5, a C compiler, CMake and
+pkg-config. On the two distributions the suite is run on:
+
+```sh
+sudo dnf install gcc make cmake pkgconf-pkg-config gtk4-devel gtksourceview5-devel
+sudo apt install build-essential cmake pkg-config libgtk-4-dev libgtksourceview-5-dev
+```
+
+Then:
+
 ```sh
 cmake -S . -B build -DCMAKE_INSTALL_PREFIX=/usr/local
 cmake --build build -j
 sudo cmake --install build          # or: sudo make -C build install
+sudo cmake --build build --target uninstall   # ...and back out again
 ```
+
+`/usr/local` on either distribution, because both pkg-configs search it — so a
+native plugin later finds `bintana.pc` without a special path. Any other prefix
+works too; then `PKG_CONFIG_PATH` points at `<prefix>/lib*/pkgconfig`, and
+[docs/installing.md](docs/installing.md#install) has the details, including the
+Fedora wrapper that makes the obvious query `pkg-config --variable pc_path`
+answer wrongly.
 
 That puts the runtime in `<prefix>/bin/bintana`, the IDE in
 `<prefix>/share/bintana/ide`, the examples beside it, and two files that turn
@@ -106,6 +127,11 @@ bintana-ide                          # the IDE, from the menu or from a shell
 bintana-ide ~/my-project             # ...opening a project
 bintana /usr/local/share/bintana/examples/hello   # any project, installed or not
 ```
+
+`uninstall` removes exactly what the last `cmake --install` wrote down, and the
+empty directories it made — never the shared ones, and never a program's own
+settings. The rest of the argument is in
+[docs/installing.md](docs/installing.md#uninstall).
 
 **The IDE is installed as the project directory it is**, not as a bundle:
 `bintana-ide` is a one-line script that hands `bintana` the path to
@@ -119,6 +145,12 @@ one somewhere of your own before opening it in the IDE to edit.
 `./tests/install.sh` does the whole of this into a staging directory under
 `/tmp` and starts the installed IDE on a display of its own, so the question
 *would an install work* has an answer that does not involve installing anything.
+
+**[docs/installing.md](docs/installing.md) is the long form**: the optional
+dependencies with a package name per distribution (`sqlite`, `libsoup`, the
+GStreamer pair, VTE), staging an install with `DESTDIR`, what the test suites
+need — `Xvfb`, `xdotool`, `python3`, `openssl`, clang for the sanitizer — and
+what to install when CMake names a `pkg-config` module it could not find.
 
 ---
 
@@ -244,6 +276,26 @@ component, documented in [docs/llm/report.md](docs/llm/report.md)) and
 are the projects that use them; the full list of
 places and the reasons are in
 [docs/formats.md](docs/formats.md#libraries-uses).
+
+**A library may also carry native code.** If its directory holds
+`<name>.so` (`.dll`/`.dylib` by platform) beside the `.js`, the runtime loads it
+before the library's sources, and what the C half installs is what the
+JavaScript half wraps:
+
+```
+lib/taglib/
+  taglib.so      TagLib.Read(path), TagLib.Write(path, tags)
+  taglib.js      optional: what the C did not bother to say
+```
+
+The plugin links neither the runtime nor QuickJS — the contract is the callback
+table in `runtime/include/bta_plugin.h`, one header installed with the runtime —
+so nothing is exported from `bintana` for it and `make install` puts a
+`bintana.pc` where a compiler finds it.  [docs/plugins.md](docs/plugins.md) is
+the reference: the table, how to build one outside the tree, a TagLib wrapper
+worked through, and what a plugin deliberately cannot do (add a widget class,
+for one).  `tests/plugins/testplug.c` is the reference implementation the suite
+loads.
 
 ### Namespaces
 

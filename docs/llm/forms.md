@@ -19,7 +19,7 @@
 | `startup` | the class instantiated and shown at launch. A `Form` subclass |
 | `main` | a **function** to call instead, for a tool with no window. Excludes `startup` |
 | `sources` | the `.js` files to evaluate, **in this order**, as paths relative to the project |
-| `uses` | libraries of shared classes, by name (`["charts"]`). Their `.js` loads before yours and their forms are found like yours, so a `.form` may use their classes. A name that is not installed stops the program and says where it looked |
+| `uses` | libraries of shared classes, by name (`["charts"]`). Their `.js` loads before yours and their forms are found like yours, so a `.form` may use their classes. A library may also carry native code (`<name>/<name>.so`), which is loaded before its `.js` — see `docs/plugins.md` in the runtime's own documentation. A name that is not installed stops the program and says where it looked |
 | `description` | free text; the runtime ignores it |
 
 Without `sources`, every `.js` under the project is loaded, subdirectories
