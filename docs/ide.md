@@ -2410,7 +2410,7 @@ off and says so, rather than opening nothing.
 ## Exporting the project
 
 *Project → Export project…* (`Ctrl+Shift+E`) writes the whole directory as one
-`.tar` beside it. Not the packaging on the README's list — that is an application
+`.tar` beside it. Not the [packaging](../issues/ISSUE-packaging.md) — that is an application
 *without* its project tree — but the smaller question that comes before it:
 handing a project to somebody without either end needing the IDE to do it.
 

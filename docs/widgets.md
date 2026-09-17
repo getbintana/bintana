@@ -1,6 +1,7 @@
 # Widgets
 
-The property and event tables are in the top-level [README](../README.md#3-widget-reference).
+The property and event tables are in [llm/controls.md](llm/controls.md), said
+briefly, and the same members explained are in [reference/](reference/README.md).
 This document is what those tables cannot say: what each widget is made of, and
 the behaviour that comes with that.
 
@@ -3239,3 +3240,88 @@ A form is a container, so everything above applies to it — including that its 
 is a `BtaFixed` by default, whose children follow the window according to their
 `HAlign`/`VAlign`, and that `Arrangement: "Vertical"` is what a window built out
 of boxes rather than coordinates uses instead.
+
+## Known limitations
+
+- `set_size_request` fixes the **minimum** size, not the exact one. A control whose
+  natural size exceeds the request (a `Label` with long text) renders larger than
+  the `.form` says. That is GTK's model and not a bug to fix — forcing an exact
+  allocation would clip text instead — so the designer reports it rather than
+  fighting it.
+- `Form.Center()` is a no-op: on Wayland the compositor decides placement.
+- `Message.*` does not block. GTK4's dialogs are asynchronous, so it does not
+  behave like VB's `MsgBox`; a confirmation with an answer is a form
+  (`ConfirmForm`), not a runtime primitive.
+- `.js` load order matters when one class extends another of the same project.
+  `sources` in `project.json` fixes it.
+- The designer edits menus in a dialog rather than on the canvas — there is
+  nothing to reorder, since a GTK4 menu is a model wired to actions and not a
+  widget. The board **does** show the form's menu bar: a `Panel` and a `Label`
+  per menu, dressed in the theme's own numbers and opening real menus through
+  `Menu` and `PopupMenu`, the same bargain the title bar above it makes. Two
+  things a stylesheet would close and the IDE will not grow one for: a previewed
+  entry does not light up under the pointer the way `menubar > item` does, and it
+  does not draw the 1px rule a real bar has inside its own height — which would
+  have cost a 28th pixel, and the height is what the canvas depends on.
+- An `Overlay`'s layers are shown and can be selected, but the designer has no
+  gesture for stacking them: what it orders are the children of a box, a
+  notebook's pages and a split's two halves.
+- A `.form` always opens in the designer; there is no way to see it as text.
+- The designer **offers** the project's style classes but does not wear them: a
+  stylesheet belongs to a process, and the canvas is drawn in the IDE's. Loading
+  the project's `app.css` would restyle the IDE itself — one `button { … }` in it
+  reaches every button in that window — so what a class of the project's looks
+  like is seen by running it. The theme's own classes do show.
+- **A control has no mnemonic.** There is no `&Save` giving a button Alt+S, and no
+  label that hands the focus to the field beside it. Menus do have them, and
+  always have: `_File`, `F_orm`, with the underscore travelling in the msgid so
+  the *translator* picks the letter — `_File` becomes `_Archivo`, F in one
+  language and A in the other. What a control gets instead of a mnemonic is a menu
+  item with a `shortcut`, which is a real accelerator and takes a list of them.
+
+  This one is **decided rather than pending**, so the reasoning is worth keeping:
+
+  - **The lineage dropped it.** Gambas has no marker on `Button.Text` and no
+    `Buddy`-style property on `Label` — thirteen properties and not one links a
+    label to a control. What it kept from VB is `Menu.Shortcut`. GNOME's own
+    libadwaita-era dialogs largely do not set mnemonics either, macOS never had
+    them, and the web's `accesskey` is dead in practice: it collides with the
+    browser's shortcuts and with assistive technology.
+  - **The cost lands on translators, and this project cares about that more than
+    most.** The marker lives inside prose that goes through the catalogue, so the
+    translator chooses the accelerator. Five curated menu titles is fine — it
+    works today. Twelve controls on a dialog times every language is a collision
+    waiting to happen, and *nothing would say so*: two controls claiming Alt+A
+    render perfectly and one of them simply never answers.
+  - **The half that would have been worth it is the label pointing at its
+    field** (`Alt+N` focuses Name), and its real argument was never the Alt key
+    but the accessibility relation it might carry — a screen reader announcing a
+    field by its label. GTK does not document `gtk_label_set_mnemonic_widget` as
+    setting `labelled-by`, and it was not verified, so that argument is not
+    available. Without it the feature is nostalgia.
+
+  If it is ever revisited, that label-to-field half is the piece to build, and
+  verifying the accessibility relation is the thing to do first.
+
+### Three things that were considered and are not coming
+
+Written down so the argument is not had twice.
+
+- **No `ToolBar` class.** GTK4 *removed* `GtkToolbar`; a toolbar there is a box
+  wearing the theme's `toolbar` class, with `flat` buttons — which is exactly what
+  the IDE's own already is, a `Panel` with `Arrangement: Horizontal` and
+  `Style: "toolbar"`. A class would be a second name for a combination that has
+  one, and this project already answered the same question about boxes: a `Panel`
+  *is* the box. The one thing a class could add is **overflow** — collapsing what
+  does not fit into a menu, which GTK4 gives no help with and nothing here needs
+  while the IDE's own window has a 1100px floor.
+- **No `ToolButton`.** `Button` already does all of it: set `Text` and `Icon`
+  together and it builds the box itself, `Icon` alone gets the `image-button`
+  treatment, and `Style = "flat"` is the rest. A second class with the same two
+  properties, differing in nothing, is the `ListBox`/`ListView` confusion by
+  another name.
+- **No `MenuButton`.** A button that drops a menu is a `Button` with a `Menu` and
+  one line: `Btn_Click() { this.Btn.PopupMenu(0, 0); }`. That is how the IDE's own
+  tab-strip button works. A `GtkMenuButton` would add the drop-down arrow (an icon
+  here), and announcing itself as a menu button to a screen reader — real, but
+  unverified, and not worth a second way to attach a menu to a widget.

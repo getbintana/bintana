@@ -3,9 +3,11 @@
 This directory is the **public contract**: everything needed to write a complete,
 working Bintana application, and nothing about how the runtime is built.
 
-It is addressed to whoever is writing the application — a person or a language
-model. If you are a model and someone has asked you for a Bintana application,
-these nine files are what you need and the only thing you should be reading.
+It is addressed to whoever is writing the application **without the IDE** — a
+language model, or a person writing every file by hand. If you are a model and
+someone has asked you for a Bintana application, these nine files are what you
+need and the only thing you should be reading. If you are a person at the IDE,
+start at [first-app.md](../first-app.md) instead.
 
 | Read | For |
 |---|---|

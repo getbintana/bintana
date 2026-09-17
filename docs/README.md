@@ -1,13 +1,13 @@
 # Bintana technical documentation
 
-The top-level [`README.md`](../README.md) is the overview and the quick
-reference: what Bintana is, how to write an application, and what every widget
-exposes. These documents go under that surface — how the runtime is built and
-why, what the file formats mean exactly, and what it takes to extend either
-side.
+The top-level [`README.md`](../README.md) is the presentation: what Bintana is
+and where each document lives. These documents go under that surface — how the
+runtime is built and why, what the file formats mean exactly, and what it takes
+to extend either side.
 
 | Document | What is in it |
 |---|---|
+| [first-app.md](first-app.md) | **Start here to write an application in the IDE**: the shape of a project and a five-minute tutorial ending in a greeting |
 | **[reference/](reference/README.md)** | **One page per class and per global, for the person writing an application**: what it is, which neighbour to use instead, an example off the tree, every member explained, and what goes wrong. The long form of `llm/controls.md` and `llm/library.md`, and what the IDE shows as help |
 | **[llm/](llm/README.md)** | **The public contract**: everything needed to write an application, and nothing about the runtime. Nine files, addressed to whoever writes one — a person or a language model. Start here if you are writing an application rather than the runtime |
 | [architecture.md](architecture.md) | Boot sequence, the C/JS split, the class table, event dispatch, the object model, lifetimes and teardown |

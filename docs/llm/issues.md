@@ -149,7 +149,7 @@ implementation, and the implementation is not what it got right.
 ## Already decided
 
 These have been argued and answered. Do not file them again; the reasoning is in
-the root [`README`](../../README.md#three-things-that-were-considered-and-are-not-coming)
+[widgets.md](../widgets.md#three-things-that-were-considered-and-are-not-coming)
 and in [controls.md](controls.md#what-is-deliberately-not-here).
 
 | Not coming | Because |
@@ -178,7 +178,7 @@ needed and what it did instead.
 | No watch, no immediate window, and no changing a value while stopped — the debugger stops, steps and **shows** what a frame holds, and that is where it ends | [`docs/debug-plan.md`](../debug-plan.md), stages 3 to 6. A loop written entirely on one line also stops only once |
 | No git in the IDE — no status, no diff before committing, no stage or push | [`docs/git-plan.md`](../git-plan.md). What there is instead: the `Terminal` tab, a real shell in the project directory. The plan's core is a side-by-side diff viewer; its one open gap is below |
 | A word for *do this, then that* | [`docs/async-plan.md`](../async-plan.md) |
-| Packaging an application without the project tree | root [`README`](../../README.md#what-is-next) |
+| Packaging an application without the project tree | [ISSUE-packaging](../issues/ISSUE-packaging.md) |
 | No editable / autocompleting combo | [ISSUE-editable-combo](../issues/ISSUE-editable-combo.md) |
 | No printer — no dialog, no copies, no preview, no control laid onto a page (a PDF **is** written: `SavePdf`) | [ISSUE-printing](../issues/ISSUE-printing.md) |
 | A `Fixed` container that does not stretch a `Fill` child when it itself grows — a reusable component that wants to fill its cell has to change its `Arrangement` | [ISSUE-fixed-fill-child](../issues/ISSUE-fixed-fill-child.md) |

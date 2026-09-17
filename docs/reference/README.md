@@ -10,7 +10,7 @@ It is a third audience, and the two that already exist do not cover it:
 | | For | Shape |
 |---|---|---|
 | [`llm/`](../llm/README.md) | a language model writing an application, which has no IDE and writes every file by hand | the philosophy, the formats, and the **whole surface said in as few words as it takes** — `Alignment`: `Left` `Center` `Right`, default `"Left"` |
-| **this** | **the person at the IDE** | **the same members, each explained: what it is for, what the default means in practice, and what happens when it is wrong** |
+| **this** | **the person at the IDE** (after [first-app.md](../first-app.md)) | **the same members, each explained: what it is for, what the default means in practice, and what happens when it is wrong** |
 | the rest of [`docs/`](../README.md) | whoever changes the runtime | how it is built in C, and what it takes to add a widget |
 
 The two references hold **the same rows**. What differs is how much each cell

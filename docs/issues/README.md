@@ -16,6 +16,7 @@ in the same form.
 | [ISSUE-fixed-fill-child.md](ISSUE-fixed-fill-child.md) | A `Fixed` container does not stretch a `Fill` child when it grows |
 | [ISSUE-fill-and-scroll.md](ISSUE-fill-and-scroll.md) | No container that fills the room it is given and scrolls when it cannot |
 | [ISSUE-printing.md](ISSUE-printing.md) | No printer — no dialog, no copies, no preview, and no way to lay a control onto a page |
+| [ISSUE-packaging.md](ISSUE-packaging.md) | No way to hand over an application without its project tree |
 
 **A gap that is filled is deleted, not archived.** What the runtime can do is in
 [`llm/`](../llm/README.md), which is where anybody looks for it; an issue kept
@@ -47,7 +48,7 @@ leaving it here would have it re-argued.
 
 Git has all of them if anybody wants to read what the asking looked like.
 
-The gaps that predate this directory — records over a database, packaging,
+The gaps that predate this directory — records over a database and
 asynchrony — are already written down and are **not** re-reported here; see
 [`llm/issues.md`](../llm/issues.md#what-is-known-to-be-missing). (Network was
 one of them until `Http` arrived; a gap kept past its answer is a second

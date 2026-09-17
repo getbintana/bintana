@@ -1254,7 +1254,7 @@ Do not file an issue for these; the argument is written down and settled.
   `Btn_Click() { this.Btn.PopupMenu(0, 0); }`.
 - **A mnemonic on a control** (`&Save` giving Alt+S, a label handing focus to
   the field beside it). Menus have mnemonics; controls have `Shortcut`. The
-  reasoning is in the root [`README`](../../README.md#10-known-limitations).
+  reasoning is in [widgets.md](../widgets.md#known-limitations).
 - **A blocking `MsgBox`** — a question is a form.
 - **A list of check boxes** (`CheckedListBox`, a `Checked(row)` the list keeps) —
   a [`RowList`](#rowlist) whose rows carry a `CheckButton`, and **the ticks live

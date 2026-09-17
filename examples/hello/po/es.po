@@ -33,16 +33,12 @@ msgstr "Saludar"
 msgid "Upper case"
 msgstr "Mayúsculas"
 
-#: Form1.js:55
+#: Form1.js:48
 msgid "Hello {0}!"
 msgstr "¡Hola {0}!"
 
-#: Form1.js:65
-msgid "Hello Bintana -- {0}"
-msgstr "Hola Bintana -- {0}"
-
 # --- the exception: strings built in code ------------------------------------
-#: Form1.js:39
+#: Form1.js:36
 msgid "Type a name first."
 msgstr "Escribí un nombre primero."
 

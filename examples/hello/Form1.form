@@ -2,7 +2,7 @@
   "format": "bintana-form/1",
   "class": "Form1",
   "properties": {
-    "Height": 316,
+    "Height": 220,
     "Text": "Hello Bintana",
     "Width": 420
   },
@@ -54,21 +54,6 @@
       }
     },
     {
-      "type": "ListBox",
-      "name": "ListBox1",
-      "properties": {
-        "HAlign": "Fill",
-        "Height": 96,
-        "MinHeight": 60,
-        "MinWidth": 200,
-        "Style": "result-list",
-        "VAlign": "Fill",
-        "Width": 380,
-        "X": 20,
-        "Y": 144
-      }
-    },
-    {
       "type": "About",
       "name": "About1",
       "properties": {
@@ -76,7 +61,7 @@
         "VAlign": "End",
         "Width": 220,
         "X": 20,
-        "Y": 256
+        "Y": 160
       }
     }
   ]

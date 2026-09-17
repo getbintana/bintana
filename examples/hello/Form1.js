@@ -4,18 +4,16 @@
  * addEventListener, no imports, exactly like Gambas.
  *
  * The form is drawn in coordinates and still survives being resized: the
- * text box is HAlign "Fill" so it grows with the window, and the list is
- * "Fill" on both axes so it takes whatever room is left. The label, the
- * button and the check box say nothing, which is HAlign/VAlign "Start" --
- * they keep their distance to the top left corner and stay where they were
- * put. Nothing here has to know: the layout is entirely in the .form.
+ * text box is HAlign "Fill" so it grows with the window, while the label,
+ * the button and the check box say nothing (HAlign/VAlign "Start") and keep
+ * their distance to the top left corner. Nothing here has to know: the
+ * layout is entirely in the .form.
  *
  * The plate at the bottom is a **component** -- `About`, this project's own,
  * two files beside these ones. In the .form it is a node like any other
  * (`{ "type": "About" }`) and here it is a control like any other: it publishes
- * `Caption` and this form sets it. `VAlign "End"` is the fourth anchor at work,
- * so it keeps its distance to the bottom edge while the list above it takes the
- * room.
+ * `Caption` and this form sets it. `VAlign "End"` keeps its distance to the
+ * bottom edge.
  */
 class Form1 extends Form {
 
@@ -42,39 +40,18 @@ class Form1 extends Form {
         if (this.CheckBox1.Active) name = name.toUpperCase();
 
         /*
-         * `Locale.Text` and not a template literal, and the difference is the
-         * whole of translation: a template arrives already filled in, so the
-         * msgid would be "Hello Ana!" and no catalogue could ever match it.
-         * `{0}` is positional so a translator can move it.
-         *
-         * The captions of this form need none of this -- they are declared in
-         * Form1.form and the loader looks them up on the way in, which is where
-         * text belongs in a RAD project. This is the exception: a string built at
-         * the moment it is shown.
+         * `Message.Info` owns its text position: the literal goes through the
+         * catalogue with `{0}` holes, so there is no `Locale.Text` around it --
+         * and never a template literal in it, which would arrive already filled
+         * in and no catalogue could ever match it. `{0}` is positional so a
+         * translator can move it.
          */
-        this.ListBox1.Add(Locale.Text("Hello {0}!", name));
+        Message.Info("Hello {0}!", name);
         this.TextBox1.Text = "";
         this.TextBox1.SetFocus();
     }
 
     TextBox1_Activate() {
         this.Button1_Click();
-    }
-
-    ListBox1_Select() {
-        this.Caption = Locale.Text("Hello Bintana -- {0}", this.ListBox1.Text);
-    }
-
-    Form_Close() {
-        print(`Greetings sent: ${this.ListBox1.Count}`);
-    }
-
-
-    CheckBox1_Click() {
-        
-    }
-
-    CheckBox1_KeyPress() {
-        
     }
 }
