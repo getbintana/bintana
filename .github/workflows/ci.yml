@@ -240,9 +240,12 @@ jobs:
         run: |
           set -euo pipefail
           file=$(cat tarball-name.txt)
+          # `|| true` on the create, because the *other* job that attaches an
+          # asset to this tag may have made the release first -- and a race that
+          # ends with the asset uploaded is a race nothing needs to report.
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
             || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" \
-                               --generate-notes
+                               --generate-notes || true
           gh release upload "$GITHUB_REF_NAME" "$file" --clobber
 
   # A fourth job, and the first one that is not Linux: the port's Stage 0/1
@@ -360,7 +363,8 @@ jobs:
         run: |
           set -euo pipefail
           file=$(cat zip-name.txt)
+          # The same race as the Linux tarball's, from the other side.
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
             || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" \
-                               --generate-notes
+                               --generate-notes || true
           gh release upload "$GITHUB_REF_NAME" "$file" --clobber
