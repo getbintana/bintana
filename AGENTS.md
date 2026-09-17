@@ -197,6 +197,16 @@ the *previous* one — silently, and every assertion that should have failed pas
 `tests/run.sh` warns when a source is newer than the binary; invoking `./build/bintana`
 by hand skips that warning, which is how it bites.
 
+**A push is the machine owner's, and a failure to push is a question for them.**
+The remote is SSH (`git@github.com:getbintana/bintana.git`) and an agent's shell
+has no key, so `git push` answers `Permission denied (publickey)`. That is not a
+puzzle with a workaround — HTTPS, a token, another remote are all ways of not
+asking. Commit locally, leave the tag made, and say the two commands.  It is the
+same rule as the Xvfb one in the traps: **when a thing fails for a missing tool,
+a permission or a package, ask the person at the machine; do not retry
+alternatives.** Their one sentence costs less than your half hour, and an
+improvised substitute is what turns a question into a false result.
+
 ## The rule that governs this codebase
 
 **The IDE's own tree is `forms/` and `modules/`.** A form is two files that
