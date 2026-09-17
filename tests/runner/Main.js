@@ -82,6 +82,10 @@ const NOISE = /^(?:\([^)]*\): )?(?:Gdk-WARNING|Gtk-WARNING|libEGL warning)/;
  * projects in parallel would buy nothing; whatever is to be won is inside this
  * one. Worth a look one day; a guard that a passing run trips is worth nothing
  * today.
+ *
+ * **And every run now says what each project cost** (`== widgets passed in
+ * 9.0s`), so this paragraph is history and the next measurement of the guard is
+ * read off a run rather than remembered from here.
  */
 const TIMEOUT = Number(Environment.Get("TIMEOUT")) || 600;
 
@@ -135,7 +139,25 @@ function run(projects, wrap, extra, i, failed) {
     const name = projects[i];
     print(`== ${name}`);
 
-    const argv = [...wrap.argv, BINTANA, File.Join(TESTS, name),
+    /*
+     * **What each project cost is printed with its result**, because the suite
+     * is five minutes and one project is almost all of it: `tests/ide` was 285
+     * of a 300-second suite the last time anybody measured, and that number
+     * cannot be watched by guessing.  `Stopwatch` and not `Date`: this is a
+     * duration, and an NTP step mid-run is not a slow test.
+     */
+    const watch = new Stopwatch().Start();
+
+    const argv = [...wrap.argv, BINTANA,
+                  /* **Every project runs strict.** These are our own, and under
+                   * the switch a control refuses a name its class does not have
+                   * instead of taking it and doing nothing -- which is the bug
+                   * three shipped libraries had, each of them creating a field
+                   * the first time it drew and throwing there the moment
+                   * anybody turned the mode on. The suite is a run we control,
+                   * so it is the run that has it on. `docs/strict-plan.md`. */
+                  "--strict",
+                  File.Join(TESTS, name),
                   /* The pid, which the projects use to name their scratch
                    * directories: two suites at once -- a flake hunt beside an
                    * ordinary run, two CI jobs on one box -- would otherwise fight
@@ -148,10 +170,13 @@ function run(projects, wrap, extra, i, failed) {
         { Environment: wrap.env, Timeout: TIMEOUT * 1000, KillAfter: GRACE },
         (line) => { if (!NOISE.test(line)) print(line); },
         (code) => {
+            const secs = (watch.Elapsed / 1000).toFixed(1);
             if (code !== 0) {
                 print(job.TimedOut ? `== ${name} FAILED (timed out after ${TIMEOUT}s)`
-                                   : `== ${name} FAILED (exit ${code})`);
+                                   : `== ${name} FAILED (exit ${code}, ${secs}s)`);
                 failed++;
+            } else {
+                print(`== ${name} passed in ${secs}s`);
             }
             run(projects, wrap, extra, i + 1, failed);
         });
