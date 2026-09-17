@@ -282,6 +282,10 @@
           "shortcut": "<Control><Shift>e"
         },
         {
+          "name": "MnuAppInstall",
+          "text": "Install as user application..."
+        },
+        {
           "separator": true
         },
         {

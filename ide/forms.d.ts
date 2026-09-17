@@ -16,6 +16,21 @@ interface AboutForm {
     BtnClose: Button;
 }
 
+interface AppForm {
+    LblAppName: Label;
+    TxtAppName: TextBox;
+    LblAppComment: Label;
+    TxtAppComment: TextBox;
+    LblAppIcon: Label;
+    TxtAppIcon: TextBox;
+    BtnAppIcon: Button;
+    LblAppWhere: Label;
+    LblAppHint: Label;
+    BtnAppUninstall: Button;
+    BtnAppCancel: Button;
+    BtnAppInstall: Button;
+}
+
 interface AskForm {
     LblPrompt: Label;
     TxtValue: TextBox;
@@ -303,6 +318,7 @@ interface MainForm {
     MnuTranslationEditor: MenuItem;
     MnuTidy: MenuItem;
     MnuExport: MenuItem;
+    MnuAppInstall: MenuItem;
     MnuCheck: MenuItem;
     MnuProjectSettings: MenuItem;
     MnuGitMenu: MenuItem;

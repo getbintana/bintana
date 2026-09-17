@@ -672,6 +672,29 @@ class MainForm extends Form {
     editProject()       { this.manifest.editSettings(); }
     editLaunch()        { this.launch.edit(); }
 
+    /*
+     * Installing the open project as a user application: a menu entry the user
+     * owns, under their own data directory, with no root and no package.
+     *
+     * `Ide.Apps` owns the entry and the runtime owns the format; what this does
+     * is hand the dialog the manifest it starts on -- a project whose
+     * `project.json` declares a name has it filled in already -- and keep the
+     * dialog so `tests/ide` can drive it, the way `editSettings` keeps the
+     * project editor.
+     *
+     * A project.json that cannot be read is not a reason to refuse: the dialog
+     * is where a name is typed, and the entry does not need the manifest at all.
+     * It starts empty instead of quoting a file that is broken.
+     */
+    installAsApp() {
+        if (!this.project) {
+            Message.Info("Open a project first.");
+            return;
+        }
+        this.appEditor = AppForm.edit(this.project, this.manifest.read() || {},
+                                      () => this.refresh());
+    }
+
     /* --- creating, renaming and deleting ------------------------------------
      *
      * All of it is `FormFiles`, which knows that a form is two files: what stays
@@ -1003,6 +1026,7 @@ class MainForm extends Form {
         this.MnuFtProject.Enabled = open;
         this.MnuProjectSettings.Enabled = open;
         this.MnuExport.Enabled = open;
+        this.MnuAppInstall.Enabled = open;
         this.launch.show();
 
         /* Searching needs text: a form tab is a tree, and Ctrl+F loses its
@@ -1300,6 +1324,7 @@ class MainForm extends Form {
      */
     MnuTidy_Click()   { this.tidyProject(); }
     MnuExport_Click() { this.exporter.run(); }
+    MnuAppInstall_Click() { this.installAsApp(); }
 
     /*
      * Extraction: every string the project shows a person, into po/<name>.pot,

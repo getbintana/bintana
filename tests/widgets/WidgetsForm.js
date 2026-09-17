@@ -360,6 +360,11 @@ const TESTS = [
     "LocaleOrder",
     /* Blocking too: two children, to see that Today follows the time zone. */
     "Day",
+    /* Blocking as well -- `desktop-file-validate` and `gio launch` are children
+     * awaited to the end -- so it joins the group that runs before anything has
+     * armed a deadline (see the note above ExecWait). Its last assertions are a
+     * launch landing on a later turn, which `until` counts. */
+    "Desktop",
     "Time",
     "Stopwatch",
     "Shortcut", "Decimal", "FieldDecimal",
@@ -11705,6 +11710,169 @@ function Main() {
             check(`Environment.${name} is enumerable`, members.includes(name),
                   JSON.stringify(members));
         }
+    }
+
+    /* --- the user's own menu entries ----------------------------------------
+     *
+     * `Desktop.Entries` writes a `.desktop` file into the user's applications
+     * directory, which is `$XDG_DATA_HOME/applications` -- and **the runner
+     * points `XDG_DATA_HOME` at a scratch directory** (tests/runner/Main.js), so
+     * the entry that goes in here is not one anybody's menu will offer. Run by
+     * hand with `tests/try.sh` there is no such promise, which is why the ids
+     * are uninstalled before they are installed: the test cleans up after
+     * itself either way.
+     *
+     * **The file is not the thing worth asserting.**  A `.desktop` is a
+     * key-file with a quoting of its own, and what can go wrong is not that the
+     * string was written but that the desktop's reader does not understand it.
+     * So the entry installed at the end runs a script through `gio launch` --
+     * a real `GDesktopAppInfo`, the same road a menu takes -- and the arguments
+     * it receives are read back from the file it wrote: a space, a percent, a
+     * double quote, a dollar, a backslash and an accent, all in one command.
+     */
+    testDesktop() {
+        check("the data directory is a path", Desktop.DataDirectory.startsWith("/"),
+              Desktop.DataDirectory);
+        eq("and the entries live under it", Desktop.Entries.Directory,
+           File.Join(Desktop.DataDirectory, "applications"));
+        check("which is there", File.IsDir(Desktop.Entries.Directory));
+
+        const id = "bta-test-entry";
+
+        /* Left over from a run that was not the runner's, or from a crash: not
+         * this test's business to keep, and not a state it may read. */
+        Desktop.Entries.Uninstall(id);
+        check("nothing is installed under this name",
+              !Desktop.Entries.Installed().includes(id));
+        eq("and reading one that is not there answers null",
+           Desktop.Entries.Read(id), null);
+
+        /* The command line, which is the desktop entry format's quoting and not
+         * the shell's -- and which is why this is a verb and not a line in an
+         * application. */
+        eq("a command line is quoted and escaped the format's way",
+           Desktop.Entries.Exec(["a b", "100%", 'a"b', "a$b", "a\\b", "café"]),
+           "\"a b\" \"100%%\" \"a\\\"b\" \"a\\$b\" \"a\\\\b\" \"café\"");
+        eq("a command with no arguments is the empty string",
+           Desktop.Entries.Exec([]), "");
+
+        const exec = Desktop.Entries.Exec(["/bin/true"]);
+        const path = Desktop.Entries.Install(id, {
+            "Desktop Entry": {
+                Type:       "Application",
+                Name:       "Bta test",
+                "Name[es]": "Prueba",
+                Comment:    "an entry the suite installs",
+                Exec:       exec,
+                Icon:       "applications-development",
+            },
+        });
+
+        check("installing answers where it went", path.endsWith(`/${id}.desktop`), path);
+        check("and writes a file there", File.Exists(path));
+        check("which shows up as installed", Desktop.Entries.Installed().includes(id));
+
+        const read = Desktop.Entries.Read(id);
+        eq("what comes back is the group that went in",
+           read["Desktop Entry"].Name, "Bta test");
+        eq("with the localized keys as the ordinary keys they are",
+           read["Desktop Entry"]["Name[es]"], "Prueba");
+        eq("and the command exactly as it was given",
+           read["Desktop Entry"].Exec, exec);
+
+        if (Application.HasCommand("desktop-file-validate")) {
+            const r = Exec.Wait(["desktop-file-validate", path],
+                                { Timeout: 20000, Stderr: "separate" });
+            eq("and the specification's own checker accepts it", r.ExitCode, 0,
+               r.Output + r.Errors);
+        } else {
+            print("no desktop-file-validate: the entry is installed but unvalidated");
+        }
+
+        /* Everything the desktop would ignore in silence is refused here, where
+         * there is a sentence to read. */
+        throws("an id that could be a path is refused",
+               () => Desktop.Entries.Install("a/b", {}));
+        throws("an id that is a file name is refused",
+               () => Desktop.Entries.Install("x.desktop", {}));
+        throws("an entry with no [Desktop Entry] group is refused",
+               () => Desktop.Entries.Install("bta-bad", { "Other": { Name: "x" } }));
+        throws("an application with no Exec is refused",
+               () => Desktop.Entries.Install("bta-bad",
+                       { "Desktop Entry": { Type: "Application", Name: "x" } }));
+        throws("a value that is not text is refused",
+               () => Desktop.Entries.Install("bta-bad",
+                       { "Desktop Entry": { Type: "Link", Name: 5 } }));
+        throws("Read needs an id", () => Desktop.Entries.Read());
+        throws("Exec needs an array", () => Desktop.Entries.Exec("nope"));
+        throws("and refuses an argument that is not text",
+               () => Desktop.Entries.Exec([7]));
+        throws("Uninstall needs an id", () => Desktop.Entries.Uninstall());
+        check("and none of those wrote anything",
+              !File.Exists(File.Join(Desktop.Entries.Directory, "bta-bad.desktop")));
+
+        /* And a file the runtime did not write, holding a value the key file's
+         * syntax cannot express: reading it is refused, naming the key, rather
+         * than answered with half of itself.  The parser is GLib's and it is
+         * the same one the desktop reads a menu with. */
+        const broken = File.Join(Desktop.Entries.Directory, "bta-broken.desktop");
+        File.Save(broken, "[Desktop Entry]\nType=Application\nName=a\\qb\nExec=/bin/true\n");
+        throws("a value with an escape the format has not got is refused",
+               () => Desktop.Entries.Read("bta-broken"));
+        File.Delete(broken);
+
+        eq("uninstalling says it was there",
+           Desktop.Entries.Uninstall(id), true);
+        check("and the file is gone", !File.Exists(path));
+        eq("uninstalling it again says it was not",
+           Desktop.Entries.Uninstall(id), false);
+
+        /*
+         * And the round trip through the desktop's own launcher, which is the
+         * claim the whole verb exists for.  A script is written (with a space in
+         * its name, and a space in the directory above it) that dumps its
+         * arguments to a file, and the entry that runs it is installed and
+         * launched.  The file is not read here: the process `gio` starts is
+         * somebody else's and has not run yet, so an `until` waits for it -- and
+         * `finish` waits for that, which is what keeps a launch that never
+         * happened from reading as a smaller total.
+         */
+        if (!Application.HasCommand("gio")) {
+            print("no gio: the entry is written but nothing launched it");
+            return;
+        }
+
+        const probe = "bta-desktop-probe";
+        const dir   = File.Join(SCRATCH, "desktop probe");
+        const argv  = File.Join(dir, "argv probe.sh");
+        const said  = File.Join(dir, "argv.txt");
+
+        Desktop.Entries.Uninstall(probe);
+        Directory.Make(dir);
+        if (File.Exists(said)) File.Delete(said);
+        File.Save(argv, "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"" + said + "\"\n");
+        Exec.Wait(["chmod", "+x", argv], { Timeout: 20000 });
+
+        Desktop.Entries.Install(probe, {
+            "Desktop Entry": {
+                Type:     "Application",
+                Name:     "Bta probe",
+                Exec:     Desktop.Entries.Exec([argv, "a b", "100%", 'a"b', "a$b", "a\\b", "café"]),
+                Terminal: "false",
+            },
+        });
+
+        const launched = Exec.Wait(
+            ["gio", "launch", File.Join(Desktop.Entries.Directory, probe + ".desktop")],
+            { Timeout: 20000, Stderr: "separate" });
+        eq("gio launches the entry", launched.ExitCode, 0,
+           launched.Output + launched.Errors);
+
+        until("the launched command wrote its arguments", () => File.Exists(said), () => {
+            eq("and they are exactly what was asked for",
+               File.Load(said), "a b\n100%\na\"b\na$b\na\\b\ncafé\n");
+            Desktop.Entries.Uninstall(probe);
+        });
     }
 
     /* --- Shortcut ------------------------------------------------------------

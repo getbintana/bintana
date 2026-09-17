@@ -112,6 +112,16 @@ const GLOBAL_VARS = {
     application: "Application",
     env:         "Environment",
     dialog:      "Dialog",
+    desktop:     "Desktop",
+    /*
+     * The module inside `Desktop`, and a heading of its own because that is
+     * where it is explained.  The check qualifies a member by its heading's
+     * first word, so `entries` under `Desktop.Entries` is written
+     * `Desktop.Entries.Read(id)` and is found -- where one heading for both
+     * would have demanded the member be spelled bare and left the module
+     * unexplained.
+     */
+    entries:     "Desktop.Entries",
 };
 
 /* `JS_SetPropertyStr(ctx, <var>, "Name", JS_New…)` -- a member of a global built
@@ -509,6 +519,7 @@ const GLOBAL_PAGES = {
     Database:    ["conn_props"],
     Day:         ["day_props"],
     Decimal:     ["dec_proto_funcs"],
+    Desktop:     ["desktop", "entries"],
     Dialog:      ["dialog"],
     Directory:   ["dir"],
     Environment: ["env_props", "env"],

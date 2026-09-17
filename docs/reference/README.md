@@ -79,7 +79,7 @@ for a control without a table in the middle.
 
 ## What is here
 
-**Every name this runtime publishes has a page**: 46 classes, 27 globals and the
+**Every name this runtime publishes has a page**: 46 classes, 28 globals and the
 3 components the shipped libraries publish. `tests/api.sh` holds each one to its
 members, twice — once in its summary and once where it is explained.
 
@@ -145,6 +145,7 @@ members, twice — once in its summary and once where it is explained.
 | [Database](globals/Database.md) | a [`Record`](Record.md) over a table |
 | [Day](globals/Day.md) | the calendar date, which is the value JavaScript does not have |
 | [Decimal](globals/Decimal.md) | exact base-10 arithmetic, with the ordinary operators. **This is what money is.** |
+| [Desktop](globals/Desktop.md) | the session the program is in, and the menu entries a user installs for themselves |
 | [Dialog](globals/Dialog.md) | asking the user for a file, a folder or a colour — with the desktop's own |
 | [Dictionary](globals/Dictionary.md) | what a bag of data holds |
 | [Directory](globals/Directory.md) | what is in a folder, and making and removing them |

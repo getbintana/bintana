@@ -95,7 +95,7 @@ const NOT_A_WIDGET = {
  */
 const PLAIN_GLOBALS = {
     Application, Environment, File, Directory, Dialog, Message, Clipboard,
-    Settings, Dictionary,
+    Settings, Dictionary, Desktop,
 };
 
 /*

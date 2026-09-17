@@ -117,6 +117,7 @@ add_executable(bintana
     runtime/src/bta_treerows.c
     runtime/src/bta_debug.c
     runtime/src/bta_sys.c
+    runtime/src/bta_desktop.c
     runtime/src/bta_database.c
     runtime/src/bta_sqlite.c
     runtime/src/bta_locale.c

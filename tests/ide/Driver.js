@@ -322,6 +322,8 @@ function* p_welcome(ide) {
        ide.MnuFtStartup.Enabled, false);
     eq("...and the project's own settings are not on offer",
        ide.MnuProjectSettings.Enabled, false);
+    eq("...nor is installing an application, which is about a project",
+       ide.MnuAppInstall.Enabled, false);
 
     /* A relative path has to end up absolute: when running, the child starts
      * with the project as its cwd and the relative one would stop resolving.
@@ -8958,6 +8960,135 @@ function* p_export(ide) {
     File.Delete(`${bare}.tar`);
 }
 
+/*
+ * --- installing the project as a user application -------------------------
+ *
+ * One `.desktop` file in the user's own applications directory, which is how an
+ * application reaches the menu with no root and no package.  The runner points
+ * `XDG_DATA_HOME` at a scratch directory (tests/runner/Main.js), so the entry
+ * installed here is not one anybody's menu will offer; driven by hand with
+ * `tests/try.sh` there is no such promise, and this removes whatever it
+ * installed either way.
+ *
+ * The runtime's half -- the format, the escaping, the refusals, and a real
+ * `gio launch` reading the command back -- is `tests/widgets`' `Desktop` test.
+ * What is here is the IDE's: the dialog, the id taken from the name, an entry
+ * that points at **this** executable and **this** project, and finding it again
+ * to update or remove.  Driven through the menu item, because that is the road
+ * a person takes.
+ */
+function* p_apps(ide) {
+    const at = () => Ide.Apps.installed(ide.project);
+
+    /* Not a state this phase may inherit: a previous run stopped between the
+     * install and the uninstall, or a hand-run with no runner to isolate it. */
+    const old = at();
+    if (old) Ide.Apps.uninstall(old.Id);
+    check("this project is not installed yet", at() === null);
+
+    /*
+     * The id, which is a slug of the name and never the file's own: the
+     * specification allows letters, digits, dashes, underscores and periods,
+     * and the runtime refuses anything else by name.
+     */
+    eq("the id is a slug of the name", Ide.Apps.idFor("My App 2"), "my-app-2");
+    eq("a name of punctuation still gets one",
+       Ide.Apps.idFor("!!!"), "bintana-app");
+
+    /* --- the dialog, through the menu item --------------------------------- */
+    check("with a project open, installing is on offer", ide.MnuAppInstall.Enabled);
+    ide.MnuAppInstall.Click();
+    yield;
+
+    const dlg = ide.appEditor;
+    check("the item opens the dialog", !!dlg);
+    if (!dlg) return;
+
+    const config = ide.manifest.read();
+    eq("which starts on the project's name", dlg.TxtAppName.Text, config.Name);
+    eq("and on its description", dlg.TxtAppComment.Text, config.Description);
+    check("and on an icon that draws", dlg.TxtAppIcon.Text !== "",
+          dlg.TxtAppIcon.Text);
+
+    /* The name picks the file, live -- which is what makes the state line say
+     * where the thing is going before anybody commits to it. */
+    dlg.TxtAppName.Text = "Bta Suite App";
+    dlg.showState();
+    check("the state line names the file to be written",
+          dlg.LblAppWhere.Text.includes("bta-suite-app.desktop"),
+          dlg.LblAppWhere.Text);
+    eq("the button says what it will do", dlg.BtnAppInstall.Text,
+       Locale.Text("Install"));
+    check("and there is nothing to uninstall yet", !dlg.BtnAppUninstall.Visible);
+
+    dlg.BtnAppInstall.Click();
+    yield;
+
+    const installed = at();
+    check("installing writes an entry this project owns", installed !== null);
+    if (!installed) return;
+
+    eq("under the id the name slugs to", installed.Id, "bta-suite-app");
+    eq("named what was typed", installed.Entry.Name, "Bta Suite App");
+    eq("running this runtime on this project",
+       installed.Entry.Exec,
+       Desktop.Entries.Exec([Application.Executable, ide.project]));
+    eq("which is how the IDE finds it again",
+       installed.Entry["X-Bintana-Project"], ide.project);
+    eq("and opening no terminal", installed.Entry.Terminal, "false");
+    check("the dialog closed when it was done", !dlg.Visible);
+
+    /* --- coming back to it -------------------------------------------------
+     *
+     * The second visit has to be an Update and not a second installation: the
+     * fields come from the entry that is there, so what is shown is what the
+     * menu shows.
+     */
+    ide.MnuAppInstall.Click();
+    yield;
+
+    const again = ide.appEditor;
+    check("opening it again finds what is installed", !!again);
+    if (!again) return;
+
+    eq("with the entry's name", again.TxtAppName.Text, "Bta Suite App");
+    eq("the button offering an update", again.BtnAppInstall.Text,
+       Locale.Text("Update"));
+    check("and something to remove", again.BtnAppUninstall.Visible);
+    check("saying where it is",
+          again.LblAppWhere.Text.includes("bta-suite-app.desktop"),
+          again.LblAppWhere.Text);
+
+    /* Renaming moves the file instead of leaving the old one behind: the id is
+     * the file's name, and two entries for one program is a menu that offers it
+     * twice. */
+    again.TxtAppName.Text = "Bta Suite App Renamed";
+    again.showState();
+    again.BtnAppInstall.Click();
+    yield;
+
+    check("renaming takes the old entry away",
+          !Desktop.Entries.Installed().includes("bta-suite-app"));
+    const renamed = at();
+    eq("and writes the new one", renamed && renamed.Id, "bta-suite-app-renamed");
+
+    /* --- and removing it --------------------------------------------------- */
+    ide.MnuAppInstall.Click();
+    yield;
+
+    const last = ide.appEditor;
+    check("the dialog opens once more to remove it", !!last);
+    if (!last) return;
+
+    last.BtnAppUninstall.Click();
+    yield;
+
+    check("uninstalling leaves nothing this project owns", at() === null);
+    check("and the file is gone",
+          !File.Exists(File.Join(Desktop.Entries.Directory,
+                                 "bta-suite-app-renamed.desktop")));
+}
+
 function* p_errors(ide) {
     /* --- the bottom panel --------------------------------------------------
      *
@@ -11598,6 +11729,7 @@ const PHASES = [
     { name: "settings", run: p_settings },
     { name: "columns", run: p_columns },
     { name: "export", run: p_export },
+    { name: "apps", run: p_apps },
     { name: "errors", run: p_errors },
     { name: "problems", run: p_problems },
     { name: "names", run: p_names },

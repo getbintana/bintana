@@ -39,6 +39,46 @@ msgstr ""
 msgid "Close"
 msgstr ""
 
+#: forms/AppForm.form: AppForm.Text
+msgid "Install as user application"
+msgstr ""
+
+#: forms/AppForm.form: LblAppName.Text
+#: forms/LaunchForm.form: LblLcName.Text
+#: forms/NewProjectForm.form: LblName.Text
+#: forms/ProjectForm.form: LblPrName.Text
+msgid "Name:"
+msgstr ""
+
+#: forms/AppForm.form: LblAppComment.Text
+msgid "Comment:"
+msgstr ""
+
+#: forms/AppForm.form: TxtAppComment.Tooltip
+msgid "What the menu shows about it; empty is no tooltip at all"
+msgstr ""
+
+#: forms/AppForm.form: LblAppIcon.Text
+msgid "Icon:"
+msgstr ""
+
+#: forms/AppForm.form: TxtAppIcon.Tooltip
+msgid "A name from the desktop's theme, or a path to an image of the project's"
+msgstr ""
+
+#: forms/AppForm.form: BtnAppIcon.Text
+msgid "Choose…"
+msgstr ""
+
+#: forms/AppForm.form: LblAppHint.Text
+msgid "The application is offered in this user's menu. Nothing is installed system-wide and no password is asked."
+msgstr ""
+
+#: forms/AppForm.form: BtnAppUninstall.Text
+msgid "Uninstall"
+msgstr ""
+
+#: forms/AppForm.form: BtnAppCancel.Text
 #: forms/AskForm.form: BtnCancel.Text
 #: forms/ClassForm.form: BtnCancel.Text
 #: forms/ColumnForm.form: BtnColCancel.Text
@@ -52,6 +92,11 @@ msgstr ""
 #: forms/StyleForm.form: BtnCancel.Text
 #: forms/SymbolForm.form: BtnCancel.Text
 msgid "Cancel"
+msgstr ""
+
+#: forms/AppForm.form: BtnAppInstall.Text
+#: forms/AppForm.js:73
+msgid "Install"
 msgstr ""
 
 #: forms/AskForm.form: BtnOk.Text
@@ -173,7 +218,7 @@ msgstr ""
 #: forms/ColumnForm.form: BtnColDel.Text
 #: forms/ConfirmForm.form: BtnYes.Text
 #: forms/MenuForm.form: BtnDelete.Text
-#: forms/MainForm.js:2146
+#: forms/MainForm.js:2171
 msgid "Delete"
 msgstr ""
 
@@ -206,7 +251,7 @@ msgid "A width of 0 lets the column size itself. Every column can be dragged wha
 msgstr ""
 
 #: forms/GitForm.form: GitForm.Text
-#: forms/MainForm.js:1634
+#: forms/MainForm.js:1659
 msgid "Changes"
 msgstr ""
 
@@ -288,6 +333,7 @@ msgid "Find"
 msgstr ""
 
 #: forms/IconForm.form: IconForm.Text
+#: forms/AppForm.js:95
 #: modules/PropertyGrid.js:967
 msgid "Choose an icon"
 msgstr ""
@@ -322,12 +368,6 @@ msgstr ""
 
 #: forms/LaunchForm.form: BtnLcRemove.Text
 msgid "Remove"
-msgstr ""
-
-#: forms/LaunchForm.form: LblLcName.Text
-#: forms/NewProjectForm.form: LblName.Text
-#: forms/ProjectForm.form: LblPrName.Text
-msgid "Name:"
 msgstr ""
 
 #: forms/LaunchForm.form: LblLcArgs.Text
@@ -430,7 +470,7 @@ msgid "Autosave..."
 msgstr ""
 
 #: forms/MainForm.form: menu MnuQuit
-#: forms/MainForm.js:803
+#: forms/MainForm.js:826
 msgid "Quit"
 msgstr ""
 
@@ -547,6 +587,10 @@ msgstr ""
 
 #: forms/MainForm.form: menu MnuExport
 msgid "Export project..."
+msgstr ""
+
+#: forms/MainForm.form: menu MnuAppInstall
+msgid "Install as user application..."
 msgstr ""
 
 #: forms/MainForm.form: menu MnuCheck
@@ -703,7 +747,7 @@ msgid "Recent"
 msgstr ""
 
 #: forms/MainForm.form: LblStatus.Text
-#: forms/MainForm.js:1092
+#: forms/MainForm.js:1116
 msgid "No project"
 msgstr ""
 
@@ -724,7 +768,7 @@ msgid "Commit what is staged. Enter is the button"
 msgstr ""
 
 #: forms/MainForm.form: BtnTakeDisk.Text
-#: forms/MainForm.js:1713
+#: forms/MainForm.js:1738
 msgid "Reload"
 msgstr ""
 
@@ -959,7 +1003,7 @@ msgid "Base folder:"
 msgstr ""
 
 #: forms/NewProjectForm.form: BtnCreate.Text
-#: forms/MainForm.js:2014
+#: forms/MainForm.js:2039
 msgid "Create"
 msgstr ""
 
@@ -1105,6 +1149,39 @@ msgstr ""
 msgid "On Bintana {0}"
 msgstr ""
 
+#: forms/AppForm.js:67
+msgid "Installed for this user as {0}.desktop, in {1}"
+msgstr ""
+
+#: forms/AppForm.js:69
+msgid "Will be installed for this user as {0}.desktop, in {1}"
+msgstr ""
+
+#: forms/AppForm.js:72
+msgid "Update"
+msgstr ""
+
+#: forms/AppForm.js:97
+#: modules/ProjectTree.js:465
+msgid "Images"
+msgstr ""
+
+#: forms/AppForm.js:98
+#: modules/Exporter.js:65
+msgid "All files"
+msgstr ""
+
+#: forms/AppForm.js:104
+msgid "An application needs a name to appear under."
+msgstr ""
+
+#: forms/AppForm.js:111
+#: forms/AppForm.js:123
+#: forms/ClassForm.js:207
+#: forms/ClassForm.js:221
+msgid "{0}"
+msgstr ""
+
 #: forms/ClassForm.js:68
 msgid "Class {0}"
 msgstr ""
@@ -1123,11 +1200,6 @@ msgstr ""
 
 #: forms/ClassForm.js:197
 msgid "{0} is not a class name: a letter first, then letters, "
-msgstr ""
-
-#: forms/ClassForm.js:207
-#: forms/ClassForm.js:221
-msgid "{0}"
 msgstr ""
 
 #: forms/ColumnForm.js:186
@@ -1215,7 +1287,7 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: forms/HelpForm.js:101
-#: forms/MainForm.js:1898
+#: forms/MainForm.js:1923
 msgid "The reference is not installed beside this build."
 msgstr ""
 
@@ -1282,135 +1354,136 @@ msgstr ""
 msgid "(none yet)"
 msgstr ""
 
-#: forms/MainForm.js:807
+#: forms/MainForm.js:830
 msgid "Quit without saving"
 msgstr ""
 
-#: forms/MainForm.js:809
+#: forms/MainForm.js:832
 msgid "Save all and quit"
 msgstr ""
 
-#: forms/MainForm.js:883
+#: forms/MainForm.js:906
 msgid "Terminal"
 msgstr ""
 
-#: forms/MainForm.js:911
+#: forms/MainForm.js:934
 msgid "the shell ended"
 msgstr ""
 
-#: forms/MainForm.js:1097
+#: forms/MainForm.js:1121
 msgid "{0}   double click to edit"
 msgstr ""
 
-#: forms/MainForm.js:1111
+#: forms/MainForm.js:1135
 msgid "   form {0}x{1}"
 msgstr ""
 
-#: forms/MainForm.js:1114
+#: forms/MainForm.js:1138
 msgid "   Ln {0}, Col {1}"
 msgstr ""
 
-#: forms/MainForm.js:1511
+#: forms/MainForm.js:1536
 msgid "Nothing wrong with the project"
 msgstr ""
 
-#: forms/MainForm.js:1689
+#: forms/MainForm.js:1714
 msgid "{0} is no longer on disk."
 msgstr ""
 
-#: forms/MainForm.js:1691
+#: forms/MainForm.js:1716
 msgid "{0} changed on disk, and there are unsaved changes here."
 msgstr ""
 
-#: forms/MainForm.js:1693
+#: forms/MainForm.js:1718
 msgid "{0} changed on disk."
 msgstr ""
 
-#: forms/MainForm.js:1714
+#: forms/MainForm.js:1739
 msgid "{0} changed on disk. Take the newer file and lose what is unsaved here?"
 msgstr ""
 
-#: forms/MainForm.js:1715
+#: forms/MainForm.js:1740
 msgid "Reload without saving"
 msgstr ""
 
-#: forms/MainForm.js:2012
+#: forms/MainForm.js:2037
 msgid "Start a repository"
 msgstr ""
 
-#: forms/MainForm.js:2013
+#: forms/MainForm.js:2038
 msgid "Create a git repository in {0}?"
 msgstr ""
 
-#: forms/MainForm.js:2069
+#: forms/MainForm.js:2094
 msgid "(no branches yet)"
 msgstr ""
 
-#: forms/MainForm.js:2076
+#: forms/MainForm.js:2101
 msgid "(no other branch)"
 msgstr ""
 
-#: forms/MainForm.js:2105
+#: forms/MainForm.js:2130
 msgid "Switch branch"
 msgstr ""
 
-#: forms/MainForm.js:2109
+#: forms/MainForm.js:2134
 msgid "Switch"
 msgstr ""
 
-#: forms/MainForm.js:2124
+#: forms/MainForm.js:2149
 msgid "New branch"
 msgstr ""
 
-#: forms/MainForm.js:2124
+#: forms/MainForm.js:2149
 msgid "Called"
 msgstr ""
 
-#: forms/MainForm.js:2144
+#: forms/MainForm.js:2169
 msgid "Delete a branch"
 msgstr ""
 
-#: forms/MainForm.js:2145
+#: forms/MainForm.js:2170
 msgid "Delete {0}? Anything committed only there would be refused rather than lost."
 msgstr ""
 
-#: forms/MainForm.js:2227
+#: forms/MainForm.js:2252
 msgid "Clone a repository"
 msgstr ""
 
-#: forms/MainForm.js:2227
+#: forms/MainForm.js:2252
 msgid "From"
 msgstr ""
 
-#: forms/MainForm.js:2234
+#: forms/MainForm.js:2259
 msgid "Clone into"
 msgstr ""
 
-#: forms/MainForm.js:804
+#: forms/MainForm.js:827
 msgid "{1} has unsaved changes."
 msgid_plural "{0} files have unsaved changes:\n{1}"
 msgstr[0] ""
 msgstr[1] ""
 
-#: forms/MainForm.js:1099
+#: forms/MainForm.js:1123
 #: forms/QuickForm.js:258
 msgid "{0} file"
 msgid_plural "{0} files"
 msgstr[0] ""
 msgstr[1] ""
 
-#: forms/MainForm.js:2106
+#: forms/MainForm.js:2131
 msgid "There is {0} change here. Switching keeps it, unless the two branches disagree about the same file."
 msgid_plural "There are {0} changes here. Switching keeps them, unless the two branches disagree about the same file."
 msgstr[0] ""
 msgstr[1] ""
 
-#: forms/MainForm.js:1314
+#: forms/MainForm.js:691
+#: forms/MainForm.js:1339
 #: modules/Exporter.js:40
 msgid "Open a project first."
 msgstr ""
 
-#: forms/MainForm.js:1475
+#: forms/MainForm.js:1500
 msgid "There is no template yet. Run Project > Update translations first: it gathers every string the project shows and writes the .pot a translation starts from."
 msgstr ""
 
@@ -1418,11 +1491,11 @@ msgstr ""
 msgid "{0} has no project.json.\nIt can still be edited, but it will not be able to run."
 msgstr ""
 
-#: forms/MainForm.js:1162
+#: forms/MainForm.js:1186
 msgid "{0}\nis not there any more."
 msgstr ""
 
-#: forms/MainForm.js:2352
+#: forms/MainForm.js:2377
 msgid "Open a form's design to edit its menus."
 msgstr ""
 
@@ -1438,11 +1511,11 @@ msgstr ""
 msgid "{0} is already a project."
 msgstr ""
 
-#: forms/MainForm.js:1424
+#: forms/MainForm.js:1449
 msgid "Cannot open {0}:\n{1}"
 msgstr ""
 
-#: forms/MainForm.js:2251
+#: forms/MainForm.js:2276
 #: modules/FormFiles.js:431
 #: modules/FormFiles.js:583
 msgid "{0} already exists."
@@ -1684,10 +1757,6 @@ msgstr ""
 msgid "tar archives"
 msgstr ""
 
-#: modules/Exporter.js:65
-msgid "All files"
-msgstr ""
-
 #: modules/Exporter.js:122
 msgid "Exported to {0}"
 msgstr ""
@@ -1792,7 +1861,7 @@ msgstr ""
 msgid "{0} changed"
 msgstr ""
 
-#: modules/Launch.js:201
+#: modules/Launch.js:209
 msgid "(none declared)"
 msgstr ""
 
@@ -1852,10 +1921,6 @@ msgstr ""
 
 #: modules/ProjectTree.js:428
 msgid "Modules"
-msgstr ""
-
-#: modules/ProjectTree.js:465
-msgid "Images"
 msgstr ""
 
 #: modules/ProjectTree.js:478

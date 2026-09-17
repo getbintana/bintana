@@ -2450,6 +2450,59 @@ It is also the first caller of `Dialog.SaveFile`, and reads the way that call wa
 meant to: a name to suggest, a folder to start in, and a filter whose label is
 the caller's own prose.
 
+## Installing it in the menu
+
+*Project → Install as user application…* writes one `.desktop` file into
+`~/.local/share/applications` — `$XDG_DATA_HOME`, whatever the desktop spells it
+— pointing at this runtime and this project. The application then appears in the
+desktop's menu, for that one user: no root, no package, nothing to restart. The
+same dialog removes it, because that is where one looks when the question
+arrives.
+
+Three fields: a name, a comment, an icon. The icon is either a name from the
+desktop's theme or a path to an image, and the recommendation is the project's
+own: an image in `<project>/icons` is offered by its **path**, because the
+desktop drawing a menu is another process and knows nothing about this project's
+icon search path.
+
+**The runtime owns the format.** `Desktop.Entries`
+([library](llm/library.md#desktopentries)) reads and writes the file through
+`GKeyFile`, which is the platform's implementation of the Desktop Entry
+Specification — the escaping and the localized keys (`Name[es]`) are not a second
+interpretation of them. What the IDE adds is `Ide.Apps`: the id, which is a slug
+of the name and never the file's; the command, which is *this* binary and *this*
+project; and the `X-Bintana-Project` key that makes an entry recognisable as this
+project's afterwards.
+
+**A rename moves the entry instead of leaving the old one.** The id is the
+file's name, so installing under a new name removes the file the old name wrote:
+two entries for one program is a menu that offers it twice. What finds it is
+`Desktop.Entries.Installed()` and the project path inside it — never the file's
+name, which is what somebody typed.
+
+**The command is not written here.** A desktop entry's `Exec` has a quoting of
+its own — double quotes; `"`, `` ` ``, `$` and `\` escaped inside them; `%`
+doubled, because it is the format's field-code marker — and all of it sits on top
+of the key file's escaping, which doubles the backslashes again in the file.
+`Desktop.Entries.Exec(argv)` is the whole of it; `tests/widgets` installs an
+entry built with it, launches it through `gio` — a real `GDesktopAppInfo`, the
+same road a menu takes — and reads the arguments back, a space, a percent, a
+quote, a dollar, a backslash and an accent included.
+
+**What is not promised is the window's identity.** The entry runs `bintana`, and
+the runtime sets no GTK application id, so a dock may group the running window
+under whatever *that* name resolves to and not under this entry. The system's own
+`bintana-ide` solves it with a bash launcher and `exec -a`; a project gets no
+launcher of its own yet, and the cost of one would be a second file per
+application to write, keep and remove.
+
+**And it is the Linux desktop's for now.** A `.desktop` file is the freedesktop
+format and nothing on Windows reads one; a Start-menu shortcut is the equivalent
+there, and it is the packaging item in
+[the portability plan](portability-plan.md#out-of-scope-here-and-why). The
+runtime's `Desktop.Entries` compiles and answers on Windows because the XDG
+directories do — what is missing is a format to write.
+
 ---
 
 # The designer

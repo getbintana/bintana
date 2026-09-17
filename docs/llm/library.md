@@ -39,8 +39,79 @@ it affects everything started afterwards), `Variables`, `CurrentDirectory`
 `ProcessId`, `ProcessorCount`, `HomeDirectory`, `TempDirectory`, `UserName`,
 `HostName`, `OS`, `OSVersion`.
 
+`HasDisplay` asks the environment — `DISPLAY` or `WAYLAND_DISPLAY` — and not
+this process, which is what a program about to start something else needs to
+know. On Windows there is no such variable and a session always has one, so it
+answers `true` there.
+
 The command line is `Application.Arguments` and quitting is `Application.Quit`:
 those belong to the application, not to the system.
+
+## Desktop
+
+The session this program is running in: where a user's own things go, by the
+freedesktop conventions every Linux desktop follows. `DataDirectory`,
+`ConfigDirectory`, `CacheDirectory` and `Entries`.
+
+| | |
+|---|---|
+| `DataDirectory` | `$XDG_DATA_HOME` — `~/.local/share` unless the desktop moved it |
+| `ConfigDirectory` | `$XDG_CONFIG_HOME` — `~/.config` |
+| `CacheDirectory` | `$XDG_CACHE_HOME` — `~/.cache` |
+| `Entries` | the module below |
+
+`ConfigDirectory` is the root and **not** `Application.ConfigDirectory`, which is
+this project's own directory inside it.
+
+## Desktop.Entries
+
+The `.desktop` files a **user** installs for themselves, in
+`DataDirectory/applications`. That directory is where a menu entry put there by a
+program appears in the desktop's menu — with no root, no package and nothing to
+restart. The format is the freedesktop *Desktop Entry Specification*, read and
+written through GLib's own key-file implementation, so the escaping and the
+localized keys (`Name[es]`) are the platform's and not a second interpretation
+of them.
+
+| | |
+|---|---|
+| `Directory` | `$XDG_DATA_HOME/applications`, created |
+| `Exec(argv)` | the `Exec=` value for that command — the format's quoting, not the shell's |
+| `Installed()` | the ids of the entries this user has, sorted |
+| `Read(id)` | one entry as data, or `null` when there is none |
+| `Install(id, entry)` | writes `Directory/<id>.desktop`, **atomically**; answers the path |
+| `Uninstall(id)` | removes it; answers whether there was one |
+
+An id is the file's name without `.desktop` — letters, digits, `-`, `_` and `.`
+— and an entry is the file as data, group by group:
+
+```js
+const exec = Desktop.Entries.Exec([Application.Executable, Application.Directory]);
+
+Desktop.Entries.Install("hello", {
+    "Desktop Entry": {
+        Type:    "Application",
+        Name:    "Hello",
+        Comment: "A greeting",
+        Exec:    exec,
+        Icon:    "applications-development",
+    },
+});
+```
+
+`Read` answers the same shape, so an entry is read, changed and written back.
+
+**An entry that is not one is refused instead of written.** The `[Desktop Entry]`
+group is required, with a `Type` and a `Name`; a `Type=Application` without an
+`Exec` is refused too. Every desktop skips a file that breaks those rules, and it
+skips it in silence — which is the one failure this cannot leave a caller to
+find by looking at a menu that has nothing in it. Values must be text.
+
+**The `Exec` string is not the shell's.** It is the desktop entry format's own
+quoting, and it sits on top of the key file's escaping — an argument with a
+space, a `"`, a `$`, a `` ` ``, a `\` or a `%` in it is exactly the case that
+cannot be written by hand. `Desktop.Entries.Exec(argv)` is the whole of the
+answer, and what a program should use.
 
 ## Message
 

@@ -1019,6 +1019,7 @@ static bool install_globals(BtaApp *app)
     bta_widgets_init(ctx, global);
     bta_menu_init(ctx);
     bta_sys_init(ctx, global);
+    bta_desktop_init(ctx, global);
 
     JS_FreeValue(ctx, global);
 

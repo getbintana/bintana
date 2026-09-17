@@ -27,6 +27,8 @@
     "../../ide/modules/Launch.js",
     "../../ide/forms/LaunchForm.js",
     "../../ide/forms/ProjectForm.js",
+    "../../ide/modules/Apps.js",
+    "../../ide/forms/AppForm.js",
     "../../ide/modules/Classes.js",
     "../../ide/modules/ProjectTree.js",
     "../../ide/modules/FormFiles.js",

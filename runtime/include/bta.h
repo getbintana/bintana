@@ -744,6 +744,15 @@ void bta_scroll_watch(BtaWidget *w);
 /* --- File / Dir / Exec -------------------------------------------------- */
 void bta_sys_init(JSContext *ctx, JSValue global);
 
+/* --- Desktop -------------------------------------------------------------
+ *
+ * The session a program is running in: the XDG directories a user's own data
+ * goes in, and `Desktop.Entries` -- the `.desktop` files of
+ * `$XDG_DATA_HOME/applications`, read and written through `GKeyFile`, which
+ * is the platform's implementation of that format.  See bta_desktop.c.
+ */
+void bta_desktop_init(JSContext *ctx, JSValue global);
+
 /*
  * The debugger (`runtime/src/bta_debug.c`), which exists only under `--debug`.
  *

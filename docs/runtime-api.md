@@ -317,7 +317,7 @@ facts about the machine that a program *acts on* rather than displays.
 | `Set(name, value)` | set it for this process **and everything it starts afterwards**; `null` removes |
 | `Variables` | every name at once, as a plain object — a fresh copy, since `Set` moves underneath it |
 | `CurrentDirectory` | where the process is; assigning enters, and a directory that is not there **throws** |
-| `HasDisplay` | whether this *environment* offers one — `DISPLAY` or `WAYLAND_DISPLAY` |
+| `HasDisplay` | whether this *environment* offers one — `DISPLAY` or `WAYLAND_DISPLAY`, and always `true` on Windows, where a session has one and no variable says so |
 | `ProcessId` | the pid |
 | `ProcessorCount` | how wide to build; the one number `-j` wants |
 | `HomeDirectory`, `TempDirectory` | named like `CurrentDirectory`, and unlike it they do not move |
@@ -347,6 +347,58 @@ child, `Exec(argv, { Environment: { ... } })` says what it changes and for whom.
 **Assigning `CurrentDirectory` refuses rather than ignores.** A directory that was
 never entered leaves every relative path after it pointing somewhere else, and
 that shows up three calls later in whatever tried to read a file.
+
+## Desktop
+
+The session a program is running in — the XDG directories — and
+`Desktop.Entries`, the module that reads and writes the `.desktop` files of the
+user's own applications directory. It is in `bta_desktop.c`.
+
+| Member | |
+|---|---|
+| `DataDirectory` | `$XDG_DATA_HOME`, or `~/.local/share` |
+| `ConfigDirectory` | `$XDG_CONFIG_HOME`, or `~/.config` |
+| `CacheDirectory` | `$XDG_CACHE_HOME`, or `~/.cache` |
+| `Entries` | the module below |
+
+```js
+Desktop.Entries.Directory              // <DataDirectory>/applications, created
+Desktop.Entries.Installed()            // ids, sorted
+Desktop.Entries.Read(id)               // the entry as data, or null
+Desktop.Entries.Install(id, entry)     // writes Directory/<id>.desktop, atomically
+Desktop.Entries.Uninstall(id)          // removes it; false when it was not there
+Desktop.Entries.Exec(argv)             // the Exec= value for that command
+```
+
+**The directories are GLib's answer and not a guess**: `g_get_user_data_dir` and
+its two siblings read the XDG variables and fall back to the home directory, so a
+machine that moved its data home is followed rather than ignored. `Desktop`
+answers them; it creates none of them but `Entries.Directory`, which is made on
+first use because an entry has to go somewhere.
+
+**The entry format is `GKeyFile`'s**, which is the platform's implementation of
+the Desktop Entry Specification and the same reader the desktop's own menu is
+built on. `Read` answers `{ group: { key: value } }` with the values unescaped,
+localized keys (`Name[es]`) included as the ordinary keys they are; comments and
+blank lines are not modelled and do not survive a rewrite, because this is for
+the entries a program installs and removes and not for editing a packager's file.
+An id is the file's name without `.desktop`, restricted to letters, digits, `-`,
+`_` and `.`: a separator would be a path out of the directory this owns.
+
+**`Install` refuses what the desktop would ignore in silence.** No
+`[Desktop Entry]` group, no `Type` or no `Name`, or an `Application` with no
+`Exec`, and the call throws naming what is missing rather than writing a file
+that would leave the user with a menu item that is not there and nothing to read.
+The write goes through `g_file_set_contents`, the same temporary-and-rename
+promise `File.Save` makes.
+
+**`Exec(argv)` is a verb because the string is three escaping rules deep.** The
+desktop entry's own quoting (double quotes; `"`, `` ` ``, `$`, `\` escaped inside
+them; `%` doubled as the field-code marker) sits on top of the key file's
+escaping, which doubles the backslashes again in the file. Measured against
+`gio launch` and `desktop-file-validate`: an argument carrying a space, a quote,
+a dollar, a backslash, a percent or an accent comes back out exactly as it went
+in. `docs/installing.md` has the system install this is the per-user half of.
 
 ## Locale
 

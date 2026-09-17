@@ -27,6 +27,8 @@
     "modules/Launch.js",
     "forms/LaunchForm.js",
     "forms/ProjectForm.js",
+    "modules/Apps.js",
+    "forms/AppForm.js",
     "modules/Classes.js",
     "modules/ProjectTree.js",
     "modules/FormFiles.js",

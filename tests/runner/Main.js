@@ -100,6 +100,23 @@ const TIMEOUT = Number(Environment.Get("TIMEOUT")) || 600;
  */
 const GRACE = 5000;
 
+/*
+ * Where the projects' `Desktop` goes, which must not be the user's own.
+ *
+ * `Desktop.Entries` writes menu entries into `$XDG_DATA_HOME/applications`, and
+ * the IDE test installs one for real -- so without this a suite run would put a
+ * `bta-test-ide.desktop` in the developer's menu, every run, and the icon would
+ * outlive the test that made it.  A scratch data home per run, named after the
+ * pid like the projects' own directories, keeps the desktop out of it.
+ *
+ * It is set for the children and not here: the runner is a console project and
+ * never touches an entry.  `Application.ConfigDirectory` is deliberately **not**
+ * moved -- that is the project's own settings directory, and the tests have
+ * always written there.
+ */
+const DATA_HOME = File.Join(Environment.TempDirectory,
+                            `bta-suite-${Environment.ProcessId}`, "data");
+
 function Main() {
     const only  = Application.Arguments[0] || "";
     const extra = Application.Arguments[1] || "";
@@ -167,7 +184,8 @@ function run(projects, wrap, extra, i, failed) {
     if (extra) argv.push(extra);
 
     const job = Exec(argv,
-        { Environment: wrap.env, Timeout: TIMEOUT * 1000, KillAfter: GRACE },
+        { Environment: { ...wrap.env, XDG_DATA_HOME: DATA_HOME },
+          Timeout: TIMEOUT * 1000, KillAfter: GRACE },
         (line) => { if (!NOISE.test(line)) print(line); },
         (code) => {
             const secs = (watch.Elapsed / 1000).toFixed(1);

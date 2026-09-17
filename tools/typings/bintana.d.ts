@@ -788,6 +788,13 @@ declare class Decimal {
     toString(...values: any[]): any;
 }
 
+declare const Desktop: {
+    CacheDirectory: any;
+    ConfigDirectory: any;
+    DataDirectory: any;
+    Entries: any;
+};
+
 declare const Dialog: {
     Color(...values: any[]): any;
     OpenFile(...values: any[]): any;

@@ -55,9 +55,9 @@ reference:
 
 | A change to | goes in |
 |---|---|
-| a widget's properties, methods or events | [`docs/llm/controls.md`](docs/llm/controls.md) — and `tests/api.sh` **fails** until it does — plus [`docs/widgets.md`](docs/widgets.md) for the behaviour a table cannot state, and `README.md` §3 |
+| a widget's properties, methods or events | [`docs/llm/controls.md`](docs/llm/controls.md) — and `tests/api.sh` **fails** until it does — plus [`docs/widgets.md`](docs/widgets.md) for the behaviour a table cannot state (`README.md` is presentation only since it was cut to ~60 lines, and takes no API) |
 | a component in `lib/` (the shipped libraries) | [`docs/llm/<library>.md`](docs/llm/charts.md) — and `tests/api.sh` **fails** until it does, the same rule the runtime's own surface is held to |
-| a global (`File`, `Exec`, `Locale`, `Record` …) | [`docs/runtime-api.md`](docs/runtime-api.md) and [`docs/llm/library.md`](docs/llm/library.md) — **and a line in `GLOBAL_TABLES`/`GLOBAL_VARS` in `tests/api/Check.js`**, or the check cannot see it |
+| a global (`File`, `Exec`, `Locale`, `Record` …) | [`docs/runtime-api.md`](docs/runtime-api.md) and [`docs/llm/library.md`](docs/llm/library.md) — **and a line in `GLOBAL_TABLES`/`GLOBAL_VARS` in `tests/api/Check.js`**, or the check cannot see it — **and `docs/reference/globals/<Name>.md` with a line in `GLOBAL_PAGES`**, the long page a global is held to member by member. The page is the one part nothing asks about by name: a global with no page at all is invisible to the check, which is how a whole family was added without one |
 | the `.form`, `project.json` or the serialiser | [`docs/formats.md`](docs/formats.md) and [`docs/llm/forms.md`](docs/llm/forms.md) |
 | what `cmake --install` lays down, or the `uninstall` target | [`docs/installing.md`](docs/installing.md) — and `tests/install.sh` must still pass, since it stages a real install, compiles a plugin against it and runs it |
 | the language: an intrinsic installed or removed | [`docs/llm/language.md`](docs/llm/language.md) and `runtime-api.md`'s *language underneath* |
@@ -519,7 +519,19 @@ the reporting all live in `tests/runner/Main.js`.
 
 `tests/ide` loads the **real** `ide/**/*.js` (see its `project.json`) and drives
 the IDE the way a user would. Its `.form` files are symlinks to the IDE's own,
-so the two cannot drift.
+so the two cannot drift — and **a form added to the IDE is a symlink added
+here**, or the test project builds that dialog with no controls at all and the
+first assignment to one of them throws `cannot set property 'Text' of
+undefined`. The new `.js` has to go in `tests/ide/project.json`'s `sources` too;
+a file listed in neither place is a class that never loads.
+
+**The runner points `XDG_DATA_HOME` at a scratch directory under `/tmp`**
+(`bta-suite-<pid>/data`), because `tests/ide`'s `apps` phase installs a menu
+entry for real. Without it every suite run would leave a `bta-suite-app.desktop`
+in the developer's menu, and only that phase would be able to say why. What is
+deliberately *not* moved is `~/.config/bintana`: the projects' own settings
+directory has always been written to by the tests, and `tests/ide`'s `settings`
+and `session` phases are about it.
 
 **`tests/report` is how a shipped library is tested, and the shape is worth
 copying.** `Save()` runs the same `Canvas_Draw` synchronously against an image
@@ -1148,6 +1160,29 @@ person who wrote it either.
   asserting the round trip rather than by anybody reading the code.
   `g_ascii_dtostr` on the way out, `g_ascii_strtod` on the way in, for any
   property that keeps a number as text.
+- **A `.desktop` entry's `Exec` is quoted twice, and the outer layer is not the
+  one you think.** `Exec` has a quoting of its own -- every argument in double
+  quotes, with `"`, `` ` ``, `$` and `\` escaped inside them, and `%` doubled
+  because a single one is the format's field-code marker (`%f`, `%u`) -- and all
+  of *that* is a string value in a key file, which escapes the backslashes again
+  on the way out. So the file a hand-written command produces is either rejected
+  by `desktop-file-validate` (`contains a non-escaped character '$' in a quote,
+  but it should be escaped with two backslashes`) or accepted and splits the
+  argument in two at launch. **The parser to test against is `gio launch`**, a
+  real `GDesktopAppInfo` and the same road a menu takes; `desktop-file-validate`
+  is the other half, and it only checks the file. `Desktop.Entries.Exec(argv)`
+  is that whole job, and `tests/widgets` (`Desktop`) installs an entry, launches
+  it with `gio` and reads the arguments back -- space, `%`, `"`, `$`, `\` and an
+  accent in one command. Writing the string by hand in JS is the regression to
+  watch for, and it is the build-another-parser mistake this file keeps warning
+  about.
+- **A generated menu entry is a file a test can leave in somebody's menu.**
+  `tests/ide`'s `apps` phase installs a real `.desktop` under
+  `$XDG_DATA_HOME/applications`, which without care is the developer's own menu
+  -- surviving the run as an entry for a project in `/tmp`. The runner points
+  `XDG_DATA_HOME` at a scratch directory (`bta-suite-<pid>/data`) for exactly
+  this, and the test still removes what it installs, because `tests/try.sh` has
+  no runner to isolate it.
 - **In an `Overlay` the bottom of the stack is the layer that fills.** The base
   is a GTK *property* (`gtk_overlay_set_child`) and the floaters are a list, so
   `Reorder(child, 0)` swaps the property rather than moving a sibling — both
