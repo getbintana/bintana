@@ -1837,6 +1837,28 @@ static JSValue table_set_cell(JSContext *ctx, JSValueConst this_val,
 
 
 
+/*
+ * Clears the selection, one selected row at a time.
+ *
+ * **`gtk_selection_model_unselect_all` is not enough, and it fails silently.**
+ * A `GtkSingleSelection` did not implement `unselect_all` before GTK 4.22, and
+ * the interface's default goes through `set_selection`, which it does not
+ * implement either -- so on 4.14 the call did *nothing* and `Index = -1` left
+ * the row selected.  This machine (4.22) passed and the ubuntu-24.04 runner
+ * (4.14) did not, which is the shape of half the traps in `AGENTS.md`.
+ * `unselect_item` is implemented by both selection models, and this goes
+ * through it.
+ */
+static void table_clear_selection(BtaWidget *w)
+{
+    GtkSelectionModel *model = table_model(w);
+    guint              n     = g_list_model_get_n_items(G_LIST_MODEL(model));
+
+    for (guint i = 0; i < n; i++)
+        if (gtk_selection_model_is_selected(model, i))
+            gtk_selection_model_unselect_item(model, i);
+}
+
 static JSValue table_get_index(JSContext *ctx, JSValueConst this_val)
 {
     BtaWidget *w = bta_this(ctx, this_val);
@@ -1870,7 +1892,7 @@ static JSValue table_set_index(JSContext *ctx, JSValueConst this_val,
     guint              n     = g_list_model_get_n_items(G_LIST_MODEL(model));
 
     if (i < 0 || (guint)i >= n)
-        gtk_selection_model_unselect_all(model);
+        table_clear_selection(w);
     else
         gtk_selection_model_select_item(model, (guint)i, TRUE);
     return JS_UNDEFINED;
@@ -2186,11 +2208,9 @@ static JSValue table_set_key(JSContext *ctx, JSValueConst this_val,
     if (!key)
         return JS_EXCEPTION;
 
-    GtkSelectionModel *sel = table_model(w);
-
     /* "" selects nothing, which is how a program clears the selection. */
     if (!*key) {
-        gtk_selection_model_unselect_all(sel);
+        table_clear_selection(w);
         JS_FreeCString(ctx, key);
         return JS_UNDEFINED;
     }
@@ -2280,7 +2300,7 @@ static JSValue table_select_every(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     if (magic == TB_NONE) {
-        gtk_selection_model_unselect_all(table_model(w));
+        table_clear_selection(w);
         return JS_UNDEFINED;
     }
     if (!table_state(w)->multi)

@@ -129,7 +129,7 @@
               "type": "Button",
               "name": "BtnCreate",
               "properties": {
-                "Icon": "document-new",
+                "Icon": "document-new-symbolic",
                 "Style": "suggested-action",
                 "Text": "Create",
                 "Default": true

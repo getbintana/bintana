@@ -4,7 +4,7 @@
   "properties": {
     "Arrangement": "Vertical",
     "Height": 380,
-    "Icon": "applications-development",
+    "Icon": "applications-engineering-symbolic",
     "Text": "About Bintana",
     "Width": 420,
     "Resizable": false
@@ -24,7 +24,7 @@
           "type": "Image",
           "name": "ImgAbout",
           "properties": {
-            "Icon": "applications-development",
+            "Icon": "applications-engineering-symbolic",
             "Size": 96
           }
         },

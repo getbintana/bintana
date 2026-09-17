@@ -3,7 +3,7 @@
   "class": "MainForm",
   "properties": {
     "Height": 720,
-    "Icon": "applications-development",
+    "Icon": "applications-engineering-symbolic",
     "Text": "Bintana IDE",
     "Width": 1100
   },
@@ -552,7 +552,7 @@
                   "type": "Image",
                   "name": "ImgWelcome",
                   "properties": {
-                    "Icon": "applications-development",
+                    "Icon": "applications-engineering-symbolic",
                     "Size": 96
                   }
                 },
@@ -589,7 +589,7 @@
                   "name": "BtnWelcomeNew",
                   "properties": {
                     "Height": 38,
-                    "Icon": "document-new",
+                    "Icon": "document-new-symbolic",
                     "Text": "New project..."
                   }
                 },
@@ -649,7 +649,7 @@
                   "name": "BtnReload",
                   "properties": {
                     "Height": 32,
-                    "Icon": "view-refresh",
+                    "Icon": "view-refresh-symbolic",
                     "Style": "flat",
                     "Width": 24
                   }
@@ -1060,7 +1060,7 @@
                                       "properties": {
                                         "HAlign": "Fill",
                                         "HExpand": true,
-                                        "Icon": "edit-find",
+                                        "Icon": "edit-find-symbolic",
                                         "Tooltip": "Text to find"
                                       }
                                     },
@@ -1142,7 +1142,7 @@
                                       "properties": {
                                         "HAlign": "Fill",
                                         "HExpand": true,
-                                        "Icon": "edit-find-replace",
+                                        "Icon": "edit-find-replace-symbolic",
                                         "Tooltip": "Replace the matches with this"
                                       }
                                     },
@@ -1352,7 +1352,7 @@
                                           "properties": {
                                             "Action": "ActDelCtl",
                                             "Height": 30,
-                                            "Icon": "edit-delete",
+                                            "Icon": "edit-delete-symbolic",
                                             "Style": "flat",
                                             "Tooltip": "Delete control",
                                             "Width": 34
@@ -1364,7 +1364,7 @@
                                           "properties": {
                                             "Action": "ActRaise",
                                             "Height": 30,
-                                            "Icon": "go-up",
+                                            "Icon": "go-up-symbolic",
                                             "Style": "flat",
                                             "Tooltip": "Bring to front",
                                             "Width": 34
@@ -1376,7 +1376,7 @@
                                           "properties": {
                                             "Action": "ActLower",
                                             "Height": 30,
-                                            "Icon": "go-down",
+                                            "Icon": "go-down-symbolic",
                                             "Style": "flat",
                                             "Tooltip": "Send to back",
                                             "Width": 34

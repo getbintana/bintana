@@ -1471,6 +1471,12 @@ person who wrote it either.
   how the IDE's tab-strip button came out blank, since `view-more-symbolic` is
   not on this desktop and nothing said so. `tests/ide` now walks every `.form`
   under `ide/` and checks each declared `Icon` against `Application.HasIcon`.
+  **And the names the IDE's own forms declare are the `-symbolic` spelling**,
+  because the full-colour legacy ones are not on every desktop: `edit-find`,
+  `go-up`, `document-new` and `applications-development` are Fedora's
+  `AdwaitaLegacy` and Ubuntu's Yaru, and the Adwaita a bare runner falls back to
+  ships only the symbolic set. Sixteen icons drew blank on the runner and every
+  one of them was fine here -- which is what walking every `.form` is for.
 - `gtk_icon_theme_has_icon()` promises more than the theme delivers: it can say
   yes and hand back its `image-missing`, or an SVG that renders to nothing (art
   outside the frame, no `viewBox`). `bta_icon_available` renders it at 16x16 and

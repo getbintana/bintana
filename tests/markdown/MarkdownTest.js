@@ -616,7 +616,11 @@ class MarkdownTest extends Form {
         this.Doc.pointer(jump.X + jump.Width - 2, on.Y);
         eq("and a text cursor over the words around it",
            this.Doc.Canvas.Cursor, "Text");
-        this.Doc.pointer(jump.X, on.Y + 400);
+        /* Left of the column, which is off the text however the paragraphs
+         * wrapped: 400 pixels down from the link lands in the filler on one
+         * machine and between two paragraphs on another, and that is a font
+         * measurement rather than a question about the pointer. */
+        this.Doc.pointer(jump.X - 20, on.Y);
         eq("and nothing in particular off the text", this.Doc.Canvas.Cursor, "Auto");
     }
 

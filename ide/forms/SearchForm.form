@@ -4,7 +4,7 @@
   "properties": {
     "Arrangement": "Vertical",
     "Height": 520,
-    "Icon": "system-search",
+    "Icon": "system-search-symbolic",
     "Text": "Find in project",
     "Width": 720
   },
@@ -34,7 +34,7 @@
                 "ActivatesDefault": true,
                 "HAlign": "Fill",
                 "HExpand": true,
-                "Icon": "edit-find",
+                "Icon": "edit-find-symbolic",
                 "Tooltip": "Text to find"
               }
             },

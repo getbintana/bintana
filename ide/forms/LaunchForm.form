@@ -3,7 +3,7 @@
   "class": "LaunchForm",
   "properties": {
     "Height": 520,
-    "Icon": "system-run",
+    "Icon": "system-run-symbolic",
     "Text": "Run configurations",
     "Width": 660
   },
