@@ -358,6 +358,12 @@ jobs:
 
       - name: Attach it to the release, when this is a tag
         if: startsWith(github.ref, 'refs/tags/')
+        # **Not the MSYS2 shell.** `gh` is installed on the Windows side and is
+        # not on the MSYS2 PATH, so this step -- the same one the Linux jobs run
+        # -- answered `gh: command not found` and left the tag with only the
+        # tarball. Git Bash has it, and the workspace is where `zip-name.txt`
+        # was written either way.
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
