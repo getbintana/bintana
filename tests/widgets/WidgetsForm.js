@@ -14675,19 +14675,29 @@ function Main() {
                  check("the handle starts with TimedOut false",
                        guarded.TimedOut === false);
 
-                 /* The terminal digests what it was fed on GTK's own time, so
-                  * the last of the assertions waits for it. */
-                 Timer.After(250, () => {
-                     this.checkTerminal();
-                     this.checkTimers();
-                     /* Needs real allocations, so it runs out here with the
-                      * rest of what only a running main loop can answer. */
-                     this.testAnchors(() => this.testBoxAlign(
-                         () => this.testSwitcherRoom(
-                             () => this.testFlow(() => this.testFontSize(
-                                 () => this.testStyleSheet(
-                                     () => this.testDirectories()))))));
-                 });
+                /*
+                 * The terminal digests what it was fed on GTK's own time, so
+                 * the last of the assertions **waits for that to have
+                 * happened** -- a fixed 250 ms is the counting-time mistake the
+                 * rest of this file retired: it was enough here and not on the
+                 * sanitizer runner, where those three assertions were the only
+                 * red ones in the suite and read as a pty that had printed
+                 * nothing. The condition is the one they assert: no pty at all,
+                 * or the last line of what it was fed.
+                 */
+                until("the terminal digested what it was fed",
+                      () => !this.term || this.term.Text.includes("line 40"),
+                      () => {
+                    this.checkTerminal();
+                    this.checkTimers();
+                    /* Needs real allocations, so it runs out here with the
+                     * rest of what only a running main loop can answer. */
+                    this.testAnchors(() => this.testBoxAlign(
+                        () => this.testSwitcherRoom(
+                            () => this.testFlow(() => this.testFontSize(
+                                () => this.testStyleSheet(
+                                    () => this.testDirectories()))))));
+                });
              });
     }
 
