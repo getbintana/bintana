@@ -19,6 +19,9 @@ static void usage(void)
           "function and opens no display at all.  Anything after the directory\n"
           "is handed to the project as Application.Arguments.\n"
           "\n"
+          "  --version print the runtime's own release and exit.  An\n"
+          "            application's version is Application.Version, and the\n"
+          "            protocol a plugin speaks is BTA_PLUGIN_ABI.\n"
           "  --debug   stop and wait for a debugger before the project runs.\n"
           "            Events go out on descriptor 3 and commands come in on\n"
           "            stdin; the IDE is what speaks it.\n"
@@ -55,6 +58,16 @@ int main(int argc, char **argv)
             continue;
         if (!dir && (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help"))) {
             usage();
+            g_ptr_array_unref(rest);
+            return 0;
+        }
+        /*
+         * The runtime's version, which had no way out of the binary: it was a
+         * JS global and a line in bintana.pc, so a script, a packager or a
+         * plugin's configure had to start a project to ask. See BTA_VERSION_STRING.
+         */
+        if (!dir && !strcmp(argv[i], "--version")) {
+            printf("bintana %s\n", BTA_VERSION_STRING);
             g_ptr_array_unref(rest);
             return 0;
         }
