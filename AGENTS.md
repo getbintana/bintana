@@ -3217,3 +3217,16 @@ person who wrote it either.
   `Draw`, so nothing had to change when it arrived. `bta_has_handler` is asked
   rather than guessed: "the form did not declare it" and "it declared it and it
   does nothing" are different statements, and only the first may fall back.
+- **Two libraries may not declare the same top-level name, and nothing was
+  checking.** A project's libraries are evaluated into the one global scope the
+  project runs in, so `lib/report` and `lib/markdown` each declaring a top-level
+  `const PAPERS` -- the same three paper sizes, written out twice -- meant a
+  project naming **both** did not start: `SyntaxError: redeclaration of
+  'PAPERS'`, on line 1 of a file its author never wrote, with nothing in the
+  message about which two libraries were arguing. The IDE offers libraries as
+  ticks, so two ticks was the whole reproduction. **Nothing in the suite could
+  have caught it**, because no project in this tree named two libraries: each
+  had a test project of its own, so the suite proved all three work and never
+  that any two work at once. Both halves exist now -- `tests/api.sh` compares
+  the top-level names of every library, and `tests/smoke` names all three --
+  and the table itself is `Printer.Papers`, read off GTK.

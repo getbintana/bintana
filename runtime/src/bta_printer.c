@@ -474,8 +474,51 @@ static JSValue printer_get_default(JSContext *ctx, JSValueConst this_val)
 #endif
 }
 
+/*
+ * **The paper sizes, in points, asked of GTK rather than written down.**
+ *
+ * `lib/report` and `lib/markdown` each carried this table, identically, and the
+ * copies did more than repeat themselves: both were a top-level `const PAPERS`,
+ * so a project that named **both libraries** did not start at all --
+ * `SyntaxError: redeclaration of 'PAPERS'`, on line 1 of a file its author
+ * never wrote. It is one table here, where the three names already had to be
+ * known (`paper_size` above hands them to GTK), and neither library declares
+ * one.
+ *
+ * The numbers are `gtk_paper_size_get_width/height` and not three pairs typed
+ * out: this is the same GTK that lays the page out, so a size that reads 595
+ * here is the 595 the print context will hand the handler. Points, 72 to the
+ * inch, because that is what a PDF page is and what the frame arrives in.
+ */
+static JSValue printer_get_papers(JSContext *ctx, JSValueConst this_val)
+{
+    static const char *names[] = { "A4", "Letter", "A5" };
+    JSValue            out     = JS_NewObject(ctx);
+
+    for (guint i = 0; i < G_N_ELEMENTS(names); i++) {
+        GtkPaperSize *size  = gtk_paper_size_new(paper_size(names[i]));
+        JSValue       sheet = JS_NewObject(ctx);
+
+        /* Whole points. GTK answers the exact conversion from millimetres --
+         * A4 is 595.2755905511812 wide -- and a quarter of a point is the
+         * noise of that conversion rather than a size anybody laid out to: a
+         * PDF surface is made in whole points and both libraries rounded on
+         * the way in already. Rounded here instead, once, so the number a
+         * layout is written against and the number the page is made with are
+         * the same one. */
+        JS_SetPropertyStr(ctx, sheet, "Width",
+            JS_NewInt32(ctx, (int)(gtk_paper_size_get_width(size, GTK_UNIT_POINTS) + 0.5)));
+        JS_SetPropertyStr(ctx, sheet, "Height",
+            JS_NewInt32(ctx, (int)(gtk_paper_size_get_height(size, GTK_UNIT_POINTS) + 0.5)));
+        JS_SetPropertyStr(ctx, out, names[i], sheet);
+        gtk_paper_size_free(size);
+    }
+    return out;
+}
+
 static const JSCFunctionListEntry printer_props[] = {
     JS_CGETSET_DEF("Names",   printer_get_names,   NULL),
+    JS_CGETSET_DEF("Papers",  printer_get_papers,  NULL),
     JS_CGETSET_DEF("Default", printer_get_default, NULL),
     JS_CFUNC_DEF("Send",   2, printer_send),
     JS_CFUNC_DEF("ToFile", 3, printer_to_file),

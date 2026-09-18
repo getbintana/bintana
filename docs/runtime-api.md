@@ -2406,6 +2406,7 @@ Printer.ToFile(this.Sheet, path, { Pages: 12 })  // a PDF, and no dialog
 | `ToFile(area, path, [setup])` | the same sheets as one PDF, no dialog. → how many pages |
 | `Names` | the printers this session can reach |
 | `Default` | the one it would use, or `""` |
+| `Papers` | `{ A4: { Width, Height }, … }` in points, read off GTK |
 
 `area` is a control that draws. Its handler runs once per sheet against the
 print context, and the sheet arrives as an argument:

@@ -168,6 +168,60 @@ function emitArity(rest) {
  * Every library in `lib/`, against its page. A library with no page at all is a
  * failure of its own: it ships with the runtime, so somebody will use it.
  */
+/* ------------------------------------------------------- one global scope
+ *
+ * **Two libraries may not declare the same top-level name.**
+ *
+ * A project's libraries are evaluated into the one global scope the project
+ * itself runs in, so a `const` at the top of `lib/report/Report.js` and a
+ * `const` of that name at the top of `lib/markdown/Markdown.js` are a
+ * redeclaration -- and it is not a warning. A project that named both did not
+ * start: `SyntaxError: redeclaration of 'PAPERS'`, on line 1 of a file its
+ * author never wrote, with no way to tell from the message which two libraries
+ * were arguing.
+ *
+ * **Nothing could have caught it**, which is why this is here rather than a
+ * note: no project in this tree names two libraries, so the suite proved every
+ * library works and never that any two work together. `PAPERS` was the same
+ * three paper sizes written out twice; it is `Printer.Papers` now, and neither
+ * library declares one.
+ *
+ * Only the top level counts -- what is inside a class or a function is that
+ * scope's and collides with nothing.
+ */
+const TOP_LEVEL = new Regex("^(?:const|let|var|function|class)\\s+([A-Za-z_$][\\w$]*)",
+                            { Multiline: true });
+
+function checkLibraryScopes(root, problems) {
+    const owners = {};        /* name -> the libraries that declare it */
+    let   names  = 0;
+
+    for (const dir of Directory.Folders(File.Join(root, "lib"))) {
+        const lib  = File.Name(dir);
+        const mine = new Set();
+
+        for (const src of Directory.Files(dir, "*.js"))
+            for (const m of TOP_LEVEL.Matches(File.Load(src)))
+                mine.add(m.Group(1));
+
+        for (const n of mine) {
+            if (!owners[n]) owners[n] = [];
+            owners[n].push(lib);
+            names++;
+        }
+    }
+
+    let clashes = 0;
+    for (const n in owners) {
+        if (owners[n].length > 1) {
+            clashes++;
+            problems.push(`${owners[n].join(" and ")} both declare a top-level ` +
+                          `\`${n}\` -- a project naming both will not start`);
+        }
+    }
+    return { names, clashes };
+}
+
 function checkLibraries(root, problems) {
     let counted = 0;
 
@@ -952,6 +1006,7 @@ function Main() {
     const glob    = checkGlobalPages(root, problems);
     const libs    = checkLibraryPages(root, problems);
     const links   = checkLinks(root, problems);
+    const scopes  = checkLibraryScopes(root, problems);
 
     for (const p of problems) print(`  ${p}`);
     print(problems.length
@@ -967,6 +1022,8 @@ function Main() {
           `${glob.checked} in the ${glob.pages} of docs/reference/globals, ` +
           `and ${libs.checked} in the ${libs.pages} of docs/reference/libraries ` +
           `(${libs.missing} still to write) -- and ${links.links} links over the ` +
-          `${links.pages} pages of docs/ all land somewhere`);
+          `${links.pages} pages of docs/ all land somewhere, with ` +
+          `${scopes.names} top-level names in lib/ and no two libraries ` +
+          `claiming one`);
     Application.Quit(problems.length ? 1 : 0);
 }

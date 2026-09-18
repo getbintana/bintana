@@ -1022,6 +1022,7 @@ declare class Painter {
 declare const Printer: {
     Default: any;
     Names: any;
+    Papers: any;
     Send(...values: any[]): any;
     ToFile(...values: any[]): any;
 };

@@ -1,5 +1,10 @@
 # Portability: a plan, not a feature
 
+**Windows is below. macOS has a plan of its own in
+[macos-plan.md](macos-plan.md)** — a Homebrew build plus a portable `.app`,
+cheaper than this one because every guard here that says "not Windows" already
+does the right thing on Darwin.
+
 **In progress.** The `windows` job in `.github/workflows/ci.yml` builds with
 MSYS2/UCRT64, runs `tests/api.sh` and stages a portable zip
 (`tools/windows-portable.sh`), which is Stage 0/1 as far as it has got: what it

@@ -347,6 +347,7 @@ takes.
 - `Printer.ToFile(area, path, [setup])` — a PDF, with **no dialog**
 - `Printer.Names` — the printers this machine has
 - `Printer.Default` — the one it would use, or `""`
+- `Printer.Papers` — the paper sizes, in points
 
 `area` is a control that draws — a `DrawingArea`, or the `Canvas` of a `Report`
 or a `Markdown`. Its handler runs once per sheet against the print context: the
@@ -383,6 +384,12 @@ BtnPrint_Click() {
         Message.Info("{0} copies, pages {1} to {2}", sent.Copies, sent.From, sent.To);
 }
 ```
+
+`Printer.Papers` is `{ A4: { Width, Height }, Letter: …, A5: … }` in points,
+read off GTK rather than written down — the **one** table, which is why
+`lib/report` and `lib/markdown` no longer each carry a copy. They did, and
+both called it `PAPERS` at the top level, so a project that named both
+libraries did not start.
 
 **`Names` and `Default` are the Unix print backend's**, and a build without it
 refuses them with a sentence rather than answering an empty list that cannot be

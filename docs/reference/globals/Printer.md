@@ -21,6 +21,7 @@ Printer.ToFile(this.Sheet, path, { Pages: 12 })  // a PDF, and no dialog
 |---|---|---|
 | `Default` | the printer this machine would use | [what the machine has](#what-the-machine-has) |
 | `Names` | the printers it can reach | [what the machine has](#what-the-machine-has) |
+| `Papers` | the paper sizes, in points | [the paper sizes](#the-paper-sizes) |
 | `Send(area, [setup])` | the dialog, then paper | [sending](#sending) |
 | `ToFile(area, path, [setup])` | a PDF, with no dialog | [to a file](#to-a-file) |
 
@@ -67,6 +68,28 @@ is worth saying because `To` is the one key with a default of its own, and it is
 the one where two readings of the same key could disagree: `{ Pages: 5, To: null }`
 printed page 1 and said nothing, for as long as the default was decided by a
 second look that asked only about `undefined`.
+
+## The paper sizes
+
+| | |
+|---|---|
+| `Papers` | `{ A4: { Width, Height }, Letter: …, A5: … }`, in **points**. Read off GTK, so a size that reads 595 here is the 595 the print context hands the handler |
+
+```js
+Printer.Papers.A4          // { Width: 595, Height: 842 }
+Dictionary.Keys(Printer.Papers)   // ["A4", "Letter", "A5"]
+```
+
+Whole points, because a quarter of a point is the noise of GTK's conversion from
+millimetres (A4 is 595.2755905511812 wide) rather than a size anybody laid out
+to, and a PDF surface is made in whole points either way.
+
+**This is the one table.** [`Report`](../libraries/Report.md) and
+[`Markdown`](../libraries/Markdown.md) each carried a copy — the same three
+sizes, written out identically — and both called it `PAPERS` at the top level of
+a file. A project's libraries share the project's global scope, so naming both
+libraries was `SyntaxError: redeclaration of 'PAPERS'` and a program that did
+not start. Neither declares one now.
 
 ## Sending
 

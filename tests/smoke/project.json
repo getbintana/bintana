@@ -1,5 +1,12 @@
 {
   "name": "smoke",
   "startup": "TestForm",
-  "sources": ["TestForm.js"]
+  "sources": [
+    "TestForm.js"
+  ],
+  "uses": [
+    "report",
+    "markdown",
+    "charts"
+  ]
 }

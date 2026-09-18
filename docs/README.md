@@ -27,6 +27,7 @@ to extend either side.
 | [async-plan.md](async-plan.md) | **One decision and one deferral**: `Exec.Wait` for the case that hurts, and why the language has no word yet for *do this, then that* — with what would reopen it |
 | [http-server-plan.md](http-server-plan.md) | What `Http.Server` deliberately does **not** do: deferred answers (a handler answers before it returns), WebSocket, CGI shapes — with the argument for each, and what was rejected on the way |
 | [portability-plan.md](portability-plan.md) | **Not a feature**: building and running the runtime and the IDE natively on Windows under MSYS2/MinGW-w64, with the examples. What it waited for is built (VTE is optional and nothing on the IDE's path needs it); the test suite, packaging and a real Windows terminal are explicitly out of scope, with the reasons |
+| [macos-plan.md](macos-plan.md) | **Not a feature**: the same for macOS — Homebrew build plus a portable `.app`, verified by CI and an external tester, since the owner has no Mac. **Not started**: four runtime tweaks, the X11-free test harness, and a bundling script; signing needs the owner's Apple account |
 | [issues/](issues/README.md) | **Reported gaps**: what the runtime is missing, each written in the form `llm/issues.md` asks for — never how to add it |
 | [testing.md](testing.md) | The four test projects, what they can prove, what `tests/install.sh` proves about an installed copy, and what has to be checked by hand |
 

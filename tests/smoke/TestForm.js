@@ -58,7 +58,35 @@ class TestForm extends Form {
         Application.Quit(failures.length ? 1 : 0);
     }
 
+    /*
+     * **Every shipped library, in one project.** This is the only place any two
+     * of them are loaded together, and until it existed nothing was: each
+     * library had a test project of its own, so the suite proved all three work
+     * and never that any two work at once.
+     *
+     * What that hid was fatal and silent to the suite. A library's sources are
+     * evaluated into the project's own global scope, so `lib/report` and
+     * `lib/markdown` each declaring a top-level `const PAPERS` meant a project
+     * naming both did not start at all -- `SyntaxError: redeclaration of
+     * 'PAPERS'`, on line 1 of a file its author never wrote. `tests/api.sh`
+     * compares the top-level names now; this is the other half, because a name
+     * check cannot prove three libraries actually come up.
+     */
+    testLibrariesTogether() {
+        /* `typeof` on a bare name rather than a lookup on the global object:
+         * there is no `globalThis` here, and `typeof` is the one operator that
+         * does not throw on a name that was never declared -- which is exactly
+         * the answer being asked for. */
+        check("Report is here with the others",   typeof Report === "function");
+        check("and Markdown", typeof Markdown === "function");
+        check("and Chart",    typeof Chart === "function");
+
+        /* And the table they used to keep a copy of each is one table. */
+        eq("a paper size is the runtime's", Printer.Papers.A4.Width, 595);
+    }
+
     runAll() {
+        this.testLibrariesTogether();
         this.testFormLoader();
         this.testGeometry();
         this.testProperties();
