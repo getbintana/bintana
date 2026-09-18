@@ -2381,6 +2381,55 @@ and statuses. It carries no `".."` refusal, and says why -- soup normalizes a
 request's dot-segments before the handler runs, so `/a/../../x` arrives as
 `/x` and a guard for it would be dead code teaching the wrong lesson.
 
+## Printer
+
+What this machine can print on, and the two ways a drawing gets there. It is in
+`bta_printer.c`.
+
+**A theme and not a verb on a control.** `Save`, `ToPng` and `SavePdf` are the
+drawing's own -- they write what it *is* -- but a printer is a thing outside the
+program, with a name, a default and a dialog, and those questions do not belong
+on a widget. `Printer` and not `Print` because `print` is already a global here,
+and because `Print` as a verb means writing text in the family this language
+comes from.
+
+```js
+Printer.Names                                    // ["Ink-Tank-310", "Print to File"]
+Printer.Default                                  // "Ink-Tank-310"
+Printer.Send(this.Sheet, { Pages: 12 })          // the dialog, then a printer
+Printer.ToFile(this.Sheet, path, { Pages: 12 })  // a PDF, and no dialog
+```
+
+| Member | |
+|---|---|
+| `Send(area, [setup])` | the print dialog, then paper. → `{ Copies, From, To }`, or `null` when cancelled |
+| `ToFile(area, path, [setup])` | the same sheets as one PDF, no dialog. → how many pages |
+| `Names` | the printers this session can reach |
+| `Default` | the one it would use, or `""` |
+
+`area` is a control that draws. Its handler runs once per sheet against the
+print context, and the sheet arrives as an argument:
+`DrawPage(painter, page, width, height)`, falling back to `Draw` for a form that
+declares none. The frame is the printable area in **points**.
+
+| Setup | |
+|---|---|
+| `Pages` | how many sheets, 1 to 10000. Default 1 |
+| `Paper` | `A4`, `Letter`, `A5` |
+| `Orientation` | `Portrait`, `Landscape` |
+| `From`, `To` | the range; `To` defaults to the last page |
+| `Copies` | **`Send` only** |
+
+**Two verbs and not one with a destination.** As one call, `Copies: 3` with a
+file answered *three copies sent* and wrote the same bytes as one copy -- a file
+has no copies, so `ToFile` refuses the key. It is the split `Dialog.OpenFile`
+and `Dialog.SaveFile` already are.
+
+**`Names` and `Default` need `gtk4-unix-print`**, which is a GTK module of its
+own; a build without it refuses them with a sentence rather than answering an
+empty list that cannot be told apart from a machine with no printer. Printing
+itself is core GTK and works either way.
+
 ## AudioPlayer
 
 Sound with no window, over GStreamer -- the `Video` widget's engine without

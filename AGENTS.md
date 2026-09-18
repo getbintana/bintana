@@ -104,7 +104,7 @@ BINTANA=/other/bintana ./tests/run.sh             # suite against another build
 TIMEOUT=300 ./tests/run.sh                        # a slower machine than this one
 ./tests/asan.sh                                   # suite under AddressSanitizer
 tests/try.sh <project> [args...]                  # run any project, on a virtual display
-./tests/api.sh                                    # is docs/llm/ still the whole public surface?
+./tests/api.sh                                    # is docs/llm/ still the whole public surface, and do the links land?
 ./tests/typings.sh                                # rewrite bintana.d.ts (api.sh fails when it is stale)
 ./tests/icons.sh                                  # which declared icons this desktop has, and which draw
 ./tests/styles.sh                                 # which style classes its theme defines
@@ -1304,7 +1304,10 @@ person who wrote it either.
   `bta_exe_path`, `env_has_display`, `env_os`), `locale_group_double` in
   `bta_locale.c`, `SetConsoleOutputCP` in `main.c`, and the `GIOUNIX`/`pthread`
   guards in `CMakeLists.txt` -- plus `runtime/src/bta_desktop.c`, which compiles
-  there and means nothing there. **There is no local way to compile any of
+  there and means nothing there, and `BTA_HAVE_UNIX_PRINT` in
+  `runtime/src/bta_printer.c`, which is off there: printing works, and
+  `Printer.Names`/`Printer.Default` refuse with a sentence, because GTK
+  publishes no list on Windows. **There is no local way to compile any of
   them**: the `windows` job in `.github/workflows/ci.yml` is the compiler, and
   its first runs are the toolchain spike `docs/portability-plan.md` asked for.
   The same job stages the downloadable zip through
@@ -3143,7 +3146,7 @@ person who wrote it either.
   stdout but the traceback. If a `run.sh <project> <phase>` stops producing
   assertions, read the traceback before believing the phase is slow.
 - **On `EXPORT` this GTK renders every page whatever range the settings carry.**
-  `Print({ Pages: 5, From: 2, To: 3, ToFile })` came back a five-page file with
+  `Printer.ToFile(area, path, { Pages: 5, From: 2, To: 3 })` came back a five-page file with
   `before` called for all of them -- measured first in Bintana, then again in a
   forty-line C probe that set the range and watched `draw-page` fire 0 to 4, so
   it is GTK's and not the plumbing's (the 0-based numbering the probe showed is
@@ -3181,3 +3184,36 @@ person who wrote it either.
   to `G_MAXUINT` instead, "effectively forever" for either key, and negatives
   stay 0 as before. The `JS_ToFloat64` beside it is infallible -- its input is
   guarded by `JS_IsNumber` -- and says so where it stands.
+- **An option's default was decided by a second reading of the same key, and
+  the two readings disagreed about `null`.** `Print`'s reader took `undefined`
+  and `null` alike for "not given"; the line that makes `To` default to the
+  last page asked again, and asked only about `undefined` -- so
+  `{ Pages: 5, To: null }` printed page 1 and said nothing. The reader answers
+  whether the key was given now, and the default is decided once, beside the
+  others. **A default that depends on another option is the one to look at**:
+  it is the only kind that cannot live in the variable's initialiser, and so
+  the only kind tempted into a second look.
+- **A deleted document leaves its links behind, and the prose around them reads
+  as current.** `docs/issues/ISSUE-printing.md` went the day printing arrived;
+  `docs/llm/markdown.md` and `docs/reference/globals/Dialog.md` went on pointing
+  at it and went on saying there was no printer, while the bookkeeping in
+  `docs/issues/README.md` was updated by hand. `tests/api.sh` walks every
+  relative link in `docs/` now -- the other three checks ask whether what exists
+  is written down, and this one asks whether what is written down still exists.
+- **A verb with a key that decides whether there is a dialog is two verbs.**
+  `Print(area, { ToFile })` opened the print dialog, or did not, depending on a
+  key in its options -- and the give-away was measurable rather than stylistic:
+  `Copies: 3` down the file road answered *three copies sent* and wrote the same
+  file, byte for byte, as one copy. A file has no copies. Split into
+  `Printer.Send` and `Printer.ToFile`, the key that does not apply cannot be
+  passed, and the answer cannot claim what did not happen -- the shape
+  `Dialog.OpenFile`/`Dialog.SaveFile` already had. **When a key changes what the
+  call *is* rather than what it does, it is the name of another call.**
+- **A second event beats a fourth argument.** Which page a handler was drawing
+  used to travel through a field of the form -- a `before` callback wrote it and
+  `Draw` read it back -- because growing `Draw` a fourth argument would have
+  changed every handler ever written. `DrawPage(painter, page, width, height)`
+  is raised in its place on paper, and a form that declares none still gets
+  `Draw`, so nothing had to change when it arrived. `bta_has_handler` is asked
+  rather than guessed: "the form did not declare it" and "it declared it and it
+  does nothing" are different statements, and only the first may fall back.

@@ -1,0 +1,491 @@
+/*
+ * Printer: what the machine can print on, and the two ways a drawing gets there.
+ *
+ * **A theme and not a verb on a control.**  `Save`, `ToPng` and `SavePdf` are
+ * the drawing's own -- they write what it is -- but a printer is a thing outside
+ * the program, with a name, a default and a dialog, and the questions about it
+ * do not belong on a widget.  That is the shape `Dialog`, `Desktop` and
+ * `Environment` already have here, and the shape VB6 (`Printer` + `Printers`),
+ * Delphi (`TPrinter`), Gambas (`Printer`) and .NET (`PrinterSettings`) all
+ * arrived at.
+ *
+ * **And `Printer` rather than `Print`.**  `print` is a global of this runtime --
+ * the one every test writes with -- so the two would have differed by a capital
+ * letter; and `Print` as a verb means *writing text* in the family this language
+ * comes from (`Printer.Print`, `Print #1,` in Basic), which is not what this
+ * does.  The noun is the thing, and the verbs say what happens to it.
+ *
+ * ## The two verbs, because they are two things
+ *
+ *   Printer.Send(area, [setup])          the dialog, a printer, paper
+ *   Printer.ToFile(area, path, [setup])  a PDF, and no dialog
+ *
+ * They were one call with a `ToFile` key once, and the key decided whether
+ * there was a dialog at all -- which is a mode and not an option.  What settled
+ * it was measurable rather than tidy: `Copies: 3` with a file destination
+ * answered "three copies sent" and wrote the same file, byte for byte, as one
+ * copy.  `Copies` is not a thing a file has.  Split, the question cannot be
+ * asked: `ToFile` has no `Copies` and its answer is the count of pages it wrote.
+ *
+ * It is the same split `Dialog.OpenFile`/`Dialog.SaveFile` is, for the same
+ * reason -- one verb with a flag that changes what the call *is* reads as one
+ * thing and behaves as two.
+ *
+ * ## What draws
+ *
+ * The control's own handler, once per sheet, against the print context: the
+ * same cairo calls that paint the screen, so a page that fits the paper in
+ * `SavePdf` fits it here.  **The sheet number arrives as an argument** --
+ * `DrawPage(painter, page, width, height)` -- and a control whose form declared
+ * no `DrawPage` gets `Draw`, which is right for a drawing that is one page.
+ * The frame is the printable area in points, 72 to the inch.
+ *
+ * ## Asking about the machine
+ *
+ * `Names` and `Default` are `gtk_enumerate_printers`, which is GTK's Unix print
+ * backend and not portable: on Windows GTK opens the system's own dialog and
+ * publishes no list, so there the two **refuse with a sentence** rather than
+ * answering an empty array that cannot be told apart from a machine with no
+ * printer.  That is the rule `Exec`'s `Control` stream already follows there.
+ *
+ * Not cached.  Measured on this machine: 33.6 ms cold and 6.2 ms warm, because
+ * GTK caches its backend underneath -- and unlike a plugin registry, the
+ * printers a machine has do change while a program is running.
+ */
+#include "bta.h"
+
+#include <glib/gstdio.h>
+#include <string.h>
+
+#ifdef BTA_HAVE_UNIX_PRINT
+#include <gtk/gtkunixprint.h>
+#endif
+
+/* --------------------------------------------------------------- the setup
+ *
+ * `{ Pages, Paper, Orientation, Copies, From, To }` -- read once, checked once,
+ * and handed to GTK as a page setup and a set of print settings.
+ *
+ * `undefined` and `null` are both "not given", spelled in `setup_int` and
+ * nowhere else: `To` is the one key with a default of its own (the last page),
+ * so it is the one where a second reading could disagree -- and did, until the
+ * reader started answering whether the key was there.
+ */
+typedef struct {
+    int32_t pages;
+    int32_t copies;
+    int32_t from;
+    int32_t to;
+    char   *paper;
+    char   *orient;
+} PrintSetup;
+
+static void setup_clear(PrintSetup *s)
+{
+    g_free(s->paper);
+    g_free(s->orient);
+}
+
+static bool setup_int(JSContext *ctx, JSValueConst opts, const char *key,
+                      int32_t *out, bool *given)
+{
+    JSValue v   = JS_GetPropertyStr(ctx, opts, key);
+    bool    had = !JS_IsUndefined(v) && !JS_IsNull(v);
+    bool    ok  = true;
+
+    if (had && JS_ToInt32(ctx, out, v)) {
+        JS_ThrowTypeError(ctx, "%s is a number", key);
+        ok = false;
+    }
+    if (given)
+        *given = had;
+    JS_FreeValue(ctx, v);
+    return ok;
+}
+
+static bool setup_text(JSContext *ctx, JSValueConst opts, const char *key,
+                       char **out)
+{
+    JSValue v  = JS_GetPropertyStr(ctx, opts, key);
+    bool    ok = true;
+
+    if (!JS_IsUndefined(v) && !JS_IsNull(v)) {
+        if (!JS_IsString(v)) {
+            JS_ThrowTypeError(ctx, "%s is text", key);
+            ok = false;
+        } else {
+            const char *t = JS_ToCString(ctx, v);
+            if (!t)
+                ok = false;
+            else {
+                g_free(*out);
+                *out = g_strdup(t);
+                JS_FreeCString(ctx, t);
+            }
+        }
+    }
+    JS_FreeValue(ctx, v);
+    return ok;
+}
+
+/* The GtkPaperSize name for one of the three papers the setup takes. */
+static const char *paper_size(const char *paper)
+{
+    if (!strcmp(paper, "A4"))
+        return GTK_PAPER_NAME_A4;
+    if (!strcmp(paper, "Letter"))
+        return GTK_PAPER_NAME_LETTER;
+    if (!strcmp(paper, "A5"))
+        return GTK_PAPER_NAME_A5;
+    return NULL;
+}
+
+/*
+ * `copies` is read only where it means something, which is the whole of why
+ * there are two verbs: a file has no copies, and a `Copies` accepted there
+ * would be a number carried through the call and reported back as sent.
+ */
+static bool setup_read(JSContext *ctx, JSValueConst opts, PrintSetup *out,
+                       bool copies, const char *who)
+{
+    bool has_to = false;
+
+    out->pages = out->copies = out->from = out->to = 1;
+    out->paper = out->orient = NULL;
+
+    if (!JS_IsUndefined(opts) && !JS_IsNull(opts)) {
+        if (!JS_IsObject(opts)) {
+            JS_ThrowTypeError(ctx, "%s: the setup is an object", who);
+            return false;
+        }
+        if (!setup_int(ctx, opts, "Pages", &out->pages, NULL) ||
+            !setup_int(ctx, opts, "From", &out->from, NULL) ||
+            !setup_int(ctx, opts, "To", &out->to, &has_to) ||
+            !setup_text(ctx, opts, "Paper", &out->paper) ||
+            !setup_text(ctx, opts, "Orientation", &out->orient) ||
+            (copies && !setup_int(ctx, opts, "Copies", &out->copies, NULL))) {
+            setup_clear(out);
+            return false;
+        }
+        if (!copies) {
+            /* Said out loud rather than ignored: a caller that asked for three
+             * copies of a file meant something, and it was not this. */
+            JSValue v = JS_GetPropertyStr(ctx, opts, "Copies");
+            bool    said = !JS_IsUndefined(v) && !JS_IsNull(v);
+
+            JS_FreeValue(ctx, v);
+            if (said) {
+                JS_ThrowTypeError(ctx, "%s: a file has no Copies -- "
+                                       "Printer.Send is the one that does", who);
+                setup_clear(out);
+                return false;
+            }
+        }
+    }
+
+    /* `To` defaults to the last page, not to the 1 it starts on. */
+    if (!has_to)
+        out->to = out->pages;
+
+    if (out->pages < 1 || out->pages > 10000)
+        JS_ThrowRangeError(ctx, "%s: %d pages is not a document (1 to 10000)",
+                           who, out->pages);
+    else if (out->copies < 1)
+        JS_ThrowRangeError(ctx, "%s: %d copies is not a job", who, out->copies);
+    else if (out->from < 1 || out->from > out->pages ||
+             out->to < 1 || out->to > out->pages || out->from > out->to)
+        JS_ThrowRangeError(ctx, "%s: pages %d to %d are outside 1 to %d", who,
+                           out->from, out->to, out->pages);
+    else if (out->paper && !paper_size(out->paper))
+        JS_ThrowRangeError(ctx, "%s: Paper '%s' is not one of A4, Letter, A5",
+                           who, out->paper);
+    else if (out->orient && strcmp(out->orient, "Portrait") &&
+             strcmp(out->orient, "Landscape"))
+        JS_ThrowRangeError(ctx, "%s: Orientation '%s' is not Portrait or "
+                                "Landscape", who, out->orient);
+    else
+        return true;
+
+    setup_clear(out);
+    return false;
+}
+
+/* ------------------------------------------------------------------ the run */
+
+typedef struct {
+    BtaWidget *w;
+    int        base;        /* document page of the first one rendered */
+    int        first;       /* first page rendered, 1-based; -1 while none */
+    int        last;
+    bool       ok;
+} PrintRun;
+
+static void on_draw_page(GtkPrintOperation *op, GtkPrintContext *context,
+                         int page_nr, gpointer data)
+{
+    PrintRun *run = data;
+
+    (void)op;
+    if (!run->ok)
+        return;
+
+    /* GTK counts the sheets it renders from 0; the handler is told the page of
+     * the document, which is the number a person would write on it. */
+    int      page = page_nr + run->base;
+    cairo_t *cr   = gtk_print_context_get_cairo_context(context);
+    double   dw   = gtk_print_context_get_width(context);
+    double   dh   = gtk_print_context_get_height(context);
+
+    if (run->first < 0)
+        run->first = page;
+    run->last = page;
+
+    if (!bta_paint_page(run->w, cr, (int)(dw + 0.5), (int)(dh + 0.5), page))
+        run->ok = false;
+}
+
+/*
+ * The half both verbs share: check the control, build the operation, run it.
+ *
+ * `tofile` is the path for the export road and NULL for the dialog one, and it
+ * is the only thing that differs below -- which is the argument for the split
+ * being in the surface rather than in a key the caller passes.
+ */
+static JSValue print_run(JSContext *ctx, JSValueConst area, JSValueConst opts,
+                         const char *tofile, const char *who)
+{
+    BtaWidget *w = bta_this(ctx, area);
+
+    if (!w || !bta_paint_draws(w))
+        return JS_ThrowTypeError(ctx,
+            "%s: the first argument is a control that draws -- a DrawingArea, "
+            "or the Canvas of a Report or a Markdown", who);
+
+    /* Refused before the dialog is on the screen rather than one page after it:
+     * there is one painter per control, and a handler that is drawing cannot
+     * ask for a second frame. */
+    if (bta_paint_busy(ctx, w))
+        return JS_ThrowTypeError(ctx, "%s: a frame is already being drawn -- a "
+                                      "Draw handler cannot print", who);
+
+    PrintSetup setup;
+    if (!setup_read(ctx, opts, &setup, tofile == NULL, who))
+        return JS_EXCEPTION;
+
+    GtkPrintOperation *op = gtk_print_operation_new();
+
+    gtk_print_operation_set_job_name(op, "Bintana");
+    gtk_print_operation_set_unit(op, GTK_UNIT_POINTS);
+
+    /*
+     * What GTK renders is not always what its settings say. Measured with a C
+     * probe: on `EXPORT` this GTK renders every page whatever range the
+     * settings carry, so a range there is said with the page count instead --
+     * the file then holds exactly `From..To`. Through the dialog the count
+     * stays the whole document (it is what the dialog offers the range within)
+     * and the settings carry the preset.
+     */
+    const bool lineal = tofile && (setup.from > 1 || setup.to < setup.pages);
+
+    gtk_print_operation_set_n_pages(op, lineal ? setup.to - setup.from + 1
+                                               : setup.pages);
+
+    GtkPageSetup *page_setup = gtk_page_setup_new();
+    if (setup.paper) {
+        GtkPaperSize *size = gtk_paper_size_new(paper_size(setup.paper));
+        gtk_page_setup_set_paper_size(page_setup, size);
+        gtk_paper_size_free(size);
+    }
+    if (setup.orient)
+        gtk_page_setup_set_orientation(
+            page_setup, !strcmp(setup.orient, "Landscape")
+                            ? GTK_PAGE_ORIENTATION_LANDSCAPE
+                            : GTK_PAGE_ORIENTATION_PORTRAIT);
+    gtk_print_operation_set_default_page_setup(op, page_setup);
+    g_object_unref(page_setup);
+
+    GtkPrintSettings *settings = gtk_print_settings_new();
+    gtk_print_settings_set_n_copies(settings, setup.copies);
+    if (!lineal && (setup.from > 1 || setup.to < setup.pages)) {
+        GtkPageRange range = { setup.from - 1, setup.to - 1 };
+
+        gtk_print_settings_set_print_pages(settings, GTK_PRINT_PAGES_RANGES);
+        gtk_print_settings_set_page_ranges(settings, &range, 1);
+    }
+    gtk_print_operation_set_print_settings(op, settings);
+    g_object_unref(settings);
+
+    GtkPrintOperationAction action = GTK_PRINT_OPERATION_ACTION_PRINT_DIALOG;
+    if (tofile) {
+        gtk_print_operation_set_export_filename(op, tofile);
+        gtk_print_operation_set_show_progress(op, FALSE);
+        action = GTK_PRINT_OPERATION_ACTION_EXPORT;
+    }
+
+    PrintRun run = {
+        .w     = w,
+        .base  = lineal ? setup.from : 1,
+        .first = -1,
+        .last  = 0,
+        .ok    = true,
+    };
+    g_signal_connect(op, "draw-page", G_CALLBACK(on_draw_page), &run);
+
+    BtaApp    *app    = bta_current_app();
+    GtkWindow *parent = app && app->gapp
+                            ? gtk_application_get_active_window(app->gapp)
+                            : NULL;
+
+    GError                 *err    = NULL;
+    GtkPrintOperationResult result = gtk_print_operation_run(op, action, parent,
+                                                             &err);
+    JSValue answer = JS_EXCEPTION;
+
+    /*
+     * **The handler's own throw is asked about first.** A `DrawPage` that
+     * failed is the program's fault and a cancellation is the person's
+     * decision, so the fault is the more specific answer -- and it is the one
+     * that leaves an exception pending. Asked last, a cancellation arriving
+     * after a page had thrown would answer `null` with that throw still armed,
+     * to surface at whatever called into JavaScript next.
+     */
+    if (!run.ok) {
+        /* What it had already written is not a document, the same bargain
+         * `SavePdf` makes about a file it did not finish. */
+        g_clear_error(&err);
+        if (tofile)
+            g_unlink(tofile);
+    } else if (result == GTK_PRINT_OPERATION_RESULT_ERROR) {
+        JS_ThrowInternalError(ctx, "%s: %s", who,
+                              err ? err->message : "the printer refused");
+        g_clear_error(&err);
+        if (tofile)
+            g_unlink(tofile);
+    } else if (result == GTK_PRINT_OPERATION_RESULT_CANCEL) {
+        /* Not an error: the dialog closed with nothing chosen. */
+        answer = JS_NULL;
+    } else if (tofile) {
+        /* A file's answer is how many pages it holds. There is nothing else to
+         * report: nobody chose anything. */
+        answer = JS_NewInt32(ctx, run.first < 0 ? 0 : run.last - run.first + 1);
+    } else {
+        /* What the dialog settled: the pages actually sent. */
+        GtkPrintSettings *final = gtk_print_operation_get_print_settings(op);
+
+        answer = JS_NewObject(ctx);
+        JS_SetPropertyStr(ctx, answer, "Copies",
+                          JS_NewInt32(ctx, final
+                                          ? gtk_print_settings_get_n_copies(final)
+                                          : setup.copies));
+        JS_SetPropertyStr(ctx, answer, "From",
+                          JS_NewInt32(ctx, run.first < 0 ? 0 : run.first));
+        JS_SetPropertyStr(ctx, answer, "To", JS_NewInt32(ctx, run.last));
+    }
+
+    g_object_unref(op);
+    setup_clear(&setup);
+    return answer;
+}
+
+static JSValue printer_send(JSContext *ctx, JSValueConst this_val,
+                            int argc, JSValueConst *argv)
+{
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "Printer.Send(area, [setup]) needs the "
+                                      "control that draws");
+    return print_run(ctx, argv[0], argc > 1 ? argv[1] : JS_UNDEFINED, NULL,
+                     "Printer.Send");
+}
+
+static JSValue printer_to_file(JSContext *ctx, JSValueConst this_val,
+                               int argc, JSValueConst *argv)
+{
+    if (argc < 2)
+        return JS_ThrowTypeError(ctx, "Printer.ToFile(area, path, [setup]) "
+                                      "needs a control and a path");
+
+    const char *path = JS_ToCString(ctx, argv[1]);
+    if (!path)
+        return JS_EXCEPTION;
+
+    JSValue r = print_run(ctx, argv[0], argc > 2 ? argv[2] : JS_UNDEFINED, path,
+                          "Printer.ToFile");
+    JS_FreeCString(ctx, path);
+    return r;
+}
+
+/* ----------------------------------------------------------- the machine's */
+
+#ifdef BTA_HAVE_UNIX_PRINT
+typedef struct {
+    JSContext *ctx;
+    JSValue    list;     /* the array, for Names */
+    char      *chosen;   /* the default's name, for Default */
+    uint32_t   n;
+} Enumeration;
+
+static gboolean printer_seen(GtkPrinter *p, gpointer data)
+{
+    Enumeration *e    = data;
+    const char  *name = gtk_printer_get_name(p);
+
+    if (gtk_printer_is_default(p) && !e->chosen)
+        e->chosen = g_strdup(name ? name : "");
+    if (!JS_IsUndefined(e->list))
+        JS_SetPropertyUint32(e->ctx, e->list, e->n++,
+                             JS_NewString(e->ctx, name ? name : ""));
+    return FALSE;        /* FALSE keeps the enumeration going */
+}
+#endif
+
+static JSValue printer_get_names(JSContext *ctx, JSValueConst this_val)
+{
+#ifndef BTA_HAVE_UNIX_PRINT
+    return JS_ThrowInternalError(ctx,
+        "Printer.Names: this build cannot list printers -- GTK publishes the "
+        "list through its Unix print backend, and the system's own dialog "
+        "elsewhere. Printer.Send opens it either way");
+#else
+    Enumeration e = { ctx, JS_NewArray(ctx), NULL, 0 };
+
+    gtk_enumerate_printers(printer_seen, &e, NULL, TRUE);
+    g_free(e.chosen);
+    return e.list;
+#endif
+}
+
+static JSValue printer_get_default(JSContext *ctx, JSValueConst this_val)
+{
+#ifndef BTA_HAVE_UNIX_PRINT
+    return JS_ThrowInternalError(ctx,
+        "Printer.Default: this build cannot name the default printer -- see "
+        "Printer.Names");
+#else
+    Enumeration e = { ctx, JS_UNDEFINED, NULL, 0 };
+
+    gtk_enumerate_printers(printer_seen, &e, NULL, TRUE);
+
+    /* `""` and not null: there is a machine, and it has no printer set as the
+     * one to use. A program that wants to know whether there is any asks
+     * `Names`. */
+    JSValue r = JS_NewString(ctx, e.chosen ? e.chosen : "");
+    g_free(e.chosen);
+    return r;
+#endif
+}
+
+static const JSCFunctionListEntry printer_props[] = {
+    JS_CGETSET_DEF("Names",   printer_get_names,   NULL),
+    JS_CGETSET_DEF("Default", printer_get_default, NULL),
+    JS_CFUNC_DEF("Send",   2, printer_send),
+    JS_CFUNC_DEF("ToFile", 3, printer_to_file),
+};
+
+void bta_printer_init(JSContext *ctx, JSValue global)
+{
+    JSValue printer = JS_NewObject(ctx);
+
+    JS_SetPropertyFunctionList(ctx, printer, printer_props,
+                               (int)G_N_ELEMENTS(printer_props));
+    JS_SetPropertyStr(ctx, global, "Printer", printer);
+}

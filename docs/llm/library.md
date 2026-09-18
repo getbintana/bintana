@@ -341,6 +341,55 @@ A filter's label is prose you own: wrap it in `Locale.Text`. `Dialog.Color`
 answers an `rgb(...)`/`rgba(...)` string, which is exactly what `Background`
 takes.
 
+## Printer
+
+- `Printer.Send(area, [setup])` — the print dialog, then a printer
+- `Printer.ToFile(area, path, [setup])` — a PDF, with **no dialog**
+- `Printer.Names` — the printers this machine has
+- `Printer.Default` — the one it would use, or `""`
+
+`area` is a control that draws — a `DrawingArea`, or the `Canvas` of a `Report`
+or a `Markdown`. Its handler runs once per sheet against the print context: the
+same cairo calls that paint the screen, so a page that fits the paper in
+`SavePdf` fits it here. The frame is the printable area in **points**, 72 to the
+inch.
+
+**Two verbs and not one with a destination**, the way `OpenFile` and `SaveFile`
+are two. A file has no copies: `Copies` on `ToFile` is refused rather than
+accepted and quietly ignored — which is what the one-verb version did, answering
+"three copies sent" and writing the same bytes as one.
+
+| Setup | |
+|---|---|
+| `Pages` | how many the document is, 1 to 10000. Default 1 |
+| `Paper` | `A4`, `Letter` or `A5` |
+| `Orientation` | `Portrait` or `Landscape` |
+| `From`, `To` | the range within the document. `To` defaults to the last page |
+| `Copies` | **`Send` only** |
+
+`Send` answers `{ Copies, From, To }` — what was actually sent — and `null` when
+the dialog was cancelled, which is not an error. `ToFile` answers how many pages
+it wrote. A page whose handler throws stops the run, and on the file road leaves
+**no file**.
+
+```js
+Sheet_DrawPage(p, page, w, h) {
+    p.Text(40, 60, Locale.Text("Page {0} of {1}", page, this.total));
+}
+
+BtnPrint_Click() {
+    const sent = Printer.Send(this.Sheet, { Pages: this.total, Paper: "A4" });
+    if (sent)
+        Message.Info("{0} copies, pages {1} to {2}", sent.Copies, sent.From, sent.To);
+}
+```
+
+**`Names` and `Default` are the Unix print backend's**, and a build without it
+refuses them with a sentence rather than answering an empty list that cannot be
+told apart from a machine with no printer. Printing itself is unaffected: the
+dialog is core GTK. They are not cached, because the printers a machine has
+change while a program runs.
+
 ## Settings
 
 What the application remembers between runs — anything JSON carries, in

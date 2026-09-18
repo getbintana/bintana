@@ -13,6 +13,11 @@
 #   globals   the same tables and the `JS_SetPropertyStr` runs that build
 #             `File`, `Dialog`, `Application` and the rest, against library.md
 #   lib/      what a shipped library publishes, against llm/<library>.md
+#   links     every relative link and picture in `docs/` and the Markdown at
+#             the root, against the files they name -- the other way round from
+#             the three above, and the failure a reorganisation leaves behind:
+#             a page deleted while two others go on pointing at it, still
+#             saying what it said
 #
 # The reference claims to be complete rather than a selection, and this is what
 # makes that claim cost something.

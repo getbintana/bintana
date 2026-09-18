@@ -57,6 +57,7 @@ designable and serialised.
 | `ScrollTo(id)` | put a heading at the top of the view. Takes an `Id`, a `#anchor` or the heading's own words; → whether one was found |
 | `Save(path, [width], [scale])` | the **whole document** as one PNG — not the view. `width` is the column it is laid out at and defaults to the one on screen; `scale` is `2`, so the text is sharp |
 | `SavePdf(path, [paper])` | every page, one file; → how many. Vector, so the text in it is text. The cut is **pulled up to the top of whatever block straddles it**, so a heading, a row or a picture is never sliced across a page |
+| `Send([setup])` | **every page, to paper**, through [`Printer`](library.md#printer). `setup` is `{ Paper, Copies, From, To }`; the pagination is `SavePdf`'s, and the **paper is decided here and not in the dialog** because the cut depends on it. Answers `{ Copies, From, To }` — what was actually sent — and `null` when the dialog was cancelled. **To a file it is `SavePdf`** |
 | **event** `Scroll(y)` | the view moved — by the wheel, a key, the indicator, or an assignment. `y` is the new offset |
 | **event** `Link(href, text)` | a link was clicked. `href` is the address exactly as the document wrote it and `text` the words that were clicked. **Answer `true` and it is dealt with**; otherwise a `#anchor` scrolls the document and anything else is left alone |
 | **event** `Select(text)` | the selection settled: a drag that ended, a double click, `SelectAll()`, `Deselect()`. `text` is `Selection`, `""` when it was cleared. **Not raised while the pointer is still moving** — a host enabling a *Copy* button does not want sixty of these a second |
@@ -111,9 +112,10 @@ These are decisions, filed here rather than discovered:
   [`SourceEditor`](controls.md#sourceeditor), which is an editor.
 - **A drag that leaves the view does not scroll it.** Select what is on screen,
   scroll, then extend with the pointer — or take the whole document with Ctrl+A.
-- **There is still no printer.** `SavePdf` writes the document as a file;
-  choosing a printer, a tray and a number of copies is
-  [ISSUE-printing](../issues/ISSUE-printing.md).
+- **The paper a print is laid out for is this control's, not the dialog's.**
+  `Print` measures and paginates against the sheet it was told about, so
+  choosing another size in the dialog scales the pages rather than re-flowing
+  them. Pass `Paper` to `Print` to lay it out for that sheet.
 
 ## The two passes
 

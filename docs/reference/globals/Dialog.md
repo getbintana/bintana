@@ -63,8 +63,11 @@ in front of it.
 - **No message boxes**, which are [`Message`](Message.md)'s, and no dialogs of
   your own — those are ordinary [`Form`](../widgets/Form.md)s with `Modal`, which
   is what `AskForm` and `ConfirmForm` in the IDE are.
-- **No printer dialog.** There is no printing yet:
-  [ISSUE-printing](../../issues/ISSUE-printing.md).
+- **No printer dialog**, because it is not asked for here: the print dialog
+  belongs to what is being printed, and it is
+  [`DrawingArea.Print`](../widgets/DrawingArea.md) that opens it — over the
+  same `Draw` that paints the screen. `Report` and `Markdown` have their own
+  `Print` over that.
 
 ## See also
 

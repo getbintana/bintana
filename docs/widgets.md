@@ -1771,25 +1771,55 @@ missing its letterhead. It is the same bargain `Picture.File` makes.
 
 **`SavePdf` is `Save` with more than one page, and a vector surface.** The size is
 in points because that is what a PDF page is, the handler is told those numbers as
-its frame size, and `before(page)` is how it knows which page it is drawing: the
-`Draw` event's three arguments are documented and asserted, and growing a fourth
-for an exporter would change every handler ever written. `lib/report` is what uses
-it, and what asked for it.
+its frame size, and `before(page)` says which page is coming. `lib/report` is what
+uses it, and what asked for it.
 
-**`Print` is `SavePdf` onto paper, through GTK's own print operation.** The dialog
-is the desktop's -- printer list, page setup, range, copies -- and so is the
-preview: `Vista previa` opens it in the desktop's preview application
+**The page is an argument now, and `Draw` never grew one.** Growing a fourth
+argument on `Draw` would have changed every handler ever written, so paper got an
+event of its own instead: `DrawPage(painter, page, width, height)`, raised in
+place of `Draw` by `SavePdf` and by `Printer` when the form declared one. A form
+that declares none still gets `Draw`, which is why nothing had to change when it
+arrived -- and a drawing that is one page never needs it. What it retired is the
+arrangement underneath `before`: the page travelled through a field of the form,
+written by one callback and read back in another, which was the only place in
+this runtime where two handlers talked through `this`.
+
+**Paper is `Printer`'s and not the drawing's**, and that is the one decision in
+it: a printer is a thing outside the program -- it has a name, a default and a
+dialog -- so the questions about it do not belong on a widget, while `Save`,
+`ToPng` and `SavePdf` do because they write what the drawing *is*. The noun is
+also why it is not called `Print`: `print` is already a global of this runtime,
+and `Print` as a verb means *writing text* in the family this language comes
+from. VB6, Delphi, Gambas and .NET all landed on the same word.
+
+**Two verbs, because they are two things.** `Printer.Send(area, setup)` opens
+GTK's print operation and `Printer.ToFile(area, path, setup)` exports a PDF with
+no dialog -- "print to PDF", and the only road the suite can assert on, since a
+test cannot click a dialog. They were one call with a `ToFile` key once, and what
+settled the split was measurable rather than tidy: `Copies: 3` with a file
+answered *three copies sent* and wrote the same file, byte for byte, as one copy.
+A file has no copies, so `ToFile` refuses the key instead of carrying a number
+nobody applies. It is the same split `Dialog.OpenFile`/`SaveFile` is.
+
+The dialog is the desktop's -- printer list, page setup, range, copies -- and so
+is the preview: `Vista previa` opens it in the desktop's preview application
 (Evince/Papers), so a machine with neither installed has no preview to open. The
-rendering is the same `Draw` against the print context, so a page that fits the
-paper in `SavePdf` fits it here; the handler's frame is the printable area in
-points, not the whole sheet. `ToFile` skips the dialog and writes a PDF, which is
-both "print to PDF" and the only road the suite can assert on -- a test cannot
-click a dialog, and the dialog itself is checked by hand. Measured while building
-it, and worth knowing before touching this path again: on `EXPORT` this GTK
-renders every page whatever range the settings carry, so a range there is said
-with the page count instead -- the file then holds exactly `From..To`. What comes
-back is what was actually sent -- `{ Copies, From, To }` -- and `null` when the
-dialog was cancelled, which is not an error.
+rendering is the same handler against the print context, so a page that fits the
+paper in `SavePdf` fits it here; its frame is the printable area in points, not
+the whole sheet. Measured while building it, and worth knowing before touching
+this path again: on `EXPORT` this GTK renders every page whatever range the
+settings carry, so a range there is said with the page count instead -- the file
+then holds exactly `From..To`. `Send` comes back with what was actually sent --
+`{ Copies, From, To }` -- and `null` when the dialog was cancelled, which is not
+an error; `ToFile` comes back with how many pages it wrote.
+
+**`Names` and `Default` are the Unix print backend's**, a GTK module of its own
+(`gtk4-unix-print`). A build without it refuses both with a sentence rather than
+answering an empty list, because an empty list cannot be told apart from a
+machine with no printer -- the rule `Exec`'s `Control` stream already follows on
+Windows. Printing is unaffected either way: the dialog is core GTK. Not cached,
+at 33.6 ms cold and 6.2 ms warm on this machine, because GTK caches its backend
+underneath and the printers a machine has do change while a program runs.
 
 **A `Draw` that throws now fails the export.** The handler's error is reported
 where every event's is and then consumed, so `Save` could not tell -- it wrote a

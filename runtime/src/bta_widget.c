@@ -329,6 +329,30 @@ bool bta_emit_ok(BtaWidget *w, const char *event, int argc, JSValueConst *argv)
     return !threw;
 }
 
+/*
+ * **Is there a handler for this event at all?**
+ *
+ * Asked by the one caller that has a *second* event to fall back on: a page
+ * being drawn onto paper raises `DrawPage`, and a control whose form never
+ * declared one raises `Draw` instead -- the screen's handler, which is the
+ * right answer for a drawing that is one page. Every other event is a
+ * notification and a form that ignores it is simply a form that ignores it,
+ * which is why this is not a general question.
+ */
+bool bta_has_handler(BtaWidget *w, const char *event)
+{
+    if (!w || !w->name || JS_IsUndefined(w->form))
+        return false;
+
+    char   *key = g_strdup_printf("%s_%s", w->name, event);
+    JSValue fn  = JS_GetPropertyStr(w->ctx, w->form, key);
+    bool    has = JS_IsFunction(w->ctx, fn);
+
+    g_free(key);
+    JS_FreeValue(w->ctx, fn);
+    return has;
+}
+
 void bta_emit(BtaWidget *w, const char *event, int argc, JSValueConst *argv)
 {
     if (!w)

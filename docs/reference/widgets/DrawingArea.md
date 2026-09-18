@@ -20,15 +20,16 @@ It is a `Widget` and a control like any other, so everything on
 | `Redraw()` | the drawing may have changed: ask again | [when it draws](#when-it-draws) |
 | `Save(path, [width], [height])` | the same `Draw` into a PNG | [off the screen](#off-the-screen) |
 | `SavePdf(path, width, height, [pages], [before])` | the same `Draw`, once per page, into one PDF | [off the screen](#off-the-screen) |
-| `Print([options], [before])` | the same `Draw`, once per page, onto paper | [off the screen](#off-the-screen) |
 | `ToPng([width], [height])` | the same frame as `Bytes` | [off the screen](#off-the-screen) |
 | **event** `Draw(painter, width, height)` | paint it | [the Draw handler](#the-draw-handler) |
+| **event** `DrawPage(painter, page, width, height)` | paint one sheet of paper | [the Draw handler](#the-draw-handler) |
 
 ## The `Draw` handler
 
 | | |
 |---|---|
 | **event** `Draw(painter, width, height)` | paint it. The size is the frame's, in logical pixels |
+| **event** `DrawPage(painter, page, width, height)` | paint one **sheet of paper**: raised by [`Printer`](../globals/Printer.md) and by `SavePdf` instead of `Draw`, with the page said out loud. 1-based, and the size is the printable area in **points**. A form that declares none gets `Draw`, which is right for a drawing that is one page |
 
 ```js
 Plot_Draw(p, width, height) {
@@ -74,14 +75,15 @@ change in *your* data becomes a frame. A drawing that animates is
 | `Save(path, [width], [height])` | runs the same `Draw` against an image surface and writes a PNG. Without a size it uses the widget's own — and a surface that has never been allocated has none, so pass one. Refused from inside a `Draw` (one painter, one frame at a time) and above 16384 a side. **A `Draw` that throws writes no file**, and the throw reaches the caller |
 | `ToPng([width], [height])` | the same frame as [`Bytes`](../../llm/library.md#bytes) instead of a file: a chart to be posted, attached or put in a reply, with nothing on disk |
 | `SavePdf(path, width, height, [pages], [before])` | the same `Draw`, once per page, into one **PDF**. The size is in **points** (72 to the inch; A4 is 595×842), the surface is vector, so text stays text. `before(page)` is called before each page — that is how the handler knows which one it is drawing. A page that throws leaves **no file** |
-| `Print([options], [before])` | the same `Draw`, once per page, **onto paper** through the print dialog — printer, paper, copies and range are the dialog's to answer, and GTK's preview shows what is about to come out. `options` is `{ Pages, Paper, Orientation, Copies, From, To, ToFile }`; `ToFile` writes a PDF with **no dialog**. The handler's frame is the printable area in points. Answers `{ Copies, From, To }`, and `null` when the dialog was cancelled. A page that throws fails the run |
 
 `Save()` is the same `Draw`, synchronously, which is both how a chart reaches a
 report and how a drawing is tested without a screen. `SavePdf()` is what makes a
 document leave the application as one file rather than as fourteen PNGs somebody
-has to keep together. `Print()` is that onto paper, and `ToFile` is the road a
-test can take -- a test cannot click a dialog, and the dialog itself is checked
-by hand.
+has to keep together. **Paper is [`Printer`](../globals/Printer.md)'s and not this control's** -- a
+printer is a thing outside the program, with a name, a default and a dialog, so
+the verbs live on a theme of their own: `Printer.Send(area)` opens the dialog
+and `Printer.ToFile(area, path)` writes a PDF without one. What the handler
+paints is the same either way, and on paper it is `DrawPage` that paints it.
 
 ## Testing a drawing
 

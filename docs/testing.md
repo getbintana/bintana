@@ -385,6 +385,17 @@ two, for as long as nobody counted.
 and Markdown, opens no window and costs a second, and every claim it checks is
 the kind that rots without looking rotten.
 
+**It asks the question the other way round too**: the checks above ask whether
+what exists is written down, and the link check asks whether what is written
+down still exists. `docs/issues/ISSUE-printing.md` was deleted the day printing
+arrived and two pages went on pointing at it, still saying there was no printer
+in prose that read as current -- while the bookkeeping in
+`docs/issues/README.md` was updated by hand. Code spans are taken out first, so
+`` `[text](href)` `` in a table of Markdown syntax is prose about the format and
+not a link; a `.md` under `examples/` is that project's own data and outside the
+scope, which is what lets `examples/markdown/Guide.md` point at a picture that
+is deliberately not there.
+
 ## The declarations an editor that is not the IDE reads
 
 ```sh

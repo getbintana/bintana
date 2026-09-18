@@ -81,6 +81,7 @@ const GLOBAL_TABLES = {
     http_server_props: "Http Server",
     http_request_props: "Http Server",
     audioplayer_props: "AudioPlayer",
+    printer_props:   "Printer",
     /*
      * These two are documented with the **forms** and not with the globals,
      * which is where they belong: a menu item and a command are parts of a
@@ -529,6 +530,7 @@ const GLOBAL_PAGES = {
     HttpServer:  ["http_server_props", "http_request_props"],
     Locale:      ["locale_props"],
     Logger:      ["log_props"],
+    Printer:     ["printer_props"],
     Screen:      ["screen_props"],
     Text:        ["text_props"],
     Time:        ["time_props"],
@@ -800,6 +802,76 @@ function checkFormTypings(root, problems) {
     return count;
 }
 
+/* ------------------------------------------------------------------- links
+ *
+ * **Does every relative link in the documentation still land on a file?**
+ *
+ * The other checks here ask whether what exists is written down; this one asks
+ * whether what is written down still exists. It is the failure a reorganisation
+ * leaves behind and nothing notices: `docs/issues/ISSUE-printing.md` was deleted
+ * the day printing arrived, and two pages went on pointing at it -- still saying
+ * there was no printer, in prose that read as current. The bookkeeping in
+ * `docs/issues/README.md` was updated by hand and the two paragraphs were not,
+ * which is the whole argument for this being a check and not a habit.
+ *
+ * **The documentation and not the examples.** `docs/` and the Markdown at the
+ * root are the pages somebody reads by following links; a `.md` under
+ * `examples/` is that project's own data -- `examples/markdown/Guide.md` points
+ * at a picture that is deliberately not there, which is what the example is
+ * demonstrating.
+ *
+ * **Code spans are not links.** `` `[text](href)` `` in a table of Markdown
+ * syntax is prose about the format, and so is a regular expression with
+ * brackets in it. Everything between backticks is taken out before the links
+ * are read -- the same way the reader takes it.
+ */
+const LINK = new Regex("(!?)\\[[^\\]]*\\]\\(([^)\\s]+)\\)");
+const CODE = new Regex("```[^]*?```|`[^`\\n]*`");
+
+/* The path as the reader would name it: `docs/llm/markdown.md` and not the
+ * whole of this machine, since the same basename is four files here. Both
+ * separators, because the Windows job runs this check too. */
+function relative(root, path) {
+    return path.startsWith(root) ? path.slice(root.length).replace(/^[\/\\]/, "")
+                                 : path;
+}
+
+function docFiles(root) {
+    const out = Directory.Files(root, { Pattern: "*.md" });
+
+    for (const f of Directory.Files(File.Join(root, "docs"),
+                                    { Pattern: "*.md", Recursive: true }))
+        out.push(f);
+    return out;
+}
+
+function checkLinks(root, problems) {
+    const files = docFiles(root);
+    let   links = 0;
+
+    for (const path of files) {
+        const text = CODE.Replace(File.Load(path), "");
+        const dir  = File.Directory(path);
+
+        for (const m of LINK.Matches(text)) {
+            /* The fragment is the heading and not the file; an address with a
+             * scheme is somebody else's to keep, and a bare `#anchor` is this
+             * page's own. */
+            const target = m.Group(2).split("#")[0];
+
+            if (target === "" || /^(?:https?|mailto):/.test(target))
+                continue;
+
+            links++;
+            if (!File.Exists(File.Join(dir, target)))
+                problems.push(`${relative(root, path)}: ` +
+                              `${m.Group(1) ? "picture" : "link"} to ${target}, ` +
+                              `which is not there`);
+        }
+    }
+    return { links, pages: files.length };
+}
+
 function Main() {
     const root = Application.Arguments[0] || File.Directory(Application.Directory);
     const doc  = File.Join(root, "docs/llm/controls.md");
@@ -879,6 +951,7 @@ function Main() {
     const ref     = checkReference(root, members, events, problems);
     const glob    = checkGlobalPages(root, problems);
     const libs    = checkLibraryPages(root, problems);
+    const links   = checkLinks(root, problems);
 
     for (const p of problems) print(`  ${p}`);
     print(problems.length
@@ -893,6 +966,7 @@ function Main() {
           `${ref.missing} more with members of their own still to write, ` +
           `${glob.checked} in the ${glob.pages} of docs/reference/globals, ` +
           `and ${libs.checked} in the ${libs.pages} of docs/reference/libraries ` +
-          `(${libs.missing} still to write)`);
+          `(${libs.missing} still to write) -- and ${links.links} links over the ` +
+          `${links.pages} pages of docs/ all land somewhere`);
     Application.Quit(problems.length ? 1 : 0);
 }

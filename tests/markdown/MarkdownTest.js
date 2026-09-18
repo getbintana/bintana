@@ -701,6 +701,37 @@ class MarkdownTest extends Form {
                () => this.Doc.SavePdf(this.at("no.pdf"), "Foolscap"));
 
         /*
+         * **And onto paper, which is `Printer`'s.** The viewer works out where
+         * the sheets cut -- the same pagination `SavePdf` uses -- and
+         * `Canvas_DrawPage` turns a sheet number into the band that goes on it,
+         * so `Printer` draws this document without the viewer intermediating.
+         * `ToFile` is the road a test can take; `Send` opens the dialog.
+         */
+        const printed = this.at("printed.pdf");
+        const wrote = Printer.ToFile(this.Doc.Canvas, printed,
+                                     { Pages: pages, Paper: "A4" });
+        eq("Printer writes the document with no dialog", File.Info(printed).Type,
+           "application/pdf");
+        eq("of the pages SavePdf would have written", wrote, pages);
+
+        /* One page of it, which `pages > 1` above makes a real range whatever
+         * the sample grows into. */
+        const ranged = this.at("printed-range.pdf");
+        eq("a range writes exactly its pages",
+           Printer.ToFile(this.Doc.Canvas, ranged,
+                          { Pages: pages, From: 1, To: 1 }), 1);
+        check("in a smaller file",
+              File.Info(ranged).Size < File.Info(printed).Size,
+              `${File.Info(ranged).Size} against ${File.Info(printed).Size}`);
+
+        /* `Send` is the viewer's own line to the dialog; what is assertable
+         * without one is that it refuses before anything opens. */
+        throws("a sheet that is not one is refused",
+               () => this.Doc.Send({ Paper: "Foolscap" }));
+        throws("and a setup that is not an object", () => this.Doc.Send(42));
+        throws("and no copies", () => this.Doc.Send({ Copies: 0 }));
+
+        /*
          * **No block is cut across a page boundary.** The pagination is the one
          * place a viewer and `lib/report` do the same work, and it is asserted
          * on the bands themselves: every break has to fall between items, not

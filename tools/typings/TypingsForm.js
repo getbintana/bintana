@@ -84,6 +84,7 @@ const NOT_A_WIDGET = {
     screen_props:       { name: "Screen",      kind: "const" },
     env_props:          { name: "Environment", kind: "const" },
     http_props:         { name: "Http",        kind: "const" },
+    printer_props:      { name: "Printer",     kind: "const" },
     painter_props:      { name: "Painter",     kind: "class" },
 };
 

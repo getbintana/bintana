@@ -37,8 +37,8 @@ nothing else could be put on, an answer that could only be read once all of
 it had arrived, a control whose engine could be missing on a machine the
 build knew nothing about — `Video`, whose `Available` is now asked of the
 registry rather than declared at build time —, and a document that could only
-leave as a file and never reach a printer: `Print` sends it through the print
-dialog, and `ToFile` writes the PDF the dialog would have made.
+leave as a file and never reach a printer: `Printer.Send` puts it through the
+print dialog, and `Printer.ToFile` writes the PDF the dialog would have made.
 
 Refused: a list of check boxes. A tick the *list* keeps is state in the view,
 which is the wrong place for it — the argument is with the other things that are

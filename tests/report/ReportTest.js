@@ -682,9 +682,11 @@ class ReportTest extends Form {
 
     /* ---------------------------------------------------------------- print
      *
-     * The same pages `SavePdf` writes, through the print dialog -- and with
-     * `ToFile` instead of it, which is the road a test can assert on. The
-     * dialog itself, and the preview, are checked by hand.
+     * A report reaches paper through `Printer`, and what this asserts is the
+     * join: the report works out how many pages there are and lays them out,
+     * `Printer` runs the sheets, and `Canvas_DrawPage` turns a sheet number
+     * into the page of the document. `ToFile` is the road a test can take --
+     * `Send` opens the dialog, and a test cannot click one.
      */
     testPrint() {
         this.Rep.Sections = PLAIN;
@@ -695,33 +697,34 @@ class ReportTest extends Form {
         const pdf = at("printed.pdf");
 
         this.moved = [];
-        const answer = this.Rep.Print({ ToFile: pdf });
+        const wrote = Printer.ToFile(this.Rep.Canvas, pdf,
+                                     { Pages: this.Rep.PageCount,
+                                       Paper: this.Rep.Paper });
 
-        eq("Print writes a PDF with no dialog", File.Info(pdf).Type,
+        eq("a report prints through Printer", File.Info(pdf).Type,
            "application/pdf");
-        eq("and does not move the report", this.Rep.Page, 2);
+        eq("every page of it", wrote, this.Rep.PageCount);
+        eq("and it does not move the report", this.Rep.Page, 2);
         eq("nor tell it that it moved", this.moved.length, 0);
-        eq("and answers what was sent",
-           JSON.stringify([answer.Copies, answer.From, answer.To]),
-           JSON.stringify([1, 1, this.Rep.PageCount]));
 
         /* A range of the document holds exactly it. */
         const ranged = at("ranged.pdf");
-        const ranswer = this.Rep.Print({ From: 1, To: 2, ToFile: ranged });
-        eq("a range answers its pages",
-           JSON.stringify([ranswer.From, ranswer.To]), "[1,2]");
+        eq("a range writes exactly its pages",
+           Printer.ToFile(this.Rep.Canvas, ranged,
+                          { Pages: this.Rep.PageCount, From: 1, To: 2 }), 2);
         check("in a smaller file",
               File.Info(ranged).Size < File.Info(pdf).Size,
               `${File.Info(ranged).Size} against ${File.Info(pdf).Size}`);
 
-        /* And the options that are not an object are refused before anything
-         * is drawn. */
-        try {
-            this.Rep.Print(42);
-            failures.push("options that are not an object should be refused");
-        } catch (e) {
-            passed++;
-        }
+        /*
+         * **`Send` is the report's own line to the dialog**, and what can be
+         * asserted without one is that it refuses what `Printer` refuses,
+         * before anything opens.
+         */
+        throws("a setup that is not an object is refused", () => this.Rep.Send(42));
+        throws("and no copies", () => this.Rep.Send({ Copies: 0 }));
+        throws("and a range outside the document",
+               () => this.Rep.Send({ From: 1, To: this.Rep.PageCount + 5 }));
     }
 
     /* --------------------------------------------------------------- report */

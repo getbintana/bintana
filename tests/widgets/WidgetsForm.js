@@ -5195,19 +5195,26 @@ function Main() {
 
         /*
          * **`SavePdf` is the same `Draw`, once per page, into one file.** The
-         * page size is in points and the handler is told those numbers; `before`
-         * is how it knows which page it is drawing, since `Draw`'s own arguments
-         * do not say.
+         * page size is in points and the handler is told those numbers.
+         *
+         * **Two ways to know which page it is, and they agree.** `before(page)`
+         * is called first, and then the frame itself goes to `DrawPage(p, page,
+         * …)` when the form declared one -- this is paper, and paper is what
+         * that event is for. A form with no `DrawPage` gets `Draw`, which is
+         * what every caller had before the event existed and why nothing had to
+         * change when it arrived.
          */
         this.plotWhat = "grid";
         this.plotPages = [];
+        this.plotBefore = [];
         const pdf = File.Join(SCRATCH, "pages.pdf");
         area.SavePdf(pdf, 595, 842, 3, (page) => {
-            this.plotPages.push(page);
+            this.plotBefore.push(page);
             this.plotSize = null;
         });
         eq("SavePdf writes a PDF", File.Info(pdf).Type, "application/pdf");
-        eq("before is called once per page, in order", this.plotPages.join(","), "1,2,3");
+        eq("before is called once per page, in order", this.plotBefore.join(","), "1,2,3");
+        eq("and DrawPage is told the same pages", this.plotPages.join(","), "1,2,3");
         eq("and the frame is the page, in points", JSON.stringify(this.plotSize), "[595,842]");
 
         eq("a page defaults to one", (() => {
@@ -5226,6 +5233,7 @@ function Main() {
          * would look like an export that worked. */
         const half = File.Join(SCRATCH, "half.pdf");
         this.plotWhat = "grid";
+        this.plotPages = [];
         throws("a page that throws fails the document",
                () => area.SavePdf(half, 200, 200, 3, (page) => {
                    this.plotWhat = page === 2 ? "bad image" : "grid";
@@ -5235,60 +5243,102 @@ function Main() {
         Application.OnError = null;     /* back to the dialog for anything else */
 
         /*
-         * **And to paper, through the print dialog.** `Print` is the same
-         * `Draw` against the print context; `ToFile` takes the dialog out of
-         * it, which is the road a test can assert on -- a test cannot click
-         * a dialog, and the dialog itself is checked by hand.
+         * **And to paper, which is `Printer`'s and not the drawing's.** A
+         * printer is a thing outside the program -- a name, a default, a
+         * dialog -- so the verbs live on a theme of their own, the way
+         * `Dialog`'s and `Desktop`'s do. `ToFile` is the road a test can
+         * assert on; `Send` opens the dialog and is checked by hand.
          */
         this.plotWhat = "grid";
         this.plotPages = [];
         const printed = File.Join(SCRATCH, "printed.pdf");
-        const answer = area.Print({ Pages: 3, Paper: "A4", ToFile: printed },
-                                  (page) => { this.plotPages.push(page); });
-        eq("Print writes a PDF with no dialog", File.Info(printed).Type,
+        const wrote = Printer.ToFile(area, printed, { Pages: 3, Paper: "A4" });
+        eq("Printer.ToFile writes a PDF with no dialog", File.Info(printed).Type,
            "application/pdf");
-        eq("before is called once per page, in order", this.plotPages.join(","),
-           "1,2,3");
-        eq("and answers what was sent",
-           JSON.stringify([answer.Copies, answer.From, answer.To]), "[1,1,3]");
+        eq("and answers how many pages it holds", wrote, 3);
+        eq("DrawPage is called once per sheet, in order",
+           this.plotPages.join(","), "1,2,3");
 
-        /* A range of a longer document, twice: the file holds exactly it. */
+        /* A range of a longer document: the file holds exactly it. */
         this.plotPages = [];
         const ranged = File.Join(SCRATCH, "ranged.pdf");
-        const ranswer = area.Print({ Pages: 5, Paper: "Letter",
-                                     From: 2, To: 3, Copies: 2, ToFile: ranged },
-                                   (page) => { this.plotPages.push(page); });
-        eq("a range draws exactly its pages", this.plotPages.join(","), "2,3");
-        eq("and the answer says which",
-           JSON.stringify([ranswer.Copies, ranswer.From, ranswer.To]),
-           "[2,2,3]");
+        eq("a range writes exactly its pages",
+           Printer.ToFile(area, ranged, { Pages: 5, Paper: "Letter",
+                                          From: 2, To: 3 }), 2);
+        eq("and draws exactly those", this.plotPages.join(","), "2,3");
         eq("in a Letter file", File.Info(ranged).Type, "application/pdf");
 
+        /*
+         * **A key that is `null` was not given**, which every key takes it for
+         * -- and `To` is the one with a default of its own, so it is where the
+         * two could disagree: it read as page 1 while `Pages` said five, and
+         * printed one page without a word.
+         */
+        this.plotPages = [];
+        Printer.ToFile(area, printed, { Pages: 4, To: null });
+        eq("To: null is the absence it is", this.plotPages.join(","), "1,2,3,4");
+        this.plotPages = [];
+        Printer.ToFile(area, printed, { Pages: 4, To: undefined });
+        eq("and so is To: undefined", this.plotPages.join(","), "1,2,3,4");
+
+        /* **A file has no copies**, which is the whole of why there are two
+         * verbs: `Copies: 3` used to answer "three sent" and write the same
+         * file, byte for byte, as one. */
+        throws("Copies on a file is refused",
+               () => Printer.ToFile(area, printed, { Pages: 2, Copies: 3 }));
+
         throws("a document of no pages is refused",
-               () => area.Print({ Pages: 0, ToFile: printed }));
-        throws("and no copies either",
-               () => area.Print({ Copies: 0, ToFile: printed }));
+               () => Printer.ToFile(area, printed, { Pages: 0 }));
         throws("and a range outside the document",
-               () => area.Print({ Pages: 3, From: 2, To: 4, ToFile: printed }));
+               () => Printer.ToFile(area, printed, { Pages: 3, From: 2, To: 4 }));
         throws("and a backwards one",
-               () => area.Print({ Pages: 3, From: 3, To: 2, ToFile: printed }));
+               () => Printer.ToFile(area, printed, { Pages: 3, From: 3, To: 2 }));
         throws("and an unknown paper",
-               () => area.Print({ Paper: "Legal", ToFile: printed }));
+               () => Printer.ToFile(area, printed, { Paper: "Legal" }));
         throws("and an unknown orientation",
-               () => area.Print({ Orientation: "Sideways", ToFile: printed }));
-        throws("and options that are not an object", () => area.Print(42));
-        throws("and a `before` that is not a function",
-               () => area.Print({}, "page 1"));
+               () => Printer.ToFile(area, printed, { Orientation: "Sideways" }));
+        throws("and a setup that is not an object",
+               () => Printer.ToFile(area, printed, 42));
+        /* **A control that is not a drawing is refused**, and that is not
+         * pedantry: every widget has a painter note it could be asked for, so
+         * a `Button` handed to this came back with a one-page PDF of nothing,
+         * reported as a document that was written. */
+        throws("and a first argument that does not draw",
+               () => Printer.ToFile("Canvas1", printed, {}));
+        const notadrawing = new Button();
+        this.Fixed1.Add(notadrawing);
+        throws("nor does a control that is not a drawing",
+               () => Printer.ToFile(notadrawing, printed, { Pages: 1 }));
+        notadrawing.Delete();
+        throws("and no copies either, on the road that has them",
+               () => Printer.Send(area, { Copies: 0 }));
+
+        /*
+         * **What the machine has.** `Names` is the printers this session can
+         * reach and `Default` the one it would use -- the question a palette
+         * has to be able to ask before it offers a button, which is the same
+         * argument `Video.Available` settled. A runner may have none of either,
+         * so what is asserted is the shape and their agreement.
+         */
+        const names = Printer.Names;
+        check("Printer.Names is a list", Array.isArray(names),
+              JSON.stringify(names));
+        check("of names", names.every((n) => typeof n === "string"),
+              JSON.stringify(names));
+        check("and Default is one of them, or nothing",
+              typeof Printer.Default === "string" &&
+              (Printer.Default === "" || names.includes(Printer.Default)),
+              `${JSON.stringify(Printer.Default)} against ${JSON.stringify(names)}`);
 
         /* A page that throws fails the run, and a file road must not keep
          * the half of it that exists -- the same bargain as `SavePdf`. */
         const phalf = File.Join(SCRATCH, "phalf.pdf");
         const perrors = [];
         Application.OnError = (m) => { perrors.push(m); };
+        this.plotBad = 2;
         throws("a page that throws fails the print",
-               () => area.Print({ Pages: 3, ToFile: phalf }, (page) => {
-                   if (page === 2) this.plotWhat = "bad image";
-               }));
+               () => Printer.ToFile(area, phalf, { Pages: 3 }));
+        this.plotBad = 0;
         check("and leaves no half-written file", !File.Exists(phalf));
         check("and the handler's own error is what was reported",
               perrors.length === 1 &&
@@ -5385,6 +5435,22 @@ function Main() {
 
     Plot2_Draw(p) { this.plot2Ink = p.Foreground; }
 
+    /* The paper's handler: the sheet arrives as an argument, which is the whole
+     * point of the event -- it used to travel through a field of this form,
+     * written by a `before` callback and read back in `Draw`. The body is the
+     * screen's, so what is asserted about a page is what is asserted about a
+     * frame. */
+    Plot1_DrawPage(p, page, width, height) {
+        this.plotPages.push(page);
+        /* Which sheet is asked to fail, for the assertion that a page that
+         * throws takes the whole print with it. 0 means none. */
+        const was = this.plotWhat;
+        if (this.plotBad === page)
+            this.plotWhat = "bad image";
+        try { this.Plot1_Draw(p, width, height); }
+        finally { this.plotWhat = was; }
+    }
+
     Plot1_Draw(p, width, height) {
         this.plotFrames++;
         this.plotKept = p;
@@ -5403,7 +5469,7 @@ function Main() {
             return;
         }
         if (this.plotWhat === "nestedprint") {
-            try { this.plotArea.Print({ ToFile: File.Join(SCRATCH, "nested.pdf") });
+            try { Printer.ToFile(this.plotArea, File.Join(SCRATCH, "nested.pdf"), {});
                   this.plotNested = "NOT REFUSED"; }
             catch (e) { this.plotNested = e.message; }
             return;

@@ -415,6 +415,13 @@ void bta_switcher_page_added(GtkWidget *stack, GtkWidget *page);
  * where the pages are taken out and put back; false when it is not one. */
 bool bta_switcher_reorder(BtaWidget *w, GtkWidget *child, int index);
 void bta_paint_register(void);     /* bta_paint.c: DrawingArea */
+/* One frame of a control's handler against a surface somebody else owns, and
+ * whether one is already running. `page` is the sheet, 1-based; `DrawPage`
+ * is raised when the form declared one. What `Printer` draws through. */
+bool bta_paint_page(BtaWidget *w, cairo_t *cr, int width, int height, int page);
+bool bta_paint_busy(JSContext *ctx, BtaWidget *w);
+bool bta_paint_draws(BtaWidget *w);
+void bta_printer_init(JSContext *ctx, JSValue global);
 /* The Painter class, which is not a widget: registered with the runtime's
  * other non-widget classes rather than in the widget table. */
 void bta_painter_init(JSContext *ctx, JSValue global);
@@ -560,6 +567,9 @@ void       bta_emit(BtaWidget *w, const char *event, int argc, JSValueConst *arg
 /* The same, answering whether the handler threw -- which only an exporter needs:
  * a frame that died halfway must not become a file that reports success. */
 bool       bta_emit_ok(BtaWidget *w, const char *event, int argc, JSValueConst *argv);
+/* Whether the form declared a handler for it -- asked only where there is a
+ * second event to fall back on. See bta_widget.c. */
+bool       bta_has_handler(BtaWidget *w, const char *event);
 /* Same as bta_emit, for event sources that are not widgets (menu items).
  * Returns what the handler returned, so an event can be consumed;
  * JS_UNDEFINED when there is no handler. The caller owns the result. */

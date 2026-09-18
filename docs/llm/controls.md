@@ -804,8 +804,8 @@ else in this widget set puts ink on the screen.
 | `Save(path, [width], [height])` | run the same `Draw` against an image surface and write it as a PNG. Without a size it uses the widget's own, and a surface that has never been allocated has none — so pass one. Refused from inside a `Draw` (one painter, one frame at a time) and above 16384 a side. **A `Draw` that throws writes no file** and the throw reaches the caller |
 | `ToPng([width], [height])` | the same frame as `Save`, answered as `Bytes` instead of written: a chart to be posted, attached or put in a reply, with nothing on disk. Same sizes, same refusals, same rule that a `Draw` which throws answers nothing |
 | `SavePdf(path, width, height, [pages], [before])` | the same `Draw`, once per page, into one **PDF**. The size is in **points**, 72 to the inch (A4 is 595×842, Letter 612×792) and is what the handler is given as its frame size; the surface is vector, so text stays text. `pages` defaults to 1. `before(page)` is called before each page — that is how the handler knows which one it is drawing, since `Draw`'s own arguments do not say. A page that throws leaves **no file** |
-| `Print([options], [before])` | the same `Draw`, once per page, **onto paper** through the print dialog. `options` is `{ Pages, Paper, Orientation, Copies, From, To, ToFile }`: `Pages` (default 1) is the whole document and the dialog's range chooses within it; `Paper` (`A4` `Letter` `A5`) and `Orientation` (`Portrait` `Landscape`) preset the page setup; `Copies`, `From`, `To` preset the job. `ToFile` takes a path instead and writes a PDF with **no dialog** — "print to PDF", and the road a test can assert on. The handler's frame is the printable area in points. Answers `{ Copies, From, To }` — what was actually sent — and `null` when the dialog was cancelled, which is not an error. A page that throws fails the run and, on the `ToFile` road, leaves **no file**. Refused from inside a `Draw` |
 | **event** `Draw(painter, width, height)` | paint it. The size is the frame's, in logical pixels |
+| **event** `DrawPage(painter, page, width, height)` | paint one **sheet of paper**, raised by [`Printer`](library.md#printer) and by `SavePdf` in place of `Draw`. `page` is 1-based and the size is the printable area in **points**, 72 to the inch. A form that declares no `DrawPage` gets `Draw`, which is right for a drawing that is one page — and is why nothing had to change when this arrived |
 
 **A drawing area has no natural size.** There is nothing inside it to measure, so
 one placed with neither a size nor an `Expand` is allocated 0×0 and its handler is
@@ -821,11 +821,12 @@ change in the data becomes a frame. A drawing that animates is `Timer.Every` plu
 report and how a drawing is tested without a screen. `SavePdf()` is that once per
 page into one file, which is what a document wants: a report leaves the
 application as fourteen pages of one PDF rather than as fourteen PNGs somebody
-has to keep together. `Print()` is that onto paper: the dialog answers the
-printer, the paper, the copies and the range, and GTK's own preview shows what
-is about to come out. Laying a *control* onto a page — rather than what a
-`Draw` paints — is still open: a form with real widgets on it has no path to
-paper except drawing it by hand.
+has to keep together. Paper is [`Printer`](library.md#printer)'s and not this
+control's: `Printer.Send(area)` opens the dialog and `Printer.ToFile(area, path)`
+writes a PDF without one, and on paper the frame goes to `DrawPage` rather than
+`Draw`. Laying a *control* onto a page — rather than what a `Draw` paints — is
+still open: a form with real widgets on it has no path to paper except drawing
+it by hand.
 
 ## Painter
 

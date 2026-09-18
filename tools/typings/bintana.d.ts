@@ -541,7 +541,6 @@ declare class Switcher extends Widget {
     Reorder(...values: any[]): any;
 }
 declare class DrawingArea extends Widget {
-    Print(...values: any[]): any;
     Redraw(...values: any[]): any;
     Save(...values: any[]): any;
     SavePdf(...values: any[]): any;
@@ -1019,6 +1018,13 @@ declare class Painter {
     TextWidth(...values: any[]): any;
     Translate(...values: any[]): any;
 }
+
+declare const Printer: {
+    Default: any;
+    Names: any;
+    Send(...values: any[]): any;
+    ToFile(...values: any[]): any;
+};
 
 declare const Screen: {
     Height: any;

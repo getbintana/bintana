@@ -85,7 +85,8 @@ static bool entries_id(JSContext *ctx, const char *id, const char *who)
         if (g_ascii_isalnum(*p) || *p == '-' || *p == '_' || *p == '.')
             continue;
         return JS_ThrowTypeError(ctx,
-            "%s: \"%s\" is not an application id: letters, digits, '-' and '.' only",
+            "%s: \"%s\" is not an application id: letters, digits, '-', '_' "
+            "and '.' only",
             who, id), false;
     }
     return true;

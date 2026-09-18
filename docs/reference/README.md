@@ -99,11 +99,11 @@ members, twice — once in its summary and once where it is explained.
 | [DatePicker](widgets/DatePicker.md) | a date on one line, with a calendar in its popover |
 | [DrawingArea](widgets/DrawingArea.md) | a surface to draw on |
 | [Editor](widgets/Editor.md) | a buffer of text with a cursor in it |
-| [Expander](widgets/Expander.md) | a [`Frame`](Frame.md) that folds |
+| [Expander](widgets/Expander.md) | a [`Frame`](widgets/Frame.md) that folds |
 | [Flow](widgets/Flow.md) | a gallery: children wrap into as many columns as fit |
 | [FontButton](widgets/FontButton.md) | the font, shown in itself |
 | [Form](widgets/Form.md) | the window |
-| [Frame](widgets/Frame.md) | a [`Panel`](Panel.md) with a title |
+| [Frame](widgets/Frame.md) | a [`Panel`](widgets/Panel.md) with a title |
 | [Grid](widgets/Grid.md) | rows and columns whose sizes come from what is in them |
 | [Image](widgets/Image.md) | an icon or a small picture, drawn at a size |
 | [Label](widgets/Label.md) | text the user reads and cannot edit |
@@ -118,7 +118,7 @@ members, twice — once in its summary and once where it is explained.
 | [RowList](widgets/RowList.md) | one row per child, and **each row is a widget you built** |
 | [Scroller](widgets/Scroller.md) | content whose size is not its parent's business |
 | [Separator](widgets/Separator.md) | a rule |
-| [Slider](widgets/Slider.md) | the same four words a [`SpinBox`](SpinBox.md) uses, asked with the mouse |
+| [Slider](widgets/Slider.md) | the same four words a [`SpinBox`](widgets/SpinBox.md) uses, asked with the mouse |
 | [SourceEditor](widgets/SourceEditor.md) | code: highlighting, completion, search and gutter marks |
 | [SpinBox](widgets/SpinBox.md) | a number, typed or stepped |
 | [Spinner](widgets/Spinner.md) | work with no end in sight, which is most work |
@@ -142,7 +142,7 @@ members, twice — once in its summary and once where it is explained.
 | [AudioPlayer](globals/AudioPlayer.md) | sound with no window |
 | [Bytes](globals/Bytes.md) | a file's contents, when they are not text |
 | [Clipboard](globals/Clipboard.md) | copy and paste, which are not symmetrical |
-| [Database](globals/Database.md) | a [`Record`](Record.md) over a table |
+| [Database](globals/Database.md) | a [`Record`](globals/Record.md) over a table |
 | [Day](globals/Day.md) | the calendar date, which is the value JavaScript does not have |
 | [Decimal](globals/Decimal.md) | exact base-10 arithmetic, with the ordinary operators. **This is what money is.** |
 | [Desktop](globals/Desktop.md) | the session the program is in, and the menu entries a user installs for themselves |
@@ -158,13 +158,14 @@ members, twice — once in its summary and once where it is explained.
 | [Locale](globals/Locale.md) | the user's language, and their way of writing numbers, money, dates and names |
 | [Logger](globals/Logger.md) | what a program writes down for itself |
 | [Message](globals/Message.md) | telling the user something, with no question attached |
+| [Printer](globals/Printer.md) | what this machine can print on, and how a drawing gets there |
 | [Record](globals/Record.md) | the shape data has, declared once |
 | [Regex](globals/Regex.md) | a pattern, with nothing remembered between questions |
 | [Screen](globals/Screen.md) | how big the desktop is, and how many pieces it is in |
 | [Settings](globals/Settings.md) | what the application remembers between runs |
 | [Stopwatch](globals/Stopwatch.md) | how long something took |
 | [Text](globals/Text.md) | what a string measures, asked where there is no painter |
-| [Time](globals/Time.md) | the clock half of [`Day`](Day.md), and the same bargain |
+| [Time](globals/Time.md) | the clock half of [`Day`](globals/Day.md), and the same bargain |
 | [Timer](globals/Timer.md) | doing something later, or repeatedly |
 
 ### libraries/

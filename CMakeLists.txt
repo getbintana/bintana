@@ -59,6 +59,15 @@ pkg_check_modules(VTE IMPORTED_TARGET vte-2.91-gtk4)
 # an old distribution -- the same reason GTK declares its floor above.
 pkg_check_modules(SQLITE3 IMPORTED_TARGET sqlite3>=3.25)
 
+# Optional: `Printer.Names` and `Printer.Default` -- the list of printers and
+# which one is the default.  It is GTK's **Unix** print backend and ships as a
+# pkg-config module of its own; on Windows GTK opens the system's dialog and
+# publishes no list at all.  Without it `Printer.Send` and `Printer.ToFile`
+# work exactly the same -- the dialog is core GTK -- and the two questions
+# refuse with a sentence rather than answering an empty list that cannot be
+# told apart from a machine with no printer.
+pkg_check_modules(UNIXPRINT IMPORTED_TARGET gtk4-unix-print)
+
 # Optional: Log.Target = "Journal" writes straight to the systemd journal, with
 # the level as its priority.  Without it the runtime still builds and logs to
 # the terminal; asking for the journal then says so instead of pretending.
@@ -133,6 +142,7 @@ add_executable(bintana
     runtime/src/bta_debug.c
     runtime/src/bta_sys.c
     runtime/src/bta_desktop.c
+    runtime/src/bta_printer.c
     runtime/src/bta_database.c
     runtime/src/bta_sqlite.c
     runtime/src/bta_locale.c
@@ -169,6 +179,14 @@ if(SQLITE3_FOUND)
     message(STATUS "sqlite3 ${SQLITE3_VERSION}: Database.Sqlite is available")
 else()
     message(STATUS "no sqlite3: Database.Sqlite will say so when called")
+endif()
+
+if(UNIXPRINT_FOUND)
+    target_link_libraries(bintana PRIVATE PkgConfig::UNIXPRINT)
+    target_compile_definitions(bintana PRIVATE BTA_HAVE_UNIX_PRINT=1)
+    message(STATUS "gtk4-unix-print ${UNIXPRINT_VERSION}: Printer.Names and Printer.Default can answer")
+else()
+    message(STATUS "no gtk4-unix-print: Printer.Names and Printer.Default will say so; printing itself is unaffected")
 endif()
 
 if(SYSTEMD_FOUND)
