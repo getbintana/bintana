@@ -159,6 +159,70 @@ jobs:
           BINTANA_LIB_PATH: ${{ github.workspace }}/lib
         run: ./tests/run.sh
 
+  # A fourth job, and the second optional half of an optional dependency:
+  # `Printer.Names` and `Printer.Default` without GTK's Unix print backend.
+  # Printing itself is core GTK and works either way; those two questions are
+  # `gtk4-unix-print`, and a build without it refuses them with a sentence rather
+  # than answering an empty list that cannot be told apart from a machine with no
+  # printer.
+  #
+  # **This one has to hide the module rather than not install it**, which is the
+  # honest difference from `no-vte` above. `gtk4-unix-print.pc` ships in the same
+  # package as `gtk4.pc` (`libgtk-4-dev`), so there is no package to leave out --
+  # and the platforms where the module really is absent are Windows and macOS,
+  # where the suite does not run. A pkg-config that answers "no" for that one
+  # name is the nearest thing to the real shape, and what it proves is what
+  # matters: the `#ifndef BTA_HAVE_UNIX_PRINT` branch compiles, and the suite
+  # takes its other road.
+  #
+  # Worth the job because of how that branch failed the one time it was run:
+  # `Printer.Names` was read unguarded and the throw ended `Form_Open`, so the
+  # project reported **one** failure and quietly skipped 1633 assertions.
+  #
+  # `tests/widgets` and not the whole suite: this dependency reaches exactly two
+  # members, and both are asserted there. Widen it the day something else asks
+  # the machine about printers.
+  no-unix-print:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config \
+            libgtk-4-dev libgtksourceview-5-dev \
+            libsqlite3-dev libsoup-3.0-dev \
+            xvfb \
+            librsvg2-common fonts-cantarell
+
+      - name: Build with gtk4-unix-print hidden
+        run: |
+          set -euo pipefail
+          mkdir -p fake
+          # Everything but that one name goes through to the real pkg-config.
+          printf '#!/bin/sh\ncase " $* " in *" gtk4-unix-print "*) exit 1;; esac\nexec /usr/bin/pkg-config "$@"\n' \
+            > fake/pkg-config
+          chmod +x fake/pkg-config
+
+          cmake -S . -B build-noprint \
+                -DPKG_CONFIG_EXECUTABLE="$PWD/fake/pkg-config" 2>&1 | tee cmake.log
+          # It has to have *decided* it, not merely compiled: a wrapper that
+          # stopped working would make this job a second copy of the first one,
+          # silently. CMake says which way it went, so read it back -- the same
+          # guard `no-vte` uses.
+          grep -q 'no gtk4-unix-print:' cmake.log \
+            || { echo "the module was found: this job would prove nothing"; exit 1; }
+          cmake --build build-noprint -j"$(nproc)"
+
+      - name: Test
+        env:
+          BINTANA: ./build-noprint/bintana
+          BINTANA_LIB_PATH: ${{ github.workspace }}/lib
+        run: ./tests/run.sh widgets
+
   # The downloadable one: the same tree `cmake --install` lays down, as a
   # tarball, so somebody without a compiler can run the IDE and the examples.
   #

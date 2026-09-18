@@ -3250,3 +3250,15 @@ person who wrote it either.
   reporting green with one event missing from its own total. It is `bta_emit\w*`
   now. A scanner that lists what it knows about goes stale the first time
   somebody adds to what it scans.
+- **An optional dependency that ships inside a required one cannot be left out,
+  so its job hides it.** `no-vte` is the honest shape -- libvte is its own
+  package, the job does not install it, CMake says so. `gtk4-unix-print` is not:
+  its `.pc` is in `libgtk-4-dev`, the same package as `gtk4.pc`, and the
+  platforms where it is really absent are Windows and macOS, where the suite
+  does not run. So `no-unix-print` puts a pkg-config on `PATH` that answers "no"
+  for that one name, and **reads CMake's own line back** to prove the wrapper
+  worked -- without that guard a wrapper that stopped working would make the job
+  a second copy of the first one, silently, which is the same guard `no-vte`
+  carries for the same reason. Measured both ways: with the wrapper the branch
+  compiles and `tests/widgets` is 3303, and with the real pkg-config the guard
+  fails the job.
