@@ -100,6 +100,13 @@
               }
             },
             {
+              "type": "Button",
+              "name": "BtnPrint",
+              "properties": {
+                "Text": "Print..."
+              }
+            },
+            {
               "type": "Label",
               "name": "LblStatus",
               "properties": {

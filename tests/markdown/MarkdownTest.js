@@ -745,6 +745,24 @@ class MarkdownTest extends Form {
         check("and no fewer than the whole sheet would take",
               onA5 >= wholeA5, `${onA5} against ${wholeA5}`);
 
+        /*
+         * **The canvas on its own**, which is the road that skips both of this
+         * viewer's verbs: `SavePdf` here is the `DrawingArea`'s and not the
+         * component's, so nobody has paginated and `Canvas_DrawPage` is the
+         * only thing standing between that and a sheet of the *screen's* band.
+         *
+         * Asserted because the suite reached it through neither road and the
+         * line looked like dead code: every other path -- `Markdown.SavePdf`,
+         * and `Printer` through `Canvas_Paginate` -- paginates first. It is not
+         * dead, it is the one place nothing else covers.
+         */
+        const bare = this.at("bare-canvas.pdf");
+        this.Doc.Canvas.SavePdf(bare, 595, 842, 3);
+        eq("the canvas on its own still writes a document",
+           File.Info(bare).Type, "application/pdf");
+        check("and it is not empty", File.Info(bare).Size > 0,
+              String(File.Info(bare).Size));
+
         /* `Send` is the viewer's own line to the dialog; what is assertable
          * without one is that it refuses before anything opens. */
         throws("a sheet that is not one is refused",

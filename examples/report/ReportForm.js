@@ -251,4 +251,27 @@ class ReportForm extends Form {
         this.LblStatus.Text = Locale.Text("Saved {0} page(s) as {1}",
                                           String(this.Report.PageCount), path);
     }
+
+    /* **And onto paper**, which is the one thing a statement of account is
+     * really for. `Send` is the report's line to `Printer`: it fills in how
+     * many pages there are and the paper it was laid out for, the dialog
+     * answers the printer, the copies and the range, and the same `Draw` runs
+     * against the print context.
+     *
+     * **A cancelled dialog is not an error** -- it answers `null` -- so there is
+     * nothing to catch and nothing to apologise for; the status line simply
+     * does not move. What comes back when something *was* printed is what the
+     * dialog settled, which is the only honest thing to report: the person may
+     * have asked for two copies of page three.
+     */
+    BtnPrint_Click() {
+        const sent = this.Report.Send();
+
+        if (!sent)
+            return;
+
+        this.LblStatus.Text = Locale.Text("Printed page(s) {0} to {1}, {2} copy/copies",
+                                          String(sent.From), String(sent.To),
+                                          String(sent.Copies));
+    }
 }
