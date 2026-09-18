@@ -73,7 +73,7 @@ It is a [`Component`](../widgets/Component.md), so everything on
 | `Paper` | `A4` `Letter` `A5` — what `SavePdf` uses. `"A4"` | [off the screen](#off-the-screen) |
 | `Save(path, [width], [scale])` | the **whole document** as one PNG | [off the screen](#off-the-screen) |
 | `SavePdf(path, [paper])` | every page, one file; → how many | [off the screen](#off-the-screen) |
-| `Send([setup])` | **every page, to paper** | [off the screen](#off-the-screen) |
+| `Send([setup], cb)` | **every page, to paper** | [off the screen](#off-the-screen) |
 
 **Events**
 
@@ -169,7 +169,7 @@ its words.
 | | |
 |---|---|
 | `SavePdf(path, [paper])` | every page, one file; → how many. Vector, so the text in it is text. **The cut is pulled up to the top of whatever block straddles it**, so a heading, a row or a picture is never sliced across a page |
-| `Send([setup])` | **every page, to paper** through [`Printer`](../globals/Printer.md). `setup` is `{ Paper, Copies, From, To }`; `Paper` is what the dialog opens on, and the pagination is `SavePdf`'s. A paper chosen in the dialog **re-flows** the document — this declares `Paginate`, so the sheet count follows the paper that really comes out, which is more sheets on a smaller one. Answers `{ Copies, From, To }`, and `null` when the dialog was cancelled. To a file it is `SavePdf` |
+| `Send([setup], cb)` | **every page, to paper** through [`Printer`](../globals/Printer.md). `setup` is `{ Paper, Copies, From, To }`; `Paper` is what the dialog opens on, and the pagination is `SavePdf`'s. A paper chosen in the dialog **re-flows** the document — this declares `Paginate`, so the sheet count follows the paper that really comes out, which is more sheets on a smaller one. **Async**: `cb({ Copies, From, To })` is what was actually sent, and is not called when the dialog was cancelled. To a file it is `SavePdf` |
 | `Save(path, [width], [scale])` | the **whole document** as one PNG — not the view. `width` is the column it is laid out at; `scale` is `2` |
 | `Paper` | `A4`, `Letter` or `A5` — what `SavePdf` uses when it is not told one |
 

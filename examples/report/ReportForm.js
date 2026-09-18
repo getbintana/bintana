@@ -258,20 +258,20 @@ class ReportForm extends Form {
      * answers the printer, the copies and the range, and the same `Draw` runs
      * against the print context.
      *
-     * **A cancelled dialog is not an error** -- it answers `null` -- so there is
-     * nothing to catch and nothing to apologise for; the status line simply
-     * does not move. What comes back when something *was* printed is what the
-     * dialog settled, which is the only honest thing to report: the person may
-     * have asked for two copies of page three.
+     * **It takes a callback, like every other dialog here.** The person answers
+     * the dialog in their own time, so this returns at once and the callback
+     * arrives when something was printed -- and **not at all when it was
+     * cancelled**, which is why there is nothing to test for and no `else`. The
+     * status line simply does not move.
+     *
+     * What arrives is what the dialog settled, which is the only honest thing
+     * to report: the person may have asked for two copies of page three.
      */
     BtnPrint_Click() {
-        const sent = this.Report.Send();
-
-        if (!sent)
-            return;
-
-        this.LblStatus.Text = Locale.Text("Printed page(s) {0} to {1}, {2} copy/copies",
-                                          String(sent.From), String(sent.To),
-                                          String(sent.Copies));
+        this.Report.Send((sent) => {
+            this.LblStatus.Text = Locale.Text("Printed page(s) {0} to {1}, {2} copy/copies",
+                                              String(sent.From), String(sent.To),
+                                              String(sent.Copies));
+        });
     }
 }

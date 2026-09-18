@@ -733,10 +733,14 @@ class ReportTest extends Form {
          * asserted without one is that it refuses what `Printer` refuses,
          * before anything opens.
          */
-        throws("a setup that is not an object is refused", () => this.Rep.Send(42));
-        throws("and no copies", () => this.Rep.Send({ Copies: 0 }));
+        throws("a setup that is not an object is refused",
+               () => this.Rep.Send(42, () => {}));
+        throws("and no copies", () => this.Rep.Send({ Copies: 0 }, () => {}));
+        throws("and a Send with nobody to tell", () => this.Rep.Send({}));
+        throws("even with no setup at all", () => this.Rep.Send());
         throws("and a range outside the document",
-               () => this.Rep.Send({ From: 1, To: this.Rep.PageCount + 5 }));
+               () => this.Rep.Send({ From: 1, To: this.Rep.PageCount + 5 },
+                                    () => {}));
     }
 
     /* --------------------------------------------------------------- report */

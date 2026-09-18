@@ -3262,3 +3262,16 @@ person who wrote it either.
   carries for the same reason. Measured both ways: with the wrapper the branch
   compiles and `tests/widgets` is 3303, and with the real pkg-config the guard
   fails the job.
+- **A dialog that blocks the caller is the odd one out here, and blocking never
+  meant safe.** `Printer.Send` ran `gtk_print_operation_run` synchronously and
+  answered `null` for a cancel, while `Dialog.OpenFile`, `SaveFile` and `Color`
+  all take a callback and none of them reports a cancel -- so it was the one
+  dialog a program had to treat differently. And the synchrony bought nothing:
+  GTK runs a **nested main loop** while a dialog is up, so the program keeps
+  going. Measured: during a 484 ms print a `Timer.Every(20)` fired four times,
+  and a second print of the same control started from a timer was **not
+  refused** and wrote its pages. `set_allow_async` plus the `done` signal is the
+  shape now, the callback is required and not called on a cancel, and one
+  control prints once at a time. `bta_paint_busy` does not cover that: between
+  two sheets there is no frame open, which is why the suite probes it from
+  `Paginate` and not from `DrawPage`.

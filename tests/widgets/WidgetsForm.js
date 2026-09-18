@@ -5311,7 +5311,20 @@ function Main() {
                () => Printer.ToFile(notadrawing, printed, { Pages: 1 }));
         notadrawing.Delete();
         throws("and no copies either, on the road that has them",
-               () => Printer.Send(area, { Copies: 0 }));
+               () => Printer.Send(area, { Copies: 0 }, () => {}));
+
+        /*
+         * **`Send` takes a callback, like every other dialog here.** The person
+         * answers in their own time, so the call returns at once and the answer
+         * arrives later -- and **not at all when it was cancelled**, which is
+         * `Dialog.OpenFile`'s rule and spares every caller a test it would
+         * forget once. A setup with no callback is refused rather than run with
+         * nobody to tell.
+         */
+        throws("Send needs a callback", () => Printer.Send(area));
+        throws("and one that is a function",
+               () => Printer.Send(area, { Pages: 1 }, "later"));
+
 
         /*
          * **What the machine has**, and both ways it can answer.
@@ -5408,6 +5421,27 @@ function Main() {
         check("with the handler's own error reported",
               pgerrors.length === 1 && pgerrors[0].includes("no pagination"),
               JSON.stringify(pgerrors));
+        /*
+         * **One control prints once at a time**, which only became askable when
+         * the dialog stopped blocking. GTK runs a nested main loop while it is
+         * up, so the program keeps going -- timers fire, buttons can be clicked
+         * -- and a second print of the same drawing used to start and write its
+         * pages. Measured before the guard existed. The `Draw` guard does not
+         * catch it: between two sheets there is no frame open.
+         *
+         * Asserted from inside `DrawPage`, which is a moment the first print is
+         * certainly in flight.
+         */
+        this.sheetInner = null;
+        this.sheetCtl     = sheet;      /* the handler is the form's, not the control's */
+        this.sheetReenter = sheetPdf;
+        Printer.ToFile(sheet, sheetPdf, { Pages: 2 });
+        this.sheetReenter = null;
+        check("a print inside a print is refused by name",
+              this.sheetInner !== null &&
+              this.sheetInner.includes("already printing"),
+              JSON.stringify(this.sheetInner));
+
         Application.OnError = null;
         sheet.Delete();
 
@@ -5526,6 +5560,18 @@ function Main() {
      * points of height, so the count really does follow the paper. */
     Sheet1_Paginate(width, height) {
         this.sheetFrame = [width, height];
+        /*
+         * The re-entry probe, and `Paginate` is the right moment for it: the
+         * print is under way and **no frame is open**, which is the gap the
+         * painter's own guard cannot see and the one a timer or a second click
+         * falls into.
+         */
+        if (this.sheetReenter && this.sheetInner === null) {
+            try {
+                Printer.ToFile(this.sheetCtl, this.sheetReenter, { Pages: 1 });
+                this.sheetInner = "NOT REFUSED";
+            } catch (e) { this.sheetInner = e.message; }
+        }
         if (this.sheetThrow) throw new Error("no pagination today");
         if (this.sheetCount !== null && this.sheetCount !== undefined)
             return this.sheetCount;

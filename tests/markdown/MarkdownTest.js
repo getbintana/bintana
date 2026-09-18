@@ -766,9 +766,11 @@ class MarkdownTest extends Form {
         /* `Send` is the viewer's own line to the dialog; what is assertable
          * without one is that it refuses before anything opens. */
         throws("a sheet that is not one is refused",
-               () => this.Doc.Send({ Paper: "Foolscap" }));
-        throws("and a setup that is not an object", () => this.Doc.Send(42));
-        throws("and no copies", () => this.Doc.Send({ Copies: 0 }));
+               () => this.Doc.Send({ Paper: "Foolscap" }, () => {}));
+        throws("and a setup that is not an object",
+               () => this.Doc.Send(42, () => {}));
+        throws("and no copies", () => this.Doc.Send({ Copies: 0 }, () => {}));
+        throws("and a Send with nobody to tell", () => this.Doc.Send({}));
 
         /*
          * **No block is cut across a page boundary.** The pagination is the one

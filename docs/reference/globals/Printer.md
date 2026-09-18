@@ -11,7 +11,7 @@ A printer is a thing outside the program — it has a name, a default and a dial
 Printer.Names                                    // ["Ink-Tank-310", "Print to File"]
 Printer.Default                                  // "Ink-Tank-310"
 
-Printer.Send(this.Sheet, { Pages: 12 })          // the dialog, then a printer
+Printer.Send(this.Sheet, { Pages: 12 }, sent => …)   // the dialog, then a printer
 Printer.ToFile(this.Sheet, path, { Pages: 12 })  // a PDF, and no dialog
 ```
 
@@ -22,7 +22,7 @@ Printer.ToFile(this.Sheet, path, { Pages: 12 })  // a PDF, and no dialog
 | `Default` | the printer this machine would use | [what the machine has](#what-the-machine-has) |
 | `Names` | the printers it can reach | [what the machine has](#what-the-machine-has) |
 | `Papers` | the paper sizes, in points | [the paper sizes](#the-paper-sizes) |
-| `Send(area, [setup])` | the dialog, then paper | [sending](#sending) |
+| `Send(area, [setup], cb)` | the dialog, then paper. **Async** | [sending](#sending) |
 | `ToFile(area, path, [setup])` | a PDF, with no dialog | [to a file](#to-a-file) |
 
 ## What draws
@@ -112,24 +112,40 @@ not start. Neither declares one now.
 
 | | |
 |---|---|
-| `Send(area, [setup])` | the print dialog, then a printer. The setup is what the dialog **opens on**; the answer is `{ Copies, From, To }` — what was actually sent — or `null` when it was cancelled |
+| `Send(area, [setup], cb)` | the print dialog, then a printer. **Async**: it returns at once and `cb({ Copies, From, To })` arrives when something was printed. The setup is what the dialog **opens on** |
 
-`Printer.Send(area, [setup])` opens the system's print dialog. The printer, the
-paper, the copies and the range are the person's to answer there, and what the
-setup carries is what the dialog **opens on**. GTK's own preview shows what is
-about to come out.
+`Printer.Send(area, [setup], cb)` opens the system's print dialog. The printer,
+the paper, the copies and the range are the person's to answer there, and what
+the setup carries is what the dialog **opens on**. GTK's own preview shows what
+is about to come out.
 
-It answers `{ Copies, From, To }` — **what was actually sent**, read back off the
-dialog — and `null` when it was cancelled, which is not an error and needs no
-`try`.
+**It takes a callback and returns at once**, which is what
+[`Dialog`](Dialog.md)'s three verbs do and for the same reason: the person
+answers in their own time, so there is nothing for the call to hand back yet.
+`cb({ Copies, From, To })` is **what was actually sent**, read back off the
+dialog, and it is **not called when the dialog was cancelled** — so no caller
+has to tell *cancelled* from *printed nothing*, which is the test every caller
+forgets once.
 
 ```js
 BtnPrint_Click() {
-    const sent = Printer.Send(this.Sheet, { Pages: this.total, Paper: "A4" });
-    if (sent)
+    Printer.Send(this.Sheet, { Pages: this.total, Paper: "A4" }, (sent) => {
         Message.Info("{0} copies, pages {1} to {2}", sent.Copies, sent.From, sent.To);
+    });
 }
 ```
+
+**One control prints once at a time.** A second `Send` or `ToFile` on a control
+whose print is in flight is refused by name. It is asked because it can happen:
+GTK runs a nested main loop while the dialog is up, so the program keeps going —
+the window repaints, timers fire — and a second print of the same drawing used to
+start and write its pages. The `Draw` guard does not catch it, because between
+two sheets there is no frame open.
+
+This was synchronous once, and answered `null` for a cancel. Both halves were
+wrong the same way: it was the one dialog in the runtime a program had to treat
+differently, and synchronous never meant safe — the loop went on running
+underneath it either way.
 
 ## To a file
 

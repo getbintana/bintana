@@ -222,8 +222,18 @@ static bool setup_read(JSContext *ctx, JSValueConst opts, PrintSetup *out,
 
 /* ------------------------------------------------------------------ the run */
 
+/*
+ * One print, from the call that started it to the sheet that ends it.
+ *
+ * **On the heap, because `Send` outlives its own call.** The dialog is the
+ * person's to answer in their own time, so the operation runs asynchronously
+ * and this is what the `done` handler is given; `ToFile` opens nothing and is
+ * over when it returns, but it carries the same structure so there is one
+ * shape and not two.
+ */
 typedef struct {
     BtaWidget *w;
+    JSValue    cb;          /* the callback, dup'd for the run; undefined for ToFile */
     int        base;        /* document page of the first one rendered */
     int        first;       /* first page rendered, 1-based; -1 while none */
     int        last;
@@ -234,6 +244,44 @@ typedef struct {
     bool        lineal;
     const char *who;        /* "Printer.Send" or "Printer.ToFile", for a message */
 } PrintRun;
+
+/*
+ * **The controls with a print in flight**, which only an asynchronous `Send`
+ * makes possible to ask about.
+ *
+ * GTK runs a nested main loop while the dialog is up, so the program does not
+ * freeze -- the window repaints, timers fire, `Exec` callbacks arrive -- and
+ * that is exactly why a second print can start on the same control while the
+ * first is waiting. Measured before this existed: a `Timer` that printed during
+ * a print was not refused and wrote its pages. `bta_paint_busy` does not catch
+ * it, because between two sheets there is no frame open.
+ *
+ * One control, one print. The refusal is a sentence rather than a queue,
+ * because two prints of one drawing is a program's mistake and not a thing to
+ * be helpful about.
+ */
+static GPtrArray *printing;
+
+static bool print_in_flight(BtaWidget *w)
+{
+    for (guint i = 0; printing && i < printing->len; i++)
+        if (g_ptr_array_index(printing, i) == w)
+            return true;
+    return false;
+}
+
+static void print_started(BtaWidget *w)
+{
+    if (!printing)
+        printing = g_ptr_array_new();
+    g_ptr_array_add(printing, w);
+}
+
+static void print_ended(BtaWidget *w)
+{
+    if (printing)
+        g_ptr_array_remove_fast(printing, w);
+}
 
 /*
  * **The paper is not known until the dialog has been answered**, and how many
@@ -345,22 +393,111 @@ static void on_draw_page(GtkPrintOperation *op, GtkPrintContext *context,
  * is the only thing that differs below -- which is the argument for the split
  * being in the surface rather than in a key the caller passes.
  */
-static JSValue print_run(JSContext *ctx, JSValueConst area, JSValueConst opts,
-                         const char *tofile, const char *who)
+/* What the dialog settled, as the callback is handed it. */
+static JSValue print_answer(JSContext *ctx, PrintRun *run,
+                            GtkPrintOperation *op, int copies)
+{
+    GtkPrintSettings *final = gtk_print_operation_get_print_settings(op);
+    JSValue           out   = JS_NewObject(ctx);
+
+    JS_SetPropertyStr(ctx, out, "Copies",
+                      JS_NewInt32(ctx, final
+                                      ? gtk_print_settings_get_n_copies(final)
+                                      : copies));
+    JS_SetPropertyStr(ctx, out, "From",
+                      JS_NewInt32(ctx, run->first < 0 ? 0 : run->first));
+    JS_SetPropertyStr(ctx, out, "To", JS_NewInt32(ctx, run->last));
+    return out;
+}
+
+static void print_free(PrintRun *run)
+{
+    print_ended(run->w);
+    JS_FreeValue(run->w->ctx, run->cb);
+    g_free(run);
+}
+
+/*
+ * The dialog has been answered, one way or another -- and this is the whole of
+ * why `Send` takes a callback.
+ *
+ * **The callback is not called when the person cancelled.** That is
+ * `Dialog.OpenFile`'s rule and it is here for its reason: no caller should have
+ * to tell *cancelled* from *printed nothing*, and a `null` that every caller
+ * must test is a test every caller forgets once. Cancelling is not an outcome a
+ * program has to handle; it is the absence of one.
+ *
+ * An error is reported where every other handler's error is reported, because
+ * by now there is nobody to hand it to: the call that started this returned
+ * while the dialog was still open.
+ */
+static void on_print_done(GtkPrintOperation *op, GtkPrintOperationResult result,
+                          gpointer data)
+{
+    PrintRun   *run = data;
+    JSContext  *ctx = run->w->ctx;
+
+    if (result == GTK_PRINT_OPERATION_RESULT_ERROR) {
+        GError *err = NULL;
+
+        gtk_print_operation_get_error(op, &err);
+        /* Raised and then dumped, which is how every handler's error is
+         * reported here: `Application.OnError` sees it, and there is no caller
+         * left to throw at. */
+        JS_ThrowInternalError(ctx, "%s: %s", run->who,
+                              err ? err->message : "the printer refused");
+        bta_dump_error(ctx);
+        g_clear_error(&err);
+    } else if (result == GTK_PRINT_OPERATION_RESULT_APPLY && run->ok) {
+        JSValueConst argv[1] = { print_answer(ctx, run, op, 1) };
+        JSValue      r       = JS_Call(ctx, run->cb, JS_UNDEFINED, 1, argv);
+
+        if (JS_IsException(r))
+            bta_dump_error(ctx);
+        JS_FreeValue(ctx, r);
+        JS_FreeValue(ctx, argv[0]);
+        bta_drain_jobs(JS_GetRuntime(ctx));
+    }
+    /* CANCEL says nothing, and a page that threw has already said it. */
+
+    print_free(run);
+    g_object_unref(op);
+}
+
+/*
+ * Everything both verbs do before the operation runs: check the control, read
+ * the setup, and build the operation out of it. Answers the operation with the
+ * run attached, or NULL with an exception pending.
+ */
+static GtkPrintOperation *print_prepare(JSContext *ctx, JSValueConst area,
+                                        JSValueConst opts, const char *tofile,
+                                        const char *who, PrintRun **out)
 {
     BtaWidget *w = bta_this(ctx, area);
 
-    if (!w || !bta_paint_draws(w))
-        return JS_ThrowTypeError(ctx,
+    if (!w || !bta_paint_draws(w)) {
+        JS_ThrowTypeError(ctx,
             "%s: the first argument is a control that draws -- a DrawingArea, "
             "or the Canvas of a Report or a Markdown", who);
+        return NULL;
+    }
 
     /* Refused before the dialog is on the screen rather than one page after it:
      * there is one painter per control, and a handler that is drawing cannot
      * ask for a second frame. */
-    if (bta_paint_busy(ctx, w))
-        return JS_ThrowTypeError(ctx, "%s: a frame is already being drawn -- a "
-                                      "Draw handler cannot print", who);
+    if (bta_paint_busy(ctx, w)) {
+        JS_ThrowTypeError(ctx, "%s: a frame is already being drawn -- a "
+                               "Draw handler cannot print", who);
+        return NULL;
+    }
+
+    /* And one control prints once at a time. See `printing` above: the dialog
+     * runs on a nested main loop, so a timer or a second click can reach this
+     * while the first print is still waiting to be answered. */
+    if (print_in_flight(w)) {
+        JS_ThrowTypeError(ctx, "%s: this control is already printing", who);
+        return NULL;
+    }
 
     /* Whether the control works its own page count out, which decides where the
      * range is checked -- see setup_read. */
@@ -368,7 +505,7 @@ static JSValue print_run(JSContext *ctx, JSValueConst area, JSValueConst opts,
 
     PrintSetup setup;
     if (!setup_read(ctx, opts, &setup, tofile == NULL, counts, who))
-        return JS_EXCEPTION;
+        return NULL;
 
     GtkPrintOperation *op = gtk_print_operation_new();
 
@@ -413,94 +550,107 @@ static JSValue print_run(JSContext *ctx, JSValueConst area, JSValueConst opts,
     gtk_print_operation_set_print_settings(op, settings);
     g_object_unref(settings);
 
-    GtkPrintOperationAction action = GTK_PRINT_OPERATION_ACTION_PRINT_DIALOG;
     if (tofile) {
         gtk_print_operation_set_export_filename(op, tofile);
         gtk_print_operation_set_show_progress(op, FALSE);
-        action = GTK_PRINT_OPERATION_ACTION_EXPORT;
     }
 
-    PrintRun run = {
-        .w      = w,
-        .base   = lineal ? setup.from : 1,
-        .first  = -1,
-        .last   = 0,
-        .ok     = true,
-        .pages  = setup.pages,
-        .from   = setup.from,
-        .to     = setup.to,
-        .lineal = lineal,
-        .who    = who,
-    };
-    g_signal_connect(op, "begin-print", G_CALLBACK(on_begin_print), &run);
-    g_signal_connect(op, "draw-page", G_CALLBACK(on_draw_page), &run);
+    PrintRun *run = g_new0(PrintRun, 1);
+
+    run->w      = w;
+    run->cb     = JS_UNDEFINED;
+    run->base   = lineal ? setup.from : 1;
+    run->first  = -1;
+    run->last   = 0;
+    run->ok     = true;
+    run->pages  = setup.pages;
+    run->from   = setup.from;
+    run->to     = setup.to;
+    run->lineal = lineal;
+    run->who    = who;
+
+    g_signal_connect(op, "begin-print", G_CALLBACK(on_begin_print), run);
+    g_signal_connect(op, "draw-page", G_CALLBACK(on_draw_page), run);
+
+    setup_clear(&setup);
+    print_started(w);
+    *out = run;
+    return op;
+}
+
+/*
+ * `Printer.Send(area, [setup], cb)` -- the dialog, then paper.
+ *
+ * **The callback is required, and it is the same bargain `Dialog` makes.** The
+ * dialog is the person's to answer in their own time, so the operation runs
+ * asynchronously and this returns at once: the call cannot hand back what was
+ * printed because nothing has been yet. `cb({ Copies, From, To })` is called
+ * when something was, and **is not called when it was cancelled** -- so no
+ * caller has to tell *cancelled* from *printed nothing*, which is the test
+ * every caller forgets once.
+ *
+ * It was synchronous first and answered `null` for a cancel, and both halves of
+ * that were wrong in the same way: `Dialog.OpenFile`, `SaveFile` and `Color`
+ * all take a callback and none of them reports a cancel, so this was the one
+ * dialog in the runtime a program had to treat differently. Synchronous did not
+ * even mean safe -- GTK runs a nested main loop, so the program went on
+ * running, and a `Timer` could start a second print of the same drawing while
+ * the first was still waiting. Measured, and refused now by name.
+ */
+static JSValue printer_send(JSContext *ctx, JSValueConst this_val,
+                            int argc, JSValueConst *argv)
+{
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "Printer.Send(area, [setup], cb) needs "
+                                      "the control that draws");
+
+    /* The callback is the last argument, so that `setup` may be left out. */
+    JSValueConst cb   = argv[argc - 1];
+    JSValueConst opts = argc > 2 ? argv[1] : JS_UNDEFINED;
+
+    if (argc < 2 || !JS_IsFunction(ctx, cb))
+        return JS_ThrowTypeError(ctx,
+            "Printer.Send(area, [setup], cb) needs a callback: it is async, and "
+            "it is not called when the dialog is cancelled");
+
+    PrintRun          *run = NULL;
+    GtkPrintOperation *op  = print_prepare(ctx, argv[0], opts, NULL,
+                                           "Printer.Send", &run);
+    if (!op)
+        return JS_EXCEPTION;
+
+    run->cb = JS_DupValue(ctx, cb);
+    g_signal_connect(op, "done", G_CALLBACK(on_print_done), run);
+
+    /*
+     * **Asynchronous on purpose, and the operation outlives this call**: GTK
+     * keeps a reference of its own until `done`, and `on_print_done` drops
+     * ours. Where the platform cannot run it asynchronously GTK simply runs it
+     * synchronously and emits `done` before this returns, which the code above
+     * does not have to know about -- the callback arrives either way.
+     */
+    gtk_print_operation_set_allow_async(op, TRUE);
 
     BtaApp    *app    = bta_current_app();
     GtkWindow *parent = app && app->gapp
                             ? gtk_application_get_active_window(app->gapp)
                             : NULL;
+    GError    *err    = NULL;
 
-    GError                 *err    = NULL;
-    GtkPrintOperationResult result = gtk_print_operation_run(op, action, parent,
-                                                             &err);
-    JSValue answer = JS_EXCEPTION;
-
-    /*
-     * **The handler's own throw is asked about first.** A `DrawPage` that
-     * failed is the program's fault and a cancellation is the person's
-     * decision, so the fault is the more specific answer -- and it is the one
-     * that leaves an exception pending. Asked last, a cancellation arriving
-     * after a page had thrown would answer `null` with that throw still armed,
-     * to surface at whatever called into JavaScript next.
-     */
-    if (!run.ok) {
-        /* What it had already written is not a document, the same bargain
-         * `SavePdf` makes about a file it did not finish. */
-        g_clear_error(&err);
-        if (tofile)
-            g_unlink(tofile);
-    } else if (result == GTK_PRINT_OPERATION_RESULT_ERROR) {
-        JS_ThrowInternalError(ctx, "%s: %s", who,
-                              err ? err->message : "the printer refused");
-        g_clear_error(&err);
-        if (tofile)
-            g_unlink(tofile);
-    } else if (result == GTK_PRINT_OPERATION_RESULT_CANCEL) {
-        /* Not an error: the dialog closed with nothing chosen. */
-        answer = JS_NULL;
-    } else if (tofile) {
-        /* A file's answer is how many pages it holds. There is nothing else to
-         * report: nobody chose anything. */
-        answer = JS_NewInt32(ctx, run.first < 0 ? 0 : run.last - run.first + 1);
-    } else {
-        /* What the dialog settled: the pages actually sent. */
-        GtkPrintSettings *final = gtk_print_operation_get_print_settings(op);
-
-        answer = JS_NewObject(ctx);
-        JS_SetPropertyStr(ctx, answer, "Copies",
-                          JS_NewInt32(ctx, final
-                                          ? gtk_print_settings_get_n_copies(final)
-                                          : setup.copies));
-        JS_SetPropertyStr(ctx, answer, "From",
-                          JS_NewInt32(ctx, run.first < 0 ? 0 : run.first));
-        JS_SetPropertyStr(ctx, answer, "To", JS_NewInt32(ctx, run.last));
-    }
-
-    g_object_unref(op);
-    setup_clear(&setup);
-    return answer;
+    gtk_print_operation_run(op, GTK_PRINT_OPERATION_ACTION_PRINT_DIALOG,
+                            parent, &err);
+    g_clear_error(&err);      /* what went wrong arrives at `done` */
+    return JS_UNDEFINED;
 }
 
-static JSValue printer_send(JSContext *ctx, JSValueConst this_val,
-                            int argc, JSValueConst *argv)
-{
-    if (argc < 1)
-        return JS_ThrowTypeError(ctx, "Printer.Send(area, [setup]) needs the "
-                                      "control that draws");
-    return print_run(ctx, argv[0], argc > 1 ? argv[1] : JS_UNDEFINED, NULL,
-                     "Printer.Send");
-}
-
+/*
+ * `Printer.ToFile(area, path, [setup])` -- a PDF, and no dialog.
+ *
+ * **Synchronous, and that is not an inconsistency**: what makes `Send` take a
+ * callback is the dialog, and there is none here. Nobody is being waited for,
+ * the pages are drawn and the call is over, so the answer -- how many it wrote
+ * -- can be handed straight back.
+ */
 static JSValue printer_to_file(JSContext *ctx, JSValueConst this_val,
                                int argc, JSValueConst *argv)
 {
@@ -512,10 +662,46 @@ static JSValue printer_to_file(JSContext *ctx, JSValueConst this_val,
     if (!path)
         return JS_EXCEPTION;
 
-    JSValue r = print_run(ctx, argv[0], argc > 2 ? argv[2] : JS_UNDEFINED, path,
-                          "Printer.ToFile");
+    PrintRun          *run = NULL;
+    GtkPrintOperation *op  = print_prepare(ctx, argv[0],
+                                           argc > 2 ? argv[2] : JS_UNDEFINED,
+                                           path, "Printer.ToFile", &run);
+    if (!op) {
+        JS_FreeCString(ctx, path);
+        return JS_EXCEPTION;
+    }
+
+    GError                 *err    = NULL;
+    GtkPrintOperationResult result = gtk_print_operation_run(
+        op, GTK_PRINT_OPERATION_ACTION_EXPORT, NULL, &err);
+    JSValue answer;
+
+    /*
+     * The handler's own throw is asked about first: a `DrawPage` that failed is
+     * the program's fault and it is the one that leaves an exception pending.
+     * What it had already written is not a document, the same bargain `SavePdf`
+     * makes about a file it did not finish.
+     */
+    if (!run->ok) {
+        g_clear_error(&err);
+        g_unlink(path);
+        answer = JS_EXCEPTION;
+    } else if (result == GTK_PRINT_OPERATION_RESULT_ERROR) {
+        JS_ThrowInternalError(ctx, "Printer.ToFile: %s",
+                              err ? err->message : "the file could not be written");
+        g_clear_error(&err);
+        g_unlink(path);
+        answer = JS_EXCEPTION;
+    } else {
+        /* A file's answer is how many pages it holds. Nobody chose anything,
+         * so there is nothing else to report. */
+        answer = JS_NewInt32(ctx, run->first < 0 ? 0 : run->last - run->first + 1);
+    }
+
+    print_free(run);
+    g_object_unref(op);
     JS_FreeCString(ctx, path);
-    return r;
+    return answer;
 }
 
 /* ----------------------------------------------------------- the machine's */

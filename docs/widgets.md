@@ -1807,9 +1807,11 @@ was given -- `lib/report` scales a page to fit and does not answer,
 has to, and measuring inside `begin-print` re-entered the drawing the operation
 was in the middle of. The suite hung.
 
-**Two verbs, because they are two things.** `Printer.Send(area, setup)` opens
-GTK's print operation and `Printer.ToFile(area, path, setup)` exports a PDF with
-no dialog -- "print to PDF", and the only road the suite can assert on, since a
+**Two verbs, because they are two things.** `Printer.Send(area, setup, cb)`
+opens GTK's print operation -- asynchronously, with a callback, the way
+`Dialog`'s three verbs do, and not called at all on a cancel -- and
+`Printer.ToFile(area, path, setup)` exports a PDF with no dialog, synchronously,
+because there is nobody to wait for -- "print to PDF", and the only road the suite can assert on, since a
 test cannot click a dialog. They were one call with a `ToFile` key once, and what
 settled the split was measurable rather than tidy: `Copies: 3` with a file
 answered *three copies sent* and wrote the same file, byte for byte, as one copy.
@@ -1824,9 +1826,12 @@ paper in `SavePdf` fits it here; its frame is the printable area in points, not
 the whole sheet. Measured while building it, and worth knowing before touching
 this path again: on `EXPORT` this GTK renders every page whatever range the
 settings carry, so a range there is said with the page count instead -- the file
-then holds exactly `From..To`. `Send` comes back with what was actually sent --
-`{ Copies, From, To }` -- and `null` when the dialog was cancelled, which is not
-an error; `ToFile` comes back with how many pages it wrote.
+then holds exactly `From..To`. `Send`'s callback is handed what was actually sent -- `{ Copies, From, To }` --
+and is not called when the dialog was cancelled; `ToFile` comes back with how
+many pages it wrote. **One control prints once at a time**: the nested main loop
+GTK runs means a timer or a second click can reach a print that is still waiting,
+and a second one used to start and write its pages, which the painter's own guard
+cannot see because between two sheets no frame is open.
 
 **`Names` and `Default` are the Unix print backend's**, a GTK module of its own
 (`gtk4-unix-print`), and they have **three** answers rather than two: the

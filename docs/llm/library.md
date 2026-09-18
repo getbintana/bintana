@@ -343,7 +343,7 @@ takes.
 
 ## Printer
 
-- `Printer.Send(area, [setup])` — the print dialog, then a printer
+- `Printer.Send(area, [setup], cb)` — the print dialog, then a printer. **Async**
 - `Printer.ToFile(area, path, [setup])` — a PDF, with **no dialog**
 - `Printer.Names` — the printers this machine has, or `null` if it cannot say
 - `Printer.Default` — the one it would use, `""` for none, `null` if it cannot say
@@ -374,9 +374,15 @@ accepted and quietly ignored — which is what the one-verb version did, answeri
 | `From`, `To` | the range within the document. `To` defaults to the last page |
 | `Copies` | **`Send` only** |
 
-`Send` answers `{ Copies, From, To }` — what was actually sent — and `null` when
-the dialog was cancelled, which is not an error. `ToFile` answers how many pages
-it wrote. A page whose handler throws stops the run, and on the file road leaves
+`Send` **takes a callback and returns at once**, like every other dialog here
+(`Dialog.OpenFile`, `SaveFile`, `Color`): the person answers in their own time.
+`cb({ Copies, From, To })` is called when something was printed and **is not
+called when it was cancelled** — so no caller has to tell *cancelled* from
+*printed nothing*. One control prints once at a time; a second `Send` on the same
+control while one is in flight is refused by name.
+
+`ToFile` opens no dialog, so it is synchronous and answers how many pages it
+wrote. A page whose handler throws stops the run, and on the file road leaves
 **no file**.
 
 ```js
@@ -385,9 +391,9 @@ Sheet_DrawPage(p, page, w, h) {
 }
 
 BtnPrint_Click() {
-    const sent = Printer.Send(this.Sheet, { Pages: this.total, Paper: "A4" });
-    if (sent)
+    Printer.Send(this.Sheet, { Pages: this.total, Paper: "A4" }, (sent) => {
         Message.Info("{0} copies, pages {1} to {2}", sent.Copies, sent.From, sent.To);
+    });
 }
 ```
 

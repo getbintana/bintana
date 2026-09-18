@@ -2402,7 +2402,7 @@ Printer.ToFile(this.Sheet, path, { Pages: 12 })  // a PDF, and no dialog
 
 | Member | |
 |---|---|
-| `Send(area, [setup])` | the print dialog, then paper. → `{ Copies, From, To }`, or `null` when cancelled |
+| `Send(area, [setup], cb)` | the print dialog, then paper. **Async**; `cb({ Copies, From, To })`, and not called on a cancel |
 | `ToFile(area, path, [setup])` | the same sheets as one PDF, no dialog. → how many pages |
 | `Names` | the printers this session can reach. `[]` for none, `null` if this build cannot ask |
 | `Default` | the one it would use. `""` for none, `null` if it cannot ask |
