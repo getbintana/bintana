@@ -461,7 +461,12 @@ static void say_locals(JSContext *ctx, int frame)
     JSValue  items = JS_NewArray(ctx);
     uint32_t i, n = 0;
 
-    JS_ToUint32(ctx, &n, JS_GetPropertyStr(ctx, raw, "length"));
+    JSValue lenv = JS_GetPropertyStr(ctx, raw, "length");
+    /* The temporary is freed on every path: on failure n stays 0 with the
+     * exception still pending, as before, minus the leak. */
+    if (JS_ToUint32(ctx, &n, lenv))
+        n = 0;
+    JS_FreeValue(ctx, lenv);
     for (i = 0; i < n; i++) {
         JSValue row   = JS_GetPropertyUint32(ctx, raw, i);
         JSValue value = JS_GetPropertyStr(ctx, row, "Value");

@@ -390,7 +390,9 @@ static JSValue entries_install(JSContext *ctx, JSValueConst this_val,
 
     g_mkdir_with_parents(dir, 0755);
 
-    if (!g_file_set_contents(path, text, len, &error)) {
+    /* The serialised key file lives in memory, so it cannot outgrow G_MAXSSIZE;
+     * the cast is for the signedness of the length the write takes. */
+    if (!g_file_set_contents(path, text, (gssize)len, &error)) {
         JSValue e = JS_ThrowInternalError(ctx, "cannot write %s: %s", path,
                                           error ? error->message : "unknown error");
         g_clear_error(&error);

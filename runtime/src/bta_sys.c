@@ -106,7 +106,9 @@ static JSValue sys_file_save(JSContext *ctx, JSValueConst this_val,
     }
 
     GError *err = NULL;
-    bool ok = g_file_set_contents(path, text, len, &err);
+    /* A JS string lives in memory, so it cannot outgrow G_MAXSSIZE; the cast
+     * is for the signedness of the length the write takes. */
+    bool ok = g_file_set_contents(path, text, (gssize)len, &err);
 
     JS_FreeCString(ctx, text);
     if (!ok) {
@@ -1341,8 +1343,16 @@ static unsigned exec_millis(JSContext *ctx, JSValueConst opts, const char *key,
 
     if (JS_IsNumber(v)) {
         double ms = 0;
+        /* Infallible: v is a number, so there is no conversion to fail and
+         * no exception to raise. */
         JS_ToFloat64(ctx, &ms, v);
-        out = ms > 0 ? (unsigned)ms : 0;
+        /* Clamped, not cast: past what an unsigned holds the cast is
+         * undefined, and Infinity must stay "effectively forever" rather
+         * than become 0 -- which for KillAfter would mean "force at once",
+         * the opposite of what was asked. */
+        out = ms <= 0 ? 0
+            : ms >= (double)G_MAXUINT ? G_MAXUINT
+            : (unsigned)ms;
     }
     JS_FreeValue(ctx, v);
     return out;

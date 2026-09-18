@@ -3134,3 +3134,23 @@ person who wrote it either.
   `TypeError` on a string; the run went to the 120 s timeout with nothing on
   stdout but the traceback. If a `run.sh <project> <phase>` stops producing
   assertions, read the traceback before believing the phase is slow.
+- **`Container.Spacing` accepted a negative and GTK read it as four billion.**
+  The setter cast its `int32_t` to `guint` unchecked while the sibling setters
+  (`Flow`'s `RowSpacing`, `Grid`'s spacings) refused negatives with
+  `RangeError` -- three implementations of one gap, one without the check.
+  `Spacing = -1` is refused now, with `tests/widgets`' `testSpacing` asserting
+  the refusal and that nothing stuck. A new numeric setter that ends in an
+  unsigned GTK call wants the same line.
+- **A failed `sqlite3_bind_*` left its parameter NULL and the statement ran
+  anyway.** `bind_one` returned `true` whenever the JS value was convertible,
+  so `SQLITE_NOMEM` or `SQLITE_RANGE` became a wrong answer rather than an
+  error. Every bind goes through `bind_ok` now, which throws sqlite's own
+  message for that parameter; a `Bytes` past `INT_MAX` is refused up front
+  rather than truncated into a shorter length.
+- **`Exec`'s `Timeout`/`KillAfter` cast a double to `unsigned` unchecked, which
+  is undefined past what an unsigned holds -- and 0 means two different
+  nothings.** `Timeout: 0` arms no guard while `KillAfter: 0` forces at once
+  (no graceful wait), so `Infinity` could not become 0 for both: it is clamped
+  to `G_MAXUINT` instead, "effectively forever" for either key, and negatives
+  stay 0 as before. The `JS_ToFloat64` beside it is infallible -- its input is
+  guarded by `JS_IsNumber` -- and says so where it stands.

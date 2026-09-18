@@ -3772,6 +3772,16 @@ class WidgetsForm extends Form {
         eq("and an even one is even", f.Homogeneous, true);
         f.Delete();
 
+        /* --- the container's own word for the same gap ---------------------- */
+        const box = new Panel();
+        this.Fixed1.Add(box);
+        box.Arrangement = "Vertical";
+        box.Spacing = 6;
+        eq("Spacing round-trips on a container", box.Spacing, 6);
+        throws("a negative spacing is refused", () => { box.Spacing = -1; });
+        eq("and nothing stuck", box.Spacing, 6);
+        box.Delete();
+
         /* --- which half of a split grows --------------------------------- */
         const sp = new Split();
         this.Fixed1.Add(sp);

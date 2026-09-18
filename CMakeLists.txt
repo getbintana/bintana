@@ -52,7 +52,12 @@ pkg_check_modules(VTE IMPORTED_TARGET vte-2.91-gtk4)
 # every such program pay for a dependency it does not use.  Without it
 # `Database.Sqlite` exists and says which package is missing, which is a better
 # answer than a `Database` that is not there.
-pkg_check_modules(SQLITE3 IMPORTED_TARGET sqlite3)
+#
+# The floor is the window function: `decimal_sum` is registered with
+# `sqlite3_create_window_function`, which arrives in 3.25.  An older library
+# would fail at link time, which reads like a broken source tree rather than
+# an old distribution -- the same reason GTK declares its floor above.
+pkg_check_modules(SQLITE3 IMPORTED_TARGET sqlite3>=3.25)
 
 # Optional: Log.Target = "Journal" writes straight to the systemd journal, with
 # the level as its priority.  Without it the runtime still builds and logs to
@@ -187,7 +192,12 @@ else()
     message(STATUS "no gstreamer: Video and AudioPlayer will say so when called")
 endif()
 target_compile_definitions(bintana PRIVATE BTA_VERSION_STRING="${PROJECT_VERSION}")
-target_compile_options(bintana PRIVATE -Wall -Wextra -Wno-unused-parameter)
+# -Wshadow, -Wnull-dereference and -Wformat=2 are clean across runtime/src
+# today; keeping them on is what keeps them clean.  (-Wconversion is not here
+# on purpose: GTK's own guint/int mixing would bury the two real sign flips,
+# which carry explicit casts instead.)
+target_compile_options(bintana PRIVATE -Wall -Wextra -Wno-unused-parameter
+                                          -Wshadow -Wnull-dereference -Wformat=2)
 
 # ----------------------------------------------------------- test plugins ---
 # The shared objects the suite loads, built here so `cmake --build build` is the
@@ -206,7 +216,8 @@ target_compile_options(bintana PRIVATE -Wall -Wextra -Wno-unused-parameter)
 function(bta_test_plugin target source)
     add_library(${target} MODULE ${source})
     target_include_directories(${target} PRIVATE ${CMAKE_SOURCE_DIR}/runtime/include)
-    target_compile_options(${target} PRIVATE -Wall -Wextra -Wno-unused-parameter)
+    target_compile_options(${target} PRIVATE -Wall -Wextra -Wno-unused-parameter
+                                              -Wshadow -Wnull-dereference -Wformat=2)
     set_target_properties(${target} PROPERTIES
         PREFIX ""
         OUTPUT_NAME ${target}
@@ -231,7 +242,8 @@ target_compile_definitions(testplug-old PRIVATE TESTPLUG_ABI=0)
 add_library(testplug-abi1 MODULE tests/plugins/testplug.c)
 target_include_directories(testplug-abi1 PRIVATE
                            ${CMAKE_SOURCE_DIR}/tests/plugins/abi1)
-target_compile_options(testplug-abi1 PRIVATE -Wall -Wextra -Wno-unused-parameter)
+target_compile_options(testplug-abi1 PRIVATE -Wall -Wextra -Wno-unused-parameter
+                                                 -Wshadow -Wnull-dereference -Wformat=2)
 set_target_properties(testplug-abi1 PROPERTIES
     PREFIX ""
     OUTPUT_NAME testplug-abi1

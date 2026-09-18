@@ -120,6 +120,7 @@
 
 #include "bta.h"
 
+#include <limits.h>
 #include <math.h>
 #include <string.h>
 
@@ -457,17 +458,26 @@ static void install_decimal(sqlite3 *db)
  *
  * The order of the tests is the whole of it: a Decimal is an object and would
  * otherwise be asked for a number, which is where the cent goes.
+ *
+ * A bind either lands or the statement must not run: sqlite leaves a failed
+ * parameter NULL, which is a wrong answer rather than an error.
  */
+static bool bind_ok(JSContext *ctx, sqlite3_stmt *st, int rc, int at)
+{
+    if (rc == SQLITE_OK)
+        return true;
+    JS_ThrowInternalError(ctx, "cannot bind parameter %d: %s", at,
+                          sqlite3_errmsg(sqlite3_db_handle(st)));
+    return false;
+}
+
 static bool bind_one(JSContext *ctx, sqlite3_stmt *st, int at, JSValueConst v)
 {
-    if (JS_IsUndefined(v) || JS_IsNull(v)) {
-        sqlite3_bind_null(st, at);
-        return true;
-    }
-    if (JS_IsBool(v)) {
-        sqlite3_bind_int(st, at, JS_ToBool(ctx, v) ? 1 : 0);
-        return true;
-    }
+    if (JS_IsUndefined(v) || JS_IsNull(v))
+        return bind_ok(ctx, st, sqlite3_bind_null(st, at), at);
+    if (JS_IsBool(v))
+        return bind_ok(ctx, st,
+                       sqlite3_bind_int(st, at, JS_ToBool(ctx, v) ? 1 : 0), at);
 
     /* A `Bytes` as a BLOB, which is the one storage class this driver used to
      * refuse in both directions -- there was no value to carry it. Before the
@@ -477,8 +487,16 @@ static bool bind_one(JSContext *ctx, sqlite3_stmt *st, int at, JSValueConst v)
     const uint8_t *blob     = bta_bytes_get(v, &blob_len);
 
     if (blob) {
-        sqlite3_bind_blob(st, at, blob, (int)blob_len, SQLITE_TRANSIENT);
-        return true;
+        /* The length a bind takes is an int: anything past it would truncate
+         * into a shorter value, which is a wrong length rather than an error. */
+        if (blob_len > (size_t)INT_MAX) {
+            JS_ThrowRangeError(ctx, "parameter %d is too large to bind", at);
+            return false;
+        }
+        return bind_ok(ctx, st,
+                       sqlite3_bind_blob(st, at, blob, (int)blob_len,
+                                         SQLITE_TRANSIENT),
+                       at);
     }
 
     /* A Decimal as its own text, before anything can turn it into a double. */
@@ -492,18 +510,18 @@ static bool bind_one(JSContext *ctx, sqlite3_stmt *st, int at, JSValueConst v)
         const char *s = JS_ToCString(ctx, v);
         if (!s)
             return false;
-        sqlite3_bind_text(st, at, s, -1, SQLITE_TRANSIENT);
+        int rc = sqlite3_bind_text(st, at, s, -1, SQLITE_TRANSIENT);
         JS_FreeCString(ctx, s);
-        return true;
+        return bind_ok(ctx, st, rc, at);
     }
 
     if (JS_IsString(v)) {
         const char *s = JS_ToCString(ctx, v);
         if (!s)
             return false;
-        sqlite3_bind_text(st, at, s, -1, SQLITE_TRANSIENT);
+        int rc = sqlite3_bind_text(st, at, s, -1, SQLITE_TRANSIENT);
         JS_FreeCString(ctx, s);
-        return true;
+        return bind_ok(ctx, st, rc, at);
     }
 
     if (JS_IsNumber(v)) {
@@ -519,10 +537,8 @@ static bool bind_one(JSContext *ctx, sqlite3_stmt *st, int at, JSValueConst v)
          * already approximate and REAL is the honest column.
          */
         if (isfinite(d) && d == trunc(d) && fabs(d) < 9007199254740992.0)
-            sqlite3_bind_int64(st, at, (int64_t)d);
-        else
-            sqlite3_bind_double(st, at, d);
-        return true;
+            return bind_ok(ctx, st, sqlite3_bind_int64(st, at, (int64_t)d), at);
+        return bind_ok(ctx, st, sqlite3_bind_double(st, at, d), at);
     }
 
     JS_ThrowTypeError(ctx, "parameter %d is %s, and a column holds text, a "

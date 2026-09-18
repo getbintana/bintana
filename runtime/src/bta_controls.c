@@ -683,6 +683,10 @@ static JSValue cont_set_spacing(JSContext *ctx, JSValueConst this_val,
     int32_t n;
     if (!bta_to_int(ctx, val, "Spacing", &n))
         return JS_EXCEPTION;
+    /* Refused, like RowSpacing/ColumnSpacing are: a negative gap would reach
+     * GTK as a guint of four billion and more. */
+    if (n < 0)
+        return JS_ThrowRangeError(ctx, "Spacing cannot be negative");
     if (bta_surface_is_box(w->slot))
         gtk_box_layout_set_spacing(
             GTK_BOX_LAYOUT(gtk_widget_get_layout_manager(w->slot)), (guint)n);
