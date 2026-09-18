@@ -43,7 +43,7 @@
  * is the one place a percentage is the right thing to draw: *this folder is a
  * third of that one* is a comparison a number makes you do in your head.
  *
- * ## What this example measured for `docs/async-plan.md`
+ * ## What this example measured for `docs/plans/async-plan.md`
  *
  * The plan names *progress **and** sequencing* as one of the five things that
  * would reopen the question of `async`/`await`, on the grounds that `Exec.Wait`

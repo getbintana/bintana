@@ -1739,7 +1739,7 @@ void bta_painter_init(JSContext *ctx, JSValue global)
  * six**: a drawing area gets one on the first frame it paints, which is later
  * than anything else here and later than any moment a loader could be said to
  * have finished -- so it is the note that decides the answer to *when is a
- * widget built*. See `docs/strict-plan.md`.
+ * widget built*. See `docs/plans/strict-plan.md`.
  */
 static JSValue area_painter(JSContext *ctx, BtaWidget *w, BtaPainter **out)
 {

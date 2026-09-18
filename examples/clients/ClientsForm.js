@@ -1,12 +1,12 @@
 /*
  * A screen over a table, written **by hand** and on purpose.
  *
- * `docs/data-plan.md` designs a binding — a form that declares which record it
- * edits, a control that declares which field it shows — and says plainly why it
- * has not been built: the value is hard to judge from the design. This window is
- * the same move `examples/quote` made for a JSON file, one layer down, and
- * **what it measured is written up where it is useful**, in
- * [data-plan.md](../../docs/data-plan.md#what-a-screen-over-a-table-measured):
+ * `docs/plans/data-plan.md` designs a binding — a form that declares which
+ * record it edits, a control that declares which field it shows — and says
+ * plainly why it has not been built: the value is hard to judge from the
+ * design. This window is the same move `examples/quote` made for a JSON file,
+ * one layer down, and **what it measured is written up where it is useful**, in
+ * [data-plan.md](../../docs/plans/data-plan.md#what-a-screen-over-a-table-measured):
  * thirteen findings, three of which changed that document.
  *
  * Run it with `./build/bintana examples/clients`. The database is created in
@@ -151,7 +151,8 @@ class ClientsForm extends Form {
      *   **derived** -- `decimal_sum` over that client's executed orders, every
      *   time it is shown. It cannot drift, because there is nowhere for it to
      *   drift *to*. And a list of ten thousand clients is ten thousand queries,
-     *   which is the N+1 that `docs/data-plan.md` refuses lazy loading over.
+     *   which is the N+1 that `docs/plans/data-plan.md` refuses lazy loading
+     *   over.
      *
      *   **stored** -- a column, moved in the same transaction as the order that
      *   moved it. One query for a whole list, and it can be wrong.
@@ -323,10 +324,10 @@ class ClientsForm extends Form {
 
     /* --- the record onto the controls, and back ---------------------------
      *
-     * These two are the loop `docs/data-plan.md` is about, and measurement 1 is
-     * that there is not much of it: fourteen lines for seven fields. What is not
-     * in the count is `showing`, which is the whole reason the loop cannot simply
-     * be written out.
+     * These two are the loop `docs/plans/data-plan.md` is about, and
+     * measurement 1 is that there is not much of it: fourteen lines for seven
+     * fields. What is not in the count is `showing`, which is the whole reason
+     * the loop cannot simply be written out.
      */
     show() {
         this.showing = true;
@@ -372,9 +373,10 @@ class ClientsForm extends Form {
      * The controls back into the record.
      *
      * **On `Activate` and losing the focus, not on every keystroke** -- which is
-     * what `docs/data-plan.md` names as the moment, and here is why: a balance on
-     * its way from `1` to `1.5` passes through `1.`, which is not a number.
-     * Refusing it mid-word would be arguing with somebody who is still typing.
+     * what `docs/plans/data-plan.md` names as the moment, and here is why: a
+     * balance on its way from `1` to `1.5` passes through `1.`, which is not a
+     * number. Refusing it mid-word would be arguing with somebody who is still
+     * typing.
      *
      * A value the field will not take throws from the setter with the sentence
      * the field wrote, so it is caught once here rather than checked seven

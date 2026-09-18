@@ -15,10 +15,10 @@
  * `.form` is a module, and that is the grouping saying the same thing the
  * paragraph above says.
  *
- * **This is the code-only path.** `docs/data-plan.md` designs a `Quote.record`
- * file — the shape as JSON, with a field editor in the IDE — and `static Fields`
- * stays legal exactly as a `Form` with no `.form` stays legal: the file is where
- * the declaration *can* live, not where it has to.
+ * **This is the code-only path.** `docs/plans/data-plan.md` designs a
+ * `Quote.record` file — the shape as JSON, with a field editor in the IDE — and
+ * `static Fields` stays legal exactly as a `Form` with no `.form` stays legal:
+ * the file is where the declaration *can* live, not where it has to.
  *
  * ## Two things about the order of these two classes
  *

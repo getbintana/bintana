@@ -21,11 +21,12 @@
  * says so when a field has no column. It cannot say that `max: 80` and the
  * column disagree, because sqlite does not enforce a text length at all.
  *
- * `docs/data-plan.md` calls the answer *"a `.record` derived from a table"*, and
- * this file is the argument for the other direction as well: **the shape should
- * be able to write the `CREATE TABLE`.** The decimals are the case in point --
- * a `Field.Decimal` has to become `TEXT` and must not become `NUMERIC`, and the
- * *only* place those two facts are tied together is a person remembering.
+ * `docs/plans/data-plan.md` calls the answer *"a `.record` derived from a
+ * table"*, and this file is the argument for the other direction as well: **the
+ * shape should be able to write the `CREATE TABLE`.** The decimals are the case
+ * in point -- a `Field.Decimal` has to become `TEXT` and must not become
+ * `NUMERIC`, and the *only* place those two facts are tied together is a person
+ * remembering.
  */
 "use strict";
 
@@ -93,8 +94,8 @@ class Order extends Record {
  *
  * `IF NOT EXISTS` because this runs on every start: an application that owns its
  * own database file has to create it the first time and leave it alone
- * afterwards, and there is no migration story here -- `docs/data-plan.md` says
- * why there is not going to be one either.
+ * afterwards, and there is no migration story here -- `docs/plans/data-plan.md`
+ * says why there is not going to be one either.
  *
  * **The two money columns are plain `TEXT`, and that is sqlite's standard type
  * for a value it has no exact numeric type for.** `NUMERIC` and

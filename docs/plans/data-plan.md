@@ -12,15 +12,15 @@ not mistaken for loose ends.
 account rather than as a first step of it: a record **holds a list of records**, so
 master–detail is a shape a program can declare; and `Database.Sqlite` + `Table`
 read and write a table, with `snake` finally in use and `key: true` as the
-identity ([reference](runtime-api.md#database-and-table)). What is left, and where
+identity ([reference](../runtime-api.md#database-and-table)). What is left, and where
 it stands, is [at the end](#where-it-stands).
 
 What exists today is the bottom half: [`Record` and
-`Field`](runtime-api.md#record-and-field), and three consumers of them —
-[`project.json`](ide.md#projectjson-as-a-record) and **two forms over data
+`Field`](../runtime-api.md#record-and-field), and three consumers of them —
+[`project.json`](../ide.md#projectjson-as-a-record) and **two forms over data
 written by hand**, on purpose, to find out what that costs.
-[`examples/quote`](../examples/quote) is one over a JSON file and
-[`examples/clients`](../examples/clients) is one over a sqlite table. What they
+[`examples/quote`](../../examples/quote) is one over a JSON file and
+[`examples/clients`](../../examples/clients) is one over a sqlite table. What they
 found is [here](#what-writing-one-by-hand-measured) and
 [here](#what-a-screen-over-a-table-measured), and between them they are the only
 evidence this document has that is not reasoning.
@@ -95,7 +95,7 @@ validating and the `Problems` reporting all reach through it with the path in
 front of each complaint (`Lines[2].Price: 0 at least`). `examples/quote` is one
 object now, and the assertion in `tests/widgets` that used to hold the wall in
 place holds the opposite. The reference is
-[runtime-api.md](runtime-api.md#a-record-inside-a-record).
+[runtime-api.md](../runtime-api.md#a-record-inside-a-record).
 
 Three things fell out of building it that the plan had not predicted, and the
 first is the one that matters:
@@ -128,7 +128,7 @@ miniature, on one control.
 ## What a screen over a table measured
 
 `examples/quote` measured the binding against a JSON file and found the loop
-small and the guards expensive. [`examples/clients`](../examples/clients) is the
+small and the guards expensive. [`examples/clients`](../../examples/clients) is the
 same move one layer down — a `TableView` of clients, a detail form beside it, and
 each client's orders in a second table — written by hand against
 `Database.Sqlite` and `Table`. Eight findings, and three of them change this
@@ -171,7 +171,7 @@ first — 27 controls, 117 numbers, 54 of them an X or a Y — and it broke on a
 resize, because on a drawing surface `HAlign`/`VAlign` are what a control does
 with the slack and the default is *stay where you were drawn*. As boxes it is 17
 numbers and no coordinates. That belongs to
-[widgets.md](widgets.md#which-of-the-two-models-a-form-should-use), which had
+[widgets.md](../widgets.md#which-of-the-two-models-a-form-should-use), which had
 explained both models and not said when to use which.
 
 **The first thing that was not CRUD needed nothing new.** Executing an order
@@ -220,7 +220,7 @@ because of the domain**.
 
 **The date half is fixed**: `DatePicker.Value = ""` is no date, spelled the way
 `Field.Date` already spelled it, with a `Placeholder` for what the button reads
-while it is empty (see [widgets.md](widgets.md#datepicker)). The `ComboBox` half
+while it is empty (see [widgets.md](../widgets.md#datepicker)). The `ComboBox` half
 stands. A binding that writes a value into a control still has to have an answer
 for what it does with a field that is empty and a control that cannot be — there
 is just one control fewer in that set.
@@ -249,7 +249,7 @@ wanted, and neither is about a value.
 
 **`ORDER BY name` in sqlite compares bytes, so it is not the language's order.**
 It puts `Ñanculeo` after `Zapata` and `Álvarez` last — the mistake
-[`examples/contacts`](../examples/contacts) exists to demonstrate, arriving from
+[`examples/contacts`](../../examples/contacts) exists to demonstrate, arriving from
 the database this time instead of from `localeCompare`. `examples/clients` sorts
 with `Locale.Compare` in the program, which is the rule for decimals applied to
 text and is the right answer for a screenful of rows.

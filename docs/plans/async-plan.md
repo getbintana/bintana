@@ -9,14 +9,14 @@ picking it up does not mean having the argument again.
 
 So this is half a reference and half a plan, and it says which is which as it
 goes. The reference half is also in
-[runtime-api.md](runtime-api.md#exec); what is here and not there is *why*.
+[runtime-api.md](../runtime-api.md#exec); what is here and not there is *why*.
 
 ## What the language does today
 
 Events dispatched by name, and a callback where an answer arrives later:
 `Exec`'s line and exit callbacks, `Dialog`'s answer, `Clipboard.Paste`,
 `File.Watch`, `Timer`. No `Promise`, no `async` / `await` — never installed, and
-[runtime-api.md](runtime-api.md#the-language-underneath) says why.
+[runtime-api.md](../runtime-api.md#the-language-underneath) says why.
 
 ## What the problem actually measures
 
@@ -190,7 +190,7 @@ the part that could not be avoided, because a child a guard ended is a child
 stopped by a signal and nothing else distinguished it.
 
 `{ Timeout, KillAfter }` and `TimedOut` are in both spellings now; see
-[runtime-api.md](runtime-api.md#exec). The runner reads `job.TimedOut` and keeps
+[runtime-api.md](../runtime-api.md#exec). The runner reads `job.TimedOut` and keeps
 neither timer nor flag.
 
 Two things it settled that are worth keeping written down:
@@ -268,7 +268,7 @@ Named because a deferral without triggers is a punt:
 - **Progress *and* sequencing** — something long that must report while it runs
   and be followed by something else. `Exec.Wait` gives up the line callback, so
   that combination has no answer today. **Tried, in
-  [`examples/usage`](../examples/usage), and it did not reopen anything**: see
+  [`examples/usage`](../../examples/usage), and it did not reopen anything**: see
   below.
 - **A seam that hurts.** If a dialog sequence appears where splitting at the
   callback makes the code worse rather than testable, the argument above loses
@@ -276,7 +276,7 @@ Named because a deferral without triggers is a punt:
 
 ### The one that was tried: progress and sequencing
 
-[`examples/usage`](../examples/usage) was written against that trigger on
+[`examples/usage`](../../examples/usage) was written against that trigger on
 purpose. It runs `du` on a folder — seconds on a real one, minutes on a home
 directory — reports a growing count while the lines arrive, and when the child is
 gone sorts what it found and builds the rows. A long child reporting while it
@@ -331,4 +331,4 @@ front page, and that distinction is the thing to design against.
 `settled` are the waits, and every `yield` in the file hands GTK a frame. That is
 a **harness technique and not a language feature** — a test harness is allowed
 machinery that the language a VB programmer writes in is not. Do not promote it,
-and do not remove it; [testing.md](testing.md) explains what it buys.
+and do not remove it; [testing.md](../testing.md) explains what it buys.

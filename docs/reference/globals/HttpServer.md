@@ -83,7 +83,7 @@ to answer later gets the `500`. A second `Answer`, or a late one, is refused —
 the request was already answered, or already ended.
 
 Why that is so, and what else was deliberately left out — WebSocket, CGI shapes
-— is in [http-server-plan.md](../../http-server-plan.md), with the argument for
+— is in [../../plans/http-server-plan.md](../../plans/http-server-plan.md), with the argument for
 each.
 
 ## What arrived
@@ -114,4 +114,4 @@ each.
 
 [`Http`](Http.md) · [`Bytes`](Bytes.md) ·
 [`examples/serve`](../../../examples/serve) ·
-[http-server-plan.md](../../http-server-plan.md)
+[../../plans/http-server-plan.md](../../plans/http-server-plan.md)

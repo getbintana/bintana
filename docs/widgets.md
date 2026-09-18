@@ -557,7 +557,7 @@ and a command in two places is still written twice.
 
 Declared in a top-level block beside `menus`, and for the same reason menus have
 one: a command is not a widget, and the children of a `.form` are widgets — the
-argument [data-plan.md](data-plan.md#what-was-rejected-and-why) makes against a
+argument [plans/data-plan.md](plans/data-plan.md#what-was-rejected-and-why) makes against a
 non-visual child. Read back as `Form.Actions`, and serialised **before** `menus`
 because the loader reads it first: an item and a control may both name one.
 
@@ -1228,7 +1228,7 @@ lets it through when the field is not required, so before this the control
 answered *today* for a field nobody filled in -- a date the program never meant,
 going into the record with no error and no warning, which is the one failure in
 this widget set that was invisible rather than merely wrong.
-[`data-plan.md`](data-plan.md) had written it down as the limit that kept an
+[`plans/data-plan.md`](plans/data-plan.md) had written it down as the limit that kept an
 optional date from making the round trip.
 
 `Placeholder` is what the button reads while there is no date, an em dash by
@@ -1625,7 +1625,7 @@ accented file name after Z.
 clicking it — which in Gambas is exactly what separates `GridView` from
 `TableView`, so this one does not yet mean what that one does — and per-column
 types (`DataGridViewCheckBoxColumn` and its family). Binding a table to a
-`Record` is [data-plan.md](data-plan.md), and `Data` is the hook it was missing.
+`Record` is [plans/data-plan.md](plans/data-plan.md), and `Data` is the hook it was missing.
 
 **`examples/table` is the whole of it running.** Two pages side by side, because
 which mode you picked is what everything else follows from: one table holds five

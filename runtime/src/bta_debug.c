@@ -28,7 +28,7 @@
  * is free, and looking is not.
  *
  * The protocol is one JSON object per line, in both directions, and is written
- * out in docs/debug-plan.md.
+ * out in docs/plans/debug-plan.md.
  */
 
 #include "bta.h"
@@ -685,10 +685,10 @@ static bool obey(JSContext *ctx, const char *line, int depth_now)
     /*
      * Anything else is ignored, deliberately: the protocol will grow verbs
      * this build does not have (`stopOnThrow`, `runto`, `eval` -- stages 3 to 6
-     * of docs/debug-plan.md), and a debugger that died on one would make every
-     * future IDE incompatible with every older runtime. What it must not do is
-     * *accept* one and do nothing, which is why none of them is listed above
-     * until it works.
+     * of docs/plans/debug-plan.md), and a debugger that died on one would make
+     * every future IDE incompatible with every older runtime. What it must not
+     * do is *accept* one and do nothing, which is why none of them is listed
+     * above until it works.
      */
 
     JS_FreeCString(ctx, verb);
@@ -846,7 +846,8 @@ static void on_step(JSContext *ctx, const uint8_t *pc, void *opaque)
      * **What it still cannot see** is a loop written entirely on one line --
      * `for (let i = 0; i < 3; i++) total += i;` never leaves the line, so a
      * breakpoint on it stops once. Telling those apart wants the pc rather
-     * than the line, which is where stage 5 of docs/debug-plan.md would go. */
+     * than the line, which is where stage 5 of docs/plans/debug-plan.md
+     * would go. */
     if (!JS_DebugPosition(ctx, pc, &file_atom, &line))
         return;
 

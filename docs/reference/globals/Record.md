@@ -127,4 +127,4 @@ two behaviours are deliberate and they are not the same call.
 
 [`Decimal`](Decimal.md) · [`Database`](Database.md), which maps a record onto a
 table · [`File`](File.md) · [`examples/quote`](../../../examples/quote) ·
-[data-plan.md](../../data-plan.md)
+[../../plans/data-plan.md](../../plans/data-plan.md)

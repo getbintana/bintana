@@ -36,10 +36,10 @@
  *
  * ## What this example measured, which is why it exists
  *
- * `docs/data-plan.md` says that filling controls from a record and reading them
- * back is "a loop every program writes again", and until this window there was
- * nothing in the tree that had written it.  Now there is: `show()` and
- * `readHeader()` below, **eleven lines**, and they are not much.
+ * `docs/plans/data-plan.md` says that filling controls from a record and
+ * reading them back is "a loop every program writes again", and until this
+ * window there was nothing in the tree that had written it.  Now there is:
+ * `show()` and `readHeader()` below, **eleven lines**, and they are not much.
  *
  * The cost turned out not to be the loop but the **two guards beside it**, and
  * both are in `readHeader`.  Every assignment to a control raises a real
@@ -94,8 +94,8 @@
  *     back on Enter or on leaving the field rather than on every keystroke: a
  *     price on its way from `1` to `1.5` passes through `1.`, which is not a
  *     number, and refusing it mid-word would be arguing with somebody who is
- *     still typing.  `LostFocus` is the moment `docs/data-plan.md` names for
- *     exactly this, written out by hand.
+ *     still typing.  `LostFocus` is the moment `docs/plans/data-plan.md` names
+ *     for exactly this, written out by hand.
  *   - a changed line repaints **its own row** and nothing else.  Rebuilding the
  *     list would take the selection away, and the selection is what is being
  *     edited — which is the same argument `examples/files` makes about a filter,
@@ -163,9 +163,9 @@ class QuoteForm extends Form {
 
     /* --- the record onto the controls, and back ----------------------------
      *
-     * These two are the loop `docs/data-plan.md` is about. Everything a binding
-     * in the `.form` would replace is here, and there is not much of it — which
-     * is the measurement, and it is the same either way it comes out.
+     * These two are the loop `docs/plans/data-plan.md` is about. Everything a
+     * binding in the `.form` would replace is here, and there is not much of it
+     * — which is the measurement, and it is the same either way it comes out.
      */
     show() {
         this.showing = true;
@@ -340,9 +340,9 @@ class QuoteForm extends Form {
      * `examples/calculator` says about its own entry, where a trailing separator
      * is kept as typed because it is not a value yet.
      *
-     * `LostFocus` is the pair `docs/data-plan.md` already names as the moment a
-     * bound control would write its value back. This is that moment, written out
-     * by hand.
+     * `LostFocus` is the pair `docs/plans/data-plan.md` already names as the
+     * moment a bound control would write its value back. This is that moment,
+     * written out by hand.
      */
     readLine() {
         const line = this.selected;

@@ -172,7 +172,8 @@ function run(projects, wrap, extra, i, failed) {
                    * three shipped libraries had, each of them creating a field
                    * the first time it drew and throwing there the moment
                    * anybody turned the mode on. The suite is a run we control,
-                   * so it is the run that has it on. `docs/strict-plan.md`. */
+                   * so it is the run that has it on.
+                   * `docs/plans/strict-plan.md`. */
                   "--strict",
                   File.Join(TESTS, name),
                   /* The pid, which the projects use to name their scratch

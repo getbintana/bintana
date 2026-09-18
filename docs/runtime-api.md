@@ -14,7 +14,7 @@ once `rad.js` has run (`close_hatches()`).
 `performance`. `Promise` is the deliberate one — this is a language of events, not
 of continuations, and leaving it out makes that a fact instead of advice. `async`
 functions therefore do not run. What a sequence is written with instead, and what
-would make that answer change, is [async-plan.md](async-plan.md).
+would make that answer change, is [plans/async-plan.md](plans/async-plan.md).
 
 **Removed after boot**: `eval`, `Function`, `globalThis`, `Symbol`, the
 scheduling primitives `setTimeout` / `setInterval` / their `clear` pair, and the
@@ -2120,7 +2120,7 @@ why the check exists:
 
 | | |
 |---|---|
-| a field that is a record or a list | a detail is a table of its own, and saving one with its master is not built (see [data-plan.md](data-plan.md)) |
+| a field that is a record or a list | a detail is a table of its own, and saving one with its master is not built (see [plans/data-plan.md](plans/data-plan.md)) |
 | a field with no column | named, with the columns the table does have |
 | **a column spelled with another case** | SQL identifiers are case-insensitive, so `Code` against a column `code` *writes perfectly and reads empty*: the values land in the bag of keys the shape does not describe, nothing throws, and the first thing anybody notices is a form full of blanks |
 | no such table | said here, rather than arriving from the middle of a generated statement |
@@ -2131,7 +2131,7 @@ why the check exists:
 for anything else — the runtime does the escaping so no program has to remember
 to. A filter is SQL because SQL is the filter language and sqlite already says
 what is wrong with one; a grammar of our own inside a value is what
-[data-plan.md](data-plan.md) refused twice. `Execute` takes **one** statement,
+[plans/data-plan.md](plans/data-plan.md) refused twice. `Execute` takes **one** statement,
 because running the head of what it was given and reporting success is worse
 than a complaint. An `Update` or a `Delete` that matched no row **throws**: a
 save that saved nothing and said so is found days later by somebody looking for

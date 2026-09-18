@@ -168,7 +168,8 @@ static void record_declared(JSContext *ctx, JSValueConst target, JSAtom key,
          * `for...in` -- everything that *looked*. What it could not be kept out
          * of was the count of what the widget has, which is what
          * `preventExtensions` and honest introspection both read. See
-         * `bta_widget.c`, where the note now lives, and `docs/strict-plan.md`.
+         * `bta_widget.c`, where the note now lives, and
+         * `docs/plans/strict-plan.md`.
          */
         JS_SetPropertyStr(ctx, target, "__declared", JS_DupValue(ctx, bag));
     }
@@ -433,7 +434,7 @@ static int build_one(JSContext *ctx, JSValueConst form_obj,
      * Not every collision lands here: a name that is a *method* -- `Close`,
      * `Show` -- is shadowed rather than refused, and the assignment succeeds.
      * That one stays [Ide.Check]'s, and the two are written down together in
-     * `docs/strict-plan.md`.
+     * `docs/plans/strict-plan.md`.
      *
      * `JS_SetPropertyStr` consumes `obj` whichever way it goes, so there is
      * nothing to free on this path.

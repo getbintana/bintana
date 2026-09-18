@@ -4686,7 +4686,7 @@ function Main() {
      * A *method* is a different case and is deliberately not here: `Close` is
      * shadowed by the control rather than refusing it, the assignment succeeds,
      * and finding that one is `Ide.Check`'s job. Both are written down in
-     * `docs/strict-plan.md`.
+     * `docs/plans/strict-plan.md`.
      */
     nameTakenByForm() {
         waiting++;
@@ -4841,7 +4841,7 @@ function Main() {
      * long after the control is (a table's columns when an application assigns
      * `Columns`, a drawing area's painter on the first frame it paints). They
      * live on the widget's struct now. If one ever comes back, this is what says
-     * so. `docs/strict-plan.md` is the argument.
+     * so. `docs/plans/strict-plan.md` is the argument.
      *
      * **A component of the project is sealed with the controls**, and that is
      * the half this test did not have: its scratch project was built out of

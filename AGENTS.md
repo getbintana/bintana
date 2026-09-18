@@ -72,7 +72,7 @@ feature, written by somebody who did not have it yet, sitting in the one
 directory whose whole meaning is that nothing in it exists. Three went that way
 when `Painter.Image`, `Text` and `SavePdf` landed. Completed plans go the same
 way: `docs/http-plan.md` was deleted once its staging was built, with its one
-live leftover (`Done` sequencing) already living in `async-plan.md` — a plan
+live leftover (`Done` sequencing) already living in `docs/plans/async-plan.md` — a plan
 kept past its building is the same second description. What the runtime can do is in
 `docs/llm/`, which is where anybody looks; git holds what the asking looked like.
 A refusal goes the same way, with the argument written into *what is deliberately
@@ -411,7 +411,7 @@ has always had.
 
 It matters because of `bintana --strict`, where a control is made
 non-extensible so a misspelt property throws where it is written
-(`docs/strict-plan.md`). The point of that mode is to be told *which* name the
+(`docs/plans/strict-plan.md`). The point of that mode is to be told *which* name the
 class does not have, and without this it says only that something was refused --
 which, on a line that assigns three properties in a row, is the wrong half of the
 answer.
@@ -426,7 +426,7 @@ refusal is still a refusal. The message goes back to the vague one, and
 `JS_DebugPosition`, `JS_DebugBacktrace`, `JS_DebugLocals`, `JS_DebugLines`,
 `JS_DebugEval` and `JS_DebugSetLocal` -- and `JSStackFrame` gains two fields. Everything that *decides* anything is in
 `runtime/src/bta_debug.c`; the vendor only exposes what its own frames already
-hold. `docs/debug-plan.md` is the design and the measurements.
+hold. `docs/plans/debug-plan.md` is the design and the measurements.
 
 - **The hook is a branch in the `SWITCH` macro of `JS_CallInternal`**, both
   spellings of it (the `switch` and the computed-goto one). With no handler
@@ -1309,7 +1309,7 @@ person who wrote it either.
   `Printer.Names`/`Printer.Default` refuse with a sentence, because GTK
   publishes no list on Windows. **There is no local way to compile any of
   them**: the `windows` job in `.github/workflows/ci.yml` is the compiler, and
-  its first runs are the toolchain spike `docs/portability-plan.md` asked for.
+  its first runs are the toolchain spike `docs/plans/portability-plan.md` asked for.
   The same job stages the downloadable zip through
   [`tools/windows-portable.sh`](tools/windows-portable.sh) -- DLLs by `ldd`,
   GTK's runtime data by hand, caches rewritten to bare names because an
@@ -2717,7 +2717,7 @@ person who wrote it either.
   back writes today into the record. `examples/clients` declares `Since` as
   `required` for that reason -- a fact about the control, written into the shape.
   Worth knowing before designing anything that writes a record's value into a
-  control, and `docs/data-plan.md` records it as one of the three things
+  control, and `docs/plans/data-plan.md` records it as one of the three things
   `examples/clients` changed about the binding's design.
 - **A throw inside `Form_Open` becomes a dialog and nothing on the terminal, so
   headless it looks like the program worked.** `examples/clients` seeded its
@@ -2738,7 +2738,7 @@ person who wrote it either.
   against it beyond portability -- `g_utf8_collate` is ~1,5 us a comparison, so
   100 000 rows is two seconds unless indexed, and an index built on a custom
   collation is exactly what another client cannot read. It stops being an answer
-  at stage 3's cursor, where the rows are not all loaded; `docs/data-plan.md`
+  at stage 3's cursor, where the rows are not all loaded; `docs/plans/data-plan.md`
   carries that as an open question with two candidates.
 
 ## Laying out a form: which of the two models

@@ -336,7 +336,7 @@ properties of the wrapper with the enumerable bit off -- invisible to everything
 that *looked*, and not invisible to the count of what the widget has, which is
 what honest introspection and `--strict` both read. `__declared`, `__children`,
 `__menus` and `__actions` are still readable from JavaScript under those names,
-as accessors on `Widget.prototype`; see [`strict-plan.md`](strict-plan.md).
+as accessors on `Widget.prototype`; see [`plans/strict-plan.md`](plans/strict-plan.md).
 
 `Container.Add()` adopts; `Notebook.Append()` and `SetTabLabel()` did not, and a
 garbage-collected page left a dangling pointer behind that the next mouse motion

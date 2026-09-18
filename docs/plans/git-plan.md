@@ -216,7 +216,7 @@ project, since a repository can hold more than one.
 
 ## What it costs outside the code
 
-A section in [ide.md](ide.md); the row in the root README's *What is next*;
+A section in [ide.md](../ide.md); the row in the root README's *What is next*;
 the strings through the extractor (literals at the call site, which the above
 already requires); and the suite phase, which asserts the parse (`-z` with
 spaces and accents), the before/after pairs, and the guards — never pixels.
@@ -243,7 +243,7 @@ Before_Scroll(x, y) { this.After.ScrollY = y; }
 It does not loop: assigning a value an adjustment already has emits nothing, so
 two panes pointed at each other settle after one event. Two things this plan
 should know before it uses them, both measured and both on
-[`Editor`](reference/widgets/Editor.md): a scroll **asked for** by `GotoLine`
+[`Editor`](../reference/widgets/Editor.md): a scroll **asked for** by `GotoLine`
 lands on the next frame rather than on the next line of code, and `ScrollMaxY`
 **grows** while GTK validates a long file, so a position is said as a fraction
 of the maximum read in the same breath and never as a remembered number of

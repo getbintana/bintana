@@ -1,0 +1,32 @@
+# Plans
+
+A plan here is a design argued in prose before it is code: what the application
+needed, what was measured, what was rejected on the way and why. Some are built
+and kept for the argument; some are waiting for a caller; some have not been
+started at all. Each one says which it is in its first lines, and the table
+below repeats it, because a plan whose status has to be inferred is a plan that
+gets re-argued.
+
+**A plan is deleted when it is built and has nothing left to say.** The rule is
+the one `docs/issues/` runs on and `AGENTS.md` states: `docs/http-plan.md` went
+that way when its staging landed, with its one live leftover (`Done` sequencing)
+already living in `async-plan.md`. A plan kept past its building is a second
+description of a feature, written by somebody who did not have it yet. What the
+runtime can do is in [`llm/`](../llm/README.md); git holds what the asking
+looked like.
+
+| Plan | What is in it |
+|---|---|
+| [data-plan.md](data-plan.md) | **Not a feature**: the design for binding records to forms and reading them from a database, **wanted and waiting for a caller**, not for a prerequisite: every one it named is built (the focus events, the grid, a `Record` that holds a list of records, and `Database.Sqlite` + `Table`), so only the declarative half is left. Thirteen findings from two hand-written screens are in it, three of which corrected the design |
+| [git-plan.md](git-plan.md) | Git in the IDE: **stages 1 to 4 built** — status in the tree, the branch in the bar, the Changes window with the side-by-side diff, and stage/unstage/discard/commit per file. Why the engine is the CLI and not a binding, why the porcelain and `-z` (and the `Exec.Wait` bug that decision found), and what is left: the remotes |
+| [debug-plan.md](debug-plan.md) | The debugger: **stages 1 and 2 built** — breakpoints, stopping, the stack, standing in a frame, its values by name, and the three steps. What *complete* means in eleven points, the four ways in and why only patching the interpreter arrives, what a branch per opcode costs **measured** (+12 to +16 % with the debugger off, which is what sends the rest to a bytecode patch), the channel this IDE speaks, and **DAP written down as the plan to evaluate** for the other editors |
+| [strict-plan.md](strict-plan.md) | **Built**: `bintana --strict` makes a control refuse a property its class does not have, so a misspelt name throws where it is written instead of doing nothing forever; the IDE offers it as a tick in the Project menu. `Object.freeze` is gone on purpose and is the wrong tool anyway -- `preventExtensions`, in C. **The measurement turned a one-line feature into a small cleanup**: the runtime left eight notes of its own on widgets as own properties, so what had to move first was its own bookkeeping -- six to their structs (`gc_mark` already reported two C-held values, which is the pattern the one comment against it ruled out) and two to a `WeakMap`. Now a widget's own properties are exactly its properties, which is what introspection reads, and the strict mode is the *test* that the cleanup landed rather than the point of it. QuickJS was taught to name the property it refused |
+| [completion-plan.md](completion-plan.md) | **Stages 0 and 1 built, stage 2 still only a plan and still not recommended**: measured rather than argued, and the measurement overturned the conclusion twice. Only 12 % of declarations state their own type; the shape that is actually written is `this.<field>.` (1410 times, and `this.ide.` is 509 of them). **TypeScript, given a complete `.d.ts`, resolves exactly what a table lookup resolves** -- a constructor parameter is `any` for it too, and one JSDoc line fixes it for both. So the declarations are generated (`tests/typings.sh`, guarded by `tests/api.sh`) and VS Code works on a Bintana project with nothing installed; the IDE gained the `new Foo()` and JSDoc lookups and closed a menu-shaped hole three flatteners shared. The analyser's blocker is that `Complete` is synchronous, and the way in that avoids it is feeding Problems instead of the popup |
+| [async-plan.md](async-plan.md) | **One decision and one deferral**: `Exec.Wait` for the case that hurts, and why the language has no word yet for *do this, then that* — with what would reopen it |
+| [http-server-plan.md](http-server-plan.md) | What `Http.Server` deliberately does **not** do: deferred answers (a handler answers before it returns), WebSocket, CGI shapes — with the argument for each, and what was rejected on the way |
+| [portability-plan.md](portability-plan.md) | **Not a feature**: building and running the runtime and the IDE natively on Windows under MSYS2/MinGW-w64, with the examples. What it waited for is built (VTE is optional and nothing on the IDE's path needs it); the test suite, packaging and a real Windows terminal are explicitly out of scope, with the reasons |
+| [macos-plan.md](macos-plan.md) | **Not a feature**: the same for macOS — Homebrew build plus a portable `.app`, verified by CI and an external tester, since the owner has no Mac. **Not started**: four runtime tweaks, the X11-free test harness, and a bundling script; signing needs the owner's Apple account |
+| [bundle-plan.md](bundle-plan.md) | **Not started**: handing over an application as one `.bta` file without its sources — QuickJS bytecode for the `.js`, base64 for the JSON (anti-temptation, not security), single-file tar, run from a temp dir. Why an obfuscator is the wrong tool, the threat model stated honestly, and the spike that has to pass first |
+
+The gaps nobody has planned yet are [`issues/`](../issues/README.md), which is
+the other half of this: what is missing, never how to add it.

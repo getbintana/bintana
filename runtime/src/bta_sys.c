@@ -1902,8 +1902,8 @@ static void exec_wait_guard_free(GSource *src)
  * catalogue in turn, and with only a callback to work with that has to be
  * written as a recursion carrying its own index -- where this is a `for` loop
  * with nothing new in it.  Gambas spells it `EXEC ... WAIT`; .NET calls it
- * `WaitForExit`.  See docs/async-plan.md for why the language stops here rather
- * than growing a word for *do this, then that*.
+ * `WaitForExit`.  See docs/plans/async-plan.md for why the language stops here
+ * rather than growing a word for *do this, then that*.
  *
  * **It freezes the window**, and that is the honest half of the bargain: nothing
  * paints and nothing responds until the child exits.  It is also what makes it

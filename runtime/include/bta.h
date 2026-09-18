@@ -28,7 +28,8 @@ typedef struct BtaApp    BtaApp;
 /*
  * The runtime's own notes about a widget -- what it knows and the application
  * does not, kept on the struct rather than as own properties of the wrapper.
- * See the fields at the end of BtaWidget, and `docs/strict-plan.md` for why.
+ * See the fields at the end of BtaWidget, and `docs/plans/strict-plan.md` for
+ * why.
  *
  * `bta_widget_note` hands back the slot itself, so a caller reads it, frees it
  * and writes it in place. Four of them are also readable from JavaScript,
@@ -204,12 +205,12 @@ struct BtaWidget {
      * `__columns` and `__painter`, each defined on the object with the
      * enumerable bit off so that nothing which looked would find them.  The
      * argument for moving them, and what it buys, is
-     * [`docs/strict-plan.md`](../../docs/strict-plan.md); the short version is
-     * that a mode which refuses a property the widget does not have cannot tell
-     * a note from a typo, and most of these are created *later* than the widget
-     * -- `__columns` when an application assigns `Columns`, `__painter` on the
-     * first frame a `DrawingArea` paints -- so pre-creating them is not open
-     * either.
+     * [`docs/plans/strict-plan.md`](../../docs/plans/strict-plan.md); the short
+     * version is that a mode which refuses a property the widget does not have
+     * cannot tell a note from a typo, and most of these are created *later*
+     * than the widget -- `__columns` when an application assigns `Columns`,
+     * `__painter` on the first frame a `DrawingArea` paints -- so pre-creating
+     * them is not open either.
      *
      * The comment this reverses is in `bta_table.c`, and it was right about the
      * thing it warned of: keeping a `JSValue` in C is a strong reference the
@@ -803,8 +804,8 @@ bool bta_debug_enabled(void);
  *
  * Off unless asked for, and named for development: an application storing state
  * on a control is ordinary JavaScript and would start throwing.
- * `docs/strict-plan.md` has the whole argument, including why a *form* is never
- * sealed -- it is the application's own object, and `Form_Open` assigning
+ * `docs/plans/strict-plan.md` has the whole argument, including why a *form* is
+ * never sealed -- it is the application's own object, and `Form_Open` assigning
  * `this.anything` is what every program here does.
  */
 void bta_strict_want(void);

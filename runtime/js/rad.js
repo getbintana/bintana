@@ -768,10 +768,11 @@ GLOBAL.Namespace = function (path) {
  *
  * It is not enough for the thing that does not look: a widget's own properties
  * are supposed to be *its properties*, and these were two that were not.  See
- * [`docs/strict-plan.md`](../../docs/strict-plan.md) -- the whole argument is
- * there, and the short version is that `preventExtensions` cannot tell a note
- * from a typo, and a note created **later** than the widget (a design value is
- * written when the designer applies one) cannot be pre-created either.
+ * [`docs/plans/strict-plan.md`](../../docs/plans/strict-plan.md) -- the whole
+ * argument is there, and the short version is that `preventExtensions` cannot
+ * tell a note from a typo, and a note created **later** than the widget (a
+ * design value is written when the designer applies one) cannot be pre-created
+ * either.
  *
  * A `WeakMap` is private to this file, invisible to `for...in`, to
  * `Dictionary.Keys`, to the serialiser and to `preventExtensions`, and it lets
@@ -1589,9 +1590,9 @@ const CLOCK = /^([01]\d|2[0-3]):([0-5]\d)(:([0-5]\d))?$/;
  * the exception, for the field the rule does not fit.
  *
  * `snake` has no user yet: it is SQL's spelling, and reading records out of a
- * database is designed but not built (docs/data-plan.md).  Kept rather than
- * removed because it is one line of the rule it belongs to, and it is what says
- * the rule was meant to hold more than one codec.
+ * database is designed but not built (docs/plans/data-plan.md).  Kept rather
+ * than removed because it is one line of the rule it belongs to, and it is what
+ * says the rule was meant to hold more than one codec.
  */
 const NAMINGS = {
     same:  (name) => name,
@@ -2547,7 +2548,7 @@ function sqliteAffinity(declared) {
  * No lazy loading, no identity map, no session.  A detail is loaded when its
  * master is or not at all: the machinery those things exist for is machinery to
  * make lazy loading safe, and lazy loading is what turns one screen into a
- * thousand statements and hides it.  See `docs/data-plan.md`.
+ * thousand statements and hides it.  See `docs/plans/data-plan.md`.
  */
 GLOBAL.Table = class Table {
     #conn;
@@ -2641,7 +2642,7 @@ GLOBAL.Table = class Table {
                 throw new TypeError(
                     `${this.#of.name}.${name} is a ${kind} and a column holds ` +
                     `one value: a detail is its own table, and saving one with ` +
-                    `its master is not built yet (docs/data-plan.md)`);
+                    `its master is not built yet (docs/plans/data-plan.md)`);
         }
 
         const columns = this.#conn.Columns(this.#name);
@@ -2739,8 +2740,8 @@ GLOBAL.Table = class Table {
      *
      * The filter is **SQL**, because SQL is the filter language and sqlite
      * already says what is wrong with one -- a grammar of our own inside a value
-     * is what `docs/data-plan.md` refused twice. Values are parameters and are
-     * never pasted in; there is no way from here to ask for that.
+     * is what `docs/plans/data-plan.md` refused twice. Values are parameters
+     * and are never pasted in; there is no way from here to ask for that.
      *
      *     customers.Where("balance > ? ORDER BY name", 0)
      *

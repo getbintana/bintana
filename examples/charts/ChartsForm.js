@@ -51,9 +51,10 @@ class ChartsForm extends Form {
      * *before* `Form_Open` runs, and every assignment raises a real event: the
      * `Items` on the combo raised `Select`, and the two `Active`s raised `Click`,
      * against a form whose other controls did not exist yet -- three error
-     * dialogs on the first run. `docs/data-plan.md` records the same thing
-     * happening to `examples/quote` against a record that was still null; it is
-     * the cost of events being real, and one flag is the whole of the fix.
+     * dialogs on the first run. `docs/plans/data-plan.md` records the same
+     * thing happening to `examples/quote` against a record that was still null;
+     * it is the cost of events being real, and one flag is the whole of the
+     * fix.
      */
     ready = false;
 

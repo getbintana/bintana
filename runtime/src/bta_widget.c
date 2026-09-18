@@ -3262,7 +3262,7 @@ static JSValue w_get_dark(JSContext *ctx, JSValueConst this_val)
  * not have cannot tell one of these from a misspelling. Most of them are created
  * later than the widget besides -- `__columns` when an application assigns
  * `Columns`, `__painter` on the first frame -- so pre-creating them is not open
- * either. The whole argument is `docs/strict-plan.md`.
+ * either. The whole argument is `docs/plans/strict-plan.md`.
  *
  * So they live on the struct, reported by `widget_gc_mark` and released by the
  * finalizer, which is what `w->form` and `w->menu` have always done. The four
@@ -3341,9 +3341,9 @@ static const JSCFunctionListEntry widget_notes[] = {
 /* ------------------------------------------------------------ strict checks
  *
  * The flag, and the one line that carries it out. See `bta.h` for what it is
- * for and `docs/strict-plan.md` for why it took the cleanup above to become
- * possible: until those six notes moved onto the struct, sealing a widget would
- * have broken the runtime before it caught anybody's typo.
+ * for and `docs/plans/strict-plan.md` for why it took the cleanup above to
+ * become possible: until those six notes moved onto the struct, sealing a
+ * widget would have broken the runtime before it caught anybody's typo.
  */
 static bool strict_checks = false;
 
@@ -3585,7 +3585,7 @@ static gboolean on_key_pressed(GtkEventControllerKey *c, guint keyval,
  * A field that checks what was typed does it when the control is *done* being
  * edited, and done is either Enter or the focus moving on -- so without this,
  * "when the user leaves this box" cannot be said at all.  (It is also the one
- * prerequisite docs/data-plan.md names for binding a record to a form.)
+ * prerequisite docs/plans/data-plan.md names for binding a record to a form.)
  *
  * `enter`/`leave` and not `notify::is-focus`, because the question is about the
  * *control* and not the widget: a TextBox's focus really sits on the GtkText

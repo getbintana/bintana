@@ -214,10 +214,10 @@ static void table_model_set_count(BtaTableModel *self, guint n)
  * widget's own struct now (`w->columns`), reported by `widget_gc_mark` and
  * released by the finalizer, which is what `w->form` and `w->menu` already did.
  *
- * What that buys is in `docs/strict-plan.md`: the note was created **when an
- * application assigned `Columns`**, so it was an own property that appeared at
- * any moment in a program's life, and a widget whose own properties are exactly
- * its properties cannot have one of those.
+ * What that buys is in `docs/plans/strict-plan.md`: the note was created **when
+ * an application assigned `Columns`**, so it was an own property that appeared
+ * at any moment in a program's life, and a widget whose own properties are
+ * exactly its properties cannot have one of those.
  */
 #define TABLE_STATE_KEY "bta-table-state"
 

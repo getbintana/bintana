@@ -43,7 +43,8 @@ extending either side ([extending](docs/extending.md)), native plugins
 
 What is missing, already decided, or still planned lives with the gaps:
 [docs/issues/](docs/issues/README.md), [docs/llm/issues.md](docs/llm/issues.md)
-and the `*-plan.md` files beside them.
+and [docs/plans/](docs/plans/README.md), which is where every `*-plan.md` now
+lives.
 
 ## Licence
 

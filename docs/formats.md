@@ -148,7 +148,7 @@ loads.
 | `arguments` | handed to the project as `Application.Arguments`, one entry per argument — not one string to split, because a path with a space in it is ordinary |
 | `directory` | where the child starts. Empty is the project's own, which is what most want |
 | `environment` | `NAME=value`, one a line. A **change** and not a replacement: what is not named here is inherited, since a child that lost `HOME` would not start |
-| `strict` | run it with [`--strict`](strict-plan.md) |
+| `strict` | run it with [`--strict`](plans/strict-plan.md) |
 | `stoponthrow` | the debugger stops where something is thrown |
 
 **Versioned on purpose.** *What this project needs in order to start* is a fact

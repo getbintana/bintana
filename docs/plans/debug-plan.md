@@ -19,7 +19,7 @@ Basic and Gambas — and beside Delphi and Lazarus, and four things are missing:
 a debugger, packaging, a form bound to a table, and printing. Three of the four
 have a substitute today. Exporting hands over the project tree; `SavePdf` writes
 the page a printer would; a screen over a table is written by hand, twice, in
-[`examples/quote`](../examples/quote) and [`examples/clients`](../examples/clients).
+[`examples/quote`](../../examples/quote) and [`examples/clients`](../../examples/clients).
 
 **Debugging has none.** It is `Logger.Debug`, save, run, read the pane. Every
 other environment in this family has had breakpoints since the nineties.
@@ -340,9 +340,9 @@ having the feature at all.
 Documentation is part of the change here, not after it. A third entry in
 *The two patches in vendor/* in `AGENTS.md` — which becomes *three* — saying what
 breaks if an upgrade drops it. A row for `Write` and for `Control` in
-[`runtime-api.md`](runtime-api.md), [`llm/library.md`](llm/library.md) and
-[`reference/globals/Exec.md`](reference/globals/Exec.md), which `tests/api.sh`
-demands. A *Debugging* section in [`ide.md`](ide.md), and a paragraph in the
+[`runtime-api.md`](../runtime-api.md), [`llm/library.md`](../llm/library.md) and
+[`reference/globals/Exec.md`](../reference/globals/Exec.md), which `tests/api.sh`
+demands. A *Debugging* section in [`ide.md`](../ide.md), and a paragraph in the
 README. And an assertion in `tests/widgets` that fails when the patch is gone,
 alongside the two that already do.
 

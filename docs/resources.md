@@ -511,7 +511,7 @@ stretches, and the pushed dialog lays out exactly as the design does, only wider
 
 | Rejected | Why |
 |---|---|
-| `strings.json` with `@string/save` | A format to invent, tooling to write, and a small language inside a value — which was already refused for `Source` in [data-plan.md](data-plan.md). The `.po` is the central list of UI strings that keys were supposed to buy |
+| `strings.json` with `@string/save` | A format to invent, tooling to write, and a small language inside a value — which was already refused for `Source` in [plans/data-plan.md](plans/data-plan.md). The `.po` is the central list of UI strings that keys were supposed to buy |
 | Translating in the **setter**, so `this.Lbl.Text = "Save"` needs nothing | Tempting, and fatal: `this.Lbl.Text = customer.Name` would look a customer's name up too, so a client called "Open" comes out translated. A bug in one record in a thousand, impossible to explain. **A translation has to be marked where the literal is written, or data joins the catalogue.** The population flowing through `Message.Error` is small enough that the same reasoning goes the other way there |
 | A method on `String` (`"Saved {0}".T(x)`) | Patching a built-in prototype, and it invites `variable.T()` — the same footgun with less signal |
 | `_()`, the gettext spelling | Breaks the convention that every global here is capitalised, and — worse — its natural JS spelling is the broken one: everybody writes the backtick, and the translation dies in silence |

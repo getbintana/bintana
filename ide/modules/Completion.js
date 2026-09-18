@@ -33,7 +33,8 @@
  * declarations only 12 % state a type at all, and the largest bucket, 38 %, is
  * the return of a call, which nothing writes down. The JSDoc one is the one that
  * pays: `this.ide.` is 509 of the 1410 `this.<field>.` in this tree, it is a
- * constructor parameter, and no `new` names it. See `docs/completion-plan.md`.
+ * constructor parameter, and no `new` names it. See
+ * `docs/plans/completion-plan.md`.
  *
  * **And the limit is stated rather than papered over**: `const x = makeThing();
  * x.` proposes nothing, because nothing in the project says what `makeThing`

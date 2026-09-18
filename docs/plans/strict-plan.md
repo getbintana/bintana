@@ -8,14 +8,14 @@ a small cleanup with the check as its proof -- which is what this document is
 mostly about, because the cleanup is worth more than the flag.
 
 It is the runtime's half of the answer
-[`Ide.Live` and `Ide.Check`](ide.md#the-names-a-file-uses-checked-while-it-is-written)
+[`Ide.Live` and `Ide.Check`](../ide.md#the-names-a-file-uses-checked-while-it-is-written)
 give statically. Those read what the `.form` describes; this catches what no file
 describes, in the act, with a traceback naming the line.
 
 ## Not `Object.freeze`, and not only because it is gone
 
 `Object` is empty in this runtime and every static was removed on purpose -- see
-[`llm/language.md`](llm/language.md). Putting `freeze` back would reverse a
+[`llm/language.md`](../llm/language.md). Putting `freeze` back would reverse a
 decision that is written down.
 
 It is also the wrong tool. `freeze` makes existing own properties
@@ -237,7 +237,7 @@ Which made it the first real caller for **launch configurations** -- and they
 exist now, because a second one turned up: the arguments a project needs in order
 to start, which the IDE had no way to pass at all. A configuration can say a run
 is strict, and that half is the project's and versioned; the tick stays yours and
-only ever adds. [`ide.md`](ide.md#run-configurations) has the three places and
+only ever adds. [`ide.md`](../ide.md#run-configurations) has the three places and
 why the switches are **copied** into a new configuration rather than inherited
 from anywhere.
 

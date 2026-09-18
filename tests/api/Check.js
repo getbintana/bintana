@@ -107,8 +107,8 @@ const GLOBAL_TABLES = {
  * `widget_notes` is what the runtime keeps *about* a widget -- `__declared`,
  * `__children`, `__menus`, `__actions` -- accessors on the root prototype so
  * that the values can live on the struct and not as own properties of the
- * control (`docs/strict-plan.md`). Nothing outside the runtime may touch them,
- * so demanding a documented row for each would be demanding that they be
+ * control (`docs/plans/strict-plan.md`). Nothing outside the runtime may touch
+ * them, so demanding a documented row for each would be demanding that they be
  * published, which is the opposite of what they are. Written down here rather
  * than hidden from the scan, so the exception is one line and visible.
  */

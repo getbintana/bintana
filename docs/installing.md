@@ -2,8 +2,8 @@
 
 Everything here is the same on any Linux with GTK 4.10 or newer; Fedora and
 Debian/Ubuntu are written out because those are the two the suite is run on.
-Windows has a plan of its own in [portability-plan.md](portability-plan.md),
-and macOS in [macos-plan.md](macos-plan.md).
+Windows has a plan of its own in [plans/portability-plan.md](plans/portability-plan.md),
+and macOS in [plans/macos-plan.md](plans/macos-plan.md).
 
 ## What it needs
 

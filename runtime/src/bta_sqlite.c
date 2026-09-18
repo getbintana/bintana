@@ -73,7 +73,8 @@
  * taste: a record's values live in a private bag, and JavaScript's private
  * fields are scoped to the class that declares them.  Nothing outside `Record`
  * can read what a record holds or what its file could not take, so the mapping
- * has to be written inside it.  See [docs/data-plan.md](../../docs/data-plan.md).
+ * has to be written inside it.  See
+ * [docs/plans/data-plan.md](../../docs/plans/data-plan.md).
  *
  * **Values are bound, never interpolated.** There is no way to ask this file to
  * paste a value into a statement, which is the same bargain every setter in this
@@ -83,8 +84,8 @@
  *
  * **SQL is the query language and it is not ours.** A filter is a string of SQL
  * because sqlite already parses it and already says what is wrong with it -- and
- * a grammar of our own inside a value is the thing `docs/data-plan.md` refused
- * twice, for field metadata and for a scheme prefix in a source.
+ * a grammar of our own inside a value is the thing `docs/plans/data-plan.md`
+ * refused twice, for field metadata and for a scheme prefix in a source.
  *
  * ## Types, and the one that matters
  *

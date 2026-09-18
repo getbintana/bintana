@@ -407,7 +407,7 @@ tests/typings.sh examples/clients   # ...and that project's too
 runtime publishes -- plus a `forms.d.ts` and a `tsconfig.json` per project, so
 **VS Code works on a Bintana project with nothing installed**: completion, go to
 definition and hover. The argument, and the measurements that shaped it, are in
-[completion-plan.md](completion-plan.md).
+[plans/completion-plan.md](plans/completion-plan.md).
 
 Three things about it belong here.
 

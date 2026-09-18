@@ -18733,7 +18733,7 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
 
 /* Bintana patch: the debugger looks before every opcode.  With none installed
    this is one predictable branch on a field already in cache; what it costs when
-   nothing is attached is measured in docs/debug-plan.md. */
+   nothing is attached is measured in docs/plans/debug-plan.md. */
 #define BTA_DEBUG_STEP(pc) \
     if (unlikely(rt->debug_handler)) rt->debug_handler(ctx, pc, rt->debug_opaque);
 

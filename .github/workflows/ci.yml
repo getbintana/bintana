@@ -314,8 +314,8 @@ jobs:
           gh release upload "$GITHUB_REF_NAME" "$file" --clobber
 
   # A fourth job, and the first one that is not Linux: the port's Stage 0/1
-  # (docs/portability-plan.md), whose deliverable is an error list as much as a
-  # build.
+  # (docs/plans/portability-plan.md), whose deliverable is an error list as much
+  # as a build.
   #
   # **What it proves today is the build, `tests/api.sh`, and that the zipped
   # tree runs** (`tools/windows-portable.sh`): the console project reads

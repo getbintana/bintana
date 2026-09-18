@@ -12,7 +12,7 @@ ide/tsconfig.json             "lib": ["es2022"], and why it is not noLib
 ```
 
 and, in the IDE, two more lookups and the closing of a hole three flatteners
-shared. What was built is in [`ide.md`](ide.md#what-the-editor-proposes); this is
+shared. What was built is in [`ide.md`](../ide.md#what-the-editor-proposes); this is
 the argument, the measurements, and **the seven things building it corrected**.
 
 Before: four completions, all table lookups --
@@ -261,7 +261,7 @@ declares its fields.
    was whether the loader looks at the answer when it binds them -- and
    `bta_menu.c` had the unchecked `JS_SetPropertyStr` that `bta_form.c` had been
    fixed for, in two places. A menu item called `Actions` bound to nothing and
-   nobody was told. Both refuse the form now; `docs/strict-plan.md` has it, since
+   nobody was told. Both refuse the form now; `strict-plan.md` has it, since
    that is where the first one was written down.
 
 None of this stops being *a lookup and nothing else*, which is the rule that path
@@ -310,7 +310,7 @@ today:
 
 ### The way in that avoids the third one entirely
 
-**Let the analyser feed [Problems](ide.md#problems-in-one-list) and never the
+**Let the analyser feed [Problems](../ide.md#problems-in-one-list) and never the
 completion.** It runs on the pause `Ide.Live` already times, it answers when it
 answers -- which a docked panel tolerates and a popup does not -- and what it
 delivers is exactly what no lookup will ever give: real type errors over the
@@ -341,7 +341,7 @@ analyser waits for somebody who needs the two rows a lookup cannot answer.**
   reads 40 files and 20 000 lines per keypress to avoid keeping an index for.
   Completion runs on the keystroke, so it would need that index cached, with an
   invalidation story this tree refuses elsewhere
-  ([`ide.md`](ide.md#f12-and-where-a-name-is-declared)). The JSDoc lines are
+  ([`ide.md`](../ide.md#f12-and-where-a-name-is-declared)). The JSDoc lines are
   the same answer written down once, and they work in every editor.
 - **An index signature on a generated form interface.** It would silence the
   `this[name]` errors `checkJs` reports, and it would make `this.Anything` valid

@@ -126,4 +126,4 @@ something a mapper should make silently.
 ## See also
 
 [`Record`](Record.md) · [`Decimal`](Decimal.md) ·
-[`examples/clients`](../../../examples/clients) · [data-plan.md](../../data-plan.md)
+[`examples/clients`](../../../examples/clients) · [../../plans/data-plan.md](../../plans/data-plan.md)

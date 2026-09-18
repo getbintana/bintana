@@ -25,8 +25,8 @@ What the port depended on is: the IDE's output pane is a read-only `TextEditor`
 over `Exec`, `Terminal` is optional at build time (`BTA_HAVE_VTE`) and
 `Widget.Available` is what hides a control this build cannot run — so nothing on
 the IDE's critical path needs VTE, which has no Windows port. See
-[`widgets.md`](widgets.md#a-build-without-vte) and
-[`ide.md`](ide.md#running).
+[`widgets.md`](../widgets.md#a-build-without-vte) and
+[`ide.md`](../ide.md#running).
 
 The target is **native Windows**, built with **MSYS2 / MinGW-w64 (UCRT64)**.
 The scope is deliberately narrow: **the runtime and the IDE compile and run,

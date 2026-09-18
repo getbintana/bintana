@@ -899,7 +899,7 @@ in the file, which is most of what one wants from a local. Going further needs a
 [runtime-api.md](runtime-api.md#the-one-thing-eval-is-still-missing-from-and-the-shape-its-answer-has-to-take).
 
 **How far that limit could be pushed, and whether pushing it needs an analyser,
-is measured in [completion-plan.md](completion-plan.md)** -- and the measurement
+is measured in [plans/completion-plan.md](plans/completion-plan.md)** -- and the measurement
 says the blocker is a *declaration* and not an analyser. TypeScript, handed a
 complete `.d.ts`, resolves **exactly** what a table lookup resolves: `this.ide.`
 is `any` for it too, because a constructor parameter is not written down
@@ -1201,7 +1201,7 @@ reason to build them. The arguments a project needs in order to start were the
 second, and two was.
 
 What it cost to make possible, and why a widget's own properties are now exactly
-its properties, is [`strict-plan.md`](strict-plan.md).
+its properties, is [`plans/strict-plan.md`](plans/strict-plan.md).
 
 **The output pane is a log view, not a console**, and that is the whole of what
 changed here. It ran in a `Terminal` — a real pty — for a consumer that never
@@ -1908,7 +1908,7 @@ the IDE already had.
 
 ### What is not built
 
-The plan is [git-plan.md](git-plan.md), and all five of its stages are here:
+The plan is [plans/git-plan.md](plans/git-plan.md), and all five of its stages are here:
 status, the viewer, staging and committing, branches and the history, and the
 remotes. `git init` is here because a project without a repository is the one
 case where a menu full of disabled items is a dead end. What is deliberately not
@@ -1921,7 +1921,7 @@ Terminal tab is a real shell in the project's directory.
 said. What does the stopping is the runtime (`bintana --debug`, and
 `runtime/src/bta_debug.c`); what is here talks to it and draws what it says.
 The design, the measurements and what was refused are in
-[debug-plan.md](debug-plan.md).
+[plans/debug-plan.md](plans/debug-plan.md).
 
 | | |
 |---|---|
@@ -2499,7 +2499,7 @@ application to write, keep and remove.
 **And it is the Linux desktop's for now.** A `.desktop` file is the freedesktop
 format and nothing on Windows reads one; a Start-menu shortcut is the equivalent
 there, and it is the packaging item in
-[the portability plan](portability-plan.md#out-of-scope-here-and-why). The
+[the portability plan](plans/portability-plan.md#out-of-scope-here-and-why). The
 runtime's `Desktop.Entries` compiles and answers on Windows because the XDG
 directories do — what is missing is a format to write.
 
