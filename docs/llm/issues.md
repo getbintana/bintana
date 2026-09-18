@@ -180,7 +180,7 @@ needed and what it did instead.
 | A word for *do this, then that* | [`docs/async-plan.md`](../async-plan.md) |
 | Packaging an application without the project tree | [ISSUE-packaging](../issues/ISSUE-packaging.md) |
 | No editable / autocompleting combo | [ISSUE-editable-combo](../issues/ISSUE-editable-combo.md) |
-| No printer — no dialog, no copies, no preview, no control laid onto a page (a PDF **is** written: `SavePdf`) | [ISSUE-printing](../issues/ISSUE-printing.md) |
+| A control laid onto a page — `Print` sends what a `Draw` paints, so a form with real widgets on it still has no path to paper except drawing it by hand | [controls.md](controls.md#drawingarea) |
 | A `Fixed` container that does not stretch a `Fill` child when it itself grows — a reusable component that wants to fill its cell has to change its `Arrangement` | [ISSUE-fixed-fill-child](../issues/ISSUE-fixed-fill-child.md) |
 | No container that fills the room it is given **and** scrolls once it cannot — `Grid` fills without scrolling, `Flow` scrolls without filling | [ISSUE-fill-and-scroll](../issues/ISSUE-fill-and-scroll.md) |
 

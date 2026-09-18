@@ -1349,6 +1349,14 @@ person who wrote it either.
   another test left in it, focusable — so "past the last one the focus leaves"
   walked into it and read exactly like a broken sort. Add a container of your own
   and put the controls in that.
+- **And it has to re-grab the focus in the tail, not only before it.**
+  `testTabOrder` grabbed once, synchronously, and walked in the async tail after
+  every other test -- where anything shown since may have moved the focus, and
+  the walk then fails with the focus sitting on the first control, which reads
+  as a broken order. Adding six PDF exports shifted the tail's schedule enough
+  to make that deterministic: three green-or-red runs became three red ones, and
+  the bisect blamed the exports while the bug was the grab. Every walk in that
+  test grabs first now, including the first one.
 - **`gtk_widget_child_focus` refuses a widget that is not mapped**, answering
   false and moving nothing, and `Form_Open` runs *before* the window is
   presented. `grab_focus` does not care, so `SetFocus()` works there and every
@@ -3134,6 +3142,25 @@ person who wrote it either.
   `TypeError` on a string; the run went to the 120 s timeout with nothing on
   stdout but the traceback. If a `run.sh <project> <phase>` stops producing
   assertions, read the traceback before believing the phase is slow.
+- **On `EXPORT` this GTK renders every page whatever range the settings carry.**
+  `Print({ Pages: 5, From: 2, To: 3, ToFile })` came back a five-page file with
+  `before` called for all of them -- measured first in Bintana, then again in a
+  forty-line C probe that set the range and watched `draw-page` fire 0 to 4, so
+  it is GTK's and not the plumbing's (the 0-based numbering the probe showed is
+  why `before` adds one). A range on the file road is said with the page count
+  instead -- the file then holds exactly `From..To` -- while the dialog road
+  keeps the whole count (it is what the dialog offers the range within) and the
+  settings carry the preset. The `answer` reports the pages actually rendered
+  either way, which is what keeps it truthful on both roads.
+- **GTK4 has no built-in print preview: `Vista previa` opens Evince or Papers.**
+  The button is there and the dialog is GTK's, but the preview itself is a
+  temporary PDF handed to an external viewer -- on a machine with neither
+  installed the preview fails, and the failed launch takes the run down with a
+  cairo assertion in GTK's own cleanup (measured with an empty `Draw`, so it is
+  not the drawing). Documented rather than worked around: there is nothing in
+  this runtime that shows a PDF. `Cancel`, by contrast, is clean and asserted
+  nowhere -- it returns `null` and quits, verified by hand four times because
+  no suite can click a dialog.
 - **`Container.Spacing` accepted a negative and GTK read it as four billion.**
   The setter cast its `int32_t` to `guint` unchecked while the sibling setters
   (`Flow`'s `RowSpacing`, `Grid`'s spacings) refused negatives with

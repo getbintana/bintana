@@ -2051,8 +2051,8 @@ static JSValue area_to_png(JSContext *ctx, JSValueConst this_val,
  * report knows it has fourteen pages before it draws any of them, and what it
  * wants is to leave the application as fourteen pages of one file rather than as
  * fourteen files somebody has to keep together. The paper half of the same wish
- * -- a print dialog, a printer, copies -- is still open, and is what
- * `docs/issues/ISSUE-printing.md` is about now.
+ * -- a print dialog, a printer, copies -- is `Print` below, over the same
+ * frames.
  *
  * **The size is in points, 72 to the inch**, because that is what a PDF page is:
  * A4 is 595x842 and Letter 612x792, and the handler is told those numbers as its
@@ -2174,12 +2174,328 @@ static JSValue area_save_pdf(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
+/*
+ * `Print([options], [before])`: the same `Draw`, onto paper.
+ *
+ * `SavePdf` writes the document; this sends it to a printer, which is the
+ * half of that wish a file cannot cover: the print dialog answers
+ * the printer, the paper, the copies and the range, GTK's own preview shows
+ * what is about to come out, and then the `Draw` runs once per page against
+ * the print context -- the same cairo calls, so a page that fits the paper
+ * in `SavePdf` fits it here.
+ *
+ * The options are one object, spelled the way `Dialog`'s are:
+ *
+ *     { Pages, Paper, Orientation, Copies, From, To, ToFile }
+ *
+ * `Pages` is the whole document (1 to 10000, default 1); the dialog's range
+ * chooses within it. `Paper` is one of `A4`, `Letter`, `A5` and `Orientation`
+ * one of `Portrait`, `Landscape`: both preset the page setup the dialog opens
+ * on. `Copies`, `From` and `To` preset the job the same way. `ToFile` takes a
+ * path instead: the document is written there as a PDF with **no dialog**,
+ * which is both "print to PDF" and the road the suite can assert on -- a test
+ * cannot click a dialog. With a range the file holds exactly `From..To`.
+ *
+ * `before(page)` is `SavePdf`'s: called with the 1-based page before each one
+ * is drawn. The handler's frame is the printable area in points, 72 to the
+ * inch, exactly as in `SavePdf`.
+ *
+ * The answer is what the dialog settled: `{ Copies, From, To }`, the pages
+ * actually sent -- and `null` when the dialog was cancelled, which is not an
+ * error. A `Draw` that throws fails the run the way it fails an export.
+ * Refused from inside a `Draw`, like `Save`.
+ */
+typedef struct {
+    BtaWidget *w;
+    JSValue    before;      /* dup'd for the run, or undefined */
+    int        base;        /* document page of the first one rendered */
+    int        first;       /* first page rendered, 1-based; -1 while none */
+    int        last;
+    bool       ok;
+} PrintRun;
+
+static void print_page(GtkPrintOperation *op, GtkPrintContext *context,
+                       int page_nr, gpointer data)
+{
+    PrintRun *run = data;
+    (void)op;
+
+    if (!run->ok)
+        return;
+
+    /* GTK counts the rendered pages from 0; the `before` callback counts
+     * document pages from 1, like `SavePdf`'s. */
+    int        page = page_nr + run->base;
+    JSContext *ctx  = run->w->ctx;
+
+    if (JS_IsFunction(ctx, run->before)) {
+        JSValueConst args[1] = { JS_NewInt32(ctx, page) };
+        JSValue      r       = JS_Call(ctx, run->before, JS_UNDEFINED, 1, args);
+
+        if (JS_IsException(r)) {
+            /* Reported already, like every other event; the run stops here
+             * and the pending throw is what the caller answers with. */
+            run->ok = false;
+            JS_FreeValue(ctx, r);
+            return;
+        }
+        JS_FreeValue(ctx, r);
+    }
+
+    if (run->first < 0)
+        run->first = page;
+    run->last = page;
+
+    cairo_t *cr = gtk_print_context_get_cairo_context(context);
+    double   dw = gtk_print_context_get_width(context);
+    double   dh = gtk_print_context_get_height(context);
+
+    if (!paint_frame(run->w, cr, (int)(dw + 0.5), (int)(dh + 0.5)))
+        run->ok = false;
+}
+
+/* The GtkPaperSize name for one of the three papers the options take. */
+static const char *print_paper_size(const char *paper)
+{
+    if (!strcmp(paper, "A4"))
+        return GTK_PAPER_NAME_A4;
+    if (!strcmp(paper, "Letter"))
+        return GTK_PAPER_NAME_LETTER;
+    if (!strcmp(paper, "A5"))
+        return GTK_PAPER_NAME_A5;
+    return NULL;
+}
+
+static bool print_opt_int(JSContext *ctx, JSValueConst opts, const char *key,
+                          int32_t *out)
+{
+    JSValue v = JS_GetPropertyStr(ctx, opts, key);
+    bool    ok = true;
+
+    if (!JS_IsUndefined(v) && !JS_IsNull(v)) {
+        if (JS_ToInt32(ctx, out, v)) {
+            JS_ThrowTypeError(ctx, "Print: `%s` is a number", key);
+            ok = false;
+        }
+    }
+    JS_FreeValue(ctx, v);
+    return ok;
+}
+
+static bool print_opt_text(JSContext *ctx, JSValueConst opts, const char *key,
+                           char **out)
+{
+    JSValue v = JS_GetPropertyStr(ctx, opts, key);
+    bool    ok = true;
+
+    if (!JS_IsUndefined(v) && !JS_IsNull(v)) {
+        if (!JS_IsString(v)) {
+            JS_ThrowTypeError(ctx, "Print: `%s` is text", key);
+            ok = false;
+        } else {
+            const char *s = JS_ToCString(ctx, v);
+            if (!s)
+                ok = false;
+            else {
+                g_free(*out);
+                *out = g_strdup(s);
+                JS_FreeCString(ctx, s);
+            }
+        }
+    }
+    JS_FreeValue(ctx, v);
+    return ok;
+}
+
+static JSValue area_print(JSContext *ctx, JSValueConst this_val,
+                          int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    JSValueConst opts   = argc > 0 ? argv[0] : JS_UNDEFINED;
+    JSValueConst before = argc > 1 ? argv[1] : JS_UNDEFINED;
+
+    if (!JS_IsUndefined(opts) && !JS_IsNull(opts) && !JS_IsObject(opts))
+        return JS_ThrowTypeError(ctx, "Print expects ([options], [before])");
+    if (!JS_IsUndefined(before) && !JS_IsNull(before) &&
+        !JS_IsFunction(ctx, before))
+        return JS_ThrowTypeError(ctx, "Print: `before` is a function called "
+                                      "with the page number, or nothing");
+
+    /* Refused from inside a `Draw`: the run would hand the handler's own
+     * painter a second context, which `paint_frame` refuses one page later
+     * with the dialog already shown. Said here instead, before anything is. */
+    BtaPainter *live = NULL;
+    JSValue     probe = area_painter(ctx, w, &live);
+    if (JS_IsException(probe) || !live) {
+        JS_FreeValue(ctx, probe);
+        return JS_EXCEPTION;
+    }
+    JS_FreeValue(ctx, probe);
+    if (live->cr)
+        return JS_ThrowTypeError(ctx, "Print: a frame is already being drawn "
+                                      "-- a Draw handler cannot print");
+
+    int32_t pages = 1, copies = 1, from = 1, to = 1;
+    char   *paper = NULL, *orient = NULL, *tofile = NULL;
+
+    if (!JS_IsUndefined(opts) && !JS_IsNull(opts)) {
+        if (!print_opt_int(ctx, opts, "Pages", &pages) ||
+            !print_opt_int(ctx, opts, "Copies", &copies) ||
+            !print_opt_int(ctx, opts, "From", &from) ||
+            !print_opt_int(ctx, opts, "To", &to) ||
+            !print_opt_text(ctx, opts, "Paper", &paper) ||
+            !print_opt_text(ctx, opts, "Orientation", &orient) ||
+            !print_opt_text(ctx, opts, "ToFile", &tofile)) {
+            g_free(paper);
+            g_free(orient);
+            g_free(tofile);
+            return JS_EXCEPTION;
+        }
+        /* `To` defaults to the last page, not to `From`. */
+        JSValue tov = JS_GetPropertyStr(ctx, opts, "To");
+        if (JS_IsUndefined(tov))
+            to = pages;
+        JS_FreeValue(ctx, tov);
+    } else {
+        to = pages;
+    }
+
+    JSValue answer = JS_EXCEPTION;
+
+    if (pages < 1 || pages > 10000)
+        JS_ThrowRangeError(ctx, "Print: %d pages is not a document (1 to 10000)",
+                           pages);
+    else if (copies < 1)
+        JS_ThrowRangeError(ctx, "Print: %d copies is not a job", copies);
+    else if (from < 1 || from > pages || to < 1 || to > pages || from > to)
+        JS_ThrowRangeError(ctx, "Print: pages %d to %d are outside 1 to %d",
+                           from, to, pages);
+    else if (paper && !print_paper_size(paper))
+        JS_ThrowRangeError(ctx, "Print: Paper '%s' is not one of A4, Letter, A5",
+                           paper);
+    else if (orient && strcmp(orient, "Portrait") && strcmp(orient, "Landscape"))
+        JS_ThrowRangeError(ctx, "Print: Orientation '%s' is not Portrait or "
+                                "Landscape", orient);
+    else {
+        GtkPrintOperation *op = gtk_print_operation_new();
+
+        gtk_print_operation_set_job_name(op, "Bintana");
+        gtk_print_operation_set_unit(op, GTK_UNIT_POINTS);
+
+        /*
+         * What GTK renders is not always what its settings say. Measured
+         * with a C probe: on `EXPORT` this GTK renders every page whatever
+         * range the settings carry, so a range there is said with the page
+         * count instead -- the file then holds exactly `From..To`. Through
+         * the dialog the count stays the whole document (it is what the
+         * dialog offers the range within) and the settings carry the preset.
+         */
+        const bool lineal = tofile && (from > 1 || to < pages);
+
+        gtk_print_operation_set_n_pages(op, lineal ? to - from + 1 : pages);
+
+        GtkPageSetup *setup = gtk_page_setup_new();
+        if (paper) {
+            GtkPaperSize *size = gtk_paper_size_new(print_paper_size(paper));
+            gtk_page_setup_set_paper_size(setup, size);
+            gtk_paper_size_free(size);
+        }
+        if (orient)
+            gtk_page_setup_set_orientation(
+                setup, !strcmp(orient, "Landscape") ? GTK_PAGE_ORIENTATION_LANDSCAPE
+                                                    : GTK_PAGE_ORIENTATION_PORTRAIT);
+        gtk_print_operation_set_default_page_setup(op, setup);
+        g_object_unref(setup);
+
+        GtkPrintSettings *settings = gtk_print_settings_new();
+        gtk_print_settings_set_n_copies(settings, copies);
+        if (!lineal && (from > 1 || to < pages)) {
+            GtkPageRange range = { (int)from - 1, (int)to - 1 };
+            gtk_print_settings_set_print_pages(settings, GTK_PRINT_PAGES_RANGES);
+            gtk_print_settings_set_page_ranges(settings, &range, 1);
+        }
+        gtk_print_operation_set_print_settings(op, settings);
+        g_object_unref(settings);
+
+        GtkPrintOperationAction action = GTK_PRINT_OPERATION_ACTION_PRINT_DIALOG;
+        if (tofile) {
+            /* No dialog: the road a test can take, and "print to PDF". */
+            gtk_print_operation_set_export_filename(op, tofile);
+            gtk_print_operation_set_show_progress(op, FALSE);
+            action = GTK_PRINT_OPERATION_ACTION_EXPORT;
+        }
+
+        PrintRun run = {
+            .w = w,
+            .before = JS_IsFunction(ctx, before) ? JS_DupValue(ctx, before)
+                                                 : JS_UNDEFINED,
+            .base = lineal ? (int)from : 1,
+            .first = -1,
+            .last  = 0,
+            .ok    = true,
+        };
+        g_signal_connect(op, "draw-page", G_CALLBACK(print_page), &run);
+
+        BtaApp    *app    = bta_current_app();
+        GtkWindow *parent = app && app->gapp
+                                ? gtk_application_get_active_window(app->gapp)
+                                : NULL;
+
+        GError                 *err    = NULL;
+        GtkPrintOperationResult result = gtk_print_operation_run(op, action,
+                                                                parent, &err);
+
+        if (result == GTK_PRINT_OPERATION_RESULT_ERROR) {
+            JS_ThrowInternalError(ctx, "Print: %s",
+                                  err ? err->message : "the printer refused");
+            g_clear_error(&err);
+            if (tofile)
+                g_unlink(tofile);
+        } else if (result == GTK_PRINT_OPERATION_RESULT_CANCEL) {
+            /* Not an error: the dialog closed with nothing chosen. */
+            answer = JS_NULL;
+        } else if (!run.ok) {
+            /* The Draw handler's own throw, still pending -- and what it had
+             * already written is not a document, the same bargain `SavePdf`
+             * makes about a file it did not finish. */
+            if (tofile)
+                g_unlink(tofile);
+            answer = JS_EXCEPTION;
+        } else {
+            /* What the dialog settled: the pages actually sent. */
+            GtkPrintSettings *final =
+                gtk_print_operation_get_print_settings(op);
+
+            answer = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, answer, "Copies",
+                              JS_NewInt32(ctx, final ? gtk_print_settings_get_n_copies(final)
+                                                    : copies));
+            JS_SetPropertyStr(ctx, answer, "From",
+                              JS_NewInt32(ctx, run.first < 0 ? 0 : run.first));
+            JS_SetPropertyStr(ctx, answer, "To",
+                              JS_NewInt32(ctx, run.last));
+        }
+
+        JS_FreeValue(ctx, run.before);
+        g_object_unref(op);
+    }
+
+    g_free(paper);
+    g_free(orient);
+    g_free(tofile);
+    return answer;
+}
+
 static const JSCFunctionListEntry area_props[] = {
     JS_CFUNC_DEF("Redraw", 0, area_redraw),
     JS_CFUNC_DEF("Dump",   0, area_dump),
     JS_CFUNC_DEF("Save",    3, area_save),
     JS_CFUNC_DEF("ToPng",   2, area_to_png),
     JS_CFUNC_DEF("SavePdf", 5, area_save_pdf),
+    JS_CFUNC_DEF("Print",   2, area_print),
 };
 
 void bta_paint_register(void)

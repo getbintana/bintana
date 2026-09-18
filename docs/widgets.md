@@ -1776,6 +1776,21 @@ its frame size, and `before(page)` is how it knows which page it is drawing: the
 for an exporter would change every handler ever written. `lib/report` is what uses
 it, and what asked for it.
 
+**`Print` is `SavePdf` onto paper, through GTK's own print operation.** The dialog
+is the desktop's -- printer list, page setup, range, copies -- and so is the
+preview: `Vista previa` opens it in the desktop's preview application
+(Evince/Papers), so a machine with neither installed has no preview to open. The
+rendering is the same `Draw` against the print context, so a page that fits the
+paper in `SavePdf` fits it here; the handler's frame is the printable area in
+points, not the whole sheet. `ToFile` skips the dialog and writes a PDF, which is
+both "print to PDF" and the only road the suite can assert on -- a test cannot
+click a dialog, and the dialog itself is checked by hand. Measured while building
+it, and worth knowing before touching this path again: on `EXPORT` this GTK
+renders every page whatever range the settings carry, so a range there is said
+with the page count instead -- the file then holds exactly `From..To`. What comes
+back is what was actually sent -- `{ Copies, From, To }` -- and `null` when the
+dialog was cancelled, which is not an error.
+
 **A `Draw` that throws now fails the export.** The handler's error is reported
 where every event's is and then consumed, so `Save` could not tell -- it wrote a
 PNG of whatever had been drawn before the error and returned happily, which is the

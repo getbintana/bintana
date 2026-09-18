@@ -15,7 +15,6 @@ in the same form.
 | [ISSUE-editable-combo.md](ISSUE-editable-combo.md) | No editable / autocompleting combo |
 | [ISSUE-fixed-fill-child.md](ISSUE-fixed-fill-child.md) | A `Fixed` container does not stretch a `Fill` child when it grows |
 | [ISSUE-fill-and-scroll.md](ISSUE-fill-and-scroll.md) | No container that fills the room it is given and scrolls when it cannot |
-| [ISSUE-printing.md](ISSUE-printing.md) | No printer — no dialog, no copies, no preview, and no way to lay a control onto a page |
 | [ISSUE-packaging.md](ISSUE-packaging.md) | No way to hand over an application without its project tree |
 
 **A gap that is filled is deleted, not archived.** What the runtime can do is in
@@ -23,7 +22,7 @@ in the same form.
 past its answer is a second description of the same feature, written by somebody
 who did not have it yet, in the directory of things that are missing.
 
-Seventeen have gone that way — sixteen filled and one refused. Filled: a drawing that
+Eighteen have gone that way — seventeen filled and one refused. Filled: a drawing that
 could not carry an image, text that could not be measured outside a `Draw`, a
 document that could only leave as one PNG per page, a program that had to run
 `sha256sum` to hash anything, an application that could not ask how big the
@@ -35,9 +34,11 @@ language with no value for the bytes of a file, a hierarchy that could not
 carry a column, a program with no word for sound or motion, a stack that could be
 written by hand and not built with the mouse, a picture whose rectangle
 nothing else could be put on, an answer that could only be read once all of
-it had arrived, and a control whose engine could be missing on a machine the
+it had arrived, a control whose engine could be missing on a machine the
 build knew nothing about — `Video`, whose `Available` is now asked of the
-registry rather than declared at build time.
+registry rather than declared at build time —, and a document that could only
+leave as a file and never reach a printer: `Print` sends it through the print
+dialog, and `ToFile` writes the PDF the dialog would have made.
 
 Refused: a list of check boxes. A tick the *list* keeps is state in the view,
 which is the wrong place for it — the argument is with the other things that are

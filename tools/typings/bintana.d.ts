@@ -541,6 +541,7 @@ declare class Switcher extends Widget {
     Reorder(...values: any[]): any;
 }
 declare class DrawingArea extends Widget {
+    Print(...values: any[]): any;
     Redraw(...values: any[]): any;
     Save(...values: any[]): any;
     SavePdf(...values: any[]): any;

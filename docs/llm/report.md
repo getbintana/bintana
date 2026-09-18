@@ -38,6 +38,7 @@ designable and serialised.
 | `Sections` | the band definitions — the whole of what a report is besides the numbers. See below. `{}` |
 | `Refresh()` | re-measures, redraws and emits `Prepared`. Call it when you changed the rows **in place**; assigning `Data` or `Sections` already does |
 | `SavePdf(path)` | **every page, one file**. Vector, at the paper's exact size, so the text in it is text; the pages are the ones the last measure worked out. This is what a report is for — `Save` is for when one page is going into something else |
+| `Print([options])` | **every page, to paper**. Through the print dialog: the printer, the paper, the copies and the range are the dialog's to answer, and GTK's preview shows what is about to come out. Paper and orientation start where the report has them; `{ Copies, From, To, ToFile }` say the rest. Answers `{ Copies, From, To }` — what was actually sent — and `null` when the dialog was cancelled. `ToFile` writes a PDF with no dialog |
 | `Save(path, [page], [scale])` | one page to a PNG. `page` defaults to the current one, `scale` to `2` (144 dpi — an A4 page is a 1190px-wide PNG). The export runs the same `Draw` at the exact paper size, clamps the page the way `Page` does, and **does not move the report** |
 | **event** `Prepared(count)` | the pages were computed: `Data`, `Sections` or `Refresh()`. `count` is the new `PageCount`. Changing the paper, the orientation or the margins re-measures **silently** — read `PageCount` back on the next line — because those can be written in a `.form`, and an event raised while a form is loading arrives before the form's other controls exist |
 | **event** `Page(page)` | the current page moved. `page` is one-based. It also fires when data that shrank pulled the current page back inside the new count |
@@ -173,9 +174,6 @@ be printed, and the theme's ink on white paper is the invisible drawing.
 
 These are runtime gaps, filed and linked rather than hidden:
 
-- **Printing** — `SavePdf` writes the document; choosing a printer, a tray and a
-  number of copies is [ISSUE-printing](../issues/ISSUE-printing.md), still
-  missing.
 - **Sorting** — grouping is consecutive and never reorders the data.
 - **A declared height still does not grow.** `Wrap` re-flows within it and cuts
   what is left over; the band that grows is the one that says

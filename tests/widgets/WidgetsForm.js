@@ -5235,6 +5235,77 @@ function Main() {
         Application.OnError = null;     /* back to the dialog for anything else */
 
         /*
+         * **And to paper, through the print dialog.** `Print` is the same
+         * `Draw` against the print context; `ToFile` takes the dialog out of
+         * it, which is the road a test can assert on -- a test cannot click
+         * a dialog, and the dialog itself is checked by hand.
+         */
+        this.plotWhat = "grid";
+        this.plotPages = [];
+        const printed = File.Join(SCRATCH, "printed.pdf");
+        const answer = area.Print({ Pages: 3, Paper: "A4", ToFile: printed },
+                                  (page) => { this.plotPages.push(page); });
+        eq("Print writes a PDF with no dialog", File.Info(printed).Type,
+           "application/pdf");
+        eq("before is called once per page, in order", this.plotPages.join(","),
+           "1,2,3");
+        eq("and answers what was sent",
+           JSON.stringify([answer.Copies, answer.From, answer.To]), "[1,1,3]");
+
+        /* A range of a longer document, twice: the file holds exactly it. */
+        this.plotPages = [];
+        const ranged = File.Join(SCRATCH, "ranged.pdf");
+        const ranswer = area.Print({ Pages: 5, Paper: "Letter",
+                                     From: 2, To: 3, Copies: 2, ToFile: ranged },
+                                   (page) => { this.plotPages.push(page); });
+        eq("a range draws exactly its pages", this.plotPages.join(","), "2,3");
+        eq("and the answer says which",
+           JSON.stringify([ranswer.Copies, ranswer.From, ranswer.To]),
+           "[2,2,3]");
+        eq("in a Letter file", File.Info(ranged).Type, "application/pdf");
+
+        throws("a document of no pages is refused",
+               () => area.Print({ Pages: 0, ToFile: printed }));
+        throws("and no copies either",
+               () => area.Print({ Copies: 0, ToFile: printed }));
+        throws("and a range outside the document",
+               () => area.Print({ Pages: 3, From: 2, To: 4, ToFile: printed }));
+        throws("and a backwards one",
+               () => area.Print({ Pages: 3, From: 3, To: 2, ToFile: printed }));
+        throws("and an unknown paper",
+               () => area.Print({ Paper: "Legal", ToFile: printed }));
+        throws("and an unknown orientation",
+               () => area.Print({ Orientation: "Sideways", ToFile: printed }));
+        throws("and options that are not an object", () => area.Print(42));
+        throws("and a `before` that is not a function",
+               () => area.Print({}, "page 1"));
+
+        /* A page that throws fails the run, and a file road must not keep
+         * the half of it that exists -- the same bargain as `SavePdf`. */
+        const phalf = File.Join(SCRATCH, "phalf.pdf");
+        const perrors = [];
+        Application.OnError = (m) => { perrors.push(m); };
+        throws("a page that throws fails the print",
+               () => area.Print({ Pages: 3, ToFile: phalf }, (page) => {
+                   if (page === 2) this.plotWhat = "bad image";
+               }));
+        check("and leaves no half-written file", !File.Exists(phalf));
+        check("and the handler's own error is what was reported",
+              perrors.length === 1 &&
+              perrors[0].includes("there-is-no-such-file"),
+              JSON.stringify(perrors));
+        this.plotWhat = "grid";
+        Application.OnError = null;     /* back to the dialog for anything else */
+
+        /* Printing from inside a `Draw` is refused up front, with the dialog
+         * still down -- refusing one page later would show it first. */
+        this.plotWhat = "nestedprint";
+        area.Save(png, 40, 40);
+        check("a Draw that prints is refused",
+              this.plotNested.includes("already being drawn"), this.plotNested);
+        this.plotWhat = "grid";
+
+        /*
          * **The painter is over when the frame is.** The natural mistake is to
          * keep it and draw from a timer later, which is a write into freed memory
          * a few frames on -- so it is a refusal and not a crash.
@@ -5327,6 +5398,12 @@ function Main() {
         }
         if (this.plotWhat === "nested") {
             try { this.plotArea.Save(File.Join(SCRATCH, "nested.png"), 20, 20);
+                  this.plotNested = "NOT REFUSED"; }
+            catch (e) { this.plotNested = e.message; }
+            return;
+        }
+        if (this.plotWhat === "nestedprint") {
+            try { this.plotArea.Print({ ToFile: File.Join(SCRATCH, "nested.pdf") });
                   this.plotNested = "NOT REFUSED"; }
             catch (e) { this.plotNested = e.message; }
             return;
@@ -9709,6 +9786,11 @@ function Main() {
         a.SetFocus();
         eq("the walk starts where the focus is", a.Focused, true);
         until("the window is mapped", () => surf.Bounds().Width > 0, () => {
+        /* Grabbed again, like every walk below does: the tail runs after
+         * every sync test, and anything shown since -- a window of another
+         * test's, a second of exports -- may have moved the focus. What is
+         * walked here is the order, not where the focus survived from. */
+        a.SetFocus();
         check("undeclared, Tab follows the order they were drawn in",
               surf.FocusNext() && b.Focused, this.focusName(box));
         check("and on to the next",

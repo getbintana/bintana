@@ -44,6 +44,7 @@ It is a [`Component`](../widgets/Component.md), so everything on
 | `Refresh()` | re-measures, redraws and emits `Prepared` | [the data](#the-data) |
 | `Save(path, [page], [scale])` | one page to a PNG | [off the screen](#off-the-screen) |
 | `SavePdf(path)` | **every page, one file** | [off the screen](#off-the-screen) |
+| `Print([options])` | **every page, to paper** | [off the screen](#off-the-screen) |
 | **event** `Page(page)` | the current page moved | [turning the pages](#turning-the-pages) |
 | **event** `Prepared(count)` | the pages were computed | [the data](#the-data) |
 
@@ -116,6 +117,7 @@ which of them to paint.
 | | |
 |---|---|
 | `SavePdf(path)` | **every page, one file.** Vector, at the paper's exact size, so the text in it is text. This is what a report is for |
+| `Print([options])` | **every page, to paper** through the print dialog. Paper and orientation start where the report has them; `{ Copies, From, To, ToFile }` say the rest. Answers `{ Copies, From, To }`, and `null` when the dialog was cancelled. `ToFile` writes a PDF with no dialog |
 | `Save(path, [page], [scale])` | one page to a PNG. `page` defaults to the current one and `scale` to `2` — 144 dpi, so an A4 page is a 1190px-wide PNG. It **does not move the report** |
 
 The canvas always shows the **whole page, scaled to fit, centred**, on white
@@ -128,8 +130,6 @@ invisible drawing.
 
 ## What it does not do
 
-- **No printer.** `SavePdf` writes the document; choosing a printer, a tray and a
-  number of copies is [ISSUE-printing](../../issues/ISSUE-printing.md).
 - **No sorting.** See [the data](#the-data).
 - **A declared height does not grow.** `Wrap` re-flows within it and cuts what is
   left over; the band that grows is the one that says `Height: "Auto"`.

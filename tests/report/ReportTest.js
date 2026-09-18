@@ -109,6 +109,7 @@ class ReportTest extends Form {
             this.testAuto();
             this.testSave();
             this.testPdf();
+            this.testPrint();
         } catch (e) {
             failures.push(`uncaught: ${e.message}\n${e.stack || ""}`);
         }
@@ -677,6 +678,50 @@ class ReportTest extends Form {
             passed++;
         }
         check("and the half of it that existed is gone", !File.Exists(broken));
+    }
+
+    /* ---------------------------------------------------------------- print
+     *
+     * The same pages `SavePdf` writes, through the print dialog -- and with
+     * `ToFile` instead of it, which is the road a test can assert on. The
+     * dialog itself, and the preview, are checked by hand.
+     */
+    testPrint() {
+        this.Rep.Sections = PLAIN;
+        this.Rep.Data     = rows(1, 20);
+        this.Rep.Page     = 2;
+
+        const at  = (name) => File.Join(SCRATCH, name);
+        const pdf = at("printed.pdf");
+
+        this.moved = [];
+        const answer = this.Rep.Print({ ToFile: pdf });
+
+        eq("Print writes a PDF with no dialog", File.Info(pdf).Type,
+           "application/pdf");
+        eq("and does not move the report", this.Rep.Page, 2);
+        eq("nor tell it that it moved", this.moved.length, 0);
+        eq("and answers what was sent",
+           JSON.stringify([answer.Copies, answer.From, answer.To]),
+           JSON.stringify([1, 1, this.Rep.PageCount]));
+
+        /* A range of the document holds exactly it. */
+        const ranged = at("ranged.pdf");
+        const ranswer = this.Rep.Print({ From: 1, To: 2, ToFile: ranged });
+        eq("a range answers its pages",
+           JSON.stringify([ranswer.From, ranswer.To]), "[1,2]");
+        check("in a smaller file",
+              File.Info(ranged).Size < File.Info(pdf).Size,
+              `${File.Info(ranged).Size} against ${File.Info(pdf).Size}`);
+
+        /* And the options that are not an object are refused before anything
+         * is drawn. */
+        try {
+            this.Rep.Print(42);
+            failures.push("options that are not an object should be refused");
+        } catch (e) {
+            passed++;
+        }
     }
 
     /* --------------------------------------------------------------- report */
