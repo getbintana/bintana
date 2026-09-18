@@ -2268,7 +2268,7 @@ void bta_paint_register(void)
          * already translated where it was written.
          */
         BTA_CLASS("DrawingArea", "Control", build_drawing_area, area_props, false,
-                  "Draw,DrawPage"),
+                  "Draw,DrawPage,Paginate"),
     };
     bta_register_classes(rows, (int)G_N_ELEMENTS(rows));
 }

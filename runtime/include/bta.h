@@ -567,6 +567,10 @@ void       bta_emit(BtaWidget *w, const char *event, int argc, JSValueConst *arg
 /* The same, answering whether the handler threw -- which only an exporter needs:
  * a frame that died halfway must not become a file that reports success. */
 bool       bta_emit_ok(BtaWidget *w, const char *event, int argc, JSValueConst *argv);
+/* An event asked a question: the handler's answer, and whether it threw.
+ * Only for an event whose value the runtime needs -- see bta_widget.c. */
+JSValue    bta_emit_answer(BtaWidget *w, const char *event, int argc,
+                           JSValueConst *argv, bool *threw);
 /* Whether the form declared a handler for it -- asked only where there is a
  * second event to fall back on. See bta_widget.c. */
 bool       bta_has_handler(BtaWidget *w, const char *event);

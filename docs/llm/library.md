@@ -355,6 +355,12 @@ same cairo calls that paint the screen, so a page that fits the paper in
 `SavePdf` fits it here. The frame is the printable area in **points**, 72 to the
 inch.
 
+**How many sheets there are is asked, not assumed.** `Pages` is the caller's
+count against the paper *it* had; a control that declares
+`Paginate(width, height)` is asked again once the dialog has settled, and
+`Printer` prints what it answers. Without it a viewer laid out for A4 printed
+four sheets on A5 and dropped the two that did not fit.
+
 **Two verbs and not one with a destination**, the way `OpenFile` and `SaveFile`
 are two. A file has no copies: `Copies` on `ToFile` is refused rather than
 accepted and quietly ignored — which is what the one-verb version did, answering

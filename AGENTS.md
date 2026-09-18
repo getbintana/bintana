@@ -3230,3 +3230,23 @@ person who wrote it either.
   that any two work at once. Both halves exist now -- `tests/api.sh` compares
   the top-level names of every library, and `tests/smoke` names all three --
   and the table itself is `Printer.Papers`, read off GTK.
+- **How many pages a document is depends on the paper, and the paper is the
+  dialog's answer.** `Printer`'s `Pages` is worked out against the paper the
+  *caller* had; a `Markdown` laid out for A4 is six sheets on A5, and the
+  operation printed the four that were declared and dropped the rest -- measured
+  on a real document, silent. `Paginate(width, height)` is asked in GTK's
+  `begin-print`, which is the only place both things are true: the paper is
+  resolved and `set_n_pages` may still be called. **A control whose layout does
+  not move with the paper must declare none** -- `lib/report` scales a page to
+  fit and its count does not move. It declared one for a single commit,
+  returning `PageCount`, and the cost was not redundancy: `PageCount` measures
+  when it has to, and measuring inside `begin-print` re-enters the drawing the
+  operation is in the middle of. **The suite hung.** Measure inside `Paginate`,
+  raise no events.
+- **`tests/api.sh` scans for `bta_emit*` by name, so a new spelling is a whole
+  event nobody checks.** The pattern knew `bta_emit`, `_on` and `_ok`;
+  `bta_emit_answer` arrived with `Paginate` and the event was raised by the
+  runtime, handled by two libraries, and counted by nothing -- the check went on
+  reporting green with one event missing from its own total. It is `bta_emit\w*`
+  now. A scanner that lists what it knows about goes stale the first time
+  somebody adds to what it scans.

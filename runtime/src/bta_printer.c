@@ -146,7 +146,7 @@ static const char *paper_size(const char *paper)
  * would be a number carried through the call and reported back as sent.
  */
 static bool setup_read(JSContext *ctx, JSValueConst opts, PrintSetup *out,
-                       bool copies, const char *who)
+                       bool copies, bool counts, const char *who)
 {
     bool has_to = false;
 
@@ -192,8 +192,18 @@ static bool setup_read(JSContext *ctx, JSValueConst opts, PrintSetup *out,
                            who, out->pages);
     else if (out->copies < 1)
         JS_ThrowRangeError(ctx, "%s: %d copies is not a job", who, out->copies);
-    else if (out->from < 1 || out->from > out->pages ||
-             out->to < 1 || out->to > out->pages || out->from > out->to)
+    /*
+     * The half of the range that is true whatever the paper turns out to be.
+     * **The total is not final yet when the control counts its own pages**:
+     * `Pages` is then the caller's estimate against the paper *it* had, and
+     * `Paginate` answers the real number once the dialog has settled -- so a
+     * range is measured against the total there and not here, where the number
+     * to measure it against is about to change.
+     */
+    else if (out->from < 1 || out->to < 1 || out->from > out->to)
+        JS_ThrowRangeError(ctx, "%s: pages %d to %d are not a range", who,
+                           out->from, out->to);
+    else if (!counts && (out->from > out->pages || out->to > out->pages))
         JS_ThrowRangeError(ctx, "%s: pages %d to %d are outside 1 to %d", who,
                            out->from, out->to, out->pages);
     else if (out->paper && !paper_size(out->paper))
@@ -218,7 +228,91 @@ typedef struct {
     int        first;       /* first page rendered, 1-based; -1 while none */
     int        last;
     bool       ok;
+    /* What the setup asked for, kept because `begin-print` may have to work the
+     * range out again against a paper the dialog chose. */
+    int         pages, from, to;
+    bool        lineal;
+    const char *who;        /* "Printer.Send" or "Printer.ToFile", for a message */
 } PrintRun;
+
+/*
+ * **The paper is not known until the dialog has been answered**, and how many
+ * sheets a document is depends on it.
+ *
+ * `Pages` in the setup is worked out against the paper the *caller* had: a
+ * `Markdown` that is four A4 sheets is six A5 ones. If the person picks A5 in
+ * the dialog, GTK hands every frame the A5 size, the control re-flows for it --
+ * and the operation still only asks for the four sheets that were declared, so
+ * the last two are never drawn and nothing says so. Measured, with a real
+ * document: four declared, six needed, four printed.
+ *
+ * `begin-print` is where that is fixable, because it carries the
+ * `GtkPrintContext` -- the paper, resolved -- and `set_n_pages` may still be
+ * called. So the control is **asked**: `Paginate(width, height)` answers how
+ * many sheets it is at that size, and a form that declares none keeps the
+ * number it gave, which is what every caller had before this existed.
+ *
+ * The range is worked out again with it, because `From`/`To` were written
+ * against the old count: a `To` past the new end is clamped to it, and a `From`
+ * past it is a range with nothing in it, which is an error rather than an empty
+ * file.
+ */
+static void on_begin_print(GtkPrintOperation *op, GtkPrintContext *context,
+                           gpointer data)
+{
+    PrintRun *run = data;
+
+    if (!run->ok || !bta_has_handler(run->w, "Paginate"))
+        return;
+
+    JSContext *ctx = run->w->ctx;
+    int        w   = (int)(gtk_print_context_get_width(context) + 0.5);
+    int        h   = (int)(gtk_print_context_get_height(context) + 0.5);
+
+    JSValueConst argv[2] = { JS_NewInt32(ctx, w), JS_NewInt32(ctx, h) };
+    bool         threw   = false;
+    JSValue      answer  = bta_emit_answer(run->w, "Paginate", 2, argv, &threw);
+    int32_t      pages   = 0;
+
+    if (threw || JS_ToInt32(ctx, &pages, answer))
+        pages = 0;
+    JS_FreeValue(ctx, answer);
+
+    if (threw) {
+        JS_ThrowInternalError(ctx, "the Paginate handler threw: nothing was "
+                                   "printed past the error above");
+        run->ok = false;
+        return;
+    }
+    /* A handler that answers nothing usable is a handler that has nothing to
+     * add: the declared count stands. The range is still settled against it
+     * below, because `setup_read` left that to here. */
+    if (pages >= 1 && pages <= 10000)
+        run->pages = pages;
+
+    /*
+     * The range, against the count that is now final. `To` past the end is
+     * clamped -- "to the end" is what a caller asking for more than there is
+     * means -- and a `From` past it is a range with nothing in it, which is an
+     * error and not an empty file.
+     */
+    if (run->to > run->pages)
+        run->to = run->pages;
+    if (run->from > run->pages) {
+        JS_ThrowRangeError(ctx, "%s: this paper is %d page%s and the range "
+                                "starts at %d", run->who, run->pages,
+                           run->pages == 1 ? "" : "s", run->from);
+        run->ok = false;
+        return;
+    }
+
+    if (run->lineal) {
+        run->base = run->from;
+        gtk_print_operation_set_n_pages(op, run->to - run->from + 1);
+    } else {
+        gtk_print_operation_set_n_pages(op, run->pages);
+    }
+}
 
 static void on_draw_page(GtkPrintOperation *op, GtkPrintContext *context,
                          int page_nr, gpointer data)
@@ -268,8 +362,12 @@ static JSValue print_run(JSContext *ctx, JSValueConst area, JSValueConst opts,
         return JS_ThrowTypeError(ctx, "%s: a frame is already being drawn -- a "
                                       "Draw handler cannot print", who);
 
+    /* Whether the control works its own page count out, which decides where the
+     * range is checked -- see setup_read. */
+    const bool counts = bta_has_handler(w, "Paginate");
+
     PrintSetup setup;
-    if (!setup_read(ctx, opts, &setup, tofile == NULL, who))
+    if (!setup_read(ctx, opts, &setup, tofile == NULL, counts, who))
         return JS_EXCEPTION;
 
     GtkPrintOperation *op = gtk_print_operation_new();
@@ -323,12 +421,18 @@ static JSValue print_run(JSContext *ctx, JSValueConst area, JSValueConst opts,
     }
 
     PrintRun run = {
-        .w     = w,
-        .base  = lineal ? setup.from : 1,
-        .first = -1,
-        .last  = 0,
-        .ok    = true,
+        .w      = w,
+        .base   = lineal ? setup.from : 1,
+        .first  = -1,
+        .last   = 0,
+        .ok     = true,
+        .pages  = setup.pages,
+        .from   = setup.from,
+        .to     = setup.to,
+        .lineal = lineal,
+        .who    = who,
     };
+    g_signal_connect(op, "begin-print", G_CALLBACK(on_begin_print), &run);
     g_signal_connect(op, "draw-page", G_CALLBACK(on_draw_page), &run);
 
     BtaApp    *app    = bta_current_app();

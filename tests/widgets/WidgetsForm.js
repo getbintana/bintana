@@ -5330,6 +5330,69 @@ function Main() {
               (Printer.Default === "" || names.includes(Printer.Default)),
               `${JSON.stringify(Printer.Default)} against ${JSON.stringify(names)}`);
 
+        /*
+         * **How many sheets a document is depends on the paper, and the paper
+         * is not known until the dialog has been answered.**
+         *
+         * `Pages` in the setup is worked out against the paper the caller had.
+         * A viewer laid out for A4 is more sheets on A5 -- and the operation
+         * used to print the count that was declared and drop the rest: four
+         * declared, six needed, four printed, silently, measured on a real
+         * document. `Paginate(width, height)` is asked in `begin-print`, where
+         * the paper is resolved and the count can still be changed.
+         *
+         * Its own control, because declaring the event changes where a range is
+         * checked -- see the assertions below -- and the area above is asserting
+         * the other half.
+         */
+        const sheet = new DrawingArea();
+        this.Fixed1.Add(sheet);
+        sheet.Name = "Sheet1";
+        sheet.Resize(100, 60);
+
+        const sheetPdf = File.Join(SCRATCH, "sheets.pdf");
+        this.sheetDrew = [];
+        const two = Printer.ToFile(sheet, sheetPdf, { Pages: 1, Paper: "A4" });
+        eq("Paginate decides how many sheets there are, not the setup", two, 2);
+        eq("and every one of them is drawn", this.sheetDrew.join(","), "1,2");
+        check("it is asked with the printable area, which is smaller than the sheet",
+              this.sheetFrame[0] < 595 && this.sheetFrame[1] < 842,
+              JSON.stringify(this.sheetFrame));
+
+        /* A smaller paper is more sheets, which is the whole point. */
+        this.sheetDrew = [];
+        eq("a smaller paper is more of them",
+           Printer.ToFile(sheet, sheetPdf, { Pages: 1, Paper: "A5" }), 3);
+        eq("and all of those are drawn too", this.sheetDrew.join(","), "1,2,3");
+
+        /* A range is settled against the count that turned out to be true. */
+        this.sheetDrew = [];
+        eq("a To past the end is the end",
+           Printer.ToFile(sheet, sheetPdf, { Pages: 1, Paper: "A5", From: 2, To: 9 }), 2);
+        eq("and it drew exactly those", this.sheetDrew.join(","), "2,3");
+        throws("a From past the end is a range with nothing in it",
+               () => Printer.ToFile(sheet, sheetPdf,
+                                    { Pages: 1, Paper: "A4", From: 5, To: 6 }));
+        throws("and a backwards range is refused whatever the paper",
+               () => Printer.ToFile(sheet, sheetPdf, { Pages: 4, From: 3, To: 2 }));
+
+        /* A handler that throws stops the print, like a page that throws. */
+        this.sheetCount = 0;         /* an answer the runtime cannot use */
+        eq("an answer that is not a count leaves the declared one standing",
+           Printer.ToFile(sheet, sheetPdf, { Pages: 2 }), 2);
+        this.sheetCount = null;
+        const pgerrors = [];
+        Application.OnError = (m) => { pgerrors.push(m); };
+        this.sheetThrow = true;
+        throws("and a Paginate that throws stops the print",
+               () => Printer.ToFile(sheet, sheetPdf, { Pages: 2 }));
+        this.sheetThrow = false;
+        check("with the handler's own error reported",
+              pgerrors.length === 1 && pgerrors[0].includes("no pagination"),
+              JSON.stringify(pgerrors));
+        Application.OnError = null;
+        sheet.Delete();
+
         /* A page that throws fails the run, and a file road must not keep
          * the half of it that exists -- the same bargain as `SavePdf`. */
         const phalf = File.Join(SCRATCH, "phalf.pdf");
@@ -5440,6 +5503,24 @@ function Main() {
      * written by a `before` callback and read back in `Draw`. The body is the
      * screen's, so what is asserted about a page is what is asserted about a
      * frame. */
+    /* The second drawing area's three handlers: it exists to assert `Paginate`,
+     * which the first one deliberately does not declare. One sheet per 200
+     * points of height, so the count really does follow the paper. */
+    Sheet1_Paginate(width, height) {
+        this.sheetFrame = [width, height];
+        if (this.sheetThrow) throw new Error("no pagination today");
+        if (this.sheetCount !== null && this.sheetCount !== undefined)
+            return this.sheetCount;
+        return Math.ceil(1200 / height);
+    }
+
+    Sheet1_DrawPage(p, page, width, height) {
+        this.sheetDrew.push(page);
+        p.Text(10, 20, `sheet ${page}`);
+    }
+
+    Sheet1_Draw(p, width, height) { p.Text(10, 20, "sheet"); }
+
     Plot1_DrawPage(p, page, width, height) {
         this.plotPages.push(page);
         /* Which sheet is asked to fail, for the assertion that a page that

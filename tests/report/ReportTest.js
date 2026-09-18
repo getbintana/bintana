@@ -717,6 +717,18 @@ class ReportTest extends Form {
               `${File.Info(ranged).Size} against ${File.Info(pdf).Size}`);
 
         /*
+         * **A report keeps its count whatever paper comes out**, because its
+         * bands are declared in its own points and a page is scaled to fit the
+         * frame. It declares no `Paginate` for that reason, and this is the
+         * assertion that says the absence is deliberate: a `Markdown` on the
+         * same call prints more sheets on smaller paper, and a report does not.
+         */
+        const onA5 = Printer.ToFile(this.Rep.Canvas, at("a5.pdf"),
+                                    { Pages: this.Rep.PageCount, Paper: "A5" });
+        eq("a report is the same pages on smaller paper", onA5,
+           this.Rep.PageCount);
+
+        /*
          * **`Send` is the report's own line to the dialog**, and what can be
          * asserted without one is that it refuses what `Printer` refuses,
          * before anything opens.

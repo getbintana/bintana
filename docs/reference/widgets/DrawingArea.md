@@ -23,12 +23,14 @@ It is a `Widget` and a control like any other, so everything on
 | `ToPng([width], [height])` | the same frame as `Bytes` | [off the screen](#off-the-screen) |
 | **event** `Draw(painter, width, height)` | paint it | [the Draw handler](#the-draw-handler) |
 | **event** `DrawPage(painter, page, width, height)` | paint one sheet of paper | [the Draw handler](#the-draw-handler) |
+| **event** `Paginate(width, height)` | how many sheets it is at that size | [the Draw handler](#the-draw-handler) |
 
 ## The `Draw` handler
 
 | | |
 |---|---|
 | **event** `Draw(painter, width, height)` | paint it. The size is the frame's, in logical pixels |
+| **event** `Paginate(width, height)` | **how many sheets this document is at that size**, answered back. [`Printer`](../globals/Printer.md) asks it once the dialog has settled the paper, and prints that many instead of the `Pages` it was given. The size is the printable area in points — the sheet less the printer's own margins. Declare none and the given count stands, which is right for a drawing whose layout does not move with the paper. It runs inside the print operation: measuring is fine, raising events of your own is not |
 | **event** `DrawPage(painter, page, width, height)` | paint one **sheet of paper**: raised by [`Printer`](../globals/Printer.md) and by `SavePdf` instead of `Draw`, with the page said out loud. 1-based, and the size is the printable area in **points**. A form that declares none gets `Draw`, which is right for a drawing that is one page |
 
 ```js

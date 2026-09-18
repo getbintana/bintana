@@ -37,6 +37,23 @@ that fits the paper in `SavePdf` fits it here.
 `DrawPage(painter, page, width, height)` gets that; one that declares none gets
 `Draw`, which is the right answer for a drawing that is one page.
 
+**And how many sheets there are is asked, not assumed.** `Pages` in the setup is
+worked out against the paper the *caller* had, and the person may pick another
+one in the dialog: a document that is four A4 sheets is more on A5. So a control
+may declare `Paginate(width, height)` and answer how many sheets it is at that
+size, and `Printer` asks it once the dialog has settled — the only moment the
+answer exists, and the last moment the count can still be changed. Without it
+the operation printed the count that was declared and dropped the rest: four
+declared, six needed, four printed, silently. Measured.
+
+A control whose layout does not move with the paper declares none, and the given
+count stands. [`Markdown`](../libraries/Markdown.md) re-flows and answers;
+[`Report`](../libraries/Report.md) scales a page to fit and does not.
+
+`Paginate` runs **inside** the print operation, so measuring is fine and raising
+events of your own is not — one that re-entered the drawing the operation was in
+the middle of hung the suite.
+
 ```js
 Sheet_DrawPage(p, page, w, h) {
     p.Text(40, 60, Locale.Text("Page {0} of {1}", page, this.total));
@@ -60,7 +77,7 @@ Both verbs take the same object, and every key is optional.
 | `Pages` | how many sheets the document is, 1 to 10000. Default `1` |
 | `Paper` | `A4`, `Letter` or `A5` |
 | `Orientation` | `Portrait` or `Landscape` |
-| `From`, `To` | the range within the document. `From` defaults to 1 and **`To` to the last page** |
+| `From`, `To` | the range within the document. `From` defaults to 1 and **`To` to the last page**. When the control answers `Paginate`, the range is settled against *that* count: a `To` past the end is the end, and a `From` past it is refused |
 | `Copies` | how many. **`Send` only** — see below |
 
 A key that is `null` was **not given**, exactly as one that is `undefined`. It

@@ -43,8 +43,15 @@ const TABLE  = new Regex("static const JSCFunctionListEntry (\\w+)\\[\\]\\s*=\\s
  * `_ok` too: an exporter emits `Draw` through the variant that answers whether
  * the handler threw, and an event that stopped being scanned is an event whose
  * arity stops being checked -- silently, which is how three documents came to
- * say `MouseWheel(dx, dy, ctrl, shift)`. */
-const EMIT   = new Regex("bta_emit(?:_on|_ok)?\\s*\\(\\s*[^;\"]*\"([A-Z][A-Za-z]*)\"\\s*,\\s*(\\d+)");
+ * say `MouseWheel(dx, dy, ctrl, shift)`.
+ *
+ * **The list of spellings is the load-bearing part**, and it has already been
+ * short by one: `bta_emit_answer` arrived with `Paginate` and this pattern did
+ * not know the name, so the event was raised by the runtime, handled by two
+ * libraries, and counted by nothing. A suffix that is not here is a whole event
+ * that is not checked. `\w*` rather than the three known suffixes now, so the
+ * next one is scanned the day it is written. */
+const EMIT   = new Regex("bta_emit\\w*\\s*\\(\\s*[^;\"]*\"([A-Z][A-Za-z]*)\"\\s*,\\s*(\\d+)");
 
 /*
  * The C surfaces that are a **global** rather than a widget class, and the

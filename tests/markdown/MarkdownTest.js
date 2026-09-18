@@ -724,6 +724,27 @@ class MarkdownTest extends Form {
               File.Info(ranged).Size < File.Info(printed).Size,
               `${File.Info(ranged).Size} against ${File.Info(printed).Size}`);
 
+        /*
+         * **The paper the dialog settles on decides how many sheets there are.**
+         * A viewer laid out for A4 is more sheets on A5, and the count declared
+         * when the print began was A4's: without `Canvas_Paginate` the
+         * operation printed that many and dropped the rest -- four declared,
+         * six needed, four printed, silently. Measured, and this is the
+         * assertion that keeps it measured.
+         */
+        const a5file = this.at("printed-a5.pdf");
+        const onA5   = Printer.ToFile(this.Doc.Canvas, a5file,
+                                      { Pages: pages, Paper: "A5" });
+        check("a smaller paper prints more sheets than were declared",
+              onA5 > pages, `${onA5} against the ${pages} declared`);
+        /* At least what the whole sheet takes, because what a printer gives a
+         * page is the sheet less its own margins -- never more. How many more
+         * is the printer's, so the assertion is the direction and not a
+         * number. */
+        const wholeA5 = this.Doc.SavePdf(this.at("len-a5.pdf"), "A5");
+        check("and no fewer than the whole sheet would take",
+              onA5 >= wholeA5, `${onA5} against ${wholeA5}`);
+
         /* `Send` is the viewer's own line to the dialog; what is assertable
          * without one is that it refuses before anything opens. */
         throws("a sheet that is not one is refused",

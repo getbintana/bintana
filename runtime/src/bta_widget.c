@@ -330,6 +330,31 @@ bool bta_emit_ok(BtaWidget *w, const char *event, int argc, JSValueConst *argv)
 }
 
 /*
+ * An event that is **asked a question**, rather than told something.
+ *
+ * Almost every event here is a notification: the handler's answer is nothing
+ * and its throw has already been reported, which is what `bta_emit` and
+ * `bta_emit_ok` are for. `Paginate` is not one -- the runtime needs the number
+ * back, and a handler that failed to work it out must stop the print rather
+ * than let it go out short. So this hands back both: the value, owned by the
+ * caller, and whether the handler threw.
+ *
+ * The exception has been reported and consumed by then, the same as every other
+ * event; `threw` is what lets the caller raise one of its own to fail with,
+ * which is the bargain `bta_emit_ok` already makes for an exporter.
+ */
+JSValue bta_emit_answer(BtaWidget *w, const char *event, int argc,
+                        JSValueConst *argv, bool *threw)
+{
+    if (!w) {
+        if (threw)
+            *threw = false;
+        return JS_UNDEFINED;
+    }
+    return emit_on(w->ctx, w->form, w->name, event, argc, argv, threw);
+}
+
+/*
  * **Is there a handler for this event at all?**
  *
  * Asked by the one caller that has a *second* event to fall back on: a page
