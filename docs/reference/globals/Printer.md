@@ -170,8 +170,27 @@ is the more specific answer.
 
 | | |
 |---|---|
-| `Names` | the printers this session can reach, as a list of strings. A machine with none answers `[]` |
-| `Default` | the one it would use, or `""` when none is marked |
+| `Names` | the printers this session can reach. `[]` for a machine with none, **`null`** for a session that cannot ask |
+| `Default` | the one it would use. `""` when none is marked, **`null`** when it cannot ask |
+
+**Three answers, because there are three states.** `[]` and `null` are not the
+same thing, and that difference is the whole reason `null` is here rather than a
+throw: an empty list cannot be told apart from a machine with no printer, which
+is an argument for a third value and not for an exception.
+
+```js
+const printers = Printer.Names;
+if (printers === null)      … // this build cannot say
+else if (!printers.length)  … // it can, and there are none
+else                        … // these are they
+```
+
+A program should not have to catch something to find out what it may ask. These
+did throw, and the suite is what showed the cost twice over: read unguarded, the
+throw ended `Form_Open` and took 1633 unrun assertions with it, reported as one
+failure; and the `try` that fixed it was a capability question answered by
+catching, which is the control flow [`Video`](../widgets/Video.md)'s `Available`
+exists to prevent.
 
 This is the question a palette has to be able to ask **before** it offers a
 button, which is the argument [`Video`](../widgets/Video.md)'s `Available`
@@ -183,11 +202,10 @@ cold and 6.2 ms warm, because GTK caches its backend underneath — and unlike a
 plugin registry, the printers a machine has do change while a program is
 running.
 
-**They are the Unix print backend's**, which is a GTK module of its own. A build
-without it **refuses both with a sentence** rather than answering an empty list,
-because an empty list cannot be told apart from a machine with no printer at
-all. Printing itself is unaffected: the dialog is core GTK, and `Send` and
-`ToFile` work the same everywhere.
+**They are the Unix print backend's**, which is a GTK module of its own, and a
+build without it is where `null` comes from. Printing itself is unaffected: the
+dialog is core GTK, and `Send` and `ToFile` work the same everywhere. The
+`no-unix-print` job in CI is what keeps that branch compiled and run.
 
 ## See also
 

@@ -2404,14 +2404,22 @@ Printer.ToFile(this.Sheet, path, { Pages: 12 })  // a PDF, and no dialog
 |---|---|
 | `Send(area, [setup])` | the print dialog, then paper. → `{ Copies, From, To }`, or `null` when cancelled |
 | `ToFile(area, path, [setup])` | the same sheets as one PDF, no dialog. → how many pages |
-| `Names` | the printers this session can reach |
-| `Default` | the one it would use, or `""` |
+| `Names` | the printers this session can reach. `[]` for none, `null` if this build cannot ask |
+| `Default` | the one it would use. `""` for none, `null` if it cannot ask |
 | `Papers` | `{ A4: { Width, Height }, … }` in points, read off GTK |
 
 `area` is a control that draws. Its handler runs once per sheet against the
 print context, and the sheet arrives as an argument:
 `DrawPage(painter, page, width, height)`, falling back to `Draw` for a form that
 declares none. The frame is the printable area in **points**.
+
+**And how many sheets there are is asked**, because it depends on the paper the
+dialog settles on: a control may declare `Paginate(width, height)` and answer its
+count at that size, and `Printer` asks it in `begin-print` -- the only moment the
+paper is resolved and the count can still change. Declare none and the `Pages`
+given stands, which is right for a layout that does not move with the paper
+(`lib/report` scales, `lib/markdown` re-flows). It runs inside the print
+operation: measure freely, raise no events.
 
 | Setup | |
 |---|---|
@@ -2427,9 +2435,10 @@ has no copies, so `ToFile` refuses the key. It is the split `Dialog.OpenFile`
 and `Dialog.SaveFile` already are.
 
 **`Names` and `Default` need `gtk4-unix-print`**, which is a GTK module of its
-own; a build without it refuses them with a sentence rather than answering an
-empty list that cannot be told apart from a machine with no printer. Printing
-itself is core GTK and works either way.
+own; a build without it answers **`null`** -- a third value, because `[]` cannot
+be told apart from a machine with no printer and a throw would make a capability
+question something a program has to catch. Printing itself is core GTK and works
+either way.
 
 ## AudioPlayer
 

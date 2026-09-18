@@ -5319,30 +5319,30 @@ function Main() {
          * `Names` is the printers this session can reach and `Default` the one
          * it would use -- the question a palette has to be able to ask before
          * it offers a button, the same argument `Video.Available` settled. But
-         * they are GTK's **Unix** print backend, an optional module, and a
-         * build without it refuses them with a sentence. So this asserts
-         * whichever half this build has, the way `testTerminal` does for VTE --
-         * and it is written as a `try` because there is nothing to ask first,
-         * which is the one rough edge left in this surface.
+         * they are GTK's **Unix** print backend, an optional module, so there
+         * are three answers and not two: the printers, `[]` for a machine that
+         * has none, and **`null` for a session that cannot ask at all**. This
+         * asserts whichever this build gives, the way `testTerminal` does for
+         * VTE.
          *
-         * Read unguarded once, and on a build without the module the throw took
-         * the **rest of the project** with it: 1671 assertions instead of 3304,
-         * because an uncaught error ends `Form_Open`.
+         * They threw once, and twice over. `Printer.Names` read unguarded on a
+         * build without the module ended `Form_Open` and took **1633 unrun
+         * assertions** with it, reported as a single failure; and the `try` that
+         * fixed that was a capability question answered by catching something,
+         * which is the control flow `Video.Available` exists to prevent. `null`
+         * is the third value the argument for throwing was really asking for.
          */
-        let names = null;
-        try {
-            names = Printer.Names;
-        } catch (e) {
-            check("a build that cannot list printers says so",
-                  e.message.includes("cannot list printers"), e.message);
-            throws("and Default says the same",  () => Printer.Default);
-        }
-        if (names !== null) {
+        const names = Printer.Names;
+
+        if (names === null) {
+            check("a build that cannot ask answers null, and says so once",
+                  Printer.Default === null, JSON.stringify(Printer.Default));
+        } else {
             check("Printer.Names is a list", Array.isArray(names),
                   JSON.stringify(names));
             check("of names", names.every((n) => typeof n === "string"),
                   JSON.stringify(names));
-            check("and Default is one of them, or nothing",
+            check("and Default is one of them, or the empty string",
                   typeof Printer.Default === "string" &&
                   (Printer.Default === "" || names.includes(Printer.Default)),
                   `${JSON.stringify(Printer.Default)} against ${JSON.stringify(names)}`);

@@ -345,8 +345,8 @@ takes.
 
 - `Printer.Send(area, [setup])` — the print dialog, then a printer
 - `Printer.ToFile(area, path, [setup])` — a PDF, with **no dialog**
-- `Printer.Names` — the printers this machine has
-- `Printer.Default` — the one it would use, or `""`
+- `Printer.Names` — the printers this machine has, or `null` if it cannot say
+- `Printer.Default` — the one it would use, `""` for none, `null` if it cannot say
 - `Printer.Papers` — the paper sizes, in points
 
 `area` is a control that draws — a `DrawingArea`, or the `Canvas` of a `Report`
@@ -397,11 +397,19 @@ read off GTK rather than written down — the **one** table, which is why
 both called it `PAPERS` at the top level, so a project that named both
 libraries did not start.
 
-**`Names` and `Default` are the Unix print backend's**, and a build without it
-refuses them with a sentence rather than answering an empty list that cannot be
-told apart from a machine with no printer. Printing itself is unaffected: the
-dialog is core GTK. They are not cached, because the printers a machine has
-change while a program runs.
+**`Names` and `Default` have three answers**, because there are three states:
+the printers, `[]` for a machine that has none, and **`null` for a session that
+cannot ask at all** — they are GTK's Unix print backend, which is an optional
+module. `null` and not a throw, and not `[]`: a program that wants to know asks,
+rather than finding out by catching something. Printing itself is unaffected —
+the dialog is core GTK — and neither is cached, because the printers a machine
+has change while a program runs.
+
+```js
+const printers = Printer.Names;
+if (printers === null)      … // this build cannot say
+else if (!printers.length)  … // it can, and there are none
+```
 
 ## Settings
 

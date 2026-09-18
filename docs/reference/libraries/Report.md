@@ -117,7 +117,7 @@ which of them to paint.
 | | |
 |---|---|
 | `SavePdf(path)` | **every page, one file.** Vector, at the paper's exact size, so the text in it is text. This is what a report is for |
-| `Send([setup])` | **every page, to paper** through [`Printer`](../globals/Printer.md). How many pages and what paper are the report's; `{ Copies, From, To }` say the job. Answers `{ Copies, From, To }`, and `null` when the dialog was cancelled. To a file it is `SavePdf` |
+| `Send([setup])` | **every page, to paper** through [`Printer`](../globals/Printer.md). How many pages and what paper are the report's; `{ Copies, From, To }` say the job. A paper chosen in the dialog **scales** the page and the count does not move, so this declares no `Paginate` — the bands are declared in the report's own points. Answers `{ Copies, From, To }`, and `null` when the dialog was cancelled. To a file it is `SavePdf` |
 | `Save(path, [page], [scale])` | one page to a PNG. `page` defaults to the current one and `scale` to `2` — 144 dpi, so an A4 page is a 1190px-wide PNG. It **does not move the report** |
 
 The canvas always shows the **whole page, scaled to fit, centred**, on white

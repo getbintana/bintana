@@ -1792,6 +1792,21 @@ also why it is not called `Print`: `print` is already a global of this runtime,
 and `Print` as a verb means *writing text* in the family this language comes
 from. VB6, Delphi, Gambas and .NET all landed on the same word.
 
+**How many pages there are is asked, not assumed.** `Pages` in the setup is
+worked out against the paper the *caller* had, and the person may pick another in
+the dialog: a `Markdown` laid out for A4 is six sheets on A5, and the operation
+printed the four that were declared and dropped the rest -- measured, and silent.
+`Paginate(width, height)` is raised in GTK's `begin-print`, which is the only
+place both halves hold: the paper is resolved and `set_n_pages` may still be
+called. The size it is asked with is the **printable area**, the sheet less the
+printer's own margins, which is the size `DrawPage` will be handed. A control
+whose layout does not move with the paper declares none and keeps the count it
+was given -- `lib/report` scales a page to fit and does not answer,
+`lib/markdown` re-flows and does. **Measure inside it and raise no events**:
+`lib/report` answered `PageCount` for one afternoon, `PageCount` measures when it
+has to, and measuring inside `begin-print` re-entered the drawing the operation
+was in the middle of. The suite hung.
+
 **Two verbs, because they are two things.** `Printer.Send(area, setup)` opens
 GTK's print operation and `Printer.ToFile(area, path, setup)` exports a PDF with
 no dialog -- "print to PDF", and the only road the suite can assert on, since a
@@ -1814,10 +1829,13 @@ then holds exactly `From..To`. `Send` comes back with what was actually sent --
 an error; `ToFile` comes back with how many pages it wrote.
 
 **`Names` and `Default` are the Unix print backend's**, a GTK module of its own
-(`gtk4-unix-print`). A build without it refuses both with a sentence rather than
-answering an empty list, because an empty list cannot be told apart from a
-machine with no printer -- the rule `Exec`'s `Control` stream already follows on
-Windows. Printing is unaffected either way: the dialog is core GTK. Not cached,
+(`gtk4-unix-print`), and they have **three** answers rather than two: the
+printers, `[]` for a machine with none, and `null` for a session that cannot ask.
+They threw at first, on the argument that an empty list cannot be told apart from
+a machine with no printer -- which is true, and is an argument for a third value.
+A throw made asking what this build can do something a program has to catch, and
+the suite paid for it twice: unguarded it ended `Form_Open` with 1633 assertions
+unrun, and guarded it was a `try` around a capability question. Printing is unaffected either way: the dialog is core GTK. Not cached,
 at 33.6 ms cold and 6.2 ms warm on this machine, because GTK caches its backend
 underneath and the printers a machine has do change while a program runs.
 

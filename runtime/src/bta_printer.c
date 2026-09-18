@@ -542,13 +542,25 @@ static gboolean printer_seen(GtkPrinter *p, gpointer data)
 }
 #endif
 
+/*
+ * **Three answers, because there are three states**, and `null` is what keeps
+ * the third one from being mistaken for the second:
+ *
+ *   ["HP LaserJet", ...]   this session can ask, and these are the printers
+ *   []                     it can ask, and the machine has none
+ *   null                   it cannot ask at all
+ *
+ * These threw where they now answer `null`, and the reason they threw was that
+ * an *empty list* cannot be told apart from a machine with no printer -- which
+ * is true, and is an argument for a third value rather than for an exception. A
+ * program that wants to know asks; it should not have to find out by catching
+ * something. The suite had to, and a `try` around a capability question is the
+ * control flow `Video.Available` exists to prevent.
+ */
 static JSValue printer_get_names(JSContext *ctx, JSValueConst this_val)
 {
 #ifndef BTA_HAVE_UNIX_PRINT
-    return JS_ThrowInternalError(ctx,
-        "Printer.Names: this build cannot list printers -- GTK publishes the "
-        "list through its Unix print backend, and the system's own dialog "
-        "elsewhere. Printer.Send opens it either way");
+    return JS_NULL;
 #else
     Enumeration e = { ctx, JS_NewArray(ctx), NULL, 0 };
 
@@ -558,12 +570,15 @@ static JSValue printer_get_names(JSContext *ctx, JSValueConst this_val)
 #endif
 }
 
+/*
+ * The same three, and the same reason `""` is not `null` here: a machine that
+ * can be asked and has nothing marked as the one to use is a different answer
+ * from a machine that cannot be asked.
+ */
 static JSValue printer_get_default(JSContext *ctx, JSValueConst this_val)
 {
 #ifndef BTA_HAVE_UNIX_PRINT
-    return JS_ThrowInternalError(ctx,
-        "Printer.Default: this build cannot name the default printer -- see "
-        "Printer.Names");
+    return JS_NULL;
 #else
     Enumeration e = { ctx, JS_UNDEFINED, NULL, 0 };
 
