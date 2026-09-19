@@ -60,15 +60,21 @@
  * rule already takes all five.  That is not luck: what keeps a global list is
  * what has work in flight, and what has work in flight is what has callbacks.
  *
- * ## The writes, which are deferred and not refused on principle
+ * ## A worker writes, and what that costs is not what it looks like
  *
- * `File.Save` and the ten other verbs that change the disk throw here, and
- * the message says the true reason: two writers need a lock to order them and
- * this language has none yet.  Phase 2 of the plan is `Lock` -- named rather
- * than held, because the two runtimes share no heap and no object can cross --
- * and when it lands these stop being refused and nothing else changes.
- * The wording matters: a deadline reads differently from a doctrine, and this
- * is a deadline.
+ * The eleven verbs that change the disk were refused here once, on the
+ * grounds that two writers need a lock to order them.  That named a real gap
+ * and pointed it at the wrong danger: `g_file_set_contents` writes a
+ * temporary and renames over the target, so two threads saving one path
+ * produce one of the two whole files and never a torn one, and `unlink` and
+ * `rename` are a syscall each.
+ *
+ * The cost of concurrency here is the **lost update** -- read, change, write
+ * from two threads, and the first thread's change never happened -- and no
+ * automatic lock reaches it, because the gap is *between* two calls and only
+ * the program knows which two.  `Lock.Hold(name, fn)` is the tool for that,
+ * and it is something to reach for rather than a condition of writing at all,
+ * which is why the verbs came back before it arrived.
  *
  * ## Stopping is asked, and only then forced
  *
@@ -900,30 +906,24 @@ static JSValue task_log(JSContext *ctx, JSValueConst this_val,
 }
 
 /*
- * The verbs that change the disk, refused until there is a lock.
+ * **A worker writes, and the eleven verbs that used to be refused are not.**
  *
- * **A deadline and not a doctrine**, and the wording is the whole point: a
- * thread writing a file is not unsafe in itself -- `Exec` already writes
- * beside the window -- what is missing is a way for two writers to take turns.
- * docs/plans/task-plan.md phase 2 is `Lock`, named rather than held because
- * the two runtimes share no heap, and when it lands these stop throwing and
- * nothing else about Task changes.
+ * They were refused with "two writers need a lock to order them", which named
+ * a real gap and then pointed it at the wrong danger.  `File.Save` is
+ * `g_file_set_contents`, which writes a temporary and renames over the target:
+ * two threads saving one path cannot produce a torn file, only one of the two
+ * whole ones.  `File.Delete` and `File.Rename` are `unlink` and `rename`, a
+ * syscall each.  What is left -- `File.Copy`, `Directory.Copy`, `DeleteTree` --
+ * leaves an intermediate state a reader can see, and so does the
+ * `Exec(["cp", ...])` nobody ever proposed to refuse.
+ *
+ * What concurrency actually costs here is the **lost update**: read, change,
+ * write from two threads and the second one wins, so the first one's change
+ * never happened.  No automatic lock fixes that, because the gap is *between*
+ * two calls and only the program knows which two.  That is what `Lock.Hold`
+ * is for, and it is a tool to reach for rather than a condition of writing at
+ * all -- which is why these came back before it arrived.
  */
-static const char *const task_writers[] = {
-    "File.Save", "File.SaveJson", "File.SaveBytes", "File.Delete",
-    "File.Copy", "File.Trash", "File.Rename",
-    "Directory.Make", "Directory.Copy", "Directory.Delete",
-    "Directory.DeleteTree",
-};
-
-static JSValue task_no_write(JSContext *ctx, JSValueConst this_val,
-                             int argc, JSValueConst *argv, int magic)
-{
-    return JS_ThrowTypeError(ctx, "%s: a task cannot write yet -- two writers "
-                                  "need a lock to order them, and there is "
-                                  "none. See docs/plans/task-plan.md",
-                             task_writers[magic]);
-}
 
 /* A verb that would hang a callback off the main loop, which is the one thing
  * a worker can never do: the source fires on the main thread holding this
@@ -1060,8 +1060,6 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
     task_delete(ctx, global, "Timer");      /* rad.js built it on setTimeout */
     task_delete(ctx, global, "Settings");   /* writes, and the main thread's */
 
-    for (size_t i = 0; i < G_N_ELEMENTS(task_writers); i++)
-        task_refuse(ctx, global, task_writers[i], task_no_write, (int)i);
     for (size_t i = 0; i < G_N_ELEMENTS(task_loopers); i++)
         task_refuse(ctx, global, task_loopers[i], task_no_loop, (int)i);
 

@@ -14990,31 +14990,29 @@ function Main() {
         });
 
         /*
-         * The refusals, and the wording is the assertion.
+         * A worker writes, and the lock is not what lets it.
          *
-         * A write is refused *for now* and names what lifts it; a plan is not
-         * a doctrine, and the message is where the difference is visible to
-         * whoever hits it. Reading is not refused, which is the other half.
+         * These eleven were refused once "until there is a lock", which named
+         * a real gap and aimed it at the wrong danger: `File.Save` renames a
+         * temporary over the target, so two threads cannot tear one file. The
+         * lost update is what a lock is for, and that is a sequence the
+         * program writes rather than a call the runtime can guard. What stays
+         * refused is the one thing that would reach the main loop.
          */
         steps.push(() => {
             const t = new TaskWork();
 
-            t.Error = (m) => fail(`refusals errored: ${m}`);
+            t.Error = (m) => fail(`writes errored: ${m}`);
             t.Done  = (r) => {
-                check("a worker may not write yet", r.write.includes("cannot write yet"),
-                      r.write);
-                check("...and the refusal names the lock", r.write.includes("lock"),
-                      r.write);
-                check("...and where the plan is", r.write.includes("task-plan"),
-                      r.write);
-                check("a worker may not make folders yet",
-                      r.mkdir.includes("cannot write yet"), r.mkdir);
-                check("a worker may not hand work to the loop",
+                eq("a worker writes a file and reads it back", r.back, 7);
+                check("...and renames one", r.moved === true);
+                check("...and deletes one", r.gone === true);
+                check("...and makes and sweeps a folder", r.swept === true);
+                check("a worker may still not hand work to the loop",
                       r.watch.includes("main loop"), r.watch);
-                check("...but reading is not refused", r.read === true);
                 next();
             };
-            t.Start({ mode: "refusals", dir: Environment.TempDirectory });
+            t.Start({ mode: "writes", n: 7, dir: Environment.TempDirectory });
         });
 
         /* Reports arrive in order, and all of them before Done. */

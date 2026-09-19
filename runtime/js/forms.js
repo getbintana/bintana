@@ -99,29 +99,6 @@ Widget.TypeName = function (ctor) {
     return ctor.name;
 };
 
-/* ------------------------------------------------------------------------
- * JSON files, which is what JSON is for here.
- *
- * A .form is JSON, project.json is JSON, settings are JSON: reading one was
- * always `JSON.parse(File.Load(path))` and writing one always the same
- * stringify with the same indent and the same trailing newline.  Two names for
- * the pair, so neither the ceremony nor the choice comes up again.
- * ---------------------------------------------------------------------- */
-
-File.LoadJson = function (path) {
-    const text = File.Load(path);
-    try {
-        return JSON.parse(text);
-    } catch (e) {
-        /* Whose fault it is, which a bare SyntaxError never says. */
-        throw new SyntaxError(`${path}: ${e.message}`);
-    }
-};
-
-File.SaveJson = function (path, value) {
-    File.Save(path, `${JSON.stringify(value, null, 2)}\n`);
-};
-
 /*
  * Caption is the VB/Gambas spelling of Text.  Aliasing on the prototypes keeps
  * both names working on every control that has a caption, including in .form

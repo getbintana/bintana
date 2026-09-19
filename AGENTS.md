@@ -3300,6 +3300,16 @@ person who wrote it either.
   `timers`, `paste_jobs`, `dialog_jobs`, all in bta_sys.c) and the rule takes
   all five. What keeps a global list is what has work in flight, and what has
   work in flight is what has callbacks.
+- **A refusal with a trigger can still be wrong, and stating the trigger is
+  what makes that findable.** The writes were refused "until there is a lock",
+  which is a deadline rather than a doctrine and so survived review -- and the
+  deadline was still aimed at a danger that does not exist. `File.Save` is
+  `g_file_set_contents`, atomic by temporary-and-rename, so two threads saving
+  one path cannot tear it; what concurrency costs here is the **lost update**,
+  which is a *sequence* and which no lock the runtime puts on a call could
+  ever reach. The writes came back before `Lock` did, and the plan's phase 2
+  turned out not to depend on its phase 3 at all. **Before promising a feature
+  will lift a refusal, measure whether the refusal is about anything.**
 - **A refusal states its expiry or it becomes doctrine.** The writes are
   refused today with *"a task cannot write yet -- two writers need a lock to
   order them, and there is none"*, not with *"a task reads the disk, it never
@@ -3351,6 +3361,15 @@ person who wrote it either.
   only thing that reaches a thread blocked in native code, and it was measured
   and deferred: one of the six verbs a worker can block in takes one, and it
   is not the one that hangs. See docs/plans/task-plan.md.
+- **Splitting a file by line range moves whatever was sitting in the range.**
+  `File.LoadJson` and `File.SaveJson` went to `forms.js` with the widget block
+  because they were physically inside it, and they are not about widgets --
+  `Settings` in rad.js calls them, and a worker (which runs rad.js and not
+  forms.js) lost them silently, since the failure is `not a function` at call
+  time and not at load. The cross-reference check that caught `defaultsFor`
+  and `sameValue` was run in one direction only: what the block *defines and
+  the rest uses*. Run it the other way too -- what the block defines that has
+  nothing to do with the block's subject.
 - **`JS_SetPropertyStr` does not take ownership of its name.** The abandoned
   version leaked one C string per property of every message it sent, through
   `JS_SetPropertyStr(ctx, out, JS_ToCString(ctx, key), copy)`. Walk properties

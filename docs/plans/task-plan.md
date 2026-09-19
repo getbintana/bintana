@@ -1,6 +1,6 @@
 # Task: a class that runs in a thread of its own
 
-**Status: phase 1 is being built.** The surface is
+**Status: phases 1 and 2 built, phase 3 next.** The surface is
 [`docs/reference/globals/Task.md`](../reference/globals/Task.md), which was
 written first and is the specification this follows. What is *not* built is
 named at the end, with the trigger that builds it — because the one limitation
@@ -130,67 +130,125 @@ shown. **The day a language can be changed without restarting, that hash table
 is the runtime's first real mutex**, and it is named here so it is not
 discovered then.
 
-## What is deferred, and what builds it
+## Writing, and the lock that is not its condition
 
-**A worker cannot write in phase 1.** `File.Save`, `File.Delete`,
-`File.Rename`, `File.Copy`, `File.Trash`, `File.SaveBytes`, `Directory.Make`,
-`Directory.Copy`, `Directory.Delete` and `Directory.DeleteTree` are refused —
-and the refusal says why, in the words that are actually true:
+**Phase 1 refused the eleven verbs that change the disk**, with a message that
+named a real gap and aimed it at the wrong danger:
 
-> `File.Save: a task cannot write yet — two writers need a lock to order
-> them, and there is none. See docs/plans/task-plan.md.`
+> *a task cannot write yet — two writers need a lock to order them*
 
-Not *"a task reads the disk, it never writes it"*. The first sentence is a
-deadline; the second is a philosophy, and this is not one. The correct answer
-to two threads writing one file is to order them, and ordering them is what
-the language is missing.
+Measured, that danger does not exist. `File.Save` is `g_file_set_contents`,
+which GLib documents as atomic: it writes a temporary and renames over the
+target, so two threads saving one path produce **one of the two whole files**
+and never a mixture. `File.Delete` is `unlink` and `File.Rename` is `rename`,
+a syscall each. The three that do leave a visible intermediate state —
+`File.Copy`, `Directory.Copy`, `DeleteTree` — leave exactly the one that
+`Exec(["cp", …])` leaves, and nobody proposed refusing that.
 
-### `Lock`, the piece that lifts it
+So the refusal is lifted, and it is lifted *before* `Lock` rather than by it.
+A worker writes.
 
-The trigger is nothing more than `Lock` existing. What forces its shape is
-that the two runtimes share no JS heap: **a mutex here cannot be an object
-passed in a message**, because no object crosses. `TCriticalSection`,
-`QMutex` and .NET's `lock (obj)` are all shared instances and all assume a
-common heap. The prior art that applies is the other tradition — **named**
-synchronisation: Win32's `CreateMutex(NULL, FALSE, "Global\\Accounts")` and
-POSIX's `sem_open("/accounts")`. The name is the only thing that crosses, as
-text, and a table in C under one process mutex resolves it.
+### What a lock is actually for
 
-Once it is named rather than held, the verb should be a `Hold` with a callback
-rather than `Enter`/`Leave`:
+The cost of concurrency here is the **lost update**, and it is a different
+shape entirely:
+
+```js
+const book = File.LoadJson(path);      // two tasks read the same thing
+File.SaveJson(path, add(book, row));   // the second wins, and the first row never happened
+```
+
+Every call is atomic and the result is still wrong, because the gap is
+*between* two calls. **No automatic lock can close it**: a lock inside
+`File.Save` would guard a call that needs no guarding, and only the program
+knows which two calls belong together. That is what makes the name the
+program's to choose, and it is why a `Hold` deduced from the path would be
+theatre.
+
+## `Lock`, for the sequence
 
 ```js
 Lock.Hold("accounts", () => {
-    const book = File.Load(path);
-    File.Save(path, add(book, row));
+    const book = File.LoadJson(path);
+    File.SaveJson(path, add(book, row));
 });
 ```
 
-A `Leave` that a `throw` skips is a deadlock, and this language has settled
-that shape twice already: `paint_frame` opens and closes around the drawing,
-and `Exec.Wait` blocks to your face and says so. `Hold` on the main thread
-freezes the window exactly as `Exec.Wait` does, and is honest for the same
-reason — no nested loop runs, so nobody can close the form the caller is
-standing in.
+**Static, and the name is the lock.** Not `new Lock("accounts")`: an instance
+suggests the instance is the thing being held, and it is not — two tasks that
+each build one still take the same lock, which is the whole point, and an
+object would make that look like a bug. Nothing crosses in the message but
+text.
 
-The scope when it lands is the ten verbs above, unrefused, and nothing else
-about `Task` changes.
+**Named rather than held**, because the two runtimes share no JS heap and no
+object can cross one. `TCriticalSection`, `QMutex` and .NET's `lock (obj)` are
+all shared instances assuming a common heap; the tradition that applies is the
+other one — Win32's `CreateMutex(NULL, FALSE, "Global\\Accounts")` and POSIX's
+`sem_open("/accounts")`. And it pays twice: a name is the indirection that
+lets the mechanism behind it change without a single call site moving, and it
+is what lets a stuck program say *waiting on "accounts", held by `Hasher` for
+twelve seconds* where an anonymous mutex can only say *waiting*.
 
-## What this explicitly is not
+**A callback and not `Enter`/`Leave`, which the interrupt handler made
+compulsory.** A forced `Stop()` ends a worker at an arbitrary opcode. With
+`Enter`/`Leave` the `Leave` would never run, the mutex would stay held
+forever, every other thread asking for that name would block, and teardown
+would cast them all adrift. With `Hold` the unlock is in C after the
+`JS_Call`, so it runs whether the function returned or was interrupted. What
+was a preference in every other language is a correctness requirement here.
 
-- **Not shared memory.** The message, every report and the answer cross as
-  text. `Serialize`/`Load` is what a `Record` crosses as; a function, a widget
-  or a cycle is refused out loud, because `JSON.stringify` would drop or null
-  it in silence and a total that is wrong on one machine is worse than a
-  refusal.
-- **Not a pool, and not a future.** One `Task` runs once and answers once.
-  Work that repeats is a new `Task`; the queue of stale jobs is exactly the
-  thing a generation counter exists to drop.
-- **Not preemptible.** `Stop()` and `Timeout` set a flag the engine's
-  interrupt handler reads at an opcode boundary. A worker blocked in native
-  code — a filesystem that never answers — is the one case no flag reaches,
-  and teardown joins it rather than shooting it, because a thread cannot be
-  signalled the way a child can.
+**It returns nothing.** `lock` in .NET, `synchronized` in Java, `with` in
+Python, `QMutexLocker`, Delphi's `try`/`finally` and Go's `defer` are all
+**statements**: the critical section is a block, not an expression. That this
+one is a function is an accident of having no block syntax, not an invitation.
+A value read under the lock comes out the way `Hasher.read()` does it, and a
+`Lock.Try(name, fn)` that may not run is left free to answer a plain boolean.
+
+**Recursive.** `lock` is reentrant in .NET because `Monitor` is, `synchronized`
+is in Java, and Delphi's `TCriticalSection` is because Win32's
+`CRITICAL_SECTION` is. Qt and pthreads are not by default and both offer the
+variant, because people deadlock. A nested `Hold` of one name in a language
+where a function calls a function that saves something would be an instant and
+**silent** deadlock, and silent is what this project spends its comments
+avoiding. `GRecMutex`, kept in a `GHashTable` under one process mutex, created
+on demand and never destroyed — freeing one while somebody waits on it is the
+bug not worth writing.
+
+**No timeout in v1.** `GRecMutex` has no bounded wait, so one would mean
+`trylock` in a sleep loop, which lies about its latency. On the main thread a
+`Hold` freezes the window exactly as `Exec.Wait` does and is honest for the
+same reason: no nested loop runs, so nobody can close the form the caller is
+standing in. The documented rule is that a `Hold` on the main thread is short
+or it does not belong there.
+
+### How it grows, and what it will not
+
+Named with triggers, so the deferral is not a punt:
+
+- **`Hold(name, { Timeout }, fn)`**, when somebody has to take a lock in a
+  handler without risking the window. Options in the middle, as `Exec` and
+  `Dialog` already take them. The cost is known: `GRecMutex` has no timed
+  wait, so the inside becomes a `GMutex` plus a `GCond` with owner and count
+  kept by hand — some thirty lines, and no call site changes, because the name
+  is the indirection.
+- **`Lock.Read` / `Lock.Write`**, with `Hold` meaning `Write`, when read
+  contention shows up in a measured program. `GRWLock`,
+  `ReaderWriterLockSlim`, `QReadWriteLock` and Delphi's
+  `TMultiReadExclusiveWriteSynchronizer` are the four names for it. One name
+  cannot have two mechanisms behind it, so this is promised now.
+- **Diagnosis**, the first time somebody hangs: who holds a name and since
+  when, said out loud after a few seconds rather than asked for by a call.
+- **`Lock.File(path, fn)`** over `flock`, when the other writer is an `Exec`
+  rather than a task. A separate verb and never a flag on `Hold`, because the
+  two are **separate namespaces that do not guard each other**, and hiding
+  that behind an option is the kind of trap paid for at night.
+
+Not coming, and named so it is not re-argued: **condition variables**
+(`Wait`/`Signal`), because the channel between threads already exists and is
+`Report`/`Progress` — without shared memory to watch, a condition is a second
+channel competing with the first. And **`Lock.Held(name)`**, a question that
+lies, since by the time it answers it has changed; Java has `holdsLock` and it
+lives inside `assert`.
 
 ## Cancelling, and how far it reaches
 
@@ -241,16 +299,23 @@ nearly free and it goes in then.**
 
 ## Phases
 
-1. **`Task` itself**, as `Task.md` specifies it: the class, the thread, the
-   message, `Progress`/`Done`/`Error`, `Stop`, `Timeout`, teardown that joins.
-   Worker built from the real `init` functions with the real classes. Writes
-   refused with the deadline wording. Suite coverage in `tests/widgets`, and
-   `examples/usage` as the program on record.
-2. **`Lock`**, named, with `Hold`. The ten verbs stop being refused.
-3. **The catalogue's mutex**, if and when a language can change at runtime.
-4. **`GCancellable`**, if and when `File` and `Directory` move to GIO. Not
-   before: one verb in six would take it, and the one that would is not the
-   one that hangs.
+1. **`Task` itself**, as `Task.md` specifies it — **built**: the class, the
+   thread, the message, `Progress`/`Done`/`Error`, `Stop`/`Stopping` with
+   `KillAfter`, `Timeout`, `Cancelled`, teardown that joins with a bound.
+   Worker built from the real `init` functions with the real classes, and
+   `rad.js` split from `forms.js` so it can be. Suite coverage in
+   `tests/widgets`, `examples/usage` as the program on record.
+2. **The writes, unrefused** — **built**, and *not* by phase 3: the danger
+   they were refused for is one GLib already handles, and the danger that is
+   real is a sequence no runtime-level lock can see.
+3. **`Lock.Hold(name, fn)`**, static, recursive, returning nothing. For the
+   lost update, which is the thing a lock is actually for.
+4. **The catalogue's mutex**, if and when a language can change at runtime.
+5. **`GCancellable`**, if and when `File` and `Directory` move to GIO. Not
+   before: one verb in six would take it, and it is not the one that hangs.
 
-Nothing in phase 2 or 3 changes phase 1's surface — which is the point of
-writing them down now rather than defending the refusal later.
+The order matters, and it is the one thing this plan got wrong the first time:
+**phase 2 was written as if phase 3 were its condition.** It was not. A
+refusal justified by a missing feature is only honest while the feature is
+what is missing — and here it was a measurement, not a feature. Stating the
+trigger is what made that findable.

@@ -378,10 +378,11 @@ off the main thread is a crash), `Exec`, `File.Watch`, `Timer` and async
 `Http` (the source would fire on the main thread holding this context), and
 `Settings`/`Locale` (process state the main thread owns).
 
-**Writing is deferred and says so.** The eleven verbs that change the disk
-throw with *"a task cannot write yet — two writers need a lock to order them,
-and there is none"*. A deadline, not a doctrine: `docs/plans/task-plan.md`
-phase 2 is `Lock`, and the refusal lifts when it lands.
+**A worker writes.** `File.Save` renames a temporary over its target, so two
+threads saving one path cannot tear it; what concurrency costs here is the
+lost update (read, change, write from two threads and the first change is
+gone), and that is a *sequence* only the program can mark — `Lock.Hold(name,
+fn)`, not a guard the runtime can put on a call.
 [`examples/usage`](../../examples/usage) is the whole of it running: N tasks
 sizing N subtrees, one window adding up.
 

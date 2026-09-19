@@ -178,32 +178,28 @@ and that is the whole rule — not reading against writing:
 
 A task computes and reports; what is drawn happens where the answer arrives.
 
-### Writing, which is deferred and not forbidden
+### Writing, and what concurrency actually costs
 
-`File.Save`, `File.SaveJson`, `File.SaveBytes`, `File.Delete`, `File.Copy`,
-`File.Trash`, `File.Rename`, `Directory.Make`, `Directory.Copy`,
-`Directory.Delete` and `Directory.DeleteTree` throw in a worker today, and the
-message says why:
+A worker writes: `File.Save`, `File.Delete`, `File.Rename`, `Directory.Make`
+and the rest are all there. They were refused once *"until there is a lock"*,
+which named a real gap and aimed it at the wrong danger — `File.Save` is
+`g_file_set_contents`, which writes a temporary and renames over the target,
+so two threads saving one path produce one of the two whole files and never a
+torn one. `File.Delete` and `File.Rename` are a syscall each.
 
-> `File.Save: a task cannot write yet — two writers need a lock to order them,
-> and there is none. See docs/plans/task-plan.md.`
+What concurrency costs is the **lost update**:
 
-**A deadline, not a doctrine.** A thread writing a file is not unsafe in
-itself — `Exec` already writes beside the window — what is missing is the word
-for *take turns*. [`task-plan.md`](../../plans/task-plan.md) phase 2 is `Lock`,
-and when it lands these eleven stop being refused and nothing else here
-changes. Until then a worker proposes (paths, counts, plans, streamed through
-`Report`) and the main thread writes.
+```js
+const book = File.LoadJson(path);      // two tasks read the same thing
+File.SaveJson(path, add(book, row));   // the second wins; the first row never happened
+```
 
-## What goes wrong
+No automatic lock reaches that, because the gap is *between* two calls and
+only the program knows which two. `Lock.Hold(name, fn)` is what orders them —
+a tool to reach for when a sequence needs it, not a condition of writing at
+all.
 
-- **`cannot find task class 'X'`.** No `<X>.js` in the project or its
-  libraries. A class declared inside another file is not findable — the file
-  is the unit, and it is named after the class.
-- **The answer never arrives.** The handler was assigned to a different
-  object, or the run belongs to a retired generation. `Done` xor `Error`
-  always fires while the loop runs.
-- **A `Timeout` that never fires.** It travels per `Start`, not per task —
-  `t.Start(data, { Timeout: 5000 })`.
-- **Teardown hangs.** A worker blocked in native code (not JS) cannot be
-  interrupted; the join waits for the filesystem, not for us.
+`File.Copy`, `Directory.Copy` and `Directory.DeleteTree` leave a state a
+reader can see half of, which is true of the `Exec(["cp", …])` beside them too
+and is not a reason to refuse either.
+

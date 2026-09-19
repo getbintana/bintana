@@ -68,6 +68,34 @@ const hasOwn      = objectProto.hasOwnProperty;
  * differ and nothing would ever say so. */
 
 /* ------------------------------------------------------------------------
+ * JSON files, which is what JSON is for here.
+ *
+ * A .form is JSON, project.json is JSON, settings are JSON: reading one was
+ * always `JSON.parse(File.Load(path))` and writing one always the same
+ * stringify with the same indent and the same trailing newline.  Two names for
+ * the pair, so neither the ceremony nor the choice comes up again.
+ *
+ * **Here and not in forms.js**, although the .form loader is its heaviest
+ * caller: a worker thread runs this file and not that one, and JSON on a disk
+ * is not a widget.  `Settings` below is the other caller, and it is right
+ * here.
+ * ---------------------------------------------------------------------- */
+
+File.LoadJson = function (path) {
+    const text = File.Load(path);
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        /* Whose fault it is, which a bare SyntaxError never says. */
+        throw new SyntaxError(`${path}: ${e.message}`);
+    }
+};
+
+File.SaveJson = function (path, value) {
+    File.Save(path, `${JSON.stringify(value, null, 2)}\n`);
+};
+
+/* ------------------------------------------------------------------------
  * Settings -- what an application remembers between runs.
  *
  * Application.ConfigDirectory is a directory; this is the file everybody was going to

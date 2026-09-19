@@ -1049,13 +1049,15 @@ main thread owns. Every handler runs on the main loop, where touching the
 interface is legal; the worker never waits for it (`Queue`, not
 `Synchronize`, in Delphi's words).
 
-**Writing is deferred, and says so.** The eleven verbs that change the disk
-throw in a worker with *"a task cannot write yet — two writers need a lock to
-order them, and there is none"*. That is a deadline and not a doctrine: a
-thread writing a file is not unsafe in itself, and what is missing is the word
-for *take turns*. [`docs/plans/task-plan.md`](plans/task-plan.md) phase 2 is
-`Lock` — named rather than held, because the two runtimes share no heap and no
-object can cross — and when it lands the eleven stop being refused.
+**A worker writes, and the cost is not the one it looks like.** The eleven
+verbs that change the disk were refused once for want of a lock; they are not,
+because `g_file_set_contents` renames a temporary over the target and two
+threads saving one path produce one whole file rather than a torn one. What
+concurrency costs is the **lost update** — read, change, write from two
+threads and the first change never happened — and no automatic lock reaches
+it, because the gap is between two calls and only the program knows which two.
+`Lock.Hold(name, fn)` is what orders those, named rather than held because the
+two runtimes share no heap; see [`docs/plans/task-plan.md`](plans/task-plan.md).
 [`examples/usage`](../examples/usage) is the shape running today: N tasks
 sizing N subtrees, one window adding up.
 

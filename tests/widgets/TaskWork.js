@@ -53,20 +53,40 @@ class TaskWork extends Task {
             };
         }
 
-        /* The refusals, and what matters is the wording: a deadline names the
-         * thing that lifts it, a doctrine names nothing. */
-        if (msg.mode === "refusals") {
+        /*
+         * A worker writes, and what is still refused is the callback.
+         *
+         * The eleven write verbs were refused once for want of a lock; they
+         * are not, because `g_file_set_contents` renames a temporary over the
+         * target and two threads saving one path cannot tear it. What a lock
+         * is for is the lost update, which is a sequence and not a call --
+         * see `Lock.Hold`. What stays refused is what would fire a callback
+         * on the main loop holding this context.
+         */
+        if (msg.mode === "writes") {
             const said = (fn) => {
                 try { fn(); return ""; } catch (e) { return e.message; }
             };
+            const dir  = File.Join(msg.dir, "bta-task-writes");
+            const file = File.Join(dir, "one.json");
 
-            return {
-                write: said(() => File.Save(File.Join(msg.dir, "no.txt"), "x")),
-                mkdir: said(() => Directory.Make(File.Join(msg.dir, "no"))),
-                watch: said(() => File.Watch(msg.dir, () => {})),
-                /* Reading is not refused, and that is the other half of it. */
-                read:  Directory.Folders(msg.dir).length >= 0,
-            };
+            Directory.Make(dir);
+            File.SaveJson(file, { n: msg.n });
+            const back = File.LoadJson(file);
+
+            File.Save(File.Join(dir, "two.txt"), "plain");
+            const renamed = File.Join(dir, "three.txt");
+            File.Rename(File.Join(dir, "two.txt"), renamed);
+            const moved = File.Exists(renamed);
+
+            File.Delete(renamed);
+            const gone = !File.Exists(renamed);
+
+            const watch = said(() => File.Watch(dir, () => {}));
+
+            Directory.DeleteTree(dir);
+            return { back: back.n, moved, gone, watch,
+                     swept: !File.Exists(dir) };
         }
 
         if (msg.mode === "progress") {
