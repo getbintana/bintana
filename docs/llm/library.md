@@ -314,6 +314,77 @@ Without a `Timeout` a command that never ends hangs the program. Use it for
 for anything genuinely interactive, a [`Terminal`](controls.md#terminal) — which
 this build may not have, so ask `Widget.Available("Terminal")` first.
 
+## Task
+
+A class that runs in a thread of its own. For a computation too long for the
+loop and too fine-grained for a child: totals over a hundred thousand rows
+while the window stays alive.
+
+```js
+class Sizer extends Task {
+    Run(msg) {
+        // ... walk msg.roots ...
+        return { size, files };
+    }
+}
+
+const t = new Sizer();
+t.Done = (r) => show(r);
+t.Error = (m, stack) => complain(m);
+t.Start({ roots: subs });
+```
+
+| | |
+|---|---|
+| `Start(data, [options])` | sends the message and starts the thread. **Once** — a second `Start` is refused; work that repeats is a new `Task` |
+| `Stop([{ KillAfter }])` | **asks** it to end, and enforces `KillAfter` ms later (5000 by default, 0 = at once). Two stages like `Exec`'s guard. Answers whether there was a live job to ask |
+| `Report(value)` | the worker's voice, called from `Run`; arrives as `Progress`. `this.Report` on a proxy is refused |
+| `Stopping` | inside `Run`: `true` once `Stop()` has asked, so the job can `Report` what it has and return. Delphi's `Terminated`, BackgroundWorker's `CancellationPending` |
+| `Done` | assign `(result) => …`. Called once, with what `Run` returned |
+| `Error` | assign `(message, stack) => …`. Called once, when `Run` threw, the job was stopped (`Cancelled`), or it timed out |
+| `Progress` | assign `(partial) => …`. Zero or more calls, in order, all before `Done` |
+| `Running` | `false` once it has ended — written before `Done`/`Error` run, like `Exec`'s |
+| `Cancelled` | whether `Stop()` is what ended it |
+| `TimedOut` | whether the guard is what ended it |
+
+`Task` itself is abstract: `new Task()` throws, and so does starting a class
+the project has no file for. Options: `{ Timeout }` in milliseconds, absent
+waits forever.
+
+**One answer, exactly once.** `Done` xor `Error`, however the job went — a
+stopped task reports `Cancelled` rather than going quiet, the way a stopped
+`Exec` still runs its exit callback. Which ending it was is read off
+`Cancelled` and `TimedOut`, never by matching on the message. Tell a stale answer from a live one the
+way `examples/usage` does: a generation counter, and the old run's answers are
+dropped where they arrive.
+
+**A message is plain data**: objects, arrays, strings, numbers, booleans, null
+— plus `Decimal`, which crosses as its own digits and arrives as a real one
+(same class, same file, so `(10/3)*3` is `10` on both sides). Functions, class
+instances, cycles, `undefined` and `Bytes` are refused out loud rather than
+silently subsetted; a `Record` crosses as what `Serialize` writes and comes
+back through `Load`.
+
+**A worker is this language, not a subset of it.** Its context is built the
+way the main one is — the same `init` functions, then the same `rad.js` — so
+`Decimal`, `Bytes`, `Dictionary`, `Regex`, `Stopwatch`, `Record`, `Field` and
+`Table` are all there, with `print`, `Logger`, `Day`/`Time`, `Hash`,
+`File`/`Directory` for reading, `Database`/`Sqlite`, and an `Application` that
+answers facts.
+
+**What it lacks is what would leave a callback on the main loop** — not what
+writes. Gone: every widget and `Dialog`/`Message`/`Clipboard`/`Screen` (GTK
+off the main thread is a crash), `Exec`, `File.Watch`, `Timer` and async
+`Http` (the source would fire on the main thread holding this context), and
+`Settings`/`Locale` (process state the main thread owns).
+
+**Writing is deferred and says so.** The eleven verbs that change the disk
+throw with *"a task cannot write yet — two writers need a lock to order them,
+and there is none"*. A deadline, not a doctrine: `docs/plans/task-plan.md`
+phase 2 is `Lock`, and the refusal lifts when it lands.
+[`examples/usage`](../../examples/usage) is the whole of it running: N tasks
+sizing N subtrees, one window adding up.
+
 ## Dialog
 
 - `Dialog.OpenFile(title, [options], cb)`

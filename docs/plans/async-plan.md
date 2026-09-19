@@ -263,8 +263,12 @@ Named because a deferral without triggers is a punt:
   The trigger stands for whatever arrives with one.
 - **A second real case of chaining.** One site is a call site; three are a
   pattern.
-- **Two children at once.** Nothing has ever asked. `Exec.Wait` in a loop is the
-  wrong shape for it and there is no word for *both*.
+- **Two children at once.** Asked at last, in worker form rather than child
+  form: [`examples/usage`](../../examples/usage) fans out to one `Task` per
+  handful of folders, and retiring a run (a generation counter dropping stale
+  answers) is the same shape as cancelling one child, generalised. `Exec.Wait`
+  in a loop stays the wrong shape for it, and the word for *both* is now a
+  barrier both sides count to rather than syntax.
 - **Progress *and* sequencing** — something long that must report while it runs
   and be followed by something else. `Exec.Wait` gives up the line callback, so
   that combination has no answer today. **Tried, in
@@ -277,16 +281,22 @@ Named because a deferral without triggers is a punt:
 ### The one that was tried: progress and sequencing
 
 [`examples/usage`](../../examples/usage) was written against that trigger on
-purpose. It runs `du` on a folder — seconds on a real one, minutes on a home
-directory — reports a growing count while the lines arrive, and when the child is
-gone sorts what it found and builds the rows. A long child reporting while it
-runs, followed by work that needs its result: the combination the line above says
-has no answer.
+purpose. It ran `du` on a folder — seconds on a real one, minutes on a home
+directory — reported a growing count while the lines arrived, and when the
+child was gone sorted what it found and built the rows. A long child reporting
+while it runs, followed by work that needs its result: the combination the
+line above says has no answer.
 
 It came out as **two callbacks, side by side, and no nesting**, because *the
 second step is not another child.* It is `sort` and a loop. The nesting the plan
 is worried about needs a chain of asynchronous steps, and a window that measures
 something and then draws it has exactly one.
+
+The window has since moved off the child: it fans out to one `Task` per
+handful of folders, reports finished roots through `Progress`, and sorts when
+the last `Done` lands. The shape survived the move untouched -- two callbacks,
+no nesting, cancel-first -- which is the evidence that the shape was the
+finding and the child was only the vehicle.
 
 What it did find is a shape that is not in the list above and is worth adding to
 it, because it is the answer to a different trigger:
@@ -302,8 +312,11 @@ cannot: a child that was stopped and a child that failed both exit non-zero, and
 so does one that worked but could not read a folder. The application has to
 remember that it was the one asking.
 
-So *two children at once* stays unasked, and now there is a program on record
-saying why rather than merely not doing it. The eleven call sites are twelve, and
+So *two children at once* stayed unasked until the same window started N tasks
+at once -- one per handful of folders -- and answered it with a barrier and a
+generation counter rather than with syntax. The program on record still says
+why *two children* never asked: opening another folder wants the old run
+retired, not both running. The eleven call sites are twelve, and
 the twelfth is a single callback like ten of the others.
 
 ### Where to start if it is reopened

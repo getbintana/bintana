@@ -2,8 +2,9 @@
   "name": "Usage",
   "startup": "UsageForm",
   "sources": [
+    "Sizer.js",
     "UsageForm.js"
   ],
   "version": "1.0",
-  "description": "What is taking up the space: Exec streaming a long child, with a Stop that means it"
+  "description": "What is taking up the space: Tasks measuring folders in parallel, with a Stop that means it"
 }

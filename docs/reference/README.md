@@ -164,6 +164,7 @@ members, twice — once in its summary and once where it is explained.
 | [Screen](globals/Screen.md) | how big the desktop is, and how many pieces it is in |
 | [Settings](globals/Settings.md) | what the application remembers between runs |
 | [Stopwatch](globals/Stopwatch.md) | how long something took |
+| [Task](globals/Task.md) | a class that runs in a thread of its own, and answers once |
 | [Text](globals/Text.md) | what a string measures, asked where there is no painter |
 | [Time](globals/Time.md) | the clock half of [`Day`](globals/Day.md), and the same bargain |
 | [Timer](globals/Timer.md) | doing something later, or repeatedly |

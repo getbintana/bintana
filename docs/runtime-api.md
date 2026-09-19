@@ -991,6 +991,80 @@ grandchild holding the write end of the pipe, the read never sees EOF, and the
 wait that was supposed to end never does. A guard that does not guarantee an
 ending is worth less than an interrupt.
 
+## Task
+
+A class that runs in a thread of its own — the third shape of long work, after
+`Timer` slices in-process and a child through `Exec`. For a computation too
+long for the loop and too fine-grained for a pipe: totals over a hundred
+thousand rows while the window stays alive.
+
+```js
+class Sizer extends Task {
+    Run(msg) {
+        // ... walk msg.roots with Directory/File ...
+        return { size, files };
+    }
+}
+
+const t = new Sizer();
+t.Progress = (p) => status(p);
+t.Done     = (r) => show(r);
+t.Error    = (m, stack) => complain(m);
+t.Start({ roots: subs });
+```
+
+`Task` itself is abstract: extend it, and `new Sizer()` is the handle.
+`Start(data, [{ Timeout }])` sends the message and starts the thread — once; a
+second `Start` is refused, and work that repeats is a new `Task`. `Stop()`
+asks it to end and answers whether there was still a live job to ask. The
+answer arrives exactly once, however the job went: `Done(result)` when `Run`
+returned, `Error(message, stack)` when it threw, when `Stop()` asked
+(`Cancelled`), or when the `Timeout` fired (`TimedOut` reads `true` then).
+`Running` is written `false` before either callback runs. `this.Report(v)`
+inside `Run` arrives as `Progress(v)`: zero or more calls, in order, every one
+before `Done` — and dropped in silence when nobody handles it.
+
+**Two runtimes, and the same language in both.** QuickJS runtimes are not
+thread-safe, so each task gets a runtime and a context of its own — but it is
+built the way the main one is: the same `init` functions, then the same
+`rad.js`, so `Decimal` is `Decimal` and `Dictionary`, `Regex`, `Record` and
+`Table` are all there. A class id registers into a second runtime verbatim,
+which is what makes that possible and what a first attempt at this wrongly
+assumed it could not do. Nothing is shared: the argument, the reports and the
+answer cross as serialised text, so no JS value is ever touched from two
+threads. A message is plain data — objects, arrays, strings, numbers,
+booleans, null — plus `Decimal`, which crosses as its own digits and comes
+back as a real one, thirds and all. Functions, class instances, cycles,
+`undefined`, non-finite numbers and `Bytes` are refused out loud, because
+`JSON.stringify` would drop or null them in silence; a `Record` crosses as
+what `Serialize` writes and comes back through `Load`.
+
+**What a worker does not get is what would leave a callback on the main
+loop.** Not reading against writing — that is the wrong axis. GTK is gone
+because GTK off the main thread is a crash (refused where widgets are built);
+`Exec`, `File.Watch`, `Timer` and the asynchronous half of `Http` are gone
+because the source would fire on the main thread holding the worker's
+context; `Settings` and `Locale` are gone because they are process state the
+main thread owns. Every handler runs on the main loop, where touching the
+interface is legal; the worker never waits for it (`Queue`, not
+`Synchronize`, in Delphi's words).
+
+**Writing is deferred, and says so.** The eleven verbs that change the disk
+throw in a worker with *"a task cannot write yet — two writers need a lock to
+order them, and there is none"*. That is a deadline and not a doctrine: a
+thread writing a file is not unsafe in itself, and what is missing is the word
+for *take turns*. [`docs/plans/task-plan.md`](plans/task-plan.md) phase 2 is
+`Lock` — named rather than held, because the two runtimes share no heap and no
+object can cross — and when it lands the eleven stop being refused.
+[`examples/usage`](../examples/usage) is the shape running today: N tasks
+sizing N subtrees, one window adding up.
+
+Teardown stops and joins every live task before the context goes away: a
+program that quits with work still running exits, but answers that had nowhere
+to arrive never do. A worker blocked in native code (a filesystem that never
+answers, not JS) is the one case no flag reaches — the join waits for the
+disk, and that is said here rather than discovered at midnight.
+
 ## Dialog
 
 - `Dialog.SelectFolder(title, [options], cb)`

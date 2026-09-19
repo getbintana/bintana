@@ -89,6 +89,10 @@ const GLOBAL_TABLES = {
     http_request_props: "Http Server",
     audioplayer_props: "AudioPlayer",
     printer_props:   "Printer",
+    task_props:      "Task",
+    /* The worker's own Decimal: instances live in worker runtimes, so its
+     * members are documented with Task rather than with the class. */
+    task_dec_proto:  "Task",
     /*
      * These two are documented with the **forms** and not with the globals,
      * which is where they belong: a menu item and a command are parts of a
@@ -593,6 +597,7 @@ const GLOBAL_PAGES = {
     Logger:      ["log_props"],
     Printer:     ["printer_props"],
     Screen:      ["screen_props"],
+    Task:        ["task_props"],
     Text:        ["text_props"],
     Time:        ["time_props"],
 };

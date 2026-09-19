@@ -521,6 +521,11 @@ int     bta_app_run(BtaApp *app, int argc, char **argv);
 char   *bta_read_file(const char *path, size_t *len);
 int     bta_eval_file(JSContext *ctx, const char *path);
 void    bta_dump_error(JSContext *ctx);
+/* The language without any project: the intrinsics build_context installs,
+ * exposed so a worker thread starts from the same language. Paired with
+ * bta_close_hatches below, which is the same closing. */
+JSContext *bta_new_context(JSRuntime *rt);
+void       bta_close_hatches(JSContext *ctx);
 /*
  * A fatal error raised from C, before any project code has run: it always goes
  * to stderr, and -- when there is a display and an application to own it -- into
@@ -825,6 +830,22 @@ void bta_sys_cleanup(void);   /* cancels children still running */
  */
 guint bta_sys_pending(void);
 
+/* --- Task ----------------------------------------------------------------
+ *
+ * A class that runs in a thread of its own: `class Sizer extends Task` with a
+ * `Run(msg)` method, `new Sizer()` as the handle, `Start(data)` as the trigger
+ * and `Done`/`Error`/`Progress` as the answers. One shot -- a Task runs once.
+ * See runtime/src/bta_task.c, which is the whole of it.
+ */
+void bta_task_init(JSContext *ctx, JSValue global);
+/* True when this context runs inside a worker thread. Widgets (and anything
+ * else that touches GTK) ask this before constructing, because GTK off the
+ * main thread is a crash and not an error. */
+bool bta_task_is_worker(JSContext *ctx);
+/* A Task still owed an answer, for the console loop's pending sum. */
+guint bta_task_pending(void);
+void bta_task_cleanup(void);   /* stops and joins workers still running */
+
 /* --- commands: actions and menus ---------------------------------------- */
 
 /*
@@ -1015,6 +1036,7 @@ bool bta_decimal_from_text(const char *text, int64_t *units, int *scale);
 /* And back -- `199` at 2 places is `"1.99"`.  A fresh string, g_free'd by the
  * caller. */
 char *bta_decimal_to_text(int64_t units, int scale);
+
 void bta_locale_cleanup(void);
 /*
  * The catalogue's version of `msgid`, or NULL when there is no catalogue or no

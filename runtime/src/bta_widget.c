@@ -4587,6 +4587,25 @@ static JSValue bta_ctor(JSContext *ctx, JSValueConst new_target,
                                       "display, so it cannot make widgets",
                                  cls->name);
 
+    /*
+     * **A worker thread has GTK initialised and still cannot make widgets.**
+     * `gtk_is_initialized` is process-wide, so the check above passes there.
+     *
+     * Today nothing reaches this line from a worker -- `bta_widgets_init`
+     * does not run in one (it keeps each class's proto and ctor in a
+     * process-global table the main thread owns) and `forms.js` is not
+     * evaluated there either, so `Button` is not a name a worker has.  This
+     * stays as the *last* guard rather than the only one: the day a class is
+     * registered per runtime, the failure it prevents is a crash in GTK from
+     * the wrong thread, which is not the kind of thing to find out then.
+     * A task computes and answers; what is drawn stays on the main thread,
+     * where the answer arrives as `Done`.
+     */
+    if (bta_task_is_worker(ctx))
+        return JS_ThrowTypeError(ctx, "%s: a task runs off the main thread, "
+                                      "so it cannot make widgets",
+                                 cls->name);
+
     /* Honour subclassing: `class Form1 extends Form` must get Form1.prototype. */
     JSValue proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     if (JS_IsException(proto))

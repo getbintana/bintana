@@ -407,10 +407,12 @@ const TESTS = [
     "Available", "TextProperties", "Locale", "LocaleRead", "TranslatedForm", "Fill", "DesignValues",
     "Grid",
     "File", "Dir", "Trash", "Environment",
+    /* Async too: its answers land on later turns of the loop, like Exec's,
+     * and a run filtered to it alone would report before they arrive. */
+    "Task",
     /* Async, and last but one: its callbacks land on later turns of the loop,
      * like Exec's, and it stops its own server before the run ends. */
-    "Http",
-    /* Async as well, and it dribbles on purpose: its server writes a line
+    "Http",    /* Async as well, and it dribbles on purpose: its server writes a line
      * every fifth of a second, so the run has to still be going a second
      * later. */
     "HttpStream",
@@ -467,6 +469,9 @@ const NEEDS = {
      * be going when they do -- otherwise `run.sh widgets http` answers with
      * the synchronous half and looks complete. */
     Http:           ["Exec"],
+    /* Same bargain as Http: answers arrive later, so asking for it alone
+     * brings the tail that finishes the run. */
+    Task:           ["Exec"],
     HttpStream:     ["Exec"],
     HttpServer:     ["Exec"],
     /* Its round trip happens once the window is up, which is not now: Form_Open
@@ -14873,6 +14878,252 @@ function Main() {
             }),
         ];
         steps[0]();
+    }
+
+    /* --- Task ----------------------------------------------------------- */
+    testTask() {
+        /* Abstract, like Widget's own abstract classes: a base with no work. */
+        throws("Task is abstract", () => new Task());
+        /* One run: the second Start is refused, whatever the first one did. */
+        throws("a Task runs once", () => {
+            const t = new TaskWork();
+
+            t.Done = () => {}; t.Error = () => {};
+            t.Start({}); t.Start({});
+        });
+        /* A message JSON would silently subset is refused instead. */
+        throws("a function does not cross", () => {
+            const t = new TaskWork();
+
+            t.Done = () => {}; t.Error = () => {};
+            t.Start({ f: () => {} });
+        });
+        /* And Report is the worker's voice: on a proxy it is at the wrong end. */
+        throws("Report is refused on the handle", () => new TaskWork().Report(1));
+
+        /*
+         * The asynchronous half, as a list of steps rather than a pyramid.
+         *
+         * **One place counts and one place stops counting.** The first version
+         * of this decremented only on the happy path, so a failing assertion
+         * left the run hanging instead of red -- the same mistake `until` has
+         * a comment about. `finish` is idempotent and every ending goes
+         * through it.
+         */
+        waiting++;
+        let done = false;
+        const finish = () => { if (!done) { done = true; waiting--; } };
+        const fail = (why) => { failures.push(`Task: ${why}`); finish(); };
+
+        /* Each step starts the next; the last one finishes. */
+        const steps = [];
+        const next = () => {
+            const step = steps.shift();
+
+            if (step) step(); else finish();
+        };
+
+        /* A round trip: what went in comes back, decimals included. */
+        steps.push(() => {
+            const t = new TaskWork();
+
+            t.Error = (m) => fail(`echo errored: ${m}`);
+            t.Done  = (r) => {
+                eq("a round trip keeps numbers", r.n, 7);
+                check("...and lists", sameJson(r.list, [1, "a", true, null, { k: "v" }]),
+                      JSON.stringify(r.list));
+                eq("...and decimals stay exact", r.total.toString(), "19.99");
+                check("a finished task is not Running", t.Running === false);
+                next();
+            };
+            t.Start({ mode: "echo", n: 7,
+                      list: [1, "a", true, null, { k: "v" }],
+                      total: new Decimal("19.99") });
+            check("a task starts out Running", t.Running === true);
+        });
+
+        /*
+         * The worker's Decimal is *the* Decimal, out of bta_decimal.c.
+         *
+         * This is the assertion the whole design turns on: a class id
+         * registers into a second runtime, so there is one exact type in one
+         * file and not a lookalike per thread. The abandoned version answered
+         * 9.999999999 to the first of these.
+         */
+        steps.push(() => {
+            const t = new TaskWork();
+
+            t.Error = (m) => fail(`exact errored: ${m}`);
+            t.Done  = (r) => {
+                eq("thirds survive a worker", r.third, "10");
+                eq("...and tenths are exact", r.price, "59.97");
+                eq("...and Round is there", r.round, "20.0");
+                check("...and Split adds back up",
+                      sameJson(r.split, ["3.34", "3.33", "3.33"]),
+                      JSON.stringify(r.split));
+                eq("...and comparisons answer", r.cmp, true);
+                check("a decimal comes back a Decimal", r.back instanceof Decimal);
+                next();
+            };
+            t.Start({ mode: "exact", price: new Decimal("19.99") });
+        });
+
+        /* rad.js runs in the worker too, which is what gives it a way to walk
+         * the keys of a message at all. */
+        steps.push(() => {
+            const t = new TaskWork();
+
+            t.Error = (m) => fail(`prelude errored: ${m}`);
+            t.Done  = (r) => {
+                eq("a worker walks keys with Dictionary", r.keys, "mode");
+                eq("...and has Regex", r.regex, "bbb");
+                eq("...and Stopwatch", r.stopwatch, "function");
+                eq("...and Record", r.record, "function");
+                eq("...and Table", r.table, "function");
+                /* And not what would fire on the main loop, or is ours. */
+                eq("a worker has no Timer", r.timer, "undefined");
+                eq("...no Settings", r.settings, "undefined");
+                eq("...no Exec", r.exec, "undefined");
+                next();
+            };
+            t.Start({ mode: "prelude" });
+        });
+
+        /*
+         * The refusals, and the wording is the assertion.
+         *
+         * A write is refused *for now* and names what lifts it; a plan is not
+         * a doctrine, and the message is where the difference is visible to
+         * whoever hits it. Reading is not refused, which is the other half.
+         */
+        steps.push(() => {
+            const t = new TaskWork();
+
+            t.Error = (m) => fail(`refusals errored: ${m}`);
+            t.Done  = (r) => {
+                check("a worker may not write yet", r.write.includes("cannot write yet"),
+                      r.write);
+                check("...and the refusal names the lock", r.write.includes("lock"),
+                      r.write);
+                check("...and where the plan is", r.write.includes("task-plan"),
+                      r.write);
+                check("a worker may not make folders yet",
+                      r.mkdir.includes("cannot write yet"), r.mkdir);
+                check("a worker may not hand work to the loop",
+                      r.watch.includes("main loop"), r.watch);
+                check("...but reading is not refused", r.read === true);
+                next();
+            };
+            t.Start({ mode: "refusals", dir: Environment.TempDirectory });
+        });
+
+        /* Reports arrive in order, and all of them before Done. */
+        steps.push(() => {
+            const t = new TaskWork();
+            const seen = [];
+
+            t.Progress = (p) => seen.push(p);
+            t.Error = (m) => fail(`progress errored: ${m}`);
+            t.Done  = (r) => {
+                check("progress arrives in order", sameJson(seen, [1, 2, 3]),
+                      JSON.stringify(seen));
+                eq("...before Done does", r.ok, true);
+                next();
+            };
+            t.Start({ mode: "progress" });
+        });
+
+        /* A throw reaches Error with both halves Application.OnError takes. */
+        steps.push(() => {
+            const t = new TaskWork();
+
+            t.Done  = () => fail("a throw must not reach Done");
+            t.Error = (m, stack) => {
+                check("a throw reaches Error with its message",
+                      String(m).includes("task boom 42"), String(m));
+                check("...and a stack", typeof stack === "string" && stack.length > 0);
+                check("a failed task is not Running", t.Running === false);
+                next();
+            };
+            t.Start({ mode: "boom", n: 42 });
+        });
+
+        /* The guard ends a run that will not end itself, and says it was the
+         * guard -- an ending the exit code of a child could never tell apart. */
+        steps.push(() => {
+            const t = new TaskWork();
+
+            t.Done  = () => fail("a timeout must not reach Done");
+            t.Error = (m) => {
+                check("a timeout reports itself", String(m).includes("timed out"),
+                      String(m));
+                check("...on the handle too", t.TimedOut === true);
+                /* The two endings are told apart by flags and not by reading
+                 * the sentence -- which is what this used to have to do. */
+                check("...and a timeout is not a cancel", t.Cancelled === false);
+                next();
+            };
+            t.Start({ mode: "spin" }, { Timeout: 1000 });
+        });
+
+        /*
+         * A stop is asked before it is enforced.
+         *
+         * **The flag the worker reads is the whole point.** `Stop()` raises
+         * it and the interrupt handler deliberately ignores it, so a `Run`
+         * watching `this.Stopping` reports what it has and returns -- and the
+         * partial work arrives as `Progress` before the ending does. Without
+         * that, everything the job had measured was thrown away.
+         */
+        steps.push(() => {
+            const t = new TaskWork();
+            let saved = 0;
+
+            t.Progress = (p) => { saved = p.saved; };
+            t.Done  = () => fail("a stop must not reach Done");
+            t.Error = (m) => {
+                check("a stop reports itself", String(m).includes("cancelled"),
+                      String(m));
+                check("...on the handle too", t.Cancelled === true);
+                check("...and is not a timeout", t.TimedOut === false);
+                check("a stopped worker keeps what it had measured", saved > 0,
+                      String(saved));
+                check("...and Stopping is false once it has ended",
+                      t.Stopping === false);
+                next();
+            };
+            t.Start({ mode: "partial" });
+            check("a running task is not Stopping", t.Stopping === false);
+            Timer.After(200, () => {
+                check("stopping reports there was something to stop",
+                      t.Stop() === true);
+                check("...and the handle says so", t.Stopping === true);
+            });
+        });
+
+        /*
+         * And a `Run` that never looks is ended anyway, `KillAfter` later.
+         *
+         * Two stages, the same two `Exec`'s guard has: ask, then insist. The
+         * default is five seconds like Exec's; this one asks for a short one
+         * so the suite does not wait for it.
+         */
+        steps.push(() => {
+            const t = new TaskWork();
+
+            t.Done  = () => fail("a forced stop must not reach Done");
+            t.Error = (m) => {
+                check("a worker that ignores Stopping is ended anyway",
+                      String(m).includes("cancelled"), String(m));
+                check("...and still reports Cancelled", t.Cancelled === true);
+                next();
+            };
+            t.Start({ mode: "spin" });
+            Timer.After(100, () => t.Stop({ KillAfter: 150 }));
+        });
+
+        next();
+        until("the task chain finishes", () => done, () => finish(), 900);
     }
 
     /* --- Exec ----------------------------------------------------------- */

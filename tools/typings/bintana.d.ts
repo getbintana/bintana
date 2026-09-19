@@ -1044,6 +1044,13 @@ declare const Settings: {
     Set(...values: any[]): any;
 };
 
+declare class Task {
+    Report(...values: any[]): any;
+    Start(...values: any[]): any;
+    Stop(...values: any[]): any;
+    Stopping: any;
+}
+
 declare const Text: {
     Bounds(...values: any[]): any;
     Escape(...values: any[]): any;

@@ -74,6 +74,7 @@ const NOT_A_WIDGET = {
     http_server_props:  { name: "HttpServer",  kind: "class" },
     http_request_props: { name: "HttpRequest", kind: "class" },
     audioplayer_props:  { name: "AudioPlayer", kind: "class" },
+    task_props:        { name: "Task",        kind: "class" },
     menuitem_props:     { name: "MenuItem",    kind: "class" },
     action_props:       { name: "Action",      kind: "class" },
     locale_props:       { name: "Locale",      kind: "const" },

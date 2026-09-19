@@ -6,6 +6,7 @@
     "Chip.js",
     "Gadgets/Stepper.js",
     "Translated.js",
+    "TaskWork.js",
     "WidgetsForm.js"
   ]
 }

@@ -109,6 +109,9 @@ endif()
 # ------------------------------------------------------------- JS prelude ---
 # rad.js is baked into the binary so the runtime is a single self-contained
 # executable; regenerating is part of the build.
+# Two halves, because a Task's worker thread runs the language without the
+# widgets: rad.js has to be evaluable with no `Widget` in the runtime, and
+# forms.js is everything that is not. See docs/plans/task-plan.md.
 set(PRELUDE_JS  ${CMAKE_SOURCE_DIR}/runtime/js/rad.js)
 set(PRELUDE_H   ${CMAKE_BINARY_DIR}/generated/bta_prelude.h)
 add_custom_command(
@@ -118,6 +121,16 @@ add_custom_command(
             -P ${CMAKE_SOURCE_DIR}/tools/embed_text.cmake
     DEPENDS ${PRELUDE_JS} ${CMAKE_SOURCE_DIR}/tools/embed_text.cmake
     COMMENT "Embedding rad.js prelude"
+)
+set(FORMS_JS    ${CMAKE_SOURCE_DIR}/runtime/js/forms.js)
+set(FORMS_H     ${CMAKE_BINARY_DIR}/generated/bta_forms.h)
+add_custom_command(
+    OUTPUT ${FORMS_H}
+    COMMAND ${CMAKE_COMMAND}
+            -DINPUT=${FORMS_JS} -DOUTPUT=${FORMS_H} -DSYMBOL=bta_forms_js
+            -P ${CMAKE_SOURCE_DIR}/tools/embed_text.cmake
+    DEPENDS ${FORMS_JS} ${CMAKE_SOURCE_DIR}/tools/embed_text.cmake
+    COMMENT "Embedding forms.js prelude"
 )
 
 # ------------------------------------------------------------- bintana runtime ---
@@ -141,6 +154,7 @@ add_executable(bintana
     runtime/src/bta_treerows.c
     runtime/src/bta_debug.c
     runtime/src/bta_sys.c
+    runtime/src/bta_task.c
     runtime/src/bta_desktop.c
     runtime/src/bta_printer.c
     runtime/src/bta_database.c
@@ -154,6 +168,7 @@ add_executable(bintana
     runtime/src/bta_media.c
     runtime/src/bta_plugin.c
     ${PRELUDE_H}
+    ${FORMS_H}
 )
 target_include_directories(bintana PRIVATE
     ${CMAKE_SOURCE_DIR}/runtime/include

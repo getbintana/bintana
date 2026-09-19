@@ -3,6 +3,7 @@
  */
 #include "bta.h"
 #include "bta_prelude.h"
+#include "bta_forms.h"
 
 /* For gtk_source_init/finalize: the library has to be initialised before any of
  * its widgets is built. See bta_app_run. */
@@ -254,7 +255,7 @@ int bta_eval_file(JSContext *ctx, const char *path)
     return 0;
 }
 
-static void close_hatches(JSContext *ctx);
+/* in bta.h: a worker thread builds the same language. */
 
 /*
  * Where the compiler said the text stopped making sense.
@@ -1019,19 +1020,36 @@ static bool install_globals(BtaApp *app)
     bta_widgets_init(ctx, global);
     bta_menu_init(ctx);
     bta_sys_init(ctx, global);
+    bta_task_init(ctx, global);
     bta_desktop_init(ctx, global);
     bta_printer_init(ctx, global);
 
     JS_FreeValue(ctx, global);
 
+    /*
+     * Two halves, and the split is what a worker thread needs: rad.js is the
+     * language and forms.js is everything about widgets.  A Task builds a
+     * runtime of its own and evaluates only the first, because
+     * `bta_widgets_init` keeps each class's prototype and constructor in a
+     * process-global table that a second runtime would overwrite.  They share
+     * the global lexical scope, so forms.js still sees rad.js's captures --
+     * which is why the order is this one and both run before the hatches
+     * close.  See docs/plans/task-plan.md.
+     */
     JSValue r = JS_Eval(ctx, bta_prelude_js, strlen(bta_prelude_js),
                         "<rad.js>", JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_STRICT);
     if (JS_IsException(r))
         bta_dump_error(ctx);
     JS_FreeValue(ctx, r);
 
+    r = JS_Eval(ctx, bta_forms_js, strlen(bta_forms_js),
+                "<forms.js>", JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_STRICT);
+    if (JS_IsException(r))
+        bta_dump_error(ctx);
+    JS_FreeValue(ctx, r);
+
     /* Last, and only after rad.js: it captured what it needs. */
-    close_hatches(ctx);
+    bta_close_hatches(ctx);
     return true;
 }
 
@@ -1075,7 +1093,7 @@ static void delete_named(JSContext *ctx, JSValueConst obj, const char *name)
     JS_FreeAtom(ctx, atom);
 }
 
-static void close_hatches(JSContext *ctx)
+void bta_close_hatches(JSContext *ctx)
 {
     JSValue global = JS_GetGlobalObject(ctx);
 
@@ -1600,9 +1618,9 @@ static GPtrArray *collect_sources(BtaApp *app, JSValueConst cfg)
  * does not install the global `eval` -- base objects does that -- it sets the
  * compiler that JS_Eval() itself runs on, so without it the runtime could not
  * load a single project file.  The global one is deleted after boot instead;
- * see close_hatches().
+ * see bta_close_hatches().
  */
-static JSContext *build_context(JSRuntime *rt)
+JSContext *bta_new_context(JSRuntime *rt)
 {
     JSContext *ctx = JS_NewContextRaw(rt);
     if (!ctx)
@@ -1673,7 +1691,7 @@ BtaApp *bta_app_new(const char *project_dir)
     JS_SetMaxStackSize(app->rt, 2 * 1024 * 1024);
 #endif
 
-    app->ctx = build_context(app->rt);
+    app->ctx = bta_new_context(app->rt);
     JS_SetRuntimeOpaque(app->rt, app);
     JS_SetContextOpaque(app->ctx, app);
 
@@ -1728,6 +1746,9 @@ void bta_app_free(BtaApp *app)
         g_ptr_array_unref(app->sources);
     if (app->forms)
         g_hash_table_unref(app->forms);
+    /* First: workers hold values of this context and run on their own threads,
+     * so they are stopped and joined before anything they touch goes away. */
+    bta_task_cleanup();
     bta_sys_cleanup();
     bta_http_cleanup();
     bta_media_cleanup();
@@ -1857,7 +1878,8 @@ static gboolean console_idle(gpointer user_data)
 {
     BtaApp *app = user_data;
 
-    if (bta_sys_pending() + bta_http_pending() + bta_media_pending() > 0)
+    if (bta_sys_pending() + bta_http_pending() + bta_media_pending() +
+        bta_task_pending() > 0)
         return G_SOURCE_CONTINUE;
 
     g_main_loop_quit(app->loop);
@@ -1902,7 +1924,8 @@ static int run_console(BtaApp *app)
      * noticing 20 ms late costs an exit 20 ms later.  It cannot end a program
      * early -- while a callback runs, the loop is not dispatching this.
      */
-    if (!app->quitting && bta_sys_pending() + bta_http_pending() + bta_media_pending() > 0) {
+    if (!app->quitting && bta_sys_pending() + bta_http_pending() +
+        bta_media_pending() + bta_task_pending() > 0) {
         app->loop  = g_main_loop_new(NULL, FALSE);
         guint tick = g_timeout_add(20, console_idle, app);
 
