@@ -2779,6 +2779,15 @@ person who wrote it either.
   the day it was written: `Application.LibraryPath` (which the IDE calls) and
   `Decimal`'s `toString`/`toJSON` (which are why `${d}` and `JSON.stringify(d)`
   are exact).
+- **A new global needs a line in *two* hand-kept tables, and only one of them
+  fails.** `GLOBAL_TABLES` in `tests/api/Check.js` is what makes the reference's
+  completeness checkable; `NOT_A_WIDGET` in `tools/typings/TypingsForm.js` is
+  what puts the global in `bintana.d.ts`. A table the generator has never heard
+  of is simply not generated, so there is nothing stale for the staleness check
+  to catch -- `Lock` was documented, counted and asserted while an editor had
+  never heard of it, with `api.sh` green and printing *all declared for an
+  editor*. **Add both lines in the same change**, and read the declaration file
+  afterwards rather than trusting the total.
 - **Adding a global means adding a line to `GLOBAL_TABLES` or `GLOBAL_VARS` in
   `tests/api/Check.js`, and that is deliberate rather than a chore.** The scan
   cannot infer them: the very same
@@ -3361,6 +3370,20 @@ person who wrote it either.
   only thing that reaches a thread blocked in native code, and it was measured
   and deferred: one of the six verbs a worker can block in takes one, and it
   is not the one that hangs. See docs/plans/task-plan.md.
+- **`Lock.Hold` releases in C, and that is what makes it correct rather than
+  tidy.** A forced `Stop()` ends a worker at an arbitrary opcode, so an
+  `Enter`/`Leave` pair written in JavaScript would leave the lock held for the
+  life of the process and every other thread asking for that name blocked until
+  teardown cast it adrift. With the unlock after the `JS_Call` it runs whether
+  the function returned, threw, or was interrupted -- measured by aborting a
+  task inside a hold and taking the same lock 0 ms later. **In every other
+  language the callback form is a convenience; here the alternative is a bug.**
+- **The lock is recursive because the silent failure is the expensive one.**
+  `GRecMutex` and not `GMutex`: `lock` is reentrant in .NET, `synchronized` in
+  Java, `TCriticalSection` in Delphi. A nested `Hold` of one name -- a function
+  that saves something calling another that saves something -- is an instant
+  deadlock with a plain mutex, with no error and no output, which is why the
+  suite asserts the nesting rather than describing it.
 - **Splitting a file by line range moves whatever was sitting in the range.**
   `File.LoadJson` and `File.SaveJson` went to `forms.js` with the widget block
   because they were physically inside it, and they are not about widgets --

@@ -90,6 +90,7 @@ const GLOBAL_TABLES = {
     audioplayer_props: "AudioPlayer",
     printer_props:   "Printer",
     task_props:      "Task",
+    lock_props:      "Lock",
     /* The worker's own Decimal: instances live in worker runtimes, so its
      * members are documented with Task rather than with the class. */
     task_dec_proto:  "Task",
@@ -598,6 +599,7 @@ const GLOBAL_PAGES = {
     Printer:     ["printer_props"],
     Screen:      ["screen_props"],
     Task:        ["task_props"],
+    Lock:        ["lock_props"],
     Text:        ["text_props"],
     Time:        ["time_props"],
 };

@@ -386,6 +386,39 @@ fn)`, not a guard the runtime can put on a call.
 [`examples/usage`](../../examples/usage) is the whole of it running: N tasks
 sizing N subtrees, one window adding up.
 
+## Lock
+
+Taking turns, by name. One member.
+
+```js
+Lock.Hold("accounts", () => {
+    const book = File.LoadJson(path);
+    File.SaveJson(path, add(book, row));
+});
+```
+
+| | |
+|---|---|
+| `Hold(name, fn)` | runs `fn` with the named lock held and releases it — whether `fn` returned, threw, or was interrupted. Answers nothing |
+
+**Not for keeping a file whole** — `File.Save` renames a temporary over its
+target, so two threads saving one path cannot tear it. It is for the **lost
+update**: read, change, write from two threads and the first change is gone,
+because the gap is *between* two calls. Measured with four `Task`s adding to
+one counter: 68 of 240 without the hold, 240 of 240 with it.
+
+**Named and not held**, because a `Task` runs in a runtime of its own and no
+object crosses a message — Win32's `CreateMutex(..., "Global\Accounts")`
+rather than .NET's `lock (obj)`. **Recursive**, so a nested hold of one name is
+not a deadlock. **Answers nothing**, because a critical section is a statement
+everywhere else; read a value out through a variable. **A callback and not
+`Enter`/`Leave`**, which is correctness here: a forced `Stop()` ends a task at
+an arbitrary point, so a `Leave` would never run.
+
+On the main thread a `Hold` freezes the window while it waits, like
+`Exec.Wait` — short, or not there. Two locks taken in two orders deadlock here
+as everywhere.
+
 ## Dialog
 
 - `Dialog.OpenFile(title, [options], cb)`

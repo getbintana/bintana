@@ -1031,6 +1031,9 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
     bta_sqlite_init(ctx, global);
     bta_sys_init(ctx, global);
     task_install(ctx, global);
+    /* The table behind it is process-global, so this is the same `Lock` the
+     * main thread holds -- which is the whole point of naming them. */
+    bta_lock_init(ctx, global);
 
     /* rad.js, the same text the main thread runs: Dictionary, Regex,
      * Stopwatch, Record, Field, Table and Namespace come from here, and

@@ -1067,6 +1067,46 @@ to arrive never do. A worker blocked in native code (a filesystem that never
 answers, not JS) is the one case no flag reaches — the join waits for the
 disk, and that is said here rather than discovered at midnight.
 
+## Lock
+
+`Lock.Hold(name, fn)` runs `fn` with the named lock held and releases it —
+whether `fn` returned, threw, or was interrupted.
+
+```js
+Lock.Hold("accounts", () => {
+    const book = File.LoadJson(path);
+    File.SaveJson(path, add(book, row));
+});
+```
+
+**It is for the lost update and nothing else.** `File.Save` writes a temporary
+and renames it over the target, so two threads saving one path produce one of
+the two whole files rather than a torn one; what breaks is read-change-write
+across two calls, where the second thread's write throws away the first
+thread's change. Measured with four `Task`s adding to one counter, sixty rounds
+each: 68 of 240 unlocked, 240 of 240 held. Only the program knows which two
+calls belong together, so the name is the program's and no automatic lock could
+have helped.
+
+**Named rather than held.** A `Task` runs in a runtime of its own and the two
+share no JS heap, so no object can cross in a message — this is Win32's
+`CreateMutex(NULL, FALSE, "Global\Accounts")` and POSIX's `sem_open`, not
+.NET's `lock (obj)`. The table is process-global, which is exactly the scope
+the main thread and its workers share.
+
+**Recursive**, as `lock` is in .NET and `synchronized` in Java: a nested hold
+of one name from one thread is not a deadlock. **It answers nothing**, because
+a critical section is a statement in every other language and leaving the value
+unspoken keeps it free for a future `Try`. **A callback and not
+`Enter`/`Leave`**, which here is correctness rather than taste: a forced
+`Stop()` ends a task at an arbitrary opcode, so a `Leave` would never run and
+the lock would stay held for the life of the program.
+
+Two rules that are documented rather than enforced. On the main thread a `Hold`
+freezes the window while it waits, exactly as `Exec.Wait` does and for the same
+honest reason — keep it short. And two locks taken in two orders deadlock here
+as everywhere.
+
 ## Dialog
 
 - `Dialog.SelectFolder(title, [options], cb)`

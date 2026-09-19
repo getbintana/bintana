@@ -1021,6 +1021,7 @@ static bool install_globals(BtaApp *app)
     bta_menu_init(ctx);
     bta_sys_init(ctx, global);
     bta_task_init(ctx, global);
+    bta_lock_init(ctx, global);
     bta_desktop_init(ctx, global);
     bta_printer_init(ctx, global);
 

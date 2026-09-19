@@ -846,6 +846,15 @@ bool bta_task_is_worker(JSContext *ctx);
 guint bta_task_pending(void);
 void bta_task_cleanup(void);   /* stops and joins workers still running */
 
+/* --- Lock ----------------------------------------------------------------
+ *
+ * `Lock.Hold(name, fn)`: run `fn` with a named lock held, so two threads take
+ * turns over a sequence. Named rather than held because a `Task` runs in a
+ * runtime of its own and no object crosses a message; the table is
+ * process-global, which is the scope the two share. See runtime/src/bta_lock.c.
+ */
+void bta_lock_init(JSContext *ctx, JSValue global);
+
 /* --- commands: actions and menus ---------------------------------------- */
 
 /*

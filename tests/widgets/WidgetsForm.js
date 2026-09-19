@@ -409,7 +409,7 @@ const TESTS = [
     "File", "Dir", "Trash", "Environment",
     /* Async too: its answers land on later turns of the loop, like Exec's,
      * and a run filtered to it alone would report before they arrive. */
-    "Task",
+    "Task", "Lock",
     /* Async, and last but one: its callbacks land on later turns of the loop,
      * like Exec's, and it stops its own server before the run ends. */
     "Http",    /* Async as well, and it dribbles on purpose: its server writes a line
@@ -14880,6 +14880,51 @@ function Main() {
         steps[0]();
     }
 
+    /* --- Lock ----------------------------------------------------------- */
+    testLock() {
+        /* A name is what two threads share, so it has to be one. */
+        throws("Lock.Hold needs a name", () => Lock.Hold(7, () => {}));
+        throws("...and a function", () => Lock.Hold("x"));
+        throws("...and a name that is a name", () => Lock.Hold("", () => {}));
+
+        let ran = false;
+        Lock.Hold("bta-test", () => { ran = true; });
+        check("Lock.Hold runs the function", ran);
+
+        /*
+         * Recursive, like `lock` in .NET and `synchronized` in Java. With a
+         * plain GMutex this line is where the suite would stop forever, which
+         * is why it is an assertion and not a comment.
+         */
+        let depth = 0;
+        Lock.Hold("bta-test", () => {
+            depth++;
+            Lock.Hold("bta-test", () => { depth++; });
+        });
+        eq("a nested hold of one name does not deadlock", depth, 2);
+
+        /*
+         * A throw comes out and the lock does not stay held -- the unlock is
+         * in C after the call, which is the whole reason this is a callback
+         * and not Enter/Leave.
+         */
+        let said = "";
+        try {
+            Lock.Hold("bta-test", () => { throw new Error("boom"); });
+        } catch (e) {
+            said = e.message;
+        }
+        eq("a throw inside comes back out", said, "boom");
+        let after = false;
+        Lock.Hold("bta-test", () => { after = true; });
+        check("...and the lock was released anyway", after);
+
+        /* It answers nothing, deliberately: a critical section is a statement
+         * everywhere else, and leaving the value unspoken keeps it free for a
+         * future Try(). */
+        eq("Hold answers nothing", Lock.Hold("bta-test", () => 42), undefined);
+    }
+
     /* --- Task ----------------------------------------------------------- */
     testTask() {
         /* Abstract, like Widget's own abstract classes: a base with no work. */
@@ -15013,6 +15058,37 @@ function Main() {
                 next();
             };
             t.Start({ mode: "writes", n: 7, dir: Environment.TempDirectory });
+        });
+
+        /*
+         * Four tasks and one counter: what a lock is actually for.
+         *
+         * Each of `File.LoadJson` and `File.SaveJson` is atomic on its own --
+         * the save renames a temporary over the target -- and the total still
+         * comes out short without the hold, because the gap is between them.
+         * Measured while this was written: 68 of 240 unlocked, 240 of 240
+         * held. Only the held half is asserted, because losing an update is a
+         * race and a race can win.
+         */
+        steps.push(() => {
+            const path   = File.Join(Environment.TempDirectory, "bta-lock-book.json");
+            const rounds = 40, n = 4;
+            let   left   = n;
+
+            File.SaveJson(path, { total: 0 });
+            for (let i = 0; i < n; i++) {
+                const t = new TaskWork();
+
+                t.Error = (m) => fail(`adds errored: ${m}`);
+                t.Done  = () => {
+                    if (--left) return;
+                    eq("four tasks holding one lock lose no update",
+                       File.LoadJson(path).total, n * rounds);
+                    File.Delete(path);
+                    next();
+                };
+                t.Start({ mode: "adds", path, rounds, lock: "bta-suite-book" });
+            }
         });
 
         /* Reports arrive in order, and all of them before Done. */

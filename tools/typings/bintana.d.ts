@@ -953,6 +953,10 @@ declare const Locale: {
     Text(...values: any[]): any;
 };
 
+declare const Lock: {
+    Hold(...values: any[]): any;
+};
+
 declare const Logger: {
     Debug(...values: any[]): any;
     Error(...values: any[]): any;

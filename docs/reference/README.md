@@ -156,6 +156,7 @@ members, twice — once in its summary and once where it is explained.
 | [Http](globals/Http.md) | a native HTTP client, and a server of its own |
 | [HttpServer](globals/HttpServer.md) | serving over the same transport, on the loop the application already runs |
 | [Locale](globals/Locale.md) | the user's language, and their way of writing numbers, money, dates and names |
+| [Lock](globals/Lock.md) | taking turns, by name, when more than one thread writes |
 | [Logger](globals/Logger.md) | what a program writes down for itself |
 | [Message](globals/Message.md) | telling the user something, with no question attached |
 | [Printer](globals/Printer.md) | what this machine can print on, and how a drawing gets there |
