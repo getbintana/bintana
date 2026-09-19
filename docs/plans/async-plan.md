@@ -1,21 +1,31 @@
-# Asynchrony: one decision, and one deferral
+# Asynchrony: the question this language has not answered
 
-**Two things are written down here.** The first is small and **built**:
-`Exec.Wait`, plus the `Timeout` guard, which between them cover the only place in
-this repository where callbacks actually hurt. The second is the general question
-— *does this language want a word for "do this, then that"?* — which is
-**deliberately deferred**, with the options and the reasons recorded so that
-picking it up does not mean having the argument again.
+**One question, deliberately deferred**: *does this language want a word for
+"do this, then that"?* The options, the measurements and the reasons are here
+so that picking it up does not mean having the argument again.
 
-So this is half a reference and half a plan, and it says which is which as it
-goes. The reference half is also in
-[runtime-api.md](../runtime-api.md#exec); what is here and not there is *why*.
+What was **built** along the way -- `Exec.Wait` and the `Timeout` guard, and
+later `Task` -- is described where it lives
+([runtime-api.md](../runtime-api.md#exec), [Task.md](../reference/globals/Task.md),
+[task-plan.md](task-plan.md)) and named here only where it changed the
+argument. This document used to carry that reference half as well, and it was
+a second description of a built feature sitting in the directory for things
+that are not.
+
+`Exec.Wait` is the one part worth a sentence here, because the reference says
+what it does and not why it exists: `Translations.mergeAll` runs `msgmerge`
+over N catalogues one after another, and with no way to wait it had to be a
+recursion carrying its own index. Waiting turned it into a `for` loop with no
+new concept in it -- no keyword, no protocol, no object to learn -- which is
+the bar anything proposed below has to clear.
 
 ## What the language does today
 
 Events dispatched by name, and a callback where an answer arrives later:
 `Exec`'s line and exit callbacks, `Dialog`'s answer, `Clipboard.Paste`,
-`File.Watch`, `Timer`. No `Promise`, no `async` / `await` — never installed, and
+`File.Watch`, `Timer`, `Http`'s replies, and a
+[`Task`](../reference/globals/Task.md)'s `Progress`/`Done`/`Error`. No
+`Promise`, no `async` / `await` — never installed, and
 [runtime-api.md](../runtime-api.md#the-language-underneath) says why.
 
 ## What the problem actually measures
@@ -52,59 +62,6 @@ that folded this into one straight-line sequence would put the chooser in the
 middle of it and leave everything after it unreachable by `tests/ide`. **The
 seam is what makes the code testable**, and a design that removes seams is a
 regression here rather than a simplification.
-
-## Built: `Exec.Wait`
-
-One real pain was left: `Translations.mergeAll` runs `msgmerge` over N
-catalogues, one after another, and with no way to wait it had to be written as a
-recursion carrying its own index.
-
-```js
-const r = Exec.Wait(["msgmerge", "--update", "--backup=none", "--quiet", po, pot]);
-r.ExitCode      // the status
-r.Output        // what it wrote, as text
-r.Errors        // separate, and only with { Stderr: "separate" }
-```
-
-A record, like `File.Info` and `Application.CheckSource`. The options are the
-async `Exec`'s — `Directory`, `Environment`, `Stderr` — because it is the same
-child started the same way. That turns the recursion into a `for` loop with **no
-new concept in it at all**: no keyword, no protocol, no object to learn. It is
-Gambas's `EXEC … WAIT` and .NET's `Process.WaitForExit()`.
-
-Hung off `Exec` rather than named as a pair (`Exec.Async` / `Exec.Wait`),
-because asynchronous is this language's default and the three callers that
-already read `Exec(...)` are right as they stand — the same shape as
-`Timer.After` on `Timer` and `Regex.Escape` on `Regex`.
-
-It is the launcher `bta_sys.c` already had — `exec_build_argv` and
-`exec_launcher` are shared by both spellings — with
-`g_subprocess_communicate_utf8_async()` where the callback spelling has
-`g_subprocess_wait_async()`, driven on a context of its own.
-
-### Its limits, and the rule that follows
-
-**It freezes the window.** Nothing paints and nothing responds until the child
-exits. That is a *feature* next to `DoEvents`: there is no nested main loop, so
-no handler runs inside the wait and nobody can close the form whose `this` the
-caller is standing in. A frozen window is honest; a live window that is lying is
-where the lifetime crashes come from.
-
-**The output arrives at the end**, not line by line. Progress while it runs is
-the asynchronous `Exec`.
-
-**Without a `Timeout` there is no ending the caller controls**, so a command that
-never exits hangs the program — exactly as in a shell script, and exactly as
-Gambas's `EXEC WAIT` does. **With one there is**, and the first version of this
-document said that was impossible: the reasoning was that with no loop running
-there is nowhere to arm a timer, and the way out is a private `GMainContext`
-(below).
-
-| Use | For |
-|---|---|
-| `Exec.Wait` | a command you know ends, and ends quickly: `msgmerge`, `msgfmt`, `tar`, `git status`. Tools. |
-| `Exec` | anything long or of unknown length, and anything that must show progress: `make`, running a project, the suite's own hang guard |
-| `Terminal` | anything interactive |
 
 ## `Exec`'s surface, against what GIO offers
 
@@ -180,33 +137,24 @@ side: *"the shell version extracted it to a temporary file and set a trap to
 remove it; here the lines are the answer, so there is no file to clean up and no
 trap to get wrong."*
 
-### `Timeout` — the one gap that had a caller, and is now built
+## The half a thread answered
 
-`tests/runner/Main.js` used to write it by hand, and not a simple one: two
-stages, `Stop()` and then `Kill()` after a grace period, with a `killed` flag in
-a closure and two timers to cancel in the exit callback. Fifteen lines of
-bookkeeping for what coreutils spells `timeout --kill-after` — and the flag was
-the part that could not be avoided, because a child a guard ended is a child
-stopped by a signal and nothing else distinguished it.
+**`async`/`await` is for waiting on I/O. What this runtime had to wait for was
+work** -- and [`Task`](task-plan.md) moves work to a thread, where the sequence
+is ordinary straight-line code inside `Run`: a `for` with an `if` in it, and no
+new word anywhere.
 
-`{ Timeout, KillAfter }` and `TimedOut` are in both spellings now; see
-[runtime-api.md](../runtime-api.md#exec). The runner reads `job.TimedOut` and keeps
-neither timer nor flag.
+That is worth stating plainly because it cuts the deferred question in half.
+*Do this, then that* has two populations behind it. Where the middle is
+**computation**, the answer is now a `Task` and there is nothing left to
+design. Where the middle is **waiting for I/O**, the evidence below still
+stands: `Http` speaks both ways, `Dialog` asks, `Exec` runs children, and every
+one of those is a single callback rather than a chain.
 
-Two things it settled that are worth keeping written down:
-
-- **`Exec.Wait`'s child leads a process group of its own**, where the first
-  version left it in the caller's so a Ctrl-C would reach it. That breaks the
-  guard into a *hang*: signalling only the direct child leaves a wrapper's
-  grandchild holding the write end of the pipe, the read never sees EOF, and the
-  wait never returns. A guard that does not guarantee an ending is worth less
-  than an interrupt. Asserted in the suite rather than reasoned about, because
-  the failure shape is a hang.
-- **A blocking timeout needs no nested event loop.** A private `GMainContext`
-  runs the guard and nothing else, because GTK's sources, our own `Timer`s and
-  every pending asynchronous `Exec` are all on the default one. Pushing it
-  *before* the spawn is load-bearing: GSubprocess takes the thread-default
-  context when it is constructed.
+So what would reopen this is narrower than it was when the list further down
+was written: not *a long operation followed by another*, which has an answer,
+but **a chain of waits** -- and nothing in this tree has produced one outside
+its own test harness.
 
 ## Considered and rejected
 
@@ -217,7 +165,11 @@ of events rather than of continuations. The measurement above adds a second
 reason — microtasks, thenables, unhandled rejections and coloured functions are
 four concepts for eleven call sites, ten of which are one callback.
 
-### `Task` over generators
+### A generator driver
+
+*(Called "`Task` over generators" while this was written, which is a name the
+runtime has since taken for something else entirely — a class that runs in a
+thread. Nothing below is about that `Task`.)*
 
 A driver that runs a `function*`, resuming it whenever something it `yield`s
 reports done. **It works**: a 30-line prototype sequenced real children, a
@@ -262,7 +214,17 @@ Named because a deferral without triggers is a punt:
   of them is one callback -- a sequence that hurts has still not shown up.
   The trigger stands for whatever arrives with one.
 - **A second real case of chaining.** One site is a call site; three are a
-  pattern.
+  pattern. **Fired, and in the harness rather than in an application**:
+  `tests/widgets`' `testTask` is eight asynchronous steps in order -- a round
+  trip, the decimals, the prelude, the writes, the reports, a throw, a timeout,
+  a stop. Written first as a six-level pyramid, and the defect that shape has
+  is not the indentation: **every branch out of it is one more place to forget
+  to close**. Only the happy path decremented the suite's outstanding count, so
+  any assertion that failed hung the run instead of reddening it. Rewritten as
+  an array of functions with a three-line `next()` and an idempotent `finish()`
+  the mistake is not available to make. So the trigger is met and the answer
+  was still a list rather than a keyword -- with the caveat this document
+  already draws: a harness is allowed machinery that the front page is not.
 - **Two children at once.** Asked at last, in worker form rather than child
   form: [`examples/usage`](../../examples/usage) fans out to one `Task` per
   handful of folders, and retiring a run (a generation counter dropping stale
@@ -327,11 +289,23 @@ decisions are:
 - **What the protocol method is called.** `Done(cb)` was the proposal. Not
   `Then`: that is Promise's word, and promising a resemblance that is not there
   is worse than a new name.
-- **What a cancelled dialog does.** Today the callback is simply not called, so
-  a sequence waiting on one would never resume and the generator would hang
-  forever. Either it resumes with `null` and the sequence tests for it — the way
-  this runtime says *there is none* everywhere else — or an exception is thrown
-  in and the `try` catches it, which is .NET's `OperationCanceledException`.
+- **What a cancelled dialog does**, which is now the *only* half of this
+  question left open. `Task` answered the other half in the opposite
+  direction: cancelling **calls**, with `Cancelled` set on the handle beside
+  `TimedOut`, and whatever the worker managed to `Report` on its way out has
+  already arrived. So a sequence waiting on a task cannot hang, and one waiting
+  on `Exec` or `Http` cannot either -- all three report their own cancellation.
+  Only the dialogs stay silent.
+
+  **And the two conventions do not contradict each other, which is what makes
+  the rule findable**: a cancelled dialog *produced nothing*, and not calling
+  is exactly what spares every caller from telling *cancelled* apart from
+  *chose nothing*; a cancelled job produced something -- time, partial work, a
+  thread to join -- so it has to report. The rule is **whether anything
+  happened**, not who did the cancelling. If this is reopened, the dialogs are
+  the one place to decide, and the two candidates are unchanged: resume with
+  `null` the way this runtime says *there is none* everywhere else, or throw in
+  and let the `try` catch it, which is .NET's `OperationCanceledException`.
 
 And the constraint that killed it is about the surface: **whatever is chosen must
 not put a new keyword in a beginner's event handler.** A mechanism used only by
