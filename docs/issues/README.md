@@ -16,6 +16,7 @@ in the same form.
 | [ISSUE-fixed-fill-child.md](ISSUE-fixed-fill-child.md) | A `Fixed` container does not stretch a `Fill` child when it grows |
 | [ISSUE-fill-and-scroll.md](ISSUE-fill-and-scroll.md) | No container that fills the room it is given and scrolls when it cannot |
 | [ISSUE-packaging.md](ISSUE-packaging.md) | No way to hand over an application without its project tree |
+| [ISSUE-worker-locale-order.md](ISSUE-worker-locale-order.md) | A `Task` has no `Locale`, so a worker cannot order names |
 
 **A gap that is filled is deleted, not archived.** What the runtime can do is in
 [`llm/`](../llm/README.md), which is where anybody looks for it; an issue kept

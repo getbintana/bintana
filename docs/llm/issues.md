@@ -183,6 +183,7 @@ needed and what it did instead.
 | A control laid onto a page — `Print` sends what a `Draw` paints, so a form with real widgets on it still has no path to paper except drawing it by hand | [controls.md](controls.md#drawingarea) |
 | A `Fixed` container that does not stretch a `Fill` child when it itself grows — a reusable component that wants to fill its cell has to change its `Arrangement` | [ISSUE-fixed-fill-child](../issues/ISSUE-fixed-fill-child.md) |
 | No container that fills the room it is given **and** scrolls once it cannot — `Grid` fills without scrolling, `Flow` scrolls without filling | [ISSUE-fill-and-scroll](../issues/ISSUE-fill-and-scroll.md) |
+| No `Locale` inside a `Task`, so a worker cannot order names — the sort has to come back to the main thread, which is what the worker was for | [ISSUE-worker-locale-order](../issues/ISSUE-worker-locale-order.md) |
 
 ## One more thing
 
