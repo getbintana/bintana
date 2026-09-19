@@ -359,9 +359,9 @@ a test runner, a build step, a tool that reads the icon themes off the disk. It 
 about a GTK binding, which is the whole point of `tests/`. See
 [`docs/formats.md`](docs/formats.md#main-a-project-with-no-window).
 
-## The four patches in vendor/
+## The five patches in vendor/
 
-All four are marked `Bintana patch` in the source, and an upgrade that drops
+All five are marked `Bintana patch` in the source, and an upgrade that drops
 one takes a feature or brings a bug back with it. Grep for the marker after any
 QuickJS upgrade; there is no build-time check that they survived.
 
@@ -484,6 +484,39 @@ hold. `docs/plans/debug-plan.md` is the design and the measurements.
   the state -- and deliberately starts no child, because driving one from there
   says the same thing again, slower and through a window.
 
+### 5. `async` is refused where it is written
+
+Two guards in `js_parse_function_decl2` (`quickjs.c`) turn every spelling of
+`async` into a `SyntaxError` on the word itself. Two, because `func_kind`
+arrives two ways: a method or an arrow is called with it already set, a
+declaration or an expression has it upgraded from the keyword a few lines in.
+Both are one `if`.
+
+**What it replaced is the reason it exists, and it is not obvious.** Not
+installing `JS_AddIntrinsicPromise` is a decision about the language and a good
+one -- but that intrinsic is also **the only thing that registers the engine's
+ten async classes**, `JS_CLASS_ASYNC_FUNCTION` among them. An unregistered
+class has a NULL finalizer and a NULL mark function, so the object `js_closure`
+built for an `async` function never released its bytecode and was never
+collected, and `JS_FreeRuntime`'s `assert(list_empty(&rt->gc_obj_list))` aborted
+the process at exit -- **after** the program had done its work and called
+`Application.Quit(0)`, with an exit status of 134. A build with `NDEBUG` leaked
+it in silence instead. It cost nothing for years because nothing in this tree
+writes `async`; the day an application did, it would have looked like a bug in
+the runtime's teardown and not in a word the manual said was unavailable.
+
+The bisection that found it is worth keeping: an async function **inside a
+function that is never called** is clean, which rules out the parser and the
+bytecode and names the culprit as *creating the object*. That is why the guard
+is in the parser rather than in `js_closure` -- the refusal belongs where the
+word is, so `Application.CheckSource` sees it and an editor can underline it.
+
+**Dropping this patch does not fail to build**, and nothing stops working until
+somebody writes the word. `tests/widgets` asserts it
+(`testCuratedLanguage`): seven spellings -- declaration, expression, arrow,
+class method, object method, async generator, and one that awaits -- each
+refused with a message and a column.
+
 ## Memory rules
 
 - Controls point back at their form, so the object graph has cycles. Report the
@@ -500,6 +533,115 @@ hold. `docs/plans/debug-plan.md` is the design and the measurements.
   `JS_FreeRuntime` aborts on anything left alive. See `bta_sys_cleanup`.
 - The class table's prototypes and constructors are static and outlive the
   context; `bta_widgets_cleanup` drops them.
+- **"Every exit path" includes the branch that gives up, and that is the branch
+  nothing exercises.** `bta_task_cleanup` waits a bounded two seconds and then
+  casts an unresponsive worker adrift with its *job* deliberately unfreed --
+  which is right, and documented in the `Task` notes below. What the `continue`
+  also skipped was `JS_FreeValue(job->ctx, job->self)`: the **proxy** is an
+  ordinary main-context `JSValue` that no JavaScript scope owns, the worker
+  never touches it, and leaving it alive left an object on `gc_obj_list`. So the
+  process printed *"1 task still inside a native call at exit ... closing
+  anyway"* and then aborted in `JS_FreeRuntime`'s assertion two lines later. The
+  rule above was followed on the path that succeeds and not on the one that only
+  runs after something already went wrong. **When you write a give-up branch,
+  read the success branch next to it and account for every release in it.**
+- **`memcpy` with a length of zero is still undefined behaviour if the pointer
+  is `NULL`**, and an empty `Bytes` carries `NULL` on purpose. `Bytes.Concat`
+  copied unguarded, so any concatenation touching an empty value was formal UB
+  a UBSan run reports -- harmless only because glib's allocator does not poison.
+  `bta_bytes_get` exists to hand back `""` instead; a copy that bypasses it
+  guards by the length itself.
+- **An idle source queued from another thread cannot be tracked by its id, and
+  the symmetry that suggests it is a trap.** A `BtaTaskJob` owns four sources.
+  `timeout_src` and `force_src` are armed on the main thread, so keeping their
+  ids on the job and removing them there is correct. `task_deliver` and
+  `task_progress_drain` are attached from inside the **worker**, and the same
+  treatment is a use-after-free of its own: the loop can dispatch the source and
+  free the job before `g_idle_add_full` has returned into the assignment, and
+  the worker then writes a `guint` into freed memory. Reaching for the pattern
+  two lines above in the same struct is exactly what makes this one easy to get
+  wrong.
+  The answer is **a reference per queued source** -- `task_job_ref` before the
+  attach, `task_job_unref` as the `GDestroyNotify` -- which needs no id, no lock
+  and no assumption about when GLib dispatches. It also replaced an invariant
+  that lived nowhere: the old code was safe only because GLib dispatches
+  equal-priority sources in insertion order, so a drain queued before a delivery
+  always ran before the delivery freed the job.
+  **And the exposure was not theoretical.** `bta_task_cleanup` takes the whole
+  job list and frees what it can join -- but the worker attaches `task_deliver`
+  *after* saying `ended`, which is the very thing that wait is waiting for.
+  Measured with eight tasks started and `Application.Quit(0)` on the next line:
+  the live reference is dropped with the refcount at **2 in all eight cases**,
+  i.e. every one of those jobs had a delivery still attached and would have been
+  freed under it. Nothing dispatches the default context after teardown today,
+  which is the only reason it never crashed -- and the reason no test can go red
+  for it, so this paragraph is the record.
+- **A cache of the filesystem must not believe a negative answer.** `form_path`
+  rebuilds its index on a miss and says why -- *"a file that appeared since,
+  which is the normal state of affairs while an IDE is writing forms in the same
+  directory it is running from"*. `task_class_file` carried a comment claiming
+  the same rebuild and did not do it, so a `<Name>.js` created while the program
+  ran stayed invisible for the life of the process. It rebuilds once on a miss
+  now, and the cost settles it rather than the symmetry: a miss means
+  `Task.Start` is about to throw *cannot find task class*, so the walk is on the
+  path that was going to fail anyway and never on the one that succeeds. The
+  narrow shape this is reachable in -- the class declared in a file named after
+  something else, its own `<Name>.js` written later -- is what `testTask` drives,
+  as a **child process**, because the cache lives for a process and the
+  alternative was writing a `.js` into the suite's own project directory.
+- **A wrong answer that looks like the right tool is worse than a missing one,
+  and `localeCompare` was the case that proves it.** With no ICU it compared
+  code units, so `"Álvarez".localeCompare("Zapata")` was `1` -- and measured,
+  `list.sort((a, b) => a.localeCompare(b))` returns **exactly** what
+  `list.sort()` with no comparator returns. It was not a rough approximation of
+  alphabetical order; it added nothing at all, while carrying the name of the
+  thing that would. Five documents warned about it and nothing ever argued for
+  keeping it. It is a `TypeError` naming `Locale.Compare` now.
+  **The refusal lives in `rad.js` and not in `close_hatches`** for one reason
+  worth reusing: a deletion says only *not a function*, while a replacement can
+  say what to use -- the same bargain as the QuickJS patch that made the
+  extensibility refusal name its property. Either place would have reached both
+  sides; **a worker calls `bta_close_hatches` too** (`bta_task.c`, right after
+  its own `task_delete` list, which is about main-thread globals and not about
+  hatches), so the `gone[]` list is one catalogue and not two. The worker gets a
+  **different sentence**,
+  because `Locale` is not installed there at all and sending it to
+  `Locale.Compare` would be the second wrong answer in a row. That gap is
+  `docs/issues/ISSUE-worker-locale-order.md`.
+- **The bare `sort()` is the half of that which cannot be refused**, and after
+  the refusal above it is the one that stays silent. It gives the same wrong
+  order and never consults the locale -- a comparator-less `sort` compares UTF-16
+  code units by specification, so this is true on every desktop and under `C`.
+  It cannot go the same way as `localeCompare` because it is *right* almost
+  everywhere it is used: all 26 bare sorts in this tree order paths, file
+  extensions, class names, namespaces and the keys of a bag, and **not one of
+  them sorts text a person reads**. So this one is documentation and an
+  assertion rather than a refusal, and `a < b` is in the same position.
+  There is deliberately **no `Locale.Sort`**: `list.sort(Locale.Compare)` is the
+  whole of it, nothing in the tree wants more, and a name gets published when
+  something needs one -- the rule `close_hatches` states when it empties
+  `Object`.
+- **A runtime answer must not be breakable by what the program did to `Error`.**
+  `Application.CheckSource` returns `{Message, Line, Column}` and the position
+  has exactly one source: a QuickJS error carries no `lineNumber`,
+  `columnNumber` or `fileName` (measured, all three `undefined`), so
+  `check_position` parses `<check>:LINE:COL` out of `.stack`. That made two
+  ordinary assignments break it silently -- `Error.prepareStackTrace` replaces
+  the string, `Error.stackTraceLimit = 0` empties it, and both returned
+  `Line: 0, Column: 0` for source whose answer is `2:9`, **with the message
+  still correct**, so the IDE underlined the first character and nothing said
+  why. The second is the likelier: it is what somebody sets to quieten a log.
+  `js_check_source` neutralises both for the length of the compile and hands
+  them back untouched. The rule generalises: **when a runtime verb reads
+  something the program can configure, it reads its own copy.**
+- **`docs/llm/` claims to be the whole public surface, and eight names were
+  outside it**: `BigInt`, `WeakMap`, `WeakSet`, `Iterator`, `DisposableStack`,
+  `queueMicrotask`, `escape` and `unescape` were all installed and in neither
+  list -- neither *what is here* nor *what is not*. `tests/api.sh` cannot catch
+  this, because it checks the globals the runtime *registers* against
+  `library.md`; a name QuickJS installs of its own accord is invisible to it.
+  Three were removed and five documented. If you add an `JS_AddIntrinsic*` call,
+  the names it brings are yours to list.
 
 ## Tests
 
@@ -566,12 +708,40 @@ would have is filtered out.
 builds with clang (Fedora ships compiler-rt but not gcc's `libasan`), runs the
 projects, and reports what `tests/lsan.supp` did not suppress. Both memory
 bugs this codebase has had were use-after-free that only showed up as a crash on
-some machines; the sanitizer says so on every machine.
+some machines; the sanitizer says so on every machine. A third joined them and
+was found by reading rather than by running: `Painter.LineDash` built its
+refusal message out of the array *after* `g_free`, which came out right on every
+normal build because `g_free` does not poison -- the rejection list now carries
+`p.LineDash = [-1]`, which is what makes the sanitizer the thing that would say
+so next time.
+
+**When `asan.sh` fails talking about the compiler, the problem is the cache.**
+A `build-asan/` left over from another toolchain keeps that compiler's absolute
+path in `CMakeCache.txt`, and CMake refuses to change the compiler of an
+existing cache -- so the run dies in `cmake_check_build_system` with *"is not a
+full path to an existing compiler tool"* before building anything, naming a
+`clang` that is simply gone. `CC=` does not help, because the cache wins.
+**Delete `build-asan/` and let the script reconfigure**; it is generated, git
+ignores it, and the script creates it when it is missing.
 
 **A frame is not a promise.** `tests/ide/Driver.js` has `until(cond)`: it yields
 until something is true instead of counting frames by hand. A text change
 re-measures on a frame of GTK's choosing, and a machine under a sanitizer takes
 more of them -- counting is what made two of these tests flaky.
+
+**And the sharper version: never assert that something has *not* happened yet.**
+`until` fixes waiting for a frame; nothing fixes racing one. `tests/widgets`
+asserted `ScrollY === 0` immediately after `GotoLine(380)`, on the reasoning
+that a scroll asked for through a text mark lands on a later frame -- which is
+true when the view has no validated allocation and **false when it has one**,
+because `gtk_text_view_scroll_to_mark` then honours it at once. Measured at
+about one failure in five, standalone, on an idle machine; it read as a
+regression three separate times during unrelated work, which is the real cost of
+a test like this. The assertion is gone and the `until` below it carries the
+half that is real -- *the scroll does arrive*. The documents that stated the
+same thing as a certainty (`reference/widgets/Editor.md`, `plans/git-plan.md`)
+say *may* now. **A negative about timing is not a property of the code; it is a
+bet on the scheduler.**
 
 **And a rectangle is not a promise either: measure it again before every
 gesture.** The stack assertions took the overlay's rectangle once and aimed two
@@ -2545,6 +2715,49 @@ person who wrote it either.
   `examples/quote` keeps the order instead (`Quote.js` before `QuoteForm.js`,
   `Line` before `Quote` inside it), on the grounds that a dependency written down
   beats one deferred.
+- **`key in bag` asks the prototype, and the curation did not take
+  `Object.prototype` away.** Every plain object still inherits `toString`,
+  `constructor`, `valueOf` and `hasOwnProperty`, so `Settings.Has("toString")`
+  answered **true**, `Settings.Get("toString")` answered a **function** for a
+  name nothing ever set, and `Record.Load` silently **dropped** an unknown key
+  called `toString` or `constructor` -- breaking the documented promise that a
+  key the record does not describe survives the round trip, which exists so an
+  older program cannot delete a newer one's field by saving the file. A declared
+  field whose file key is inherited read the inherited function and complained
+  about a key nobody wrote.
+  **`for...in` is not the trap** and never was: `Object.prototype`'s members are
+  non-enumerable and are never recited. The trap is `in`, and a plain `bag[key]`
+  read used as a boolean -- `taken["toString"]` is a function, which is truthy.
+  `Dictionary` had it right from the start (`hasOwn.call`, `rad.js:403`) with
+  the reasoning written above it; `Settings` and `Record` are the two that did
+  not reach for it, and `Settings` disagreed with itself -- `Keys()` used the
+  captured `ownKeys` while `Has` and `Get` beside it used `in`. **Own keys or
+  the prototype answers: `hasOwn.call(bag, key)`, never `key in bag`.**
+- **`g_object_ref(NULL)` is a critical and carries on, which is how a wrong
+  branch stays invisible.** `Split.Reorder` ref'd both halves before unparenting
+  them, and a split with **one** half is ordinary -- it is what one looks like
+  after the first child is dropped, and reordering the remaining half is
+  documented API. The reorder itself came out right, so nothing looked broken;
+  the price was two `GLib-GObject-CRITICAL`s that the runner prints and does not
+  count (`tests/runner/Main.js`'s `NOISE` filters warnings only, and no script
+  sets `G_DEBUG=fatal-criticals`), and an abort for anyone who does set it.
+  **A green run is not a quiet one — read the output when you touch ref counts.**
+- **`JS_ToCString` throws, and a `NULL` you turned into `"?"` is an exception you
+  left on the context.** `print({ toString: null })` and `Logger.Info` of the
+  same value both wrote `"?"` and walked away, so the failure surfaced later as
+  whoever asked next appearing to have thrown. Handling a conversion failure
+  means consuming it: `if (!s) JS_FreeValue(ctx, JS_GetException(ctx));`.
+  `bta_debug.c:350-355` is the other shape, for when there is a pending
+  exception to *preserve* across the work rather than discard.
+- **A refusal a C function returns and nothing reads is a feature that quietly
+  is not there.** Two of these, both fixed and both worth recognising by shape:
+  `JS_DeleteProperty`'s boolean was dropped in `bta_close_hatches`, so an engine
+  that made one of those names non-configurable would leave the hatch open with
+  nothing said; and `exec_control_fd` returned `-1` for a `pipe()` that failed,
+  which is the same `-1` that means *no Control was asked for*, so descriptor
+  exhaustion lost the debugger's channel in silence while Windows answered the
+  same situation with a real exception. **When a helper's sentinel already means
+  "nothing to do", a failure needs a different one.**
 
 ## Database.Sqlite and Table
 
@@ -3365,7 +3578,9 @@ person who wrote it either.
   withdrawn or poisoned, so `Stop()` asks and `KillAfter` enforces -- `Exec`'s
   two stages, with a flag where that one has a signal -- and teardown waits a
   bounded two seconds and then casts an unresponsive worker adrift with its
-  job deliberately unfreed. Freeing memory a live thread still writes to is
+  job's **live reference deliberately never dropped** -- the job is refcounted
+  now, so the deliberate leak is said in the same vocabulary as everything else
+  that holds one. Freeing memory a live thread still writes to is
   worse than leaking it on the last line before exit. `GCancellable` is the
   only thing that reaches a thread blocked in native code, and it was measured
   and deferred: one of the six verbs a worker can block in takes one, and it

@@ -50,6 +50,16 @@ class TaskWork extends Task {
                 timer:     typeof Timer,
                 settings:  typeof Settings,
                 exec:      typeof Exec,
+                /* Refused on this side too -- rad.js is evaluated entire here,
+                 * so the curation crosses with it -- and with a sentence of its
+                 * own, because `Locale` is not installed in a worker and
+                 * pointing at `Locale.Compare` would be a second wrong answer.
+                 * See testLocaleOrder for the main thread's half. */
+                locale:    typeof Locale,
+                lc:        (() => {
+                    try { "a".localeCompare("b"); return "NOT REFUSED"; }
+                    catch (e) { return e.message; }
+                })(),
             };
         }
 

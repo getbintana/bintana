@@ -40,8 +40,17 @@
  *
  * A `WeakMap` is private to this file, invisible to `for...in`, to
  * `Dictionary.Keys`, to the serialiser and to `preventExtensions`, and it lets
- * the widget go when the widget goes.  `Map`, `WeakMap` and `Set` are all here;
- * `Symbol` is not, which is why this is keyed by the widget and not by one.
+ * the widget go when the widget goes.
+ *
+ * **Keyed by the widget, and not by a `Symbol`** -- and the reason is the
+ * paragraph above, not availability.  `Symbol` *is* installed while this file
+ * runs: `bta_close_hatches` takes it away only after both halves of the prelude
+ * have been evaluated, and a symbol is a valid weak key on this engine besides.
+ * What a symbol would buy is a symbol-keyed **own property** on the widget,
+ * which is exactly the shape already ruled out: `preventExtensions` cannot tell
+ * a note from a typo, it refuses one created later than the widget, and a
+ * widget's own properties are supposed to be its properties.  The note has to
+ * live off the widget, and a symbol does not put it there.
  *
  * `__declared` is **not** among them, and cannot be: `bta_form.c` defines and
  * writes it as the loader substitutes prose, so a bag private to this file

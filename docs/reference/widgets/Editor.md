@@ -95,11 +95,15 @@ Before_Scroll(x, y) { this.After.ScrollY = y; }
 nothing, so two panes pointed at each other settle after one event rather than
 bouncing.
 
-**A scroll one of the cursor verbs asks for lands on the next frame.**
-`GotoLine` and `Select` reveal their place through a text mark so that the
-request survives a view that has not been laid out yet — which means reading
-`ScrollY` on the line after `GotoLine(n)` answers where the view still *is*.
-Assigning `ScrollY` is immediate; asking to be shown a line is not.
+**A scroll one of the cursor verbs asks for is not promised until the next
+frame.** `GotoLine` and `Select` reveal their place through a text mark so that
+the request survives a view that has not been laid out yet — which means
+`ScrollY` read on the line after `GotoLine(n)` **may answer either** where the
+view still is or where it is going: GTK honours the mark at once when the view
+already has a validated allocation, and on a later frame when it does not.
+Measured, both happen. So the cursor is immediate — `Line` is right on the next
+line — and the scroll is only reliable once a frame has passed. Assigning
+`ScrollY` is immediate; asking to be shown a line is not.
 
 **And the end of a file exists only once it has been measured — which for a long
 one takes more than a turn.** A `GtkTextView` validates its text a little at a

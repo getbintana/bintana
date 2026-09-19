@@ -167,10 +167,14 @@ Reaching for `new Date(y, m, d, 12)` to get a month or a weekday out of one is t
 mistake this saves you — the noon is there to dodge the time zone that borrowing an
 instant introduced, and the string never had one.
 
-**Use `Locale.Compare` and never `localeCompare`**, which here compares code
-units and puts `Álvarez` after `Zapata`. `Locale.Matches` is its half for a
-search field. `Locale.Number` and `Locale.Currency` take a `Decimal` and write
-it from its own digits, never through a double.
+**Use `Locale.Compare`; `localeCompare` is refused**, because here it compares
+code units and puts `Álvarez` after `Zapata`. **A bare `list.sort()` and a plain
+`a < b` give that same wrong order and do not refuse** — they never claimed to
+know about language, and they are the right thing for paths, extensions and the
+keys of a bag. Over text a person reads, write `list.sort(Locale.Compare)`.
+`Locale.Matches` is its half for a search field. `Locale.Number` and
+`Locale.Currency` take a `Decimal` and write it from its own digits, never
+through a double.
 
 Most text needs none of this: see
 [forms.md](forms.md#text-a-person-reads).

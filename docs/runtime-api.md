@@ -12,15 +12,25 @@ once `rad.js` has run (`close_hatches()`).
 **Never installed**, because no Bintana code has ever used them: `Promise`,
 `Proxy`, `Reflect`, the typed arrays and `ArrayBuffer`, `WeakRef`, `atob`/`btoa`,
 `performance`. `Promise` is the deliberate one — this is a language of events, not
-of continuations, and leaving it out makes that a fact instead of advice. `async`
-functions therefore do not run. What a sequence is written with instead, and what
-would make that answer change, is [plans/async-plan.md](plans/async-plan.md).
+of continuations, and leaving it out makes that a fact instead of advice.
+`async` and `await` are therefore **refused by the compiler**, with a
+`SyntaxError` on the word itself: the engine registers its async classes only
+alongside `Promise`, so one that merely parsed left an object nothing could
+collect and a process that could not close. What a sequence is written with
+instead, and what would make that answer change, is
+[plans/async-plan.md](plans/async-plan.md).
 
 **Removed after boot**: `eval`, `Function`, `globalThis`, `Symbol`, the
 scheduling primitives `setTimeout` / `setInterval` / their `clear` pair, and the
 forward-only clock they are scheduled on — which is published as
 [`Stopwatch`](#stopwatch), because a single reading of it counts from the
-machine's boot and means nothing on its own. And with
+machine's boot and means nothing on its own. **`queueMicrotask` goes with
+them**, for the sentence the pair went for: scheduling with no name of ours, no
+switch and no handle. It worked — `bta_drain_jobs` pumps the job queue after
+every event handler — and that is why it was worth removing rather than
+leaving, since a second undocumented way to defer is the thing `Timer` exists to
+prevent. `escape` / `unescape` go too: an Annex B URL encoding no standard
+recommends, with no caller here. And with
 them the roads that need no name: `Function.prototype.constructor` and the
 generator function constructor both compiled strings, so both are unhooked. What
 is left in their place is `Application.CheckSource`, which answers the one honest
@@ -112,11 +122,14 @@ produces one whatever the global is called, so taking the name would remove
 `new RegExp(…)` and nothing else. `Object.keys` had no syntax to fall back on,
 which is why emptying `Object` meant something and this does not.
 
-**One that is installed and is a trap: `String.prototype.localeCompare`.** There
-is no `Intl` — QuickJS is built without ICU — so a comparison with no collator
-falls back to comparing code units, and `"Álvarez".localeCompare("Zapata")` is
-`1`. It reads like the thing that puts a list of names in order and is a
-codepoint sort wearing the name, which is worse than not having it.
+**One that was installed and is now refused: `String.prototype.localeCompare`.**
+There is no `Intl` — QuickJS is built without ICU — so a comparison with no
+collator fell back to comparing code units, and `"Álvarez".localeCompare("Zapata")`
+was `1`. It read like the thing that puts a list of names in order and was a
+codepoint sort wearing the name, **answering exactly what no comparator at all
+answers** — which is worse than not having it, so it is not had. `rad.js`
+replaces it with a refusal that names the alternative, on both sides, since a
+worker evaluates that file too.
 [`Locale.Compare`](#ordering-names-and-finding-one) is the one that asks the
 desktop, and `Locale.Matches` is its half for a search field.
 
@@ -546,10 +559,11 @@ Locale.Matches("Álvarez, María", "maria alv")   // true — every word, in any
 Locale.Matches(anything, "")                    // true — an empty search finds everything
 ```
 
-**`localeCompare` is installed here and is not this.** It is a method of `String`
-and nothing took it away, but QuickJS is built without ICU, so with no `Intl` a
-comparison with no collator falls back to comparing code units — which is not an
-approximation of alphabetical order, it is a different order:
+**`localeCompare` is not this, and is refused rather than left to mislead.** It
+is a method of `String` and nothing had taken it away, but QuickJS is built
+without ICU, so with no `Intl` a comparison with no collator falls back to
+comparing code units — which is not an approximation of alphabetical order, it
+is a different order:
 
 ```js
 ["Zapata", "Álvarez", "acosta"].sort()               // Zapata, acosta, Álvarez
@@ -560,6 +574,14 @@ approximation of alphabetical order, it is a different order:
 every surname written with a lowercase particle — *van der Berg*, *de la Fuente*.
 That is the whole of the reason this exists: the fallback reads like the fix and
 changes nothing, which is worse than not having one.
+
+**Note which line above is the silent one.** `localeCompare` is refused now and
+says what to use; a bare `sort()` and a plain `a < b` give that same wrong order
+and say nothing, because neither ever claimed to know about language. They are
+right for what most lists in a program hold — paths, extensions, class names,
+the keys of a bag — and wrong the moment the list is text a person reads. There
+is no `Locale.Sort`: `sort(Locale.Compare)` is the whole of it, and a name will
+be published when something needs more than that.
 
 `Compare` is `strcoll` under the C locale the runtime set at startup, the same one
 `Locale.Number` writes a comma with. So a Spanish desktop files *Ñanculeo* between
@@ -2617,8 +2639,8 @@ and 573 ms cold, and no program should pay that for a feature it never calls.
   array — but **not** all of what QuickJS can provide. What is installed and what
   is taken away is [above](#the-language-underneath).
 
-**There is no `Promise`, so an `async` function does not run and `await` is not a
-word here.** It is the one omission that is a decision rather than an economy:
+**There is no `Promise`, so `async` and `await` are refused where they are
+written.** It is the one omission that is a decision rather than an economy:
 this is a language of events, and the sequences that would otherwise want a
 promise are written as a chain of callbacks — `Exec`'s exit callback,
 `Dialog`'s answer, `Timer.After`. Nothing drains a microtask queue because there

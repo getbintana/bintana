@@ -1655,8 +1655,19 @@ static int exec_control_fd(JSContext *ctx, JSValueConst opts,
         "Exec: Control needs a descriptor a child inherits, which this platform has not got");
     return -2;
 #else
-    if (pipe(ends) != 0)
-        return -1;
+    /*
+     * A refusal and not an absence.  `-1` here means *no Control was asked
+     * for*, so returning it for a pipe that could not be made handed back a
+     * child with the stream silently missing -- descriptor exhaustion (EMFILE)
+     * losing the debugger's channel with nothing said.  `-2` is the shape the
+     * Windows arm above already answers with, so the two platforms now agree
+     * about what failure looks like.
+     */
+    if (pipe(ends) != 0) {
+        JS_ThrowInternalError(ctx, "Exec: Control could not be opened: %s",
+                              g_strerror(errno));
+        return -2;
+    }
 
     /* The launcher takes the writing end and closes it here after the spawn,
        which is what makes the child's descriptor 3 the only one left open on

@@ -285,12 +285,23 @@ static JSValue bytes_concat(JSContext *ctx, JSValueConst this_val,
     if (total && !buf)
         return JS_EXCEPTION;
 
+    /*
+     * Guarded by the length, because an empty Bytes carries a NULL data
+     * pointer on purpose (see bta_bytes_get).  `memcpy`'s parameters are
+     * declared nonnull, so `memcpy(NULL, NULL, 0)` is undefined behaviour a
+     * UBSan run reports -- and it is not the exotic case: any empty operand
+     * reaches one of these two, so `a.Concat(new Bytes())` does it as readily
+     * as `new Bytes().Concat()`.
+     */
     size_t at = 0;
-    memcpy(buf, b->data, b->len);
+    if (b->len)
+        memcpy(buf, b->data, b->len);
     at += b->len;
     for (int i = 0; i < argc; i++) {
         BtaBytes *more = bytes_of(argv[i]);
-        memcpy(buf + at, more->data, more->len);
+
+        if (more->len)
+            memcpy(buf + at, more->data, more->len);
         at += more->len;
     }
 

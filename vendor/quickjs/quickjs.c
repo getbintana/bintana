@@ -38069,6 +38069,28 @@ static __exception int js_parse_function_decl2(JSParseState *s,
     bool has_opt_arg;
     bool create_func_var = false;
 
+    /*
+     * Bintana patch: `async` is refused where it is written.
+     *
+     * This runtime does not install JS_AddIntrinsicPromise, which is a decision
+     * about the language -- and which is also the only thing that registers
+     * JS_CLASS_ASYNC_FUNCTION.  Without that class the object js_closure builds
+     * for an async function has a NULL finalizer and a NULL mark function, so
+     * it never releases its bytecode and never gets collected, and
+     * JS_FreeRuntime's `assert(list_empty(&rt->gc_obj_list))` fires at exit --
+     * after the program has done its work and asked to quit with 0.  A build
+     * with NDEBUG leaks it silently instead.
+     *
+     * So a name that parses and then makes the process unable to close is the
+     * one outcome worse than either having the feature or not having it, and
+     * this is where it stops.  Two guards because func_kind arrives two ways: a
+     * method or an arrow is called with it already set, and a declaration or an
+     * expression has `async` upgraded below.
+     */
+    if (func_kind & JS_FUNC_ASYNC)
+        return js_parse_error(s, "async functions are not available: there is "
+                                 "no Promise here to run them");
+
     is_expr = (func_type != JS_PARSE_FUNC_STATEMENT &&
                func_type != JS_PARSE_FUNC_VAR);
 
@@ -38078,9 +38100,10 @@ static __exception int js_parse_function_decl2(JSParseState *s,
         if (func_kind == JS_FUNC_NORMAL &&
             token_is_pseudo_keyword(s, JS_ATOM_async) &&
             peek_token(s, true) != '\n') {
-            if (next_token(s))
-                return -1;
-            func_kind = JS_FUNC_ASYNC;
+            /* Bintana patch: the second half of the guard above, reported while
+             * the token still is `async` so the column names it. */
+            return js_parse_error(s, "async functions are not available: there "
+                                     "is no Promise here to run them");
         }
         if (next_token(s))
             return -1;

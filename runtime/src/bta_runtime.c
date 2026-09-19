@@ -65,10 +65,26 @@ static bool error_handled_by_app(JSContext *ctx, const char *msg, const char *st
                             JS_NewString(ctx, stack ? stack : "") };
         JSValue r = JS_Call(ctx, fn, app, 2, (JSValueConst *)argv);
 
-        /* An error inside the error handler is only reported to the terminal:
-         * the guard is still up, so it cannot come back here. */
-        if (JS_IsException(r))
-            JS_FreeValue(ctx, JS_GetException(ctx));
+        /*
+         * An error inside the error handler is reported to the terminal and
+         * nowhere else: the guard is still up, so it cannot come back here.
+         *
+         * It used to be fetched and dropped without a word, which made the
+         * sentence in runtime-api.md false -- it reached nothing at all, and a
+         * typo in an application's OnError was invisible from both ends.  Same
+         * shape as log_handled_by_app below.
+         */
+        if (JS_IsException(r)) {
+            JSValue     e = JS_GetException(ctx);
+            const char *m = JS_ToCString(ctx, e);
+
+            fprintf(stderr, "bintana: Application.OnError failed: %s\n",
+                    m ? m : "?");
+            if (!m)
+                JS_FreeValue(ctx, JS_GetException(ctx));
+            JS_FreeCString(ctx, m);
+            JS_FreeValue(ctx, e);
+        }
 
         JS_FreeValue(ctx, r);
         JS_FreeValue(ctx, argv[0]);
@@ -294,6 +310,18 @@ static void check_position(const char *stack, int *line, int *column)
     *column = n;
 }
 
+/* Put back what js_check_source borrowed from `Error`.  Both setters take the
+ * value, so the saved ones are handed over rather than freed. */
+static void check_restore_error(JSContext *ctx, JSValue err_ctor, bool guarded,
+                                JSValue saved_prepare, JSValue saved_limit)
+{
+    if (guarded) {
+        JS_SetPropertyStr(ctx, err_ctor, "prepareStackTrace", saved_prepare);
+        JS_SetPropertyStr(ctx, err_ctor, "stackTraceLimit", saved_limit);
+    }
+    JS_FreeValue(ctx, err_ctor);
+}
+
 /*
  * `null` when the text is valid JavaScript, and `{ Message, Line, Column }` when
  * it is not.  Compiled and not run: asking is not the same as executing.
@@ -315,6 +343,39 @@ static JSValue js_check_source(JSContext *ctx, JSValueConst this_val,
     if (!src)
         return JS_ThrowTypeError(ctx, "Application.CheckSource(text) needs text");
 
+    /*
+     * **The stack this reads is data, not a message, so the program's own
+     * settings must not reach it.**
+     *
+     * There is nowhere else to read the position from -- a QuickJS error object
+     * carries no `lineNumber`, `columnNumber` or `fileName`, measured, so
+     * `check_position` parsing `<check>:LINE:COL` out of `.stack` is the only
+     * way there is.  That made two ordinary assignments silently break this
+     * answer: `Error.prepareStackTrace` replaces the whole string, and
+     * `Error.stackTraceLimit = 0` empties it.  Both were measured returning
+     * `Line: 0, Column: 0` for source whose real answer is `2:9`, with the
+     * message still right -- so an editor underlined the first character of the
+     * file and nothing said why.
+     *
+     * Neutralised for the length of the compile and put back after the stack
+     * has been read.  Not removed from the language: what a program does to
+     * `Error` is its business, and what it does must simply not be able to
+     * corrupt a runtime answer.
+     */
+    JSValue global = JS_GetGlobalObject(ctx);
+    JSValue err_ctor = JS_GetPropertyStr(ctx, global, "Error");
+    JSValue saved_prepare = JS_UNDEFINED, saved_limit = JS_UNDEFINED;
+    bool    guarded = JS_IsObject(err_ctor);
+
+    JS_FreeValue(ctx, global);
+    if (guarded) {
+        saved_prepare = JS_GetPropertyStr(ctx, err_ctor, "prepareStackTrace");
+        saved_limit   = JS_GetPropertyStr(ctx, err_ctor, "stackTraceLimit");
+        JS_SetPropertyStr(ctx, err_ctor, "prepareStackTrace", JS_UNDEFINED);
+        /* The engine's own default; one frame is all check_position reads. */
+        JS_SetPropertyStr(ctx, err_ctor, "stackTraceLimit", JS_NewInt32(ctx, 10));
+    }
+
     JSValue r = JS_Eval(ctx, src, strlen(src), "<check>",
                         JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_STRICT |
                         JS_EVAL_FLAG_COMPILE_ONLY);
@@ -322,6 +383,7 @@ static JSValue js_check_source(JSContext *ctx, JSValueConst this_val,
 
     if (!JS_IsException(r)) {
         JS_FreeValue(ctx, r);
+        check_restore_error(ctx, err_ctor, guarded, saved_prepare, saved_limit);
         return JS_NULL;
     }
     JS_FreeValue(ctx, r);
@@ -348,6 +410,7 @@ static JSValue js_check_source(JSContext *ctx, JSValueConst this_val,
     JS_FreeValue(ctx, st);
     JS_FreeCString(ctx, msg);
     JS_FreeValue(ctx, err);
+    check_restore_error(ctx, err_ctor, guarded, saved_prepare, saved_limit);
     return out;
 }
 
@@ -485,6 +548,9 @@ static bool log_handled_by_app(JSContext *ctx, int level, const char *text)
             JSValue e = JS_GetException(ctx);
             const char *m = JS_ToCString(ctx, e);
             fprintf(stderr, "bintana: Logger.Handler failed: %s\n", m ? m : "?");
+            /* A conversion that failed left one of its own behind. */
+            if (!m)
+                JS_FreeValue(ctx, JS_GetException(ctx));
             JS_FreeCString(ctx, m);
             JS_FreeValue(ctx, e);
         }
@@ -527,9 +593,16 @@ static JSValue js_log(JSContext *ctx, JSValueConst this_val,
     GString *line = g_string_new(NULL);
     for (int i = 0; i < argc; i++) {
         const char *s = JS_ToCString(ctx, argv[i]);
+
         if (i)
             g_string_append_c(line, ' ');
         g_string_append(line, s ? s : "?");
+        /* A value that cannot become a string -- `{ toString: null }` -- throws
+         * here, and the "?" is this function's answer to that.  Consume it, or
+         * it stays on the context and surfaces as whoever asks next having
+         * thrown. */
+        if (!s)
+            JS_FreeValue(ctx, JS_GetException(ctx));
         JS_FreeCString(ctx, s);
     }
 
@@ -639,7 +712,12 @@ static JSValue js_print(JSContext *ctx, JSValueConst this_val,
 {
     for (int i = 0; i < argc; i++) {
         const char *s = JS_ToCString(ctx, argv[i]);
+
         printf("%s%s", i ? " " : "", s ? s : "?");
+        /* Same as Logger's: the failed conversion left an exception behind, and
+         * printing "?" is this function saying it handled it. */
+        if (!s)
+            JS_FreeValue(ctx, JS_GetException(ctx));
         JS_FreeCString(ctx, s);
     }
     putchar('\n');
@@ -1087,11 +1165,25 @@ static bool install_globals(BtaApp *app)
  * This is curation of the surface, not a sandbox -- a project still holds every
  * capability the runtime gave it, and Terminal.Run is Exec by another name.
  */
+/*
+ * A refusal is said out loud, because the silent version is the expensive one.
+ * `delete` answers true for a name that was never there, so the only way this
+ * comes back false is an engine that made one of these non-configurable -- at
+ * which point `close_hatches` is theatre, the hatch is open, and the only
+ * alarm left is a list in `tests/widgets` somebody has to keep in step by hand.
+ */
 static void delete_named(JSContext *ctx, JSValueConst obj, const char *name)
 {
     JSAtom atom = JS_NewAtom(ctx, name);
-    JS_DeleteProperty(ctx, obj, atom, 0);
+    int    gone = JS_DeleteProperty(ctx, obj, atom, 0);
+
     JS_FreeAtom(ctx, atom);
+    if (gone <= 0) {
+        fprintf(stderr, "bintana: '%s' would not be deleted -- the hatch is "
+                        "still open\n", name);
+        if (gone < 0)
+            JS_FreeValue(ctx, JS_GetException(ctx));
+    }
 }
 
 void bta_close_hatches(JSContext *ctx)
@@ -1110,6 +1202,13 @@ void bta_close_hatches(JSContext *ctx)
      * GeneratorFunction is the same hatch by a side door: it has no global name,
      * but every generator's prototype carries it and it compiles strings just as
      * Function does.  (AsyncFunction needs Promise, which is not installed.)
+     *
+     * That parenthesis is true and answers only half of what the same absence
+     * decides.  JS_AddIntrinsicPromise builds the AsyncFunction constructor --
+     * so there is no hatch here -- **and** is the only thing that registers the
+     * engine's async classes, without which an async function object can never
+     * be collected and JS_FreeRuntime aborts at exit.  That is why `async` is
+     * refused in the parser now; see patch 5 in AGENTS.md.
      */
     JSValue gen = JS_Eval(ctx, "(function* () {})", 17, "<hatches>",
                           JS_EVAL_TYPE_GLOBAL);
@@ -1196,6 +1295,24 @@ void bta_close_hatches(JSContext *ctx)
          * reading of it is meaningless alone, so Stopwatch is not a convenience
          * over it but the only shape in which it says anything. */
         "monotonic",
+        /*
+         * queueMicrotask goes with setTimeout and for the same sentence: it is
+         * scheduling with no name of ours, no switch and no handle.  It does
+         * work -- bta_drain_jobs runs the queue after every event handler, and
+         * it was measured running -- which is exactly what made it worth
+         * removing rather than leaving: a second way to defer, undocumented,
+         * that nothing in this tree ever asked for.  `Timer.After(0, fn)` is the
+         * published word, and the day a program needs *before the next frame*
+         * rather than *on the next turn* it gets a name instead of this one.
+         */
+        "queueMicrotask",
+        /*
+         * Annex B, and not even that any more: `escape` is a URL encoding no
+         * standard recommends, with no caller anywhere here.  `Text.Escape` is
+         * markup and `Http` builds its own query strings, so the name is free
+         * to mislead and nothing else.
+         */
+        "escape", "unescape",
     };
     for (size_t i = 0; i < sizeof(gone) / sizeof(gone[0]); i++)
         delete_named(ctx, global, gone[i]);
@@ -1766,6 +1883,10 @@ void bta_app_free(BtaApp *app)
     g_free(app->version);
     g_free(app->startup);
     g_free(app->entry);
+    /* Owns its paths (collect_libs builds it with g_free as the element free
+     * func), and only bta_plugins_load reads it -- which is long done. */
+    if (app->libs)
+        g_ptr_array_unref(app->libs);
     if (g_app == app)
         g_app = NULL;
     g_free(app);

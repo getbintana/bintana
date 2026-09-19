@@ -157,6 +157,9 @@ bool bta_task_is_worker(JSContext *ctx)
 typedef struct BtaTaskJob BtaTaskJob;
 
 struct BtaTaskJob {
+    /* The live reference plus one per queued idle source -- atomic, because the
+     * worker thread takes one.  See task_job_ref. */
+    gint       refs;
     JSContext *ctx;             /* main context, borrowed */
     JSValue    self;            /* the proxy, Dup'd: it outlives being dropped */
     /*
@@ -219,8 +222,44 @@ static BtaTaskJob *task_find_locked(JSValueConst self)
     return NULL;
 }
 
-static void task_job_free(BtaTaskJob *job)
+/*
+ * **Refcounted, because two of its four sources are queued from the worker
+ * thread.**
+ *
+ * `task_deliver` and `task_progress_drain` are handed the job as their
+ * `user_data` from inside `task_thread`, while the main loop may be dispatching
+ * concurrently.  Keeping their source ids on the job -- the way `timeout_src`
+ * and `force_src` are kept, which is the obvious symmetry to reach for -- does
+ * not work here: the loop can dispatch the source and free the job before
+ * `g_idle_add_full` has returned into the assignment, and the worker then
+ * writes an id into freed memory.  Those two are safe only because they are
+ * armed on *this* thread.
+ *
+ * A reference per queued source answers it without a lock and without an id:
+ * `task_job_ref` is taken before the source is attached and `task_job_unref` is
+ * its `GDestroyNotify`, so the job outlives any source that points at it
+ * whether that source is dispatched or destroyed with the context.
+ *
+ * The **live** reference -- the one taken at creation -- belongs to whoever
+ * takes the job off `task_jobs`, which is `task_deliver` for an ordinary ending
+ * and `bta_task_cleanup` for teardown.  `job->dead` is set in exactly one place
+ * and tells them apart.  A worker cast adrift keeps its live reference for
+ * good, which is the same deliberate leak as before, said in the vocabulary of
+ * the rest of the file: freeing memory a live thread still writes to is worse.
+ */
+static BtaTaskJob *task_job_ref(BtaTaskJob *job)
 {
+    g_atomic_int_inc(&job->refs);
+    return job;
+}
+
+static void task_job_unref(gpointer data)
+{
+    BtaTaskJob *job = data;
+
+    if (!g_atomic_int_dec_and_test(&job->refs))
+        return;
+
     g_free(job->class_name);
     g_free(job->file_text);
     g_free(job->file_path);
@@ -465,34 +504,70 @@ static void js_walk(GHashTable *out, const char *dir, const char *prefix,
     g_dir_close(d);
 }
 
-/* The path of the file declaring this class: a path, "" when two files claim
+/* The project and its libraries, walked into the cache from scratch. */
+static void js_index_build(BtaApp *app)
+{
+    g_clear_pointer(&js_index, g_hash_table_unref);
+    g_free(js_index_dir);
+    js_index_dir = g_strdup(app->dir);
+    js_index     = g_hash_table_new_full(g_str_hash, g_str_equal,
+                                         g_free, js_entry_free);
+    js_walk(js_index, app->dir, NULL, 0);
+    if (app->libs)
+        for (guint i = 0; i < app->libs->len; i++)
+            js_walk(js_index, app->libs->pdata[i], NULL, 0);
+}
+
+/* Qualified first, then the bare name: a `Jobs.Sizer` may be declared in a file
+ * that only says `Sizer`. */
+static JsEntry *js_index_find(const char *class_name)
+{
+    JsEntry    *e = g_hash_table_lookup(js_index, class_name);
+    const char *dot;
+
+    if (!e && (dot = strrchr(class_name, '.'))) {
+        char *bare = g_strdup(dot + 1);
+
+        e = g_hash_table_lookup(js_index, bare);
+        g_free(bare);
+    }
+    return e;
+}
+
+/*
+ * The path of the file declaring this class: a path, "" when two files claim
  * the name, NULL when none does.  Borrowed -- the table owns it.  One project
- * per process, so one cache keyed by its directory, rebuilt on a miss the way
- * form_path rebuilds on one.  Main thread only: Start is where it is read. */
+ * per process, so one cache keyed by its directory.  Main thread only: Start is
+ * where it is read.
+ *
+ * **A miss is not believed until the index has been rebuilt**, which is the
+ * same rule `form_path` runs on and for the same reason: the other answer is a
+ * `<Name>.js` that appeared since, which is the normal state of affairs while
+ * an IDE writes files in the directory it is running from.  The comment here
+ * claimed that rebuild for a long time while the code only rebuilt when the
+ * cache was absent or the project directory had changed, so a task class
+ * created after the first `Start` stayed invisible for the life of the process.
+ *
+ * It costs less here than it does in `form_path`, which is what settles it: a
+ * miss means `Task.Start` is about to throw *cannot find task class*, so the
+ * walk is on the path that was going to fail anyway, and never on the one that
+ * succeeds.
+ */
 static const char *task_class_file(BtaApp *app, const char *class_name)
 {
-    const char *dot;
-    char       *bare = NULL;
-    JsEntry    *e;
+    bool     fresh = false;
+    JsEntry *e;
 
     if (!js_index || !js_index_dir || !g_str_equal(js_index_dir, app->dir)) {
-        g_clear_pointer(&js_index, g_hash_table_unref);
-        g_free(js_index_dir);
-        js_index_dir = g_strdup(app->dir);
-        js_index     = g_hash_table_new_full(g_str_hash, g_str_equal,
-                                             g_free, js_entry_free);
-        js_walk(js_index, app->dir, NULL, 0);
-        if (app->libs)
-            for (guint i = 0; i < app->libs->len; i++)
-                js_walk(js_index, app->libs->pdata[i], NULL, 0);
+        js_index_build(app);
+        fresh = true;
     }
 
-    e = g_hash_table_lookup(js_index, class_name);
-    if (!e && (dot = strrchr(class_name, '.'))) {
-        bare = g_strdup(dot + 1);
-        e = g_hash_table_lookup(js_index, bare);
+    e = js_index_find(class_name);
+    if (!e && !fresh) {
+        js_index_build(app);
+        e = js_index_find(class_name);
     }
-    g_free(bare);
     if (!e)
         return NULL;
     return e->path ? e->path : "";
@@ -938,12 +1013,20 @@ static JSValue task_no_loop(JSContext *ctx, JSValueConst this_val,
                                   "do it", task_loopers[magic]);
 }
 
+/* The worker's half of bta_close_hatches, and loud about a refusal for the same
+ * reason -- see the note on delete_named in bta_runtime.c. */
 static void task_delete(JSContext *ctx, JSValue global, const char *name)
 {
     JSAtom atom = JS_NewAtom(ctx, name);
+    int    gone = JS_DeleteProperty(ctx, global, atom, 0);
 
-    JS_DeleteProperty(ctx, global, atom, 0);
     JS_FreeAtom(ctx, atom);
+    if (gone <= 0) {
+        fprintf(stderr, "bintana: '%s' would not be deleted in a worker -- the "
+                        "hatch is still open\n", name);
+        if (gone < 0)
+            JS_FreeValue(ctx, JS_GetException(ctx));
+    }
 }
 
 /* Replace `<object>.<verb>` with a refusal, keeping the verb's name so the
@@ -1267,7 +1350,8 @@ done:
      * simply waits for a loop that may still start, and teardown joins what
      * never got delivered.
      */
-    g_idle_add_full(G_PRIORITY_DEFAULT, task_deliver, job, NULL);
+    g_idle_add_full(G_PRIORITY_DEFAULT, task_deliver, task_job_ref(job),
+                    task_job_unref);
     return NULL;
 }
 
@@ -1333,9 +1417,20 @@ static gboolean task_deliver(gpointer data)
     task_jobs = g_list_remove(task_jobs, job);
     g_mutex_unlock(&task_lock);
 
-    /* The thread packed everything before invoking: joining only collects. */
-    g_thread_join(job->thread);
-    job->thread = NULL;
+    /*
+     * The thread packed everything before invoking: joining only collects.
+     *
+     * Guarded, because this source can still be queued when teardown reaches
+     * the same job: `bta_task_cleanup` joins it, clears these, drops the live
+     * reference and moves on, and the job stays alive on this source's own
+     * reference until the source is dispatched or destroyed.  Everything below
+     * is then already done, and doing it twice would join a joined thread and
+     * remove source ids that no longer exist.
+     */
+    if (job->thread) {
+        g_thread_join(job->thread);
+        job->thread = NULL;
+    }
     if (job->timeout_src) {
         g_source_remove(job->timeout_src);
         job->timeout_src = 0;
@@ -1375,9 +1470,16 @@ static gboolean task_deliver(gpointer data)
             JS_FreeValue(job->ctx, stack);
         }
         JS_FreeValue(job->ctx, job->self);
+        job->self = JS_UNDEFINED;
         bta_drain_jobs(JS_GetRuntime(job->ctx));
+        /*
+         * The live reference, and only on this branch: `dead` means teardown
+         * took the job off `task_jobs` and has already dropped it.  What is
+         * left after this is whatever the still-queued sources hold, including
+         * this one -- released by the GDestroyNotify when it is destroyed.
+         */
+        task_job_unref(job);
     }
-    task_job_free(job);
     return G_SOURCE_REMOVE;
 }
 
@@ -1517,6 +1619,7 @@ static JSValue task_start(JSContext *ctx, JSValueConst this_val,
     }
 
     job = g_new0(BtaTaskJob, 1);
+    job->refs       = 1;        /* the live one; sources take their own */
     job->ctx        = ctx;
     job->self       = JS_DupValue(ctx, this_val);
     job->reports    = g_queue_new();
@@ -1686,7 +1789,8 @@ static JSValue task_report(JSContext *ctx, JSValueConst this_val,
     env->job->drain_queued = true;
     g_mutex_unlock(&task_lock);
     if (queue)
-        g_idle_add_full(G_PRIORITY_DEFAULT, task_progress_drain, env->job, NULL);
+        g_idle_add_full(G_PRIORITY_DEFAULT, task_progress_drain,
+                        task_job_ref(env->job), task_job_unref);
     return JS_UNDEFINED;
 }
 
@@ -1731,9 +1835,9 @@ void bta_task_cleanup(void)
          * runtime that offered to (`Thread.Abort`, `Thread.stop`,
          * `pthread_cancel`) withdrew it.  So the wait has an end, and a thread
          * still running when it passes is **cast adrift rather than joined**:
-         * its job is deliberately left unfreed, because the one thing worse
-         * than leaking it on the last line before exit is freeing memory a
-         * live thread still writes to.
+         * its live reference is deliberately never dropped, because the one
+         * thing worse than leaking it on the last line before exit is freeing
+         * memory a live thread still writes to.
          */
         g_mutex_lock(&task_lock);
         while (!job->ended)
@@ -1743,16 +1847,41 @@ void bta_task_cleanup(void)
         g_mutex_unlock(&task_lock);
 
         if (!ended) {
+            /*
+             * The *job* stays unfreed, as the note above says.  The **proxy**
+             * does not: it is a JSValue of the main context, held by no
+             * JavaScript scope, and only the delivery paths on this thread ever
+             * read it -- the worker touches `env->job` and never `job->self`.
+             * Leaving it alive is what left the object on `gc_obj_list`, so the
+             * process printed *closing anyway* and then aborted in
+             * `JS_FreeRuntime`'s assertion two lines later.
+             */
+            JS_FreeValue(job->ctx, job->self);
+            job->self = JS_UNDEFINED;
             adrift++;
             continue;
         }
+        /*
+         * Cleared as they go, because this job's `task_deliver` may still be
+         * queued -- the worker attaches it after saying `ended`, which is what
+         * this loop waited for -- and would otherwise join a joined thread and
+         * remove two source ids that are already gone.  The job survives until
+         * that source is dispatched or destroyed, on the reference the source
+         * itself holds.
+         */
         g_thread_join(job->thread);
-        if (job->timeout_src)
+        job->thread = NULL;
+        if (job->timeout_src) {
             g_source_remove(job->timeout_src);
-        if (job->force_src)
+            job->timeout_src = 0;
+        }
+        if (job->force_src) {
             g_source_remove(job->force_src);
+            job->force_src = 0;
+        }
         JS_FreeValue(job->ctx, job->self);
-        task_job_free(job);
+        job->self = JS_UNDEFINED;
+        task_job_unref(job);        /* the live reference */
     }
     g_list_free(jobs);
 

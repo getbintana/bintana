@@ -1,7 +1,7 @@
 # Testing
 
 ```sh
-./tests/run.sh                          # all five projects, 5979 assertions
+./tests/run.sh                          # all five projects, 6145 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -196,7 +196,7 @@ own says so with `reportsItself`.
 
 `tests/widgets` is 134 tests listed in `TESTS`, and a filter there **selects** rather
 than running a prefix — `./tests/run.sh widgets record` is 71 assertions
-in a fifth of a second against 3122 in about three. It can select because these tests are
+in a fifth of a second against 3401 in about three. It can select because these tests are
 independent: each builds the controls it needs and deletes them again. The two that
 are not say so in the file:
 

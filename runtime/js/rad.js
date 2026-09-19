@@ -68,6 +68,50 @@ const hasOwn      = objectProto.hasOwnProperty;
  * differ and nothing would ever say so. */
 
 /* ------------------------------------------------------------------------
+ * localeCompare, refused by name.
+ *
+ * QuickJS is built without ICU, so there is no `Intl` and this falls back to
+ * comparing code units -- which is not a rough alphabetical order but a
+ * different one, in the language this runtime is commented in.  Measured:
+ *
+ *     "Álvarez".localeCompare("Zapata")                  ->  1
+ *     ["Zapata","Álvarez","acosta","Ñandú"].sort(cmp)    ->  Zapata, acosta,
+ *                                                            Álvarez, Ñandú
+ *
+ * **It answers exactly what no comparator at all answers**, which is what makes
+ * it worse than missing: the name is right, the arguments are right, it returns
+ * -1/0/1, it never throws, and the list comes out sorted wrongly.  Five
+ * documents warned about it and nothing ever argued for keeping it, so it is a
+ * refusal now, and the refusal names the answer -- the same bargain as the
+ * QuickJS patch that made *"no 'Txt' to assign"* say which property.
+ *
+ * **Here and not in close_hatches** because a deletion would say only *not a
+ * function*, and this can say what to use instead.  Either place would have
+ * reached both sides -- a worker evaluates this file entire, and it calls
+ * bta_close_hatches too -- so the choice is about the message and nothing else.
+ *
+ * The worker gets a different sentence because it is in a different position:
+ * `bta_locale_init` is deliberately not called there, so `Locale.Compare` --
+ * which needs no catalogue, only g_utf8_collate -- is missing along with the
+ * half that does.  Pointing a worker at a name it has not got would be the
+ * second wrong answer in a row.
+ * ---------------------------------------------------------------------- */
+
+defineProperty(String.prototype, "localeCompare", {
+    configurable: true,
+    writable:     true,
+    value() {
+        throw new TypeError(
+            typeof Locale === "undefined"
+                ? "localeCompare compares code units on this engine, so it is " +
+                  "refused -- and a worker has no Locale either, so order the " +
+                  "list on the main thread with Locale.Compare"
+                : "localeCompare compares code units on this engine, so it is " +
+                  "refused -- use Locale.Compare");
+    },
+});
+
+/* ------------------------------------------------------------------------
  * JSON files, which is what JSON is for here.
  *
  * A .form is JSON, project.json is JSON, settings are JSON: reading one was
@@ -139,7 +183,7 @@ GLOBAL.Settings = {
      * tell "missing" from "false". */
     Get(key, fallback) {
         const all = settingsAll();
-        return key in all ? all[key] : fallback;
+        return hasOwn.call(all, key) ? all[key] : fallback;
     },
 
     Set(key, value) {
@@ -147,7 +191,10 @@ GLOBAL.Settings = {
         return settingsFlush();
     },
 
-    Has(key)    { return key in settingsAll(); },
+    /* Own keys only, the same rule and for the same reason as Dictionary.Has:
+     * `"toString" in {}` is true, and a settings file nobody wrote a toString
+     * into must not answer about Object.prototype. */
+    Has(key)    { return hasOwn.call(settingsAll(), key); },
     Keys()      { return ownKeys(settingsAll()); },
     Delete(key) { delete settingsAll()[key]; return settingsFlush(); },
     Clear()     { settingsCache = {}; return settingsFlush(); },
@@ -1710,7 +1757,10 @@ GLOBAL.Record = class Record {
             const key   = rec.#fileKey(name, field);
 
             taken[key] = true;
-            if (!(key in json)) continue;
+            /* Own keys only: a field whose file key is `toString` would
+             * otherwise read Object.prototype's function for a file that does
+             * not carry the key, and complain about one nobody wrote. */
+            if (!hasOwn.call(json, key)) continue;
 
             /*
              * A child is **loaded and not assigned**: assigning would go through
@@ -1761,7 +1811,12 @@ GLOBAL.Record = class Record {
             }
         }
 
-        for (const key in json) if (!taken[key]) rec.#x[key] = json[key];
+        /* `taken` is a plain object, so a plain read of it answers about
+         * Object.prototype too: `taken["toString"]` is a function, which is
+         * truthy, which dropped every unknown key named after one of those --
+         * exactly the keys this loop exists to carry through untouched. */
+        for (const key in json)
+            if (!hasOwn.call(taken, key)) rec.#x[key] = json[key];
         return rec;
     }
 };

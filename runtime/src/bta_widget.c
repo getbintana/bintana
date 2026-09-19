@@ -4086,16 +4086,28 @@ bool bta_container_reorder(JSContext *ctx, BtaWidget *parent, BtaWidget *child,
         if ((first && child->gtk == start) || (!first && child->gtk == end))
             return true;                            /* already there */
 
-        /* Both are unparented before either is re-parented: GTK 4 refuses a
-         * widget that still has one. */
-        g_object_ref(start);
-        g_object_ref(end);
+        /*
+         * Both are unparented before either is re-parented: GTK 4 refuses a
+         * widget that still has one.
+         *
+         * **Guarded, because a split with one half is ordinary** -- it is what
+         * a Split looks like after the first child is dropped, and reordering
+         * the remaining one is documented API.  `g_object_ref(NULL)` is two
+         * GLib-GObject-CRITICALs and carries on, so the move came out right and
+         * nothing said anything; under `G_DEBUG=fatal-criticals` it aborts.
+         */
+        if (start)
+            g_object_ref(start);
+        if (end)
+            g_object_ref(end);
         gtk_paned_set_start_child(paned, NULL);
         gtk_paned_set_end_child(paned, NULL);
         gtk_paned_set_start_child(paned, first ? child->gtk : (start == child->gtk ? end : start));
         gtk_paned_set_end_child(paned, first ? (start == child->gtk ? end : start) : child->gtk);
-        g_object_unref(start);
-        g_object_unref(end);
+        if (start)
+            g_object_unref(start);
+        if (end)
+            g_object_unref(end);
         return true;
     }
 

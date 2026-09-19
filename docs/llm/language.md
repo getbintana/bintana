@@ -44,9 +44,19 @@ A namespace is an ordinary object. `Namespace("A.B")` creates both levels.
 
 Not present at all, and referencing one is a `ReferenceError`:
 
-`Promise`, `async`/`await` (they parse, but nothing runs them), `Proxy`,
-`Reflect`, `ArrayBuffer` and the typed arrays, `WeakRef`, `atob`/`btoa`,
-`performance`, `window`, `document`, `fetch`, `require`, `console`, `process`.
+`Promise`, `Proxy`, `Reflect`, `ArrayBuffer` and the typed arrays, `WeakRef`,
+`atob`/`btoa`, `performance`, `window`, `document`, `fetch`, `require`,
+`console`, `process`.
+
+**`async` and `await` are refused where they are written**, with a `SyntaxError`
+naming the line and the column — a declaration, an expression, an arrow, a class
+or object method and an async generator alike. They used to parse and do
+nothing, which was worse than either answer: the engine registers its async
+classes only alongside `Promise`, so the object the parser built for one could
+never be collected and a program that merely *declared* an async function
+aborted on the way out, after its own work was done and it had asked to quit
+with 0. `Application.CheckSource` reports the refusal like any other syntax
+error, so an editor underlines it as it is typed.
 
 Two of those have a word here instead: bytes are
 [`Bytes`](library.md#bytes) — one class, immutable, with `Slice`, `Concat` and
@@ -57,7 +67,24 @@ Removed once the runtime has booted, so they are gone before your code runs:
 
 `eval`, `Function` (and `Function.prototype.constructor`, and the generator
 function constructor), `globalThis`, `Symbol`, `setTimeout`, `setInterval`,
-`clearTimeout`, `clearInterval`.
+`clearTimeout`, `clearInterval`, `queueMicrotask`, `escape`, `unescape`,
+`monotonic`.
+
+`queueMicrotask` goes with the timer pair and for the same sentence — it is
+scheduling with no name of ours, no switch and no handle. It worked; that is
+why it went, rather than a reason to keep it. `Timer.After(0, fn)` is the word
+for *do this on the next turn*. `escape`/`unescape` are an Annex B URL encoding
+no standard recommends: `Text.Escape` is markup, and `Http` builds its own query
+strings.
+
+**Installed and worth knowing about**, though nothing here needs them: `BigInt`,
+`WeakMap`, `WeakSet`, `Iterator` and `DisposableStack`. `WeakMap` is the one to
+know: it is how `forms.js` keeps a note *about* a widget without putting a
+property *on* it, which is the pattern to copy when you need per-object state
+that no serialiser, `for...in` or `Dictionary.Keys` should ever see.
+`Error.captureStackTrace`, `Error.stackTraceLimit` (10) and
+`Error.prepareStackTrace` are there too, and changing the last two no longer
+affects `Application.CheckSource`, which takes its own reading.
 
 **`Object` is empty.** Every static is gone: `keys`, `values`, `entries`,
 `assign`, `create`, `freeze`, `defineProperty`, `getPrototypeOf`, `hasOwn`,
@@ -66,9 +93,12 @@ function constructor), `globalThis`, `Symbol`, `setTimeout`, `setInterval`,
 that *ask* about an object rather than rewrite it: `hasOwnProperty`,
 `isPrototypeOf`, `propertyIsEnumerable`, `toString`, `valueOf`.
 
-`String.prototype.localeCompare` **is** installed and is a trap: there is no
-`Intl`, so it compares code units and puts `Álvarez` after `Zapata`. Use
-`Locale.Compare`.
+`String.prototype.localeCompare` **is refused**, and the refusal says why and
+what to use. It was installed and was a trap: with no `Intl` it compares code
+units, puts `Álvarez` after `Zapata`, and answers exactly what sorting with no
+comparator at all answers — so it read like the fix and changed nothing. Use
+[`Locale.Compare`](library.md#locale). In a worker there is no `Locale` either,
+and the refusal says so: order the list on the main thread.
 
 This is curation, not a sandbox: the application still holds every capability
 the runtime gave it. It is a smaller language to learn, and a smaller one to
@@ -97,7 +127,8 @@ get wrong.
 | a time with no date | `Time` and `"HH:MM"` — see [library.md](library.md#time) |
 | `new Uint8Array(...)` | `Bytes`, and `File.LoadBytes` — see [library.md](library.md#bytes) |
 | `atob` / `btoa` | `Bytes.FromBase64(t)` / `bytes.ToBase64()` |
-| `a.localeCompare(b)` | `Locale.Compare(a, b)` |
+| `a.localeCompare(b)` | `Locale.Compare(a, b)` — the first is refused |
+| `names.sort()`, or `a < b`, over text a person reads | `names.sort(Locale.Compare)` |
 | money in a `Number` | `new Decimal("19.99")` — see [library.md](library.md#decimal) |
 | a bag of unchecked keys | a `Record` — see [library.md](library.md#record-and-field) |
 | `element.style.color = …` | `Style`, and `app.css` — see [forms.md](forms.md#styles) |
@@ -111,9 +142,17 @@ what a console tool writes and what a test reports with.
 
 ```js
 for (const key in settings) applyOne(key, settings[key]);
-Dictionary.Keys(bag).sort()
+Dictionary.Keys(bag).sort()     /* keys are identifiers, so a bare sort is right */
 Dictionary.Count(bag)
 ```
+
+**A bare `sort()` is right there and wrong for names.** With no comparator it
+compares code units, which is the same wrong order `localeCompare` used to
+give — `["Zapata", "Álvarez", "acosta"].sort()` answers *Zapata, acosta,
+Álvarez*. It is fine for what a bag's keys are, and for paths, extensions and
+class names; the moment the list is text a person reads, it wants
+`sort(Locale.Compare)`. `localeCompare` refuses and says so, and a plain `<` and
+a bare `sort()` are the two that stay silent.
 
 `for...in` is safe here — nothing can put anything on a prototype any more — and
 it forgives an absent bag: reciting `undefined` is zero turns.
@@ -131,7 +170,7 @@ callback, and the callback runs on the main loop with the application fully
 alive.
 
 ```js
-/* wrong — nothing runs this */
+/* wrong — a SyntaxError, on the word `async` */
 async Btn_Click() { const path = await Dialog.OpenFile("Open"); }
 
 /* right */

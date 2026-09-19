@@ -1156,15 +1156,23 @@ class WidgetsForm extends Form {
             eq("GotoLine puts the cursor there", ed.Line, 380);
 
             /*
-             * **The scroll it asks for lands on the next frame, not on this
-             * line.** That is the point of revealing through a mark: the request
-             * survives until there is something laid out to carry it out on.
-             * Reading `ScrollY` in the same turn answers where the view still
-             * is, which is what anybody writing `GotoLine(n); ed.ScrollY` has to
-             * know.
+             * **The cursor moves now; the scroll is only promised for later.**
+             * `Line` above is already 380, because moving the cursor is a write
+             * to the buffer. The scroll is revealed through a mark instead, so
+             * that the request survives a view that has not been laid out --
+             * which means a program must not read `ScrollY` on the next line and
+             * believe it.
+             *
+             * **There is deliberately no assertion that it is still 0 here**,
+             * and that is the finding rather than an omission. There was one,
+             * and it failed about one run in five: `gtk_text_view_scroll_to_mark`
+             * honours the mark *immediately* when the view already has a
+             * validated allocation and on a later frame when it does not, so
+             * whether the jump has landed by this line is a race against GTK and
+             * not a property of the editor. Asserting a **negative about frame
+             * timing** cannot be made to pass; `until` below asserts the half
+             * that is real -- that the scroll does arrive.
              */
-            eq("...and has not scrolled yet, in this same turn", ed.ScrollY, 0);
-
             until("the jump is carried out", () => ed.ScrollY > 0, () => {
                 check("GotoLine really scrolls to its line", ed.ScrollY > 0,
                       `ScrollY=${ed.ScrollY} of ${ed.ScrollMaxY}`);
@@ -5143,7 +5151,8 @@ function Main() {
             "Arc: -2 is not a radius",
             "ArcNegative: -2 is not a radius",
             "a flat array of coordinates has an even length; this one has 3",
-            "LineDash expects an array of lengths ([] for a solid line)"].join("|"));
+            "LineDash expects an array of lengths ([] for a solid line)",
+            "LineDash: -1 is not a length"].join("|"));
 
         /*
          * **An image, which is a file the drawing reads rather than ink it
@@ -5675,6 +5684,11 @@ function Main() {
             refused(() => p.ArcNegative(10, 10, -2, 90, 0));
             refused(() => p.Polyline([1, 2, 3]));
             refused(() => { p.LineDash  = 4; });
+            /* A negative *inside* the array: the message used to be built out
+             * of the array after it was freed, which read correctly and was a
+             * use-after-free.  This is the assertion that proves it under
+             * tests/asan.sh. */
+            refused(() => { p.LineDash  = [-1]; });
             return;
         }
 
@@ -7871,6 +7885,22 @@ function Main() {
         eq("and asking for where it already is does nothing",
            paned.Children.map((c) => c.Name).join(""), "rl");
 
+        /*
+         * **A split with one half is ordinary**, and reordering that half is
+         * documented API -- it is what a Split looks like once the first child
+         * is dropped.  The paned branch used to `g_object_ref` both halves
+         * unguarded, so this raised two GLib-GObject-CRITICALs and carried on:
+         * the move was right, nothing failed, and the runner counts no
+         * criticals, which is why nobody had seen it.  Under
+         * `G_DEBUG=fatal-criticals` it aborted.
+         */
+        halves[0].Delete();
+        eq("a split keeps working with one half", paned.Children.length, 1);
+        paned.Reorder(halves[1], 1);
+        eq("and that half can be reordered", paned.Children.map((c) => c.Name).join(""), "r");
+        paned.Reorder(halves[1], 0);
+        eq("and back", paned.Children.map((c) => c.Name).join(""), "r");
+
         book.Delete();
         late.Delete();
         paned.Delete();
@@ -8813,6 +8843,32 @@ function Main() {
 
         eq("Symbol is not part of the language", typeof Symbol, "undefined");
 
+        /*
+         * **Scheduling has one name, and `queueMicrotask` was a second one with
+         * no switch and no handle.** It went with `setTimeout` and `setInterval`
+         * for the sentence those went for, and the fact that it *worked* --
+         * `bta_drain_jobs` pumps the queue after every event handler -- is why
+         * it was worth taking rather than a reason to keep it.
+         * `escape`/`unescape` are an Annex B URL encoding with no caller here.
+         */
+        eq("queueMicrotask is not the third way to schedule",
+           typeof queueMicrotask, "undefined");
+        eq("escape is gone", typeof escape, "undefined");
+        eq("unescape is gone", typeof unescape, "undefined");
+
+        /*
+         * **And these are installed on purpose and documented as such.** They
+         * were unlisted for a long time, which is the same defect as an
+         * undocumented method: `docs/llm/` claims to be the whole public
+         * surface. `WeakMap` is the load-bearing one -- `forms.js` keeps its
+         * notes about a widget in one rather than on it.
+         */
+        for (const there of ["BigInt", "WeakMap", "WeakSet", "Iterator",
+                             "DisposableStack"]) {
+            eq(`${there} is installed and documented`,
+               typeof this.globalNamed(there), "function");
+        }
+
         /* Generators themselves keep working -- the tests are written in them,
          * and iterating one never needed Symbol by name. */
         const counted = [...(function* () { yield 1; yield 2; })()];
@@ -8855,6 +8911,76 @@ function Main() {
         /* Compiled, not run: asking is not executing. */
         eq("checking does not run the code",
            Application.CheckSource("noSuchFunction(); throw new Error('boom');"), null);
+
+        /*
+         * **And the position survives whatever the program did to `Error`.**
+         *
+         * There is nowhere else to read it from: a QuickJS error carries no
+         * `lineNumber`, `columnNumber` or `fileName`, so `check_position` parses
+         * `<check>:LINE:COL` out of `.stack` and that is the only way there is.
+         * Which meant two ordinary assignments used to break this answer in
+         * silence -- `prepareStackTrace` replaces the whole string and
+         * `stackTraceLimit = 0` empties it, and both returned `Line: 0,
+         * Column: 0` with the message still correct, so an editor underlined the
+         * first character of the file and nothing said why. The second is the
+         * likelier one: it is what somebody sets to quieten a log.
+         *
+         * `CheckSource` takes its own reading now and hands the settings back
+         * untouched -- what a program does to `Error` is its business, and must
+         * not be able to corrupt a runtime answer.
+         */
+        const mine = () => "nothing like a stack";
+        const src  = "let a = 1;\nlet b = ;\n";
+
+        Error.prepareStackTrace = mine;
+        const prep = Application.CheckSource(src);
+        eq("a prepareStackTrace does not move the line", prep.Line, 2);
+        check("...nor the column", prep.Column > 0, JSON.stringify(prep));
+        check("...and the program keeps its own", Error.prepareStackTrace === mine);
+        Error.prepareStackTrace = undefined;
+
+        Error.stackTraceLimit = 0;
+        const none = Application.CheckSource(src);
+        eq("a stackTraceLimit of 0 does not move the line", none.Line, 2);
+        check("...nor the column", none.Column > 0, JSON.stringify(none));
+        eq("...and the program keeps its own", Error.stackTraceLimit, 0);
+        Error.stackTraceLimit = 10;
+
+        /*
+         * **`async` is refused where it is written, in every form it has.**
+         *
+         * This is the guard on the fifth vendor patch, and it is worth knowing
+         * what it replaced: the engine's async classes are registered by
+         * `JS_AddIntrinsicPromise` and nothing else, and this runtime does not
+         * install it -- so the object the parser built for an `async` function
+         * had no finalizer and no mark function, was never collected, and
+         * `JS_FreeRuntime`'s `assert(list_empty(&rt->gc_obj_list))` aborted the
+         * process **after** it had done its work and asked to quit with 0. A
+         * Release build leaked it instead. A name that parses and then makes a
+         * program unable to close is worse than either having the feature or
+         * not having it.
+         *
+         * Every spelling, because `func_kind` reaches the parser two ways: a
+         * method or an arrow arrives with it already set, a declaration or an
+         * expression has it upgraded from the `async` keyword.
+         */
+        for (const [what, src] of [
+            ["a declaration",    "async function f() {}"],
+            ["an expression",    "const f = async function () {};"],
+            ["an arrow",         "const f = async () => {};"],
+            ["a class method",   "class C { async m() {} }"],
+            ["an object method", "const o = { async m() {} };"],
+            ["an async generator", "async function* g() {}"],
+            ["one that awaits",  "async function f() { await 1; }"],
+        ]) {
+            const no = Application.CheckSource(src);
+
+            check(`${what} with async is refused`,
+                  no !== null && /async functions are not available/.test(no.Message),
+                  JSON.stringify(no));
+            check(`...and says where ${what} was`, no !== null && no.Column > 0,
+                  JSON.stringify(no));
+        }
     }
 
     /* `typeof x` is safe on an undeclared name, but only written literally --
@@ -8879,6 +9005,14 @@ function Main() {
         case "Date":        return Date;
         case "Math":        return Math;
         case "Symbol":      return typeof Symbol      === "undefined" ? undefined : Symbol;
+        /* Installed and documented as such, which they were not for a long
+         * time -- see testCuratedLanguage. */
+        case "BigInt":      return typeof BigInt      === "undefined" ? undefined : BigInt;
+        case "WeakMap":     return typeof WeakMap     === "undefined" ? undefined : WeakMap;
+        case "WeakSet":     return typeof WeakSet     === "undefined" ? undefined : WeakSet;
+        case "Iterator":    return typeof Iterator    === "undefined" ? undefined : Iterator;
+        case "DisposableStack":
+            return typeof DisposableStack === "undefined" ? undefined : DisposableStack;
         case "Logger":      return Logger;
         case "Namespace":   return Namespace;
         case "Widget":      return Widget;
@@ -12840,6 +12974,42 @@ function Main() {
      * not a skip, it is the other half of the same claim.
      */
     testLocaleOrder() {
+        /*
+         * **And `localeCompare` is refused, by name.** It used to be installed
+         * and wrong: it answers exactly what no comparator at all answers, so
+         * it read like the fix and changed nothing, and no list sorted with it
+         * was ever right. The refusal says what to use, which is the point of
+         * refusing rather than deleting -- a deletion says only *not a
+         * function*. It lives in `rad.js` because a worker evaluates that file
+         * entire and closes its hatches off a list of its own, so C would have
+         * been a third catalogue to keep in step.
+         */
+        let refused = "NOT REFUSED";
+
+        try { "Álvarez".localeCompare("Zapata"); }
+        catch (e) { refused = e.message; }
+        check("localeCompare is refused", refused.includes("code units"), refused);
+        check("...and the refusal names Locale.Compare",
+              refused.includes("Locale.Compare"), refused);
+
+        /*
+         * **And the bare sort is the one that stays silent**, which is why the
+         * refusal above is not the whole answer. `sort()` with no comparator
+         * gives exactly the order `localeCompare` gave -- that equality is the
+         * measurement that settled the refusal, since it means the method added
+         * nothing at all -- and it cannot be refused in turn: it is right for
+         * paths, extensions and the keys of a bag, which is every other one of
+         * the 26 bare sorts in this tree.
+         *
+         * Asserted here and not from a child in a chosen locale, unlike the
+         * orders below: a comparator-less `sort` is specified to compare UTF-16
+         * code units and never consults the locale at all, so this holds on
+         * every desktop and under `C`.
+         */
+        eq("a bare sort compares code units, in any locale",
+           ["Zapata", "Álvarez", "acosta"].sort().join(","),
+           "Zapata,acosta,Álvarez");
+
         /* --- the contract, which holds anywhere --- */
         eq("a string equals itself", Locale.Compare("Ortiz", "Ortiz"), 0);
         eq("and the answer is one of three", Locale.Compare("Ana", "Bruno"), -1);
@@ -14926,9 +15096,66 @@ function Main() {
     }
 
     /* --- Task ----------------------------------------------------------- */
+    /*
+     * **A task class whose file appears after the first `Start` is found.**
+     *
+     * The file a worker is given is looked up in a cache of the project's
+     * `.js`, built once and keyed by the project directory. It used to be
+     * believed on a miss, so a `<Name>.js` created while the program ran stayed
+     * invisible for the life of the process -- while the comment over it
+     * claimed it rebuilt on a miss "the way form_path rebuilds on one", which
+     * is a description of a different program.
+     *
+     * Driven as a **child**, the way `testDebugger` is, because the thing being
+     * asserted is a process-lifetime cache: this project's own directory is the
+     * one that would have to be written into otherwise, and a test that leaves
+     * a `.js` in the tree is worse than no test. The class is declared in a file
+     * named after nothing, so the first `Start` misses for real.
+     */
+    taskClassAppears() {
+        const proj = File.Join(SCRATCH, "lateclass");
+
+        Directory.Make(proj);
+        File.Save(File.Join(proj, "project.json"),
+                  JSON.stringify({ name: "lateclass", main: "Main",
+                                   sources: ["Workers.js", "Main.js"] }));
+        File.Save(File.Join(proj, "Workers.js"),
+                  '"use strict";\n' +
+                  'class Later extends Task {\n' +
+                  '    Run(msg) { return { doubled: msg.n * 2 }; }\n}\n');
+        File.Save(File.Join(proj, "Main.js"),
+                  '"use strict";\n' +
+                  'function Main() {\n' +
+                  '    try { new Later().Start({ n: 21 }); print("1st: started"); }\n' +
+                  '    catch (e) { print("1st: " + e.message); }\n' +
+                  '    File.Save(File.Join(Application.Directory, "Later.js"),\n' +
+                  '        \'"use strict";\\nclass Later extends Task {\\n\' +\n' +
+                  '        \'    Run(msg) { return { doubled: msg.n * 2 }; }\\n}\\n\');\n' +
+                  '    const t = new Later();\n' +
+                  '    t.Done  = (r) => { print("2nd: " + r.doubled); Application.Quit(0); };\n' +
+                  '    t.Error = (m) => { print("2nd: error " + m); Application.Quit(1); };\n' +
+                  '    try { t.Start({ n: 21 }); }\n' +
+                  '    catch (e) { print("2nd: " + e.message); Application.Quit(1); }\n' +
+                  '}\n');
+        /* Left over from a previous run, or the first Start would find it. */
+        const late = File.Join(proj, "Later.js");
+
+        if (File.Exists(late)) File.Delete(late);
+
+        const r = Exec.Wait([Application.Executable, proj]);
+
+        check("a task class with no file of its own is refused",
+              r.Output.includes("1st: Task: cannot find task class 'Later'"),
+              r.Output);
+        check("...and is found once that file appears",
+              r.Output.includes("2nd: 42"), r.Output);
+        eq("...with the program closing cleanly", r.ExitCode, 0);
+    }
+
     testTask() {
         /* Abstract, like Widget's own abstract classes: a base with no work. */
         throws("Task is abstract", () => new Task());
+        this.taskClassAppears();
         /* One run: the second Start is refused, whatever the first one did. */
         throws("a Task runs once", () => {
             const t = new TaskWork();
@@ -15029,6 +15256,13 @@ function Main() {
                 eq("a worker has no Timer", r.timer, "undefined");
                 eq("...no Settings", r.settings, "undefined");
                 eq("...no Exec", r.exec, "undefined");
+                /* The curation crosses with rad.js, and says the true thing on
+                 * this side: there is no `Locale` here to be sent to. */
+                eq("...and no Locale", r.locale, "undefined");
+                check("localeCompare is refused in a worker too",
+                      r.lc.includes("code units"), r.lc);
+                check("...naming the main thread, since Locale is not here",
+                      r.lc.includes("main thread"), r.lc);
                 next();
             };
             t.Start({ mode: "prelude" });

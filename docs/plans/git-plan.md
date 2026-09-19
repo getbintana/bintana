@@ -244,7 +244,8 @@ It does not loop: assigning a value an adjustment already has emits nothing, so
 two panes pointed at each other settle after one event. Two things this plan
 should know before it uses them, both measured and both on
 [`Editor`](../reference/widgets/Editor.md): a scroll **asked for** by `GotoLine`
-lands on the next frame rather than on the next line of code, and `ScrollMaxY`
+is not promised until the next frame — it may land at once when the view is
+already allocated, so the next line of code must not read it either way — and `ScrollMaxY`
 **grows** while GTK validates a long file, so a position is said as a fraction
 of the maximum read in the same breath and never as a remembered number of
 pixels.

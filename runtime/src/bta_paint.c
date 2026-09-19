@@ -336,11 +336,16 @@ static JSValue painter_set_dash(JSContext *ctx, JSValueConst this_val,
         dashes[i]  = arg_num(ctx, e, &no);
         JS_FreeValue(ctx, e);
         if (no || dashes[i] < 0) {
+            /* Read before the free: the message used to quote the array after
+             * releasing it, which came out right only because g_free does not
+             * poison and is a use-after-free under a sanitizer. */
+            double bad = dashes[i];
+
             g_free(dashes);
             g_string_free(shown, TRUE);
             return no ? JS_EXCEPTION
                       : JS_ThrowRangeError(ctx, "LineDash: %g is not a length",
-                                           dashes[i]);
+                                           bad);
         }
         if (i)
             g_string_append_c(shown, ',');

@@ -88,7 +88,7 @@ never had one.
 
 | | |
 |---|---|
-| `Compare(a, b)` | `-1`, `0` or `1`, in the order this desktop puts names in. **Use it and never `localeCompare`**, which here compares code units and puts `Álvarez` after `Zapata` |
+| `Compare(a, b)` | `-1`, `0` or `1`, in the order this desktop puts names in. `localeCompare` is **refused** and its message points here: it compares code units and puts `Álvarez` after `Zapata` |
 | `Matches(text, needle)` | whether a search for `needle` should find `text`, **accents folded**: `cordoba` finds `Córdoba` and `ver` finds `Echeverría`. `toLowerCase().includes()` does neither |
 
 ```js
@@ -97,7 +97,9 @@ rows.sort((a, b) => Locale.Compare(a.Name, b.Name));
 
 ## What goes wrong
 
-- **A sort put the accented names at the end.** `localeCompare`, or a plain `<`.
+- **A sort put the accented names at the end.** A plain `<`, or a bare `sort()`
+  with no comparator — `localeCompare` refuses now and says so, but the other
+  two are silent and give the same wrong order.
 - **A search box could not find a name with an accent in it.** `Matches`.
 - **The window kept the old language after switching.** Assigning `Current`
   affects what is built afterwards: rebuild the form, or restart.
