@@ -1785,14 +1785,10 @@ person who wrote it either.
   (`JS_NewObjectProto(ctx, JS_NULL)`) -- `JS_GetPropertyStr` walks the chain, and
   this repository has already been bitten by an ordinary bag inheriting
   `Object.prototype`; no event is spelt `constructor` and the bag costs nothing
-  to make unable to answer for one. And **which road wins is not a promise**: a
-  control carrying both a handler of its own and a `<name>_<event>` is an
-  ambiguity -- eight events here are asked a question, so only one of two
-  answers could be used -- and it is meant to become a refusal where the second
-  handler is written, at `On` and at the `bta_widget_bind` that can create the
-  collision afterwards. The documentation says *what happens* and not *what is
-  guaranteed* for that reason; `tests/widgets`' `testOn` marks the three
-  assertions that go when the refusal lands.
+  to make unable to answer for one. And **a control never has two handlers for
+  one event**: the pair is refused where the second one is written, since of two
+  answers only one could ever be used -- eight events here are asked a question
+  -- and picking one would silence the other in silence.
 - **Checking the event name against `EventNames()` found a handler the IDE had
   been installing on controls that cannot raise it**, which is the whole argument
   for checking it in one sentence. `PropertyGrid.bindEditor` wired
@@ -1822,6 +1818,24 @@ person who wrote it either.
   process, with no `delete` anywhere. It is wired **once** now and reads
   `this.sampleKey`. A handler that cannot live on a widget has to be given a
   target it looks up rather than one it closes over.
+- **The two-handler refusal has two doors and there is no third, which is a
+  property of the language rather than a shortcut.** `named_handler_exists` is
+  asked in `On` (is there already a `<name>_<event>` for the event being
+  installed) and in the **`Name` setter** (does this control already carry a
+  handler for an event the new name would answer). Both are where the
+  application writes the *second* of the pair, both can throw at that line, and
+  neither costs anything on the path that has no handlers.
+  **`bta_widget_bind` is not the third door and must not be made one**, which is
+  what an earlier sketch of this said it would be. It is `void`, it is reached
+  from `bta_widget_adopt` **after** `bta_container_attach` has already parented
+  the child in GTK, and refusing there would leave a half-attached control --
+  the same shape as the `AddNode` trap above. What it would catch is also
+  narrower than it looks: for a code-built control the name is only meaningful
+  once somebody *sets* it, and that is the `Name` setter.
+  **And the check can never be total**: a form is an ordinary JavaScript object,
+  so `this.Btn_Click = fn` assigned onto it afterwards is invisible to anything
+  the runtime can install. What is refused is the pair the runtime is *handed*,
+  and the documentation says so rather than implying a guarantee.
 - **A test that called a handler off the form had to start raising the event.**
   `tests/ide/Driver.js` drove the grid with `ide[`Prop_${key}_Activate`]()` and
   `ide.Prop_Icon_IconClick()`; those properties do not exist any more, and the

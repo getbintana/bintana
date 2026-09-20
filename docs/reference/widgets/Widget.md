@@ -245,7 +245,7 @@ translated string can carry `{0}` at all.
 | `Menu` | a context menu, as the same array of items a form's `menus` uses. Reassigning replaces it |
 | `PopupMenu(x, y)` | opens that menu at a point in this control's own coordinates — how a button that drops a menu is built |
 | `Emit(event, …args)` | raises an event that arrives by name on the host form. **What a component announces itself with** |
-| `On(event, fn)` | installs **this control's own** handler, for a control built in code. Installing again replaces, `On(event, null)` removes, and it answers with the control so it chains |
+| `On(event, fn)` | installs **this control's own** handler, for a control built in code. Installing again replaces, `On(event, null)` removes, and it answers with the control so it chains. Refused when the form already answers that event by name |
 
 **A control a designer drew, and a control built in code.** A designer names a
 control and the handler is `<Name>_<Event>` on the form — which is the whole of
@@ -255,12 +255,15 @@ leaves a **global on the form** that outlives the control: build the same
 palette twice and the old handlers are still there. `On` is that case, and only
 that case.
 
-A control never has both. Where one does today the handler installed on the
-control answers and the named one is not called — **which is what happens and
-not a promise**: two handlers for one event is an ambiguity, and eight of this
-runtime's events are asked a question rather than told something, so only one
-of two answers could ever be used. It is meant to become a refusal where the
-second handler is written.
+A control never has both: **the second one is refused where it is written.**
+`On` throws when the form already answers that event by name, and assigning a
+`Name` throws when the control already carries a handler the new name would
+answer. Two handlers for one event is an ambiguity, and eight of this runtime's
+events are asked a question rather than told something, so only one of two
+answers could ever be used. `On(event, null)` is always allowed — taking a
+handler away cannot make a pair — and the check is not total, since a
+`<Name>_<Event>` assigned onto the form afterwards is not something the runtime
+can watch.
 
 `On` is also how a **component added from code** is heard. Such a component
 keeps itself as its event target — only the `.form` loader rebinds one to its

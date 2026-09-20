@@ -10936,10 +10936,11 @@ function Main() {
                () => b.On("Click", 5));
 
         /*
-         * **Which of the two roads wins, and this assertion is not a promise.**
-         * A control carrying a handler on itself *and* a `<name>_<event>` on
-         * its form is an ambiguity, and it is meant to become a refusal where
-         * the second one is written. When that lands, these four lines go.
+         * **Two handlers for one event are refused where the second is
+         * written**, which is what the precedence assertions here used to be.
+         * Of two answers only one could ever be used -- eight events here are
+         * asked a question -- so picking one would silence the other in
+         * silence.
          *
          * Driven through the component already on this form, whose `Up` button
          * is bound by name to a real `Up_Click` -- so nothing has to be added
@@ -10951,13 +10952,17 @@ function Main() {
         st.Up.Click();
         eq("a named handler inside a component runs", st.Value, was + 1);
 
-        st.Up.On("Click", () => {});
-        st.Up.Click();
-        eq("an On installed over it takes the event", st.Value, was + 1);
+        throws("and On over it is refused, not silently preferred",
+               () => st.Up.On("Click", () => {}));
 
+        st.Up.Click();
+        eq("so the named handler still has the event", st.Value, was + 2);
+
+        /* Taking one away cannot make a pair, so clearing is let through even
+         * where installing would not be. */
         st.Up.On("Click", null);
         st.Up.Click();
-        eq("and removing it gives the name the event back", st.Value, was + 2);
+        eq("...and clearing is not refused", st.Value, was + 3);
 
         st.Value = was;   /* what testComponent left, put back */
 
@@ -10979,6 +10984,30 @@ function Main() {
          * same walk `EventNames()` above makes. */
         throws("a component's own declaration is what checks its events",
                () => made.On("Changed", () => {}));
+
+        /*
+         * The other door into the refused pair: a control carrying a handler of
+         * its own, **renamed** onto a name its form already answers for.
+         *
+         * Inside the component built above, because that is the one event target
+         * here with an `Up_Click` to collide with -- `this.Step1` looks like it
+         * would and does not, since the `.form` loader rebound it to *this* form
+         * and a child added to it from code binds to this form too.
+         */
+        const child = new Button();
+        made.Add(child);
+        child.On("Click", () => {});
+
+        throws("a rename onto a name the form answers for is refused too",
+               () => { child.Name = "Up"; });
+        eq("and the name it had is the one it keeps", child.Name, "");
+
+        /* It is the *pair* that is refused and not the name: the same rename
+         * with no handler of its own goes through. */
+        const plain = new Button();
+        made.Add(plain);
+        plain.Name = "Up";
+        eq("a control with no handler of its own may take it", plain.Name, "Up");
     }
 
     /*

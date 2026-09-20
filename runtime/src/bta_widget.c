@@ -340,6 +340,31 @@ static JSValue emit_on(JSContext *ctx, BtaWidget *w, JSValueConst form,
     return result;
 }
 
+/*
+ * **Would this control answer that event by name as well?**
+ *
+ * Asked where the *second* handler is written -- `On`, and the rename that can
+ * create the same pair afterwards -- so the ambiguity is refused at the line
+ * that makes it rather than resolved by a rule nobody can see.
+ *
+ * `name` is passed rather than read off `w`, because the rename has to ask about
+ * the name it is *about to* take.
+ */
+static bool named_handler_exists(JSContext *ctx, BtaWidget *w,
+                                 const char *name, const char *event)
+{
+    if (!name || !*name || JS_IsUndefined(w->form))
+        return false;
+
+    char   *key = g_strdup_printf("%s_%s", name, event);
+    JSValue fn  = JS_GetPropertyStr(ctx, w->form, key);
+    bool    had = JS_IsFunction(ctx, fn);
+
+    JS_FreeValue(ctx, fn);
+    g_free(key);
+    return had;
+}
+
 JSValue bta_emit_on(JSContext *ctx, JSValueConst form, const char *name,
                     const char *event, int argc, JSValueConst *argv)
 {
@@ -457,6 +482,46 @@ static JSValue w_set_name(JSContext *ctx, JSValueConst this_val, JSValueConst va
     const char *s = JS_ToCString(ctx, val);
     if (!s)
         return JS_EXCEPTION;
+
+    /*
+     * The other door into the pair `On` refuses: a control carrying handlers of
+     * its own, renamed onto a name its form already answers for.  Asked of every
+     * event it holds, against the name it is about to take.
+     *
+     * **This is not a total check and cannot be.**  A form is an ordinary object
+     * and nothing can watch `this.Btn_Click = fn` being assigned onto it after
+     * the fact, so what is refused is the pair the *runtime* is handed: `On`
+     * over a name, and a name over an `On`.
+     */
+    if (JS_IsObject(w->handlers) && !JS_IsUndefined(w->form)) {
+        JSPropertyEnum *tab = NULL;
+        uint32_t        len = 0;
+        char           *bad = NULL;
+
+        if (JS_GetOwnPropertyNames(ctx, &tab, &len, w->handlers,
+                                   JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) == 0) {
+            for (uint32_t i = 0; i < len; i++) {
+                const char *event = JS_AtomToCString(ctx, tab[i].atom);
+
+                if (event && !bad && named_handler_exists(ctx, w, s, event))
+                    bad = g_strdup(event);
+                JS_FreeCString(ctx, event);
+                JS_FreeAtom(ctx, tab[i].atom);
+            }
+            js_free(ctx, tab);
+        }
+
+        if (bad) {
+            JSValue e = JS_ThrowTypeError(ctx,
+                "Name: this control has a handler of its own for '%s', and "
+                "%s_%s on its form would answer it too", bad, s, bad);
+
+            g_free(bad);
+            JS_FreeCString(ctx, s);
+            return e;
+        }
+    }
+
     g_free(w->name);
     w->name = g_strdup(s);
     JS_FreeCString(ctx, s);
@@ -2605,6 +2670,25 @@ static JSValue w_on(JSContext *ctx, JSValueConst this_val,
         return e;
     }
     g_strfreev(names);
+
+    /*
+     * **And that nothing already answers it by name.**  A control carrying a
+     * handler of its own *and* a `<name>_<event>` on its form is an ambiguity
+     * rather than a layering: eight events here are asked a question, so of two
+     * answers only one could ever be used, and picking one silences the other
+     * without saying so.  Refused where the second one is written.
+     *
+     * `On(event, null)` is exempt: taking a handler away cannot make a pair.
+     */
+    if (!clearing && named_handler_exists(ctx, w, w->name, event)) {
+        JSValue e = JS_ThrowTypeError(ctx,
+            "On: %s already answers '%s' through %s_%s on its form, and a "
+            "control has one handler for one event", w->name, event,
+            w->name, event);
+
+        JS_FreeCString(ctx, event);
+        return e;
+    }
 
     JSValue *slot = bta_widget_note(w, BTA_NOTE_HANDLERS);
 
