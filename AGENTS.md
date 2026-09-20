@@ -682,6 +682,22 @@ refused with a message and a column.
   Documented in `formats.md` and `llm/forms.md` rather than widened: reading
   UTF-8 means unifying three copies first, to enable something nobody has asked
   for, and a class name is also a file name.
+- **`tests/api.sh` asked whether what is *declared* is documented, and could not
+  ask whether what is *installed* is declared.** Those are different questions
+  and the second has the worse failure: a global nobody listed is invisible to
+  every list in `Check.js`, so nothing fails and its documentation is free to be
+  absent. Measured when the check was added: **six** were in that state --
+  `BTA_VERSION`, `Field`, `Multipart`, `Namespace`, `Painter` and `Record` were
+  installed and named nowhere in that file. `checkGlobalsListed` reads the
+  installed set from where it is decided -- `JS_SetPropertyStr(ctx, global, …)`
+  in the C, `GLOBAL.X =` in the prelude, minus `close_hatches`' own `gone[]` --
+  and fails on a name with no home at all. A page written by hand counts as a
+  home; `GLOBALS_ELSEWHERE` is for the ones documented inside another global's
+  page, with the where written next to the name.
+  The general shape is worth keeping: **a completeness check that reads only its
+  own list is a completeness check about its own list.** The same blind spot let
+  eight QuickJS-installed names sit outside `llm/language.md` for as long as
+  they did.
 
 ## Tests
 

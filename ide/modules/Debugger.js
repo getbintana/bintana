@@ -361,12 +361,20 @@ Ide.Debugger = class Debugger {
 
             const label = new Label();
             label.Markup = true;
-            /* An argument is shown in bold: which names came in and which the
+            /*
+             * An argument is shown in bold: which names came in and which the
              * body made is the first thing one wants off a list like this.
-             * The escaping is the reason this is not `Text` alone -- a watch's
-             * name is an expression and can hold a `<`. */
-            label.Text   = argument ? `<b>${escapeMarkup(name)}</b>`
-                                    : escapeMarkup(name);
+             *
+             * The escaping is the reason this is not `Text` alone. A local's
+             * name is an identifier and needs none of it; a **watch**'s name is
+             * whatever was typed, and `a < b` in a label with markup on is a
+             * parse error that swallows the rest of the line. `Text.Escape` is
+             * the runtime's own, and escapes the quotes as well as the three
+             * that matter here -- harmless in markup text, where `&quot;` draws
+             * as `"`.
+             */
+            label.Text   = argument ? `<b>${Text.Escape(name)}</b>`
+                                    : Text.Escape(name);
             label.Width  = 120;
             label.HAlign = "Start";
             label.Tooltip = name;
@@ -517,16 +525,3 @@ Ide.Debugger = class Debugger {
 
     pause() { return this.running ? this.send({ do: "pause" }) : false; }
 };
-
-/*
- * A name put into markup.
- *
- * A local's name is an identifier and needs none of this; a **watch**'s name is
- * whatever was typed, and `a < b` in a label with markup on is a parse error
- * that swallows the rest of the line.
- */
-function escapeMarkup(text) {
-    return String(text).replace(/&/g, "&amp;")
-                       .replace(/</g, "&lt;")
-                       .replace(/>/g, "&gt;");
-}

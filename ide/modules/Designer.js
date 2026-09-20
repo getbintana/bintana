@@ -24,10 +24,6 @@
 
 Namespace("Ide");
 
-/* A control's name is also the prefix of its handlers, so it has to be a valid
- * JS identifier. */
-const IDENT = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
-
 /*
  * Which event a double click opens is **asked of the control**, not looked up
  * here.  `EventNames()` answers most-derived first, so its head is the event the
@@ -2219,7 +2215,12 @@ Ide.Designer = class Designer {
             return false;
         }
 
-        if (!IDENT.test(newName)) {
+        /* `CLASS_NAME` is `Classes.js`'s, and this is the same question: a
+         * control's name is the prefix of its handlers, so it has to be an
+         * identifier the runtime can spell -- ASCII, which is narrower than the
+         * engine's own idea of one. This was a second copy of that pattern
+         * written as a regexp literal, where the tree writes `Regex`. */
+        if (!CLASS_NAME.IsMatch(newName)) {
             Message.Error("\"{0}\" is not usable as a control name.", newName);
             this.grid.sync();
             return false;

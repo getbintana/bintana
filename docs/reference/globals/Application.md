@@ -28,6 +28,7 @@ The running program: what it is called, where its files are, and how it ends.
 |---|---|
 | `Name` | from `project.json` |
 | `Version` | what the **project** calls its release; `""` when it declares none. **`BTA_VERSION` is the runtime's** and is not this — showing the wrong one is what an About box does until it knows the difference |
+| `BTA_VERSION` | **a bare global, not a member of this** — the runtime's own release as text, the one number `CMakeLists.txt` declares, and what `bintana --version` prints. It is here because this is where the confusion lives; a worker has it too |
 | `Arguments` | whatever followed the project directory on the command line, as an array |
 
 ## Where its files are

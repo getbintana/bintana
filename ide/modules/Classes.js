@@ -70,10 +70,6 @@ const CLASS_NAME = new Regex("^[A-Za-z_$][A-Za-z0-9_$]*$");
  * that would turn a relative path into an absolute one. */
 const FOLDER_NAME = new Regex("^[A-Za-z0-9_-]+$");
 
-/* A folder whose name could also be a namespace.  Not every folder can: a
- * namespace is a JS identifier, and "my-widgets" is not one. */
-const NAMESPACE_PART = new Regex("^[A-Za-z_$][A-Za-z0-9_$]*$");
-
 /* What a file says about the namespace it belongs to.  The declaration is what
  * the runtime acts on, so it is what the IDE reads -- deducing it from the
  * folder would let the two disagree, and the IDE would then write types into

@@ -133,8 +133,12 @@ get wrong.
 | a bag of unchecked keys | a `Record` — see [library.md](library.md#record-and-field) |
 | `element.style.color = …` | `Style`, and `app.css` — see [forms.md](forms.md#styles) |
 
-`print(...)` writes a line to stdout, joining its arguments with a space. It is
-what a console tool writes and what a test reports with.
+**Two bare globals**, which is all of them: `print(...)` writes a line to
+stdout, joining its arguments with a space — what a console tool writes and what
+a test reports with, where `Logger` is what an application says something *at a
+level* with. And `BTA_VERSION` is the runtime's own release as text, which is
+**not** `Application.Version`: that one is what the project calls itself. Both
+exist inside a `Task` as well.
 
 ## Reading a bag of properties
 

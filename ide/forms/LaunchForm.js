@@ -37,8 +37,11 @@ class LaunchForm extends Form {
         const dlg = new LaunchForm();
 
         /* Records, copied one at a time: the list is the project's and a dialog
-         * that mutated it would have edited the file before Save. */
-        dlg.list       = list.map((one) => Ide.LaunchConfig.Load(JSON.parse(JSON.stringify(one))));
+         * that mutated it would have edited the file before Save.  `Clone()` is
+         * the record's own round trip -- it was written here as a `Load` of a
+         * `JSON.parse(JSON.stringify())`, which is the same trip with the class
+         * named by hand, so a subclass would have been loaded as its base. */
+        dlg.list       = list.map((one) => one.Clone());
         dlg.suggestion = { Strict: suggestion.Strict, StopOnThrow: suggestion.StopOnThrow };
         dlg.onAccept   = onAccept;
         dlg.at         = -1;

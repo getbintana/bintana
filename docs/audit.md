@@ -97,10 +97,28 @@ its third copy, in `bta_task.c`, is **not** a refusal — a folder it cannot spe
 contributes no namespace prefix and what is under it stays findable by its bare
 name, which is deliberate and says so in a comment.
 
-**So sections 1 and 2 are both gone, and most of §4 has moved** to the places
-that own its kind of claim: seven `issues/` files for the words the language has
-not got, and two lines in `plans/async-plan.md`. What remains is §3's costs —
-none of which this audit timed — and three small defects §4 had miscategorised.
+**Section 4 is gone as well**, and mostly by moving rather than by fixing: seven
+of its thirteen were words the language has not got and are `issues/` files now,
+two went to [`plans/async-plan.md`](plans/async-plan.md), and one lost its
+evidence with the work in progress it was drawn from. The three that were
+**defects after all** are fixed — `Debugger.js` reimplemented `Text.Escape` by
+hand, `NAMESPACE_PART` and a second spelling of `CLASS_NAME` were dead, and
+`print`, `BTA_VERSION` and four more globals were installed and named in no list
+`tests/api/Check.js` keeps.
+
+That last one turned out bigger than filed. The audit said two globals; measured
+at the time of the fix it was **six**, and the reason is structural rather than
+an oversight: the check asked whether what is *declared* is documented and could
+not ask whether what is *installed* is declared. It can now, reading the
+installed set from the C, the prelude and `close_hatches`' own list of
+removals — so a global added without a home fails the suite instead of being
+invisible to it.
+
+**So only §3 is left**, and none of it was timed by this audit. It is a
+different kind of session: nine claims about cost with no numbers under them,
+two of which (a one-entry lookup cache, a dirty flag on the stylesheet) change
+no semantics and can be measured cheaply, and one of which already has a plan of
+its own.
 
 ## 3. Cost
 
@@ -217,65 +235,6 @@ live jobs, and a free path that must release on every exit. `bta_widget_watch`
 and `http_job_alive` exist because two of these forgot; a shared base for
 "a job with values and a dead flag" would shrink the surface where forgetting
 one is possible. Not a bug today.
-
-## 4. What the IDE does the long way
-
-**Seven of this section's thirteen became `issues/` files**, which is where a
-missing capability belongs: this document is for things the runtime does
-*wrongly*, and *a word it has not got* is a different claim with a different
-form and a different rule for being deleted. They are the shown `Form` kept
-alive by hand, the missing *I have been laid out*, an editor that cannot cross
-from an offset to a line, `File.Relative` and a case-folded `Extension`, asking
-a class what it has without building one, `Widget.On(event, fn)`, and
-`Locale.Write`. Each is now argued in the form
-[`llm/issues.md`](llm/issues.md) asks for, with the counts it had here.
-
-**Two went to a plan.** `Timer.After(0)` used to mean *the next turn* and
-`Translations.update`'s `next(i + 1)` recursion are both about a word for
-sequencing, and [`plans/async-plan.md`](plans/async-plan.md) is the document
-that owns that question — it opens on that very recursion.
-
-**One went nowhere, because its evidence did.** `Stop()` defended against an
-error that cannot come was eleven `try`s in work in progress; in the committed
-tree the only `try` around a `Stop()` is a test asserting the refusal, not a
-caller fearing it.
-
-What is left below are three the audit filed here and which are **defects after
-all** — a verb reimplemented, dead code, and documentation that nothing holds to
-its word.
-
-### 4.10 `Text.Escape` exists and is reimplemented
-
-`Debugger.js:528-532`'s `escapeMarkup` is `&`, `<`, `>` by hand; `Text.Escape`
-(`js_text_escape` at `bta_paint.c:1353`, registered at `1385`, documented in
-[`reference/globals/Text.md:16`](reference/globals/Text.md)) is the runtime's
-own. It reimplements it with the spelling the manual also argues against: the
-three lines are `.replace(/&/g, …)` and its siblings, where
-[`llm/language.md:101-102`](llm/language.md) asks for
-`new Regex("x").Replace(s, y)`. One call replaces both.
-
-### 4.12 Leftovers
-
-`NAMESPACE_PART` (`Classes.js:75`) is declared and never used; `IDENT`
-(`Designer.js:29`) is `CLASS_NAME` (`Classes.js:67`) written a second time;
-and `JSON.parse(JSON.stringify(x))` appears twice (`LaunchForm.js:41`,
-`MenuForm.js:43`) where `Record.Clone()` exists (`rad.js:1517`).
-
-### 4.13 The reference's blind spots
-
-`print` and `BTA_VERSION` are the two globals with a row in neither
-`GLOBAL_TABLES`/`GLOBAL_VARS` (`tests/api/Check.js:73-138`) nor a page under
-`docs/reference/globals/`, so nothing demands their documentation stay true.
-(`Connection`, `Database.Sqlite` and `Multipart` *are* covered — `conn_props`
-at `Check.js:84` and `multipart_props` at `:87` — and `Message`'s page is
-hand-written by design, which the file says at `Check.js:576-580`.)
-
-**"The two" is the count of globals with *neither*, and one more deserves a
-look.** `Painter` is installed on the global object (`bta_paint.c:1728`) and has
-no page under `docs/reference/globals/` either; it is not unchecked, because
-`painter_props` is reached by the non-global table scan at `Check.js:961`, but
-it is undocumented in the place a reader looks. Worth deciding whether the page
-rule is about globals or about surfaces.
 
 ## 5. Checked and discarded
 

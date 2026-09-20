@@ -422,6 +422,101 @@ function sources(root) {
                     .filter((path) => !File.Name(path).startsWith("."));
 }
 
+/*
+ * ------------------------------------------------- every global, named once
+ *
+ * **The check above this one asks whether what is *declared* is documented. It
+ * cannot ask whether what is *installed* is declared**, and that is a different
+ * question with a worse failure: a global nobody listed is invisible to every
+ * list here, so nothing fails, and its documentation is free to be absent or to
+ * rot. Six were in that state when this was written -- `BTA_VERSION`, `Field`,
+ * `Multipart`, `Namespace`, `Painter` and `Record` are installed and were not
+ * named anywhere in this file.
+ *
+ * So the installed set is read from where it is decided, the same way
+ * everything else here is read from the source rather than from a list: the C
+ * that puts a name on the global object, the prelude that does the same through
+ * `GLOBAL`, and `close_hatches`'s own array for the ones taken away again
+ * before any project runs.
+ */
+const GLOBAL_INSTALL = new Regex(
+    "JS_SetPropertyStr\\(\\s*ctx,\\s*global,\\s*\"([A-Za-z_]\\w*)\"");
+const GLOBAL_PRELUDE = new Regex("GLOBAL\\.([A-Za-z_]\\w*)\\s*=");
+const GLOBAL_GONE    = new Regex(
+    "static const char \\*gone\\[\\]\\s*=\\s*\\{([^}]*)\\n\\s*\\};");
+const QUOTED         = new Regex("\"([A-Za-z_]\\w*)\"");
+
+/*
+ * Named here because they are documented **inside another global's page**,
+ * which is where they are used from -- not because they are exempt from being
+ * documented at all. The rule the rest of this file follows is that a name is
+ * accounted for somewhere; this is the somewhere for these.
+ */
+const GLOBALS_ELSEWHERE = {
+    BTA_VERSION: "reference/globals/Application.md, beside Application.Version",
+    Connection:  "reference/globals/Database.md -- what Sqlite() answers with",
+    Field:       "reference/globals/Record.md -- a record's field types",
+    Multipart:   "reference/globals/Http.md -- what a built upload is",
+    Namespace:   "llm/language.md -- a declaration rather than an object",
+    Painter:     "llm/controls.md and reference/widgets -- it belongs to drawing",
+    print:       "llm/language.md -- a bare function, with Logger beside it",
+    Table:       "reference/globals/Database.md -- a Connection's tables",
+};
+
+function checkGlobalsListed(root, problems) {
+    const installed = new Set();
+
+    for (const c of sources(root)) {
+        const src = File.Load(c);
+
+        for (const m of GLOBAL_INSTALL.Matches(src)) installed.add(m.Group(1));
+    }
+    for (const js of Directory.Files(File.Join(root, "runtime/js"), "*.js")) {
+        const src = File.Load(js);
+
+        for (const m of GLOBAL_PRELUDE.Matches(src)) installed.add(m.Group(1));
+    }
+
+    const hatches = GLOBAL_GONE.Match(File.Load(
+        File.Join(root, "runtime/src/bta_runtime.c")));
+
+    if (!hatches) {
+        problems.push("close_hatches' gone[] could not be read, so what is " +
+                      "installed cannot be told from what is taken away again");
+        return 0;
+    }
+    for (const g of QUOTED.Matches(hatches.Group(1))) installed.delete(g.Group(1));
+
+    /*
+     * Accounted for: a row in one of this file's own lists, a page of its own
+     * under `docs/reference/globals`, or a named home in another global's page.
+     *
+     * **A page counts even when nothing holds it to a table**, which is the
+     * bargain `GLOBAL_PAGES` already describes for `Message`, `Exec`,
+     * `Settings`, `Timer`, `Stopwatch`, `Dictionary`, `Regex`, `Clipboard` and
+     * `Record`: they are built in ways this file does not parse, so their pages
+     * are written by hand and held to nothing but existing. That is a weaker
+     * claim than the rest and it is still a claim -- what this check is for is
+     * the name with *no* claim at all.
+     */
+    const pages = Directory.Files(File.Join(root, "docs/reference/globals"), "*.md")
+                           .map((p) => File.BaseName(p));
+    const listed = new Set([
+        ...Dictionary.Values(GLOBAL_VARS).map((v) => v.split(".")[0]),
+        ...Dictionary.Values(GLOBAL_TABLES),
+        ...Dictionary.Keys(GLOBAL_PAGES),
+        ...Dictionary.Keys(GLOBALS_ELSEWHERE),
+        ...pages,
+    ]);
+
+    for (const name of installed) {
+        if (!listed.has(name))
+            problems.push(`global ${name} is installed and named in no list ` +
+                          `here, so nothing holds its documentation to anything`);
+    }
+    return installed.size;
+}
+
 
 /*
  * ------------------------------------------------------------ the reference
@@ -1016,6 +1111,7 @@ function Main() {
     const lib     = checkLibraries(root, problems);
     const typings = checkTypings(root, members, problems);
     const globals = checkGlobals(root, problems);
+    const named   = checkGlobalsListed(root, problems);
     const ref     = checkReference(root, members, events, problems);
     const glob    = checkGlobalPages(root, problems);
     const libs    = checkLibraryPages(root, problems);
@@ -1038,6 +1134,7 @@ function Main() {
           `(${libs.missing} still to write) -- and ${links.links} links over the ` +
           `${links.pages} pages of docs/ all land somewhere, with ` +
           `${scopes.names} top-level names in lib/ and no two libraries ` +
-          `claiming one`);
+          `claiming one, and all ${named} globals the runtime installs ` +
+          `accounted for`);
     Application.Quit(problems.length ? 1 : 0);
 }
