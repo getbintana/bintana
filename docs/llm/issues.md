@@ -189,7 +189,6 @@ needed and what it did instead.
 | An `Editor` speaks in lines and everything that searches speaks in offsets, with no verb crossing | [ISSUE-editor-offset](../issues/ISSUE-editor-offset.md) |
 | `File` takes a path apart and cannot relate two: no `Relative`, no `Within`, and no case-folded `Extension` | [ISSUE-file-relative](../issues/ISSUE-file-relative.md) |
 | `PropertyNames`/`EventNames`/`TextProperties` need an instance, so asking what a class has means building one | [ISSUE-class-introspection](../issues/ISSUE-class-introspection.md) |
-| No `Widget.On(event, fn)`, so a control built from code is wired by writing `<name>_<Event>` onto the form — and a `Component` added that way keeps itself as its target | [ISSUE-widget-on](../issues/ISSUE-widget-on.md) |
 | `Locale.Read` has no `Locale.Write`, so the `.po` format is written by hand in the IDE | [ISSUE-locale-write](../issues/ISSUE-locale-write.md) |
 
 ## One more thing

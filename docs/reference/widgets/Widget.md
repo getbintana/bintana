@@ -75,6 +75,7 @@ in the section.
 | `Hide()` | makes it invisible, keeping its place | [shown, enabled, focused](#shown-enabled-focused) |
 | `Lower()` | to the bottom of the painting order | [how it is placed](#how-it-is-placed) |
 | `Move(x, y)` | sets `X` and `Y` together | [where it is and how big](#where-it-is-and-how-big) |
+| `On(event, fn)` | installs **this control's own** handler | [commands, menus and keys](#commands-menus-and-keys) |
 | `OriginIn(container)` | → where it sits in that container | [where it is and how big](#where-it-is-and-how-big) |
 | `PopupMenu(x, y)` | opens its `Menu` at a point | [commands, menus and keys](#commands-menus-and-keys) |
 | `PropertyOptions(name)` | → the exact strings that property takes | [what it answers about itself](#what-it-answers-about-itself) |
@@ -244,6 +245,39 @@ translated string can carry `{0}` at all.
 | `Menu` | a context menu, as the same array of items a form's `menus` uses. Reassigning replaces it |
 | `PopupMenu(x, y)` | opens that menu at a point in this control's own coordinates — how a button that drops a menu is built |
 | `Emit(event, …args)` | raises an event that arrives by name on the host form. **What a component announces itself with** |
+| `On(event, fn)` | installs **this control's own** handler, for a control built in code. Installing again replaces, `On(event, null)` removes, and it answers with the control so it chains |
+
+**A control a designer drew, and a control built in code.** A designer names a
+control and the handler is `<Name>_<Event>` on the form — which is the whole of
+how a `.form` is wired, and needs nothing else. A control built in code has no
+name anybody chose, and giving it one purely to build that property out of
+leaves a **global on the form** that outlives the control: build the same
+palette twice and the old handlers are still there. `On` is that case, and only
+that case.
+
+A control never has both. Where one does today the handler installed on the
+control answers and the named one is not called — **which is what happens and
+not a promise**: two handlers for one event is an ambiguity, and eight of this
+runtime's events are asked a question rather than told something, so only one
+of two answers could ever be used. It is meant to become a refusal where the
+second handler is written.
+
+`On` is also how a **component added from code** is heard. Such a component
+keeps itself as its event target — only the `.form` loader rebinds one to its
+host — so `<Name>_<Event>` on the host never fires for it. Its `Emit` reads the
+control's own handler first, so `card.On("Changed", …)` answers, with nothing
+rebound.
+
+```js
+const b = new Button();
+b.Icon = name;
+b.On("Click", () => this.choose(name));
+panel.Add(b);
+```
+
+The handler is called with `this` **undefined**, like every other callback this
+runtime is handed — a closure captures what it needs. An event name that is not
+in `EventNames()` throws where it is written, rather than never firing.
 
 **One command, several places.** A toolbar button, a menu item and a context menu
 entry that all do the same thing should all name the same `Action`: its

@@ -491,6 +491,67 @@ So `KeyRelease` on a text box sees letters its `KeyPress` never will. Watching
 what is typed is `Change`'s job; `KeyRelease` is for the widget that does not edit
 text -- releasing a modifier, a key-held-down that ends.
 
+## Two ways a handler is found, and which is for which
+
+A `.form` names a control and the handler is `<Name>_<Event>` on the form. That
+is the whole of how a designed window is wired, it needs no registration, and a
+handler can be assigned or deleted at any moment because the lookup happens when
+the event is raised.
+
+It has nothing to say about a control **built in code**, and the count is not
+known until the data is read — a button per widget type, a row per column of a
+board, an editor per property. There is no name a designer chose. Inventing one
+to build the property out of works, and costs two things that are not obvious:
+the name is a *global on the form*, so building the same palette twice leaves
+the old handlers behind unless something deletes them by hand; and a handler
+that closes over a loop variable has to encode that variable into the name.
+
+`On(event, fn)` is that case:
+
+```js
+const b = new Button();
+b.Icon = name;
+b.On("Click", () => this.choose(name));
+panel.Add(b);
+```
+
+Nothing is left on the form, so nothing has to be cleaned up; installing again
+replaces, so rebuilding needs no bookkeeping; and the handler goes when the
+control goes. `On(event, null)` removes one. There is no `Off` — it would be the
+same sentence said twice, and it would need the function back to identify it,
+which is the one thing a closure does not hand you.
+
+**A control never has both.** Where one does today, the handler on the control
+answers and the named one is not called; that is what happens rather than a
+promise to build on, and it is meant to become a refusal where the second
+handler is written. Two handlers for one event is an ambiguity this runtime
+cannot resolve by merging them the way GTK or Qt would: eight of its events are
+asked a question rather than told something — `Paginate` answers a number,
+`KeyPress` answers whether the key was eaten — and only one of two answers could
+ever be used.
+
+**A component added from code is the case the convention cannot reach at all.**
+It keeps *itself* as its event target, since only the `.form` loader rebinds one
+to its host, so `<Name>_<Event>` on the host never fires for a card built with
+`new TaskCard()`. `Emit` reads the control's own handler first, so the host
+hears it:
+
+```js
+const card = new TaskCard();
+card.On("Changed", (v) => this.recalc(v));
+this.Board.Add(card);
+```
+
+Two things about the handler itself. It is called with `this` **undefined**,
+like every other callback this runtime is handed — a closure captures what it
+needs, and under the forced strict mode every project source runs in, a
+non-arrow function that reads `this` throws where it is written instead of
+finding the global object. And the event name is checked against
+`EventNames()`: a name that is not there throws, rather than sitting in a
+handler that never fires. A component of the project declares its own with
+`static Events = [...]`, which is the same list the designer offers on a double
+click.
+
 ## Shortcut: the key that presses a control
 
 ```json

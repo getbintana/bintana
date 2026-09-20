@@ -44,6 +44,7 @@ typedef enum {
     BTA_NOTE_ACTIONS,    /* forms: the commands, as read */
     BTA_NOTE_COLUMNS,    /* tables: the declared columns */
     BTA_NOTE_PAINTER,    /* drawing areas: made on the first frame painted */
+    BTA_NOTE_HANDLERS,   /* the handlers `On(event, fn)` installed, by event */
 } BtaNote;
 
 JSValue *bta_widget_note(BtaWidget *w, BtaNote which);
@@ -233,6 +234,16 @@ struct BtaWidget {
                               * which is the GSimpleActionGroup above */
     JSValue    columns;    /* tables: the declared columns */
     JSValue    painter;    /* drawing areas: made on the first frame painted */
+    /*
+     * `On(event, fn)`: this control's own handlers, keyed by event name.
+     *
+     * The seventh note, and the only one an application writes on purpose --
+     * which is why it is here rather than as an own property of the wrapper.
+     * A handler closes over the form, the form reaches the control through
+     * `__children`, and the control reaches the handler through this: an
+     * ordinary cycle that collects **because** `gc_mark` below reports it.
+     */
+    JSValue    handlers;
 };
 
 struct BtaApp {

@@ -749,7 +749,7 @@ static gboolean rowlist_filter(GtkListBoxRow *row, gpointer user_data)
     JSContext *ctx     = w->ctx;
     JSValue    argv[2] = { JS_DupValue(ctx, cw->self),
                            JS_NewInt32(ctx, gtk_list_box_row_get_index(row)) };
-    JSValue    r       = bta_emit_on(ctx, w->form, w->name, "Filter", 2, argv);
+    JSValue    r       = bta_emit_answer(w, "Filter", 2, argv, NULL);
     /* Nothing answered is not "hide it". */
     gboolean   show    = JS_IsUndefined(r) || JS_ToBool(ctx, r) != 0;
 

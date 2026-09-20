@@ -618,7 +618,7 @@ static void cell_of(BtaWidget *w, BtaTableRow *row, guint col,
     JSContext *ctx     = w->ctx;
     JSValue    argv[2] = { JS_NewInt32(ctx, (int)row->index),
                            JS_NewInt32(ctx, (int)col) };
-    JSValue    r       = bta_emit_on(ctx, w->form, w->name, "Data", 2, argv);
+    JSValue    r       = bta_emit_answer(w, "Data", 2, argv, NULL);
 
     if (JS_IsString(r)) {
         const char *s = JS_ToCString(ctx, r);
@@ -857,7 +857,7 @@ static void on_sort_changed(GtkSorter *sorter, GtkSorterChange change,
         JS_NewBool(ctx, gtk_column_view_sorter_get_primary_sort_order(cs)
                             == GTK_SORT_ASCENDING),
     };
-    JSValue r = bta_emit_on(ctx, w->form, w->name, "Sort", 2, argv);
+    JSValue r = bta_emit_answer(w, "Sort", 2, argv, NULL);
 
     JS_FreeValue(ctx, r);
     JS_FreeValue(ctx, argv[0]);

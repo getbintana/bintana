@@ -786,10 +786,13 @@ refused with a message and a column.
   silent failure if any writing verb is ever missed. That failure is precisely
   the one the current design exists to prevent.
   **Reconsider when** a project is big enough that opening a form is felt, or
-  when components built in code become common -- which is what a
-  `Widget.On(event, fn)` (`docs/issues/ISSUE-widget-on.md`) would encourage. The
-  same question belongs to `task_class_file`, which rebuilds on a miss too and
-  for a cheaper reason: there, a miss means `Task.Start` is about to throw.
+  when components built in code become common -- **which `Widget.On(event, fn)`
+  now encourages, so this is the live half of this note rather than the
+  hypothetical one.** A palette or a list of cards built from `new <Component>()`
+  is exactly the shape that misses on every instantiation, and the table above
+  is what it costs. The same question belongs to `task_class_file`, which
+  rebuilds on a miss too and for a cheaper reason: there, a miss means
+  `Task.Start` is about to throw.
 - **And the smallest one, measured anyway because reasoning about it is how the
   others went wrong.** `bta_sys_pending` walks two `GList`s about fifty times a
   second, and only in a **console** project -- `run_console` arms the poll, so an
@@ -1748,15 +1751,48 @@ person who wrote it either.
   `Scroller` over a `Panel`, which claims nothing, with selection (`MouseDown`
   plus a class), filtering (`Visible`) and editing (double click) written by
   hand. Found building `examples/kanban`.
-- **A component added from code keeps itself as its event target.** Only the
-  `.form` loader rebinds one to its host (`bta_widget_bind` in `build_one`);
-  `Container.Add` adopts it through `bta_widget_adopt`, which only binds what
-  has no form yet -- and a component's root already answers to itself. So
-  `<name>_<event>` on the host never fires for a card built with `new
-  TaskCard()`; the closures go onto the card (`card[card.Name +
-  "_MouseDown"] = …`) and die with it. `examples/contacts` never noticed,
-  because its rows are passive. Measured both ways with a probe: a `.form`
-  component answers on the host, a code-added one answers on itself.
+- **A component added from code keeps itself as its event target, and
+  `On(event, fn)` is what makes that harmless.** Only the `.form` loader rebinds
+  one to its host (`bta_widget_bind` in `build_one`); `Container.Add` adopts it
+  through `bta_widget_adopt`, which only binds what has no form yet -- and a
+  component's root already answers to itself. So `<name>_<event>` on the host
+  never fires for a card built with `new TaskCard()`. Measured both ways with a
+  probe: a `.form` component answers on the host, a code-added one answers on
+  itself.
+  **The binding is unchanged and the reach is what moved.** `emit_on` reads the
+  control's own handlers before the named road, and `Emit` is one of its
+  callers, so `card.On("Changed", fn)` on the *host* hears a
+  `this.Emit("Changed", v)` inside the card -- with nothing rebound, no name
+  invented and no change to what `Add` means. **An `Add` that rebinds a
+  component was the other half of the issue this answered and is not coming**: it
+  would change what an already-built component answers to, for a case the
+  dispatch now covers. The closures onto the card (`card[card.Name +
+  "_MouseDown"] = …`) are what `On` replaces.
+- **A widget event dispatched with `bta_emit_on` skips `On`, silently, and the
+  signature will not stop you.** There are two entry points and they are not
+  interchangeable. The static `emit_on` takes the `BtaWidget *` and reads its
+  handlers note *before* the `<name>_<event>` road; the published
+  `bta_emit_on(ctx, form, name, …)` takes no widget and is **the menus' road** --
+  a `BtaMenuItem` and a `BtaAction` are not widgets, have no note, and are the
+  only two callers left (`bta_menu.c`). Ten sites in five files used to call it
+  with `w->form, w->name` because they needed the handler's answer back, and
+  every one of them is `bta_emit_answer(w, …, NULL)` now, which is the same
+  return value through the widget road. **A new event raised the old way would
+  be an event `On` cannot hear**, with nothing failing: the named handler still
+  works, so it looks wired. Raise one with `bta_emit`, `bta_emit_ok` or
+  `bta_emit_answer`, all of which take the widget.
+  Two smaller things settled here. **The note's bag has a null prototype**
+  (`JS_NewObjectProto(ctx, JS_NULL)`) -- `JS_GetPropertyStr` walks the chain, and
+  this repository has already been bitten by an ordinary bag inheriting
+  `Object.prototype`; no event is spelt `constructor` and the bag costs nothing
+  to make unable to answer for one. And **which road wins is not a promise**: a
+  control carrying both a handler of its own and a `<name>_<event>` is an
+  ambiguity -- eight events here are asked a question, so only one of two
+  answers could be used -- and it is meant to become a refusal where the second
+  handler is written, at `On` and at the `bta_widget_bind` that can create the
+  collision afterwards. The documentation says *what happens* and not *what is
+  guaranteed* for that reason; `tests/widgets`' `testOn` marks the three
+  assertions that go when the refusal lands.
 - **Submitting a modal with an xdotool key can haunt the run.** `key` sends
   down, waits 12 ms, sends up; a dialog that submits and closes inside that gap
   takes the up down with it -- `BadWindow` on the send, the release never

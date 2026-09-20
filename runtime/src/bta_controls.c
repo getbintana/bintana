@@ -39,7 +39,7 @@ static gboolean on_close_request(GtkWindow *win, gpointer user_data)
     BtaWidget *w   = user_data;
     JSContext *ctx = w->ctx;
 
-    JSValue  r    = bta_emit_on(ctx, w->form, w->name, "Close", 0, NULL);
+    JSValue  r    = bta_emit_answer(w, "Close", 0, NULL, NULL);
     gboolean stay = JS_ToBool(ctx, r) > 0;
     JS_FreeValue(ctx, r);
 
@@ -500,7 +500,7 @@ static void on_surface_size(GdkSurface *surface, int cw, int ch, gpointer user_d
     g_object_set_data(G_OBJECT(w->gtk), LAST_SIZE_KEY, GUINT_TO_POINTER(now));
 
     JSValue argv[2] = { JS_NewInt32(w->ctx, cw), JS_NewInt32(w->ctx, ch) };
-    JSValue r = bta_emit_on(w->ctx, w->form, w->name, "Resize", 2, argv);
+    JSValue r = bta_emit_answer(w, "Resize", 2, argv, NULL);
 
     JS_FreeValue(w->ctx, r);
     JS_FreeValue(w->ctx, argv[0]);

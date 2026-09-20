@@ -275,21 +275,58 @@ void bta_widget_relayout(BtaWidget *w)
 
 /* ---------------------------------------------------------------- events */
 
-static JSValue emit_on(JSContext *ctx, JSValueConst form, const char *name,
-                       const char *event, int argc, JSValueConst *argv, bool *threw)
+/*
+ * **Two roads to a handler, and the control's own is the first.**
+ *
+ * `On(event, fn)` puts a function on the control itself; the `.form`
+ * convention puts `<name>_<event>` on the form.  A control carrying both is a
+ * mistake rather than a layering -- two handlers for one event, and only one of
+ * them can answer a `Paginate` -- so these are not merged: the one installed on
+ * the control answers and the named one is not called.
+ *
+ * **That is not a promise to build on.**  The second handler is meant to become
+ * a refusal where it is *written* (at `On`, and at the bind that can create the
+ * collision afterwards), which is what every relative of this runtime does with
+ * an ambiguity it cannot resolve -- nobody silences a handler.  Until then this
+ * line is what happens, not what is guaranteed.
+ *
+ * **`this` differs between the two roads, deliberately.**  A named handler is
+ * found *on* the form and is called as its method, the way any property lookup
+ * ends.  A function handed to `On` was found nowhere -- it is an argument -- so
+ * it is called with `this` undefined, which is what every other callback this
+ * runtime is handed gets (`Timer`, `Lock.Hold`, `Http`, `Exec`, `Dialog`).
+ * Every project source is evaluated with `JS_EVAL_FLAG_STRICT`, so a non-arrow
+ * function that reads `this` throws where it is written rather than finding the
+ * global object.
+ */
+static JSValue emit_on(JSContext *ctx, BtaWidget *w, JSValueConst form,
+                       const char *name, const char *event,
+                       int argc, JSValueConst *argv, bool *threw)
 {
     if (threw)
         *threw = false;
-    if (!name || JS_IsUndefined(form))
-        return JS_UNDEFINED;
 
-    char   *key = g_strdup_printf("%s_%s", name, event);
-    JSValue fn  = JS_GetPropertyStr(ctx, form, key);
-    g_free(key);
+    JSValue      fn   = JS_UNDEFINED;
+    JSValueConst self = JS_UNDEFINED;
+
+    if (w && JS_IsObject(w->handlers))
+        fn = JS_GetPropertyStr(ctx, w->handlers, event);
+
+    if (!JS_IsFunction(ctx, fn)) {
+        JS_FreeValue(ctx, fn);
+
+        if (!name || JS_IsUndefined(form))
+            return JS_UNDEFINED;
+
+        char *key = g_strdup_printf("%s_%s", name, event);
+        fn   = JS_GetPropertyStr(ctx, form, key);
+        self = form;
+        g_free(key);
+    }
 
     JSValue result = JS_UNDEFINED;
     if (JS_IsFunction(ctx, fn)) {
-        result = JS_Call(ctx, fn, form, argc, argv);
+        result = JS_Call(ctx, fn, self, argc, argv);
         if (JS_IsException(result)) {
             bta_dump_error(ctx);
             JS_FreeValue(ctx, result);
@@ -306,7 +343,9 @@ static JSValue emit_on(JSContext *ctx, JSValueConst form, const char *name,
 JSValue bta_emit_on(JSContext *ctx, JSValueConst form, const char *name,
                     const char *event, int argc, JSValueConst *argv)
 {
-    return emit_on(ctx, form, name, event, argc, argv, NULL);
+    /* NULL: a menu item and an action are not widgets and have no note of
+     * their own, so this road is the named one and only the named one. */
+    return emit_on(ctx, NULL, form, name, event, argc, argv, NULL);
 }
 
 /*
@@ -325,7 +364,7 @@ bool bta_emit_ok(BtaWidget *w, const char *event, int argc, JSValueConst *argv)
 
     bool threw = false;
     JS_FreeValue(w->ctx,
-                 emit_on(w->ctx, w->form, w->name, event, argc, argv, &threw));
+                 emit_on(w->ctx, w, w->form, w->name, event, argc, argv, &threw));
     return !threw;
 }
 
@@ -351,7 +390,7 @@ JSValue bta_emit_answer(BtaWidget *w, const char *event, int argc,
             *threw = false;
         return JS_UNDEFINED;
     }
-    return emit_on(w->ctx, w->form, w->name, event, argc, argv, threw);
+    return emit_on(w->ctx, w, w->form, w->name, event, argc, argv, threw);
 }
 
 /*
@@ -366,7 +405,21 @@ JSValue bta_emit_answer(BtaWidget *w, const char *event, int argc,
  */
 bool bta_has_handler(BtaWidget *w, const char *event)
 {
-    if (!w || !w->name || JS_IsUndefined(w->form))
+    if (!w)
+        return false;
+
+    /* The control's own first, exactly as the dispatch reads it -- or a
+     * `DrawPage` installed with `On` would fall back to `Draw`. */
+    if (JS_IsObject(w->handlers)) {
+        JSValue own = JS_GetPropertyStr(w->ctx, w->handlers, event);
+        bool    had = JS_IsFunction(w->ctx, own);
+
+        JS_FreeValue(w->ctx, own);
+        if (had)
+            return true;
+    }
+
+    if (!w->name || JS_IsUndefined(w->form))
         return false;
 
     char   *key = g_strdup_printf("%s_%s", w->name, event);
@@ -382,7 +435,7 @@ void bta_emit(BtaWidget *w, const char *event, int argc, JSValueConst *argv)
 {
     if (!w)
         return;
-    JS_FreeValue(w->ctx, bta_emit_on(w->ctx, w->form, w->name, event, argc, argv));
+    JS_FreeValue(w->ctx, bta_emit_answer(w, event, argc, argv, NULL));
 }
 
 /* ------------------------------------------------- base Widget properties */
@@ -2466,10 +2519,125 @@ static JSValue w_emit(JSContext *ctx, JSValueConst this_val,
     if (!event)
         return JS_ThrowTypeError(ctx, "Emit(event, ...) expects an event name");
 
-    JSValue r = bta_emit_on(ctx, w->form, w->name, event,
-                            argc - 1, argc > 1 ? argv + 1 : NULL);
+    JSValue r = bta_emit_answer(w, event, argc - 1,
+                                argc > 1 ? (JSValueConst *)(argv + 1) : NULL, NULL);
     JS_FreeCString(ctx, event);
     return r;
+}
+
+/*
+ * **On("Click", fn): a handler on *this control*, rather than a name on a form.**
+ *
+ * The `.form` convention -- `<name>_<event>`, looked up on the form -- is the
+ * right shape for a control a designer drew and named.  It is the wrong shape
+ * for one built in code, and the IDE is where that shows: a palette has a
+ * button per widget type, a property grid an editor per property, and the count
+ * is not known until the data is read.  There is no name a designer chose, so
+ * one gets invented for the sole purpose of building a property out of it --
+ * and that property is a **global on the form**, which outlives the control it
+ * was named for.  Building the same palette twice then leaks the old handlers
+ * unless something deletes them by hand.
+ *
+ * It also reaches the one case the convention cannot.  A `Component` added from
+ * code keeps *itself* as its event target -- only the `.form` loader rebinds one
+ * to its host -- so `this.Emit("Changed", v)` inside a card built with
+ * `new TaskCard()` looks for `Form_Changed` on the card and the host never hears
+ * it.  `Emit` reads this note like every other event, so the host's
+ * `card.On("Changed", ...)` answers: no rebinding, and no change to what `Add`
+ * means.
+ *
+ * **Installing again replaces**, so rebuilding a palette needs no bookkeeping,
+ * and `On(event, null)` removes.  There is no `Off`: it would be the same
+ * sentence said twice -- the argument this runtime already makes about
+ * `TabStop` -- and it would need the function back to identify it, which is the
+ * one thing a closure does not hand you.  It is the shape Delphi's
+ * `OnClick := nil`, Android's `setOnClickListener(null)` and the DOM's
+ * `onclick = null` all have, and the reason it is that family and not GTK's
+ * accumulating `g_signal_connect` is that **the events here return values**:
+ * `Paginate` answers a number and `KeyPress` answers whether the key was eaten,
+ * so two handlers would need an accumulator policy to decide between two
+ * answers.  Every toolkit that accumulates either has void signals or has that
+ * policy; this one has neither and needs neither.
+ *
+ * **The event name is checked against `EventNames()`.**  The list already
+ * exists, the designer already offers events out of it, and the alternative is
+ * `addEventListener`'s -- a handler for `"Clik"` that never fires and never says
+ * so.  A component of the project declares its own with `static Events = [...]`
+ * and is read by the same walk, so this costs a declaration that the IDE
+ * already wanted.
+ */
+static JSValue w_on(JSContext *ctx, JSValueConst this_val,
+                    int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    const char *event = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    if (!event)
+        return JS_ThrowTypeError(ctx, "On(event, fn) expects an event name");
+
+    JSValueConst fn       = argc > 1 ? argv[1] : JS_UNDEFINED;
+    bool         clearing = JS_IsUndefined(fn) || JS_IsNull(fn);
+
+    if (!clearing && !JS_IsFunction(ctx, fn)) {
+        JS_FreeCString(ctx, event);
+        return JS_ThrowTypeError(ctx,
+            "On(event, fn) expects a function, or null to remove one");
+    }
+
+    char **names = class_list_of(ctx, this_val, CLASS_LIST_EVENTS);
+    bool   known = false;
+
+    for (uint32_t i = 0; names && names[i] && !known; i++)
+        known = g_str_equal(names[i], event);
+
+    if (!known) {
+        /* Naming what it *does* raise, because the answer is in hand and the
+         * question is nearly always a misspelling of one of them. */
+        char   *had = names ? g_strjoinv(", ", names) : NULL;
+        JSValue e   = JS_ThrowTypeError(ctx, "On: there is no '%s' event here; "
+                                             "this one raises %s", event,
+                                        had && *had ? had : "none");
+        g_free(had);
+        g_strfreev(names);
+        JS_FreeCString(ctx, event);
+        return e;
+    }
+    g_strfreev(names);
+
+    JSValue *slot = bta_widget_note(w, BTA_NOTE_HANDLERS);
+
+    if (!JS_IsObject(*slot)) {
+        if (clearing) {                 /* nothing installed: nothing to remove */
+            JS_FreeCString(ctx, event);
+            return JS_DupValue(ctx, this_val);
+        }
+        JS_FreeValue(ctx, *slot);
+        /*
+         * A null prototype, so a lookup here answers about what was installed
+         * and nothing else.  `JS_GetPropertyStr` walks the chain, and this
+         * repository has already been bitten once by an ordinary bag inheriting
+         * `Object.prototype` -- `Settings.Has("toString")` answered true.  No
+         * event is spelt `constructor` today; the note costs nothing to make
+         * unable to answer for one.
+         */
+        *slot = JS_NewObjectProto(ctx, JS_NULL);
+    }
+
+    if (clearing) {
+        JSAtom key = JS_NewAtom(ctx, event);
+
+        JS_DeleteProperty(ctx, *slot, key, 0);
+        JS_FreeAtom(ctx, key);
+    } else {
+        JS_SetPropertyStr(ctx, *slot, event, JS_DupValue(ctx, fn));
+    }
+
+    JS_FreeCString(ctx, event);
+    /* The control back, so a control built in code can be dressed in one
+     * expression: `panel.Add(new Button().On("Click", fn))`. */
+    return JS_DupValue(ctx, this_val);
 }
 
 /* ---------------------------------------------------------------- tooltip */
@@ -3332,6 +3500,7 @@ JSValue *bta_widget_note(BtaWidget *w, BtaNote which)
     case BTA_NOTE_ACTIONS:  return &w->actions_spec;
     case BTA_NOTE_COLUMNS:  return &w->columns;
     case BTA_NOTE_PAINTER:  return &w->painter;
+    case BTA_NOTE_HANDLERS: return &w->handlers;
     }
     g_assert_not_reached();
 }
@@ -3460,6 +3629,7 @@ static const JSCFunctionListEntry widget_props[] = {
     JS_CFUNC_DEF("SetFocus", 0, w_set_focus),
     JS_CFUNC_DEF("Delete",   0, w_delete),
     JS_CFUNC_DEF("Emit",     1, w_emit),
+    JS_CFUNC_DEF("On",       2, w_on),
     JS_CFUNC_DEF("OriginIn", 1, w_origin_in),
     JS_CFUNC_DEF("Bounds",   1, w_bounds),
     JS_CFUNC_DEF("PropertyOptions", 1, w_property_options),
@@ -3597,7 +3767,7 @@ static gboolean on_key_pressed(GtkEventControllerKey *c, guint keyval,
         JS_NewBool(ctx, (state & GDK_ALT_MASK) != 0),
     };
 
-    JSValue r = bta_emit_on(ctx, w->form, w->name, "KeyPress", 4, argv);
+    JSValue r = bta_emit_answer(w, "KeyPress", 4, argv, NULL);
     gboolean handled = JS_ToBool(ctx, r) > 0;
 
     JS_FreeValue(ctx, r);
@@ -3666,7 +3836,7 @@ static void on_mouse_enter(GtkEventControllerMotion *c, double x, double y,
 {
     BtaWidget *w   = user_data;
     JSValue    argv[2] = { JS_NewFloat64(w->ctx, x), JS_NewFloat64(w->ctx, y) };
-    JSValue    r   = bta_emit_on(w->ctx, w->form, w->name, "MouseEnter", 2, argv);
+    JSValue    r   = bta_emit_answer(w, "MouseEnter", 2, argv, NULL);
 
     JS_FreeValue(w->ctx, r);
     JS_FreeValue(w->ctx, argv[0]);
@@ -3691,7 +3861,7 @@ static gboolean on_mouse_scroll(GtkEventControllerScroll *c, double dx, double d
 {
     BtaWidget *w = user_data;
     JSValue argv[2] = { JS_NewFloat64(w->ctx, dx), JS_NewFloat64(w->ctx, dy) };
-    JSValue r = bta_emit_on(w->ctx, w->form, w->name, "MouseWheel", 2, argv);
+    JSValue r = bta_emit_answer(w, "MouseWheel", 2, argv, NULL);
 
     gboolean handled = JS_ToBool(w->ctx, r) > 0;
     JS_FreeValue(w->ctx, r);
@@ -3721,7 +3891,7 @@ static void on_key_released(GtkEventControllerKey *c, guint keyval, guint keycod
         JS_NewBool(ctx, (state & GDK_SHIFT_MASK) != 0),
         JS_NewBool(ctx, (state & GDK_ALT_MASK) != 0),
     };
-    JSValue r = bta_emit_on(ctx, w->form, w->name, "KeyRelease", 4, argv);
+    JSValue r = bta_emit_answer(w, "KeyRelease", 4, argv, NULL);
 
     JS_FreeValue(ctx, r);
     for (int i = 0; i < 4; i++)
@@ -4510,13 +4680,14 @@ static void widget_finalizer(JSRuntime *rt, JSValue val)
     bta_menu_popup_free(w);
     JS_FreeValueRT(rt, w->menu);
 
-    /* The six notes; every one of them is marked above. */
+    /* The seven notes; every one of them is marked above. */
     JS_FreeValueRT(rt, w->declared);
     JS_FreeValueRT(rt, w->children);
     JS_FreeValueRT(rt, w->menus);
     JS_FreeValueRT(rt, w->actions_spec);
     JS_FreeValueRT(rt, w->columns);
     JS_FreeValueRT(rt, w->painter);
+    JS_FreeValueRT(rt, w->handlers);
 
     if (w->gtk) {
         /*
@@ -4571,6 +4742,7 @@ static void widget_gc_mark(JSRuntime *rt, JSValueConst val, JS_MarkFunc *mark_fu
         JS_MarkValue(rt, w->actions_spec, mark_func);
         JS_MarkValue(rt, w->columns, mark_func);
         JS_MarkValue(rt, w->painter, mark_func);
+        JS_MarkValue(rt, w->handlers, mark_func);
     }
 }
 
@@ -4710,6 +4882,7 @@ static JSValue bta_ctor(JSContext *ctx, JSValueConst new_target,
     w->actions_spec = JS_UNDEFINED;
     w->columns  = JS_UNDEFINED;
     w->painter  = JS_UNDEFINED;
+    w->handlers = JS_UNDEFINED;
     JS_SetOpaque(obj, w);
 
     cls->build(w);

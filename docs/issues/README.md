@@ -22,7 +22,6 @@ in the same form.
 | [ISSUE-editor-offset.md](ISSUE-editor-offset.md) | An editor cannot turn a character offset into a line |
 | [ISSUE-file-relative.md](ISSUE-file-relative.md) | No `File.Relative`, and an extension has to be case-folded by hand |
 | [ISSUE-class-introspection.md](ISSUE-class-introspection.md) | Asking what a type has means building one |
-| [ISSUE-widget-on.md](ISSUE-widget-on.md) | A control built from code has no `On(event, fn)` |
 | [ISSUE-locale-write.md](ISSUE-locale-write.md) | A catalogue can be read and not written |
 
 **A gap that is filled is deleted, not archived.** What the runtime can do is in

@@ -58,6 +58,7 @@ declare class Widget {
     Hide(...values: any[]): any;
     Lower(...values: any[]): any;
     Move(...values: any[]): any;
+    On(...values: any[]): any;
     OriginIn(...values: any[]): any;
     PopupMenu(...values: any[]): any;
     PropertyNames(...values: any[]): any;

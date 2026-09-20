@@ -391,7 +391,7 @@ const TESTS = [
     /* Early on purpose: they show windows of their own, and the pushed-surface
      * assertions in the async tail measure a form on the frame it settles. See
      * the note below. */
-    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "FormMargin", "HideOnClose", "PointerEvents", "Field", "Separator", "TableView", "TableTree", "TableOnDemand", "TableSort", "TableIcon", "TableProse",
+    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "FormMargin", "HideOnClose", "PointerEvents", "On", "Field", "Separator", "TableView", "TableTree", "TableOnDemand", "TableSort", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
     "Expand", "Spacing", "Scrolling", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "EditorMarks", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
@@ -10877,6 +10877,108 @@ function Main() {
          * not appear twice. */
         const dup = btn.filter((e, i) => btn.indexOf(e) !== i);
         eq("and no event is listed twice", JSON.stringify(dup), "[]");
+    }
+
+    /*
+     * `On(event, fn)`: a handler on the control, for a control built in code.
+     *
+     * Beside `EventNames`, because that list is what this one is checked
+     * against -- the two are the same declaration read from opposite ends.
+     */
+    testOn() {
+        const b = new Button();
+        let   seen = 0;
+
+        eq("On answers with the control, so one can be dressed in an expression",
+           b.On("Click", () => { seen++; }), b);
+
+        b.Click();
+        eq("the handler installed on the control runs", seen, 1);
+
+        /* It needed no name, no form and no parent, which is the whole point:
+         * the name the convention wants exists only to build a property out
+         * of, and that property outlives the control. */
+        eq("and it needed no name", b.Name, "");
+
+        /* Installing again replaces. That is what makes rebuilding a palette
+         * need no bookkeeping, and it is why there is no `Off`. */
+        let other = 0;
+        b.On("Click", () => { other++; });
+        b.Click();
+        eq("a second On replaces the first", seen, 1);
+        eq("and the second is what runs", other, 1);
+
+        b.On("Click", null);
+        b.Click();
+        eq("null removes it", other, 1);
+
+        /* The answer travels back: eight of this runtime's events are asked a
+         * question rather than told something, and `Emit` is the one road a
+         * test can put a value through. */
+        const q = new Button();
+        q.On("Click", () => 42);
+        eq("what the handler answers comes back", q.Emit("Click"), 42);
+
+        /* `this` is undefined, like every other callback this runtime is
+         * handed. Sources run under forced strict mode, so a non-arrow
+         * function that reads it throws rather than finding the global. */
+        let sawThis = "unset";
+        const t = new Button();
+        t.On("Click", function () { sawThis = this; });
+        t.Click();
+        eq("a handler is called with no this", sawThis, undefined);
+
+        /* Checked against EventNames(), so a misspelling throws where it is
+         * written instead of never firing and never saying so. */
+        throws("an event the control does not raise is refused",
+               () => b.On("Clik", () => {}));
+        throws("and so is a handler that is not a function",
+               () => b.On("Click", 5));
+
+        /*
+         * **Which of the two roads wins, and this assertion is not a promise.**
+         * A control carrying a handler on itself *and* a `<name>_<event>` on
+         * its form is an ambiguity, and it is meant to become a refusal where
+         * the second one is written. When that lands, these four lines go.
+         *
+         * Driven through the component already on this form, whose `Up` button
+         * is bound by name to a real `Up_Click` -- so nothing has to be added
+         * to `Fixed1`, whose children `testTabOrder` walks.
+         */
+        const st  = this.Step1;
+        const was = st.Value;
+
+        st.Up.Click();
+        eq("a named handler inside a component runs", st.Value, was + 1);
+
+        st.Up.On("Click", () => {});
+        st.Up.Click();
+        eq("an On installed over it takes the event", st.Value, was + 1);
+
+        st.Up.On("Click", null);
+        st.Up.Click();
+        eq("and removing it gives the name the event back", st.Value, was + 2);
+
+        st.Value = was;   /* what testComponent left, put back */
+
+        /*
+         * The other half of the gap this answers. A component added from code
+         * keeps *itself* as its event target -- only the `.form` loader rebinds
+         * one to its host -- so `<name>_<event>` on the host never fires for it.
+         * `Emit` reads the control's own note like every other event, so the
+         * host hears it with no rebinding and no change to what `Add` means.
+         */
+        const made = new Stepper();
+        let   said = null;
+
+        made.On("Change", (v) => { said = v; });
+        made.Value = 3;
+        eq("a component built in code reports to whoever holds it", said, 3);
+
+        /* And its own `static Events` is what the check reads, which is the
+         * same walk `EventNames()` above makes. */
+        throws("a component's own declaration is what checks its events",
+               () => made.On("Changed", () => {}));
     }
 
     /*

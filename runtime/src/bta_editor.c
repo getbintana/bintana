@@ -792,7 +792,7 @@ static GListModel *provider_proposals(BtaProvider *self,
         JS_NewString(ctx, before ? before : ""),
     };
 
-    JSValue answer = bta_emit_on(ctx, w->form, w->name, "Complete", 4, argv);
+    JSValue answer = bta_emit_answer(w, "Complete", 4, argv, NULL);
 
     for (int i = 0; i < 4; i++)
         JS_FreeValue(ctx, argv[i]);
