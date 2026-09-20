@@ -154,8 +154,28 @@ class names; the moment the list is text a person reads, it wants
 `sort(Locale.Compare)`. `localeCompare` refuses and says so, and a plain `<` and
 a bare `sort()` are the two that stay silent.
 
-`for...in` is safe here — nothing can put anything on a prototype any more — and
-it forgives an absent bag: reciting `undefined` is zero turns.
+`for...in` forgives an absent bag: reciting `undefined` is zero turns.
+
+**And it does not recite what an object inherits — because those members are
+non-enumerable, which is the engine's doing and not this language's.**
+`toString`, `valueOf`, `hasOwnProperty` and `constructor` are all reachable on
+any plain object (`"toString" in {}` is `true`), and `for...in` walks past every
+one of them. That is worth knowing the right way round: emptying `Object`
+changed nothing here, so the safety survives whatever else is curated.
+
+What it does **not** survive is your own side putting something enumerable on
+`Object.prototype` — an ordinary assignment, which still works, and after which
+`for...in` recites it over every bag in the program. Nothing can stop that:
+`freeze`, `seal`, `preventExtensions` and `isExtensible` are all gone with the
+rest of `Object`'s statics, so a program can neither lock the prototype nor ask
+whether somebody already wrote to it. There are no imports here, so the only
+code that can do it is the project's own and the libraries it named in `uses`
+— which makes it a thing to *not write* rather than a thing to defend against.
+
+**`Dictionary` is immune either way**, and that is the better reason to reach
+for it: `Dictionary.Keys({ a: 1 })` answers `["a"]` whatever is on the
+prototype, because it is `Object.keys` — own and enumerable — captured before
+the name was taken away.
 
 When the bag is going onto a control, do not write the loop at all:
 

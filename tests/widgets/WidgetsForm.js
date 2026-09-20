@@ -8841,6 +8841,58 @@ function Main() {
               (() => { const k = []; for (const x in { a: 1, b: 2 }) k.push(x);
                        return k.join(); })() === "a,b");
 
+        /*
+         * **Why `for...in` is safe, said correctly.**
+         *
+         * `llm/language.md` justified it with *nothing can put anything on a
+         * prototype any more*, which was three claims in a row and only one of
+         * them true. The safety is real and is the **engine's**: `toString` and
+         * its siblings are non-enumerable and always were, so emptying `Object`
+         * had nothing to do with it. What emptying `Object` did do is take away
+         * `freeze`, `seal` and `preventExtensions`, so a program can neither
+         * lock `Object.prototype` nor ask whether anything wrote to it -- and an
+         * ordinary assignment there still works and *is* recited.
+         *
+         * `Dictionary` is immune to both, which is the better argument for it
+         * and was written down nowhere.
+         */
+        const recite = (o) => { const k = []; for (const x in o) k.push(x); return k.join(); };
+
+        check("what an object inherits is reachable", "toString" in {});
+        eq("...and for...in walks past it, because it is not enumerable",
+           recite({ a: 1 }), "a");
+
+        Object.prototype.auditProbe = 1;
+        try {
+            eq("an enumerable one put there *is* recited",
+               recite({ a: 1 }), "a,auditProbe");
+            eq("...and Dictionary.Keys is immune, being own keys only",
+               Dictionary.Keys({ a: 1 }).join(), "a");
+        } finally {
+            delete Object.prototype.auditProbe;
+        }
+        eq("and the probe left nothing behind", recite({ a: 1 }), "a");
+
+        /* Nothing published could have stopped it: the four that would are gone
+         * with the rest of Object's statics. */
+        for (const lock of ["freeze", "seal", "preventExtensions", "isExtensible"])
+            eq(`Object.${lock} is gone, so a prototype cannot be locked`,
+               typeof Object[lock], "undefined");
+
+        /*
+         * **Every name the runtime looks something up by is ASCII**, which is
+         * narrower than the language underneath and was written down nowhere.
+         * The engine takes `Peón` as an identifier -- `CheckSource` says so, and
+         * that is the half of the claim worth pinning, since it is what makes
+         * the limit the runtime's own rather than QuickJS's.
+         */
+        eq("the engine accepts an accented identifier",
+           Application.CheckSource("class Peón { }"), null);
+        eq("...and so does a namespaced one",
+           Application.CheckSource("const año = 1;"), null);
+        throws("but Widget.New refuses a class name it cannot spell",
+               () => Widget.New("Peón"));
+
         eq("Symbol is not part of the language", typeof Symbol, "undefined");
 
         /*

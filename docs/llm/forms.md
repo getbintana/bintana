@@ -94,7 +94,7 @@ A child node:
 | Key | Meaning |
 |---|---|
 | `type` | a class name: a runtime control, or one of the project's own components |
-| `name` | becomes `Widget.Name`, is exposed as `this.<name>`, and prefixes its handlers. Must be a valid JS identifier, unique on the form, and **not something a `Form` already answers to** — `Actions`, `Menus`, `Controls`, `DefaultButton` and `CancelButton` are read-only, so a control called one of them binds to nothing and the form refuses to load, saying which. The same rule holds for a **menu item** and a **command**: all three blocks bind what they name on the form, by name, in the same way |
+| `name` | becomes `Widget.Name`, is exposed as `this.<name>`, and prefixes its handlers. Must be a valid identifier **in ASCII** — `A-Z`, `a-z`, `_`, `$` and then digits, which is narrower than the JavaScript underneath, where `año` is a legal name and here is not; the same holds for a node's `type`, for `startup`/`entry` and for a `Task` class — unique on the form, and **not something a `Form` already answers to** — `Actions`, `Menus`, `Controls`, `DefaultButton` and `CancelButton` are read-only, so a control called one of them binds to nothing and the form refuses to load, saying which. The same rule holds for a **menu item** and a **command**: all three blocks bind what they name on the form, by name, in the same way |
 | `properties` | applied **in the order written** |
 | `children` | nested, to any depth. A container's children are added to it |
 | `design` | what the *designer* shows instead; unreachable from a running application |

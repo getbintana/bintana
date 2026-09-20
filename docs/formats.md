@@ -327,7 +327,8 @@ A child node:
   as an ordinary type. A project's classes live in the global lexical scope and
   never land on `globalThis`, so looking one up there would find nothing.
 - `name` becomes `widget.Name`, is exposed on the form as `this.<name>`, and is the
-  prefix of its handlers. It has to be a valid JS identifier.
+  prefix of its handlers. It has to be a valid identifier **in ASCII** — see the
+  note below, because that is narrower than what JavaScript itself accepts.
 - `properties` are applied **in the order written**, as plain assignments. Order
   can matter: `Value` before `Max` on a `SpinBox` would be clamped, which is why
   the factory range is wide, and `Arrangement` is written first by the serialiser
@@ -338,6 +339,24 @@ A child node:
 - `children` nest to any depth. A container's children are added to it, not to the
   form.
 - `design` is the other dictionary a node may carry: see below.
+
+**Every name the runtime looks something up by is ASCII**, and that is narrower
+than the language it is written in: QuickJS accepts `Peón` as an identifier and
+this does not. It holds for a node's `type` and `name`, for `startup` and
+`entry` in `project.json`, and for a `Task` subclass — the first letter must be
+`A-Z`, `a-z`, `_` or `$`, and the rest those plus `0-9`. So a class called
+`Peón` is refused as *"'Peón' is not a valid class name"* and a control named
+`año` as *"form: 'año' is not a usable control name"*, and both refusals are
+about the spelling rather than about the class being missing.
+
+A **folder** is the one place this is not a refusal: a folder whose name is not
+an identifier simply contributes no namespace prefix, and the classes under it
+stay findable by their bare names. A file is indexed whatever it is called; it
+is the *class* the code declares that has to be spellable.
+
+The limit is the runtime's own and not the engine's, and it is worth knowing
+because nothing about it is obvious from an error that says a class was not
+found.
 
 ### `design`: what the designer shows, and the application never does
 

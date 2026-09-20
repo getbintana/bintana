@@ -158,7 +158,7 @@ boundary is the process: the IDE already runs a project as a child.
 | `CheckSource(text)` | `null` if the text is valid JavaScript, otherwise `{ Message, Line, Column }` |
 | `LibraryPath(name, [project])` | where a library by that name is, or `""`. The same six-place search `uses` does — published so a tool that opens *other* projects asks about theirs instead of keeping a second copy of the path, since two implementations of one lookup drift and the one that drifts is the one nobody runs from a shell |
 | `Libraries([project])` | the names of every library those six places offer, sorted and deduplicated — a name found twice is the one nearest the project, which is the one `uses` would load. The other direction of the same lookup: one resolves a name, the other says which names there are, which is what an IDE offering them to tick had no way to ask |
-| `OnError` | assign `(message, stack) => …` to take over uncaught errors |
+| `OnError` | assign `(message, stack) => …` to take over uncaught errors — **two strings, not the `Error`**: see below |
 | `Quit(code)` | quits the main loop with that exit status |
 
 **Two versions, and they are two questions.** `Application.Version` is the
@@ -248,6 +248,14 @@ One at a time: the dialog is raised with `choose()` so the runtime is told when 
 is dismissed, which is what keeps a handler that throws on every timer tick from
 stacking dialogs forever. An error raised *inside* `OnError` only reaches the
 terminal — the guard is still up, so it cannot come back around.
+
+**What the handler gets is two strings, and not the `Error`.** That is worth
+saying because the obvious guess is the other one: the name is gone, so a
+`TypeError` and a `RangeError` arrive indistinguishable, and there is no object
+to re-throw. It is enough to log and enough to show, which is what it was built
+for — a handler that wanted to branch on the kind of failure would have to match
+on the message, which is the shape this language refuses everywhere else. If you
+need the kind, catch it where it is raised.
 
 **`Bintana error:` is red only on a terminal.** It was red unconditionally, which
 was true and invisible for as long as the only thing reading it down a pipe was a

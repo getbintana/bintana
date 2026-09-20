@@ -65,6 +65,12 @@ For an application that wants to log them, show them, or keep going. A test
 suite assigns it to fail loudly; the IDE assigns it to put the error in its log
 with a link to the line.
 
+**Two strings, and not the `Error`.** The name does not cross, so a `TypeError`
+and a `RangeError` arrive the same, and there is nothing to re-throw. It is
+enough to log and enough to show, which is what it is for; a handler that needs
+to know *which* failure it was has to catch it where it is raised, since
+matching on the message is the shape this language refuses elsewhere.
+
 ## Ending
 
 | | |

@@ -71,78 +71,36 @@ QuickJS error carries no `lineNumber`, `columnNumber` or `fileName`, measured �
 so parsing the stack stays; what changed is that the program can no longer
 corrupt it.
 
-**What is left is decisions and costs**, which is what the rest of this file has
-always been. The counts in §4 are the working tree's, not `271eeb6`'s.
+**2.4 went as well, and it was right for a reason it did not give.** The manual
+justified `for...in` with *"nothing can put anything on a prototype any more"*,
+which is three claims stacked. Measured: `for...in` over `{a:1}` answers `[a]`,
+so it really is safe from the builtins — but because they are **non-enumerable**,
+which is the engine's doing and would survive any amount of further curation.
+`Object.prototype.x = 1` still works and *is* recited, and the program cannot
+defend itself, since `freeze`, `seal`, `preventExtensions` and `isExtensible`
+went with `Object`'s statics. And `Dictionary.Keys` is immune to both, which is
+the strongest argument for it and was written down nowhere. The audit filed this
+as the bill for 1.3; it is not, and the difference is load-bearing — 1.3 was the
+`in` operator and a bracket read, which see non-enumerable inherited names,
+while this sentence is about `for...in`, which never does.
 
-## 2. The language's curation
+**2.7 and 2.8 close the section**, both as sentences the documents owed rather
+than as code. `Application.OnError` receives two strings and not the `Error`, so
+a `TypeError` and a `RangeError` arrive indistinguishable and nothing can be
+re-thrown — enough to log and enough to show, which is what it was built for,
+and now said where the signature is. And every name the runtime looks something
+up by is **ASCII**, which is narrower than the engine underneath: measured,
+`CheckSource("class Peón {}")` answers `null` and `Widget.New("Peón")` refuses.
+Documented in `formats.md` and `llm/forms.md` rather than widened, because
+reading UTF-8 means unifying three copies first to enable something nobody has
+asked for, and a class name is also a file name. One correction to the finding:
+its third copy, in `bta_task.c`, is **not** a refusal — a folder it cannot spell
+contributes no namespace prefix and what is under it stays findable by its bare
+name, which is deliberate and says so in a comment.
 
-### 2.4 "Nothing can put anything on a prototype any more" is false — *measured*
-
-[`llm/language.md:118`](llm/language.md) says `for...in` is safe because
-*"nothing can put anything on a prototype any more"*. `Object.prototype.x = 1`
-measured: `true, 1`. The curation emptied `Object`'s statics and took
-`__proto__` and the `__defineGetter__` family; `Object.prototype` itself is
-still extensible and reachable, and a plain object still inherits
-`toString`/`constructor`/`valueOf`.
-
-**And the program cannot lock it either**, which is the part that makes the
-sentence not merely false but unfalsifiable from inside the language: `freeze`,
-`seal`, `preventExtensions` and `isExtensible` are all on the deleted list
-(`bta_runtime.c:1159-1160`). The only `JS_PreventExtensions` in the tree is the
-one `--strict` puts on a widget (`bta_widget.c:3356`).
-
-**And it is narrower than it reads, which is the other half of why it misleads.**
-It is written about `for...in`, and `for...in` is in fact safe from the
-builtins: `Object.prototype`'s members are non-enumerable and are never recited.
-What the sentence does not cover is the `in` operator and a plain property read,
-both of which **do** see non-enumerable inherited names — and that is where this
-tree has already paid. `Settings.Has("toString")` answered `true`,
-`Settings.Get("toString")` answered a function, and `Record.Load` dropped every
-unknown key named after an `Object.prototype` member, breaking the documented
-promise that a key the record does not describe survives the round trip. Those
-four lines are fixed (`hasOwn.call` at each, and the trap is written up in
-`AGENTS.md`), and the sentence that made them look safe is not.
-
-So the manual owes two replacements, not one: a true statement about what
-`for...in` recites, and the own-key doctrine stated where somebody writing `in`
-would read it. The doctrine has exactly **one** implementation in the prelude
-today — `hasOwn`, captured at `rad.js:64`, used by `Dictionary` and by the two
-that had to be taught it.
-
-### 2.7 What `Application.OnError` hands over
-
-It receives `(message, stack)` as two strings, not the error: the name is gone
-(`TypeError` and `RangeError` read the same), and nothing can be re-thrown. It
-is enough to log and enough to show, which is what it was built for; it is worth
-saying so in [`runtime-api.md`](runtime-api.md), which currently describes the
-pair without saying it is not an `Error`.
-
-### 2.8 Class names are ASCII-only, in three copies
-
-Three independent copies of the same byte-at-a-time check, sharing no helper:
-`is_identifier` in `bta_runtime.c:354-362` (the `g_ascii_isalpha` is on `356`,
-and `is_class_path` that uses it at `365-378`), `is_identifier` in
-`bta_form.c:36-44`, and `js_is_ident` in `bta_task.c:415-423`. The engine
-accepts `Peón` as an identifier; these do not.
-
-**They refuse three different things, with three different sentences**, which is
-worth separating because a single fix will not cover all three:
-
-- A `.form` declaring `"type": "Peón"` reaches `bta_lookup_global` and is
-  refused as *"'%s' is not a valid class name"* — the one place that sentence
-  exists, `bta_runtime.c:400`. A `startup` (`1991`) and an `entry` (`1902`) with
-  an accent land on the same message.
-- `bta_form.c:315-317` is about the control's **`name`**, not its `type`, and
-  says something else: *"form: '%s' is not a usable control name"*.
-- `bta_task.c:442` only decides whether a *folder* contributes a namespace
-  prefix; a folder with an accent is walked silently without one
-  (`446-448`). A file named `Peón.js` **is** indexed — there is no identifier
-  check on the basename (`451-453`) — and is refused later, at lookup, by the
-  first sentence above.
-
-The limit is written down nowhere: no hit in `docs/llm/`, `docs/runtime-api.md`
-or `docs/reference/`. Either document it, or read the identifier with `g_utf8_*`
-the way the engine does.
+**So sections 1 and 2 are both gone, and what is left is costs and missing
+words** — which is what a `plans/` entry and an `issues/` file are for. The
+counts in §4 are the working tree's, not `271eeb6`'s.
 
 ## 3. Cost
 

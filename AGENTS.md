@@ -642,6 +642,46 @@ refused with a message and a column.
   `library.md`; a name QuickJS installs of its own accord is invisible to it.
   Three were removed and five documented. If you add an `JS_AddIntrinsic*` call,
   the names it brings are yours to list.
+- **`for...in` is safe from the builtins, and not for the reason the manual gave
+  for years.** It said *nothing can put anything on a prototype any more*, which
+  was three claims stacked and only one true. Measured: `for...in` over `{a:1}`
+  answers `[a]` -- `toString` and its siblings are reachable (`"toString" in {}`
+  is `true`) and simply **non-enumerable**, which is the engine's doing and has
+  nothing to do with emptying `Object`. So the safety is real and would survive
+  any further curation. But `Object.prototype.x = 1` still works, and from then
+  on `for...in` recites `x` over every bag in the program.
+  **And the program cannot defend itself**: `freeze`, `seal`,
+  `preventExtensions` and `isExtensible` all went with `Object`'s statics, so
+  there is no way to lock the prototype and no way to ask whether anything wrote
+  to it. That makes the old sentence not merely false but unfalsifiable from
+  inside the language. It stays a small risk only because there are no imports:
+  the only code that can do it is the project's own and its `uses` libraries.
+  **`Dictionary.Keys` is immune** -- it is the `Object.keys` `rad.js` captured,
+  own and enumerable -- which is the strongest argument for it and was written
+  down nowhere.
+  Do not file this under the `in`-operator trap above: that one is about
+  **non-enumerable** inherited names, which `for...in` never sees. Two different
+  mechanisms, and confusing them is how somebody fixes the sentence and leaves
+  the bug.
+- **Every name the runtime looks something up by is ASCII, and that is narrower
+  than the language it is written in.** QuickJS takes `Peón` as an identifier --
+  `Application.CheckSource("class Peón {}")` answers `null` -- and
+  `is_identifier` does not: `bta_runtime.c`, `bta_form.c` and `bta_task.c` each
+  keep a byte-at-a-time copy on `g_ascii_isalpha`. It covers a `.form` node's
+  `type` and `name`, `startup` and `entry`, and a `Task` subclass. **The three
+  copies refuse three different things with three different sentences**, so a
+  single fix does not cover them and reading one tells you little about the
+  others: `bta_runtime.c` answers *"'%s' is not a valid class name"*,
+  `bta_form.c` answers *"form: '%s' is not a usable control name"* and is about
+  the control's `name` rather than its `type`, and `bta_task.c`'s is not a
+  refusal at all -- a folder it cannot spell contributes no namespace prefix and
+  what is under it stays findable by its bare name, which is deliberate and says
+  so. A *file* called `Peón.js` is indexed; it is the class the code declares
+  that has to be spellable, and that is refused later at lookup with the first
+  sentence, which is what makes it read as *the class is missing*.
+  Documented in `formats.md` and `llm/forms.md` rather than widened: reading
+  UTF-8 means unifying three copies first, to enable something nobody has asked
+  for, and a class name is also a file name.
 
 ## Tests
 

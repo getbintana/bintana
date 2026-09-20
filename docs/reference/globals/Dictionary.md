@@ -24,9 +24,19 @@ Dictionary.Keys(bag).sort()
 Dictionary.Count(bag)
 ```
 
-`for…in` is safe here — nothing can put anything on a prototype any more — and it
-forgives an absent bag: reciting `undefined` is zero turns. Reach for
-`Dictionary` when the answer is a **list** or a **number** rather than a loop.
+`for…in` forgives an absent bag: reciting `undefined` is zero turns, and it does
+not recite what an object inherits — `toString` and its siblings are
+non-enumerable, which is the engine's doing rather than this language's. Reach
+for `Dictionary` when the answer is a **list** or a **number** rather than a
+loop.
+
+**And reach for it when anything might have written to `Object.prototype`.** An
+ordinary assignment there still works — `freeze`, `seal` and `preventExtensions`
+went with the rest of `Object`'s statics, so nothing can lock it or ask whether
+somebody already did — and from that moment `for…in` recites the addition over
+every bag in the program. `Dictionary.Keys` does not: it is `Object.keys`, own
+and enumerable, captured before the name was taken away. See
+[`llm/language.md`](../../llm/language.md#reading-a-bag-of-properties).
 
 **When the keys are numbers, use a `Map`**: an object's keys are strings, and a
 bag keyed by id is a bag that turns `12` into `"12"` behind you.
