@@ -1413,11 +1413,37 @@ person who wrote it either.
   action widget each emit nothing. What produces that message is
   `g_signal_handler_disconnect(instance, id)`, and the only call by id in this
   repository is `bta_tree.c:on_unbind_row` — instrumented, and it never fires for
-  this. So something in GTK is disconnecting a handler by id that
-  `widget_disconnect_all`'s `_by_data` sweep has already removed. The fix is
-  probably to stop sweeping handlers we did not connect, which is a change in the
-  teardown path and not one to guess at: it wants the actual owner identified
-  first. Two lines in the suite output, nothing failing.
+  this. **The caller is now named, and it is GTK's own.** From a backtrace under
+  the suite's exact child invocation — which is the part that had been getting in
+  the way, because the project does not run its tests unless it is started the way
+  the runner starts it:
+
+      xvfb-run -a env G_DEBUG=fatal-criticals \
+          gdb -batch -ex run -ex "bt 30" \
+          --args ./build/bintana --strict tests/widgets 99999
+
+  `--strict` and the pid argument are both required; without them the process
+  opens and exits without running anything, and the critical never comes. It
+  reproduces on the first try, and the frames are:
+
+      g_signal_handler_disconnect
+      gtk_notebook_remove_tab_label
+      gtk_notebook_remove
+      gtk_notebook_dispose
+      g_object_unref
+      widget_finalizer            ← the unref of w->gtk
+
+  So the handler is `page->mnemonic_activate_signal`, which GTK connects on a
+  page's **tab label** and disconnects when the page goes, and the id is already
+  stale when dispose reaches it. Two things narrow what remains: the teardown is
+  driven from `widget_finalizer`, so it runs **inside a QuickJS collection cycle,
+  in no particular order** — the same hazard `widget_disconnect_tree` above was
+  written for — and `tests/asan.sh` is clean over this path, which says the
+  instance is a live object that has lost the handler rather than freed memory.
+  Still open, and still two lines with nothing failing; but it starts from the
+  frames above now, and **not** from `_by_data`, which this note used to blame and
+  which the backtrace clears: our sweeps pass the `BtaWidget` as data and GTK's
+  handler carries the notebook, so they cannot be reaching it.
 - **Every numeric setter goes through `bta_to_number` / `bta_to_int`, and must.**
   `JS_ToInt32` cannot fail: ToNumber of a string that is not a number is NaN and
   ToInt32(NaN) is 0, so a setter that converts its own value silently accepts

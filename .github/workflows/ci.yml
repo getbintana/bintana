@@ -221,7 +221,40 @@ jobs:
         env:
           BINTANA: ./build-noprint/bintana
           BINTANA_LIB_PATH: ${{ github.workspace }}/lib
-        run: ./tests/run.sh widgets
+        run: |
+          # **Arranged to leave a core behind**, because this job segfaulted once
+          # (exit 139, in the widgets project's async tail, before it printed its
+          # own total) and the crash does not exist off the runner: forty runs
+          # here, six of them under the sanitizer, and a local build configured
+          # with the same dependencies hidden -- all green. The runner has GTK
+          # 4.14 against a developer's 4.22, which is the only variable left, and
+          # it is not one a laptop can hold. So the next failure has to explain
+          # itself where it happens.
+          #
+          # The core is the *child's*: tests/run.sh is a runner that spawns each
+          # project, so `%p` in the pattern is what separates them, and a pattern
+          # rather than the default is what gets a core out of a container at all.
+          ulimit -c unlimited
+          sudo mkdir -p /tmp/cores && sudo chmod 1777 /tmp/cores
+          echo '/tmp/cores/core.%e.%p' | sudo tee /proc/sys/kernel/core_pattern
+          ./tests/run.sh widgets
+
+      # Only when the step above failed, and never a gate of its own: this
+      # reports, it does not judge. `continue-on-error` so a missing core or a
+      # gdb that cannot read it still leaves the real failure as the job's.
+      - name: The backtrace, if it crashed
+        if: failure()
+        continue-on-error: true
+        run: |
+          sudo apt-get install -y --no-install-recommends gdb
+          shopt -s nullglob
+          found=
+          for core in /tmp/cores/core.*; do
+            found=1
+            echo "===== $core"
+            gdb -batch -ex "thread apply all bt 40" ./build-noprint/bintana "$core"
+          done
+          [ -n "$found" ] || echo "no core was written: the failure was not a crash"
 
   # The downloadable one: the same tree `cmake --install` lays down, as a
   # tarball, so somebody without a compiler can run the IDE and the examples.
