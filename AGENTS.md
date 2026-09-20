@@ -1793,6 +1793,42 @@ person who wrote it either.
   collision afterwards. The documentation says *what happens* and not *what is
   guaranteed* for that reason; `tests/widgets`' `testOn` marks the three
   assertions that go when the refusal lands.
+- **Checking the event name against `EventNames()` found a handler the IDE had
+  been installing on controls that cannot raise it**, which is the whole argument
+  for checking it in one sentence. `PropertyGrid.bindEditor` wired
+  `Prop_<Key>_IconClick` on **every** editor in design mode, and two of the three
+  shapes `makeEditor` builds there have no icon in the field to click: the
+  `ITEM_OF` drop-down is a `ComboBox`, and a design *number* is a `TextBox`
+  deliberately given no sample button. Under dispatch by name those were two
+  properties written onto `MainForm` that nothing would ever look up -- no error,
+  no warning, and no way to find them short of reading both functions together.
+  `On` threw on the first one, naming the fourteen events a `ComboBox` does
+  raise. **The guard is asked of the icon** (`editor instanceof TextBox &&
+  editor.Icon`) and not by repeating `makeEditor`'s condition, so the two cannot
+  drift.
+- **What the IDE kept dispatching by name is exactly what is not a widget.**
+  Nineteen sites in seven files became `On`; what is left is three, all menu
+  items -- `MenuBar`'s leaves and `PropertyGrid`'s sample entries -- because a
+  GTK4 menu is a model and an item has no note to carry a handler on. So
+  `MenuBar.clear()` still exists and is half of what it was (the `_MouseDown`
+  line went with the entries, which are `Label`s), and `bar.owned` now holds menu
+  item names only. `tests/ide` still drives one of those by name
+  (`ide[`${leaf}_Click`]()`), which is the assertion that the named road is still
+  there for the half that needs it.
+  **The sample menu could not be converted and had to be fixed in place.**
+  `pickSample` rewired nine `PropSample<N>_Click` on every open, each closing
+  over that click's editor and key -- so the set left on the form held the editor
+  and the control of whichever field was sampled last, for the life of the
+  process, with no `delete` anywhere. It is wired **once** now and reads
+  `this.sampleKey`. A handler that cannot live on a widget has to be given a
+  target it looks up rather than one it closes over.
+- **A test that called a handler off the form had to start raising the event.**
+  `tests/ide/Driver.js` drove the grid with `ide[`Prop_${key}_Activate`]()` and
+  `ide.Prop_Icon_IconClick()`; those properties do not exist any more, and the
+  replacement is `editor(ide, key).Emit("Activate")` -- which is *better* rather
+  than equivalent, because `Emit` goes through the runtime's own dispatch instead
+  of reaching for the one name the test happened to know. When a handler moves
+  onto its control, the test that drove it by name moves with it.
 - **Submitting a modal with an xdotool key can haunt the run.** `key` sends
   down, waits 12 ms, sends up; a dialog that submits and closes inside that gap
   takes the up down with it -- `BadWindow` on the send, the release never

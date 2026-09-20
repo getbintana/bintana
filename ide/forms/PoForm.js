@@ -115,7 +115,6 @@ class PoForm extends Form {
             this.Forms.Add(caption);
 
             const box = new TextEditor();
-            box.Name            = `Form${i}`;
             /*
              * `Height` and `Expand` together, and each does half of it: in a box
              * a height is the *least* the control may be, and `Expand` is what
@@ -128,9 +127,9 @@ class PoForm extends Form {
             box.Expand          = true;
             this.Forms.Add(box);
 
-            /* Dispatch is by name on the owning form, and these were made on the
-             * fly, so their handlers are too. */
-            this[`Form${i}_Change`] = () => this.formChanged(i);
+            /* The handler belongs to the box, which is what lets one be made
+             * on the fly without a name for the dispatch to go through. */
+            box.On("Change", () => this.formChanged(i));
 
             this.boxes.push({ caption, box });
         }

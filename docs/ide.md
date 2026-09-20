@@ -272,8 +272,8 @@ about *the selection*, and there is one selection because there is one active
 tab; the designer being switched to takes them over in `adopt()`. Two things had
 to be true for that to work, and neither was:
 
-- The palette's buttons install their handlers on the IDE **by name**
-  (`Pal_Button_Click`), so the handler must act on `ide.designer` and not on the
+- The palette's buttons carry their own handlers (`button.On("Click", …)`), and
+  each one must read `ide.designer` **when it runs** rather than closing over the
   designer that happened to build it — otherwise a click adds a control to a
   canvas nobody is looking at.
 - Filling the grid assigns values to editors, and a `ColorButton` or a
@@ -2174,6 +2174,13 @@ open; click a leaf and you are writing its handler, the same gesture the canvas
 and the editor's tree have. Double click or right click the bar itself and the
 menu editor opens.
 
+**And the bar is where both ways of finding a handler are visible at once.** The
+panel and its entries are widgets and carry their own (`entry.On("MouseDown", …)`),
+so they go when the bar is emptied. The **items inside the drop-downs are not
+widgets** -- a GTK4 menu is a model, not a tree of controls -- so they have
+nowhere to carry one, still dispatch as `<name>_Click` on the IDE's form, and are
+the whole of what `MenuBar.clear()` is left taking back off.
+
 **Where the look comes from, and where TitleBar's trick stops.** The title bar
 can wear the theme's decoration because GTK styles it through *classes*. A menu
 bar is styled through a **node name** -- `menubar`, `menubar > item` -- and a node
@@ -3321,8 +3328,10 @@ row says nothing about which key it edits.
 The grid is rebuilt only when the *set* of properties changes: while dragging, `X`
 and `Y` refresh dozens of times a second, and rebuilding the widgets each time would
 take the focus and the cursor away from whoever is typing. Editors are created on the
-fly, so their handlers are installed on the IDE form on the fly too
-(`Prop_<Key>_Activate` and friends) — the same dispatch-by-name every control uses.
+fly, so **each carries its own handler** (`editor.On("Activate", …)` and friends).
+That is what lets the grid be thrown away and rebuilt on every change of
+selection without a list of names to take back off the IDE's form — which is
+what it used to be, four `delete`s a key, and two families they did not cover.
 
 With nothing selected the grid edits the **form**: its values are not a control's,
 so they come from the root node and are written back there.
@@ -3395,8 +3404,10 @@ Three details make it work with no new widget:
 - **An empty field means "no design value"**, and the `Placeholder` behind it shows
   what the real one is. Without that, "nothing set" and "set to nothing" would look
   identical and there would be no way to see what you were standing in for.
-- **The button inside the field** is the same `TextBox.Icon` + `Prop_<Key>_IconClick`
-  the `Icon` row uses. Here it pops a menu of samples — Words, Sentence, Paragraph,
+- **The button inside the field** is the same `TextBox.Icon` + `IconClick`
+  the `Icon` row uses, and it is wired only where the icon is: the list drop-down
+  is a `ComboBox` and a design *number* is given no sample button, so neither can
+  raise it. Here it pops a menu of samples — Words, Sentence, Paragraph,
   Name, City, Email, Date, Number — and writes **literal words** into the block. So
   Lorem is not a runtime feature at all: the file holds text rather than an
   `@sample/lorem` the loader would have to understand, and the sample is stable
@@ -3557,9 +3568,10 @@ a lint that cries wolf gets switched off.
 ## The palette
 
 Tabs of square icon buttons, one per type, built by `Palette` (`Palette.js`)
-— none of it is declared in the `.form`. Each button is a real `Button` named `Pal_<Type>`
-with an icon, a tooltip and `DragData = type`, and its handler is installed on the
-IDE form the same way the grid's editors are.
+— none of it is declared in the `.form`. Each button is a real `Button` with an
+icon, a tooltip and `DragData = type`, carrying its own handler
+(`button.On("Click", …)`) the same way the grid's editors do. It needs no `Name`:
+the handler belongs to the button and goes when the palette is rebuilt.
 
 **It is one widget shared by every open designer, so it belongs to the IDE and not
 to a designer** — which is why the class is the window's (`ide.palette`) and each

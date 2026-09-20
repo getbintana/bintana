@@ -87,7 +87,7 @@ class StyleForm extends Form {
         this.List.Clear();
 
         let heading = "";
-        this.classes.forEach((name, i) => {
+        this.classes.forEach((name) => {
             const ok   = fits(name);
             const want = ok ? (who ? Locale.Text("For a {0}", who)
                                    : Locale.Text("Classes"))
@@ -100,7 +100,6 @@ class StyleForm extends Form {
 
             const box = new CheckButton();
 
-            box.Name   = `Cls${i}`;
             box.Text   = name;
             box.Active = have.includes(name);
             box.Margin = 4;
@@ -113,9 +112,9 @@ class StyleForm extends Form {
             this.List.Add(box);
             this.boxes.push(box);
 
-            /* Events dispatch by name on the form, so the handler goes there --
-             * the same way the icon chooser wires its page of buttons. */
-            this[`Cls${i}_Click`] = () => this.showChosen();
+            /* The handler belongs to the box, so emptying the list takes it
+             * with them -- and no name is invented to dispatch by. */
+            box.On("Click", () => this.showChosen());
         });
 
         this.showChosen();

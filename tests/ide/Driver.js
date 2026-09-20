@@ -153,12 +153,13 @@ function editor(ide, key) {
 /*
  * A drop-down and a spin apply on change alone: assigning the value goes out to
  * GTK and comes back as a signal, which is the round trip worth testing.  A text
- * field waits for Enter, and from JS that means calling the handler the runtime
- * would dispatch -- the same name bta_emit looks for.
+ * field waits for Enter, and from JS that means raising it on the editor --
+ * `Emit` goes through the same dispatch a real Enter would, which is what finds
+ * the handler the grid installed on that control with `On`.
  */
 function typeInto(ide, key, text) {
     editor(ide, key).Text = text;
-    ide[`Prop_${key}_Activate`]();
+    editor(ide, key).Emit("Activate");
 }
 
 /* Compile without running: the only honest way to claim that a file the IDE
@@ -1247,7 +1248,7 @@ function* p_designer(ide) {
      * gets built.
      */
     typeInto(ide, "Style", "danger");
-    ide.Prop_Style_IconClick();
+    editor(ide, "Style").Emit("IconClick");
     yield;
 
     const styleDlg  = openStylePickers[openStylePickers.length - 1];
@@ -1335,7 +1336,8 @@ function* p_designer(ide) {
 
     const which = offered.indexOf("title-1");
     styleDlg.boxes[which].Active = true;
-    styleDlg[`Cls${which}_Click`]();
+    /* Raised on the box, which is what carries the handler now. */
+    styleDlg.boxes[which].Emit("Click");
     eq("ticking a second one adds it to the value", styleDlg.LblChosen.Text,
        "danger title-1");
 
@@ -1511,7 +1513,7 @@ function* p_designer(ide) {
     yield;
     eq("and pressing it goes back to the theme's", byName(ide, "Ok").Background, "");
 
-    ide.Prop_Icon_IconClick();
+    editor(ide, "Icon").Emit("IconClick");
     yield;
 
     const picker = openPickers[openPickers.length - 1];
@@ -1539,13 +1541,13 @@ function* p_designer(ide) {
 
     /* Cancelling is not the same as choosing none: one leaves the icon alone,
      * the other is a thing one means to do. */
-    ide.Prop_Icon_IconClick();
+    editor(ide, "Icon").Emit("IconClick");
     yield;
     openPickers[openPickers.length - 1].BtnCancel_Click();
     yield;
     eq("cancelling leaves it as it was", byName(ide, "Ok").Icon, chosen);
 
-    ide.Prop_Icon_IconClick();
+    editor(ide, "Icon").Emit("IconClick");
     yield;
     openPickers[openPickers.length - 1].BtnNone_Click();
     yield;
@@ -6582,7 +6584,7 @@ function* p_projects(ide) {
      * text is read as the JSON it is about to become -- a .form is JSON, and 5
      * and "5" are not the same thing to the setter that will receive it. */
     editor(ide, "Caption").Text = "Hola";
-    ide.Prop_Caption_Activate();
+    editor(ide, "Caption").Emit("Activate");
     eq("a first value that is not a number stays a string",
        standIn.__node.properties.Caption, "Hola");
     eq("one that is a number is stored as one",

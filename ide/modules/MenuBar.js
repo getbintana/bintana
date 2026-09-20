@@ -103,9 +103,10 @@ Ide.MenuBar = class MenuBar {
 
     /*
      * One per open form, like the canvas and the title bar it sits between.  The
-     * IDE's form is needed and not just the widget: events dispatch by name *on
-     * a form*, so that is where the handlers for the entries and for the items
-     * go -- the same way the palette installs `Pal_Button_Click` (Palette.js).
+     * IDE's form is still needed, and for **one** of the two halves now: the
+     * bar's own widgets carry their handlers (`On`), while a **menu item is not
+     * a widget** -- it has no note to put one on -- so those still dispatch by
+     * name on the form, and are still what `clear()` takes back off.
      *
      * Nothing is built here.  A `Menu` can only be given to a widget that is
      * already bound to a form (`bta_widget.c`: "a widget with no form yet has
@@ -120,7 +121,6 @@ Ide.MenuBar = class MenuBar {
 
         const panel = new Panel();
 
-        panel.Name        = `${PREVIEW}Bar${this.serial}`;
         panel.Arrangement = "Horizontal";
         panel.Spacing     = 0;
         panel.HAlign      = "Fill";
@@ -138,7 +138,7 @@ Ide.MenuBar = class MenuBar {
         this.panel     = panel;
         this.items     = [];    // the top level entries, in the order declared
         this.signature = null;  // what was last built, so it is not built again
-        this.owned     = [];    // names this put on the form, to take back off
+        this.owned     = [];    // menu item names on the form, to take back off
 
         /*
          * The bar itself opens the editor: a double click, which is what a double
@@ -148,10 +148,10 @@ Ide.MenuBar = class MenuBar {
          * are spoken for, one dropping its menu and the other opening it too,
          * since a right click shows the menu of the nearest widget that has one.
          */
-        this.ide[`${panel.Name}_DblClick`]  = () => this.edit();
-        this.ide[`${panel.Name}_MouseDown`] = (x, y, button) => {
+        panel.On("DblClick", () => this.edit());
+        panel.On("MouseDown", (x, y, button) => {
             if (button === 3) this.edit();
-        };
+        });
     }
 
     /*
@@ -184,10 +184,8 @@ Ide.MenuBar = class MenuBar {
 
     /* One top level menu: the word that shows its title and drops it. */
     add(node, index, actions) {
-        const name  = `${PREVIEW}${this.serial}Item${index}`;
         const entry = new Label();
 
-        entry.Name = name;
         /* A control has no mnemonic in this language, so a `_File` left as it
          * came would be shown with the underscore in it -- which is not what the
          * bar will look like.  The menu below keeps its own: those items go into
@@ -207,14 +205,13 @@ Ide.MenuBar = class MenuBar {
         entry.Menu = this.sanitise(children, `${index}`, actions);
 
         this.items.push(entry);
-        this.owned.push(name);
 
         /* Under the word, where a menu goes -- not over it.  The right button
          * needs no handler: it shows the menu of the nearest widget that has
          * one, which is this. */
-        this.ide[`${name}_MouseDown`] = (x, y, button) => {
+        entry.On("MouseDown", (x, y, button) => {
             if (button === 1) entry.PopupMenu(0, this.panel.Height);
-        };
+        });
     }
 
     /*
@@ -300,32 +297,34 @@ Ide.MenuBar = class MenuBar {
     }
 
     /*
-     * Everything this put on the IDE's form, taken back off.  Not housekeeping:
-     * the names are the IDE's own namespace, and both a menu item and a closure
-     * over this designer are strong references -- a form closed with its menus
-     * still hanging off `MainForm` leaves a stale item answering to a name, and
-     * holds the page that was closed.
+     * What this put on the IDE's form, taken back off.  Not housekeeping: the
+     * names are the IDE's own namespace, and both a menu item and a closure over
+     * this designer are strong references -- a form closed with its menus still
+     * hanging off `MainForm` leaves a stale item answering to a name, and holds
+     * the page that was closed.
+     *
+     * **Only the items.** The bar's widgets carry their own handlers, so
+     * emptying the panel takes those with them; a menu item is not a widget and
+     * has nowhere of its own to carry one, which is what this loop is left
+     * being.
      */
     clear() {
         for (const name of this.owned) {
             delete this.ide[name];                 /* the item, put there by the runtime */
-            delete this.ide[`${name}_Click`];      /* the handlers, put there by this */
-            delete this.ide[`${name}_MouseDown`];
+            delete this.ide[`${name}_Click`];      /* its handler, put there by this */
         }
         this.owned = [];
         this.items = [];
         this.panel.Clear();
     }
 
-    /* The page is closing and takes its canvas with it -- but not these, which
-     * were never on it. */
+    /* The page is closing and takes its canvas with it -- but not the panel,
+     * which was never on it. Its two handlers go with it whenever it goes:
+     * they are its own, and nothing of ours is left on the IDE's form. */
     dispose() {
         this.clear();
         this.signature = null;
         this.panel.Visible = false;
-
-        delete this.ide[`${this.panel.Name}_DblClick`];
-        delete this.ide[`${this.panel.Name}_MouseDown`];
     }
 
     /*

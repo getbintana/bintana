@@ -1289,9 +1289,10 @@ class MainForm extends Form {
     /*
      * Which of the grid's rows the filter lets through, asked of us by GTK.
      *
-     * A method here and not a handler the grid installs on us, unlike
-     * `Prop_<Key>_Change`: those belong to editors that are built and thrown away,
-     * and this one is about a widget that is always there. It delegates to
+     * A method here and not a handler on the control itself, unlike the grid's
+     * editors: those are built and thrown away, so each carries its own (`On`),
+     * while `PropGrid` is declared in this form's `.form` and is always there --
+     * which is what makes the name the right place for it. It delegates to
      * whichever designer is showing, exactly as `PropFind_Change` does -- one
      * panel, one selection, whoever's tab is up.
      */

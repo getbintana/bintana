@@ -66,27 +66,19 @@ class IconForm extends Form {
     }
 
     fill() {
-        /* The handlers of the previous page point at names that are no longer
-         * on screen: they go with the buttons they belonged to. */
-        for (const i of this.wired || []) delete this[`Ico${i}_Click`];
-        this.wired = [];
-
+        /* Nothing to unwire: each handler belongs to its own button and goes
+         * with it when the board is emptied. */
         this.Board.Clear();
 
         const found = this.matches();
 
-        found.forEach((name, i) => {
+        found.forEach((name) => {
             const b = new Button();
-            b.Name    = `Ico${i}`;
             b.Icon    = name;
             b.Tooltip = name;         /* with no text, the name has to be somewhere */
             b.Resize(ICON_SIZE, ICON_SIZE);
+            b.On("Click", () => this.choose(name));
             this.Board.Add(b);
-
-            /* Events dispatch by name on the form, so the handler is installed
-             * there -- the same way the designer wires its palette. */
-            this[`Ico${i}_Click`] = () => this.choose(name);
-            this.wired.push(i);
         });
 
         const total = this.TxtFind.Text.trim()

@@ -15,10 +15,11 @@
  * (`formProbe`) answers what the list, the defaults and the drop-downs are.
  *
  * One per designer, like the control tree: `PropGrid` is a single widget, but
- * what it shows is this form's selection.  The editors, though, dispatch their
- * events by name on the *IDE's* form (`Prop_<Key>_Change`), which is where the
- * runtime looks a handler up -- so they are installed and removed there as the
- * grid is rebuilt.
+ * what it shows is this form's selection.  Each editor **carries its own
+ * handler** (`editor.On("Change", ...)`), so a rebuilt grid drops the previous
+ * set with the controls they belonged to; nothing of the grid's is left on the
+ * IDE's form to be taken back off.  The one exception is the sample menu, whose
+ * entries are menu *items* rather than widgets and so have nowhere to carry one.
  *
  * The grid is rebuilt only when the set of properties changes: while a control
  * is dragged, X and Y refresh dozens of times a second, and rebuilding the
@@ -398,6 +399,13 @@ Ide.PropertyGrid = class PropertyGrid {
          * editor fires its event exactly as if the user had touched it. */
         this.updating = false;
 
+        /* The sample menu: which field it was opened for, and whether its
+         * entries have been wired yet.  See `pickSample` -- those entries are
+         * menu *items*, so they are the one part of this grid that cannot carry
+         * a handler of its own. */
+        this.sampleKey     = null;
+        this.samplesWired  = false;
+
         /* Which property of which control the open undo entry belongs to; see
          * `beginEdit`. */
         this.editKey    = null;
@@ -701,15 +709,11 @@ Ide.PropertyGrid = class PropertyGrid {
     build(keys) {
         const grid = this.ide.PropGrid;
 
-        /* The handlers live on the IDE's form, which is where each editor
-         * dispatches by name; the previous grid's point at nothing now. */
-        for (const key of this.propKeys || []) {
-            delete this.ide[`Prop_${key}_Change`];
-            delete this.ide[`Prop_${key}_Select`];
-            delete this.ide[`Prop_${key}_Activate`];
-            delete this.ide[`PropClear_${key}_Click`];
-        }
-
+        /* Nothing to unwire: each handler belongs to the editor it was installed
+         * on and goes when the grid is emptied.  It used to be four `delete`s a
+         * key here -- and two families they did not cover (`Prop_<Key>_IconClick`
+         * and `PropSample<N>_Click`), which stayed on the IDE's form holding the
+         * editor and the target they closed over, one set per rebuild. */
         grid.Clear();
         this.propKeys   = keys;
         this.builtFor = this.target;
@@ -808,9 +812,18 @@ Ide.PropertyGrid = class PropertyGrid {
             group.Add(editor);
 
             const clear = new Button();
+            /* Named for what it is and not to dispatch by -- the handler is the
+             * button's own.  The name is how a test finds it on the row. */
             clear.Name    = `PropClear_${key}`;
             clear.Icon    = ICON_CLEAR.find((n) => Application.HasIcon(n)) || "";
             clear.Tooltip = Locale.Text("Back to the theme's");
+            /* Assigning `""` is what clearing *is* -- the same value the .form
+             * would carry -- and it goes out to GTK and comes back as a real
+             * Change, so the apply is the one that would have run anyway. */
+            clear.On("Click", () => {
+                editor.Value = "";
+                this.applyEditor(key);
+            });
             group.Add(clear);
         } else {
             row.Add(editor);
@@ -976,8 +989,9 @@ Ide.PropertyGrid = class PropertyGrid {
         return box;
     }
 
-    /* The editors are created on the fly, so their handlers are too: dispatch is
-     * by name on the owning form, and the owner is the IDE.
+    /* The editors are created on the fly, so each carries its own handler --
+     * which is what lets the grid be rebuilt on every change of selection
+     * without a list of names to take back off the IDE's form.
      *
      * A drop-down and a spin apply as soon as they change -- choosing is already
      * deciding.  A text field waits for Enter: applying on every keystroke would
@@ -985,33 +999,35 @@ Ide.PropertyGrid = class PropertyGrid {
     bindEditor(key, editor) {
         const apply = () => this.applyEditor(key);
 
-        if (editor instanceof ComboBox)          this.ide[`Prop_${key}_Select`]   = apply;
-        else if (editor instanceof SpinBox)      this.ide[`Prop_${key}_Change`]   = apply;
-        else if (editor instanceof ColorButton)  this.ide[`Prop_${key}_Change`]   = apply;
-        else if (editor instanceof FontButton)   this.ide[`Prop_${key}_Change`]   = apply;
-        else                                     this.ide[`Prop_${key}_Activate`] = apply;
+        if (editor instanceof ComboBox)          editor.On("Select",   apply);
+        else if (editor instanceof SpinBox)      editor.On("Change",   apply);
+        else if (editor instanceof ColorButton)  editor.On("Change",   apply);
+        else if (editor instanceof FontButton)   editor.On("Change",   apply);
+        else                                     editor.On("Activate", apply);
 
-        /* And the button beside the chooser empties it. Assigning `""` is what
-         * clearing *is* -- the same value the .form would carry -- and it goes
-         * out to GTK and comes back as a real Change, so the apply below is the
-         * one that would have run anyway. */
-        if (this.clearable(key)) {
-            this.ide[`PropClear_${key}_Click`] = () => {
-                editor.Value = "";
-                this.applyEditor(key);
-            };
-        }
-
-        /* The icon inside the field opens the chooser, and what comes back is
-         * applied as if it had been typed and entered. */
+        /*
+         * The icon inside the field opens the chooser, and what comes back is
+         * applied as if it had been typed and entered.
+         *
+         * **Only where there is an icon to click.**  In design mode this used to
+         * be wired on every editor, and two of the three shapes `makeEditor`
+         * builds there cannot raise it: the `ITEM_OF` drop-down is a `ComboBox`,
+         * which has no field to put a button in, and a design *number* is a
+         * `TextBox` deliberately given no sample button -- offering *Lorem ipsum*
+         * for how many rows a table shows would be the widget saying something
+         * false.  Both were handlers that could never fire, and under dispatch by
+         * name nothing said so.  Asked of the icon rather than by repeating
+         * `makeEditor`'s condition, so the two cannot drift apart.
+         */
         if (this.designMode) {
-            this.ide[`Prop_${key}_IconClick`] = () => this.pickSample(key);
+            if (editor instanceof TextBox && editor.Icon)
+                editor.On("IconClick", () => this.pickSample(key));
         } else if (key === "Icon") {
-            this.ide[`Prop_${key}_IconClick`] = () => this.pickIcon(key);
+            editor.On("IconClick", () => this.pickIcon(key));
         } else if (key === "Columns") {
-            this.ide[`Prop_${key}_IconClick`] = () => this.editColumns(key);
+            editor.On("IconClick", () => this.editColumns(key));
         } else if (key === "Style") {
-            this.ide[`Prop_${key}_IconClick`] = () => this.pickStyle(key);
+            editor.On("IconClick", () => this.pickStyle(key));
         }
     }
 
@@ -1029,11 +1045,31 @@ Ide.PropertyGrid = class PropertyGrid {
             name: `PropSample${i}`, text: label,
         }));
 
-        for (const [i, [, text]] of SAMPLES.entries()) {
-            this.ide[`PropSample${i}_Click`] = () => {
-                editor.Text = text;
-                this.applyEditor(key);
-            };
+        /*
+         * **The one place in this grid that still dispatches by name**, because
+         * a menu item is not a widget and has nowhere to carry a handler.
+         *
+         * So it is wired **once** and reads which field it was opened for out of
+         * `sampleKey`, rather than being rewired per click with a closure over
+         * that click's editor.  Written the closure way -- which it was -- every
+         * open replaced nine handlers on the IDE's form with nine more, and the
+         * set that stayed there held the editor and the control of whichever
+         * field was sampled last, for the life of the process, with nothing to
+         * delete them.
+         */
+        this.sampleKey = key;
+
+        if (!this.samplesWired) {
+            for (const [i, [, text]] of SAMPLES.entries()) {
+                this.ide[`PropSample${i}_Click`] = () => {
+                    const target = this.editors[this.sampleKey];
+                    if (!target) return;    /* the grid was rebuilt under the menu */
+
+                    target.Text = text;
+                    this.applyEditor(this.sampleKey);
+                };
+            }
+            this.samplesWired = true;
         }
         editor.PopupMenu(0, 0);
     }

@@ -153,11 +153,10 @@ class ProjectForm extends Form {
          * Not a second copy of the answer -- what is ticked is the record's. */
         this.useBoxes = [];
 
-        names.forEach((name, i) => {
+        names.forEach((name) => {
             const lib = this.available.find((one) => one.Name === name);
             const box = new CheckButton();
 
-            box.Name   = `Use${i}`;
             box.Active = used.includes(name);
             box.Margin = 4;
 
@@ -175,9 +174,9 @@ class ProjectForm extends Form {
 
             this.LstPrUses.Add(box);
             this.useBoxes.push(box);
-            /* Events dispatch by name on the form, so the handler goes there --
-             * the same way the class chooser wires its page of boxes. */
-            this[`Use${i}_Click`] = () => this.use(name, box.Active);
+            /* The handler belongs to the box, so rebuilding the list takes
+             * it with them -- and no name is invented to dispatch by. */
+            box.On("Click", () => this.use(name, box.Active));
         });
 
         /* One literal each, however long: the extractor reads the source, and a

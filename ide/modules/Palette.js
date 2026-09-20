@@ -395,7 +395,6 @@ Ide.Palette = class Palette {
     button(type, component) {
         const button = new Button();
 
-        button.Name = `Pal_${type}`;
         button.Icon = component
             ? COMPONENT_ICON.find((n) => Application.HasIcon(n)) || ""
             : paletteIcon(type);
@@ -406,20 +405,23 @@ Ide.Palette = class Palette {
         button.Resize(PALETTE_BUTTON, PALETTE_BUTTON);
 
         /*
-         * Events dispatch by name on the form, so the handler is installed
-         * there -- the same as the grid's editors.  It acts on `ide.designer`,
-         * the form on screen: the palette is one widget for every open form, and
-         * a button that added a control to a canvas nobody was looking at is
-         * what a closure over one designer used to do.
+         * The handler belongs to the button, which is what lets the palette be
+         * rebuilt -- a library ticked, a tab switched -- without the previous
+         * set of them being deleted off the IDE's form by hand.
+         *
+         * It reads `ide.designer` **when it runs** rather than closing over one:
+         * the palette is one widget for every open form, and a button that added
+         * a control to a canvas nobody was looking at is what a closure over one
+         * designer used to do.
          */
-        this.ide[`Pal_${type}_Click`] = () => {
+        button.On("Click", () => {
             const designer = this.ide.designer;
             if (!designer) return;      /* no form on screen: nothing to add to */
 
             designer.tool = type;
             designer.showTool();
             designer.addControl(type);
-        };
+        });
 
         this.buttons[type] = button;
         return button;
