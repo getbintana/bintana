@@ -184,6 +184,13 @@ needed and what it did instead.
 | A `Fixed` container that does not stretch a `Fill` child when it itself grows — a reusable component that wants to fill its cell has to change its `Arrangement` | [ISSUE-fixed-fill-child](../issues/ISSUE-fixed-fill-child.md) |
 | No container that fills the room it is given **and** scrolls once it cannot — `Grid` fills without scrolling, `Flow` scrolls without filling | [ISSUE-fill-and-scroll](../issues/ISSUE-fill-and-scroll.md) |
 | No `Locale` inside a `Task`, so a worker cannot order names — the sort has to come back to the main thread, which is what the worker was for | [ISSUE-worker-locale-order](../issues/ISSUE-worker-locale-order.md) |
+| A shown `Form` is collectable, so every dialog keeps a module-level array alive by hand — sixteen of them | [ISSUE-form-keepalive](../issues/ISSUE-form-keepalive.md) |
+| No `Allocated` event and no `WhenLaidOut`, so anything that needs a real rectangle retries on a timer | [ISSUE-laid-out](../issues/ISSUE-laid-out.md) |
+| An `Editor` speaks in lines and everything that searches speaks in offsets, with no verb crossing | [ISSUE-editor-offset](../issues/ISSUE-editor-offset.md) |
+| `File` takes a path apart and cannot relate two: no `Relative`, no `Within`, and no case-folded `Extension` | [ISSUE-file-relative](../issues/ISSUE-file-relative.md) |
+| `PropertyNames`/`EventNames`/`TextProperties` need an instance, so asking what a class has means building one | [ISSUE-class-introspection](../issues/ISSUE-class-introspection.md) |
+| No `Widget.On(event, fn)`, so a control built from code is wired by writing `<name>_<Event>` onto the form — and a `Component` added that way keeps itself as its target | [ISSUE-widget-on](../issues/ISSUE-widget-on.md) |
+| `Locale.Read` has no `Locale.Write`, so the `.po` format is written by hand in the IDE | [ISSUE-locale-write](../issues/ISSUE-locale-write.md) |
 
 ## One more thing
 

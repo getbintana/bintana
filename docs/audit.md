@@ -1,8 +1,7 @@
 # External audit
 
 Findings from a code audit done outside the tree's own work, at `271eeb6` on
-19 September 2026 — except four entries in §4, whose counts come from the
-working tree and say so where they stand. Everything here was found by reading
+19 September 2026. Everything here was found by reading
 the runtime and the prelude; where an entry says **measured**, a project was run
 against the built binary and what it printed is quoted. The rest is confirmed in
 the code and marked **read**, or comes from the audit's static pass and is
@@ -98,9 +97,10 @@ its third copy, in `bta_task.c`, is **not** a refusal — a folder it cannot spe
 contributes no namespace prefix and what is under it stays findable by its bare
 name, which is deliberate and says so in a comment.
 
-**So sections 1 and 2 are both gone, and what is left is costs and missing
-words** — which is what a `plans/` entry and an `issues/` file are for. The
-counts in §4 are the working tree's, not `271eeb6`'s.
+**So sections 1 and 2 are both gone, and most of §4 has moved** to the places
+that own its kind of claim: seven `issues/` files for the words the language has
+not got, and two lines in `plans/async-plan.md`. What remains is §3's costs —
+none of which this audit timed — and three small defects §4 had miscategorised.
 
 ## 3. Cost
 
@@ -218,127 +218,31 @@ and `http_job_alive` exist because two of these forgot; a shared base for
 "a job with values and a dead flag" would shrink the surface where forgetting
 one is possible. Not a bug today.
 
-## 4. Friction the IDE and the examples pay for
+## 4. What the IDE does the long way
 
-These are not defects; they are places where the language's own vocabulary is
-missing and the biggest program written in it pays.
+**Seven of this section's thirteen became `issues/` files**, which is where a
+missing capability belongs: this document is for things the runtime does
+*wrongly*, and *a word it has not got* is a different claim with a different
+form and a different rule for being deleted. They are the shown `Form` kept
+alive by hand, the missing *I have been laid out*, an editor that cannot cross
+from an offset to a line, `File.Relative` and a case-folded `Extension`, asking
+a class what it has without building one, `Widget.On(event, fn)`, and
+`Locale.Write`. Each is now argued in the form
+[`llm/issues.md`](llm/issues.md) asks for, with the counts it had here.
 
-**The counts here are from the working tree, not from `271eeb6`**, and the
-difference matters for four of them. `examples/assistant` and `examples/kanban`
-are not in that commit — they are uncommitted work in progress. §4.7 and §4.8
-rest on `examples/assistant` entirely, and §4.6 and §4.12 rest on
-`examples/kanban` in part. Those four report the state of a draft, which is not
-the same claim as the rest of this section makes; the `// TEMP` lines in §4.12
-in particular are scaffolding in something still being written. Everything else
-below is at `271eeb6`.
+**Two went to a plan.** `Timer.After(0)` used to mean *the next turn* and
+`Translations.update`'s `next(i + 1)` recursion are both about a word for
+sequencing, and [`plans/async-plan.md`](plans/async-plan.md) is the document
+that owns that question — it opens on that very recursion.
 
-### 4.1 A shown `Form` has to be kept alive by hand — 16 copies
+**One went nowhere, because its evidence did.** `Stop()` defended against an
+error that cannot come was eleven `try`s in work in progress; in the committed
+tree the only `try` around a `Stop()` is a test asserting the refusal, not a
+caller fearing it.
 
-Every dialog opens with a module-level array and closes with a `splice`:
-
-```js
-/* While it is open nothing else references it: without this the collector takes
- * it away and the window is left without its handlers. */
-const openPrompts = [];
-/* ide/forms/AskForm.js:12, under the comment at :10 */
-```
-
-The same block is in `AboutForm`, `AppForm`, `ClassForm`, `ColumnForm`,
-`ConfirmForm`, `IconForm`, `ImageForm`, `LaunchForm`, `MenuForm`,
-`NewProjectForm`, `ProjectForm`, `QuickForm`, `StyleForm` and `SymbolForm` —
-fifteen arrays. `PoForm` is the sixteenth and carries the identical comment
-(`PoForm.js:23-26`) over a different container: `const openCatalogues = new Map()`
-(`:27`), `set` at `:66`, `delete` at `:401`. Sixteen forms, then, doing one
-thing two ways — which is itself a small argument for the primitive.
-
-It is the shape `AudioPlayer.Play` already solves for
-itself: a shown form is doing something the collector must not undo, and the
-runtime could take that reference in `Show` and drop it in `Close`, rather than
-sixteen applications remembering.
-
-### 4.2 There is no "I have been laid out" — 5 sites plus the harness
-
-`Bounds()` reads zero until GTK has allocated, and `Form_Open` runs before the
-window is presented, so five places retry on a timer:
-`Ide.Chrome.position(tries)`, `ImageForm.fit(tries = 25)`,
-`examples/viewer/Viewer.js`'s copy, `examples/i18n/Anchors.js`'s `whenLaidOut`
-and `Layouts.js`'s copy of it — each bounded, each asking again. The suite's
-`until`/`settled` is the same idea and is *not* the thing to promote
-(`plans/async-plan.md` says so). An `Allocated` event, or
-`Widget.WhenLaidOut(fn)`, would replace the five application copies with one
-frame the runtime knows it has taken.
-
-### 4.3 Line ↔ offset conversions, rebuilt four times and inlined six more
-
-`TextEditor`/`SourceEditor` publish `Line`, `Column` and `Select`, and nothing
-turns a character offset into a line. So: `Live.js:162` (`lineAt`, with a
-comment at `158` explaining it cannot be shared because `Navigator` already
-declares the same name at top level), `Navigator.js:237`, `Names.js:259`
-(`lineOfIndex`), `FormFiles.js:26` (`lineOf`), plus five inline
-`src.slice(0, m.index).split("\n").length` in `Strings.js` — at `260`, `308`,
-`331`, `350` and `371` — and the inverse shape at `MainForm.js:1963`
-(`editor.Text.split("\n")[editor.Line - 1]`, line → text rather than offset →
-line). `Editor.Offset` (the cursor as a character) and `Editor.LineAt(offset)` —
-or a `Text.LineAt(text, offset)` — close all ten.
-
-### 4.4 Paths relative to a root, and extensions
-
-`File.Join/Absolute/Name/BaseName/Directory/Extension` exist and
-`File.Relative`/`File.Within` do not, so about ten sites spell
-`startsWith(root + "/") ? slice(...)` themselves: `Runner.js:221` and `:321`,
-`Debugger.js:438`, `Git.js:149` (a whole boundary class,
-with the `rev-parse --show-prefix` trap in `AGENTS.md` behind it),
-`Classes.js:769`, `Document.js:169`, `Exporter.js:93`, `examples/assistant`,
-and `examples/serve/Main.js:40` (which slices without even asking
-`startsWith`). The same `File.Extension(f).toLowerCase()` appears **43** times
-across `ide/`, `examples/` and `lib/` — 46 counting `tests/`, with
-`Classes.js` alone holding twelve; an `IsExtension(f, "js")`
-or a case-folding option on `Extension` would make the idiom one call and
-impossible to forget half of.
-
-### 4.5 Asking what a type has means building one
-
-`Widget.Types()` exists; a class-level `PropertyNames(type)`/`EventNames(type)`
-does not, so the IDE builds disposable probes and deletes them:
-`PropertyGrid.baseProperties()` constructs every type to intersect them
-(`PropertyGrid.js:200-229`), `Names.sampleFor`, `Strings.textPropertiesOf`,
-`Completion`, `Classes.componentProbe`, `Check` (`new Form()` as a probe). A
-class can answer about its own prototype without an instance — the serialiser
-already reads it that way — and the runtime could publish it.
-
-### 4.6 A control built from code has no `On(event, fn)`
-
-Handlers are properties named `<name>_<Event>` on the form, so dynamic controls
-assign and delete them by hand: `PropertyGrid.js:707-710`, `MenuBar.js:309-328`,
-`Palette.js:415`, `IconForm.js:71-89`, `kanban/Board.js:285-299`. The sharp edge
-is the component: a `Component` added from code keeps itself as its event target
-(`AGENTS.md` documents it; `kanban/Board.js:431-440` is the example that gave up
-its `TaskCard` and wrote panels by hand, and says so in the comment at `440`).
-A `Widget.On(event, fn)` — and an
-`Add` that rebinds a component to its host the way the loader does — is the
-primitive all six are reaching for.
-
-### 4.7 `Stop()` is idempotent and nobody believes it
-
-Eleven `try { ….Stop(); } catch (e) {}` in `examples/assistant` alone. `Exec`'s
-`Stop()` answers `false` for a child already reaped and `Timer.Stop()` answers
-`false` for one already stopped; neither throws. The contract is fine and
-undocumented, so every caller defends against an error that cannot come.
-
-### 4.8 `Timer.After(0)` used as "defer this"
-
-`examples/assistant/OpencodeClient.js:61,84,193` uses it to turn a synchronous
-throw into an asynchronous callback, which is a *statement about when code
-runs* and not a timeout. The manual explains `Timer.After(0)` as "let GTK draw
-a frame". If deferring is a thing a program can want, it wants a name.
-
-### 4.9 Writing a `.po` has no runtime verb
-
-`Locale.Read` reads a catalogue (`bta_locale.c:1691`) and `Locale.Write` does
-not exist, so `Translations.js:88-175` writes the format by hand — `poQuote` at
-`89`, header, plural forms, wrapping, `File.Save` at `174`: some eighty-seven
-lines. One consumer, but it is the only implementation, and the reader already
-exists to be its other half.
+What is left below are three the audit filed here and which are **defects after
+all** — a verb reimplemented, dead code, and documentation that nothing holds to
+its word.
 
 ### 4.10 `Text.Escape` exists and is reimplemented
 
@@ -350,23 +254,12 @@ three lines are `.replace(/&/g, …)` and its siblings, where
 [`llm/language.md:101-102`](llm/language.md) asks for
 `new Regex("x").Replace(s, y)`. One call replaces both.
 
-### 4.11 `Translations.update` is the recursion the async plan retired
-
-`Translations.js:429-444` — `update()` at `380`, the closure at `430-443`,
-`next(i + 1)` at `441`, `next(0)` at `444` — chains `msgmerge` calls through a
-closure that carries its own index, the exact shape `plans/async-plan.md` opens
-with as the thing `Exec.Wait` was supposed to replace. The plan names it
-`Translations.mergeAll`, and nothing in the tree is called that any more; the
-recursion it was written about is still here under another name.
-
 ### 4.12 Leftovers
 
 `NAMESPACE_PART` (`Classes.js:75`) is declared and never used; `IDENT`
 (`Designer.js:29`) is `CLASS_NAME` (`Classes.js:67`) written a second time;
-`JSON.parse(JSON.stringify(x))` appears twice (`LaunchForm.js:41`,
-`MenuForm.js:43`) where `Record.Clone()` exists (`rad.js:1517`); and
-`kanban/Board.js:163,523` still print `// TEMP` on every selection and after a
-second.
+and `JSON.parse(JSON.stringify(x))` appears twice (`LaunchForm.js:41`,
+`MenuForm.js:43`) where `Record.Clone()` exists (`rad.js:1517`).
 
 ### 4.13 The reference's blind spots
 

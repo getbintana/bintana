@@ -17,6 +17,13 @@ in the same form.
 | [ISSUE-fill-and-scroll.md](ISSUE-fill-and-scroll.md) | No container that fills the room it is given and scrolls when it cannot |
 | [ISSUE-packaging.md](ISSUE-packaging.md) | No way to hand over an application without its project tree |
 | [ISSUE-worker-locale-order.md](ISSUE-worker-locale-order.md) | A `Task` has no `Locale`, so a worker cannot order names |
+| [ISSUE-form-keepalive.md](ISSUE-form-keepalive.md) | A shown `Form` has to be kept alive by hand — sixteen copies of one array |
+| [ISSUE-laid-out.md](ISSUE-laid-out.md) | Nothing says *I have been laid out*, so five places retry on a timer |
+| [ISSUE-editor-offset.md](ISSUE-editor-offset.md) | An editor cannot turn a character offset into a line |
+| [ISSUE-file-relative.md](ISSUE-file-relative.md) | No `File.Relative`, and an extension has to be case-folded by hand |
+| [ISSUE-class-introspection.md](ISSUE-class-introspection.md) | Asking what a type has means building one |
+| [ISSUE-widget-on.md](ISSUE-widget-on.md) | A control built from code has no `On(event, fn)` |
+| [ISSUE-locale-write.md](ISSUE-locale-write.md) | A catalogue can be read and not written |
 
 **A gap that is filled is deleted, not archived.** What the runtime can do is in
 [`llm/`](../llm/README.md), which is where anybody looks for it; an issue kept

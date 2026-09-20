@@ -13,11 +13,14 @@ a second description of a built feature sitting in the directory for things
 that are not.
 
 `Exec.Wait` is the one part worth a sentence here, because the reference says
-what it does and not why it exists: `Translations.mergeAll` runs `msgmerge`
-over N catalogues one after another, and with no way to wait it had to be a
-recursion carrying its own index. Waiting turned it into a `for` loop with no
-new concept in it -- no keyword, no protocol, no object to learn -- which is
-the bar anything proposed below has to clear.
+what it does and not why it exists: running `msgmerge` over N catalogues one
+after another had to be a recursion carrying its own index, and waiting turns it
+into a `for` loop with no new concept in it -- no keyword, no protocol, no
+object to learn -- which is the bar anything proposed below has to clear.
+
+**In a tool. The IDE's own copy still carries the recursion**, because
+`Exec.Wait` blocks the loop and that code runs with a window up: see the
+chaining trigger below, where it counts for more than this example does.
 
 ## What the language does today
 
@@ -225,6 +228,25 @@ Named because a deferral without triggers is a punt:
   the mistake is not available to make. So the trigger is met and the answer
   was still a list rather than a keyword -- with the caveat this document
   already draws: a harness is allowed machinery that the front page is not.
+
+  **And it has since fired in an application too, which the caveat does not
+  cover.** `Ide.Translations.update()` still chains `msgmerge` over N
+  catalogues through a `next(i + 1)` closure carrying its own index -- the very
+  shape the opening of this document says waiting retired. It was not retired
+  and **could not be**: that code runs with the IDE's window up, and `Exec.Wait`
+  blocks the loop, so waiting N times would freeze the application for the
+  length of the whole pass. The opening's `for` loop is the right answer for a
+  console tool and unavailable here. So the chaining case the trigger asks for
+  exists on the application side, and what distinguishes it is not *how many
+  waits* but **whether the thread may stop** -- which is the question a word for
+  sequencing would have to answer and `Exec.Wait` cannot.
+
+  A second, much smaller one beside it: `tests/ide/Driver.js:11324` writes
+  `Timer.After(0, …)` to mean *the next turn of the loop*, and says so in its
+  comment -- *"one turn, not a delay"*. `Timer.After(0)` is documented as *let
+  GTK draw a frame*, which is a different claim spelled the same way. If
+  deferring is a thing a program can want, it wants a name of its own; one
+  harness line is not enough to give it one.
 - **Two children at once.** Asked at last, in worker form rather than child
   form: [`examples/usage`](../../examples/usage) fans out to one `Task` per
   handful of folders, and retiring a run (a generation counter dropping stale
