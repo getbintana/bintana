@@ -559,6 +559,15 @@ void       bta_widgets_cleanup(JSContext *ctx);
 BtaWidget *bta_widget_of(JSValueConst v);
 /* Unwraps `this`, throwing a TypeError when it is not a widget. */
 BtaWidget *bta_this(JSContext *ctx, JSValueConst this_val);
+/*
+ * Hold the appearance stylesheet's rebuild while a whole tree is built, and
+ * rebuild once on release.  Counted, so a component with a `.form` of its own
+ * nests.  **Only for a stretch with no JavaScript in it**: the sheet is read
+ * back -- a DrawingArea takes its ink from its control's style context -- so a
+ * hold that is open when something draws answers with the theme's colour.
+ */
+void       bta_widget_styles_hold(void);
+void       bta_widget_styles_release(void);
 
 /* A number from a property setter, or false with a TypeError naming the value.
  * Every numeric setter goes through these: JS_ToInt32 turns a string that is not

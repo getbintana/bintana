@@ -678,11 +678,29 @@ int bta_form_build(JSContext *ctx, JSValueConst form_obj, const char *class_name
     }
 
     int rc = -1;
+    /* Exact, because a component with a `.form` of its own nests one of these
+     * inside another and only the outermost may rebuild. */
+    bool held = false;
     BtaWidget *w = bta_widget_of(form_obj);
     if (!w) {
         JS_ThrowInternalError(ctx, "%s: not a form", class_name);
         goto out;
     }
+
+    /*
+     * **One stylesheet rebuild for the whole tree.**
+     *
+     * Every appearance property reloads the accumulated sheet, which makes a
+     * form's load quadratic in its styled controls -- 2.4 seconds for two
+     * hundred of them, measured, against 6 ms with this. The hold is here and
+     * not inside the setter because the sheet is read back: a `DrawingArea`
+     * takes its ink from its control's style context and `Save()` draws
+     * synchronously, so deferring it in general answers a program with the
+     * theme's colour instead of its own. Between the first node and the last
+     * nothing runs but the loader, so there is nobody to ask.
+     */
+    bta_widget_styles_hold();
+    held = true;
 
     JSValue props = JS_GetPropertyStr(ctx, root, "properties");
     rc = apply_properties(ctx, form_obj, props, class_name);
@@ -724,6 +742,8 @@ int bta_form_build(JSContext *ctx, JSValueConst form_obj, const char *class_name
     w->drawn_h = w->h;
 
 out:
+    if (held)
+        bta_widget_styles_release();
     JS_FreeValue(ctx, root);
     g_free(path);
     return rc;

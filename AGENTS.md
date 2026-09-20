@@ -698,6 +698,35 @@ refused with a message and a column.
   own list is a completeness check about its own list.** The same blind spot let
   eight QuickJS-installed names sit outside `llm/language.md` for as long as
   they did.
+- **There are nine hand-rolled async job shapes, and two of them have already
+  forgotten to release.** `WatchJob` (`bta_sys.c`), `ExecJob`, `TimerJob`,
+  `PasteJob`, `DialogJob`, `HttpJob` (`bta_http.c`), `BtaTaskJob`
+  (`bta_task.c`), `PrintRun` (`bta_printer.c`) and `BtaMedia` (`bta_media.c`)
+  each carry a `JSContext`, one or more `JSValue`s, a list of live jobs and a
+  free path that has to release on **every** exit. `bta_widget_watch` and
+  `http_job_alive` exist because two of them did not -- they are the repairs,
+  not the design. So when you add the tenth, or touch one of the nine, the
+  question to ask first is *which exit path did the one next to me forget*: this
+  is where §1.2 and §1.13 both came from, in the same struct, two months apart.
+  A shared base for *a job with values and a dead flag* would shrink the surface
+  where forgetting is possible; nobody has built one, and this paragraph is the
+  cheaper half of that.
+- **The appearance stylesheet is read back, which is why its rebuild can only be
+  held for a stretch with no JavaScript in it.** Every `Font`, `Padding`,
+  `Radius`, `Shadow`, `Color`, `Border`, `Scale` or `Opacity` reloads the whole
+  accumulated sheet, so loading a `.form` was quadratic in its styled controls:
+  **50 → 112 ms, 100 → 667 ms, 200 → 2392 ms**, measured, against 5 ms for the
+  same form with none. `bta_form_build` holds the rebuild around the whole tree
+  and drops it once (**counted** -- a component with a `.form` of its own nests
+  one build inside another), which is 14.8 ms at 200.
+  **Coalescing it on an idle instead is wrong and looks right**, which is the
+  part worth remembering: a `DrawingArea` takes its ink from its control's style
+  context and `Save()` draws **synchronously**, so a program that sets
+  `Foreground` and saves a PNG in the same turn gets the theme's colour.
+  `tests/widgets` says so in one line -- *a drawing takes its ink from the
+  control's Foreground* -- and two of `tests/ide`'s designer assertions agree.
+  The rule generalises past CSS: **before deferring anything, ask what reads it
+  back and whether that reader waits for a frame.**
 
 ## Tests
 

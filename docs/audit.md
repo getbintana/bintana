@@ -114,17 +114,45 @@ installed set from the C, the prelude and `close_hatches`' own list of
 removals — so a global added without a home fails the suite instead of being
 invisible to it.
 
-**So only §3 is left**, and none of it was timed by this audit. It is a
-different kind of session: nine claims about cost with no numbers under them,
-two of which (a one-entry lookup cache, a dirty flag on the stylesheet) change
-no semantics and can be measured cheaply, and one of which already has a plan of
-its own.
+**So only §3 is left, and it is down to seven.** 3.7 went because it was the one
+entry with real numbers and they are not this document's: the debugger's branch
+costs +12.5 % and +16.4 % *measured*, and the bytecode patch that removes it is
+stage 5 of [`plans/debug-plan.md`](plans/debug-plan.md) — a second description of
+a planned change, sitting in the file for things that are wrong today. 3.9 went
+because it said of itself *"not a bug today"*: nine hand-rolled job shapes is a
+refactor somebody may want, and the fact worth keeping out of it — that two of
+the nine forgot to release, which is why `bta_widget_watch` and `http_job_alive`
+exist — is in `AGENTS.md`, where a trap is read.
 
 ## 3. Cost
 
-None of these was timed by this audit; they are what the code does, with the
-shape of the cost. The one number that comes from a measurement is 3.7's, and
-it is from [`plans/debug-plan.md`](plans/debug-plan.md).
+**None of these was timed by the audit**; they are what the code does, with the
+shape of the cost and no number under it. That is the difference between this
+section and every other one in the file: the rest named a promise and could be
+checked against it, while these name a shape and can only be checked against a
+clock.
+
+**One of them has been now, and it was much worse than filed.** A `.form` of
+`Label`s with two appearance properties each, constructed twelve times and the
+median taken:
+
+| controls | before | after |
+|---|---|---|
+| 50 | 112 ms | 4.2 ms |
+| 100 | 667 ms | 7.6 ms |
+| 200 | **2392 ms** | 14.8 ms |
+
+against 5 ms for the same form with no appearance at all — so two hundred styled
+controls cost **two and a half seconds**, quadratically, and that is 3.3, now
+fixed and gone. The measurement is the point: *reparses the sheet O(N) times*
+reads like something to get to eventually, and *a window takes two seconds to
+open* does not.
+
+What is left is 3.1 and 3.6 on the same path — the bench above measures them
+too, and at 200 controls they are **2 ms** and part of a 5 ms floor, which is
+the honest answer to *is this worth doing*: not yet, and now with a number
+saying so. 3.5 is the one still unmeasured, and it wants a different bench: a
+pointer dragged across a deep tree.
 
 ### 3.1 Every class lookup without a `.form` compiles an expression
 
@@ -153,15 +181,6 @@ for both. The costs are not the same, which is why one was a defect and this is
 a cost: a miss in the task index means `Task.Start` is about to throw, so the
 walk is on a path that fails anyway, while a miss in `form_path` is an ordinary
 instantiation that is about to succeed.
-
-### 3.3 Every appearance property reparses the whole stylesheet
-
-`widget_styles_apply` inserts the rule and then
-`gtk_css_provider_load_from_string(style_provider, css->str)`
-(`bta_widget.c:1156`, `styles_rebuild` at `1146`). A `.form` with three
-appearance properties on each of N controls reparses the accumulated sheet O(N)
-times. A dirty flag and one rebuild on idle — or one rebuild at the end of
-`apply_properties` — changes no semantics.
 
 ### 3.4 Removing a child is O(n) in JavaScript
 
@@ -197,15 +216,6 @@ hot path.
 about a class: caching "the prose set of this prototype" would remove hundreds
 of allocations per load.
 
-### 3.7 The debugger's hook is always on
-
-`BTA_DEBUG_STEP` is a branch in the interpreter's dispatch, both spellings of
-it, and with no handler installed it is +12.5 % on tight arithmetic and +16.4 %
-on property reads — measured, both off against the same tree without it
-(`plans/debug-plan.md`, stage 5). The plan's technique 2 (the bytecode patch
-that makes this scaffolding and removes the branch) is still the open stage;
-until it lands, every program pays for the debugger.
-
 ### 3.8 `bta_sys_pending` counts by walking
 
 `g_list_length` **twice** — not three times — every time the loop asks whether
@@ -224,17 +234,6 @@ window, which never polls this. Counters, or a short-circuit "is any
 non-empty", for lists that are expected to be empty almost always — but this is
 the smallest item in this section, and it is listed for completeness rather than
 for action.
-
-### 3.9 Nine hand-rolled async job shapes — *noted*
-
-`WatchJob` (`bta_sys.c:469`), `ExecJob` (`1043`), `TimerJob` (`2089`),
-`PasteJob` (`2449`), `DialogJob` (`2539`), `HttpJob` (`bta_http.c:61`),
-`BtaTaskJob` (`bta_task.c:159`), `PrintRun` (`bta_printer.c`), `BtaMedia`
-(`bta_media.c:62`) each carry a `JSContext`, one or more `JSValue`s, a list of
-live jobs, and a free path that must release on every exit. `bta_widget_watch`
-and `http_job_alive` exist because two of these forgot; a shared base for
-"a job with values and a dead flag" would shrink the surface where forgetting
-one is possible. Not a bug today.
 
 ## 5. Checked and discarded
 
