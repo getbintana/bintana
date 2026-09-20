@@ -727,6 +727,35 @@ refused with a message and a column.
   control's Foreground* -- and two of `tests/ide`'s designer assertions agree.
   The rule generalises past CSS: **before deferring anything, ask what reads it
   back and whether that reader waits for a frame.**
+- **The other four cost claims were measured and are fine, and the numbers are
+  here so nobody has to guess again.** An external audit named five places the
+  runtime is slow; one of them was real and is the paragraph above. These are
+  the rest, on this machine, so a future *this looks expensive* has something to
+  be compared against:
+  - **A class looked up with no `.form`** compiles its identifier through
+    `JS_Eval` per instance (`bta_lookup_global`). Two hundred project
+    components: **2 ms** over the same form built from runtime classes, so about
+    10 µs each.
+  - **A `.form`'s prose-membership walk** (`bta_widget_text_prop_field`, once
+    per property per node, `g_strsplit` every time) is inside a **5 ms** floor
+    for two hundred controls -- it does not separate from the noise.
+  - **Dispatching an event with no handler.** Every widget carries a motion
+    controller at `GTK_PHASE_BUBBLE`, so a pointer over a twelve-deep tree
+    raises **12.8 dispatches per position**, each building `<name>_<event>` and
+    walking the form's prototype chain for a property that is not there.
+    Measured over three full sweeps: 3850 dispatches, **one** of which found a
+    handler, **580 ns each** and **2.2 ms** of continuous movement in three
+    seconds. It scales with *depth*, not with handlers -- which is the wrong
+    way round -- and is still 0.07 % of a core.
+  - **Emptying a container** runs `indexOf` and `splice` through the interpreter
+    on `__children`, which is superlinear: 100 children **1.4 ms**, 200 **3.7**,
+    400 **10.5**, 800 **34.2** with `Clear()`. **`Clear()` is twice as fast as
+    deleting children one at a time** (68.8 ms at 800), which is worth knowing
+    because it is already the documented verb and now has a reason.
+
+  None of the four is worth changing at the sizes a form reaches. What made them
+  worth measuring is that the fifth, which read the same on paper, was two and a
+  half seconds.
 
 ## Tests
 

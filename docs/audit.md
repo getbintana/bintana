@@ -132,9 +132,12 @@ section and every other one in the file: the rest named a promise and could be
 checked against it, while these name a shape and can only be checked against a
 clock.
 
-**One of them has been now, and it was much worse than filed.** A `.form` of
-`Label`s with two appearance properties each, constructed twelve times and the
-median taken:
+**They have been now, and five of the seven left on the strength of it.** One
+was much worse than filed and is fixed; four were fine and their numbers are in
+`AGENTS.md`, where somebody about to optimise something will look.
+
+The one that was real: a `.form` of `Label`s with two appearance properties
+each, built twelve times, median —
 
 | controls | before | after |
 |---|---|---|
@@ -142,28 +145,20 @@ median taken:
 | 100 | 667 ms | 7.6 ms |
 | 200 | **2392 ms** | 14.8 ms |
 
-against 5 ms for the same form with no appearance at all — so two hundred styled
-controls cost **two and a half seconds**, quadratically, and that is 3.3, now
-fixed and gone. The measurement is the point: *reparses the sheet O(N) times*
-reads like something to get to eventually, and *a window takes two seconds to
-open* does not.
+— against 5 ms for the same form with no appearance at all. That is 3.3, and the
+measurement is the whole point of it: *reparses the sheet O(N) times* reads like
+something to get to eventually, and *a window takes two and a half seconds to
+open* does not, and they are the same sentence.
 
-What is left is 3.1 and 3.6 on the same path — the bench above measures them
-too, and at 200 controls they are **2 ms** and part of a 5 ms floor, which is
-the honest answer to *is this worth doing*: not yet, and now with a number
-saying so. 3.5 is the one still unmeasured, and it wants a different bench: a
-pointer dragged across a deep tree.
+The four that were fine: a class looked up without a `.form` is **2 ms** for two
+hundred components; the prose-membership walk is inside a **5 ms** floor;
+dispatching an event with no handler is **580 ns** and 2.2 ms per three seconds
+of continuous mouse movement, though it does scale with tree *depth* rather than
+with handlers; and emptying a container is superlinear but **1.4 ms at a hundred
+children**, with `Clear()` twice as fast as deleting them one by one.
 
-### 3.1 Every class lookup without a `.form` compiles an expression
-
-`bta_lookup_global` falls back to `JS_Eval(ctx, name, ..., "<class-lookup>")`
-when a bare name is not on `globalThis` (`bta_runtime.c:431`) — which is every
-class declared with `class Foo {}`, since those live in the global **lexical**
-scope. `bta_widget_new` reaches it per instance for any project class that is
-not one of the runtime's (`bta_widget.c:4765`, `4803`). A form with fifty
-components with no `.form` of their own is fifty compilations of the same
-identifier. A one-entry cache of the successful lookups (misses cannot be
-cached: a class may be declared later) removes it.
+**What that leaves is two**, and neither is a thing done wrongly: 3.2 is a trade
+somebody argued for in a comment, and 3.8 is small and known.
 
 ### 3.2 `form_path` reindexes project and libraries on every miss
 
@@ -181,40 +176,6 @@ for both. The costs are not the same, which is why one was a defect and this is
 a cost: a miss in the task index means `Task.Start` is about to throw, so the
 walk is on a path that fails anyway, while a miss in `form_path` is an ordinary
 instantiation that is about to succeed.
-
-### 3.4 Removing a child is O(n) in JavaScript
-
-`bta_widget_release` calls `Array.prototype.indexOf` and `splice` through the
-interpreter on the parent's `__children` (`bta_widget.c:148-178`). Emptying a
-container of N children is N² array steps in JS plus N property lookups by
-name. It is the designer's ordinary gesture (`Clear`/`Delete`/rebuild). An index
-kept on the wrapper side, or the parent's wrapper found through
-`bta_widget_of` instead of the `__children` accessor, would make it O(n).
-
-### 3.5 Every event names its handler with a fresh string
-
-`emit_on` builds `g_strdup_printf("%s_%s", name, event)` per dispatch
-(`bta_widget.c:286`) — **before** the `JS_IsFunction` test at `291`, so it
-happens for every `MouseMove` over a widget with no handler, on every ancestor,
-since `attach_mouse` (`3682`) installs its controllers at `GTK_PHASE_BUBBLE` for
-every widget the common constructor builds (`4658`). The `JS_GetPropertyStr` on
-the next line interns an atom from that string and drops it again, so the cost
-per dispatch is an allocation *and* an atom round trip.
-
-The other `"%s_%s"` in the tree is `bta_has_handler` (`bta_widget.c:367-377`),
-which is **not** a hot path: its only callers are `Paginate`/`DrawPage`
-(`bta_printer.c:313`, `504`, `bta_paint.c:1838`).
-
-An atom cache per (name, event), dropped when a name changes, takes both off the
-hot path.
-
-### 3.6 Loading a `.form` asks each property's prose membership afresh
-
-`bta_widget_text_prop_field` is called once per property per node
-(`bta_form.c:259`) and walks the prototype chain with `class_list_of` and
-`g_strsplit` every time (`bta_widget.c:2158`, `2224`). The answer is a fact
-about a class: caching "the prose set of this prototype" would remove hundreds
-of allocations per load.
 
 ### 3.8 `bta_sys_pending` counts by walking
 
