@@ -3830,6 +3830,15 @@ bool bta_container_attach(JSContext *ctx, BtaWidget *parent, BtaWidget *child)
         return false;
     }
 
+    /*
+     * **The `GTK_IS_BOX` and `GTK_IS_FRAME` arms here and in detach are ahead of
+     * the program**, and a reader should know it rather than go looking for the
+     * container that uses them: no container assigns such a slot today. A
+     * `Panel`, `Form`, `Frame`, `Expander` or `Scroller` slot is a `BtaFixed`,
+     * and everything else is its own GTK type with an arm of its own. Left as
+     * they are -- the day one is used the branch is already right -- but they
+     * are unreached, so a change to them is untested by construction.
+     */
     if (BTA_IS_FIXED(slot)) {
         /* No coordinates to hand over: the surface reads them off the child. */
         gtk_widget_set_parent(child->gtk, slot);

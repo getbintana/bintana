@@ -614,6 +614,16 @@ static const FormEntry *index_find(GHashTable *forms, const char *class_name)
  * since, which is the normal state of affairs while an IDE is writing forms in
  * the same directory it is running from.  Walking a project costs far less than
  * a form that does not load.
+ *
+ * **What that costs, since the first half of the `or` never stops missing.** A
+ * class built in code walks the whole project and every library on *every*
+ * instantiation, so the price scales with the project rather than with the
+ * program: a form of 200 such components is 7.3 ms in a six-file project and
+ * **67.8 ms** in a three-hundred-file one, while the same form built from
+ * runtime classes stays at 5.4 ms either way.  Measured, weighed, and left --
+ * the argument above still wins at these sizes.  `AGENTS.md` carries the
+ * numbers and what would reopen it, and `task_class_file` in `bta_task.c` makes
+ * the same trade for a cheaper reason.
  */
 static const FormEntry *form_path(BtaApp *app, const char *class_name)
 {

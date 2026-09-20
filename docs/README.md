@@ -21,7 +21,6 @@ to extend either side.
 | [ide.md](ide.md) | How the IDE and its designer work, as a Bintana application with no privileges |
 | **[plans/](plans/README.md)** | **Designs argued before they are code**: the ten of them, each saying in its first lines whether it is built, waiting for a caller or not started — records and forms, git and the debugger, `--strict`, completion, `Exec.Wait`, what `Http.Server` refuses, Windows, macOS and the `.bta` bundle |
 | [issues/](issues/README.md) | **Reported gaps**: what the runtime is missing, each written in the form `llm/issues.md` asks for — never how to add it |
-| [audit.md](audit.md) | **Findings of an external audit**: the defects, undocumented names and missing primitives it found in the runtime and the language — measured where marked, each with the promise it breaks, and with what was checked and discarded — deleted entry by entry as they are fixed |
 | [testing.md](testing.md) | The four test projects, what they can prove, what `tests/install.sh` proves about an installed copy, and what has to be checked by hand |
 
 Working *on* this repository — commands, conventions, the trap list — is

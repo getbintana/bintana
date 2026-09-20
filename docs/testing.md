@@ -56,6 +56,16 @@ directly -- outside the runner -- is what showed the two lines existing all
 along. A filter aimed at the toolkit must not be able to swallow what a project
 says *about* the toolkit.
 
+**And what the runner cannot fail on is a GLib critical.** The filter drops
+warnings; a `GLib-GObject-CRITICAL` is *printed* and then counted by nothing,
+because pass or fail is the child's exit status and a critical does not change
+it. No script sets `G_DEBUG=fatal-criticals` either. That blindness is not
+theoretical: `Split.Reorder` called `g_object_ref(NULL)` twice on a split with
+one half, the reorder came out right, and two criticals went past on every green
+run for as long as nobody read the output. **So read what a run printed, not
+only what it counted** — and if you are touching reference counts, run it once
+with `G_DEBUG=fatal-criticals` by hand.
+
 **A sanitized build is not just slower, it is shallower.** The stack budget
 `JS_SetMaxStackSize` sets is a number of bytes, and AddressSanitizer's frames are
 about ten times fatter -- so the same budget that walks a hundred levels of widget

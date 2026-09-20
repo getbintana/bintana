@@ -706,8 +706,10 @@ refused with a message and a column.
   free path that has to release on **every** exit. `bta_widget_watch` and
   `http_job_alive` exist because two of them did not -- they are the repairs,
   not the design. So when you add the tenth, or touch one of the nine, the
-  question to ask first is *which exit path did the one next to me forget*: this
-  is where §1.2 and §1.13 both came from, in the same struct, two months apart.
+  question to ask first is *which exit path did the one next to me forget*: the
+  adrift `Task`'s unreleased proxy and its untracked idle sources -- the two
+  paragraphs above -- were both in `BtaTaskJob`, and neither was found by
+  reading that struct's success path.
   A shared base for *a job with values and a dead flag* would shrink the surface
   where forgetting is possible; nobody has built one, and this paragraph is the
   cheaper half of that.
@@ -756,6 +758,58 @@ refused with a message and a column.
   None of the four is worth changing at the sizes a form reaches. What made them
   worth measuring is that the fifth, which read the same on paper, was two and a
   half seconds.
+- **`form_path` walks the project on every miss, and a class built in code
+  misses forever — deliberately, and here is the number to reconsider it
+  against.** The index maps a class name to its `.form`; a hit is a hash lookup
+  and a **miss throws the whole index away and re-walks the project and every
+  library**, because a miss also means *a `.form` that appeared since*, which is
+  the normal state of affairs while the IDE writes forms in the directory it is
+  running from. The comment over the function argues that trade and the argument
+  is good.
+  What it does not say is that the other half of its own *or* — a class built
+  entirely in code, which is legal and documented — misses on **every**
+  instantiation, and that a miss is a **filesystem walk** whose cost scales with
+  the project rather than with the program. Measured, a form of 200 components
+  with no `.form` of their own:
+  | project | that form | the same form of runtime classes |
+  |---|---|---|
+  | 6 files | 7.3 ms | 5.4 ms |
+  | 300 files | **67.8 ms** | 5.3 ms |
+  | 300 files + a library in `uses` | 69.5 ms | 5.4 ms |
+
+  So about **0.31 ms per instantiation at 300 files**, against 0.01 ms at six,
+  and the runtime-class form does not move at all.
+  **Left as it is on purpose.** 70 ms is perceptible and not broken, and the fix
+  that would work -- treating the index as a cache of the filesystem and
+  invalidating it when *this process* writes under the project, since `File.Save`
+  is the same runtime -- turns a heuristic into an invariant at the price of a
+  silent failure if any writing verb is ever missed. That failure is precisely
+  the one the current design exists to prevent.
+  **Reconsider when** a project is big enough that opening a form is felt, or
+  when components built in code become common -- which is what a
+  `Widget.On(event, fn)` (`docs/issues/ISSUE-widget-on.md`) would encourage. The
+  same question belongs to `task_class_file`, which rebuilds on a miss too and
+  for a cheaper reason: there, a miss means `Task.Start` is about to throw.
+- **And the smallest one, measured anyway because reasoning about it is how the
+  others went wrong.** `bta_sys_pending` walks two `GList`s about fifty times a
+  second, and only in a **console** project -- `run_console` arms the poll, so an
+  application with a window never asks. **20 ns a call**, so 1 µs per second of
+  runtime. Counters would be state to keep in step for nothing.
+  **The first attempt at that number said 3.1 µs, which is 150× wrong**, and the
+  reason is worth more than the measurement: timing one call with
+  `g_get_monotonic_time` on either side measures the clock. Two of those cost
+  **88 ns** between them and the function returns **microseconds**, so a 20 ns
+  body is rounding noise sitting under an instrument four times heavier than
+  itself. **Time a thousand iterations and divide** -- and when a micro-benchmark
+  reports something surprisingly expensive, suspect the instrument first.
+- **Five things a static analyser flags here that are not leaks**, each read and
+  dismissed, so the next run of one does not cost the same afternoon:
+  `bta_widget.c:1124` (freed by `g_clear_pointer`, with the strv beside it by
+  `g_strfreev`), `bta_controls.c:3196` (`strv` by `g_strfreev` on the line
+  before), `bta_controls.c:4778` (a `NULL` widget cannot reach `cal_marks` --
+  all five callers guard), `bta_http.c:3583` (the list and its elements are
+  freed on both early-outs) and `bta_notebook.c:161` (the output is assigned on
+  every path that returns success).
 
 ## Tests
 
