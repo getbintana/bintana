@@ -1,0 +1,13 @@
+{
+  "name": "Kanban",
+  "startup": "Board",
+  "sources": [
+    "Task.js",
+    "ColumnDialog.js",
+    "Confirm.js",
+    "TaskDialog.js",
+    "Board.js"
+  ],
+  "version": "1.0",
+  "description": "A kanban board: columns you arrange, cards you drag, and a file that keeps them"
+}

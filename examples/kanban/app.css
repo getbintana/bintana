@@ -1,0 +1,33 @@
+/* Kanban: what the cards look like. The per-task colour (priority,
+ * overdue) is `Foreground` set from code — a colour the program worked out,
+ * which is what the per-widget exception is for. This sheet holds the shape
+ * nobody computes: a bordered card with room inside it, and the selected
+ * one in the desktop's own selection colours — which is what a cascade is
+ * for: the class is on the card's node and the rule walks down to the
+ * labels, since a theme names `label` explicitly and inheritance alone
+ * would lose to it.
+ *
+ * The column's ground is here for the same reason. What makes a board read
+ * as columns rather than as three lists is a panel under each one, and
+ * `alpha(currentColor, …)` is a colour that follows the theme into the dark
+ * without anybody computing it — which is the difference between a shape
+ * (here) and a value the program worked out (`Foreground`, above). */
+.kanban-column {
+  background-color: alpha(currentColor, 0.05);
+  border-radius: 10px;
+  padding: 6px;
+}
+
+.kanban-card {
+  border: 1px solid alpha(currentColor, 0.25);
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.kanban-sel {
+  background-color: @theme_selected_bg_color;
+}
+
+.kanban-sel label {
+  color: @theme_selected_fg_color;
+}

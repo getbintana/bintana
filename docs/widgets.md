@@ -1784,6 +1784,40 @@ carrying halves of it. The adjustments are not the widget, so the handlers are
 registered with `bta_widget_watch`: without it they outlive the scroller and fire
 into freed memory.
 
+**And `Arrangement` decides whether it also *fills*.** The `BtaFixed` above is
+the default and not the only slot: arranged `Horizontal` or `Vertical` the slot
+is a `GtkBox`, which stretches an expanding child across itself and lets it ask
+for more than the view along itself. That single property is the difference
+between the two containers other toolkits keep apart — WinForms'
+`TableLayoutPanel` and `TableLayoutPanel` + `AutoScroll`, CSS `grid` and `grid`
+inside `overflow: auto` — and it is what a wall of tiles whose count is not
+known in advance needs: one tile takes the stage, four come out 2x2, twenty
+scroll. Measured in a 900x500 view, a `Grid` of `Homogeneous` tiles with a
+180x130 floor and `HExpand`/`VExpand`:
+
+| tiles | the grid | `ScrollMaxY` | the view |
+|---|---|---|---|
+| 1 | 898x498 | 0 | 900x500 |
+| 4 (2x2) | 445x245 each | 0 | 900x500 |
+| 20 (4 columns) | 924x538 | 38 | 900x500 |
+
+and the same grid in an unarranged scroller is **180x130** for the one tile and
+**366x266** for the four, with the rest of the view empty — which is what was
+reported as a missing container before anybody tried the property.
+
+The `Fixed` slot cannot do it, and the reason is worth keeping: an anchor keeps the gap a control was *drawn* with, against a design
+size that only a **form** has (see the anchoring notes above), so `HAlign: Fill`
+on a scroller's content has nothing to fill.
+
+**What decides whether it scrolls or grows the window is `Scrollbars`, and not a
+floor.** An axis that may not scroll has to be given its content's minimum and
+propagates it outwards: the same twenty tiles under `Scrollbars: "Vertical"`
+take the window from 900 to 924 wide, and a `MinWidth` on the scroller changes
+nothing either way (measured both). [`examples/kanban`](../examples/kanban) is
+the shape in both directions — a board arranged `Horizontal` whose columns are
+as tall as it is, each column a scroller arranged `Vertical` whose cards are as
+wide as it is.
+
 ### DrawingArea and Painter
 
 A `GtkDrawingArea` with `gtk_drawing_area_set_draw_func`, and a `Painter` over the
@@ -3218,6 +3252,19 @@ own flag set, and `select_row` returns early on a row that already claims to be
 selected — so without it the row comes back drawing selected while `Index`
 answers `-1`, with nothing but a click to get out of it. `tests/widgets`'
 `Reorder` asserts the selection survives and that no event was raised.
+
+**Nothing dragged out of one ever starts, and that decides what a board is made
+of.** A `GtkListBox` claims the press for its own selection, so a row whose
+control has `DragData` selects and does nothing else — measured with a one-row
+probe that printed `SELECTED` and never `DROPPED`, while the same gesture from a
+bare `Button` dropped fine. It is not the phase: a widget that claims a gesture
+sequence cancels the others on it in capture as much as in bubble, which is the
+same thing VTE does to a click (above). A column of *draggable* cards is a
+[`Scroller`](#scroller) arranged `Vertical`, which claims nothing, with what the
+list would have given written by hand — selection is a `MouseDown` and a class,
+filtering sets `Visible`, editing is a double click, and each of those is one
+`On(event, fn)` on the card itself. [`examples/kanban`](../examples/kanban) is
+that, both halves.
 
 **And the rest of the list vocabulary is `ListBox`'s, because underneath they are
 the same widget.** `MultiSelect`, `Selection`, `Select(i)`, `Deselect(i)`,

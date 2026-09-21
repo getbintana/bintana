@@ -1048,8 +1048,8 @@ Three things that will waste your time:
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
-  351 assertions in 4 s against 1768 in 45, which is what makes iterating on an
-  early phase bearable. Each phase works on the project the ones before it built and
+  364 assertions against 2418 for the whole project -- 8.6 s against 185 on this
+  machine -- which is what makes iterating on an early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.
 - **`tests/ide` always passes a project, so `Form_Open`'s no-project branch is
@@ -1216,6 +1216,35 @@ person who wrote it either.
   (`rev-parse --show-prefix`) and crosses the boundary in `strip`/`full`; and
   every listing carries `-- .`, since a repository can hold more than this
   project and the panel must not offer to stage somebody else's folder.
+- **A `Scroller` fills as well as scrolls, and the property that decides it is
+  `Arrangement` -- which nothing said, so it was reported as a missing
+  container.** Its slot is a `BtaFixed` by default, and a `Fixed` sizes what is
+  in it at the content's own minimum: there is no design size for an anchor to
+  keep a gap against (only a **form** has one -- the `is_form` note above), so
+  `HAlign: "Fill"` on a scroller's content has nothing to fill and a declared
+  `Width` is not even a floor on a `Fill` axis. Arranged `Horizontal` or
+  `Vertical` the slot is a `GtkBox`, which stretches an expanding child across
+  itself and lets it outgrow the view along itself. Measured, a `Grid` of
+  `Homogeneous` tiles with a 180x130 floor in a 900x500 view: **one tile
+  898x498, four 2x2 at 445x245, twenty a 924x538 grid with `ScrollMaxY 38`**,
+  and the view 900x500 throughout. The same declarations unarranged leave the
+  grid at its content's own floor -- **180x130 for the one tile and 366x266 for
+  the four**, in the same 900x500 view, with the rest of it empty.
+  `tests/widgets`' `FillScroll` asserts both halves and goes red on three
+  assertions with the arrangement taken away.
+  **What decides scrolling versus growing the window is `Scrollbars`, and a
+  floor is not it**: the same twenty tiles under `Scrollbars: "Vertical"` take
+  the window from 900 to 924 wide, with `MinWidth` set or not (measured both
+  ways, four runs). An axis that may not scroll has to be given its content's
+  minimum and propagates it outwards.
+  `docs/issues/ISSUE-fill-and-scroll.md` is deleted as answered, and the
+  lesson is the one that keeps recurring here: **before reporting a gap,
+  measure the properties the container already has.** The report was written
+  against `Grid` (fills, cannot scroll), `Flow` (scrolls, does not fill) and
+  `Scroller` (documented as *content as big as it needs*, which is the default
+  slot and not the only one) -- three true sentences, and the fourth was in
+  nobody's reach because no document had put `Arrangement` and `Scroller` in
+  the same paragraph.
 - **A `Split` inside a `Fixed` gave its diff 46 pixels of a 620-pixel window.**
   Two mistakes that look like one. The window was a `Fixed` root with every
   region at an `X`, a `Y` and a height of its own, so a taller window gave the
@@ -1743,14 +1772,33 @@ person who wrote it either.
 - A `GtkDragSource` goes in the **capture** phase. A `Button`'s own gesture
   claims the press, so a source in `bubble` never reaches the drag threshold: the
   control would be draggable everywhere except on the controls one drags from.
+- **A `Drop`'s point is the accepting widget's, and a scroller's already
+  carries its scroll -- so placing a dropped row is a comparison and nobody
+  has to measure a layout mid-gesture.** `examples/kanban` appended for its
+  first two versions on the belief that it could not be done: `Drop(data, x,
+  y)` and `child.Bounds(that widget)` are the *same* space, which is what
+  `gtk_widget_compute_point` gives. Measured with a real pointer on a column
+  scrolled down -- the drop arrived at `y=168` while the cards above the view
+  read `Y: -293, -206, -119, -32` and the ones in it `55, 142, 229` -- so
+  adding `ScrollY` is counting the scroll twice. Two more from the same
+  sitting, both of which a synthetic `Emit` would have hidden because it only
+  asserts our own numbers back: **a hidden child measures 0x0 at the origin**
+  rather than keeping its last rectangle, so a walk over children skips what
+  is not `Visible`; and **what such a walk must answer is a child's *name* and
+  not an index**, since a filter hides rows without taking them out, so the
+  third row shown can be the seventh the list holds. Written down in
+  `llm/controls.md`'s `Drop` row and in `reference/widgets/Widget.md`, which
+  said only `Drop(data, x, y)` while this was being guessed at.
 - **No drag starts inside a `RowList`, in either phase.** A `GtkListBox` claims
   the press for its own selection, so a card with `DragData` set selects and
   nothing else -- measured with a one-row probe that printed `SELECTED` and no
   `DROPPED`, while the same gesture from a bare `Button` dropped fine. It is the
   VTE shape above seen from the list side. A column of draggable cards is a
-  `Scroller` over a `Panel`, which claims nothing, with selection (`MouseDown`
-  plus a class), filtering (`Visible`) and editing (double click) written by
-  hand. Found building `examples/kanban`.
+  `Scroller` arranged `Vertical`, which claims nothing, with selection
+  (`MouseDown` plus a class), filtering (`Visible`) and editing (double click)
+  written by hand -- one `On` each, on the card. Found building
+  `examples/kanban`, and written down in `docs/widgets.md` under `RowList`,
+  where somebody choosing a container will read it.
 - **A component added from code keeps itself as its event target, and
   `On(event, fn)` is what makes that harmless.** Only the `.form` loader rebinds
   one to its host (`bta_widget_bind` in `build_one`); `Container.Add` adopts it

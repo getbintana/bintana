@@ -1,0 +1,169 @@
+{
+  "format": "bintana-form/1",
+  "class": "Board",
+  "properties": {
+    "Text": "Kanban",
+    "Width": 1000,
+    "Height": 600
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "Bar",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "HAlign": "Fill",
+        "Height": 38,
+        "Spacing": 6,
+        "Width": 976,
+        "X": 12,
+        "Y": 10
+      },
+      "children": [
+        {
+          "type": "Button",
+          "name": "BtnNew",
+          "properties": {
+            "Shortcut": "<Control>n",
+            "Style": "suggested-action",
+            "Text": "New task",
+            "Tooltip": "Ctrl+N"
+          }
+        },
+        {
+          "type": "TextBox",
+          "name": "TxtFind",
+          "properties": {
+            "HExpand": true,
+            "Height": 34,
+            "Icon": "edit-clear-symbolic",
+            "Placeholder": "Search title or notes",
+            "Tooltip": "Anywhere in the title or the notes, accents folded"
+          }
+        },
+        {
+          "type": "ComboBox",
+          "name": "CmbPriority",
+          "properties": {
+            "Height": 34,
+            "Index": 0,
+            "Items": [
+              "All priorities",
+              "Low",
+              "Medium",
+              "High",
+              "Urgent"
+            ],
+            "Text": "All priorities",
+            "Tooltip": "Show only one priority",
+            "Width": 150
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnAddCol",
+          "properties": {
+            "Height": 34,
+            "Text": "Add column",
+            "Tooltip": "A new column on the right"
+          }
+        }
+      ]
+    },
+    {
+      "type": "Panel",
+      "name": "ActBar",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "HAlign": "Fill",
+        "Height": 36,
+        "Spacing": 6,
+        "Width": 976,
+        "X": 12,
+        "Y": 54
+      },
+      "children": [
+        {
+          "type": "Label",
+          "name": "LblSel",
+          "properties": {
+            "Ellipsize": true,
+            "HExpand": true,
+            "Style": "dim-label",
+            "VAlign": "Center"
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnLeft",
+          "properties": {
+            "Enabled": false,
+            "Text": "◀",
+            "Tooltip": "Move to the previous column",
+            "Width": 44
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnRight",
+          "properties": {
+            "Enabled": false,
+            "Text": "▶",
+            "Tooltip": "Move to the next column",
+            "Width": 44
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnEdit",
+          "properties": {
+            "Enabled": false,
+            "Text": "Edit",
+            "Width": 80
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnDel",
+          "properties": {
+            "Enabled": false,
+            "Style": "destructive-action",
+            "Text": "Delete",
+            "Width": 80
+          }
+        }
+      ]
+    },
+    {
+      "type": "Scroller",
+      "name": "Cols",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "HAlign": "Fill",
+        "Height": 420,
+        "MinHeight": 200,
+        "MinWidth": 400,
+        "Scrollbars": "Horizontal",
+        "Spacing": 12,
+        "VAlign": "Fill",
+        "Width": 976,
+        "X": 12,
+        "Y": 96
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblStatus",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 52,
+        "Style": "dim-label",
+        "VAlign": "End",
+        "Width": 976,
+        "Wrap": true,
+        "X": 12,
+        "Y": 524
+      }
+    }
+  ]
+}

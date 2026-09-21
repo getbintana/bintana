@@ -393,7 +393,7 @@ const TESTS = [
      * the note below. */
     "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "FormMargin", "HideOnClose", "PointerEvents", "On", "Field", "Separator", "TableView", "TableTree", "TableOnDemand", "TableSort", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
-    "Expand", "Spacing", "Scrolling", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "EditorMarks", "Search", "Tree", "TreeIcons", "TreeExpand",
+    "Expand", "Spacing", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "EditorMarks", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
     "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "Record", "Nested", "Database", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "Date", "Calendar", "Drawing", "Metrics", "Library", "Plugin", "ListMulti", "MenuState",
@@ -444,6 +444,10 @@ const NEEDS = {
     Media:          ["Exec"],
     /* Its two measurements are a window being laid out, twice. */
     Scrollbars:     ["Exec"],
+    /* Every claim it makes is an allocation, which is a frame away. */
+    FillScroll:     ["Exec"],
+    /* Its last block measures a child shown and then hidden, a frame each. */
+    DragDrop:       ["Exec"],
     /* Its second window has to be shown, closed and shown again. */
     HideOnClose:    ["Exec"],
     /* Its events arrive from the filesystem, which is not this turn of the
@@ -5788,6 +5792,96 @@ function Main() {
 
     Sc1_Scroll(x, y) { this.scrolled.push([x, y]); }
 
+    /* --- A Scroller that fills the room it has, and scrolls when it cannot ----
+     *
+     * These are two containers in the field's vocabulary -- WinForms'
+     * `TableLayoutPanel` with `AutoScroll`, CSS `overflow: auto` around a grid
+     * -- and one here, which is why it was reported as a gap and is not one:
+     * **`Arrangement` decides which of the two a `Scroller` is.**
+     *
+     * Its slot is a `Fixed` unless it is told otherwise, and a `Fixed` sizes
+     * its content at the content's own natural size: there is no design size
+     * for an anchor to keep a gap against, so `Fill` has nothing to fill and a
+     * panel in a scroller is as wide as what is in it. Arranged, the slot is a
+     * box, and a box stretches an expanding child across itself and lets it
+     * grow past the view along itself -- which is fill *and* scroll, decided by
+     * the content rather than ahead of it.
+     *
+     * The numbers this was written against are a wall of camera tiles, a `Grid`
+     * of `ceil(sqrt(n))` columns in a 900x500 view: **one tile is 898x498**,
+     * four are 2x2 at 445x245 with nothing to scroll, and twenty are a
+     * 924x538 grid with `ScrollMaxY 38` -- and the window stays 900x500.
+     * `examples/kanban` is the same two words the other way round: a row of
+     * columns that scrolls sideways, each column a scroller that fills.
+     *
+     * The half that is **not** `Arrangement`'s, measured the same afternoon:
+     * an axis that may not scroll propagates its content's minimum outwards,
+     * so the same twenty tiles under `Scrollbars: "Vertical"` push the window
+     * from 900 to 924 wide. A floor on the scroller does not stop it and is
+     * not what this is for -- scroll the axis that must not ask its parent for
+     * room.
+     */
+    testFillScroll() {
+        const W = 240, H = 160;
+
+        /* The declared shape is the same for both, and only the arrangement
+         * differs -- which is the whole claim. */
+        const build = (name, arranged) => {
+            const sc = new Scroller();
+            this.Fixed1.Add(sc);
+            sc.Name = name;
+            if (arranged) sc.Arrangement = "Vertical";
+            sc.Scrollbars = "Both";
+            sc.Resize(W, H);
+
+            const inner = new Panel();
+            inner.HAlign  = "Fill";
+            inner.VAlign  = "Fill";
+            inner.HExpand = true;
+            inner.VExpand = true;
+            inner.MinWidth  = 60;
+            inner.MinHeight = 40;
+            sc.Add(inner);
+            return [sc, inner];
+        };
+
+        const [plain,  loose] = build("ScPlain", false);
+        const [filled, tight] = build("ScFilled", true);
+
+        until("both scrollers are laid out",
+              () => plain.Bounds().Width > 1 && filled.Bounds().Width > 1, () => {
+            const view = filled.Bounds();
+            const got  = tight.Bounds();
+            const nat  = loose.Bounds();
+
+            check("a Fixed slot leaves its content at its own size",
+                  nat.Width < view.Width - 40,
+                  `${nat.Width} in a view of ${view.Width}`);
+
+            eq("an arranged slot hands it the view's width",  got.Width,  view.Width);
+            eq("and the view's height while there is spare", got.Height, view.Height);
+            eq("with nothing to scroll",                     filled.ScrollMaxY, 0);
+
+            /* And now the content outgrows the view. Its floor is what it may
+             * not be squeezed below -- the axis is `Fill` -- so this is the
+             * same declaration asking for more than there is. */
+            tight.MinHeight = H * 2;
+
+            until("the taller content is measured", () => filled.ScrollMaxY > 0, () => {
+                check("content that no longer fits scrolls instead",
+                      filled.ScrollMaxY > 0, String(filled.ScrollMaxY));
+                eq("and the view is still the size it was given",
+                   filled.Bounds().Height, view.Height);
+                eq("while the width still follows it",
+                   tight.Bounds().Width, view.Width);
+
+                plain.Delete();
+                filled.Delete();
+            });
+        });
+    }
+
+
     /* --- Time: the clock half of Day ----------------------------------------
      *
      * A time of day is the text `"HH:MM"` (seconds optional), for the same
@@ -8336,6 +8430,42 @@ function Main() {
         eq("files turn off on their own", target.AcceptFiles, false);
         eq("leaving the drag alone", target.AcceptDrop, true);
         target.AcceptDrop = false;
+
+        /*
+         * **And the one thing about *placing* a drop that a test can reach.**
+         * `Drop(data, x, y)` carries the point in the accepting widget's own
+         * coordinates, and `child.Bounds(that widget)` answers in the same
+         * space -- so which row a drop is over is a comparison, and a list
+         * can place a dropped card instead of appending it. None of that is
+         * assertable here: there is no synthetic pointer, and an `Emit` would
+         * only hand our own numbers back. It was measured by hand instead
+         * (`examples/kanban`, and the note in AGENTS.md).
+         *
+         * What *is* assertable is the guard such a walk needs: a hidden child
+         * does not keep its last rectangle, it measures **0x0 at the origin**
+         * -- which is a rectangle every point in the container is below, so a
+         * walk that forgot `Visible` would answer with the wrong row rather
+         * than with none.
+         */
+        const seen = new Panel();
+        seen.Width = 120;
+        seen.Height = 40;
+        this.Fixed1.Add(seen);
+        seen.Move(4, 4);
+
+        until("the panel is laid out", () => seen.Bounds().Width > 1, () => {
+            check("a shown child has a rectangle", seen.Bounds().Width >= 120,
+                  JSON.stringify(seen.Bounds()));
+            seen.Visible = false;
+
+            until("and the hidden one is measured again",
+                  () => seen.Bounds().Width === 0, () => {
+                eq("a hidden child measures nothing wide", seen.Bounds().Width, 0);
+                eq("nothing tall",                         seen.Bounds().Height, 0);
+                eq("and sits at the origin",               seen.Bounds().X, 0);
+                seen.Delete();
+            });
+        });
 
         /* An empty tooltip is none, not a blank balloon. */
         eq("no Tooltip by default", source.Tooltip, "");

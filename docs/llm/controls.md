@@ -169,7 +169,7 @@ is what `bta_emit` really passes, counted from the call — not from prose.
 | **event** `KeyRelease(key, ctrl, shift, alt)` | nothing here is consumable |
 | **event** `GotFocus()` | answers for the **control**, so it fires for the focus arriving anywhere within it |
 | **event** `LostFocus()` | where "the user is done with this box" is said |
-| **event** `Drop(data, x, y)` | something with `DragData` was dropped on a widget with `AcceptDrop` |
+| **event** `Drop(data, x, y)` | something with `DragData` was dropped on a widget with `AcceptDrop`. The point is in **this widget's** coordinates, and so is `Bounds(this widget)` asked of a child — so *which row a drop is over* is a comparison and not arithmetic, and on a scroller both numbers already carry the scroll (a child above the view reads a negative `Y`). A hidden child measures 0x0, so skip what is not `Visible` |
 | **event** `FileDrop(paths, x, y)` | files were dropped from the file manager or the desktop on a widget with `AcceptFiles`. `paths` is an array of full paths — **only files that have one**: a file on a remote share has no local path and does not arrive, and a drop of nothing but those is refused rather than delivered empty |
 
 ### What every widget also answers
@@ -1045,7 +1045,7 @@ A gallery: children wrap into as many columns as fit, and it scrolls itself.
 
 ## Scroller
 
-Content whose size is not its parent's business: the view is as big as the room it is given, the content as big as it needs, and the difference scrolls.
+Content whose size is not its parent's business: the view is as big as the room it is given, the content as big as it needs, and the difference scrolls. Give it an `Arrangement` and the content follows the view as well, and scrolls only once it cannot fit — [below](#scroller).
 
 | Member | |
 |---|---|
@@ -1059,6 +1059,44 @@ Content whose size is not its parent's business: the view is as big as the room 
 **`ScrollY === ScrollMaxY` is the test for *at the bottom***, which is the whole
 of infinite scroll: the maximum is the content minus one view, so it is the last
 position that still shows something rather than the content's own height.
+
+**`Arrangement` is what makes a scroller *fill* as well as scroll**, and without
+it the content is only ever as big as it needs to be. The default slot is a
+`Fixed`, which is what lets `X`/`Y` mean something inside a scroller — and a
+`Fixed` has no design size for an anchor to keep a gap against, so `HAlign:
+"Fill"` on the content has nothing to fill: a panel in a 900-wide view is as
+wide as what is in it. Arranged `Horizontal` or `Vertical`, the slot is a box,
+and then a child with `HExpand`/`VExpand` is **stretched across the view and
+free to grow past it along the view**, which is fill and scroll in one
+declaration:
+
+```js
+const view = new Scroller();
+view.Arrangement = "Vertical";     /* a column of content */
+view.Scrollbars  = "Both";
+const grid = new Grid();           /* one tile, or twenty */
+grid.Columns = 4;
+grid.Homogeneous = true;
+grid.HExpand = true;               /* claims the width the view has */
+grid.VExpand = true;               /* and the height, while there is spare */
+view.Add(grid);
+```
+
+Measured in a 900x500 view, tiles with a 180x130 floor and `Columns` at
+`ceil(sqrt(n))`: one tile is **898x498**, four are 2x2 at **445x245** with
+nothing to scroll, and twenty are a **924x538** grid with `ScrollMaxY 38` — the
+view never grows, and which of the two happens is decided by how much there is
+rather than declared in advance. Unarranged, the same declarations leave the
+grid at what is in it — **180x130** for the one tile, **366x266** for the four —
+with the rest of the view empty.
+[`examples/kanban`](../../examples/kanban) is both ways round in one window: a
+row of columns that scrolls sideways, each column a scroller that fills.
+
+**An axis that may not scroll asks its parent for room instead.** `Scrollbars`
+is what decides that, and it is not `MinWidth`'s job: the twenty tiles above
+under `Scrollbars: "Vertical"` push the window from 900 to 924 wide, with or
+without a floor on the scroller, because a view that cannot scroll across has to
+be given its content's width. Scroll the axis that must not ask.
 
 **Scrolling to the end of something you just added needs a turn.** A row added in
 this turn has no allocation yet, so the maximum is still the old one and

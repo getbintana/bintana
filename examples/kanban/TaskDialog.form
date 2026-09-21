@@ -1,0 +1,117 @@
+{
+  "format": "bintana-form/1",
+  "class": "TaskDialog",
+  "properties": {
+    "Text": "Task",
+    "Width": 440,
+    "Height": 480,
+    "Resizable": false
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblTitle",
+      "properties": { "Height": 20, "Text": "Title", "Width": 408, "X": 16, "Y": 12 }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtTitle",
+      "properties": { "HAlign": "Fill", "Height": 34, "Width": 408, "X": 16, "Y": 36 }
+    },
+    {
+      "type": "Label",
+      "name": "LblNotes",
+      "properties": { "Height": 20, "Text": "Notes", "Width": 408, "X": 16, "Y": 78 }
+    },
+    {
+      "type": "TextEditor",
+      "name": "EdNotes",
+      "properties": { "HAlign": "Fill", "Height": 110, "Width": 408, "X": 16, "Y": 102 }
+    },
+    {
+      "type": "Label",
+      "name": "LblPri",
+      "properties": { "Height": 20, "Text": "Priority", "Width": 190, "X": 16, "Y": 220 }
+    },
+    {
+      "type": "ComboBox",
+      "name": "CmbPriority",
+      "properties": { "Height": 34, "Width": 190, "X": 16, "Y": 244 }
+    },
+    {
+      "type": "Label",
+      "name": "LblCol",
+      "properties": { "Height": 20, "Text": "Column", "Width": 190, "X": 218, "Y": 220 }
+    },
+    {
+      "type": "ComboBox",
+      "name": "CmbColumn",
+      "properties": { "Height": 34, "Width": 190, "X": 218, "Y": 244 }
+    },
+    {
+      "type": "Label",
+      "name": "LblDue",
+      "properties": { "Height": 20, "Text": "Due date", "Width": 190, "X": 16, "Y": 286 }
+    },
+    {
+      "type": "DatePicker",
+      "name": "PckDue",
+      "properties": { "Height": 34, "Width": 150, "X": 16, "Y": 310 }
+    },
+    {
+      "type": "Button",
+      "name": "BtnClearDate",
+      "properties": {
+        "Height": 34,
+        "Icon": "edit-clear-symbolic",
+        "Style": "flat",
+        "Tooltip": "No date",
+        "Width": 40,
+        "X": 174,
+        "Y": 310
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblErr",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 40,
+        "Style": "error",
+        "Width": 408,
+        "Wrap": true,
+        "X": 16,
+        "Y": 352
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnCancel",
+      "properties": {
+        "Cancel": true,
+        "HAlign": "End",
+        "Height": 32,
+        "Text": "Cancel",
+        "VAlign": "End",
+        "Width": 90,
+        "X": 222,
+        "Y": 424
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnSave",
+      "properties": {
+        "Default": true,
+        "HAlign": "End",
+        "Height": 32,
+        "Style": "suggested-action",
+        "Text": "Save",
+        "VAlign": "End",
+        "Width": 90,
+        "X": 326,
+        "Y": 424
+      }
+    }
+  ]
+}

@@ -14,7 +14,7 @@ in the same form.
 |---|---|
 | [ISSUE-editable-combo.md](ISSUE-editable-combo.md) | No editable / autocompleting combo |
 | [ISSUE-fixed-fill-child.md](ISSUE-fixed-fill-child.md) | A `Fixed` container does not stretch a `Fill` child when it grows |
-| [ISSUE-fill-and-scroll.md](ISSUE-fill-and-scroll.md) | No container that fills the room it is given and scrolls when it cannot |
+| [ISSUE-drag-feedback.md](ISSUE-drag-feedback.md) | A drop target hears nothing until the drop, so a drag cannot be shown |
 | [ISSUE-packaging.md](ISSUE-packaging.md) | No way to hand over an application without its project tree |
 | [ISSUE-worker-locale-order.md](ISSUE-worker-locale-order.md) | A `Task` has no `Locale`, so a worker cannot order names |
 | [ISSUE-form-keepalive.md](ISSUE-form-keepalive.md) | A shown `Form` has to be kept alive by hand — sixteen copies of one array |
@@ -29,8 +29,8 @@ in the same form.
 past its answer is a second description of the same feature, written by somebody
 who did not have it yet, in the directory of things that are missing.
 
-Eighteen have gone that way — seventeen filled and one refused. Filled: a drawing that
-could not carry an image, text that could not be measured outside a `Draw`, a
+Nineteen have gone that way — seventeen filled, one refused, and one that was
+never missing. Filled: a drawing that could not carry an image, text that could not be measured outside a `Draw`, a
 document that could only leave as one PNG per page, a program that had to run
 `sha256sum` to hash anything, an application that could not ask how big the
 screen was, a `Scroller` that could not say where it was scrolled to, an editor
@@ -46,6 +46,19 @@ build knew nothing about — `Video`, whose `Available` is now asked of the
 registry rather than declared at build time —, and a document that could only
 leave as a file and never reach a printer: `Printer.Send` puts it through the
 print dialog, and `Printer.ToFile` writes the PDF the dialog would have made.
+
+Never missing: a container that fills the room it is given **and** scrolls when
+it cannot. It was reported against a wall of cameras whose count is only known
+at run time, and it is what a `Scroller` with an `Arrangement` has always done —
+the slot is a box then, so an expanding child is stretched across the view and
+free to outgrow it along the view. Nothing said so anywhere, which is the part
+that was real: the reference now does, in
+[`llm/controls.md`](../llm/controls.md#scroller) and
+[`reference/widgets/Scroller.md`](../reference/widgets/Scroller.md), with the
+measurements, and `tests/widgets`' `FillScroll` is what keeps it true.
+**An issue answered by words that already existed is deleted like any other** —
+what it leaves behind is the documentation that would have prevented it, not a
+file describing a feature the runtime has.
 
 Refused: a list of check boxes. A tick the *list* keeps is state in the view,
 which is the wrong place for it — the argument is with the other things that are

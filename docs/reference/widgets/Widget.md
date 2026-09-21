@@ -299,6 +299,18 @@ availability is computed once and every one of them follows. Three copies of
 | **event** `Drop(data, x, y)` | something with a `DragData` was dropped here |
 | **event** `FileDrop(paths, x, y)` | files were dropped here. `paths` is an array of full paths — **only files that have one**: something on a remote share has no local path and does not arrive, and a drop of nothing but those is refused rather than delivered empty |
 
+**The point is in the accepting control's own coordinates, and so is
+`Bounds(that control)`** — which is what lets a drop be *placed* rather than
+appended: the row it is over is the first child whose middle is below it, one
+comparison and no arithmetic. **A scroller's numbers already carry its scroll,
+both of them.** Measured on a column scrolled down: the drop arrived at
+`y = 168`, the cards above the view read `Y: -293, -206, -119, -32` and the ones
+in it `55, 142, 229`, so adding `ScrollY` would count the scroll twice.
+A control that is hidden measures **0x0 at the origin** rather than keeping its
+old rectangle, so anything comparing against children has to skip what is not
+`Visible`. [`examples/kanban`](../../../examples/kanban) places a dropped card
+from exactly that comparison.
+
 ## The mouse and the keyboard
 
 Every widget raises these, with coordinates **relative to itself**:
