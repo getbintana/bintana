@@ -30,9 +30,6 @@ const MENU_HELP =
     "it radio keeps the entry that was chosen.\n\n" +
     "Double click an item to write its handler.";
 
-/* Open dialogs, so the collector does not take one away mid-edit. */
-const openMenuEditors = [];
-
 class MenuForm extends Form {
 
     /* MenuForm.edit(menus, (spec) => ..., (name) => ...) */
@@ -45,7 +42,6 @@ class MenuForm extends Form {
         dlg.onOpenHandler   = onOpenHandler;
         dlg.Modal           = true;
 
-        openMenuEditors.push(dlg);
         dlg.Show();
         dlg.fillTree();
         return dlg;
@@ -406,11 +402,7 @@ class MenuForm extends Form {
         return true;
     }
 
-    dismiss() {
-        const i = openMenuEditors.indexOf(this);
-        if (i >= 0) openMenuEditors.splice(i, 1);
-        this.Close();
-    }
+    dismiss() { this.Close(); }
 
     BtnOk_Click()     { this.accept(); }
     BtnCancel_Click() { this.dismiss(); }

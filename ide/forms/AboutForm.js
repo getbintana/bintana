@@ -19,10 +19,6 @@
  */
 "use strict";
 
-/* While it is open nothing else references it: without this the collector takes
- * it away and the window is left without its handlers.  Same as `AskForm`. */
-const openAbouts = [];
-
 class AboutForm extends Form {
 
     /* AboutForm.show() -- there is nothing to ask and nothing to answer, so it
@@ -57,17 +53,12 @@ class AboutForm extends Form {
 
         dlg.Modal = true;
 
-        openAbouts.push(dlg);
         dlg.Show();
         dlg.BtnClose.SetFocus();
         return dlg;
     }
 
-    dismiss() {
-        const i = openAbouts.indexOf(this);
-        if (i >= 0) openAbouts.splice(i, 1);
-        this.Close();
-    }
+    dismiss() { this.Close(); }
 
     BtnClose_Click() { this.dismiss(); }
 

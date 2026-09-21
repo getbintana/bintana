@@ -17,7 +17,9 @@
  */
 "use strict";
 
-/* Open viewers, so the collector does not take one away mid-look. */
+/* The viewers that are up, so the same file is not shown twice and the driver
+ * can reach the one on screen.  The runtime holds a shown form alive on its
+ * own, so this is a registry and not a workaround for the collector. */
 const openImages = [];
 
 /* What `Zoom` does per press. A quarter is small enough to aim with and large

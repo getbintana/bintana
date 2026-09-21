@@ -445,7 +445,7 @@ function* p_welcome(ide) {
     about.CancelButton.Click();
     yield;
 
-    eq("and closing lets go of it, so it can be collected", openAbouts.length, 0);
+    eq("and closing takes the window away", about.Visible, false);
 }
 
 function* p_files(ide) {
@@ -1251,7 +1251,7 @@ function* p_designer(ide) {
     editor(ide, "Style").Emit("IconClick");
     yield;
 
-    const styleDlg  = openStylePickers[openStylePickers.length - 1];
+    const styleDlg  = ide.stylePicker;
     const offered = styleDlg.classes;
 
     check("which opens the chooser", styleDlg !== undefined);
@@ -1354,7 +1354,7 @@ function* p_designer(ide) {
     styleDlg.BtnNew_Click();
     yield;
 
-    const classDlg = openClassEditors[openClassEditors.length - 1];
+    const classDlg = ide.classEditor;
     check("New… opens the class editor", classDlg !== undefined);
 
     classDlg.TxtName.Text    = "made-here";
@@ -1516,7 +1516,7 @@ function* p_designer(ide) {
     editor(ide, "Icon").Emit("IconClick");
     yield;
 
-    const picker = openPickers[openPickers.length - 1];
+    const picker = ide.iconPicker;
     check("which opens the chooser", picker !== undefined);
     check("showing a page and saying there is more",
           picker.Board.Children.length > 0 && picker.LblCount.Text.includes("of"),
@@ -1543,13 +1543,13 @@ function* p_designer(ide) {
      * the other is a thing one means to do. */
     editor(ide, "Icon").Emit("IconClick");
     yield;
-    openPickers[openPickers.length - 1].BtnCancel_Click();
+    ide.iconPicker.BtnCancel_Click();
     yield;
     eq("cancelling leaves it as it was", byName(ide, "Ok").Icon, chosen);
 
     editor(ide, "Icon").Emit("IconClick");
     yield;
-    openPickers[openPickers.length - 1].BtnNone_Click();
+    ide.iconPicker.BtnNone_Click();
     yield;
     eq("and None clears it", byName(ide, "Ok").Icon, "");
 
@@ -4526,7 +4526,7 @@ function* p_forms(ide) {
     ide.WidgetTree_Activate();
     yield;
 
-    const asking = openPrompts[openPrompts.length - 1];
+    const asking = ide.renameControlAsk;
     check("double clicking a node asks for a name", asking !== undefined);
     eq("starting from the one it has", asking.TxtValue.Text, "BtnSave");
 
@@ -4546,10 +4546,9 @@ function* p_forms(ide) {
     /* The form is not a control and is not renamed from here. */
     ide.WidgetTree.Key = "@form";
     yield;
-    const promptsOpen = openPrompts.length;
+    const lastPrompt = ide.renameControlAsk;
     ide.WidgetTree_Activate();
-    eq("the root offers no rename", openPrompts.length, promptsOpen);
-
+    check("the root offers no rename", ide.renameControlAsk === lastPrompt);
     ide.designer.select(byName(ide, "BtnStore"));
     typeInto(ide, "Name", "BtnSave");
 
@@ -8259,7 +8258,7 @@ function* p_strings(ide) {
     ide.MnuFtNewTranslation_Click();
     yield;
 
-    const asking = openPrompts[openPrompts.length - 1];
+    const asking = ide.newTranslationAsk;
     check("the template asks which language", !!asking);
 
     /* A name the runtime could never match is refused where it is typed, not
@@ -8303,7 +8302,7 @@ function* p_strings(ide) {
      * translator's file. */
     ide.MnuFtNewTranslation_Click();
     yield;
-    const again = openPrompts[openPrompts.length - 1];
+    const again = ide.newTranslationAsk;
     again.TxtValue.Text = "ru";
     again.accept();
     check("a locale that already has one is refused",

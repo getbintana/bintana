@@ -7,10 +7,6 @@
  */
 "use strict";
 
-/* While it is open nothing else references it: without this the collector takes
- * it away and the window is left without its handlers. */
-const openPrompts = [];
-
 class AskForm extends Form {
 
     /*
@@ -48,7 +44,6 @@ class AskForm extends Form {
             dlg.Height += room;
         }
 
-        openPrompts.push(dlg);
         dlg.Show();
         dlg.TxtValue.SetFocus();
         return dlg;
@@ -65,11 +60,7 @@ class AskForm extends Form {
         if (this.onAccept) this.onAccept(value, checked);
     }
 
-    dismiss() {
-        const i = openPrompts.indexOf(this);
-        if (i >= 0) openPrompts.splice(i, 1);
-        this.Close();
-    }
+    dismiss() { this.Close(); }
 
     /*
      * Enter and Escape are declared in the .form now -- `BtnOk` is `Default`,

@@ -16,7 +16,6 @@ in the same form.
 | [ISSUE-fixed-fill-child.md](ISSUE-fixed-fill-child.md) | A `Fixed` container does not stretch a `Fill` child when it grows |
 | [ISSUE-packaging.md](ISSUE-packaging.md) | No way to hand over an application without its project tree |
 | [ISSUE-worker-locale-order.md](ISSUE-worker-locale-order.md) | A `Task` has no `Locale`, so a worker cannot order names |
-| [ISSUE-form-keepalive.md](ISSUE-form-keepalive.md) | A shown `Form` has to be kept alive by hand — sixteen copies of one array |
 | [ISSUE-laid-out.md](ISSUE-laid-out.md) | Nothing says *I have been laid out*, so five places retry on a timer |
 | [ISSUE-editor-offset.md](ISSUE-editor-offset.md) | An editor cannot turn a character offset into a line |
 | [ISSUE-file-relative.md](ISSUE-file-relative.md) | No `File.Relative`, and an extension has to be case-folded by hand |
@@ -28,7 +27,7 @@ in the same form.
 past its answer is a second description of the same feature, written by somebody
 who did not have it yet, in the directory of things that are missing.
 
-Twenty have gone that way — eighteen filled, one refused, and one that was
+Twenty-one have gone that way — nineteen filled, one refused, and one that was
 never missing. Filled: a drawing that could not carry an image, text that could not be measured outside a `Draw`, a
 document that could only leave as one PNG per page, a program that had to run
 `sha256sum` to hash anything, an application that could not ask how big the
@@ -47,7 +46,9 @@ leave as a file and never reach a printer: `Printer.Send` puts it through the
 print dialog, and `Printer.ToFile` writes the PDF the dialog would have made,
 and a drop target that heard nothing until the drop: `DragEnter`/`DragOver`
 carry the point while the drag travels, `DragLeave` says it went,
-`DragBegin`/`DragEnd` mark the source's half, and answering `false` refuses.
+`DragBegin`/`DragEnd` mark the source's half, and answering `false` refuses,
+and a shown `Form` that had to be kept alive by hand in sixteen dialogs:
+`Show()` holds it now and the allowed close lets it go.
 
 Never missing: a container that fills the room it is given **and** scrolls when
 it cannot. It was reported against a wall of cameras whose count is only known

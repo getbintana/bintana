@@ -3381,6 +3381,15 @@ active one, fires `Open` the first time, and presents it. `Close()` closes it,
 firing `Close`. `Center()` is a no-op on purpose rather than a lie: on Wayland the
 compositor decides placement.
 
+**And `Show()` holds the form, so a dialog needs no reference kept anywhere.**
+`new AskForm().Show()` is the whole of it: the runtime takes a strong reference
+while the window is open and drops it when the close is allowed — a vetoed
+`Form_Close` keeps it, `HideOnClose` releases it and a later `Show()` takes it
+again, and hiding with `Visible = false` does not end it. The reference is
+invisible to the collector on purpose (the `AudioPlayer` claim, for the length of
+a sound, is the same bargain), so the runtime releases it on every road out,
+including teardown.
+
 **A form is asked whether it is closing, not told.** `Form_Close` returning true
 keeps the window open — the convention `KeyPress` already uses for a key it
 consumed, and returning nothing at all, which is what every handler written before

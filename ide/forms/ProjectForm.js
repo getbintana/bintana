@@ -14,9 +14,6 @@
  */
 "use strict";
 
-/* Open dialogs, so the collector does not take one away mid-edit. */
-const openProjectForms = [];
-
 class ProjectForm extends Form {
 
     /*
@@ -67,7 +64,6 @@ class ProjectForm extends Form {
         dlg.showUses();
         dlg.showSources();
 
-        openProjectForms.push(dlg);
         dlg.Show();
         dlg.TxtPrName.SetFocus();
         return dlg;
@@ -292,11 +288,7 @@ class ProjectForm extends Form {
         if (this.onAccept) this.onAccept(edited);
     }
 
-    dismiss() {
-        const i = openProjectForms.indexOf(this);
-        if (i >= 0) openProjectForms.splice(i, 1);
-        this.Close();
-    }
+    dismiss() { this.Close(); }
 
     /* --- events ------------------------------------------------------------ */
 

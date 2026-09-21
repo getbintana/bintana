@@ -1090,15 +1090,19 @@ Ide.PropertyGrid = class PropertyGrid {
     pickStyle(key) {
         const editor = this.editors[key];
 
-        StyleForm.pick(editor.Text, this.styleClasses(),
-                       { node: this.styleNode(), type: this.typeName(),
-                         /* A class that dresses `> children` needs a control that
-                          * takes controls: what a ListBox holds is strings. */
-                         container: !!this.target && "Children" in this.target,
-                         /* Where a class of one's own is written: app.css, so it
-                          * can be worn by every control that wants it. */
-                         project: this.ide.project },
-                       (value) => {
+        this.ide.stylePicker =
+            StyleForm.pick(editor.Text, this.styleClasses(),
+                           { node: this.styleNode(), type: this.typeName(),
+                             /* A class that dresses `> children` needs a control that
+                              * takes controls: what a ListBox holds is strings. */
+                             container: !!this.target && "Children" in this.target,
+                             /* Where a class of one's own is written: app.css, so it
+                              * can be worn by every control that wants it. */
+                             project: this.ide.project,
+                             /* The picker opens the class editor itself, so it is the
+                              * one that has to leave it reachable. */
+                             ide: this.ide },
+                           (value) => {
             editor.Text = value;
             this.applyEditor(key);
         });
@@ -1262,7 +1266,7 @@ Ide.PropertyGrid = class PropertyGrid {
      * colour one is a control of its own, because a swatch is what a colour
      * looks like and a wheel is not something the widget set can be. */
     pickIcon(key) {
-        IconForm.pick(String(this.propertyValue(key) || ""), (name) => {
+        this.ide.iconPicker = IconForm.pick(String(this.propertyValue(key) || ""), (name) => {
             this.editors[key].Text = name;
             this.applyEditor(key);
         });

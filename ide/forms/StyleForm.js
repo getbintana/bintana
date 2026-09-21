@@ -17,12 +17,6 @@
  */
 "use strict";
 
-/* While it is open nothing else references it: without this the collector takes
- * it away and the window is left without its handlers. The icon chooser keeps
- * its own list for the same reason, under its own name -- these files share one
- * lexical scope. */
-const openStylePickers = [];
-
 /* The CSS nodes a control here can be, worked out once per run of the IDE: it is
  * a fact about the runtime, and the runtime does not change while it runs. */
 let nodeCache = null;
@@ -50,7 +44,6 @@ class StyleForm extends Form {
                  offer || [], (about && about.node) || "", who,
                  !!(about && about.container));
 
-        openStylePickers.push(dlg);
         dlg.Show();
         dlg.TxtFind.SetFocus();
         return dlg;
@@ -229,7 +222,7 @@ class StyleForm extends Form {
         const project = this.project || (this.about && this.about.project);
         if (!project) return;
 
-        ClassForm.edit(project, name, (saved) => {
+        const editor = ClassForm.edit(project, name, (saved) => {
             /* Read the sheet again rather than guessing what changed: the file is
              * the answer, and somebody may have edited it in the tab next door. */
             const have = [...this.chosen(), saved];
@@ -239,6 +232,10 @@ class StyleForm extends Form {
             this.fill(have, this.offer, this.about.node || "",
                       this.about.type || "", !!this.about.container);
         });
+
+        /* Kept so the IDE (and its driver) can reach the editor while it is
+         * open -- the runtime holds the window itself. */
+        if (this.about.ide) this.about.ide.classEditor = editor;
     }
 
     TxtFind_Change()    { this.List.Refilter(); }
@@ -254,9 +251,5 @@ class StyleForm extends Form {
 
     BtnCancel_Click() { this.dismiss(); }
 
-    dismiss() {
-        const i = openStylePickers.indexOf(this);
-        if (i >= 0) openStylePickers.splice(i, 1);
-        this.Close();
-    }
+    dismiss() { this.Close(); }
 }

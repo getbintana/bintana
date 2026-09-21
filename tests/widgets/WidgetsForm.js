@@ -391,7 +391,7 @@ const TESTS = [
     /* Early on purpose: they show windows of their own, and the pushed-surface
      * assertions in the async tail measure a form on the frame it settles. See
      * the note below. */
-    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "FormMargin", "HideOnClose", "PointerEvents", "On", "Field", "Separator", "TableView", "TableTree", "TableOnDemand", "TableSort", "TableIcon", "TableProse",
+    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator", "TableView", "TableTree", "TableOnDemand", "TableSort", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
     "Expand", "Spacing", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "EditorMarks", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
@@ -1303,6 +1303,45 @@ class WidgetsForm extends Form {
         win.Close();
         eq("asked again the next time", win.asked, 2);
         eq("and answering nothing lets it go", win.Visible, false);
+    }
+
+    /* --- a shown form is held by the runtime -------------------------------
+     *
+     * A form's wrapper is an ordinary object, and nothing references a dialog
+     * once it is up: the collector is free to take it and leave the window on
+     * screen with every handler disconnected.  Sixteen dialogs in the IDE kept
+     * a module-level array alive against exactly that, which is what `Show`
+     * takes and the allowed close drops.
+     *
+     * **The collection itself cannot be forced from here** -- there is no
+     * `gc()` in the language, the sentence `testHttp` also ends with -- so
+     * what this proves is the half that is easy to get wrong: a claim that is
+     * never dropped is a strong reference the collector cannot see, and
+     * `JS_FreeRuntime` aborts at teardown.  The form left open is the one that
+     * proves `bta_forms_cleanup` ran; the closed one walks the other road, and
+     * after this method returns nothing in JavaScript points at either.
+     */
+    testFormKeepalive() {
+        /* Closed: the claim has to be dropped on the way out. */
+        const closed = new Form();
+        closed.Text = "keepalive closed";
+        closed.Resize(240, 120);
+        closed.Show();
+        eq("a shown form is a window", closed.Visible, true);
+
+        closed.Close();
+        eq("and the allowed close takes it away", closed.Visible, false);
+
+        /* Shown and never closed: `bta_forms_cleanup` is the only thing that
+         * can drop this one.  Hidden, so the rest of the run is not measuring
+         * around a window nobody asked for -- a hidden form is still an open
+         * one, and only closing releases it. */
+        const left = new Form();
+        left.Text = "keepalive left open";
+        left.Resize(240, 120);
+        left.Show();
+        left.Visible = false;
+        eq("a hidden form is still an open one", left.Visible, false);
     }
 
     /* What the editor under test asks its form. Returning an array is the

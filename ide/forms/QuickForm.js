@@ -29,10 +29,9 @@
  */
 "use strict";
 
-/* While it is open nothing else references it: without this the collector takes
- * it away and the window is left without its handlers. `SymbolForm` and the
- * choosers keep their own list for the same reason -- these files share one
- * lexical scope, so the name has to be its own. */
+/* The palette that is up, so the next `Ctrl+P` reuses it and the driver can
+ * reach it.  A registry, not a collector workaround: the runtime holds a shown
+ * form alive by itself. */
 const openQuickPickers = [];
 
 /* What turns the box from a file search into a command search. Sublime's

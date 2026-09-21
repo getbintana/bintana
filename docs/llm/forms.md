@@ -315,6 +315,11 @@ Events: `Open`, `Close`, `Resize(width, height)`.
 
 - `Show()` fires `Open` the first time, and presents the window. A modal window
   is made transient for the active one.
+- **A shown form is held by the runtime**, so a dialog needs no reference kept
+  anywhere: `new AskForm().Show()` is the whole of it. The claim lasts until the
+  close is allowed — a vetoed `Form_Close` keeps it — and is dropped on
+  `HideOnClose` too, where a later `Show()` takes it again. Hiding with
+  `Visible = false` does not end it: only closing does.
 - **`Show()` runs `Form_Open` before it returns.** Whatever the handler set is
   readable on the next line, with no waiting. What needs a frame is anything that
   *measures* — those are two different questions.
@@ -372,6 +377,9 @@ AskName.ask("Name for the note", "", (name) => this.create(name));
 **The callback runs only when there is an answer**, so no caller has to tell
 *cancelled* from *chose nothing*. Its `.form` declares `Resizable: false` and
 puts `Default` on OK.
+
+**Nothing keeps the dialog alive on the side**: the runtime holds a shown form
+until it closes.
 
 For a confirmation, the same shape with nothing `Default` and the focus on
 Cancel — Enter must not be able to delete anything.

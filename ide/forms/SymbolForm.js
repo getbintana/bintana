@@ -19,12 +19,6 @@
  */
 "use strict";
 
-/* While it is open nothing else references it: without this the collector takes
- * it away and the window is left without its handlers.  The style and icon
- * choosers keep their own list for the same reason -- these files share one
- * lexical scope, so the name has to be its own. */
-const openSymbolPickers = [];
-
 class SymbolForm extends Form {
 
     /*
@@ -43,7 +37,6 @@ class SymbolForm extends Form {
         dlg.Modal    = true;
         dlg.fill();
 
-        openSymbolPickers.push(dlg);
         dlg.Show();
         dlg.TxtFind.SetFocus();
         return dlg;
@@ -218,20 +211,5 @@ class SymbolForm extends Form {
 
         this.Close();
         if (this.onChoose) this.onChoose(line);
-    }
-
-    /*
-     * Letting go of itself, on every road out: the button, Escape (which is what
-     * `Cancel` on that button means) and the frame's X.  `StyleForm` does this in
-     * its Cancel handler and so leaks a window closed with the X; here it is the
-     * one event all three go through.
-     *
-     * **It must not return true.** `Form_Close` is a veto -- `on_close_request`
-     * hands back what it returned, and true *keeps the window open*. Returning
-     * nothing is the answer that lets it go.
-     */
-    Form_Close() {
-        const at = openSymbolPickers.indexOf(this);
-        if (at >= 0) openSymbolPickers.splice(at, 1);
     }
 }

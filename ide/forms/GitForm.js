@@ -27,9 +27,8 @@
  */
 "use strict";
 
-/* While it is open nothing else references it, and a window with no reference
- * is collected out from under its own handlers. One at a time, which is what
- * makes raising it the right answer to being asked for twice. */
+/* The one that is open, if any: one at a time, which is what makes raising it
+ * the right answer to being asked for twice. */
 let openGit = null;
 
 /* Past this a file is not read into two buffers: a diff of a generated file or

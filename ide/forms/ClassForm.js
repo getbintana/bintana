@@ -21,8 +21,6 @@
  */
 "use strict";
 
-const openClassEditors = [];
-
 /* The file every project keeps its classes in, found by name exactly as the
  * runtime finds it. */
 const SHEET = "app.css";
@@ -72,7 +70,6 @@ class ClassForm extends Form {
         dlg.ready = true;
         dlg.load(props || {});
 
-        openClassEditors.push(dlg);
         dlg.Show();
         (name ? dlg.ColBack : dlg.TxtName).SetFocus();
         return dlg;
@@ -229,9 +226,5 @@ class ClassForm extends Form {
 
     BtnCancel_Click() { this.dismiss(); }
 
-    dismiss() {
-        const i = openClassEditors.indexOf(this);
-        if (i >= 0) openClassEditors.splice(i, 1);
-        this.Close();
-    }
+    dismiss() { this.Close(); }
 }

@@ -49,6 +49,12 @@ dialogs are Bintana forms with `Modal` set, not runtime primitives — which is 
 rule this whole tree is built on and the reason there is nothing to learn here
 beyond what a form already is.
 
+**`Show()` holds the form, so nothing else has to.** `new AskForm().Show()` is
+the whole of it: the runtime keeps a strong reference while the window is open
+and drops it when the close is allowed — a vetoed `Form_Close` keeps it,
+`HideOnClose` releases it and a later `Show()` takes it again, and
+`Visible = false` does not end it.
+
 **Nothing has a size inside `Open`.** The window has not been laid out yet, so
 measuring there measures nothing: `Timer.After(0, …)` is where a measurement
 belongs, and `DefaultButton`/`CancelButton` are `null` until after that handler

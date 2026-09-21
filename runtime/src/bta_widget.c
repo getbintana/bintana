@@ -5137,6 +5137,7 @@ static JSValue bta_ctor(JSContext *ctx, JSValueConst new_target,
     w->ctx     = ctx;
     w->form    = JS_UNDEFINED;
     w->self    = obj;          /* borrowed; see the note in bta.h */
+    w->held    = JS_UNDEFINED; /* forms: nothing shown yet; see form_hold */
     w->is_form = cls->is_form;
     w->w = w->h = -1;
     w->anchored = true;        /* g_new0 would have said otherwise */

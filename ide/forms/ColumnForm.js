@@ -15,9 +15,6 @@
  */
 "use strict";
 
-/* Open dialogs, so the collector does not take one away mid-edit. */
-const openColumnForms = [];
-
 /* What a column that was just added says, so a new row is never blank. */
 const NEW_COLUMN_TEXT = "Column";
 
@@ -61,7 +58,6 @@ class ColumnForm extends Form {
 
 
         dlg.show();
-        openColumnForms.push(dlg);
         dlg.Show();
         dlg.ColList.SetFocus();
         return dlg;
@@ -196,9 +192,5 @@ class ColumnForm extends Form {
 
     BtnColCancel_Click() { this.dismiss(); }
 
-    dismiss() {
-        const i = openColumnForms.indexOf(this);
-        if (i >= 0) openColumnForms.splice(i, 1);
-        this.Close();
-    }
+    dismiss() { this.Close(); }
 }

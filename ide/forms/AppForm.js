@@ -13,9 +13,6 @@
  */
 "use strict";
 
-/* Open dialogs, so the collector does not take one away mid-edit. */
-const openAppForms = [];
-
 class AppForm extends Form {
 
     /*
@@ -46,7 +43,6 @@ class AppForm extends Form {
                                        : Ide.Apps.defaultIcon(project);
 
         dlg.showState();
-        openAppForms.push(dlg);
         dlg.Show();
         dlg.TxtAppName.SetFocus();
         return dlg;
@@ -143,10 +139,6 @@ class AppForm extends Form {
         if (said) said();
     }
 
-    dismiss() {
-        const i = openAppForms.indexOf(this);
-        if (i >= 0) openAppForms.splice(i, 1);
-        this.Close();
-    }
+    dismiss() { this.Close(); }
 
 }

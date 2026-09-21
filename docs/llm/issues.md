@@ -183,7 +183,6 @@ needed and what it did instead.
 | A control laid onto a page — `Print` sends what a `Draw` paints, so a form with real widgets on it still has no path to paper except drawing it by hand | [controls.md](controls.md#drawingarea) |
 | A `Fixed` container that does not stretch a `Fill` child when it itself grows — a reusable component that wants to fill its cell has to change its `Arrangement` | [ISSUE-fixed-fill-child](../issues/ISSUE-fixed-fill-child.md) |
 | No `Locale` inside a `Task`, so a worker cannot order names — the sort has to come back to the main thread, which is what the worker was for | [ISSUE-worker-locale-order](../issues/ISSUE-worker-locale-order.md) |
-| A shown `Form` is collectable, so every dialog keeps a module-level array alive by hand — sixteen of them | [ISSUE-form-keepalive](../issues/ISSUE-form-keepalive.md) |
 | No `Allocated` event and no `WhenLaidOut`, so anything that needs a real rectangle retries on a timer | [ISSUE-laid-out](../issues/ISSUE-laid-out.md) |
 | An `Editor` speaks in lines and everything that searches speaks in offsets, with no verb crossing | [ISSUE-editor-offset](../issues/ISSUE-editor-offset.md) |
 | `File` takes a path apart and cannot relate two: no `Relative`, no `Within`, and no case-folded `Extension` | [ISSUE-file-relative](../issues/ISSUE-file-relative.md) |

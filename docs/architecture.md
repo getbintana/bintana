@@ -370,7 +370,7 @@ the slot outlives the wrapper exactly as `gtk` does, and a walk that found a
 stale one there would read freed memory. Found by the IDE's About dialog, which
 is the smallest thing that has a focused button and outlives everything else.
 
-Two more rules, both in `AGENTS.md` because they are easy to break:
+Three more rules, all in `AGENTS.md` because they are easy to break:
 
 - Controls point back at their form, so the object graph has cycles. Report the
   edge in `gc_mark` or forms never get collected.
@@ -378,6 +378,12 @@ Two more rules, both in `AGENTS.md` because they are easy to break:
   actions) are strong references the collector cannot see. Free them on **every**
   exit path, including runtime teardown while a child still runs —
   `JS_FreeRuntime` aborts on anything left alive. See `bta_sys_cleanup()`.
+- **A shown form is the same shape, and it is why a dialog needs no reference
+  kept.** `Show` takes the wrapper (`BtaWidget.held`, `form_hold`), the allowed
+  close drops it, and `bta_forms_cleanup` sweeps what is left at teardown. It is
+  deliberately **not** in `gc_mark` — a cycle detector that could see the claim
+  would collect the object it protects — which is what makes the release on
+  every road out mandatory rather than tidy.
 
 ## Layout: two models in one tree
 

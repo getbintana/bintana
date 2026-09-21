@@ -12,8 +12,6 @@
  * that points somewhere else. */
 const BAD_NAME = /[/\\]|^\.\.?$/;
 
-const openForms = [];
-
 class NewProjectForm extends Form {
 
     static ask(baseDir, onAccept) {
@@ -24,7 +22,6 @@ class NewProjectForm extends Form {
         dlg.onAccept     = onAccept;
         dlg.Modal        = true;
 
-        openForms.push(dlg);
         dlg.Show();
         dlg.TxtName.SetFocus();
         dlg.updateHint();
@@ -79,11 +76,7 @@ class NewProjectForm extends Form {
         if (this.onAccept) this.onAccept(info);
     }
 
-    dismiss() {
-        const i = openForms.indexOf(this);
-        if (i >= 0) openForms.splice(i, 1);
-        this.Close();
-    }
+    dismiss() { this.Close(); }
 
     /* --- eventos ---------------------------------------------------------- */
 

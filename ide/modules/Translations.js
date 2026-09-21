@@ -252,9 +252,10 @@ Ide.Translations = class Translations {
         const have = Directory.List(this.dir, "*.po").map((n) => File.BaseName(n));
         const hint = have.length ? ` Already here: ${have.join(", ")}.` : "";
 
-        AskForm.prompt("New translation",
-                       `Locale for the new catalogue, like es, pt_BR or de.${hint}`,
-                       "", (value) => {
+        this.ide.newTranslationAsk =
+            AskForm.prompt("New translation",
+                           `Locale for the new catalogue, like es, pt_BR or de.${hint}`,
+                           "", (value) => {
             const lang = String(value).trim();
 
             if (!LOCALE_NAME.test(lang)) {

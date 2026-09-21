@@ -7,8 +7,6 @@
  */
 "use strict";
 
-const openConfirms = [];
-
 class ConfirmForm extends Form {
 
     /*
@@ -39,7 +37,6 @@ class ConfirmForm extends Form {
             dlg.onOther          = other.Run;
         }
 
-        openConfirms.push(dlg);
         dlg.Show();
 
         /*
@@ -55,11 +52,7 @@ class ConfirmForm extends Form {
         return dlg;
     }
 
-    dismiss() {
-        const i = openConfirms.indexOf(this);
-        if (i >= 0) openConfirms.splice(i, 1);
-        this.Close();
-    }
+    dismiss() { this.Close(); }
 
     BtnYes_Click() {
         this.dismiss();

@@ -531,6 +531,25 @@ refused with a message and a column.
   menu actions) are strong references the collector cannot see. Free them on
   **every** exit path, including runtime teardown while a child still runs —
   `JS_FreeRuntime` aborts on anything left alive. See `bta_sys_cleanup`.
+- **A shown form is the same kind of reference, and it is what makes
+  `new AskForm().Show()` the whole of a dialog.** `form_hold` (`bta_controls.c`)
+  takes the wrapper in `Show` and `form_drop` releases it when the close is
+  allowed — **not** in `Close()`, which `Form_Close` may veto; `HideOnClose`
+  releases too, and a later `Show` takes it again. It is deliberately absent from
+  `gc_mark`: a cycle detector that could see it would collect the object it
+  protects, so a form still held at teardown has to be swept by
+  `bta_forms_cleanup` or `JS_FreeRuntime` aborts. `tests/widgets`' `FormKeepalive`
+  leaves one open (the sweep) and closes another (the drop). **Before this,
+  sixteen IDE dialogs kept a module-level array alive by hand** because a form
+  nothing referenced was collected and its window was left on screen with every
+  handler disconnected. Measured with a probe on its own `Xvfb` **plus a real
+  window manager** — under a bare `xvfb-run` a synthetic click never reached GTK
+  at all (`xdotool getmouselocation` reported the pointer over no client window,
+  with the window mapped and focused; `xfwm4` on the same `Xvfb` made the first
+  try work): with the hold, a click before and a click after a 400 000-object
+  ball both answer; with `form_hold` compiled out, the first answers and the
+  second is silent **while the window is still on screen**, which is the
+  reported symptom exactly.
 - The class table's prototypes and constructors are static and outlive the
   context; `bta_widgets_cleanup` drops them.
 - **"Every exit path" includes the branch that gives up, and that is the branch

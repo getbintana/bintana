@@ -22,9 +22,6 @@
  */
 "use strict";
 
-/* Open dialogs, so the collector does not take one away mid-edit. */
-const openLaunchForms = [];
-
 class LaunchForm extends Form {
 
     /*
@@ -48,7 +45,6 @@ class LaunchForm extends Form {
 
         dlg.showList(dlg.list.length ? 0 : -1);
 
-        openLaunchForms.push(dlg);
         dlg.Show();
         dlg.LstLcNames.SetFocus();
         return dlg;
@@ -238,9 +234,5 @@ class LaunchForm extends Form {
     BtnLcCancel_Click() { this.done(); }
     Form_Close()        { this.done(); return false; }
 
-    done() {
-        const i = openLaunchForms.indexOf(this);
-        if (i >= 0) openLaunchForms.splice(i, 1);
-        this.Close();
-    }
+    done() { this.Close(); }
 }

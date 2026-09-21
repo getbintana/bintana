@@ -20,10 +20,10 @@
  */
 "use strict";
 
-/* While one is open nothing else references it: without this the collector takes
- * it away and the window is left without its handlers.  Keyed by file, so
- * opening the same catalogue twice brings the window that is already up rather
- * than a second one over the same file. */
+/* The editors that are up, keyed by file, so opening the same catalogue twice
+ * brings the window that is already there rather than a second one over the
+ * same file.  A registry, not a collector workaround: the runtime holds a shown
+ * form alive by itself. */
 const openCatalogues = new Map();
 
 /* The least a translation box may be squeezed to.  A `TextEditor` and not a

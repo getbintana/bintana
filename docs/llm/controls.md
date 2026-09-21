@@ -1262,9 +1262,9 @@ The window. See [forms.md](forms.md#form-the-window) for the behaviour a table c
 | `DefaultButton` (ro) | the button Enter presses, resolved from whichever declared `Default`. **`null` inside `Form_Open`** — it is settled after that handler |
 | `CancelButton` (ro) | the button Escape presses, likewise |
 | `Center()` | a no-op on Wayland: the compositor places windows. [`Screen`](library.md#screen) answers how big the desktop is, which is a different question from where a window goes |
-| `Close()` | closes it, through `Form_Close`, which may refuse |
+| `Close()` | closes it, through `Form_Close`, which may refuse. The runtime's claim on the form ends here, and on `HideOnClose` when it is put away |
 | `Minimize()` | a verb because there is nothing to read back — GTK reports nothing about a minimised window |
-| `Show()` | presents the window, and fires `Open` **before returning** the first time |
+| `Show()` | presents the window, and fires `Open` **before returning** the first time. **The runtime holds the form while its window is open**, so `new AskForm().Show()` needs no reference kept anywhere |
 | **event** `Open()` | the first time the form is shown, **before `Show()` returns** |
 | **event** `Close()` | the window is closing. **Returning `true` keeps it open**; returning nothing lets it go |
 | **event** `Resize(width, height)` | the size GTK settled on — the same numbers `Bounds()` gives. Fires when the window is first given a size too |

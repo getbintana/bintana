@@ -15,6 +15,76 @@
 /* ------------------------------------------------------------------ Form */
 
 /*
+ * The keepalive a shown form holds.
+ *
+ * `AudioPlayer.Play` is the same bargain for the length of a sound: a window
+ * that is open is doing something the collector must not undo, and a form
+ * whose wrapper nothing else references would otherwise be taken away -- its
+ * window left on screen with every handler disconnected, which reads as a
+ * dialog that stopped answering and reproduces only when the collector last
+ * ran.  Sixteen dialogs in the IDE kept a module-level array alive by hand
+ * against exactly this, which is the shape of a missing primitive.
+ *
+ * The reference is deliberately **not** in `gc_mark`: a cycle detector that
+ * could see it would collect what it protects.  What follows is that every
+ * path that ends a window's life has to drop it -- `on_close_request` below
+ * when the close is allowed -- and that `bta_forms_cleanup` has to sweep
+ * whatever is still held at teardown, or `JS_FreeRuntime` aborts on an object
+ * left alive.  `held_forms` is the list that sweep walks; it is kept in step
+ * with `w->held` by the two helpers, and by nothing else.
+ */
+static GList *held_forms = NULL;
+
+static void form_hold(BtaWidget *w, JSValueConst self)
+{
+    if (!JS_IsUndefined(w->held))
+        return;                         /* shown twice: one claim, not two */
+
+    w->held = JS_DupValue(w->ctx, self);
+    held_forms = g_list_prepend(held_forms, w);
+}
+
+/*
+ * Drop the claim.  The window itself is GTK's business from here -- with
+ * `HideOnClose` it is hidden, without it destroyed -- and the wrapper stays
+ * alive until the program lets go of its own reference, exactly as before.
+ */
+static void form_drop(BtaWidget *w)
+{
+    if (JS_IsUndefined(w->held))
+        return;
+
+    held_forms = g_list_remove(held_forms, w);
+
+    JSValue held = w->held;
+    w->held = JS_UNDEFINED;
+    JS_FreeValue(w->ctx, held);
+}
+
+/*
+ * Whatever is still shown when the program ends.  A form that was closed
+ * dropped its claim already; this is the one that was open at quit, and
+ * without it the strong reference outlives the context and the runtime's own
+ * teardown assertion fires.
+ *
+ * Popped off the list before the free, so the list is never walked while a
+ * release is in flight.
+ */
+void bta_forms_cleanup(void)
+{
+    while (held_forms) {
+        BtaWidget *w = held_forms->data;
+
+        held_forms = g_list_delete_link(held_forms, held_forms);
+
+        JSValue held = w->held;
+        w->held = JS_UNDEFINED;
+        if (!JS_IsUndefined(held))
+            JS_FreeValue(w->ctx, held);
+    }
+}
+
+/*
  * A form is *asked* whether it is closing, and answers by returning.
  *
  * The convention is `KeyPress`'s, for the same reason: **returning true from
@@ -42,6 +112,21 @@ static gboolean on_close_request(GtkWindow *win, gpointer user_data)
     JSValue  r    = bta_emit_answer(w, "Close", 0, NULL, NULL);
     gboolean stay = JS_ToBool(ctx, r) > 0;
     JS_FreeValue(ctx, r);
+
+    /*
+     * The allowed close is the moment the keepalive ends, and it is here and
+     * not in `Close()` because this handler may veto -- a form that refuses
+     * to go is still doing something and is still held.
+     *
+     * `HideOnClose` is the same release: a form that was put away is not on
+     * screen, and showing it again takes the claim anew.  What it is not is
+     * *destroyed*, so `closed` stays false and a later `Show` still works.
+     */
+    if (!stay) {
+        form_drop(w);
+        if (!gtk_window_get_hide_on_close(win))
+            w->closed = true;
+    }
 
     return stay;   /* TRUE = keep it open, FALSE = let the window close */
 }
@@ -270,6 +355,17 @@ static JSValue form_show(JSContext *ctx, JSValueConst this_val,
 
     BtaApp    *app    = bta_current_app();
     GtkWindow *window = GTK_WINDOW(w->gtk);
+
+    /*
+     * The window is about to be shown, so the form is doing something the
+     * collector must not undo -- taken **before** `Form_Open`, or a handler
+     * that drops the program's own last reference while building its dialog
+     * would lose it in the same turn.  `closed` is the form whose window GTK
+     * already took apart: `Show` cannot bring it back, and holding it would
+     * be a claim no close would ever release.
+     */
+    if (!w->closed)
+        form_hold(w, this_val);
 
     /* Read the active window before adding ourselves, or a modal dialog would
      * end up transient for itself. */

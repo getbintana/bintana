@@ -10,10 +10,6 @@
  */
 "use strict";
 
-/* While it is open nothing else references it: without this the collector takes
- * it away and the window is left without its handlers. */
-const openPickers = [];
-
 const ICON_SIZE = 44;    // side of one icon button
 /* A page and not the lot: 2575 buttons is thousands of widgets, and every one
  * of them would be built before anything appeared. Narrowing the search is the
@@ -37,7 +33,6 @@ class IconForm extends Form {
         dlg.all      = Application.Icons();
         dlg.TxtFind.Text = current || "";
 
-        openPickers.push(dlg);
         dlg.Show();
         dlg.fill();
         dlg.TxtFind.SetFocus();
@@ -94,11 +89,7 @@ class IconForm extends Form {
         if (answer) answer(name);
     }
 
-    dismiss() {
-        const i = openPickers.indexOf(this);
-        if (i >= 0) openPickers.splice(i, 1);
-        this.Close();
-    }
+    dismiss() { this.Close(); }
 
     TxtFind_Change()   { this.fill(); }
     TxtFind_IconClick() { this.TxtFind.Text = ""; }

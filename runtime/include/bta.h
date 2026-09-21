@@ -81,6 +81,28 @@ struct BtaWidget {
     JSValue    self;   /* this widget's own wrapper, BORROWED (never freed):
                         * the wrapper owns us, so it always outlives us.
                         * Lets Children map GTK widgets back to JS objects. */
+    /*
+     * Forms: the keepalive a shown window holds.
+     *
+     * A form's wrapper is an ordinary object, and once it is shown nothing
+     * else references it -- its children point back at it, which is a cycle
+     * the collector is free to take away.  When it does, the window is left
+     * on screen with every handler disconnected: a dialog that opens, looks
+     * right, and stops answering at a moment that depends on when the
+     * collector last ran.  Sixteen dialogs in the IDE kept a module-level
+     * array alive by hand against exactly this.
+     *
+     * So `Show` takes a strong reference and the allowed close drops it --
+     * the same claim `AudioPlayer.Play` makes for the length of a sound.
+     * **Invisible to the collector on purpose**: `gc_mark` does not report
+     * it, because a cycle detector that could see it would collect the very
+     * object it protects.  What that costs is a release on every exit path,
+     * `bta_forms_cleanup` included, or `JS_FreeRuntime` aborts at teardown.
+     *
+     * JS_UNDEFINED on anything that is not a form, and on a form that is not
+     * currently shown.  `self` above is borrowed; this one is owned.
+     */
+    JSValue    held;
     char      *name;   /* control name; the "Button1" in Button1_Click */
 
     /*
@@ -127,6 +149,11 @@ struct BtaWidget {
     bool       anchored;
     bool       is_form;
     bool       opened;  /* forms: has Form_Open already fired? */
+    /* Forms: the window was destroyed by an allowed close, so `Show` can
+     * never present it again (see HideOnClose) and must not take a keepalive
+     * that nothing will ever release.  False under HideOnClose, which hides
+     * instead of destroying. */
+    bool       closed;
 
     /*
      * Forms: the size the `.form` declared, kept apart from the size the window
@@ -567,6 +594,9 @@ JSValue bta_lookup_global(JSContext *ctx, const char *name);
 void       bta_widgets_init(JSContext *ctx, JSValue global);
 /* Releases the class table's prototypes/constructors before the context dies. */
 void       bta_widgets_cleanup(JSContext *ctx);
+/* Drops the keepalive every shown form holds.  A strong reference the collector
+ * cannot see, so it has to go before JS_FreeRuntime -- see `BtaWidget.held`. */
+void       bta_forms_cleanup(void);
 BtaWidget *bta_widget_of(JSValueConst v);
 /* Unwraps `this`, throwing a TypeError when it is not a widget. */
 BtaWidget *bta_this(JSContext *ctx, JSValueConst this_val);
