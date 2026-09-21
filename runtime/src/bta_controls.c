@@ -5697,7 +5697,7 @@ void bta_core_register(void)
          * in text_props_of() necessary rather than convenient.
          */
         BTA_CLASS_FULL("Widget", NULL, NULL, base, nbase, false,
-                       widget_options, "Tooltip", "MouseDown,MouseUp,MouseMove,MouseEnter,MouseLeave,MouseWheel,DblClick,KeyPress,KeyRelease,GotFocus,LostFocus,Drop,FileDrop"),
+                       widget_options, "Tooltip", "MouseDown,MouseUp,MouseMove,MouseEnter,MouseLeave,MouseWheel,DblClick,KeyPress,KeyRelease,GotFocus,LostFocus,Drop,FileDrop,DragEnter,DragOver,DragLeave,DragBegin,DragEnd"),
         BTA_CLASS_ENUM("Container", "Widget",  NULL, container_props, false, container_options, NULL),
         BTA_CLASS_BARE("Control",   "Widget",    NULL,                            false, NULL),
         /* A window's title is prose; so is the caption of everything below. */

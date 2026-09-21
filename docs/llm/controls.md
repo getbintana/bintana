@@ -1,7 +1,7 @@
 # Controls
 
 **This is the complete surface, not a selection.** Every property, method and
-event of every class is below — 385 rows, covering 218 distinct members and 34
+event of every class is below — 390 rows, covering 223 distinct members and 42
 events across 41 classes. If something is not here, the runtime does not have it,
 and you should not have to open the project tree to find that out.
 
@@ -169,8 +169,15 @@ is what `bta_emit` really passes, counted from the call — not from prose.
 | **event** `KeyRelease(key, ctrl, shift, alt)` | nothing here is consumable |
 | **event** `GotFocus()` | answers for the **control**, so it fires for the focus arriving anywhere within it |
 | **event** `LostFocus()` | where "the user is done with this box" is said |
-| **event** `Drop(data, x, y)` | something with `DragData` was dropped on a widget with `AcceptDrop`. The point is in **this widget's** coordinates, and so is `Bounds(this widget)` asked of a child — so *which row a drop is over* is a comparison and not arithmetic, and on a scroller both numbers already carry the scroll (a child above the view reads a negative `Y`). A hidden child measures 0x0, so skip what is not `Visible` |
+| **event** `Drop(data, x, y)` | something with `DragData` was dropped on a widget with `AcceptDrop`. The point is in **this widget's** coordinates, and so is `Bounds(this widget)` asked of a child — so *which row a drop is over* is a comparison and not arithmetic, and on a scroller both numbers already carry the scroll (a child above the view reads a negative `Y`). A hidden child measures 0x0, so skip what is not `Visible`. Only arrives when the drop was not refused (see `DragOver`) |
 | **event** `FileDrop(paths, x, y)` | files were dropped from the file manager or the desktop on a widget with `AcceptFiles`. `paths` is an array of full paths — **only files that have one**: a file on a remote share has no local path and does not arrive, and a drop of nothing but those is refused rather than delivered empty |
+| **event** `DragEnter(data, x, y)` | the drag came over a widget with `AcceptDrop`, carrying the same point `Drop` will. What the target lights up with — a column, a highlight — goes here |
+| **event** `DragOver(data, x, y)` | the drag moved over it, point after point. Where an insertion line sits is recomputed here. **Returning `false` refuses the drop at that point**: the cursor shows it and `Drop` never fires. Anything else — including answering nothing — accepts it, and with no handler everything is accepted. Strictly `false`: a handler that answers nothing returns `undefined`, which must not refuse every drag anywhere |
+| **event** `DragLeave()` | the drag left without dropping. Undoes what `DragEnter` did |
+| **event** `DragBegin()` | on the widget being dragged: the drag started. Grey the card here |
+| **event** `DragEnd()` | on the widget being dragged: the drag finished — dropped or refused. Puts back whatever `DragBegin` changed |
+
+`data` in `DragEnter`/`DragOver` is the dragged string, read off the target with preload on — the same value `Drop` arrives with, one gesture earlier. Still loading on a very early `enter` answers `""` rather than holding the event back. There is no feedback half for `FileDrop`: files from the desktop have no travelling string to preload, so a file drag still announces itself only on arrival.
 
 ### What every widget also answers
 

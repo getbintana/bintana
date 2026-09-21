@@ -31,3 +31,16 @@
 .kanban-sel label {
   color: @theme_selected_fg_color;
 }
+
+/* While a drag is over the column: a wash of the selection colour under it,
+ * following the theme into the dark like the column's own ground does. */
+.kanban-drop {
+  background-color: alpha(@theme_selected_bg_color, 0.18);
+}
+
+/* The insertion line: where the card would land. A panel with nothing in it,
+ * so its Height is all it is. */
+.kanban-drop-line {
+  background-color: @theme_selected_bg_color;
+  border-radius: 2px;
+}

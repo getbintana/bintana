@@ -14,7 +14,6 @@ in the same form.
 |---|---|
 | [ISSUE-editable-combo.md](ISSUE-editable-combo.md) | No editable / autocompleting combo |
 | [ISSUE-fixed-fill-child.md](ISSUE-fixed-fill-child.md) | A `Fixed` container does not stretch a `Fill` child when it grows |
-| [ISSUE-drag-feedback.md](ISSUE-drag-feedback.md) | A drop target hears nothing until the drop, so a drag cannot be shown |
 | [ISSUE-packaging.md](ISSUE-packaging.md) | No way to hand over an application without its project tree |
 | [ISSUE-worker-locale-order.md](ISSUE-worker-locale-order.md) | A `Task` has no `Locale`, so a worker cannot order names |
 | [ISSUE-form-keepalive.md](ISSUE-form-keepalive.md) | A shown `Form` has to be kept alive by hand — sixteen copies of one array |
@@ -29,7 +28,7 @@ in the same form.
 past its answer is a second description of the same feature, written by somebody
 who did not have it yet, in the directory of things that are missing.
 
-Nineteen have gone that way — seventeen filled, one refused, and one that was
+Twenty have gone that way — eighteen filled, one refused, and one that was
 never missing. Filled: a drawing that could not carry an image, text that could not be measured outside a `Draw`, a
 document that could only leave as one PNG per page, a program that had to run
 `sha256sum` to hash anything, an application that could not ask how big the
@@ -45,7 +44,10 @@ it had arrived, a control whose engine could be missing on a machine the
 build knew nothing about — `Video`, whose `Available` is now asked of the
 registry rather than declared at build time —, and a document that could only
 leave as a file and never reach a printer: `Printer.Send` puts it through the
-print dialog, and `Printer.ToFile` writes the PDF the dialog would have made.
+print dialog, and `Printer.ToFile` writes the PDF the dialog would have made,
+and a drop target that heard nothing until the drop: `DragEnter`/`DragOver`
+carry the point while the drag travels, `DragLeave` says it went,
+`DragBegin`/`DragEnd` mark the source's half, and answering `false` refuses.
 
 Never missing: a container that fills the room it is given **and** scrolls when
 it cannot. It was reported against a wall of cameras whose count is only known

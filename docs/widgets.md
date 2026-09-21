@@ -3266,6 +3266,29 @@ filtering sets `Visible`, editing is a double click, and each of those is one
 `On(event, fn)` on the card itself. [`examples/kanban`](../examples/kanban) is
 that, both halves.
 
+**A drag can be shown while it travels, and the board above is what does.**
+`Drop` used to be the whole of what a target heard, arriving once at the end, so
+the placement was exact and invisible until the button came up. The target now
+hears `DragEnter(data, x, y)` and `DragOver(data, x, y)` with the same point
+`Drop` will carry — a column lights up, an insertion line sits where the card
+would land — and `DragLeave()` when the drag goes without dropping. The source
+hears `DragBegin()` and `DragEnd()`, the second on a drop and on a refusal, so the
+card greys itself in the air and is put back on a refusal too. `data` is the
+dragged string, preloaded on hover: without preload the value only exists at
+drop, and `enter`/`motion` carry just the point. A handler that answers `false`
+to `DragOver` refuses the drop at that point — strictly `false`,
+since answering nothing is `undefined` and must stay an accept. Measured with a
+real pointer, because there is no synthetic one: enter, motion with the data,
+leave, drop, a refused drop that never arrives, and the end on a drop and on a
+refusal.
+
+**And a drop is not a leave**, which is why `dropOn` there puts the column out
+itself before it moves the card. Measured in the same sitting: after a `Drop`
+no `DragLeave` follows — five seconds of stillness and nothing — and the leave
+for that target arrives at the *next* drag instead, after its `DragBegin` and
+for a target that drag never went over. A column that lights up in `DragEnter`
+therefore stays lit after a card lands on it unless `Drop` undoes it.
+
 **And the rest of the list vocabulary is `ListBox`'s, because underneath they are
 the same widget.** `MultiSelect`, `Selection`, `Select(i)`, `Deselect(i)`,
 `SelectAll()`, `DeselectAll()`, `Remove(i)`, `Activate([i])`,

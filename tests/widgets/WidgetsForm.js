@@ -8432,6 +8432,45 @@ function Main() {
         target.AcceptDrop = false;
 
         /*
+         * **The feedback half: a drag is shown before it lands.** While the
+         * pointer travels, the target hears DragEnter/DragOver with the same
+         * point Drop will carry, and DragLeave when it goes; the source hears
+         * DragBegin when the drag starts and DragEnd on a drop and on a refusal. A
+         * real drag is GTK's doing with the mouse and is verified by hand
+         * (kanban, and the note in AGENTS.md); what a test reaches is that
+         * the events exist, install, and dispatch with their arguments --
+         * and that a handler answering false is what a refusal looks like
+         * (the runtime turns that into GDK_ACTION_NONE, which no Emit can
+         * show and the hand probe did).
+         */
+        for (const e of ["DragEnter", "DragOver", "DragLeave",
+                         "DragBegin", "DragEnd"])
+            check("raises " + e, target.EventNames().indexOf(e) >= 0,
+                  target.EventNames().join(","));
+
+        const heard = [];
+        target.On("DragEnter", (d, x, y) => heard.push(["enter", d, x, y]));
+        target.On("DragOver", (d, x, y) => heard.push(["over", d, x, y]));
+        target.On("DragLeave", () => heard.push(["leave"]));
+        source.On("DragBegin", () => heard.push(["begin"]));
+        source.On("DragEnd", () => heard.push(["end"]));
+
+        target.Emit("DragEnter", "card-7", 10, 80);
+        target.Emit("DragOver", "card-7", 30, 80);
+        target.Emit("DragLeave");
+        source.Emit("DragBegin");
+        source.Emit("DragEnd");
+        eq("the five arrive in order, with the point Drop will carry",
+           JSON.stringify(heard),
+           JSON.stringify([["enter", "card-7", 10, 80],
+                           ["over", "card-7", 30, 80],
+                           ["leave"], ["begin"], ["end"]]));
+
+        target.On("DragOver", () => false);
+        eq("a refusal is the handler answering false",
+           target.Emit("DragOver", "card-7", 30, 80), false);
+
+        /*
          * **And the one thing about *placing* a drop that a test can reach.**
          * `Drop(data, x, y)` carries the point in the accepting widget's own
          * coordinates, and `child.Bounds(that widget)` answers in the same

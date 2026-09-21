@@ -3051,10 +3051,14 @@ static JSValue w_set_cursor(JSContext *ctx, JSValueConst this_val, JSValueConst 
 
 /* ----------------------------------------------------------- drag and drop
  *
- * Two properties and one event.  A widget with DragData can be dragged and
- * hands that string over; a widget with AcceptDrop receives it as
- * Name_Drop(data, x, y), with x and y relative to itself -- the same
+ * Two properties and six events.  A widget with DragData can be dragged and
+ * hands that string over, hearing DragBegin when the drag starts and DragEnd
+ * when it is over -- dropped or refused; a widget with AcceptDrop receives it
+ * as Name_Drop(data, x, y), with x and y relative to itself -- the same
  * coordinates MouseDown reports, so a drop can land where the pointer is.
+ * While the pointer is over the target it also hears DragEnter and DragOver
+ * with that same point, and DragLeave when it goes, so the target can show
+ * where the drop would land before it happens.
  *
  * A string is the whole payload on purpose.  It is what crosses the gap
  * between two widgets that know nothing about each other -- the IDE's palette
@@ -3079,7 +3083,8 @@ static GdkContentProvider *on_drag_prepare(GtkDragSource *src, double x, double 
 }
 
 /* The drag carries a picture of the widget itself, held where it was grabbed:
- * what is being dragged is then never in doubt. */
+ * what is being dragged is then never in doubt. The drag has started, so the
+ * source hears about it too -- a card that greys itself while it travels. */
 static void on_drag_begin(GtkDragSource *src, GdkDrag *drag, gpointer user_data)
 {
     BtaWidget    *w     = user_data;
@@ -3089,6 +3094,18 @@ static void on_drag_begin(GtkDragSource *src, GdkDrag *drag, gpointer user_data)
                              gtk_widget_get_width(w->gtk) / 2,
                              gtk_widget_get_height(w->gtk) / 2);
     g_object_unref(ghost);
+
+    bta_emit(w, "DragBegin", 0, NULL);
+}
+
+/* The drag is over: dropped or refused. `drag-end` is the signal GTK finishes
+ * every drag with -- undoing `prepare`/`drag-begin` is its documented purpose
+ * -- so it is the only half of the source's pair that is connected: a
+ * `drag-cancel` of its own would answer twice for one failed gesture. */
+static void on_drag_end(GtkDragSource *src, GdkDrag *drag, gboolean delete_data,
+                        gpointer user_data)
+{
+    bta_emit((BtaWidget *)user_data, "DragEnd", 0, NULL);
 }
 
 static JSValue w_get_drag_data(JSContext *ctx, JSValueConst this_val)
@@ -3130,6 +3147,7 @@ static JSValue w_set_drag_data(JSContext *ctx, JSValueConst this_val, JSValueCon
                                                    GTK_PHASE_CAPTURE);
         g_signal_connect(src, "prepare",    G_CALLBACK(on_drag_prepare), w);
         g_signal_connect(src, "drag-begin", G_CALLBACK(on_drag_begin),   w);
+        g_signal_connect(src, "drag-end",   G_CALLBACK(on_drag_end),     w);
 
         /* The controller owns itself once added; this is only a marker. */
         gtk_widget_add_controller(w->gtk, GTK_EVENT_CONTROLLER(src));
@@ -3159,6 +3177,83 @@ static gboolean on_drop(GtkDropTarget *target, const GValue *value,
     for (int i = 0; i < 3; i++)
         JS_FreeValue(ctx, argv[i]);
     return TRUE;
+}
+
+/*
+ * What the dragged string is while the pointer is still travelling.
+ *
+ * `enter` and `motion` carry only the point, so the data is read off the
+ * target itself: with `preload` on, GTK loads it on hover and
+ * `gtk_drop_target_get_value` hands it back synchronously -- the same GValue
+ * `drop` arrives with, one gesture earlier. Still NULL on a very early enter
+ * is not an error, only a drag whose data has not arrived yet, so that answers
+ * "" rather than holding the event back.
+ */
+static const char *drop_hover_string(GtkDropTarget *target)
+{
+    const GValue *v = gtk_drop_target_get_value(target);
+
+    if (v && G_VALUE_HOLDS_STRING(v) && g_value_get_string(v))
+        return g_value_get_string(v);
+    return "";
+}
+
+/*
+ * The drag over the target, move by move. Asked as a question and not told as
+ * a notification: a handler returning **false** refuses the drop at that
+ * point -- the motion answers GDK_ACTION_NONE, the cursor shows it, and Drop
+ * never fires -- while anything else accepts it. No handler is an accept,
+ * which is what every target written before this did.
+ *
+ * The event name is spelled out at each call site, because the check that
+ * holds the documentation to the runtime (`tests/api.sh`) reads `bta_emit`
+ * calls by their literal -- an event dispatched through a variable is one
+ * nothing checks, and this file has been bitten by that before.
+ */
+static GdkDragAction on_drag_hover(GtkDropTarget *target, double x, double y,
+                                   gpointer user_data, const char *event)
+{
+    BtaWidget *w    = user_data;
+    JSContext *ctx  = w->ctx;
+    JSValue    argv[3] = {
+        JS_NewString(ctx, drop_hover_string(target)),
+        JS_NewFloat64(ctx, x),
+        JS_NewFloat64(ctx, y),
+    };
+    JSValue r = g_str_equal(event, "DragEnter")
+        ? bta_emit_answer(w, "DragEnter", 3, argv, NULL)
+        : bta_emit_answer(w, "DragOver", 3, argv, NULL);
+
+    /* Strictly false refuses: a handler that answers nothing returns undefined,
+     * and `JS_ToBool` would read that as a refusal of every drag anywhere.
+     * KeyPress and MouseWheel can afford the loose read because their handlers
+     * consume by returning true; here the refusing answer is the falsy one, so
+     * only an explicit `false` counts. */
+    bool rejected = JS_IsStrictEqual(ctx, r, JS_FALSE) == 1;
+
+    JS_FreeValue(ctx, r);
+    for (int i = 0; i < 3; i++)
+        JS_FreeValue(ctx, argv[i]);
+    return rejected ? GDK_ACTION_NONE : GDK_ACTION_COPY;
+}
+
+static GdkDragAction on_drag_enter(GtkDropTarget *target, double x, double y,
+                                   gpointer user_data)
+{
+    return on_drag_hover(target, x, y, user_data, "DragEnter");
+}
+
+static GdkDragAction on_drag_motion(GtkDropTarget *target, double x, double y,
+                                    gpointer user_data)
+{
+    return on_drag_hover(target, x, y, user_data, "DragOver");
+}
+
+/* Its main purpose is to undo what DragEnter did, as GTK's own documentation
+ * puts it: the highlight goes off, the insertion line hides. */
+static void on_drag_leave(GtkDropTarget *target, gpointer user_data)
+{
+    bta_emit((BtaWidget *)user_data, "DragLeave", 0, NULL);
 }
 
 /* ------------------------------------------------------- files from outside
@@ -3289,6 +3384,12 @@ static JSValue w_set_accept_drop(JSContext *ctx, JSValueConst this_val, JSValueC
 
     if (on && !target) {
         target = gtk_drop_target_new(G_TYPE_STRING, GDK_ACTION_COPY);
+        /* Preload so enter/motion can read the string off the target itself
+         * (see drop_hover_string): without it the value only exists at drop. */
+        gtk_drop_target_set_preload(target, TRUE);
+        g_signal_connect(target, "enter",  G_CALLBACK(on_drag_enter),  w);
+        g_signal_connect(target, "motion", G_CALLBACK(on_drag_motion), w);
+        g_signal_connect(target, "leave",  G_CALLBACK(on_drag_leave),  w);
         g_signal_connect(target, "drop", G_CALLBACK(on_drop), w);
         gtk_widget_add_controller(w->gtk, GTK_EVENT_CONTROLLER(target));
         g_object_set_data(G_OBJECT(w->gtk), DROP_TARGET_KEY, target);

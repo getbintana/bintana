@@ -96,14 +96,13 @@
  * because a button has no point to carry. They are the accessible half of
  * the verb, and the half a test can press.
  *
- * **What this cannot do is show you any of it while you drag.** A target
- * hears nothing until the drop — measured with a probe: a whole drag across
- * a control with `AcceptDrop` delivers `{"Drop": 1}` and no `MouseMove`,
- * `MouseEnter` or `MouseLeave`, since the pointer belongs to the drag. So
- * there is no column lighting up and no line where the card would land, and
- * the placement is exact and invisible until the button comes up. That is
- * `docs/issues/ISSUE-drag-feedback.md`, and it is the one thing here a
- * program cannot write its way out of.
+ * **What this shows while you drag.** A target hears about the drag before
+ * the drop — `DragEnter`/`DragOver` carry the same point `Drop` will, and
+ * `DragLeave` says it went — so the column lights up (`kanban-drop` on the
+ * box) and a line (`DropLine_<id>`, a 4px panel) sits where `landingBefore`
+ * says the card would land. The dragged card greys itself: `DragBegin` sets
+ * `Opacity`, `DragEnd` puts it back, dropped or refused. The placement
+ * was exact and invisible until the button came up, and now it is shown.
  *
  * ## Each list keeps its own rows
  *
@@ -402,10 +401,13 @@ class Board extends Form {
         list.Height = 120;
         list.AcceptDrop = true;
         list.On("Drop", (data, x, y) => this.dropOn(id, data, y));
+        list.On("DragEnter", (data, x, y) => this.dragEnter(id, data));
+        list.On("DragOver", (data, x, y) => this.dragOver(id, data, y));
+        list.On("DragLeave", () => this.dragLeave(id));
         box.Add(list);
 
         return { id: id, box: box, list: list, rows: [], cards: {},
-                 lblTitle: title, lblCount: count };
+                 lblTitle: title, lblCount: count, line: null, hot: false };
     }
 
     viewOf(id) {
@@ -447,8 +449,21 @@ class Board extends Form {
             v.list.Clear();
             v.rows = [];
             v.cards = {};
+            v.line = null;
+            v.hot = false;
             for (const t of sorted)
                 if (t.Column === v.id) this.addCard(v, t);
+            /* The insertion line, last child and hidden: DragOver moves it
+             * with Reorder and shows it. Recreated here because Clear took
+             * it, which is also what hides it after a drop. */
+            const line = new Panel();
+            line.Name = "DropLine_" + v.id;
+            line.HExpand = true;
+            line.Height = 4;
+            line.Style = "kanban-drop-line";
+            line.Visible = false;
+            v.list.Add(line);
+            v.line = line;
         }
         this.restoreSelection();
     }
@@ -490,6 +505,10 @@ class Board extends Form {
         card.DragData = String(taskId);
         card.On("MouseDown", () => this.select(id, taskId));
         card.On("DblClick", () => this.editSelected());
+        /* Travelling: greyed while in the air, put back when the drag ends
+         * -- dropped or refused. */
+        card.On("DragBegin", () => { card.Opacity = 0.45; card.Cursor = "Grabbing"; });
+        card.On("DragEnd", () => { card.Opacity = 1; card.Cursor = "Grab"; });
 
         const title = new Label();
         title.Font = "Bold";
@@ -647,10 +666,60 @@ class Board extends Form {
 
     dropOn(colId, data, y) {
         if (!this.loaded) return;
+        this.dragLeave(colId);
         const id = Number(data);
         if (!(id > 0)) return;
         const v = this.viewOf(colId);
         this.moveTask(id, colId, v ? this.landingBefore(v, y, id) : null);
+    }
+
+    /* The payload is a task id as a string, and anything else is refused:
+     * returning false answers GDK_ACTION_NONE, so the cursor shows it and
+     * Drop never fires. */
+    dragId(data) {
+        const n = Number(data);
+        return n > 0 ? n : 0;
+    }
+
+    dragEnter(colId, data) {
+        if (!this.loaded) return false;
+        const v = this.viewOf(colId);
+        if (!v || !this.dragId(data)) return false;
+        if (!v.hot) {
+            v.hot = true;
+            v.box.Style = "kanban-column kanban-drop";
+        }
+    }
+
+    /* The line goes where the drop would land: immediately above `before`,
+     * or past the last card. `Reorder` counts children without the line,
+     * which are the cards in `rows` order, so the index is the position of
+     * `before` in `rows` -- or the end when there is none. */
+    dragOver(colId, data, y) {
+        if (!this.loaded) return false;
+        const v = this.viewOf(colId);
+        const moving = this.dragId(data);
+        if (!v || !moving || !v.line) return false;
+        if (!v.hot) {
+            v.hot = true;
+            v.box.Style = "kanban-column kanban-drop";
+        }
+        const before = this.landingBefore(v, y, moving);
+        let at = 0;
+        for (const rid of v.rows) {
+            if (before !== null && rid === before) break;
+            at++;
+        }
+        v.list.Reorder(v.line, at);
+        v.line.Visible = true;
+    }
+
+    dragLeave(colId) {
+        const v = this.viewOf(colId);
+        if (!v) return;
+        v.hot = false;
+        v.box.Style = "kanban-column";
+        if (v.line) v.line.Visible = false;
     }
 
     /* Which card a drop lands above, among the ones that are *shown*.

@@ -1799,6 +1799,27 @@ person who wrote it either.
   written by hand -- one `On` each, on the card. Found building
   `examples/kanban`, and written down in `docs/widgets.md` under `RowList`,
   where somebody choosing a container will read it.
+- **A `GtkDropTarget`'s `enter`/`motion` carry only the point, and `preload` is
+  what puts the string beside it.** The data only exists at `drop` unless the
+  target preloads it on hover, so `DragEnter`/`DragOver` read it off the target
+  with `gtk_drop_target_get_value` -- same `GValue` the drop arrives with, one
+  gesture earlier, and `""` on a very early enter rather than holding the event
+  back. The alternative is `gdk_drop_read_value_async` per motion, which is a
+  callback to marry back to a position that has already moved.
+- **A refusing answer has to be strict, and the reason is what a handler that
+  says nothing returns.** `DragOver` refuses on `false`, so the check is
+  `JS_IsStrictEqual(r, JS_FALSE)`: `KeyPress`/`MouseWheel` can afford the loose
+  `JS_ToBool` because their handlers consume by returning `true`, but here the
+  refusing answer is the falsy one and `undefined` -- what every handler that
+  shows a line and answers nothing returns -- would refuse every drag anywhere.
+- **`drag-end` finishes every drag, so it is the only source-side signal
+  connected.** Success and refusal were measured; Escape is GTK's documented
+  finish rather than a measured one -- an `xdotool key Escape` mid-drag under
+  XTEST did not cancel anything and the drag went on to a `Drop`. Connecting
+  `drag-cancel` beside it would answer twice for one failed gesture. And a
+  single long `xdotool mousemove` jump made *during* a drag registers nothing
+  -- enter/motion only arrived for small stepwise moves, which is also the
+  shape of a real hand.
 - **A component added from code keeps itself as its event target, and
   `On(event, fn)` is what makes that harmless.** Only the `.form` loader rebinds
   one to its host (`bta_widget_bind` in `build_one`); `Container.Add` adopts it

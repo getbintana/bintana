@@ -157,16 +157,19 @@ class MainForm extends Form {
   **literally `Form_`**, whatever the class is called.
 - `this.<name>` is any named child of the `.form`, and any menu item.
 - Ordinary state goes on `this`. There is no model layer imposed on you.
-- A handler that returns a value matters in exactly four places: `Form_Close`
+- A handler that returns a value matters in exactly five places: `Form_Close`
   (`true` vetoes), `KeyPress`/`MouseWheel` (`true` consumes), `TableView`'s
-  `Data` (the cell) and `RowList`'s `Filter` (`false` hides the row).
+  `Data` (the cell), `RowList`'s `Filter` (`false` hides the row), and
+  `DragEnter`/`DragOver` (`false` refuses the drop at that point).
 
 ### Events on every widget
 
 `MouseDown(x, y, button, ctrl, shift)`, `MouseUp(…)`, `MouseMove(…)`,
 `MouseEnter(x, y)`, `MouseLeave()`, `MouseWheel(dx, dy)`,
 `DblClick(x, y, button, ctrl, shift)`, `KeyPress(key, ctrl, shift, alt)`,
-`KeyRelease(…)`, `GotFocus()`, `LostFocus()`, `Drop(data, x, y)`.
+`KeyRelease(…)`, `GotFocus()`, `LostFocus()`, `Drop(data, x, y)`,
+`DragEnter(data, x, y)`, `DragOver(data, x, y)`, `DragLeave()`,
+`DragBegin()`, `DragEnd()`.
 
 Coordinates are relative to the widget itself. Returning `true` from `KeyPress`
 consumes the key; returning `true` from `MouseWheel` stops the scroller around
