@@ -11008,6 +11008,37 @@ function Main() {
         made.Add(plain);
         plain.Name = "Up";
         eq("a control with no handler of its own may take it", plain.Name, "Up");
+
+        /*
+         * **And the third door, which the first two cannot cover.**  Both of
+         * them ask about the control's *form*, and a control built in code has
+         * not got one until it is adopted -- so naming it and installing a
+         * handler *before* `Add` passed both and made the pair in silence.  The
+         * adoption is where the form arrives, so the adoption is what is asked,
+         * before the child is put into GTK: `bta_widget_adopt` runs after the
+         * attach and so cannot refuse anything.
+         */
+        const held = made.Children.length;
+        const both = new Button();
+
+        both.Name = "Up";                 /* no form yet: nothing to collide with */
+        both.On("Click", () => {});       /* likewise */
+
+        throws("a control that arrives carrying both is refused at the Add",
+               () => made.Add(both));
+        eq("and the refusal left nothing behind", made.Children.length, held);
+
+        /* Over-refusing would be worse than the hole was, so the same shape
+         * with a name the form does not answer for still goes in and still
+         * answers. */
+        const fine = new Button();
+        let   rang = 0;
+
+        fine.Name = "NadaLoResponde";
+        fine.On("Click", () => { rang++; });
+        made.Add(fine);
+        fine.Click();
+        eq("a name the form does not answer for is no pair at all", rang, 1);
     }
 
     /*

@@ -134,7 +134,7 @@ Every control and every container has all of this.
 | `CssNode()` | → the GTK node name it is styled as (`"button"`, `"entry"`) |
 | `Delete()` | removes it from its parent **and destroys it** |
 | `Emit(event, ...args)` | raises an event that arrives by name on the host form. What a `Component` announces itself with |
-| `On(event, fn)` | installs **this control's own** handler for an event, for a control built in code: no name, and nothing left on the form to delete. Installing again replaces; `On(event, null)` removes; it answers with the control, so it chains. The handler is called with `this` undefined; an event name that is not in `EventNames()` throws, and so does installing one the form already answers by name — a control has one handler for one event. It is also how a `Component` added from code is heard: its `Emit` finds this before the `<name>_<event>` road |
+| `On(event, fn)` | installs **this control's own** handler for an event, for a control built in code: no name, and nothing left on the form to delete. Installing again replaces; `On(event, null)` removes; it answers with the control, so it chains. The handler is called with `this` undefined; an event name that is not in `EventNames()` throws, and so does installing one the form already answers by name — a control has one handler for one event, refused at `On`, at a rename, and at the `Add` that brings the control to that form. It is also how a `Component` added from code is heard: its `Emit` finds this before the `<name>_<event>` road |
 | `EventNames()` | → the events it raises, **most derived first**; `[0]` is the one a double click writes a handler for |
 | `Hide()` | makes it invisible; it keeps its place in the tree |
 | `Lower()` | to the bottom |

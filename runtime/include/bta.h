@@ -625,6 +625,13 @@ void       bta_widget_release(JSContext *ctx, JSValueConst parent_val,
 void       bta_widget_adopt(JSContext *ctx, JSValueConst parent_val,
                             BtaWidget *parent, JSValueConst child_val,
                             BtaWidget *child);
+/* Would this adoption hand the child two handlers for one event -- its own,
+ * from `On`, and a `<Name>_<Event>` the form it is joining already answers?
+ * **Asked before the child is put into GTK**, and throws when it answers true:
+ * `bta_widget_adopt` runs after the attach and so cannot refuse anything. Every
+ * verb that brings an *unbound* control into a container asks it first. */
+bool       bta_widget_adopt_refused(JSContext *ctx, JSValueConst parent_val,
+                                    BtaWidget *parent, BtaWidget *child);
 /* Re-applies x/y/width/height to the GTK layout. */
 void       bta_widget_relayout(BtaWidget *w);
 /*

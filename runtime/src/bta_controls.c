@@ -592,6 +592,11 @@ static JSValue container_add(JSContext *ctx, JSValueConst this_val,
     if (!c)
         return JS_ThrowTypeError(ctx, "Add() expects a widget");
 
+    /* Before GTK holds it: adopt binds the form and runs after the attach, so
+     * this is the only point a refused pair leaves nothing behind. */
+    if (bta_widget_adopt_refused(ctx, this_val, p, c))
+        return JS_EXCEPTION;
+
     if (!bta_container_attach(ctx, p, c))
         return JS_EXCEPTION;
     bta_widget_relayout(c);

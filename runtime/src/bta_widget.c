@@ -284,11 +284,20 @@ void bta_widget_relayout(BtaWidget *w)
  * them can answer a `Paginate` -- so these are not merged: the one installed on
  * the control answers and the named one is not called.
  *
- * **That is not a promise to build on.**  The second handler is meant to become
- * a refusal where it is *written* (at `On`, and at the bind that can create the
- * collision afterwards), which is what every relative of this runtime does with
- * an ambiguity it cannot resolve -- nobody silences a handler.  Until then this
- * line is what happens, not what is guaranteed.
+ * **The pair is refused at every act that completes it**, and there are three:
+ * `On` throws when the form already answers that event by name, the `Name`
+ * setter throws when the control already carries a handler the new name would
+ * answer, and `bta_widget_adopt_refused` throws when a control arrives at a
+ * form carrying both.  The third is the one that is easy to miss, because the
+ * other two ask about `w->form` and a control built in code has not got one
+ * until it is adopted -- so named-then-`On`-then-`Add` passed both and made the
+ * pair in silence.  Its note says why it cannot live in `bta_widget_adopt`.
+ *
+ * **So this line is what is left over, and only one thing reaches it**: a
+ * `<name>_<event>` assigned onto the form afterwards, which is not something
+ * the runtime can watch -- a form is an ordinary JavaScript object, and there
+ * is no fourth act to hook.  That much is inherent rather than unfinished, and
+ * it is why this fallback stays rather than becoming an assertion.
  *
  * **`this` differs between the two roads, deliberately.**  A named handler is
  * found *on* the form and is called as its method, the way any property lookup
@@ -347,22 +356,118 @@ static JSValue emit_on(JSContext *ctx, BtaWidget *w, JSValueConst form,
  * create the same pair afterwards -- so the ambiguity is refused at the line
  * that makes it rather than resolved by a rule nobody can see.
  *
- * `name` is passed rather than read off `w`, because the rename has to ask about
- * the name it is *about to* take.
+ * **Both the form and the name are passed rather than read off `w`**, because
+ * two of the three doors ask about something the control has not got yet: the
+ * rename asks about the name it is *about to* take, and the adoption about the
+ * form it is *about to* be bound to.
  */
-static bool named_handler_exists(JSContext *ctx, BtaWidget *w,
+static bool named_handler_exists(JSContext *ctx, JSValueConst form,
                                  const char *name, const char *event)
 {
-    if (!name || !*name || JS_IsUndefined(w->form))
+    if (!name || !*name || JS_IsUndefined(form))
         return false;
 
     char   *key = g_strdup_printf("%s_%s", name, event);
-    JSValue fn  = JS_GetPropertyStr(ctx, w->form, key);
+    JSValue fn  = JS_GetPropertyStr(ctx, form, key);
     bool    had = JS_IsFunction(ctx, fn);
+
+    /* A form is an ordinary object and the lookup can throw -- an accessor of
+     * its own, or OOM.  Both callers are guards that answer yes or no and have
+     * nowhere to report it, so it is consumed here: left pending it would land
+     * on whoever asked the context next, half a program away. */
+    if (JS_IsException(fn))
+        JS_FreeValue(ctx, JS_GetException(ctx));
 
     JS_FreeValue(ctx, fn);
     g_free(key);
     return had;
+}
+
+/*
+ * The same question asked of every handler a control carries: which of them
+ * `name` on `form` would answer too, or NULL for none.  The caller frees it.
+ *
+ * Two doors need this -- the rename and the adoption -- and `On` needs only the
+ * single-event form above, since it is installing one.
+ */
+static char *pair_with_named(JSContext *ctx, BtaWidget *w,
+                             JSValueConst form, const char *name)
+{
+    JSPropertyEnum *tab = NULL;
+    uint32_t        len = 0;
+    char           *bad = NULL;
+
+    if (!JS_IsObject(w->handlers) || JS_IsUndefined(form))
+        return NULL;
+
+    if (JS_GetOwnPropertyNames(ctx, &tab, &len, w->handlers,
+                               JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) != 0) {
+        /* It throws rather than answering, and both callers are guards with
+         * nowhere to report it: consumed, or it surfaces at whatever asks the
+         * context next. */
+        JS_FreeValue(ctx, JS_GetException(ctx));
+        return NULL;
+    }
+
+    for (uint32_t i = 0; i < len; i++) {
+        const char *event = JS_AtomToCString(ctx, tab[i].atom);
+
+        if (!event)
+            JS_FreeValue(ctx, JS_GetException(ctx));
+        else if (!bad && named_handler_exists(ctx, form, name, event))
+            bad = g_strdup(event);
+        JS_FreeCString(ctx, event);
+        JS_FreeAtom(ctx, tab[i].atom);
+    }
+    js_free(ctx, tab);
+    return bad;
+}
+
+/*
+ * **The third door, and the one that has to be asked before anything moves.**
+ *
+ * `On` and the `Name` setter both ask about `w->form`, and a control built in
+ * code has not got one until it is adopted -- so a control that is *named* and
+ * *given a handler* before `Add` passes both and arrives at a form that answers
+ * its name.  Measured before this existed: `Add` then `On` was refused, `On`
+ * then `Name` was refused, and `Name` + `On` then `Add` was not, and the pair it
+ * made was silent.
+ *
+ * **It cannot live in `bta_widget_adopt`**, which is where the binding happens
+ * and is the choke point every container goes through: adopt runs *after* the
+ * child is already in GTK -- after `bta_container_attach`, after
+ * `gtk_notebook_append_page`, after `gtk_stack_add_child` -- so refusing there
+ * would leave a half-attached control, which is the `AddNode` trap this tree
+ * already carries.  So it is a question, asked first, by the five verbs that
+ * bring an unbound control in: `Container.Add`, `Notebook.Append` (twice, for
+ * the page and its tab), `Notebook.SetAction`, `Notebook.SetTabLabel` and
+ * `Switcher.Append`.  A sixth one that forgets reopens the hole, which is the
+ * cost of adopt not being able to carry this itself.
+ *
+ * The `.form` loader is not among them and needs nothing: it binds before it
+ * attaches, and a control it has just built carries no handlers anyway.
+ */
+bool bta_widget_adopt_refused(JSContext *ctx, JSValueConst parent_val,
+                              BtaWidget *parent, BtaWidget *child)
+{
+    if (!parent || !child)
+        return false;
+    /* Already bound: its own two doors were asked when it had a form. */
+    if (!JS_IsUndefined(child->form))
+        return false;
+
+    JSValueConst form = parent->is_form ? parent_val : parent->form;
+    char        *bad  = pair_with_named(ctx, child, form, child->name);
+
+    if (!bad)
+        return false;
+
+    JS_ThrowTypeError(ctx,
+        "Add: this control has a handler of its own for '%s', and %s_%s on the "
+        "form it is being added to would answer it too", bad,
+        child->name, bad);
+    g_free(bad);
+    return true;
 }
 
 JSValue bta_emit_on(JSContext *ctx, JSValueConst form, const char *name,
@@ -484,42 +589,25 @@ static JSValue w_set_name(JSContext *ctx, JSValueConst this_val, JSValueConst va
         return JS_EXCEPTION;
 
     /*
-     * The other door into the pair `On` refuses: a control carrying handlers of
-     * its own, renamed onto a name its form already answers for.  Asked of every
-     * event it holds, against the name it is about to take.
+     * The second of the three doors into the pair `On` refuses: a control
+     * carrying handlers of its own, renamed onto a name its form already answers
+     * for.  Asked of every event it holds, against the name it is about to take,
+     * and before anything is written -- a refused rename leaves the name it had.
      *
      * **This is not a total check and cannot be.**  A form is an ordinary object
      * and nothing can watch `this.Btn_Click = fn` being assigned onto it after
-     * the fact, so what is refused is the pair the *runtime* is handed: `On`
-     * over a name, and a name over an `On`.
+     * the fact, so what is refused is the pair the *runtime* is handed.
      */
-    if (JS_IsObject(w->handlers) && !JS_IsUndefined(w->form)) {
-        JSPropertyEnum *tab = NULL;
-        uint32_t        len = 0;
-        char           *bad = NULL;
+    char *bad = pair_with_named(ctx, w, w->form, s);
 
-        if (JS_GetOwnPropertyNames(ctx, &tab, &len, w->handlers,
-                                   JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) == 0) {
-            for (uint32_t i = 0; i < len; i++) {
-                const char *event = JS_AtomToCString(ctx, tab[i].atom);
+    if (bad) {
+        JSValue e = JS_ThrowTypeError(ctx,
+            "Name: this control has a handler of its own for '%s', and "
+            "%s_%s on its form would answer it too", bad, s, bad);
 
-                if (event && !bad && named_handler_exists(ctx, w, s, event))
-                    bad = g_strdup(event);
-                JS_FreeCString(ctx, event);
-                JS_FreeAtom(ctx, tab[i].atom);
-            }
-            js_free(ctx, tab);
-        }
-
-        if (bad) {
-            JSValue e = JS_ThrowTypeError(ctx,
-                "Name: this control has a handler of its own for '%s', and "
-                "%s_%s on its form would answer it too", bad, s, bad);
-
-            g_free(bad);
-            JS_FreeCString(ctx, s);
-            return e;
-        }
+        g_free(bad);
+        JS_FreeCString(ctx, s);
+        return e;
     }
 
     g_free(w->name);
@@ -2680,7 +2768,7 @@ static JSValue w_on(JSContext *ctx, JSValueConst this_val,
      *
      * `On(event, null)` is exempt: taking a handler away cannot make a pair.
      */
-    if (!clearing && named_handler_exists(ctx, w, w->name, event)) {
+    if (!clearing && named_handler_exists(ctx, w->form, w->name, event)) {
         JSValue e = JS_ThrowTypeError(ctx,
             "On: %s already answers '%s' through %s_%s on its form, and a "
             "control has one handler for one event", w->name, event,

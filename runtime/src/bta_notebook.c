@@ -56,6 +56,11 @@ static JSValue notebook_append(JSContext *ctx, JSValueConst this_val,
             return JS_ThrowTypeError(ctx, "Append: label is not a widget");
     }
 
+    /* Both, and before the page is in GTK: see bta_widget_adopt_refused. */
+    if (bta_widget_adopt_refused(ctx, this_val, w, child) ||
+        (labelw && bta_widget_adopt_refused(ctx, this_val, w, labelw)))
+        return JS_EXCEPTION;
+
     gint index = gtk_notebook_append_page(GTK_NOTEBOOK(w->gtk), child->gtk,
                                          labelw ? labelw->gtk : NULL);
 
@@ -189,6 +194,9 @@ static JSValue notebook_set_action(JSContext *ctx, JSValueConst this_val,
     GtkNotebook *nb  = GTK_NOTEBOOK(w->slot);
     GtkWidget   *old = gtk_notebook_get_action_widget(nb, pack);
 
+    if (child && bta_widget_adopt_refused(ctx, this_val, w, child))
+        return JS_EXCEPTION;
+
     gtk_notebook_set_action_widget(nb, child ? child->gtk : NULL, pack);
 
     /* Let go after the swap: until GTK has dropped it, releasing our reference
@@ -259,6 +267,9 @@ static JSValue notebook_set_tab_label(JSContext *ctx, JSValueConst this_val,
     BtaWidget *prev = old ? g_object_get_data(G_OBJECT(old), BTA_WIDGET_QUARK) : NULL;
     if (prev && prev != labelw)
         bta_widget_release(ctx, this_val, prev->self);
+
+    if (bta_widget_adopt_refused(ctx, this_val, w, labelw))
+        return JS_EXCEPTION;
 
     gtk_notebook_set_tab_label(GTK_NOTEBOOK(w->gtk), page, labelw->gtk);
     bta_widget_adopt(ctx, this_val, w, argv[1], labelw);

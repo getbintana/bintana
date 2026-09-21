@@ -521,10 +521,11 @@ control goes. `On(event, null)` removes one. There is no `Off` — it would be t
 same sentence said twice, and it would need the function back to identify it,
 which is the one thing a closure does not hand you.
 
-**A control never has both, and the second one is refused where it is written.**
-`On` throws when the form already answers that event by name, and assigning a
+**A control never has both, and the pair is refused at whichever act completes
+it.** `On` throws when the form already answers that event by name, assigning a
 `Name` throws when the control already carries a handler the new name would
-answer:
+answer, and **adding the control to a container** throws when it arrives at a
+form carrying both:
 
     On: BtnOk already answers 'Click' through BtnOk_Click on its form,
         and a control has one handler for one event
@@ -536,9 +537,15 @@ whether the key was eaten — and only one of two answers could ever be used, so
 preferring one would silence the other without saying so. `On(event, null)` is
 let through either way: taking a handler away cannot make a pair.
 
-The check is at the two doors the runtime is handed the pair through, and **it
-is not total**: a form is an ordinary object, so a `<Name>_<Event>` assigned onto
-it after the fact is something nothing can watch.
+The third of those is the one worth knowing about, because the other two cannot
+cover it: both ask about the control's **form**, and a control built in code has
+not got one until it is added. So naming it and installing a handler before
+`Add` satisfies both, and the adoption is where the form finally arrives — which
+is why that is asked too, and asked before the control reaches the container.
+
+What is left is **not total**, and inherently so: a form is an ordinary object,
+so a `<Name>_<Event>` assigned onto it after the fact is something nothing can
+watch. There is no act to hook there.
 
 **A component added from code is the case the convention cannot reach at all.**
 It keeps *itself* as its event target, since only the `.form` loader rebinds one

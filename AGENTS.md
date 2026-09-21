@@ -1818,24 +1818,42 @@ person who wrote it either.
   process, with no `delete` anywhere. It is wired **once** now and reads
   `this.sampleKey`. A handler that cannot live on a widget has to be given a
   target it looks up rather than one it closes over.
-- **The two-handler refusal has two doors and there is no third, which is a
-  property of the language rather than a shortcut.** `named_handler_exists` is
-  asked in `On` (is there already a `<name>_<event>` for the event being
-  installed) and in the **`Name` setter** (does this control already carry a
-  handler for an event the new name would answer). Both are where the
-  application writes the *second* of the pair, both can throw at that line, and
-  neither costs anything on the path that has no handlers.
-  **`bta_widget_bind` is not the third door and must not be made one**, which is
-  what an earlier sketch of this said it would be. It is `void`, it is reached
-  from `bta_widget_adopt` **after** `bta_container_attach` has already parented
-  the child in GTK, and refusing there would leave a half-attached control --
-  the same shape as the `AddNode` trap above. What it would catch is also
-  narrower than it looks: for a code-built control the name is only meaningful
-  once somebody *sets* it, and that is the `Name` setter.
-  **And the check can never be total**: a form is an ordinary JavaScript object,
-  so `this.Btn_Click = fn` assigned onto it afterwards is invisible to anything
-  the runtime can install. What is refused is the pair the runtime is *handed*,
-  and the documentation says so rather than implying a guarantee.
+- **The two-handler refusal has three doors, and the third one is not where you
+  would look for it.** The question is the same at all three -- does this control
+  carry a handler of its own for an event that a `<name>_<event>` on its form
+  would answer too -- and it is asked in `On`, in the **`Name` setter**, and in
+  **`bta_widget_adopt_refused`**, which every verb that brings an *unbound*
+  control into a container asks before it touches GTK.
+  **The framing that hid the third one was *refused where the second handler is
+  written*.** That reads as a symmetry and is not one: `BtnOk_Click` is a method
+  in a class body, so it is never handed to the runtime at all and can never be
+  the trigger -- the check can only ever fire on the other side. The framing
+  that finds all three is **every act that completes the pair**, and there are
+  exactly three, because the first two both ask about `w->form` and a control
+  built in code has not got one until it is adopted. Measured, before the third
+  existed: `Add` then `On` was refused, `On` then `Name` was refused, and
+  **`Name` + `On` then `Add` was not** -- the pair was made in silence and `On`
+  won. Narrow (`On` exists so a code-built control needs no name at all) and
+  real.
+  **It could not go in `bta_widget_bind` and could not go in
+  `bta_widget_adopt` either**, which is the part that costs something. Adopt is
+  the choke point every container goes through -- *"every path that adds a child
+  has to call it"*, above -- but it runs **after** the child is in GTK: after
+  `bta_container_attach`, after `gtk_notebook_append_page`, after
+  `gtk_stack_add_child`. Refusing there leaves a half-attached control, which is
+  the `AddNode` trap. So it is a *question asked first* by five verbs --
+  `Container.Add`, `Notebook.Append` (twice: the page and its tab),
+  `Notebook.SetAction`, `Notebook.SetTabLabel`, `Switcher.Append` -- and **a
+  sixth verb that forgets to ask reopens the hole**, with nothing failing. That
+  is the price of adopt not being able to carry it, and it is the thing to check
+  when adding a way to put a control in a container. The `.form` loader is
+  deliberately not among them: it binds *before* it attaches, and a control it
+  has just built carries no handlers.
+  **And the check can never be total**, which is a different statement now that
+  the omission is gone: a form is an ordinary JavaScript object, so
+  `this.Btn_Click = fn` assigned onto it afterwards is invisible -- there is no
+  act to hook. That much is inherent. Do not file the adoption under it, which
+  is what the documentation did for one commit.
 - **A test that called a handler off the form had to start raising the event.**
   `tests/ide/Driver.js` drove the grid with `ide[`Prop_${key}_Activate`]()` and
   `ide.Prop_Icon_IconClick()`; those properties do not exist any more, and the

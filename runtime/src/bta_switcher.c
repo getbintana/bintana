@@ -398,6 +398,14 @@ static JSValue switcher_append(JSContext *ctx, JSValueConst this_val,
             return JS_EXCEPTION;
     }
 
+    /* Before the page is in the stack, for the reason the name above is read
+     * before it: a refusal must leave nothing behind. */
+    if (bta_widget_adopt_refused(ctx, this_val, w, child)) {
+        if (name)
+            JS_FreeCString(ctx, name);
+        return JS_EXCEPTION;
+    }
+
     gtk_stack_add_child(GTK_STACK(w->slot), child->gtk);
 
     /* Named before it is adopted, so a Switch handler that reads Tabs sees the
