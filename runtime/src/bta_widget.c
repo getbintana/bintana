@@ -3201,7 +3201,7 @@ static const char *drop_hover_string(GtkDropTarget *target)
 /*
  * The drag over the target, move by move. Asked as a question and not told as
  * a notification: a handler returning **false** refuses the drop at that
- * point -- the motion answers GDK_ACTION_NONE, the cursor shows it, and Drop
+ * point -- the motion answers *no action*, the cursor shows it, and Drop
  * never fires -- while anything else accepts it. No handler is an accept,
  * which is what every target written before this did.
  *
@@ -3234,7 +3234,14 @@ static GdkDragAction on_drag_hover(GtkDropTarget *target, double x, double y,
     JS_FreeValue(ctx, r);
     for (int i = 0; i < 3; i++)
         JS_FreeValue(ctx, argv[i]);
-    return rejected ? GDK_ACTION_NONE : GDK_ACTION_COPY;
+
+    /*
+     * `0` and not `GDK_ACTION_NONE`: that enumerator only exists since GTK
+     * 4.20, while the floor this runtime declares is 4.10 -- the CI's Ubuntu
+     * 24.04 has 4.14 and refuses it, and this machine's 4.22 accepts it. No
+     * action is the zero of the flags type either way.
+     */
+    return rejected ? 0 : GDK_ACTION_COPY;
 }
 
 static GdkDragAction on_drag_enter(GtkDropTarget *target, double x, double y,

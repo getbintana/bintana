@@ -1625,6 +1625,16 @@ person who wrote it either.
   `__has_feature` question is nested inside the `#ifdef` that knows the name
   exists (`bta_runtime.c`), and any compiler-version conditional added here is
   the same shape of risk: the runner is the only GCC 13 this repository has.
+- **And so is its GTK, which is the one that actually bit.** The runner is
+  Ubuntu 24.04 with GTK **4.14** while this machine has **4.22**, so a name added
+  since 4.15 compiles here and is an *undeclared identifier* there:
+  `GDK_ACTION_NONE` is an enumerator only since **4.20**
+  (`GDK_AVAILABLE_ENUMERATOR_IN_4_20` in `gdk/gdkenums.h`) and `bta_widget.c`
+  returned it for a refused drag -- green here, `error: 'GDK_ACTION_NONE'
+  undeclared` on the runner, and the floor this runtime declares is 4.10. `0` is
+  the zero of the flags type and says it in every version. **A new GTK or GDK
+  name is checked against the floor, not against this machine**: grep the header
+  for its `GDK_AVAILABLE_IN_*`, and when it is newer, spell the older thing.
 - **In an `Overlay` the bottom of the stack is the layer that fills.** The base
   is a GTK *property* (`gtk_overlay_set_child`) and the floaters are a list, so
   `Reorder(child, 0)` swaps the property rather than moving a sibling — both
@@ -1833,7 +1843,7 @@ person who wrote it either.
   shows a line and answers nothing returns -- would refuse every drag anywhere.
 - **And the refusal lives in `DragOver` alone, although both events answer
   one.** `on_drag_enter` and `on_drag_motion` go through the same helper and
-  return the same `GDK_ACTION_NONE`, which is what made *"`DragEnter` refuses
+  return the same *no action*, which is what made *"`DragEnter` refuses
   too"* look true from the code -- and it is not, because GTK's `motion` sets
   the action again a few milliseconds later. Measured three ways with a real
   pointer, dropping on a target that refuses: in `DragEnter` only, the `Drop`
