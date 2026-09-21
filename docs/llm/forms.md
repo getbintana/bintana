@@ -160,7 +160,7 @@ class MainForm extends Form {
 - A handler that returns a value matters in exactly five places: `Form_Close`
   (`true` vetoes), `KeyPress`/`MouseWheel` (`true` consumes), `TableView`'s
   `Data` (the cell), `RowList`'s `Filter` (`false` hides the row), and
-  `DragEnter`/`DragOver` (`false` refuses the drop at that point).
+  `DragOver` (`false` refuses the drop at that point).
 
 ### Events on every widget
 

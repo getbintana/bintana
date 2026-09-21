@@ -1812,6 +1812,24 @@ person who wrote it either.
   `JS_ToBool` because their handlers consume by returning `true`, but here the
   refusing answer is the falsy one and `undefined` -- what every handler that
   shows a line and answers nothing returns -- would refuse every drag anywhere.
+- **And the refusal lives in `DragOver` alone, although both events answer
+  one.** `on_drag_enter` and `on_drag_motion` go through the same helper and
+  return the same `GDK_ACTION_NONE`, which is what made *"`DragEnter` refuses
+  too"* look true from the code -- and it is not, because GTK's `motion` sets
+  the action again a few milliseconds later. Measured three ways with a real
+  pointer, dropping on a target that refuses: in `DragEnter` only, the `Drop`
+  **arrives**; in `DragOver` only, it does not; in both, it does not. So a
+  `false` from `DragEnter` is worth exactly the time until the pointer moves a
+  pixel -- and **that time is always zero**, which is what makes it dead rather
+  than narrow: GTK raises a `motion` at the *same point* immediately after every
+  `enter`, in every gesture measured (`DragEnter card-7 60,0` then
+  `DragOver card-7 60,0`), so there is no drop that can land in between. The
+  documents said `DragEnter`/`DragOver` in three places and say `DragOver` now,
+  and `examples/kanban` had the matching `return false` in its `dragEnter`,
+  which is gone for the reason `examples/serve` has no `".."` guard: a refusal
+  that cannot fire teaches the next reader the wrong vocabulary. Read from the
+  C this is invisible: the two paths are identical and what discards one of the
+  answers is in GTK.
 - **`drag-end` finishes every drag, so it is the only source-side signal
   connected.** Success and refusal were measured; Escape is GTK's documented
   finish rather than a measured one -- an `xdotool key Escape` mid-drag under
@@ -1820,6 +1838,26 @@ person who wrote it either.
   single long `xdotool mousemove` jump made *during* a drag registers nothing
   -- enter/motion only arrived for small stepwise moves, which is also the
   shape of a real hand.
+- **A drop is not a leave, and the leave it owes arrives during somebody
+  else's drag.** `DragLeave` is documented as *the drag left without dropping*,
+  which is true and is half the sentence. Measured with a real pointer: after a
+  `Drop` nothing else comes -- five seconds of stillness and no leave -- and
+  GTK delivers that target's `leave` at the **next** drag instead, right after
+  its `DragBegin` and for a target the new drag never went over:
+
+      Ok Drop card-7 60,60 / Src DragEnd / Src DragBegin / Ok DragLeave /
+      No DragEnter card-7
+
+  So a target that lights up in `DragEnter` and puts itself out in `DragLeave`
+  **stays lit after a drop**, which is the shape anybody writes first, and a
+  program counting enters against leaves is handed one it did not ask for.
+  `examples/kanban` is right because `dropOn` calls its own `dragLeave` before
+  it moves anything -- a line that looked like belt and braces and is the whole
+  of it. Written into the `Drop` and `DragLeave` rows rather than fixed:
+  emitting a leave of our own from `on_drop` would make the late one a
+  **second** leave for one gesture, and swallowing that late one means keeping
+  a flag per target for a tidiness nobody asked for. A drag that leaves without
+  dropping, and a drop that was refused, both raise it in their own gesture.
 - **A component added from code keeps itself as its event target, and
   `On(event, fn)` is what makes that harmless.** Only the `.form` loader rebinds
   one to its host (`bta_widget_bind` in `build_one`); `Container.Add` adopts it

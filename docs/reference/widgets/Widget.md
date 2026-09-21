@@ -96,7 +96,7 @@ in the section.
 | `DragBegin()` | this control started travelling | [drag and drop](#drag-and-drop) |
 | `DragEnd()` | the drag finished, however it did | [drag and drop](#drag-and-drop) |
 | `DragEnter(data, x, y)` | a drag came over it | [drag and drop](#drag-and-drop) |
-| `DragLeave()` | the drag went without dropping | [drag and drop](#drag-and-drop) |
+| `DragLeave()` | the drag went **without dropping** | [drag and drop](#drag-and-drop) |
 | `DragOver(data, x, y)` | a drag moved over it. **`false` refuses it** | [drag and drop](#drag-and-drop) |
 | `Drop(data, x, y)` | something was dropped on it | [drag and drop](#drag-and-drop) |
 | `FileDrop(paths, x, y)` | files were dropped on it | [drag and drop](#drag-and-drop) |
@@ -301,15 +301,25 @@ availability is computed once and every one of them follows. Three copies of
 | `DragData` | the string that travels when this control is dragged. Empty turns dragging off |
 | `AcceptDrop` | receives a drop from **this application**, which arrives as `Drop` |
 | `AcceptFiles` | receives files dragged in from **the desktop**, which arrive as `FileDrop`. Independent of `AcceptDrop`: a control may take one, the other or both |
-| **event** `Drop(data, x, y)` | something with a `DragData` was dropped here. Refused drops never arrive (see `DragOver`) |
+| **event** `Drop(data, x, y)` | something with a `DragData` was dropped here. Refused drops never arrive (see `DragOver`). **Undo here whatever `DragEnter` lit up**, because no `DragLeave` follows a drop |
 | **event** `FileDrop(paths, x, y)` | files were dropped here. `paths` is an array of full paths — **only files that have one**: something on a remote share has no local path and does not arrive, and a drop of nothing but those is refused rather than delivered empty |
-| **event** `DragEnter(data, x, y)` | a drag came over this control, carrying the same point `Drop` will. Light the column up here |
+| **event** `DragEnter(data, x, y)` | a drag came over this control, carrying the same point `Drop` will. Light the column up here. **Refusing is `DragOver`'s**, not this one's: a `false` here is overwritten by the next motion |
 | **event** `DragOver(data, x, y)` | the drag moved over it, point after point. Recompute the insertion line here. **Returning `false` refuses the drop at that point**: the cursor shows it and `Drop` never fires. Anything else — including answering nothing — accepts, and with no handler everything is accepted. Strictly `false`: a handler that answers nothing returns `undefined`, which must not refuse every drag anywhere |
-| **event** `DragLeave()` | the drag left without dropping. Undoes what `DragEnter` did |
+| **event** `DragLeave()` | the drag left **without dropping**. Undoes what `DragEnter` did — and a drop is not a leave: see below |
 | **event** `DragBegin()` | this control started being dragged. Grey the card here |
 | **event** `DragEnd()` | the drag finished — dropped or refused. Puts back whatever `DragBegin` changed |
 
 `data` in `DragEnter`/`DragOver` is the dragged string, preloaded on hover: without preload the value would only exist at drop. Still loading on a very early `enter` answers `""` rather than holding the event back. There is no feedback half for `FileDrop`: files from the desktop have no travelling string to preload.
+
+**A drop is not a leave, so the target undoes its own feedback in `Drop`.**
+Measured with a real pointer: after a `Drop` nothing else arrives — five
+seconds of stillness and no `DragLeave` — and the leave for that target is
+delivered at the **next** drag instead, right after its `DragBegin` and for a
+target the new drag never went over. So a column that lights up in `DragEnter`
+stays lit after a card lands on it unless `Drop` puts it out, and anything
+counting enters against leaves has to expect the late one. A drag that leaves
+without dropping, and a drop that was refused, both do raise it in the gesture
+they belong to.
 
 **The point is in the accepting control's own coordinates, and so is
 `Bounds(that control)`** — which is what lets a drop be *placed* rather than

@@ -666,6 +666,10 @@ class Board extends Form {
 
     dropOn(colId, data, y) {
         if (!this.loaded) return;
+        /* **A drop is not a leave.** Nothing follows a `Drop` -- the target's
+         * own `DragLeave` is delivered during the *next* drag, for a column
+         * that drag may never go near -- so the wash and the line are put out
+         * here, or they would sit on the column until somebody dragged again. */
         this.dragLeave(colId);
         const id = Number(data);
         if (!(id > 0)) return;
@@ -681,10 +685,15 @@ class Board extends Form {
         return n > 0 ? n : 0;
     }
 
+    /* No `false` here, although it reads like the place for one: **the veto is
+     * `DragOver`'s**. GTK raises a `motion` at the same point immediately after
+     * every `enter`, and that one sets the action again -- measured, a target
+     * refusing only in `DragEnter` receives the drop anyway. So this one only
+     * lights the column, and `dragOver` below is what refuses. */
     dragEnter(colId, data) {
-        if (!this.loaded) return false;
+        if (!this.loaded) return;
         const v = this.viewOf(colId);
-        if (!v || !this.dragId(data)) return false;
+        if (!v || !this.dragId(data)) return;
         if (!v.hot) {
             v.hot = true;
             v.box.Style = "kanban-column kanban-drop";
