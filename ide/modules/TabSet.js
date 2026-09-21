@@ -66,7 +66,7 @@ function opensInTab(file) {
 
 /* And whether it opens as a rendered document rather than as its source. */
 function isDocument(file) {
-    return File.Extension(file).toLowerCase() === "md";
+    return File.IsExtension(file, "md");
 }
 
 /* How far the board sits from the corner of the room it is drawn in. */
@@ -712,7 +712,7 @@ Ide.TabSet = class TabSet {
      * wants written down before going to look something up.
      */
     checkSyntax(name, editor) {
-        if (!editor || File.Extension(name).toLowerCase() !== "js") return true;
+        if (!editor || !File.IsExtension(name, "js")) return true;
 
         /* Only ours: a bookmark or a mark somebody else put there is not this
          * function's to clear. */

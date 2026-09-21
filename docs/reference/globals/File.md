@@ -44,8 +44,11 @@ ceremony around nothing. What is not synchronous is what genuinely waits:
 | `BaseName(path)` | `/a/b/c.js` → `c` | [paths](#paths) |
 | `Directory(path)` | `/a/b/c.js` → `/a/b` | [paths](#paths) |
 | `Extension(path)` | → `js`, no dot, `""` if none | [paths](#paths) |
+| `IsExtension(path, ext)` | → whether it ends in that extension, case-insensitively | [paths](#paths) |
 | `Join(a, b, …)` | → one path out of pieces | [paths](#paths) |
 | `Name(path)` | `/a/b/c.js` → `c.js` | [paths](#paths) |
+| `Relative(path, root)` | → `path` with `root` taken off | [paths](#paths) |
+| `Within(path, root)` | → whether `path` is `root` or under it | [paths](#paths) |
 
 ## Text
 
@@ -132,13 +135,32 @@ and giving a file verb two meanings would be the wrong place to put it.
 |---|---|
 | `Join(a, b, …)` | one path out of pieces, with the separator the platform uses |
 | `Absolute(path)` | the path resolved against the working directory |
+| `Within(path, root)` | whether `path` is `root` or under it |
+| `Relative(path, root)` | `path` with `root` taken off; the path unchanged when there is no relative spelling, and `""` for the root itself |
 | `Name(path)` | `/a/b/c.js` → `c.js` |
 | `BaseName(path)` | `/a/b/c.js` → `c` |
 | `Directory(path)` | `/a/b/c.js` → `/a/b` |
 | `Extension(path)` | `js` — no dot, `""` when there is none |
+| `IsExtension(path, ext)` | whether the name ends in that extension, **case-insensitively**. `"js"` and `".js"` are both taken, and a suffix like `"tar.gz"` is refused: the extension is what [`Extension`](#paths) answers, which stops at the last dot |
 
 These are **string** operations and touch no disk: they answer about a path that
 need not exist.
+
+`Within` and `Relative` are the pair a program that shows a tree needs, and they
+are the question and the spelling — the same bargain as
+[`HasCommand`](Application.md) and [`Exec`](Exec.md). **A path is components and
+not a prefix**: `/home/u/proj2` starts with `/home/u/proj` and is not inside it,
+and a hand-written `startsWith(root + "/")` gets the rest right only by luck.
+`.` and `..`, `//` and a trailing slash are settled on the way in, and what is
+compared is the canonical bytes — `GFile`'s own rule, on every platform. A file
+that is not under the root has no relative spelling, so `Relative` answers the
+path it was given — which is what a tree that lists files from inside *and*
+outside the project wants; ask `Within` first when the two have to be told
+apart.
+
+`IsExtension` folds the case because the question almost every caller has is
+case-insensitive, and `Extension` answers the case that was on disk. It is what
+`File.Extension(f).toLowerCase() === "js"` was written for, 43 times.
 
 ## What goes wrong
 
@@ -154,6 +176,9 @@ need not exist.
 - **A watch fired twice for one save.** Editors write and rename; both settle
   into `"Changed"`, but a handler still has to be idempotent.
 - **`Info` answered `null`.** Nothing is there.
+- **A file from outside the project was shown as if it were inside it.** A
+  prefix test says yes to `/home/u/proj2` for a root of `/home/u/proj`;
+  `File.Within` is the question and `File.Relative` is the name.
 
 ## See also
 

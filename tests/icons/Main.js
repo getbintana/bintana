@@ -214,7 +214,7 @@ function drawsNothing(name, path) {
      * icons in this theme that are fine.
      */
     if (!name.endsWith("-symbolic")) return false;
-    if (File.Extension(path).toLowerCase() !== "svg") return false;
+    if (!File.IsExtension(path, "svg")) return false;
 
     let svg;
     try { svg = File.Load(path); } catch (e) { return false; }

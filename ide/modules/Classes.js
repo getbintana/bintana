@@ -60,7 +60,7 @@ const MODULE_DIR    = "modules";
 const TOOL_DIRS = {
     [FORM_DIR]:      (f) => ["form", "js"].includes(File.Extension(f).toLowerCase()),
     [COMPONENT_DIR]: (f) => ["form", "js"].includes(File.Extension(f).toLowerCase()),
-    [MODULE_DIR]:    (f) => File.Extension(f).toLowerCase() === "js",
+    [MODULE_DIR]:    (f) => File.IsExtension(f, "js"),
     po:              (f) => Ide.Translations.isCatalogue(f),
 };
 
@@ -322,7 +322,7 @@ Ide.Classes = class Classes {
     warnDuplicateClasses() {
         const seen = {};
         for (const file of this.files) {
-            if (File.Extension(file).toLowerCase() !== "form") continue;
+            if (!File.IsExtension(file, "form")) continue;
 
             const name = File.BaseName(file);
             (seen[name] = seen[name] || []).push(file);
@@ -440,7 +440,7 @@ Ide.Classes = class Classes {
      * of two the caller meant is how a rename moves the wrong file.
      */
     formOfClass(name) {
-        const forms = this.files.filter((f) => File.Extension(f).toLowerCase() === "form");
+        const forms = this.files.filter((f) => File.IsExtension(f, "form"));
 
         const exact = forms.find((f) => this.qualifiedName(f) === name);
         if (exact) return exact;
@@ -465,7 +465,7 @@ Ide.Classes = class Classes {
      */
     fileOfClass(name) {
         const sources = this.files.filter(
-            (f) => File.Extension(f).toLowerCase() === "js");
+            (f) => File.IsExtension(f, "js"));
 
         const dot  = String(name).lastIndexOf(".");
         const ns   = dot < 0 ? "" : name.slice(0, dot);
@@ -513,7 +513,7 @@ Ide.Classes = class Classes {
     names() {
         if (!this.cache) {
             this.cache = this.files
-                                .filter((f) => File.Extension(f).toLowerCase() === "form")
+                                .filter((f) => File.IsExtension(f, "form"))
                                 .map((f) => this.qualifiedName(f));
         }
         return this.cache;
@@ -562,7 +562,7 @@ Ide.Classes = class Classes {
         const fresh   = new Map();
 
         for (const file of this.files) {
-            if (File.Extension(file).toLowerCase() !== "js") continue;
+            if (!File.IsExtension(file, "js")) continue;
 
             const said = this.namespaceIn(file, fresh);
             if (!said) continue;
@@ -585,7 +585,7 @@ Ide.Classes = class Classes {
          * time, and this runs on every listing.
          */
         for (const file of this.files) {
-            if (File.Extension(file).toLowerCase() !== "form") continue;
+            if (!File.IsExtension(file, "form")) continue;
 
             const ns = of[sibling(file, "js")];
             if (ns) of[file] = ns;
@@ -677,7 +677,7 @@ Ide.Classes = class Classes {
         const out = [];
 
         for (const file of this.files) {
-            if (File.Extension(file).toLowerCase() !== "form") continue;
+            if (!File.IsExtension(file, "form")) continue;
             /* **A vendored library is not the project's own.** `<project>/lib/x`
              * is the first place `uses` looks and those files are inside the
              * tree -- so without this the same class is a project component *and*
@@ -762,7 +762,7 @@ Ide.Classes = class Classes {
         if (!this.libraries || !this.libraries.length) return false;
 
         const path = File.Absolute(File.Join(this.ide.project, file));
-        return this.libraries.some((lib) => path.startsWith(`${lib.dir}/`));
+        return this.libraries.some((lib) => File.Within(path, lib.dir));
     }
 
     componentsInLibraries() {

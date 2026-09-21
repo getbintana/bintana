@@ -848,18 +848,21 @@ declare const File: {
     Hash(...values: any[]): any;
     Info(...values: any[]): any;
     IsDir(...values: any[]): any;
+    IsExtension(...values: any[]): any;
     Join(...values: any[]): any;
     Load(...values: any[]): any;
     LoadBytes(...values: any[]): any;
     LoadJson(...values: any[]): any;
     Name(...values: any[]): any;
     Open(...values: any[]): any;
+    Relative(...values: any[]): any;
     Rename(...values: any[]): any;
     Save(...values: any[]): any;
     SaveBytes(...values: any[]): any;
     SaveJson(...values: any[]): any;
     Trash(...values: any[]): any;
     Watch(...values: any[]): any;
+    Within(...values: any[]): any;
 };
 
 declare const Hash: {

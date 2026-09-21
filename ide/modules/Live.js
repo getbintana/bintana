@@ -98,7 +98,7 @@ Ide.Live = class Live {
 
         const ide  = this.ide;
         const name = ide.activeFile;
-        if (!name || File.Extension(name).toLowerCase() !== "js") return;
+        if (!name || !File.IsExtension(name, "js")) return;
         if (!ide.Editor) return;
 
         /* One pause means one pass over the file, however many readers it has.

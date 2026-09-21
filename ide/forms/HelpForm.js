@@ -188,7 +188,7 @@ class HelpForm extends Form {
     Doc_Link(href, text) {
         const target = File.Absolute(File.Join(File.Directory(this.Doc.Path),
                                                href.replace(/#.*$/, "")));
-        if (File.Exists(target) && File.Extension(target).toLowerCase() === "md")
+        if (File.Exists(target) && File.IsExtension(target, "md"))
             return this.go(target);
 
         this.LblWhere.Text = `${text} -> ${href}`;

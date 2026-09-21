@@ -199,10 +199,20 @@ Most text needs none of this: see
 | `Watch(path, cb)` | `cb(event, path)` — `"Changed"` `"Created"` `"Deleted"`; answers something with `Stop()` |
 | `Open(path)` | hands it to whatever the desktop opens that kind of file with |
 | `Join(a, b, …)`, `Absolute(path)` | |
+| `Within(path, root)` | whether `path` is `root` or under it, by whole path components — `/a/proj2` is **not** inside `/a/proj` |
+| `Relative(path, root)` | `path` with `root` taken off; the path unchanged when there is no relative spelling, and `""` for the root itself |
 | `Name(path)` | `/a/b/c.js` → `c.js` |
 | `Directory(path)` | `/a/b/c.js` → `/a/b` |
 | `Extension(path)` | `js`, no dot, `""` if none |
+| `IsExtension(path, ext)` | whether the name ends in that extension, **case-insensitively**; `"js"` and `".js"` are both taken |
 | `BaseName(path)` | `c` |
+
+`Within` and `Relative` are **lexical** and touch no disk, and they are the pair
+`HasCommand`/`Exec` are: the question, and the spelling. The one thing they get
+right that a hand-written prefix test does not is that a path is components:
+`/home/u/proj2` starts with `/home/u/proj` and is not inside it. `.`, `..`, `//`
+and a trailing slash are settled on the way in, and what is compared is the
+canonical bytes -- `GFile`'s own rule, on every platform.
 
 **`Trash` is what *Delete* usually should mean.** A program that offers Delete
 and means `unlink` is harsher than the desktop it runs on — and one that offers

@@ -145,8 +145,11 @@ Ide.Git = class Git {
      * two. Nothing else in `ide/` needs to know that the boundary exists.
      */
     strip(path) {
-        const at = this.prefix || "";
-        return at && path.startsWith(at) ? path.slice(at.length) : path;
+        /* `prefix` is git's own `rev-parse --show-prefix`, repo-relative like
+         * the path it is being taken off -- `File.Relative` is lexical and
+         * does not care, and answers the path unchanged at the repo root,
+         * where the prefix is "". */
+        return File.Relative(path, this.prefix || "");
     }
 
     full(name) { return `${this.prefix || ""}${name}`; }

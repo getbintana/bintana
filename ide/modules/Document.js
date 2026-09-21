@@ -166,8 +166,8 @@ Ide.Document = class Document {
          * and that is what a tab is opened with. Outside it there is no name
          * and no tab: the IDE opens one project at a time. */
         const root = this.ide.project ? File.Absolute(this.ide.project) : "";
-        const name = root && target.startsWith(`${root}/`)
-                        ? target.slice(root.length + 1) : "";
+        const name = root && File.Within(target, root)
+                        ? File.Relative(target, root) : "";
 
         if (name && Ide.TabSet.opensInTab(name) && this.ide.opensAsText(name)) {
             this.ide.openInTab(name);

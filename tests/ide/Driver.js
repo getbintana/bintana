@@ -1163,7 +1163,7 @@ function* p_designer(ide) {
      * the same reason `EventNames()` retired a hardcoded table of widget types.
      */
     const ideDir = File.Join(Application.Directory, "..", "..", "ide", "forms");
-    const forms  = Directory.List(ideDir).filter((f) => File.Extension(f).toLowerCase() === "form");
+    const forms  = Directory.List(ideDir).filter((f) => File.IsExtension(f, "form"));
 
     check("the walk covers every form the IDE has", forms.length >= 11, `${forms.length}`);
 
@@ -8458,7 +8458,7 @@ function* p_settings(ide) {
           startedAt !== "" && ide.classExists(startedAt), startedAt);
 
     const otherClass = ide.files
-        .filter((f) => File.Extension(f).toLowerCase() === "form")
+        .filter((f) => File.IsExtension(f, "form"))
         .map((f) => ide.qualifiedName(f))
         .find((n) => n !== ide.startupClass);
     check("the project has another form to point at", !!otherClass, otherClass);

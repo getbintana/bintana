@@ -72,7 +72,7 @@ Ide.Outline = class Outline {
         /* A `.js` and not merely an editor: a document tab has one too, and a
          * README has no methods to list. */
         const code = !!ide.Editor && !!ide.activeFile &&
-                     File.Extension(ide.activeFile).toLowerCase() === "js";
+                     File.IsExtension(ide.activeFile, "js");
 
         ide.SidePanel.Visible  = code || form;
         ide.SideTabs.Visible   = form;

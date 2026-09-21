@@ -132,7 +132,7 @@ Ide.Strings = class Strings {
     /* --- the declarative half, which is most of it ----------------------- */
 
     fromForm(path) {
-        const rel = path.slice(this.ide.project.length + 1);
+        const rel = File.Relative(path, this.ide.project);
         let   root;
 
         try {
@@ -241,7 +241,7 @@ Ide.Strings = class Strings {
     /* --- the code half, which is the exception -------------------------- */
 
     fromSource(path) {
-        const rel = path.slice(this.ide.project.length + 1);
+        const rel = File.Relative(path, this.ide.project);
         const src = File.Load(path);
 
         for (const spec of CALLS) this.fromCalls(src, rel, spec);

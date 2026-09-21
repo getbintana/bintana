@@ -18,7 +18,6 @@ in the same form.
 | [ISSUE-worker-locale-order.md](ISSUE-worker-locale-order.md) | A `Task` has no `Locale`, so a worker cannot order names |
 | [ISSUE-laid-out.md](ISSUE-laid-out.md) | Nothing says *I have been laid out*, so five places retry on a timer |
 | [ISSUE-editor-offset.md](ISSUE-editor-offset.md) | An editor cannot turn a character offset into a line |
-| [ISSUE-file-relative.md](ISSUE-file-relative.md) | No `File.Relative`, and an extension has to be case-folded by hand |
 | [ISSUE-class-introspection.md](ISSUE-class-introspection.md) | Asking what a type has means building one |
 | [ISSUE-locale-write.md](ISSUE-locale-write.md) | A catalogue can be read and not written |
 
@@ -27,7 +26,7 @@ in the same form.
 past its answer is a second description of the same feature, written by somebody
 who did not have it yet, in the directory of things that are missing.
 
-Twenty-one have gone that way — nineteen filled, one refused, and one that was
+Twenty-two have gone that way — twenty filled, one refused, and one that was
 never missing. Filled: a drawing that could not carry an image, text that could not be measured outside a `Draw`, a
 document that could only leave as one PNG per page, a program that had to run
 `sha256sum` to hash anything, an application that could not ask how big the
@@ -48,7 +47,9 @@ and a drop target that heard nothing until the drop: `DragEnter`/`DragOver`
 carry the point while the drag travels, `DragLeave` says it went,
 `DragBegin`/`DragEnd` mark the source's half, and answering `false` refuses,
 and a shown `Form` that had to be kept alive by hand in sixteen dialogs:
-`Show()` holds it now and the allowed close lets it go.
+`Show()` holds it now and the allowed close lets it go, and a `File` that could
+take a path apart and not relate two: `Within` is the question, `Relative` the
+spelling, and `IsExtension` the case-folded question that was written 43 times.
 
 Never missing: a container that fills the room it is given **and** scrolls when
 it cannot. It was reported against a wall of cameras whose count is only known

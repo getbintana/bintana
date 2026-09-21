@@ -217,9 +217,8 @@ Ide.Runner = class Runner {
          * file tree and `openInTab` both speak. */
         let name = path;
         if (path.startsWith("/")) {
-            const root = `${ide.project}/`;
-            if (!path.startsWith(root)) return false;
-            name = path.slice(root.length);
+            if (!File.Within(path, ide.project)) return false;
+            name = File.Relative(path, ide.project);
         }
         if (!File.Exists(File.Join(ide.project, name))) return false;
         if (!ide.openInTab(name)) return false;
@@ -258,7 +257,7 @@ Ide.Runner = class Runner {
             /* Ours, or the runtime's? Only the first question has an answer the
              * IDE can act on. */
             if (path.startsWith("/") &&
-                !path.startsWith(`${this.ide.project}/`)) continue;
+                !File.Within(path, this.ide.project)) continue;
             return { path, line: Number(at[2]) };
         }
         return null;
@@ -317,7 +316,6 @@ Ide.Runner = class Runner {
     /* A path the traceback named, as a tab is keyed. Absolute is what a
      * traceback writes; relative is what everything in this IDE speaks. */
     relative(path) {
-        const root = `${this.ide.project}/`;
-        return path.startsWith(root) ? path.slice(root.length) : path;
+        return File.Relative(path, this.ide.project);
     }
 };

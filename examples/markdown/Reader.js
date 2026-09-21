@@ -64,7 +64,7 @@ class Reader extends Form {
     Doc_Link(href, text) {
         const beside = File.Join(File.Directory(this.Doc.Path), href);
 
-        if (File.Extension(href).toLowerCase() === "md" && File.Exists(beside)) {
+        if (File.IsExtension(href, "md") && File.Exists(beside)) {
             this.show(beside);                 /* the next document, in place */
             return true;
         }
@@ -117,7 +117,7 @@ class Reader extends Form {
     }
 
     Form_FileDrop(paths) {
-        const md = paths.find((p) => File.Extension(p).toLowerCase() === "md");
+        const md = paths.find((p) => File.IsExtension(p, "md"));
         if (md) this.show(md);
     }
 }

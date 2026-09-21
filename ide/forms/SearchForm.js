@@ -140,8 +140,7 @@ class SearchForm extends Form {
         const pick = this.filters[Math.max(this.CboFiles.Index, 0)];
         if (!pick || !pick.ext) return this.ide.files;
 
-        return this.ide.files.filter(
-            (f) => File.Extension(f).toLowerCase() === pick.ext);
+        return this.ide.files.filter((f) => File.IsExtension(f, pick.ext));
     }
 
     /* --- the search itself -------------------------------------------------

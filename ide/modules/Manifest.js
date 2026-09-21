@@ -187,7 +187,7 @@ Ide.Manifest = class Manifest {
      */
     loadOrder() {
         return this.ide.files
-                   .filter((f) => File.Extension(f).toLowerCase() === "js").sort();
+                   .filter((f) => File.IsExtension(f, "js")).sort();
     }
 
     apply(edited) {

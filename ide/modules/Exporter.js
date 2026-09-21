@@ -90,7 +90,7 @@ Ide.Exporter = class Exporter {
          * the only answer that does not leave a growing pile of tars in a source
          * tree.
          */
-        if (abs === project || abs.startsWith(`${project}/`)) {
+        if (File.Within(abs, project)) {
             /* One literal, however long: joined with `+` only the first piece is
              * extracted, and the IDE's own lint says so -- which is how this
              * line was found. */

@@ -186,7 +186,7 @@ Ide.Translations = class Translations {
      * translations in it by definition, so editing one is not a thing to offer:
      * what it is for is starting a `.po`. */
     static isTemplate(file) {
-        return File.Extension(file || "").toLowerCase() === "pot";
+        return File.IsExtension(file || "", "pot");
     }
 
     /* ------------------------------------------------- starting a catalogue */

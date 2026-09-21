@@ -150,7 +150,12 @@ makes a *generated* file worth having rather than a stale one nobody notices: ru
 check found sixteen read-only properties missing the hour it was written --
 `Children`, `Focused`, `Line`, `CanUndo` and twelve more -- because
 `PropertyNames()` answers *what a property grid can set*, which is the right
-answer to a different question.
+answer to a different question. **And it covered only the table-driven half**:
+`File.Within` was added, the declarations were not regenerated, and the check
+passed -- the globals built one `JS_SetPropertyStr` at a time were in no list it
+read. It reads their names out of the C now, the way `checkGlobals` does, and the
+one exception is `Desktop.Entries`, which the declarations hold as a single
+`any`.
 
 **Every one of those but `asan.sh` is a Bintana project now** — `tests/runner`,
 `tests/icons`, `tests/styles`, `tests/install`, each a console project (`"main"`,

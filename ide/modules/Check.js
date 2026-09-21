@@ -156,7 +156,7 @@ Ide.Check = class Check {
 
         const listed = cfg.sources.map((s) => String(s));
         for (const file of this.ide.classes.files) {
-            if (File.Extension(file).toLowerCase() !== "js") continue;
+            if (!File.IsExtension(file, "js")) continue;
             if (listed.includes(file)) continue;
 
             found.push({

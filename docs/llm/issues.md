@@ -185,7 +185,6 @@ needed and what it did instead.
 | No `Locale` inside a `Task`, so a worker cannot order names — the sort has to come back to the main thread, which is what the worker was for | [ISSUE-worker-locale-order](../issues/ISSUE-worker-locale-order.md) |
 | No `Allocated` event and no `WhenLaidOut`, so anything that needs a real rectangle retries on a timer | [ISSUE-laid-out](../issues/ISSUE-laid-out.md) |
 | An `Editor` speaks in lines and everything that searches speaks in offsets, with no verb crossing | [ISSUE-editor-offset](../issues/ISSUE-editor-offset.md) |
-| `File` takes a path apart and cannot relate two: no `Relative`, no `Within`, and no case-folded `Extension` | [ISSUE-file-relative](../issues/ISSUE-file-relative.md) |
 | `PropertyNames`/`EventNames`/`TextProperties` need an instance, so asking what a class has means building one | [ISSUE-class-introspection](../issues/ISSUE-class-introspection.md) |
 | `Locale.Read` has no `Locale.Write`, so the `.po` format is written by hand in the IDE | [ISSUE-locale-write](../issues/ISSUE-locale-write.md) |
 

@@ -37,7 +37,7 @@ function Main() {
         if (req.Path === "/") {
             let out = "<html><body><ul>";
             for (const f of Directory.Files(root, { Recursive: true })) {
-                const rel = f.slice(root.length + 1);
+                const rel = File.Relative(f, root);
                 out += `<li><a href="/${rel}">${rel}</a></li>`;
             }
             req.Answer(200, out + "</ul></body></html>", { ContentType: "text/html" });

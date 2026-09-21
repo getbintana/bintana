@@ -107,7 +107,7 @@ Ide.Navigator = class Navigator {
     /* A method declared in the file that is open. */
     inActiveFile(name) {
         const file = this.ide.activeFile;
-        if (!file || File.Extension(file).toLowerCase() !== "js") return null;
+        if (!file || !File.IsExtension(file, "js")) return null;
 
         const line = this.symbolLine(this.sourceOf(file), name);
         return line ? { file, line } : null;
@@ -144,7 +144,7 @@ Ide.Navigator = class Navigator {
      */
     classNamed(name) {
         for (const file of this.ide.classes.files) {
-            if (File.Extension(file).toLowerCase() !== "js") continue;
+            if (!File.IsExtension(file, "js")) continue;
 
             const source = this.sourceOf(file);
             for (const found of CLASS_AT.Matches(source))

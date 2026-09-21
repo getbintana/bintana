@@ -889,7 +889,29 @@ function checkTypings(root, members, problems) {
     const seen  = new Set();
     let   count = 0;
 
-    for (const m of members) {
+    /*
+     * And the globals built one `JS_SetPropertyStr` at a time -- `File`,
+     * `Dialog`, `Application` and the rest -- which are in no table, so their
+     * members are read out of the C the way `checkGlobals` reads them. Without
+     * this, the stale file is invisible for exactly the half of the surface
+     * that is written by hand: `File.Within` was added, the declarations were
+     * not regenerated, and nothing failed.
+     */
+    const all = members.slice();
+    for (const c of sources(root)) {
+        const src = File.Load(c);
+
+        for (const v in GLOBAL_VARS) {
+            /* A module inside a global -- `Desktop.Entries` -- is one `any` in
+             * the declarations, so its members cannot be asked for by name. */
+            if (GLOBAL_VARS[v].indexOf(".") >= 0) continue;
+
+            for (const m of setPropOn(v).Matches(src))
+                all.push({ name: m.Group(1), table: GLOBAL_VARS[v] });
+        }
+    }
+
+    for (const m of all) {
         if (seen.has(m.name)) continue;
         seen.add(m.name);
 
@@ -992,11 +1014,9 @@ const LINK = new Regex("(!?)\\[[^\\]]*\\]\\(([^)\\s]+)\\)");
 const CODE = new Regex("```[^]*?```|`[^`\\n]*`");
 
 /* The path as the reader would name it: `docs/llm/markdown.md` and not the
- * whole of this machine, since the same basename is four files here. Both
- * separators, because the Windows job runs this check too. */
+ * whole of this machine, since the same basename is four files here. */
 function relative(root, path) {
-    return path.startsWith(root) ? path.slice(root.length).replace(/^[\/\\]/, "")
-                                 : path;
+    return File.Relative(path, root);
 }
 
 function docFiles(root) {

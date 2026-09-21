@@ -442,8 +442,7 @@ Ide.Debugger = class Debugger {
     /* The child names a file the way it was loaded -- an absolute path; the tabs
      * and the tree name it the way the project does. */
     projectName(path) {
-        const root = `${this.ide.project}/`;
-        return path && path.startsWith(root) ? path.slice(root.length) : path;
+        return path ? File.Relative(path, this.ide.project) : path;
     }
 
     /* --- what a stopped program can be asked --------------------------------- */

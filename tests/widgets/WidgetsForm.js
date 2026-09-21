@@ -12391,6 +12391,43 @@ function Main() {
            File.Extension("/x.y/z"), "");
         eq("Join", File.Join("a", "b", "c.js"), "a/b/c.js");
 
+        /* --- relative to a root, which is a component test and not a prefix
+         * test: `proj2` starts with `proj` and is not inside it. */
+        eq("Relative strips the root", File.Relative("/home/u/proj/x.js", "/home/u/proj"), "x.js");
+        eq("...however the root is spelled",
+           File.Relative("/home/u/proj/x.js", "/home/u/proj/"), "x.js");
+        eq("...and however the path is",
+           File.Relative("/home/u/./proj/x.js", "/home/u/proj"), "x.js");
+        eq("with `..` settled first",
+           File.Relative("/home/u/other/../proj/x.js", "/home/u/proj"), "x.js");
+        eq("the root itself is the empty name",
+           File.Relative("/home/u/proj", "/home/u/proj"), "");
+        eq("and a path with no relative spelling is answered unchanged",
+           File.Relative("/home/u/proj2/x.js", "/home/u/proj"), "/home/u/proj2/x.js");
+
+        eq("Within says no to the sibling that shares the prefix",
+           File.Within("/home/u/proj2/x.js", "/home/u/proj"), false);
+        eq("and yes to what is under it",
+           File.Within("/home/u/proj/x.js", "/home/u/proj"), true);
+        eq("including the root itself", File.Within("/home/u/proj", "/home/u/proj"), true);
+
+        /* --- is this extension, without folding it by hand */
+        eq("IsExtension", File.IsExtension("/x/y/z.js", "js"), true);
+        eq("whatever the case on disk", File.IsExtension("/x/y/z.JS", "js"), true);
+        eq("whatever the case asked", File.IsExtension("/x/y/z.js", "JS"), true);
+        eq("and with the dot, which both spellings of the world use",
+           File.IsExtension("/x/y/z.js", ".js"), true);
+        eq("while another extension is not it",
+           File.IsExtension("/x/y/z.js", "json"), false);
+        eq("and the last dot is the one that counts",
+           File.IsExtension("/x/y/z.tar.gz", "gz"), true);
+        eq("a dotted directory is not an extension",
+           File.IsExtension("/x.y/z", "y"), false);
+        throws("an empty extension is refused",
+               () => File.IsExtension("/x/y/z.js", ""));
+        throws("and a suffix is not an extension",
+               () => File.IsExtension("/x/y/z.tar.gz", "tar.gz"));
+
         /* UTF-8 has to survive the round trip byte for byte. */
         File.Save(path, "ñandú — ok\n");
         eq("utf-8 round-trip", File.Load(path), "ñandú — ok\n");

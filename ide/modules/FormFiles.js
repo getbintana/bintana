@@ -516,7 +516,7 @@ Ide.FormFiles = class FormFiles {
         const touched = [];
 
         for (const file of this.ide.files) {
-            if (file === skip || File.Extension(file).toLowerCase() !== "form") continue;
+            if (file === skip || !File.IsExtension(file, "form")) continue;
 
             const path = File.Join(this.ide.project, file);
             let root;
@@ -556,7 +556,7 @@ Ide.FormFiles = class FormFiles {
     warnDanglingReferences(oldName, newName) {
         const pattern = new Regex(`\\b${Regex.Escape(oldName)}\\b`);
         const guilty  = this.ide.files.filter((f) =>
-            File.Extension(f).toLowerCase() === "js" &&
+            File.IsExtension(f, "js") &&
             File.BaseName(f) !== oldName &&
             pattern.IsMatch(File.Load(File.Join(this.ide.project, f))));
 
@@ -725,7 +725,7 @@ Ide.FormFiles = class FormFiles {
                     File.Delete(path);
                 }
             }
-            if (File.Extension(name).toLowerCase() === "js") this.ide.dropSource(name);
+            if (File.IsExtension(name, "js")) this.ide.dropSource(name);
         }
 
         /* Close the tabs of what was deleted before re-listing the tree. */

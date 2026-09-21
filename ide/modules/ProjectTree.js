@@ -373,7 +373,7 @@ Ide.ProjectTree = class ProjectTree {
         const catKey = (base) => (scope ? `cat:${base}:${scope}` : `cat:${base}`);
 
         const paired = [];
-        const forms  = here.filter((f) => File.Extension(f).toLowerCase() === "form");
+        const forms  = here.filter((f) => File.IsExtension(f, "form"));
 
         const groups = [
             { key: catKey("forms"),      text: Locale.Text("Forms"), icon: "forms",

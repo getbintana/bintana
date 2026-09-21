@@ -161,6 +161,23 @@ static JSValue sys_file_absolute(JSContext *ctx, JSValueConst this_val,
  */
 enum { BTA_PATH_NAME, BTA_PATH_DIR, BTA_PATH_EXT, BTA_PATH_BASENAME };
 
+/*
+ * What follows the last dot of the *name* and not of a directory: `/x.y/z` has
+ * no extension, and `/x/y.js` has `js` -- without the dot, which is the one
+ * spelling this runtime has for it.  Answers a pointer into `path`, or "".
+ *
+ * Split out because `File.IsExtension` is the same question with a comparison
+ * on the end, and two implementations of "where does the extension start" is
+ * how a `File.Extension` and a `File.IsExtension` come to disagree.
+ */
+static const char *path_extension(const char *path)
+{
+    const char *dot = strrchr(path, '.');
+    const char *sep = strrchr(path, G_DIR_SEPARATOR);
+
+    return (dot && (!sep || dot > sep)) ? dot + 1 : "";
+}
+
 static JSValue sys_path_part(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv, int magic)
 {
@@ -178,12 +195,9 @@ static JSValue sys_path_part(JSContext *ctx, JSValueConst this_val,
     case BTA_PATH_DIR:
         out = g_path_get_dirname(path);
         break;
-    case BTA_PATH_EXT: {
-        const char *dot = strrchr(path, '.');
-        const char *sep = strrchr(path, G_DIR_SEPARATOR);
-        out = (dot && (!sep || dot > sep)) ? g_strdup(dot + 1) : g_strdup("");
+    case BTA_PATH_EXT:
+        out = g_strdup(path_extension(path));
         break;
-    }
     default: {
         char       *base = g_path_get_basename(path);
         const char *dot  = strrchr(base, '.');
@@ -197,6 +211,118 @@ static JSValue sys_path_part(JSContext *ctx, JSValueConst this_val,
     v = JS_NewString(ctx, out);
     g_free(out);
     return v;
+}
+
+/*
+ * `File.Within(path, root)` and `File.Relative(path, root)` -- the question and
+ * the spelling, the pair `HasCommand` and `Exec` already are.
+ *
+ * Both are **lexical**: a `GFile` is a path and not a handle, and
+ * `g_file_get_relative_path` compares one against the other without asking the
+ * disk, so a path that does not exist yet is answered like any other.  What
+ * `GFile` does bring is the part a hand-written prefix test gets wrong: the
+ * separators are components, so `/home/u/proj2` is not inside `/home/u/proj`,
+ * and `.`, `..`, `//` and a trailing slash are settled on the way in.
+ *
+ * `Relative` answers the path unchanged when there is no relative spelling --
+ * that is what a tree showing files from inside and outside the project wants
+ * -- and `""` for the root itself, the same empty folder `Ide.Classes` uses.
+ * `Within` is for a caller that has to tell the two apart, and counts the root
+ * as inside itself.
+ */
+static JSValue sys_file_within(JSContext *ctx, JSValueConst this_val,
+                               int argc, JSValueConst *argv)
+{
+    const char *path = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    const char *root = argc > 1 ? JS_ToCString(ctx, argv[1]) : NULL;
+
+    if (!path || !root) {
+        if (path) JS_FreeCString(ctx, path);
+        if (root) JS_FreeCString(ctx, root);
+        return JS_ThrowTypeError(ctx, "File.Within(path, root) needs two paths");
+    }
+
+    GFile *r   = g_file_new_for_path(root);
+    GFile *p   = g_file_new_for_path(path);
+    char  *rel = g_file_get_relative_path(r, p);
+
+    bool within = rel != NULL || g_file_equal(r, p);
+
+    g_free(rel);
+    g_object_unref(p);
+    g_object_unref(r);
+    JS_FreeCString(ctx, path);
+    JS_FreeCString(ctx, root);
+    return JS_NewBool(ctx, within);
+}
+
+static JSValue sys_file_relative(JSContext *ctx, JSValueConst this_val,
+                                 int argc, JSValueConst *argv)
+{
+    const char *path = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    const char *root = argc > 1 ? JS_ToCString(ctx, argv[1]) : NULL;
+
+    if (!path || !root) {
+        if (path) JS_FreeCString(ctx, path);
+        if (root) JS_FreeCString(ctx, root);
+        return JS_ThrowTypeError(ctx, "File.Relative(path, root) needs two paths");
+    }
+
+    GFile *r   = g_file_new_for_path(root);
+    GFile *p   = g_file_new_for_path(path);
+    char  *rel = g_file_get_relative_path(r, p);
+
+    /* No relative spelling, and not the root itself: the path it was given. */
+    const char *out = rel ? rel : (g_file_equal(r, p) ? "" : path);
+
+    JSValue v = JS_NewString(ctx, out);
+
+    g_free(rel);
+    g_object_unref(p);
+    g_object_unref(r);
+    JS_FreeCString(ctx, path);
+    JS_FreeCString(ctx, root);
+    return v;
+}
+
+/*
+ * `File.IsExtension(path, extension)`: the case-insensitive question, which is
+ * the one almost every caller has -- `File.Extension` answers the case that was
+ * on disk, which is right, and the fold was then written by hand 43 times.
+ *
+ * The dot is optional on the argument because both spellings are in the world
+ * (our `Extension` has none, .NET's has one), and a *suffix* is refused rather
+ * than silently never matching: `"tar.gz"` is not an extension this runtime can
+ * answer for, since `Extension` stops at the last dot.
+ */
+static JSValue sys_file_is_extension(JSContext *ctx, JSValueConst this_val,
+                                     int argc, JSValueConst *argv)
+{
+    const char *path = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    const char *want = argc > 1 ? JS_ToCString(ctx, argv[1]) : NULL;
+
+    if (!path || !want) {
+        if (path) JS_FreeCString(ctx, path);
+        if (want) JS_FreeCString(ctx, want);
+        return JS_ThrowTypeError(ctx,
+            "File.IsExtension(path, extension) needs a path and an extension");
+    }
+
+    const char *ext = *want == '.' ? want + 1 : want;
+
+    if (*ext == '\0' || strchr(ext, '.')) {
+        JSValue e = JS_ThrowTypeError(ctx,
+            "File.IsExtension takes one extension and not a suffix: '%s'", want);
+        JS_FreeCString(ctx, path);
+        JS_FreeCString(ctx, want);
+        return e;
+    }
+
+    bool same = g_ascii_strcasecmp(path_extension(path), ext) == 0;
+
+    JS_FreeCString(ctx, path);
+    JS_FreeCString(ctx, want);
+    return JS_NewBool(ctx, same);
 }
 
 static JSValue sys_file_join(JSContext *ctx, JSValueConst this_val,
@@ -3183,6 +3309,12 @@ void bta_sys_init(JSContext *ctx, JSValue global)
     JS_SetPropertyStr(ctx, file, "Join",   JS_NewCFunction(ctx, sys_file_join, "Join", 2));
     JS_SetPropertyStr(ctx, file, "Absolute",
                       JS_NewCFunction(ctx, sys_file_absolute, "Absolute", 1));
+    JS_SetPropertyStr(ctx, file, "Within",
+                      JS_NewCFunction(ctx, sys_file_within, "Within", 2));
+    JS_SetPropertyStr(ctx, file, "Relative",
+                      JS_NewCFunction(ctx, sys_file_relative, "Relative", 2));
+    JS_SetPropertyStr(ctx, file, "IsExtension",
+                      JS_NewCFunction(ctx, sys_file_is_extension, "IsExtension", 2));
     JS_SetPropertyStr(ctx, file, "Exists",
                       JS_NewCFunctionMagic(ctx, sys_file_test, "Exists", 1,
                                            JS_CFUNC_generic_magic, FT_EXISTS));

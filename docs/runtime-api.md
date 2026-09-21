@@ -661,9 +661,12 @@ With no display (or before the application is up) they print to stderr.
 | `Open(path)` | hands it to whatever the desktop opens that kind of file with |
 | `Join(a, b, ...)` | builds a path with the platform separator |
 | `Absolute(path)` | resolves against the current directory |
+| `Within(path, root)` | whether `path` is `root` or under it, by whole components |
+| `Relative(path, root)` | `path` with `root` taken off, or the path unchanged when there is no relative spelling |
 | `Name(path)` | the basename: `/a/b/c.js` → `c.js` |
 | `Directory(path)` | the dirname: `/a/b/c.js` → `/a/b` |
 | `Extension(path)` | `js`, without the dot, `""` if none |
+| `IsExtension(path, ext)` | whether the name ends in that extension, case-insensitively |
 | `BaseName(path)` | the basename without the extension: `c` |
 
 **`Info` is one `g_file_query_info` for five answers**, and the two that are not
