@@ -558,6 +558,7 @@ declare class TextEditor extends Widget {
     readonly CanUndo: boolean;
     readonly Column: number;
     readonly Line: number;
+    readonly Offset: number;
     readonly ScrollMaxX: number;
     readonly ScrollMaxY: number;
     readonly Selection: string;
@@ -565,6 +566,8 @@ declare class TextEditor extends Widget {
     Clear(...values: any[]): any;
     GotoLine(...values: any[]): any;
     Insert(...values: any[]): any;
+    LineOf(...values: any[]): any;
+    OffsetAt(...values: any[]): any;
     Redo(...values: any[]): any;
     Select(...values: any[]): any;
     Undo(...values: any[]): any;
@@ -588,6 +591,7 @@ declare class SourceEditor extends Widget {
     readonly Line: number;
     readonly MatchIndex: number;
     readonly Matches: number;
+    readonly Offset: number;
     readonly ScrollMaxX: number;
     readonly ScrollMaxY: number;
     readonly Selection: string;
@@ -598,8 +602,10 @@ declare class SourceEditor extends Widget {
     FindPrevious(...values: any[]): any;
     GotoLine(...values: any[]): any;
     Insert(...values: any[]): any;
+    LineOf(...values: any[]): any;
     Mark(...values: any[]): any;
     Marks(...values: any[]): any;
+    OffsetAt(...values: any[]): any;
     Redo(...values: any[]): any;
     Replace(...values: any[]): any;
     ReplaceAll(...values: any[]): any;
@@ -1065,7 +1071,9 @@ declare const Text: {
     Font: any;
     Height(...values: any[]): any;
     IndexAt(...values: any[]): any;
+    LineOf(...values: any[]): any;
     Lines(...values: any[]): any;
+    OffsetAt(...values: any[]): any;
     Size(...values: any[]): any;
     Width(...values: any[]): any;
 };

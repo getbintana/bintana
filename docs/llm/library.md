@@ -732,6 +732,8 @@ Text.Font                                            // "Cantarell 11"
 | `Escape(text)` | the text as markup that says exactly it: `&`, `<` and `>` escaped |
 | `IndexAt(text, x, y, [font], [options])` | → which character is at that point, as an index into the text **as it was laid out** — a markup run's tags already consumed. Above it is `0` and below it is the end |
 | `Bounds(text, from, to, [font], [options])` | → the rectangles covering those characters: `{ X, Y, Width, Height }`, one per line the range crosses and more than one on a line that changes direction |
+| `LineOf(text, index)` | → the line a **search's** index falls on — the number `Regex.Index` gives, counted in UTF-16 units |
+| `OffsetAt(text, line, [column])` | → the **character** offset of that position, clamped the way an editor's `Select` clamps |
 | `Font` (ro) | the desktop's UI font, which is what a control draws with unless CSS says otherwise. `""` where there is no display to ask |
 
 `font` is a Pango description (`"Cantarell Bold 10"`); `""` or nothing means
@@ -752,6 +754,17 @@ offset becomes the rectangles to paint behind the words — and the offsets are
 an emoji in it still slices where it was clicked. Pass the same `font` and
 `options` the text was measured and drawn with, or the answer is about a layout
 nobody can see. `lib/markdown` selects with these two and nothing else.
+
+**`LineOf` and `OffsetAt` are the same pair an [`Editor`](controls.md#editor--inherited-by-both-editors)
+has**, for a string with no control around it — what the IDE's own scanners use
+to turn a match into a line. They are deliberately **not one unit**: `LineOf`
+receives what a search returned (a UTF-16 index, where an emoji is two), and
+`OffsetAt` receives a column in characters (where it is one), which is what
+`Column` and `Select` count. `OffsetAt(editor.Line, editor.Column)` is exactly
+the cursor's `Offset`, and `LineOf(m.Index)` is exactly the line the match was
+on. **The lines are the editor's and not this layout's**: `\n`, `\r\n` as one, a
+lone `\r` and U+2029 break, U+2028 does not — so `Text.Lines` and `LineOf` can
+disagree on that one character, and the one a `GotoLine` lands on is `LineOf`'s.
 
 **`Markup` is for the paragraph whose font changes halfway** — a bold word, a
 name in italic, a code span. `Text.Lines` refuses it, and that is not a gap: the

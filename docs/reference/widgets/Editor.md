@@ -18,6 +18,7 @@ everything here works the same in both.
 | `Column` (ro) | the cursor's column | [the cursor](#the-cursor) |
 | `Line` (ro) | the cursor's line, counting from 1 | [the cursor](#the-cursor) |
 | `Modified` | the editing flag | [what is in it](#what-is-in-it) |
+| `Offset` (ro) | the cursor's position, as a character offset | [the cursor](#the-cursor) |
 | `ReadOnly` | shown but not editable | [what is in it](#what-is-in-it) |
 | `ScrollMaxX` (ro) | the furthest it can scroll sideways | [where it is scrolled to](#where-it-is-scrolled-to) |
 | `ScrollMaxY` (ro) | and downwards | [where it is scrolled to](#where-it-is-scrolled-to) |
@@ -30,6 +31,8 @@ everything here works the same in both.
 | `Clear()` | empties it | [what is in it](#what-is-in-it) |
 | `GotoLine(line)` | puts the cursor there and scrolls to it | [the cursor](#the-cursor) |
 | `Insert(text)` | at the cursor | [what is in it](#what-is-in-it) |
+| `LineOf(index)` | the line a search's index falls on | [the cursor](#the-cursor) |
+| `OffsetAt(line, [column])` | the character offset of that position | [the cursor](#the-cursor) |
 | `Redo()` | one step forward | [undo](#undo) |
 | `Select(line, [column], [length])` | selects from there | [the cursor](#the-cursor) |
 | `Undo()` | one step back | [undo](#undo) |
@@ -56,13 +59,38 @@ everything here works the same in both.
 |---|---|
 | `Line` (ro) | the line the cursor is on, **counting from 1** |
 | `Column` (ro) | the column it is at |
+| `Offset` (ro) | the cursor's position as an absolute **character** offset — the same unit `Column` counts in |
 | `Selection` (ro) | the selected text, `""` for none |
 | `GotoLine(line)` | puts the cursor there and scrolls to it |
+| `LineOf(index)` | the line a search's index falls on, 1-based and clamped — the number `Regex.Index` gives, counted in UTF-16 units |
 | `Select(line, [column], [length])` | selects from there. A column past the end of the line is the end of the line |
+| `OffsetAt(line, [column])` | the character offset of that position — the inverse read of `Offset`, clamped as `Select` clamps |
 | **event** `Cursor()` | the cursor moved. `Line` and `Column` say where |
 
 `Line`/`Column` in a status bar is `Cursor` plus two reads — and it is the one
 event that fires often, so what hangs off it should be cheap.
+
+```js
+/* A search found something, and the gutter marks it. */
+const m = pattern.Match(this.Ed.Text);
+this.Ed.Mark(this.Ed.LineOf(m.Index), "Info", "here");
+this.Ed.GotoLine(this.Ed.LineOf(m.Index));
+```
+
+**Two units, and each verb takes the one its caller has.** `Offset` and
+`OffsetAt` count **characters**, the way `Column` and `Select` do — an emoji is
+one. `LineOf` receives what a search returned: `Regex.Index`, `indexOf` and
+`slice` count **UTF-16 units**, so that emoji is two, and `LineOf` converts
+exactly rather than counting lines in the wrong unit. Which is why
+`OffsetAt(Line, Column) === Offset` always holds, while `LineOf`'s argument and
+`Offset` are not the same number: **do not write `LineOf(this.Ed.Offset)`** —
+the cursor's line is `Line`.
+
+**`LineOf` counts the lines the editor draws**, so a `GotoLine(LineOf(n))`
+lands on the line the index was on: `\n`, `\r\n` (one break, not two), a lone
+`\r` and U+2029 break; **U+2028 does not**. `Text.Lines` is a layout and breaks
+U+2028, so the two can disagree on that one character — this is the one that
+matches the view.
 
 **`GotoLine` and `Select` work in a view that has not been drawn yet**, which is
 the case that matters: opening a file in a tab and jumping to a line in it happen

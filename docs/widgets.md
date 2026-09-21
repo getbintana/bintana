@@ -2197,6 +2197,21 @@ log pane wants — and works even when `ReadOnly` is set, since that only blocks
 user's keyboard and not the program. `Undo`/`Redo` and `CanUndo`/`CanRedo` are the
 buffer's.
 
+**An `Offset` is a character and an index is a JavaScript number, and the two are
+not the same count.** `Offset` and `OffsetAt(line, [column])` count characters, as
+`Column` and `Select` do: an emoji outside the BMP is one, and
+`OffsetAt(Line, Column) === Offset`. `LineOf(index)` is the other direction and
+takes the number a *search* returned — `Regex.Index`, `indexOf` — which counts
+UTF-16 units and calls that emoji two. It does not fail on it: the walk converts
+exactly, which is the difference between the two numbers and why
+`GotoLine(LineOf(m.Index))` lands on the line the match was on. The pair is not
+interchangeable, and the reason is that nothing here can change what JavaScript
+calls a position: `slice` and `Regex` hand out UTF-16 units, GTK counts
+characters, and each verb is handed the one its caller already has. Which
+separator counts as a line is GTK's too — `\n`, `\r\n` as one, a lone `\r` and
+U+2029 break, U+2028 does not — and that is deliberate, because the line is about
+to be given to `GotoLine`.
+
 Loading text resets the cursor to the start and the view to the top, which
 `gtk_text_buffer_set_text` does not do on its own.
 

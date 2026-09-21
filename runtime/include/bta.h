@@ -475,6 +475,17 @@ void bta_text_view_setup(BtaWidget *w, GtkWidget *view);
 /* The line a JS caller means, 1-based and clamped, as an iter at its start --
  * shared because a SourceEditor's marks are placed by line too. */
 void bta_text_iter_at_line(GtkTextBuffer *buf, GtkTextIter *it, int32_t line);
+/*
+ * The two string bridges `Editor` and `Text` share, over a plain UTF-8 buffer.
+ *
+ * **A character offset and a JavaScript index are not the same number**, and
+ * neither side may answer with the other's: `Offset`/`OffsetAt` count
+ * characters, as `Column` and `Select` do; `LineOf` receives the index a
+ * search produced (`Regex.Index`, `indexOf`), which counts UTF-16 units.  See
+ * `bta_line_of_utf16` for why the conversion cannot be the identity.
+ */
+int  bta_line_of_utf16(const char *utf8, int index);
+int  bta_chars_at_position(const char *utf8, int line, int column);
 void bta_editor_register(void);    /* bta_editor.c: SourceEditor */
 void bta_terminal_register(void);  /* bta_terminal.c */
 void bta_tree_register(void);

@@ -17,7 +17,9 @@ the answer available when the layout is being worked out.
 | `Font` (ro) | the desktop's UI font | [the font](#the-font) |
 | `Height(text, [font], [options])` | → how tall it lays out | [measuring](#measuring) |
 | `IndexAt(text, x, y, [font], [options])` | → which character is at that point | [where a character is](#where-a-character-is) |
+| `LineOf(text, index)` | → the line a search's index falls on | [where a character is](#where-a-character-is) |
 | `Lines(text, [font], [options])` | → the lines it breaks into | [measuring](#measuring) |
+| `OffsetAt(text, line, [column])` | → the character offset of that position | [where a character is](#where-a-character-is) |
 | `Size(text, [font], [options])` | → `{ Width, Height, Lines }` in one measurement | [measuring](#measuring) |
 | `Width(text, [font], [options])` | → how wide it lays out, in pixels | [measuring](#measuring) |
 
@@ -81,16 +83,33 @@ out nothing and warning on the console — which is what a
 |---|---|
 | `IndexAt(text, x, y, [font], [options])` | which character is at that point, as an index into the text **as it was laid out** — a markup run's tags already consumed. Above the text is `0` and below it is the end |
 | `Bounds(text, from, to, [font], [options])` | the rectangles covering those characters: one per line the range crosses, and more than one on a line that changes direction |
+| `LineOf(text, index)` | the line an index falls on, 1-based and clamped — `index` is the number a **search** gave, so it is counted in UTF-16 units |
+| `OffsetAt(text, line, [column])` | the **character** offset of that line and column, clamped the way an editor's `Select` clamps |
 
 The two questions a **selection** asks, and neither can be worked out by a
 caller: where the lines broke, which run is in which font and which way the text
 runs are all the layout's. A pointer becomes an offset with the first and an
 offset becomes the rectangles to paint with the second.
 
-**The offsets are JS string indices**, so `plain.slice(from, to)` is the text and
-a document with an emoji in it still slices where it was clicked. Pass the same
-`font` and `options` the text was measured and drawn with, or the answer is about
-a layout nobody can see.
+**The offsets `IndexAt`/`Bounds` answer are JS string indices**, so
+`plain.slice(from, to)` is the text and a document with an emoji in it still
+slices where it was clicked. Pass the same `font` and `options` the text was
+measured and drawn with, or the answer is about a layout nobody can see.
+
+`LineOf` and `OffsetAt` are the same pair an [`Editor`](../../llm/controls.md#editor--inherited-by-both-editors)
+has, for a string with no control around it — what a scanner turns a match into
+a line with. **The two units are not the same and are not meant to be**:
+`LineOf` is handed the index a search returned (an emoji is two UTF-16 units),
+`OffsetAt` a column in characters (an emoji is one), and each converts exactly.
+`OffsetAt(editor.Line, editor.Column)` is the cursor's `Offset` to the letter,
+and `LineOf(m.Index)` is the line the match was on.
+
+**The lines are the editor's and not this object's.** `Text.Lines` lays the
+string out and answers Pango's lines, which break U+2028 and wrap at a width;
+`LineOf` answers the lines GTK draws — `\n`, `\r\n` as one break, a lone `\r`
+and U+2029 — because the number is usually on its way to a `GotoLine`. On a
+paragraph with a U+2028 in it the two disagree, and the one that matches the
+view is this one.
 
 ## The font
 

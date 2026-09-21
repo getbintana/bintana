@@ -11585,7 +11585,7 @@ function* p_session(ide) {
 
     ide.openInTab("Desk.js");
     yield* settled(ide);
-    ide.Editor.GotoLine(4);
+    ide.Editor.Select(4, 5);
     yield* settled(ide);
     ide.openInTab("Recover.form");
     yield* settled(ide);
@@ -11599,6 +11599,8 @@ function* p_session(ide) {
        mine.files.map((f) => f.name).join(","), "Desk.js,Recover.form");
     eq("and which one was in front", mine.active, "Recover.form");
     eq("with the line the caret was on", mine.files[0].line, 4);
+    eq("and the column it was in, or half a caret comes back",
+       mine.files[0].column, 5);
     check("and nothing about the form's, which has no line",
           mine.files[1].line === undefined, JSON.stringify(mine.files[1]));
 
@@ -11615,6 +11617,7 @@ function* p_session(ide) {
     ide.tabs.switchTo("Desk.js");
     yield* settled(ide);
     eq("and the caret where it was left", ide.Editor.Line, 4);
+    eq("and in the column it was left in", ide.Editor.Column, 5);
 
     /*
      * A file the project no longer has is skipped and nothing is said. Saying

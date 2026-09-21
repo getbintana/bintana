@@ -1373,6 +1373,70 @@ static JSValue js_text_escape(JSContext *ctx, JSValueConst this_val,
     return v;
 }
 
+/*
+ * ---------------------------------------------------------------- lines
+ *
+ * Two string questions that are not measurements, and that live here because
+ * this is where a question about a string with no widget is asked: **which
+ * line a search position falls on**, and **the position of a line and a
+ * column**.  `Editor` answers both over its own buffer and shares the walk.
+ *
+ * **The units are the two the runtime has, and they are not the same number.**
+ * `LineOf` receives a **JavaScript string index** -- the number `Regex.Index`
+ * and `indexOf` give -- while `OffsetAt` receives a column in **characters**,
+ * the unit `Column` and `Select` count in.  `bta_line_of_utf16` is the walk
+ * that makes the first exact; see it for the emoji that separates them.
+ *
+ * **Not `Text.Lines`.**  That lays the string out and answers Pango's lines,
+ * which wrap at a width and break U+2028; these answer the lines the editor
+ * draws, which is the one a `GotoLine` will land on.
+ */
+static JSValue js_text_line_of(JSContext *ctx, JSValueConst this_val,
+                               int argc, JSValueConst *argv)
+{
+    if (argc < 2)
+        return JS_ThrowTypeError(ctx, "Text.LineOf(text, index) needs the text "
+                                      "and an index");
+
+    const char *s = JS_ToCString(ctx, argv[0]);
+    if (!s)
+        return JS_EXCEPTION;
+
+    int32_t index = 0;
+    if (JS_ToInt32(ctx, &index, argv[1])) {
+        JS_FreeCString(ctx, s);
+        return JS_EXCEPTION;
+    }
+
+    int   line = bta_line_of_utf16(s, index);
+    JS_FreeCString(ctx, s);
+    return JS_NewInt32(ctx, line);
+}
+
+static JSValue js_text_offset_at(JSContext *ctx, JSValueConst this_val,
+                                 int argc, JSValueConst *argv)
+{
+    if (argc < 2)
+        return JS_ThrowTypeError(ctx, "Text.OffsetAt(text, line, [column]) "
+                                      "needs the text and a line");
+
+    const char *s = JS_ToCString(ctx, argv[0]);
+    if (!s)
+        return JS_EXCEPTION;
+
+    int32_t line = 1, column = 1;
+    if (JS_ToInt32(ctx, &line, argv[1]) ||
+        (argc > 2 && !JS_IsUndefined(argv[2]) &&
+         JS_ToInt32(ctx, &column, argv[2]))) {
+        JS_FreeCString(ctx, s);
+        return JS_EXCEPTION;
+    }
+
+    int   at = bta_chars_at_position(s, line, column);
+    JS_FreeCString(ctx, s);
+    return JS_NewInt32(ctx, at);
+}
+
 static JSValue js_text_get_font(JSContext *ctx, JSValueConst this_val)
 {
     char   *name = metrics_default_font();
@@ -1390,6 +1454,8 @@ static const JSCFunctionListEntry text_props[] = {
     JS_CFUNC_DEF("Escape", 1, js_text_escape),
     JS_CFUNC_DEF("IndexAt", 5, js_text_index_at),
     JS_CFUNC_DEF("Bounds",  5, js_text_bounds),
+    JS_CFUNC_DEF("LineOf",  2, js_text_line_of),
+    JS_CFUNC_DEF("OffsetAt", 3, js_text_offset_at),
     JS_CGETSET_DEF("Font", js_text_get_font, NULL),
 };
 

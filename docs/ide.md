@@ -1058,13 +1058,14 @@ under the present.
 
 The window comes back the size it was, with its four dividers where they were
 left, and a project reopens with the tabs it was closed with — each code tab on
-the line its caret was on and the tab that was in front in front. `Session.js`,
-and it is two memories rather than one, which is the whole design:
+the line **and in the column** its caret was in, and the tab that was in front
+in front. `Session.js`, and it is two memories rather than one, which is the
+whole design:
 
 | | |
 |---|---|
 | `session.window` | the size, whether it was maximised, and the four dividers — **the person's**: one screen, one pair of eyes, and the same answer in every project |
-| `session.projects` | one entry per project: the open files in the order the strip had them, the active one, and a line each — **the work's**, and the next project has its own |
+| `session.projects` | one entry per project: the open files in the order the strip had them, the active one, and a line and a column each — **the work's**, and the next project has its own |
 
 **It is kept in `Settings` and never beside the project.** Delphi writes a `.dsk`
 next to the `.dpr` and Lazarus an `.lps` next to the `.lpi`, and the first thing

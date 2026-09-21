@@ -183,10 +183,13 @@ Ide.Session = class Session {
     /*
      * The open tabs of the project that is open now.
      *
-     * The line comes from the tab's **own editor**, which is where it is: every
-     * code tab holds its editor for as long as it is open, so this is the live
-     * caret of all of them and not only of the one on screen. A design tab has
-     * no line and is written down without one.
+     * The position comes from the tab's **own editor**, which is where it is:
+     * every code tab holds its editor for as long as it is open, so this is
+     * the live caret of all of them and not only of the one on screen. Both
+     * numbers are saved -- `Line` and `Column` -- because a caret put back on
+     * its line and left at the first column is half a caret, and `Select` is
+     * what puts both. A design tab has no line and is written down without
+     * one.
      */
     saveTabs() {
         const ide = this.ide;
@@ -194,10 +197,11 @@ Ide.Session = class Session {
 
         const files = [];
         for (const name of ide.tabs.tabOrder) {
-            const state = ide.tabs.openTabs.get(name);
-            const line  = state && state.editor ? state.editor.Line : 0;
+            const state  = ide.tabs.openTabs.get(name);
+            const line   = state && state.editor ? state.editor.Line : 0;
+            const column = state && state.editor ? state.editor.Column : 0;
 
-            files.push(line > 1 ? { name, line } : { name });
+            files.push(line > 1 || column > 1 ? { name, line, column } : { name });
         }
 
         const all = this.projects();
@@ -262,10 +266,12 @@ Ide.Session = class Session {
             try {
                 if (!tabs.open(name)) continue;
 
-                const state = tabs.openTabs.get(name);
-                const line  = Number(one.line);
-                if (state && state.editor && Number.isFinite(line) && line > 1)
-                    state.editor.GotoLine(line);
+                const state  = tabs.openTabs.get(name);
+                const line   = Number(one.line) || 1;
+                const column = Number(one.column) || 1;
+
+                if (state && state.editor && (line > 1 || column > 1))
+                    state.editor.Select(line, column);
 
                 done++;
             } catch (e) {

@@ -23,13 +23,6 @@
 
 Namespace("Ide");
 
-/* Line number (1-based) of the character at `index`. */
-function lineOf(source, index) {
-    let line = 1;
-    for (let i = 0; i < index; i++) if (source[i] === "\n") line++;
-    return line;
-}
-
 /* Index of the closing quote of the string that starts at `start`. */
 function endOfString(source, start) {
     const quote = source[start];
@@ -92,7 +85,7 @@ function insertMethod(source, className, method) {
                 source.slice(at);
 
     /* The cursor goes to the blank line of the body, the one after the signature. */
-    return { source: out, line: lineOf(out, out.indexOf(`${method}() {`, at)) + 1 };
+    return { source: out, line: Text.LineOf(out, out.indexOf(`${method}() {`, at)) + 1 };
 }
 
 /*
@@ -852,7 +845,7 @@ Ide.FormFiles = class FormFiles {
         let line;
         const found = already.Match(source);
         if (found) {
-            line = lineOf(source, found.Index);
+            line = Text.LineOf(source, found.Index);
         } else {
             const written = insertMethod(source, base, method);
             if (!written) {

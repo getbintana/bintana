@@ -149,7 +149,7 @@ Ide.Navigator = class Navigator {
             const source = this.sourceOf(file);
             for (const found of CLASS_AT.Matches(source))
                 if ((found.Group(1) || found.Group(2)) === name)
-                    return { file, line: lineAt(source, found.Index) };
+                    return { file, line: Text.LineOf(source, found.Index) };
         }
         return null;
     }
@@ -173,7 +173,7 @@ Ide.Navigator = class Navigator {
     /* The line a method is declared on, or 0. */
     symbolLine(source, name) {
         for (const found of SYMBOL.Matches(source))
-            if (found.Group(1) === name) return lineAt(source, found.Index);
+            if (found.Group(1) === name) return Text.LineOf(source, found.Index);
 
         return 0;
     }
@@ -183,7 +183,7 @@ Ide.Navigator = class Navigator {
     symbols(source) {
         return SYMBOL.Matches(source)
                      .map((found) => ({ name: found.Group(1),
-                                        line: lineAt(source, found.Index) }));
+                                        line: Text.LineOf(source, found.Index) }));
     }
 
     /* Whether a `.form` holds a control of that name, at any depth. */
@@ -232,8 +232,3 @@ Ide.Navigator = class Navigator {
         return true;
     }
 };
-
-/* The 1-based line a character index falls on. */
-function lineAt(source, index) {
-    return source.slice(0, index).split("\n").length;
-}

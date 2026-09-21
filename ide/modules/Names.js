@@ -99,7 +99,7 @@ Ide.Names = class Names {
             yield {
                 kind: "Warning",
                 file,
-                line: lineOfIndex(text, m.index),
+                line: Text.LineOf(text, m.index),
                 text: `${type} has no ${m[2]}: the assignment would be accepted ` +
                       `and do nothing`,
             };
@@ -132,7 +132,7 @@ Ide.Names = class Names {
             yield {
                 kind: "Warning",
                 file,
-                line: lineOfIndex(text, m.index),
+                line: Text.LineOf(text, m.index),
                 text: `${type} does not raise ${m[2]}: this method will never ` +
                       `be called`,
             };
@@ -253,9 +253,4 @@ function typeOf(controls, name) {
  * of a word is the one just pressed. A `caret` of -1 is inside nothing. */
 function underCaret(m, caret) {
     return caret >= 0 && caret >= m.index && caret <= m.index + m[0].length;
-}
-
-/* The 1-based line a character index falls on. */
-function lineOfIndex(text, index) {
-    return text.slice(0, index).split("\n").length;
 }

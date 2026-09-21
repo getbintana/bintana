@@ -2540,14 +2540,34 @@ person who wrote it either.
 - **There are two editors now, and which one a name means matters.**
   `SourceEditor` is GtkSourceView (`bta_editor.c`) and `TextEditor` is a plain
   GtkTextView (`bta_text.c`); the shared half -- `Text`, `Line`, `Column`,
-  `Selection`, `Modified`, `ReadOnly`, `Wrap`, `CanUndo`/`CanRedo`, `GotoLine`,
-  `Select`, `Insert`, `Append`, `Clear`, `Undo`, `Redo`, `Change`, `Cursor` -- is
+  `Offset`, `LineOf`, `OffsetAt`, `Selection`, `Modified`, `ReadOnly`, `Wrap`,
+  `CanUndo`/`CanRedo`, `GotoLine`, `Select`, `Insert`, `Append`, `Clear`,
+  `Undo`, `Redo`, `Change`, `Cursor` -- is
   an abstract `Editor` both inherit, because a `GtkSourceView` *is* a
   `GtkTextView` and the code was already written against the base class's API.
   The IDE's code tabs are `SourceEditor`s; `PoForm`'s translation boxes are
   `TextEditor`s and used to be the source editor with `Language = ""`,
   `ShowLineNumbers = false` and `Wrap = true` -- which is what the plain one now
   is by default, and the reason it exists.
+- **An offset is a character and an index is a JavaScript number, and the
+  runtime has a verb for each so no caller crosses them by hand.**
+  `Offset`/`OffsetAt(line, [column])` count **characters**, as `Column` and
+  `Select` do -- an emoji is one, and `OffsetAt(Line, Column) === Offset`.
+  `LineOf(index)` (and `Text.LineOf(text, index)`) receives the **index a search
+  returned** -- the number `Regex.Index`, `indexOf` and `slice` speak, which
+  counts UTF-16 units and calls that emoji two. **The conversion is a walk and
+  not an identity**: on `"🙂\nx"`, index 2 is the `\n` (line 1) while character
+  2 is the `x` (line 2), so handing a search's index straight to GTK's
+  `get_iter_at_offset` answers the wrong line on any file with an astral
+  character before a break -- silently, and correctly on every file without
+  one. That is why `LineOf` reads the text and the other two do not: GTK
+  answers a character directly. **The separators are GTK's, since the line goes
+  to `GotoLine`**: `\n`, `\r\n` as one, a lone `\r` and U+2029 break; U+2028
+  does not break a buffer although Pango breaks it, so `Text.Lines` and
+  `LineOf` disagree on that one character. Eight crossings in the IDE became
+  `Text.LineOf`; `Live.lineAt` was dead and went; `Live.caret` stays hand-rolled
+  on purpose, because it compares against a match's `Index` and both sides are
+  already JS numbers.
 - **`Editor` is abstract for one reason, and it is not tidiness.** `texts`
   accumulates *down* the class chain (`class_list_of`), and there is no way for a
   child to refuse what its parent declared. A plain `TextEditor` should declare

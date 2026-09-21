@@ -731,6 +731,7 @@ shape — a `GtkSourceView` *is* a `GtkTextView`.
 | `Wrap` | wrap long lines. Default `true` on a `TextEditor`, `false` on a `SourceEditor` |
 | `Line` (ro) | the cursor's line, counting from 1 |
 | `Column` (ro) | the cursor's column |
+| `Offset` (ro) | the cursor's position as a **character** offset — the same unit `Column` counts in, so an emoji is one |
 | `Selection` (ro) | the selected text |
 | `CanUndo` (ro) | whether there is anything to undo |
 | `CanRedo` (ro) | likewise |
@@ -739,6 +740,8 @@ shape — a `GtkSourceView` *is* a `GtkTextView`.
 | `Append(text)` | at the end, scrolling there, whatever the cursor was doing |
 | `Clear()` | empties it |
 | `GotoLine(line)` | puts the cursor there and scrolls to it |
+| `LineOf(index)` | the line a **search's index** falls on, 1-based and clamped — `index` is the number `Regex.Index` gives, and it counts UTF-16 units |
+| `OffsetAt(line, [column])` | the character offset of that position, clamped as `Select` clamps — the inverse read of `Offset` |
 | `Insert(text)` | at the cursor. The selection is left alone, so on a selected word this lands after it rather than replacing it |
 | `Redo()` | one step forward |
 | `Select(line, [column], [length])` | selects from there. A column past the end of the line is the end of the line |
@@ -746,6 +749,19 @@ shape — a `GtkSourceView` *is* a `GtkTextView`.
 | **event** `Change()` | the value changed, including from an assignment in code — the round trip goes out to GTK and back |
 | **event** `Cursor()` | the cursor moved. `Line` and `Column` say where |
 | **event** `Scroll(x, y)` | it was scrolled — by the wheel, a scrollbar, the keyboard or an assignment. One event for a diagonal move. Two panes locked together is `Before_Scroll(x, y) { this.After.ScrollY = y; }`, and it does not loop: assigning a value it already has emits nothing |
+
+**Two units, and which verb takes which is the whole of it.** `Offset` and
+`OffsetAt` count **characters**, as `Column` and `Select` do. `LineOf` receives
+the **index a search gives** — the number `Regex.Index`, `indexOf` and `slice`
+speak — which counts UTF-16 units, so a character outside the BMP is two of
+them. That is deliberate and not an inconsistency: the verb that crosses *from
+a search* is handed the search's own number and converts exactly, which is what
+`GotoLine(LineOf(m.Index))` is. `OffsetAt(Line, Column) === Offset` always.
+
+The lines `LineOf` counts are GTK's, which is what the editor draws: `\n`,
+`\r\n` as one break, a lone `\r` and U+2029 break; **U+2028 does not**, although
+Pango breaks it — so `Text.Lines` and `LineOf` can disagree on that one
+character, and the one a `GotoLine` will land on is this one.
 
 ## TextEditor
 

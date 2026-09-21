@@ -128,8 +128,9 @@ Ide.Live = class Live {
         this.mark(ide.Editor, found);
     }
 
-    /* The cursor as an offset into the text, which is what a match's index can
-     * be compared against. `Line` and `Column` are 1-based. */
+    /* The cursor as an **index** into the text -- the unit a match's `Index`
+     * can be compared against, and not the character `Offset` the editor
+     * publishes. `Line` and `Column` are 1-based. */
     caret(editor, text) {
         const lines = text.split("\n");
         let at = 0;
@@ -151,15 +152,5 @@ Ide.Live = class Live {
         editor.ClearMarks("Warning");
         for (const p of found)
             if (p.line > 0) editor.Mark(p.line, "Warning", p.text);
-    }
-
-
-    /* The 1-based line a character index falls on. A method and not a function
-     * beside the class: `Navigator` already declares a `lineAt` at the top level
-     * of its own file, and a second one would be the same name twice in one
-     * lexical scope -- which is the trap this project's own namespaces exist to
-     * close. */
-    lineAt(text, index) {
-        return text.slice(0, index).split("\n").length;
     }
 };

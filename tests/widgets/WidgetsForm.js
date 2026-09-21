@@ -1051,6 +1051,56 @@ class WidgetsForm extends Form {
         this.Ed.Append("consola\n");
         eq("Append works while ReadOnly", this.Ed.Text, "consola\n");
         this.Ed.ReadOnly = false;
+
+        /*
+         * **Offsets and indices, which are two different numbers.** `Offset`
+         * and `OffsetAt` count **characters**, as `Column` and `Select` do --
+         * an emoji is one -- while `LineOf` receives the **index a search
+         * gives**, the same number `Regex.Index` answers with, and converts.
+         * The emoji below is what tells them apart: an index counts two.
+         */
+        this.Ed.Text = "uno\ndos\ntres\n";
+        this.Ed.GotoLine(1);
+        eq("the cursor starts at offset zero", this.Ed.Offset, 0);
+
+        this.Ed.GotoLine(2);
+        eq("GotoLine moves the offset too", this.Ed.Offset, 4);
+        eq("which is the inverse read of the position",
+           this.Ed.OffsetAt(this.Ed.Line, this.Ed.Column), this.Ed.Offset);
+        eq("LineOf reads the index a search gives", this.Ed.LineOf(4), 2);
+        eq("the separator belongs to the line it ends", this.Ed.LineOf(3), 1);
+        eq("past the end is the last line", this.Ed.LineOf(9999), 4);
+        eq("a column past the end of the line is the end of it",
+           this.Ed.OffsetAt(1, 9999), 3);
+        eq("and a line past the last is the last",
+           this.Ed.OffsetAt(9999, 1), 13);
+
+        this.Ed.Text = "🙂\nx";
+        eq("an index on the line break is the line it ends", this.Ed.LineOf(2), 1);
+        eq("and the x is on the second", this.Ed.LineOf(3), 2);
+        this.Ed.GotoLine(2);
+        eq("the cursor's offset counts characters", this.Ed.Offset, 2);
+        eq("which is what OffsetAt says",
+           this.Ed.OffsetAt(this.Ed.Line, this.Ed.Column), this.Ed.Offset);
+
+        /* The separators are GTK's -- the ones it draws -- and a `\r\n` is one
+         * break and not two.  `GotoLine` past the end is GTK's own line count,
+         * so it is what says the model here and the model there are the same. */
+        this.Ed.Text = "a\rb";
+        eq("a lone carriage return breaks a line", this.Ed.LineOf(2), 2);
+        this.Ed.GotoLine(99);
+        eq("which is the line GotoLine lands on", this.Ed.Line, 2);
+        this.Ed.Text = "a\r\nb";
+        eq("a CRLF is one break", this.Ed.LineOf(3), 2);
+        this.Ed.Text = "a\u2028b";
+        eq("U+2028 is not one", this.Ed.LineOf(2), 1);
+        this.Ed.GotoLine(99);
+        eq("...and GTK agrees it is one line", this.Ed.Line, 1);
+        this.Ed.Text = "a\u2029b";
+        eq("and U+2029 is", this.Ed.LineOf(2), 2);
+        this.Ed.GotoLine(99);
+        eq("...as GTK does", this.Ed.Line, 2);
+
         this.Ed.Clear();
     }
 
@@ -6535,6 +6585,41 @@ function Main() {
         const emoji = "a\u{1F600}b";
         eq("the index is a JS string index", Text.IndexAt(emoji, 9999, 0), emoji.length);
 
+        /*
+         * **Lines**, which is the other bridge: `LineOf` receives the index a
+         * `Regex` gives -- UTF-16 units -- and `OffsetAt` a column in
+         * characters, as `Column` and `Select` count.  They are deliberately
+         * not one unit, and `"🙂\nx"` is the number that tells them apart:
+         * the index 2 is the `\n` (line 1) while the second *character* is
+         * the `x` (line 2).
+         */
+        eq("a line is what a search index falls on", Text.LineOf("uno\ndos", 4), 2);
+        eq("the separator is on the line it ends", Text.LineOf("uno\ndos", 3), 1);
+        eq("past the end is the last line", Text.LineOf("uno\ndos", 9999), 2);
+        eq("below the start is the first", Text.LineOf("uno\ndos", -1), 1);
+        eq("a carriage return breaks a line", Text.LineOf("a\rb", 2), 2);
+        eq("...and U+2029, the way GTK draws it", Text.LineOf("a\u2029b", 2), 2);
+        eq("U+2028 does not, which is where Pango's lines differ",
+           Text.LineOf("a\u2028b", 2), 1);
+        eq("an index inside a CRLF is the line it ends",
+           Text.LineOf("a\r\nb", 2), 1);
+        eq("and past it is the next one", Text.LineOf("a\r\nb", 3), 2);
+
+        eq("a position is a character offset", Text.OffsetAt("uno\ndos", 2), 4);
+        eq("a column past the line ends at the line",
+           Text.OffsetAt("uno\ndos", 1, 9999), 3);
+        eq("and a line past the last is the last",
+           Text.OffsetAt("uno\ndos", 9999, 1), 4);
+
+        eq("the emoji is one character to a column",
+           Text.OffsetAt("🙂\nx", 2, 1), 2);
+        eq("and two units to an index", Text.LineOf("🙂\nx", 2), 1);
+        eq("so the x is not where the index would say",
+           Text.LineOf("🙂\nx", 3), 2);
+
+        throws("a line needs the text", () => Text.LineOf("x"));
+        throws("and a position needs a line", () => Text.OffsetAt("x"));
+
         /* The options are an object a caller hands over, so its properties may
          * be getters and a getter may throw. Every option checks its
          * conversion: the alternative is a failed one read as `true` with an
@@ -6906,6 +6991,9 @@ function Main() {
          * editor's: `Marks` on a Calendar is a different idea again. */
         check("while Select and GotoLine are both editors'",
               typeof memo.Select === "function" && typeof memo.GotoLine === "function");
+        check("and so are the offsets, which the two share",
+              typeof memo.OffsetAt === "function" && typeof memo.LineOf === "function" &&
+              typeof memo.Offset === "number");
 
         eq("it saves as itself", memo.Serialize().type, "TextEditor");
         check("and a wrapping default is not written into the .form",

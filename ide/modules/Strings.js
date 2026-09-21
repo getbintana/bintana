@@ -257,7 +257,7 @@ Ide.Strings = class Strings {
         let m;
         while ((m = re.exec(src)) !== null) {
             const parts = m[0].match(new RegExp(LITERAL, "g")) || [];
-            const line  = src.slice(0, m.index).split("\n").length;
+            const line  = Text.LineOf(src, m.index);
             const where = `${rel}:${line}`;
 
             const first  = literalValue(parts[0]);
@@ -305,7 +305,7 @@ Ide.Strings = class Strings {
                 const prose = m[1].replace(/\$\{[^}]*\}/g, "");
                 if (!/\p{L}/u.test(prose)) continue;
 
-                const line = src.slice(0, m.index).split("\n").length;
+                const line = Text.LineOf(src, m.index);
                 this.warn(rel, line,
                     `a template literal in ${spec.call} cannot be translated -- ` +
                     `the msgid arrives already filled in. Give ${spec.call} the ` +
@@ -328,7 +328,7 @@ Ide.Strings = class Strings {
             const re   = new RegExp(`${head}\\(\\s*${LITERAL}\\s*\\+`, "g");
             let m;
             while ((m = re.exec(src)) !== null) {
-                const line = src.slice(0, m.index).split("\n").length;
+                const line = Text.LineOf(src, m.index);
                 this.warn(rel, line,
                     `the text in ${spec.call} is two literals joined, so only ` +
                     `the first is extracted. Write it as one string, however long.`);
@@ -347,7 +347,7 @@ Ide.Strings = class Strings {
                 const value = literalValue(m[1]);
                 if (!value || !/\p{L}/u.test(value)) continue;
 
-                const line = src.slice(0, m.index).split("\n").length;
+                const line = Text.LineOf(src, m.index);
                 this.warn(rel, line,
                     `${JSON.stringify(value)} is assigned to .${key} from code, ` +
                     `so nothing extracts it. Declare it in the .form, or wrap it ` +
@@ -368,7 +368,7 @@ Ide.Strings = class Strings {
                 const prose = m[1].replace(/\$\{[^}]*\}/g, "");
                 if (!/\p{L}/u.test(prose)) continue;
 
-                const line = src.slice(0, m.index).split("\n").length;
+                const line = Text.LineOf(src, m.index);
                 this.warn(rel, line,
                     `a template literal is assigned to .${key}, so nothing ` +
                     `extracts it. Wrap it in Locale.Text with {0} placeholders, or ` +
