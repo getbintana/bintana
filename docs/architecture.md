@@ -90,10 +90,13 @@ plain object, and it is in here. `Object.prototype` cannot be deleted, being
 non-configurable, and the serialiser walks up to it; that one is a capture for
 tidiness rather than survival.
 
-`RegExp` is the one still installed, and taking its name would buy little: `/x/g`
-is syntax and produces one regardless, so only `new RegExp(…)` would go. The
-capture is what makes that a one-line change in `close_hatches()` if it is ever
-worth making — exactly as capturing `setInterval` was for `Timer`.
+`RegExp` is **not** installed any more, and what it bought is smaller than it
+sounds: `/x/g` is syntax and produces one regardless, so what went is
+`new RegExp(…)` — the constructor reached from a *string*. Which is the whole
+point: a pattern built at run time has one spelling now, and it is
+`Regex`. `RegularExpression` above is the capture that outlives the name, exactly
+as capturing `setInterval` was for `Timer`; `RegExp.prototype.constructor` goes
+with it, or `(/(?:)/).constructor` would hand the function straight back.
 
 It is also what makes a record's values unreachable. They live in a `#private` bag
 declared inside `Record`'s own class body, so the accessors `rad.js` generates can

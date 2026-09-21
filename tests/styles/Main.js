@@ -200,16 +200,15 @@ carrying the class, so it needs a widget whose children really are \`x\`.`);
 function look(sels, name) {
     const hosts = new Set();
     const kids  = new Set();
-    const at    = new RegExp(`(?:^|[\\s>+~])([a-z-]*)\\.${name}\\b`, "g");
+    const at    = new Regex(`(?:^|[\\s>+~])([a-z-]*)\\.${name}\\b`);
     let   n     = 0;
 
     for (const sel of sels) {
-        at.lastIndex = 0;
-        for (let m; (m = at.exec(sel)) !== null; ) {
+        for (const m of at.Matches(sel)) {
             n++;
-            hosts.add(m[1] || "any");
+            hosts.add(m.Group(1) || "any");
 
-            const tail  = sel.slice(m.index + m[0].length).replace(PSEUDO, "");
+            const tail  = sel.slice(m.Index + m.Value.length).replace(PSEUDO, "");
             const child = /^\s*[>+~]\s*([a-z-]+)/.exec(tail);
             if (child) kids.add(child[1]);
         }

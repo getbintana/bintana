@@ -1285,8 +1285,30 @@ void bta_close_hatches(JSContext *ctx)
     JS_FreeValue(ctx, object_proto);
     JS_FreeValue(ctx, object);
 
+    /*
+     * RegExp, whose name goes the way Function's did -- and this is the half of
+     * the bargain Timer's removal needed.  `/x/g` is syntax and still produces
+     * one, which is why taking the name was once judged to buy little: what
+     * goes is `new RegExp(p, flags)`, so a pattern **built from strings** has
+     * exactly one spelling now and it is `Regex` (rad.js captured the
+     * constructor before this runs, and `Regex` is built on it).
+     *
+     * The prototype's own `constructor` goes first, the same side door
+     * GeneratorFunction arrived by: `(/(?:)/).constructor` hands the function
+     * straight back, and leaving it while deleting the global would be theatre.
+     * Nothing here reads it -- `instanceof` walks the prototype chain and does
+     * not ask.
+     */
+    JSValue regexp = JS_GetPropertyStr(ctx, global, "RegExp");
+    if (JS_IsObject(regexp)) {
+        JSValue proto = JS_GetPropertyStr(ctx, regexp, "prototype");
+        delete_named(ctx, proto, "constructor");
+        JS_FreeValue(ctx, proto);
+    }
+    JS_FreeValue(ctx, regexp);
+
     static const char *gone[] = {
-        "eval", "Function", "globalThis", "Reflect", "Symbol",
+        "eval", "Function", "globalThis", "Reflect", "Symbol", "RegExp",
         /* Timer is the published way to schedule: it has a name, a switch and
          * hands itself back, and these are the same thing said worse.  rad.js
          * built Timer out of them and holds what it needs. */

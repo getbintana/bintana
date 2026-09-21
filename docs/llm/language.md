@@ -2,9 +2,9 @@
 
 Modern JavaScript, with a curated set of intrinsics. Classes, template
 literals, destructuring, spread, generators, `for...of`, arrow functions,
-optional chaining, getters and setters, `Map`, `Set`, `Date`, `Math`, `JSON`,
-`RegExp` and every ordinary object and array are all there and mean what they
-mean everywhere.
+optional chaining, getters and setters, `Map`, `Set`, `Date`, `Math`, `JSON`
+and every ordinary object and array are all there and mean what they mean
+everywhere.
 
 What follows is the whole of the difference. Read it once; the rest of your
 JavaScript knowledge transfers unchanged.
@@ -66,9 +66,9 @@ without the string that is secretly bytes.
 Removed once the runtime has booted, so they are gone before your code runs:
 
 `eval`, `Function` (and `Function.prototype.constructor`, and the generator
-function constructor), `globalThis`, `Symbol`, `setTimeout`, `setInterval`,
-`clearTimeout`, `clearInterval`, `queueMicrotask`, `escape`, `unescape`,
-`monotonic`.
+function constructor), `globalThis`, `Symbol`, `RegExp` (and
+`RegExp.prototype.constructor`), `setTimeout`, `setInterval`, `clearTimeout`,
+`clearInterval`, `queueMicrotask`, `escape`, `unescape`, `monotonic`.
 
 `queueMicrotask` goes with the timer pair and for the same sentence — it is
 scheduling with no name of ours, no switch and no handle. It worked; that is
@@ -76,6 +76,16 @@ why it went, rather than a reason to keep it. `Timer.After(0, fn)` is the word
 for *do this on the next turn*. `escape`/`unescape` are an Annex B URL encoding
 no standard recommends: `Text.Escape` is markup, and `Http` builds its own query
 strings.
+
+**Taking `RegExp` away does not take regular expressions away.** `/x/g` is
+syntax and still produces one, `.test` and `.exec` and `String.replace` all
+still work, and a literal is a perfectly good way to write a pattern that is
+fixed. What goes is `new RegExp(p, flags)` — the engine reached from a *string* —
+so a pattern built at run time has one spelling and it is
+[`Regex`](library.md#regex), which captured the constructor before the name
+went. It is also where the two flags only the constructor could give you are:
+`{ Unicode: true }` is `u`, and `{ IgnorePatternWhitespace: true }` is free
+spacing, which `RegExp` never had at all.
 
 **Installed and worth knowing about**, though nothing here needs them: `BigInt`,
 `WeakMap`, `WeakSet`, `Iterator` and `DisposableStack`. `WeakMap` is the one to
@@ -119,6 +129,7 @@ get wrong.
 | `Object.assign(a, b)` | `{ ...a, ...b }` |
 | `console.log` / `console.error` | `Logger.Info` / `Logger.Error`, or `print` |
 | `new RegExp(p, "gi")` | `new Regex(p, { IgnoreCase: true })` |
+| `new RegExp(p, "u")` | `new Regex(p, { Unicode: true })` |
 | `s.replace(/x/g, y)` | `new Regex("x").Replace(s, y)` |
 | `[...s.matchAll(re)]` | `re.Matches(s)` |
 | `new Function(src)` | `Application.CheckSource(src)` |

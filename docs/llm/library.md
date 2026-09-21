@@ -879,10 +879,16 @@ pair.Split(text)
 Regex.Escape(name)                    // a name as a literal inside a pattern
 ```
 
-Options: `IgnoreCase`, `Multiline`, `Singleline`, `IgnorePatternWhitespace`.
-`Replace` replaces **all** unless a `count` says how many. There is no
-`lastIndex`, so a `Regex` can be a `const`. A replacement function is handed the
-`Match`.
+Options: `IgnoreCase`, `Multiline`, `Singleline`, `Unicode`,
+`IgnorePatternWhitespace`. `Replace` replaces **all** unless a `count` says how
+many. There is no `lastIndex`, so a `Regex` can be a `const`. A replacement
+function is handed the `Match`.
+
+**`Regex` is the only way to a pattern built from a string**: the name `RegExp`
+is not in the language any more, and `Unicode` is where the `u` went — without
+it `\p{L}` compiles and matches the literal text `p{L}`. A fixed pattern is still
+well written as a literal (`/x/g` is syntax and needs no global); see
+[language.md](language.md#what-is-not-installed).
 
 `Regex.Escape` is the one that is easy to forget: any pattern built around a
 name the program did not choose needs it.

@@ -34,11 +34,11 @@ Namespace("Ide");
 
 /* `this.Name.Member`, and a method that looks like a handler -- `Name_Event(` at
  * the start of a line, which is how every handler in every project of this
- * language is written. Sources and not `RegExp`s: a `g` pattern carries a
- * `lastIndex`, and one shared between two passes resumes the second where the
- * first stopped. */
-const NAMES_MEMBER  = "\\bthis\\.([A-Za-z_$][\\w$]*)\\.([A-Za-z_$][\\w$]*)";
-const NAMES_HANDLER = "^[ \\t]*([A-Za-z_$][\\w$]*)_([A-Za-z_$][\\w$]*)[ \\t]*\\(";
+ * language is written. Compiled once and shared: a `Regex` remembers nothing
+ * between calls, so one pass cannot resume where another stopped. */
+const NAMES_MEMBER  = new Regex("\\bthis\\.([A-Za-z_$][\\w$]*)\\.([A-Za-z_$][\\w$]*)");
+const NAMES_HANDLER = new Regex(
+    "^[ \\t]*([A-Za-z_$][\\w$]*)_([A-Za-z_$][\\w$]*)[ \\t]*\\(", { Multiline: true });
 
 Ide.Names = class Names {
 
@@ -86,21 +86,18 @@ Ide.Names = class Names {
      * would report every method call in the project as a mistake.
      */
     *members(text, controls, file, caret) {
-        const re = new RegExp(NAMES_MEMBER, "g");
-        let m;
-
-        while ((m = re.exec(text)) !== null) {
+        for (const m of NAMES_MEMBER.Matches(text)) {
             if (underCaret(m, caret)) continue;
 
-            const type   = typeOf(controls, m[1]);
+            const type   = typeOf(controls, m.Group(1));
             const sample = this.sampleFor(type);
-            if (!sample || m[2] in sample) continue;
+            if (!sample || m.Group(2) in sample) continue;
 
             yield {
                 kind: "Warning",
                 file,
-                line: Text.LineOf(text, m.index),
-                text: `${type} has no ${m[2]}: the assignment would be accepted ` +
+                line: Text.LineOf(text, m.Index),
+                text: `${type} has no ${m.Group(2)}: the assignment would be accepted ` +
                       `and do nothing`,
             };
         }
@@ -119,21 +116,18 @@ Ide.Names = class Names {
      * `Select`: loaded, never called, and nothing said so.
      */
     *handlers(text, controls, file, caret) {
-        const re = new RegExp(NAMES_HANDLER, "gm");
-        let m;
-
-        while ((m = re.exec(text)) !== null) {
+        for (const m of NAMES_HANDLER.Matches(text)) {
             if (underCaret(m, caret)) continue;
 
-            const type   = typeOf(controls, m[1]);
+            const type   = typeOf(controls, m.Group(1));
             const events = this.eventsOf(type);
-            if (!events || events.includes(m[2])) continue;
+            if (!events || events.includes(m.Group(2))) continue;
 
             yield {
                 kind: "Warning",
                 file,
-                line: Text.LineOf(text, m.index),
-                text: `${type} does not raise ${m[2]}: this method will never ` +
+                line: Text.LineOf(text, m.Index),
+                text: `${type} does not raise ${m.Group(2)}: this method will never ` +
                       `be called`,
             };
         }
@@ -252,5 +246,5 @@ function typeOf(controls, name) {
  * typed*. One past the end counts: the caret sits there while the last character
  * of a word is the one just pressed. A `caret` of -1 is inside nothing. */
 function underCaret(m, caret) {
-    return caret >= 0 && caret >= m.index && caret <= m.index + m[0].length;
+    return caret >= 0 && caret >= m.Index && caret <= m.Index + m.Value.length;
 }

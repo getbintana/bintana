@@ -645,6 +645,24 @@ refused with a message and a column.
   whole of it, nothing in the tree wants more, and a name gets published when
   something needs one -- the rule `close_hatches` states when it empties
   `Object`.
+- **`RegExp` is gone and regular expressions are not, which is the whole of what
+  taking the name buys.** `/x/g` is syntax and still makes one, so the removal
+  could only ever reach `new RegExp(p, flags)` -- the engine built from a
+  *string* -- and that is the half worth having: a dynamic pattern has one
+  spelling now, `Regex`, which captured the constructor before `close_hatches`
+  ran. `RegExp.prototype.constructor` goes with the name, or
+  `(/(?:)/).constructor` hands the function straight back; what that read falls
+  through to is `Object`, which cannot make a pattern. The documents said for
+  years that this "would buy little" and left it; `architecture.md` and
+  `runtime-api.md` now say what changed, and the 14 `new RegExp(…)` in the IDE
+  and `tests/styles` are `Regex` and literal patterns.
+  **And the flag that was only reachable through the constructor is
+  `{ Unicode: true }`.** Measured: without it `\p{L}` does not throw -- it
+  compiles and matches the literal text `p{L}`, so a Unicode pattern that is not
+  a literal was silently wrong rather than missing -- and `.` counts UTF-16
+  units, so an emoji is two matches. `Matches` steps a **code point** on an empty
+  match under it, which is what `Symbol.matchAll` does; stepping a code unit
+  would start the next match inside an emoji.
 - **A runtime answer must not be breakable by what the program did to `Error`.**
   `Application.CheckSource` returns `{Message, Line, Column}` and the position
   has exactly one source: a QuickJS error carries no `lineNumber`,

@@ -252,12 +252,10 @@ Ide.Strings = class Strings {
         const head = spec.call.replace(".", "\\.");
         const one  = `\\s*${LITERAL}\\s*`;
         const tail = spec.args === 2 ? `,${one}` : "";
-        const re   = new RegExp(`${head}\\(${one}${tail}`, "g");
 
-        let m;
-        while ((m = re.exec(src)) !== null) {
-            const parts = m[0].match(new RegExp(LITERAL, "g")) || [];
-            const line  = Text.LineOf(src, m.index);
+        for (const m of new Regex(`${head}\\(${one}${tail}`).Matches(src)) {
+            const parts = new Regex(LITERAL).Matches(m.Value).map((lit) => lit.Value);
+            const line  = Text.LineOf(src, m.Index);
             const where = `${rel}:${line}`;
 
             const first  = literalValue(parts[0]);
@@ -299,13 +297,12 @@ Ide.Strings = class Strings {
          * translate; warning about it is how a lint gets switched off.
          */
         for (const spec of CALLS) {
-            const re = new RegExp(`${spec.call.replace(".", "\\.")}\\(\\s*\`([^\`]*)\``, "g");
-            let m;
-            while ((m = re.exec(src)) !== null) {
-                const prose = m[1].replace(/\$\{[^}]*\}/g, "");
+            const re = new Regex(`${spec.call.replace(".", "\\.")}\\(\\s*\`([^\`]*)\``);
+            for (const m of re.Matches(src)) {
+                const prose = m.Group(1).replace(/\$\{[^}]*\}/g, "");
                 if (!/\p{L}/u.test(prose)) continue;
 
-                const line = Text.LineOf(src, m.index);
+                const line = Text.LineOf(src, m.Index);
                 this.warn(rel, line,
                     `a template literal in ${spec.call} cannot be translated -- ` +
                     `the msgid arrives already filled in. Give ${spec.call} the ` +
@@ -325,10 +322,9 @@ Ide.Strings = class Strings {
          */
         for (const spec of CALLS) {
             const head = spec.call.replace(".", "\\.");
-            const re   = new RegExp(`${head}\\(\\s*${LITERAL}\\s*\\+`, "g");
-            let m;
-            while ((m = re.exec(src)) !== null) {
-                const line = Text.LineOf(src, m.index);
+            const re   = new Regex(`${head}\\(\\s*${LITERAL}\\s*\\+`);
+            for (const m of re.Matches(src)) {
+                const line = Text.LineOf(src, m.Index);
                 this.warn(rel, line,
                     `the text in ${spec.call} is two literals joined, so only ` +
                     `the first is extracted. Write it as one string, however long.`);
@@ -341,13 +337,12 @@ Ide.Strings = class Strings {
          * translator sees it and the property grid cannot show it either.
          */
         for (const key of this.proseNames()) {
-            const re = new RegExp(`\\.${key}\\s*=\\s*(${LITERAL})`, "g");
-            let m;
-            while ((m = re.exec(src)) !== null) {
-                const value = literalValue(m[1]);
+            const re = new Regex(`\\.${key}\\s*=\\s*(${LITERAL})`);
+            for (const m of re.Matches(src)) {
+                const value = literalValue(m.Group(1));
                 if (!value || !/\p{L}/u.test(value)) continue;
 
-                const line = Text.LineOf(src, m.index);
+                const line = Text.LineOf(src, m.Index);
                 this.warn(rel, line,
                     `${JSON.stringify(value)} is assigned to .${key} from code, ` +
                     `so nothing extracts it. Declare it in the .form, or wrap it ` +
@@ -363,12 +358,12 @@ Ide.Strings = class Strings {
              * Found by translating this IDE: every menu came out in Spanish and
              * the title stayed in English.
              */
-            const tmpl = new RegExp(`\\.${key}\\s*=\\s*\`([^\`]*)\``, "g");
-            while ((m = tmpl.exec(src)) !== null) {
-                const prose = m[1].replace(/\$\{[^}]*\}/g, "");
+            const tmpl = new Regex(`\\.${key}\\s*=\\s*\`([^\`]*)\``);
+            for (const m of tmpl.Matches(src)) {
+                const prose = m.Group(1).replace(/\$\{[^}]*\}/g, "");
                 if (!/\p{L}/u.test(prose)) continue;
 
-                const line = Text.LineOf(src, m.index);
+                const line = Text.LineOf(src, m.Index);
                 this.warn(rel, line,
                     `a template literal is assigned to .${key}, so nothing ` +
                     `extracts it. Wrap it in Locale.Text with {0} placeholders, or ` +

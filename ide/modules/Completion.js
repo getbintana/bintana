@@ -98,23 +98,23 @@ const METHOD_LINE = /^ {4}(?:static\s+|get\s+|set\s+|async\s+)*([A-Za-z_$][\w$]*
  * constructor parameter, so no `new` names it and TypeScript infers `any` for it
  * too. One JSDoc line fixes it there and here, and 32 of them cover the tree.
  *
- * Sources and not `RegExp`s: the name goes into the pattern, so one is built per
- * question, and a `g` pattern kept between two of them would resume where the
- * last one stopped.
+ * Sources and not a `const` pattern: the name goes into the pattern, so one is
+ * built per question -- and a `Regex` remembers nothing between calls, so the
+ * one that is built is handed straight to `Match`.
  */
 const BUILT_HERE = (name) =>
-    new RegExp(`(?:^|[;{}\\n]|\\bthis\\.)\\s*(?:const\\s+|let\\s+|var\\s+)?` +
-               `${name}\\s*=\\s*new\\s+([A-Za-z_$][\\w$.]*)\\s*\\(`);
+    new Regex(`(?:^|[;{}\\n]|\\bthis\\.)\\s*(?:const\\s+|let\\s+|var\\s+)?` +
+              `${name}\\s*=\\s*new\\s+([A-Za-z_$][\\w$.]*)\\s*\\(`);
 
 const DECLARED_JSDOC = (name) =>
-    new RegExp(`@param\\s*\\{\\s*([A-Za-z_$][\\w$.]*)\\s*\\}\\s*\\[?${name}\\b`);
+    new Regex(`@param\\s*\\{\\s*([A-Za-z_$][\\w$.]*)\\s*\\}\\s*\\[?${name}\\b`);
 
 /* `this.thing = thing` -- the line that ties a field to the parameter whose
  * JSDoc says what it is. Without it the JSDoc lookup would only answer for a
  * field whose name happens to be the parameter's, which is the habit here and
  * not a rule anybody has to keep. */
 const FIELD_FROM_PARAM = (name) =>
-    new RegExp(`\\bthis\\.${name}\\s*=\\s*([A-Za-z_$][\\w$]*)\\s*[;\\n]`);
+    new Regex(`\\bthis\\.${name}\\s*=\\s*([A-Za-z_$][\\w$]*)\\s*[;\\n]`);
 
 Ide.Completion = class Completion {
 
@@ -212,17 +212,17 @@ Ide.Completion = class Completion {
         if (!editor) return "";
 
         const text  = editor.Text;
-        const built = BUILT_HERE(name).exec(text);
-        if (built) return built[1];
+        const built = BUILT_HERE(name).Match(text);
+        if (built) return built.Group(1);
 
-        const said = DECLARED_JSDOC(name).exec(text);
-        if (said) return said[1];
+        const said = DECLARED_JSDOC(name).Match(text);
+        if (said) return said.Group(1);
 
-        const from = FIELD_FROM_PARAM(name).exec(text);
+        const from = FIELD_FROM_PARAM(name).Match(text);
         if (!from) return "";
 
-        const param = DECLARED_JSDOC(from[1]).exec(text);
-        return param ? param[1] : "";
+        const param = DECLARED_JSDOC(from.Group(1)).Match(text);
+        return param ? param.Group(1) : "";
     }
 
     /*

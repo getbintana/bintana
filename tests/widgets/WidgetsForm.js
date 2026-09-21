@@ -9228,6 +9228,22 @@ function Main() {
         eq("globalThis is not part of the language", typeof globalThis, "undefined");
         check("but a namespace still publishes", typeof Gadgets === "object");
 
+        /*
+         * **`RegExp` went the way `setInterval` did, and the engine did not.**
+         * `/x/g` is syntax and still produces one -- which is why taking the
+         * name was once judged to buy little -- so what goes is
+         * `new RegExp(p, flags)`, and a pattern built from strings has one
+         * spelling now: `Regex`, which captured the constructor before the name
+         * went. The prototype's own `constructor` goes with it, or
+         * `(/(?:)/).constructor` would hand it straight back; what that reads
+         * falls through to `Object`, which cannot make a pattern.
+         */
+        eq("RegExp is not part of the language",
+           typeof this.globalNamed("RegExp"), "undefined");
+        eq("and a literal cannot hand the constructor back",
+           (/(?:)/).constructor, Object);
+        check("while a literal is still a regular expression", /x/.test("x"));
+
         /* Never used by any Bintana code, so never installed. */
         for (const absent of ["Promise", "Proxy", "Reflect", "WeakRef", "Symbol",
                               "ArrayBuffer", "Uint8Array", "atob", "performance"]) {
@@ -9235,7 +9251,7 @@ function Main() {
         }
 
         /* What the language is made of, and what it would be absurd without. */
-        for (const kept of ["JSON", "RegExp", "Regex", "Dictionary", "Map", "Set", "Date", "Math",
+        for (const kept of ["JSON", "Regex", "Dictionary", "Map", "Set", "Date", "Math",
                             "Namespace", "Widget", "Settings", "Timer", "Logger"]) {
             check(`${kept} is there`, typeof this.globalNamed(kept) !== "undefined");
         }
@@ -9345,7 +9361,7 @@ function Main() {
         case "atob":        return typeof atob        === "undefined" ? undefined : atob;
         case "performance": return typeof performance === "undefined" ? undefined : performance;
         case "JSON":        return JSON;
-        case "RegExp":      return RegExp;
+        case "RegExp":      return typeof RegExp === "undefined" ? undefined : RegExp;
         case "Regex":       return Regex;
         case "Dictionary":  return Dictionary;
         case "Map":         return Map;
@@ -9569,6 +9585,24 @@ function Main() {
         check("Multiline", new Regex("^b", { Multiline: true }).IsMatch("a\nb"));
         check("Singleline", new Regex("a.b", { Singleline: true }).IsMatch("a\nb"));
         check("a dot is not a newline by default", !new Regex("a.b").IsMatch("a\nb"));
+
+        /*
+         * **`Unicode` is `u`**, and the reason it is a word here and not merely
+         * nicer: without it `\p{L}` **compiles** and matches the literal text
+         * `p{L}` -- a wrong answer rather than a missing one -- and `.` counts
+         * UTF-16 units, so an emoji is two matches.
+         */
+        const emoji = "🙂";
+        eq("a dot counts UTF-16 units by default", new Regex(".").Matches(emoji).length, 2);
+        eq("and a code point with Unicode",
+           new Regex(".", { Unicode: true }).Matches(emoji).length, 1);
+        check("\\p{L} needs the flag, and then matches a letter",
+              new Regex("\\p{L}", { Unicode: true }).IsMatch("ñ"));
+        check("without it, \\p{L} is the literal text",
+              !new Regex("\\p{L}").IsMatch("ñ") &&
+               new Regex("\\p{L}").IsMatch("p{L}"));
+        eq("an empty match advances by a code point under Unicode",
+           new Regex("x*", { Unicode: true }).Matches(emoji).length, 2);
 
         /* Free spacing: the reason the IDE's long patterns had to be read as
          * one unbroken string. */

@@ -114,13 +114,18 @@ That is also the pattern for anything else that needs a captured reference.
 
 **Still there**, because the language is made of them: `JSON` (a `.form` is
 JSON), `Map`/`Set`, `Date`, `Math`, generators, and every ordinary object and
-array. `RegExp` is there too — renaming a control is a regular expression — but
-what a project writes is [`Regex`](#regex), and `RegExp` is the engine under it.
+array.
 
-`RegExp` is the last one that is installed but not written: `/x/g` is syntax and
-produces one whatever the global is called, so taking the name would remove
-`new RegExp(…)` and nothing else. `Object.keys` had no syntax to fall back on,
-which is why emptying `Object` meant something and this does not.
+**`RegExp` is not.** `/x/g` is syntax and still produces one whatever the global
+is called — `.test`, `.exec` and `String.replace` all work, and a fixed pattern
+is well written as a literal — so what was removed is `new RegExp(p, flags)`: the
+engine reached from a string. A pattern built at run time has one spelling, and
+it is [`Regex`](#regex), which captured the constructor before the name went.
+`RegExp.prototype.constructor` went with it, or `(/(?:)/).constructor` would hand
+the function straight back; that read now falls through to `Object`, which cannot
+make a pattern. The `u` that `new RegExp(p, "u")` used to reach is
+`{ Unicode: true }` here, and the other flag only this word has is
+`{ IgnorePatternWhitespace: true }`.
 
 **One that was installed and is now refused: `String.prototype.localeCompare`.**
 There is no `Intl` — QuickJS is built without ICU — so a comparison with no
@@ -281,6 +286,7 @@ because it names the idiom somebody arrives with:
 | `setTimeout(fn, ms)` | `Timer.After(ms, fn)` |
 | `setInterval(fn, ms)` | `Timer.Every(ms, fn)` |
 | `new RegExp(p, "gi")` | `new Regex(p, { IgnoreCase: true })` |
+| `new RegExp(p, "u")` | `new Regex(p, { Unicode: true })` |
 | `[...s.matchAll(re)]` | `re.Matches(s)` |
 | `s.replace(/x/g, y)` | `re.Replace(s, y)` |
 | `Object.keys(o)` | `Dictionary.Keys(o)` |
@@ -1850,12 +1856,20 @@ Regex.Escape(name)                       // a text as a literal in a pattern
 | `IgnoreCase` | |
 | `Multiline` | `^` and `$` match at every line |
 | `Singleline` | `.` matches a newline too |
+| `Unicode` | the `u` JavaScript spells as a flag: `.` counts **code points** — one match for an emoji, not two — and `\p{L}` is the Unicode property it looks like. Without it `\p{L}` **compiles and matches the literal text `p{L}`** |
 | `IgnorePatternWhitespace` | .NET's free spacing: whitespace and `# comments` are dropped **from the pattern**, so a long one can be laid out over several lines. Inside a character class a space is still a space |
 
 An option nobody has is refused by name, the way a `Field`'s is.
 
-**`RegExp` is the engine and this is the word.** Three things change, and each was
-a bug this repository has actually written:
+**The engine is the language's own `RegExp`, and this is the only way to it from
+a string.** The name `RegExp` is gone — `close_hatches` takes it, and
+`RegExp.prototype.constructor` with it so `(/(?:)/).constructor` cannot hand it
+back — but `/x/g` is syntax and still makes one, so a pattern that is *fixed* is
+well written as a literal and a pattern **built at run time** has exactly one
+spelling. `rad.js` captured the constructor before the name went, which is what
+`Regex` is built on, and `Unicode` is where the `u` that only
+`new RegExp(p, "u")` used to reach lives now. Three more things change, and each
+was a bug this repository has actually written:
 
 **No `lastIndex`.** A `/g` pattern remembers where it stopped, so one object
 answers `test` true and then false depending on who asked before it, and every

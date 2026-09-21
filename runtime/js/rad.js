@@ -454,15 +454,22 @@ GLOBAL.Dictionary = {
 /* ------------------------------------------------------------------------
  * Regex -- a pattern, with nothing remembered between questions.
  *
- * `RegExp` is the engine; this is the language's word for it, the same bargain
- * Timer makes with setInterval.  Three things change, and each one is a bug
- * this repository has actually written:
+ * The engine is the engine's own `RegExp` -- `RegularExpression` below is the
+ * capture that outlives the name, since `close_hatches` takes `RegExp` out of
+ * the language -- and this is the only door to it.  `/x/g` is still syntax and
+ * still produces one, which is why the name could go at all; what it buys is
+ * that a pattern **built from strings** has one spelling and it is this one,
+ * with the options below and not a flags string.  The same bargain Timer makes
+ * with setInterval, completed.
+ *
+ * Three things change, and each one is a bug this repository has actually
+ * written:
  *
  *   No lastIndex.  A `/g` pattern remembers where it stopped, so one object
  *   answers `test` true and then false depending on who asked before, and every
  *   walk over matches is a `while ((m = re.exec(text)))` that only holds
- *   together while nothing else touches the pattern.  `Matches()` hands back the
- *   whole list at once and nothing here remembers anything, which is why the
+ *   together while nothing else touches the pattern.  `Matches()` hands back
+ *   the whole list at once and nothing here remembers anything, which is why the
  *   same Regex can be a `const` at the top of a file -- the shape the IDE keeps
  *   rebuilding inside its loops to stay out of trouble.
  *
@@ -470,10 +477,13 @@ GLOBAL.Dictionary = {
  *   not a flag any more.
  *
  *   Options are words: `{ IgnoreCase: true }` rather than `"gi"`, in the options
- *   object Exec, Dialog and SourceEditor.Search already take.  One of them is not
- *   a flag at all -- `IgnorePatternWhitespace` is .NET's free spacing, which
+ *   object Exec, Dialog and SourceEditor.Search already take.  Two of them are
+ *   not a plain flag.  `IgnorePatternWhitespace` is .NET's free spacing, which
  *   lets a pattern be laid out over several lines with comments in it, and is
  *   the only reason the long ones in the IDE have to be read as one string.
+ *   `Unicode` is `u`: without it `\p{L}` does not fail, it matches the literal
+ *   text `p{L}`, and `.` matches one half of an emoji -- the two answers worth
+ *   having a word for.
  *
  * And `Escape`, which is the one that was missing rather than merely awkward:
  * the IDE builds patterns out of control names -- `\bBtnSave\b` -- and a control
@@ -488,11 +498,16 @@ GLOBAL.Dictionary = {
  * decides to call itself, this file still needs the thing underneath. */
 const RegularExpression = RegExp;
 
-/* The options that are a flag, and what each one is. */
+/* The options that are a flag, and what each one is.  `Unicode` is the `u` the
+ * language's own `new RegExp(p, "u")` used to be the only way to reach -- and
+ * it matters here beyond `.` on an astral character: `\p{L}` **compiles** in a
+ * pattern without it and matches the literal text `p{L}`, which is a wrong
+ * answer rather than a missing one. */
 const REGEX_FLAGS = {
     IgnoreCase: "i",
     Multiline:  "m",
     Singleline: "s",
+    Unicode:    "u",
 };
 
 /* ...and the one that is not: RegExp has no free-spacing mode, so it is done
@@ -672,6 +687,7 @@ GLOBAL.Regex = class Regex {
 
     #re;
     #pattern;
+    #unicode;
 
     constructor(pattern, options) {
         const written = String(pattern);
@@ -687,6 +703,7 @@ GLOBAL.Regex = class Regex {
             throw new SyntaxError(`Regex: ${e.message} -- in ${JSON.stringify(written)}`);
         }
         this.#pattern = written;
+        this.#unicode = flags.includes("u");
     }
 
     /* What it was built from, for whoever has to report it. */
@@ -713,8 +730,19 @@ GLOBAL.Regex = class Regex {
             out.push(new Match(found));
 
             /* A pattern that can match nothing ("x*") would otherwise never
-             * move -- the same step bta_editor.c takes when it counts. */
-            if (found[0] === "") this.#re.lastIndex++;
+             * move -- the same step bta_editor.c takes when it counts.  Under
+             * `u` it moves by a **code point**, which is what
+             * `Symbol.matchAll` does: stepping onto a low surrogate would ask
+             * the next match to start in the middle of a character. */
+            if (found[0] === "") {
+                const at = this.#re.lastIndex;
+                const hi = subject.charCodeAt(at);
+                const lo = subject.charCodeAt(at + 1);
+
+                this.#re.lastIndex += this.#unicode &&
+                                      hi >= 0xD800 && hi <= 0xDBFF &&
+                                      lo >= 0xDC00 && lo <= 0xDFFF ? 2 : 1;
+            }
         }
         return out;
     }

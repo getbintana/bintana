@@ -190,8 +190,8 @@ Ide.Runner = class Runner {
         while (from > 0 && TOKEN.test(row[from - 1])) from--;
         while (to + 1 < row.length && TOKEN.test(row[to + 1])) to++;
 
-        const found = new RegExp(SOURCE_LINK).exec(row.slice(from, to + 1));
-        return found ? found[0] : "";
+        const found = new Regex(SOURCE_LINK).Match(row.slice(from, to + 1));
+        return found ? found.Value : "";
     }
 
     /*
@@ -248,10 +248,8 @@ Ide.Runner = class Runner {
         const said  = text.lastIndexOf("Bintana error:");
         const where = said >= 0 ? text.slice(said) : text;
 
-        const scan = new RegExp(`(${SOURCE_LINK})`, "g");
-        let m;
-        while ((m = scan.exec(where)) !== null) {
-            const at = /^(.*):(\d+)$/.exec(m[1]);
+        for (const m of new Regex(`(${SOURCE_LINK})`).Matches(where)) {
+            const at = /^(.*):(\d+)$/.exec(m.Group(1));
             if (!at) continue;
             const path = at[1];
             /* Ours, or the runtime's? Only the first question has an answer the
