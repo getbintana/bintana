@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A feed as RSS 2.0: lower-case elements, RFC 822 dates, the version as an
+     attribute, and the items repeated with no wrapper.  The atom:link is the
+     one thing here that has a prefix. -->
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Bintana — cambios</title>
+    <link>https://example.invalid/bintana</link>
+    <description>Lo que se movió en el árbol, contado corto.</description>
+    <language>es-AR</language>
+    <lastBuildDate>Mon, 21 Sep 2026 18:04:00 -0300</lastBuildDate>
+    <atom:link href="https://example.invalid/bintana/feed.xml"
+               rel="self" type="application/rss+xml"/>
+    <item>
+      <title>Xml entra al runtime</title>
+      <link>https://example.invalid/bintana/xml</link>
+      <guid isPermaLink="false">bintana-xml-1</guid>
+      <pubDate>Mon, 21 Sep 2026 18:04:00 -0300</pubDate>
+      <description><![CDATA[Un DOM, File.LoadXml y el mapeo de Record: XML al lado de JSON, con atributos y namespaces donde un objeto no los tiene.]]></description>
+    </item>
+    <item>
+      <title>SaveXml escribe sin romper</title>
+      <link>https://example.invalid/bintana/record-xml</link>
+      <guid isPermaLink="false">bintana-xml-2</guid>
+      <pubDate>Sun, 20 Sep 2026 09:30:00 -0300</pubDate>
+      <description>Escribe en el documento y no toca lo que no modela: los comentarios y las extensiones quedan donde estaban.</description>
+      <enclosure url="https://example.invalid/audio/xml.mp3"
+                 length="183000" type="audio/mpeg"/>
+    </item>
+    <item>
+      <title>Un momento con zona</title>
+      <link>https://example.invalid/bintana/datetime-z</link>
+      <guid isPermaLink="false">bintana-xml-3</guid>
+      <pubDate>Sat, 19 Sep 2026 12:00:00 -0300</pubDate>
+      <description>Field.DateTime acepta Z y ±HH:MM, y guarda el texto tal como estaba escrito.</description>
+    </item>
+  </channel>
+</rss>

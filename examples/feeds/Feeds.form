@@ -1,0 +1,126 @@
+{
+  "format": "bintana-form/1",
+  "class": "Feeds",
+  "properties": {
+    "AcceptFiles": true,
+    "Height": 560,
+    "Icon": "application-rss+xml-symbolic",
+    "Text": "Feeds",
+    "Width": 780
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblFeed",
+      "properties": {
+        "Ellipsize": true,
+        "Height": 34,
+        "Style": "title-3",
+        "VAlign": "Start",
+        "Width": 620,
+        "X": 12,
+        "Y": 10
+      },
+      "design": {
+        "Text": "Bintana — cambios"
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnOpen",
+      "properties": {
+        "HAlign": "End",
+        "Height": 34,
+        "Icon": "document-open-symbolic",
+        "Text": "Open…",
+        "Tooltip": "An RSS or Atom file",
+        "VAlign": "Start",
+        "Width": 120,
+        "X": 648,
+        "Y": 10
+      }
+    },
+    {
+      "type": "RowList",
+      "name": "List",
+      "properties": {
+        "Height": 440,
+        "MinHeight": 140,
+        "MinWidth": 240,
+        "Style": "frame",
+        "VAlign": "Fill",
+        "Width": 360,
+        "X": 12,
+        "Y": 54
+      },
+      "item": {
+        "of": "FeedItem",
+        "count": 4
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblStatus",
+      "properties": {
+        "Ellipsize": true,
+        "Height": 32,
+        "Style": "dim-label",
+        "VAlign": "End",
+        "Width": 360,
+        "X": 12,
+        "Y": 516
+      },
+      "design": {
+        "Text": "3 items · 2 things the shape does not model"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblWhen",
+      "properties": {
+        "Ellipsize": true,
+        "HAlign": "Fill",
+        "Height": 24,
+        "Style": "dim-label",
+        "VAlign": "Start",
+        "Width": 384,
+        "X": 384,
+        "Y": 54
+      },
+      "design": {
+        "Text": "Mon, 21 Sep 2026 18:04:00 -0300"
+      }
+    },
+    {
+      "type": "TextEditor",
+      "name": "Summary",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 400,
+        "MinHeight": 120,
+        "ReadOnly": true,
+        "VAlign": "Fill",
+        "Width": 384,
+        "Wrap": true,
+        "X": 384,
+        "Y": 86
+      }
+    },
+    {
+      "type": "LinkButton",
+      "name": "LnkItem",
+      "properties": {
+        "Ellipsize": true,
+        "HAlign": "Fill",
+        "Height": 30,
+        "VAlign": "End",
+        "Width": 384,
+        "X": 384,
+        "Y": 518
+      },
+      "design": {
+        "Text": "https://example.invalid/bintana/xml"
+      }
+    }
+  ]
+}

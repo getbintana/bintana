@@ -1,0 +1,11 @@
+{
+  "name": "Feeds",
+  "startup": "Feeds",
+  "sources": [
+    "FeedItem.js",
+    "Feed.js",
+    "Feeds.js"
+  ],
+  "version": "1.0",
+  "description": "RSS and Atom on a window: one list over two shapes, and what the shape could not take counted rather than hidden"
+}

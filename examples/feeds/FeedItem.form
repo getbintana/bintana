@@ -1,0 +1,40 @@
+{
+  "format": "bintana-form/1",
+  "class": "FeedItem",
+  "properties": {
+    "Arrangement": "Horizontal",
+    "HAlign": "Fill",
+    "Height": 30,
+    "Margin": 5,
+    "Spacing": 10,
+    "VAlign": "Fill",
+    "Width": 340
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblTitle",
+      "properties": {
+        "Ellipsize": true,
+        "HExpand": true,
+        "Width": 180
+      },
+      "design": {
+        "Text": "Xml entra al runtime"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblWhen",
+      "properties": {
+        "Alignment": "Right",
+        "Ellipsize": true,
+        "Style": "dim-label",
+        "Width": 130
+      },
+      "design": {
+        "Text": "21 sep 18:04"
+      }
+    }
+  ]
+}
