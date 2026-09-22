@@ -2247,7 +2247,8 @@ const fresh = p.ToXml(true);                           // a new element, every f
 ```
 
 **`ToXml` is `Serialize` and `LoadXml` is `Load`.** `ToXml()` omits what is at
-its starting value and `ToXml(true)` writes every field — which a schema whose
+its starting value — **a `key` excepted: identity is written either way, and so
+is `SaveXml`** — and `ToXml(true)` writes every field, which a schema whose
 elements are not `minOccurs="0"` needs. `LoadXml` reads a document or element,
 checks the root's name and namespace (a **list**, because an official schema and
 the files it describes can disagree about the URI and both be right), takes what
@@ -2260,11 +2261,16 @@ so in `Problems`.
 writes into the element it is handed and touches **only** what the shape models:
 unknown elements, foreign namespaces and comments stay exactly where they were,
 a missing modelled element is inserted in declaration order among the modelled
-ones, a field back at its starting value has its element removed, and a list is
-reconciled — matched by the record's `key` (a key at its starting value is a new
-item) or by position, unmatched elements removed, new ones added, the array's
-order the element order afterwards. Writing into the wrong root is a **throw**
-and not a `Problems` line: the lenient road is `LoadXml`.
+ones, a field back at its starting value has its element removed — **except a
+`key`, which is identity and is written whatever it holds**, so the project
+summary task keeps its `UID 0` and an element it matches keeps the children the
+shape does not model — and a list is reconciled, matched by the record's `key`
+(key text for key text, a key at its starting value included, because there is
+no INSERT here to assign one) or by position, unmatched elements removed, new
+ones added, the array's order the element order afterwards. `Table`'s *an int
+key of 0 is a row never saved* is the database's rule and does not reach XML.
+Writing into the wrong root is a **throw** and not a `Problems` line: the
+lenient road is `LoadXml`.
 
 **What is not modelled is reported, never silently written.** There is no bag of
 raw nodes: re-emitting an unknown element at the end of an `xsd:sequence` is a

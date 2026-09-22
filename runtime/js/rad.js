@@ -984,9 +984,11 @@ const FIELD_KINDS = {
  * the same way, and a JSON file of customers has an id too.  More than one
  * marked is a compound key, in declaration order.
  *
- * And one thing falls out of it rather than needing to be said: an `int` key at
- * **0** -- what the kind starts from -- is a row that has not been saved yet, so
- * nothing needs a flag to tell an INSERT from an UPDATE.
+ * And one thing falls out of it rather than needing to be said: for `Table`, an
+ * `int` key at **0** -- what the kind starts from -- is a row that has not been
+ * saved yet, so nothing needs a flag to tell an INSERT from an UPDATE.  XML is
+ * the other medium and does not share it: there is no INSERT to assign a key,
+ * so `<UID>0</UID>` is an item with key 0 and `#xmlKeyText` matches it.
  */
 const FIELD_COMMON = ["as", "def", "key"];
 
@@ -2263,7 +2265,8 @@ GLOBAL.Record = class Record {
     /*
      * A new element, the way `Serialize` is a new object: what differs from
      * the field's start, or every field with `true` -- which is what a schema
-     * with elements that are not `minOccurs="0"` needs.
+     * with elements that are not `minOccurs="0"` needs.  A `key` is written
+     * either way: identity is not a value the file may drop.
      */
     ToXml(all) {
         const shape = Record.#xmlOf(this.constructor);
@@ -2288,7 +2291,9 @@ GLOBAL.Record = class Record {
             const field = fields[name];
             const v     = rec.#d[name];
 
-            if (!all && Record.#atDefault(v, field)) continue;
+            /* A key is written either way -- see `#xmlKeyed`. */
+            if (!all && !Record.#xmlKeyed(field) &&
+                Record.#atDefault(v, field)) continue;
 
             if (field.attribute) {
                 el.SetAttr(Record.#xmlFieldName(ctor, name, field),
@@ -2334,7 +2339,8 @@ GLOBAL.Record = class Record {
      * -- exactly where it was.
      *
      * A field at what it starts from is removed rather than written, which is
-     * `ToXml`'s omission with a tree to keep in step.  A list is reconciled:
+     * `ToXml`'s omission with a tree to keep in step -- except a `key`, which
+     * is identity and is written whatever it holds.  A list is reconciled:
      * an item is matched to an element by the record's `key` (declared as
      * ever) where there is one and by position where there is not, unmatched
      * elements are taken out, new ones are added, and the order of the list is
@@ -2364,7 +2370,8 @@ GLOBAL.Record = class Record {
         for (const name in fields) {
             const field = fields[name];
             const v     = rec.#d[name];
-            const dflt  = Record.#atDefault(v, field);
+            const dflt  = !Record.#xmlKeyed(field) &&
+                          Record.#atDefault(v, field);
 
             if (field.attribute) {
                 const key = Record.#xmlFieldName(ctor, name, field);
@@ -2458,14 +2465,12 @@ GLOBAL.Record = class Record {
             if (key) {
                 const want = Record.#xmlKeyText(item, key);
 
-                if (want !== null) {
-                    for (let i = 0; i < existing.length; i++) {
-                        if (used[i]) continue;
-                        const got = key.attribute
-                                  ? existing[i].Attr(key.name)
-                                  : (existing[i].Find(key.name) || {}).Text;
-                        if (got === want) { found = existing[i]; used[i] = true; break; }
-                    }
+                for (let i = 0; i < existing.length; i++) {
+                    if (used[i]) continue;
+                    const got = key.attribute
+                              ? existing[i].Attr(key.name)
+                              : (existing[i].Find(key.name) || {}).Text;
+                    if (got === want) { found = existing[i]; used[i] = true; break; }
                 }
             } else {
                 const i = used.indexOf(false);
@@ -2507,9 +2512,20 @@ GLOBAL.Record = class Record {
         }
     }
 
-    /* The field a list is keyed by, if the item shape declares one: `Table`
-     * reads `key` the same way, and a key at what it starts from means a row
-     * that has never been saved -- so it never matches an element. */
+    /* A scalar `key` is identity and not a value: both XML verbs write it
+     * whatever it holds, because `<UID>0</UID>` is a UID.  `Table`'s "an int
+     * key of 0 is a row never saved" is a statement about having an INSERT
+     * that assigns one, and XML has none -- which is also why a key at its
+     * default still matches its element. */
+    static #xmlKeyed(field) {
+        return field.key === true &&
+               field.kind !== "record" && field.kind !== "list";
+    }
+
+    /* The field a list is keyed by, if the item shape declares one: the same
+     * `key` `Table` reads.  Unlike `Table`, a key at what it starts from is
+     * matched like any other value -- an XML key of 0 is an item whose key is
+     * 0 -- because no INSERT here assigns one. */
     static #xmlKeyName(ctor) {
         const fields = Record.#fieldsOf(ctor);
         const naming = Record.#namingOf(ctor);
@@ -2529,8 +2545,11 @@ GLOBAL.Record = class Record {
         return null;
     }
 
+    /* The key as the file spells it -- never `null`, because the default is a
+     * value like any other here: `<UID>0</UID>` is a key of 0.  `Table`'s "an
+     * int key at 0 is a row never saved" is about having an INSERT to assign
+     * one, and `#xmlSave` is what writes it. */
     static #xmlKeyText(item, key) {
-        if (Record.#atDefault(item.#d[key.prop], key.field)) return null;
         return Record.#xmlText(key.field, item.#d[key.prop]);
     }
 };

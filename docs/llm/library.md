@@ -1103,15 +1103,22 @@ const fresh = p.ToXml(true);                              // a new element, ever
 ```
 
 - **`ToXml` is `Serialize`, `LoadXml` is `Load`.** `ToXml()` omits what is at
-  its starting value exactly as `Serialize` does, and `ToXml(true)` writes
-  every field — which is what a schema whose elements are not
-  `minOccurs="0"` needs.
+  its starting value exactly as `Serialize` does — **a `key` excepted, which is
+  identity and is written either way** — and `ToXml(true)` writes every field,
+  which is what a schema whose elements are not `minOccurs="0"` needs.
 - **`SaveXml` is the lossless road.** It writes into the element it is handed
   and touches only what the shape models: unknown elements, foreign namespaces
   and comments stay exactly where they were, and a list is reconciled — an item
-  is matched by the record's `key` (a key at its start is a new item) or by
-  position, unmatched elements are removed, new ones are added, and the order
-  of the array is the order of the elements afterwards.
+  is matched by the record's `key` — key text for key text, a key at its start
+  included, because `<UID>0</UID>` is a UID and there is no INSERT here to
+  assign one — or by position, unmatched elements are removed, new ones are
+  added, and the order of the array is the order of the elements afterwards.
+- **A `key` is written whatever it holds, by both verbs** — `ToXml()` writes it
+  and `SaveXml` writes it where any other field back at its starting value has
+  its element removed — so the project summary task keeps its `UID 0`, and the
+  unmodelled children of the element it matched stay with it. `Table`'s *an int
+  key of 0 is a row never saved* (`Save` inserts) is the database's rule and
+  does not reach XML.
 - **`namespace` is a string or a list**: the first is written, all are accepted
   on read, and a root in neither is a `Problems` line rather than a refusal.
   An official schema and the files it describes can disagree about the URI and

@@ -157,19 +157,27 @@ const fresh = p.ToXml(true);                           // a new element, every f
 ```
 
 **`toJSON` is `ToXml`, `Load` is `LoadXml`, and `SaveXml` is the pair neither
-is.** `ToXml()` writes what differs from the field's start, `ToXml(true)` writes
-everything; `SaveXml(element)` writes into the tree it was handed and touches
-**only** what the shape models, which is the road an interchange file needs:
+is.** `ToXml()` writes what differs from the field's start — a `key` excepted,
+which is identity and is written either way, as `SaveXml` writes it —
+`ToXml(true)` writes everything; `SaveXml(element)` writes into the tree it was
+handed and touches **only** what the shape models, which is the road an
+interchange file needs:
 
 - unknown elements, foreign namespaces and comments stay exactly where they
   were, and a missing modelled element is inserted in declaration order among
   the modelled ones;
 - a list is reconciled — an item is matched to an element by the record's
-  `key` (a key at its starting value is a new item) or by position, unmatched
-  elements are removed, new ones are added, and the array's order is the
-  element order afterwards;
-- a field at its starting value has its element removed rather than written,
-  and an empty list takes its wrapper with it when nothing else is in it.
+  `key` — key text for key text, a key at its starting value included, because
+  `<UID>0</UID>` is a UID — or by position, unmatched elements are removed, new
+  ones are added, and the array's order is the element order afterwards;
+- a field at its starting value has its element removed rather than written —
+  **except a `key`, which is identity and is written whatever it holds**, so
+  the summary task's `UID 0` survives and the unmodelled children of the
+  element it matched stay with it — and an empty list takes its wrapper with it
+  when nothing else is in it.
+
+`Table`'s *an int key of 0 is a row never saved* (`Save` inserts) is the
+database's rule and does not reach XML: there is no INSERT here to assign one.
 
 **LoadXml is lenient, like `Load`**, and reports what the shape does not model:
 an unknown element or attribute goes on `Problems` with its path, a bad value

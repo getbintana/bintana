@@ -3348,8 +3348,22 @@ what the shape models, which is what an interchange round trip needs. Unknown
 elements and attributes are reported in `Problems` and never silently written
 back -- an unknown node re-emitted at the end of an `xsd:sequence` is a wrong
 answer that looks right, so the lossless road is `SaveXml` and not a raw-node
-bag. Three things are worth knowing before touching either half:
+bag. Five things are worth knowing before touching either half:
 
+- **A `key` is identity and is written whatever it holds, so an XML key at its
+  default still matches.** `#xmlKeyText` used to answer `null` for a key equal
+  to the field's default -- `Table`'s *an int key of 0 is a row never saved*,
+  borrowed into a medium with no INSERT -- and the summary task of every MSPDI
+  file (`<UID>0</UID>`) was replaced by a fresh element, taking its unmodelled
+  children (`CreateDate`, `ActualStart`) and the `UID` element itself with it.
+  Matching compares key text always and both verbs write a scalar `key` even at
+  its default -- `#xmlKeyed`, asked by `#xmlWrite` and `#xmlSave`, because two
+  answers to *is this a key* is the asymmetry that is found later as a bug --
+  while every *other* field back at its start still has its element removed.
+  Nothing failed because no test had a key at a default -- `XmlRecord`'s were 1,
+  2 and 3 -- and the regression now puts `UID 0` beside a `Milestone: false` and
+  asserts `ToXml()` writes it too, so the non-key half of the rule is held.
+  `Table` keeps its rule: the two media do not share it.
 - **A node from another tree is copied in, and `Add` answers the copy.** So
   `el.Add(Xml.Element("X")).Text = "…"` is right, and writing to the element you
   built is writing to a node that is not in the tree -- `Record`'s

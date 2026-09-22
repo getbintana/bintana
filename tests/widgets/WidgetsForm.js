@@ -9328,6 +9328,9 @@ function Main() {
         check("ToXml() leaves the defaults out",
               !Xml.Stringify(new XmlTask({ UID: 1 }).ToXml())
                   .includes("Milestone"));
+        check("...but a key is never one of them, in either verb",
+              Xml.Stringify(new XmlTask({ Name: "x" }).ToXml())
+                 .includes("<UID>0</UID>"));
 
         /* LoadXml is lenient, and says what it could not take. */
         const partial = XmlProject.LoadXml(Xml.Parse(
@@ -9414,6 +9417,51 @@ function Main() {
         eq("the namespace survived",
            XmlProject.LoadXml(doc).Problems.filter(
                (x) => x.includes("namespace")).length, 0);
+
+        /*
+         * A key at what it starts from is still a key: `<UID>0</UID>` is the
+         * project summary task and a real UID, so the element it matches keeps
+         * everything the shape does not model.  `Table`'s "an int key of 0 is
+         * a row never saved" is the database's, because there an INSERT
+         * assigns one; XML has no INSERT, and an unmatched element would take
+         * its unmodelled children with it.
+         */
+        const summaryDoc = Xml.Parse(
+            `<Project xmlns="${MSPDI_NS[0]}">
+               <Tasks>
+                 <Task><UID>0</UID><Name>Summary</Name>
+                   <Milestone>false</Milestone>
+                   <CreateDate>2026-01-01T08:00:00</CreateDate></Task>
+               </Tasks>
+             </Project>`);
+        const summary = XmlProject.LoadXml(summaryDoc);
+
+        eq("a key of 0 is read as a key", summary.Tasks[0].UID, 0);
+        summary.Tasks[0].Name = "Resumen";
+        summary.SaveXml(summaryDoc);
+
+        const kept = Xml.Stringify(summaryDoc);
+        check("a key at its default still matches its element",
+              kept.includes("<UID>0</UID>"), kept);
+        check("...so what the shape does not model stays",
+              kept.includes("<CreateDate>2026-01-01T08:00:00</CreateDate>"),
+              kept);
+        check("...and the edit landed", kept.includes("<Name>Resumen</Name>"),
+              kept);
+        check("while a default that is not the key is still removed",
+              !kept.includes("<Milestone>"), kept);
+
+        /* And an item with no element to match is written with its key as
+         * well: identity is written whatever it holds. */
+        const freshDoc = Xml.Parse(
+            `<Project xmlns="${MSPDI_NS[0]}"><Tasks/></Project>`);
+        const freshList = XmlProject.LoadXml(freshDoc);
+
+        freshList.Tasks.push(new XmlTask({ Name: "Nueva" }));
+        freshList.SaveXml(freshDoc);
+        check("a new item writes its key even at its default",
+              Xml.Stringify(freshDoc).includes("<UID>0</UID>"),
+              Xml.Stringify(freshDoc));
 
         /* A list emptied takes its items -- and its wrapper -- with it. */
         live.Tasks = [];
