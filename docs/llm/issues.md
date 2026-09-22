@@ -183,7 +183,6 @@ needed and what it did instead.
 | A control laid onto a page — `Print` sends what a `Draw` paints, so a form with real widgets on it still has no path to paper except drawing it by hand | [controls.md](controls.md#drawingarea) |
 | A `Fixed` container that does not stretch a `Fill` child when it itself grows — a reusable component that wants to fill its cell has to change its `Arrangement` | [ISSUE-fixed-fill-child](../issues/ISSUE-fixed-fill-child.md) |
 | No `Locale` inside a `Task`, so a worker cannot order names — the sort has to come back to the main thread, which is what the worker was for | [ISSUE-worker-locale-order](../issues/ISSUE-worker-locale-order.md) |
-| No `Allocated` event and no `WhenLaidOut`, so anything that needs a real rectangle retries on a timer | [ISSUE-laid-out](../issues/ISSUE-laid-out.md) |
 | `PropertyNames`/`EventNames`/`TextProperties` need an instance, so asking what a class has means building one | [ISSUE-class-introspection](../issues/ISSUE-class-introspection.md) |
 | `Locale.Read` has no `Locale.Write`, so the `.po` format is written by hand in the IDE | [ISSUE-locale-write](../issues/ISSUE-locale-write.md) |
 

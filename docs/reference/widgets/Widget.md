@@ -92,6 +92,7 @@ in the section.
 
 | | | |
 |---|---|---|
+| `Allocated(box)` | the first real rectangle, once | [where it is and how big](#where-it-is-and-how-big) |
 | `DblClick(x, y, button, ctrl, shift)` | two clicks | [the mouse and the keyboard](#the-mouse-and-the-keyboard) |
 | `DragBegin()` | this control started travelling | [drag and drop](#drag-and-drop) |
 | `DragEnd()` | the drag finished, however it did | [drag and drop](#drag-and-drop) |
@@ -152,10 +153,29 @@ long sentence in it is a label wider than 80, and that is GTK doing what it was
 asked. To keep something inside a width, the control needs a way to give text up
 — `Ellipsize`, `Wrap`, a `Scroller` around it.
 
-**Nothing has a size before a frame.** `Bounds()` and a `Width` that was never
-declared answer `0` until the window has been laid out once, so a measurement
-taken in `Form_Open` measures nothing. `Timer.After(0, …)` is where that belongs:
-it runs after the layout, and every measured thing in this tree does it that way.
+**Nothing has a size before a frame** — and `Form_Open` runs before the window is
+even presented, so a measurement taken there measures nothing. **`Allocated` is
+the moment to wait for**: raised once, when GTK has really given the control a
+rectangle, carrying the same box `Bounds()` answers. A control on a hidden page
+hears it when the page is shown, because that is when it gets one.
+
+```js
+/* The room exists now: fit the picture to it. */
+this.Pic.On("Allocated", (box) => this.fitTo(box));
+```
+
+**An already-allocated control never hears it.** The moment has gone, and
+`Timer.After(0, …)` is not a way to get it back — it is *one* frame and not *the*
+frame, and how many a window needs before it is mapped and laid out is the
+machine's business, which is why the five places that used to do this each
+carried their own retry count. For a control that may have one already, ask
+first:
+
+```js
+const box = this.Pic.Bounds();
+if (box.Width > 0) this.fitTo(box);
+else               this.Pic.On("Allocated", (b) => this.fitTo(b));
+```
 
 ## How it is placed
 

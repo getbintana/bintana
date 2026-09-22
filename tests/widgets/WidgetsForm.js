@@ -393,7 +393,7 @@ const TESTS = [
      * the note below. */
     "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator", "TableView", "TableTree", "TableOnDemand", "TableSort", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
-    "Expand", "Spacing", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "EditorMarks", "Search", "Tree", "TreeIcons", "TreeExpand",
+    "Expand", "Spacing", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
     "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "Record", "Nested", "Database", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "Date", "Calendar", "Drawing", "Metrics", "Library", "Plugin", "ListMulti", "MenuState",
@@ -446,6 +446,10 @@ const NEEDS = {
     Scrollbars:     ["Exec"],
     /* Every claim it makes is an allocation, which is a frame away. */
     FillScroll:     ["Exec"],
+    /* The rectangle arrives once the window is up, which is not now: Form_Open
+     * runs before it is presented, so asking for this alone has to bring the
+     * tail that still runs when the allocation lands. */
+    Allocated:      ["Exec"],
     /* Its last block measures a child shown and then hidden, a frame each. */
     DragDrop:       ["Exec"],
     /* Its second window has to be shown, closed and shown again. */
@@ -1331,6 +1335,91 @@ class WidgetsForm extends Form {
         this.Ed.ShowMarks = false;
         eq("ShowMarks round-trip", this.Ed.ShowMarks, false);
         this.Ed.Clear();
+    }
+
+    /* --- Allocated: the first real rectangle -------------------------------
+     *
+     * `Allocated(box)` is the moment GTK has given a control a rectangle --
+     * the fact `Form_Open` is reliably too early for, and what `Timer.After(0)`
+     * only guesses at with a frame count.  The hook is the toplevel surface's
+     * `layout`, and it fires **once**: a control that was already on screen has
+     * missed the moment, which is why the callback half here is installed on
+     * one control and the named half on another.
+     */
+    testAllocated() {
+        /* The `On` half, on a control added in code. */
+        const probe = new Button();
+        probe.Text = "alloc";
+        probe.Name = "AllocOn";
+        probe.Resize(90, 30);
+        this.allocCount = 0;
+        probe.On("Allocated", (box) => {
+            this.allocBox   = box;
+            this.allocCount = this.allocCount + 1;
+        });
+        this.Fixed1.Add(probe);
+
+        /* And the named half: a method on the form, armed when the control is
+         * bound -- which is why the name goes on before `Add`. */
+        const named = new Button();
+        named.Text = "named";
+        named.Name = "AllocNamed";
+        named.Resize(90, 30);
+        this.Fixed1.Add(named);
+
+        /* A control on a page nobody is looking at: no rectangle until the
+         * page is shown, which is the half a bounded retry gets wrong in both
+         * directions. */
+        const pages = new Switcher();
+        pages.Name = "AllocPages";
+        pages.Resize(220, 140);
+        this.Fixed1.Add(pages);
+
+        const first  = new Panel();
+        const second = new Panel();
+        pages.Append(first, "One");
+        pages.Append(second, "Two");
+
+        const hidden = new Button();
+        hidden.Text = "hidden";
+        hidden.Resize(90, 30);
+        second.Add(hidden);
+        hidden.On("Allocated", (box) => { this.allocHidden = box; });
+        pages.Current = 0;
+
+        until("a control hears its first rectangle", () => !!this.allocBox, () => {
+            const box = probe.Bounds();
+            eq("with the box Bounds() answers",
+               `${this.allocBox.Width}x${this.allocBox.Height}`,
+               `${box.Width}x${box.Height}`);
+            eq("once", this.allocCount, 1);
+            eq("and the named half heard it too",
+               `${this.allocNamedWidth}x${this.allocNamedHeight}`,
+               `${box.Width}x${box.Height}`);
+            check("a hidden page's control has no rectangle",
+                  hidden.Bounds().Width === 0, hidden.Bounds().Width);
+
+            /* Already allocated is a moment gone: installing another handler
+             * must not raise it a second time. */
+            probe.On("Allocated", () => { this.allocCount = this.allocCount + 1; });
+
+            pages.Current = 1;
+            until("and it hears its own rectangle when the page is shown",
+                  () => !!this.allocHidden, () => {
+                eq("with its real size", this.allocHidden.Width, hidden.Bounds().Width);
+                eq("and nothing was raised twice", this.allocCount, 1);
+
+                probe.Delete();
+                named.Delete();
+                pages.Delete();
+            });
+        });
+    }
+
+    /* The named half of the same fact: `AllocNamed_Allocated` on the form. */
+    AllocNamed_Allocated(box) {
+        this.allocNamedWidth  = box.Width;
+        this.allocNamedHeight = box.Height;
     }
 
     /* --- a form that refuses to close --------------------------------------
@@ -10652,6 +10741,29 @@ function Main() {
                 check("which is the new one and not the one before it",
                       w2 > w || h2 > h, `${w2}x${h2} after ${w}x${h}`);
                 win.Close();
+            });
+        });
+
+        /*
+         * **And a form can hear `Allocated` without losing `Resize`.** Both
+         * ride the same surface and carry the same widget as data, so an unhook
+         * that went by data would take the window's whole geometry with it --
+         * the window would report its first rectangle and then go deaf.
+         */
+        const both = new SizedForm();
+        both.Text = "both";
+        both.Resize(240, 160);
+        this.allocatedForm = false;
+        both.On("Allocated", () => { this.allocatedForm = true; });
+        both.Show();
+
+        until("a window hears Allocated too", () => this.allocatedForm, () => {
+            const seen = both.seen.length;
+            both.Resize(300, 180);
+
+            until("and still hears Resize after it",
+                  () => both.seen.length > seen, () => {
+                both.Close();
             });
         });
     }

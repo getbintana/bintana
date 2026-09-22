@@ -87,24 +87,33 @@ class ImageForm extends Form {
      * `Scroller` the picture is the size its zoom makes it, so "fit" is not a
      * mode the widget has -- it is a number this works out and sets.
      *
-     * **And it asks again until there is a room**, rather than once on the next
-     * frame. A window on its way up has no allocation, and a fit computed then
-     * divides by nothing and leaves the zoom at zero -- which inside a
-     * `Scroller` is a picture drawn at nothing at all, an empty window that
-     * looks like a file that failed to load. Waiting for the thing instead of
-     * for a frame is the same rule the selection chrome learnt.
+     * **And the room is waited for, not timed.** A window on its way up has no
+     * allocation, and a fit computed then divides by nothing and leaves the
+     * zoom at zero -- which inside a `Scroller` is a picture drawn at nothing
+     * at all, an empty window that looks like a file that failed to load.
+     * `Allocated` is the frame GTK gives the view a rectangle, where this used
+     * to be a bounded retry that could give up before the window was up. The
+     * image's own size is `Picture`'s to report and may not have decoded yet,
+     * so that half still asks again.
      */
     fit(tries = 25) {
-        Timer.After(20, () => {
-            const room = this.View.Bounds();
-            const w = this.Shown.SourceWidth, h = this.Shown.SourceHeight;
+        const room = this.View.Bounds();
+        if (room.Width && room.Height) {
+            this.fitImage(tries);
+            return;
+        }
+        this.View.On("Allocated", () => this.fitImage(tries));
+    }
 
-            if (!room.Width || !room.Height || !w || !h) {
-                if (tries > 0) this.fit(tries - 1);
-                return;
-            }
-            this.zoomTo(Math.min(room.Width / w, room.Height / h));
-        });
+    fitImage(tries) {
+        const room = this.View.Bounds();
+        const w = this.Shown.SourceWidth, h = this.Shown.SourceHeight;
+
+        if (!w || !h) {
+            if (tries > 0) Timer.After(20, () => this.fitImage(tries - 1));
+            return;
+        }
+        this.zoomTo(Math.min(room.Width / w, room.Height / h));
     }
 
     zoomTo(zoom) {

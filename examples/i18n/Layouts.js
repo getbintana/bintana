@@ -42,17 +42,12 @@ class Layouts extends Form {
             : Locale.Text("No catalogue: showing the msgids");
 
         /* Waited for, not timed: nothing is allocated until the main loop has
-         * run, and how many frames that takes is GTK's business. */
-        this.whenLaidOut(() => this.measure(), 100);
+         * run, and `Allocated` is the frame GTK gives the window one. */
+        this.On("Allocated", () => this.measure());
 
         /* The anchor case opens beside it: the two halves of the question are
          * better read together than one after the other. */
         Timer.After(120, () => this.BtnAnchors_Click());
-    }
-
-    whenLaidOut(then, tries) {
-        if (this.BtnFixedItem.Bounds().Width > 1 || tries <= 0) { then(); return; }
-        Timer.After(20, () => this.whenLaidOut(then, tries - 1));
     }
 
     BtnMeasure_Click() { this.measure(); }

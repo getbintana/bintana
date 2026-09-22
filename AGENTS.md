@@ -3049,6 +3049,35 @@ person who wrote it either.
   by the time the event is raised. The pair is still packed into `(w<<16)|h` and
   repeats dropped, since `layout` is emitted for relayouts that are not resizes;
   any future geometry event needs the same coalescing.
+- **Per widget there is no signal either, and every obvious hook fires too
+  early.** `Allocated(box)` -- the first real rectangle, once -- rides the same
+  `GdkSurface::layout`, because the alternatives were measured and are all
+  either too early or too expensive: `GtkWidget` has **no `width`/`height`
+  property** (`g_object_class_find_property(class, "width")` is NULL and
+  `notify::width` never fires -- GTK4's allocation is read with
+  `gtk_widget_get_width`, and there is no `size-allocate` to hook); `realize`
+  and `map` both arrive with the allocation still 0x0, which is the too-early
+  moment `Form_Open` already has; and a tick callback works but is a poll that
+  **keeps the frame clock running** -- 33 frames in 700 ms measured, which a
+  hidden page can hold forever. The event fires **once per widget**, and a
+  control already on screen has missed it, so the shape is check `Bounds()`
+  first and listen otherwise; a control on a hidden page hears it when the page
+  is shown. The hook is armed at `bta_widget_bind` (the named handler, asked of
+  the form) and in `w_on` (the `On` half), and it holds no `JSValue` and no
+  job -- disconnecting its own handler and dropping the watch is the whole
+  cleanup, so it is not a tenth async job shape.
+  **And the hook is two handlers on one surface, told apart by function *and*
+  data, which cost three rounds of red tests to get right.** A form's `Resize`
+  rides the same `GdkSurface::layout` with the same `BtaWidget` as its
+  `Allocated`; and every control of a window shares that surface. So:
+  connecting guarded by *data* found the form's own `Resize` and never connected
+  `Allocated` at all; guarded by *function alone* found the next widget's
+  handler and only the first control to realize ever heard one; and the cleanup
+  that goes by data (`bta_widget_forget`, right when a whole surface is being
+  replaced) unhooked the form's `Resize` along with it, so a window reported its
+  first rectangle and went deaf to its own size. `tests/widgets`'s `Allocated`
+  and `WindowState` hold all three: a form hears `Allocated` **and** still hears
+  `Resize` after it, and two controls on one window both hear theirs.
 - **A name freed by deleting a control is not free: the code still answers for
   it.** Deleting leaves the handlers in the `.js` on purpose, and `uniqueName`
   counted up over the live controls only -- so `Button1` deleted and a button

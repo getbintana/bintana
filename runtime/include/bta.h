@@ -187,6 +187,15 @@ struct BtaWidget {
     bool       is_default;
     bool       is_cancel;
 
+    /*
+     * `Allocated`: the connection is made (or its realize handler is armed),
+     * and the event has been raised -- once, the first time GTK gave this
+     * widget a rectangle.  Kept here and not as JS state because the hook is a
+     * GTK signal per widget; see `bta_widget_when_allocated` in bta_widget.c.
+     */
+    bool       alloc_watching;
+    bool       alloc_fired;
+
     /* The application's own classes, as written in Style: the normal way to
      * dress a control, and the reason the three below are the exception.
      * A space separated list of CSS class names, NULL for none. */
@@ -657,6 +666,10 @@ void       bta_widget_bind_tree(BtaWidget *w, JSValueConst form);
  * not the widget itself (a GtkTextBuffer, a selection model) has to say so, or
  * its handlers outlive the widget and fire into freed memory. */
 void       bta_widget_watch(BtaWidget *w, gpointer object);
+/* The other half, for a connection that has done its job: unhook it and let the
+ * object go. A window that is realized again gets a *new* surface each time, and
+ * a watch kept past its surface is one dead object per opening. */
+void       bta_widget_forget(BtaWidget *w, gpointer object);
 /* The inverse of adopting: drop the parent's JS reference to a child. Every way
  * of removing one has to call it, or the wrappers pile up. */
 void       bta_widget_release(JSContext *ctx, JSValueConst parent_val,

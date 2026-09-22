@@ -3469,6 +3469,26 @@ are declared, not a window with the grip taken off.
 It fires when the window is first given a size too, which is where `Bounds()`
 first means anything.
 
+**A control has `Allocated` for its own version of that fact, and it is what
+anything inside the window should wait for.** `Resize` is the form's;
+`Allocated(box)` is raised **once** for a control that asked, the first time GTK
+gave it a real rectangle, with the same box `Bounds()` answers. A fit-to-the-room,
+a dialog centred on its monitor, a translated label measured against its panel:
+`Form_Open` runs before the window is presented, so all of it measures zero
+there. That is what the five bounded retries this replaced -- `Ide.Chrome`,
+`ImageForm`, `examples/viewer` and both `examples/i18n` -- were for, each with its
+own number of tries.
+
+It fires **once**, so a control that was already on screen has missed it: the
+moment is gone and `Bounds()` is the answer for that case. A control on a hidden
+page hears it when the page is shown, because that is when it gets one. Nothing
+polls and nothing is held: the hook is the window's own layout pass, the same
+`GdkSurface::layout` `Resize` rides. GTK4 offers nothing more exact per widget --
+it has no `size-allocate`, `GtkWidget` has no `width`/`height` property to notify
+on (measured: `notify::width` never fires), and `realize` and `map` both arrive
+while the allocation is still 0x0, which is the too-early moment the event exists
+to replace.
+
 GTK4 has no `size-allocate` on a window, and the obvious substitute is a trap.
 `notify::default-width` fires when GTK updates the size the window would
 *remember*, which is **before** the window has been laid out at the new one: an

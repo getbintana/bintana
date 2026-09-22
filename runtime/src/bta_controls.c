@@ -631,8 +631,7 @@ static void on_form_realized(GtkWidget *win, gpointer user_data)
      */
     for (guint i = 0; w->watched && i < w->watched->len; i++) {
         if (GDK_IS_SURFACE(w->watched->pdata[i])) {
-            g_signal_handlers_disconnect_by_data(w->watched->pdata[i], w);
-            g_ptr_array_remove_index_fast(w->watched, i);
+            bta_widget_forget(w, w->watched->pdata[i]);
             break;
         }
     }
@@ -5793,7 +5792,7 @@ void bta_core_register(void)
          * in text_props_of() necessary rather than convenient.
          */
         BTA_CLASS_FULL("Widget", NULL, NULL, base, nbase, false,
-                       widget_options, "Tooltip", "MouseDown,MouseUp,MouseMove,MouseEnter,MouseLeave,MouseWheel,DblClick,KeyPress,KeyRelease,GotFocus,LostFocus,Drop,FileDrop,DragEnter,DragOver,DragLeave,DragBegin,DragEnd"),
+                       widget_options, "Tooltip", "MouseDown,MouseUp,MouseMove,MouseEnter,MouseLeave,MouseWheel,DblClick,KeyPress,KeyRelease,GotFocus,LostFocus,Drop,FileDrop,DragEnter,DragOver,DragLeave,DragBegin,DragEnd,Allocated"),
         BTA_CLASS_ENUM("Container", "Widget",  NULL, container_props, false, container_options, NULL),
         BTA_CLASS_BARE("Control",   "Widget",    NULL,                            false, NULL),
         /* A window's title is prose; so is the caption of everything below. */

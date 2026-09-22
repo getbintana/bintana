@@ -30,11 +30,11 @@ const BOUNDS_COLOR  = "#77767b";
 
 const HANDLE = 8;               // side of the little resize square
 
-/* How the chrome waits for a layout it did not cause: every SETTLE_MS, up to
- * SETTLE_TRIES times -- half a second in all, which is far longer than a frame
- * and far shorter than a person waits before deciding nothing happened. */
-const SETTLE_MS    = 30;
-const SETTLE_TRIES = 16;
+/* How long after an edit the chrome looks again: the layout a changed text
+ * causes lands on a later frame, and no event reports a rectangle that moved
+ * rather than one that appeared.  One pass, not a retry -- waiting for an
+ * allocation is `Allocated`'s, and that one is exact. */
+const SETTLE_MS = 30;
 
 /* Which edges each handle moves: [left, top, right, bottom].  Read by the
  * designer as well -- a drag on a handle is what the table is for. */
@@ -124,43 +124,36 @@ Ide.Chrome = class Chrome {
     }
 
     /*
-     * The chrome is placed with OriginIn, which reads GTK's layout.  A control
-     * just created, just moved or rebuilt by an undo has no layout yet, and
-     * OriginIn answers (0,0): the outline would be drawn in the corner, the
-     * right size but in the wrong place.
+     * Re-draws it now, once more after the layout an edit causes, and again the
+     * moment the control has a rectangle.
      *
-     * So a second pass is always scheduled for the next frame.  The first keeps
-     * the response immediate when nothing moved; the second fixes it when it
-     * did.
+     * The outline is drawn from the control's *allocation*, and a control that
+     * has just been created has none -- so the ring collapses to nothing while
+     * the status bar and the property grid, which read the selection itself,
+     * both say it is selected. Pasting is where that showed: the control
+     * arrives in a clipboard callback and the bounded retry this used to be
+     * could give up before GTK got round to it, after which nothing ever drew
+     * it again. **`Allocated` is the frame GTK gives it one**, so that half is
+     * exact and has no count or interval to guess at; a control that is 0x0
+     * because it sits on a hidden page simply waits, which is better than a
+     * retry that gave up on it for good.
+     *
+     * The single delayed pass is the other half and stays: a text that just
+     * changed makes a rectangle move a frame later, and nothing raises an event
+     * for a size that changed rather than appeared.
      */
-    /*
-     * Re-draws it now, and again once the layout has landed.
-     *
-     * **The second pass used to be a single 30 ms guess, and a guess is what it
-     * cannot be.** The outline is drawn from the control's *allocation*, and a
-     * control that has just been created has none -- so the ring collapses to
-     * nothing while the status bar and the property grid, which read the
-     * selection itself, both say it is selected. Pasting is where that shows:
-     * the control arrives in a clipboard callback and GTK gets round to
-     * allocating it after the 30 ms had passed, so nothing ever drew it again
-     * and the canvas looked like the paste had not selected anything.
-     *
-     * So it asks again until the selection has a size, which is the same
-     * *wait for the thing, not for a number of frames* the test suite is built
-     * on. Bounded, because a control really can be 0x0 -- a page of a notebook
-     * that is not on screen has no allocation and never will while it is
-     * hidden, and spinning on that would be a timer that never stops.
-     */
-    position(tries = SETTLE_TRIES) {
+    position() {
         this.layout();
 
         if (this.timer) this.timer.Stop();
         this.timer = Timer.After(SETTLE_MS, () => {
             this.timer = null;
             this.layout();
-
-            if (tries > 0 && this.unsized()) this.position(tries - 1);
         });
+
+        const primary = this.designer.selected;
+        if (primary && this.unsized())
+            primary.On("Allocated", () => this.layout());
     }
 
     /* Whether what is selected has no size yet -- which is not the same as

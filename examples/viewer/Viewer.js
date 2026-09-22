@@ -134,22 +134,28 @@ class Viewer extends Form {
     /* --- fit, which is a zoom ---------------------------------------------- */
 
     /*
-     * Asked again until there is a room to fit into: a window on its way up has
-     * no allocation, and a fit worked out then divides by nothing. Inside a
-     * `Scroller` a zoom of zero is a picture drawn at nothing at all, so getting
-     * this wrong looks like a file that failed to load.
+     * The room is waited for, not timed: `Allocated` is the frame GTK gives the
+     * view a rectangle, where this used to be a bounded retry. The image's own
+     * size may not have decoded yet, so that half still asks again.
      */
     fit(tries = 25) {
-        Timer.After(20, () => {
-            const room = this.View.Bounds();
-            const w = this.Shown.SourceWidth, h = this.Shown.SourceHeight;
+        const room = this.View.Bounds();
+        if (room.Width && room.Height) {
+            this.fitImage(tries);
+            return;
+        }
+        this.View.On("Allocated", () => this.fitImage(tries));
+    }
 
-            if (!room.Width || !room.Height || !w || !h) {
-                if (tries > 0) this.fit(tries - 1);
-                return;
-            }
-            this.zoomTo(Math.min(room.Width / w, room.Height / h));
-        });
+    fitImage(tries) {
+        const room = this.View.Bounds();
+        const w = this.Shown.SourceWidth, h = this.Shown.SourceHeight;
+
+        if (!w || !h) {
+            if (tries > 0) Timer.After(20, () => this.fitImage(tries - 1));
+            return;
+        }
+        this.zoomTo(Math.min(room.Width / w, room.Height / h));
     }
 
     zoomTo(zoom) {

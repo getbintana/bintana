@@ -32,17 +32,12 @@ class Anchors extends Form {
 
     Form_Open() {
         /*
-         * Waited for rather than timed. Nothing is allocated until the main loop
-         * has run, and how many frames that takes is GTK's business -- a fixed
-         * delay measured a window of zeroes the first time this ran in Spanish,
-         * where the longer strings simply took one frame more.
+         * Waited for rather than timed.  Nothing is allocated until the main
+         * loop has run, and `Allocated` is the frame GTK gives the window a
+         * rectangle -- so there is no number of frames to guess at, which is
+         * what the retry this used to be was guessing.
          */
-        this.whenLaidOut(() => this.measure(), 100);
-    }
-
-    whenLaidOut(then, tries) {
-        if (this.Bounds().Width > 1 || tries <= 0) { then(); return; }
-        Timer.After(20, () => this.whenLaidOut(then, tries - 1));
+        this.On("Allocated", () => this.measure());
     }
 
     BtnMeasureA_Click() { this.measure(); }

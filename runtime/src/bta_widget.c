@@ -80,6 +80,11 @@ bool bta_to_int(JSContext *ctx, JSValueConst val, const char *name, int32_t *out
     return true;
 }
 
+/* Below, with Bounds: the `Allocated` event a control can ask to hear. */
+static void bta_widget_when_allocated(BtaWidget *w);
+/* Below, with bta_widget_watch: drop a watch that unhooked itself. */
+static void widget_unwatch(BtaWidget *w, gpointer object);
+
 void bta_widget_bind(BtaWidget *w, JSValueConst form, const char *name)
 {
     if (!w)
@@ -92,6 +97,16 @@ void bta_widget_bind(BtaWidget *w, JSValueConst form, const char *name)
     char *copy = g_strdup(name);
     g_free(w->name);
     w->name = copy;
+
+    /*
+     * A control whose form answers `Allocated` hears it the first time GTK
+     * gives it a rectangle.  Asked here because bind is the one moment every
+     * named control passes through, and the `.form` loader binds before the
+     * control is attached -- so this is always too early for an allocation,
+     * which is the case the event exists for.  See bta_widget_when_allocated.
+     */
+    if (bta_has_handler(w, "Allocated"))
+        bta_widget_when_allocated(w);
 }
 
 /*
@@ -2608,6 +2623,32 @@ static JSValue w_event_names(JSContext *ctx, JSValueConst this_val,
 }
 
 /*
+ * The rectangle GTK really gave the widget, in `ref`'s coordinates -- one
+ * builder, so `Bounds()` and the `Allocated` event cannot disagree about the
+ * numbers they are telling.  `ref` is the window for `Bounds()` with no
+ * argument, the named container for `Bounds(container)`, and the root when the
+ * event carries the box.
+ */
+static JSValue widget_box(JSContext *ctx, BtaWidget *w, GtkWidget *ref)
+{
+    graphene_point_t out = GRAPHENE_POINT_INIT(0.0f, 0.0f);
+
+    /* Unrelated widgets have no common point; (0,0) is the honest answer, and
+     * the size below is still real. */
+    if (ref && !gtk_widget_compute_point(w->gtk, ref,
+                                         &GRAPHENE_POINT_INIT(0.0f, 0.0f), &out)) {
+        out.x = out.y = 0.0f;
+    }
+
+    JSValue o = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, o, "X",      JS_NewInt32(ctx, (int)out.x));
+    JS_SetPropertyStr(ctx, o, "Y",      JS_NewInt32(ctx, (int)out.y));
+    JS_SetPropertyStr(ctx, o, "Width",  JS_NewInt32(ctx, gtk_widget_get_width(w->gtk)));
+    JS_SetPropertyStr(ctx, o, "Height", JS_NewInt32(ctx, gtk_widget_get_height(w->gtk)));
+    return o;
+}
+
+/*
  * What GTK actually gave the widget, as opposed to what it was asked for.
  *
  * Width and Height report the *request*, which is a minimum -- so a control
@@ -2636,21 +2677,125 @@ static JSValue w_bounds(JSContext *ctx, JSValueConst this_val,
         ref = root ? GTK_WIDGET(root) : NULL;
     }
 
-    graphene_point_t out = GRAPHENE_POINT_INIT(0.0f, 0.0f);
+    return widget_box(ctx, w, ref);
+}
 
-    /* Unrelated widgets have no common point; (0,0) is the honest answer, and
-     * the size below is still real. */
-    if (ref && !gtk_widget_compute_point(w->gtk, ref,
-                                         &GRAPHENE_POINT_INIT(0.0f, 0.0f), &out)) {
-        out.x = out.y = 0.0f;
+/*
+ * ------------------------------------------------------------- Allocated
+ *
+ * `Allocated(box)` -- the first time GTK has given the widget a rectangle.
+ * The box is `Bounds()`'s, in the window's coordinates.
+ *
+ * **The hook is the toplevel surface's `layout`, and it was measured rather
+ * than picked.**  GTK4 has no `size-allocate` signal, and there is no
+ * `GtkWidget:width` property to notify on either -- measured,
+ * `g_object_class_find_property(class, "width")` is NULL and `notify::width`
+ * never fires.  `realize` and `map` do, and both arrive with the allocation
+ * still 0x0: the same too-early moment `Form_Open` has, which is what the
+ * event exists to replace.  A tick callback would work and is the wrong tool:
+ * measured at 33 frames in 700 ms, it keeps the frame clock running for a
+ * widget that may never be shown -- which a hidden page can do forever.  The
+ * surface `layout` fires with the allocation already made, on the frame it was
+ * made on, and it is the signal the form's own `Resize` already rides.
+ *
+ * **Once, and never for a widget that already had one.**  A control that has
+ * been on screen for an hour has missed the moment, the same bargain `map` and
+ * `realize` make; a caller that has to work in either case asks `Bounds()`
+ * first.  A widget on a hidden page hears it when the page is shown, because
+ * that is when it gets one.  **Nothing is held from C** -- no JSValue, no job,
+ * no timer -- so this is not the tenth async job shape AGENTS.md warns about:
+ * the handler lives where every other handler lives, and unhooking it (by
+ * function **and** data -- see `alloc_connect`) is the whole cleanup.
+ */
+static gboolean on_alloc_layout(GdkSurface *surface, int cw, int ch, gpointer data)
+{
+    BtaWidget *w = data;
+
+    if (w->alloc_fired || !w->gtk)
+        return G_SOURCE_CONTINUE;
+
+    if (gtk_widget_get_width(w->gtk) <= 0 || gtk_widget_get_height(w->gtk) <= 0)
+        return G_SOURCE_CONTINUE;
+
+    w->alloc_fired = true;
+
+    GtkRoot *root = gtk_widget_get_root(w->gtk);
+    JSValue  box  = widget_box(w->ctx, w, root ? GTK_WIDGET(root) : NULL);
+
+    bta_emit(w, "Allocated", 1, &box);
+    JS_FreeValue(w->ctx, box);
+
+    /*
+     * Done: unhook **this** handler and let the surface go with it.  Not
+     * `bta_widget_forget`, which goes by data -- a form's `Resize` shares this
+     * surface and this widget as data, and taking it down here would make the
+     * window stop reporting its own size the moment it reported its first one.
+     */
+    g_signal_handlers_disconnect_by_func(surface, G_CALLBACK(on_alloc_layout), w);
+    widget_unwatch(w, surface);
+    return G_SOURCE_CONTINUE;
+}
+
+/* The surface a widget's allocation will be reported on.  A widget not in a
+ * window yet has none, and the hook then is its own `realize` -- which is where
+ * the window's surface appears, and which GTK emits for a child added to a
+ * window that is already up (measured). */
+static void alloc_connect(BtaWidget *w)
+{
+    GtkRoot    *root = gtk_widget_get_root(w->gtk);
+    GdkSurface *s;
+
+    if (!root)
+        return;
+
+    s = gtk_native_get_surface(GTK_NATIVE(root));
+    /*
+     * Asked by **function and data**, and each half is load-bearing: data alone
+     * matches the form's own `Resize` -- same surface, same widget -- so the
+     * form never got an `Allocated` at all; the function alone matches the
+     * *next* widget's handler, so only the first control to realize ever heard
+     * one.  Two handlers, one data, two different questions.
+     */
+    if (!s || g_signal_handler_find(s, G_SIGNAL_MATCH_FUNC | G_SIGNAL_MATCH_DATA,
+                                    0, 0, NULL,
+                                    (gpointer) on_alloc_layout, w) != 0)
+        return;
+
+    /* A window closed and shown again is realized again with a **new** surface,
+     * so the one before it would sit in the watch list until the widget died,
+     * one dead surface per opening -- the same cleanup on_form_realized does.
+     * **A different one**: for a form the surface found here is the current one,
+     * put there moments ago by that same realize, and forgetting it goes by data
+     * -- which would unhook the form's `Resize` along with everything else. */
+    for (guint i = 0; w->watched && i < w->watched->len; i++) {
+        if (GDK_IS_SURFACE(w->watched->pdata[i]) && w->watched->pdata[i] != s) {
+            bta_widget_forget(w, w->watched->pdata[i]);
+            break;
+        }
     }
 
-    JSValue o = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, o, "X",      JS_NewInt32(ctx, (int)out.x));
-    JS_SetPropertyStr(ctx, o, "Y",      JS_NewInt32(ctx, (int)out.y));
-    JS_SetPropertyStr(ctx, o, "Width",  JS_NewInt32(ctx, gtk_widget_get_width(w->gtk)));
-    JS_SetPropertyStr(ctx, o, "Height", JS_NewInt32(ctx, gtk_widget_get_height(w->gtk)));
-    return o;
+    g_signal_connect(s, "layout", G_CALLBACK(on_alloc_layout), w);
+    bta_widget_watch(w, s);
+}
+
+static void on_alloc_realize(GtkWidget *widget, gpointer data)
+{
+    BtaWidget *w = data;
+    if (!w->alloc_fired)
+        alloc_connect(w);
+}
+
+static void bta_widget_when_allocated(BtaWidget *w)
+{
+    if (!w || !w->gtk || w->alloc_fired || w->alloc_watching)
+        return;
+
+    w->alloc_watching = true;
+
+    if (gtk_widget_get_realized(w->gtk))
+        alloc_connect(w);
+    else
+        g_signal_connect(w->gtk, "realize", G_CALLBACK(on_alloc_realize), w);
 }
 
 /*
@@ -2732,6 +2877,7 @@ static JSValue w_on(JSContext *ctx, JSValueConst this_val,
 
     JSValueConst fn       = argc > 1 ? argv[1] : JS_UNDEFINED;
     bool         clearing = JS_IsUndefined(fn) || JS_IsNull(fn);
+    bool         allocating = !clearing && g_str_equal(event, "Allocated");
 
     if (!clearing && !JS_IsFunction(ctx, fn)) {
         JS_FreeCString(ctx, event);
@@ -2807,6 +2953,12 @@ static JSValue w_on(JSContext *ctx, JSValueConst this_val,
     }
 
     JS_FreeCString(ctx, event);
+
+    /* A handler installed here is a control that may be on screen already, and
+     * an event that has already happened is not one to raise later. */
+    if (allocating)
+        bta_widget_when_allocated(w);
+
     /* The control back, so a control built in code can be dressed in one
      * expression: `panel.Add(new Button().On("Click", fn))`. */
     return JS_DupValue(ctx, this_val);
@@ -4858,6 +5010,43 @@ void bta_widget_watch(BtaWidget *w, gpointer object)
 
     /* Held, so the pointer is certainly still valid when we unhook it. */
     g_ptr_array_add(w->watched, g_object_ref(object));
+}
+
+void bta_widget_forget(BtaWidget *w, gpointer object)
+{
+    if (!w || !w->watched)
+        return;
+
+    for (guint i = 0; i < w->watched->len; i++) {
+        if (w->watched->pdata[i] == object) {
+            g_signal_handlers_disconnect_by_data(object, w);
+            g_ptr_array_remove_index_fast(w->watched, i);
+            return;
+        }
+    }
+}
+
+/*
+ * The other half, for a connection that unhooked itself: drop the reference
+ * without touching any handler.
+ *
+ * `bta_widget_forget` disconnects **by data**, which is right when a whole
+ * surface is being replaced and wrong when one of several handlers on it is
+ * done -- and a `Form` has two: `Resize` and `Allocated` ride the same surface
+ * with the same widget as data, so forgetting the second by data takes the
+ * first with it and the window goes deaf to its own geometry.
+ */
+static void widget_unwatch(BtaWidget *w, gpointer object)
+{
+    if (!w || !w->watched)
+        return;
+
+    for (guint i = 0; i < w->watched->len; i++) {
+        if (w->watched->pdata[i] == object) {
+            g_ptr_array_remove_index_fast(w->watched, i);
+            return;
+        }
+    }
 }
 
 static void widget_disconnect_all(BtaWidget *w)
