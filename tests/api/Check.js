@@ -87,6 +87,8 @@ const GLOBAL_TABLES = {
     screen_props:    "Screen",
     env_props:       "Environment",
     conn_props:      "Database and Table",
+    xml_doc_props:   "Xml",
+    xml_node_props:  "Xml",
     http_props:      "Http",
     http_client_props: "Http",
     multipart_props: "Http",
@@ -127,6 +129,7 @@ const NOT_PUBLISHED = ["widget_notes"];
 const GLOBAL_VARS = {
     file:        "File",
     dir:         "Directory",
+    xml:         "Xml",
     application: "Application",
     env:         "Environment",
     dialog:      "Dialog",
@@ -729,6 +732,7 @@ const GLOBAL_PAGES = {
     Lock:        ["lock_props"],
     Text:        ["text_props"],
     Time:        ["time_props"],
+    Xml:         ["xml_doc_props", "xml_node_props", "xml"],
 };
 
 function checkGlobalPages(root, problems) {

@@ -187,6 +187,8 @@ Most text needs none of this: see
 | `Save(path, text)` | **atomically** — a temporary beside it, renamed over, so a failed write leaves the old file intact |
 | `LoadJson(path)` | parsed, and the error names the file |
 | `SaveJson(path, value)` | one canonical shape: indented by two, one trailing newline |
+| `LoadXml(path)` | as an XML document — see [Xml](#xml) — and the error names the file |
+| `SaveXml(path, node)` | the canonical XML shape, atomically, honouring neither locale nor encoding guesses |
 | `Exists(path)`, `IsDir(path)` | |
 | `Delete(path)` | a file, or an **empty** directory. Throws on failure |
 | `Trash(path)` | to the desktop's trash, whole for a folder. Throws where there is no trash |
@@ -231,6 +233,79 @@ be stopped from inside its own callback.
 
 Text is UTF-8 throughout, which is why `Copy` exists: `Save(to, Load(from))` is
 right for source and destroys a PNG.
+
+## Xml
+
+```js
+const doc = File.LoadXml("plan.xml");        // or Xml.Parse(text)
+const tasks = doc.Root.Find("Tasks").FindAll("Task");
+
+tasks[0].Find("Name").Text = "Analyse";      // or .SetAttr("Kind", "x")
+File.SaveXml("plan.xml", doc);
+```
+
+**XML is a document and JSON is a value, and that is the whole design.** JSON
+and JavaScript are the same model — object, list, scalar — which is why a
+`Record` survives it; XML has attributes, order (an MSPDI schema is an
+`xsd:sequence`), namespaces and mixed content, and none of those has anywhere to
+go in a plain object. So `Xml.Parse` answers a tree, and a
+[`Record`](#record-and-field) maps onto an element by **declaring** it —
+[`static Xml`](#a-record-over-xml), beside what `Table` declares for a row.
+
+| | |
+|---|---|
+| `Xml.Parse(text)` | → the document, or a `SyntaxError` naming línea and columna |
+| `Xml.ParseBytes(bytes)` | the same, letting the declaration pick the encoding — what [`File.LoadXml`](#file) uses |
+| `Xml.Stringify(node)` | the canonical text: declaration, indented by two, one trailing newline. A detached element is written with a document of its own |
+| `Xml.Element(name)` | → a detached element, for building |
+| `Xml.Available` | whether this build has libxml2; the verbs refuse with a sentence when it does not |
+
+A **document** answers `Root` (→ element, or `null`). An **element** answers:
+
+| | |
+|---|---|
+| `Name`, `Prefix`, `Namespace` | the local name, the prefix, the URI — `""` when there is none |
+| `Text` | all the character data under it; assigning replaces the children |
+| `Attr(name)` | the value, `""` for one that is present and empty, `null` for one that is not |
+| `SetAttr(name, value)`, `RemoveAttr(name)` | both as text |
+| `AttributeNames()` | the local names, sorted as the file had them |
+| `Children` | its element children, in order |
+| `Find(name)`, `FindAll(name)` | direct children by local name — `Find` answers `null` |
+| `Add(child)`, `Insert(index, child)`, `Remove()` | see below |
+| `Parent` | `null` for a root |
+| `Copy()` | a detached subtree |
+| `SetNamespace(uri, [prefix])` | puts the element in a namespace, reusing a declaration already in reach |
+
+**A node from another tree is copied in, and `Add` answers the node that is in
+*this* tree.** Within one tree `Add` moves, as a DOM does; across trees it
+copies, because moving a subtree would have to repoint every wrapper under it
+and one that was not repointed is a dangling pointer. The idiom that always
+reads right is `const el = parent.Add(Xml.Element("Task"))`. `Remove()` takes the
+node out for good and its wrapper stops answering — `Copy()` first to keep it.
+A broken name (`Add("a b")`) throws rather than writing a document no parser can
+read.
+
+**The canonical shape is `SaveJson`'s decision repeated.** A parsed document is
+rebuilt with a declaration, indentation of two and a trailing newline, so
+whitespace between elements and the order of attributes are not preserved —
+both are insignificant to XML, and one shape is worth more than byte fidelity.
+Comments are nodes in the tree and are written back where they were. An element
+that is present but empty is *not* something the canonical writer can promise:
+an empty text is what a field starts from, which is the record mapper's
+business and not the DOM's.
+
+**Nothing here reads a DTD, an entity, a schema or the network.** Parsed with
+`XML_PARSE_NONET` and without entity substitution or DTD loading, so an external
+entity, a billion laughs and a 2 GB text node are negatives rather than
+configurations to get right; a document that is not well formed throws with its
+position, and nothing goes to stderr. HTML is not XML and is not this.
+`XPath`, XSD validation and a streaming reader are deliberately absent — each is
+a language or a contract of its own, and `docs/plans/xml-plan.md` names the
+trigger that would bring each back.
+
+XML is **optional at build time**, like `Database.Sqlite`: without libxml2,
+`Xml.Available` is `false` and every verb refuses naming the package. The class
+is installed in a worker too, so a big file can be parsed off the main thread.
 
 ## Directory
 
@@ -945,6 +1020,7 @@ class Customer extends Record {
 | `Field.Bool(def, o)` | `true`/`false`, and SQL's `0`/`1` | |
 | `Field.Date(o)` | `"YYYY-MM-DD"`, checked against the calendar | `required` |
 | `Field.Time(o)` | `"HH:MM"` or `"HH:MM:SS"` — see [Time](#time) | `required`, `min`, `max` (compared as text, which is what the fixed shape is for) |
+| `Field.DateTime(o)` | `"YYYY-MM-DDTHH:MM"` or `"…:SS"`, with `Z`/`±HH:MM` kept as written — a date and a time, which neither of the two above can say | `required`; `min`/`max` over local time only |
 | `Field.Bytes(o)` | a [`Bytes`](#bytes) — a file in a record. Base64 in JSON, a BLOB in sqlite | `required`, `max` (bytes) |
 | `Field.Enum(values, def, o)` | one of `values` | `required` |
 | `Field.List(item, o)` | an array, each entry through `item` — a `Field`, or a `Record` class | `required`, `max` |
@@ -963,6 +1039,9 @@ class Customer extends Record {
 | `PropertyNames()`, `PropertyOptions(name)`, `Dump()` | as a widget answers them |
 | `PropertyInfo(name)` | → `{ Kind, Column, Key }`: what a field *is*, for whoever maps it onto something else |
 | `C.Load(json)` | a file, read **leniently** |
+| `C.LoadXml(node)` | the same, from an XML document or element — see [a record over XML](#a-record-over-xml) |
+| `ToXml([all])` | → a new element: what differs from the start, or every field |
+| `SaveXml(node)` | writes into that element, touching **only** what the shape models |
 
 ```js
 const c = new Customer({ Name: "Ana" });
@@ -985,6 +1064,65 @@ if (read.Problems.length) Message.Warning("{0} problems in the file", read.Probl
 - `Naming` says how the *file* spells its keys, once; `as` is the exception for
   the field the rule does not fit.
 - A wrong declaration is answered the first time the class is used.
+
+### A record over XML
+
+XML is a **document** and not a value, so this is a declaration rather than a
+conversion: `static Xml` names the element, and the fields name their own with
+the `as`/`Naming` pair a column already uses. Three options cover what a plain
+object has nowhere to keep — `attribute` for a value kept as one, `in` for the
+wrapper a list lives under, and `element` for the item name of a list of values.
+
+```js
+class Task extends Record {
+    static Xml = { Root: "Task" };
+    static Fields = {
+        UID:       Field.Int({ key: true }),               // the identity, for SaveXml
+        Name:      Field.Text(),
+        Start:     Field.DateTime(),
+        Milestone: Field.Bool(),                           // written true/false; 0/1 read
+        Links:     Field.List(Link),                       // <PredecessorLink> repeated
+    };
+}
+
+class Project extends Record {
+    static Xml = { Root: "Project",
+                   Namespace: ["http://schemas.microsoft.com/project",
+                               "http://schemas.microsoft.com/project/2007"] };
+    static Fields = {
+        Author: Field.Text({ attribute: true }),           // Author="…", not an element
+        Tasks:  Field.List(Task, { in: "Tasks" }),         // <Tasks><Task>…</Task></Tasks>
+        Tags:   Field.List(Field.Text(), { element: "Tag", in: "Tags" }),
+    };
+}
+
+const p = Project.LoadXml(File.LoadXml("plan.xml"));      // lenient; Problems
+p.Tasks[0].Name = "Analyse";
+File.SaveXml("plan.xml", p.SaveXml(doc.Root));            // in place: only what it models
+const fresh = p.ToXml(true);                              // a new element, every field
+```
+
+- **`ToXml` is `Serialize`, `LoadXml` is `Load`.** `ToXml()` omits what is at
+  its starting value exactly as `Serialize` does, and `ToXml(true)` writes
+  every field — which is what a schema whose elements are not
+  `minOccurs="0"` needs.
+- **`SaveXml` is the lossless road.** It writes into the element it is handed
+  and touches only what the shape models: unknown elements, foreign namespaces
+  and comments stay exactly where they were, and a list is reconciled — an item
+  is matched by the record's `key` (a key at its start is a new item) or by
+  position, unmatched elements are removed, new ones are added, and the order
+  of the array is the order of the elements afterwards.
+- **`namespace` is a string or a list**: the first is written, all are accepted
+  on read, and a root in neither is a `Problems` line rather than a refusal.
+  An official schema and the files it describes can disagree about the URI and
+  both be right — MSPDI does.
+- **What the shape does not model is reported, never silently written.**
+  `LoadXml` puts an unknown element or attribute in `Problems` (with the path,
+  for a child); `ToXml` does not write it; `SaveXml` does not see it.
+- **`LoadXml` matches by local name** — `Find`/`FindAll` are how it reads — and
+  a name that cannot be an element is refused where it is written, by the DOM.
+- `Field.Bool` writes `true`/`false` and reads `true`/`false`/`1`/`0`; a number
+  is read with a dot and never the desktop's comma.
 
 ### A record inside a record
 

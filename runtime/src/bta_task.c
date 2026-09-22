@@ -1113,6 +1113,9 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
     bta_database_init(ctx, global);
     bta_sqlite_init(ctx, global);
     bta_sys_init(ctx, global);
+    /* Pure computation over a string, and libxml2 is thread-safe per document:
+     * parsing a big file off the main thread is what this is for. */
+    bta_xml_init(ctx, global);
     task_install(ctx, global);
     /* The table behind it is process-global, so this is the same `Lock` the
      * main thread holds -- which is the whole point of naming them. */

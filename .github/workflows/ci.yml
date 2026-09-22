@@ -22,7 +22,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake pkg-config \
             libgtk-4-dev libgtksourceview-5-dev libvte-2.91-gtk4-dev \
-            libsqlite3-dev libsoup-3.0-dev \
+            libsqlite3-dev libsoup-3.0-dev libxml2-dev \
             libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
             gstreamer1.0-tools \
             xvfb xdotool desktop-file-utils \
@@ -89,7 +89,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake pkg-config clang \
             libgtk-4-dev libgtksourceview-5-dev libvte-2.91-gtk4-dev \
-            libsqlite3-dev libsoup-3.0-dev \
+            libsqlite3-dev libsoup-3.0-dev libxml2-dev \
             libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
             gstreamer1.0-tools \
             xvfb \
@@ -134,7 +134,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake pkg-config \
             libgtk-4-dev libgtksourceview-5-dev \
-            libsqlite3-dev libsoup-3.0-dev \
+            libsqlite3-dev libsoup-3.0-dev libxml2-dev \
             libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
             gstreamer1.0-tools \
             xvfb \
@@ -194,7 +194,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake pkg-config \
             libgtk-4-dev libgtksourceview-5-dev \
-            libsqlite3-dev libsoup-3.0-dev \
+            libsqlite3-dev libsoup-3.0-dev libxml2-dev \
             xvfb \
             librsvg2-common fonts-cantarell
 
@@ -256,6 +256,60 @@ jobs:
           done
           [ -n "$found" ] || echo "no core was written: the failure was not a crash"
 
+  # A fifth job, and the third optional half: `Xml` without libxml2.  A
+  # program that draws windows and reads JSON needs none of it, so the build
+  # finds it when it is there and `Xml.Parse` refuses with a sentence when it
+  # is not -- and the suite's XML tests take their other branch (`XmlFiles`,
+  # `XmlRecord` and the worker's two lines), which is the only build that
+  # proves that branch compiles and runs.
+  #
+  # **Hiding the module rather than not installing it**, like `no-unix-print`:
+  # libxml2's headers may arrive as some other package's dependency, and a
+  # runner that grew it would make this job a second copy of the first one,
+  # silently.  The wrapper answers "no" for that one name and CMake's own line
+  # is read back to prove it did.
+  #
+  # `tests/widgets` and not the whole suite: XML reaches exactly those three
+  # places and all of them are there.  Nothing else in the tree calls it.
+  no-libxml:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config \
+            libgtk-4-dev libgtksourceview-5-dev \
+            libsqlite3-dev libsoup-3.0-dev \
+            xvfb \
+            librsvg2-common fonts-cantarell
+
+      - name: Build with libxml2 hidden
+        run: |
+          set -euo pipefail
+          mkdir -p fake
+          # Everything but that one name goes through to the real pkg-config.
+          printf '#!/bin/sh\ncase " $* " in *" libxml-2.0 "*) exit 1;; esac\nexec /usr/bin/pkg-config "$@"\n' \
+            > fake/pkg-config
+          chmod +x fake/pkg-config
+
+          cmake -S . -B build-noxml \
+                -DPKG_CONFIG_EXECUTABLE="$PWD/fake/pkg-config" 2>&1 | tee cmake.log
+          # It has to have *decided* it, not merely compiled: the same guard
+          # `no-vte` and `no-unix-print` carry, for the same reason.
+          grep -q 'no libxml2:' cmake.log \
+            || { echo "this runner has libxml2: the job would prove nothing"; exit 1; }
+          cmake --build build-noxml -j"$(nproc)"
+
+      - name: Test
+        env:
+          BINTANA: ./build-noxml/bintana
+          BINTANA_LIB_PATH: ${{ github.workspace }}/lib
+        run: ./tests/run.sh widgets
+
   # The downloadable one: the same tree `cmake --install` lays down, as a
   # tarball, so somebody without a compiler can run the IDE and the examples.
   #
@@ -273,10 +327,13 @@ jobs:
   #     ./bin/bintana share/bintana/examples/hello
   #
   # **Built with the minimum dependencies on purpose.** The optional ones
-  # (sqlite, soup, GStreamer, VTE) would each become a shared library the
-  # downloader must have; without them the binary still runs, and the features
-  # that need one say which package is missing. A distribution package is the
-  # opposite trade and is a packager's to make.
+  # (sqlite, soup, GStreamer, VTE, libxml2) would each become a shared library
+  # the downloader must have; without them the binary still runs, and the
+  # features that need one say which package is missing -- and libxml2 is
+  # *hidden* rather than merely not installed, because its headers can arrive
+  # as some other package's dependency and the tarball would then link a
+  # library nobody asked for. A distribution package is the opposite trade and
+  # is a packager's to make.
   #
   # **What it does not bundle is GTK.** The tarball needs GTK 4.10+ and
   # GtkSourceView 5 on the machine, and glibc at least as new as ubuntu-24.04's
@@ -309,7 +366,16 @@ jobs:
       - name: Build and stage
         run: |
           set -euo pipefail
-          cmake -S . -B build -DCMAKE_INSTALL_PREFIX=/usr
+          # libxml2 hidden, and proved hidden: see the job's comment.
+          mkdir -p fake
+          printf '#!/bin/sh\ncase " $* " in *" libxml-2.0 "*) exit 1;; esac\nexec /usr/bin/pkg-config "$@"\n' \
+            > fake/pkg-config
+          chmod +x fake/pkg-config
+
+          cmake -S . -B build -DCMAKE_INSTALL_PREFIX=/usr \
+                -DPKG_CONFIG_EXECUTABLE="$PWD/fake/pkg-config" 2>&1 | tee cmake.log
+          grep -q 'no libxml2:' cmake.log \
+            || { echo "this runner has libxml2: the tarball would depend on it"; exit 1; }
           cmake --build build -j"$(nproc)"
 
           version=$(grep -m1 -oP 'project\(bintana VERSION \K[0-9][^ )]*' CMakeLists.txt)
@@ -394,6 +460,7 @@ jobs:
             mingw-w64-ucrt-x86_64-gtksourceview5
             mingw-w64-ucrt-x86_64-sqlite3
             mingw-w64-ucrt-x86_64-libsoup3
+            mingw-w64-ucrt-x86_64-libxml2
 
       - name: Build
         run: |

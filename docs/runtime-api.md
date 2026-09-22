@@ -763,6 +763,44 @@ Text is UTF-8 throughout — which is why `Copy` exists rather than being
 the bytes go through a text decoding that does not survive them, and until there
 was a copy a project could read its own image and had nowhere to put one.
 
+**`LoadXml` and `SaveXml` are the same pair one medium over**, and they are not
+the same kind of thing as `LoadJson`/`SaveJson`: JSON is a *value* model —
+object, list, scalar — and JavaScript has the same one, which is why a `Record`
+survives it; XML is a **document** model, and attributes, element order,
+namespaces and mixed content have nowhere to go in a plain object. So `Xml`
+answers a tree, and a `Record` maps onto one by **declaring** it: `static Xml`
+names the element and `LoadXml`/`ToXml`/`SaveXml` are `Load`/`Serialize` one
+medium over, with `SaveXml` the road an interchange needs — writing into the
+element it is handed and touching only what the shape models.
+[`Xml`](reference/globals/Xml.md) is the page, and
+[`Record`](reference/globals/Record.md) has the mapping; the argument, and what
+is deliberately not there, is [`plans/xml-plan.md`](plans/xml-plan.md).
+
+```js
+const doc   = File.LoadXml("plan.xml");     // reads bytes: the declaration says the encoding
+const tasks = doc.Root.Find("Tasks").FindAll("Task");
+
+tasks[0].Find("Name").Text = "Analyse";     // or .SetAttr("Kind", "planned")
+doc.Root.Find("Tasks").Add(Xml.Element("Task"));   // from another tree, so copied in
+
+File.SaveXml("plan.xml", doc);              // canonical: declaration, indent 2, trailing newline
+```
+
+`Xml.Parse(text)` / `Xml.ParseBytes(bytes)` / `Xml.Stringify(node)` /
+`Xml.Element(name)` are the in-memory four, and `Xml.Available` says whether
+this build carries libxml2 — it is optional, the `Database.Sqlite` mould, and
+without it every verb refuses with a sentence. An element answers `Name`,
+`Prefix`, `Namespace`, `Text`, `Attr`/`SetAttr`/`RemoveAttr`/`AttributeNames`,
+`Children`, `Find`/`FindAll`, `Add`/`Insert`/`Remove`, `Parent`, `Copy` and
+`SetNamespace`; a document answers `Root`.
+
+**Parsed with no DTD, no entities, no schema and no network** — `XML_PARSE_NONET`
+and not `NOENT`/`DTDLOAD`/`HUGE` — so an external entity and a billion laughs
+are negatives rather than configurations, and a malformed document throws with
+its line and column instead of printing to stderr. HTML is not XML and is not
+this. XPath, XSD validation and streaming are deferred with their triggers
+named in the plan.
+
 ## Directory
 
 | | |
@@ -2003,6 +2041,8 @@ without being told which it has. Declaring is only how the accessors get written
 | `Field.Number(o)` | a number | `required`, `min`, `max`, `decimals` |
 | `Field.Bool(def, o)` | `true`/`false`, and SQL's `0`/`1` | |
 | `Field.Date(o)` | `"YYYY-MM-DD"`, checked against the calendar | `required` |
+| `Field.Time(o)` | `"HH:MM"` or `"HH:MM:SS"` | `required`, `min`, `max` |
+| `Field.DateTime(o)` | `"YYYY-MM-DDTHH:MM"` or `"…:SS"`, with `Z`/`±HH:MM` kept as written — what an XML `dateTime` is | `required`; `min`/`max` over local time only, since a text order over moments is a wrong answer |
 | `Field.Enum(values, def, o)` | one of `values`; the list is what `PropertyOptions` hands out | `required` |
 | `Field.List(item, o)` | an array, each entry through `item` — a `Field`, or a `Record` class for a list of records | `required`, `max` (entries) |
 | `Field.Record(of, o)` | another record: the class, or `() => the class` for a shape that contains itself | `required` |
@@ -2019,6 +2059,9 @@ without being told which it has. Declaring is only how the accessors get written
 | `Problems` | **the report of one `Load`**: what the file said that could not be taken (read-only) |
 | `PropertyNames()`, `PropertyOptions(name)`, `Dump()` | as a widget answers them |
 | `C.Load(json)` | a file, read leniently: see below |
+| `C.LoadXml(node)` | the same for an XML document or element, with the same `Problems` |
+| `ToXml([all])` | → a new element: what differs from the start, or every field |
+| `SaveXml(node)` | writes **into** that element, touching only what the shape models |
 
 **Assigning validates; reading a file does not stop.** A setter refuses what the
 field does not accept and says what was wrong with the value — the same bargain
@@ -2166,6 +2209,75 @@ answers with something that is not a `Record`.
 The values live where only the runtime can reach them, which is what makes the
 setter the only way in: there is no `customer._Name` to go around it with. See
 [architecture.md](architecture.md#what-radjs-keeps-for-itself).
+
+### A record over XML
+
+XML is a **document** and JSON is a value, so a record does not "become" XML:
+it **declares** the element it is. `static Xml` names the root, the fields name
+their own children with the same `as`/`Naming` pair a column uses, and three
+options cover what XML has and a plain object does not:
+
+```js
+class Task extends Record {
+    static Xml = { Root: "Task" };
+    static Fields = {
+        UID:       Field.Int({ key: true }),               // the identity SaveXml matches by
+        Name:      Field.Text(),
+        Start:     Field.DateTime(),
+        Milestone: Field.Bool(),                           // true/false out; true/false/1/0 in
+        Links:     Field.List(Link),                       // repeated, no wrapper
+    };
+}
+
+class Project extends Record {
+    static Xml = { Root: "Project",
+                   Namespace: ["http://schemas.microsoft.com/project",
+                               "http://schemas.microsoft.com/project/2007"] };
+    static Fields = {
+        Author: Field.Text({ attribute: true }),           // Author="…"
+        Tasks:  Field.List(Task, { in: "Tasks" }),         // <Tasks><Task>…</Task></Tasks>
+        Tags:   Field.List(Field.Text(), { element: "Tag", in: "Tags" }),
+    };
+}
+
+const p = Project.LoadXml(File.LoadXml("plan.xml"));   // lenient; Problems
+p.Tasks[0].Name = "Analyse";
+File.SaveXml("plan.xml", p.SaveXml(doc.Root));         // in place: only what it models
+const fresh = p.ToXml(true);                           // a new element, every field
+```
+
+**`ToXml` is `Serialize` and `LoadXml` is `Load`.** `ToXml()` omits what is at
+its starting value and `ToXml(true)` writes every field — which a schema whose
+elements are not `minOccurs="0"` needs. `LoadXml` reads a document or element,
+checks the root's name and namespace (a **list**, because an official schema and
+the files it describes can disagree about the URI and both be right), takes what
+fits, and reports what the shape does not model on `Problems` with the path in
+front of it. A missing `Root` is not an error at declaration — a record is a
+shape before it is a file — but `ToXml`/`SaveXml` refuse it and `LoadXml` says
+so in `Problems`.
+
+**`SaveXml` is the road an interchange file needs, and it is neither.** It
+writes into the element it is handed and touches **only** what the shape models:
+unknown elements, foreign namespaces and comments stay exactly where they were,
+a missing modelled element is inserted in declaration order among the modelled
+ones, a field back at its starting value has its element removed, and a list is
+reconciled — matched by the record's `key` (a key at its starting value is a new
+item) or by position, unmatched elements removed, new ones added, the array's
+order the element order afterwards. Writing into the wrong root is a **throw**
+and not a `Problems` line: the lenient road is `LoadXml`.
+
+**What is not modelled is reported, never silently written.** There is no bag of
+raw nodes: re-emitting an unknown element at the end of an `xsd:sequence` is a
+wrong answer that looks right, so the shape says what it dropped and `SaveXml`
+is what preserves it. A scalar field reads its element's **text**, so an
+attribute of that element, child markup inside it, or a second element with the
+same name is reported too — those are things the shape is not taking.
+
+[`examples/feeds`](../examples/feeds) is the first real caller: two shapes
+(RSS 2.0 and Atom 1.0) over one list, and the window counts what either shape
+could not take rather than hiding it. [`examples/gpx`](../examples/gpx) is the
+second: a track whose points carry their position as **attributes** and whose
+watch's `<extensions>` survive a Save that changes the name.
 
 ## Database and Table
 

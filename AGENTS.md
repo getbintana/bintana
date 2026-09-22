@@ -179,10 +179,12 @@ what `.github/workflows/ci.yml` relies on. Anything you drive by hand still need
 `gtk4` (**4.10 or newer** -- `GtkAlertDialog` and `GtkFileDialog`),
 `gtksourceview-5` (with headers), pkg-config, and `gmodule-2.0`, which is the
 plugin loader and comes with glib. QuickJS is vendored, so
-nothing to install for it. Five are optional and CMake says what it found either
-way: `sqlite3`, `libsystemd`, `libsoup-3.0`, `gstreamer-1.0` and
-**`vte-2.91-gtk4`** -- the last being the pty behind `Terminal`, and the only
-dependency with no Windows port. **Package names per distribution and what each
+nothing to install for it. Six are optional and CMake says what it found either
+way: `sqlite3`, `libsystemd`, `libsoup-3.0`, `gstreamer-1.0`,
+**`vte-2.91-gtk4`** -- the pty behind `Terminal`, and the only dependency with
+no Windows port -- and `libxml2`, which is what `Xml` parses with. The last is
+optional in the build only: on most desktops GTK4 already loads libxml2 at
+runtime, so what the package buys is the headers. **Package names per distribution and what each
 one turns on are in [`docs/installing.md`](docs/installing.md)**, which is also
 where the `Xvfb`/`xdotool`/`python3`/`openssl` the suites want are listed. **Build both ways before touching anything under
 an `#ifdef`**: a wrapper `pkg-config` that exits 1 for one module name and
@@ -3325,6 +3327,47 @@ person who wrote it either.
   same situation with a real exception. **When a helper's sentinel already means
   "nothing to do", a failure needs a different one.**
 
+## Xml and Record
+
+**XML is a document and JSON is a value**, and everything else follows from it:
+`Xml` is a DOM over libxml2 (optional at build time, `Xml.Available`), and a
+record maps onto an element by **declaring** `static Xml` -- the same split
+`Table` makes for a row. `ToXml` is `Serialize`, `LoadXml` is `Load`, and
+`SaveXml` is neither: it writes into the element it was handed and touches only
+what the shape models, which is what an interchange round trip needs. Unknown
+elements and attributes are reported in `Problems` and never silently written
+back -- an unknown node re-emitted at the end of an `xsd:sequence` is a wrong
+answer that looks right, so the lossless road is `SaveXml` and not a raw-node
+bag. Three things are worth knowing before touching either half:
+
+- **A node from another tree is copied in, and `Add` answers the copy.** So
+  `el.Add(Xml.Element("X")).Text = "…"` is right, and writing to the element you
+  built is writing to a node that is not in the tree -- `Record`'s
+  `#xmlInsert` did exactly that, and the round trip showed empty elements. The
+  same rule is why `Record.#xmlSaveList` writes a new item *after* it is placed.
+- **A removed node is orphaned and not freed**, because a `Children` array
+  somebody is holding has to keep answering; the tree's refcount frees it when
+  the last wrapper goes. That is why `Remove()` makes the wrapper throw instead
+  of reading freed memory, and why a node wrapper is a reference to a tree and
+  not to a document.
+- **`Field.DateTime` exists because XML's `dateTime` is a date and a time**
+  together, which `Date` and `Time` cannot say between them; and the namespace
+  on `static Xml` is a **list** because MSPDI's own XSD and its own files
+  disagree about the URI (the schema says `/2007`, Project writes without it),
+  measured. The first is written, all are accepted on read.
+- **The object `LoadXml` builds is keyed by the file's spelling, not by the
+  property name** -- `Load` looks a field up by `as`/`Naming`, exactly as it
+  does for a JSON file. MSPDI spells every property the same as its element and
+  hid this; the first format that says `Naming = "lower"` (`examples/feeds`,
+  where RSS hands over `<pubDate>`) found **every field silently at its
+  default**. A shape with a naming rule or an `as` needs a test that reads one.
+
+`examples/feeds` is the first real caller: two shapes (RSS 2.0 and Atom 1.0)
+over one list, and the four format facts worth knowing -- RSS dates are RFC 822
+and stay `Field.Text`, Atom's are ISO and keep their zone, an element's own
+text cannot be modelled beside its attributes (`<guid isPermaLink>`), and
+`<link>` versus `<atom:link>` is one local name from here.
+
 ## Database.Sqlite and Table
 
 - **SQL identifiers are case-insensitive, and that makes a `Naming` rule that is
@@ -4049,7 +4092,18 @@ person who wrote it either.
   a second copy of the first one, silently, which is the same guard `no-vte`
   carries for the same reason. Measured both ways: with the wrapper the branch
   compiles and `tests/widgets` is 3303, and with the real pkg-config the guard
-  fails the job.
+  fails the job. **`no-libxml` is the third and it is the hidden kind too**:
+  libxml2's headers can arrive as some other package's dependency, so the same
+  wrapper hides `libxml-2.0` and the same read-back proves it -- measured,
+  `tests/widgets` is **3566** in that build against **3665** with it, and green
+  both ways, because the XML tests fork on `Xml.Available` the way `testDatabase`
+  does on sqlite.
+- **An optional dependency shipping in the tarball is a promise about somebody
+  else's machine.** The `package` job builds for the fewest shared libraries, and
+  `libxml2-dev` can be pulled in by `libgtk-4-dev` without anybody asking -- so
+  that job hides `libxml-2.0` with the same wrapper and fails if it is found,
+  rather than silently making every download need a library the downloader may
+  not have.
 - **A dialog that blocks the caller is the odd one out here, and blocking never
   meant safe.** `Printer.Send` ran `gtk_print_operation_run` synchronously and
   answered `null` for a cancel, while `Dialog.OpenFile`, `SaveFile` and `Color`

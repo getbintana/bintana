@@ -17,9 +17,11 @@ ceremony around nothing. What is not synchronous is what genuinely waits:
 | `Load(path)` | → the whole file as a string | [text](#text) |
 | `LoadBytes(path)` | → the whole file as [`Bytes`](Bytes.md) | [bytes](#bytes) |
 | `LoadJson(path)` | → it, parsed | [json](#json) |
+| `LoadXml(path)` | → it, as an XML document | [xml](#xml) |
 | `Save(path, text)` | writes it **atomically** | [text](#text) |
 | `SaveBytes(path, bytes)` | those bytes, exactly | [bytes](#bytes) |
 | `SaveJson(path, value)` | one canonical shape | [json](#json) |
+| `SaveXml(path, node)` | the canonical XML shape, atomically | [xml](#xml) |
 
 **Files themselves**
 
@@ -67,6 +69,16 @@ and destroys a PNG.
 |---|---|
 | `LoadJson(path)` | the file, parsed. **The error names the file**, which is the whole reason to use it over `JSON.parse(File.Load(p))` — a syntax error in *something* is not an answer |
 | `SaveJson(path, value)` | one canonical shape: indented by two, one trailing newline. Every `.form` and every `project.json` in this tree is written by it, which is why a file saved by the IDE and one written by hand look the same |
+
+## XML
+
+| | |
+|---|---|
+| `LoadXml(path)` | the file as a [`Xml`](Xml.md) document. **The error names the file**, and the document's own declaration says what encoding it is in: this reads bytes, unlike `Load` |
+| `SaveXml(path, node)` | the canonical shape [`Xml.Stringify`](Xml.md) defines, written by the atomic `Save` |
+
+XML is a **document** and JSON is a value; the two pairs are not the same
+thing, and [`Xml`](Xml.md) is where that is argued.
 
 ## Bytes
 

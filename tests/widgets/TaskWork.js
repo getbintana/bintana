@@ -45,6 +45,13 @@ class TaskWork extends Task {
                 stopwatch: typeof Stopwatch,
                 record:    typeof Record,
                 table:     typeof Table,
+                /* And the document: pure computation over a string, so a
+                 * worker parses the big file off the main thread. */
+                xml:       typeof Xml,
+                xmlText:   (() => {
+                    try { return Xml.Parse("<a><b>x</b></a>").Root.Find("b").Text; }
+                    catch (e) { return `ERROR ${e.message}`; }
+                })(),
                 /* Gone: they would fire on the main loop, or are the main
                  * thread's own state. */
                 timer:     typeof Timer,

@@ -41,6 +41,9 @@ class Customer extends Record {
 | `Validate()` | **the state**: what is wrong with what it holds now |
 | `toJSON()` | so `JSON.stringify` and `File.SaveJson` are the record |
 | `C.Load(json)` | a file, read **leniently** |
+| `C.LoadXml(node)` | the same, from an XML document or element — see [XML](#xml) |
+| `ToXml([all])` | → a new element, the `Serialize` of XML |
+| `SaveXml(node)` | writes **into** that element, touching only what it models |
 
 **On the class**
 
@@ -48,6 +51,7 @@ class Customer extends Record {
 |---|---|
 | `static Fields` | the shape: a name and a `Field` for each |
 | `static Naming` | how a field's name becomes a column: `same`, `lower` or `snake` |
+| `static Xml` | the element this record is: `{ Root, Namespace }` — see [XML](#xml) |
 
 ## The fields
 
@@ -60,6 +64,7 @@ class Customer extends Record {
 | `Field.Bool(def, o)` | `true`/`false`, and SQL's `0`/`1` | |
 | `Field.Date(o)` | `"YYYY-MM-DD"`, checked against the calendar | `required` |
 | `Field.Time(o)` | `"HH:MM"` or `"HH:MM:SS"` | `required`, `min`, `max` |
+| `Field.DateTime(o)` | `"YYYY-MM-DDTHH:MM"` or `"…:SS"` — a date and a time — with `Z` or `±HH:MM` when the moment has a zone, kept as written | `required`, `min`, `max` (local time only: a zoned value and a range are refused together, because a text order over moments is a wrong answer) |
 | `Field.Bytes(o)` | a [`Bytes`](Bytes.md) — a file in a record | `required`, `max` (bytes) |
 | `Field.Enum(values, def, o)` | one of `values` | `required` |
 | `Field.List(item, o)` | an array, each entry through `item` — a `Field` or a `Record` class | `required`, `max` |
@@ -110,6 +115,75 @@ two behaviours are deliberate and they are not the same call.
 | `toJSON()` | so `JSON.stringify(record)` and `File.SaveJson(path, record)` are the record itself, with a `Decimal` as its digits and a `Bytes` as base64 |
 | `Clone()` | a copy, which is what a dialog edits so that Cancel costs nothing |
 
+## XML
+
+XML is a **document** and not a value — attributes, element order, namespaces
+and mixed content have nowhere to go in a plain object — so a record maps onto
+an element by declaring it. `static Xml` names the element; every field names
+its own with `as`/`Naming`, and three options cover what XML adds:
+
+| | |
+|---|---|
+| `attribute: true` | the field is an attribute of the element, not a child — `Field.Text({ attribute: true })` |
+| `in: "Tasks"` | a list lives under that wrapper: `<Tasks><Task>…</Task></Tasks>` |
+| `element: "Tag"` | the item name of a list of values — a record already knows its own, from its `Root` |
+
+```js
+class Task extends Record {
+    static Xml = { Root: "Task" };
+    static Fields = {
+        UID:       Field.Int({ key: true }),
+        Name:      Field.Text(),
+        Start:     Field.DateTime(),
+        Milestone: Field.Bool(),                 // written true/false; 0/1 read
+        Links:     Field.List(Link),             // <PredecessorLink> repeated
+    };
+}
+
+class Project extends Record {
+    static Xml = { Root: "Project",
+                   Namespace: ["http://schemas.microsoft.com/project",
+                               "http://schemas.microsoft.com/project/2007"] };
+    static Fields = {
+        Author: Field.Text({ attribute: true }),
+        Tasks:  Field.List(Task, { in: "Tasks" }),
+    };
+}
+
+const p = Project.LoadXml(File.LoadXml("plan.xml"));   // lenient; Problems
+p.Tasks[0].Name = "Analyse";
+File.SaveXml("plan.xml", p.SaveXml(doc.Root));         // in place
+const fresh = p.ToXml(true);                           // a new element, every field
+```
+
+**`toJSON` is `ToXml`, `Load` is `LoadXml`, and `SaveXml` is the pair neither
+is.** `ToXml()` writes what differs from the field's start, `ToXml(true)` writes
+everything; `SaveXml(element)` writes into the tree it was handed and touches
+**only** what the shape models, which is the road an interchange file needs:
+
+- unknown elements, foreign namespaces and comments stay exactly where they
+  were, and a missing modelled element is inserted in declaration order among
+  the modelled ones;
+- a list is reconciled — an item is matched to an element by the record's
+  `key` (a key at its starting value is a new item) or by position, unmatched
+  elements are removed, new ones are added, and the array's order is the
+  element order afterwards;
+- a field at its starting value has its element removed rather than written,
+  and an empty list takes its wrapper with it when nothing else is in it.
+
+**LoadXml is lenient, like `Load`**, and reports what the shape does not model:
+an unknown element or attribute goes on `Problems` with its path, a bad value
+keeps the field at its start, and the root's name and namespace are checked —
+`Namespace` as a string or a list, because an official schema and the files it
+describes can disagree about the URI and both be right. What is reported is
+never silently written back.
+
+`static Xml` merges down the class chain the way `Fields` does. A class with no
+`Root` is not an XML shape: `ToXml` and `SaveXml` refuse it, and `LoadXml` says
+so in `Problems`. `Field.Bool` is written `true`/`false` (the XML Schema
+spelling) and read from `true`/`false`/`1`/`0`; numbers are read with a dot and
+never the desktop's comma.
+
 ## What goes wrong
 
 - **A value was refused with a message naming the field.** That is the type
@@ -122,6 +196,12 @@ two behaviours are deliberate and they are not the same call.
 - **A record inside a record recursed for ever.** `Field.Record(() => Class)` is
   the spelling for a shape that contains itself; a cycle in the *values* is
   refused rather than hung on.
+- **`LoadXml` answered with `Problems` naming elements you do not know.** That
+  is the shape saying what it does not model; the values it did take are there.
+- **`SaveXml` refused with `<Other>` was expected.** It writes into an element
+  of its own root, not into any element; `LoadXml` is the lenient one.
+- **A list of values refused to be written.** `Field.List(Field.Text())` needs
+  `{ element: "Name" }`: only a record knows its own element, from its `Root`.
 
 ## See also
 

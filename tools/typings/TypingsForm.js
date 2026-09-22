@@ -72,6 +72,8 @@ const CFUNC  = new Regex("JS_CFUNC(?:_MAGIC)?_DEF\\s*\\(\\s*\"([A-Za-z_]\\w*)\"\
 const NOT_A_WIDGET = {
     dec_proto_funcs:    { name: "Decimal",     kind: "class" },
     bytes_proto_funcs:  { name: "Bytes",       kind: "class" },
+    xml_doc_props:      { name: "XmlDocument", kind: "class" },
+    xml_node_props:     { name: "XmlNode",     kind: "class" },
     day_props:          { name: "Day",         kind: "class" },
     conn_props:         { name: "Connection",  kind: "class" },
     http_client_props:  { name: "HttpClient",  kind: "class" },
@@ -103,7 +105,7 @@ const NOT_A_WIDGET = {
  */
 const PLAIN_GLOBALS = {
     Application, Environment, File, Directory, Dialog, Message, Clipboard,
-    Settings, Dictionary, Desktop,
+    Settings, Dictionary, Desktop, Xml,
 };
 
 /*

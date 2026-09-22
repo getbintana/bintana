@@ -16,7 +16,7 @@ and macOS in [plans/macos-plan.md](plans/macos-plan.md).
 | **CMake 3.16+** and **pkg-config** | the build |
 | **QuickJS** | **not a dependency to install**: quickjs-ng v0.16.1 is vendored in `vendor/quickjs`, with four patches of ours in it ([AGENTS.md](../AGENTS.md#the-four-patches-in-vendor)) |
 
-Five more are optional, and CMake prints what it found either way. Without each
+Six more are optional, and CMake prints what it found either way. Without each
 the runtime builds and the thing itself says which package is missing when it is
 called — see the table below.
 
@@ -217,10 +217,13 @@ project in [plugins.md](plugins.md#building-one) says where that is.
 | `Video`, `AudioPlayer` | `gstreamer1-devel gstreamer1-plugins-base-devel` | `libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev` | both exist and say nothing can be played |
 | ...and the picture, not just the sound | `gstreamer1-plugin-gtk4` | `gstreamer1.0-gtk4` | `Video`'s sink (`gtk4paintablesink`, from gst-plugins-rs) is missing and `AudioPlayer` still works |
 | `Terminal` | `vte291-gtk4-devel` | `libvte-2.91-gtk4-dev` | the class still draws and still round-trips a `.form`; only `Run`, `Stop` and `Kill` refuse. The only dependency with no Windows port |
+| `Xml`, `File.LoadXml`/`SaveXml` | `libxml2-devel` | `libxml2-dev` | `Xml` exists, `Available` is `false`, and every verb refuses with a sentence. GTK4 itself already loads libxml2 at runtime on most desktops, so this is a **build** dependency and not a new runtime one |
 
 `Widget.Available(type)` is how a program asks what the build it is running on
 can actually do — a palette filters on it, and so should anything that offers a
-feature rather than using one.
+feature rather than using one. For the two globals that are not widgets the
+question is spelled `Xml.Available` (a value, read off the build) and a refusing
+call for `Database.Sqlite`.
 
 ## Running the test suite
 
@@ -290,4 +293,4 @@ and a TagLib wrapper worked through.
 | `Package 'gtksourceview-5' not found` | `gtksourceview5-devel` / `libgtksourceview-5-dev` |
 | compile errors about `gtk_alert_dialog` or `gtk_file_dialog` | the GTK is older than 4.10 — Debian 13 / Ubuntu 24.04 or newer |
 | `no vte: Terminal exists and refuses to run one` | not an error: the optional table above |
-| `no sqlite3`, `no libsoup`, `no gstreamer` | likewise — a build line, not a failure |
+| `no sqlite3`, `no libsoup`, `no gstreamer`, `no libxml2` | likewise — a build line, not a failure |

@@ -340,6 +340,46 @@ class BadThunk extends Record {
     static Fields = { A: Field.List(() => 3) };
 }
 
+/* --- records over XML ----------------------------------------------------
+ * A task with a list of its own, a project that models a handful of MSPDI's
+ * elements, and the namespace the format really has two spellings of.  What
+ * testXmlRecord holds is the mapping: the declaration, the three verbs, and
+ * the two things XML has that a value mapping has nowhere to put -- an
+ * attribute and an element order. */
+const MSPDI_NS = ["http://schemas.microsoft.com/project",
+                  "http://schemas.microsoft.com/project/2007"];
+
+class XmlLink extends Record {
+    static Xml = { Root: "PredecessorLink" };
+    static Fields = {
+        PredecessorUID: Field.Int({ key: true }),
+        Type:           Field.Int(),
+        LinkLag:        Field.Int(),
+    };
+}
+
+class XmlTask extends Record {
+    static Xml = { Root: "Task" };
+    static Fields = {
+        UID:       Field.Int({ key: true }),
+        Name:      Field.Text(),
+        Start:     Field.DateTime(),
+        Milestone: Field.Bool(),
+        Duration:  Field.Text(),
+        Links:     Field.List(XmlLink),
+    };
+}
+
+class XmlProject extends Record {
+    static Xml = { Root: "Project", Namespace: MSPDI_NS };
+    static Fields = {
+        Author:       Field.Text({ attribute: true }),
+        CurrencyCode: Field.Text(),
+        Tasks:        Field.List(XmlTask, { in: "Tasks" }),
+        Tags:         Field.List(Field.Text(), { element: "Tag", in: "Tags" }),
+    };
+}
+
 /*
  * The tests, in the order they run in, and what `./tests/run.sh widgets <name>`
  * matches -- `run.sh widgets record` is 20-odd assertions in a third of a second
@@ -400,7 +440,7 @@ const TESTS = [
     "RowList", "RowFilter", "PropertyOptions", "CssNode", "TabAction", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "NumericSetters",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
-    "CuratedLanguage", "Dictionary", "Regex", "Bytes", "Hash", "Screen", "JsonFiles", "Log", "Apply", "TimerShorthand", "Terminal",
+    "CuratedLanguage", "Dictionary", "Regex", "Bytes", "Hash", "Screen", "JsonFiles", "XmlFiles", "XmlRecord", "Log", "Apply", "TimerShorthand", "Terminal",
     "Settings", "Timer", "Icons", "Font", "Style", "Radius", "Padding", "Shadow", "StyleRule",
     "ColorButton",
     "ColorDialog", "FileDialog", "IconList", "FormIcon", "ButtonClick",
@@ -9000,6 +9040,424 @@ function Main() {
         File.Delete(path);
     }
 
+    /* --- XML files, which are a document and not a value --------------------
+     *
+     * The other program's format.  JSON is a value model and JavaScript has the
+     * same one, which is why a record survives it; XML has attributes, order,
+     * namespaces and mixed content, so `Xml` answers a **document** and the
+     * record mapping is a declaration.  What this pins is the DOM: parsing,
+     * walking, building, the canonical shape, and the errors naming a line and
+     * a file.  See docs/plans/xml-plan.md.
+     */
+    testXmlFiles() {
+        /*
+         * libxml2 is optional at build time, so this is the fork every optional
+         * dependency gets: with it the DOM is driven end to end, and without it
+         * the verbs refuse by name.  The `no-libxml` CI job is the build that
+         * takes the second road -- the same bargain `testDatabase` makes with
+         * sqlite and `testTerminal` with VTE.
+         */
+        if (!Xml.Available) {
+            check("no libxml2: Available says so", Xml.Available === false);
+
+            let said = "";
+            try { Xml.Parse("<a/>"); } catch (e) { said = e.message; }
+            check("...and Parse refuses naming the package",
+                  said.includes("libxml2"), said);
+
+            Directory.Make(SCRATCH);
+            const path = File.Join(SCRATCH, "offline.xml");
+            File.Save(path, "<a/>");
+            said = "";
+            try { File.LoadXml(path); } catch (e) { said = e.message; }
+            check("...and File.LoadXml names the file and the package",
+                  said.includes("offline.xml") && said.includes("libxml2"), said);
+            File.Delete(path);
+            return;
+        }
+
+        check("this build can read XML", Xml.Available === true);
+
+        const text = `<?xml version="1.0" encoding="UTF-8"?>
+<!-- a comment -->
+<Project xmlns="http://schemas.microsoft.com/project">
+  <Name>Minimal &amp; more</Name>
+  <Tasks>
+    <Task><UID>1</UID><Name>Analyse</Name><Duration>PT8H0M0S</Duration></Task>
+    <Task><UID>2</UID><Name>Build</Name></Task>
+  </Tasks>
+</Project>
+`;
+
+        const doc  = Xml.Parse(text);
+        const root = doc.Root;
+
+        eq("the root is an element", root.Name, "Project");
+        eq("with its namespace resolved",
+           root.Namespace, "http://schemas.microsoft.com/project");
+        eq("and no prefix", root.Prefix, "");
+        check("a root has no parent", root.Parent === null);
+        eq("text decodes entities", root.Find("Name").Text, "Minimal & more");
+        eq("and UTF-8 is UTF-8",
+           Xml.Parse("<a>Análisis · ñ</a>").Root.Text, "Análisis · ñ");
+        check("which survives the canonical writer",
+              Xml.Stringify(Xml.Parse("<a>Análisis</a>")).includes("Análisis"),
+              Xml.Stringify(Xml.Parse("<a>Análisis</a>")));
+
+        const tasks = root.Find("Tasks");
+        const all   = tasks.FindAll("Task");
+        eq("FindAll finds every child", all.length, 2);
+        eq("and they are in file order", all[0].Find("UID").Text, "1");
+        eq("both of them", all[1].Find("UID").Text, "2");
+        check("Find answers null for none", tasks.Find("Nope") === null);
+        eq("Children are the element children", tasks.Children.length, 2);
+        eq("and Children[1] is the second",
+           tasks.Children[1].Find("Name").Text, "Build");
+
+        /* Attributes and building, which is the half a read-only parser lacks. */
+        const el = Xml.Element("Thing");
+        el.SetAttr("Kind", "x");
+        el.Text = "hello";
+        eq("an attribute reads back", el.Attr("Kind"), "x");
+        eq("and the text", el.Text, "hello");
+        check("an absent attribute is null", el.Attr("Nope") === null);
+        eq("AttributeNames lists them", el.AttributeNames().join(","), "Kind");
+        el.RemoveAttr("Kind");
+        check("RemoveAttr takes it away", el.Attr("Kind") === null);
+
+        /*
+         * A node from another tree is **copied in**, and `Add` answers the node
+         * that is in this tree -- moving it would have to repoint every wrapper
+         * under it.  Within one tree it moves, as a DOM does.
+         */
+        const holder = Xml.Element("Holder");
+        const kept   = holder.Add(el);
+        eq("Add answers the node in this tree", kept.Parent.Name, "Holder");
+        check("and the original stays detached", el.Parent === null);
+
+        const second = holder.Add("Second");
+        second.Text = "two";
+        holder.Insert(0, Xml.Element("First")).Text = "one";
+        eq("Insert puts one first", holder.Children[0].Name, "First");
+        eq("and the rest follow", holder.Children[1].Name, "Thing");
+        eq("the copy has the same shape", holder.Copy().Children.length, 3);
+        check("and is detached", holder.Copy().Parent === null);
+
+        /* Removing is done: the wrapper says so rather than reading freed
+         * memory, which is the whole reason a tree keeps an orphan list. */
+        const doomed = holder.Children[0];
+        doomed.Remove();
+        let dead = false;
+        try { doomed.Text; } catch (e) { dead = true; }
+        check("a removed node stops answering", dead);
+
+        /* Removing the **root of a detached tree** is the edge that had it freed
+         * twice -- once out of the orphan list and once as the tree's root. The
+         * wrapper is dropped here so the collection runs over it. */
+        Xml.Element("Lone").Remove();
+        Xml.Element("Lone").Add("Child").Remove();
+
+        /* A name that is not one is refused where it is written, rather than
+         * written into a document no parser can read back. */
+        throws("an invalid element name is refused", () => Xml.Element("1 a"));
+        throws("...and a prefixed one, which is what SetNamespace is for",
+               () => Xml.Element("soap:Envelope"));
+
+        /* The canonical shape: declaration, indented by two, trailing newline. */
+        const out = Xml.Stringify(doc);
+        check("the declaration leads",
+              out.startsWith('<?xml version="1.0" encoding="UTF-8"?>'),
+              out.slice(0, 60));
+        check("indented by two", out.includes("\n  <Name>"), out.slice(0, 200));
+        check("and ending in a newline", out.endsWith("\n"));
+        check("a comment is kept", out.includes("<!-- a comment -->"));
+        check("and an ampersand is escaped", out.includes("Minimal &amp; more"));
+        eq("what reparses is the same tree",
+           Xml.Parse(out).Root.Find("Tasks").FindAll("Task").length, 2);
+
+        eq("ParseBytes reads a Bytes",
+           Xml.ParseBytes(new Bytes(text)).Root.Name, "Project");
+
+        /* What `Load` reads is keyed by the **file's** spelling and not by the
+         * property name -- `as`/`Naming` are what it looks a field up by, the
+         * same rule a JSON file follows.  MSPDI spells everything the same as
+         * the property and hid this until RSS's `Naming = "lower"` met it. */
+        const Note = class extends Record {
+            static Naming = "lower";
+            static Xml = { Root: "note" };
+            static Fields = {
+                Title:     Field.Text(),
+                WrittenAt: Field.Text({ as: "writtenAt" }),
+            };
+        };
+        const note = Note.LoadXml(
+            Xml.Parse("<note><title>Hola</title><writtenAt>2026</writtenAt></note>"));
+        eq("a lowered spelling is read by its file key", note.Title, "Hola");
+        eq("and 'as' is the exception it always was", note.WrittenAt, "2026");
+        eq("with nothing reported", note.Problems.length, 0,
+           note.Problems.join(" | "));
+
+        /* An error names where, which is the only thing a parser's message is
+         * missing. */
+        let said = "";
+        try { Xml.Parse("<a>\n<b></a>"); } catch (e) { said = e.message; }
+        check("a malformed document names a line", /^2:/.test(said), said);
+        check("and says what was wrong", said.length > 5, said);
+
+        Directory.Make(SCRATCH);
+        const path = File.Join(SCRATCH, "thing.xml");
+        File.SaveXml(path, doc);
+        eq("File.SaveXml writes and File.LoadXml reads",
+           File.LoadXml(path).Root.Name, "Project");
+        check("written canonically",
+              File.Load(path).startsWith('<?xml version="1.0" encoding="UTF-8"?>'),
+              File.Load(path).slice(0, 60));
+
+        File.Save(path, "<a>\n<b></a>");
+        said = "";
+        try { File.LoadXml(path); } catch (e) { said = e.message; }
+        check("a broken file names itself", said.includes("thing.xml"), said);
+        throws("and so does a missing one",
+               () => File.LoadXml(File.Join(SCRATCH, "nope.xml")));
+
+        File.Delete(path);
+    }
+
+    /* --- a record over XML --------------------------------------------------
+     *
+     * The mapping the plan's stage 3 is: `static Xml` names the element,
+     * `as`/`Naming` name the children, and two options cover what XML has and
+     * a plain object does not -- `attribute`, and `in`/`element` for a list.
+     * `ToXml` is `Serialize`, `LoadXml` is `Load`, and `SaveXml` is the road
+     * an interchange needs: it writes into the element it was handed and
+     * touches only what it models, so everything a shape does not know about
+     * stays where it was.
+     */
+    testXmlRecord() {
+        /* The other half of the optional fork: a shape with `static Xml` and no
+         * DOM under it can still be declared, and writing it refuses with the
+         * package's name rather than doing nothing. */
+        if (!Xml.Available) {
+            const Bare = class extends Record {
+                static Xml = { Root: "thing" };
+                static Fields = { Name: Field.Text() };
+            };
+            let said = "";
+            try { new Bare({ Name: "x" }).ToXml(); } catch (e) { said = e.message; }
+            check("no libxml2: a record cannot be written as an element either",
+                  said.includes("libxml2"), said);
+            return;
+        }
+
+        /* Field.DateTime first: it arrived for this and is not about XML. */
+        const Timed = class extends Record {
+            static Fields = { At: Field.DateTime({ required: true }) };
+        };
+        const t = new Timed({ At: "2026-09-01T08:00" });
+        eq("a datetime keeps its minutes", t.At, "2026-09-01T08:00");
+        t.At = "2026-09-01T08:00:30";
+        eq("and its seconds", t.At, "2026-09-01T08:00:30");
+        t.At = "2026-09-01T08:00:00Z";
+        eq("and a zone is kept as it was written", t.At, "2026-09-01T08:00:00Z");
+        t.At = "2026-09-01T08:00-03:00";
+        eq("...offset or not", t.At, "2026-09-01T08:00-03:00");
+        for (const wrong of ["2026-09-01", "2026-09-01 08:00",
+                             "2026-02-30T08:00:00", "2026-09-01T25:00",
+                             "2026-09-01T08:00:00.5Z",
+                             "2026-09-01T08:00+0300"])
+            throws(`${wrong} is not a datetime`, () => { t.At = wrong; });
+
+        /* A range is local text, so a moment in it is refused rather than
+         * ordered wrong: 09:00+02:00 is 07:00Z and sorts after 08:00. */
+        const Ranged = class extends Record {
+            static Fields = {
+                At: Field.DateTime({ min: "2026-01-01T00:00:00" }),
+            };
+        };
+        const r = new Ranged({ At: "2026-06-01T00:00" });
+        eq("a naive range still compares", r.At, "2026-06-01T00:00");
+        throws("a bound is enforced", () => { r.At = "2025-06-01T00:00"; });
+        check("and a zoned value is refused, not mis-ordered",
+              (() => { try { r.At = "2026-06-01T00:00Z"; return false; }
+                       catch (e) { return e.message.includes("text order"); } })());
+
+        const p = new XmlProject({
+            Author: "Matias",
+            CurrencyCode: "USD",
+            Tags: ["a", "b"],
+            Tasks: [
+                new XmlTask({ UID: 1, Name: "Analyse",
+                              Start: "2026-09-01T08:00:00",
+                              Duration: "PT8H0M0S" }),
+                new XmlTask({ UID: 2, Name: "Build", Milestone: true,
+                              Links: [new XmlLink({ PredecessorUID: 1,
+                                                    Type: 1 })] }),
+            ],
+        });
+
+        /* ToXml(true): every field, in declaration order, named and spelled
+         * the way the format wants. */
+        const xml = Xml.Stringify(p.ToXml(true));
+        check("the root carries its namespace",
+              xml.includes('<Project xmlns="http://schemas.microsoft.com/project"'),
+              xml.slice(0, 120));
+        check("an attribute is an attribute, not an element",
+              xml.includes('Author="Matias"') &&
+              !xml.includes("<Author>"), xml.slice(0, 200));
+        check("a list is wrapped", xml.includes("<Tasks>") && xml.includes("<Task>"), xml);
+        check("...and one with no wrapper repeats",
+              (xml.match(/<PredecessorLink>/g) || []).length === 1, xml);
+        check("a bool is the schema's",
+              xml.includes("<Milestone>true</Milestone>"), xml);
+        check("a datetime is one",
+              xml.includes("<Start>2026-09-01T08:00:00</Start>"), xml);
+        check("a list of values names its own item",
+              xml.includes("<Tags>\n    <Tag>a</Tag>"), xml);
+
+        const back = XmlProject.LoadXml(Xml.Parse(xml));
+        eq("an attribute round trips", back.Author, "Matias");
+        eq("a child record does", back.Tasks[1].Name, "Build");
+        eq("a nested list does", back.Tasks[1].Links[0].PredecessorUID, 1);
+        eq("a list of values does", back.Tags.join(","), "a,b");
+        eq("and nothing was a problem", back.Problems.length, 0,
+           back.Problems.join(" | "));
+        check("the whole shape comes back",
+              sameJson(back.Serialize(true), p.Serialize(true)),
+              JSON.stringify(back.Serialize(true)));
+
+        check("ToXml() leaves the defaults out",
+              !Xml.Stringify(new XmlTask({ UID: 1 }).ToXml())
+                  .includes("Milestone"));
+
+        /* LoadXml is lenient, and says what it could not take. */
+        const partial = XmlProject.LoadXml(Xml.Parse(
+            `<Project xmlns="${MSPDI_NS[0]}" Extra="1">
+               <Author>Ana</Author>
+               <CurrencyCode>US<i>D</i></CurrencyCode>
+               <Notes>hello</Notes>
+               <Tasks><Task><UID>x</UID><Name Lang="en">N</Name>
+                 <Name>B</Name><Nope/></Task></Tasks>
+             </Project>`));
+        check("an unknown attribute is reported",
+              partial.Problems.some((p) => p.includes("Extra")),
+              partial.Problems.join(" | "));
+        check("an unknown element is reported",
+              partial.Problems.some((p) => p.includes("<Notes>")),
+              partial.Problems.join(" | "));
+        check("a bad value keeps the field's own sentence",
+              partial.Problems.some((p) => p.includes("UID")),
+              partial.Problems.join(" | "));
+        check("a nested unknown carries its path",
+              partial.Problems.some((p) => p.includes("Tasks[0]") &&
+                                           p.includes("Nope")),
+              partial.Problems.join(" | "));
+        check("child markup in a scalar is said, not lost",
+              partial.Problems.some((p) => p.includes("mixed content")),
+              partial.Problems.join(" | "));
+        check("an attribute of a scalar child is said too",
+              partial.Problems.some((p) => p.includes("attribute 'Lang'")),
+              partial.Problems.join(" | "));
+        check("and a repeated element is read once and reported",
+              partial.Problems.some((p) => p.includes("2 <Name> elements")),
+              partial.Problems.join(" | "));
+        eq("what fit is taken", partial.CurrencyCode, "USD");
+        eq("mixed content reads as its text", partial.Tasks[0].Name, "N");
+        eq("what did not stays at its start", partial.Tasks[0].UID, 0);
+
+        check("the wrong root is a problem, not a throw",
+              XmlProject.LoadXml(Xml.Parse("<Nope/>"))
+                        .Problems.some((p) => p.includes("Nope")));
+        eq("the schema's other namespace is accepted",
+           XmlProject.LoadXml(Xml.Parse(`<Project xmlns="${MSPDI_NS[1]}"/>`))
+                     .Problems.length, 0);
+        check("a namespace in neither list is reported",
+              XmlProject.LoadXml(Xml.Parse('<Project xmlns="http://x.example/"/>'))
+                        .Problems.some((p) => p.includes("namespace")));
+
+        /* SaveXml: in place, only what it models. */
+        const doc = Xml.Parse(
+            `<Project xmlns="${MSPDI_NS[0]}">
+               <!-- kept -->
+               <CurrencyCode>USD</CurrencyCode>
+               <Unknown>42</Unknown>
+               <Tasks>
+                 <Task Keep="1"><UID>1</UID><Name>One</Name><Nope>z</Nope></Task>
+                 <Task><UID>2</UID><Name>Two</Name></Task>
+               </Tasks>
+             </Project>`);
+        const live = XmlProject.LoadXml(doc);
+
+        live.Tasks[0].Name = "One!";
+        live.Tasks[0].Links = [new XmlLink({ PredecessorUID: 2, Type: 1 })];
+        live.Tasks.splice(1, 1);
+        live.Tasks.push(new XmlTask({ UID: 3, Name: "Three" }));
+        live.CurrencyCode = "EUR";
+        live.SaveXml(doc);
+
+        const saved = Xml.Stringify(doc);
+        check("a comment keeps its place", saved.includes("<!-- kept -->"), saved);
+        check("an unknown element is untouched",
+              saved.includes("<Unknown>42</Unknown>"), saved);
+        check("an unknown attribute is untouched",
+              saved.includes('<Task Keep="1">'), saved);
+        check("an unknown child is untouched", saved.includes("<Nope>z</Nope>"), saved);
+        check("an edited value is written", saved.includes("<Name>One!</Name>"), saved);
+        check("a removed item is gone", !saved.includes("<Name>Two</Name>"), saved);
+        check("an added item is there", saved.includes("<Name>Three</Name>"), saved);
+        check("...with its own children written",
+              saved.includes("<PredecessorUID>2</PredecessorUID>") &&
+              saved.includes("<Type>1</Type>"), saved);
+        eq("and the document reads back as the record says",
+           XmlProject.LoadXml(doc).Serialize(true).Tasks.map((x) => x.Name)
+                                 .join(","),
+           "One!,Three");
+        eq("the namespace survived",
+           XmlProject.LoadXml(doc).Problems.filter(
+               (x) => x.includes("namespace")).length, 0);
+
+        /* A list emptied takes its items -- and its wrapper -- with it. */
+        live.Tasks = [];
+        live.Tags = [];
+        live.SaveXml(doc);
+        check("an emptied list takes its wrapper",
+              !Xml.Stringify(doc).includes("<Tasks>"), Xml.Stringify(doc));
+        check("...and its items", !Xml.Stringify(doc).includes("<Task>"),
+              Xml.Stringify(doc));
+
+        /* The refusals, each where it is written. */
+        throws("SaveXml refuses another element",
+               () => p.SaveXml(Xml.Element("Other")));
+        const NoRoot = class extends Record {
+            static Fields = { A: Field.Text() };
+        };
+        check("a shape with no Root cannot be written",
+              (() => { try { new NoRoot().ToXml(); return false; }
+                       catch (e) { return e.message.includes("Xml.Root"); } })());
+        check("a list of values needs its element name",
+              (() => {
+                  const Bad = class extends Record {
+                      static Xml = { Root: "Bad" };
+                      static Fields = { Xs: Field.List(Field.Text()) };
+                  };
+                  try { new Bad({ Xs: ["a"] }).ToXml(); return false; }
+                  catch (e) { return e.message.includes("element"); }
+              })());
+        throws("'attribute' is not a list's",
+               () => Field.List(Field.Text(), { attribute: true }));
+        throws("and 'in' is not a value's",
+               () => Field.Text({ in: "Bunch" }));
+
+        /* The file road, since that is what a format is for. */
+        Directory.Make(SCRATCH);
+        const path = File.Join(SCRATCH, "plan.xml");
+        File.SaveXml(path, p.ToXml(true));
+        const read = XmlProject.LoadXml(File.LoadXml(path));
+        eq("saved and read through a file", read.Tasks[0].Name, "Analyse");
+        eq("...with no complaints", read.Problems.length, 0,
+           read.Problems.join(" | "));
+        File.Delete(path);
+    }
+
     /* --- applying a dictionary of properties --------------------------------
      *
      * The other half of Serialize, and the reason nobody has to write
@@ -16079,6 +16537,10 @@ function Main() {
                 eq("...and Stopwatch", r.stopwatch, "function");
                 eq("...and Record", r.record, "function");
                 eq("...and Table", r.table, "function");
+                eq("...and Xml", r.xml, "object");
+                check("which parses in there", Xml.Available
+                      ? r.xmlText === "x" : r.xmlText.includes("libxml2"),
+                      r.xmlText);
                 /* And not what would fire on the main loop, or is ours. */
                 eq("a worker has no Timer", r.timer, "undefined");
                 eq("...no Settings", r.settings, "undefined");

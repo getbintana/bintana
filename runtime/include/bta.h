@@ -1082,6 +1082,16 @@ void bta_database_driver(JSContext *ctx, const char *name,
 void bta_sqlite_init(JSContext *ctx, JSValue global);
 
 /*
+ * Xml: XML as a **document** -- parse, walk, edit, write -- at JSON's level.
+ * Optional at build time (BTA_HAVE_LIBXML), the sqlite mould: without it `Xml`
+ * exists, `Available` is false and every verb refuses with a sentence.  A
+ * record's mapping onto an element -- `static Xml`, `LoadXml`/`ToXml`/
+ * `SaveXml` -- is in rad.js, beside `Table`; docs/plans/xml-plan.md is the
+ * design.
+ */
+void bta_xml_init(JSContext *ctx, JSValue global);
+
+/*
  * Bytes: the value a file is when it is not text. One class, immutable, with the
  * operations an application actually performs on a file it read.
  */

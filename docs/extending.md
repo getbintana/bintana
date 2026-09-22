@@ -232,9 +232,9 @@ read off the class row rather than recomputed, so the two cannot drift apart.
 
 In CMake, `pkg_check_modules` **without** `REQUIRED`, a `BTA_HAVE_*` definition,
 and a `message(STATUS …)` **either way** — the message is what a build reads back
-to know which half it got, and the `no-vte` CI job greps for it so that a runner
-which quietly grew the library cannot turn the job into a copy of the ordinary
-one. Everything the library's headers bring goes inside the guard, `signal.h` and
+to know which half it got, and the `no-vte`/`no-libxml` CI jobs grep for it so
+that a runner which quietly grew the library cannot turn the job into a copy of
+the ordinary one. Everything the library's headers bring goes inside the guard, `signal.h` and
 `sys/wait.h` included: they do not exist on Windows either, which is the reason
 VTE became optional at all.
 

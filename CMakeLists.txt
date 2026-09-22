@@ -86,6 +86,14 @@ pkg_check_modules(SOUP IMPORTED_TARGET libsoup-3.0)
 # the pbutils headers are required.
 pkg_check_modules(GSTREAMER IMPORTED_TARGET gstreamer-1.0)
 
+# Optional: libxml2 is what `Xml` parses and writes. Optional for the same
+# reason sqlite is -- a program that draws windows and reads JSON needs none of
+# it -- and the mould is sqlite's: without it `Xml` exists, `Available` is
+# false and the verbs refuse with a sentence. Note that GTK4 itself already
+# loads libxml2 at runtime on most desktops; what this asks for is the headers
+# to build against.
+pkg_check_modules(LIBXML IMPORTED_TARGET libxml-2.0)
+
 # ---------------------------------------------------------------- QuickJS ---
 # quickjs-ng, vendored under vendor/quickjs (see vendor/quickjs/VERSION).
 add_library(quickjs STATIC
@@ -177,6 +185,7 @@ add_executable(bintana
     runtime/src/bta_printer.c
     runtime/src/bta_database.c
     runtime/src/bta_sqlite.c
+    runtime/src/bta_xml.c
     runtime/src/bta_locale.c
     runtime/src/bta_bytes.c
     runtime/src/bta_decimal.c
@@ -242,6 +251,14 @@ if(GSTREAMER_FOUND)
     message(STATUS "gstreamer ${GSTREAMER_VERSION}: Video and AudioPlayer are available")
 else()
     message(STATUS "no gstreamer: Video and AudioPlayer will say so when called")
+endif()
+
+if(LIBXML_FOUND)
+    target_link_libraries(bintana PRIVATE PkgConfig::LIBXML)
+    target_compile_definitions(bintana PRIVATE BTA_HAVE_LIBXML=1)
+    message(STATUS "libxml2 ${LIBXML_VERSION}: Xml is available")
+else()
+    message(STATUS "no libxml2: Xml exists and refuses to read anything")
 endif()
 target_compile_definitions(bintana PRIVATE BTA_VERSION_STRING="${PROJECT_VERSION}")
 # -Wshadow, -Wnull-dereference and -Wformat=2 are clean across runtime/src

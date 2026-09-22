@@ -867,6 +867,7 @@ declare const File: {
     Load(...values: any[]): any;
     LoadBytes(...values: any[]): any;
     LoadJson(...values: any[]): any;
+    LoadXml(...values: any[]): any;
     Name(...values: any[]): any;
     Open(...values: any[]): any;
     Relative(...values: any[]): any;
@@ -874,6 +875,7 @@ declare const File: {
     Save(...values: any[]): any;
     SaveBytes(...values: any[]): any;
     SaveJson(...values: any[]): any;
+    SaveXml(...values: any[]): any;
     Trash(...values: any[]): any;
     Watch(...values: any[]): any;
     Within(...values: any[]): any;
@@ -1092,6 +1094,38 @@ declare const Time: {
     Now: any;
     Seconds(...values: any[]): any;
 };
+
+declare const Xml: {
+    Available: any;
+    Element(...values: any[]): any;
+    Parse(...values: any[]): any;
+    ParseBytes(...values: any[]): any;
+    Stringify(...values: any[]): any;
+};
+
+declare class XmlDocument {
+    Root: any;
+}
+
+declare class XmlNode {
+    Add(...values: any[]): any;
+    Attr(...values: any[]): any;
+    AttributeNames(...values: any[]): any;
+    Children: any;
+    Copy(...values: any[]): any;
+    Find(...values: any[]): any;
+    FindAll(...values: any[]): any;
+    Insert(...values: any[]): any;
+    Name: any;
+    Namespace: any;
+    Parent: any;
+    Prefix: any;
+    Remove(...values: any[]): any;
+    RemoveAttr(...values: any[]): any;
+    SetAttr(...values: any[]): any;
+    SetNamespace(...values: any[]): any;
+    Text: any;
+}
 
 declare class Timer {
     constructor(milliseconds?: number, repeat?: boolean);

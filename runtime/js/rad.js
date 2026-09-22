@@ -140,6 +140,35 @@ File.SaveJson = function (path, value) {
 };
 
 /* ------------------------------------------------------------------------
+ * XML files, the same pair one medium over.
+ *
+ * A `.form` and `project.json` are JSON; the formats other programs write are
+ * XML -- MSPDI, SOAP, SVG -- and reading one was
+ * `Xml.ParseBytes(File.LoadBytes(path))` with the path lost from the message.
+ * The two names carry the two decisions: the error names the file, and what is
+ * written is the canonical shape the DOM defines (declaration, indented by
+ * two, one trailing newline).
+ *
+ * **Bytes and not `File.Load`**, because XML declares its own encoding: reading
+ * it as UTF-8 text first would destroy a file written in ISO-8859-1 before the
+ * declaration that says so could be honoured.  A worker runs this file and not
+ * forms.js, and `Xml` is installed there too; see docs/plans/xml-plan.md.
+ * ---------------------------------------------------------------------- */
+
+File.LoadXml = function (path) {
+    try {
+        return Xml.ParseBytes(File.LoadBytes(path));
+    } catch (e) {
+        /* Whose fault it is, which the parser never says. */
+        throw new SyntaxError(`${path}: ${e.message}`);
+    }
+};
+
+File.SaveXml = function (path, node) {
+    File.Save(path, Xml.Stringify(node));
+};
+
+/* ------------------------------------------------------------------------
  * Settings -- what an application remembers between runs.
  *
  * Application.ConfigDirectory is a directory; this is the file everybody was going to
@@ -921,6 +950,14 @@ const FIELD_KINDS = {
      * closes at 20:00 is two options rather than two lines of handwritten
      * validation. They compare as text, which is what "HH:MM" is for. */
     time:   { def: "",    takes: ["required", "min", "max"] },
+    /*
+     * A date and a time together, which is what an XML `dateTime` is and what
+     * neither of the two above can say: `2026-09-01T08:00:00`. It holds
+     * `YYYY-MM-DDTHH:MM` or `...:SS`, seconds optional, compared as text the
+     * way `time` is; an offset or a fraction is refused rather than half-kept,
+     * and arrives with the first format that has one.
+     */
+    datetime: { def: "",  takes: ["required", "min", "max"] },
     list:   { def: [],    takes: ["required", "max"] },
     enum:   { def: "",    takes: ["required"] },
     /*
@@ -954,6 +991,19 @@ const FIELD_KINDS = {
 const FIELD_COMMON = ["as", "def", "key"];
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+/* `YYYY-MM-DDTHH:MM` or `...:SS`, with `Z` or `±HH:MM` when the moment has a
+ * zone.  A fraction of a second is not accepted: nothing here reads one and
+ * half a value is worse than none. */
+const ISO_DATETIME =
+    /^(\d{4})-(\d{2})-(\d{2})T([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?(Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)?$/;
+/* And the zone alone, because min/max compare as text and a text order over
+ * moments is a wrong answer that looks right. */
+const ZONED = /(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
+
+/* What XML spells a number with: a dot and never the desktop's comma, since
+ * this reads a file and not a person. */
+const XML_WHOLE = /^-?\d+$/;
+const XML_DEC   = /^-?(\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?$/;
 /* `"HH:MM"` or `"HH:MM:SS"`, and nothing looser: a value that is sometimes five
  * characters and sometimes four does not sort, and sorting is most of what a
  * time held as text is for. The same rule the `Time` global parses by. */
@@ -1035,14 +1085,36 @@ function makeField(kind, opts, extra) {
     const spec  = FIELD_KINDS[kind];
     const field = { __field: true, kind, def: spec.def };
 
+    /*
+     * The XML mapping's three options live where they can mean something:
+     * `attribute` on a value, and `in`/`element` on a list.  A record's element
+     * name is its class's `Xml.Root` (`as` overrides it), and a list of records
+     * takes its item name from the same place, so neither is an option here.
+     */
+    const common = FIELD_COMMON.slice();
+    if (kind !== "record" && kind !== "list") common.push("attribute");
+    if (kind === "list") common.push("in", "element");
+
     for (const key in opts || {}) {
-        if (!FIELD_COMMON.includes(key) && !spec.takes.includes(key)) {
-            const takes = FIELD_COMMON.concat(spec.takes).join(", ");
+        if (!common.includes(key) && !spec.takes.includes(key)) {
+            const takes = common.concat(spec.takes).join(", ");
             throw new RangeError(`${fieldName(kind)}: '${key}' is not one of ` +
                                  `its options (${takes})`);
         }
         field[key] = opts[key];
     }
+
+    if (field.attribute !== undefined && field.attribute !== true)
+        throw new TypeError(`${fieldName(kind)}: 'attribute' is true or it is ` +
+                            `not written`);
+    if (field.in !== undefined && (typeof field.in !== "string" || !field.in))
+        throw new TypeError(`${fieldName(kind)}: 'in' is the wrapper element's ` +
+                            `name`);
+    if (field.element !== undefined &&
+        (typeof field.element !== "string" || !field.element))
+        throw new TypeError(`${fieldName(kind)}: 'element' is the item ` +
+                            `element's name`);
+
     for (const key in extra || {}) field[key] = extra[key];
     return field;
 }
@@ -1168,6 +1240,55 @@ function fieldValue(field, name, v, mayBeEmpty) {
         return v;
     }
 
+    case "datetime": {
+        if (typeof v !== "string")
+            throw new TypeError(`${name}: expected a date and time as text, ` +
+                                `got ${typeof v}`);
+        if (v === "") {
+            if (field.required) throw new RangeError(`${name} is required`);
+            return v;
+        }
+
+        const parts = ISO_DATETIME.exec(v);
+        if (!parts)
+            throw new RangeError(`${name}: '${v}' is not a date and time ` +
+                                 `(expected YYYY-MM-DDTHH:MM[:SS], with an ` +
+                                 `optional Z or ±HH:MM)`);
+
+        /* A timestamp that reads as one and is not: February the 30th parses
+         * and then comes back as March, exactly as `date` says. */
+        const y = +parts[1], m = +parts[2], d = +parts[3];
+        const when = new Date(y, m - 1, d);
+        if (when.getFullYear() !== y || when.getMonth() !== m - 1 ||
+            when.getDate() !== d)
+            throw new RangeError(`${name}: '${v}' is not a date`);
+
+        /*
+         * Text order, and without a zone it holds across the optional
+         * seconds: "08:00" is before "08:00:01" as a string and as a moment.
+         * **With one it does not** -- 09:00+02:00 is 07:00Z, which is earlier
+         * than 08:00Z and later than 08:00 as text -- so a range and a zone
+         * are refused together rather than answered wrongly.  Comparing
+         * instants is the program's, where the value means something.
+         */
+        if (field.min !== undefined || field.max !== undefined) {
+            if (ZONED.test(v) ||
+                (field.min !== undefined && ZONED.test(field.min)) ||
+                (field.max !== undefined && ZONED.test(field.max)))
+                throw new RangeError(`${name}: min/max compare local text, and ` +
+                                     `'${v}' is a moment -- a text order is not ` +
+                                     `a time order, so keep the range in the ` +
+                                     `program`);
+            if (field.min !== undefined && v < field.min)
+                throw new RangeError(`${name}: ${field.min} at the earliest, ` +
+                                     `got ${v}`);
+            if (field.max !== undefined && v > field.max)
+                throw new RangeError(`${name}: ${field.max} at the latest, ` +
+                                     `got ${v}`);
+        }
+        return v;
+    }
+
     case "bytes": {
         /*
          * **A string here is base64**, and that is not a convenience: it is what
@@ -1257,12 +1378,13 @@ function fieldValue(field, name, v, mayBeEmpty) {
 }
 
 GLOBAL.Field = {
-    Text:   (opts) => makeField("text",   opts),
-    Int:    (opts) => makeField("int",    opts),
-    Number: (opts) => makeField("number", opts),
-    Date:   (opts) => makeField("date",   opts),
-    Time:   (opts) => makeField("time",   opts),
-    Bytes:  (opts) => makeField("bytes",  opts),
+    Text:     (opts) => makeField("text",     opts),
+    Int:      (opts) => makeField("int",      opts),
+    Number:   (opts) => makeField("number",   opts),
+    Date:     (opts) => makeField("date",     opts),
+    Time:     (opts) => makeField("time",     opts),
+    DateTime: (opts) => makeField("datetime", opts),
+    Bytes:    (opts) => makeField("bytes",    opts),
 
     /* The default first, because it is the whole of what a boolean field says. */
     Bool: (def, opts) => makeField("bool", opts, { def: def === true }),
@@ -1846,6 +1968,570 @@ GLOBAL.Record = class Record {
         for (const key in json)
             if (!hasOwn.call(taken, key)) rec.#x[key] = json[key];
         return rec;
+    }
+
+    /* --------------------------------------------------------------- XML
+     *
+     * A shape and an element, declared once.  `static Xml` names the element
+     * this record is, and every field names its own -- the same `as`/`Naming`
+     * pair a column uses, plus three options for the places XML differs:
+     * `attribute` for a value kept as one, `in` for the wrapper a list lives
+     * under, and `element` for the item name of a list of values.
+     *
+     * Three verbs, and the difference between them is the difference between
+     * JSON and XML.  `ToXml` is `Serialize`: a new element, what differs from
+     * the field's start (or everything, with `true`).  `LoadXml` is `Load`: a
+     * document read leniently, with `Problems`.  `SaveXml` is neither -- it
+     * writes into the element it is handed and touches **only** what it
+     * models, which is the road an interchange round trip needs: everything
+     * the shape does not know about stays exactly where it was.
+     *
+     * What is not modelled is **reported and left alone**: `LoadXml` puts it
+     * in `Problems`, `ToXml` does not write it, and `SaveXml` does not see it.
+     * There is no raw-node bag, because re-emitting an unknown element at the
+     * end of an `xsd:sequence` is a wrong answer that looks right.
+     *
+     * `static Xml` merges down the class chain the way `Fields` does, a string
+     * `Namespace` or a list: the first is written, all of them are accepted on
+     * read -- an official schema and the files it describes can disagree about
+     * the URI and both be right, which is exactly what MSPDI does.
+     */
+
+    static #xmlReady = new Map();
+
+    static #namingOf(ctor) {
+        return NAMINGS[ctor.Naming || "same"];
+    }
+
+    static #xmlOf(ctor) {
+        let shape = Record.#xmlReady.get(ctor);
+        if (shape) return shape;
+
+        const chain = [];
+        for (let c = ctor; c && c !== Record; c = prototypeOf(c)) chain.unshift(c);
+
+        const out = {};
+        for (const c of chain) {
+            const own = ownDescriptor(c, "Xml");
+            if (!own) continue;
+            if (!own.value || typeof own.value !== "object" ||
+                Array.isArray(own.value))
+                throw new TypeError(`${c.name}.Xml must be a static object of ` +
+                                    `{ Root, Namespace }`);
+
+            for (const key in own.value) {
+                if (key !== "Root" && key !== "Namespace")
+                    throw new RangeError(`${c.name}.Xml: '${key}' is not an ` +
+                                         `XML option (Root, Namespace)`);
+                out[key] = own.value[key];
+            }
+        }
+
+        if (out.Root !== undefined &&
+            (typeof out.Root !== "string" || !out.Root))
+            throw new TypeError(`${ctor.name}.Xml.Root must be an element name`);
+
+        const uris = out.Namespace === undefined ? []
+                   : Array.isArray(out.Namespace) ? out.Namespace
+                   : [out.Namespace];
+        if (!uris.length && out.Namespace !== undefined)
+            throw new TypeError(`${ctor.name}.Xml.Namespace must be a URI or a ` +
+                                `list of them`);
+        if (!uris.every((u) => typeof u === "string" && u))
+            throw new TypeError(`${ctor.name}.Xml.Namespace must be a URI or a ` +
+                                `list of them`);
+        out.Uris = uris;
+
+        Record.#xmlReady.set(ctor, out);
+        return out;
+    }
+
+    /* The element a field is written as: `as` first, then the class's own Root
+     * for a record, then the naming rule for a value. */
+    static #xmlFieldName(ctor, name, field) {
+        if (field.as) return field.as;
+        if (field.kind === "record") return Record.#xmlRootOf(recordClass(field));
+        return Record.#namingOf(ctor)(name);
+    }
+
+    static #xmlRootOf(of) {
+        const root = Record.#xmlOf(of).Root;
+        if (!root)
+            throw new RangeError(`${of.name} has no Xml.Root, so there is no ` +
+                                 `element to write it as -- declare one, or ` +
+                                 `give the field an 'as'`);
+        return root;
+    }
+
+    static #xmlItemName(field) {
+        if (field.element) return field.element;
+        if (field.item.kind === "record")
+            return Record.#xmlRootOf(recordClass(field.item));
+        throw new RangeError(`Field.List needs { element: "Name" } for a list ` +
+                             `of values: only a record knows its own element`);
+    }
+
+    /* The child element names a parent models, in declaration order -- what
+     * `SaveXml` keeps a missing element's insertion in step with. */
+    static #xmlOrder(ctor, fields) {
+        const out = [];
+
+        for (const name in fields) {
+            const field = fields[name];
+            if (field.attribute) continue;
+            if (field.kind === "list")
+                out.push(field.in || Record.#xmlItemName(field));
+            else
+                out.push(Record.#xmlFieldName(ctor, name, field));
+        }
+        return out;
+    }
+
+    /* One value as XML spells it.  A boolean is `true`/`false`, which is the
+     * XML Schema spelling and the one read back; MS Project writes `0`/`1` and
+     * that is read too. */
+    static #xmlText(field, v) {
+        switch (field.kind) {
+        case "bool":    return v ? "true" : "false";
+        case "int":
+        case "number":
+        case "decimal": return `${v}`;
+        case "bytes":   return v.ToBase64();
+        default:        return v;
+        }
+    }
+
+    /* And the other way: what XML spells, as the type the field's setter
+     * takes.  A value this cannot read is handed over as the text it was, so
+     * the field's own check writes the sentence -- one place composes them. */
+    static #xmlValue(field, text) {
+        switch (field.kind) {
+        case "int":    return XML_WHOLE.test(text) ? Number(text) : text;
+        case "number": return XML_DEC.test(text) ? Number(text) : text;
+        case "bool":
+            if (text === "true" || text === "1")  return true;
+            if (text === "false" || text === "0") return false;
+            return text;
+        default:
+            return text;
+        }
+    }
+
+    static #xmlSource(source, who) {
+        const el = source && typeof source === "object" &&
+                   typeof source.Name === "string"
+                 ? source
+                 : source && typeof source === "object" && source.Root
+                 ? source.Root : null;
+
+        if (!el)
+            throw new TypeError(`${who}: expected an XML document or element, ` +
+                                `from Xml.Parse or File.LoadXml`);
+        return el;
+    }
+
+    /*
+     * One element, as the plain object `Load` reads -- recursively, so a child
+     * keeps its own mapping and its own problems.  `unknown` collects what the
+     * shape does not model, with the path in front of it; `Load` is what
+     * validates every value.
+     */
+    static #xmlRead(ctor, el, path, unknown) {
+        const fields = Record.#fieldsOf(ctor);
+        const naming = Record.#namingOf(ctor);
+        const values = {};
+        const seen   = new Set();
+
+        for (const name in fields) {
+            const field = fields[name];
+            /* The object `Load` reads is keyed by the **file's** spelling and
+             * not by the property name -- `Load` looks a field up by
+             * `as`/`Naming` -- and the element name is a third thing for a
+             * record or a list, where the class or the option names it. */
+            const fileKey = field.as || naming(name);
+
+            if (field.attribute) {
+                seen.add(`@${fileKey}`);
+                const v = el.Attr(fileKey);
+                if (v !== null) values[fileKey] = Record.#xmlValue(field, v);
+                continue;
+            }
+
+            if (field.kind === "list") {
+                const itemName = Record.#xmlItemName(field);
+                const holder   = field.in ? el.Find(field.in) : el;
+
+                if (field.in) {
+                    seen.add(field.in);
+                    if (!holder) continue;
+                    for (const c of holder.Children)
+                        if (c.Name !== itemName)
+                            unknown.push(`${path}${name}: <${c.Name}> is not ` +
+                                         `modelled`);
+                } else {
+                    seen.add(itemName);
+                }
+
+                values[fileKey] = holder.FindAll(itemName).map((item, i) =>
+                    field.item.kind === "record"
+                        ? Record.#xmlRead(recordClass(field.item), item,
+                                          `${path}${name}[${i}].`, unknown)
+                        : Record.#xmlValue(field.item, item.Text));
+                continue;
+            }
+
+            if (field.kind === "record") {
+                const childName = Record.#xmlFieldName(ctor, name, field);
+                const kids      = el.FindAll(childName);
+
+                seen.add(childName);
+                if (kids.length > 1)
+                    unknown.push(`${path}<${el.Name}>: ${kids.length} ` +
+                                 `<${childName}> elements, and the shape reads one`);
+                if (kids.length)
+                    values[fileKey] = Record.#xmlRead(recordClass(field), kids[0],
+                                                      `${path}${name}.`, unknown);
+                continue;
+            }
+
+            /*
+             * A scalar field reads its element's **text**, so anything else
+             * that element carries is content the shape is dropping -- and it
+             * is said rather than lost: a repetition (two `<Name>` elements,
+             * which is how a prefixed name in another namespace looks from
+             * here), attributes (`<guid isPermaLink="false">`, whose own text
+             * is the value), and child elements (`<description>` with real
+             * markup inside, which is read as the text between the tags).
+             */
+            seen.add(fileKey);
+            const kids = el.FindAll(fileKey);
+
+            if (kids.length > 1)
+                unknown.push(`${path}<${el.Name}>: ${kids.length} <${fileKey}> ` +
+                             `elements, and the shape reads one`);
+            if (!kids.length) continue;
+
+            if (kids[0].Children.length)
+                unknown.push(`${path}<${fileKey}>: mixed content is read as ` +
+                             `its text`);
+            for (const a of kids[0].AttributeNames())
+                unknown.push(`${path}<${fileKey}>: attribute '${a}' is not ` +
+                             `modelled`);
+            values[fileKey] = Record.#xmlValue(field, kids[0].Text);
+        }
+
+        for (const a of el.AttributeNames())
+            if (!seen.has(`@${a}`))
+                unknown.push(`${path}<${el.Name}>: attribute '${a}' is not ` +
+                             `modelled`);
+        for (const c of el.Children)
+            if (!seen.has(c.Name))
+                unknown.push(`${path}<${el.Name}>: <${c.Name}> is not modelled`);
+        return values;
+    }
+
+    /*
+     * A document or element, read leniently -- `Load`'s bargain one medium
+     * over.  The root's element and namespace are checked, everything the
+     * shape does not model is reported, and nothing throws: an element read
+     * from somebody else's file is a file.
+     */
+    static LoadXml(source) {
+        const el    = Record.#xmlSource(source, "LoadXml");
+        const ctor  = this;
+        const shape = Record.#xmlOf(ctor);
+        const pre   = [];
+
+        if (!shape.Root)
+            pre.push(`${ctor.name} has no Xml.Root, so there is no element it ` +
+                     `reads from`);
+        else if (el.Name !== shape.Root)
+            pre.push(`expected <${shape.Root}>, got <${el.Name}>`);
+        if (shape.Uris.length && !shape.Uris.includes(el.Namespace))
+            pre.push(`expected namespace ${shape.Uris.join(" or ")}, got ` +
+                     `'${el.Namespace}'`);
+
+        const unknown = [];
+        const values  = Record.#xmlRead(ctor, el, "", unknown);
+        const rec     = ctor.Load(values);
+
+        rec.#p.unshift(...pre);
+        for (const u of unknown) rec.#p.push(u);
+        return rec;
+    }
+
+    /*
+     * A new element, the way `Serialize` is a new object: what differs from
+     * the field's start, or every field with `true` -- which is what a schema
+     * with elements that are not `minOccurs="0"` needs.
+     */
+    ToXml(all) {
+        const shape = Record.#xmlOf(this.constructor);
+
+        if (!shape.Root)
+            throw new RangeError(`${this.constructor.name} has no Xml.Root, ` +
+                                 `so there is no element to write it as`);
+        const el = Xml.Element(shape.Root);
+
+        Record.#xmlWrite(this, el, all === true);
+        return el;
+    }
+
+    static #xmlWrite(rec, el, all) {
+        const ctor   = rec.constructor;
+        const shape  = Record.#xmlOf(ctor);
+        const fields = Record.#fieldsOf(ctor);
+
+        if (shape.Uris.length) el.SetNamespace(shape.Uris[0]);
+
+        for (const name in fields) {
+            const field = fields[name];
+            const v     = rec.#d[name];
+
+            if (!all && Record.#atDefault(v, field)) continue;
+
+            if (field.attribute) {
+                el.SetAttr(Record.#xmlFieldName(ctor, name, field),
+                           Record.#xmlText(field, v));
+                continue;
+            }
+
+            if (field.kind === "list") {
+                const itemName = Record.#xmlItemName(field);
+                const holder   = field.in ? el.Add(field.in) : el;
+
+                for (const item of v) {
+                    if (field.item.kind === "record") {
+                        const child = Xml.Element(itemName);
+
+                        Record.#xmlWrite(item, child, all);
+                        holder.Add(child);
+                    } else {
+                        holder.Add(itemName).Text =
+                            Record.#xmlText(field.item, item);
+                    }
+                }
+                continue;
+            }
+
+            if (field.kind === "record") {
+                if (v === null) continue;
+                const child = Xml.Element(Record.#xmlFieldName(ctor, name, field));
+
+                Record.#xmlWrite(v, child, all);
+                el.Add(child);
+                continue;
+            }
+
+            el.Add(Record.#xmlFieldName(ctor, name, field)).Text =
+                Record.#xmlText(field, v);
+        }
+    }
+
+    /*
+     * The record's state, written **into** an element: only what it models,
+     * with everything else -- unknown elements, foreign namespaces, comments
+     * -- exactly where it was.
+     *
+     * A field at what it starts from is removed rather than written, which is
+     * `ToXml`'s omission with a tree to keep in step.  A list is reconciled:
+     * an item is matched to an element by the record's `key` (declared as
+     * ever) where there is one and by position where there is not, unmatched
+     * elements are taken out, new ones are added, and the order of the list is
+     * the order of the elements afterwards.
+     */
+    SaveXml(source) {
+        const el    = Record.#xmlSource(source, "SaveXml");
+        const ctor  = this.constructor;
+        const shape = Record.#xmlOf(ctor);
+
+        if (!shape.Root)
+            throw new RangeError(`${ctor.name} has no Xml.Root, so there is no ` +
+                                 `element to write into`);
+        if (el.Name !== shape.Root)
+            throw new TypeError(`SaveXml: expected <${shape.Root}>, got ` +
+                                `<${el.Name}>`);
+
+        Record.#xmlSave(this, el);
+        return el;
+    }
+
+    static #xmlSave(rec, el) {
+        const ctor   = rec.constructor;
+        const fields = Record.#fieldsOf(ctor);
+        const order  = Record.#xmlOrder(ctor, fields);
+
+        for (const name in fields) {
+            const field = fields[name];
+            const v     = rec.#d[name];
+            const dflt  = Record.#atDefault(v, field);
+
+            if (field.attribute) {
+                const key = Record.#xmlFieldName(ctor, name, field);
+
+                if (dflt) el.RemoveAttr(key);
+                else      el.SetAttr(key, Record.#xmlText(field, v));
+                continue;
+            }
+
+            if (field.kind === "list") {
+                if (dflt) Record.#xmlDropList(el, field);
+                else      Record.#xmlSaveList(el, field, v, order);
+                continue;
+            }
+
+            if (field.kind === "record") {
+                const childName = Record.#xmlFieldName(ctor, name, field);
+                const child     = el.Find(childName);
+
+                if (v === null) {
+                    if (child) child.Remove();
+                    continue;
+                }
+                Record.#xmlSave(v, child || Record.#xmlInsert(el, childName, order));
+                continue;
+            }
+
+            const key   = Record.#xmlFieldName(ctor, name, field);
+            const child = el.Find(key);
+
+            if (dflt) {
+                if (child) child.Remove();
+                continue;
+            }
+            (child || Record.#xmlInsert(el, key, order)).Text =
+                Record.#xmlText(field, v);
+        }
+    }
+
+    /* A missing element goes where the declaration says it goes, relative to
+     * the modelled siblings -- before the first one declared after it -- and
+     * never moves anything the shape does not know about. */
+    static #xmlInsert(el, name, order) {
+        const later = order.slice(order.indexOf(name) + 1);
+        const kids  = el.Children;
+        let   at    = -1;
+
+        for (let i = 0; i < kids.length; i++)
+            if (later.includes(kids[i].Name)) { at = i; break; }
+
+        /* The answer is the node that is **in this tree**: a `Xml.Element` is
+         * detached, so `Insert`/`Add` copy it in and the caller writing the
+         * value has to write the copy -- the original stays where it was. */
+        const made = Xml.Element(name);
+        return at >= 0 ? el.Insert(at, made) : el.Add(made);
+    }
+
+    /* An empty list takes its items out -- and the wrapper with them when
+     * nothing else is left in it, since the wrapper was modelled too.  A
+     * wrapper holding something the shape does not know about stays. */
+    static #xmlDropList(el, field) {
+        const itemName = Record.#xmlItemName(field);
+
+        if (field.in) {
+            const holder = el.Find(field.in);
+
+            if (!holder) return;
+            for (const child of holder.Children)
+                if (child.Name === itemName) child.Remove();
+            if (!holder.Children.length) holder.Remove();
+            return;
+        }
+
+        for (const child of el.FindAll(itemName)) child.Remove();
+    }
+
+    static #xmlSaveList(el, field, v, order) {
+        const itemName = Record.#xmlItemName(field);
+        const holder   = field.in
+                       ? (el.Find(field.in) || Record.#xmlInsert(el, field.in, order))
+                       : el;
+        const existing = holder.FindAll(itemName);
+        const key      = field.item.kind === "record"
+                       ? Record.#xmlKeyName(recordClass(field.item)) : null;
+        const used     = new Array(existing.length).fill(false);
+        const wanted   = [];
+
+        for (const item of v) {
+            let found = null;
+
+            if (key) {
+                const want = Record.#xmlKeyText(item, key);
+
+                if (want !== null) {
+                    for (let i = 0; i < existing.length; i++) {
+                        if (used[i]) continue;
+                        const got = key.attribute
+                                  ? existing[i].Attr(key.name)
+                                  : (existing[i].Find(key.name) || {}).Text;
+                        if (got === want) { found = existing[i]; used[i] = true; break; }
+                    }
+                }
+            } else {
+                const i = used.indexOf(false);
+                if (i >= 0) { found = existing[i]; used[i] = true; }
+            }
+
+            if (!found)
+                found = Xml.Element(itemName);
+            wanted.push(found);
+
+            if (field.item.kind === "record") Record.#xmlSave(item, found);
+            else found.Text = Record.#xmlText(field.item, item);
+        }
+
+        existing.forEach((node, i) => { if (!used[i]) node.Remove(); });
+        Record.#xmlPlace(holder, itemName, wanted);
+    }
+
+    /*
+     * The list's order is the array's order afterwards.  New items are
+     * detached elements, and `Insert` copies what comes from another tree,
+     * which is exactly what putting one here means; an item already in
+     * position is a no-op at the C level.
+     */
+    static #xmlPlace(holder, itemName, wanted) {
+        for (let i = 0; i < wanted.length; i++) {
+            const kids = holder.Children;
+            let   seen = 0;
+            let   at   = -1;
+
+            for (let j = 0; j < kids.length; j++) {
+                if (kids[j].Name !== itemName) continue;
+                if (seen === i) { at = j; break; }
+                seen++;
+            }
+
+            if (at < 0) holder.Add(wanted[i]);
+            else        holder.Insert(at, wanted[i]);
+        }
+    }
+
+    /* The field a list is keyed by, if the item shape declares one: `Table`
+     * reads `key` the same way, and a key at what it starts from means a row
+     * that has never been saved -- so it never matches an element. */
+    static #xmlKeyName(ctor) {
+        const fields = Record.#fieldsOf(ctor);
+        const naming = Record.#namingOf(ctor);
+
+        for (const name in fields) {
+            const field = fields[name];
+
+            if (field.key !== true) continue;
+            if (field.kind === "record" || field.kind === "list") continue;
+            return {
+                prop:      name,
+                name:      field.as || naming(name),
+                attribute: field.attribute === true,
+                field,
+            };
+        }
+        return null;
+    }
+
+    static #xmlKeyText(item, key) {
+        if (Record.#atDefault(item.#d[key.prop], key.field)) return null;
+        return Record.#xmlText(key.field, item.#d[key.prop]);
     }
 };
 
