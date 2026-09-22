@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A track as a watch or a phone writes it: the position as attributes on
+     every point, two segments (the recorder was paused), a namespace, and an
+     <extensions> block from a program this one has never heard of. -->
+<gpx version="1.1" creator="bintana-example"
+     xmlns="http://www.topografix.com/GPX/1/1"
+     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
+  <metadata>
+    <name>Costanera</name>
+    <time>2026-09-01T08:00:00Z</time>
+  </metadata>
+  <trk>
+    <name>Mañana en bici</name>
+    <type>cycling</type>
+    <trkseg>
+      <trkpt lat="-34.6037000" lon="-58.3816000">
+        <ele>25.0</ele><time>2026-09-01T08:00:00Z</time>
+      </trkpt>
+      <trkpt lat="-34.6051000" lon="-58.3790000">
+        <ele>27.5</ele><time>2026-09-01T08:06:00Z</time>
+      </trkpt>
+      <trkpt lat="-34.6072000" lon="-58.3761000">
+        <ele>30.0</ele><time>2026-09-01T08:12:00Z</time>
+      </trkpt>
+      <trkpt lat="-34.6098000" lon="-58.3730000">
+        <ele>34.5</ele><time>2026-09-01T08:18:00Z</time>
+      </trkpt>
+      <trkpt lat="-34.6120000" lon="-58.3702000">
+        <ele>31.0</ele><time>2026-09-01T08:24:00Z</time>
+        <extensions>
+          <gpxtpx:TrackPointExtension xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">
+            <gpxtpx:hr>128</gpxtpx:hr>
+          </gpxtpx:TrackPointExtension>
+        </extensions>
+      </trkpt>
+    </trkseg>
+    <trkseg>
+      <trkpt lat="-34.6140000" lon="-58.3680000">
+        <ele>28.0</ele><time>2026-09-01T08:32:00Z</time>
+      </trkpt>
+      <trkpt lat="-34.6155000" lon="-58.3650000">
+        <ele>24.0</ele><time>2026-09-01T08:38:00Z</time>
+      </trkpt>
+      <trkpt lat="-34.6162000" lon="-58.3618000">
+        <ele>20.0</ele><time>2026-09-01T08:45:00Z</time>
+      </trkpt>
+    </trkseg>
+    <extensions>
+      <gpxx:TrackExtension xmlns:gpxx="http://www.garmin.com/xmlschemas/GpxExtensions/v3">
+        <gpxx:DisplayColor>Blue</gpxx:DisplayColor>
+      </gpxx:TrackExtension>
+    </extensions>
+  </trk>
+</gpx>

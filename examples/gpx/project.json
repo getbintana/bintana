@@ -1,0 +1,11 @@
+{
+  "name": "Gpx",
+  "startup": "GpxForm",
+  "sources": [
+    "Tiles.js",
+    "Gpx.js",
+    "GpxForm.js"
+  ],
+  "version": "1.0",
+  "description": "A real marathon over cached OpenStreetMap tiles: hover the line for the mark, and Save writes around the watch's extensions"
+}

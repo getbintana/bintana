@@ -1,0 +1,234 @@
+{
+  "format": "bintana-form/1",
+  "class": "GpxForm",
+  "properties": {
+    "AcceptFiles": true,
+    "Height": 600,
+    "Icon": "find-location-symbolic",
+    "Text": "GPX",
+    "Width": 900
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblTitle",
+      "properties": {
+        "Ellipsize": true,
+        "Height": 34,
+        "Style": "title-3",
+        "VAlign": "Start",
+        "Width": 740,
+        "X": 12,
+        "Y": 10
+      },
+      "design": {
+        "Text": "Mañana en bici"
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnOpen",
+      "properties": {
+        "HAlign": "End",
+        "Height": 34,
+        "Icon": "document-open-symbolic",
+        "Text": "Open…",
+        "Tooltip": "A .gpx track",
+        "VAlign": "Start",
+        "Width": 120,
+        "X": 768,
+        "Y": 10
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtName",
+      "properties": {
+        "Height": 34,
+        "Placeholder": "Track name",
+        "Tooltip": "Edit it and Save: only the fields this shape models are written, and the watch's extensions stay",
+        "VAlign": "Start",
+        "Width": 400,
+        "X": 12,
+        "Y": 54
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnSave",
+      "properties": {
+        "Enabled": false,
+        "Height": 34,
+        "Icon": "document-save-symbolic",
+        "Text": "Save",
+        "Tooltip": "Writes the track name back into the same file, around everything the shape does not model",
+        "VAlign": "Start",
+        "Width": 100,
+        "X": 424,
+        "Y": 54
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnZoomOut",
+      "properties": {
+        "Height": 34,
+        "Icon": "zoom-out-symbolic",
+        "Tooltip": "One zoom level out — only the tiles the new view needs are asked for",
+        "VAlign": "Start",
+        "Width": 40,
+        "X": 800,
+        "Y": 54
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnZoomIn",
+      "properties": {
+        "Height": 34,
+        "Icon": "zoom-in-symbolic",
+        "Tooltip": "One zoom level in",
+        "VAlign": "Start",
+        "Width": 40,
+        "X": 848,
+        "Y": 54
+      }
+    },
+    {
+      "type": "Overlay",
+      "name": "Map",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 440,
+        "MinHeight": 200,
+        "MinWidth": 300,
+        "VAlign": "Fill",
+        "Width": 876,
+        "X": 12,
+        "Y": 98
+      },
+      "children": [
+        {
+          "type": "DrawingArea",
+          "name": "Area",
+          "properties": {
+            "Expand": true,
+            "HAlign": "Fill",
+            "VAlign": "Fill"
+          }
+        },
+        {
+          "type": "Panel",
+          "name": "Hover",
+          "properties": {
+            "Arrangement": "Vertical",
+            "Foreground": "#ffffff",
+            "HAlign": "Start",
+            "Margin": 12,
+            "Padding": "6 10",
+            "Radius": 8,
+            "Shadow": "0 2 10 0 rgba(0,0,0,0.35)",
+            "Spacing": 2,
+            "Style": "osd",
+            "VAlign": "Start",
+            "Visible": false
+          },
+          "children": [
+            {
+              "type": "Label",
+              "name": "LblHoverAt",
+              "properties": {
+                "Alignment": "Start",
+                "Foreground": "#ffffff"
+              },
+              "design": {
+                "Text": "12,40 km · 28 m"
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblHoverWhen",
+              "properties": {
+                "Alignment": "Start",
+                "Foreground": "#ffffff"
+              },
+              "design": {
+                "Text": "0:58:12 · 4:41 /km"
+              }
+            }
+          ]
+        },
+        {
+          "type": "Panel",
+          "name": "Credits",
+          "properties": {
+            "Arrangement": "Horizontal",
+            "HAlign": "End",
+            "Margin": 12,
+            "Padding": "4 10",
+            "Radius": 8,
+            "Spacing": 14,
+            "Style": "osd",
+            "VAlign": "End",
+            "Visible": false
+          },
+          "children": [
+            {
+              "type": "LinkButton",
+              "name": "LnkCredit",
+              "properties": {
+                "Foreground": "#ffffff",
+                "Text": "© OpenStreetMap contributors",
+                "Tooltip": "The map data is OpenStreetMap's, under the ODbL",
+                "Uri": "https://www.openstreetmap.org/copyright"
+              }
+            },
+            {
+              "type": "LinkButton",
+              "name": "LnkFix",
+              "properties": {
+                "Foreground": "#ffffff",
+                "Text": "Report a map issue",
+                "Uri": "https://www.openstreetmap.org/fixthemap"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Label",
+      "name": "LblStats",
+      "properties": {
+        "Ellipsize": true,
+        "Height": 32,
+        "Style": "dim-label",
+        "VAlign": "End",
+        "Width": 560,
+        "X": 12,
+        "Y": 548
+      },
+      "design": {
+        "Text": "2,32 km · +10 m · 8 points · 45 min"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblMap",
+      "properties": {
+        "Alignment": "Right",
+        "Ellipsize": true,
+        "HAlign": "End",
+        "Height": 32,
+        "Style": "dim-label",
+        "VAlign": "End",
+        "Width": 308,
+        "X": 580,
+        "Y": 548
+      },
+      "design": {
+        "Text": "z15 · 4 cache · 2 asked · 0 304"
+      }
+    }
+  ]
+}

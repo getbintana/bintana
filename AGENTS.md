@@ -3012,6 +3012,16 @@ person who wrote it either.
   whatever path the handler had already started, and a path survives
   `Push`/`Pop` here by design. The source's own extent is what bounds the ink,
   so `paint` is also the right answer and not only the safe one.
+- **The pen's width is `LineWidth`, and `p.Width = 8` is a plain JavaScript
+  property that the painter never reads.** It does not throw, it does not warn,
+  and the line stays one pixel: `examples/gpx` drew its track "wider" through
+  three rounds of screenshots before anybody looked at the property table --
+  `painter_props` says `LineWidth`, and every other painter in the tree
+  (`lib/charts`, `lib/report`, `lib/markdown`, `examples/drawing`) already
+  wrote it that way. **`--strict` would not have caught it either**: a
+  `Painter` is not a widget, so it is not in the class table strict checks.
+  When a drawing property seems to do nothing, read `painter_props` before
+  redrawing.
 - **A PDF is written as it is drawn.** `cairo_pdf_surface` streams, so a page
   that throws halfway leaves a file on disk that looks like an export that
   worked; `SavePdf` removes it. Anything that writes progressively wants the
