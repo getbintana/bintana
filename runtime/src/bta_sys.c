@@ -1221,6 +1221,16 @@ static void exec_job_free(ExecJob *job)
 {
     exec_jobs = g_list_remove(exec_jobs, job);
 
+    /*
+     * Every read still armed is told it was cancelled, which is how it knows
+     * the job it was handed is gone.  Not only teardown's concern: a job ends
+     * when stdout drains and the child is reaped, and the **control** read is
+     * still armed then -- descriptor 3 ending is not the child ending -- so
+     * a last debugger event racing the exit, or a grandchild holding the
+     * descriptor, completed that read into freed memory.  Exit 139 on CI.
+     */
+    g_cancellable_cancel(job->cancel);
+
     /* Before anything else: a guard that fires on a freed job reads memory that
      * is gone, and it fires on a timer nobody is watching. */
     if (job->guard)
@@ -1352,21 +1362,29 @@ static void on_exec_line(GObject *src, GAsyncResult *res, gpointer user_data)
     GError  *err = NULL;
     gsize    len = 0;
 
+    /* The read is finished **before the job is touched**: a cancelled read is
+     * how a freed job says so (`exec_job_free` cancels), and asking the job
+     * which pipe this was first would read the freed memory anyway.  The
+     * membership check behind it is the belt: a read that had already
+     * completed when the cancel came is still answered cancelled by GTask,
+     * and the check costs a walk of a list that holds a handful. */
+    GDataInputStream *stream = G_DATA_INPUT_STREAM(src);
+    char *line = g_data_input_stream_read_line_finish_utf8(stream, res, &len, &err);
+
+    if (g_error_matches(err, G_IO_ERROR, G_IO_ERROR_CANCELLED)
+        || !g_list_find(exec_jobs, job)) {
+        g_clear_error(&err);
+        g_free(line);
+        return;   /* the job is gone: the run ended, or the runtime did */
+    }
+    g_clear_error(&err);
+
     /* Which pipe answered.  The stream itself says so, which is why nothing has
      * to be allocated to carry it: the two reads are told apart by the object
      * the callback is already given. */
-    GDataInputStream *stream = G_DATA_INPUT_STREAM(src);
-    bool              is_err = job->err && stream == job->err;
-    bool              is_ctl = job->control && stream == job->control;
-
-    char *line = g_data_input_stream_read_line_finish_utf8(stream, res, &len, &err);
-
-    if (g_error_matches(err, G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
-        g_clear_error(&err);
-        g_free(line);
-        return;   /* teardown already freed the job */
-    }
-    g_clear_error(&err);
+    bool       is_err = job->err && stream == job->err;
+    bool       is_ctl = job->control && stream == job->control;
+    JSContext *ctx    = job->ctx;   /* outlives the job, which a handler may end */
 
     if (!line) {
         /* The control stream ending is not the child ending: it closes when the
@@ -1383,38 +1401,47 @@ static void on_exec_line(GObject *src, GAsyncResult *res, gpointer user_data)
     }
 
     if (is_ctl) {
-        if (JS_IsFunction(job->ctx, job->on_control)) {
-            JSValue arg = JS_NewString(job->ctx, line);
-            JSValue r   = JS_Call(job->ctx, job->on_control, JS_UNDEFINED, 1,
+        if (JS_IsFunction(ctx, job->on_control)) {
+            /* Held for the call: ending the job inside it frees the job's. */
+            JSValue fn  = JS_DupValue(ctx, job->on_control);
+            JSValue arg = JS_NewString(ctx, line);
+            JSValue r   = JS_Call(ctx, fn, JS_UNDEFINED, 1,
                                   (JSValueConst *)&arg);
             if (JS_IsException(r))
-                bta_dump_error(job->ctx);
-            JS_FreeValue(job->ctx, r);
-            JS_FreeValue(job->ctx, arg);
+                bta_dump_error(ctx);
+            JS_FreeValue(ctx, r);
+            JS_FreeValue(ctx, arg);
+            JS_FreeValue(ctx, fn);
         }
         g_free(line);
-        exec_read_next(job, stream);
+        if (g_list_find(exec_jobs, job))   /* see below */
+            exec_read_next(job, stream);
         return;
     }
 
-    if (JS_IsFunction(job->ctx, job->on_line)) {
+    if (JS_IsFunction(ctx, job->on_line)) {
         /* The second argument only exists when the streams were kept apart:
          * with them merged there is no honest answer to "which was this",
          * and inventing "out" for a line that came from stderr would be one. */
-        JSValue argv[2] = { JS_NewString(job->ctx, line),
-                            job->err ? JS_NewString(job->ctx, is_err ? "err" : "out")
+        JSValue argv[2] = { JS_NewString(ctx, line),
+                            job->err ? JS_NewString(ctx, is_err ? "err" : "out")
                                      : JS_UNDEFINED };
-        JSValue r = JS_Call(job->ctx, job->on_line, JS_UNDEFINED,
-                            job->err ? 2 : 1, (JSValueConst *)argv);
+        JSValue fn = JS_DupValue(ctx, job->on_line);
+        JSValue r  = JS_Call(ctx, fn, JS_UNDEFINED,
+                             job->err ? 2 : 1, (JSValueConst *)argv);
         if (JS_IsException(r))
-            bta_dump_error(job->ctx);
-        JS_FreeValue(job->ctx, r);
-        JS_FreeValue(job->ctx, argv[0]);
-        JS_FreeValue(job->ctx, argv[1]);
+            bta_dump_error(ctx);
+        JS_FreeValue(ctx, r);
+        JS_FreeValue(ctx, argv[0]);
+        JS_FreeValue(ctx, argv[1]);
+        JS_FreeValue(ctx, fn);
     }
     g_free(line);
 
-    exec_read_next(job, stream);
+    /* A handler can spin the loop -- a modal dialog, `Printer.Send` -- and the
+     * job can end inside it, so it is asked again before the next read. */
+    if (g_list_find(exec_jobs, job))
+        exec_read_next(job, stream);
 }
 
 static void exec_read_next(ExecJob *job, GDataInputStream *from)

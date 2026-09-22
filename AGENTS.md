@@ -817,6 +817,24 @@ refused with a message and a column.
   A shared base for *a job with values and a dead flag* would shrink the surface
   where forgetting is possible; nobody has built one, and this paragraph is the
   cheaper half of that.
+  **`ExecJob` was the third, and CI's core dump is what named it.** A job ends
+  when stdout drains and the child is reaped -- descriptor 3 ending is *not*
+  the child ending, on purpose -- so `exec_maybe_finish` freed it with the
+  `Control` read still armed, and `exec_job_free` never cancelled
+  `job->cancel` (only teardown did). The debugger's last event races its exit;
+  when the exit won, the read completed into freed memory and
+  `on_exec_line` segfaulted in `JS_IsFunction` -- exit 139 on the
+  `no-unix-print` job, one run in several, and never in forty here. And the
+  callback read `job->err`/`job->control` *before* checking for the cancel, so
+  even teardown's cancel was a read of freed memory. Now: the free cancels,
+  the callback finishes the read before touching the job and also asks
+  `exec_jobs`, the context and the handler are held across the `JS_Call`
+  (a handler can spin a nested loop that ends the job), and the next read is
+  armed only if the job survived it. `testExecControlLate` makes the race
+  deterministic -- a grandchild writes to descriptor 3 a third of a second
+  after its parent exits -- and is `heap-use-after-free` under `asan.sh`
+  without the fix. **A read that outlives what says the run is over has to be
+  cancelled by whatever frees the job, not by teardown alone.**
 - **The appearance stylesheet is read back, which is why its rebuild can only be
   held for a stretch with no JavaScript in it.** Every `Font`, `Padding`,
   `Radius`, `Shadow`, `Color`, `Border`, `Scale` or `Opacity` reloads the whole

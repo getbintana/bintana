@@ -92,7 +92,7 @@ a line and answers.
 | | |
 |---|---|
 | `Write(text)` | writes a line to the child's stdin. A newline is added when there is not one, because a line is what the other side is waiting on. Answers whether there was still a child to write to, the way `Stop` does |
-| `Control` | an option: a callback for the child's **descriptor 3**, called once per line |
+| `Control` | an option: a callback for the child's **descriptor 3**, called once per line — until the run is over (stdout drained, child exited); a line after that is dropped |
 
 ```js
 const job = Exec(["some-tool", "--protocol"],

@@ -222,14 +222,14 @@ jobs:
           BINTANA: ./build-noprint/bintana
           BINTANA_LIB_PATH: ${{ github.workspace }}/lib
         run: |
-          # **Arranged to leave a core behind**, because this job segfaulted once
-          # (exit 139, in the widgets project's async tail, before it printed its
-          # own total) and the crash does not exist off the runner: forty runs
-          # here, six of them under the sanitizer, and a local build configured
-          # with the same dependencies hidden -- all green. The runner has GTK
-          # 4.14 against a developer's 4.22, which is the only variable left, and
-          # it is not one a laptop can hold. So the next failure has to explain
-          # itself where it happens.
+          # **Arranged to leave a core behind**, because this job segfaulted
+          # (exit 139, in the widgets project's async tail) and the crash did not
+          # happen off the runner in forty runs. The core is what named it: an
+          # `Exec` job freed with its `Control` read still armed, which the
+          # runner's timing lost and a laptop's never did -- GTK 4.14 was a red
+          # herring. `testExecControlLate` loses the race on purpose now, so it
+          # is the sanitizer's to report anywhere. Kept, because the next crash
+          # that only happens here has to explain itself where it happens.
           #
           # The core is the *child's*: tests/run.sh is a runner that spawns each
           # project, so `%p` in the pattern is what separates them, and a pattern

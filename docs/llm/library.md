@@ -375,6 +375,9 @@ A child that speaks a protocol as well as printing gets a stream of its own:
 `Control` in the options is a callback for the child's **descriptor 3**, one
 line at a time. stdout is what a child says to a person, so a protocol must not
 share it -- a child that printed the marker would break its own tooling.
+The run is over when stdout has drained and the child has exited, not when
+descriptor 3 closes, so a line written there after that -- by a grandchild
+still holding it, say -- is dropped: the exit callback has already run.
 Both signal the child's whole process group, so a wrapper's children go too.
 
 ```js

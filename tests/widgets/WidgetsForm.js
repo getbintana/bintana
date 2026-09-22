@@ -460,6 +460,8 @@ const TESTS = [
      * both must be going when either is. A Wait would freeze the loop the
      * server answers on -- that dogfood is async or it is a deadlock. */
     "HttpServer",
+    /* Async: a line that arrives a third of a second after its child ended. */
+    "ExecControlLate",
     /* Async, and last: it reports and quits. */
     "Exec",
 ];
@@ -18117,6 +18119,41 @@ function Main() {
      * stops when its condition holds. Plus stopping where a throw happens,
      * which is the one place the frames that built a failure are still alive.
      */
+    /*
+     * A `Control` line that arrives after the run is over.
+     *
+     * The run is over when stdout has drained and the child is reaped -- the
+     * control stream ending is not the child ending, by design -- so the job
+     * was freed with the read on descriptor 3 still armed, and uncancelled.
+     * Whoever else holds that descriptor can still write to it, and the read
+     * then completed into a freed job: `JS_IsFunction` on garbage, exit 139.
+     * The debugger is the ordinary case -- its last event and its exit race,
+     * and CI's runner lost the race where this machine never did -- and a
+     * grandchild holding the descriptor is the case that loses it every time.
+     * A plain build may survive it by luck; `tests/asan.sh` says
+     * `heap-use-after-free` without the fix.
+     */
+    testExecControlLate() {
+        if (!File.Exists("/bin/sh")) return;
+
+        const late  = [];
+        let   ended = false;
+
+        waiting++;
+        Exec(["/bin/sh", "-c",
+              "(sleep 0.3; echo late >&3) >/dev/null 2>&1 & exit 0"],
+             { Control: (line) => late.push(line) },
+             null,
+             () => { ended = true; });
+
+        Timer.After(900, () => {
+            waiting--;
+            check("the child's end is reported", ended);
+            eq("a Control line after the end is dropped, not delivered to a " +
+               "freed job", late.length, 0, JSON.stringify(late));
+        });
+    }
+
     testDebuggerAsks() {
         const proj = File.Join(SCRATCH, "dbg2");
 
