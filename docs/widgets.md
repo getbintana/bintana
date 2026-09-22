@@ -2222,6 +2222,18 @@ of the context existing, and answers how many there are; `opts` takes
 `CaseSensitive`, `WholeWord` and `Regex`, and a broken pattern is refused with what
 is wrong with it. An empty text clears the search, highlight included.
 
+**`Regex: true` here is a different engine from the language's `Regex`**, and
+nothing but this paragraph says so. GtkSourceView compiles the pattern with
+GRegex -- PCRE2 -- always with `G_REGEX_MULTILINE` and with `CASELESS` when the
+setting asks for it, and GLib turns PCRE2's Unicode properties on for every
+pattern. So in the find bar `^` and `$` match at every line whatever the
+pattern, `\d`/`\w`/`\b` are Unicode-aware, `$` also matches before a final
+newline, and PCRE2 grammar (`\p{L}`, `\K`, atomic groups) is available. In a
+`Regex` the same text is ECMAScript: ASCII `\w`, one line unless
+`{ Multiline: true }`, and `\p{L}` behind `{ Unicode: true }`. A pattern shared
+between a find bar and a lint should be written the language's way; the
+[`Regex` page](reference/globals/Regex.md) has the detail.
+
 It does **not** move the cursor. Highlighting the matches and going to one are two
 things a find bar does at different moments -- typing versus pressing Enter -- and
 only the caller knows which this is. `FindNext`/`FindPrevious` are what move, from

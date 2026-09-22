@@ -53,6 +53,18 @@ catalogue must never rewrite code.
 | `Replace(with)` | the match the cursor is standing on |
 | `ReplaceAll(with)` | every match |
 
+**`Regex: true` is not the language's [`Regex`](../../llm/library.md#regex), and
+the differences are the kind a pattern notices.** The search is GtkSourceView's
+`GtkSourceSearchContext`, which compiles with GRegex/PCRE2: it is **always
+multiline** (`^` and `$` match at every line), `\d`, `\w` and `\b` are
+**Unicode-aware** (`ñ` and `٣` are one of each), and `$` also matches before a
+final newline. Its grammar is PCRE2's as well — `\p{L}`, `\K`, atomic groups and
+possessive quantifiers all compile here — and in a `Regex` those either mean
+something else or do not parse, while `\w` is ASCII, the pattern is single-line
+unless `{ Multiline: true }` says otherwise, and `\p{L}` needs
+`{ Unicode: true }`. A find bar and a lint that share a pattern should write it
+the language's way.
+
 ## Marks
 
 | | |

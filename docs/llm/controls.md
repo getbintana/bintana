@@ -805,7 +805,7 @@ own. It is [`Editor`](#editor--inherited-by-both-editors) plus everything below.
 | `Marks([kind])` | → a record per mark, in line order: `{ Line, Kind, Text }` |
 | `Replace(with)` | the match the cursor is standing on |
 | `ReplaceAll(with)` | every match |
-| `Search(text, [{CaseSensitive, WholeWord, Regex}])` | → how many there are, highlighting every one. **It does not move the cursor**: typing in a find field and jumping to a match happen at different moments |
+| `Search(text, [{CaseSensitive, WholeWord, Regex}])` | → how many there are, highlighting every one. **It does not move the cursor**: typing in a find field and jumping to a match happen at different moments. `Regex: true` is **PCRE2** — GtkSourceView's own engine and not the language's [`Regex`](library.md#regex): always multiline, and `\d` `\w` `\b` are Unicode-aware |
 | `ShowCompletion()` | opens the completion popup from code |
 | `Unmark(line, [kind])` | takes marks off that line |
 | **event** `Complete(word, line, column, text)` | a completion was asked for. Answer with a list, or nothing. An entry is a **word**, or `{ Text, Detail }` for one that says what it is beside itself — a type, a one-line description. An entry that is neither is skipped, not refused |

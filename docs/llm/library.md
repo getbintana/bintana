@@ -890,6 +890,16 @@ it `\p{L}` compiles and matches the literal text `p{L}`. A fixed pattern is stil
 well written as a literal (`/x/g` is syntax and needs no global); see
 [language.md](language.md#what-is-not-installed).
 
+**And what a person types into a find bar is a different engine.** An editor's
+`Search(text, { Regex: true })` is GtkSourceView's own, which is PCRE2 (GRegex):
+**always multiline**, `\d`/`\w`/`\b` **Unicode-aware**, `$` also matching before
+a final newline, and PCRE2 grammar (`\p{L}`, `\K`, atomic groups) available. So
+the same pattern can mean two things in one application — `Regex("^a")` is one
+line, the find bar's is every line — and a search box and a lint meant to agree
+should write it the language's way: `{ Unicode: true }` for `\p{L}`,
+`{ Multiline: true }` when every line is wanted. The editor's side is in
+[`SourceEditor`](controls.md#sourceeditor).
+
 `Regex.Escape` is the one that is easy to forget: any pattern built around a
 name the program did not choose needs it.
 

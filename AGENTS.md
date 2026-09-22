@@ -663,6 +663,20 @@ refused with a message and a column.
   units, so an emoji is two matches. `Matches` steps a **code point** on an empty
   match under it, which is what `Symbol.matchAll` does; stepping a code unit
   would start the next match inside an emoji.
+- **The editor's find bar is a different regex engine, and three differences are
+  the kind a pattern notices.** `SourceEditor.Search(text, { Regex: true })` is
+  GtkSourceView's `GtkSourceSearchContext`, which compiles with GRegex/PCRE2 --
+  read from 5.20.0: `compile_flags = G_REGEX_MULTILINE` always, `CASELESS` when
+  the setting says so, `G_REGEX_MATCH_NOTEMPTY` at match time -- and GLib turns
+  PCRE2's UCP on for every pattern (2.74 and later). So in the find bar `^` and
+  `$` match at every line whatever the pattern, `\d`/`\w`/`\b` are Unicode-aware
+  (`ñ`, `٣`), `$` also matches before a final newline, and PCRE2 grammar
+  (`\p{L}`, `\K`, atomic groups) is available. In a `Regex` the same text is
+  ECMAScript: ASCII `\w`, one line unless `{ Multiline: true }`, `\p{L}` behind
+  `{ Unicode: true }`. Two engines in one application, documented where each is
+  read -- `library.md`'s `Regex` section, the `Search` row, the `SourceEditor`
+  page and `widgets.md` -- because a find bar and a lint that share a pattern
+  otherwise disagree in silence.
 - **A runtime answer must not be breakable by what the program did to `Error`.**
   `Application.CheckSource` returns `{Message, Line, Column}` and the position
   has exactly one source: a QuickJS error carries no `lineNumber`,
