@@ -46,20 +46,15 @@ Ide.Names = class Names {
     constructor(ide) {
         this.ide = ide;
 
+        /* The runtime's class names, kept as a set: which types are answered by
+         * class and which have to come from a sample is asked once per match,
+         * and the class list does not change while the IDE runs. */
+        this.widgets = new Set(Widget.Types());
+
         /*
-         * One control per *type*, kept.
-         *
-         * `Widget.New` builds a real GTK widget and this is asked once per match
-         * and once per node, so the project pass over this IDE -- 311 nodes and
-         * 886 KB of source -- was building a fresh `Button` for every
-         * `this.Btn.Text` in it. A control is only ever asked what its class
-         * has, which is the same answer for every one of them.
-         *
-         * **Measured, and it is a smaller win than it looks: 176 ms down to
-         * 156.** Most of that pass is reading 886 KB and running two regular
-         * expressions over it, which no cache helps. Kept because it is right
-         * and free, and because `Ide.Live` asks the same question on every pause
-         * over one file, where the matches repeat a type far more often.
+         * The two classes this process cannot answer by class -- a `MenuItem`
+         * and an `Action` -- borrowed from the window's own menu bar and kept,
+         * so the walk over its menus happens once rather than per match.
          */
         this.samples = new Map();
     }
@@ -89,9 +84,22 @@ Ide.Names = class Names {
         for (const m of NAMES_MEMBER.Matches(text)) {
             if (underCaret(m, caret)) continue;
 
-            const type   = typeOf(controls, m.Group(1));
-            const sample = this.sampleFor(type);
-            if (!sample || m.Group(2) in sample) continue;
+            const type = typeOf(controls, m.Group(1));
+            if (!type) continue;
+
+            /*
+             * A widget is asked **by class**, with no control built:
+             * `Widget.Member` is the `in` this used to run on a disposable one.
+             * A component of the project is not a class of *this* process, so
+             * there is nothing here to ask and nothing is reported about it,
+             * which is a refusal to guess rather than a gap.
+             */
+            if (this.widgets.has(type)) {
+                if (Widget.Member(type, m.Group(2)) !== "") continue;
+            } else {
+                const sample = this.sampleFor(type);
+                if (!sample || m.Group(2) in sample) continue;
+            }
 
             yield {
                 kind: "Warning",
@@ -136,31 +144,24 @@ Ide.Names = class Names {
     /* --- what a type really has ---------------------------------------------- */
 
     /*
-     * A control of that type to ask, or nothing.
+     * A control of that type to ask, or nothing -- for the two classes that are
+     * not widgets.
      *
-     * `Widget.New` is the same lookup the `.form` loader does. A component of
-     * the project is not a class of *this* process -- the IDE never loads the
-     * project's code -- so there is nothing here to ask and nothing is reported
-     * about it, which is a refusal to guess rather than a gap.
-     *
-     * **A menu item and a command are neither**, and `Widget.New` cannot make
-     * one: they are not widgets, and the only thing that builds one is a `.form`
-     * loader reading a `menus` or an `actions` block. So the sample is borrowed
-     * from the window this code is running in -- the IDE has a menu bar and a
-     * set of commands, so both classes are in this process already, and one of
-     * its own items answers for every project's. Which is the same bargain
-     * `Widget.New` makes and not a weaker one: what is asked is what the
-     * *class* has.
+     * A widget answers by class now (`Widget.Member`, `Widget.EventNames`), so
+     * nothing is built for one. **A menu item and a command are neither**, and
+     * the only thing that builds one is a `.form` loader reading a `menus` or
+     * an `actions` block, so the sample is borrowed from the window this code is
+     * running in -- the IDE has a menu bar and a set of commands, so both
+     * classes are in this process already, and one of its own items answers for
+     * every project's. Which is the same bargain `Widget.New` makes and not a
+     * weaker one: what is asked is what the *class* has.
      */
     sampleFor(type) {
-        if (!type) return null;
+        if (type !== MENU_ITEM_TYPE && type !== ACTION_TYPE) return null;
         if (this.samples.has(type)) return this.samples.get(type);
 
-        let made = null;
-        if (type === MENU_ITEM_TYPE)   made = this.borrowedItem();
-        else if (type === ACTION_TYPE) made = this.borrowedAction();
-        else try { made = Widget.New(type); } catch (e) { made = null; }
-
+        const made = type === MENU_ITEM_TYPE ? this.borrowedItem()
+                                             : this.borrowedAction();
         this.samples.set(type, made);      /* null is an answer worth keeping too */
         return made;
     }
@@ -189,12 +190,14 @@ Ide.Names = class Names {
     }
 
     /* The events a control of that type raises, or null when it is not one this
-     * process can build. A component answers from what its class declares. */
+     * process can build. A widget answers by class; a component answers from
+     * what its class declares. */
     eventsOf(type) {
         if (!type) return null;
+        if (this.widgets.has(type)) return Widget.EventNames(type);
 
-        const control = this.sampleFor(type);
-        if (control) return control.EventNames();
+        const sample = this.sampleFor(type);
+        if (sample) return sample.EventNames();
 
         return this.ide.classes.componentEvents(type) || null;
     }

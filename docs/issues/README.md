@@ -16,7 +16,6 @@ in the same form.
 | [ISSUE-fixed-fill-child.md](ISSUE-fixed-fill-child.md) | A `Fixed` container does not stretch a `Fill` child when it grows |
 | [ISSUE-packaging.md](ISSUE-packaging.md) | No way to hand over an application without its project tree |
 | [ISSUE-worker-locale-order.md](ISSUE-worker-locale-order.md) | A `Task` has no `Locale`, so a worker cannot order names |
-| [ISSUE-class-introspection.md](ISSUE-class-introspection.md) | Asking what a type has means building one |
 | [ISSUE-locale-write.md](ISSUE-locale-write.md) | A catalogue can be read and not written |
 
 **A gap that is filled is deleted, not archived.** What the runtime can do is in
@@ -24,7 +23,7 @@ in the same form.
 past its answer is a second description of the same feature, written by somebody
 who did not have it yet, in the directory of things that are missing.
 
-Twenty-four have gone that way — twenty-two filled, one refused, and one that was
+Twenty-five have gone that way — twenty-three filled, one refused, and one that was
 never missing. Filled: a drawing that could not carry an image, text that could not be measured outside a `Draw`, a
 document that could only leave as one PNG per page, a program that had to run
 `sha256sum` to hash anything, an application that could not ask how big the
@@ -54,7 +53,12 @@ crossing — it converts the index a search gives, exactly, and the same pair is
 characters, the unit `Column` and `Select` count, and nothing that said *I have
 been laid out*: `Allocated(box)` is raised once, on the frame GTK gives a control
 a real rectangle, so the five bounded retries — the selection chrome, the image
-viewer twice and both `i18n` examples — stopped guessing.
+viewer twice and both `i18n` examples — stopped guessing, and a class that could
+only be asked what it has by building one: `Widget.PropertyNames(type)`,
+`Methods`, `EventNames`, `TextProperties`, `PropertyOptions` and `Member` answer
+by name, abstract classes included, so a palette, a property grid and the
+extractor stop making disposable controls — the grid's base-properties pass used
+to construct every widget type there is.
 
 Never missing: a container that fills the room it is given **and** scrolls when
 it cannot. It was reported against a wall of cameras whose count is only known

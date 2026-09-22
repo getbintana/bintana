@@ -6,6 +6,9 @@
  * class table.  Every JS widget object keeps a BtaWidget in its opaque slot.
  */
 #include "bta.h"
+/* The parameters every method and event declares beside itself, generated from
+ * those comments by `tools/extract_signatures.cmake`. */
+#include "bta_signatures.h"
 
 #include <math.h>
 #include <stdlib.h>
@@ -2361,18 +2364,14 @@ static JSValue class_static_options(JSContext *ctx, JSValueConst proto,
  * Looked up along the prototype chain, so a subclass inherits its parent's --
  * and a class the table does not hold is asked for its own `static Options`.
  */
-static JSValue w_property_options(JSContext *ctx, JSValueConst this_val,
-                                  int argc, JSValueConst *argv)
+static JSValue options_of_proto(JSContext *ctx, JSValueConst start,
+                                const char *prop)
 {
-    const char *prop = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
-    if (!prop)
-        return JS_ThrowTypeError(ctx, "PropertyOptions(name) expects a name");
-
     int       n;
     BtaClass *table  = bta_class_table(&n);
     JSValue   result = JS_NULL;
 
-    JSValue proto = JS_GetPrototype(ctx, this_val);
+    JSValue proto = JS_DupValue(ctx, start);
     while (JS_IsObject(proto) && JS_IsNull(result)) {
         /* Whether the table speaks for this class at all, which is a different
          * question from whether it had anything to say about `prop`: a Button
@@ -2404,6 +2403,20 @@ static JSValue w_property_options(JSContext *ctx, JSValueConst this_val,
         proto = parent;
     }
     JS_FreeValue(ctx, proto);
+    return result;
+}
+
+static JSValue w_property_options(JSContext *ctx, JSValueConst this_val,
+                                  int argc, JSValueConst *argv)
+{
+    const char *prop = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    if (!prop)
+        return JS_ThrowTypeError(ctx, "PropertyOptions(name) expects a name");
+
+    JSValue proto  = JS_GetPrototype(ctx, this_val);
+    JSValue result = options_of_proto(ctx, proto, prop);
+
+    JS_FreeValue(ctx, proto);
     JS_FreeCString(ctx, prop);
     return result;
 }
@@ -2427,7 +2440,16 @@ static JSValue w_property_options(JSContext *ctx, JSValueConst this_val,
  */
 typedef enum { CLASS_LIST_TEXTS, CLASS_LIST_EVENTS } ClassList;
 
-static char **class_list_of(JSContext *ctx, JSValueConst obj, ClassList which)
+/*
+ * The same walk, started at a prototype rather than at a control.
+ *
+ * This is where the class-level questions come in: `Widget.EventNames("Button")`
+ * has no control to ask, and the answer an instance would give is the one its
+ * class prototype holds -- so the whole difference between the two entry points
+ * is one `JS_GetPrototype`, and there is only one walk.
+ */
+static char **class_list_of_proto(JSContext *ctx, JSValueConst start,
+                                  ClassList which)
 {
     int       n;
     BtaClass *table = bta_class_table(&n);
@@ -2436,7 +2458,7 @@ static char **class_list_of(JSContext *ctx, JSValueConst obj, ClassList which)
     /* The static that says the same thing, for a class the table cannot hold. */
     const char *declares = which == CLASS_LIST_TEXTS ? "TextProperties" : "Events";
 
-    JSValue proto = JS_GetPrototype(ctx, obj);
+    JSValue proto = JS_DupValue(ctx, start);
     while (JS_IsObject(proto)) {
         bool known = false;
 
@@ -2473,6 +2495,15 @@ static char **class_list_of(JSContext *ctx, JSValueConst obj, ClassList which)
         return NULL;
     g_ptr_array_add(out, NULL);
     return (char **)g_ptr_array_free(out, FALSE);
+}
+
+static char **class_list_of(JSContext *ctx, JSValueConst obj, ClassList which)
+{
+    JSValue proto = JS_GetPrototype(ctx, obj);
+    char  **out   = class_list_of_proto(ctx, proto, which);
+
+    JS_FreeValue(ctx, proto);
+    return out;
 }
 
 static char **text_props_of(JSContext *ctx, JSValueConst obj)
@@ -2526,6 +2557,18 @@ bool bta_widget_text_prop(JSContext *ctx, JSValueConst obj, const char *prop)
     return bta_widget_text_prop_field(ctx, obj, prop, NULL);
 }
 
+/* A list of names as the array every one of these answers with. Takes the list. */
+static JSValue names_to_array(JSContext *ctx, char **names)
+{
+    JSValue out = JS_NewArray(ctx);
+
+    for (uint32_t i = 0; names && names[i]; i++)
+        JS_SetPropertyUint32(ctx, out, i, JS_NewString(ctx, names[i]));
+
+    g_strfreev(names);
+    return out;
+}
+
 /*
  * TextProperties(): which of this control's properties hold prose.
  *
@@ -2544,14 +2587,7 @@ bool bta_widget_text_prop(JSContext *ctx, JSValueConst obj, const char *prop)
 static JSValue w_text_properties(JSContext *ctx, JSValueConst this_val,
                                  int argc, JSValueConst *argv)
 {
-    char  **names = text_props_of(ctx, this_val);
-    JSValue out   = JS_NewArray(ctx);
-
-    for (uint32_t i = 0; names && names[i]; i++)
-        JS_SetPropertyUint32(ctx, out, i, JS_NewString(ctx, names[i]));
-
-    g_strfreev(names);
-    return out;
+    return names_to_array(ctx, text_props_of(ctx, this_val));
 }
 
 /*
@@ -2612,13 +2648,469 @@ static JSValue w_css_node(JSContext *ctx, JSValueConst this_val,
 static JSValue w_event_names(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
-    char  **names = class_list_of(ctx, this_val, CLASS_LIST_EVENTS);
-    JSValue out   = JS_NewArray(ctx);
+    return names_to_array(ctx, class_list_of(ctx, this_val, CLASS_LIST_EVENTS));
+}
 
-    for (uint32_t i = 0; names && names[i]; i++)
-        JS_SetPropertyUint32(ctx, out, i, JS_NewString(ctx, names[i]));
+/* ------------------------------------------------------------------------
+ * What a class has, with no control to ask.
+ *
+ * Every caller with this question is holding a **name**: a `.form` says
+ * `"type": "Button"`, the IDE reads its controls out of one, the extractor
+ * walks them. So the entry points take the name, resolve it exactly the way
+ * `Widget.New` does -- the runtime's table first, then the project's own
+ * classes and its libraries -- and walk the class prototype where the instance
+ * walks started one step higher. One walk each, so a class and a control
+ * cannot disagree about what they answer.
+ * ---------------------------------------------------------------------- */
 
-    g_strfreev(names);
+/*
+ * The prototype a class-level question starts from, or an exception.
+ *
+ * A name the table does not hold may still be a class of the project, which is
+ * the same resolution `Widget.New` does. A class that is not a widget is
+ * refused the way `Widget.New` refuses it -- walked and not assumed, so
+ * `Widget.PropertyNames("Util")` on an ordinary class says so.
+ */
+static JSValue class_proto_for(JSContext *ctx, const char *type)
+{
+    BtaClass *cls = bta_class_find(type);
+    if (cls)
+        return JS_DupValue(ctx, cls->proto);
+
+    JSValue klass = bta_lookup_global(ctx, type);
+    if (JS_IsException(klass))
+        return klass;
+
+    JSValue proto = JS_GetPropertyStr(ctx, klass, "prototype");
+    JS_FreeValue(ctx, klass);
+
+    if (!JS_IsObject(proto)) {
+        JS_FreeValue(ctx, proto);
+        return JS_ThrowTypeError(ctx, "'%s' is not a widget class", type);
+    }
+
+    BtaClass *root   = bta_class_find("Widget");
+    bool      widget = false;
+
+    JSValue p = JS_DupValue(ctx, proto);
+    while (JS_IsObject(p)) {
+        if (JS_IsStrictEqual(ctx, p, root->proto)) {
+            widget = true;
+            break;
+        }
+        JSValue parent = JS_GetPrototype(ctx, p);
+        JS_FreeValue(ctx, p);
+        p = parent;
+    }
+    JS_FreeValue(ctx, p);
+
+    if (!widget) {
+        JS_FreeValue(ctx, proto);
+        return JS_ThrowTypeError(ctx, "'%s' is not a widget class", type);
+    }
+    return proto;
+}
+
+/* The type a class-level question was asked about, resolved. */
+static JSValue class_proto_arg(JSContext *ctx, int argc, JSValueConst *argv,
+                               const char *who)
+{
+    const char *type = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    if (!type)
+        return JS_ThrowTypeError(ctx, "%s(type) expects a type name", who);
+
+    JSValue proto = class_proto_for(ctx, type);
+    JS_FreeCString(ctx, type);
+    return proto;
+}
+
+/*
+ * `Object.prototype`, kept: it is where a shape walk stops. `settableProperties`
+ * in `rad.js` captured the same object before the hatches closed, and the two
+ * walks have to agree about the boundary. Filled in by `bta_widgets_init`,
+ * dropped by `bta_widgets_cleanup`.
+ */
+static JSValue bta_object_proto = JS_UNDEFINED;
+
+/*
+ * The methods of a class: the own function-valued data properties along the
+ * prototype chain, most derived first and de-duplicated.
+ *
+ * Nothing declares these. `JS_CFUNC_DEF` defines a method as an ordinary data
+ * property whose value is a function, and a class written in JS defines one the
+ * same way, so the answer is a fact about the prototype rather than a list
+ * somebody keeps. **The walk stops before `Object.prototype`**, like
+ * `PropertyNames()`: `toString` is inherited by everything and is nobody's
+ * method. (`Widget.Member` is the other question and does not stop -- `in`
+ * answered about it too.)
+ */
+static char **methods_of_proto(JSContext *ctx, JSValueConst start)
+{
+    GPtrArray *out   = NULL;
+    JSValue    proto = JS_DupValue(ctx, start);
+
+    while (JS_IsObject(proto) && !JS_IsStrictEqual(ctx, proto, bta_object_proto)) {
+        JSPropertyEnum *tab = NULL;
+        uint32_t        len = 0;
+
+        if (JS_GetOwnPropertyNames(ctx, &tab, &len, proto,
+                                   JS_GPN_STRING_MASK) == 0) {
+            for (uint32_t i = 0; i < len; i++) {
+                JSPropertyDescriptor d;
+
+                if (JS_GetOwnProperty(ctx, &d, proto, tab[i].atom) == 1) {
+                    if (JS_IsFunction(ctx, d.value)) {
+                        const char *name = JS_AtomToCString(ctx, tab[i].atom);
+
+                        /* The class's own `constructor`, which `JS_SetConstructor`
+                         * leaves on every prototype: a member, and not a method
+                         * of the control. */
+                        if (name && *name && !g_str_equal(name, "constructor"))
+                            list_add(&out, g_strdup(name));
+                        JS_FreeCString(ctx, name);
+                    }
+                    JS_FreeValue(ctx, d.value);
+                    JS_FreeValue(ctx, d.getter);
+                    JS_FreeValue(ctx, d.setter);
+                }
+            }
+            JS_FreePropertyEnum(ctx, tab, len);
+        }
+
+        JSValue parent = JS_GetPrototype(ctx, proto);
+        JS_FreeValue(ctx, proto);
+        proto = parent;
+    }
+    JS_FreeValue(ctx, proto);
+
+    if (!out)
+        return NULL;
+    g_ptr_array_add(out, NULL);
+    return (char **)g_ptr_array_free(out, FALSE);
+}
+
+/*
+ * What kind of member `name` is on this class, or `""` for one it has not got.
+ *
+ * The question `in` answers about a control, with the half the loader needs
+ * added: an accessor with no setter is `ReadOnly`, which is the name that makes
+ * a `.form` refuse to load rather than shadow. The walk goes all the way up,
+ * `Object.prototype` included, because that is where `in` went.
+ */
+static JSValue member_of_proto(JSContext *ctx, JSValueConst start,
+                               const char *name)
+{
+    JSAtom  atom   = JS_NewAtom(ctx, name);
+    JSValue result = JS_NewString(ctx, "");
+    JSValue p      = JS_DupValue(ctx, start);
+
+    while (JS_IsObject(p)) {
+        JSPropertyDescriptor d;
+        int                  found = JS_GetOwnProperty(ctx, &d, p, atom);
+
+        if (found < 0) {
+            JS_FreeValue(ctx, result);
+            result = JS_EXCEPTION;
+            break;
+        }
+        if (found == 1) {
+            const char *kind = "Property";
+
+            if (JS_IsFunction(ctx, d.getter) || JS_IsFunction(ctx, d.setter)) {
+                if (!JS_IsFunction(ctx, d.setter))
+                    kind = "ReadOnly";
+            } else if (JS_IsFunction(ctx, d.value)) {
+                kind = "Method";
+            }
+
+            JS_FreeValue(ctx, result);
+            result = JS_NewString(ctx, kind);
+            JS_FreeValue(ctx, d.value);
+            JS_FreeValue(ctx, d.getter);
+            JS_FreeValue(ctx, d.setter);
+            break;
+        }
+
+        JSValue parent = JS_GetPrototype(ctx, p);
+        JS_FreeValue(ctx, p);
+        p = parent;
+    }
+    JS_FreeValue(ctx, p);
+    JS_FreeAtom(ctx, atom);
+    return result;
+}
+
+/*
+ * The parameters a method or event declares, or NULL.
+ *
+ * Read out of the table the build generates from the one-line comments beside
+ * the C entries, so there is no second declaration anywhere: `Widget.Signature`
+ * publishes what the method already says about itself. `event` tells the two
+ * apart, because a name can be both -- `Button.Click` is a method and an event.
+ */
+static const char *signature_for(const char *owner, const char *member,
+                                 bool event)
+{
+    for (size_t i = 0; i < G_N_ELEMENTS(bta_signatures); i++) {
+        if (bta_signatures[i].event == event &&
+            g_str_equal(bta_signatures[i].owner, owner) &&
+            g_str_equal(bta_signatures[i].member, member))
+            return bta_signatures[i].signature;
+    }
+    return NULL;
+}
+
+/*
+ * What one prototype declares about `member` -- a method's parameters out of
+ * the generated table, or a class of the project's own `static Signatures`.
+ */
+static JSValue signature_at(JSContext *ctx, JSValueConst proto,
+                            const char *member, bool event)
+{
+    int       n;
+    BtaClass *table = bta_class_table(&n);
+
+    for (int i = 0; i < n; i++) {
+        if (!JS_IsStrictEqual(ctx, table[i].proto, proto))
+            continue;
+
+        const char *decl = signature_for(table[i].name, member, event);
+        if (decl)
+            return JS_NewString(ctx, decl);
+        break;                     /* the table speaks for this class */
+    }
+
+    /* A class of the project, whose parameters only its own class can state:
+     * JavaScript has no reflection for an argument's name. */
+    JSValue ctor = class_of_proto(ctx, proto);
+    if (!JS_IsObject(ctor)) {
+        JS_FreeValue(ctx, ctor);
+        return JS_NULL;
+    }
+
+    JSValue sigs = own_property(ctx, ctor, "Signatures");
+    JSValue v    = own_property(ctx, sigs, member);
+    JS_FreeValue(ctx, sigs);
+    JS_FreeValue(ctx, ctor);
+
+    if (!JS_IsString(v)) {
+        JS_FreeValue(ctx, v);
+        return JS_NULL;
+    }
+    return v;
+}
+
+/*
+ * Signature(type, name): the parameters of a **method**, or null.
+ *
+ * The walk stops at the **first class that declares the member**, which is what
+ * keeps an override honest: `Form.Serialize` is `()` where `Widget.Serialize`
+ * is `(parentIsFixed)`, and a lookup that only knew the name would answer the
+ * ancestor's. A name that is no member of any class is not a method and this
+ * answers null -- an event is asked about with `Widget.EventSignature`, because
+ * a name can be both and `ListBox.Select` is.
+ */
+static JSValue signature_of_proto(JSContext *ctx, JSValueConst start,
+                                  const char *member)
+{
+    JSAtom  atom  = JS_NewAtom(ctx, member);
+    JSValue proto = JS_DupValue(ctx, start);
+    JSValue found = JS_NULL;
+
+    while (JS_IsObject(proto) && JS_IsNull(found)) {
+        JSPropertyDescriptor d;
+        int                  own = JS_GetOwnProperty(ctx, &d, proto, atom);
+
+        if (own < 0) {
+            found = JS_EXCEPTION;
+            break;
+        }
+        if (own == 1) {
+            JS_FreeValue(ctx, d.value);
+            JS_FreeValue(ctx, d.getter);
+            JS_FreeValue(ctx, d.setter);
+            found = signature_at(ctx, proto, member, false);
+            break;
+        }
+
+        JSValue parent = JS_GetPrototype(ctx, proto);
+        JS_FreeValue(ctx, proto);
+        proto = parent;
+    }
+    JS_FreeValue(ctx, proto);
+    JS_FreeAtom(ctx, atom);
+    return found;
+}
+
+/*
+ * EventSignature(type, name): the parameters of an **event**, or null.
+ *
+ * An event is emitted and not defined, so there is no member to stop at: the
+ * walk looks at every class of the chain and answers with the first that
+ * declares one. `ListBox.Select` is the case this exists for -- the same name
+ * is a method that selects a row and the event that says the selection moved,
+ * and only the caller knows which it is asking about.
+ */
+static JSValue event_signature_of_proto(JSContext *ctx, JSValueConst start,
+                                        const char *member)
+{
+    JSValue proto = JS_DupValue(ctx, start);
+    JSValue found = JS_NULL;
+
+    while (JS_IsObject(proto) && JS_IsNull(found)) {
+        found = signature_at(ctx, proto, member, true);
+
+        JSValue parent = JS_GetPrototype(ctx, proto);
+        JS_FreeValue(ctx, proto);
+        proto = parent;
+    }
+    JS_FreeValue(ctx, proto);
+    return found;
+}
+
+/*
+ * PropertyNames(type): the settable properties of a class.
+ *
+ * The walk is `rad.js`'s -- the serialiser discovers what to save with the same
+ * one -- so this does not reimplement it: it hands the walk the class prototype
+ * as the receiver. The empty object is that receiver and never leaves this
+ * function; what it walks is the prototype chain, exactly as a control's call
+ * would.
+ */
+static JSValue w_property_names_by_type(JSContext *ctx, JSValueConst this_val,
+                                        int argc, JSValueConst *argv)
+{
+    JSValue proto = class_proto_arg(ctx, argc, argv, "PropertyNames");
+    if (JS_IsException(proto))
+        return proto;
+
+    JSValue anchor = JS_NewObjectProto(ctx, proto);
+    if (JS_IsException(anchor)) {
+        JS_FreeValue(ctx, proto);
+        return anchor;
+    }
+
+    JSValue fn  = JS_GetPropertyStr(ctx, proto, "PropertyNames");
+    JSValue out = JS_Call(ctx, fn, anchor, 0, NULL);
+
+    JS_FreeValue(ctx, fn);
+    JS_FreeValue(ctx, anchor);
+    JS_FreeValue(ctx, proto);
+    return out;
+}
+
+static JSValue w_methods_by_type(JSContext *ctx, JSValueConst this_val,
+                                 int argc, JSValueConst *argv)
+{
+    JSValue proto = class_proto_arg(ctx, argc, argv, "Methods");
+    if (JS_IsException(proto))
+        return proto;
+
+    char **names = methods_of_proto(ctx, proto);
+    JS_FreeValue(ctx, proto);
+    return names_to_array(ctx, names);
+}
+
+static JSValue w_event_names_by_type(JSContext *ctx, JSValueConst this_val,
+                                     int argc, JSValueConst *argv)
+{
+    JSValue proto = class_proto_arg(ctx, argc, argv, "EventNames");
+    if (JS_IsException(proto))
+        return proto;
+
+    char **names = class_list_of_proto(ctx, proto, CLASS_LIST_EVENTS);
+    JS_FreeValue(ctx, proto);
+    return names_to_array(ctx, names);
+}
+
+static JSValue w_text_properties_by_type(JSContext *ctx, JSValueConst this_val,
+                                         int argc, JSValueConst *argv)
+{
+    JSValue proto = class_proto_arg(ctx, argc, argv, "TextProperties");
+    if (JS_IsException(proto))
+        return proto;
+
+    char **names = class_list_of_proto(ctx, proto, CLASS_LIST_TEXTS);
+    JS_FreeValue(ctx, proto);
+    return names_to_array(ctx, names);
+}
+
+static JSValue w_property_options_by_type(JSContext *ctx, JSValueConst this_val,
+                                          int argc, JSValueConst *argv)
+{
+    const char *prop = argc > 1 ? JS_ToCString(ctx, argv[1]) : NULL;
+    if (!prop)
+        return JS_ThrowTypeError(ctx,
+                                 "PropertyOptions(type, name) expects a property name");
+
+    JSValue proto = class_proto_arg(ctx, argc, argv, "PropertyOptions");
+    if (JS_IsException(proto)) {
+        JS_FreeCString(ctx, prop);
+        return proto;
+    }
+
+    JSValue out = options_of_proto(ctx, proto, prop);
+    JS_FreeValue(ctx, proto);
+    JS_FreeCString(ctx, prop);
+    return out;
+}
+
+static JSValue w_member_by_type(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv)
+{
+    const char *name = argc > 1 ? JS_ToCString(ctx, argv[1]) : NULL;
+    if (!name)
+        return JS_ThrowTypeError(ctx, "Member(type, name) expects a member name");
+
+    JSValue proto = class_proto_arg(ctx, argc, argv, "Member");
+    if (JS_IsException(proto)) {
+        JS_FreeCString(ctx, name);
+        return proto;
+    }
+
+    JSValue out = member_of_proto(ctx, proto, name);
+    JS_FreeValue(ctx, proto);
+    JS_FreeCString(ctx, name);
+    return out;
+}
+
+static JSValue w_signature_by_type(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv)
+{
+    const char *name = argc > 1 ? JS_ToCString(ctx, argv[1]) : NULL;
+    if (!name)
+        return JS_ThrowTypeError(ctx,
+                                 "Signature(type, name) expects a member name");
+
+    JSValue proto = class_proto_arg(ctx, argc, argv, "Signature");
+    if (JS_IsException(proto)) {
+        JS_FreeCString(ctx, name);
+        return proto;
+    }
+
+    JSValue out = signature_of_proto(ctx, proto, name);
+    JS_FreeValue(ctx, proto);
+    JS_FreeCString(ctx, name);
+    return out;
+}
+
+static JSValue w_event_signature_by_type(JSContext *ctx, JSValueConst this_val,
+                                         int argc, JSValueConst *argv)
+{
+    const char *name = argc > 1 ? JS_ToCString(ctx, argv[1]) : NULL;
+    if (!name)
+        return JS_ThrowTypeError(ctx,
+                                 "EventSignature(type, name) expects an event name");
+
+    JSValue proto = class_proto_arg(ctx, argc, argv, "EventSignature");
+    if (JS_IsException(proto)) {
+        JS_FreeCString(ctx, name);
+        return proto;
+    }
+
+    JSValue out = event_signature_of_proto(ctx, proto, name);
+    JS_FreeValue(ctx, proto);
+    JS_FreeCString(ctx, name);
     return out;
 }
 
@@ -4052,28 +4544,48 @@ static const JSCFunctionListEntry widget_props[] = {
     JS_CGETSET_DEF("AcceptDrop", w_get_accept_drop, w_set_accept_drop),
     JS_CGETSET_DEF("AcceptFiles", w_get_accept_files, w_set_accept_files),
     JS_CGETSET_DEF("Menu",       w_get_menu,        w_set_menu),
+    /* PopupMenu(x, y) */
     JS_CFUNC_DEF("PopupMenu", 2, w_popup_menu),
+    /* Show() */
     JS_CFUNC_DEF("Show",     0, w_show),
+    /* Hide() */
     JS_CFUNC_DEF("Hide",     0, w_hide),
+    /* Move(x, y) */
     JS_CFUNC_DEF("Move",     2, w_move),
+    /* Resize(width, height) */
     JS_CFUNC_DEF("Resize",   2, w_resize),
+    /* SizeRequest() */
     JS_CFUNC_DEF("SizeRequest", 0, w_size_request),
+    /* SetFocus() */
     JS_CFUNC_DEF("SetFocus", 0, w_set_focus),
+    /* Delete() */
     JS_CFUNC_DEF("Delete",   0, w_delete),
+    /* Emit(event, ...args) */
     JS_CFUNC_DEF("Emit",     1, w_emit),
+    /* On(event, fn) */
     JS_CFUNC_DEF("On",       2, w_on),
+    /* OriginIn(container) */
     JS_CFUNC_DEF("OriginIn", 1, w_origin_in),
+    /* Bounds([container]) */
     JS_CFUNC_DEF("Bounds",   1, w_bounds),
+    /* PropertyOptions(name) */
     JS_CFUNC_DEF("PropertyOptions", 1, w_property_options),
+    /* TextProperties() */
     JS_CFUNC_DEF("TextProperties", 0, w_text_properties),
+    /* EventNames() */
     JS_CFUNC_DEF("EventNames",     0, w_event_names),
+    /* StyleRule() */
     JS_CFUNC_DEF("StyleRule",      0, w_style_rule),
+    /* CssNode() */
     JS_CFUNC_DEF("CssNode",        0, w_css_node),
     /* Detach from the current parent without destroying the widget. Needed
      * for re-parenting in GTK 4, where a container refuses
      * a widget that already has a parent. */
+    /* Remove() */
     JS_CFUNC_DEF("Remove",   0, w_remove),
+    /* Raise() */
     JS_CFUNC_MAGIC_DEF("Raise", 0, w_restack, STACK_RAISE),
+    /* Lower() */
     JS_CFUNC_MAGIC_DEF("Lower", 0, w_restack, STACK_LOWER),
 };
 
@@ -5545,6 +6057,12 @@ void bta_widgets_init(JSContext *ctx, JSValue global)
     JS_NewClassID(rt, &bta_widget_class_id);
     JS_NewClass(rt, bta_widget_class_id, &widget_class_def);
 
+    /* The boundary the shape walks stop at, before the hatches take the way to
+     * ask for it again. */
+    JSValue object = JS_GetPropertyStr(ctx, global, "Object");
+    bta_object_proto = JS_GetPropertyStr(ctx, object, "prototype");
+    JS_FreeValue(ctx, object);
+
     int       n;
     BtaClass *table = bta_class_table(&n);
 
@@ -5586,6 +6104,38 @@ void bta_widgets_init(JSContext *ctx, JSValue global)
             JS_SetPropertyStr(ctx, ctor, "Available",
                               JS_NewCFunction(ctx, w_available, "Available", 1));
 
+            /*
+             * ...and what a class has, asked with no control built. The five
+             * answers a control gives about itself, each one the same walk the
+             * instance entry point uses -- a palette, a property grid and an
+             * extractor are all holding a name and not a control.
+             */
+            JS_SetPropertyStr(ctx, ctor, "PropertyNames",
+                              JS_NewCFunction(ctx, w_property_names_by_type,
+                                              "PropertyNames", 1));
+            JS_SetPropertyStr(ctx, ctor, "Methods",
+                              JS_NewCFunction(ctx, w_methods_by_type,
+                                              "Methods", 1));
+            JS_SetPropertyStr(ctx, ctor, "EventNames",
+                              JS_NewCFunction(ctx, w_event_names_by_type,
+                                              "EventNames", 1));
+            JS_SetPropertyStr(ctx, ctor, "TextProperties",
+                              JS_NewCFunction(ctx, w_text_properties_by_type,
+                                              "TextProperties", 1));
+            JS_SetPropertyStr(ctx, ctor, "PropertyOptions",
+                              JS_NewCFunction(ctx, w_property_options_by_type,
+                                              "PropertyOptions", 2));
+            JS_SetPropertyStr(ctx, ctor, "Member",
+                              JS_NewCFunction(ctx, w_member_by_type,
+                                              "Member", 2));
+            /* ...and the parameters each of them declares beside itself. */
+            JS_SetPropertyStr(ctx, ctor, "Signature",
+                              JS_NewCFunction(ctx, w_signature_by_type,
+                                              "Signature", 2));
+            JS_SetPropertyStr(ctx, ctor, "EventSignature",
+                              JS_NewCFunction(ctx, w_event_signature_by_type,
+                                              "EventSignature", 2));
+
             /* The runtime's own notes, reachable by the names they had when
              * they were own properties. */
             JS_SetPropertyFunctionList(ctx, proto, widget_notes,
@@ -5610,4 +6160,6 @@ void bta_widgets_cleanup(JSContext *ctx)
         table[i].proto = JS_UNDEFINED;
         table[i].ctor  = JS_UNDEFINED;
     }
+    JS_FreeValue(ctx, bta_object_proto);
+    bta_object_proto = JS_UNDEFINED;
 }

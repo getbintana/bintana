@@ -133,6 +133,23 @@ add_custom_command(
     COMMENT "Embedding forms.js prelude"
 )
 
+# ------------------------------------------------------ member signatures ---
+# Every method and event declares its parameters in a one-line comment beside
+# itself, and this is the table that publishes them: `Widget.Signature(type,
+# name)` answers with no control built. Generated rather than written, so the
+# declaration is in one place -- next to the thing it documents.
+file(GLOB RUNTIME_C_SOURCES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/runtime/src/*.c)
+set(SIGNATURES_H ${CMAKE_BINARY_DIR}/generated/bta_signatures.h)
+add_custom_command(
+    OUTPUT ${SIGNATURES_H}
+    COMMAND ${CMAKE_COMMAND}
+            -DSRC_DIR=${CMAKE_SOURCE_DIR}/runtime/src
+            -DOUTPUT=${SIGNATURES_H}
+            -P ${CMAKE_SOURCE_DIR}/tools/extract_signatures.cmake
+    DEPENDS ${RUNTIME_C_SOURCES} ${CMAKE_SOURCE_DIR}/tools/extract_signatures.cmake
+    COMMENT "Extracting member signatures"
+)
+
 # ------------------------------------------------------------- bintana runtime ---
 add_executable(bintana
     runtime/src/main.c
@@ -170,6 +187,7 @@ add_executable(bintana
     runtime/src/bta_plugin.c
     ${PRELUDE_H}
     ${FORMS_H}
+    ${SIGNATURES_H}
 )
 target_include_directories(bintana PRIVATE
     ${CMAKE_SOURCE_DIR}/runtime/include

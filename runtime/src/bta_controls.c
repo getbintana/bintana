@@ -646,8 +646,11 @@ static const JSCFunctionListEntry form_props[] = {
     JS_CGETSET_DEF("Modal", form_get_modal, form_set_modal),
     JS_CGETSET_DEF("DefaultButton", form_get_default_button, NULL),
     JS_CGETSET_DEF("CancelButton",  form_get_cancel_button,  NULL),
+    /* Show() */
     JS_CFUNC_DEF("Show",   0, form_show),
+    /* Close() */
     JS_CFUNC_DEF("Close",  0, form_close),
+    /* Center() */
     JS_CFUNC_DEF("Center", 0, form_center),
     JS_CGETSET_MAGIC_DEF("Resizable",  form_get_state, form_set_state, WIN_RESIZABLE),
     JS_CGETSET_MAGIC_DEF("Maximized",  form_get_state, form_set_state, WIN_MAXIMIZED),
@@ -671,6 +674,7 @@ static const JSCFunctionListEntry form_props[] = {
      * what happens once the close is allowed, not whether it is.
      */
     JS_CGETSET_MAGIC_DEF("HideOnClose", form_get_state, form_set_state, WIN_HIDEONCLOSE),
+    /* Minimize() */
     JS_CFUNC_DEF("Minimize", 0, form_minimize),
 };
 
@@ -1340,7 +1344,9 @@ static JSValue cont_focus_step(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry container_props[] = {
+    /* FocusNext() */
     JS_CFUNC_MAGIC_DEF("FocusNext",     0, cont_focus_step, 0),
+    /* FocusPrevious() */
     JS_CFUNC_MAGIC_DEF("FocusPrevious", 0, cont_focus_step, 1),
     JS_CGETSET_DEF("Arrangement", cont_get_arrangement, cont_set_arrangement),
     JS_CGETSET_DEF("Placement",   cont_get_placement,   NULL),
@@ -1348,11 +1354,17 @@ static const JSCFunctionListEntry container_props[] = {
     JS_CGETSET_DEF("Homogeneous", cont_get_homogeneous, cont_set_homogeneous),
     JS_CGETSET_DEF("Anchored",    cont_get_anchored,    cont_set_anchored),
     JS_CGETSET_DEF("Children",    cont_get_children,    NULL),
+    /* Reorder(child, index) */
     JS_CFUNC_DEF("Reorder",     2, cont_reorder),
+    /* PickAt(x, y) */
     JS_CFUNC_DEF("PickAt",      2, cont_pick_at),
+    /* ContainerAt(x, y, [ignore]) */
     JS_CFUNC_DEF("ContainerAt", 3, cont_container_at),
+    /* LocalPoint(x, y, from) */
     JS_CFUNC_DEF("LocalPoint",  3, cont_local_point),
+    /* Add(widget) */
     JS_CFUNC_DEF("Add",   1, container_add),
+    /* Clear() */
     JS_CFUNC_DEF("Clear", 0, container_clear),
 };
 
@@ -2046,6 +2058,7 @@ static const JSCFunctionListEntry button_props[] = {
     JS_CGETSET_DEF("Icon", button_get_icon, button_set_icon),
     JS_CGETSET_MAGIC_DEF("Default", button_get_flag, button_set_flag, BTN_DEFAULT),
     JS_CGETSET_MAGIC_DEF("Cancel",  button_get_flag, button_set_flag, BTN_CANCEL),
+    /* Click() */
     JS_CFUNC_DEF("Click", 0, button_click),
 };
 
@@ -2426,7 +2439,9 @@ static const JSCFunctionListEntry textbox_props[] = {
     JS_CGETSET_DEF("Purpose",   textbox_get_purpose,   textbox_set_purpose),
     JS_CGETSET_DEF("Alignment", textbox_get_alignment, textbox_set_alignment),
     JS_CGETSET_DEF("SelectedText", textbox_get_selected, NULL),
+    /* Select(start, length) */
     JS_CFUNC_DEF("Select",    2, textbox_select),
+    /* SelectAll() */
     JS_CFUNC_DEF("SelectAll", 0, textbox_select_all),
     JS_CGETSET_DEF("Placeholder", textbox_get_placeholder, textbox_set_placeholder),
     JS_CGETSET_DEF("Icon", textbox_get_icon, textbox_set_icon),
@@ -3204,13 +3219,21 @@ static const JSCFunctionListEntry listbox_props[] = {
     JS_CGETSET_DEF("Selection",   listbox_get_selection, NULL),
     JS_CGETSET_DEF("ActivateOnSingleClick",
                    listbox_get_single, listbox_set_single),
+    /* Add(text) */
     JS_CFUNC_DEF("Add",    1, listbox_add),
+    /* Clear() */
     JS_CFUNC_DEF("Clear",  0, listbox_clear_js),
+    /* Remove(index) */
     JS_CFUNC_DEF("Remove", 1, listbox_remove),
+    /* Select(index) */
     JS_CFUNC_MAGIC_DEF("Select",   1, listbox_select_one, LB_SELECT),
+    /* Deselect(index) */
     JS_CFUNC_MAGIC_DEF("Deselect", 1, listbox_select_one, LB_DESELECT),
+    /* Activate(index) */
     JS_CFUNC_DEF("Activate", 1, listbox_activate),
+    /* SelectAll() */
     JS_CFUNC_DEF("SelectAll",   0, listbox_select_all),
+    /* DeselectAll() */
     JS_CFUNC_DEF("DeselectAll", 0, listbox_deselect_all),
 };
 
@@ -3410,7 +3433,9 @@ static const JSCFunctionListEntry combobox_props[] = {
     JS_CGETSET_DEF("Index", combo_get_index, combo_set_index),
     JS_CGETSET_DEF("Text",  combo_get_text,  combo_set_text),
     JS_CGETSET_DEF("Count", combo_get_count, NULL),
+    /* Add(text) */
     JS_CFUNC_DEF("Add",   1, combo_add),
+    /* Clear() */
     JS_CFUNC_DEF("Clear", 0, combo_clear),
 };
 
@@ -3616,6 +3641,7 @@ static const JSCFunctionListEntry togglebutton_props[] = {
     JS_CGETSET_DEF("Text",  button_get_text, button_set_text),
     JS_CGETSET_DEF("Icon",  button_get_icon, button_set_icon),
     JS_CGETSET_DEF("Active", toggle_get_active, toggle_set_active),
+    /* Click() */
     JS_CFUNC_DEF("Click", 0, button_click),
 };
 
@@ -4084,6 +4110,7 @@ static JSValue picture_set_zoom(JSContext *ctx, JSValueConst this_val,
 
 static const JSCFunctionListEntry picture_props[] = {
     JS_CGETSET_DEF("File", picture_get_file, picture_set_file),
+    /* LoadBytes(bytes) */
     JS_CFUNC_DEF("LoadBytes", 1, picture_load_bytes),
     JS_CGETSET_DEF("Fit",  picture_get_fit,  picture_set_fit),
     JS_CGETSET_DEF("Zoom", picture_get_zoom, picture_set_zoom),
@@ -4442,6 +4469,7 @@ static const JSCFunctionListEntry progressbar_props[] = {
     JS_CGETSET_MAGIC_DEF("ShowText", prog_get, prog_set, PROG_SHOWTEXT),
     JS_CGETSET_DEF("Text", prog_get_text, prog_set_text),
     JS_CGETSET_DEF("Orientation", orient_get, orient_set),
+    /* Pulse() */
     JS_CFUNC_DEF("Pulse", 0, prog_pulse),
 };
 
@@ -4705,7 +4733,9 @@ static const JSCFunctionListEntry slider_props[] = {
     JS_CGETSET_DEF("Inverted",      slider_get_inverted, slider_set_inverted),
     JS_CGETSET_DEF("ValuePosition", slider_get_valuepos, slider_set_valuepos),
     JS_CGETSET_DEF("Orientation", orient_get, orient_set),
+    /* Mark(value, [text]) */
     JS_CFUNC_DEF("Mark",       2, slider_mark),
+    /* ClearMarks() */
     JS_CFUNC_DEF("ClearMarks", 0, slider_clear_marks),
 };
 
@@ -5297,8 +5327,11 @@ static const JSCFunctionListEntry calendar_props[] = {
     JS_CGETSET_MAGIC_DEF("ShowDayNames",    cal_get_shows, cal_set_shows, CAL_DAYNAMES),
     JS_CGETSET_MAGIC_DEF("ShowWeekNumbers", cal_get_shows, cal_set_shows, CAL_WEEKS),
     JS_CGETSET_DEF("Marks", cal_get_marks, NULL),
+    /* Mark(date) */
     JS_CFUNC_DEF("Mark",       1, cal_mark),
+    /* Unmark(date) */
     JS_CFUNC_DEF("Unmark",     1, cal_unmark),
+    /* ClearMarks() */
     JS_CFUNC_DEF("ClearMarks", 0, cal_clear_marks),
 };
 
@@ -5774,6 +5807,7 @@ static JSValue image_load_bytes(JSContext *ctx, JSValueConst this_val,
 static const JSCFunctionListEntry image_props[] = {
     JS_CGETSET_DEF("Icon", image_get_icon, image_set_icon),
     JS_CGETSET_DEF("File", image_get_file, image_set_file),
+    /* LoadBytes(bytes) */
     JS_CFUNC_DEF("LoadBytes", 1, image_load_bytes),
     JS_CGETSET_DEF("Size", image_get_size, image_set_size),
 };
@@ -5791,17 +5825,41 @@ void bta_core_register(void)
          * inherited by all of them, which is what makes the accumulating walk
          * in text_props_of() necessary rather than convenient.
          */
+        /* MouseDown(x, y, button, ctrl, shift) */
+        /* MouseUp(x, y, button, ctrl, shift) */
+        /* MouseMove(x, y, button, ctrl, shift) */
+        /* MouseEnter(x, y) */
+        /* MouseLeave() */
+        /* MouseWheel(dx, dy) */
+        /* DblClick(x, y, button, ctrl, shift) */
+        /* KeyPress(key, ctrl, shift, alt) */
+        /* KeyRelease(key, ctrl, shift, alt) */
+        /* GotFocus() */
+        /* LostFocus() */
+        /* Drop(data, x, y) */
+        /* FileDrop(paths, x, y) */
+        /* DragEnter(data, x, y) */
+        /* DragOver(data, x, y) */
+        /* DragLeave() */
+        /* DragBegin() */
+        /* DragEnd() */
+        /* Allocated(box) */
         BTA_CLASS_FULL("Widget", NULL, NULL, base, nbase, false,
                        widget_options, "Tooltip", "MouseDown,MouseUp,MouseMove,MouseEnter,MouseLeave,MouseWheel,DblClick,KeyPress,KeyRelease,GotFocus,LostFocus,Drop,FileDrop,DragEnter,DragOver,DragLeave,DragBegin,DragEnd,Allocated"),
         BTA_CLASS_ENUM("Container", "Widget",  NULL, container_props, false, container_options, NULL),
         BTA_CLASS_BARE("Control",   "Widget",    NULL,                            false, NULL),
         /* A window's title is prose; so is the caption of everything below. */
+        /* Open() */
+        /* Close() */
+        /* Resize(width, height) */
+        /* ThemeChange() */
         BTA_CLASS_TEXT("Form",      "Container", build_form,     form_props,      true, "Text",
                        "Open,Close,Resize,ThemeChange"),
         BTA_CLASS_BARE("Panel",     "Container", build_panel,                     false, NULL),
         BTA_CLASS_BARE("Component", "Container", build_component,                 false, NULL),
         BTA_CLASS_ENUM_TEXT("Label", "Control",  build_label,    label_props, false,
                        label_options, "Text", NULL),
+        /* Click() */
         BTA_CLASS_TEXT("Button",    "Control",   build_button,   button_props,    false, "Text", "Click"),
         BTA_CLASS     ("Image",     "Control",   build_image,    image_props,     false, NULL),
         /* No `texts`: a rule has nothing to read. No events of its own either --
@@ -5811,22 +5869,32 @@ void bta_core_register(void)
                        orient_options, NULL),
         /* A TextBox's Text is what it starts with -- prose -- and Placeholder is
          * the hint behind it, which is prose that is only ever read. */
+        /* Change() */
+        /* Activate() */
+        /* IconClick() */
         BTA_CLASS_ENUM_TEXT("TextBox", "Control", build_textbox, textbox_props, false,
                        textbox_options, "Text,Placeholder", "Change,Activate,IconClick"),
         /* One control, and `Group` says which of the two it is: see
          * build_checkbutton for why there is no RadioButton beside it. */
+        /* Click() */
         BTA_CLASS_TEXT("CheckButton", "Control", build_checkbutton,
                        checkbutton_props, false, "Text", "Click"),
         /* No `texts`: a switch has no caption to translate.  The Label beside
          * it is where the prose is, and that one is already a Label. */
+        /* Click() */
         BTA_CLASS     ("Switch",    "Control",   build_switch,   switch_props,    false, "Click"),
         /* `Items` is a list of strings a person reads, so each entry goes
          * through the catalogue.  ListBox.Text is read-only (it reports the
          * selection) and so is not one of these. */
+        /* Select() */
+        /* Activate() */
         BTA_CLASS_TEXT("ListBox",   "Control",   build_listbox,  listbox_props,   false, "Items",
                        "Select,Activate"),
+        /* Select() */
         BTA_CLASS_TEXT("ComboBox",  "Control",   build_combobox, combobox_props,  false,
                        "Items,Text", "Select"),
+        /* Change() */
+        /* Activate() */
         BTA_CLASS     ("SpinBox",   "Control",   build_spinbox,  spinbox_props,   false, "Change,Activate"),
         /* Three small ones, each a word the vocabulary was missing: work with no
          * end in sight, an address, and a reading. */
@@ -5834,25 +5902,32 @@ void bta_core_register(void)
                        false, picture_options, NULL),
         BTA_CLASS     ("Spinner",    "Control", build_spinner,    spinner_props,
                        false, NULL),
+        /* Click() */
         BTA_CLASS_TEXT("LinkButton", "Control", build_linkbutton, linkbutton_props,
                        false, "Text", "Click"),
         BTA_CLASS_ENUM("LevelBar",   "Control", build_levelbar,   levelbar_props,
                        false, level_options, NULL),
+        /* Click() */
         BTA_CLASS_TEXT("ToggleButton", "Control", build_togglebutton,
                        togglebutton_props, false, "Text", "Click"),
         BTA_CLASS_ENUM_TEXT("ProgressBar", "Control", build_progressbar,
                        progressbar_props, false, orient_options, "Text", NULL),
+        /* Change() */
         BTA_CLASS_ENUM("Slider",       "Control", build_slider,
                        slider_props, false, slider_options, "Change"),
         /* `Placeholder` is prose and `Format` is not, which is the same line
          * `TextBox` draws: one is read by a person, the other is a strftime
          * pattern that a catalogue would turn into a different date. */
+        /* Change() */
         BTA_CLASS_TEXT("DatePicker",   "Control", build_datepicker,
                        datepicker_props, false, "Placeholder", "Change"),
+        /* Change() */
         BTA_CLASS     ("Calendar",     "Control", build_calendar,
                        calendar_props, false, "Change"),
+        /* Change() */
         BTA_CLASS     ("ColorButton", "Control",  build_colorbutton,
                        colorbutton_props, false, "Change"),
+        /* Change() */
         BTA_CLASS     ("FontButton",  "Control",  build_fontbutton,
                        fontbutton_props, false, "Change"),
     };

@@ -45,39 +45,47 @@ declare class Widget {
     __declared: any;
     readonly Dark: boolean;
     readonly Focused: boolean;
-    Apply(...values: any[]): any;
-    Bounds(...values: any[]): any;
-    CssNode(...values: any[]): any;
-    Declared(...values: any[]): any;
-    Delete(...values: any[]): any;
-    DesignValue(...values: any[]): any;
-    Dump(...values: any[]): any;
-    Emit(...values: any[]): any;
-    EventNames(...values: any[]): any;
+    Apply(properties: any): any;
+    Bounds(container?: any): any;
+    CssNode(): any;
+    Declared(name: any): any;
+    Delete(): any;
+    DesignValue(name: any): any;
+    Dump(): any;
+    Emit(event: any, ...args: any[]): any;
+    EventNames(): any;
     Fill(...values: any[]): any;
-    Hide(...values: any[]): any;
-    Lower(...values: any[]): any;
-    Move(...values: any[]): any;
-    On(...values: any[]): any;
-    OriginIn(...values: any[]): any;
-    PopupMenu(...values: any[]): any;
-    PropertyNames(...values: any[]): any;
-    PropertyOptions(...values: any[]): any;
-    Raise(...values: any[]): any;
-    Remove(...values: any[]): any;
-    Resize(...values: any[]): any;
-    Serialize(...values: any[]): any;
-    SetDesign(...values: any[]): any;
-    SetFocus(...values: any[]): any;
-    SetItem(...values: any[]): any;
-    Show(...values: any[]): any;
-    SizeRequest(...values: any[]): any;
-    StyleRule(...values: any[]): any;
-    TextProperties(...values: any[]): any;
+    Hide(): any;
+    Lower(): any;
+    Move(x: any, y: any): any;
+    On(event: any, fn: any): any;
+    OriginIn(container: any): any;
+    PopupMenu(x: any, y: any): any;
+    PropertyNames(): any;
+    PropertyOptions(name: any): any;
+    Raise(): any;
+    Remove(): any;
+    Resize(width: any, height: any): any;
+    Serialize(parentIsFixed: any): any;
+    SetDesign(name: any, value: any): any;
+    SetFocus(): any;
+    SetItem(of: any, count: any): any;
+    Show(): any;
+    SizeRequest(): any;
+    StyleRule(): any;
+    TextProperties(): any;
     static New(type: string): Widget;
     static Types(): string[];
     static Available(type: string): boolean;
     static TypeName(ctor: any): string;
+    static PropertyNames(type: string): string[];
+    static Methods(type: string): string[];
+    static EventNames(type: string): string[];
+    static TextProperties(type: string): string[];
+    static PropertyOptions(type: string, name: string): string[] | null;
+    static Member(type: string, name: string): string;
+    static Signature(type: string, name: string): string | null;
+    static EventSignature(type: string, name: string): string | null;
 }
 
 declare class Container extends Widget { }
@@ -100,20 +108,20 @@ declare class Form extends Widget {
     readonly Children: any[];
     readonly DefaultButton: any;
     readonly Placement: string;
-    Add(...values: any[]): any;
-    AddNode(...values: any[]): any;
-    BuildChildren(...values: any[]): any;
-    Center(...values: any[]): any;
-    Clear(...values: any[]): any;
-    Close(...values: any[]): any;
-    ContainerAt(...values: any[]): any;
-    FocusNext(...values: any[]): any;
-    FocusPrevious(...values: any[]): any;
-    LocalPoint(...values: any[]): any;
-    Minimize(...values: any[]): any;
-    PickAt(...values: any[]): any;
-    Reorder(...values: any[]): any;
-    SaveForm(...values: any[]): any;
+    Add(widget: any): any;
+    AddNode(node: any): any;
+    BuildChildren(node: any): any;
+    Center(): any;
+    Clear(): any;
+    Close(): any;
+    ContainerAt(x: any, y: any, ignore?: any): any;
+    FocusNext(): any;
+    FocusPrevious(): any;
+    LocalPoint(x: any, y: any, from: any): any;
+    Minimize(): any;
+    PickAt(x: any, y: any): any;
+    Reorder(child: any, index: any): any;
+    SaveForm(path: any): any;
 }
 declare class Panel extends Widget {
     Anchored: boolean;
@@ -122,16 +130,16 @@ declare class Panel extends Widget {
     Spacing: number;
     readonly Children: any[];
     readonly Placement: string;
-    Add(...values: any[]): any;
-    AddNode(...values: any[]): any;
-    BuildChildren(...values: any[]): any;
-    Clear(...values: any[]): any;
-    ContainerAt(...values: any[]): any;
-    FocusNext(...values: any[]): any;
-    FocusPrevious(...values: any[]): any;
-    LocalPoint(...values: any[]): any;
-    PickAt(...values: any[]): any;
-    Reorder(...values: any[]): any;
+    Add(widget: any): any;
+    AddNode(node: any): any;
+    BuildChildren(node: any): any;
+    Clear(): any;
+    ContainerAt(x: any, y: any, ignore?: any): any;
+    FocusNext(): any;
+    FocusPrevious(): any;
+    LocalPoint(x: any, y: any, from: any): any;
+    PickAt(x: any, y: any): any;
+    Reorder(child: any, index: any): any;
 }
 declare class Component extends Widget {
     Anchored: boolean;
@@ -140,16 +148,16 @@ declare class Component extends Widget {
     Spacing: number;
     readonly Children: any[];
     readonly Placement: string;
-    Add(...values: any[]): any;
-    AddNode(...values: any[]): any;
-    BuildChildren(...values: any[]): any;
-    Clear(...values: any[]): any;
-    ContainerAt(...values: any[]): any;
-    FocusNext(...values: any[]): any;
-    FocusPrevious(...values: any[]): any;
-    LocalPoint(...values: any[]): any;
-    PickAt(...values: any[]): any;
-    Reorder(...values: any[]): any;
+    Add(widget: any): any;
+    AddNode(node: any): any;
+    BuildChildren(node: any): any;
+    Clear(): any;
+    ContainerAt(x: any, y: any, ignore?: any): any;
+    FocusNext(): any;
+    FocusPrevious(): any;
+    LocalPoint(x: any, y: any, from: any): any;
+    PickAt(x: any, y: any): any;
+    Reorder(child: any, index: any): any;
 }
 declare class Label extends Widget {
     Alignment: string;
@@ -165,13 +173,13 @@ declare class Button extends Widget {
     Default: boolean;
     Icon: string;
     Text: string;
-    Click(...values: any[]): any;
+    Click(): any;
 }
 declare class Image extends Widget {
     File: string;
     Icon: string;
     Size: number;
-    LoadBytes(...values: any[]): any;
+    LoadBytes(bytes: any): any;
 }
 declare class Separator extends Widget {
     Orientation: string;
@@ -187,8 +195,8 @@ declare class TextBox extends Widget {
     ReadOnly: boolean;
     Text: string;
     readonly SelectedText: string;
-    Select(...values: any[]): any;
-    SelectAll(...values: any[]): any;
+    Select(start: any, length: any): any;
+    SelectAll(): any;
 }
 declare class CheckButton extends Widget {
     Active: boolean;
@@ -206,21 +214,21 @@ declare class ListBox extends Widget {
     readonly Count: number;
     readonly Selection: any[];
     readonly Text: string;
-    Activate(...values: any[]): any;
-    Add(...values: any[]): any;
-    Clear(...values: any[]): any;
-    Deselect(...values: any[]): any;
-    DeselectAll(...values: any[]): any;
-    Select(...values: any[]): any;
-    SelectAll(...values: any[]): any;
+    Activate(index: any): any;
+    Add(text: any): any;
+    Clear(): any;
+    Deselect(index: any): any;
+    DeselectAll(): any;
+    Select(index: any): any;
+    SelectAll(): any;
 }
 declare class ComboBox extends Widget {
     Index: number;
     Items: any[];
     Text: string;
     readonly Count: number;
-    Add(...values: any[]): any;
-    Clear(...values: any[]): any;
+    Add(text: any): any;
+    Clear(): any;
 }
 declare class SpinBox extends Widget {
     Decimals: number;
@@ -237,7 +245,7 @@ declare class Picture extends Widget {
     Zoom: number;
     readonly SourceHeight: number;
     readonly SourceWidth: number;
-    LoadBytes(...values: any[]): any;
+    LoadBytes(bytes: any): any;
 }
 declare class Spinner extends Widget {
     Active: boolean;
@@ -257,14 +265,14 @@ declare class ToggleButton extends Widget {
     Active: boolean;
     Icon: string;
     Text: string;
-    Click(...values: any[]): any;
+    Click(): any;
 }
 declare class ProgressBar extends Widget {
     Orientation: string;
     ShowText: boolean;
     Text: string;
     Value: number;
-    Pulse(...values: any[]): any;
+    Pulse(): any;
 }
 declare class Slider extends Widget {
     Decimals: number;
@@ -276,8 +284,8 @@ declare class Slider extends Widget {
     Step: number;
     Value: number;
     ValuePosition: string;
-    ClearMarks(...values: any[]): any;
-    Mark(...values: any[]): any;
+    ClearMarks(): any;
+    Mark(value: any, text?: any): any;
 }
 declare class DatePicker extends Widget {
     Format: string;
@@ -290,9 +298,9 @@ declare class Calendar extends Widget {
     ShowWeekNumbers: boolean;
     Value: string;
     readonly Marks: any[];
-    ClearMarks(...values: any[]): any;
-    Mark(...values: any[]): any;
-    Unmark(...values: any[]): any;
+    ClearMarks(): any;
+    Mark(date: any): any;
+    Unmark(date: any): any;
 }
 declare class ColorButton extends Widget {
     Value: string;
@@ -310,16 +318,16 @@ declare class Split extends Widget {
     WideHandle: boolean;
     readonly Children: any[];
     readonly Placement: string;
-    Add(...values: any[]): any;
-    AddNode(...values: any[]): any;
-    BuildChildren(...values: any[]): any;
-    Clear(...values: any[]): any;
-    ContainerAt(...values: any[]): any;
-    FocusNext(...values: any[]): any;
-    FocusPrevious(...values: any[]): any;
-    LocalPoint(...values: any[]): any;
-    PickAt(...values: any[]): any;
-    Reorder(...values: any[]): any;
+    Add(widget: any): any;
+    AddNode(node: any): any;
+    BuildChildren(node: any): any;
+    Clear(): any;
+    ContainerAt(x: any, y: any, ignore?: any): any;
+    FocusNext(): any;
+    FocusPrevious(): any;
+    LocalPoint(x: any, y: any, from: any): any;
+    PickAt(x: any, y: any): any;
+    Reorder(child: any, index: any): any;
 }
 declare class Frame extends Widget {
     Anchored: boolean;
@@ -329,16 +337,16 @@ declare class Frame extends Widget {
     Text: string;
     readonly Children: any[];
     readonly Placement: string;
-    Add(...values: any[]): any;
-    AddNode(...values: any[]): any;
-    BuildChildren(...values: any[]): any;
-    Clear(...values: any[]): any;
-    ContainerAt(...values: any[]): any;
-    FocusNext(...values: any[]): any;
-    FocusPrevious(...values: any[]): any;
-    LocalPoint(...values: any[]): any;
-    PickAt(...values: any[]): any;
-    Reorder(...values: any[]): any;
+    Add(widget: any): any;
+    AddNode(node: any): any;
+    BuildChildren(node: any): any;
+    Clear(): any;
+    ContainerAt(x: any, y: any, ignore?: any): any;
+    FocusNext(): any;
+    FocusPrevious(): any;
+    LocalPoint(x: any, y: any, from: any): any;
+    PickAt(x: any, y: any): any;
+    Reorder(child: any, index: any): any;
 }
 declare class Expander extends Widget {
     Anchored: boolean;
@@ -349,16 +357,16 @@ declare class Expander extends Widget {
     Text: string;
     readonly Children: any[];
     readonly Placement: string;
-    Add(...values: any[]): any;
-    AddNode(...values: any[]): any;
-    BuildChildren(...values: any[]): any;
-    Clear(...values: any[]): any;
-    ContainerAt(...values: any[]): any;
-    FocusNext(...values: any[]): any;
-    FocusPrevious(...values: any[]): any;
-    LocalPoint(...values: any[]): any;
-    PickAt(...values: any[]): any;
-    Reorder(...values: any[]): any;
+    Add(widget: any): any;
+    AddNode(node: any): any;
+    BuildChildren(node: any): any;
+    Clear(): any;
+    ContainerAt(x: any, y: any, ignore?: any): any;
+    FocusNext(): any;
+    FocusPrevious(): any;
+    LocalPoint(x: any, y: any, from: any): any;
+    PickAt(x: any, y: any): any;
+    Reorder(child: any, index: any): any;
 }
 declare class Overlay extends Widget {
     Anchored: boolean;
@@ -367,16 +375,16 @@ declare class Overlay extends Widget {
     Spacing: number;
     readonly Children: any[];
     readonly Placement: string;
-    Add(...values: any[]): any;
-    AddNode(...values: any[]): any;
-    BuildChildren(...values: any[]): any;
-    Clear(...values: any[]): any;
-    ContainerAt(...values: any[]): any;
-    FocusNext(...values: any[]): any;
-    FocusPrevious(...values: any[]): any;
-    LocalPoint(...values: any[]): any;
-    PickAt(...values: any[]): any;
-    Reorder(...values: any[]): any;
+    Add(widget: any): any;
+    AddNode(node: any): any;
+    BuildChildren(node: any): any;
+    Clear(): any;
+    ContainerAt(x: any, y: any, ignore?: any): any;
+    FocusNext(): any;
+    FocusPrevious(): any;
+    LocalPoint(x: any, y: any, from: any): any;
+    PickAt(x: any, y: any): any;
+    Reorder(child: any, index: any): any;
 }
 declare class RowList extends Widget {
     ActivateOnSingleClick: boolean;
@@ -390,22 +398,22 @@ declare class RowList extends Widget {
     readonly Count: number;
     readonly Placement: string;
     readonly Selection: any[];
-    Activate(...values: any[]): any;
-    Add(...values: any[]): any;
-    AddNode(...values: any[]): any;
-    BuildChildren(...values: any[]): any;
-    Clear(...values: any[]): any;
-    ContainerAt(...values: any[]): any;
-    Deselect(...values: any[]): any;
-    DeselectAll(...values: any[]): any;
-    FocusNext(...values: any[]): any;
-    FocusPrevious(...values: any[]): any;
-    LocalPoint(...values: any[]): any;
-    PickAt(...values: any[]): any;
-    Refilter(...values: any[]): any;
-    Reorder(...values: any[]): any;
-    Select(...values: any[]): any;
-    SelectAll(...values: any[]): any;
+    Activate(index?: any): any;
+    Add(widget: any): any;
+    AddNode(node: any): any;
+    BuildChildren(node: any): any;
+    Clear(): any;
+    ContainerAt(x: any, y: any, ignore?: any): any;
+    Deselect(index: any): any;
+    DeselectAll(): any;
+    FocusNext(): any;
+    FocusPrevious(): any;
+    LocalPoint(x: any, y: any, from: any): any;
+    PickAt(x: any, y: any): any;
+    Refilter(): any;
+    Reorder(child: any, index: any): any;
+    Select(index: any): any;
+    SelectAll(): any;
 }
 declare class Scroller extends Widget {
     Anchored: boolean;
@@ -419,16 +427,16 @@ declare class Scroller extends Widget {
     readonly Placement: string;
     readonly ScrollMaxX: number;
     readonly ScrollMaxY: number;
-    Add(...values: any[]): any;
-    AddNode(...values: any[]): any;
-    BuildChildren(...values: any[]): any;
-    Clear(...values: any[]): any;
-    ContainerAt(...values: any[]): any;
-    FocusNext(...values: any[]): any;
-    FocusPrevious(...values: any[]): any;
-    LocalPoint(...values: any[]): any;
-    PickAt(...values: any[]): any;
-    Reorder(...values: any[]): any;
+    Add(widget: any): any;
+    AddNode(node: any): any;
+    BuildChildren(node: any): any;
+    Clear(): any;
+    ContainerAt(x: any, y: any, ignore?: any): any;
+    FocusNext(): any;
+    FocusPrevious(): any;
+    LocalPoint(x: any, y: any, from: any): any;
+    PickAt(x: any, y: any): any;
+    Reorder(child: any, index: any): any;
 }
 declare class AspectFrame extends Widget {
     Anchored: boolean;
@@ -438,16 +446,16 @@ declare class AspectFrame extends Widget {
     Spacing: number;
     readonly Children: any[];
     readonly Placement: string;
-    Add(...values: any[]): any;
-    AddNode(...values: any[]): any;
-    BuildChildren(...values: any[]): any;
-    Clear(...values: any[]): any;
-    ContainerAt(...values: any[]): any;
-    FocusNext(...values: any[]): any;
-    FocusPrevious(...values: any[]): any;
-    LocalPoint(...values: any[]): any;
-    PickAt(...values: any[]): any;
-    Reorder(...values: any[]): any;
+    Add(widget: any): any;
+    AddNode(node: any): any;
+    BuildChildren(node: any): any;
+    Clear(): any;
+    ContainerAt(x: any, y: any, ignore?: any): any;
+    FocusNext(): any;
+    FocusPrevious(): any;
+    LocalPoint(x: any, y: any, from: any): any;
+    PickAt(x: any, y: any): any;
+    Reorder(child: any, index: any): any;
 }
 declare class Flow extends Widget {
     Anchored: boolean;
@@ -460,16 +468,16 @@ declare class Flow extends Widget {
     Spacing: number;
     readonly Children: any[];
     readonly Placement: string;
-    Add(...values: any[]): any;
-    AddNode(...values: any[]): any;
-    BuildChildren(...values: any[]): any;
-    Clear(...values: any[]): any;
-    ContainerAt(...values: any[]): any;
-    FocusNext(...values: any[]): any;
-    FocusPrevious(...values: any[]): any;
-    LocalPoint(...values: any[]): any;
-    PickAt(...values: any[]): any;
-    Reorder(...values: any[]): any;
+    Add(widget: any): any;
+    AddNode(node: any): any;
+    BuildChildren(node: any): any;
+    Clear(): any;
+    ContainerAt(x: any, y: any, ignore?: any): any;
+    FocusNext(): any;
+    FocusPrevious(): any;
+    LocalPoint(x: any, y: any, from: any): any;
+    PickAt(x: any, y: any): any;
+    Reorder(child: any, index: any): any;
 }
 declare class Grid extends Widget {
     Anchored: boolean;
@@ -481,16 +489,16 @@ declare class Grid extends Widget {
     Spacing: number;
     readonly Children: any[];
     readonly Placement: string;
-    Add(...values: any[]): any;
-    AddNode(...values: any[]): any;
-    BuildChildren(...values: any[]): any;
-    Clear(...values: any[]): any;
-    ContainerAt(...values: any[]): any;
-    FocusNext(...values: any[]): any;
-    FocusPrevious(...values: any[]): any;
-    LocalPoint(...values: any[]): any;
-    PickAt(...values: any[]): any;
-    Reorder(...values: any[]): any;
+    Add(widget: any): any;
+    AddNode(node: any): any;
+    BuildChildren(node: any): any;
+    Clear(): any;
+    ContainerAt(x: any, y: any, ignore?: any): any;
+    FocusNext(): any;
+    FocusPrevious(): any;
+    LocalPoint(x: any, y: any, from: any): any;
+    PickAt(x: any, y: any): any;
+    Reorder(child: any, index: any): any;
 }
 declare class Notebook extends Widget {
     Anchored: boolean;
@@ -503,20 +511,20 @@ declare class Notebook extends Widget {
     readonly Children: any[];
     readonly Count: number;
     readonly Placement: string;
-    Add(...values: any[]): any;
-    AddNode(...values: any[]): any;
-    Append(...values: any[]): any;
-    BuildChildren(...values: any[]): any;
-    Clear(...values: any[]): any;
-    ContainerAt(...values: any[]): any;
-    FocusNext(...values: any[]): any;
-    FocusPrevious(...values: any[]): any;
-    GetAction(...values: any[]): any;
-    LocalPoint(...values: any[]): any;
-    PickAt(...values: any[]): any;
-    Reorder(...values: any[]): any;
-    SetAction(...values: any[]): any;
-    SetTabLabel(...values: any[]): any;
+    Add(widget: any): any;
+    AddNode(node: any): any;
+    Append(child: any, label?: any): any;
+    BuildChildren(node: any): any;
+    Clear(): any;
+    ContainerAt(x: any, y: any, ignore?: any): any;
+    FocusNext(): any;
+    FocusPrevious(): any;
+    GetAction(where: any): any;
+    LocalPoint(x: any, y: any, from: any): any;
+    PickAt(x: any, y: any): any;
+    Reorder(child: any, index: any): any;
+    SetAction(control: any, where?: any): any;
+    SetTabLabel(index: any, label: any): any;
 }
 declare class Switcher extends Widget {
     Anchored: boolean;
@@ -529,23 +537,23 @@ declare class Switcher extends Widget {
     readonly Children: any[];
     readonly Count: number;
     readonly Placement: string;
-    Add(...values: any[]): any;
-    AddNode(...values: any[]): any;
-    Append(...values: any[]): any;
-    BuildChildren(...values: any[]): any;
-    Clear(...values: any[]): any;
-    ContainerAt(...values: any[]): any;
-    FocusNext(...values: any[]): any;
-    FocusPrevious(...values: any[]): any;
-    LocalPoint(...values: any[]): any;
-    PickAt(...values: any[]): any;
-    Reorder(...values: any[]): any;
+    Add(widget: any): any;
+    AddNode(node: any): any;
+    Append(child: any, name?: any): any;
+    BuildChildren(node: any): any;
+    Clear(): any;
+    ContainerAt(x: any, y: any, ignore?: any): any;
+    FocusNext(): any;
+    FocusPrevious(): any;
+    LocalPoint(x: any, y: any, from: any): any;
+    PickAt(x: any, y: any): any;
+    Reorder(child: any, index: any): any;
 }
 declare class DrawingArea extends Widget {
-    Redraw(...values: any[]): any;
-    Save(...values: any[]): any;
-    SavePdf(...values: any[]): any;
-    ToPng(...values: any[]): any;
+    Redraw(): any;
+    Save(path: any, width?: any, height?: any): any;
+    SavePdf(path: any, width: any, height: any, pages?: any, before?: any): any;
+    ToPng(width?: any, height?: any): any;
 }
 declare class TextEditor extends Widget {
     Modified: boolean;
@@ -562,15 +570,15 @@ declare class TextEditor extends Widget {
     readonly ScrollMaxX: number;
     readonly ScrollMaxY: number;
     readonly Selection: string;
-    Append(...values: any[]): any;
-    Clear(...values: any[]): any;
-    GotoLine(...values: any[]): any;
-    Insert(...values: any[]): any;
-    LineOf(...values: any[]): any;
-    OffsetAt(...values: any[]): any;
-    Redo(...values: any[]): any;
-    Select(...values: any[]): any;
-    Undo(...values: any[]): any;
+    Append(text: any): any;
+    Clear(): any;
+    GotoLine(line: any): any;
+    Insert(text: any): any;
+    LineOf(index: any): any;
+    OffsetAt(line: any, column?: any): any;
+    Redo(): any;
+    Select(line: any, column?: any, length?: any): any;
+    Undo(): any;
 }
 declare class SourceEditor extends Widget {
     Completion: boolean;
@@ -595,25 +603,25 @@ declare class SourceEditor extends Widget {
     readonly ScrollMaxX: number;
     readonly ScrollMaxY: number;
     readonly Selection: string;
-    Append(...values: any[]): any;
-    Clear(...values: any[]): any;
-    ClearMarks(...values: any[]): any;
-    FindNext(...values: any[]): any;
-    FindPrevious(...values: any[]): any;
-    GotoLine(...values: any[]): any;
-    Insert(...values: any[]): any;
-    LineOf(...values: any[]): any;
-    Mark(...values: any[]): any;
-    Marks(...values: any[]): any;
-    OffsetAt(...values: any[]): any;
-    Redo(...values: any[]): any;
-    Replace(...values: any[]): any;
-    ReplaceAll(...values: any[]): any;
-    Search(...values: any[]): any;
-    Select(...values: any[]): any;
-    ShowCompletion(...values: any[]): any;
-    Undo(...values: any[]): any;
-    Unmark(...values: any[]): any;
+    Append(text: any): any;
+    Clear(): any;
+    ClearMarks(kind?: any): any;
+    FindNext(): any;
+    FindPrevious(): any;
+    GotoLine(line: any): any;
+    Insert(text: any): any;
+    LineOf(index: any): any;
+    Mark(line: any, kind: any, text?: any): any;
+    Marks(kind?: any): any;
+    OffsetAt(line: any, column?: any): any;
+    Redo(): any;
+    Replace(with: any): any;
+    ReplaceAll(with: any): any;
+    Search(text: any, options?: { CaseSensitive?: any; WholeWord?: any; Regex?: any }): any;
+    Select(line: any, column?: any, length?: any): any;
+    ShowCompletion(): any;
+    Undo(): any;
+    Unmark(line: any, kind?: any): any;
 }
 declare class Terminal extends Widget {
     LinkPattern: string;
@@ -621,27 +629,27 @@ declare class Terminal extends Widget {
     readonly Available: boolean;
     readonly Running: boolean;
     readonly Text: string;
-    Clear(...values: any[]): any;
-    Feed(...values: any[]): any;
-    Kill(...values: any[]): any;
-    Run(...values: any[]): any;
-    Stop(...values: any[]): any;
+    Clear(): any;
+    Feed(text: any): any;
+    Kill(): any;
+    Run(argv: any, workdir?: any): any;
+    Stop(): any;
 }
 declare class TreeView extends Widget {
     AutoExpand: boolean;
     Key: string;
     readonly Count: number;
     readonly Text: string;
-    Add(...values: any[]): any;
-    Clear(...values: any[]): any;
-    CollapseAll(...values: any[]): any;
-    CollapseNode(...values: any[]): any;
-    Exists(...values: any[]): any;
-    ExpandAll(...values: any[]): any;
-    ExpandNode(...values: any[]): any;
-    Expanded(...values: any[]): any;
-    SetIcon(...values: any[]): any;
-    SetText(...values: any[]): any;
+    Add(key: any, text: any, parentKey?: any, icon?: any): any;
+    Clear(): any;
+    CollapseAll(): any;
+    CollapseNode(key: any): any;
+    Exists(key: any): any;
+    ExpandAll(): any;
+    ExpandNode(key: any): any;
+    Expanded(key: any): any;
+    SetIcon(key: any, name: any): any;
+    SetText(key: any, text: any): any;
 }
 declare class TableView extends Widget {
     AutoExpand: boolean;
@@ -654,24 +662,24 @@ declare class TableView extends Widget {
     RowLines: boolean;
     Sortable: boolean;
     readonly Selection: any[];
-    Add(...values: any[]): any;
-    Cell(...values: any[]): any;
-    Clear(...values: any[]): any;
-    CollapseAll(...values: any[]): any;
-    CollapseNode(...values: any[]): any;
-    Deselect(...values: any[]): any;
-    DeselectAll(...values: any[]): any;
-    Exists(...values: any[]): any;
-    ExpandAll(...values: any[]): any;
-    ExpandNode(...values: any[]): any;
-    Expanded(...values: any[]): any;
-    Row(...values: any[]): any;
-    Select(...values: any[]): any;
-    SelectAll(...values: any[]): any;
-    SetCell(...values: any[]): any;
-    SetIcon(...values: any[]): any;
-    SortBy(...values: any[]): any;
-    SortColumn(...values: any[]): any;
+    Add(values: any, options?: any): any;
+    Cell(row: any, column: any): any;
+    Clear(): any;
+    CollapseAll(): any;
+    CollapseNode(key: any): any;
+    Deselect(index: any): any;
+    DeselectAll(): any;
+    Exists(key: any): any;
+    ExpandAll(): any;
+    ExpandNode(key: any): any;
+    Expanded(key: any): any;
+    Row(index: any): any;
+    Select(index: any): any;
+    SelectAll(): any;
+    SetCell(row: any, column: any, value: any): any;
+    SetIcon(row: any, column: any, name: any): any;
+    SortBy(column: any, ascending?: any): any;
+    SortColumn(column: any, ascending?: any): any;
 }
 declare class Video extends Widget {
     Fit: string;
@@ -690,11 +698,11 @@ declare class Video extends Widget {
     readonly Seekable: boolean;
     readonly SourceHeight: number;
     readonly SourceWidth: number;
-    Pause(...values: any[]): any;
-    Play(...values: any[]): any;
-    Save(...values: any[]): any;
-    Seek(...values: any[]): any;
-    Stop(...values: any[]): any;
+    Pause(): any;
+    Play(): any;
+    Save(path: any): any;
+    Seek(seconds: any): any;
+    Stop(): any;
 }
 
 declare class Action {

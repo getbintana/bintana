@@ -810,20 +810,6 @@ Ide.Classes = class Classes {
         return this.components.find((c) => c.name === type) || null;
     }
 
-    /*
-     * A bare `Component`, to answer for what every component inherits.
-     *
-     * `Component` is the *runtime's* class, so the IDE has one even though it
-     * will never have the project's subclass of it: what a Stepper gets from
-     * Widget -- the mouse events, `Tooltip` -- is exactly what this answers.
-     * Built once and never shown, the way the property grid builds a Form to
-     * ask it things.
-     */
-    componentProbe() {
-        if (!this.probe) this.probe = new Component();
-        return this.probe;
-    }
-
     componentProperties(type) {
         const found = this.componentClass(type);
         return found ? found.properties.slice() : null;
@@ -859,7 +845,7 @@ Ide.Classes = class Classes {
     componentEvents(type) {
         const found = this.componentClass(type);
         return found ? ownThenInherited(found.events,
-                                        this.componentProbe().EventNames())
+                                        Widget.EventNames("Component"))
                      : null;
     }
 
@@ -881,7 +867,7 @@ Ide.Classes = class Classes {
         if (!found || !found.textProperties.length) return null;
 
         return ownThenInherited(found.textProperties,
-                                this.componentProbe().TextProperties());
+                                Widget.TextProperties("Component"));
     }
 
     /* The values one of its properties accepts, or null where it is free-form

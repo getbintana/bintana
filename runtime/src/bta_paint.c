@@ -2323,10 +2323,15 @@ static JSValue area_save_pdf(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry area_props[] = {
+    /* Redraw() */
     JS_CFUNC_DEF("Redraw", 0, area_redraw),
+    /* Dump() */
     JS_CFUNC_DEF("Dump",   0, area_dump),
+    /* Save(path, [width], [height]) */
     JS_CFUNC_DEF("Save",    3, area_save),
+    /* ToPng([width], [height]) */
     JS_CFUNC_DEF("ToPng",   2, area_to_png),
+    /* SavePdf(path, width, height, [pages], [before]) */
     JS_CFUNC_DEF("SavePdf", 5, area_save_pdf),
 };
 
@@ -2338,6 +2343,9 @@ void bta_paint_register(void)
          * screen came from the handler, and whatever prose that handler drew was
          * already translated where it was written.
          */
+        /* Draw(painter, width, height) */
+        /* DrawPage(painter, page, width, height) */
+        /* Paginate(width, height) */
         BTA_CLASS("DrawingArea", "Control", build_drawing_area, area_props, false,
                   "Draw,DrawPage,Paginate"),
     };

@@ -806,27 +806,40 @@ static const JSCFunctionListEntry tree_props[] = {
     JS_CGETSET_DEF("Key",   tree_get_key,   tree_set_key),
     JS_CGETSET_DEF("Text",  tree_get_text,  NULL),
     JS_CGETSET_DEF("Count", tree_get_count, NULL),
+    /* Add(key, text, [parentKey], [icon]) */
     JS_CFUNC_DEF("Add",    4, tree_add),
+    /* Clear() */
     JS_CFUNC_DEF("Clear",  0, tree_clear),
+    /* Remove(key) */
     JS_CFUNC_DEF("Remove", 1, tree_remove),
+    /* SetText(key, text) */
     JS_CFUNC_MAGIC_DEF("SetText", 2, tree_set_one, NODE_TEXT),
+    /* SetIcon(key, name) */
     JS_CFUNC_MAGIC_DEF("SetIcon", 2, tree_set_one, NODE_ICON),
+    /* Exists(key) */
     JS_CFUNC_DEF("Exists", 1, tree_exists),
     JS_CGETSET_DEF("AutoExpand", tree_get_autoexpand, tree_set_autoexpand),
     /* Not "Expand": Widget already has one, the boolean that decides who
      * absorbs slack in a box.  A method of that name would shadow it on the
      * prototype and then be shadowed right back the moment a .form set the
      * layout property on the instance -- which is how this was found. */
+    /* ExpandNode(key) */
     JS_CFUNC_MAGIC_DEF("ExpandNode",   1, tree_expand,     1),
+    /* CollapseNode(key) */
     JS_CFUNC_MAGIC_DEF("CollapseNode", 1, tree_expand,     0),
+    /* Expanded(key) */
     JS_CFUNC_DEF("Expanded",          1, tree_expanded),
+    /* ExpandAll() */
     JS_CFUNC_MAGIC_DEF("ExpandAll",   0, tree_expand_all, 1),
+    /* CollapseAll() */
     JS_CFUNC_MAGIC_DEF("CollapseAll", 0, tree_expand_all, 0),
 };
 
 void bta_tree_register(void)
 {
     const BtaClass rows[] = {
+        /* Select() */
+        /* Activate() */
         BTA_CLASS("TreeView", "Control", build_tree, tree_props, false, "Select,Activate"),
     };
     bta_register_classes(rows, (int)G_N_ELEMENTS(rows));

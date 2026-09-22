@@ -2320,25 +2320,44 @@ static const JSCFunctionListEntry table_props[] = {
     JS_CGETSET_MAGIC_DEF("ColumnLines", table_get_flag, table_set_flag, TAB_HEADERS),
     JS_CGETSET_DEF("Key",        table_get_key,        table_set_key),
     JS_CGETSET_DEF("AutoExpand", table_get_autoexpand, table_set_autoexpand),
+    /* Add(values, [options]) */
     JS_CFUNC_DEF("Add",     2, table_add),
+    /* ExpandNode(key) */
     JS_CFUNC_MAGIC_DEF("ExpandNode",   1, table_expand_node,  NODE_EXPAND),
+    /* CollapseNode(key) */
     JS_CFUNC_MAGIC_DEF("CollapseNode", 1, table_expand_node,  NODE_COLLAPSE),
+    /* ExpandAll() */
     JS_CFUNC_MAGIC_DEF("ExpandAll",    0, table_expand_every, NODE_EXPAND),
+    /* CollapseAll() */
     JS_CFUNC_MAGIC_DEF("CollapseAll",  0, table_expand_every, NODE_COLLAPSE),
+    /* Expanded(key) */
     JS_CFUNC_DEF("Expanded", 1, table_expanded),
+    /* Exists(key) */
     JS_CFUNC_DEF("Exists",   1, table_exists),
+    /* Clear() */
     JS_CFUNC_DEF("Clear",   0, table_clear),
+    /* Remove(index) */
     JS_CFUNC_DEF("Remove",  1, table_remove),
+    /* Row(index) */
     JS_CFUNC_DEF("Row",     1, table_row),
+    /* Cell(row, column) */
     JS_CFUNC_DEF("Cell",    2, table_cell),
+    /* SetCell(row, column, value) */
     JS_CFUNC_DEF("SetCell", 3, table_set_cell),
+    /* SetIcon(row, column, name) */
     JS_CFUNC_DEF("SetIcon", 3, table_set_icon),
     JS_CGETSET_DEF("Sortable", table_get_sortable, table_set_sortable),
+    /* Select(index) */
     JS_CFUNC_MAGIC_DEF("Select",      1, table_select_one,   TB_SELECT),
+    /* Deselect(index) */
     JS_CFUNC_MAGIC_DEF("Deselect",    1, table_select_one,   TB_DESELECT),
+    /* SelectAll() */
     JS_CFUNC_MAGIC_DEF("SelectAll",   0, table_select_every, TB_ALL),
+    /* DeselectAll() */
     JS_CFUNC_MAGIC_DEF("DeselectAll", 0, table_select_every, TB_NONE),
+    /* SortBy(column, [ascending]) */
     JS_CFUNC_DEF("SortBy",  2, table_sort_by),
+    /* SortColumn(column, [ascending]) */
     JS_CFUNC_DEF("SortColumn", 2, table_sort_column),
 };
 
@@ -2350,6 +2369,10 @@ void bta_table_register(void)
          * and an alignment, and only the first is prose. Translating `Right`
          * would be the permissive mistake this declaration exists to prevent.
          */
+        /* Select() */
+        /* Activate() */
+        /* Data(row, column) */
+        /* Sort(column, ascending) */
         BTA_CLASS_ENUM_TEXT("TableView", "Control", build_table, table_props, false,
                             table_options, "Columns.Text", "Select,Activate,Data,Sort"),
     };

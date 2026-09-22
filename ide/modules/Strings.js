@@ -9,8 +9,8 @@
  * `xgettext` reads JavaScript and knows nothing about a widget tree.
  *
  * Which properties hold prose is *asked of the runtime*, never matched against a
- * list of names here: `Widget.New(type).TextProperties()`.  A widget added to
- * the runtime in C is extracted with nothing changed in the IDE -- and a
+ * list of names here: `Widget.TextProperties(type)`.  A widget added to the
+ * runtime in C is extracted with nothing changed in the IDE -- and a
  * SourceEditor's source text is never collected, because its class says that
  * string is not prose.
  *
@@ -84,6 +84,10 @@ Ide.Strings = class Strings {
          * parsed `file:line: text` back out of the sentence above would be
          * reading what this class had just finished writing. */
         this.found    = [];
+
+        /* Which type names the runtime answers by class, worked out once: the
+         * class list does not change while the IDE runs. */
+        this.widgets  = new Set(Widget.Types());
     }
 
     /*
@@ -209,21 +213,22 @@ Ide.Strings = class Strings {
      * nobody has vouched for is how `"Right"` ends up in front of a translator.
      */
     textPropertiesOf(type, isRoot) {
-        if (isRoot) return new Form().TextProperties();
+        /* A form's own properties are the window's, and the class answers for
+         * them: no window is built to ask. */
+        if (isRoot) return Widget.TextProperties("Form");
         if (!type) return null;
 
         if (!this.probes) this.probes = new Map();
         if (this.probes.has(type)) return this.probes.get(type);
 
-        let answer;
-        try {
-            answer = Widget.New(type).TextProperties();
-        } catch (e) {
-            /* Not cached with the rest: what a widget of this process answers
-             * cannot change while the IDE runs, and what a component declares
-             * changes every time its source is saved. */
+        /* A widget answers by class. A project's own component cannot be asked
+         * here -- its class belongs to the project and the IDE runs in its own
+         * process -- so what it declares is read out of its source, and it is
+         * not cached: the declaration changes every time the source is saved. */
+        if (!this.widgets.has(type))
             return this.ide.classes.componentTextProperties(type);
-        }
+
+        const answer = Widget.TextProperties(type);
         this.probes.set(type, answer);
         return answer;
     }

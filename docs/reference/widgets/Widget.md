@@ -70,7 +70,7 @@ in the section.
 | `Bounds([container])` | → what GTK really allocated | [where it is and how big](#where-it-is-and-how-big) |
 | `CssNode()` | → the node name it is styled as | [what it answers about itself](#what-it-answers-about-itself) |
 | `Delete()` | removes it **and destroys it** | [shown, enabled, focused](#shown-enabled-focused) |
-| `Emit(event, …)` | raises an event on the form | [commands, menus and keys](#commands-menus-and-keys) |
+| `Emit(event, ...args)` | raises an event on the form | [commands, menus and keys](#commands-menus-and-keys) |
 | `EventNames()` | → the events it raises, most derived first | [what it answers about itself](#what-it-answers-about-itself) |
 | `Hide()` | makes it invisible, keeping its place | [shown, enabled, focused](#shown-enabled-focused) |
 | `Lower()` | to the bottom of the painting order | [how it is placed](#how-it-is-placed) |
@@ -269,7 +269,7 @@ translated string can carry `{0}` at all.
 | `Shortcut` | the key that activates it: `"F5"`, `"<Control>s"`, or a list `["7", "KP_7"]`. **`Return` never fires**, the window claiming it for its default button |
 | `Menu` | a context menu, as the same array of items a form's `menus` uses. Reassigning replaces it |
 | `PopupMenu(x, y)` | opens that menu at a point in this control's own coordinates — how a button that drops a menu is built |
-| `Emit(event, …args)` | raises an event that arrives by name on the host form. **What a component announces itself with** |
+| `Emit(event, ...args)` | raises an event that arrives by name on the host form. **What a component announces itself with** |
 | `On(event, fn)` | installs **this control's own** handler, for a control built in code. Installing again replaces, `On(event, null)` removes, and it answers with the control so it chains. Refused when the form already answers that event by name -- at `On`, at a rename, and at the `Add` that brings the control to that form |
 
 **A control a designer drew, and a control built in code.** A designer names a
@@ -393,6 +393,31 @@ them being privileged:
 | `CssNode()` | → the GTK node name it is styled as (`"button"`, `"entry"`) |
 | `SetDesign(name, value)`, `DesignValue(name)` | what the **designer** shows instead of what the code will fill in. Unreachable from a running application |
 | `SetItem(of, count)`, `Item` (ro) | a container: the component the **designer** draws in it while the form is laid out, and how many. See [`item`](../../formats.md#item-what-a-list-holds-while-it-is-being-designed) |
+
+### Asking the class instead
+
+Every one of those has a class-level twin, for a caller holding the **name** and
+no control — a palette, a property grid, an extractor:
+
+```js
+Widget.PropertyNames("Button")         // what a control can be set to
+Widget.Methods("Button")               // what it can be asked to do
+Widget.EventNames("Button")            // what it raises, most derived first
+Widget.TextProperties("Button")        // which properties hold prose
+Widget.PropertyOptions("Label", "Alignment")
+Widget.Member("Button", "SetFocus")    // "Method"; "" for one it has not got
+Widget.Signature("Button", "Bounds")          // "([container])"
+Widget.EventSignature("Button", "MouseDown")  // "(x, y, button, ctrl, shift)"
+```
+
+The answer is the one a control gives, because it is the same walk started at the
+class prototype — a class and a control cannot disagree. A name that is no class
+throws the way `Widget.New` does, and an **abstract** class answers
+(`Widget.PropertyNames("Widget")`), which is the question no control could be
+made to answer. `Widget.Member` adds the kind to the `in` a control answers:
+`ReadOnly` is the one a `.form` refuses to load over. A **method's parameters**
+and an **event's** are two questions — `ListBox.Select` is both — and the class
+declares each beside itself.
 
 ## What goes wrong
 

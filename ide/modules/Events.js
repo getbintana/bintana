@@ -85,9 +85,8 @@ Ide.Events = class Events {
      *
      * For a control that is `Designer.eventsOf`, which answers for a component
      * of the project out of its class rather than out of the stand-in drawn for
-     * it.  For the form it is the probe the grid already keeps: the form being
-     * designed is not running, so there is no instance to ask and one is made
-     * and never shown.
+     * it.  For the form it is the class, which answers with no window built:
+     * the form being designed is not running, so there is no instance to ask.
      */
     list() {
         if (!this.ide.designing) return [];
@@ -96,7 +95,10 @@ Ide.Events = class Events {
         const control  = designer.selected;
 
         if (control) return designer.eventsOf(control);
-        return designer.grid.formProbe().EventNames();
+
+        const kind = designer.root && designer.isComponent(designer.root.class)
+            ? "Component" : "Form";
+        return Widget.EventNames(kind);
     }
 
     /*

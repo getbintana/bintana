@@ -348,6 +348,33 @@ Widget.prototype.PropertyNames = function () {
     return settableProperties(this).filter((key) => key !== "Caption");
 };
 
+/*
+ * The parameters of the methods written here rather than in C.
+ *
+ * A method of a class in the table declares its signature in a one-line comment
+ * beside the entry and the build turns those into a table; a method written in
+ * JavaScript has nowhere to put one, because `Function.length` is a count and
+ * not a name. So the class states them, exactly as a component of the project
+ * does with its own `static Signatures` -- and `Widget.Signature(type, name)`
+ * reads either. `Form` and `Notebook` override `Serialize`, so each declares
+ * its own; a subclass's declaration is found at its own step of the walk.
+ */
+Widget.Signatures = {
+    PropertyNames: "()",
+    Serialize:     "(parentIsFixed)",
+    Apply:         "(properties)",
+    Dump:          "()",
+    Declared:      "(name)",
+    Fill:          "(...values)",
+    SetDesign:     "(name, value)",
+    DesignValue:   "(name)",
+    SetItem:       "(of, count)",
+};
+
+Form.Signatures     = { Serialize: "()", SaveForm: "(path)" };
+Notebook.Signatures = { Serialize: "(parentIsFixed)" };
+Container.Signatures = { AddNode: "(node)", BuildChildren: "(node)" };
+
 Widget.prototype.Serialize = function (parentIsFixed = true) {
     const node = { type: Widget.TypeName(this.constructor) };
     if (this.Name) node.name = this.Name;

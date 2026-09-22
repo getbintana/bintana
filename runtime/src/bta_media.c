@@ -162,10 +162,15 @@ static const JSCFunctionListEntry video_props[] = {
     JS_CGETSET_DEF("Seekable",     media_get_seekable, NULL),
     JS_CGETSET_DEF("SourceWidth",  video_get_source_width,  NULL),
     JS_CGETSET_DEF("SourceHeight", video_get_source_height, NULL),
+    /* Play() */
     JS_CFUNC_DEF("Play",  0, media_play),
+    /* Pause() */
     JS_CFUNC_DEF("Pause", 0, media_pause),
+    /* Stop() */
     JS_CFUNC_DEF("Stop",  0, media_stop),
+    /* Seek(seconds) */
     JS_CFUNC_DEF("Seek",  1, media_seek),
+    /* Save(path) */
     JS_CFUNC_DEF("Save",  1, video_save),
 };
 
@@ -913,6 +918,8 @@ static bool video_available(void)
 void bta_media_register(void)
 {
     const BtaClass rows[] = {
+        /* Ended() */
+        /* Error(message, kind) */
         BTA_CLASS_ENUM_PROBE("Video", "Control", build_video, video_props,
                              false, video_options, video_available,
                              "Ended,Error"),

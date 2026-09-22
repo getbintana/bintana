@@ -15,7 +15,8 @@
  * lookups:
  *
  *     this.            everything this form names, and the methods in this file
- *     this.Btn1.       what a Button really has -- PropertyNames() on one
+ *     this.Btn1.       what a Button really has -- its class answers, with no
+ *                      control built
  *     this.MnuSave.    the same, on a MenuItem
  *     Btn1_            what a Button raises  -- EventNames(), most derived first
  *     File.            Dictionary.Keys(File)
@@ -132,6 +133,10 @@ Ide.Completion = class Completion {
          * file: two reads per class, on the keystroke. Not `classes`, which is
          * `Ide.Classes` two characters away and would read as the same thing. */
         this.declared = new Map();
+
+        /* Which type names the runtime answers by class, worked out once: the
+         * class list does not change while the IDE runs. */
+        this.widgets = new Set(Widget.Types());
     }
 
     /* Called wherever the project's files change: a control renamed in the
@@ -228,22 +233,44 @@ Ide.Completion = class Completion {
     /*
      * What a name of that type has, when the type is one this project wrote.
      *
-     * A widget answers from the runtime, as everything else here does. A class
-     * of the project answers from **its two files** -- the controls its `.form`
-     * names and the methods its `.js` declares -- which is the same pair
-     * `membersOfForm` reads about the file on screen, asked about another one.
-     * Nothing is loaded and nothing is parsed: `Ide.Names` flattens the JSON and
-     * the methods are the same four-spaces-name-bracket shape.
+     * A widget's class answers -- properties *and* methods, with no control
+     * built. A class of the project answers from **its two files** -- the
+     * controls its `.form` names and the methods its `.js` declares -- which is
+     * the same pair `membersOfForm` reads about the file on screen, asked about
+     * another one. Nothing is loaded and nothing is parsed: `Ide.Names`
+     * flattens the JSON and the methods are the same four-spaces-name-bracket
+     * shape.
      */
     membersOfDeclared(name) {
         const type = this.declaredType(name);
         if (!type) return [];
 
-        const control = this.sample(type);
-        if (control)
-            return control.PropertyNames().map((p) => ({ Text: p, Detail: type }));
+        if (this.widgets.has(type)) return this.membersOfType(type);
+
+        /* A menu item or a command answers from the sample this window lends;
+         * the two of them are not widgets, so their class cannot be asked. */
+        const sample = this.ide.names.sampleFor(type);
+        if (sample)
+            return sample.PropertyNames().map((p) => ({ Text: p, Detail: type }));
 
         return this.membersOfClass(type);
+    }
+
+    /* A control's vocabulary: what its class can be set to, and what it can be
+     * asked to do. Most of the popup after `this.Btn.` is the first list, and
+     * a method that never showed up there was half the class missing. A method
+     * carries its **parameters** -- declared beside it in C, or in the class's
+     * `static Signatures` -- which is the hint a name alone cannot give. */
+    membersOfType(type) {
+        const out = Widget.PropertyNames(type)
+                          .map((p) => ({ Text: p, Detail: type }));
+
+        for (const method of Widget.Methods(type)) {
+            const sig = Widget.Signature(type, method);
+            out.push({ Text: method,
+                       Detail: sig ? `${method}${sig}` : type });
+        }
+        return out;
     }
 
     /*
@@ -321,21 +348,6 @@ Ide.Completion = class Completion {
         return found ? found.type : "";
     }
 
-    /*
-     * A control of that type, or nothing.
-     *
-     * `Ide.Names` answers it -- one control per type, kept, and the two classes
-     * a `.form` declares outside `children` borrowed from this window's own menu
-     * bar. A component of the project is not a class of *this* process -- the
-     * IDE never loads the project's code -- so there is nothing to ask for one,
-     * and the two answers below fall through to what its class declares instead
-     * (`Ide.Classes`, read from the source once per listing, so this stays a
-     * lookup).
-     */
-    sample(type) {
-        return this.ide.names.sampleFor(type);
-    }
-
     /* --- the four answers ---------------------------------------------------- */
 
     membersOfForm(word) {
@@ -350,11 +362,27 @@ Ide.Completion = class Completion {
         })));
     }
 
+    /*
+     * `this.Btn.` -- what a control of that type has.
+     *
+     * The class answers, so a widget's properties and methods both arrive with
+     * no control built. A component of the project is not a class of *this*
+     * process -- the IDE never loads the project's code -- so there is nothing
+     * to ask for one, and the answer falls through to what its class declares
+     * (`Ide.Classes`, read from the source once per listing, so this stays a
+     * lookup).
+     */
     propertiesOf(name) {
-        const type    = this.typeOf(name);
-        const control = this.sample(type);
-        const props   = control ? control.PropertyNames()
-                                : this.ide.classes.componentProperties(type);
+        const type = this.typeOf(name);
+        if (!type) return [];
+
+        if (this.widgets.has(type)) return this.membersOfType(type);
+
+        const sample = this.ide.names.sampleFor(type);
+        if (sample)
+            return sample.PropertyNames().map((p) => ({ Text: p, Detail: type }));
+
+        const props = this.ide.classes.componentProperties(type);
         if (!props) return [];
 
         return props.map((p) => ({ Text: p, Detail: type }));
@@ -364,10 +392,17 @@ Ide.Completion = class Completion {
      * the mouse events every widget has -- and, for a component, whatever its
      * `static Events` names before either. */
     eventsOf(name) {
-        const type    = this.typeOf(name);
-        const control = this.sample(type);
-        const events  = control ? control.EventNames()
-                                : this.ide.classes.componentEvents(type);
+        const type = this.typeOf(name);
+        if (!type) return [];
+
+        let events;
+        if (this.widgets.has(type)) {
+            events = Widget.EventNames(type);
+        } else {
+            const sample = this.ide.names.sampleFor(type);
+            events = sample ? sample.EventNames()
+                            : this.ide.classes.componentEvents(type);
+        }
         if (!events) return [];
 
         return events.map((e) => ({ Text: `${name}_${e}`, Detail: type }));

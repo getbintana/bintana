@@ -9463,9 +9463,8 @@ function* p_names(ide) {
           JSON.stringify(controls));
 
     const one    = controls[0];
-    const sample = ide.completion.sample(one.type);
-    check("...and its first control is a class this process has", sample !== null,
-          one.type);
+    check("...and its first control is a class this process has",
+          Widget.Types().includes(one.type), one.type);
 
     /* This phase's source and no other: the project pass has rows about `Main.js`
      * too -- the fixture plants files the manifest does not list -- and *which
@@ -9507,7 +9506,7 @@ function* p_names(ide) {
 
     /* --- an event the control does not raise --------------------------------- */
 
-    const events = sample.EventNames();
+    const events = Widget.EventNames(one.type);
     check("the control raises something", events.length > 0, JSON.stringify(events));
 
     editor.Text = `class Main extends Form {\n` +

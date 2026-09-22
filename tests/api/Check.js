@@ -37,8 +37,13 @@ const GETSET = new Regex(
     "JS_CGETSET(?:_MAGIC)?_DEF\\(\\s*\"([A-Za-z_]\\w*)\"\\s*,\\s*([A-Za-z_]\\w*|NULL)\\s*,\\s*([A-Za-z_]\\w*|NULL)");
 /* JS_CFUNC_DEF("Name", nargs, fn) -- a method, with the arity C declares. */
 const CFUNC  = new Regex("JS_CFUNC(?:_MAGIC)?_DEF\\s*\\(\\s*\"([A-Za-z_]\\w*)\"\\s*,\\s*(\\d+)");
-/* The tables themselves, so a name outside one is not mistaken for a member. */
-const TABLE  = new Regex("static const JSCFunctionListEntry (\\w+)\\[\\]\\s*=\\s*\\{([^}]*)\\n\\};");
+/* The tables themselves, so a name outside one is not mistaken for a member.
+ * The body is lazy to the `};` that ends a table and not `[^}]*`: a signature
+ * comment declares an options object with braces in it -- `Search(text,
+ * [{CaseSensitive, …}])` -- and a body that stopped at the first `}` would
+ * silently lose every member of that table, which is a check that stops
+ * checking without failing. */
+const TABLE  = new Regex("static const JSCFunctionListEntry (\\w+)\\[\\]\\s*=\\s*\\{([\\s\\S]*?)\\n\\};");
 /* bta_emit(w, "Change", 0, NULL) -- an event and how many arguments it carries.
  * `_ok` too: an exporter emits `Draw` through the variant that answers whether
  * the handler threw, and an event that stopped being scanned is an event whose
@@ -546,28 +551,39 @@ const CLASS_NAME = new Regex("BTA_CLASS(?:_\\w+)?\\s*\\(\\s*\"(\\w+)\"");
 const CLASS_REG = new Regex(
     "BTA_CLASS(?:_\\w+)?\\s*\\(\\s*\"(\\w+)\"\\s*,\\s*(?:\"\\w+\"|NULL)\\s*,\\s*\\w+\\s*,\\s*(\\w+)");
 
+/*
+ * table -> class, off the registrations: the only place those two facts are
+ * already together.
+ *
+ * **One class does not name its table in the registration**: `Widget`'s members
+ * are handed over by `bta_widget_base_props()` and arrive there as a local
+ * called `base`, so the line says `base` where every other says `label_props`.
+ * One alias, which is cheaper than either teaching this to follow a C function
+ * or leaving the root class of the whole set unchecked.
+ */
+const TABLE_ALIAS = { base: "widget_props" };
+
+function tableClasses(root) {
+    const owner = {};
+
+    for (const c of sources(root)) {
+        const src = File.Load(c);
+        for (const m of CLASS_REG.Matches(src))
+            owner[TABLE_ALIAS[m.Group(2)] || m.Group(2)] = m.Group(1);
+    }
+    return owner;
+}
+
 function checkReference(root, members, events, problems) {
     const dir = File.Join(root, "docs/reference/widgets");
     if (!File.IsDir(dir)) return { checked: 0, pages: 0, missing: 0 };
 
-    /*
-     * table -> class, off the registrations.
-     *
-     * **One class does not name its table in the registration**: `Widget`'s
-     * members are handed over by `bta_widget_base_props()` and arrive there as a
-     * local called `base`, so the line says `base` where every other says
-     * `label_props`. One alias, which is cheaper than either teaching this to
-     * follow a C function or leaving the root class of the whole set unchecked.
-     */
-    const ALIAS = { base: "widget_props" };
-    const owner = {};
+    const owner = tableClasses(root);
     const known = {};
 
     for (const c of sources(root)) {
         const src = File.Load(c);
 
-        for (const m of CLASS_REG.Matches(src))
-            owner[ALIAS[m.Group(2)] || m.Group(2)] = m.Group(1);
         /* Every registered class, whatever it publishes. **A class with no
          * members of its own is still a class somebody places** -- `Panel` is
          * the commonest container in this tree and declares nothing beyond what
@@ -624,13 +640,24 @@ function checkReference(root, members, events, problems) {
 
         for (const m of mine[name] || []) {
             const row = m.kind === "method"
-                ? new Regex("^\\|\\s*`" + Regex.Escape(m.name) + "\\(", { Multiline: true })
+                ? new Regex("^\\|\\s*`" + Regex.Escape(m.name) + "\\(([^)]*)\\)", { Multiline: true })
                 : new Regex("^\\|\\s*`" + Regex.Escape(m.name) + "`", { Multiline: true });
 
             if (!row.IsMatch(summary))
                 problems.push(`${name}.md: ${m.kind} ${m.name} is not in "Every member"`);
             else if (!row.IsMatch(body))
                 problems.push(`${name}.md: ${m.kind} ${m.name} is listed and never explained`);
+            else if (m.kind === "method") {
+                /* ...and with the parameters the runtime declares for it, which
+                 * is the half a row could get confidently wrong: a signature
+                 * that is wrong reads as authoritative. */
+                const sig = Widget.Signature(name, m.name);
+                const got = row.Match(summary).Group(1);
+
+                if (sig === null || got !== sig.slice(1, -1))
+                    problems.push(`${name}.md: ${m.name} is documented as ` +
+                                  `(${got}), the runtime declares ${sig}`);
+            }
             checked++;
         }
 
@@ -649,6 +676,11 @@ function checkReference(root, members, events, problems) {
             if (n !== events[event])
                 problems.push(`${name}.md: event ${event} is documented with ${n} ` +
                               `argument(s), the runtime passes ${events[event]}`);
+
+            const sig = Widget.EventSignature(name, event);
+            if (sig !== null && args !== sig.slice(1, -1))
+                problems.push(`${name}.md: event ${event} is documented as ` +
+                              `(${args}), the runtime declares ${sig}`);
             checked++;
         }
     }
@@ -929,7 +961,104 @@ function checkTypings(root, members, problems) {
                           `run tests/typings.sh`);
         count++;
     }
+
+    /*
+     * ...and with the **parameters the runtime declares**, class by class: a
+     * name means different parameters in different classes -- `Serialize` is
+     * `(parentIsFixed)` on `Widget` and `()` on `Form` -- so a line has to be
+     * compared under its own class and not found anywhere in the file.
+     */
+    const widgets = new Set(Widget.Types());
+    const blocks  = declarationBlocks(text);
+
+    for (const cls in blocks) {
+        if (!widgets.has(cls)) continue;      /* a global class, not a widget */
+
+        for (const line of blocks[cls]) {
+            const m = new Regex("^ {4}([A-Za-z_]\\w*)\\(([^)]*)\\):").Match(line);
+            if (!m) continue;
+
+            const sig = Widget.Signature(cls, m.Group(1));
+            if (sig === null) continue;
+
+            const got  = declarationParams(m.Group(2)).join(",");
+            const want = signatureParams(sig).join(",");
+
+            if (got !== want)
+                problems.push(`bintana.d.ts: ${cls}.${m.Group(1)} is declared ` +
+                              `with (${got}), the runtime declares ${sig}`);
+            count++;
+        }
+    }
     return count + checkFormTypings(root, problems);
+}
+
+/*
+ * `bintana.d.ts` split into its class bodies, by name: the file is generated
+ * class by class, and a method's parameters only mean anything under the class
+ * that declares it.
+ */
+function declarationBlocks(text) {
+    const blocks = {};
+    let   current = null;
+
+    for (const line of text.split("\n")) {
+        const open = new Regex("^declare class (\\w+)").Match(line);
+        if (open) {
+            current = open.Group(1);
+            blocks[current] = [];
+            continue;
+        }
+        if (line.startsWith("}")) {
+            current = null;
+            continue;
+        }
+        if (current)
+            blocks[current].push(line);
+    }
+    return blocks;
+}
+
+/* A parameter list split at its **top-level** commas, so `[{A, B}]` is one
+ * argument and not three. */
+function splitTop(text) {
+    const out = [];
+    let   depth = 0;
+    let   cur   = "";
+
+    for (const ch of text) {
+        if (ch === "[" || ch === "{" || ch === "(") depth++;
+        if (ch === "]" || ch === "}" || ch === ")") depth--;
+        if (ch === "," && depth === 0) {
+            out.push(cur.trim());
+            cur = "";
+            continue;
+        }
+        cur += ch;
+    }
+    if (cur.trim()) out.push(cur.trim());
+    return out;
+}
+
+/* The parameter names a declared signature has: `([container])` is
+ * `container`, `(...args)` is `args`, and a `{…}` shape is the `options` the
+ * generator names it. */
+function signatureParams(sig) {
+    return splitTop(sig.slice(1, -1)).map((part) => {
+        let arg = part;
+        if (arg.startsWith("[") && arg.endsWith("]")) arg = arg.slice(1, -1);
+        if (arg.startsWith("{")) return "options";
+        return arg.startsWith("...") ? arg.slice(3) : arg;
+    });
+}
+
+/* The same for a line of TypeScript: `container?: any, ...args: any[]`. */
+function declarationParams(text) {
+    return splitTop(text).map((part) => {
+        const name = part.split(":")[0].trim();
+        if (name.startsWith("{")) return "options";
+        return name.replace(/^\.\.\./, "").replace(/\?$/, "");
+    }).filter((name) => name !== "");
 }
 
 /*
@@ -987,10 +1116,83 @@ function checkFormTypings(root, problems) {
     return count;
 }
 
+/*
+ * ------------------------------------------------ what a class answers
+ *
+ * The questions a class answers by **name** -- `Widget.PropertyNames(type)`,
+ * `Methods`, `EventNames`, `TextProperties`, `PropertyOptions`, `Member`, and
+ * the `New`/`Types`/`Available` they joined -- are built by
+ * `JS_SetPropertyStr` on the root constructor, which is in no
+ * `JSCFunctionListEntry` table. So the scan above cannot see them and neither
+ * could the typings check: measured when this was written, `New`, `Types` and
+ * `Available` were public, called by the IDE and declared for an editor, and
+ * nothing here would have failed had any of them lost its row.
+ *
+ * They are read from where they are installed and held to the same rule, with
+ * the qualified spelling -- `` `Widget.Types(` `` -- because that is what tells
+ * a static from the instance method of the same name.
+ */
+const WIDGET_STATIC = new Regex(
+    "JS_SetPropertyStr\\(\\s*ctx,\\s*ctor,\\s*\"([A-Za-z_]\\w*)\"");
+
+function checkWidgetStatics(root, problems) {
+    const src = File.Load(File.Join(root, "runtime/src/bta_widget.c"));
+    const doc = File.Load(File.Join(root, "docs/llm/controls.md"));
+    const dts = File.Load(File.Join(root, "tools/typings/bintana.d.ts"));
+    let   count = 0;
+
+    for (const m of WIDGET_STATIC.Matches(src)) {
+        const name = m.Group(1);
+        count++;
+
+        if (!doc.includes("`Widget." + name + "("))
+            problems.push(`Widget.${name} is installed and has no row in controls.md`);
+
+        if (!new Regex("^\\s*static\\s+" + name + "\\s*[:(]",
+                       { Multiline: true }).IsMatch(dts))
+            problems.push(`Widget.${name} is installed and is not declared in ` +
+                          `bintana.d.ts -- run tests/typings.sh`);
+    }
+
+    /*
+     * And it has to answer **here**, where there is no display at all: the
+     * point of asking a class is that no control is built, and a query that
+     * reached GTK would make this the project it cannot run in.
+     */
+    try {
+        if (!Widget.EventNames("Button").includes("Click"))
+            problems.push("Widget.EventNames(\"Button\") answers without Click");
+    } catch (e) {
+        problems.push(`Widget.EventNames("Button") failed in a project with ` +
+                      `no display: ${e.message}`);
+    }
+
+    /*
+     * **And every method and event declares its parameters.** A signature lives
+     * beside the member -- a comment above its C entry, or a `static
+     * Signatures` on a class of the project's own -- and one that is missing is
+     * a method `bintana.d.ts` cannot write and an editor cannot hint. Asked of
+     * the runtime rather than of the comments, so it is the same answer a
+     * caller gets.
+     */
+    for (const type of Widget.Types()) {
+        for (const method of Widget.Methods(type))
+            if (Widget.Signature(type, method) === null)
+                problems.push(`${type}.${method} declares no signature -- a ` +
+                              `comment above its entry, or static Signatures ` +
+                              `on the class`);
+
+        for (const event of Widget.EventNames(type))
+            if (Widget.EventSignature(type, event) === null)
+                problems.push(`${type}.${event} declares no signature -- a ` +
+                              `comment above the class row that lists it`);
+    }
+    return count;
+}
+
 /* ------------------------------------------------------------------- links
  *
  * **Does every relative link in the documentation still land on a file?**
- *
  * The other checks here ask whether what exists is written down; this one asks
  * whether what is written down still exists. It is the failure a reorganisation
  * leaves behind and nothing notices: `docs/issues/ISSUE-printing.md` was deleted
@@ -1130,6 +1332,7 @@ function Main() {
 
     const lib     = checkLibraries(root, problems);
     const typings = checkTypings(root, members, problems);
+    const statics = checkWidgetStatics(root, problems);
     const globals = checkGlobals(root, problems);
     const named   = checkGlobalsListed(root, problems);
     const ref     = checkReference(root, members, events, problems);
@@ -1141,10 +1344,11 @@ function Main() {
     for (const p of problems) print(`  ${p}`);
     print(problems.length
         ? `api: ${problems.length} undocumented or wrong, of ${seen.size} widget ` +
-          `members, ${Dictionary.Count(events)} events, ${globals} on globals, ` +
-          `${lib} in lib/ and ${typings} declared for an editor`
+          `members, ${statics} class statics, ${Dictionary.Count(events)} events, ` +
+          `${globals} on globals, ${lib} in lib/ and ${typings} declared for an editor`
         : `api: ${seen.size} widget members and ${Dictionary.Count(events)} events, ` +
-          `plus ${globals} on the globals and ${lib} published by lib/, ` +
+          `plus ${statics} class statics, ${globals} on the globals and ${lib} ` +
+          `published by lib/, ` +
           `all declared for an editor (${typings} names, the runtime's and the ` +
           `IDE's own forms) and documented -- and ${ref.checked} again in the ${ref.pages} ` +
           `long page${ref.pages === 1 ? "" : "s"} of docs/reference/widgets, ` +

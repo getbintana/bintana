@@ -51,44 +51,23 @@ Ide.Check = class Check {
     constructor(ide) {
         this.ide = ide;
 
-        /* A **bare** `Form`, which is the only thing that can answer *is this
-         * name already a member of a form*. Asked of `MainForm` instead -- the
-         * obvious thing to reach for -- it would answer yes for every control
-         * and method the IDE itself happens to have, and flag a user's
-         * `Tabs` or `Editor`. Built once and never shown. */
-        this.bareForm = null;
-    }
-
-    /* The sample above, made the first time it is wanted. */
-    formMembers() {
-        if (!this.bareForm) this.bareForm = new Form();
-        return this.bareForm;
+        /* Which type names the runtime answers by class, worked out once: the
+         * class list does not change while the IDE runs. */
+        this.widgets = new Set(Widget.Types());
     }
 
     /*
      * Whether the loader will *refuse* this name or merely shadow what it
      * lands on.
      *
-     * Asked by trying the assignment, which is the same question the loader
-     * asks and the only one that cannot drift from it: a getter with no setter
-     * throws under strict mode, and every source of this project is strict
-     * whatever its pragma says. The note is taken back afterwards so the sample
-     * answers the same way next time -- a name that *did* assign left an own
-     * property behind, and `delete` on anything else does nothing.
-     *
-     * Only ever asked about a name that is already a member, which is rare:
-     * this is a throw per collision found and not per control.
+     * `Widget.Member` answers what the name is on a bare `Form` -- the class,
+     * not a window built to ask -- and a **read-only** member is the one the
+     * loader refuses: `Actions`, `Menus`, `Controls`, `DefaultButton`,
+     * `CancelButton`. Anything else is shadowed, the form runs, and the
+     * collision is all that can be said.
      */
     refusedByForm(name) {
-        const form = this.formMembers();
-
-        try {
-            form[name] = undefined;
-        } catch (e) {
-            return true;
-        }
-        delete form[name];
-        return false;
+        return Widget.Member("Form", name) === "ReadOnly";
     }
 
     /*
@@ -184,8 +163,9 @@ Ide.Check = class Check {
      * method is what is lost -- while a control named `Actions` **loses**, since
      * that one is a getter with no setter and the assignment goes nowhere. The
      * same mistake resolves two different ways depending on what it lands on,
-     * and neither way says anything. So the test is `in` against a real `Form`,
-     * which answers for both.
+     * and neither way says anything. So the test is `Widget.Member` against the
+     * class, which answers for both -- and is the `in` this used to run on a
+     * bare `Form` made to ask.
      */
     form(rel, found) {
         let root;
@@ -212,7 +192,7 @@ Ide.Check = class Check {
                 });
             seen[node.name] = true;
 
-            if (node.name in this.formMembers()) {
+            if (Widget.Member("Form", node.name) !== "") {
                 /*
                  * Two different futures, and the reader does different things
                  * about them -- so they are two different rows. A **read-only**
@@ -242,10 +222,9 @@ Ide.Check = class Check {
          */
         const walk = (nodes) => {
             for (const node of nodes || []) {
-                const sample = node.type ? this.ide.names.sampleFor(node.type) : null;
-                if (sample && node.properties)
+                if (node.properties && node.type)
                     for (const key in node.properties)
-                        if (!(key in sample))
+                        if (this.hasMember(node.type, key) === false)
                             found.push({
                                 kind: "Warning", file: rel, line: 0,
                                 text: `${node.type} has no ${key}: the value is ` +
@@ -256,6 +235,20 @@ Ide.Check = class Check {
             }
         };
         walk(root.children);
+    }
+
+    /*
+     * Whether a class of that type has the member -- and **`null` when nothing
+     * here can say**, which is a component of the project: its class belongs to
+     * a process this one is not, so the node is passed over rather than guessed
+     * at. A widget's class answers by name; the two classes that are not
+     * widgets answer from the sample this window lends.
+     */
+    hasMember(type, key) {
+        if (this.widgets.has(type)) return Widget.Member(type, key) !== "";
+
+        const sample = this.ide.names.sampleFor(type);
+        return sample ? key in sample : null;
     }
 
     /* --- one .js, against the form beside it --------------------------------- */

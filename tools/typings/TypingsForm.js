@@ -51,8 +51,13 @@
 
 /* The three shapes a member takes in C, read exactly as `tests/api` reads them
  * -- and for the same reason: the C is where they are declared, and anything
- * else is a second list to drift from it. */
-const TABLE  = new Regex("static const JSCFunctionListEntry (\\w+)\\[\\]\\s*=\\s*\\{([^}]*)\\n\\};");
+ * else is a second list to drift from it.
+ *
+ * The body is lazy to the `};` that ends a table and not `[^}]*`: a signature
+ * comment declares an options object with braces in it -- `Search(text,
+ * [{CaseSensitive, …}])` -- and a body that stopped at the first `}` would
+ * silently lose every member of that table. */
+const TABLE  = new Regex("static const JSCFunctionListEntry (\\w+)\\[\\]\\s*=\\s*\\{([\\s\\S]*?)\\n\\};");
 const GETSET = new Regex("JS_CGETSET(?:_MAGIC)?_DEF\\(\\s*\"([A-Za-z_]\\w*)\"\\s*,\\s*([A-Za-z_]\\w*|NULL)\\s*,\\s*([A-Za-z_]\\w*|NULL)");
 const CFUNC  = new Regex("JS_CFUNC(?:_MAGIC)?_DEF\\s*\\(\\s*\"([A-Za-z_]\\w*)\"\\s*,\\s*(\\d+)");
 
@@ -218,12 +223,6 @@ class TypingsForm extends Form {
         return out;
     }
 
-    /* Every method name any widget class has, which is the candidate list a
-     * control is then asked about. */
-    widgetMethods(members) {
-        return this.candidates(members, (m) => m.kind === "method");
-    }
-
     /*
      * And every **read-only** property, which `PropertyNames()` does not report
      * and for a good reason: it answers *what can a property grid set*, and a
@@ -234,7 +233,7 @@ class TypingsForm extends Form {
      * `Line`, `Column`, `CanUndo`, `SelectedText`, `ScrollMaxX` -- every one of
      * them real, every one of them something an editor would have said does not
      * exist. So they come from the C, where the NULL setter is what says
-     * read-only, and which class has which is settled by asking the control.
+     * read-only, and which class has which is settled by asking the class.
      */
     readOnlyProperties(members) {
         return this.candidates(members, (m) => m.kind === "property" && m.readOnly);
@@ -259,7 +258,6 @@ class TypingsForm extends Form {
     /* --- the runtime, as TypeScript ------------------------------------------ */
 
     runtimeTypes(members) {
-        const methods  = this.widgetMethods(members);
         const readOnly = this.readOnlyProperties(members);
         const out      = [];
 
@@ -281,46 +279,26 @@ class TypingsForm extends Form {
             try { control = Widget.New(type); } catch (e) { continue; }
 
             /*
-             * `for...in` as well as the C, because **rad.js's own methods are
-             * not in a C table**: `PropertyNames`, `Serialize`, `Apply`,
-             * `Declared`, `Fill` and four more are plain assignments onto
-             * `Widget.prototype`, which makes them enumerable -- the one thing
-             * a C method is not. Nine of them, and leaving them out is how a
-             * declaration comes to say `Property 'PropertyNames' does not exist
-             * on type 'Form'`.
-             */
-            const has = methods.filter((m) => typeof control[m] === "function");
-            for (const key in control)
-                if (typeof control[key] === "function" && !has.includes(key))
-                    has.push(key);
-
-            /*
-             * `in` and not `PropertyNames()`: a read-only property is on the
-             * prototype like any other, and is exactly what that method leaves
-             * out.
+             * Methods, settable properties and read-only ones are the
+             * **class's** to answer, with no control built: `Widget.Methods`
+             * is the prototype's own function-valued data properties, and
+             * `Widget.Member` says which of the names that are not settable is
+             * read-only and which is a method.
              *
-             * **And the two lists overlap**, because the candidate names come
-             * from every widget table at once: `Text` is read-only on a
-             * `TreeView` and settable on a `Label`, so a Label asked about it
-             * says yes twice and the declaration came out with `Text` and
-             * `readonly Text` on the same class -- which TypeScript reads as a
-             * duplicate identifier. What the *class* can set wins.
-             *
-             * **And a name can be a property of one class and a method of
-             * another**: `Marks` is a read-only property on a `Calendar` and a
-             * method on a `SourceEditor`, so the editor came out with both. What
-             * the control really holds settles it.
+             * The control is still made, because a property's *type* is the
+             * value it holds and nothing declares it -- the one question a
+             * class cannot answer.
              */
-            const settable = control.PropertyNames();
-            const fixed    = readOnly.filter((name) => name in control &&
-                                                       !settable.includes(name) &&
-                                                       !this.isMethod(control, name));
+            const has      = Widget.Methods(type).sort();
+            const settable = Widget.PropertyNames(type);
+            const fixed    = readOnly.filter((name) =>
+                Widget.Member(type, name) === "ReadOnly");
 
             built.push(type);
             shape[type] = {
                 properties: settable,
                 readOnly:   fixed,
-                methods:    has.sort(),
+                methods:    has,
                 sample:     control,
             };
         }
@@ -351,11 +329,20 @@ class TypingsForm extends Form {
             out.push(`    ${name}: ${this.typeOf(shape[built[0]].sample, name)};`);
         for (const name of baseFixed)
             out.push(`    readonly ${name}: ${this.typeOf(shape[built[0]].sample, name)};`);
-        for (const name of baseMethods) out.push(`    ${name}(...values: any[]): any;`);
+        for (const name of baseMethods)
+            out.push(this.methodLine(name, Widget.Signature("Widget", name)));
         out.push("    static New(type: string): Widget;");
         out.push("    static Types(): string[];");
         out.push("    static Available(type: string): boolean;");
         out.push("    static TypeName(ctor: any): string;");
+        out.push("    static PropertyNames(type: string): string[];");
+        out.push("    static Methods(type: string): string[];");
+        out.push("    static EventNames(type: string): string[];");
+        out.push("    static TextProperties(type: string): string[];");
+        out.push("    static PropertyOptions(type: string, name: string): string[] | null;");
+        out.push("    static Member(type: string, name: string): string;");
+        out.push("    static Signature(type: string, name: string): string | null;");
+        out.push("    static EventSignature(type: string, name: string): string | null;");
         out.push("}");
         out.push("");
 
@@ -379,7 +366,7 @@ class TypingsForm extends Form {
             }
             for (const name of shape[type].methods) {
                 if (baseMethods.includes(name)) continue;
-                out.push(`    ${name}(...values: any[]): any;`);
+                out.push(this.methodLine(name, Widget.Signature(type, name)));
             }
             out.push("}");
         }
@@ -429,19 +416,76 @@ class TypingsForm extends Form {
     }
 
     /*
+     * A method, with the parameters the class declares for it.
+     *
+     * A signature is the documentation's own spelling -- `([container])`,
+     * `(event, ...args)` -- so the two brackets that carry meaning become
+     * TypeScript's: `[x]` is an optional argument and `...x` a rest one. Every
+     * type is `any`, which the runtime has none to offer and this file already
+     * says. A method that declares nothing falls back to the permissive
+     * spelling rather than claiming it takes none.
+     */
+    methodLine(name, sig) {
+        if (sig === null)
+            return `    ${name}(...values: any[]): any;`;
+        return `    ${name}(${this.tsArgs(sig)}): any;`;
+    }
+
+    tsArgs(sig) {
+        if (sig === "()") return "";
+
+        return this.splitArgs(sig.slice(1, -1)).map((part) => {
+            let arg = part;
+            let optional = false;
+
+            if (arg.startsWith("[") && arg.endsWith("]")) {
+                optional = true;
+                arg = arg.slice(1, -1).trim();
+            }
+
+            if (arg.startsWith("..."))
+                return `...${arg.slice(3)}: any[]`;
+
+            /* `{CaseSensitive, WholeWord, Regex}` is the *shape* of an options
+             * object and not a name, so it becomes one -- `options`, which is
+             * what the summary lines already call it. */
+            if (arg.startsWith("{")) {
+                const members = this.splitArgs(arg.slice(1, -1))
+                                    .map((m) => `${m}?: any`).join("; ");
+                return `options${optional ? "?" : ""}: { ${members} }`;
+            }
+            return `${arg}${optional ? "?" : ""}: any`;
+        }).join(", ");
+    }
+
+    /* A parameter list split at its **top-level** commas, so `[{A, B}]` is one
+     * argument and not three. */
+    splitArgs(text) {
+        const out = [];
+        let   depth = 0;
+        let   cur   = "";
+
+        for (const ch of text) {
+            if (ch === "[" || ch === "{" || ch === "(") depth++;
+            if (ch === "]" || ch === "}" || ch === ")") depth--;
+            if (ch === "," && depth === 0) {
+                out.push(cur.trim());
+                cur = "";
+                continue;
+            }
+            cur += ch;
+        }
+        if (cur.trim()) out.push(cur.trim());
+        return out;
+    }
+
+    /*
      * What a property holds, asked of the control rather than declared.
      *
      * A getter may refuse -- `MenuItem.Value` throws for an item that is not a
      * check -- and a refusal is not a type, so it is `any` and says so by saying
      * nothing.
      */
-    /* Whether this control answers that name with a function, which is what
-     * tells a method from a read-only property when both spellings exist in the
-     * C. A getter that refuses is not a function and says so by throwing. */
-    isMethod(sample, name) {
-        try { return typeof sample[name] === "function"; } catch (e) { return false; }
-    }
-
     typeOf(sample, name) {
         let value;
         try { value = sample[name]; } catch (e) { return "any"; }

@@ -360,16 +360,23 @@ static const JSCFunctionListEntry terminal_props[] = {
     JS_CGETSET_DEF("Running",         term_get_running,    NULL),
     JS_CGETSET_DEF("ScrollbackLines", term_get_scrollback, term_set_scrollback),
     JS_CGETSET_DEF("FontScale",       term_get_font_scale, term_set_font_scale),
+    /* Run(argv, [workdir]) */
     JS_CFUNC_DEF("Run",   2, term_run),
+    /* Stop() */
     JS_CFUNC_MAGIC_DEF("Stop", 0, term_signal, 0),
+    /* Kill() */
     JS_CFUNC_MAGIC_DEF("Kill", 0, term_signal, 1),
+    /* Feed(text) */
     JS_CFUNC_DEF("Feed",  1, term_feed),
+    /* Clear() */
     JS_CFUNC_DEF("Clear", 0, term_clear),
 };
 
 void bta_terminal_register(void)
 {
     const BtaClass rows[] = {
+        /* Exit(code) */
+        /* Link(text) */
         BTA_CLASS_OPTIONAL("Terminal", "Control", term_build, terminal_props,
                            false, TERM_AVAILABLE, "Exit,Link"),
     };

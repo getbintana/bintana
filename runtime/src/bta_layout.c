@@ -1273,12 +1273,19 @@ static const JSCFunctionListEntry rowlist_props[] = {
     JS_CGETSET_DEF("Selection",   rowlist_get_selection, NULL),
     JS_CGETSET_DEF("ActivateOnSingleClick",
                    rowlist_get_single, rowlist_set_single),
+    /* Refilter() */
     JS_CFUNC_DEF("Refilter", 0, rowlist_refilter),
+    /* Remove(index) */
     JS_CFUNC_DEF("Remove",   1, rowlist_remove),
+    /* Activate([index]) */
     JS_CFUNC_DEF("Activate", 1, rowlist_activate),
+    /* Select(index) */
     JS_CFUNC_MAGIC_DEF("Select",      1, rowlist_select_one,   RL_SELECT),
+    /* Deselect(index) */
     JS_CFUNC_MAGIC_DEF("Deselect",    1, rowlist_select_one,   RL_DESELECT),
+    /* SelectAll() */
     JS_CFUNC_MAGIC_DEF("SelectAll",   0, rowlist_select_every, RL_ALL),
+    /* DeselectAll() */
     JS_CFUNC_MAGIC_DEF("DeselectAll", 0, rowlist_select_every, RL_NONE),
 };
 
@@ -1480,13 +1487,18 @@ void bta_layout_register(void)
         /* A frame's Text is the caption drawn into its border. */
         BTA_CLASS_TEXT("Frame",  "Container", build_frame,  frame_props, false, "Text", NULL),
         /* And an expander's is the caption one presses to fold it. */
+        /* Toggle() */
         BTA_CLASS_TEXT("Expander", "Container", build_expander, expander_props,
                        false, "Text", "Toggle"),
         BTA_CLASS_BARE("Overlay", "Container", build_overlay,            false, NULL),
         /* `Select` first: it is the default event, the one a double click in the
          * designer writes. `Filter` is asked of the form, never raised by it. */
+        /* Select() */
+        /* Activate() */
+        /* Filter(control, index) */
         BTA_CLASS     ("RowList", "Container", build_rowlist, rowlist_props, false,
                        "Select,Activate,Filter"),
+        /* Scroll(x, y) */
         BTA_CLASS_ENUM("Scroller", "Container", build_scroller, scroller_props,
                        false, scroller_options, "Scroll"),
         /* A proportion to keep, and a rectangle for whatever rides on it. */

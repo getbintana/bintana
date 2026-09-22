@@ -154,13 +154,12 @@ const FORM_HIDDEN = [
  * widget's own class adds** -- is not, and cannot be: a property added to a
  * class in C has to turn up in the right group with nothing changed in the IDE,
  * which is the bet the whole grid is built on. It is worked out instead: every
- * concrete widget is asked what it has, and what they *all* have is the base
- * every control inherits. What a Slider has beyond that is a Slider's.
+ * concrete widget class is asked what it has, and what they *all* have is the
+ * base every control inherits.
  *
- * The runtime does not offer the prototype chain to answer this with -- the
- * reflection that would walk it is deleted on purpose, `Object.getPrototypeOf`
- * included -- so the intersection is not a shortcut, it is the way. It is also
- * exact: a property every widget has *is* base, whatever declared it.
+ * The runtime answers that about a *class*, by name -- `Widget.PropertyNames`
+ * -- so nothing is built to ask. It is also exact: a property every widget has
+ * *is* base, whatever declared it.
  */
 const ESSENTIAL = ["Name", "Text"];
 
@@ -192,9 +191,10 @@ const LAYOUT = ["X", "Y", "Width", "Height", "MinWidth", "MinHeight",
  * What every widget has, worked out once.
  *
  * Once per run of the IDE and not once per grid: it is a fact about the
- * runtime, and the runtime does not change while it is running. The widgets it
- * makes to ask are deleted again -- a probe left behind is a GTK widget with no
- * parent, which is a leak nobody would ever see.
+ * runtime, and the runtime does not change while it is running. The classes
+ * answer for themselves -- no control is built, so abstract classes are part of
+ * the answer instead of being the ones that threw, and a `Form` probe is no
+ * longer a window made to be thrown away.
  */
 let baseCache = null;
 
@@ -203,26 +203,13 @@ function baseProperties() {
 
     let common = null;
     for (const type of Widget.Types()) {
-        let probe;
-        try {
-            probe = Widget.New(type);
-        } catch (e) {
-            continue;                   /* abstract: Widget, Control, Container */
-        }
-
         /* A window is not a control and is not part of the answer: what is
-         * being worked out is what every *control* has. It is also the one kind
-         * that has to be closed rather than deleted, and making one to throw it
-         * away would be a window built per question. */
-        if (probe instanceof Form) {
-            probe.Close();
-            continue;
-        }
+         * being worked out is what every *control* has. */
+        if (type === "Form") continue;
 
-        const names = probe.PropertyNames();
+        const names = Widget.PropertyNames(type);
         common = common === null ? names
                                  : common.filter((k) => names.includes(k));
-        probe.Delete();
     }
 
     baseCache = common || [];

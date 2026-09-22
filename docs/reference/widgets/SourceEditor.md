@@ -26,7 +26,7 @@ are made of.
 | `Marks([kind])` | → a record per mark: `{ Line, Kind, Text }` | [marks](#marks) |
 | `Replace(with)` | the match the cursor is on | [search](#search) |
 | `ReplaceAll(with)` | every match | [search](#search) |
-| `Search(text, [options])` | → how many, highlighting every one | [search](#search) |
+| `Search(text, [{CaseSensitive, WholeWord, Regex}])` | → how many, highlighting every one | [search](#search) |
 | `ShowCompletion()` | opens the completion popup from code | [completion](#completion) |
 | **event** `Complete(word, line, column, text)` | a completion was asked for | [completion](#completion) |
 

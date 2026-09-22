@@ -50,6 +50,16 @@ belongs in `rad.js`**, and today that means serialisation, the `Caption` aliases
 `Form.Controls`, `PropertyNames()`, `Record`/`Field`, `Dictionary`, `Regex`,
 `Declared`/`Fill`/`SetDesign`, and building a tree from a `.form` node.
 
+**And the member signatures are generated the same way**, from the C itself:
+`tools/extract_signatures.cmake` reads the one-line comment above each method
+entry and above each class row that declares an event — `/* Bounds([container])
+*/` — and writes `generated/bta_signatures.h`, which `bta_widget.c` includes.
+`Widget.Signature(type, name)` and `Widget.EventSignature(type, name)` answer
+with it, so the parameters are declared once, beside the member, and nothing
+keeps a second list. A class written in JS states its own as
+`static Signatures`, because a function knows its argument count and not its
+names.
+
 ### What rad.js keeps for itself
 
 `rad.js` runs **before** `close_hatches()`, and it holds on to the reflection that

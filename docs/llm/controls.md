@@ -1,16 +1,18 @@
 # Controls
 
 **This is the complete surface, not a selection.** Every property, method and
-event of every class is below — 390 rows, covering 223 distinct members and 42
-events across 41 classes. If something is not here, the runtime does not have it,
-and you should not have to open the project tree to find that out.
+event of every class is below — 46 classes, 267 distinct members and 43 events,
+which is what `tests/api.sh` prints. If something is not here, the runtime does
+not have it, and you should not have to open the project tree to find that out.
 
 It is generated from the runtime and checked against it, which is what makes that
 claim worth anything: the class list comes from `Widget.Types()`, the properties
 from the accessor tables in C, the enumerated values from `PropertyOptions()`, the
-defaults from a freshly built control, and **every event signature's argument
-count from the `bta_emit` call that raises it**. `tests/api.sh` fails if a member
-exists and is not documented here.
+defaults from a freshly built control, and **every method's and event's
+parameters from the comment the member declares them in, with the event's
+argument count also held against the `bta_emit` call that raises it**.
+`tests/api.sh` fails if a member exists and is not documented here, or is
+documented with parameters the runtime does not declare.
 
 How to read it:
 
@@ -76,6 +78,39 @@ machines that could never have made it work.
 
 A class of the project's own is available whenever it resolves: a component is
 JavaScript, and JavaScript this runtime can always run.
+
+### What a class has, with no control built
+
+A palette, a property grid and an extractor are all holding a **name** — a
+`.form` says `"type": "Button"` — and each of them wants what a control would
+answer about itself. These are those answers, asked of the class: the same walk
+the instance methods run, started at the class prototype, so the two cannot
+disagree.
+
+| | |
+|---|---|
+| `Widget.PropertyNames(type)` → array | the properties a control of that class can be **set to** |
+| `Widget.Methods(type)` → array | its methods, **most derived first**, and not its `constructor` |
+| `Widget.EventNames(type)` → array | the events it raises, most derived first; `[0]` is the one a double click writes |
+| `Widget.TextProperties(type)` → array | which of its properties hold prose, accumulated along the chain |
+| `Widget.PropertyOptions(type, name)` → array | the values that property accepts, or `null` |
+| `Widget.Member(type, name)` → string | what the name is on that class: `Property`, `ReadOnly`, `Method`, or `""` for one it has not got. The question `in` answers about a control, with the kind the loader needs — a **`ReadOnly`** name makes a `.form` refuse to load |
+| `Widget.Signature(type, name)` → string | the parameters a **method** declares: `"([container])"`, `"(event, fn)"`, `"()"`. `null` where the class declares none, or where the name is no method |
+| `Widget.EventSignature(type, name)` → string | the same for an **event**: `"(x, y, button, ctrl, shift)"`. A name that is both — `ListBox.Select` — is answered by each |
+
+The type resolves exactly as `Widget.New` does — the runtime's classes first,
+then the project's own and its libraries' — and a name that is no class, or a
+class that is not a widget, **throws** the same way. **An abstract class
+answers**: `Widget.PropertyNames("Widget")` is the one question no probe could
+ask, because `Widget.New` refuses to build one. Nothing here touches a display,
+so a console project can ask.
+
+**The parameters are declared beside the member**, never in a second list: a
+one-line comment above its C entry — `/* Bounds([container]) */` — and the build
+turns those into the table `Widget.Signature` reads. A class of the project's
+own states them as `static Signatures = { Up: "(delta)" }`, because JavaScript
+cannot reflect an argument's name. `tests/api.sh` fails on a method or an event
+that declares none.
 
 
 ### Where to find one

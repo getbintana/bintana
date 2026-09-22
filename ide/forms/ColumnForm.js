@@ -28,12 +28,13 @@ const NEW_COLUMN_TEXT = "Column";
  * into the .form, which the runtime then refuses. The extractor is what caught
  * it, by collecting three keywords as if they were something a person reads.
  *
- * `PropertyOptions` is the answer to "what does this property accept", and a
- * Label's `Alignment` is the same three words a column's is -- one vocabulary,
- * which is why there is no list of them anywhere in the IDE.
+ * `PropertyOptions` is the answer to "what does this property accept", asked of
+ * the **class** and not of a Label made to ask -- and a Label's `Alignment` is
+ * the same three words a column's is, one vocabulary, which is why there is no
+ * list of them anywhere in the IDE.
  */
 function alignments() {
-    return new Label().PropertyOptions("Alignment") || ["Left", "Center", "Right"];
+    return Widget.PropertyOptions("Label", "Alignment") || ["Left", "Center", "Right"];
 }
 
 class ColumnForm extends Form {

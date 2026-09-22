@@ -644,14 +644,23 @@ static const JSCFunctionListEntry editor_props[] = {
     JS_CGETSET_MAGIC_DEF("Wrap",     ed_get_flag, ed_set_flag, ED_WRAP),
     JS_CGETSET_MAGIC_DEF("CanUndo",  ed_get_flag, NULL,        ED_CANUNDO),
     JS_CGETSET_MAGIC_DEF("CanRedo",  ed_get_flag, NULL,        ED_CANREDO),
+    /* GotoLine(line) */
     JS_CFUNC_DEF("GotoLine", 1, ed_goto_line),
+    /* Select(line, [column], [length]) */
     JS_CFUNC_DEF("Select",   3, ed_select),
+    /* LineOf(index) */
     JS_CFUNC_DEF("LineOf",   1, ed_line_of),
+    /* OffsetAt(line, [column]) */
     JS_CFUNC_DEF("OffsetAt", 2, ed_offset_at),
+    /* Insert(text) */
     JS_CFUNC_DEF("Insert",   1, ed_insert),
+    /* Append(text) */
     JS_CFUNC_DEF("Append",   1, ed_append),
+    /* Clear() */
     JS_CFUNC_DEF("Clear",    0, ed_clear),
+    /* Undo() */
     JS_CFUNC_DEF("Undo",     0, ed_undo),
+    /* Redo() */
     JS_CFUNC_DEF("Redo",     0, ed_redo),
 };
 
@@ -666,6 +675,9 @@ void bta_text_register(void)
          * once, and `EventNames()[0]` is what the designer's double click
          * writes, so `Change` has to stay at the head.
          */
+        /* Change() */
+        /* Cursor() */
+        /* Scroll(x, y) */
         BTA_CLASS("Editor", "Control", NULL, editor_props, false,
                   "Change,Cursor,Scroll"),
         /*

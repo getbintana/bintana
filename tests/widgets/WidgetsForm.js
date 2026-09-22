@@ -404,7 +404,7 @@ const TESTS = [
     "Settings", "Timer", "Icons", "Font", "Style", "Radius", "Padding", "Shadow", "StyleRule",
     "ColorButton",
     "ColorDialog", "FileDialog", "IconList", "FormIcon", "ButtonClick",
-    "Available", "TextProperties", "Locale", "LocaleRead", "TranslatedForm", "Fill", "DesignValues",
+    "Available", "TextProperties", "ClassIntrospection", "Signatures", "Locale", "LocaleRead", "TranslatedForm", "Fill", "DesignValues",
     "Grid",
     "File", "Dir", "Trash", "Environment",
     /* Async too: its answers land on later turns of the loop, like Exec's,
@@ -12296,6 +12296,140 @@ function Main() {
             t.Placeholder = "escriba";
             return t.Placeholder;
         })(), "escriba");
+    }
+
+    /* --- what a class has, with no control built -------------------------
+     *
+     * Every site that needed this used to make a control to ask a question
+     * about a *class* -- one of them, every widget type there is -- and a
+     * `Form` probe was a window. The class answers now, and the answer is the
+     * one a control gives, because it is the same walk.
+     */
+    testClassIntrospection() {
+        /* The class and a control agree, which is the whole contract: the IDE
+         * asks one and the serialiser the other. */
+        const btn = new Button();
+        check("the settable properties of a class are a control's",
+              sameJson(Widget.PropertyNames("Button"), btn.PropertyNames()),
+              JSON.stringify(Widget.PropertyNames("Button").slice(0, 6)));
+        check("its events are the control's, most derived first",
+              sameJson(Widget.EventNames("Button"), btn.EventNames()));
+        eq("...and the head is still the one a double click writes",
+           Widget.EventNames("Button")[0], "Click");
+        check("its prose is the control's",
+              sameJson(Widget.TextProperties("Button"), btn.TextProperties()));
+        btn.Delete();
+
+        const lbl = new Label();
+        check("so are the values a property accepts",
+              sameJson(Widget.PropertyOptions("Label", "Alignment"),
+                       lbl.PropertyOptions("Alignment")));
+        lbl.Delete();
+
+        /* A method is a fact about the prototype, so it needs no declaration:
+         * nothing in the class table says `SetFocus` or `Bounds`. */
+        check("methods come from the prototype",
+              Widget.Methods("Button").includes("SetFocus") &&
+              Widget.Methods("Button").includes("Bounds"),
+              JSON.stringify(Widget.Methods("Button").slice(0, 8)));
+        check("a class's own come before what it inherits",
+              Widget.Methods("Button").indexOf("Click") <
+              Widget.Methods("Button").indexOf("Show"));
+        check("and the class's `constructor` is not one of them",
+              !Widget.Methods("Button").includes("constructor"));
+
+        /* `Member` is the `in` a check ran on a disposable control, with the
+         * kind added: the loader refuses the read-only one. */
+        eq("a settable property", Widget.Member("Button", "Text"), "Property");
+        eq("a method",            Widget.Member("Button", "SetFocus"), "Method");
+        eq("a read-only one",     Widget.Member("Panel", "Children"), "ReadOnly");
+        eq("and nothing at all",  Widget.Member("Button", "Txt"), "");
+        eq("inherited from Object, as `in` was",
+           Widget.Member("Button", "toString"), "Method");
+
+        /* Abstract classes answer -- there is no control to make of one, which
+         * is exactly what the old probes could not ask. */
+        check("an abstract class answers",
+              Widget.PropertyNames("Widget").includes("Tooltip") &&
+              Widget.EventNames("Container").includes("MouseDown"),
+              JSON.stringify(Widget.PropertyNames("Widget").slice(0, 5)));
+
+        /* A class of the project, resolved by the name a .form would use --
+         * qualified, because the two Steppers share a short name. */
+        const stepper = new Gadgets.Stepper();
+        check("a component's class answers too",
+              sameJson(Widget.EventNames("Gadgets.Stepper"), stepper.EventNames()));
+        check("...and its declared prose",
+              sameJson(Widget.TextProperties("Gadgets.Stepper"),
+                       stepper.TextProperties()));
+        eq("...and a member of its class",
+           Widget.Member("Gadgets.Stepper", "Value"), "Property");
+        stepper.Delete();
+
+        /* The root Stepper declares the statics; the namespaced one does not,
+         * and they are different classes. */
+        eq("the root Stepper's own event is first",
+           Widget.EventNames("Stepper")[0], "Change");
+        check("the two Steppers answer differently",
+              Widget.EventNames("Gadgets.Stepper")[0] !== "Change",
+              JSON.stringify(Widget.EventNames("Gadgets.Stepper").slice(0, 2)));
+
+        /* A name that is no class is refused the way `Widget.New` refuses it. */
+        throws("a name that is no class is refused",
+               () => Widget.PropertyNames("Nonsense"));
+        throws("...for every one of the questions",
+               () => Widget.Member("Nonsense", "Text"));
+    }
+
+    /* --- the parameters a member declares beside itself ------------------
+     *
+     * The one thing that cannot be read off a function, so it is declared: a
+     * one-line comment above the C entry, or a `static Signatures` on a class
+     * of the project's own. The build turns the comments into the table
+     * `Widget.Signature` answers with.
+     */
+    testSignatures() {
+        eq("a method declares its parameters",
+           Widget.Signature("Button", "Bounds"), "([container])");
+        eq("...an optional one is bracketed",
+           Widget.Signature("Button", "On"), "(event, fn)");
+        eq("...and one that takes none says so",
+           Widget.Signature("Button", "Show"), "()");
+
+        /* An event's, above the class row that lists it. `EventSignature` and
+         * not `Signature`, because `ListBox.Select` is a method and an event
+         * and only the caller knows which it is asking about. */
+        eq("an event declares its parameters too",
+           Widget.EventSignature("Button", "MouseDown"), "(x, y, button, ctrl, shift)");
+        eq("...on the class that raises it",
+           Widget.EventSignature("Widget", "Allocated"), "(box)");
+        eq("...and a name that is both is answered by each",
+           Widget.Signature("ListBox", "Select") + "/" +
+           Widget.EventSignature("ListBox", "Select"), "(index)/()");
+
+        /* The walk stops where the member is declared, which is what keeps an
+         * override honest: the same name answers differently per class. */
+        eq("an override answers its own",
+           Widget.Signature("Form", "Serialize"), "()");
+        eq("...the class it overrides answers the other",
+           Widget.Signature("Widget", "Serialize"), "(parentIsFixed)");
+        eq("...and the class that overrides that, its own",
+           Widget.Signature("Notebook", "Serialize"), "(parentIsFixed)");
+
+        /* A class of the project declares its own; an inherited method still
+         * answers from the class that declares it. */
+        eq("a component's method declares its parameters",
+           Widget.Signature("Stepper", "Up"), "(delta)");
+        eq("...and so does its event",
+           Widget.EventSignature("Stepper", "Change"), "(value)");
+        eq("...which its subclass inherits",
+           Widget.EventSignature("Chip", "Change"), "(value)");
+        eq("an inherited method answers from the class that declares it",
+           Widget.Signature("Gadgets.Stepper", "Show"), "()");
+        eq("and one with nothing said is null",
+           Widget.Signature("Gadgets.Stepper", "Up_Click"), null);
+        eq("...as is a name that is no member at all",
+           Widget.Signature("Button", "Nonsense"), null);
     }
 
     /* --- the catalogue -------------------------------------------------- */

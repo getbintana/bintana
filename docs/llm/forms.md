@@ -556,6 +556,7 @@ class Stepper extends Component {
     static Events         = ["Change"];
     static Options        = { Step: ["1", "5", "10"] };
     static TextProperties = ["Caption"];
+    static Signatures     = { Change: "(value)", Up: "(delta)" };
 
     get Value()  { return this._value || 0; }
     set Value(v) {
@@ -566,6 +567,8 @@ class Stepper extends Component {
 
     Up_Click()   { this.Value = this.Value + 1; }
     Down_Click() { this.Value = this.Value - 1; }
+
+    Up(delta)    { this.Value = this.Value + (delta || 1); }
 }
 ```
 
@@ -578,9 +581,14 @@ class Stepper extends Component {
   component's handlers, and the host form does not see them.
 - A property is discovered because it is *there* — an accessor with both a
   getter and a setter. That is also what makes it serialisable and editable.
-- The three statics are what a class cannot be asked: what it **raises**, what a
-  property **accepts**, and which of its strings a person **reads**. Only
-  literal lists count.
+- The four statics are what a class cannot be asked: what it **raises**, what a
+  property **accepts**, which of its strings a person **reads**, and the
+  **parameters** of what it declares. Only literal lists count.
+- `Signatures` is the one thing JavaScript cannot reflect — a function knows how
+  many arguments it takes and not what they are called — so the class states
+  them, in the same spelling a C class uses in a comment beside its entry:
+  `"(value)"`, `"(delta)"`, `"()"`. `Widget.Signature(type, name)` and
+  `Widget.EventSignature(type, name)` answer with them.
 - `Emit(event, ...args)` raises an event that arrives by name like any
   control's.
 - A component may extend a component; the chain is walked whole.

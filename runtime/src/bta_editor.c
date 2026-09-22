@@ -1381,15 +1381,25 @@ static const JSCFunctionListEntry source_props[] = {
     JS_CGETSET_MAGIC_DEF("ShowLineNumbers", ed_get_flag, ed_set_flag, ED_LINENUMBERS),
     JS_CGETSET_MAGIC_DEF("ShowMarks",       ed_get_flag, ed_set_flag, ED_MARKS),
     JS_CGETSET_MAGIC_DEF("Completion",      ed_get_flag, ed_set_flag, ED_COMPLETION),
+    /* ShowCompletion() */
     JS_CFUNC_DEF("ShowCompletion", 0, ed_show_completion),
+    /* Mark(line, kind, [text]) */
     JS_CFUNC_DEF("Mark",       3, ed_mark),
+    /* Unmark(line, [kind]) */
     JS_CFUNC_DEF("Unmark",     2, ed_unmark),
+    /* ClearMarks([kind]) */
     JS_CFUNC_DEF("ClearMarks", 1, ed_clear_marks),
+    /* Marks([kind]) */
     JS_CFUNC_DEF("Marks",      1, ed_marks),
+    /* Search(text, [{CaseSensitive, WholeWord, Regex}]) */
     JS_CFUNC_DEF("Search",       2, ed_search),
+    /* FindNext() */
     JS_CFUNC_DEF("FindNext",     0, ed_find_next),
+    /* FindPrevious() */
     JS_CFUNC_DEF("FindPrevious", 0, ed_find_previous),
+    /* Replace(with) */
     JS_CFUNC_DEF("Replace",      1, ed_replace),
+    /* ReplaceAll(with) */
     JS_CFUNC_DEF("ReplaceAll",   1, ed_replace_all),
 };
 
@@ -1450,6 +1460,9 @@ void bta_editor_register(void)
      * first event a completion request.
      */
     const BtaClass rows[] = {
+        /* Change() */
+        /* Cursor() */
+        /* Complete(word, line, column, text) */
         BTA_CLASS_ENUM_TEXT("SourceEditor", "Editor", build_source_editor,
                             source_props, false, editor_options,
                             "CompletionTitle", "Change,Cursor,Complete"),

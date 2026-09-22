@@ -462,10 +462,15 @@ static const JSCFunctionListEntry notebook_props[] = {
     JS_CGETSET_DEF("Tabs",    notebook_get_tabs,    notebook_set_tabs),
     JS_CGETSET_DEF("Count",   notebook_get_count,   NULL),
     JS_CGETSET_DEF("Current", notebook_get_current, notebook_set_current),
+    /* Append(child, [label]) */
     JS_CFUNC_DEF ("Append",     2, notebook_append),
+    /* Remove(index) */
     JS_CFUNC_DEF ("Remove",     1, notebook_remove),
+    /* SetTabLabel(index, label) */
     JS_CFUNC_DEF ("SetTabLabel", 2, notebook_set_tab_label),
+    /* SetAction(control, [where]) */
     JS_CFUNC_DEF ("SetAction",   2, notebook_set_action),
+    /* GetAction(where) */
     JS_CFUNC_DEF ("GetAction",   1, notebook_get_action),
 };
 
@@ -479,6 +484,7 @@ void bta_notebook_register(void)
 {
     const BtaClass rows[] = {
         /* The tab labels: a list of strings a person reads. */
+        /* Switch(index) */
         BTA_CLASS_ENUM_TEXT("Notebook", "Container", build_notebook, notebook_props,
                        false, notebook_options, "Tabs", "Switch"),
     };

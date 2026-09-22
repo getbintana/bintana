@@ -16,6 +16,12 @@ class Stepper extends Component {
     static Options        = { Step: ["1", "5", "10"] };
     static TextProperties = ["Caption"];
 
+    /* And the parameters of what it declares, which is the one thing the
+     * runtime cannot read off a function: JavaScript keeps an argument's count
+     * and not its name. Same declaration as the C classes make in a comment
+     * beside the entry. */
+    static Signatures     = { Change: "(value)", Up: "(delta)" };
+
     /* And its fields are declared, which is the fourth thing a component says
      * about itself: under `--strict` it is sealed once it is built, so a field
      * it only creates when somebody first assigns the property would throw
@@ -42,4 +48,8 @@ class Stepper extends Component {
 
     Down_Click() { this.Value = this.Value - 1; }
     Up_Click()   { this.Value = this.Value + 1; }
+
+    /* A method with a parameter, so `Widget.Signature` has something of the
+     * class's own to answer with. */
+    Up(delta)    { this.Value = this.Value + (delta || 1); }
 }

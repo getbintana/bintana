@@ -316,6 +316,57 @@ Four requirements:
   events at all fails the suite; one whose *list* is short does not, and nothing
   but reading the row will say so.
 
+## Asking a class instead of a control
+
+A widget added the ways above is answerable **without building one**, which is
+what a palette, a property grid and the extractor do:
+
+```js
+Widget.PropertyNames("Meter")        // every settable property, its own and inherited
+Widget.Methods("Meter")              // its methods, from the prototype
+Widget.EventNames("Meter")           // most derived first -- "Change" before Widget's
+Widget.TextProperties("Meter")       // the `texts` of the row
+Widget.PropertyOptions("Meter", "Style")   // the `options` of the row
+Widget.Member("Meter", "Value")      // "Property" | "ReadOnly" | "Method" | ""
+Widget.Signature("Meter", "Set")           // "(value)"
+Widget.EventSignature("Meter", "Change")   // "(value)"
+```
+
+Nothing extra is declared for the first six: each answer is the walk the instance
+method runs, started at the class prototype, so a class and a control cannot
+disagree. A new method is a method because it is on the prototype; a new event,
+prose property or enumerated value is answered because its row says so.
+`Widget.Member` is the `in` question with the kind added — `ReadOnly` is the name
+a `.form` refuses to load over, which is what `Ide.Check` reads to tell a
+shadowed name from a refused one.
+
+**The parameters are the one thing that has to be declared**, because a function
+knows how many arguments it takes and not what they are called. It goes on the
+line directly above what it documents, in the documentation's own spelling:
+
+```c
+/* Set(value) */
+JS_CFUNC_DEF("Set", 1, meter_set),
+
+/* Change(value) */
+BTA_CLASS_ENUM("Meter", "Control", build_meter, meter_props, false,
+               meter_options, "Change")
+```
+
+A method's above its entry, an event's above the class row that already lists
+it — one line per event, because `events` is a comma separated list and a
+parameter list has commas of its own. `tools/extract_signatures.cmake` turns
+those comments into the table the runtime publishes, so there is no second
+declaration anywhere; `tests/api.sh` fails on a method or an event that declares
+none. A class written in JS states its own as `static Signatures`, and
+`Widget.Signature` asks about a **method** where `Widget.EventSignature` asks
+about an **event** — `ListBox.Select` is both, and only the caller knows which.
+
+The type is resolved the way `Widget.New` resolves it — the runtime's table
+first, then the project's own classes and its libraries' — and a name that is no
+class, or a class that is not a widget, is refused. Abstract classes answer,
+which is the question no control could be made to ask.
+
 ## Adding a global
 
 `install_globals()` in `bta_runtime.c` for anything ambient;`bta_sys.c` for the

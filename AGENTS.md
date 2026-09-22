@@ -334,6 +334,52 @@ the extractor ask it.
 A class that declares none must keep answering *nothing* — which is not an empty
 list, and the difference is load-bearing on the IDE side: see `docs/ide.md`.
 
+**A class answers about itself with no control built, and every caller that
+needed it was holding a name.** `Widget.PropertyNames/Methods/EventNames/
+TextProperties/PropertyOptions/Member(type, …)` resolve the type the way
+`Widget.New` does — the class table first, then `bta_lookup_global` for the
+project's own and its libraries' — and run the same walks the instance methods
+run, started at the class prototype. Three consequences worth knowing before
+touching them:
+
+- **Abstract classes answer**, which is the one thing no probe could ask:
+  `Widget.PropertyNames("Widget")` works where `Widget.New("Widget")` refuses.
+  `PropertyGrid.baseProperties` used `try { Widget.New } catch` to skip exactly
+  those, and now includes them — harmless, because an ancestor's names are
+  already in the intersection.
+- **`PropertyNames` is still `rad.js`'s walk.** The static hands it an empty
+  object whose prototype is the class, so the function a control answers is the
+  one a class answers and neither was reimplemented. Do not add a second
+  accessor walk in C.
+- **`Member` is `in` with a kind**, and it walks into `Object.prototype` because
+  `in` did; `Methods` and `PropertyNames` stop before it. A method is a
+  function-valued data property — nothing declares one — and the class's own
+  `constructor`, which `JS_SetConstructor` leaves on every prototype, is
+  filtered out. `ReadOnly` is the kind the loader refuses a `.form` over.
+- **Nothing here may touch GTK**, and `tests/api` (a console project) asks one
+  of these to keep that true: the whole point is that `Widget.New` was the only
+  way to ask, and it needs a display.
+- **The parameters are declared beside the member**, because a function knows
+  its count and not its names: one line directly above the C entry —
+  `/* Bounds([container]) */` — or, for an event, above the class row that
+  already lists it. `tools/extract_signatures.cmake` turns those comments into
+  `generated/bta_signatures.h` and the runtime answers with it, so there is no
+  second declaration to drift. A JS class states its own as
+  `static Signatures`. **`Signature` is the method's and `EventSignature` the
+  event's**, because a name can be both — `ListBox.Select` is a method that
+  selects a row and the event that says the selection moved — and the walk stops
+  at the first class that declares the member, so an override
+  (`Form.Serialize`) answers its own. `tests/api` fails on a method or event
+  that declares none, and compares both `controls.md`/`reference/widgets` and
+  `bintana.d.ts` against what the runtime answers.
+- **And the table parser in `tests/api` and `tools/typings` was `[^}]*`**, which
+  a signature comment with an options object broke: `/* Search(text,
+  [{CaseSensitive, …}]) */` stopped the body at its first `}` and every member
+  of that table was silently lost — a completeness check that stops checking
+  without failing. The body is lazy to the `};` that ends a table now
+  (`[\s\S]*?`), which is what a parser over C that can contain braces in
+  comments has to be.
+
 **`Environment` is the context a program was started in** — `Get`/`Set`,
 `Variables`, `CurrentDirectory`, `HasDisplay`, `ProcessId`, `ProcessorCount`,
 `UserName`, `HostName`, `OS`. One object, because they are asked together and

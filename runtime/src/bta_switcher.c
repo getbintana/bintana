@@ -523,7 +523,9 @@ static const JSCFunctionListEntry switcher_props[] = {
     JS_CGETSET_DEF("Tabs",    switcher_get_tabs,    switcher_set_tabs),
     JS_CGETSET_DEF("Count",   switcher_get_count,   NULL),
     JS_CGETSET_DEF("Current", switcher_get_current, switcher_set_current),
+    /* Append(child, [name]) */
     JS_CFUNC_DEF("Append", 2, switcher_append),
+    /* Remove(index) */
     JS_CFUNC_DEF("Remove", 1, switcher_remove),
 };
 
@@ -538,6 +540,7 @@ void bta_switcher_register(void)
     const BtaClass rows[] = {
         /* Its strip is a segmented control and `Tabs` is the whole of what can
          * be in it: a list of strings a person reads. */
+        /* Switch(index) */
         BTA_CLASS_ENUM_TEXT("Switcher", "Container", build_switcher, switcher_props,
                        false, switcher_options, "Tabs", "Switch"),
     };
