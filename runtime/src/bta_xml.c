@@ -126,6 +126,26 @@ static void xml_tree_ref(BtaXmlTree *t)
     t->refs++;
 }
 
+/*
+ * The two doors of the orphan list, and the invariant they keep: a node is on
+ * it **at most once**, and **only while it has no parent**. Either half broken
+ * is a double free at teardown -- once from the list and once from wherever
+ * else the node is reachable -- and both were reachable, because wrappers are
+ * not unique: two `Find`s of one element are two wrappers, so the second
+ * `Remove()` found a node the first had already orphaned, and a wrapper kept
+ * over a `Text` assignment could `Add` its orphan back into the tree.
+ */
+static void xml_orphan(BtaXmlTree *t, xmlNodePtr node)
+{
+    if (!g_list_find(t->orphans, node))
+        t->orphans = g_list_prepend(t->orphans, node);
+}
+
+static void xml_adopt(BtaXmlTree *t, xmlNodePtr node)
+{
+    t->orphans = g_list_remove(t->orphans, node);
+}
+
 static void xml_doc_finalizer(JSRuntime *rt, JSValue val)
 {
     BtaXmlTree *t = JS_GetOpaque(val, bta_xml_doc_class_id);
@@ -344,8 +364,13 @@ static void xml_place(xmlNodePtr parent, int index, xmlNodePtr node)
         return;
     if (before)
         xmlAddPrevSibling(before, node);
-    else
+    else {
+        /* `xmlAddPrevSibling` unlinks what it moves and `xmlAddChild` is not
+         * promised to in every libxml2 this builds against, so a node moved
+         * to the end leaves its old place first. */
+        xmlUnlinkNode(node);
         xmlAddChild(parent, node);
+    }
 }
 
 /*
@@ -397,6 +422,14 @@ static JSValue xml_place_child(JSContext *ctx, BtaXmlNode *parent,
         return JS_ThrowTypeError(ctx, "Add: a node cannot contain itself");
 
     if (child->tree == parent->tree) {
+        /* A node coming back from the orphan list leaves it, or it would be
+         * freed as an orphan and again with whatever it now sits in.  And the
+         * root of a detached tree can only be moved under one of its orphans
+         * -- everything else is inside it -- so it stops being the root, the
+         * same answer `Remove()` gives. */
+        xml_adopt(child->tree, child->node);
+        if (child->tree->root == child->node)
+            child->tree->root = NULL;
         xml_place(parent->node, index, child->node);
         return JS_DupValue(ctx, value);
     }
@@ -614,7 +647,7 @@ static JSValue xml_node_set_text(JSContext *ctx, JSValueConst this_val,
         xmlNodePtr next = c->next;
 
         xmlUnlinkNode(c);
-        n->tree->orphans = g_list_prepend(n->tree->orphans, c);
+        xml_orphan(n->tree, c);
         c = next;
     }
     xmlNodeAddContentLen(n->node, BAD_CAST s, (int)len);
@@ -861,7 +894,7 @@ static JSValue xml_node_remove(JSContext *ctx, JSValueConst this_val,
      * the orphan list and once as the root. */
     if (n->tree->root == n->node)
         n->tree->root = NULL;
-    n->tree->orphans = g_list_prepend(n->tree->orphans, n->node);
+    xml_orphan(n->tree, n->node);
     n->node = NULL;
     return JS_UNDEFINED;
 }
@@ -913,22 +946,54 @@ static JSValue xml_node_set_namespace(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
     }
 
-    /* Reuse the declaration already in reach, or it would be written twice.
-     * A detached element has no document and so no ancestors to search, which
-     * is why the search is skipped rather than handed a NULL. */
-    xmlNsPtr ns = n->node->doc
-                ? xmlSearchNs(n->node->doc, n->node,
-                              prefix ? BAD_CAST prefix : NULL)
-                : NULL;
-    if (!ns || !ns->href || strcmp((const char *)ns->href, uri))
-        ns = xmlNewNs(n->node, BAD_CAST uri,
-                      prefix ? BAD_CAST prefix : NULL);
+    /*
+     * The element's own declarations first, because `xmlNewNs` refuses a
+     * prefix the element already declares -- answering NULL with nothing said.
+     * The same URI again is the declaration there is; another URI for a prefix
+     * already declared here is refused in words, since rewriting it would move
+     * every descendant that uses it along with this element.
+     */
+    xmlNsPtr ns = NULL;
+    for (xmlNsPtr d = n->node->nsDef; d; d = d->next) {
+        bool same = prefix ? d->prefix && !strcmp((const char *)d->prefix, prefix)
+                           : !d->prefix;
+        if (!same)
+            continue;
+        if (!d->href || strcmp((const char *)d->href, uri)) {
+            JSValue e = JS_ThrowTypeError(ctx, "SetNamespace: <%s> already "
+                                          "declares %s%s%s as '%s'",
+                                          (const char *)n->node->name,
+                                          prefix ? "the prefix '" : "the default "
+                                                                    "namespace",
+                                          prefix ? prefix : "",
+                                          prefix ? "'" : "",
+                                          d->href ? (const char *)d->href : "");
+            JS_FreeCString(ctx, uri);
+            if (prefix)
+                JS_FreeCString(ctx, prefix);
+            return e;
+        }
+        ns = d;
+        break;
+    }
+
+    /* Then the one in reach, or it would be written twice.  A detached element
+     * has no document and so no ancestors to search, which is why that search
+     * is skipped rather than handed a NULL. */
+    if (!ns && n->node->doc) {
+        ns = xmlSearchNs(n->node->doc, n->node, prefix ? BAD_CAST prefix : NULL);
+        if (ns && (!ns->href || strcmp((const char *)ns->href, uri)))
+            ns = NULL;
+    }
+    if (!ns)
+        ns = xmlNewNs(n->node, BAD_CAST uri, prefix ? BAD_CAST prefix : NULL);
 
     JS_FreeCString(ctx, uri);
     if (prefix)
         JS_FreeCString(ctx, prefix);
     if (!ns)
-        return JS_EXCEPTION;
+        return JS_ThrowTypeError(ctx, "SetNamespace: libxml2 refused the "
+                                      "declaration");
 
     xmlSetNs(n->node, ns);
     return JS_UNDEFINED;

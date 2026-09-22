@@ -2415,18 +2415,24 @@ GLOBAL.Record = class Record {
      * the modelled siblings -- before the first one declared after it -- and
      * never moves anything the shape does not know about. */
     static #xmlInsert(el, name, order) {
-        const later = order.slice(order.indexOf(name) + 1);
-        const kids  = el.Children;
-        let   at    = -1;
-
-        for (let i = 0; i < kids.length; i++)
-            if (later.includes(kids[i].Name)) { at = i; break; }
+        const at = Record.#xmlSlot(el, name, order);
 
         /* The answer is the node that is **in this tree**: a `Xml.Element` is
          * detached, so `Insert`/`Add` copy it in and the caller writing the
          * value has to write the copy -- the original stays where it was. */
         const made = Xml.Element(name);
         return at >= 0 ? el.Insert(at, made) : el.Add(made);
+    }
+
+    /* Where an element of `name` goes when there is none: before the first
+     * child the declaration puts after it, -1 for the end. */
+    static #xmlSlot(el, name, order) {
+        const later = order.slice(order.indexOf(name) + 1);
+        const kids  = el.Children;
+
+        for (let i = 0; i < kids.length; i++)
+            if (later.includes(kids[i].Name)) return i;
+        return -1;
     }
 
     /* An empty list takes its items out -- and the wrapper with them when
@@ -2486,7 +2492,7 @@ GLOBAL.Record = class Record {
         }
 
         existing.forEach((node, i) => { if (!used[i]) node.Remove(); });
-        Record.#xmlPlace(holder, itemName, wanted);
+        Record.#xmlPlace(holder, itemName, wanted, field.in ? null : order);
     }
 
     /*
@@ -2494,8 +2500,15 @@ GLOBAL.Record = class Record {
      * detached elements, and `Insert` copies what comes from another tree,
      * which is exactly what putting one here means; an item already in
      * position is a no-op at the C level.
+     *
+     * An item past the last one there is goes **after** that one, never to
+     * the end of the holder: with no `in` the holder is the record's own
+     * element, and its end is past every field declared later and everything
+     * the shape does not model -- `<Line/><Total/><Line/>`, which an
+     * `xsd:sequence` refuses.  With none there at all, `order` (the record's
+     * own element only) says where the first one goes.
      */
-    static #xmlPlace(holder, itemName, wanted) {
+    static #xmlPlace(holder, itemName, wanted, order) {
         for (let i = 0; i < wanted.length; i++) {
             const kids = holder.Children;
             let   seen = 0;
@@ -2505,6 +2518,15 @@ GLOBAL.Record = class Record {
                 if (kids[j].Name !== itemName) continue;
                 if (seen === i) { at = j; break; }
                 seen++;
+            }
+
+            if (at < 0) {
+                let last = -1;
+                for (let j = 0; j < kids.length; j++)
+                    if (kids[j].Name === itemName) last = j;
+                at = last >= 0 ? last + 1
+                   : order     ? Record.#xmlSlot(holder, itemName, order)
+                   : -1;
             }
 
             if (at < 0) holder.Add(wanted[i]);

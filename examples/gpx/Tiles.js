@@ -151,9 +151,13 @@ class Tiles {
                 return;
             }
 
+            /* A 304 can answer a request dated by the file's mtime alone, so
+             * there may be no record to refresh: it starts one. */
             if (r.Status === 304 && File.Exists(path)) {
-                saved.Expires = this.expiry(r.Headers);
-                File.SaveJson(this.meta(z, x, y), saved);
+                const record = saved || { Etag: r.Headers["etag"] || "",
+                                          Saved: Date.now() };
+                record.Expires = this.expiry(r.Headers);
+                File.SaveJson(this.meta(z, x, y), record);
                 this.states[key] = "ok";
                 this.checked++;
             } else if (r.Status === 200) {

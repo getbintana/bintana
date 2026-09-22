@@ -104,6 +104,11 @@ An `xmlns` declaration is not in `AttributeNames()` and cannot be read with
 | `Namespace` (ro) | the URI, `""` when there is none |
 | `SetNamespace(uri, [prefix])` | puts the element in that namespace, reusing a declaration already in reach |
 
+Asking twice for the same namespace is one declaration. A *different* URI for a
+prefix (or a default namespace) the element already declares throws, naming the
+one it has: rewriting that declaration would move every descendant using it
+along with the element.
+
 A name that is not one — with a space in it, say — is refused at `Add` and
 `Element` rather than written into a document no parser could read.
 
@@ -130,8 +135,12 @@ every wrapper under it — and one that was not repointed is memory that has bee
 freed. The idiom is always `const el = parent.Add(Xml.Element("Task"))`, and a
 freshly built `Xml.Element` is *always* in another tree.
 
-`Remove()` takes the node out and its wrapper stops answering, rather than
-reading freed memory. `Copy()` first if the subtree is wanted elsewhere.
+`Remove()` takes the node out and **that** wrapper stops answering, rather than
+reading freed memory. `Copy()` first if the subtree is wanted elsewhere. A
+wrapper is not the node — two `Find`s of one element are two wrappers — so
+another one taken before the `Remove()` still answers, about a node that is now
+detached, and can `Add` it back. So can a child kept across a `Text`
+assignment, which detaches the children without silencing anybody.
 
 ## Writing
 
@@ -165,8 +174,10 @@ off the main thread.
   not an answer; the file road adds which file.
 - **An attribute read back `null`.** There is no such attribute. `""` means one
   is there and empty, which is a different fact.
-- **A node stopped answering.** It was `Remove()`d, or its parent's `Text` was
-  assigned. `Copy()` before either, when the subtree is wanted again.
+- **A node stopped answering.** That wrapper was `Remove()`d. `Copy()` first
+  when the subtree is wanted again, or keep a second wrapper to `Add` it back.
+- **A child is no longer under its parent, and still answers.** The parent's
+  `Text` was assigned, which detaches the children it replaces.
 - **`Add` answered a different node than was handed in.** The argument came from
   another document and was copied; use the answer.
 - **`Available` is `false`.** This build has no libxml2; CMake printed which

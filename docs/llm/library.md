@@ -281,7 +281,10 @@ A **document** answers `Root` (→ element, or `null`). An **element** answers:
 copies, because moving a subtree would have to repoint every wrapper under it
 and one that was not repointed is a dangling pointer. The idiom that always
 reads right is `const el = parent.Add(Xml.Element("Task"))`. `Remove()` takes the
-node out for good and its wrapper stops answering — `Copy()` first to keep it.
+node out and *that* wrapper stops answering — `Copy()` first to keep it; another
+wrapper of the same element still answers, detached, and can `Add` it back.
+`SetNamespace` twice with one URI is one declaration; another URI for a prefix
+the element already declares throws, naming the one it has.
 A broken name (`Add("a b")`) throws rather than writing a document no parser can
 read.
 

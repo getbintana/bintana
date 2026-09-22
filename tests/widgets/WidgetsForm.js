@@ -9157,6 +9157,60 @@ function Main() {
         Xml.Element("Lone").Remove();
         Xml.Element("Lone").Add("Child").Remove();
 
+        /* Wrappers are not unique -- two `Find`s are two of them -- so the
+         * orphan list is kept by the node and not by the wrapper.  Each of
+         * these was a double free at teardown, which is when the trees below
+         * go: removing through a second wrapper put the node on the list
+         * twice, and a child kept across a `Text` assignment could be added
+         * back while still on it.  What they assert is the tree afterwards;
+         * `tests/asan.sh` is what says the teardown is clean. */
+        const twice = Xml.Parse("<a><X/><Y/></a>");
+        const xa = twice.Root.Find("X"), xb = twice.Root.Find("X");
+        xa.Remove();
+        xb.Remove();
+        eq("a node removed through two wrappers is removed once",
+           twice.Root.Children.map(c => c.Name).join(","), "Y");
+
+        const back = Xml.Parse("<a><K>k</K></a>");
+        const kid  = back.Root.Children[0];
+        back.Root.Text = "text";
+        back.Root.Add(kid);
+        eq("a child orphaned by Text can be added back",
+           back.Root.Find("K").Text, "k");
+        const kidToo = back.Root.Find("K");
+        kid.Remove();
+        back.Root.Add(kidToo);
+        eq("...and removed and added again", back.Root.FindAll("K").length, 1);
+
+        /* The root of a detached tree can be moved under one of its own
+         * orphans, and then it is not the root any more -- or teardown frees
+         * it inside the orphan and again as the root. */
+        const top   = Xml.Element("Top");
+        const under = top.Add("Under");
+        const held  = top.Find("Under");
+        under.Remove();
+        held.Add(top);
+        eq("a detached root moved under its orphan is its child",
+           top.Parent.Name, "Under");
+
+        /* SetNamespace twice with the same URI is the declaration there is,
+         * and a different one for a prefix already declared here says so --
+         * both used to throw with no message at all. */
+        const nsEl = Xml.Element("Env");
+        nsEl.SetNamespace("urn:a");
+        nsEl.SetNamespace("urn:a");
+        eq("the same namespace twice is one declaration",
+           (Xml.Stringify(nsEl).match(/xmlns=/g) || []).length, 1,
+           Xml.Stringify(nsEl));
+        let nsSaid = "";
+        try { nsEl.SetNamespace("urn:b"); } catch (e) { nsSaid = e.message; }
+        check("another URI for a declared default is refused in words",
+              nsSaid.includes("urn:a"), nsSaid);
+        const nsDoc = Xml.Parse('<r xmlns="urn:x"/>');
+        nsSaid = "";
+        try { nsDoc.Root.SetNamespace("urn:y"); } catch (e) { nsSaid = e.message; }
+        check("...on a parsed root too", nsSaid.includes("urn:x"), nsSaid);
+
         /* A name that is not one is refused where it is written, rather than
          * written into a document no parser can read back. */
         throws("an invalid element name is refused", () => Xml.Element("1 a"));
@@ -9462,6 +9516,40 @@ function Main() {
         check("a new item writes its key even at its default",
               Xml.Stringify(freshDoc).includes("<UID>0</UID>"),
               Xml.Stringify(freshDoc));
+
+        /* A list with no `in` lives in the record's own element, so a new item
+         * goes after the last one there -- not to the end of the element, past
+         * the fields declared later and what the shape does not model.  And
+         * with none there at all, before the first field declared after it. */
+        const OrderLine = class extends Record {
+            static Xml = { Root: "Line" };
+            static Fields = { Sku: Field.Text() };
+        };
+        const Order = class extends Record {
+            static Xml = { Root: "Order" };
+            static Fields = {
+                Lines: Field.List(() => OrderLine),
+                Total: Field.Text(),
+            };
+        };
+        const orderDoc = Xml.Parse(
+            "<Order><Line><Sku>a</Sku></Line><Total>1</Total><Extra/></Order>");
+        const order = Order.LoadXml(orderDoc);
+        order.Lines.push(new OrderLine({ Sku: "b" }));
+        order.SaveXml(orderDoc);
+        eq("a new item in the element itself follows the last one",
+           orderDoc.Root.Children.map(c => c.Name).join(","),
+           "Line,Line,Total,Extra");
+        eq("...and is the one that was added",
+           orderDoc.Root.Children[1].Find("Sku").Text, "b");
+
+        const bareDoc = Xml.Parse("<Order><Total>1</Total><Extra/></Order>");
+        const bare = Order.LoadXml(bareDoc);
+        bare.Lines.push(new OrderLine({ Sku: "c" }));
+        bare.SaveXml(bareDoc);
+        eq("with none there, the first goes where the declaration puts it",
+           bareDoc.Root.Children.map(c => c.Name).join(","),
+           "Line,Total,Extra");
 
         /* A list emptied takes its items -- and its wrapper -- with it. */
         live.Tasks = [];

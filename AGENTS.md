@@ -3374,6 +3374,32 @@ bag. Five things are worth knowing before touching either half:
   the last wrapper goes. That is why `Remove()` makes the wrapper throw instead
   of reading freed memory, and why a node wrapper is a reference to a tree and
   not to a document.
+  **And wrappers are not unique, so the orphan list is kept by the node.** Two
+  `Find`s of one element are two wrappers, and `Remove()` silences only its
+  own: the second one's `Remove()` put the node on the list twice, and a child
+  kept across a `Text` assignment could be `Add`ed back while still on it --
+  both a **double free at teardown**, with every assertion green, because the
+  free happens when the tree dies and not when the mistake is made. Measured:
+  the regression in `testXmlFiles` reported `attempting double-free` under
+  `build-asan/` before the fix and is clean after it. `xml_orphan` and
+  `xml_adopt` are the only two doors now -- on the list at most once, and only
+  while parentless -- and a same-tree move of a detached tree's root (which can
+  only land under one of its own orphans) clears `tree->root` as `Remove()`
+  does. **A new verb that detaches or re-parents a node goes through those
+  two**, and `tests/asan.sh` is the only thing that will say it did not.
+- **A list with no `in` lives in the record's own element, so "append" is the
+  wrong default for a new item.** `#xmlPlace` used to `Add` an item past the
+  last one there, which put it after every later field and every unmodelled
+  element -- `<Line/><Total/><Line/>`, which an `xsd:sequence` refuses. The
+  MSPDI tests could not see it because every list there is `in: "Tasks"`. It
+  goes after the last item of its name now, and with none there, where
+  `#xmlSlot` (the same answer `#xmlInsert` gives a scalar) puts it.
+- **`xmlNewNs` answers NULL for a prefix the element already declares, and says
+  nothing.** `SetNamespace` returned `JS_EXCEPTION` with no exception set --
+  twice on one `Xml.Element` (no document, so the search was skipped), or a new
+  URI on a parsed root with a default `xmlns`. It reads the element's own
+  `nsDef` first now: the same URI is reused, another is refused naming the one
+  there.
 - **`Field.DateTime` exists because XML's `dateTime` is a date and a time**
   together, which `Date` and `Time` cannot say between them; and the namespace
   on `static Xml` is a **list** because MSPDI's own XSD and its own files
