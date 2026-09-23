@@ -416,6 +416,98 @@ static JSValue js_check_source(JSContext *ctx, JSValueConst this_val,
     return out;
 }
 
+/* Where the parser's declarations land: an array, and how many are in it. */
+typedef struct {
+    JSContext *ctx;
+    JSValue    list;
+    uint32_t   count;
+} SymbolSink;
+
+static const char *symbol_kind_name(JSSymbolKind kind)
+{
+    switch (kind) {
+    case JS_SYMBOL_CLASS:    return "Class";
+    case JS_SYMBOL_METHOD:   return "Method";
+    case JS_SYMBOL_FUNCTION: return "Function";
+    }
+    return "";
+}
+
+static void symbol_report(void *opaque, JSSymbolKind kind, const char *name,
+                          const char *parent, int line)
+{
+    SymbolSink *sink = opaque;
+    JSContext  *ctx  = sink->ctx;
+    JSValue     obj  = JS_NewObject(ctx);
+
+    if (JS_IsException(obj)) {
+        JS_FreeValue(ctx, JS_GetException(ctx));
+        return;
+    }
+
+    JS_SetPropertyStr(ctx, obj, "Name", JS_NewString(ctx, name));
+    JS_SetPropertyStr(ctx, obj, "Kind", JS_NewString(ctx, symbol_kind_name(kind)));
+    JS_SetPropertyStr(ctx, obj, "Line", JS_NewInt32(ctx, line));
+    JS_SetPropertyStr(ctx, obj, "Parent", JS_NewString(ctx, parent ? parent : ""));
+
+    /* The value is taken either way; the count only moves when it landed, so
+     * an array this hands back never has a hole for a caller to trip on. */
+    if (JS_DefinePropertyValueUint32(ctx, sink->list, sink->count, obj,
+                                     JS_PROP_C_W_E) < 0)
+        JS_FreeValue(ctx, JS_GetException(ctx));
+    else
+        sink->count++;
+}
+
+/*
+ * `Application.Symbols(source)`: what the text declares -- classes, methods and
+ * top-level functions, each with the line it is on.
+ *
+ * **The parser answers and not a pattern**, which is the whole point: a regular
+ * expression that looks for declarations finds them in comments and in strings,
+ * needs a rule about indentation to tell a method from a call, and disagrees
+ * with the next regular expression that needs the same answer.  This is the
+ * compiler's own parse, with nothing run, so a file that is halfway through a
+ * word is still worth asking -- see the tolerance note below.
+ *
+ * **A syntax error answers what was collected.**  An editor reads this while
+ * somebody types, so text that does not compile is the ordinary state of a file
+ * and not a failure: the declarations the parser reached are the answer, and
+ * the complaint is `Application.CheckSource`'s to give.
+ *
+ * The handler is installed for the length of this one compile and taken out
+ * after it, so nothing else in the program pays for the feature and the code
+ * the runtime itself compiles -- `rad.js`, every `.form` -- is not walked.
+ */
+static JSValue js_application_symbols(JSContext *ctx, JSValueConst this_val,
+                                      int argc, JSValueConst *argv)
+{
+    const char *src = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    if (!src)
+        return JS_ThrowTypeError(ctx, "Application.Symbols(text) needs text");
+
+    SymbolSink sink = { ctx, JS_NewArray(ctx), 0 };
+    JSRuntime *rt   = JS_GetRuntime(ctx);
+
+    JS_SetSymbolHandler(rt, symbol_report, &sink);
+
+    JSValue r = JS_Eval(ctx, src, strlen(src), "<symbols>",
+                        JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_STRICT |
+                        JS_EVAL_FLAG_COMPILE_ONLY);
+
+    JS_SetSymbolHandler(rt, NULL, NULL);
+    JS_FreeCString(ctx, src);
+
+    /* Compiled and not run, so the only thing it can hand back is an error --
+     * and the symbols collected before it are the answer, not the error. */
+    if (JS_IsException(r))
+        JS_FreeValue(ctx, JS_GetException(ctx));
+    else
+        JS_FreeValue(ctx, r);
+
+    return sink.list;
+}
+
 static bool is_identifier(const char *s)
 {
     if (!s || !*s || (!g_ascii_isalpha(*s) && *s != '_' && *s != '$'))
@@ -1060,6 +1152,17 @@ static bool install_globals(BtaApp *app)
      * string-to-code hatch does not have to stay open for it. */
     JS_SetPropertyStr(ctx, application, "CheckSource",
                       JS_NewCFunction(ctx, js_check_source, "CheckSource", 1));
+
+    /*
+     * `Application.Symbols(text)`: what the text declares, with the line of
+     * each -- `[{ Name, Kind, Line, Parent }]`, from the parser that will run
+     * it.  Published for the same reason `CheckSource` is: an editor that
+     * lists a file's declarations should not have to guess at them with a
+     * pattern, and the answer belongs to the compiler and not to one
+     * application.
+     */
+    JS_SetPropertyStr(ctx, application, "Symbols",
+                      JS_NewCFunction(ctx, js_application_symbols, "Symbols", 1));
 
     /*
      * `Application.LibraryPath(name, [project])`: where a library by that name

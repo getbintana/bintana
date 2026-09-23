@@ -642,6 +642,44 @@ JS_EXTERN JSValue JS_DebugEval(JSContext *ctx, int frame, const char *expr);
    ownership of `value` either way. */
 JS_EXTERN bool JS_DebugSetLocal(JSContext *ctx, int frame, const char *name,
                                 JSValue value);
+
+/* Bintana patch: the declarations of a source, for an editor.
+ *
+ * An editor that wants to list what a file declares should ask the parser that
+ * is going to run it, and not a regular expression: the parser knows what a
+ * comment, a string and a nested class are, and a pattern knows what they look
+ * like.  Bintana's outline, its handler marks and its go-to-symbol all read the
+ * text this way now, which is what retired four patterns that disagreed.
+
+ * The handler is called while the source is compiled -- JS_Eval with
+ * JS_EVAL_FLAG_COMPILE_ONLY and nothing runs -- in source order, with borrowed
+ * C strings that are only valid for the call.  A class comes before its
+ * methods, and a method's `parent` is the name of the class it is in.  **The
+ * one exception is an anonymous class expression, which is reported after the
+ * methods it contains**, because its name arrives with the assignment that
+ * wraps it (`Ide.Events = class {}`); a class written with a name of its own is
+ * reported where it stands.
+ *
+ * **Installed around one compile and taken out after it.**  A handler that
+ * stayed would report `rad.js` and the code of every `.form` at startup, and
+ * the flag that would scope it instead is another way to say the same thing:
+ * what an embedder wants is one compile's answer, so it asks for one compile.
+ *
+ * A syntax error does not undo what was collected -- half a file is what an
+ * editor is looking at while somebody types, and the error itself is
+ * `Application.CheckSource`'s answer, not this one's.
+ *
+ * See runtime/src/bta_runtime.c for the only consumer there is. */
+typedef enum {
+    JS_SYMBOL_CLASS,
+    JS_SYMBOL_METHOD,
+    JS_SYMBOL_FUNCTION,
+} JSSymbolKind;
+typedef void JSSymbolHandler(void *opaque, JSSymbolKind kind,
+                             const char *name, const char *parent, int line);
+JS_EXTERN void JS_SetSymbolHandler(JSRuntime *rt, JSSymbolHandler *cb,
+                                   void *opaque);
+
 JS_EXTERN int JS_AddIntrinsicWeakRef(JSContext *ctx);
 JS_EXTERN int JS_AddPerformance(JSContext *ctx);
 JS_EXTERN int JS_AddIntrinsicDOMException(JSContext *ctx);

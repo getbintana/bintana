@@ -767,6 +767,7 @@ declare const Application: {
     LibraryPath(...values: any[]): any;
     Name: any;
     Quit(...values: any[]): any;
+    Symbols(...values: any[]): any;
     Version: any;
 };
 

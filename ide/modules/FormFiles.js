@@ -823,18 +823,22 @@ Ide.FormFiles = class FormFiles {
      * pasted subtree asking about one name after another and reading the file
      * once is the difference between a lookup and a lot of I/O.
      *
-     * Anchored at four spaces: a method of the class, which is where a handler
-     * lives. `\b` alone would find `this.Button1_Click()` in a *call* and count
-     * a name as answered because something mentioned it.
+     * **The methods come from `Application.Symbols`, which is the parser's
+     * answer.** This was a pattern anchored at four spaces, and the anchor was
+     * the whole difficulty: `\b` alone found `this.Button1_Click()` in a *call*
+     * and counted a handler as written because something mentioned it, while
+     * exactly four spaces missed a method somebody indented differently. The
+     * compiler knows which of the two it is looking at, and this is where that
+     * is asked for.
      */
     static handlersIn(source, controlName) {
         if (!source || !controlName) return [];
 
-        const re = new Regex(
-            `^ {4}(?:static\\s+|async\\s+)*${Regex.Escape(controlName)}_([A-Za-z][\\w$]*)\\s*\\(`,
-            { Multiline: true });
-
-        return re.Matches(source).map((match) => match.Group(1));
+        const prefix = `${controlName}_`;
+        return Application.Symbols(source)
+                          .filter((s) => s.Kind === "Method" &&
+                                         s.Name.startsWith(prefix))
+                          .map((s) => s.Name.slice(prefix.length));
     }
 
     openHandler(controlName, eventName) {
@@ -869,18 +873,17 @@ Ide.FormFiles = class FormFiles {
 
         const method = `${controlName}_${eventName}`;
         const source = editor ? editor.Text : File.Load(jsPath);
-        /* **The anchored rule, the same one `handlersIn` uses.** `\b` alone
-         * found `this.BtnOk_Click()` inside a call and took it for the
-         * declaration: the menu marked the handler as written and a double
-         * click jumped to the call instead of writing the method. */
-        const already = new Regex(
-            `^ {4}(?:static\\s+|async\\s+)*${Regex.Escape(method)}\\s*\\(`,
-            { Multiline: true });
+        /* The parser's answer, the same one `handlersIn` reads: a pattern found
+         * `this.BtnOk_Click()` inside a call and took it for the declaration,
+         * and the menu marked the handler as written while the double click
+         * jumped to the call instead of writing the method. */
+        const found = Application.Symbols(source)
+                                 .find((s) => s.Kind === "Method" &&
+                                              s.Name === method);
 
         let line;
-        const found = already.Match(source);
         if (found) {
-            line = Text.LineOf(source, found.Index);
+            line = found.Line;
         } else {
             const written = insertMethod(source, base, method);
             if (!written) {

@@ -8,6 +8,7 @@ The running program: what it is called, where its files are, and how it ends.
 |---|---|---|
 | `Arguments` | whatever followed the project directory on the command line | [the project](#the-project) |
 | `CheckSource(text)` | → `null` if the text is valid JavaScript, else `{ Message, Line, Column }` | [asking about the machine](#asking-about-the-machine) |
+| `Symbols(text)` | → what the text declares, with the line of each | [asking about the machine](#asking-about-the-machine) |
 | `ConfigDirectory` | `~/.config/bintana/<name>`, created at startup | [where its files are](#where-its-files-are) |
 | `DecorationLayout` | how this desktop arranges a title bar | [asking about the machine](#asking-about-the-machine) |
 | `Directory` | the project directory, absolute | [where its files are](#where-its-files-are) |
@@ -48,6 +49,15 @@ The running program: what it is called, where its files are, and how it ends.
 | `HasCommand(name)` | whether that program is on the PATH. **The question that does not need an exception**, since [`Exec`](Exec.md) throws when the program is not there |
 | `DecorationLayout` | how this desktop arranges a title bar — which buttons, and on which side. What a drawn title bar reads to look like the real one |
 | `CheckSource(text)` | `null` when the text is valid JavaScript, else `{ Message, Line, Column }`. What an editor checks a file with before saving it, and the answer `new Function(src)` is not allowed to give |
+| `Symbols(text)` | `[{ Name, Kind, Line, Parent }]`: the classes, methods and top-level functions the text declares, with the line of each. What an editor lists a file with, and the answer a pattern is not allowed to guess at |
+
+**`Symbols` is `CheckSource`'s compile asked a different question.** `Kind` is
+`"Class"`, `"Method"` or `"Function"`, `Parent` is the class a method is in and
+`""` otherwise, and the parser is the one that would run the file — so a
+declaration in a comment or a string is not one, and a method is a method at any
+indentation. Text that does not compile answers what the parser reached before
+the error: an editor reads this while somebody types, and the complaint is
+`CheckSource`'s to give. Nothing runs.
 
 ## Libraries
 

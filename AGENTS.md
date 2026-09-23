@@ -412,9 +412,9 @@ a test runner, a build step, a tool that reads the icon themes off the disk. It 
 about a GTK binding, which is the whole point of `tests/`. See
 [`docs/formats.md`](docs/formats.md#main-a-project-with-no-window).
 
-## The five patches in vendor/
+## The six patches in vendor/
 
-All five are marked `Bintana patch` in the source, and an upgrade that drops
+All six are marked `Bintana patch` in the source, and an upgrade that drops
 one takes a feature or brings a bug back with it. Grep for the marker after any
 QuickJS upgrade; there is no build-time check that they survived.
 
@@ -569,6 +569,40 @@ somebody writes the word. `tests/widgets` asserts it
 (`testCuratedLanguage`): seven spellings -- declaration, expression, arrow,
 class method, object method, async generator, and one that awaits -- each
 refused with a message and a column.
+
+### 6. The parser reports what it declared
+
+`quickjs.h` gains `JS_SetSymbolHandler` and `JSSymbolKind`, and the parser calls
+the handler -- installed for one compile and taken out after it -- from
+`js_parse_class` (the class at its name, each method at its own), from
+`js_parse_function_decl2` (a top-level `function`), and from `set_object_name`
+and `js_parse_assign_expr2` (an anonymous class expression, named by the
+assignment that wraps it). It is what `Application.Symbols` is: classes, methods
+and top-level functions with their line, so an editor does not have to guess
+with a pattern.
+
+**The four patterns it retired are the argument.** `FormFiles.hasHandler`,
+`openHandler`, `handlersIn` and `Navigator.SYMBOL` each answered *what does this
+file declare* differently: one anchored at four spaces, one matched a mention in
+a call, all of them found a method in a comment, and the IDE marked handlers as
+written and jumped to calls because of it. A parser knows what a comment and a
+string are, and there is one of it. It is also faster: **3.4 ms against 5.1 and
+6.9 ms**, measured on the IDE's own 110 KB `MainForm.js`.
+
+**Three things about the patch itself are load-bearing.** The handler lives on
+the runtime and is installed around a single `JS_Eval(COMPILE_ONLY)` rather than
+gated by a flag, because what an embedder wants is one compile's answer and a
+handler that stayed would report `rad.js` and every `.form`; a syntax error
+still reports what was collected, because half a file is the ordinary state of
+one somebody is typing in; and an anonymous class expression is reported *after*
+its methods, since its name only exists once the assignment around it is parsed
+-- the one case where the order is not source order.
+
+**Dropping this patch does not fail to build.** `Application.Symbols` compiles
+and answers `[]` for every source, so the IDE's outline, its handler marks and
+its go-to-symbol all go empty together -- with the suite red in `tests/widgets`
+(`testCuratedLanguage` asserts the classes, methods and lines) and in `tests/ide`
+(`goto` asserts a method typed and not saved is still found).
 
 ## Memory rules
 
@@ -1221,7 +1255,7 @@ Three things that will waste your time:
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
-  364 assertions against 2459 for the whole project -- 9.4 s against 268 on this
+  364 assertions against 2459 for the whole project -- 9.4 s against 264 on this
   machine -- which is what makes iterating on an early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.

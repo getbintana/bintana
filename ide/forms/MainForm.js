@@ -438,8 +438,8 @@ class MainForm extends Form {
          * **One read of the `.js` and one pass over it for every event.** This
          * runs from `refresh()`, which runs on every keystroke, and asking
          * `hasHandler` per event read the file and compiled a fresh regex each
-         * time. The anchored rule `handlersIn` uses is also what makes the
-         * answer right: `\bBtnOk_Click\s*\(` finds a *call* and marked an
+         * time. What makes the answer right is that `handlersIn` asks the
+         * parser now: `\bBtnOk_Click\s*\(` found a *call* and marked an
          * unwritten handler as written.
          */
         const written = control

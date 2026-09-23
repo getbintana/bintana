@@ -3137,8 +3137,15 @@ function* p_handlers(ide) {
      * makes it survive the project being closed: asked again from nothing, the
      * answer is the same.
      */
+    /* The method goes inside the class body, where a handler lives: a
+     * `Name_Event() {}` after the closing brace is a call and a block, and the
+     * parser does not report it as a method -- which is the point of asking a
+     * parser instead of a pattern anchored at four spaces. */
+    const brace = wasJs.lastIndexOf("}");
     eq("a name whose handlers are still written is taken",
-       Ide.FormFiles.handlersIn(wasJs + `\n    ${doomed}_Click() {}\n`, doomed).length, 1);
+       Ide.FormFiles.handlersIn(wasJs.slice(0, brace) +
+                                `    ${doomed}_Click() {}\n` +
+                                wasJs.slice(brace), doomed).length, 1);
     eq("and a mere mention of it in a call is not a handler",
        Ide.FormFiles.handlersIn(`        this.${doomed}_Click();\n`, doomed).length, 0);
 
@@ -3449,10 +3456,13 @@ function* p_goto(ide) {
      */
     const onScreen = ide.Editor.Text;
 
-    ide.Editor.Text = `    later() {\n    }\n${onScreen}`;
+    /* Inside the class body, which is where a method is one: the answer comes
+     * from the parser now, and a `later() {}` before the `class` line is a call
+     * and a block -- not a method -- so it would not be found at all. */
+    ide.Editor.Text = onScreen.replace("{\n", "{\n    later() {\n    }\n");
     yield;
     const unsaved = nav.find("later");
-    eq("a method typed and not saved is found", unsaved && unsaved.line, 1);
+    eq("a method typed and not saved is found", unsaved && unsaved.line, 2);
     eq("and the ones under it have moved with it", nav.find("greet").line, 9);
 
     ide.Editor.Text = onScreen;

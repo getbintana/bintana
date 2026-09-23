@@ -34,11 +34,12 @@ runtime/js/rad.js the JS half, baked into the binary
 ```
 
 `vendor/quickjs` is quickjs-ng v0.16.1, built as a static library, and it
-carries **four local patches**: the arithmetic hook that gives `Decimal` its
+carries **six local patches**: the arithmetic hook that gives `Decimal` its
 operators, `js_atod` so `JSON.parse` does not read the locale's decimal comma,
-the refusal message that names the property it would not add, and the
-debugger's hook with its six readers. All four are in
-[`AGENTS.md`](../AGENTS.md#the-four-patches-in-vendor), each with what dropping
+the refusal message that names the property it would not add, the debugger's
+hook with its six readers, the refusal of `async` where it is written, and the
+parser's symbol report behind `Application.Symbols`. All six are in
+[`AGENTS.md`](../AGENTS.md#the-six-patches-in-vendor), each with what dropping
 it costs. GTK4 (4.10 or newer) and GtkSourceView 5 come from pkg-config and are
 required; sqlite3, libsystemd, libsoup-3.0, gstreamer-1.0 and VTE come from
 pkg-config and are not.

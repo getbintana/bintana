@@ -774,10 +774,10 @@ jump**. And the runtime's own names — `TableView`, `File` — are not here eit
 which is not a gap: they have no definition in this project to go to, and F1
 already opens their page. Two keys, two questions.
 
-**A declaration is not a mention.** What it looks for is a method four spaces into
-a class body, which is the same anchor `FormFiles.handlersIn` uses and for the
-same reason: `\bgreet\s*\(` finds `this.greet()` in a *call* and calls it a
-declaration.
+**A declaration is not a mention.** The methods come from
+`Application.Symbols` — the compiler's own parse with nothing run — so
+`this.greet()` in a call is not one, and neither is a `greet()` inside a comment:
+two things four patterns anchored at four spaces could not tell between them.
 
 **What a tab says beats what the file says.** A method written a moment ago and
 not yet saved is still a method, and jumping to where the file on disk has it
@@ -810,13 +810,10 @@ per row while it filters and what Enter calls to find the first row still showin
 A second expression for the second question is how the two come to disagree — the
 same argument the design commands' `Action` settled elsewhere in this file.
 
-Which methods there are is `Navigator.symbols`, so the one regular expression that
-knows what a declaration looks like has one home and `SymbolForm` does no parsing:
-it is handed a list and hands back a line.
-
-A permanent *Outline* panel would be the larger version of this, and it is not
-here: the side panel is hidden unless a form is showing, and a code tab getting one
-is a bigger change than the question warrants.
+Which methods there are is `Navigator.symbols`, which asks the runtime's parser,
+so there is one answer to *what is a declaration* and `SymbolForm` does no
+parsing: it is handed a list and hands back a line. The permanent version of this
+is [the outline](#the-outline-beside-the-code).
 
 **Nothing is cached**, and that is deliberate. An index of the project's classes
 would have to be thrown away whenever a class is renamed, a file is added or a tab
@@ -1509,8 +1506,9 @@ that one asks you to know the name already.
 `Navigator.symbols` reads the text on screen. An index would have to be thrown
 away whenever a method is renamed or a tab is edited, and getting that wrong
 points at a line that no longer declares anything — [the same bargain and the
-same argument](#f12-and-where-a-name-is-declared). What it costs is one regular
-expression over one file.
+same argument](#f12-and-where-a-name-is-declared). What it costs is one parse of
+one file, and it is cheaper than the pattern it replaced: **3.4 ms against
+6.9 ms** on this IDE's own 110 KB `MainForm.js`, measured.
 
 It runs on the pause after typing, and **`Ide.Live` owns that timer**: one pause
 should mean one pass over the file however many readers it has. A pass that found
@@ -2133,9 +2131,9 @@ knows about is exactly how the two halves met.
 Reclaiming the old code deliberately is a **rename** — the gesture that says
 *this control is that one* — and renaming already carries handlers along.
 
-`FormFiles.handlersIn(source, name)` is the reader both halves use, anchored at
-four spaces so a method of the class counts and a `this.Button1_Click()` in a
-call does not: a mention is not an answer.
+`FormFiles.handlersIn(source, name)` is the reader both halves use, and it asks
+`Application.Symbols`: a method of the class counts and a `this.Button1_Click()`
+in a call does not — a mention is not an answer.
 
 Renaming a control from the property grid carries its handlers along in the `.js`,
 with two precise patterns instead of a global replace:

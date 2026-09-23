@@ -377,6 +377,11 @@ struct JSRuntime {
     void *interrupt_opaque;
     /* Bintana patch: see JS_SetArithHandler in quickjs.h. */
     JSArithHandler *arith_handler;
+    /* Bintana patch: see JS_SetSymbolHandler in quickjs.h.  Installed for one
+     * compile and NULL the rest of the time, so the parser's test is one load
+     * per declaration. */
+    JSSymbolHandler *symbol_handler;
+    void *symbol_opaque;
 
     JSPromiseHook *promise_hook;
     void *promise_hook_opaque;
@@ -8982,6 +8987,13 @@ void JS_SetDebugHandler(JSRuntime *rt, JSDebugHandler *cb, void *opaque)
 {
     rt->debug_handler = cb;
     rt->debug_opaque  = opaque;
+}
+
+/* Bintana patch: see JS_SetSymbolHandler in quickjs.h. */
+void JS_SetSymbolHandler(JSRuntime *rt, JSSymbolHandler *cb, void *opaque)
+{
+    rt->symbol_handler = cb;
+    rt->symbol_opaque  = opaque;
 }
 
 void JS_DebugStopOnThrow(JSRuntime *rt, bool on)
@@ -23088,6 +23100,10 @@ typedef struct JSParseState {
     JSFunctionDef *cur_func;
     bool is_module; /* parsing a module */
     bool allow_html_comments;
+    /* Bintana patch: the line an anonymous class expression started on, so
+     * that `Foo = class {}` can be reported as `Foo` when the assignment
+     * names it.  0 when there is none; `js_parse_init` memsets the state. */
+    int pending_class_line;
 } JSParseState;
 
 typedef struct JSOpCode {
@@ -25868,6 +25884,42 @@ static int js_parse_skip_parens_token(JSParseState *s, int *pbits, bool no_line_
     return tok;
 }
 
+/*
+ * Bintana patch: report one declaration to the embedder, if it asked.
+ *
+ * The strings are built here and borrowed for the call -- an atom is not a C
+ * string and the handler is not allowed to know that.  A conversion that fails
+ * is this function's exception and not the parser's: it is consumed, the
+ * declaration is left out, and the compile carries on.  See JS_SetSymbolHandler
+ * in quickjs.h.
+ */
+static void js_report_symbol(JSParseState *s, JSSymbolKind kind,
+                             JSAtom name, JSAtom parent, int line)
+{
+    JSRuntime  *rt = s->ctx->rt;
+    const char *cname, *cparent;
+
+    if (!rt->symbol_handler || name == JS_ATOM_NULL)
+        return;
+
+    cname = JS_AtomToCString(s->ctx, name);
+    if (!cname) {
+        JS_FreeValue(s->ctx, JS_GetException(s->ctx));
+        return;
+    }
+    cparent = (parent != JS_ATOM_NULL)
+        ? JS_AtomToCString(s->ctx, parent) : NULL;
+    if (parent != JS_ATOM_NULL && !cparent)
+        JS_FreeValue(s->ctx, JS_GetException(s->ctx));
+
+    rt->symbol_handler(rt->symbol_opaque, kind, cname,
+                       cparent ? cparent : "", line);
+
+    JS_FreeCString(s->ctx, cname);
+    if (cparent)
+        JS_FreeCString(s->ctx, cparent);
+}
+
 static void set_object_name(JSParseState *s, JSAtom name)
 {
     JSFunctionDef *fd = s->cur_func;
@@ -25893,6 +25945,14 @@ static void set_object_name(JSParseState *s, JSAtom name)
         put_u32(fd->byte_code.buf + define_class_pos + 1,
                 JS_DupAtom(s->ctx, name));
         fd->last_opcode_pos = -1;
+        /* Bintana patch: this is `Foo = class {}` getting its name.  The class
+         * was anonymous when js_parse_class saw it, so it reported nothing and
+         * left the line here; now the assignment says what to call it. */
+        if (s->pending_class_line > 0) {
+            js_report_symbol(s, JS_SYMBOL_CLASS, name, JS_ATOM_NULL,
+                             s->pending_class_line);
+            s->pending_class_line = -1;
+        }
     }
 }
 
@@ -26238,6 +26298,10 @@ static __exception int js_parse_class(JSParseState *s, bool is_class_expr,
     const uint8_t *class_start_ptr = s->token.ptr;
     const uint8_t *start_ptr;
     ClassFieldsDef class_fields[2];
+    /* Bintana patch: the `class` keyword's line, and a clean slate for the
+     * anonymous case `set_object_name` finishes. */
+    int class_line = s->token.line_num;
+    s->pending_class_line = -1;
 
     /* classes are parsed and executed in strict mode */
     is_strict_mode = fd->is_strict_mode;
@@ -26256,6 +26320,13 @@ static __exception int js_parse_class(JSParseState *s, bool is_class_expr,
         js_parse_error(s, "class statement requires a name");
         goto fail;
     }
+    /* Bintana patch: the class is a declaration the moment its name is read,
+     * so a file that breaks further down still lists what it declared.  An
+     * anonymous class expression has no name here and is reported by
+     * set_object_name if an assignment names it. */
+    if (class_name != JS_ATOM_NULL)
+        js_report_symbol(s, JS_SYMBOL_CLASS, class_name, JS_ATOM_NULL,
+                         class_line);
     if (!is_class_expr) {
         if (class_name == JS_ATOM_NULL)
             class_var_name = JS_ATOM__default_; /* export default */
@@ -26382,6 +26453,9 @@ static __exception int js_parse_class(JSParseState *s, bool is_class_expr,
         if (is_static)
             emit_op(s, OP_swap);
         start_ptr = s->token.ptr;
+        /* Bintana patch: the line the member's own first token is on -- which
+         * is the name and not the `static` or the `(`. */
+        int member_line = s->token.line_num;
         if (prop_type < 0) {
             prop_type = js_parse_property_name(s, &name, true, false, true);
             if (prop_type < 0)
@@ -26431,6 +26505,10 @@ static __exception int js_parse_class(JSParseState *s, bool is_class_expr,
                                         s->token.col_num,
                                         JS_PARSE_EXPORT_NONE, &method_fd))
                 goto fail;
+            /* Bintana patch: a getter and a setter of one name are two
+             * declarations, the way an editor lists them. */
+            js_report_symbol(s, JS_SYMBOL_METHOD, name, class_name,
+                             member_line);
             if (is_private) {
                 method_fd->need_home_object = true; /* needed for brand check */
                 emit_op(s, OP_set_home_object);
@@ -26586,6 +26664,10 @@ static __exception int js_parse_class(JSParseState *s, bool is_class_expr,
                                         s->token.col_num,
                                         JS_PARSE_EXPORT_NONE, &method_fd))
                 goto fail;
+            /* Bintana patch: the constructor, a static method and a plain one
+             * are all methods; a computed name has none to report. */
+            js_report_symbol(s, JS_SYMBOL_METHOD, name, class_name,
+                             member_line);
             if (func_type == JS_PARSE_FUNC_DERIVED_CLASS_CONSTRUCTOR ||
                 func_type == JS_PARSE_FUNC_CLASS_CONSTRUCTOR) {
                 ctor_fd = method_fd;
@@ -26728,6 +26810,9 @@ static __exception int js_parse_class(JSParseState *s, bool is_class_expr,
                executed */
             emit_op(s, OP_set_class_name);
             emit_u32(s, fd->last_opcode_pos + 1 - define_class_offset);
+            /* Bintana patch: `Foo = class {}` is named by the assignment a
+             * moment from now -- see set_object_name. */
+            s->pending_class_line = class_line;
         }
     }
 
@@ -29125,6 +29210,17 @@ static __exception int js_parse_assign_expr2(JSParseState *s, int parse_flags)
         if (op == '=') {
             if ((opcode == OP_get_ref_value || opcode == OP_scope_get_var) && name == name0) {
                 set_object_name(s, name);
+            } else if (s->pending_class_line > 0 &&
+                       get_prev_opcode(s->cur_func) == OP_set_class_name) {
+                /* Bintana patch: `Ide.Events = class {}` -- a member assignment
+                 * names an anonymous class for an editor even though the engine
+                 * leaves it anonymous (`set_object_name` is for the simple-name
+                 * case and the property name is the last segment here).  The
+                 * opcode test is what makes it precise: the pending line is only
+                 * consumed when the value just parsed really was a class. */
+                js_report_symbol(s, JS_SYMBOL_CLASS, name, JS_ATOM_NULL,
+                                 s->pending_class_line);
+                s->pending_class_line = -1;
             }
         } else {
             emit_op(s, op - TOK_MUL_ASSIGN + OP_mul);
@@ -38194,6 +38290,15 @@ static __exception int js_parse_function_decl2(JSParseState *s,
             }
         }
     }
+
+    /* Bintana patch: a function declared at the top level of the file is a
+     * declaration an editor lists; one inside another function is that body's
+     * business.  Methods are reported by js_parse_class, which is the only
+     * place that knows the class they belong to.  `fd` is still the enclosing
+     * function here. */
+    if (func_type == JS_PARSE_FUNC_STATEMENT && fd->parent == NULL)
+        js_report_symbol(s, JS_SYMBOL_FUNCTION, func_name, JS_ATOM_NULL,
+                         function_line_num);
 
     fd = js_new_function_def(ctx, fd, false, is_expr, s->filename,
                              function_line_num, function_col_num);

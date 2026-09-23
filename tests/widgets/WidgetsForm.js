@@ -10572,6 +10572,76 @@ function Main() {
         Error.stackTraceLimit = 10;
 
         /*
+         * **`Application.Symbols`: the same compile, asked what it declared.**
+         *
+         * The parser's answer and not a pattern's, which is the whole point: a
+         * comment and a string cannot produce a declaration, a method is a
+         * method wherever it is indented, and a mention in a call is not a
+         * declaration. This is what the IDE's outline, its handler marks and
+         * its go-to-symbol read now -- four patterns that disagreed, retired.
+         */
+        const sym = Application.Symbols(
+            "function Top() {\n" +              /* 1 */
+            "    function inner() {}\n" +       /* 2 */
+            "}\n" +                             /* 3 */
+            "class One {\n" +                   /* 4 */
+            "    Plain() {}\n" +                /* 5 */
+            "    static Make() {}\n" +          /* 6 */
+            "    get Value() { return 1; }\n" + /* 7 */
+            "    set Value(v) {}\n" +           /* 8 */
+            "}\n" +                             /* 9 */
+            "Ide.Events = class Events {\n" +   /* 10 */
+            "    Click() {}\n" +                /* 11 */
+            "}\n" +                             /* 12 */
+            "const Anon = class {\n" +          /* 13 */
+            "    Only() {}\n" +                 /* 14 */
+            "};\n" +
+            "// class Ghost { Gone() {} }\n" +
+            'const s = "class Fake { Nope() {} }";\n');
+
+        const named = (n) => sym.find((x) => x.Name === n);
+
+        eq("a top-level function is a declaration", named("Top").Kind, "Function");
+        eq("...on the line it is written", named("Top").Line, 1);
+        eq("and one nested inside is not reported",
+           sym.filter((x) => x.Name === "inner").length, 0);
+
+        eq("a class is a declaration", named("One").Kind, "Class");
+        eq("...on its own line", named("One").Line, 4);
+        eq("and its methods belong to it", named("Plain").Parent, "One");
+        eq("...including a static one", named("Make").Kind, "Method");
+        eq("a getter and a setter are two", sym.filter((x) => x.Name === "Value").length, 2);
+        eq("the constructor of a class is not invented",
+           sym.filter((x) => x.Name === "constructor").length, 0);
+
+        eq("a namespaced class expression is named by its own name",
+           named("Events").Kind, "Class");
+        eq("and its method says which class it is in",
+           named("Click").Parent, "Events");
+
+        /* An anonymous class expression is named by the assignment -- and that
+         * name arrives after the body, so it is reported after its methods. */
+        eq("an anonymous class takes the assignment's name",
+           named("Anon").Kind, "Class");
+        eq("...on the line the class starts", named("Anon").Line, 13);
+        eq("...with its methods belonging to nobody yet", named("Only").Parent, "");
+
+        eq("a class in a comment is not a class", named("Ghost"), undefined);
+        eq("nor one inside a string", named("Fake"), undefined);
+        eq("and nothing was invented from the call",
+           sym.filter((x) => x.Name === "Nope").length, 0);
+
+        /* Text that does not compile is the ordinary state of a file somebody
+         * is typing in: the declarations reached are the answer, and the
+         * complaint is `CheckSource`'s. */
+        const part = Application.Symbols(
+            "class Ok {\n    A() {}\n}\nclass Bad extnds X {\n");
+        eq("broken source answers what it reached", part.length, 3);
+        eq("...the class that was complete", part[0].Name, "Ok");
+        eq("...its method", part[1].Name, "A");
+        eq("...and the one the error is in", part[2].Name, "Bad");
+
+        /*
          * **`async` is refused where it is written, in every form it has.**
          *
          * This is the guard on the fifth vendor patch, and it is worth knowing

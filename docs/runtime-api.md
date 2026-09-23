@@ -161,6 +161,7 @@ boundary is the process: the IDE already runs a project as a child.
 | `Icons([contains])` | every icon name the search path offers, sorted; narrowed by substring |
 | `DecorationLayout` | how this desktop arranges a window's title bar — `"icon,menu:minimize,maximize,close"` |
 | `CheckSource(text)` | `null` if the text is valid JavaScript, otherwise `{ Message, Line, Column }` |
+| `Symbols(text)` | `[{ Name, Kind, Line, Parent }]` — the classes, methods and top-level functions the text declares, each with its line, out of the parser that would run it |
 | `LibraryPath(name, [project])` | where a library by that name is, or `""`. The same six-place search `uses` does — published so a tool that opens *other* projects asks about theirs instead of keeping a second copy of the path, since two implementations of one lookup drift and the one that drifts is the one nobody runs from a shell |
 | `Libraries([project])` | the names of every library those six places offer, sorted and deduplicated — a name found twice is the one nearest the project, which is the one `uses` would load. The other direction of the same lookup: one resolves a name, the other says which names there are, which is what an IDE offering them to tick had no way to ask |
 | `OnError` | assign `(message, stack) => …` to take over uncaught errors — **two strings, not the `Error`**: see below |
@@ -220,6 +221,31 @@ prose, which would be a small language inside a value and is the shape this
 project refuses everywhere else. A text with no position leaves both at `0`, which
 is an honest *it does not say* rather than a line 1 nobody chose. `null` is as
 falsy as the `""` it replaces, so `if (bad)` reads the same as it always did.
+
+**`Symbols` is that same compile asked a different question**, and it is what an
+editor should list a file with. A pattern that looks for declarations finds them
+in comments and in strings, needs a rule about indentation to tell a method from
+a call, and disagrees with the next pattern that needs the same answer -- this
+tree had four of them, and the IDE's outline, its handler marks and its
+go-to-symbol read this now. `Kind` is `"Class"`, `"Method"` or `"Function"`,
+`Parent` is the class a method is in and `""` otherwise, and `Line` is 1-based.
+
+```js
+Application.Symbols("class Cart {\n    Total() {}\n}\nfunction Main() {}")
+// [{ Name: "Cart",  Kind: "Class",    Line: 1, Parent: "" },
+//  { Name: "Total", Kind: "Method",   Line: 2, Parent: "Cart" },
+//  { Name: "Main",  Kind: "Function", Line: 4, Parent: "" }]
+```
+
+**Source that does not compile answers what the parser reached.** An editor reads
+this while somebody types, so text that is halfway through a word is the ordinary
+state of a file and not a failure: the declarations before the error are the
+answer, and the complaint is `CheckSource`'s to give. A method being typed is not
+listed until it is whole, which is also what an outline does.
+
+Nothing runs. The parse is the compiler's own and it is cheaper than the
+patterns it replaced: measured on this IDE's own `MainForm.js`, 110 KB, **3.4 ms
+against 5.1 ms** for the handler pattern and **6.9 ms** for the symbol one.
 
 **`DecorationLayout`** is the desktop's `gtk-decoration-layout`: what goes at the
 start of a title bar, a colon, what goes at the end. The window manager reads the
