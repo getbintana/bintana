@@ -193,7 +193,7 @@ class TestForm extends Form {
         this.ListBox1.Add("cuatro");
         eq("Add appends", this.ListBox1.Count, 4);
 
-        this.ListBox1.Remove(0);
+        this.ListBox1.RemoveRow(0);
         eq("Remove drops one", this.ListBox1.Count, 3);
         eq("Remove shifts the rest", this.ListBox1.Items[0], "two");
 

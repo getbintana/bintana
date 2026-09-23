@@ -48,7 +48,8 @@ not repeated here.
 | `ExpandAll()` | opens every node | [a tree](#a-tree) |
 | `ExpandNode(key)` | opens one, and the way to it | [a tree](#a-tree) |
 | `Expanded(key)` | → whether it is open | [a tree](#a-tree) |
-| `Remove(index)` | takes a row out | [the rows](#the-rows-it-holds) |
+| `RemoveRow(index)` | takes a row out. Flat only | [the rows](#the-rows-it-holds) |
+| `RemoveNode(key)` | takes a node out, and its subtree. Tree only | [a tree](#a-tree) |
 | `Row(index)` | → that row's values | [the rows](#the-rows-it-holds) |
 | `Select(index)` | selects a row | [the selection](#the-selection) |
 | `SelectAll()` | every row, with `MultiSelect` | [the selection](#the-selection) |
@@ -191,7 +192,8 @@ row shorter than there are columns simply reads blank in the rest.
 | `Row(index)` | → that row's values, as the array it was given — including any it was given beyond the columns declared |
 | `SetCell(row, column, value)` | one cell, in place. The selection stays where it is |
 | `SetIcon(row, column, name)` | an icon from the theme beside a cell's text. `""` takes it off |
-| `Remove(index)` | takes that row out. In a tree it takes the subtree with it |
+| `RemoveRow(index)` | takes that row out. **Flat only** — a tree says `RemoveNode(key)`, and this one refuses with that sentence |
+| `RemoveNode(key)` | takes that node out, **and the subtree with it**. **Tree only** — a flat table says `RemoveRow(index)` |
 | `Clear()` | empties it — **and forgets which of the three shapes this table was** |
 
 **In a tree, every one of these takes a key where it says `row`** — see
@@ -204,7 +206,7 @@ text, and an icon is a name the desktop draws.
 rows in order, and taking one out shifts every row after it:
 
 ```js
-for (const at of [...this.Files.Selection].reverse()) this.Files.Remove(at);
+for (const at of [...this.Files.Selection].reverse()) this.Files.RemoveRow(at);
 ```
 
 Front to back deletes the wrong rows the moment two are selected, and works
@@ -308,7 +310,7 @@ Give a row a `Key` and the table becomes a hierarchy with headings over it.
 nothing has added yet is not there to go under.
 
 **In a tree, a row is addressed by its key** — `Cell(key, column)`,
-`SetCell(key, …)`, `SetIcon(key, …)`, `Row(key)`, and `Remove(key)`, which takes
+`SetCell(key, …)`, `SetIcon(key, …)`, `Row(key)`, and `RemoveNode(key)`, which takes
 the subtree with it. That is not a second spelling of the same thing: a *position*
 in a tree is a position in the **visible** list, so it moves the moment something
 above it is collapsed. `Index` still says where the highlight is right now, and

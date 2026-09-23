@@ -27,7 +27,7 @@ class ConfirmForm extends Form {
 
         dlg.Text             = title;
         dlg.LblMessage.Text  = message;
-        dlg.BtnYes.Text      = acceptText || "Aceptar";
+        dlg.BtnYes.Text      = acceptText || Locale.Text("Accept");
         dlg.onConfirm        = onConfirm;
         dlg.Modal            = true;
 

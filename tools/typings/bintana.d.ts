@@ -219,6 +219,7 @@ declare class ListBox extends Widget {
     Clear(): any;
     Deselect(index: any): any;
     DeselectAll(): any;
+    RemoveRow(index: any): any;
     Select(index: any): any;
     SelectAll(): any;
 }
@@ -411,6 +412,7 @@ declare class RowList extends Widget {
     LocalPoint(x: any, y: any, from: any): any;
     PickAt(x: any, y: any): any;
     Refilter(): any;
+    RemoveRow(index: any): any;
     Reorder(child: any, index: any): any;
     Select(index: any): any;
     SelectAll(): any;
@@ -522,6 +524,7 @@ declare class Notebook extends Widget {
     GetAction(where: any): any;
     LocalPoint(x: any, y: any, from: any): any;
     PickAt(x: any, y: any): any;
+    RemovePage(index: any): any;
     Reorder(child: any, index: any): any;
     SetAction(control: any, where?: any): any;
     SetTabLabel(index: any, label: any): any;
@@ -547,6 +550,7 @@ declare class Switcher extends Widget {
     FocusPrevious(): any;
     LocalPoint(x: any, y: any, from: any): any;
     PickAt(x: any, y: any): any;
+    RemovePage(index: any): any;
     Reorder(child: any, index: any): any;
 }
 declare class DrawingArea extends Widget {
@@ -648,6 +652,7 @@ declare class TreeView extends Widget {
     ExpandAll(): any;
     ExpandNode(key: any): any;
     Expanded(key: any): any;
+    RemoveNode(key: any): any;
     SetIcon(key: any, name: any): any;
     SetText(key: any, text: any): any;
 }
@@ -673,6 +678,8 @@ declare class TableView extends Widget {
     ExpandAll(): any;
     ExpandNode(key: any): any;
     Expanded(key: any): any;
+    RemoveNode(key: any): any;
+    RemoveRow(index: any): any;
     Row(index: any): any;
     Select(index: any): any;
     SelectAll(): any;

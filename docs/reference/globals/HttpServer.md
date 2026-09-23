@@ -60,7 +60,12 @@ srv.Start();
 
 A listening server **counts like a watch**: a console project that returned from
 `main` with one running stays alive for its requests. Dropping it without
-`Stop()` disconnects.
+`Stop()` disconnects. **A `Stop` from inside a handler waits for the handler**:
+`Answer` fills the message in and soup sends it when the handler returns, so
+disconnecting during the dispatch cut the response the handler had already
+written — `req.Answer(200, "bye"); srv.Stop();` answered with a closed
+connection. `Running` stays true until the deferred disconnect runs, because the
+port is still held.
 
 ## Who may reach it
 

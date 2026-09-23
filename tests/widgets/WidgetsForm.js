@@ -47,6 +47,17 @@ function throws(name, fn) {
     }
 }
 
+/* The message a call refuses with, or `null` when it did not refuse. An empty
+ * string is a refusal with no sentence, which is the bug this exists to see. */
+function refusal(fn) {
+    try {
+        fn();
+        return null;
+    } catch (e) {
+        return typeof e.message === "string" ? e.message : "";
+    }
+}
+
 /*
  * A locale off this machine that actually collates, for testLocaleOrder.
  *
@@ -438,7 +449,7 @@ const TESTS = [
     "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "Record", "Nested", "Database", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "Date", "Calendar", "Drawing", "Metrics", "Library", "Plugin", "ListMulti", "MenuState",
     "RowList", "RowFilter", "PropertyOptions", "CssNode", "TabAction", "Image", "Switcher", "Reorder", "Aspect",
-    "Removal", "AddMoves", "NumericSetters",
+    "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
     "CuratedLanguage", "Dictionary", "Regex", "Bytes", "Hash", "Screen", "JsonFiles", "XmlFiles", "XmlRecord", "Log", "Apply", "TimerShorthand", "Terminal",
     "Settings", "Timer", "Icons", "Font", "Style", "Radius", "Padding", "Shadow", "StyleRule",
@@ -462,6 +473,9 @@ const TESTS = [
     "HttpServer",
     /* Async as well: a handler that replaces itself mid-request. */
     "HttpServerSwap",
+    /* Async: a handler that answers and then stops its own server -- the shape
+     * of every `/shutdown` endpoint. */
+    "HttpServerStop",
     /* Async: a line that arrives a third of a second after its child ended. */
     "ExecControlLate",
     /* Async: more into a child's stdin than a pipe holds, while it echoes. */
@@ -967,6 +981,28 @@ class WidgetsForm extends Form {
         keep.Text = "still a widget";
         eq("Remove did not destroy it", keep.Text, "still a widget");
 
+        /*
+         * **And it is every control's detach, the six that used to answer to
+         * their own `Remove(index)` included.** Those had a row, a page or a
+         * node removal under the same name, so the documented verb for taking a
+         * control out of its container threw on a `ListBox` and meant something
+         * else on the rest. The item verbs are `RemoveRow`/`RemovePage`/
+         * `RemoveNode` now, and this is the half that was unreachable.
+         */
+        for (const type of ["ListBox", "RowList", "TreeView", "TableView",
+                            "Notebook", "Switcher"]) {
+            const host = new Panel();
+            const c    = Widget.New(type);
+
+            c.Name = `detach-${type}`;
+            host.Add(c);
+            eq(`${type} is in the panel`, host.Children.length, 1);
+
+            c.Remove();
+            eq(`${type}.Remove() took it out`, host.Children.length, 0);
+            eq(`${type} is still alive`, c.Name, `detach-${type}`);
+        }
+
         /* A grid re-flows what stayed, so a hole closes up rather than persists:
          * this is what makes rebuilding one mean anything. */
         const gr = new Grid();
@@ -1067,6 +1103,157 @@ class WidgetsForm extends Form {
         eq("Padding still takes four sizes", l.Padding, "0 0 0 12");
         l.Radius = "8 8 0 0";
         eq("Radius still takes four", l.Radius, "8 8 0 0");
+
+        /* A value past what an `int32_t` holds was cast, which is undefined in
+         * C and answered INT32_MIN on this machine -- a number nobody typed. */
+        throws("TabIndex refuses a value past an integer",
+               () => { l.TabIndex = 1e12; });
+
+        const tv = new TableView();
+        throws("Columns.Width refuses a word",
+               () => { tv.Columns = [{ Text: "A", Width: "wide" }]; });
+    }
+
+    /*
+     * A missing argument is a refusal with a sentence, not an empty exception.
+     *
+     * `if (argc < 1 || JS_ToInt32(...)) return JS_EXCEPTION;` returned an
+     * exception nobody had set, so `lb.Remove()` threw something whose
+     * `message` was `undefined` -- and the engine's own report of an
+     * uninitialized exception is a crash in some builds. Every one of these
+     * names its signature now.
+     */
+    testMissingArgs() {
+        const asks = (what, fn) => {
+            const message = refusal(fn);
+
+            check(`${what} refuses a missing argument`,
+                  message !== null && message.length > 0,
+                  `message: ${JSON.stringify(message)}`);
+        };
+
+        const lb = new ListBox();
+        asks("ListBox.RemoveRow", () => lb.RemoveRow());
+        asks("ListBox.Select",    () => lb.Select());
+        asks("ListBox.Deselect",  () => lb.Deselect());
+
+        const rl = new RowList();
+        asks("RowList.RemoveRow", () => rl.RemoveRow());
+        asks("RowList.Select",    () => rl.Select());
+
+        const ed = new TextEditor();
+        asks("TextEditor.OffsetAt", () => ed.OffsetAt());
+        asks("TextEditor.LineOf",   () => ed.LineOf());
+        asks("TextEditor.GotoLine", () => ed.GotoLine());
+        asks("TextEditor.Select",   () => ed.Select());
+
+        const se = new SourceEditor();
+        asks("SourceEditor.Mark",   () => se.Mark());
+        asks("SourceEditor.Unmark", () => se.Unmark());
+
+        const tv = new TableView();
+        asks("TableView.Select",    () => tv.Select());
+        asks("TableView.Deselect",  () => tv.Deselect());
+
+        const pn = new Panel();
+        asks("Container.PickAt",      () => pn.PickAt());
+        asks("Container.ContainerAt", () => pn.ContainerAt());
+        asks("Container.LocalPoint",  () => pn.LocalPoint());
+
+        const nb = new Notebook();
+        throws("Notebook.RemovePage refuses a page that is not there",
+               () => nb.RemovePage(7));
+
+        /* The painter's two, which the audit's list did not have: with no text
+         * they measured the string "undefined". The handler is the only place
+         * a painter exists, so the assertions run inside the frame. */
+        Directory.Make(SCRATCH);
+        const area = new DrawingArea();
+        this.Fixed1.Add(area);
+        area.Name = "MissingArgsArea";
+        area.Resize(80, 40);
+        this.missingArgs = [];
+        area.Save(File.Join(SCRATCH, "missing-args.png"), 80, 40);
+        eq("the painter's own refusals are asserted", this.missingArgs.length, 5);
+        for (const line of this.missingArgs)
+            check(line.startsWith("ok"), line);
+        area.Delete();
+
+        lb.Delete();
+        rl.Delete();
+        ed.Delete();
+        se.Delete();
+        tv.Delete();
+        pn.Delete();
+        nb.Delete();
+    }
+
+    MissingArgsArea_Draw(p) {
+        const asks = (what, fn) => {
+            const message = refusal(fn);
+
+            this.missingArgs.push(message !== null && message.length > 0
+                                      ? "ok" : `${what}: ${JSON.stringify(message)}`);
+            return message;
+        };
+
+        asks("TextWidth",  () => p.TextWidth());
+        asks("TextHeight", () => p.TextHeight());
+
+        /* A NaN is worse than a refusal: cairo records the call, puts the
+         * context in an error state, and the rest of the frame draws nothing. */
+        const nan = asks("LineTo", () => p.LineTo(NaN, 5));
+        check("a NaN coordinate is refused, naming the call",
+              (nan || "").includes("LineTo") && (nan || "").includes("NaN"),
+              JSON.stringify(nan));
+
+        const inf = asks("Scale", () => p.Scale(Infinity, 1));
+        check("and so is an infinity", (inf || "").includes("Scale"), JSON.stringify(inf));
+
+        const word = asks("MoveTo", () => p.MoveTo("abc", 1));
+        check("a word is refused too, naming the call",
+              (word || "").includes("MoveTo"), JSON.stringify(word));
+    }
+
+    /*
+     * A path is a path and text is text.
+     *
+     * `JS_ToCString` converts anything, so `File.Save(undefined, t)` wrote a
+     * file called `./undefined`, `File.Delete(undefined)` deleted it, and a
+     * record without its `Serialize()` was written as `[object Object]`. A
+     * conversion that *fails* used to be skipped with its exception left
+     * pending, for whoever called into JS next.
+     */
+    testStrictArgs() {
+        const bad = { toString() { throw new Error("boom"); } };
+        const target = File.Join(SCRATCH, "strict.txt");
+
+        throws("File.Save refuses a path that is not a string",
+               () => File.Save(undefined, "x"));
+        throws("and text that is not a string",
+               () => File.Save(target, {}));
+        check("and wrote no file", !File.Exists(target));
+        throws("File.Load refuses a path that is not a string",
+               () => File.Load(undefined));
+        throws("File.Delete refuses a path that is not a string",
+               () => File.Delete(undefined));
+        throws("File.Trash refuses a path that is not a string",
+               () => File.Trash(undefined));
+        throws("File.Rename refuses a path that is not a string",
+               () => File.Rename(undefined, target));
+        throws("File.Copy refuses a path that is not a string",
+               () => File.Copy(target, undefined));
+        throws("File.SaveBytes refuses a path that is not a string",
+               () => File.SaveBytes(undefined, new Bytes("x")));
+        throws("File.Watch refuses a path that is not a string",
+               () => File.Watch(undefined, () => {}));
+
+        throws("Exec refuses an environment value that cannot become text",
+               () => Exec(["true"], { Environment: { BAD: bad } }, () => {}));
+        throws("Http refuses a header value that cannot become text",
+               () => Http.Get("http://127.0.0.1:1/", { Headers: { X: bad } }, () => {}));
+        throws("Http refuses a query value that cannot become text",
+               () => Http.Get("http://127.0.0.1:1/", { Query: { x: bad } }, () => {}));
     }
 
     testSplits() {
@@ -5794,8 +5981,13 @@ function Main() {
 
         /* The theme's ink, which is the one fact a drawing cannot work out and
          * the reason a chart is visible on a dark desktop. */
+        /* The whole string and not a prefix: the alpha was formatted with `%g`,
+         * so on a desktop with a decimal comma it read `rgba(32,64,96,0,5)` and
+         * a prefix test accepted it -- a colour `gdk_rgba_parse` refuses, which
+         * made `Chart` throw from inside its own `Draw`. */
         check("the painter arrives knowing the theme's ink",
-              /^rgba?\(\d+,\d+,\d+/.test(this.plotInk), this.plotInk);
+              /^rgba?\(\d+,\d+,\d+(,\d+(\.\d+)?)?\)$/.test(this.plotInk),
+              this.plotInk);
         eq("and whether the ground is dark, derived from it",
            typeof this.plotDark, "boolean");
         /* One derivation and not two: `Painter.Dark` and `Widget.Dark` are the
@@ -5868,10 +6060,12 @@ function Main() {
 
     Sheet1_DrawPage(p, page, width, height) {
         this.sheetDrew.push(page);
-        p.Text(10, 20, `sheet ${page}`);
+        /* Text(text, x, y) -- these were the other way round, and were drawing
+         * the number 10 as the text at a NaN y until `arg_num` refused NaN. */
+        p.Text(`sheet ${page}`, 10, 20);
     }
 
-    Sheet1_Draw(p, width, height) { p.Text(10, 20, "sheet"); }
+    Sheet1_Draw(p, width, height) { p.Text("sheet", 10, 20); }
 
     Plot1_DrawPage(p, page, width, height) {
         this.plotPages.push(page);
@@ -6327,7 +6521,7 @@ function Main() {
 
         /* Removing a node takes its subtree with it: a subtree with no parent is
          * not something this control can show. */
-        t.Remove("/src");
+        t.RemoveNode("/src");
         eq("the node is gone",      t.Exists("/src"), false);
         eq("and so are its children", t.Exists("/src/main.c"), false);
         eq("leaving the rest",      t.Count, 3);
@@ -7316,7 +7510,7 @@ function Main() {
         eq("nor does changing the icon", t.Key, "named");
         throws("a key that is not there", () => t.SetText("nope", "x"));
         throws("SetIcon needs both",      () => t.SetIcon("named"));
-        t.Remove("named");
+        t.RemoveNode("named");
 
         const was = t.Count;
         t.Add("gone", "Gone", "");
@@ -7324,12 +7518,12 @@ function Main() {
         t.Add("gone/one/deep", "Deep", "gone/one");
         eq("three more nodes", t.Count, was + 3);
 
-        t.Remove("gone");
+        t.RemoveNode("gone");
         eq("the node is gone",        t.Exists("gone"), false);
         eq("and its child",           t.Exists("gone/one"), false);
         eq("and its grandchild",      t.Exists("gone/one/deep"), false);
         eq("leaving what was there",  t.Count, was);
-        throws("a key that is not there is refused", () => t.Remove("nope"));
+        throws("a key that is not there is refused", () => t.RemoveNode("nope"));
 
         t.Clear();
         eq("Clear empties it", t.Count, 0);
@@ -7679,16 +7873,16 @@ function Main() {
         eq("and selected the row it activated", list.Index, 2);
 
         /*
-         * **`Remove` goes through the container.** A row holds a widget the
+         * **`RemoveRow` goes through the container.** A row holds a widget the
          * application made and the list is holding a JS reference to it;
          * unparenting the row would leave that behind. So this is the same act
          * as deleting the child, and `Children` says so.
          */
         const before = list.Children.length;
-        eq("Remove answers whether there was a row", list.Remove(0), true);
+        eq("RemoveRow answers whether there was a row", list.RemoveRow(0), true);
         eq("and it is gone",        list.Count, before - 1);
         eq("with its widget",       list.Children.length, before - 1);
-        eq("a row that is not there is not an error", list.Remove(99), false);
+        eq("a row that is not there is not an error", list.RemoveRow(99), false);
 
         throws("it refuses Arrangement: the rows are its arrangement",
                () => { list.Arrangement = "Vertical"; });
@@ -8054,12 +8248,12 @@ function Main() {
          * it, so the container holds a reference and lets go on removal. */
         const kids = (c) => (c.__children || []).length;
         eq("a switcher holds a reference per page", kids(late), 2);
-        late.Remove(0);
+        late.RemovePage(0);
         eq("removing a page releases it", kids(late), 1);
         eq("and the page is gone", late.Count, 1);
         late.Children[0].Delete();
         eq("a page can be deleted like any other child", late.Count, 0);
-        throws("and removing what is not there says so", () => late.Remove(0));
+        throws("and removing what is not there says so", () => late.RemovePage(0));
 
         throws("a form cannot be a page", () => sw.Append(this));
         throws("nor can a number", () => sw.Append(42));
@@ -8674,7 +8868,7 @@ function Main() {
          * notebook means. */
         eq("Children answers with the pages", book.Children.length, 3);
 
-        book.Remove(0);
+        book.RemovePage(0);
         eq("removing a page releases the page and its tab", kids(book), 4);
         eq("and the page is gone", book.Count, 2);
 
@@ -11611,10 +11805,10 @@ function Main() {
            JSON.stringify(t.Row(2)), '["Cora","0.00"]');
         throws("but not past the end of the table", () => t.SetCell(9, 0, "x"));
 
-        t.Remove(0);
+        t.RemoveRow(0);
         eq("removing one shortens it", t.Count, 2);
         eq("and the rest move up", JSON.stringify(t.Row(0)), '["Beto","99.99"]');
-        throws("removing what is not there is refused", () => t.Remove(9));
+        throws("removing what is not there is refused", () => t.RemoveRow(9));
 
         /* --- selection ------------------------------------------------------ */
         eq("nothing is selected to begin with", t.Index, -1);
@@ -16188,6 +16382,36 @@ function Main() {
         }, (e) => done(`first request errored: ${e.Message}`));
     }
 
+    /*
+     * `req.Answer(200, "bye"); srv.Stop();` -- the shape of every `/shutdown`
+     * endpoint.
+     *
+     * `Stop` used to disconnect the server in the middle of the dispatch, and
+     * `Answer` only fills the message in: soup sends it when the handler
+     * returns. The client saw a closed connection instead of the answer. The
+     * disconnect waits for the handler now.
+     */
+    testHttpServerStop() {
+        let srv = null;
+        try { srv = Http.Server({ Port: 0 }); } catch (e) { return; }   /* no libsoup */
+
+        srv.Request = (req) => { req.Answer(200, "bye"); srv.Stop(); };
+        srv.Start();
+        eq("the server is running before the request", srv.Running, true);
+
+        waiting++;
+        const api  = Http.Client({ BaseUrl: srv.Url, Timeout: 5000 });
+        const done = (why) => { srv.Stop(); waiting--; if (why) failures.push(why); };
+
+        api.Get("/", (r) => {
+            eq("a handler that stops the server still answers", r.Body.ToText(), "bye");
+            /* The disconnect is deferred to an idle, so `Running` answers true
+             * for a turn or two after the answer -- the port is still held,
+             * which is the truth about the socket. */
+            until("and the server is stopped afterwards", () => !srv.Running, done);
+        }, (e) => done(`request errored: ${e.Message}`));
+    }
+
     testHttpServer() {
         let noSoup = false;
         try {
@@ -18231,14 +18455,28 @@ function Main() {
         const late  = [];
         let   ended = false;
 
+        /*
+         * **The grandchild writes long after the parent's end, and that is the
+         * whole of what makes this deterministic.** It was 0.3 s, and the
+         * assertion is a negative about timing -- the thing AGENTS.md warns
+         * about -- so it was really a bet on the rest of `Form_Open`'s
+         * synchronous work taking under 0.3 s. Under AddressSanitizer it does
+         * not: the loop starts with the exit, the read and the write all
+         * already pending, the read is dispatched first and the line is
+         * delivered while the job is still alive, which is correct behaviour
+         * and a red test. Two seconds leaves the free path an order of
+         * magnitude of headroom, and the test still proves what it was written
+         * for: a line arriving after the job is gone is dropped rather than
+         * completing into freed memory.
+         */
         waiting++;
         Exec(["/bin/sh", "-c",
-              "(sleep 0.3; echo late >&3) >/dev/null 2>&1 & exit 0"],
+              "(sleep 2; echo late >&3) >/dev/null 2>&1 & exit 0"],
              { Control: (line) => late.push(line) },
              null,
              () => { ended = true; });
 
-        Timer.After(900, () => {
+        Timer.After(2600, () => {
             waiting--;
             check("the child's end is reported", ended);
             eq("a Control line after the end is dropped, not delivered to a " +

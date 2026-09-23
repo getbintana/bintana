@@ -30,7 +30,7 @@ for a child stopped by a signal), `TimedOut`, `Stop()`, `Kill()` and
 | | |
 |---|---|
 | `Directory` | where to start the child |
-| `Environment` | names to add or change; a `null` value **removes** one. A change, not a replacement |
+| `Environment` | names to add or change; a `null` value **removes** one. A change, not a replacement. A value that cannot become text — a `Symbol`, an object whose `toString` throws — is refused by the call and not skipped |
 | `Stderr` | `"separate"` keeps the streams apart — the line callback then gets `"out"`/`"err"` as its second argument. Merged is the default, and merging is what keeps the order |
 | `Timeout` | milliseconds before the child is ended; absent waits forever |
 | `KillAfter` | milliseconds between SIGTERM and SIGKILL, `5000` by default |

@@ -1173,7 +1173,9 @@ static JSValue cont_pick_at(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     double x, y;
-    if (argc < 2 || JS_ToFloat64(ctx, &x, argv[0]) || JS_ToFloat64(ctx, &y, argv[1]))
+    if (argc < 2)
+        return JS_ThrowTypeError(ctx, "PickAt(x, y) needs a point");
+    if (JS_ToFloat64(ctx, &x, argv[0]) || JS_ToFloat64(ctx, &y, argv[1]))
         return JS_EXCEPTION;
 
     /* Insensitive and non-targetable widgets are pickable here on purpose: a
@@ -1218,7 +1220,9 @@ static JSValue cont_container_at(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     double x, y;
-    if (argc < 2 || JS_ToFloat64(ctx, &x, argv[0]) || JS_ToFloat64(ctx, &y, argv[1]))
+    if (argc < 2)
+        return JS_ThrowTypeError(ctx, "ContainerAt(x, y, [ignore]) needs a point");
+    if (JS_ToFloat64(ctx, &x, argv[0]) || JS_ToFloat64(ctx, &y, argv[1]))
         return JS_EXCEPTION;
 
     BtaWidget *ignore = argc > 2 ? bta_widget_of(argv[2]) : NULL;
@@ -1257,7 +1261,9 @@ static JSValue cont_local_point(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     double x, y;
-    if (argc < 2 || JS_ToFloat64(ctx, &x, argv[0]) || JS_ToFloat64(ctx, &y, argv[1]))
+    if (argc < 2)
+        return JS_ThrowTypeError(ctx, "LocalPoint(x, y, from) needs a point");
+    if (JS_ToFloat64(ctx, &x, argv[0]) || JS_ToFloat64(ctx, &y, argv[1]))
         return JS_EXCEPTION;
 
     BtaWidget *from = argc > 2 ? bta_widget_of(argv[2]) : NULL;
@@ -2742,7 +2748,7 @@ static const JSCFunctionListEntry checkbutton_props[] = {
 /*
  * A `GtkSwitch`: the same question a CheckButton asks, drawn the way the desktop
  * draws a setting that takes effect the moment it is flipped.  So it is the
- * CheckButton's `Value` and its `Click`, and nothing else -- a switch
+ * CheckButton's `Active` and its `Click`, and nothing else -- a switch
  * carries no caption of its own, and the label beside it is a Label.
  *
  * `notify::active` and not `state-set`: the second is the hook for a setting
@@ -3078,8 +3084,11 @@ static JSValue listbox_select_one(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     int32_t i;
-    if (argc < 1 || JS_ToInt32(ctx, &i, argv[0]))
-        return JS_EXCEPTION;
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx,
+            "Select(index)/Deselect(index) needs a row index");
+    if (JS_ToInt32(ctx, &i, argv[0]))
+        return JS_EXCEPTION;        /* it threw on the way; that stands */
 
     GtkListBoxRow *row = gtk_list_box_get_row_at_index(GTK_LIST_BOX(w->inner), i);
     if (!row)
@@ -3158,7 +3167,9 @@ static JSValue listbox_remove(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     int32_t i;
-    if (argc < 1 || JS_ToInt32(ctx, &i, argv[0]))
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "RemoveRow(index) needs a row index");
+    if (JS_ToInt32(ctx, &i, argv[0]))
         return JS_EXCEPTION;
 
     GtkListBoxRow *row = gtk_list_box_get_row_at_index(GTK_LIST_BOX(w->inner), i);
@@ -3224,8 +3235,8 @@ static const JSCFunctionListEntry listbox_props[] = {
     JS_CFUNC_DEF("Add",    1, listbox_add),
     /* Clear() */
     JS_CFUNC_DEF("Clear",  0, listbox_clear_js),
-    /* Remove(index) */
-    JS_CFUNC_DEF("Remove", 1, listbox_remove),
+    /* RemoveRow(index) */
+    JS_CFUNC_DEF("RemoveRow", 1, listbox_remove),
     /* Select(index) */
     JS_CFUNC_MAGIC_DEF("Select",   1, listbox_select_one, LB_SELECT),
     /* Deselect(index) */
@@ -5064,20 +5075,32 @@ static JSValue date_set_value(JSContext *ctx, JSValueConst this_val,
     GtkCalendar *cal = date_calendar(w);
 
     /*
-     * Three setters and one event.  GTK has no way to set a whole date that does
-     * not raise the floor to 4.20, so the day goes first to 1 -- otherwise
-     * standing on the 31st and moving to February would clamp on the way through
-     * -- and **both** handlers are blocked so one assignment is one Change and
-     * not four: `notify::month` is a change of value too (see `on_date_page`), so
-     * an assignment that lands in another month would otherwise raise it on the
-     * way and again at the end.  The same bargain Switcher.Reorder makes.
+     * One assignment, one event, whichever GTK this is.  `set_day`/`set_month`/
+     * `set_year` are 4.14 and the runtime's floor is 4.10, so on the older GTK
+     * the whole date goes in through `select_day` -- deprecated only in 4.20,
+     * where the guarded branch is the one compiled.  **Both** handlers are
+     * blocked either way: `notify::month` is a change of value too (see
+     * `on_date_page`), so an assignment that lands in another month would raise
+     * it on the way and again at the end.  The same bargain Switcher.Reorder
+     * makes, and the reason the day goes to 1 first in the setters: standing on
+     * the 31st and moving to February would otherwise clamp on the way through.
      */
     g_signal_handlers_block_by_func(cal, G_CALLBACK(on_date_selected), w);
     g_signal_handlers_block_by_func(cal, G_CALLBACK(on_date_page), w);
+#if GTK_CHECK_VERSION(4, 14, 0)
     gtk_calendar_set_day(cal, 1);
     gtk_calendar_set_year(cal, y);
     gtk_calendar_set_month(cal, m - 1);        /* GTK counts months from zero */
     gtk_calendar_set_day(cal, d);
+#else
+    {
+        GDateTime *date = g_date_time_new_local(y, m, d, 0, 0, 0);
+        if (date) {
+            gtk_calendar_select_day(cal, date);
+            g_date_time_unref(date);
+        }
+    }
+#endif
     g_signal_handlers_unblock_by_func(cal, G_CALLBACK(on_date_page), w);
     g_signal_handlers_unblock_by_func(cal, G_CALLBACK(on_date_selected), w);
 

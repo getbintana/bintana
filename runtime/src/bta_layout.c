@@ -1077,8 +1077,8 @@ static JSValue rowlist_get_count(JSContext *ctx, JSValueConst this_val)
  * between them is what goes in a row, a widget against a string, and nothing
  * else. So the words for *selecting* in one are the words for selecting in the
  * other: `MultiSelect`, `Selection`, `Select`, `Deselect`, `SelectAll`,
- * `DeselectAll`, `Remove`, `Activate` and `ActivateOnSingleClick` are the same
- * members with the same meanings, and this is the same code.
+ * `DeselectAll`, `RemoveRow`, `Activate` and `ActivateOnSingleClick` are the
+ * same members with the same meanings, and this is the same code.
  *
  * They were missing here and nowhere else, which is the only reason this is
  * being written: a program that moved a list from strings to widgets lost half
@@ -1142,8 +1142,11 @@ static JSValue rowlist_select_one(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     int32_t i;
-    if (argc < 1 || JS_ToInt32(ctx, &i, argv[0]))
-        return JS_EXCEPTION;
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx,
+            "Select(index)/Deselect(index) needs a row index");
+    if (JS_ToInt32(ctx, &i, argv[0]))
+        return JS_EXCEPTION;        /* it threw on the way; that stands */
 
     GtkListBoxRow *row = i < 0 ? NULL : rowlist_row(w, i);
     if (!row)
@@ -1237,7 +1240,7 @@ static JSValue rowlist_activate(JSContext *ctx, JSValueConst this_val,
 }
 
 /*
- * `Remove(index)` -- and it goes through the container, not through GTK.
+ * `RemoveRow(index)` -- and it goes through the container, not through GTK.
  *
  * A row here holds a **widget of the application's**, which the container is
  * holding a JS reference to. Unparenting the `GtkListBoxRow` would leave that
@@ -1253,7 +1256,9 @@ static JSValue rowlist_remove(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     int32_t i;
-    if (argc < 1 || JS_ToInt32(ctx, &i, argv[0]))
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "RemoveRow(index) needs a row index");
+    if (JS_ToInt32(ctx, &i, argv[0]))
         return JS_EXCEPTION;
 
     GtkListBoxRow *row   = i < 0 ? NULL : rowlist_row(w, i);
@@ -1275,8 +1280,8 @@ static const JSCFunctionListEntry rowlist_props[] = {
                    rowlist_get_single, rowlist_set_single),
     /* Refilter() */
     JS_CFUNC_DEF("Refilter", 0, rowlist_refilter),
-    /* Remove(index) */
-    JS_CFUNC_DEF("Remove",   1, rowlist_remove),
+    /* RemoveRow(index) */
+    JS_CFUNC_DEF("RemoveRow", 1, rowlist_remove),
     /* Activate([index]) */
     JS_CFUNC_DEF("Activate", 1, rowlist_activate),
     /* Select(index) */

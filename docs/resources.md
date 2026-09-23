@@ -29,7 +29,7 @@ code-heavy Bintana application there is — counts:
 | **declared** | **130** |
 | `Message.*` with a composed template | 36 |
 | `Message.*` with a literal | 13 |
-| `AskForm`/`ConfirmForm` with a literal | 7 |
+| `AskForm`/`ConfirmForm`, whose prose is a `Locale.Text` at the call site | 7 |
 | assignments to `.Text`/`.Tooltip` from code | 7 |
 | **in code** | **63** |
 
@@ -82,7 +82,12 @@ could ever match it.
 
 **A project's own function is not on that list**, and cannot be: `ConfirmForm` is
 a form of the project's, and giving the IDE a way to declare argument positions
-would be exactly the privileged API the one rule forbids. Those get the helper.
+would be exactly the privileged API the one rule forbids. Those get the helper —
+and every call site does wrap, which is what the two entries in `Strings.js`'s
+`CALLS` are for: the helper does not translate by itself (what it passes reaches
+a form's `Text`, which only the `.form` loader puts through a catalogue), so the
+entries are the lint that catches an unwrapped literal at one of those
+positions, and the extraction is `Locale.Text`'s.
 
 ## The helper, for the residue
 

@@ -86,28 +86,38 @@ static JSValue notebook_remove(JSContext *ctx, JSValueConst this_val,
     if (!w)
         return JS_EXCEPTION;
     if (argc < 1)
-        return JS_ThrowTypeError(ctx, "Remove(index)");
+        return JS_ThrowTypeError(ctx, "RemovePage(index) needs a page index");
 
     int32_t index;
     if (JS_ToInt32(ctx, &index, argv[0]))
         return JS_EXCEPTION;
 
-    /* Let go of the page and its tab before GTK drops them, or the wrappers stay
-     * referenced for the life of the notebook -- an IDE closes tabs all day. */
-    GtkWidget *page = gtk_notebook_get_nth_page(GTK_NOTEBOOK(w->gtk), index);
-    if (page) {
-        BtaWidget *child = g_object_get_data(G_OBJECT(page), BTA_WIDGET_QUARK);
-        GtkWidget *label = gtk_notebook_get_tab_label(GTK_NOTEBOOK(w->gtk), page);
-        BtaWidget *tab   = label ? g_object_get_data(G_OBJECT(label), BTA_WIDGET_QUARK)
-                                 : NULL;
+    GtkNotebook *nb   = GTK_NOTEBOOK(w->gtk);
+    GtkWidget   *page = gtk_notebook_get_nth_page(nb, index);
+    if (!page)
+        return JS_ThrowRangeError(ctx, "RemovePage: there is no page %d", index);
 
-        if (child)
-            bta_widget_release(ctx, this_val, child->self);
-        if (tab)
-            bta_widget_release(ctx, this_val, tab->self);
-    }
+    BtaWidget *child = g_object_get_data(G_OBJECT(page), BTA_WIDGET_QUARK);
+    GtkWidget *label = gtk_notebook_get_tab_label(nb, page);
+    BtaWidget *tab   = label ? g_object_get_data(G_OBJECT(label), BTA_WIDGET_QUARK)
+                             : NULL;
 
-    gtk_notebook_remove_page(GTK_NOTEBOOK(w->gtk), index);
+    /*
+     * **Through the container**, `Switcher.RemovePage`'s road: taking a page out is
+     * where the parent's reference to it is dropped, and it is also what clears
+     * a default button inside the subtree -- GTK keeps an unowned pointer to it
+     * -- and what rebuilds a radio chain the page was part of. Doing it by hand
+     * here left all of that behind.
+     */
+    if (child && !bta_container_detach(ctx, child))
+        return JS_EXCEPTION;
+    if (!child)
+        gtk_notebook_remove_page(nb, index);
+
+    /* The tab label is ours too and goes with the page -- after the swap, like
+     * every other label this file lets go of. */
+    if (tab)
+        bta_widget_release(ctx, this_val, tab->self);
     return JS_UNDEFINED;
 }
 
@@ -373,34 +383,43 @@ static JSValue notebook_set_tabs(JSContext *ctx, JSValueConst this_val,
     GtkNotebook *nb    = GTK_NOTEBOOK(w->gtk);
     int          pages = gtk_notebook_get_n_pages(nb);
 
-    /* Kept for the pages that do not exist yet. */
+    /*
+     * Converted once, kept for the pages that do not exist yet -- and a value
+     * that cannot become text is a refusal, not an empty label: swallowing the
+     * failure left the conversion's exception pending and the property looking
+     * like it had worked.
+     */
     GPtrArray *keep = g_ptr_array_new();
     for (uint32_t i = 0; i < n; i++) {
         JSValue     e = JS_GetPropertyUint32(ctx, val, i);
         const char *s = JS_ToCString(ctx, e);
-        g_ptr_array_add(keep, g_strdup(s ? s : ""));
+
+        if (!s) {
+            JS_FreeValue(ctx, e);
+            g_ptr_array_free(keep, TRUE);
+            return JS_EXCEPTION;   /* it threw on the way; that stands */
+        }
+        g_ptr_array_add(keep, g_strdup(s));
         JS_FreeCString(ctx, s);
         JS_FreeValue(ctx, e);
     }
     g_ptr_array_add(keep, NULL);
-    g_object_set_data_full(G_OBJECT(w->gtk), TABS_PENDING_KEY,
-                           g_ptr_array_free(keep, FALSE), (GDestroyNotify)g_strfreev);
+    char **labels = (char **)g_ptr_array_free(keep, FALSE);
+
+    g_object_set_data_full(G_OBJECT(w->gtk), TABS_PENDING_KEY, labels,
+                           (GDestroyNotify)g_strfreev);
 
     for (uint32_t i = 0; i < n && (int)i < pages; i++) {
-        JSValue     e = JS_GetPropertyUint32(ctx, val, i);
-        const char *s = JS_ToCString(ctx, e);
-        JS_FreeValue(ctx, e);
-
         GtkWidget *page = gtk_notebook_get_nth_page(nb, (int)i);
         GtkWidget *old  = gtk_notebook_get_tab_label(nb, page);
         BtaWidget *prev = old ? g_object_get_data(G_OBJECT(old), BTA_WIDGET_QUARK) : NULL;
 
-        /* A label of ours stops being ours to keep alive. */
+        gtk_notebook_set_tab_label(nb, page, gtk_label_new(labels[i]));
+
+        /* Let go *after* the swap, `SetTabLabel`'s order: releasing first could
+         * collect a wrapper the notebook is still showing. */
         if (prev)
             bta_widget_release(ctx, this_val, prev->self);
-
-        gtk_notebook_set_tab_label(nb, page, gtk_label_new(s ? s : ""));
-        JS_FreeCString(ctx, s);
     }
     return JS_UNDEFINED;
 }
@@ -480,8 +499,8 @@ static const JSCFunctionListEntry notebook_props[] = {
     JS_CGETSET_DEF("Current", notebook_get_current, notebook_set_current),
     /* Append(child, [label]) */
     JS_CFUNC_DEF ("Append",     2, notebook_append),
-    /* Remove(index) */
-    JS_CFUNC_DEF ("Remove",     1, notebook_remove),
+    /* RemovePage(index) */
+    JS_CFUNC_DEF ("RemovePage", 1, notebook_remove),
     /* SetTabLabel(index, label) */
     JS_CFUNC_DEF ("SetTabLabel", 2, notebook_set_tab_label),
     /* SetAction(control, [where]) */

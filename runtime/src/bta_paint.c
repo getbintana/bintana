@@ -34,6 +34,7 @@
 #include <cairo.h>
 #include <cairo-pdf.h>
 #include <glib/gstdio.h>
+#include <math.h>
 #include <pango/pangocairo.h>
 
 /* ---------------------------------------------------------------- Painter */
@@ -132,11 +133,28 @@ static void note_num(GString *out, double v)
     g_string_append(out, num(buf, v));
 }
 
-static double arg_num(JSContext *ctx, JSValueConst v, bool *bad)
+/*
+ * A coordinate, refused if it is not a finite number.
+ *
+ * **A NaN is worse than a refusal**, and it is the one a chart hands over: a
+ * series with a missing reading makes `p.LineTo(x, undefined)` an ordinary
+ * line, cairo records the call, puts the context in an error state, and the
+ * *rest of the frame draws nothing* -- with no throw and nothing to see. So
+ * every argument names the call it belongs to, the way `bta_to_number` names
+ * the property, and the frame that broke says which call broke it.
+ */
+static double arg_num(JSContext *ctx, JSValueConst v, const char *where, bool *bad)
 {
     double d = 0;
-    if (JS_ToFloat64(ctx, &d, v))
+    if (JS_ToFloat64(ctx, &d, v)) {
         *bad = true;
+        return 0;                      /* it threw on the way; that stands */
+    }
+    if (!isfinite(d)) {
+        JS_ThrowRangeError(ctx, "%s: %s is not a finite number", where,
+                           isnan(d) ? "NaN" : "Infinity");
+        *bad = true;
+    }
     return d;
 }
 
@@ -172,7 +190,15 @@ static char *rgba_text(const GdkRGBA *c)
 
     if (c->alpha >= 1.0)
         return g_strdup_printf("rgb(%d,%d,%d)", r, g, b);
-    return g_strdup_printf("rgba(%d,%d,%d,%.3g)", r, g, b, c->alpha);
+
+    /* The alpha through `g_ascii_formatd` and not through `%g`, or a desktop
+     * that writes a decimal comma hands back `rgba(32,64,96,0,5)` -- a string
+     * `gdk_rgba_parse` refuses, so assigning it to `Color` throws from inside
+     * a `Draw`.  The same trap the JSON patch in `vendor/` exists for. */
+    char alpha[NUMLEN];
+
+    return g_strdup_printf("rgba(%d,%d,%d,%s)", r, g, b,
+                           g_ascii_formatd(alpha, NUMLEN, "%.3g", c->alpha));
 }
 
 static JSValue painter_get_foreground(JSContext *ctx, JSValueConst this_val)
@@ -333,7 +359,7 @@ static JSValue painter_set_dash(JSContext *ctx, JSValueConst this_val,
     for (uint32_t i = 0; i < n; i++) {
         JSValue e  = JS_GetPropertyUint32(ctx, val, i);
         bool    no = false;
-        dashes[i]  = arg_num(ctx, e, &no);
+        dashes[i]  = arg_num(ctx, e, "LineDash", &no);
         JS_FreeValue(ctx, e);
         if (no || dashes[i] < 0) {
             /* Read before the free: the message used to quote the array after
@@ -690,10 +716,13 @@ static JSValue painter_measure_js(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     int w = 0, h = 0;
-    if (argc < 1 || !painter_measure(ctx, p, argv[0],
-                                     argc > 1 ? argv[1] : JS_UNDEFINED,
-                                     magic == MEASURE_WIDTH ? "TextWidth" : "TextHeight",
-                                     &w, &h))
+    const char *where = magic == MEASURE_WIDTH ? "TextWidth" : "TextHeight";
+
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "%s(text, [options]) needs text", where);
+    if (!painter_measure(ctx, p, argv[0],
+                         argc > 1 ? argv[1] : JS_UNDEFINED,
+                         where, &w, &h))
         return JS_EXCEPTION;
     return JS_NewInt32(ctx, magic == MEASURE_WIDTH ? w : h);
 }
@@ -708,8 +737,8 @@ static JSValue painter_text(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "Text expects (text, x, y, [options])");
 
     bool   bad = false;
-    double x   = arg_num(ctx, argv[1], &bad);
-    double y   = arg_num(ctx, argv[2], &bad);
+    double x   = arg_num(ctx, argv[1], "Text", &bad);
+    double y   = arg_num(ctx, argv[2], "Text", &bad);
     if (bad)
         return JS_EXCEPTION;
 
@@ -888,10 +917,12 @@ static JSValue painter_image(JSContext *ctx, JSValueConst this_val,
             "Image expects (path or bytes, x, y, [width], [height])");
 
     bool   bad = false;
-    double x   = arg_num(ctx, argv[1], &bad);
-    double y   = arg_num(ctx, argv[2], &bad);
-    double ww  = (argc > 3 && !JS_IsUndefined(argv[3])) ? arg_num(ctx, argv[3], &bad) : -1;
-    double hh  = (argc > 4 && !JS_IsUndefined(argv[4])) ? arg_num(ctx, argv[4], &bad) : -1;
+    double x   = arg_num(ctx, argv[1], "Image", &bad);
+    double y   = arg_num(ctx, argv[2], "Image", &bad);
+    double ww  = (argc > 3 && !JS_IsUndefined(argv[3]))
+                     ? arg_num(ctx, argv[3], "Image", &bad) : -1;
+    double hh  = (argc > 4 && !JS_IsUndefined(argv[4]))
+                     ? arg_num(ctx, argv[4], "Image", &bad) : -1;
     if (bad)
         return JS_EXCEPTION;
 
@@ -1246,8 +1277,8 @@ static JSValue js_text_index_at(JSContext *ctx, JSValueConst this_val,
                                       "needs the text and a point");
 
     bool   bad = false;
-    double x   = arg_num(ctx, argv[1], &bad);
-    double y   = arg_num(ctx, argv[2], &bad);
+    double x   = arg_num(ctx, argv[1], "Text.IndexAt", &bad);
+    double y   = arg_num(ctx, argv[2], "Text.IndexAt", &bad);
     if (bad)
         return JS_EXCEPTION;
 
@@ -1483,10 +1514,12 @@ static JSValue painter_path(JSContext *ctx, JSValueConst this_val,
     char   nb[NUMLEN], nb2[NUMLEN];
 
     if (magic == PATH_MOVE || magic == PATH_LINE) {
+        const char *where = magic == PATH_MOVE ? "MoveTo" : "LineTo";
+
         if (argc < 2)
-            return JS_ThrowTypeError(ctx, "expects (x, y)");
-        x = arg_num(ctx, argv[0], &bad);
-        y = arg_num(ctx, argv[1], &bad);
+            return JS_ThrowTypeError(ctx, "%s(x, y) expects (x, y)", where);
+        x = arg_num(ctx, argv[0], where, &bad);
+        y = arg_num(ctx, argv[1], where, &bad);
         if (bad)
             return JS_EXCEPTION;
     }
@@ -1520,7 +1553,7 @@ static JSValue painter_curve(JSContext *ctx, JSValueConst this_val,
     bool   bad = false;
     double v[6];
     for (int i = 0; i < 6; i++)
-        v[i] = arg_num(ctx, argv[i], &bad);
+        v[i] = arg_num(ctx, argv[i], "CurveTo", &bad);
     if (bad)
         return JS_EXCEPTION;
 
@@ -1543,9 +1576,10 @@ static JSValue painter_rectangle(JSContext *ctx, JSValueConst this_val,
     if (argc < 4)
         return JS_ThrowTypeError(ctx, "expects (x, y, width, height)");
 
+    const char *where = magic == RECT_CLIP ? "ClipRectangle" : "Rectangle";
     bool   bad = false;
-    double x = arg_num(ctx, argv[0], &bad), y = arg_num(ctx, argv[1], &bad);
-    double w = arg_num(ctx, argv[2], &bad), h = arg_num(ctx, argv[3], &bad);
+    double x = arg_num(ctx, argv[0], where, &bad), y = arg_num(ctx, argv[1], where, &bad);
+    double w = arg_num(ctx, argv[2], where, &bad), h = arg_num(ctx, argv[3], where, &bad);
     if (bad)
         return JS_EXCEPTION;
 
@@ -1598,15 +1632,19 @@ static JSValue painter_arc(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "expects (x, y, radius, from, to) "
                                       "-- the angles in degrees");
 
+    const char *where = magic ? "ArcNegative" : "Arc";
     bool   bad = false;
-    double x = arg_num(ctx, argv[0], &bad), y  = arg_num(ctx, argv[1], &bad);
-    double r = arg_num(ctx, argv[2], &bad), a1 = arg_num(ctx, argv[3], &bad);
-    double a2 = arg_num(ctx, argv[4], &bad);
+    double x = arg_num(ctx, argv[0], where, &bad), y  = arg_num(ctx, argv[1], where, &bad);
+    double r = arg_num(ctx, argv[2], where, &bad), a1 = arg_num(ctx, argv[3], where, &bad);
+    double a2 = arg_num(ctx, argv[4], where, &bad);
     if (bad)
         return JS_EXCEPTION;
-    if (!(r >= 0))
-        return JS_ThrowRangeError(ctx, "%s: %g is not a radius",
-                                  magic ? "ArcNegative" : "Arc", r);
+    if (!(r >= 0)) {
+        char nb[NUMLEN];
+
+        return JS_ThrowRangeError(ctx, "%s: %s is not a radius", where,
+                                  g_ascii_formatd(nb, NUMLEN, "%g", r));
+    }
 
     char b[5][NUMLEN];
     if (magic)
@@ -1653,12 +1691,13 @@ static JSValue painter_polyline(JSContext *ctx, JSValueConst this_val,
         return JS_UNDEFINED;        /* a series with no points draws nothing */
 
     double first[2] = { 0, 0 }, last[2] = { 0, 0 };
+    const char *where = magic == POLY_OPEN ? "Polyline" : "Polygon";
 
     for (uint32_t i = 0; i < n; i += 2) {
         JSValue xv = JS_GetPropertyUint32(ctx, argv[0], i);
         JSValue yv = JS_GetPropertyUint32(ctx, argv[0], i + 1);
         bool    bad = false;
-        double  x = arg_num(ctx, xv, &bad), y = arg_num(ctx, yv, &bad);
+        double  x = arg_num(ctx, xv, where, &bad), y = arg_num(ctx, yv, where, &bad);
 
         JS_FreeValue(ctx, xv);
         JS_FreeValue(ctx, yv);
@@ -1711,9 +1750,11 @@ static JSValue painter_transform(JSContext *ctx, JSValueConst this_val,
     if (!p)
         return JS_EXCEPTION;
 
+    const char *where = magic == XFORM_TRANSLATE ? "Translate"
+                      : magic == XFORM_SCALE     ? "Scale" : "Rotate";
     bool   bad = false;
-    double a   = argc > 0 ? arg_num(ctx, argv[0], &bad) : 0;
-    double b   = argc > 1 ? arg_num(ctx, argv[1], &bad) : a;
+    double a   = argc > 0 ? arg_num(ctx, argv[0], where, &bad) : 0;
+    double b   = argc > 1 ? arg_num(ctx, argv[1], where, &bad) : a;
     char   nb[NUMLEN], nb2[NUMLEN];
 
     if (bad)

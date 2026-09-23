@@ -463,9 +463,13 @@ Ide.TabSet = class TabSet {
         const doClose = () => this.closeByName(name, /* force */ true);
 
         if (this.dirtyOf(name, state)) {
-            ConfirmForm.ask("Close tab",
-                            `Close ${name} without saving the changes?`,
-                            "Close without saving", doClose);
+            /* The msgid is the catalogue's `Close {0} without saving the
+             * changes?`, with the name as a value: a template literal here was
+             * already interpolated by the time it reached the dialog, so no
+             * catalogue could ever match it. */
+            ConfirmForm.ask(Locale.Text("Close tab"),
+                            Locale.Text("Close {0} without saving the changes?", name),
+                            Locale.Text("Close without saving"), doClose);
         } else {
             doClose();
         }
@@ -500,7 +504,10 @@ Ide.TabSet = class TabSet {
          * its items and their handlers off the IDE's own form, which is the one
          * thing a closed page cannot take with it. */
         if (state.canvas && state.canvas.menubar) state.canvas.menubar.dispose();
-        this.ide.Tabs.Remove(index);
+        /* The breakpoints of a code tab go with it, and the map is where a
+         * closed file keeps them: read before the editor is gone. */
+        if (state.editor) this.ide.debugger_.remember(name, state.editor);
+        this.ide.Tabs.RemovePage(index);
         this.openTabs.delete(name);
         this.tabOrder.splice(index, 1);
 
@@ -582,6 +589,7 @@ Ide.TabSet = class TabSet {
     rename(oldName, newName) {
         const state = this.openTabs.get(oldName);
         if (!state) return;
+        this.ide.debugger_.renamed(oldName, newName);
         state.name = newName;
         /* The watch was on the old path, which is gone: a change to the file
          * the tab now holds would go unnoticed, and the tab would go on

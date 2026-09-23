@@ -18,7 +18,7 @@ follows is what is its own.
 | `Strip` | `Top` `Bottom` `Start` `End` `None`. Default `"Top"` | [the strip](#the-strip) |
 | `Tabs` | the strip, as strings. **Translated** | [the strip](#the-strip) |
 | `Append(child, [name])` | one more page | [the pages](#the-pages) |
-| `Remove(index)` | takes one out | [the pages](#the-pages) |
+| `RemovePage(index)` | takes one out | [the pages](#the-pages) |
 | **event** `Switch(index)` | a different page is showing | [the page showing](#the-page-showing) |
 
 ## Which of the two is this one
@@ -33,7 +33,7 @@ follows is what is its own.
 | | |
 |---|---|
 | `Append(child, [name])` | one more page. The child is the page |
-| `Remove(index)` | takes it out, with the control in it |
+| `RemovePage(index)` | takes it out, with the control in it |
 | `Count` (ro) | how many there are |
 
 ## The page showing

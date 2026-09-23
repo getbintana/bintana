@@ -254,9 +254,12 @@ Ide.Git = class Git {
      * with a space or an accent in it, which is not an edge case in a project
      * written in Spanish.
      *
-     * A record is `XY<space><path>`, NUL-terminated; a rename is
-     * `R<something><NUL>old<NUL>new`, so the *old* name arrives as a record of
-     * its own and is consumed here rather than read as a path with no state.
+     * A record is `XY<space><path>`, NUL-terminated; with `-z` a rename is
+     * `R<something><NUL>new<NUL>old` -- the record's own path is the **new**
+     * name and the old one arrives as a record of its own, consumed here
+     * rather than read as a path with no state. Measured, not remembered:
+     * `git status --porcelain=v1 -z` after a `git mv viejo nuevo` is
+     * `R  nuevo.txt\0viejo.txt\0`, and the two were read the other way round.
      */
     status() {
         const out = new Map();
@@ -275,13 +278,14 @@ Ide.Git = class Git {
             const tree  = record[1];
             const path  = this.strip(record.slice(3));
 
-            /* A rename's second path is the next record, and belongs to this
-             * one: consuming it here is what stops it being read as a file
-             * whose state is the first letter of its own name. */
+            /* The rename's new name is the record's own path; the next record
+             * is the old one, and consuming it here is what stops it being
+             * read as a file whose state is the first letter of its own name.
+             * The new one is what the tree marks: marking the old as deleted
+             * and the new as *gone* was exactly backwards. */
             if (index === "R" || index === "C") {
-                const to = parts[++i];
-                if (to) out.set(this.strip(to), index);
-                out.set(path, "D");
+                parts[++i];                          /* the old name */
+                out.set(path, index);
                 staged++;
                 continue;
             }
@@ -641,10 +645,13 @@ Ide.Git = class Git {
             }
             if (index === "!") continue;
 
-            /* A rename's new name is the next record; the pair is staged. */
+            /* The record's own path is the rename's **new** name and the next
+             * record is the old one -- `git mv viejo nuevo` answers
+             * `R  nuevo\0viejo\0`. The old one is consumed so it is not read
+             * as a file, and what the panel offers to open is the new one. */
             if (index === "R" || index === "C") {
-                const to = parts[++i];
-                out.staged.push({ path: to ? this.strip(to) : path, state: index });
+                parts[++i];                          /* the old name */
+                out.staged.push({ path, state: index });
                 continue;
             }
 

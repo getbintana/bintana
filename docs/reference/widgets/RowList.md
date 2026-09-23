@@ -39,7 +39,7 @@ rows](#the-rows).
 | `Deselect(index)` | unselects a row | [the selection](#the-selection) |
 | `DeselectAll()` | selects nothing | [the selection](#the-selection) |
 | `Refilter()` | the answer to `Filter` may have changed | [filtering](#filtering) |
-| `Remove(index)` | takes a row out, **and its control with it** | [the rows](#the-rows) |
+| `RemoveRow(index)` | takes a row out, **and its control with it** | [the rows](#the-rows) |
 | `Select(index)` | selects a row | [the selection](#the-selection) |
 | `SelectAll()` | every row, with `MultiSelect` | [the selection](#the-selection) |
 
@@ -107,7 +107,7 @@ built row from being measured.
 | `Add(control)` | `Container`'s: one control, one row, at the end |
 | `Clear()` | `Container`'s: empties it, destroying every row's control |
 | `Children` (ro) | `Container`'s: the controls, one per row, in order |
-| `Remove(index)` | takes that row out — **and the control in it goes with it**: the row is the widget's wrapper, so this is the same as deleting the child |
+| `RemoveRow(index)` | takes that row out — **and the control in it goes with it**: the row is the widget's wrapper, so this is the same as deleting the child |
 | `Count` (ro) | how many rows there are, **hidden ones included** |
 
 **A row is a control and nothing else is a row.** What the row stands for lives in
@@ -176,7 +176,7 @@ list comes to show thirteen rows while claiming twelve.
 - **The count in the status bar disagrees with the list.** Two copies of the
   predicate. One method, two callers.
 - **Removing a row destroyed a control that was wanted elsewhere.** The pair is
-  worth knowing: `list.Remove(index)` takes the row out **and destroys** the
+  worth knowing: `list.RemoveRow(index)` takes the row out **and destroys** the
   control in it, while `control.Remove()` — `Widget`'s, which detaches without
   destroying — takes the row out and **keeps** it, ready to be added somewhere
   else. Measured on a list of two: either way the count goes to one; only the

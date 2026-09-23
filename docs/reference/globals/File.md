@@ -8,6 +8,12 @@ oversight: a desktop application reads a project's files, a note, a settings fil
 ceremony around nothing. What is not synchronous is what genuinely waits:
 [`Http`](Http.md), [`Exec`](Exec.md) and a file `Watch`.
 
+**A path is a string, and so is `Save`'s text.** A verb that takes one refuses
+anything else: `Save(undefined, t)` used to write a file called `./undefined` and
+`Delete(undefined)` used to delete it, because the conversion took whatever it
+was handed. `Save(path, rec)` without the `Serialize()` used to replace the file
+with `[object Object]`, and is now a refusal that says so.
+
 ## Every member
 
 **Reading and writing**

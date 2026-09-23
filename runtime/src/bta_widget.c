@@ -77,6 +77,18 @@ bool bta_to_int(JSContext *ctx, JSValueConst val, const char *name, int32_t *out
     if (!bta_to_number(ctx, val, name, &n))
         return false;
 
+    /* A cast past what an `int32_t` holds is undefined in C and answers
+     * differently per machine -- 1e12 came out INT32_MIN on this one -- which
+     * is exactly the "accepted and quietly wrong" the helper exists to stop.
+     * Infinity lands here too: `bta_to_number` refuses NaN and not it. */
+    if (n < (double)INT32_MIN || n > (double)INT32_MAX) {
+        char buf[G_ASCII_DTOSTR_BUF_SIZE];
+
+        JS_ThrowRangeError(ctx, "%s: %s is outside the range of an integer",
+                           name, g_ascii_formatd(buf, sizeof buf, "%g", n));
+        return false;
+    }
+
     /* Truncated the way ToInt32 truncates, so a value that was already legal
      * stays legal: 8.7 is 8 here as it was before. */
     *out = (int32_t)n;
@@ -1422,7 +1434,13 @@ static void styles_rebuild(void)
     while (g_hash_table_iter_next(&it, &key, &value))
         g_string_append_printf(css, ".%s { %s }\n", (char *)key, (char *)value);
 
+    /* `load_from_string` is 4.12 and the floor is 4.10; `load_from_data` is the
+     * same call with a length, and is what the older GTK has. */
+#if GTK_CHECK_VERSION(4, 12, 0)
     gtk_css_provider_load_from_string(style_provider, css->str);
+#else
+    gtk_css_provider_load_from_data(style_provider, css->str, -1);
+#endif
     g_string_free(css, TRUE);
 }
 

@@ -444,17 +444,45 @@ static char *http_with_query(JSContext *ctx, const char *url, JSValueConst opts)
         for (uint32_t i = 0; i < len; i++) {
             const char *k = JS_AtomToCString(ctx, tab[i].atom);
             JSValue     v = JS_GetProperty(ctx, q, tab[i].atom);
-            const char *vs = JS_ToCString(ctx, v);
-            char       *ek = k ? g_uri_escape_string(k, NULL, TRUE) : NULL;
-            char       *ev = vs ? g_uri_escape_string(vs, NULL, TRUE) : NULL;
 
-            if (ek && ev)
+            /* A parameter with no value is not sent: `{ page: undefined }` went
+             * out as `page=undefined`, a query nobody wrote. */
+            if (JS_IsUndefined(v) || JS_IsNull(v)) {
+                if (k)
+                    JS_FreeCString(ctx, k);
+                JS_FreeValue(ctx, v);
+                continue;
+            }
+
+            const char *vs = JS_ToCString(ctx, v);
+
+            /* A value that cannot become text is a refusal, and not a skipped
+             * parameter with the conversion's exception left pending. */
+            if (!vs) {
+                JS_ThrowTypeError(ctx, "Query: the value of '%s' is not text",
+                                  k ? k : "?");
+                if (k)
+                    JS_FreeCString(ctx, k);
+                JS_FreeValue(ctx, v);
+                JS_FreePropertyEnum(ctx, tab, len);
+                JS_FreeValue(ctx, q);
+                g_string_free(out, TRUE);
+                return NULL;
+            }
+
+            char *ek = k ? g_uri_escape_string(k, NULL, TRUE) : NULL;
+            char *ev = g_uri_escape_string(vs, NULL, TRUE);
+
+            /* `first` moves only when an entry really went in: it used to be
+             * cleared even for a skipped one, so the next parameter came out
+             * with `&` on a URL that had no `?` yet. */
+            if (ek && ev) {
                 g_string_append_printf(out, "%c%s=%s", first ? '?' : '&', ek, ev);
-            first = false;
+                first = false;
+            }
             if (k)
                 JS_FreeCString(ctx, k);
-            if (vs)
-                JS_FreeCString(ctx, vs);
+            JS_FreeCString(ctx, vs);
             g_free(ek);
             g_free(ev);
             JS_FreeValue(ctx, v);
@@ -855,12 +883,28 @@ static bool http_apply_headers(JSContext *ctx, SoupMessage *msg, HttpClientData 
                 JSValue     v = JS_GetProperty(ctx, h, tab[i].atom);
                 const char *vs = JS_ToCString(ctx, v);
 
-                if (k && vs)
+                /*
+                 * A header whose value cannot become text is a refusal: the
+                 * entry used to be skipped with the conversion's exception still
+                 * pending, so the request went out without the header and the
+                 * error surfaced on whoever asked next.
+                 */
+                if (!vs) {
+                    JS_ThrowTypeError(ctx, "%s: the value of header '%s' is "
+                                           "not text", who, k ? k : "?");
+                    if (k)
+                        JS_FreeCString(ctx, k);
+                    JS_FreeValue(ctx, v);
+                    JS_FreePropertyEnum(ctx, tab, len);
+                    if (owned)
+                        JS_FreeValue(ctx, h);
+                    return false;
+                }
+                if (k)
                     soup_message_headers_replace(hdrs, k, vs);
                 if (k)
                     JS_FreeCString(ctx, k);
-                if (vs)
-                    JS_FreeCString(ctx, vs);
+                JS_FreeCString(ctx, vs);
                 JS_FreeValue(ctx, v);
             }
             JS_FreePropertyEnum(ctx, tab, len);
@@ -1844,10 +1888,8 @@ static bool http_build(JSContext *ctx, HttpClientData *c, const char *method,
     char *full = http_with_query(ctx, joined, opts);
 
     g_free(joined);
-    if (!full) {
-        JS_ThrowInternalError(ctx, "%s: out of memory", who);
-        return false;
-    }
+    if (!full)
+        return false;   /* the builder named what it refused */
     /* Relative with no BaseUrl is refused where it is asked. */
     if (!http_is_absolute(full) && (!c || !c->base_url || !c->base_url[0])) {
         JS_ThrowTypeError(ctx, "%s: '%s' is not absolute and no BaseUrl was set", who, full);
@@ -2985,7 +3027,23 @@ typedef struct {
     char        *auth_realm;
     GHashTable  *auth_users; /* user -> pass; NULL is open */
     SoupAuthDomain *auth_domain; /* live while running with Auth (server-owned) */
+    /*
+     * Stop() asked from inside a handler, and the idle that finishes it.
+     * `soup_server_disconnect` during dispatch drops the connection with the
+     * response already written but not yet sent, so a `/shutdown` endpoint --
+     * `req.Answer(200, "bye"); srv.Stop();` -- answered the client with a
+     * closed connection instead of the "bye". The disconnect waits for the
+     * handler to return and soup to send.
+     */
+    bool         stopping;
+    guint        stop_idle;
 } HttpServerData;
+
+/* Handlers on the stack, nested loops included -- global because the counter
+ * is decremented after a call that may have freed the server it belongs to,
+ * and nothing after that call may read it. Any handler dispatching is reason
+ * enough to defer a disconnect. */
+static int http_dispatching;
 
 static JSClassID http_server_class_id;
 /* Every live server: what teardown disconnects the listening ones from. A
@@ -3018,6 +3076,10 @@ static void http_server_free(JSRuntime *rt, HttpServerData *s)
 {
     if (!s)
         return;
+    if (s->stop_idle) {
+        g_source_remove(s->stop_idle);
+        s->stop_idle = 0;
+    }
     http_servers = g_list_remove(http_servers, s);
     if (s->auth_domain) {
         if (s->server && s->running)
@@ -3221,12 +3283,26 @@ static JSValue http_request_answer(JSContext *ctx, JSValueConst this_val,
                     JSValue     vv = JS_GetProperty(ctx, hv, tab[i].atom);
                     const char *vs = JS_ToCString(ctx, vv);
 
-                    if (k && vs)
+                    /* Same as the request's: a value that cannot become text is
+                     * a refusal and not a header nobody sees. */
+                    if (!vs) {
+                        JS_ThrowTypeError(ctx, "Answer: the value of header "
+                                               "'%s' is not text", k ? k : "?");
+                        if (k)
+                            JS_FreeCString(ctx, k);
+                        JS_FreeValue(ctx, vv);
+                        JS_FreePropertyEnum(ctx, tab, len);
+                        JS_FreeValue(ctx, hv);
+                        if (b)
+                            g_bytes_unref(b);
+                        g_free(ctype_free);
+                        return JS_EXCEPTION;
+                    }
+                    if (k)
                         soup_message_headers_replace(rh, k, vs);
                     if (k)
                         JS_FreeCString(ctx, k);
-                    if (vs)
-                        JS_FreeCString(ctx, vs);
+                    JS_FreeCString(ctx, vs);
                     JS_FreeValue(ctx, vv);
                 }
                 JS_FreePropertyEnum(ctx, tab, len);
@@ -3391,7 +3467,10 @@ static void on_server_request(SoupServer *server, SoupServerMessage *msg,
 
     if (JS_IsFunction(ctx, s->handler)) {
         JSValue fn  = JS_DupValue(ctx, s->handler);
+
+        http_dispatching++;
         JSValue ret = JS_Call(ctx, fn, JS_UNDEFINED, 1, &req);
+        http_dispatching--;
 
         if (JS_IsException(ret))
             bta_dump_error(ctx);
@@ -3888,6 +3967,33 @@ static JSValue http_server_start(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
+/* The disconnect itself, once nothing is dispatching. */
+static void http_server_finish_stop(HttpServerData *s)
+{
+    s->running  = false;
+    s->stopping = false;
+    http_server_apply_auth(s);
+    if (s->server) {
+        soup_server_disconnect(s->server);
+        g_object_unref(s->server);
+        s->server = NULL;
+    }
+    /* Empty again, as before the first Start: a URL nothing is listening on
+     * is the answer to a question nobody asked. */
+    g_free(s->url);
+    s->url = NULL;
+}
+
+static gboolean http_server_stop_idle(gpointer data)
+{
+    HttpServerData *s = data;
+
+    s->stop_idle = 0;
+    if (s->stopping)
+        http_server_finish_stop(s);
+    return G_SOURCE_REMOVE;
+}
+
 static JSValue http_server_stop(JSContext *ctx, JSValueConst this_val,
                                 int argc, JSValueConst *argv)
 {
@@ -3897,15 +4003,26 @@ static JSValue http_server_stop(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "Stop: not an Http server");
     if (!s->running)
         return JS_FALSE;
-    s->running = false;
-    http_server_apply_auth(s);
-    soup_server_disconnect(s->server);
-    g_object_unref(s->server);
-    s->server = NULL;
-    /* Empty again, as before the first Start: a URL nothing is listening on
-     * is the answer to a question nobody asked. */
-    g_free(s->url);
-    s->url = NULL;
+
+    /*
+     * **A Stop from inside a handler waits for the handler.** Disconnecting
+     * now cut the response the handler had already written -- `Answer` only
+     * fills the message in; soup sends it when the handler returns -- so the
+     * client of a `/shutdown` endpoint saw a closed connection instead of the
+     * answer. `Running` stays true until the idle runs, because the port is
+     * still held: it is the truth about the socket and not a promise about the
+     * call.
+     */
+    if (http_dispatching > 0) {
+        if (!s->stopping) {
+            s->stopping  = true;
+            s->stop_idle = g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,
+                                           http_server_stop_idle, s, NULL);
+        }
+        return JS_TRUE;
+    }
+
+    http_server_finish_stop(s);
     return JS_TRUE;
 }
 
@@ -4118,6 +4235,10 @@ void bta_http_cleanup(void)
         if (s->running && s->server) {
             if (s->auth_domain) {
                 soup_server_remove_auth_domain(s->server, s->auth_domain);
+                /* Ours is a reference of its own (`http_server_apply_auth`),
+                 * and removing it from the server releases only the server's:
+                 * dropping the pointer here leaked it. */
+                g_object_unref(s->auth_domain);
                 s->auth_domain = NULL;
             }
             soup_server_disconnect(s->server);

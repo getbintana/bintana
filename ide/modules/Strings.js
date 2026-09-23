@@ -45,6 +45,14 @@ const CALLS = [
     { call: "Message.Info",    args: 1, ctxt: false },
     { call: "Message.Warning", args: 1, ctxt: false },
     { call: "Message.Error",   args: 1, ctxt: false },
+    /* The IDE's two dialog helpers, whose leading arguments are prose. They do
+     * not translate by themselves -- what a caller passes reaches a form's
+     * `Text`, which only the `.form` loader puts through a catalogue -- so the
+     * entries are here for the extractor's second pass and the lint, and every
+     * call site wraps with `Locale.Text`. `many` says each leading literal is a
+     * msgid of its own (`ConfirmForm.ask`'s title, message and accept text). */
+    { call: "AskForm.prompt",  args: 2, ctxt: false },
+    { call: "ConfirmForm.ask", args: 3, ctxt: false, many: true },
 ];
 
 
@@ -256,12 +264,21 @@ Ide.Strings = class Strings {
     fromCalls(src, rel, spec) {
         const head = spec.call.replace(".", "\\.");
         const one  = `\\s*${LITERAL}\\s*`;
-        const tail = spec.args === 2 ? `,${one}` : "";
+        /* The leading literals, up to what the call declares -- **optional and
+         * not exact**, because the last of them is routinely left out
+         * (`ConfirmForm.ask` with no accept text) and an exact tail would stop
+         * the call being seen at all. */
+        const tail = spec.args > 1 ? `(?:,${one}){0,${spec.args - 1}}` : "";
 
         for (const m of new Regex(`${head}\\(${one}${tail}`).Matches(src)) {
             const parts = new Regex(LITERAL).Matches(m.Value).map((lit) => lit.Value);
             const line  = Text.LineOf(src, m.Index);
             const where = `${rel}:${line}`;
+
+            if (spec.many) {
+                for (const part of parts) this.add(literalValue(part), where);
+                continue;
+            }
 
             const first  = literalValue(parts[0]);
             const second = parts[1] !== undefined ? literalValue(parts[1]) : undefined;

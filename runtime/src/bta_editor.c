@@ -1208,7 +1208,9 @@ static JSValue ed_mark(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     int32_t line;
-    if (argc < 2 || JS_ToInt32(ctx, &line, argv[0]))
+    if (argc < 2)
+        return JS_ThrowTypeError(ctx, "Mark(line, kind, [text]) needs a line and a kind");
+    if (JS_ToInt32(ctx, &line, argv[0]))
         return JS_EXCEPTION;
 
     const char *name = JS_ToCString(ctx, argv[1]);
@@ -1282,7 +1284,9 @@ static JSValue ed_unmark(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     int32_t line;
-    if (argc < 1 || JS_ToInt32(ctx, &line, argv[0]))
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "Unmark(line, [kind]) needs a line");
+    if (JS_ToInt32(ctx, &line, argv[0]))
         return JS_EXCEPTION;
 
     const char *cat = NULL;

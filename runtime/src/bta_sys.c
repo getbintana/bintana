@@ -66,12 +66,33 @@ char *bta_exe_path(void)
 
 /* ------------------------------------------------------------------ File */
 
+/*
+ * A path has to be a path, and `JS_ToCString` is the wrong road for one.
+ *
+ * It converts anything: `File.Save(undefined, t)` wrote a file called
+ * `./undefined`, `File.Delete(undefined)` deleted it, and `File.Save(p, rec)`
+ * without the `Serialize()` replaced the file with `[object Object]` -- all
+ * atomically, and all silent. A number or an object in a position whose value
+ * is a file name is a mistake being made, so it is named here instead.
+ */
+static const char *file_path(JSContext *ctx, JSValueConst v, const char *who)
+{
+    if (!JS_IsString(v)) {
+        JS_ThrowTypeError(ctx, "%s expects a path, as a string", who);
+        return NULL;
+    }
+    return JS_ToCString(ctx, v);
+}
+
 static JSValue sys_file_load(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
-    const char *path = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
-    if (!path)
+    if (argc < 1)
         return JS_ThrowTypeError(ctx, "File.Load(path) needs a path");
+
+    const char *path = file_path(ctx, argv[0], "File.Load");
+    if (!path)
+        return JS_EXCEPTION;
 
     char   *data = NULL;
     gsize   len  = 0;
@@ -94,15 +115,27 @@ static JSValue sys_file_load(JSContext *ctx, JSValueConst this_val,
 static JSValue sys_file_save(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
-    const char *path = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
-    if (!path)
+    if (argc < 1)
         return JS_ThrowTypeError(ctx, "File.Save(path, text) needs a path");
 
+    const char *path = file_path(ctx, argv[0], "File.Save");
+    if (!path)
+        return JS_EXCEPTION;
+
+    /* And the text is text: a record without its `Serialize()` used to be
+     * written as `[object Object]`. */
+    if (argc < 2 || !JS_IsString(argv[1])) {
+        JS_FreeCString(ctx, path);
+        return JS_ThrowTypeError(ctx, "File.Save(path, text) needs the text, "
+                                      "as a string -- `Serialize()` is what turns "
+                                      "a record into one");
+    }
+
     size_t      len  = 0;
-    const char *text = argc > 1 ? JS_ToCStringLen(ctx, &len, argv[1]) : NULL;
+    const char *text = JS_ToCStringLen(ctx, &len, argv[1]);
     if (!text) {
         JS_FreeCString(ctx, path);
-        return JS_ThrowTypeError(ctx, "File.Save(path, text) needs text");
+        return JS_EXCEPTION;
     }
 
     GError *err = NULL;
@@ -351,13 +384,16 @@ static JSValue sys_file_join(JSContext *ctx, JSValueConst this_val,
 static JSValue sys_file_rename(JSContext *ctx, JSValueConst this_val,
                                int argc, JSValueConst *argv)
 {
-    const char *from = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
-    const char *to   = argc > 1 ? JS_ToCString(ctx, argv[1]) : NULL;
-
-    if (!from || !to) {
-        JS_FreeCString(ctx, from);
-        JS_FreeCString(ctx, to);
+    if (argc < 2)
         return JS_ThrowTypeError(ctx, "File.Rename(from, to) needs both paths");
+
+    const char *from = file_path(ctx, argv[0], "File.Rename");
+    if (!from)
+        return JS_EXCEPTION;
+    const char *to = file_path(ctx, argv[1], "File.Rename");
+    if (!to) {
+        JS_FreeCString(ctx, from);
+        return JS_EXCEPTION;      /* it threw on the way; that stands */
     }
 
     /* Refuse to clobber: renaming over an existing file loses it silently. */
@@ -387,13 +423,16 @@ static JSValue sys_file_rename(JSContext *ctx, JSValueConst this_val,
 static JSValue sys_file_copy(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
-    const char *from = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
-    const char *to   = argc > 1 ? JS_ToCString(ctx, argv[1]) : NULL;
-
-    if (!from || !to) {
-        JS_FreeCString(ctx, from);
-        JS_FreeCString(ctx, to);
+    if (argc < 2)
         return JS_ThrowTypeError(ctx, "File.Copy(from, to) needs both paths");
+
+    const char *from = file_path(ctx, argv[0], "File.Copy");
+    if (!from)
+        return JS_EXCEPTION;
+    const char *to = file_path(ctx, argv[1], "File.Copy");
+    if (!to) {
+        JS_FreeCString(ctx, from);
+        return JS_EXCEPTION;      /* it threw on the way; that stands */
     }
 
     JSValue e = JS_UNDEFINED;
@@ -719,12 +758,13 @@ static JSValue sys_watch_stop(JSContext *ctx, JSValueConst this_val,
 static JSValue sys_file_watch(JSContext *ctx, JSValueConst this_val,
                               int argc, JSValueConst *argv)
 {
-    const char *path = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
-    if (!path || argc < 2 || !JS_IsFunction(ctx, argv[1])) {
-        JS_FreeCString(ctx, path);
+    if (argc < 2 || !JS_IsFunction(ctx, argv[1]))
         return JS_ThrowTypeError(ctx,
             "File.Watch(path, (event, path) => ...) needs a path and a function");
-    }
+
+    const char *path = file_path(ctx, argv[0], "File.Watch");
+    if (!path)
+        return JS_EXCEPTION;
 
     GFile  *file  = g_file_new_for_path(path);
     GError *error = NULL;
@@ -765,9 +805,12 @@ static JSValue sys_file_watch(JSContext *ctx, JSValueConst this_val,
 static JSValue sys_file_delete(JSContext *ctx, JSValueConst this_val,
                                int argc, JSValueConst *argv)
 {
-    const char *path = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
-    if (!path)
+    if (argc < 1)
         return JS_ThrowTypeError(ctx, "File.Delete(path) needs a path");
+
+    const char *path = file_path(ctx, argv[0], "File.Delete");
+    if (!path)
+        return JS_EXCEPTION;
 
     bool ok = g_remove(path) == 0;
     JSValue e = ok ? JS_UNDEFINED
@@ -796,9 +839,12 @@ static JSValue sys_file_delete(JSContext *ctx, JSValueConst this_val,
 static JSValue sys_file_trash(JSContext *ctx, JSValueConst this_val,
                               int argc, JSValueConst *argv)
 {
-    const char *path = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
-    if (!path)
+    if (argc < 1)
         return JS_ThrowTypeError(ctx, "File.Trash(path) needs a path");
+
+    const char *path = file_path(ctx, argv[0], "File.Trash");
+    if (!path)
+        return JS_EXCEPTION;
 
     GFile  *file  = g_file_new_for_path(path);
     GError *error = NULL;
@@ -1477,8 +1523,11 @@ static void on_exec_line(GObject *src, GAsyncResult *res, gpointer user_data)
     }
     g_free(line);
 
-    /* A handler can spin the loop -- a modal dialog, `Printer.Send` -- and the
-     * job can end inside it, so it is asked again before the next read. */
+    /* The job can end inside the handler -- a nested loop the handler spins, or
+     * a runtime call that drains jobs -- so it is asked again before the next
+     * read. `Printer.Send` used to be the example here and is asynchronous now;
+     * nothing in this runtime spins the default context itself, and the check
+     * is what keeps that from being an assumption. */
     if (g_list_find(exec_jobs, job))
         exec_read_next(job, stream);
 }
@@ -1579,7 +1628,7 @@ static bool exec_wants_split(JSContext *ctx, JSValueConst opts)
  * means writing out PATH, HOME and DISPLAY by hand in order to keep them --
  * three chances to lose one, for a case nobody has.
  */
-static void exec_apply_options(JSContext *ctx, JSValueConst opts,
+static bool exec_apply_options(JSContext *ctx, JSValueConst opts,
                                GSubprocessLauncher *launcher)
 {
     JSValue dir = JS_GetPropertyStr(ctx, opts, "Directory");
@@ -1607,10 +1656,26 @@ static void exec_apply_options(JSContext *ctx, JSValueConst opts,
                     g_subprocess_launcher_unsetenv(launcher, name);
                 } else if (name) {
                     const char *val = JS_ToCString(ctx, v);
-                    if (val) {
-                        g_subprocess_launcher_setenv(launcher, name, val, TRUE);
-                        JS_FreeCString(ctx, val);
+
+                    /*
+                     * **The verb says so when a value cannot become text.** The
+                     * entry used to be skipped with the conversion's exception
+                     * still pending, so the child started with an environment
+                     * nobody asked for and the error landed on whatever called
+                     * into JS next.
+                     */
+                    if (!val) {
+                        JS_ThrowTypeError(ctx, "Exec: the value of the "
+                                               "environment variable '%s' is not "
+                                               "text", name);
+                        JS_FreeCString(ctx, name);
+                        JS_FreeValue(ctx, v);
+                        JS_FreePropertyEnum(ctx, tab, len);
+                        JS_FreeValue(ctx, env);
+                        return false;
                     }
+                    g_subprocess_launcher_setenv(launcher, name, val, TRUE);
+                    JS_FreeCString(ctx, val);
                 }
                 JS_FreeCString(ctx, name);
                 JS_FreeValue(ctx, v);
@@ -1619,6 +1684,7 @@ static void exec_apply_options(JSContext *ctx, JSValueConst opts,
         }
     }
     JS_FreeValue(ctx, env);
+    return true;
 }
 
 /*
@@ -1943,8 +2009,10 @@ static GSubprocessLauncher *exec_launcher(JSContext *ctx, JSValueConst opts,
 #ifndef G_OS_WIN32
     g_subprocess_launcher_set_child_setup(launcher, exec_child_setup, NULL, NULL);
 #endif
-    if (!JS_IsUndefined(opts))
-        exec_apply_options(ctx, opts, launcher);
+    if (!JS_IsUndefined(opts) && !exec_apply_options(ctx, opts, launcher)) {
+        g_object_unref(launcher);
+        return NULL;               /* it threw on the way; that stands */
+    }
 
     return launcher;
 }
@@ -1975,6 +2043,10 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
     bool split = exec_wants_split(ctx, opts);
 
     GSubprocessLauncher *launcher = exec_launcher(ctx, opts, split);
+    if (!launcher) {
+        g_ptr_array_unref(args);
+        return JS_EXCEPTION;
+    }
     int                  ctl_fd  = exec_control_fd(ctx, opts, launcher);
 
     /* Refused, and the refusal is the answer: see exec_control_fd. */
@@ -2229,6 +2301,13 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
     g_main_context_push_thread_default(priv);
 
     GSubprocessLauncher *launcher = exec_launcher(ctx, opts, split);
+
+    if (!launcher) {
+        g_ptr_array_unref(args);
+        g_main_context_pop_thread_default(priv);
+        g_main_context_unref(priv);
+        return JS_EXCEPTION;       /* it threw on the way; that stands */
+    }
 
     GError      *err  = NULL;
     GSubprocess *proc = g_subprocess_launcher_spawnv(
@@ -2706,8 +2785,9 @@ static const JSCFunctionListEntry screen_props[] = {
  * asymmetry is the platform's, not a choice.
  */
 typedef struct {
-    JSContext *ctx;
-    JSValue    cb;
+    JSContext    *ctx;
+    JSValue       cb;
+    GCancellable *cancel;   /* cancelled at teardown, so the read answers */
 } PasteJob;
 
 static GList *paste_jobs;   /* PasteJob*, reads in flight */
@@ -2716,6 +2796,7 @@ static void paste_job_free(PasteJob *job)
 {
     paste_jobs = g_list_remove(paste_jobs, job);
     JS_FreeValue(job->ctx, job->cb);
+    g_clear_object(&job->cancel);
     g_free(job);
 }
 
@@ -2746,12 +2827,19 @@ static void on_paste(GObject *src, GAsyncResult *res, gpointer user_data)
     GError   *err  = NULL;
     char     *text = gdk_clipboard_read_text_finish(GDK_CLIPBOARD(src), res, &err);
 
-    if (g_error_matches(err, G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
-        g_clear_error(&err);
+    g_clear_error(&err);   /* nothing to paste is an empty string, not an error */
+
+    /*
+     * **Teardown cancels the read and drops the job**, with its context, so
+     * there is no JS left to call. Asked by membership -- the pointer is only
+     * compared, never read -- because the job may be gone by the time the
+     * cancelled read answers. This branch used to claim the same thing while
+     * passing a NULL cancellable, so it could not happen.
+     */
+    if (!g_list_find(paste_jobs, job)) {
         g_free(text);
-        return;                      /* teardown already freed the job */
+        return;
     }
-    g_clear_error(&err);
 
     /* Nothing to paste is an empty string, not an error: a clipboard holding an
      * image is as ordinary as an empty one. */
@@ -2780,11 +2868,12 @@ static JSValue sys_clip_paste(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowInternalError(ctx, "no display, no clipboard");
 
     PasteJob *job = g_new0(PasteJob, 1);
-    job->ctx = ctx;
-    job->cb  = JS_DupValue(ctx, argv[0]);
-    paste_jobs = g_list_prepend(paste_jobs, job);
+    job->ctx    = ctx;
+    job->cb     = JS_DupValue(ctx, argv[0]);
+    job->cancel = g_cancellable_new();
+    paste_jobs  = g_list_prepend(paste_jobs, job);
 
-    gdk_clipboard_read_text_async(clip, NULL, on_paste, job);
+    gdk_clipboard_read_text_async(clip, job->cancel, on_paste, job);
     return JS_UNDEFINED;
 }
 
@@ -2796,8 +2885,9 @@ static JSValue sys_clip_paste(JSContext *ctx, JSValueConst this_val,
  * released on every path out, including the user cancelling.
  */
 typedef struct {
-    JSContext *ctx;
-    JSValue    cb;
+    JSContext    *ctx;
+    JSValue       cb;
+    GCancellable *cancel;   /* cancelled at teardown, so the dialog answers */
 } DialogJob;
 
 enum { DLG_FOLDER, DLG_FILE, DLG_SAVE };
@@ -2807,10 +2897,16 @@ enum { DLG_FOLDER, DLG_FILE, DLG_SAVE };
 
 static GList *dialog_jobs;
 
-static void dialog_job_finish(DialogJob *job, char *path)
+static void dialog_job_free(DialogJob *job)
 {
     dialog_jobs = g_list_remove(dialog_jobs, job);
+    JS_FreeValue(job->ctx, job->cb);
+    g_clear_object(&job->cancel);
+    g_free(job);
+}
 
+static void dialog_job_finish(DialogJob *job, char *path)
+{
     if (path && JS_IsFunction(job->ctx, job->cb)) {
         JSValue arg = JS_NewString(job->ctx, path);
         JSValue r   = JS_Call(job->ctx, job->cb, JS_UNDEFINED, 1, &arg);
@@ -2821,8 +2917,7 @@ static void dialog_job_finish(DialogJob *job, char *path)
         bta_drain_jobs(JS_GetRuntime(job->ctx));
     }
     g_free(path);
-    JS_FreeValue(job->ctx, job->cb);
-    g_free(job);
+    dialog_job_free(job);
 }
 
 static void on_dialog_done(GObject *src, GAsyncResult *res, gpointer user_data)
@@ -2849,6 +2944,12 @@ static void on_dialog_done(GObject *src, GAsyncResult *res, gpointer user_data)
     g_clear_object(&file);
     g_clear_error(&err);   /* cancelling is not an error worth raising */
 
+    /* Teardown cancelled the dialog and dropped the job, context and all: the
+     * pointer is only compared, never read. */
+    if (!g_list_find(dialog_jobs, job)) {
+        g_free(path);
+        return;
+    }
     dialog_job_finish(job, path);
 }
 
@@ -3044,8 +3145,9 @@ static JSValue sys_dialog(JSContext *ctx, JSValueConst this_val,
     }
 
     DialogJob *job = g_new0(DialogJob, 1);
-    job->ctx = ctx;
-    job->cb  = JS_DupValue(ctx, cb);
+    job->ctx    = ctx;
+    job->cb     = JS_DupValue(ctx, cb);
+    job->cancel = g_cancellable_new();
     dialog_jobs = g_list_prepend(dialog_jobs, job);
 
     BtaApp    *app    = bta_current_app();
@@ -3056,13 +3158,13 @@ static JSValue sys_dialog(JSContext *ctx, JSValueConst this_val,
 
     switch (magic) {
     case DLG_FOLDER:
-        gtk_file_dialog_select_folder(dlg, parent, NULL, on_dialog_done, job);
+        gtk_file_dialog_select_folder(dlg, parent, job->cancel, on_dialog_done, job);
         break;
     case DLG_SAVE:
-        gtk_file_dialog_save(dlg, parent, NULL, on_dialog_done, job);
+        gtk_file_dialog_save(dlg, parent, job->cancel, on_dialog_done, job);
         break;
     default:
-        gtk_file_dialog_open(dlg, parent, NULL, on_dialog_done, job);
+        gtk_file_dialog_open(dlg, parent, job->cancel, on_dialog_done, job);
         break;
     }
     g_object_unref(dlg);
@@ -3094,6 +3196,12 @@ static void on_color_done(GObject *src, GAsyncResult *res, gpointer user_data)
     if (rgba)
         gdk_rgba_free(rgba);
     g_clear_error(&err);          /* cancelling is not an error worth raising */
+
+    /* Same as the file dialog's: teardown may have taken the job away. */
+    if (!g_list_find(dialog_jobs, job)) {
+        g_free(css);
+        return;
+    }
 
     /* The same finish as a file dialog's: a heap string handed to the callback
      * and freed, or nothing at all. */
@@ -3132,15 +3240,16 @@ static JSValue sys_color_dialog(JSContext *ctx, JSValueConst this_val,
     JS_FreeCString(ctx, current);
 
     DialogJob *job = g_new0(DialogJob, 1);
-    job->ctx = ctx;
-    job->cb  = JS_DupValue(ctx, cb);
+    job->ctx    = ctx;
+    job->cb     = JS_DupValue(ctx, cb);
+    job->cancel = g_cancellable_new();
     dialog_jobs = g_list_prepend(dialog_jobs, job);
 
     BtaApp    *app    = bta_current_app();
     GtkWindow *parent = app && app->gapp
                             ? gtk_application_get_active_window(app->gapp) : NULL;
 
-    gtk_color_dialog_choose_rgba(dlg, parent, from, NULL, on_color_done, job);
+    gtk_color_dialog_choose_rgba(dlg, parent, from, job->cancel, on_color_done, job);
     g_object_unref(dlg);
     return JS_UNDEFINED;
 }
@@ -3190,9 +3299,12 @@ static JSValue js_monotonic(JSContext *ctx, JSValueConst this_val,
 static JSValue sys_file_load_bytes(JSContext *ctx, JSValueConst this_val,
                                    int argc, JSValueConst *argv)
 {
-    const char *path = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
-    if (!path)
+    if (argc < 1)
         return JS_ThrowTypeError(ctx, "File.LoadBytes(path) needs a path");
+
+    const char *path = file_path(ctx, argv[0], "File.LoadBytes");
+    if (!path)
+        return JS_EXCEPTION;
 
     char   *data = NULL;
     gsize   len  = 0;
@@ -3215,9 +3327,12 @@ static JSValue sys_file_load_bytes(JSContext *ctx, JSValueConst this_val,
 static JSValue sys_file_save_bytes(JSContext *ctx, JSValueConst this_val,
                                    int argc, JSValueConst *argv)
 {
-    const char *path = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
-    if (!path)
+    if (argc < 1)
         return JS_ThrowTypeError(ctx, "File.SaveBytes(path, bytes) needs a path");
+
+    const char *path = file_path(ctx, argv[0], "File.SaveBytes");
+    if (!path)
+        return JS_EXCEPTION;
 
     size_t         len   = 0;
     const uint8_t *bytes = argc > 1 ? bta_bytes_get(argv[1], &len) : NULL;
@@ -3606,15 +3721,17 @@ void bta_sys_cleanup(void)
         watch_job_free(watch_jobs->data);
     while (paste_jobs) {
         PasteJob *job = paste_jobs->data;
-        paste_jobs = g_list_remove(paste_jobs, job);
-        JS_FreeValue(job->ctx, job->cb);
-        g_free(job);
+
+        /* The read is cancelled and the job dropped; the completion answers
+         * into a pointer it only compares, never reads. */
+        g_cancellable_cancel(job->cancel);
+        paste_job_free(job);
     }
     while (dialog_jobs) {
         DialogJob *job = dialog_jobs->data;
-        dialog_jobs = g_list_remove(dialog_jobs, job);
-        JS_FreeValue(job->ctx, job->cb);
-        g_free(job);
+
+        g_cancellable_cancel(job->cancel);
+        dialog_job_free(job);
     }
 
     if (timers) {

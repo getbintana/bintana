@@ -430,7 +430,7 @@ static JSValue switcher_remove(JSContext *ctx, JSValueConst this_val,
     if (!w)
         return JS_EXCEPTION;
     if (argc < 1)
-        return JS_ThrowTypeError(ctx, "Remove(index)");
+        return JS_ThrowTypeError(ctx, "RemovePage(index) needs a page index");
 
     int32_t index;
     if (JS_ToInt32(ctx, &index, argv[0]))
@@ -438,7 +438,7 @@ static JSValue switcher_remove(JSContext *ctx, JSValueConst this_val,
 
     GtkWidget *page = stack_nth(w->slot, index);
     if (!page)
-        return JS_ThrowRangeError(ctx, "no page at index %d", index);
+        return JS_ThrowRangeError(ctx, "RemovePage: there is no page %d", index);
 
     /* Through the container: taking a child out is where the parent's reference
      * to it is dropped, and doing it by hand here is how they pile up. */
@@ -525,8 +525,8 @@ static const JSCFunctionListEntry switcher_props[] = {
     JS_CGETSET_DEF("Current", switcher_get_current, switcher_set_current),
     /* Append(child, [name]) */
     JS_CFUNC_DEF("Append", 2, switcher_append),
-    /* Remove(index) */
-    JS_CFUNC_DEF("Remove", 1, switcher_remove),
+    /* RemovePage(index) */
+    JS_CFUNC_DEF("RemovePage", 1, switcher_remove),
 };
 
 /* What Strip accepts, so a property grid offers the five and not a text field. */

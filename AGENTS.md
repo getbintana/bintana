@@ -1074,6 +1074,18 @@ half that is real -- *the scroll does arrive*. The documents that stated the
 same thing as a certainty (`reference/widgets/Editor.md`, `plans/git-plan.md`)
 say *may* now. **A negative about timing is not a property of the code; it is a
 bet on the scheduler.**
+**And the same bet can hide in a test that waits, because what it waits *for*
+is not the only clock in it.** `testExecControlLate` starts a child whose
+grandchild writes to descriptor 3 a third of a second later, and asserts the
+line is dropped -- which is only true if the job was freed first, and the job is
+freed on a loop that does not start until the rest of `Form_Open` has run.
+Under AddressSanitizer that takes longer than 0.3 s, so the exit, the read and
+the write were all pending at once, the read was dispatched first, the line was
+delivered while the job was alive -- correct behaviour -- and the test went red
+in every sanitized run while passing five out of five standalone. The sleep is
+two seconds now, which is an order of magnitude of headroom for the free path.
+The lesson is the same one: **find every clock a test depends on, not only the
+one it waits on.**
 
 **And a rectangle is not a promise either: measure it again before every
 gesture.** The stack assertions took the overlay's rectangle once and aimed two
@@ -1209,7 +1221,7 @@ Three things that will waste your time:
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
-  364 assertions against 2448 for the whole project -- 8.6 s against 254 on this
+  364 assertions against 2455 for the whole project -- 9.4 s against 265 on this
   machine -- which is what makes iterating on an early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.
@@ -1726,7 +1738,12 @@ person who wrote it either.
   the QuickJS number patch exists for, one layer up, and it was caught by a test
   asserting the round trip rather than by anybody reading the code.
   `g_ascii_dtostr` on the way out, `g_ascii_strtod` on the way in, for any
-  property that keeps a number as text.
+  property that keeps a number as text. **`Painter.Foreground` was the third
+  one**, and it is the one that threw: `rgba(%d,%d,%d,%.3g)` read
+  `rgba(32,64,96,0,5)` here, `lib/charts` assigned it straight to `p.Color`, and
+  `gdk_rgba_parse` refused it from inside a `Draw`. The alpha goes through
+  `g_ascii_formatd`, and `tests/widgets` matches the **whole** string now -- the
+  prefix test it had accepted the comma.
 - **A `.desktop` entry's `Exec` is quoted twice, and the outer layer is not the
   one you think.** `Exec` has a quoting of its own -- every argument in double
   quotes, with `"`, `` ` ``, `$` and `\` escaped inside them, and `%` doubled
@@ -3300,7 +3317,13 @@ person who wrote it either.
   deprecated in favour of a `set_date` that raises the floor), so `DatePicker`
   sets year, month and day — day to 1 first, or standing on the 31st and moving to
   February clamps on the way through — with the handler blocked for the three so
-  one assignment is one `Change`.
+  one assignment is one `Change`. **The three setters are 4.14, not "old"**, and
+  the floor this tree declares is 4.10: `gtk_calendar_set_day`/`_month`/`_year`
+  and `gtk_css_provider_load_from_string` (4.12, the appearance sheet) were the
+  only four calls above the floor, and each has a `GTK_CHECK_VERSION` guard now
+  falling back to `select_day` and `load_from_data`. CI runs GTK 4.14, so no run
+  here could ever have said so; the check is `GDK_AVAILABLE_IN_*` in the header,
+  which is the same rule the `GDK_ACTION_NONE` note above states.
 - **A leading comment can make a valid SVG unreadable.** gdk-pixbuf decides a
   file is SVG by looking for `<svg` in its first bytes, so a header comment long
   enough to push the element past that window loads as *"Unrecognized image file
@@ -3409,6 +3432,13 @@ person who wrote it either.
   not reach for it, and `Settings` disagreed with itself -- `Keys()` used the
   captured `ownKeys` while `Has` and `Get` beside it used `in`. **Own keys or
   the prototype answers: `hasOwn.call(bag, key)`, never `key in bag`.**
+  `rad.js` itself had three more, found last: `regexFlags` accepted
+  `new Regex("x", { constructor: true })` because `"constructor" in REGEX_FLAGS`
+  is true and then appended the inherited *function* to the flags string, so the
+  refusal came out as a syntax error about garbage; and `Table.Insert`/`Save`
+  asked `k.Column in decided` about a serialised row. **A bag of own values is
+  never asked with `in`** -- the class that had it right from the start is the
+  one to copy.
 - **`g_object_ref(NULL)` is a critical and carries on, which is how a wrong
   branch stays invisible.** `Split.Reorder` ref'd both halves before unparenting
   them, and a split with **one** half is ordinary -- it is what one looks like
@@ -3434,6 +3464,82 @@ person who wrote it either.
   exhaustion lost the debugger's channel in silence while Windows answered the
   same situation with a real exception. **When a helper's sentinel already means
   "nothing to do", a failure needs a different one.**
+- **A verb that takes a path takes a string, and the conversion was the bug.**
+  `JS_ToCString` converts anything, so `File.Save(undefined, t)` wrote
+  `./undefined`, `File.Delete(undefined)` deleted it, and `File.Save(p, rec)`
+  without the `Serialize()` replaced the file with `[object Object]` -- all
+  atomically and all silent. `file_path` in `bta_sys.c` is the one door the
+  file verbs go through now, and `Save`'s text is checked as text. The other
+  half is the loops: `Exec`'s `Environment`, the client's and `Answer`'s
+  `Headers` and the `Query` builder each skipped an entry whose conversion
+  failed and left the exception pending, so the child started without the
+  variable, the header was not sent, and the error landed on whatever called
+  into JS next. **A conversion failure is a refusal from the verb**, not a
+  skipped entry; a `Query` value of `undefined`/`null` is not sent; and
+  `first` moves only when an entry really went in.
+- **An empty `JS_EXCEPTION` is not a refusal, and in some builds it is a
+  crash.** Fifteen methods -- the list and table `Select`/`Deselect`, `Remove`,
+  `PickAt`/`ContainerAt`/`LocalPoint`, the editor's `OffsetAt`/`LineOf`/
+  `GotoLine`/`Select`/`Mark`/`Unmark`, and `Painter.TextWidth`/`TextHeight` --
+  wrote `if (argc < N || JS_ToInt32(...)) return JS_EXCEPTION;`, and the
+  short-circuit meant no exception was ever set for a missing argument:
+  `lb.Remove()` threw an object with `typeof e === "unknown"` and `e.message
+  === undefined`, and a bare C probe against the vendored engine segfaults on
+  the uninitialized value. The argc test and the conversion are separate now,
+  and the first throws a `TypeError` naming the signature. **QuickJS pads
+  `argv` to the declared arity**, so a function that reads `argv[0]` without an
+  `argc` check is reading `undefined` -- `TextWidth()` measured the string
+  `"undefined"`, which is the `db.Query()` trap one layer down.
+- **A NaN in a painter is worse than a refusal.** `arg_num` took whatever
+  `JS_ToFloat64` gave it, so `p.LineTo("abc", 5)` recorded a NaN: cairo puts
+  the context in an error state and **the rest of the frame draws nothing**,
+  with no throw and nothing to see. It refuses non-finite values now, naming
+  the call (`LineTo: NaN is not a finite number`) -- and that immediately found
+  a test calling `p.Text(10, 20, "sheet")`, text and coordinates the other way
+  round, which had been drawing the number 10 at a NaN y for as long as it had
+  been there. **The whole frame is the unit of damage**, which is why the check
+  belongs at the argument.
+- **`bta_to_int` had no range check, and `(int32_t)1e12` is undefined in C.**
+  It answered INT32_MIN on this machine, which is a number nobody typed. The
+  helper refuses past the range now -- `Columns.Width` was read with a bare
+  `JS_ToInt32` and took `"wide"` for `0`, and the two are one rule.
+- **`Stop` from inside a handler waits for the handler.** `Answer` fills the
+  message in; soup sends it when the handler returns. Disconnecting during the
+  dispatch -- `req.Answer(200, "bye"); srv.Stop();`, which is every `/shutdown`
+  endpoint -- answered the client with a closed connection. The disconnect is
+  an idle now, `Running` stays true until it runs (the port is still held,
+  which is the truth about the socket), and the counter is **global** because
+  it is decremented after a call that may have freed the server it belongs to.
+- **A clipboard read and a file dialog are jobs with a pending operation, and
+  teardown has to cancel them.** Both passed a NULL `GCancellable` and were
+  freed at cleanup with the operation still armed -- the `ExecJob` crash's
+  shape, harmless only because nothing dispatches after teardown. Each job has
+  its own cancellable now, cancelled at teardown, and the completion asks
+  membership of the list before touching the job: **the pointer is compared,
+  never read**. `on_paste`'s comment claimed this while the cancellable was
+  NULL, so the branch it described could not happen. The same cleanup leaked
+  its own reference on the server's auth domain, which `http_server_free`
+  always released.
+- **A subclass method that shadows a base one is a verb the base loses, and
+  `api.sh` cannot see it.** Six controls -- `ListBox`, `RowList`, `TreeView`,
+  `TableView`, `Notebook`, `Switcher` -- answered `Remove(index)`/`Remove(key)`
+  while every control's own `Remove()` detaches it from its parent, so a
+  `ListBox` could not be taken out of its container by the documented verb, and
+  `Remove(key)` and `Remove()` read as one thing. It is the `Expand`/`ExpandNode`
+  trap again, and the check was blind for the same reason: the `Remove` row under
+  `Widget` in `controls.md` "covered" the six, because `api.sh` asks whether a
+  name is documented *somewhere* and not under its own class. The item verbs are
+  `RemoveRow`/`RemovePage`/`RemoveNode` now -- one word per meaning, each naming
+  its address -- and `Remove()` detaches on all six, which `Removal` asserts.
+  **When a subclass needs a member the base already has, the subclass member is
+  the one that gets a new name**; check the base table before naming it
+  (`grep -n 'JS_C\(GETSET\|FUNC\)' runtime/src/bta_widget.c`).
+- **`git status --porcelain=v1 -z` spells a rename `R  new\0old\0`**, and the
+  IDE read it the other way round: the new file was marked `[D]` and the old
+  one was the row offered to open, so a renamed file could not be clicked and
+  the tree marked the wrong half. Measured with a real `git mv`; `filesIn`
+  (`show --name-status -z`, `R100\0old\0new\0`) was already right -- the two
+  commands order the pair differently, which is why the wrong one survived.
 
 ## Xml and Record
 
@@ -4243,9 +4349,10 @@ text cannot be modelled beside its attributes (`<guid isPermaLink>`), and
   fails the job. **`no-libxml` is the third and it is the hidden kind too**:
   libxml2's headers can arrive as some other package's dependency, so the same
   wrapper hides `libxml-2.0` and the same read-back proves it -- measured,
-  `tests/widgets` is **3566** in that build against **3665** with it, and green
-  both ways, because the XML tests fork on `Xml.Available` the way `testDatabase`
-  does on sqlite.
+  `tests/widgets` is **99 assertions fewer** in that build than with it
+  (measured 3566 against 3665 when the suite was that size; it has grown since),
+  and green both ways, because the XML tests fork on `Xml.Available` the way
+  `testDatabase` does on sqlite.
 - **An optional dependency shipping in the tarball is a promise about somebody
   else's machine.** The `package` job builds for the fewest shared libraries, and
   `libxml2-dev` can be pulled in by `libgtk-4-dev` without anybody asking -- so

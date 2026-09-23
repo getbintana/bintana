@@ -32,6 +32,35 @@ Ide.Runner = class Runner {
         this.ide = ide;
         /* The child, while there is one: an Exec handle. */
         this.job = null;
+        /* Lines waiting for the end of the turn: see `log`. */
+        this.pending  = [];
+        this.flushJob = null;
+    }
+
+    /*
+     * A line of the child's output, **collected and put in once per turn**.
+     *
+     * A program that prints in a tight loop otherwise asked the pane for one
+     * `Append` -- and one full-buffer copy of its text -- per line. Lines are
+     * batched into one append on the next turn, which is what `Timer.After(0)`
+     * is for.
+     */
+    log(text) {
+        this.pending.push(text);
+        if (this.flushJob) return;
+
+        this.flushJob = Timer.After(0, () => {
+            this.flushJob = null;
+            this.flushLog();
+        });
+    }
+
+    flushLog() {
+        if (!this.pending.length) return;
+
+        const batch = this.pending.join("");
+        this.pending.length = 0;
+        this.ide.log(batch);
     }
 
     start() {
@@ -42,7 +71,8 @@ Ide.Runner = class Runner {
          * execute something other than what is on screen. */
         ide.saveAllDirty();
 
-        ide.LogView.Clear();
+        ide.clearLog();
+        this.pending.length = 0;
         /* The console is cleared, and what the last run said about itself goes
          * with it: a place a program died at two runs ago is not a fact about
          * the program on screen now. */
@@ -69,7 +99,7 @@ Ide.Runner = class Runner {
         this.job = Exec([Application.Executable, ...this.options(), ide.project,
                          ...plan.arguments],
                         plan.options,
-                        (line) => ide.log(`${line}\n`),
+                        (line) => this.log(`${line}\n`),
                         (code) => this.finished(code));
     }
 
@@ -124,6 +154,9 @@ Ide.Runner = class Runner {
         const ide = this.ide;
 
         this.job = null;
+        /* Whatever arrived in the same turn as the exit, before the traceback
+         * below is read out of the pane. */
+        this.flushLog();
         ide.log(code === 0 ? "\n[finished ok]\n"
                            : `\n[finished with code ${code}]\n`);
         ide.running = false;
@@ -172,6 +205,23 @@ Ide.Runner = class Runner {
     linkAt(line, column, text) {
         const row = (text || "").split("\n")[line - 1];
         if (!row) return "";
+
+        /*
+         * **A path may hold a space**, and the token walk below stops at one --
+         * so a place in `/tmp/My Projects/Main.js` was unclickable. This first
+         * pass looks for a whole place containing the click and allows the
+         * space: an absolute path, or a relative one with a folder in it. It is
+         * not a looser token walk -- prose does not match, because the pattern
+         * still has to end in `.js:NN`.
+         */
+        const spaced = new Regex(
+            "(?:[/~][\\w./+ \\-]+|[\\w.+\\-]+/[\\w.+\\- ]+(?:/[\\w.+\\- ]+)*)" +
+            "\\.(?:js|form|json):\\d+");
+
+        for (const m of spaced.Matches(row)) {
+            if (column - 1 >= m.Index && column - 1 < m.Index + m.Value.length)
+                return m.Value;
+        }
 
         const TOKEN = /[\w./+:-]/;
         let from = column - 1;

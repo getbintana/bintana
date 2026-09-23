@@ -10965,6 +10965,30 @@ function* p_git(ide) {
     ide.refreshGit();
 
     /*
+     * --- a rename, which `-z` spells backwards from what one expects --------
+     *
+     * Measured: after `git mv Uno.js Dos.js`, `git status --porcelain=v1 -z`
+     * answers `R  Dos.js\0Uno.js\0` -- the record's own path is the **new**
+     * name and the old one is the next record. Read the other way round, the
+     * new file was marked deleted and the old one was the row the panel offered
+     * to open: a rename whose row goes nowhere.
+     */
+    run("mv", "Uno.js", "Dos.js");
+    ide.refreshGit();
+    yield* settled(ide);
+
+    eq("a rename is seen on its new name", git.stateOf("Dos.js"), "R");
+    eq("and the name it had is not a file any more", git.stateOf("Uno.js"), "");
+    eq("the changes panel offers the new name",
+       git.split().staged.map((r) => r.path).join(), "Dos.js");
+    eq("with the rename's state", git.split().staged[0].state, "R");
+
+    /* Committed, so nothing below finds the repository mid-gesture. */
+    run("commit", "-qm", "renombrado");
+    ide.refreshGit();
+    yield* settled(ide);
+
+    /*
      * --- back to what the phases after this one expect ----------------------
      *
      * This one opened a **project of its own**, which nothing else here does:
@@ -11060,6 +11084,30 @@ function* p_debug(ide) {
     yield* settled(ide);
     check("and opening it again puts the mark back",
           lines().includes(at.line), JSON.stringify(lines()));
+
+    /*
+     * --- a mark moves with the editing, and the map has to hear about it -----
+     *
+     * GtkSourceView moves the mark when text is inserted above it, but the
+     * debugger's map is only written when a tab is remembered -- so `all()`
+     * read it for an open tab and a run armed the line the file had when it was
+     * last remembered. Two lines above the breakpoint is a two-line move.
+     */
+    const moved = at.line + 2;
+
+    ide.Editor.Select(1, 1, 0);
+    ide.Editor.Insert("// una\n// dos\n");
+    yield* settled(ide);
+
+    check("the gutter moved the breakpoint with the text",
+          lines().includes(moved), JSON.stringify(lines()));
+    eq("and the debugger reports where it is now",
+       ide.debugger_.all()[0].line, moved);
+
+    /* Back the way it was, so the cleanup below acts on the line it expects. */
+    ide.Editor.Undo();
+    yield* settled(ide);
+    check("undo puts it back", lines().includes(at.line), JSON.stringify(lines()));
 
     /* --- back to what the phase after this one expects ----------------------- */
     /* The caret went back to the top when the tab reopened, and F9 acts where

@@ -253,8 +253,9 @@ Ide.Translations = class Translations {
         const hint = have.length ? ` Already here: ${have.join(", ")}.` : "";
 
         this.ide.newTranslationAsk =
-            AskForm.prompt("New translation",
-                           `Locale for the new catalogue, like es, pt_BR or de.${hint}`,
+            AskForm.prompt(Locale.Text("New translation"),
+                           Locale.Text("Locale for the new catalogue, like es, pt_BR or de.{0}",
+                                       hint),
                            "", (value) => {
             const lang = String(value).trim();
 
@@ -354,8 +355,8 @@ Ide.Translations = class Translations {
             ? `Installed here: ${installed.join(", ")}.`
             : "None of the usual ones is installed here (poedit, gtranslator, lokalize).";
 
-        AskForm.prompt("Translation editor",
-                       `Command to open a .po with. ${hint}`,
+        AskForm.prompt(Locale.Text("Translation editor"),
+                       Locale.Text("Command to open a .po with. {0}", hint),
                        Settings.Get(PO_EDITOR_KEY, "") || installed[0] || "poedit",
                        (value) => {
             const cmd = String(value).trim();

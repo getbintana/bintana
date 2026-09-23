@@ -1203,7 +1203,7 @@ static bool table_build_columns(JSContext *ctx, BtaWidget *w, JSValueConst list)
 
         JSValue wv = JS_GetPropertyStr(ctx, col, "Width");
         int32_t px = 0;
-        if (!JS_IsUndefined(wv) && JS_ToInt32(ctx, &px, wv)) {
+        if (!JS_IsUndefined(wv) && !bta_to_int(ctx, wv, "Columns.Width", &px)) {
             JS_FreeValue(ctx, wv);
             JS_FreeValue(ctx, col);
             return false;
@@ -1237,7 +1237,10 @@ static bool table_build_columns(JSContext *ctx, BtaWidget *w, JSValueConst list)
 
         JSValue wv = JS_GetPropertyStr(ctx, col, "Width");
         int32_t px = 0;
-        JS_ToInt32(ctx, &px, wv);
+        /* Validated above, so this cannot fail; and if it ever did, the pending
+         * exception is the refusal and not something to swallow. */
+        if (!JS_IsUndefined(wv))
+            bta_to_int(ctx, wv, "Columns.Width", &px);
         JS_FreeValue(ctx, wv);
 
         bool  bad = false;
@@ -1382,8 +1385,12 @@ static bool table_become_tree(JSContext *ctx, BtaWidget *w)
 }
 
 /* The values into a row's cells. Everything is text once it is in one: a number
- * formatted by whoever knows how it should read beats this guessing. */
-static void table_fill_cells(JSContext *ctx, BtaTableRow *row, JSValueConst values)
+ * formatted by whoever knows how it should read beats this guessing.
+ *
+ * A value that cannot become text is a refusal and not an empty cell: `s ? s :
+ * ""` swallowed the failure with the conversion's exception still pending, so
+ * the row went in looking filled and the error landed on whoever asked next. */
+static bool table_fill_cells(JSContext *ctx, BtaTableRow *row, JSValueConst values)
 {
     if (JS_IsArray(values)) {
         JSValue  lenv = JS_GetPropertyStr(ctx, values, "length");
@@ -1395,16 +1402,23 @@ static void table_fill_cells(JSContext *ctx, BtaTableRow *row, JSValueConst valu
             JSValue     v = JS_GetPropertyUint32(ctx, values, i);
             const char *s = JS_ToCString(ctx, v);
 
-            g_ptr_array_add(row->cells, g_strdup(s ? s : ""));
+            if (!s) {
+                JS_FreeValue(ctx, v);
+                return false;   /* it threw on the way; that stands */
+            }
+            g_ptr_array_add(row->cells, g_strdup(s));
             JS_FreeCString(ctx, s);
             JS_FreeValue(ctx, v);
         }
-        return;
+        return true;
     }
 
     const char *s = JS_ToCString(ctx, values);
-    g_ptr_array_add(row->cells, g_strdup(s ? s : ""));
+    if (!s)
+        return false;
+    g_ptr_array_add(row->cells, g_strdup(s));
     JS_FreeCString(ctx, s);
+    return true;
 }
 
 /*
@@ -1419,8 +1433,8 @@ static void table_fill_cells(JSContext *ctx, BtaTableRow *row, JSValueConst valu
  * -- and it keeps `Add(values)` exactly as it was.
  *
  * The key is the application's -- a path, an id -- and it is what everything
- * else takes from then on: `Cell`, `SetCell`, `SetIcon`, `Row` and `Remove` all
- * address a node by key, because a *position* in a tree is of the visible list
+ * else takes from then on: `Cell`, `SetCell`, `SetIcon`, `Row` and `RemoveNode`
+ * all address a node by key, because a *position* in a tree is of the visible list
  * and moves when something above it collapses.
  */
 static JSValue table_add_node(JSContext *ctx, BtaWidget *w, JSValueConst values,
@@ -1454,7 +1468,10 @@ static JSValue table_add_node(JSContext *ctx, BtaWidget *w, JSValueConst values,
     node->key      = g_strdup(key);
     node->children = g_list_store_new(BTA_TYPE_TABLE_ROW);
     node->parent   = parent;
-    table_fill_cells(ctx, node, values);
+    if (!table_fill_cells(ctx, node, values)) {
+        g_object_unref(node);
+        return JS_EXCEPTION;
+    }
 
     /* The icon goes in with the node, the way `TreeView.Add` takes one: a
      * `SetIcon` per node afterwards is a second call for something that was
@@ -1522,7 +1539,10 @@ static JSValue table_add(JSContext *ctx, JSValueConst this_val,
 
     BtaTableRow *row = g_object_new(BTA_TYPE_TABLE_ROW, NULL);
 
-    table_fill_cells(ctx, row, argv[0]);
+    if (!table_fill_cells(ctx, row, argv[0])) {
+        g_object_unref(row);
+        return JS_EXCEPTION;
+    }
 
     TableState *st = table_state(w);
 
@@ -1576,46 +1596,74 @@ static JSValue table_clear(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
-static JSValue table_remove(JSContext *ctx, JSValueConst this_val,
-                            int argc, JSValueConst *argv)
+/*
+ * `RemoveNode(key)` and `RemoveRow(index)`, and not one `Remove` that means the
+ * index here and the key there: the control is flat or a tree, so which address
+ * a call wants is a fact about the table, and a program reading `t.Remove(x)`
+ * cannot tell which one it wrote. Each says which mode it belongs to and what
+ * the other verb is.
+ */
+static JSValue table_remove_node(JSContext *ctx, JSValueConst this_val,
+                                 int argc, JSValueConst *argv)
 {
     BtaWidget *w = bta_this(ctx, this_val);
     if (!w)
         return JS_EXCEPTION;
 
     TableState *st = table_state(w);
+    if (!st->tree)
+        return JS_ThrowTypeError(ctx, "RemoveNode(key) is for a table that is a "
+                                      "tree; this one is flat, and a row is "
+                                      "addressed by its index: RemoveRow(index)");
 
-    /* A tree is addressed by key, and removing a node removes what is under
-     * it: a subtree with no parent is not a thing this control can show. */
-    if (st->tree) {
-        const char *key = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
-        if (!key)
-            return JS_ThrowTypeError(ctx, "Remove(key) expects a node's key");
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "RemoveNode(key) expects a node's key");
 
-        BtaTableRow *node = table_node(w, key);
-        if (!node) {
-            JSValue e = JS_ThrowRangeError(ctx, "Remove: there is no node '%s'", key);
-            JS_FreeCString(ctx, key);
-            return e;
-        }
+    const char *key = JS_ToCString(ctx, argv[0]);
+    if (!key)
+        return JS_EXCEPTION;
+
+    BtaTableRow *node = table_node(w, key);
+    if (!node) {
+        JSValue e = JS_ThrowRangeError(ctx, "RemoveNode: there is no node '%s'", key);
         JS_FreeCString(ctx, key);
-
-        GListStore *store = table_store_of(w, node);
-        int         at    = table_index_in(store, node);
-
-        table_forget(w, node);
-        if (at >= 0)
-            g_list_store_remove(store, (guint)at);
-        return JS_UNDEFINED;
+        return e;
     }
+    JS_FreeCString(ctx, key);
+
+    /* Removing a node removes what is under it: a subtree with no parent is not
+     * a thing this control can show. */
+    GListStore *store = table_store_of(w, node);
+    int         at    = table_index_in(store, node);
+
+    table_forget(w, node);
+    if (at >= 0)
+        g_list_store_remove(store, (guint)at);
+    return JS_UNDEFINED;
+}
+
+static JSValue table_remove_row(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    TableState *st = table_state(w);
+    if (st->tree)
+        return JS_ThrowTypeError(ctx, "RemoveRow(index) is for a flat table; "
+                                      "this one is a tree, where a node is "
+                                      "addressed by its key: RemoveNode(key)");
 
     int32_t i;
-    if (argc < 1 || JS_ToInt32(ctx, &i, argv[0]))
-        return JS_ThrowTypeError(ctx, "Remove(index) expects a row");
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "RemoveRow(index) expects a row");
+    if (JS_ToInt32(ctx, &i, argv[0]))
+        return JS_EXCEPTION;
 
     GListStore *rows = st->rows;
     if (i < 0 || (guint)i >= g_list_model_get_n_items(G_LIST_MODEL(rows)))
-        return JS_ThrowRangeError(ctx, "Remove: there is no row %d", i);
+        return JS_ThrowRangeError(ctx, "RemoveRow: there is no row %d", i);
 
     g_list_store_remove(rows, (guint)i);
     return JS_UNDEFINED;
@@ -2271,8 +2319,11 @@ static JSValue table_select_one(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     int32_t i;
-    if (argc < 1 || JS_ToInt32(ctx, &i, argv[0]))
-        return JS_EXCEPTION;
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx,
+            "Select(index)/Deselect(index) needs a row index");
+    if (JS_ToInt32(ctx, &i, argv[0]))
+        return JS_EXCEPTION;        /* it threw on the way; that stands */
 
     GtkSelectionModel *sel = table_model(w);
     guint              n   = g_list_model_get_n_items(G_LIST_MODEL(sel));
@@ -2336,8 +2387,10 @@ static const JSCFunctionListEntry table_props[] = {
     JS_CFUNC_DEF("Exists",   1, table_exists),
     /* Clear() */
     JS_CFUNC_DEF("Clear",   0, table_clear),
-    /* Remove(index) */
-    JS_CFUNC_DEF("Remove",  1, table_remove),
+    /* RemoveRow(index) */
+    JS_CFUNC_DEF("RemoveRow",  1, table_remove_row),
+    /* RemoveNode(key) */
+    JS_CFUNC_DEF("RemoveNode", 1, table_remove_node),
     /* Row(index) */
     JS_CFUNC_DEF("Row",     1, table_row),
     /* Cell(row, column) */

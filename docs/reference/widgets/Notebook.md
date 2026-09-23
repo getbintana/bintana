@@ -18,7 +18,7 @@ follows is what is its own.
 | `Tabs` | the strip, as an array of strings. **Translated** | [the strip](#the-strip) |
 | `Append(child, [label])` | one more page | [the pages](#the-pages) |
 | `GetAction(where)` | → the widget in that end of the strip, or `null` | [a widget in the strip](#a-widget-in-the-strip) |
-| `Remove(index)` | takes a page out | [the pages](#the-pages) |
+| `RemovePage(index)` | takes a page out | [the pages](#the-pages) |
 | `SetAction(control, [where])` | puts a widget **in the strip** instead of making it a page | [a widget in the strip](#a-widget-in-the-strip) |
 | `SetTabLabel(index, label)` | renames one tab | [the strip](#the-strip) |
 | **event** `Switch(index)` | a different page is showing | [the page showing](#the-page-showing) |
@@ -28,7 +28,7 @@ follows is what is its own.
 | | |
 |---|---|
 | `Append(child, [label])` | one more page, at the end. The child **is** the page — usually a [`Panel`](Panel.md), which is then an ordinary container |
-| `Remove(index)` | takes that page out, and the control in it goes with it |
+| `RemovePage(index)` | takes that page out, and the control in it goes with it |
 | `Count` (ro) | how many pages there are. **An action widget in the strip is not one** |
 
 A page declared in a `.form` is an ordinary child; `Tabs` names them.

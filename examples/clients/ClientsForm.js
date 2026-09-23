@@ -523,7 +523,7 @@ class ClientsForm extends Form {
                 return;
             }
             this.rows.splice(at, 1);
-            this.Clients.Remove(at);
+            this.Clients.RemoveRow(at);
             this.pick();
             this.say(Locale.Text("Deleted {0}", c.Name));
         });
@@ -856,7 +856,7 @@ class ClientsForm extends Form {
             return;
         }
         this.orderRows.splice(at, 1);
-        this.Orders.Remove(at);
+        this.Orders.RemoveRow(at);
         this.showOrder();
         this.total();
     }

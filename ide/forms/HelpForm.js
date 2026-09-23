@@ -46,11 +46,13 @@ function candidates() {
     ];
 }
 
-/* The three folders, in the order the tree shows them. */
+/* The three folders, in the order the tree shows them.  The heading is not
+ * here: `Locale.Text(SOME_CONST)` extracts nothing, so the literal lives at
+ * the call site, in `sectionTitle`. */
 const SECTIONS = [
-    { key: "widgets",   text: "Controls" },
-    { key: "globals",   text: "Globals" },
-    { key: "libraries", text: "Libraries" },
+    { key: "widgets"   },
+    { key: "globals"   },
+    { key: "libraries" },
 ];
 
 class HelpForm extends Form {
@@ -105,6 +107,15 @@ class HelpForm extends Form {
         this.go(File.Join(this.root, "README.md"));
     }
 
+    /* The heading of a section, with the literal at the call site: a msgid held
+     * in a `const` is one no extractor sees, and it was in no catalogue. */
+    sectionTitle(key) {
+        if (key === "widgets")   return Locale.Text("Controls");
+        if (key === "globals")   return Locale.Text("Globals");
+        if (key === "libraries") return Locale.Text("Libraries");
+        return key;
+    }
+
     /* The tree: a node per section, a node per page. The key is the path, so
      * choosing one needs no lookup at all. */
     fill() {
@@ -115,7 +126,7 @@ class HelpForm extends Form {
             const dir = File.Join(this.root, section.key);
             if (!File.IsDir(dir)) continue;
 
-            this.Pages.Add(`cat:${section.key}`, Locale.Text(section.text), "",
+            this.Pages.Add(`cat:${section.key}`, this.sectionTitle(section.key), "",
                            "folder-documents-symbolic");
 
             for (const path of Directory.Files(dir, "*.md"))

@@ -181,6 +181,11 @@ Most text needs none of this: see
 
 ## File
 
+A **path is a string** and `Save`'s text is a string: anything else is refused
+with a sentence. It used to convert, so `Save(undefined, t)` wrote `./undefined`,
+`Delete(undefined)` deleted it, and a record without its `Serialize()` replaced
+the file with `[object Object]`.
+
 | | |
 |---|---|
 | `Load(path)` | the whole file as a string; throws if unreadable |
@@ -361,7 +366,7 @@ An options object may come between the argv and the callbacks:
 | Option | |
 |---|---|
 | `Directory` | where to start the child |
-| `Environment` | names to add or change; a `null` value **removes** one. A change, not a replacement |
+| `Environment` | names to add or change; a `null` value **removes** one. A change, not a replacement. A value that cannot become text is refused by the call, not skipped |
 | `Stderr` | `"separate"` keeps the streams apart — the line callback then gets `"out"`/`"err"` as its second argument. Merged is the default, and merging is what keeps the order |
 | `Timeout` | milliseconds before the child is ended; absent waits forever |
 | `KillAfter` | milliseconds between SIGTERM and SIGKILL, `5000` by default |
@@ -1344,7 +1349,10 @@ later. The handle answers `Running`, `TimedOut`, `Url`, `Method` and `Stop()`
 `Headers`, `Query: {k:v}` (appended escaped), `Body`, `ContentType`, `Timeout`,
 `FollowRedirects`, `Auth` — and naming any of them is what makes an object
 options rather than a JSON body. A repeated response header keeps the last of
-them, `Set-Cookie` included, which is what `Cookies: true` is for.
+them, `Set-Cookie` included, which is what `Cookies: true` is for. A `Query`
+value of `undefined` or `null` is not sent, and a header or query value that
+cannot become text is refused by the call — not skipped with the conversion's
+error left pending.
 
 **`Stream` reads before EOF**, which is the difference: the other verbs answer
 once, when the response is complete, and a feed that never completes is
@@ -1399,7 +1407,7 @@ srv.Start();
 | `req.Multipart()` | the upload parsed: a `Multipart` to read with `Part(index)` (or re-post). Refused on a plain body |
 | `Request` | assign `(req) => …`; required before `Start`, replaceable while running -- including from inside the handler, which finishes the request it was running |
 | `Start()` | listens; throws naming the reason (a busy port says which one). A second `Start` is refused |
-| `Stop()` | `true` while something was listening, `false` after — like signalling a reaped child |
+| `Stop()` | `true` while something was listening, `false` after — like signalling a reaped child. **From inside a handler it waits for the handler**: `Answer` fills the message in and soup sends it when the handler returns, so `req.Answer(200, "bye"); srv.Stop();` answers first and disconnects after. `Running` stays true until the deferred disconnect runs |
 | `Running`, `Port`, `Url` | `Port` is declared until `Start`, actual after; `Url` is `""` until then, and empty again after `Stop` |
 | `Answer(status, [body], [opts])` | on the request: `body` follows the client's rules (object serialises canonical), `opts` carries `Headers` and `ContentType`. The second argument is always the body, the third always the options |
 | `req.Method`, `req.Path`, `req.Query`, `req.Headers`, `req.Body`, `req.Remote` | `Headers` lower-cased and `Body` always `Bytes`, like the client's answers; `Query` repeats keep one; `Remote` is the IP |

@@ -36,7 +36,7 @@ matters is in the section.
 | `Clear()` | empties it | [the rows](#the-rows) |
 | `Deselect(index)` | unselects a row | [the selection](#the-selection) |
 | `DeselectAll()` | selects nothing | [the selection](#the-selection) |
-| `Remove(index)` | takes a row out | [the rows](#the-rows) |
+| `RemoveRow(index)` | takes a row out | [the rows](#the-rows) |
 | `Select(index)` | selects a row | [the selection](#the-selection) |
 | `SelectAll()` | every row, with `MultiSelect` | [the selection](#the-selection) |
 
@@ -92,7 +92,7 @@ why the rows go in in the array's order and stay in it.
 |---|---|
 | `Items` | the whole list, as an array of strings. Assigning replaces every row at once; reading gives the rows as they are now. **Translated** — a list declared in a `.form` goes through the catalogue |
 | `Add(text)` | one row at the end, which is what a list being filled a row at a time wants |
-| `Remove(index)` | takes that row out |
+| `RemoveRow(index)` | takes that row out |
 | `Clear()` | empties it |
 | `Count` (ro) | how many rows there are |
 
@@ -139,7 +139,7 @@ the action — a menu of choices, a palette.
   re-enters whatever `Select` does. Assigning `Items` and calling `Add` do
   **not** raise it. `examples/notes` carries a `showing` flag for exactly this,
   which is the plain answer: set it around the assignment and return early.
-- **The button stayed enabled after the row was removed.** `Remove` and `Clear`
+- **The button stayed enabled after the row was removed.** `RemoveRow` and `Clear`
   leave nothing selected — `Index` is `-1` — and **raise no event**, so whatever
   `Select` was keeping up to date is now stale. Update it yourself on the line
   after, or call the same method `Select` calls.

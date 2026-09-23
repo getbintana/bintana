@@ -366,7 +366,9 @@ static JSValue ed_offset_at(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     int32_t line = 1, column = 1;
-    if (argc < 1 || JS_ToInt32(ctx, &line, argv[0]))
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "OffsetAt(line, [column]) needs a line");
+    if (JS_ToInt32(ctx, &line, argv[0]))
         return JS_EXCEPTION;
     if (argc > 1 && !JS_IsUndefined(argv[1]) && JS_ToInt32(ctx, &column, argv[1]))
         return JS_EXCEPTION;
@@ -400,7 +402,9 @@ static JSValue ed_line_of(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     int32_t index = 0;
-    if (argc < 1 || JS_ToInt32(ctx, &index, argv[0]))
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "LineOf(index) needs an index");
+    if (JS_ToInt32(ctx, &index, argv[0]))
         return JS_EXCEPTION;
 
     GtkTextBuffer *buf = buffer_of(w);
@@ -422,7 +426,9 @@ static JSValue ed_goto_line(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     int32_t line;
-    if (argc < 1 || JS_ToInt32(ctx, &line, argv[0]))
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "GotoLine(line) needs a line");
+    if (JS_ToInt32(ctx, &line, argv[0]))
         return JS_EXCEPTION;
 
     GtkTextBuffer *buf = buffer_of(w);
@@ -581,7 +587,9 @@ static JSValue ed_select(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     int32_t line, column = 1, length = 0;
-    if (argc < 1 || JS_ToInt32(ctx, &line, argv[0]))
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "Select(line, [column], [length]) needs a line");
+    if (JS_ToInt32(ctx, &line, argv[0]))
         return JS_EXCEPTION;
     if (argc > 1 && !JS_IsUndefined(argv[1]) && JS_ToInt32(ctx, &column, argv[1]))
         return JS_EXCEPTION;

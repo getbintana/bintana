@@ -141,7 +141,8 @@ Ide.FormFiles = class FormFiles {
             return;
         }
         const suggested = this.ide.suggestFormName();
-        AskForm.prompt("New form", "Class name (a folder is allowed):", suggested,
+        AskForm.prompt(Locale.Text("New form"),
+                       Locale.Text("Class name (a folder is allowed):"), suggested,
                        (name, useNs) => this.createForm(name, "Form", useNs),
                        this.ide.namespaceOption(suggested));
     }
@@ -260,7 +261,8 @@ Ide.FormFiles = class FormFiles {
             return;
         }
         const suggested = this.ide.suggestFormName("Module");
-        AskForm.prompt("New module", "Class name (a folder is allowed):", suggested,
+        AskForm.prompt(Locale.Text("New module"),
+                       Locale.Text("Class name (a folder is allowed):"), suggested,
                        (name, useNs) => this.createModule(name, useNs),
                        this.ide.namespaceOption(suggested));
     }
@@ -345,7 +347,8 @@ Ide.FormFiles = class FormFiles {
             return;
         }
         const suggested = this.ide.suggestFormName("Part");
-        AskForm.prompt("New component", "Class name (a folder is allowed):", suggested,
+        AskForm.prompt(Locale.Text("New component"),
+                       Locale.Text("Class name (a folder is allowed):"), suggested,
                        (name, useNs) => this.createForm(name, "Component", useNs),
                        this.ide.namespaceOption(suggested));
     }
@@ -376,12 +379,14 @@ Ide.FormFiles = class FormFiles {
              * being looked at says which one is being renamed. */
             const file = this.ide.activeFile;
             this.ide.renamePrompt = AskForm.prompt(
-                "Rename form", "New class name (a folder moves it):",
+                Locale.Text("Rename form"),
+                Locale.Text("New class name (a folder moves it):"),
                 File.BaseName(file),
                 (name) => this.renameForm(this.ide.qualifiedName(file), name));
         } else {
             this.ide.renamePrompt = AskForm.prompt(
-                "Rename file", "New name (a folder moves it):",
+                Locale.Text("Rename file"),
+                Locale.Text("New name (a folder moves it):"),
                 File.Name(this.ide.activeFile),
                 (name) => this.renameFile(this.ide.activeFile, name));
         }
@@ -670,9 +675,10 @@ Ide.FormFiles = class FormFiles {
         }
 
         const lines = plan.map((m) => `${m.file}  ->  ${m.to}${m.pair ? " (+ .js)" : ""}`);
-        ConfirmForm.ask("Tidy files into folders",
-                        `${plan.length} of them will move:\n\n${lines.join("\n")}`,
-                        "Tidy", () => this.tidy(plan));
+        ConfirmForm.ask(Locale.Text("Tidy files into folders"),
+                        Locale.Text("{0} of them will move:\n\n{1}",
+                                    plan.length, lines.join("\n")),
+                        Locale.Text("Tidy"), () => this.tidy(plan));
     }
 
     tidy(plan) {
@@ -702,9 +708,10 @@ Ide.FormFiles = class FormFiles {
         if (!this.ide.activeFile) return;
 
         const targets = this.ide.pairOf(this.ide.activeFile);
-        ConfirmForm.ask("Delete from project",
-                        `These will be deleted from disk:\n\n${targets.join("\n")}`,
-                        "Delete", () => this.deleteFiles(targets));
+        ConfirmForm.ask(Locale.Text("Delete from project"),
+                        Locale.Text("These will be deleted from disk:\n\n{0}",
+                                    targets.join("\n")),
+                        Locale.Text("Delete"), () => this.deleteFiles(targets));
     }
 
     /*
@@ -792,17 +799,6 @@ Ide.FormFiles = class FormFiles {
      * it does, without having to remember the naming convention.
      */
     /*
-     * Is that handler already written?  The same regular expression
-     * `openHandler` uses to decide between jumping and writing, asked without
-     * doing either -- which is what lets the Form menu say which of a control's
-     * events are already answered.
-     */
-    hasHandler(controlName, eventName) {
-        return new Regex(`\\b${Regex.Escape(`${controlName}_${eventName}`)}\\s*\\(`)
-                   .IsMatch(this.siblingSource());
-    }
-
-    /*
      * What the `.js` beside the form being designed says **now**.
      *
      * The tab when it is open, and the file otherwise: a handler written a
@@ -873,7 +869,13 @@ Ide.FormFiles = class FormFiles {
 
         const method = `${controlName}_${eventName}`;
         const source = editor ? editor.Text : File.Load(jsPath);
-        const already = new Regex(`\\b${Regex.Escape(method)}\\s*\\(`);
+        /* **The anchored rule, the same one `handlersIn` uses.** `\b` alone
+         * found `this.BtnOk_Click()` inside a call and took it for the
+         * declaration: the menu marked the handler as written and a double
+         * click jumped to the call instead of writing the method. */
+        const already = new Regex(
+            `^ {4}(?:static\\s+|async\\s+)*${Regex.Escape(method)}\\s*\\(`,
+            { Multiline: true });
 
         let line;
         const found = already.Match(source);

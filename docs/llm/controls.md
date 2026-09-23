@@ -597,10 +597,20 @@ same:
 **The words for using one are the words for using the next.** `Index` is the
 selected row and `Count` is how many; `MultiSelect` with `Selection`,
 `Select(i)`, `Deselect(i)`, `SelectAll()` and `DeselectAll()` are the same six
-members wherever more than one row can be chosen; `Add`, `Remove` and `Clear`
-put rows in and take them out; `Select` and `Activate` are the two events, with
+members wherever more than one row can be chosen; `Add` and `Clear` put rows in
+and take them out; `Select` and `Activate` are the two events, with
 `ActivateOnSingleClick` deciding which click raises the second. What differs is
-only what `Add` takes, and that is the difference between the controls.
+what `Add` takes — and what taking one out is called.
+
+**Taking one out names the address, not the class.** `RemoveRow(index)` on a
+`ListBox`, a `RowList` and a flat `TableView`; `RemovePage(index)` on a
+`Notebook` and a `Switcher`; `RemoveNode(key)` on a `TreeView` and on a
+`TableView` that is a tree. It is deliberately **not** `Remove`: that is every
+control's own *detach* — `Widget.Remove`, "out of its parent, and still alive" —
+and six classes answering to the same name meant a `ListBox` could not be taken
+out of its container by the documented verb, and that `Remove(key)` and
+`Remove()` read as one thing. One word, one meaning, and the verb says which
+address it wants where a single `Remove(x)` could not.
 
 What is not shared is what one control alone can answer: `Items` and `Text` need
 rows that *are* text (`ListBox`, and `ComboBox` beside it), `Filter` needs rows
@@ -626,7 +636,7 @@ A list of strings.
 | `Clear()` | empties it |
 | `Deselect(index)` | unselects it |
 | `DeselectAll()` | selects nothing |
-| `Remove(index)` | takes that row out |
+| `RemoveRow(index)` | takes that row out |
 | `Select(index)` | selects that row |
 | `SelectAll()` | with `MultiSelect` |
 | **event** `Select()` | the selection moved. Ask `Index` or `Text` for what it is now |
@@ -656,7 +666,7 @@ headings is a `TreeView`; one *with* them — columns, widths, alignment — is 
 `TableView` whose rows nest ([below](#tableview)).
 
 Everything they both do, they do with the same words: `Key`, `Count`,
-`AutoExpand`, `Add`, `Clear`, `Remove(key)` (with the subtree), `Exists`,
+`AutoExpand`, `Add`, `Clear`, `RemoveNode(key)` (with the subtree), `Exists`,
 `ExpandNode`, `CollapseNode`, `Expanded`, `ExpandAll`, `CollapseAll`, `SetIcon`.
 Three things differ, and each for a reason worth knowing:
 
@@ -682,7 +692,7 @@ Three things differ, and each for a reason worth knowing:
 | `CollapseAll()` | every node |
 | `CollapseNode(key)` | closes it |
 | `Exists(key)` | → whether that node is there |
-| `Remove(key)` | takes that node out **and the subtree with it** — a node whose parent is gone is not something this control can show |
+| `RemoveNode(key)` | takes that node out **and the subtree with it** — a node whose parent is gone is not something this control can show |
 | `SetText(key, text)` | renames a node. **Translated** |
 | `SetIcon(key, name)` | its icon, or `""` for none. One column, so no column argument — otherwise it is `TableView`'s |
 | `ExpandAll()` | every node |
@@ -714,7 +724,8 @@ A list with columns, **and its rows may nest**. The control to reach for wheneve
 | `Expanded(key)` | → whether it is open |
 | `Cell(row, column)` | → one value. Refused on an on-demand table |
 | `Clear()` | empties it |
-| `Remove(index)` | takes a row out |
+| `RemoveRow(index)` | takes a row out. **Flat only** — on a tree, `RemoveNode(key)` |
+| `RemoveNode(key)` | takes that node out **and the subtree with it**. **Tree only** — on a flat table, `RemoveRow(index)` |
 | `Row(index)` | → that row's values. Refused on an on-demand table |
 | `SetCell(row, column, value)` | one cell, in place |
 | `SetIcon(row, column, name)` | an icon beside a cell's text. Refused on an on-demand table |
@@ -739,7 +750,7 @@ Decided by the first row put in it, and `Clear()` decides again:
 | **a tree** | ✖ | ✔ | ✖ |
 
 **In a tree, a row is addressed by its key** — `Cell(key, column)`,
-`SetCell(key, …)`, `SetIcon(key, …)`, `Row(key)`, `Remove(key)`, which takes the
+`SetCell(key, …)`, `SetIcon(key, …)`, `Row(key)`, `RemoveNode(key)`, which takes the
 subtree with it. That is not a second spelling of the same thing: a *position* in
 a tree is a position in the **visible** list, so it moves when something above it
 collapses. `Index` still answers where the highlight is right now; `Key` is what
@@ -931,6 +942,13 @@ widget's own font.
 | `TextHeight(text, [options])` | how tall it would be. A chart asking for a line's height passes `"0"`; the same options, so a wrapped or styled run measures as what it will be |
 | `TextWidth(text, [options])` | how wide it would be, which is how a label is right-aligned |
 | `Translate(x, y)` | move the origin |
+
+**Every coordinate has to be a finite number.** A `NaN` — a series with a missing
+reading makes `p.LineTo(x, undefined)` an ordinary line — is worse than a
+refusal: cairo records the call, puts the context in an error state, and *the
+rest of the frame draws nothing*, with no throw and nothing to see. So a `NaN`,
+an infinity or a word is refused where it is written, naming the call it belongs
+to (`LineTo: NaN is not a finite number`).
 
 **`Width`, `Markup` and `Align`** are the three things a run of text may be told,
 and they are the same three [`Text`](library.md#text) measures with:
@@ -1177,7 +1195,7 @@ One row per child, each row **a widget of its own**, with scrolling and selectio
 | `Deselect(index)` | unselects it |
 | `DeselectAll()` | selects nothing |
 | `Refilter()` | says the answer to `Filter` may have changed. The whole of the API on this side — what a handler answers *from* is yours |
-| `Remove(index)` | takes that row out, **and the control in it goes with it**: the row is the widget's wrapper, so this is the same as deleting the child |
+| `RemoveRow(index)` | takes that row out, **and the control in it goes with it**: the row is the widget's wrapper, so this is the same as deleting the child |
 | `Select(index)` | selects that row |
 | `SelectAll()` | with `MultiSelect` |
 | **event** `Select()` | the selection moved. Ask `Index` or `Selection` for which rows; what is *in* them is the widgets you put there |
@@ -1275,7 +1293,7 @@ Pages in tabs. Its `children` **are** its pages.
 | `Count` (ro) | how many **pages** — an action widget in the strip is not one |
 | `Append(child, [label])` | one more page |
 | `GetAction(where)` | → the widget in that end of the strip, or `null` |
-| `Remove(index)` | takes a page out |
+| `RemovePage(index)` | takes a page out |
 | `SetAction(control, [where])` | puts a widget **in the tab strip** instead of making it a page. `where` is `Start` or `End`; `null` takes it out. In a `.form` this is a child carrying `"strip": "End"` |
 | `SetTabLabel(index, label)` | renames one tab |
 | **event** `Switch(index)` | a different page is showing |
@@ -1291,7 +1309,7 @@ Pages picked from a strip of linked buttons.
 | `Tabs` | the strip, as strings. **Translated**. A segmented control has nowhere for a widget, so this is the whole of it |
 | `Count` (ro) | how many pages |
 | `Append(child, [name])` | one more page |
-| `Remove(index)` | takes one out |
+| `RemovePage(index)` | takes one out |
 | **event** `Switch(index)` | a different page is showing |
 
 ---

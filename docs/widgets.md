@@ -1095,7 +1095,7 @@ A lone member of a named set is grouped with a companion check button that is
 never parented and never drawn, because a group of one is otherwise no group at
 all and GTK offers no other lever -- no property, no CSS name.
 
-Setting `Value = true` on one raises `Click` on it *and* on the one that went off,
+Setting `Active = true` on one raises `Click` on it *and* on the one that went off,
 because both toggled. That is GTK's doing and what a group means.
 
 ### Switch
@@ -1119,7 +1119,7 @@ Reported through `notify::active` rather than `state-set` — the hook for a set
 that takes a while to apply and may refuse, where what the handler returns decides
 whether the switch moves at all. There is nothing here to refuse, and `active` is
 the property both the pointer and an assignment from JS go through, which is what
-makes `Value = true` come back as a real `Click`.
+makes `Active = true` come back as a real `Click`.
 
 ### ToggleButton
 
@@ -1407,8 +1407,8 @@ measured under an `Xvfb` of the probe's own with `xdotool`, and the commands are
 
 A `GtkListBox` of label rows in a scroller. `Items` is an array of strings and
 round-trips through the `.form`; `Index` is the selection or `-1`;
-`Text` is read-only, being whatever is selected. `Add`, `Remove(i)` and `Clear`
-mutate the list.
+`Text` is read-only, being whatever is selected. `Add`, `RemoveRow(i)` and
+`Clear` mutate the list.
 
 `Index = -1` is legitimate and has to survive: the property grid's spin for it
 allows negatives for exactly this reason.
@@ -1542,7 +1542,7 @@ Tree1.Key = "Form1.form";          // selects it, fires Select
 ```
 
 `Key` reads and writes the selection, `Exists(key)` tests, `Text` is the selected
-label, `Remove(key)` takes a node out **with its subtree**, `SetText(key, text)`
+label, `RemoveNode(key)` takes a node out **with its subtree**, `SetText(key, text)`
 and `SetIcon(key, name)` change one after it was added, and `Clear` empties it.
 `Select` fires on selection, `Activate` on double click or Enter.
 
@@ -3318,13 +3318,13 @@ therefore stays lit after a card lands on it unless `Drop` undoes it.
 
 **And the rest of the list vocabulary is `ListBox`'s, because underneath they are
 the same widget.** `MultiSelect`, `Selection`, `Select(i)`, `Deselect(i)`,
-`SelectAll()`, `DeselectAll()`, `Remove(i)`, `Activate([i])`,
+`SelectAll()`, `DeselectAll()`, `RemoveRow(i)`, `Activate([i])`,
 `ActivateOnSingleClick` and the `Activate` event are the same members with the
 same meanings and, in the C, nearly the same code. They were missing here and
 nowhere else — a program that moved a list from strings to widgets lost half its
 vocabulary and invented replacements for it.
 
-Two of them are not quite a copy. **`Remove(index)` goes through the container**:
+Two of them are not quite a copy. **`RemoveRow(index)` goes through the container**:
 a row holds a widget the application made and the list is holding a JS reference
 to it, so unparenting the `GtkListBoxRow` would leave that behind —
 `bta_container_detach` is the same act as deleting the child. And **`Select`

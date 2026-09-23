@@ -157,7 +157,8 @@ Ide.ControlTree = class ControlTree {
         /* Kept so the IDE (and its driver) can reach the dialog while it is
          * open; the runtime holds the window itself. */
         this.designer.ide.renameControlAsk =
-            AskForm.prompt("Rename control", "Name:", found.Name,
+            AskForm.prompt(Locale.Text("Rename control"), Locale.Text("Name:"),
+                           found.Name,
                            (name) => this.designer.renameControl(name.trim()));
     }
 };

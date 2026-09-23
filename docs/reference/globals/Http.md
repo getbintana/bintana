@@ -93,7 +93,10 @@ later, with `Kind: "Cancelled"`.
 
 Per-request `opts` carry `Headers`, `Query: {k: v}` (appended escaped), `Body`,
 `ContentType`, `Timeout`, `FollowRedirects` and `Auth` — and **naming any of them
-is what makes an object options rather than a JSON body**.
+is what makes an object options rather than a JSON body**. A `Query` value of
+`undefined` or `null` is not sent — `{ page: undefined }` used to go out as
+`page=undefined` — and a header or query value that cannot become text is refused
+by the call, not skipped with the conversion's error left pending.
 
 A `Post` body is text, `Bytes`, or an object — which is sent as canonical JSON
 with `application/json`.

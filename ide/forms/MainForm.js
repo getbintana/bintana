@@ -40,6 +40,11 @@
  */
 const SOURCE_LINK = "[\\w./+-]+\\.(?:js|form|json):\\d+";
 
+/* What the output pane keeps, in characters. Long enough for a traceback and
+ * the output that led to it; short enough that a runaway `print` is a bounded
+ * cost. Half of it goes when it is passed, so the trim is rare. */
+const LOG_MAX = 200000;
+
 /* The stylesheet a new project starts with: how the application looks, in the
  * one place that answers for it.  A control wears a class from here by setting
  * Style; Background, Foreground and Font on a control are the exception. */
@@ -429,8 +434,20 @@ class MainForm extends Form {
         const control = picked ? this.designer.selected : null;
         const events  = control ? this.designer.eventsOf(control) : [];
 
+        /*
+         * **One read of the `.js` and one pass over it for every event.** This
+         * runs from `refresh()`, which runs on every keystroke, and asking
+         * `hasHandler` per event read the file and compiled a fresh regex each
+         * time. The anchored rule `handlersIn` uses is also what makes the
+         * answer right: `\bBtnOk_Click\s*\(` finds a *call* and marked an
+         * unwritten handler as written.
+         */
+        const written = control
+            ? Ide.FormFiles.handlersIn(this.formFiles.siblingSource(), control.Name)
+            : [];
+
         this.MnuHandler.Items = events.length
-            ? events.map((e) => (this.hasHandler(control.Name, e)
+            ? events.map((e) => (written.includes(e)
                                      ? `${HANDLER_WRITTEN}${e}` : `${HANDLER_NEW}${e}`))
             : [Locale.Text("(select a control)")];
         this.MnuHandler.Enabled = events.length > 0;
@@ -746,9 +763,7 @@ class MainForm extends Form {
     openHandler(controlName, eventName) {
         return this.formFiles.openHandler(controlName, eventName);
     }
-    hasHandler(controlName, eventName) {
-        return this.formFiles.hasHandler(controlName, eventName);
-    }
+
 
     /* --- tabs ----------------------------------------------------------------
      *
@@ -891,9 +906,32 @@ class MainForm extends Form {
      *
      * No CRLF translation any more. A terminal is a grid of lines and wanted
      * one; a text buffer takes `\n` as the newline it is.
+     *
+     * **The pane has a ceiling.** A `print` in a loop would otherwise grow the
+     * buffer for as long as the child runs -- and every click reads the whole
+     * text back to find the token under it. Past `LOG_MAX` the oldest half goes
+     * in one cut, not a line at a time: replacing the buffer is O(n), and
+     * trimming per append would make a runaway child quadratic. The running
+     * length is kept here so the check does not read the buffer it guards.
      */
     log(text) {
         this.LogView.Append(text);
+        this.logged = (this.logged || 0) + text.length;
+
+        if (this.logged <= LOG_MAX) return;
+
+        const keep = Math.floor(LOG_MAX / 2);
+        const held = this.LogView.Text;
+
+        this.LogView.Text = held.slice(held.length - keep);
+        this.logged = keep;
+    }
+
+    /* Emptying it is a reset of the count too, or the first append after would
+     * trim a buffer that is already gone. */
+    clearLog() {
+        this.LogView.Clear();
+        this.logged = 0;
     }
 
 

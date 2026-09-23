@@ -357,8 +357,8 @@ read.
 
 Removing a child has to do the inverse: `bta_widget_release()` drops the parent's
 reference. `Container.Delete()`/`Remove()` go through it, and so does
-`Notebook.Remove()` -- which for a while did not, so an IDE that opens and closes
-tabs kept every wrapper it had ever shown.
+`Notebook.RemovePage()` -- which for a while did not, so an IDE that opens and
+closes tabs kept every wrapper it had ever shown.
 
 **2. A finalised widget is still reachable from GTK.** The container usually holds
 the last reference, so the `GtkWidget` outlives its wrapper — and GTK emits

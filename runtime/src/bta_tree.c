@@ -418,7 +418,10 @@ static void tree_clear_children(BtaTreeNode *node)
 }
 
 /*
- * `Remove(key)` -- the node and everything under it.
+ * `RemoveNode(key)` -- the node and everything under it. It is not `Remove`,
+ * which is every control's own detach: a subclass member that shadowed the base
+ * one meant a `TreeView` could not be taken out of its container by the
+ * documented verb, and `Remove(key)` and `Remove()` read as one thing.
  *
  * A tree that could only be emptied whole was the one gap the four list controls
  * did not share: `ListBox` and `TableView` both take a row out, and this had to
@@ -446,13 +449,16 @@ static JSValue tree_remove(JSContext *ctx, JSValueConst this_val,
     if (!w)
         return JS_EXCEPTION;
 
-    const char *key = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "RemoveNode(key) expects a node's key");
+
+    const char *key = JS_ToCString(ctx, argv[0]);
     if (!key)
-        return JS_ThrowTypeError(ctx, "Remove(key) expects a node's key");
+        return JS_EXCEPTION;
 
     BtaTreeNode *node = g_hash_table_lookup(tree_index(w), key);
     if (!node) {
-        JSValue e = JS_ThrowRangeError(ctx, "Remove: there is no node '%s'", key);
+        JSValue e = JS_ThrowRangeError(ctx, "RemoveNode: there is no node '%s'", key);
         JS_FreeCString(ctx, key);
         return e;
     }
@@ -810,8 +816,8 @@ static const JSCFunctionListEntry tree_props[] = {
     JS_CFUNC_DEF("Add",    4, tree_add),
     /* Clear() */
     JS_CFUNC_DEF("Clear",  0, tree_clear),
-    /* Remove(key) */
-    JS_CFUNC_DEF("Remove", 1, tree_remove),
+    /* RemoveNode(key) */
+    JS_CFUNC_DEF("RemoveNode", 1, tree_remove),
     /* SetText(key, text) */
     JS_CFUNC_MAGIC_DEF("SetText", 2, tree_set_one, NODE_TEXT),
     /* SetIcon(key, name) */

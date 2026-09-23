@@ -1233,6 +1233,15 @@ line in the buffer as it arrives, so everything the child printed is in `Text` b
 the time the run is reported over. It used to be ten tries thirty milliseconds
 apart, because VTE digests what it is fed on its own time.
 
+**The child's lines are batched into one append per turn**, because a program
+that prints in a tight loop otherwise asked the pane for one `Append` — and one
+full-buffer copy — per line. And **the pane has a ceiling**: past `LOG_MAX`
+characters the oldest half goes in one cut, not a line at a time, since replacing
+the buffer is O(n) and trimming per append would make a runaway child quadratic.
+The running length is kept in `MainForm`, so the check does not read the buffer
+it guards, and `clearLog()` resets it. Every click still reads the whole text
+back to find the token under it, which is the other reason for the ceiling.
+
 `Runner.stop()` is what the Stop button means — `if (this.job && this.job.Running)
 this.job.Stop();` — and `Stop` reaches the child's whole **process group**, which
 matters because the child is the runtime running somebody's program.
@@ -1961,7 +1970,12 @@ knows.
 since it was written, and its reference page says in as many words that a
 breakpoint is what it is for. So there is no second list beside the marks to
 disagree with them; what a file that is closed keeps is its lines, put back on
-the editor that opens next.
+the editor that opens next. **An open tab is read live**, though: GtkSourceView
+moves a mark when text is inserted above it, so the lines the editor carries are
+the truth and the map is only the closed file's. Reading the map for an open tab
+armed the line the file had when it was last remembered, and a file edited since
+had moved them. A tab being closed writes its lines down first, and a rename
+moves the map's entry with the file.
 
 **A breakpoint can move, and says so.** QuickJS emits a line-number entry where
 the line *changes*, so two statements it runs together share one -- `let total =
@@ -2607,7 +2621,10 @@ arrows reach *which layer fills* as well as which paints on top.
 And the arrows take their undo snapshot **before** the move and push it after,
 which is what `mouseUp` already did: pushing first left a dead step behind every
 nudge that could not happen -- at either end of a row, and on every container
-that used to refuse the move outright.
+that used to refuse the move outright. **A run of nudges of the same selection is
+one step**: `pushUndo` takes a merge key, and a held arrow key used to push a
+snapshot per repeat until the 200-entry stack was full and real history fell out
+the bottom.
 
 Before this, an elastic form arrived piled at the origin with negative
 coordinates, which is the concrete sense in which the IDE could not be written in

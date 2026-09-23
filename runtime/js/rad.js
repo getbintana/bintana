@@ -556,7 +556,11 @@ function regexFlags(options) {
     let flags = "g";
 
     for (const key in options || {}) {
-        if (!(key in REGEX_FLAGS) && !REGEX_REWRITES.includes(key)) {
+        /* Own keys: `"constructor" in REGEX_FLAGS` is true through
+         * `Object.prototype`, and then `REGEX_FLAGS.constructor` -- which is a
+         * function -- got appended to the flags, so the refusal the line below
+         * exists for came out as a syntax error about garbage flags. */
+        if (!hasOwn.call(REGEX_FLAGS, key) && !REGEX_REWRITES.includes(key)) {
             const takes = ownKeys(REGEX_FLAGS).concat(REGEX_REWRITES).join(", ");
             throw new RangeError(`Regex: '${key}' is not one of its options (${takes})`);
         }
@@ -2928,7 +2932,7 @@ GLOBAL.Table = class Table {
         const keys    = this.#keys();
         const row     = rec.Serialize(true);
         const decided = rec.Serialize();
-        const blanks  = keys.filter((k) => !(k.Column in decided));
+        const blanks  = keys.filter((k) => !hasOwn.call(decided, k.Column));
 
         for (const k of blanks) delete row[k.Column];
 
@@ -3011,7 +3015,7 @@ GLOBAL.Table = class Table {
         this.#mine(rec);
 
         const decided = rec.Serialize();
-        const fresh   = this.#keys().some((k) => !(k.Column in decided));
+        const fresh   = this.#keys().some((k) => !hasOwn.call(decided, k.Column));
 
         return fresh ? this.Insert(rec) : this.Update(rec);
     }

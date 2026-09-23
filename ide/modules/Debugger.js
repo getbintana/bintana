@@ -80,10 +80,23 @@ Ide.Debugger = class Debugger {
         return true;
     }
 
-    /* What the open tab says, written down so a file that is closed keeps it. */
-    remember(file) {
-        if (!this.ide.Editor) return;
-        this.marks.set(file, this.linesOf(this.ide.Editor));
+    /*
+     * What a tab says, written down so a file that is closed keeps it. The
+     * editor is asked for rather than assumed: a tab being closed is not the
+     * active one, and the marks of the one on screen have moved with its
+     * editing while this map has not.
+     */
+    remember(file, editor) {
+        const ed = editor || this.ide.Editor;
+        if (!ed || !file) return;
+        this.marks.set(file, this.linesOf(ed));
+    }
+
+    /* A file renamed: the same lines under the new name. */
+    renamed(oldName, newName) {
+        if (!this.marks.has(oldName)) return;
+        this.marks.set(newName, this.marks.get(oldName));
+        this.marks.delete(oldName);
     }
 
     /*
@@ -106,12 +119,28 @@ Ide.Debugger = class Debugger {
             editor.Mark(line, BREAK_MARK, Locale.Text("Stop here while debugging"));
     }
 
-    /* Every breakpoint there is, as the protocol spells one. */
+    /*
+     * Every breakpoint there is, as the protocol spells one.
+     *
+     * **An open tab is read live.** GtkSourceView moves a mark with the
+     * editing, so the lines the editor carries are the truth and the map is
+     * only what a file that is closed keeps -- reading the map for a file that
+     * is open armed breakpoints on the lines it had when it was last
+     * remembered, and a file edited since had moved them.
+     */
     all() {
         const out = [];
-        for (const [file, lines] of this.marks)
-            for (const line of lines) out.push({ file, line });
 
+        for (const [file, state] of this.ide.openTabs) {
+            if (!state.editor) continue;
+            for (const line of this.linesOf(state.editor))
+                out.push({ file, line });
+        }
+        for (const [file, lines] of this.marks) {
+            const state = this.ide.openTabs.get(file);
+            if (state && state.editor) continue;      /* read live above */
+            for (const line of lines) out.push({ file, line });
+        }
         return out;
     }
 
@@ -138,7 +167,7 @@ Ide.Debugger = class Debugger {
         if (!this.ide.project) return false;
 
         this.ide.saveAllDirty();
-        this.ide.LogView.Clear();
+        this.ide.clearLog();
         /* Whatever this run is, the debugger runs it too: `--strict` is a
          * property of the run and not of the button that started it, and a
          * misspelt property is exactly the thing one would want to stop at. */

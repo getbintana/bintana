@@ -38,7 +38,7 @@ matters is in the section.
 | `ExpandAll()` | opens every node | [opening and closing](#opening-and-closing) |
 | `ExpandNode(key)` | opens one, and the way to it | [opening and closing](#opening-and-closing) |
 | `Expanded(key)` | → whether it is open | [opening and closing](#opening-and-closing) |
-| `Remove(key)` | takes a node out, **and its subtree** | [the nodes](#the-nodes) |
+| `RemoveNode(key)` | takes a node out, **and its subtree** | [the nodes](#the-nodes) |
 | `SetIcon(key, name)` | its picture, `""` for none | [the nodes](#the-nodes) |
 | `SetText(key, text)` | renames it | [the nodes](#the-nodes) |
 
@@ -118,7 +118,7 @@ nothing has added yet is not there to go under.
 | `Add(key, text, [parentKey], [icon])` | a node. `key` is yours to choose and must be unique in this tree; an empty `parentKey` is a root; `icon` is a name from the theme, and one the theme lacks is dropped rather than drawn as a hole |
 | `SetText(key, text)` | renames a node, keeping it where it is — and keeping the selection on it. **Translated** |
 | `SetIcon(key, name)` | its picture, or `""` for none. One column, so no column argument |
-| `Remove(key)` | takes that node out **and the subtree with it** — a node whose parent is gone is not something this control can show |
+| `RemoveNode(key)` | takes that node out **and the subtree with it** — a node whose parent is gone is not something this control can show |
 | `Exists(key)` | → whether that node is there. The question you ask *before* you know, so it answers rather than throwing |
 | `Clear()` | empties the whole tree |
 | `Count` (ro) | how many nodes there are, **at every level**, open or closed |
@@ -192,7 +192,7 @@ every node itself on every `Add`; what that cost is in
   IDE does exactly that on every reload.
 - **Two nodes fought over one key.** Keys are one namespace per tree; prefix the
   kinds that could collide.
-- **A whole branch disappeared.** `Remove(key)` takes the subtree: that is the
+- **A whole branch disappeared.** `RemoveNode(key)` takes the subtree: that is the
   only thing it can do, since a node with no parent has nowhere to be.
 - **The icon is missing and nothing said so.** An icon name the theme does not
   have is dropped. `Application.HasIcon(name)` is the question, and a fallback
@@ -204,7 +204,7 @@ every node itself on every `Add`; what that cost is in
   rows carry a `Key` — the same hierarchy, with fields.
 - **No more than one selected node.**
 - **No editing in place, no dragging a node onto another.** Renaming is
-  `SetText`, from a dialog or a field of your own; moving a node is `Remove` and
+  `SetText`, from a dialog or a field of your own; moving a node is `RemoveNode` and
   `Add` under the new parent, which is also the moment your own data moves.
 - **No sorting.** The tree shows the order the nodes went in, per parent. Sort
   the data first.

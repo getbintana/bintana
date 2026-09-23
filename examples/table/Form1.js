@@ -152,7 +152,7 @@ class Form1 extends Form {
             this.LblTree.Text = Locale.Text("Choose a node first.");
             return;
         }
-        this.Tree.Remove(key);
+        this.Tree.RemoveNode(key);
         this.showTree();
     }
 
@@ -206,7 +206,7 @@ class Form1 extends Form {
             Message.Info("Nothing is selected.");
             return;
         }
-        for (const i of rows.slice().reverse()) this.Files.Remove(i);
+        for (const i of rows.slice().reverse()) this.Files.RemoveRow(i);
         this.showHeld();
     }
 

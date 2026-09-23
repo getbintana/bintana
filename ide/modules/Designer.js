@@ -324,9 +324,19 @@ Ide.Designer = class Designer {
 
     /* `before` allows pushing a state captured before the action, which is what
      * a drag needs: the useful snapshot is the one from mouseDown. */
-    pushUndo(before) {
+    pushUndo(before, merge) {
         /* Any action closes the edit the grid was grouping. */
         this.grid.closeEdit();
+
+        /*
+         * **A run of the same gesture is one edit.** A held arrow key pushed a
+         * snapshot per repeat, so a few seconds of nudging filled the 200-entry
+         * stack and pushed real history out. The first push of a run keeps the
+         * state from before it and the rest ride on that; any other action ends
+         * the run by pushing without a key.
+         */
+        if (merge !== undefined && merge === this.undoMerge) return;
+        this.undoMerge = merge;
 
         this.undoStack.push(before !== undefined ? before : this.snapshot());
         if (this.undoStack.length > 200) this.undoStack.shift();
@@ -359,6 +369,7 @@ Ide.Designer = class Designer {
         const current = this.snapshot();
         this.restore(this.undoStack.pop());
         this.redoStack.push(current);
+        this.undoMerge = undefined;   /* a nudge after this is a new edit */
         this.touch();
     }
 
@@ -367,6 +378,7 @@ Ide.Designer = class Designer {
         const current = this.snapshot();
         this.restore(this.redoStack.pop());
         this.undoStack.push(current);
+        this.undoMerge = undefined;
         this.touch();
     }
 
@@ -1740,7 +1752,10 @@ Ide.Designer = class Designer {
                        Up: [0, -step],   Down: [0, step] }[key];
         if (!by) return false;
 
-        this.pushUndo();
+        /* One undo step per run of nudges of the same selection, not per
+         * repeat: see `pushUndo`. */
+        this.pushUndo(undefined, `nudge:${ctrl ? "size" : "move"}:` +
+                                 this.selection.map((c) => c.Name).join(","));
 
         /* Resizing from the keyboard goes to the primary only; moving, to all. */
         if (ctrl) {
