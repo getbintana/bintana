@@ -214,6 +214,17 @@ a permission or a package, ask the person at the machine; do not retry
 alternatives.** Their one sentence costs less than your half hour, and an
 improvised substitute is what turns a question into a false result.
 
+**And a commit says who wrote it, by its own name.** Every commit an agent makes
+carries a trailer — `Co-Authored-By: opencode (deepseek-v4.1-flash)
+<noreply@opencode.ai>` for this one — and it never names another tool. The
+history had ninety-two commits signed `Co-Authored-By: Claude` while the agent
+writing them was not Claude, because each one copied the trailer of the commit
+before it; a false statement in the permanent record is precisely what a trailer
+exists to prevent. **An agent that does not know its own name asks rather than
+copying the last one it saw**, and the whole history was rewritten to take those
+out — which is why a `git log` older than that rewrite and a checkout of it
+disagree.
+
 ## The rule that governs this codebase
 
 **The IDE's own tree is `forms/` and `modules/`.** A form is two files that
