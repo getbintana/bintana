@@ -1212,6 +1212,10 @@ typedef struct {
     guint             force;
     unsigned          kill_after;   /* ms between the two stages */
     bool              timed_out;    /* the guard fired, so a nonzero status is ours */
+    /* `Write`'s lines not yet in the pipe, oldest first (GBytes*), and whether
+     * one is in flight -- see exec_write. */
+    GQueue            unwritten;
+    bool              writing;
 } ExecJob;
 
 static GList *exec_jobs;   /* ExecJob*, live children */
@@ -1243,6 +1247,9 @@ static void exec_job_free(ExecJob *job)
     g_clear_object(&job->control);
     JS_FreeValue(job->ctx, job->on_exit);
     JS_FreeValue(job->ctx, job->handle);
+    /* The line in flight is not in this queue: its operation holds it, and is
+     * cancelled above with everything else. */
+    g_queue_clear_full(&job->unwritten, (GDestroyNotify)g_bytes_unref);
     g_clear_object(&job->out);
     g_clear_object(&job->err);
     g_clear_object(&job->proc);
@@ -1313,13 +1320,47 @@ static void exec_signal_group(GSubprocess *proc, pid_t pid, bool force)
  * for the reason exec_child_setup exists -- a child is usually a wrapper, and
  * signalling only the wrapper leaves what it started running.
  */
+/*
+ * Signalling a job, which is not over when its leader is.
+ *
+ * A job ends when stdout drains *and* the child is reaped, and a grandchild
+ * that inherited the pipe -- `sh -c "server & echo up"` -- keeps it open after
+ * the shell has exited. Every verb here used to stop at `reaped`, so `Timeout`,
+ * `Stop()` and `Kill()` all did nothing to a job that was still very much
+ * running: the exit callback never came and a console program never ended,
+ * while `Exec.Wait`'s own timeout did kill the group.
+ *
+ * Reaped, the **group** is still signalled and the pid is not: a process
+ * group keeps its id while any member is alive, and a pipe still open says one
+ * is, so `killpg` reaches the grandchild and cannot reach a stranger. What must
+ * not happen is the `kill(pid)` fallback `exec_signal_group` has for a leader
+ * whose group is gone -- that pid may be somebody else's by now.
+ *
+ * Answers whether there was anything left to signal.
+ */
+static bool exec_job_signal(ExecJob *job, bool force)
+{
+    if (job->pid <= 0)
+        return false;
+    if (!job->reaped) {
+        exec_signal_group(job->proc, job->pid, force);
+        return true;
+    }
+    if (job->eof && job->err_eof)
+        return false;                 /* over in all but the callback */
+#ifdef G_OS_WIN32
+    return false;                     /* no groups to reach: see exec_signal_group */
+#else
+    return killpg(job->pid, force ? SIGKILL : SIGTERM) == 0;
+#endif
+}
+
 static gboolean on_exec_force(gpointer data)
 {
     ExecJob *job = data;
 
     job->force = 0;
-    if (!job->reaped)
-        exec_signal_group(job->proc, job->pid, true);
+    exec_job_signal(job, true);
     return G_SOURCE_REMOVE;
 }
 
@@ -1336,14 +1377,12 @@ static gboolean on_exec_guard(gpointer data)
     ExecJob *job = data;
 
     job->guard = 0;
-    if (job->reaped || job->pid <= 0)
+    if (!exec_job_signal(job, false))
         return G_SOURCE_REMOVE;
 
     job->timed_out = true;
     if (JS_IsObject(job->handle))
         JS_SetPropertyStr(job->ctx, job->handle, "TimedOut", JS_TRUE);
-
-    exec_signal_group(job->proc, job->pid, false);
 
     /* Zero means do not wait at all: SIGTERM and SIGKILL together, for a caller
      * that has no use for a graceful ending. */
@@ -1643,14 +1682,72 @@ static void exec_child_setup(gpointer user_data)
  * child to write to, the way `Stop` and `Kill` do, so a caller that races the
  * exit gets `false` rather than an exception.
  */
+/*
+ * One line on its way into the child's stdin.
+ *
+ * The operation owns its bytes, because the job may be freed while it is in
+ * flight -- the child ended, the runtime is closing -- and the cancel that
+ * `exec_job_free` makes is answered on a later turn. The job pointer is only a
+ * name to look up in `exec_jobs` when the answer comes, never dereferenced
+ * before that.
+ */
+typedef struct {
+    ExecJob *job;
+    GBytes  *bytes;
+} ExecWrite;
+
+static void exec_write_next(ExecJob *job);
+
+static void on_exec_written(GObject *src, GAsyncResult *res, gpointer user_data)
+{
+    ExecWrite *op  = user_data;
+    GError    *err = NULL;
+    gboolean   ok  = g_output_stream_write_all_finish(G_OUTPUT_STREAM(src), res,
+                                                      NULL, &err);
+    bool gone = g_error_matches(err, G_IO_ERROR, G_IO_ERROR_CANCELLED)
+                || !g_list_find(exec_jobs, op->job);
+    ExecJob *job = op->job;
+
+    g_clear_error(&err);
+    g_bytes_unref(op->bytes);
+    g_free(op);
+    if (gone)
+        return;
+
+    job->writing = false;
+    /* A pipe the child closed takes the rest of the queue with it: there is
+     * nobody reading, and a line that cannot arrive is not worth holding. */
+    if (!ok) {
+        g_queue_clear_full(&job->unwritten, (GDestroyNotify)g_bytes_unref);
+        return;
+    }
+    exec_write_next(job);
+}
+
+static void exec_write_next(ExecJob *job)
+{
+    if (job->writing || g_queue_is_empty(&job->unwritten) || !job->in)
+        return;
+
+    ExecWrite *op = g_new0(ExecWrite, 1);
+    gsize      len = 0;
+    const void *data;
+
+    op->job   = job;
+    op->bytes = g_queue_pop_head(&job->unwritten);
+    data      = g_bytes_get_data(op->bytes, &len);
+
+    job->writing = true;
+    g_output_stream_write_all_async(job->in, data, len, G_PRIORITY_DEFAULT,
+                                    job->cancel, on_exec_written, op);
+}
+
 static JSValue exec_write(JSContext *ctx, JSValueConst this_val,
                           int argc, JSValueConst *argv, int magic,
                           JSValue *data)
 {
     int32_t  id = 0;
     ExecJob *job;
-    GError  *err = NULL;
-    gsize    written = 0;
 
     (void)this_val; (void)magic;
     JS_ToInt32(ctx, &id, data[0]);
@@ -1674,16 +1771,21 @@ static JSValue exec_write(JSContext *ctx, JSValueConst this_val,
                                               : g_strdup_printf("%s\n", text);
     JS_FreeCString(ctx, text);
 
-    gboolean ok = g_output_stream_write_all(job->in, line, strlen(line),
-                                            &written, NULL, &err);
-    /* Flushed, because the other side is blocked on a read: a line sitting in a
-     * buffer here is a program waiting there. */
-    if (ok)
-        g_output_stream_flush(job->in, NULL, NULL);
-    g_free(line);
-    g_clear_error(&err);
+    /*
+     * **Queued, and written by the main loop, never here.** It was a blocking
+     * `g_output_stream_write_all` on the UI thread, and that is a deadlock with
+     * any child that writes while it reads -- `cat`, `tr`, a JSON-RPC server:
+     * once the child's stdout pipe fills (~64 KB) it stops reading its stdin,
+     * our write blocks, and the reader that would drain its stdout is an
+     * async callback on the very loop the write is holding. Measured: 300 KB
+     * into `cat` hung for good. Now the lines go out one operation at a time,
+     * in order, while the loop keeps reading. The pipe is unbuffered, so what
+     * `write_all` hands over is in the child's hands without a flush.
+     */
+    g_queue_push_tail(&job->unwritten, g_bytes_new_take(line, strlen(line)));
+    exec_write_next(job);
 
-    return ok ? JS_TRUE : JS_FALSE;
+    return JS_TRUE;
 }
 
 static JSValue exec_signal(JSContext *ctx, JSValueConst this_val,
@@ -1699,19 +1801,12 @@ static JSValue exec_signal(JSContext *ctx, JSValueConst this_val,
         if (job->id != id)
             continue;
         /*
-         * Reaped and not yet freed is a real state -- it is where the exit
-         * callback runs -- and signalling there would send SIGTERM to a pid the
-         * system has already handed back, which is somebody else's process by
-         * then.  Nothing to stop, so: false.
-         */
-        if (job->reaped || job->pid <= 0)
-            return JS_FALSE;
-
-        /* `Stop` asks and `Kill` makes -- where the platform has both.  On
+         * `Stop` asks and `Kill` makes -- where the platform has both.  On
          * Windows there is one ending, and `exec_signal_group` is where that
-         * sentence lives. */
-        exec_signal_group(job->proc, job->pid, magic != 0);
-        return JS_TRUE;
+         * sentence lives.  A reaped leader with its pipe still held is signalled
+         * through its group only, never its pid: see `exec_job_signal`.
+         */
+        return JS_NewBool(ctx, exec_job_signal(job, magic != 0));
     }
     return JS_FALSE;
 }

@@ -142,6 +142,11 @@ the window repaints, timers fire — and a second print of the same drawing used
 start and write its pages. The `Draw` guard does not catch it, because between
 two sheets there is no frame open.
 
+**The control is held while its dialog is open**, and a program that quits
+with a dialog still waiting ends cleanly: the dialog is cancelled and the
+callback is not called. Both used to fail -- a control built only to be printed
+could be collected under an open dialog, and quitting aborted the process.
+
 This was synchronous once, and answered `null` for a cancel. Both halves were
 wrong the same way: it was the one dialog in the runtime a program had to treat
 differently, and synchronous never meant safe — the loop went on running

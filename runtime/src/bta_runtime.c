@@ -1893,6 +1893,7 @@ void bta_app_free(BtaApp *app)
     bta_sys_cleanup();
     bta_http_cleanup();
     bta_media_cleanup();
+    bta_printer_cleanup();
     /* Forms still shown hold a reference the collector cannot see; drop it
      * before the context goes, or JS_FreeRuntime asserts. */
     bta_forms_cleanup();

@@ -243,7 +243,7 @@ Written in `rad.js` rather than in C, and on every widget just the same:
 | `Homogeneous` | every child the same size along the axis |
 | `Spacing` | pixels between children, in a row or a column |
 | `Children` (ro) | its real children, one level deep, in order |
-| `Add(widget)` | puts a widget in. A `Split` refuses a third |
+| `Add(widget)` | puts a widget in. A control already in another container is **moved** out of it; one that contains this container is refused, as is the container itself. A `Split` refuses a third |
 | `Clear()` | removes and destroys every child, and it can be refilled afterwards |
 | `ContainerAt(x, y, [ignore])` | → the innermost container that could take a drop there. `ignore` excludes the widget being dragged, which otherwise always answers |
 | `FocusNext()` | → whether the focus moved: what Tab does, kept inside this container |

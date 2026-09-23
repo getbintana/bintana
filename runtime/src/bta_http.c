@@ -3377,13 +3377,27 @@ static void on_server_request(SoupServer *server, SoupServerMessage *msg,
 
     JS_SetPropertyStr(s->ctx, req, "Remote", JS_NewString(s->ctx, remote ? remote : ""));
 
-    if (JS_IsFunction(s->ctx, s->handler)) {
-        JSValue ret = JS_Call(s->ctx, s->handler, JS_UNDEFINED, 1, &req);
+    /*
+     * **The handler is held for the length of its own call.** The reference is
+     * documented as replaceable while running, and a handler that installs its
+     * successor (`srv.Request = next`) freed the closure it was executing in:
+     * `http_server_set_request` drops the old value at once, and the next
+     * allocation inside the running function was a heap-use-after-free --
+     * ASan's report on the first request. And nothing after the call reads the
+     * server: a handler that let go of the last reference to it may have had it
+     * finalised, so the context is taken first, as `on_file_changed` does.
+     */
+    JSContext *ctx = s->ctx;
+
+    if (JS_IsFunction(ctx, s->handler)) {
+        JSValue fn  = JS_DupValue(ctx, s->handler);
+        JSValue ret = JS_Call(ctx, fn, JS_UNDEFINED, 1, &req);
 
         if (JS_IsException(ret))
-            bta_dump_error(s->ctx);
-        JS_FreeValue(s->ctx, ret);
-        bta_drain_jobs(JS_GetRuntime(s->ctx));
+            bta_dump_error(ctx);
+        JS_FreeValue(ctx, ret);
+        JS_FreeValue(ctx, fn);
+        bta_drain_jobs(JS_GetRuntime(ctx));
     }
     /* A handler that returns without answering gets a 500: hanging the
      * connection instead would fail silently and forever. */
@@ -3392,7 +3406,7 @@ static void on_server_request(SoupServer *server, SoupServerMessage *msg,
     /* The message outlives nothing here: a later Answer throws instead of
      * writing into freed memory. */
     g_clear_object(&r->msg);
-    JS_FreeValue(s->ctx, req);
+    JS_FreeValue(ctx, req);
 }
 
 static JSValue http_server_get_running(JSContext *ctx, JSValueConst this_val)

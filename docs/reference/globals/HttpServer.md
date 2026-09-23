@@ -73,7 +73,7 @@ A listening server **counts like a watch**: a console project that returned from
 
 | | |
 |---|---|
-| `Request` | assign `(req) => …`. **Required before `Start`**, and replaceable while running |
+| `Request` | assign `(req) => …`. **Required before `Start`**, and replaceable while running — even from inside the handler: the running one finishes its request and the next goes to the new one |
 | `Answer(status, [body], [opts])` | `body` follows the client's rules — an object serialises as canonical JSON — and `opts` carries `Headers` and `ContentType`. **The second argument is always the body and the third always the options** |
 
 **The handler answers before it returns.** There is no deferred answer, so a

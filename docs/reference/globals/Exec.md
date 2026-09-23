@@ -53,6 +53,13 @@ job.Stop();
 group**, so a wrapper's own children go too — which is the difference between
 stopping a build and orphaning four compilers.
 
+**A run is not over when its leader is.** It ends when stdout is drained *and*
+the child has exited, and `sh -c "server & echo up"` leaves a grandchild holding
+the pipe after the shell is gone. `Stop()`, `Kill()` and `Timeout` still reach
+that grandchild -- through the group, and never through the leader's pid, which
+the system may have handed to somebody else by then. They used to answer false
+and do nothing, and the exit callback never came.
+
 ## Waiting for one
 
 ```js
@@ -91,7 +98,7 @@ a line and answers.
 
 | | |
 |---|---|
-| `Write(text)` | writes a line to the child's stdin. A newline is added when there is not one, because a line is what the other side is waiting on. Answers whether there was still a child to write to, the way `Stop` does |
+| `Write(text)` | writes a line to the child's stdin. A newline is added when there is not one, because a line is what the other side is waiting on. **Queued, and never blocks**: lines go out in order while the program keeps running, so a child that writes while it reads cannot deadlock it. Answers whether there was still a child to write to, the way `Stop` does |
 | `Control` | an option: a callback for the child's **descriptor 3**, called once per line — until the run is over (stdout drained, child exited); a line after that is dropped |
 
 ```js

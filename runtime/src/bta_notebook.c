@@ -56,9 +56,14 @@ static JSValue notebook_append(JSContext *ctx, JSValueConst this_val,
             return JS_ThrowTypeError(ctx, "Append: label is not a widget");
     }
 
-    /* Both, and before the page is in GTK: see bta_widget_adopt_refused. */
-    if (bta_widget_adopt_refused(ctx, this_val, w, child) ||
-        (labelw && bta_widget_adopt_refused(ctx, this_val, w, labelw)))
+    /* Both asked, and only then both moved, before the page is in GTK: a label
+     * refused must not leave the page already taken out of where it was. See
+     * bta_widget_bring_in. */
+    if (!bta_widget_bring_in(ctx, this_val, w, child, false) ||
+        (labelw && !bta_widget_bring_in(ctx, this_val, w, labelw, false)))
+        return JS_EXCEPTION;
+    if (!bta_widget_bring_in(ctx, this_val, w, child, true) ||
+        (labelw && !bta_widget_bring_in(ctx, this_val, w, labelw, true)))
         return JS_EXCEPTION;
 
     gint index = gtk_notebook_append_page(GTK_NOTEBOOK(w->gtk), child->gtk,
@@ -194,7 +199,11 @@ static JSValue notebook_set_action(JSContext *ctx, JSValueConst this_val,
     GtkNotebook *nb  = GTK_NOTEBOOK(w->slot);
     GtkWidget   *old = gtk_notebook_get_action_widget(nb, pack);
 
-    if (child && bta_widget_adopt_refused(ctx, this_val, w, child))
+    /* The one it already has: nothing to move, and asking would try to take it
+     * out of this very strip. */
+    if (child && old == child->gtk)
+        return JS_UNDEFINED;
+    if (child && !bta_widget_bring_in(ctx, this_val, w, child, true))
         return JS_EXCEPTION;
 
     gtk_notebook_set_action_widget(nb, child ? child->gtk : NULL, pack);
@@ -262,17 +271,24 @@ static JSValue notebook_set_tab_label(JSContext *ctx, JSValueConst this_val,
     if (!page)
         return JS_ThrowRangeError(ctx, "no page at index %d", index);
 
-    /* Whatever was there stops being ours to keep alive. */
     GtkWidget *old = gtk_notebook_get_tab_label(GTK_NOTEBOOK(w->gtk), page);
     BtaWidget *prev = old ? g_object_get_data(G_OBJECT(old), BTA_WIDGET_QUARK) : NULL;
-    if (prev && prev != labelw)
-        bta_widget_release(ctx, this_val, prev->self);
 
-    if (bta_widget_adopt_refused(ctx, this_val, w, labelw))
+    /* The label it already has: adopting it again would put a second copy in
+     * the children, and asking would try to take it out of this very tab. */
+    if (prev == labelw)
+        return JS_UNDEFINED;
+
+    /* Asked, swapped, and only then the old one let go -- `SetAction`'s order.
+     * Releasing first left a refused call with the old label still on screen and
+     * its wrapper collectable: freed memory on the next pointer motion. */
+    if (!bta_widget_bring_in(ctx, this_val, w, labelw, true))
         return JS_EXCEPTION;
 
     gtk_notebook_set_tab_label(GTK_NOTEBOOK(w->gtk), page, labelw->gtk);
     bta_widget_adopt(ctx, this_val, w, argv[1], labelw);
+    if (prev)
+        bta_widget_release(ctx, this_val, prev->self);
     return JS_UNDEFINED;
 }
 

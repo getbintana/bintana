@@ -233,6 +233,14 @@ static bool setup_read(JSContext *ctx, JSValueConst opts, PrintSetup *out,
  */
 typedef struct {
     BtaWidget *w;
+    /* The control's own JS object, held for the run. `w` is its opaque data, so
+     * without this a control built only to be printed -- or a form closed while
+     * the dialog was up -- was collected with the dialog still open, and
+     * `draw-page` and `done` read a freed `BtaWidget`: the AudioPlayer
+     * keepalive's lesson. Absent from any gc_mark for the same reason that one
+     * is: it is the operation's claim on the control, not a cycle. */
+    JSValue    self;
+    GtkPrintOperation *op;  /* `Send`'s, while it waits: see print_runs */
     JSValue    cb;          /* the callback, dup'd for the run; undefined for ToFile */
     int        base;        /* document page of the first one rendered */
     int        first;       /* first page rendered, 1-based; -1 while none */
@@ -410,11 +418,43 @@ static JSValue print_answer(JSContext *ctx, PrintRun *run,
     return out;
 }
 
+/* `Send`s whose dialog has not been answered: the one kind of run that
+ * outlives the call that made it, and so the kind teardown has to find. */
+static GList *print_runs;
+
 static void print_free(PrintRun *run)
 {
+    JSContext *ctx = run->w->ctx;
+
+    print_runs = g_list_remove(print_runs, run);
     print_ended(run->w);
-    JS_FreeValue(run->w->ctx, run->cb);
+    JS_FreeValue(ctx, run->cb);
+    /* Last: letting go of the control may finalise it, and `w` with it. */
+    JS_FreeValue(ctx, run->self);
     g_free(run);
+}
+
+/*
+ * The runtime is closing with a print dialog still waiting to be answered.
+ *
+ * Before this, `Printer.Send(a, cb)` and then `Application.Quit(0)` aborted
+ * the process -- exit 134 in `JS_FreeRuntime`'s assertion -- because the
+ * callback the run held was released only by `done`, which never came. The
+ * operation is told to stop and cut loose from its handlers first, so nothing
+ * it emits on the way out reaches a run that is gone; then the run lets go of
+ * its values while the context still exists.
+ */
+void bta_printer_cleanup(void)
+{
+    while (print_runs) {
+        PrintRun          *run = print_runs->data;
+        GtkPrintOperation *op  = run->op;
+
+        g_signal_handlers_disconnect_by_data(op, run);
+        gtk_print_operation_cancel(op);
+        print_free(run);          /* takes it off the list */
+        g_object_unref(op);
+    }
 }
 
 /*
@@ -558,6 +598,7 @@ static GtkPrintOperation *print_prepare(JSContext *ctx, JSValueConst area,
     PrintRun *run = g_new0(PrintRun, 1);
 
     run->w      = w;
+    run->self   = JS_DupValue(ctx, area);
     run->cb     = JS_UNDEFINED;
     run->base   = lineal ? setup.from : 1;
     run->first  = -1;
@@ -620,6 +661,8 @@ static JSValue printer_send(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     run->cb = JS_DupValue(ctx, cb);
+    run->op = op;
+    print_runs = g_list_prepend(print_runs, run);
     g_signal_connect(op, "done", G_CALLBACK(on_print_done), run);
 
     /*

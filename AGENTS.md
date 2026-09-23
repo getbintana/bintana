@@ -835,6 +835,45 @@ refused with a message and a column.
   after its parent exits -- and is `heap-use-after-free` under `asan.sh`
   without the fix. **A read that outlives what says the run is over has to be
   cancelled by whatever frees the job, not by teardown alone.**
+  **And `Write` was the other half of that struct's trouble: it blocked.** A
+  synchronous `g_output_stream_write_all` on the UI thread deadlocks with any
+  child that writes while it reads -- once `cat`'s stdout pipe fills it stops
+  reading, the write waits for it, and the reader that would drain it is a
+  callback on the loop the write is holding. 300 KB into `cat` hung for good
+  (`testExecWriteLarge`). Lines are queued on the job (`unwritten`) and written
+  one async operation at a time; each operation owns its `GBytes` and names the
+  job only to look it up in `exec_jobs` when it answers, because the job may
+  be freed -- and the operation cancelled -- while a line is in flight.
+  **And a reaped leader is not an ended job.** Every signalling verb stopped at
+  `reaped`, so `Timeout`, `Stop()` and `Kill()` did nothing to `sh -c "sleep 30
+  & echo up"`, whose `sleep` holds stdout: no exit callback, a console program
+  that never ended. `exec_job_signal` signals the **group** when the leader is
+  reaped and the output is not drained -- a group keeps its id while any member
+  lives, and an open pipe says one does -- and never falls back to `kill(pid)`,
+  which after the reap could be a stranger. `testExecGrandchild` waits thirty
+  seconds and fails three assertions on the old code.
+  **`PrintRun` was the fourth to forget, and at teardown.** Its callback was
+  released only by `done`, so `Printer.Send(a, cb)` then `Application.Quit(0)`
+  aborted in `JS_FreeRuntime` (exit 134, `testPrintAtQuit` runs it as a
+  child). `bta_printer_cleanup` cancels what is still waiting, cut loose from
+  its handlers first. The run also holds the control's own wrapper now
+  (`self`), since `run->w` was a raw `BtaWidget*` and a control built only to
+  be printed could be collected under an open dialog -- the AudioPlayer
+  keepalive's lesson, and absent from `gc_mark` for the same reason.
+- **A callback the program can replace from inside itself has to be held for
+  its own call.** `Http.Server`'s `Request` is documented as replaceable while
+  running, and `http_server_set_request` releases the old function at once --
+  so a handler that did `srv.Request = next` freed the closure it was
+  executing. **What is freed is the closure, not the code** (an arrow's
+  bytecode lives in the constant pool of the function around it), so the
+  use-after-free only happens when the handler reads a *captured* variable
+  afterwards: a first test that allocated but captured nothing passed under
+  ASan against the bug, and one that reads `served++` after the swap is
+  `heap-use-after-free`. The handler is `JS_DupValue`'d across the call, and
+  nothing after the call reads the server. Every other callback shape was
+  checked: timers are held by GLib's dispatch, `File.Watch` and the Http
+  deliverers by their `calling`/`dead` pair, events by `JS_GetProperty`'s own
+  reference -- `Request` was the only one a program could replace mid-call.
 - **The appearance stylesheet is read back, which is why its rebuild can only be
   held for a stretch with no JavaScript in it.** Every `Font`, `Padding`,
   `Radius`, `Shadow`, `Color`, `Border`, `Scale` or `Opacity` reloads the whole
@@ -2062,7 +2101,9 @@ person who wrote it either.
   carry a handler of its own for an event that a `<name>_<event>` on its form
   would answer too -- and it is asked in `On`, in the **`Name` setter**, and in
   **`bta_widget_adopt_refused`**, which every verb that brings an *unbound*
-  control into a container asks before it touches GTK.
+  control into a container asks before it touches GTK -- through
+  **`bta_widget_bring_in`**, which asks the other two questions a child arriving
+  has to answer (see *`Add` moves* below).
   **The framing that hid the third one was *refused where the second handler is
   written*.** That reads as a symmetry and is not one: `BtnOk_Click` is a method
   in a class body, so it is never handed to the runtime at all and can never be
@@ -2088,6 +2129,22 @@ person who wrote it either.
   when adding a way to put a control in a container. The `.form` loader is
   deliberately not among them: it binds *before* it attaches, and a control it
   has just built carries no handlers.
+  **`Add` moves, and a container cannot go inside itself -- and both are the
+  same door.** `bta_widget_bring_in` is what the six verbs ask now, and it asks
+  three things in the order where a refusal moves nothing: not into itself
+  (`a.Add(inner); inner.Add(a)` **hung the process** -- GTK walked the cycle),
+  the handler pair, and then -- only then -- out of wherever the control was.
+  That last one used to be nobody's: `Add` on a control already in `p1` gave a
+  `Gtk-CRITICAL` from `gtk_widget_set_parent`, the control stayed in `p1`, and
+  `bta_widget_adopt` still put it in the new container's `__children`, two
+  parents holding one control. `Remove()` then `Add()` was the only correct
+  spelling and nothing refused the other. A verb that brings **two** controls in
+  (`Notebook.Append`) asks both with `move` false and only then moves both, or a
+  refused tab would leave the page already taken out. `SetTabLabel` and
+  `SetAction` with the control they already hold are no-ops, since asking would
+  try to take it out of the very strip -- and `SetTabLabel` now releases the old
+  label *after* the swap, as `SetAction` always said. `testAddMoves` hangs on
+  the old code.
   **And the check can never be total**, which is a different statement now that
   the omission is gone: a form is an ordinary JavaScript object, so
   `this.Btn_Click = fn` assigned onto it afterwards is invisible -- there is no

@@ -369,7 +369,10 @@ An options object may come between the argv and the callbacks:
 The handle: `ProcessId`, `Running`, `ExitCode` (`null` while it runs; `-1` for a
 child stopped by a signal), `TimedOut`, `Stop()` (SIGTERM), `Kill()` (SIGKILL),
 `Write(text)` (a line to its stdin; a newline is added when there is not one,
-and it answers whether there was still a child to write to).
+and it answers whether there was still a child to write to). `Write` is queued
+and never blocks, so a child that echoes what it reads cannot hang the program;
+and `Stop`/`Kill`/`Timeout` still reach a grandchild that holds the output after
+the leader has exited.
 
 A child that speaks a protocol as well as printing gets a stream of its own:
 `Control` in the options is a callback for the child's **descriptor 3**, one
@@ -1394,7 +1397,7 @@ srv.Start();
 | `Allow` | a list of exact IPs, or nothing (open). Refused remotes get `403` before the handler runs. Exact means exact: on a dual-stack `"any"` server, `::1` is not `127.0.0.1` |
 | `Auth` | `{ Realm, Users }`: Basic over the whole server, `401` with the realm until the right password. Nothing set is open, and reads back `null`. Like `Allow`, takes effect at once |
 | `req.Multipart()` | the upload parsed: a `Multipart` to read with `Part(index)` (or re-post). Refused on a plain body |
-| `Request` | assign `(req) => …`; required before `Start`, replaceable while running |
+| `Request` | assign `(req) => …`; required before `Start`, replaceable while running -- including from inside the handler, which finishes the request it was running |
 | `Start()` | listens; throws naming the reason (a busy port says which one). A second `Start` is refused |
 | `Stop()` | `true` while something was listening, `false` after — like signalling a reaped child |
 | `Running`, `Port`, `Url` | `Port` is declared until `Start`, actual after; `Url` is `""` until then, and empty again after `Stop` |

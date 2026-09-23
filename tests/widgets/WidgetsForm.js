@@ -438,7 +438,7 @@ const TESTS = [
     "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "Record", "Nested", "Database", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "Date", "Calendar", "Drawing", "Metrics", "Library", "Plugin", "ListMulti", "MenuState",
     "RowList", "RowFilter", "PropertyOptions", "CssNode", "TabAction", "Image", "Switcher", "Reorder", "Aspect",
-    "Removal", "NumericSetters",
+    "Removal", "AddMoves", "NumericSetters",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
     "CuratedLanguage", "Dictionary", "Regex", "Bytes", "Hash", "Screen", "JsonFiles", "XmlFiles", "XmlRecord", "Log", "Apply", "TimerShorthand", "Terminal",
     "Settings", "Timer", "Icons", "Font", "Style", "Radius", "Padding", "Shadow", "StyleRule",
@@ -460,8 +460,16 @@ const TESTS = [
      * both must be going when either is. A Wait would freeze the loop the
      * server answers on -- that dogfood is async or it is a deadlock. */
     "HttpServer",
+    /* Async as well: a handler that replaces itself mid-request. */
+    "HttpServerSwap",
     /* Async: a line that arrives a third of a second after its child ended. */
     "ExecControlLate",
+    /* Async: more into a child's stdin than a pipe holds, while it echoes. */
+    "ExecWriteLarge",
+    /* Async: a child that quits with a print dialog still open. */
+    "PrintAtQuit",
+    /* Async: a leader gone and its grandchild still holding the pipe. */
+    "ExecGrandchild",
     /* Async, and last: it reports and quits. */
     "Exec",
 ];
@@ -874,6 +882,48 @@ class WidgetsForm extends Form {
      * assertion. What ties the three together is the round trip -- fill, empty,
      * fill again -- which nothing had asked any container to do.
      */
+    /*
+     * `Add` on a control that is already somewhere, and on one that would
+     * contain its own container.
+     *
+     * The first was a `Gtk-CRITICAL` with the control left where it was and
+     * adopted by the new container anyway -- two parents holding one control.
+     * The second hung the process: GTK walked the cycle forever. `Add` moves
+     * now, the way `Remove()` then `Add()` always did, and a cycle is refused
+     * before anything moves.
+     */
+    testAddMoves() {
+        const p1 = new Panel(), p2 = new Panel(), btn = new Button();
+
+        btn.Text = "moving";
+        p1.Add(btn);
+        p2.Add(btn);
+        eq("Add moves a control out of where it was", p1.Children.length, 0);
+        eq("and into the new container", p2.Children.length, 1);
+        check("the very same control", p2.Children[0] === btn);
+
+        /* A page out of a panel: the notebook door asks the same question. */
+        const nb = new Notebook(), page = new Panel(), tab = new Label();
+        p1.Add(page);
+        nb.Append(page, tab);
+        eq("a notebook page taken from a panel leaves it", p1.Children.length, 0);
+        eq("and is the notebook's", nb.Count, 1);
+
+        const outer = new Panel(), inner = new Panel();
+        outer.Add(inner);
+        throws("a control cannot go inside what it contains", () => inner.Add(outer));
+        throws("nor inside itself", () => outer.Add(outer));
+        check("and a refused Add moved nothing", inner.Children.length === 0 &&
+              outer.Children.length === 1);
+
+        /* The same label twice is no change rather than a second copy. */
+        nb.SetTabLabel(0, tab);
+        eq("setting the tab it already has adds no second child",
+           nb.Children.filter((c) => c === tab).length <= 1, true);
+
+        for (const c of [p1, p2, nb, outer]) c.Clear();
+    }
+
     testRemoval() {
         for (const type of ["Panel", "Frame", "Expander", "Scroller", "Flow",
                             "RowList", "Notebook", "Switcher", "Grid", "Overlay"]) {
@@ -16096,6 +16146,48 @@ function Main() {
      * server answers on, which is a deadlock and not a test. Ephemeral port,
      * read back: a hardcoded one collides with yesterday's crashed run.
      */
+    /*
+     * A handler that installs its successor and then keeps working.
+     *
+     * `Request` is replaceable while running, and the setter releases the old
+     * function at once -- so the running closure was freed under itself and the
+     * next allocation inside it was a heap-use-after-free (ASan, first request).
+     * A plain build may answer correctly by luck; `tests/asan.sh` is what says
+     * so without the hold. The allocation loop is what makes the freed closure
+     * be touched rather than merely referenced.
+     */
+    testHttpServerSwap() {
+        let srv = null;
+        try { srv = Http.Server({ Port: 0 }); } catch (e) { return; }   /* no libsoup */
+
+        /* What is freed is the closure and not the code -- an arrow's bytecode
+         * lives in the constant pool of the function around it -- so the
+         * handler has to read a *captured* variable after the swap for the
+         * freed memory to be touched. `served` is that variable. */
+        let served = 0;
+        const second = (req) => req.Answer(200, "second");
+        srv.Request = (req) => {
+            srv.Request = second;
+            const junk = [];
+            for (let i = 0; i < 2000; i++) junk.push({ i, s: `row ${i}` });
+            served++;
+            req.Answer(200, `first ${junk.length} ${served}`);
+        };
+        srv.Start();
+
+        waiting++;
+        const api  = Http.Client({ BaseUrl: srv.Url, Timeout: 5000 });
+        const done = (why) => { srv.Stop(); waiting--; if (why) failures.push(why); };
+
+        api.Get("/", (r1) => {
+            eq("a handler that replaces itself still answers", r1.Body.ToText(), "first 2000 1");
+            api.Get("/", (r2) => {
+                eq("and its successor answers the next request", r2.Body.ToText(), "second");
+                done();
+            }, (e) => done(`second request errored: ${e.Message}`));
+        }, (e) => done(`first request errored: ${e.Message}`));
+    }
+
     testHttpServer() {
         let noSoup = false;
         try {
@@ -18152,6 +18244,118 @@ function Main() {
             eq("a Control line after the end is dropped, not delivered to a " +
                "freed job", late.length, 0, JSON.stringify(late));
         });
+    }
+
+    /*
+     * More into a child's stdin than a pipe holds, to a child that writes while
+     * it reads.
+     *
+     * `Write` was a blocking write on the UI thread: once `cat`'s stdout filled
+     * (~64 KB) it stopped reading, our write waited for it, and the reader that
+     * would have drained it is a callback on the loop the write was holding --
+     * the whole program hung. Red is a hang, and the runner's guard is what
+     * reports it.
+     */
+    testExecWriteLarge() {
+        if (!Application.HasCommand("cat")) return;
+
+        const LINES = 3000;
+        const row   = "x".repeat(99);
+        let   back  = 0;
+
+        waiting++;
+        const job = Exec(["cat"], { Timeout: 20000 },
+                         (line) => {
+                             if (line === row) back++;
+                             if (back === LINES) job.Stop();
+                         },
+                         () => {
+                             waiting--;
+                             eq("every line written to a child comes back through it",
+                                back, LINES);
+                         });
+
+        let queued = true;
+        for (let i = 0; i < LINES; i++) queued = job.Write(row) && queued;
+        check("three hundred kilobytes are taken without blocking", queued);
+    }
+
+    /*
+     * Quitting with `Printer.Send`'s dialog still waiting.
+     *
+     * The run held its callback until `done`, which never comes when the
+     * program ends first, so `JS_FreeRuntime` found the callback alive and
+     * aborted: exit 134, after the program had done everything it meant to.
+     * A child, because the question is how a process ends.
+     */
+    testPrintAtQuit() {
+        const proj = File.Join(SCRATCH, "print-at-quit");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "printquit", startup: "PQ", sources: ["PQ.js"] });
+        File.SaveJson(File.Join(proj, "PQ.form"), {
+            type: "Form", name: "PQ",
+            properties: { Text: "PQ", Width: 240, Height: 140 },
+            children: [{ type: "DrawingArea", name: "A",
+                         properties: { X: 4, Y: 4, Width: 200, Height: 100 } }],
+        });
+        File.Save(File.Join(proj, "PQ.js"), `
+class PQ extends Form {
+    Form_Open() {
+        this.Visible = false;                 /* never mapped: it would take the focus */
+        Printer.Send(this.A, () => print("printed"));
+        print("sent");
+        Timer.After(300, () => Application.Quit(0));
+    }
+    A_Draw(p, w, h) { p.Rectangle(0, 0, w, h); p.Stroke(); }
+}
+`);
+        const said = [];
+
+        waiting++;
+        Exec([Application.Executable, proj], { Timeout: 20000 },
+             (line) => said.push(line),
+             (code) => {
+                 waiting--;
+                 check("the child opened the dialog", said.includes("sent"), said.join(" | "));
+                 eq("quitting with a print dialog open ends cleanly", code, 0,
+                    said.join(" | "));
+             });
+    }
+
+    /*
+     * A job whose leader has exited while a grandchild still holds its stdout.
+     *
+     * `sh -c "sleep 30 & echo up"`: the shell is reaped at once, the `sleep`
+     * keeps the pipe, and the job is not over. `Timeout`, `Stop()` and `Kill()`
+     * all stopped at *reaped* and did nothing, so the exit callback never came.
+     * Both roads are driven: the guard, and `Stop()` from the line callback.
+     */
+    testExecGrandchild() {
+        if (!File.Exists("/bin/sh") || !Application.HasCommand("sleep")) return;
+
+        const started = Date.now();
+        let   timedOut = null;
+
+        waiting++;
+        const guarded = Exec(["/bin/sh", "-c", "sleep 30 & echo up"], { Timeout: 400 },
+            null,
+            () => {
+                waiting--;
+                timedOut = guarded.TimedOut;
+                check("a Timeout reaches a grandchild holding the pipe",
+                      Date.now() - started < 10000, `${Date.now() - started} ms`);
+                eq("and says it timed out", timedOut, true);
+            });
+
+        let stopped = null;
+        waiting++;
+        const asked = Exec(["/bin/sh", "-c", "sleep 30 & echo up"], {},
+            (line) => { if (line === "up") Timer.After(100, () => { stopped = asked.Stop(); }); },
+            () => {
+                waiting--;
+                eq("Stop() on a reaped leader still reaches its group", stopped, true);
+            });
     }
 
     testDebuggerAsks() {

@@ -488,6 +488,51 @@ bool bta_widget_adopt_refused(JSContext *ctx, JSValueConst parent_val,
     return true;
 }
 
+/*
+ * Everything a verb that brings a control into a container asks **before GTK
+ * holds it**, in the order where a refusal leaves nothing moved.
+ *
+ * - **Not into itself.** `a.Add(inner); inner.Add(a)` hung the process: GTK
+ *   was handed a cycle and walked it forever. Refused when the child is the
+ *   container or any container around it.
+ * - **The handler pair** -- `bta_widget_adopt_refused`, above.
+ * - **Out of where it was.** A control already in a container was attached a
+ *   second time: `gtk_widget_set_parent` refused with a `Gtk-CRITICAL`, the
+ *   control stayed where it was, and `bta_widget_adopt` still put it in the new
+ *   container's children -- two parents holding one control. `Add` means
+ *   *move*, as a VB or Delphi `Parent` does; the `Remove()` then `Add()` that
+ *   used to be the only way still works and is the same thing in two steps.
+ *   The caller's argument keeps the wrapper alive across the detach, which
+ *   releases the old container's reference.
+ *
+ * The six verbs are `Container.Add`, `Notebook.Append` (the page and its tab),
+ * `Notebook.SetAction`, `Notebook.SetTabLabel` and `Switcher.Append`; a seventh
+ * that does not ask reopens all three holes.
+ */
+bool bta_widget_bring_in(JSContext *ctx, JSValueConst parent_val,
+                         BtaWidget *parent, BtaWidget *child, bool move)
+{
+    if (!parent || !child)
+        return true;
+
+    GtkWidget *into = parent->slot ? parent->slot : parent->gtk;
+    if (child->gtk == parent->gtk || child->gtk == into ||
+        gtk_widget_is_ancestor(into, child->gtk)) {
+        JS_ThrowTypeError(ctx, "Add: a control cannot be put inside itself, or "
+                               "inside something it contains");
+        return false;
+    }
+
+    if (bta_widget_adopt_refused(ctx, parent_val, parent, child))
+        return false;
+
+    /* `move` false is the question alone, for a verb that brings two controls
+     * in and must not move the first when the second is refused. */
+    if (move && gtk_widget_get_parent(child->gtk) && !bta_container_detach(ctx, child))
+        return false;
+    return true;
+}
+
 JSValue bta_emit_on(JSContext *ctx, JSValueConst form, const char *name,
                     const char *event, int argc, JSValueConst *argv)
 {

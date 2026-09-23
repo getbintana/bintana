@@ -92,9 +92,18 @@ is a size and not a position, and that is the distinction that matters.
 
 | | |
 |---|---|
-| `Add(widget)` | puts a widget in, at the end. A [`Split`](Split.md) refuses a third |
+| `Add(widget)` | puts a widget in, at the end. A control already somewhere is **moved** here; one that contains this container is refused. A [`Split`](Split.md) refuses a third |
 | `Clear()` | removes **and destroys** every child, and the container can be refilled afterwards |
 | `Children` (ro) | its real children, one level deep, in the order they are in |
+
+**`Add` moves.** A control that is already in a container comes out of it and
+goes into this one — `Remove()` then `Add()` in one step, which is what a
+`Parent` assignment means in VB or Delphi. It used to be attached a second time:
+GTK refused with a critical, the control stayed where it was, and the new
+container held it anyway. Putting a container inside something it contains is
+refused before anything moves; it used to hang the program. `Notebook.Append`,
+`Switcher.Append` and a tab strip's `SetAction`/`SetTabLabel` follow the same
+rule.
 
 A child is taken out with its own [`Delete()`](Widget.md#shown-enabled-focused),
 which destroys it, or its own `Remove()`, which detaches it and keeps it alive

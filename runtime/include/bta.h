@@ -686,6 +686,12 @@ void       bta_widget_adopt(JSContext *ctx, JSValueConst parent_val,
  * verb that brings an *unbound* control into a container asks it first. */
 bool       bta_widget_adopt_refused(JSContext *ctx, JSValueConst parent_val,
                                     BtaWidget *parent, BtaWidget *child);
+/* Everything asked before a child goes into a container: not into itself, the
+ * handler pair above, and -- with `move` -- out of wherever it was (so `Add`
+ * moves). Answers false with an exception pending. See its note in
+ * bta_widget.c. */
+bool       bta_widget_bring_in(JSContext *ctx, JSValueConst parent_val,
+                               BtaWidget *parent, BtaWidget *child, bool move);
 /* Re-applies x/y/width/height to the GTK layout. */
 void       bta_widget_relayout(BtaWidget *w);
 /*
@@ -822,6 +828,7 @@ guint bta_http_pending(void);   /* requests owed an answer */
 void  bta_media_register(void); /* the Video widget row */
 void  bta_media_init(JSContext *ctx, JSValue global);
 void  bta_media_cleanup(void);  /* stops players still going */
+void  bta_printer_cleanup(void); /* cancels print dialogs still waiting */
 guint bta_media_pending(void);  /* players owed an answer (console loop) */
 
 /* --- Scrolling, shared by Scroller and Editor -------------------------- */
