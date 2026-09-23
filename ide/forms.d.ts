@@ -353,6 +353,7 @@ interface MainForm {
     MnuSameHeight: MenuItem;
     MnuSpreadH: MenuItem;
     MnuSpreadV: MenuItem;
+    MnuTabOrder: MenuItem;
     MnuHelp: MenuItem;
     MnuReference: MenuItem;
     MnuAbout: MenuItem;
@@ -487,6 +488,15 @@ interface SymbolForm {
     TxtFind: TextBox;
     List: RowList;
     LblCount: Label;
+    BtnCancel: Button;
+    BtnOk: Button;
+}
+
+interface TabOrderForm {
+    LblWhich: Label;
+    LstOrder: ListBox;
+    BtnUp: Button;
+    BtnDown: Button;
     BtnCancel: Button;
     BtnOk: Button;
 }

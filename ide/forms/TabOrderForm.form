@@ -1,0 +1,88 @@
+{
+  "format": "bintana-form/1",
+  "class": "TabOrderForm",
+  "properties": {
+    "Height": 396,
+    "Icon": "view-sort-ascending-symbolic",
+    "Text": "Tab order",
+    "Width": 360
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblWhich",
+      "properties": {
+        "Ellipsize": true,
+        "HAlign": "Fill",
+        "Height": 22,
+        "Text": "Tab order",
+        "VAlign": "End",
+        "Width": 332,
+        "X": 14,
+        "Y": 10
+      }
+    },
+    {
+      "type": "ListBox",
+      "name": "LstOrder",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 300,
+        "Width": 332,
+        "X": 14,
+        "Y": 38
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnUp",
+      "properties": {
+        "Height": 32,
+        "Text": "Move up",
+        "VAlign": "End",
+        "Width": 80,
+        "X": 14,
+        "Y": 348
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnDown",
+      "properties": {
+        "Height": 32,
+        "Text": "Move down",
+        "VAlign": "End",
+        "Width": 80,
+        "X": 100,
+        "Y": 348
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnCancel",
+      "properties": {
+        "Cancel": true,
+        "Height": 32,
+        "Text": "Cancel",
+        "VAlign": "End",
+        "Width": 80,
+        "X": 186,
+        "Y": 348
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnOk",
+      "properties": {
+        "Default": true,
+        "Height": 32,
+        "Style": "suggested-action",
+        "Text": "OK",
+        "VAlign": "End",
+        "Width": 80,
+        "X": 272,
+        "Y": 348
+      }
+    }
+  ]
+}

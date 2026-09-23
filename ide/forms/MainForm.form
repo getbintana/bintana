@@ -489,6 +489,13 @@
         {
           "name": "MnuSpreadV",
           "text": "Distribute vertically"
+        },
+        {
+          "separator": true
+        },
+        {
+          "name": "MnuTabOrder",
+          "text": "Tab order..."
         }
       ]
     },

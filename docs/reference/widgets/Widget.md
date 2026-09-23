@@ -188,7 +188,7 @@ else               this.Pic.On("Allocated", (b) => this.fitTo(b));
 | `VAlign` | the same, down it |
 | `Margin` | room **around** it: one number for all four sides, never a list. On a `Form` it insets the contents, a window having no outside |
 | `ColumnSpan` | how many columns of a [`Grid`](Grid.md) it runs under |
-| `TabIndex` | where Tab reaches it on a surface laid out by coordinate. Sparse, never renumbered; `0` means *in drawn order* |
+| `TabIndex` | where Tab reaches it on a surface laid out by coordinate. Sparse, never renumbered; `0` means *in drawn order*. The IDE edits it as a list — *Form > Tab order...* — which is the shape a relation needs |
 | `Raise()` | to the top of the painting order, among its siblings on a surface |
 | `Lower()` | and to the bottom |
 
@@ -209,7 +209,7 @@ component with a drawn size of its own is put into a small pane: `HAlign` and
 | `Show()` | makes it visible |
 | `Hide()` | makes it invisible. A hidden control **keeps its place in the tree** and its position in a box |
 | `Enabled` | answers the mouse and the keyboard. `true` by default, and **read-only in effect while `Action` is set**: a control that points at a command takes the command's answer |
-| `Focusable` | can take the keyboard focus. Turn it on for a container that wants keys — a drawing surface, a board |
+| `Focusable` | can take the keyboard focus. Turn it on for a container that wants keys — a drawing surface, a board. The answer is the **control's** and not the outside widget's: a `TextBox` reads `true` while the entry GTK lays out is not focusable at all, its inner `GtkText` being where the focus really sits |
 | `Focused` (ro) | whether the focus is **within** it, which is why a `TextBox` answers `true` while the focus really sits on the entry inside it |
 | `SetFocus()` | puts the focus here |
 | `Remove()` | detaches it from its parent **without destroying it**, so it can be put somewhere else |

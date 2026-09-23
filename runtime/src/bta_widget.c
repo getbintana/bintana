@@ -742,6 +742,33 @@ static JSValue w_set_geom(JSContext *ctx, JSValueConst this_val,
 
 enum { FLAG_VISIBLE, FLAG_ENABLED, FLAG_FOCUSABLE };
 
+/*
+ * **A control's focusable state is not always the outside widget's**, which is
+ * the same *contains* rather than *is* that `Focused` reports.  A `TextBox`'s
+ * focus sits on the `GtkText` inside its entry and an editor's on the view
+ * inside its scroller, and in GTK4 the outside of either is not focusable at
+ * all -- so the getter reading `gtk` alone answered **false** for the
+ * commonest control in the set, while `w_set_flag` reached `inner` and the
+ * editable's delegate and the behaviour was right.  A property that reads back
+ * wrong and works is found by whoever asks it a question: the designer's
+ * tab-order dialog asked *which children can Tab reach*.
+ *
+ * True if any of the three is focusable, which is the question Tab asks.
+ */
+static bool widget_focusable(BtaWidget *w)
+{
+    if (gtk_widget_get_focusable(w->gtk))
+        return true;
+    if (w->inner && w->inner != w->gtk && gtk_widget_get_focusable(w->inner))
+        return true;
+    if (GTK_IS_EDITABLE(w->gtk)) {
+        GtkEditable *d = gtk_editable_get_delegate(GTK_EDITABLE(w->gtk));
+        if (d && gtk_widget_get_focusable(GTK_WIDGET(d)))
+            return true;
+    }
+    return false;
+}
+
 static JSValue w_get_flag(JSContext *ctx, JSValueConst this_val, int magic)
 {
     BtaWidget *w = bta_this(ctx, this_val);
@@ -750,7 +777,7 @@ static JSValue w_get_flag(JSContext *ctx, JSValueConst this_val, int magic)
     switch (magic) {
     case FLAG_VISIBLE:   return JS_NewBool(ctx, gtk_widget_get_visible(w->gtk));
     case FLAG_ENABLED:   return JS_NewBool(ctx, gtk_widget_get_sensitive(w->gtk));
-    default:             return JS_NewBool(ctx, gtk_widget_get_focusable(w->gtk));
+    default:             return JS_NewBool(ctx, widget_focusable(w));
     }
 }
 

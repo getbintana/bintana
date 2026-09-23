@@ -53,6 +53,7 @@
     "modules/Finder.js",
     "forms/SearchForm.js",
     "forms/SymbolForm.js",
+    "forms/TabOrderForm.js",
     "forms/QuickForm.js",
     "forms/GitForm.js",
     "forms/LogForm.js",

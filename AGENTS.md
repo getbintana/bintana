@@ -1240,7 +1240,7 @@ Three things that will waste your time:
   with the first frame of its stack. **A new phase does not have to remember
   this**, which is the point; what it does mean is that a test deliberately
   provoking an error has to catch it.
-- **`tests/ide/Driver.js` is forty-one phases, and the phase is the scope.** It used
+- **`tests/ide/Driver.js` is forty-two phases, and the phase is the scope.** It used
   to be one 4000-line generator where every `const` shared one scope, so a name
   near the top collided with one added at the bottom and the suite died with
   `SyntaxError: invalid redefinition of lexical identifier` — three times in one
@@ -1255,7 +1255,7 @@ Three things that will waste your time:
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
-  364 assertions against 2459 for the whole project -- 9.4 s against 264 on this
+  364 assertions against 2482 for the whole project -- 9.4 s against 271 on this
   machine -- which is what makes iterating on an early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.
@@ -2487,14 +2487,20 @@ person who wrote it either.
   what makes the *same* top-level `const` in two files a `SyntaxError:
   redeclaration` that stops the IDE at startup. Splitting a file means moving each
   constant, not copying it.
-- **`Focusable` set on `w->gtk` alone is a property that reads back and does
-  nothing.** A `TextBox`'s focus sits on the `GtkText` *inside* its entry and a
-  an editor's on the view inside its scroller -- the same *contains* rather
-  than *is* that `Focused` reports -- so `gtk_widget_child_focus` walked past the
-  unfocusable outside straight into the focusable inside. `w_set_flag` reaches
-  `inner` and, for a `GtkEditable`, its delegate. Found by a tab-order test
-  expecting Tab to skip a `TextBox`, which is the only way it *could* be found:
-  the getter agreed with the setter the whole time.
+- **`Focusable` reaches `inner` and the editable's delegate, and the *getter* has
+  to ask the same three.** A `TextBox`'s focus sits on the `GtkText` *inside* its
+  entry and an editor's on the view inside its scroller -- the same *contains*
+  rather than *is* that `Focused` reports -- so `gtk_widget_child_focus` walked
+  past the unfocusable outside straight into the focusable inside. `w_set_flag`
+  reaches `inner` and, for a `GtkEditable`, its delegate. Found by a tab-order
+  test expecting Tab to skip a `TextBox`.
+  **The getter was left reading `w->gtk` alone, which answered `false` for every
+  `TextBox` in the tree** -- in GTK4 the outside of an entry is not focusable at
+  all, the `GtkText` inside is -- so a property that read back wrong *worked*, and
+  that is a bug only whoever asks it a question can find. The question arrived
+  years later: the designer's tab-order dialog lists the children Tab can reach,
+  listed the buttons and skipped every field. `widget_focusable` is the three
+  widgets the setter writes, asked in one place.
 - **An image in memory is a verb, not a property.** `Picture.LoadBytes(bytes)`,
   `Image.LoadBytes(bytes)`, `Painter.Image` taking a string *or* `Bytes`, and
   `DrawingArea.ToPng()` answering `Bytes` -- the circle `Http` (which answers

@@ -1855,6 +1855,22 @@ class WidgetsForm extends Form {
         eq("and turning it back on lets it in again", a.Focused, true);
 
         /*
+         * **And it answers for the control, not for the outside widget.** The
+         * focus of a `TextBox` sits on the `GtkText` inside its entry, which in
+         * GTK4 is the focusable half -- so the getter reading `gtk` alone said
+         * `false` for the commonest control in the set, while the setter had
+         * reached `inner` and the delegate and the behaviour was right. A
+         * property that reads back wrong and works is found by whoever asks it
+         * a question: the designer's tab-order dialog asks which children Tab
+         * can reach.
+         */
+        eq("a TextBox is focusable by default", b.Focusable, true);
+        b.Focusable = false;
+        eq("and saying so reads back", b.Focusable, false);
+        b.Focusable = true;
+        eq("...both ways", b.Focusable, true);
+
+        /*
          * And it answers for the *control*, not for the widget GTK gave the
          * focus to.  A TextBox's focus really sits on the GtkText inside its
          * entry, and an editor's on the view inside its scroller -- both would

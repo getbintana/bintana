@@ -2628,6 +2628,35 @@ Before this, an elastic form arrived piled at the origin with negative
 coordinates, which is the concrete sense in which the IDE could not be written in
 itself: its own window is a column of boxes and splits.
 
+### The tab order, as a list
+
+`TabIndex` is a number in the property grid, and a tab order is a relation —
+*before what* is the whole question and a number cannot say it. *Form → Tab
+order...* is the dialog Visual Basic and Delphi have: a container's controls in
+the order Tab takes them, with Move up and Move down, and one Ctrl+Z for the
+whole reorder.
+
+**The order shown is the runtime's own rule** — `TabIndex` ascending, ties in the
+order they were drawn, which is what `bta_fixed_focus` sorts by when Tab is
+pressed — so what the list says is what the keyboard does. With nothing selected
+it edits the form; a selected container drawn in coordinates is edited instead;
+a selected box is refused with a sentence, because `TabIndex` is read by a
+`Fixed` surface and a box follows GTK's own child order.
+
+**The rows are the children Tab can reach** — `Focusable`, which is the TabStop —
+and asking that question is what found a property that read back wrong and
+worked: the getter read the widget the parent lays out, and in GTK4 the outside
+of a `TextBox` is not focusable at all, its focus being on the `GtkText` inside.
+The dialog listed the buttons and skipped every field until the getter asked the
+same three widgets the setter writes (see [`Widget.Focusable`](reference/widgets/Widget.md)).
+
+**A dense renumbering is what the property refuses, not what this does.** VB and
+Delphi shuffle every sibling whenever one `TabIndex` is set, which is why the
+property here is sparse and never renumbered; a dialog is a deliberate bulk edit,
+so it assigns `0..n-1` — **only when the list really moved**, and under a single
+`pushUndo()`. Opening it and pressing OK leaves the `.form` exactly as it was,
+which is what *an edit that changes nothing is not an edit* asks of every editor.
+
 ## Selection and chrome
 
 Four thin bars for the outline and eight squares for the handles, created once and

@@ -1,7 +1,7 @@
 # Testing
 
 ```sh
-./tests/run.sh                          # all five projects, 6682 assertions
+./tests/run.sh                          # all five projects, 6708 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -157,13 +157,13 @@ it came from. It was added the day a window shipped throwing six of them into a
 run that said *0 failed*: every assertion the phase made was true, and the
 window was broken.
 
-`tests/ide` is forty-one **phases**, each a generator with a scope of its own,
+`tests/ide` is forty-two **phases**, each a generator with a scope of its own,
 listed in `PHASES` at the bottom of `Driver.js`. `./tests/run.sh ide <name>` runs
 every phase up to and including the last one whose name contains `<name>`:
 
 ```
-welcome files designer palette clipboard completion handlers events goto images
-watch tooldirs namespaces selfns views document help forms nested projects
+welcome files designer palette clipboard taborder completion handlers events
+goto images watch tooldirs namespaces selfns views document help forms nested projects
 menus folders strings settings columns export apps errors problems names
 outline check quick recovery unsaved session search git debug launch running
 ```
@@ -178,8 +178,8 @@ or a discarded project leaves behind.
 stale; the one above is here to be read.
 
 The saving is the point of it: `welcome files` is **102** assertions and
-`designer` **364**, against **2459** for the whole project — measured at 3.7 s,
-9.4 s and 264 s on the machine this was last run on, where what carries over to
+`designer` **364**, against **2482** for the whole project — measured at 3.7 s,
+9.4 s and 271 s on the machine this was last run on, where what carries over to
 another machine is the proportion and not the seconds. Iterating on an early
 phase stops being minutes a time.
 
@@ -214,7 +214,7 @@ own says so with `reportsItself`.
 
 `tests/widgets` is 160 tests listed in `TESTS`, and a filter there **selects** rather
 than running a prefix — `./tests/run.sh widgets record` is 71 assertions
-in a fifth of a second against 3897 in about eight. It can select because these tests are
+in a fifth of a second against 3900 in about eight. It can select because these tests are
 independent: each builds the controls it needs and deletes them again. The two that
 are not say so in the file:
 

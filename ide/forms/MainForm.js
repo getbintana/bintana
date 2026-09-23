@@ -2466,6 +2466,23 @@ class MainForm extends Form {
     MnuSpreadV_Click() { this.designer.distribute("v"); }
 
     /*
+     * The order Tab takes the controls of a container in -- Delphi's *Edit >
+     * Tab Order...*, in the Form menu because that is the menu about the form
+     * being designed.
+     *
+     * Kept while it is open for the same reason the menu editor and the symbol
+     * picker are: so a test can drive the dialog the menu opened rather than
+     * the method under it.
+     */
+    MnuTabOrder_Click() {
+        if (!this.designing) {
+            Message.Warning("Open a form's design to edit its tab order.");
+            return;
+        }
+        this.tabOrderForm = TabOrderForm.open(this);
+    }
+
+    /*
      * The version, and the binary it is running on.  Kept while it is open for
      * the same reason the menu editor is: so a test can drive the dialog the
      * menu opened, rather than the method under it.

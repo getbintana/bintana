@@ -2745,6 +2745,128 @@ function* p_clipboard(ide) {
 }
 
 /*
+ * The tab order, as a list.
+ *
+ * `TabIndex` was a number in the property grid: correct and unusable, because a
+ * tab order is a relation and a number cannot say *before what*. The dialog is
+ * the one Delphi and Visual Basic have -- a container's controls in the order
+ * Tab takes them, with Up and Down -- and the order it shows is the runtime's
+ * own rule, so what the list says is what the keyboard does.
+ *
+ * It runs on the form `p_clipboard` left saved and puts it back exactly as it
+ * found it: `p_completion` and everything after reads that file.
+ */
+function* p_taborder(ide) {
+    ide.openInTab("Child.form");
+    yield* settled(ide);
+
+    const was = ide.Surface.Children.map((c) => c.Name);
+
+    /* Three more controls, so there is an order to change. `Ok` is the fourth
+     * and the only one the form already had that Tab can reach -- `Msg` is a
+     * `Label`, and a label is not a stop. */
+    ["Txt1", "Txt2", "Txt3"].forEach((name, at) => {
+        const t = new TextBox();
+        t.Name = name;
+        t.X = 20; t.Y = 100 + at * 40; t.Width = 140; t.Height = 30;
+        ide.Surface.Add(t);
+    });
+    yield* settled(ide);
+
+    /* --- the list ---------------------------------------------------------- */
+    ide.designer.select(null);
+    ide.MnuTabOrder_Click();
+    const dlg = ide.tabOrderForm;
+    yield;
+
+    check("the tab order dialog opens", dlg !== undefined && dlg !== null);
+    eq("with a row per focusable child", dlg.LstOrder.Count, 4);
+    eq("in the order Tab takes them, ties in drawn order",
+       dlg.LstOrder.Items.join(","), "Ok,Txt1,Txt2,Txt3");
+    check("and it names the container it is editing",
+          dlg.LblWhich.Text.includes("Child"), dlg.LblWhich.Text);
+
+    /* --- nothing moved, nothing written ------------------------------------- */
+    dlg.BtnOk_Click();
+    yield;
+    eq("OK without moving leaves the form unmodified", ide.designer.dirty, false);
+    eq("and the controls as they were", byName(ide, "Txt1").TabIndex, 0);
+
+    /* --- a real move -------------------------------------------------------- */
+    ide.MnuTabOrder_Click();
+    const moved = ide.tabOrderForm;
+    yield;
+
+    moved.LstOrder.Index = 0;
+    moved.LstOrder_Select();
+    check("up is off at the top", !moved.BtnUp.Enabled);
+    check("and down is on", moved.BtnDown.Enabled);
+
+    moved.LstOrder.Index = 3;
+    moved.LstOrder_Select();
+    check("down is off at the bottom", !moved.BtnDown.Enabled);
+
+    moved.BtnUp_Click();
+    eq("moving up swaps with the one above", moved.LstOrder.Items.join(","),
+       "Ok,Txt1,Txt3,Txt2");
+    eq("and the row stays chosen", moved.LstOrder.Index, 2);
+
+    moved.BtnOk_Click();
+    yield;
+    eq("OK writes the order", byName(ide, "Txt3").TabIndex, 2);
+    eq("...the one that came down", byName(ide, "Txt2").TabIndex, 3);
+    eq("...and the ones that did not move", byName(ide, "Ok").TabIndex, 0);
+    eq("and the form is modified", ide.designer.dirty, true);
+
+    /* One Ctrl+Z for the whole reorder. The controls are rebuilt by an undo, so
+     * they are found by name rather than held. */
+    ide.MnuUndo_Click();
+    yield;
+    eq("one undo takes the whole reorder back", byName(ide, "Txt2").TabIndex, 0);
+    eq("...and the other one with it", byName(ide, "Txt3").TabIndex, 0);
+
+    /* --- a container edits its own children --------------------------------- */
+    const box = new Panel();
+    box.Name = "Box";
+    box.X = 200; box.Y = 100; box.Width = 120; box.Height = 120;
+    ide.Surface.Add(box);
+    ["A", "B"].forEach((name, at) => {
+        const t = new TextBox();
+        t.Name = name;
+        t.X = 10; t.Y = 10 + at * 40; t.Width = 90; t.Height = 30;
+        box.Add(t);
+    });
+    yield* settled(ide);
+
+    ide.designer.select(box);
+    ide.MnuTabOrder_Click();
+    const inner = ide.tabOrderForm;
+    yield;
+    eq("a selected container edits its own children",
+       inner.LstOrder.Items.join(","), "A,B");
+    check("and says which one", inner.LblWhich.Text.includes("Box"),
+          inner.LblWhich.Text);
+    inner.BtnCancel_Click();
+    yield;
+
+    /* A box has no order to give: `TabIndex` is read by a surface drawn in
+     * coordinates, and GTK's own child order is what a box follows. */
+    box.Arrangement = "Horizontal";
+    eq("a box is not a container this edits", TabOrderForm.targetOf(ide), null);
+
+    /* --- and the form goes back to what it was ------------------------------ */
+    for (const c of [...ide.Surface.Children])
+        if (!was.includes(c.Name)) c.Delete();
+
+    ide.designer.select(null);
+    ide.designer.touch();
+    ide.BtnSave_Click();
+    eq("the form is back to what it was", ide.Surface.Children.length, 2);
+    eq("and saved", ide.designer.dirty, false);
+    yield;
+}
+
+/*
  * What the editor proposes, once it is asked about the project rather than
  * about the words in the buffer.
  *
@@ -11920,6 +12042,7 @@ const PHASES = [
     { name: "designer", run: p_designer },
     { name: "palette", run: p_palette },
     { name: "clipboard", run: p_clipboard },
+    { name: "taborder", run: p_taborder },
     { name: "completion", run: p_completion },
     { name: "handlers", run: p_handlers },
     { name: "events", run: p_events },

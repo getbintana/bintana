@@ -53,6 +53,7 @@
     "../../ide/modules/Finder.js",
     "../../ide/forms/SearchForm.js",
     "../../ide/forms/SymbolForm.js",
+    "../../ide/forms/TabOrderForm.js",
     "../../ide/forms/QuickForm.js",
     "../../ide/forms/GitForm.js",
     "../../ide/forms/LogForm.js",
