@@ -530,14 +530,66 @@ Ide.TabSet = class TabSet {
     }
 
     closeAll() {
-        /* Take a copy: closing one mutates tabOrder. */
+        return this.closeMany([...this.tabOrder]);
+    }
+
+    /* Every tab, now and without asking: for leaving a project, whose doors
+     * asked already (`MainForm.leaveProject`). */
+    discardAll() {
         for (const name of [...this.tabOrder]) this.closeByName(name, true);
+    }
+
+    /* Every tab but the one named. */
+    closeOthers(keep) {
+        return this.closeMany(this.tabOrder.filter((name) => name !== keep));
+    }
+
+    /* Closing several tabs is the question closing one already asks -- asked
+     * once, naming them. It used to be `closeByName(name, true)` in a loop, and
+     * `true` is *force*: Close all and Close others dropped unsaved work with
+     * no word at all. */
+    closeMany(names, then) {
+        return this.whenSettled(names, Locale.Text("Close tabs"),
+                         Locale.Text("Close without saving"),
+                         Locale.Text("Save and close"), () => {
+            for (const name of names) this.closeByName(name, /* force */ true);
+            if (then) then();
+        });
+    }
+
+    /*
+     * `then` runs once none of `names` holds unsaved work: at once when none
+     * does, and otherwise after the one question -- discard, or save and go on.
+     * A save that fails goes on with nothing: the tab is still there and still
+     * dirty, and the error said why.
+     */
+    whenSettled(names, title, discardText, saveText, then) {
+        const dirty = names.filter((name) => {
+            const state = this.openTabs.get(name);
+            return state && this.dirtyOf(name, state);
+        });
+        if (!dirty.length) { then(); return; }
+
+        return ConfirmForm.ask(title,
+            Locale.Plural("{1} has unsaved changes.",
+                          "{0} files have unsaved changes:\n{1}",
+                          dirty.length, dirty.join(", ")),
+            discardText, then,
+            { Text: saveText,
+              Run:  () => { if (this.saveAllDirty(dirty)) then(); } });
     }
 
     rename(oldName, newName) {
         const state = this.openTabs.get(oldName);
         if (!state) return;
         state.name = newName;
+        /* The watch was on the old path, which is gone: a change to the file
+         * the tab now holds would go unnoticed, and the tab would go on
+         * answering for a path nothing is at. */
+        if (state.watch) {
+            this.unwatch(state);
+            this.watch(newName, state);
+        }
         this.openTabs.delete(oldName);
         this.openTabs.set(newName, state);
         const idx = this.tabOrder.indexOf(oldName);
@@ -563,6 +615,10 @@ Ide.TabSet = class TabSet {
         const state = this.openTabs.get(name);
         if (!state) return;
         const path = File.Join(this.ide.project, name);
+
+        /* What was read is what the watch compares against: without it, the
+         * file the IDE itself just wrote reads as somebody else's change. */
+        try { state.onDisk = File.Load(path); } catch (e) { /* gone */ }
 
         if (state.mode === "design") {
             state.root  = File.LoadJson(path);
@@ -809,22 +865,78 @@ Ide.TabSet = class TabSet {
         this.ide.showReloadBar();
     }
 
+    /*
+     * A change the IDE makes to a source file by itself -- a control's handlers
+     * following its new name, a class renamed with its form -- applied to
+     * **both** copies there are: the file, and the open tab's editor.
+     *
+     * It used to be the file alone, and the tab kept the old text: a dirty tab
+     * then saved the old names back over the rename, and even a clean one sat
+     * there saying `class Form1` until the next save wrote it. The file is
+     * written so the pair on disk agrees (the `.form` beside it has just been
+     * saved); the editor gets the same change on top of whatever was typed into
+     * it, and stays exactly as dirty as it was. Assigning `Text` costs the tab
+     * its undo history, which is the price of not losing its content.
+     *
+     * `change(text)` answers the new text; answering the same text is no change.
+     */
+    rewriteSource(name, change) {
+        const path  = File.Join(this.ide.project, name);
+        const state = this.openTabs.get(name);
+
+        if (File.Exists(path)) {
+            const disk = File.Load(path);
+            const next = change(disk);
+            if (next !== disk) File.Save(path, next);
+            if (state) state.onDisk = next;
+        }
+
+        const editor = state && state.editor;
+        if (!editor) return;
+
+        const text = editor.Text;
+        const next = change(text);
+        if (next === text) return;
+
+        const dirty = this.liveDirty(state);
+        const line  = editor.Line;
+
+        editor.Text     = next;
+        editor.Modified = dirty;
+        state.text      = next;
+        state.dirty     = dirty;
+        editor.GotoLine(line);
+        this.render();
+    }
+
     /* Walks every dirty tab and saves it.  Run and MnuSaveAll use it: a .form
      * and its .js travel together, and one cannot run with either unsaved. */
-    saveAllDirty() {
+    /* Saves every dirty tab, or only those of `only`, and answers whether all
+     * of them were saved -- which is what lets "save and close" not close the
+     * one that failed. */
+    saveAllDirty(only) {
         const wasActive = this.ide.activeFile;
+        let   ok        = true;
+
         for (const name of [...this.tabOrder]) {
+            if (only && !only.includes(name)) continue;
             const state = this.openTabs.get(name);
             if (!state) continue;
             if (!this.dirtyOf(name, state)) continue;
             this.switchTo(name);
             if (state.mode === "design") {
-                this.ide.designer.save();
+                if (!this.ide.designer.save()) { ok = false; continue; }
                 try { state.onDisk = File.Load(File.Join(this.ide.project, name)); }
                 catch (e) { /* nothing to compare against */ }
                 state.changedOnDisk = false;
             } else {
-                File.Save(File.Join(this.ide.project, name), state.editor.Text);
+                try {
+                    File.Save(File.Join(this.ide.project, name), state.editor.Text);
+                } catch (e) {
+                    Message.Error("Could not save {0}:\n{1}", name, e.message);
+                    ok = false;
+                    continue;
+                }
                 state.editor.Modified = false;
                 state.onDisk = state.editor.Text;   /* ours, not somebody else's */
                 state.changedOnDisk = false;
@@ -836,6 +948,7 @@ Ide.TabSet = class TabSet {
         this.render();
         this.ide.afterSave();
         this.ide.refresh();
+        return ok;
     }
 
     /* Whether there are unsaved changes, whichever the mode.  This is about the

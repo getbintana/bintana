@@ -2208,7 +2208,7 @@ Ide.Designer = class Designer {
      */
     renameControl(newName) {
         const control = this.selected;
-        const oldName = control.Name;
+        const oldName = control ? control.Name : null;
 
         if (!control || newName === oldName) {
             this.grid.sync();
@@ -2227,6 +2227,18 @@ Ide.Designer = class Designer {
         }
         if (this.allControls().some((c) => c !== control && c.Name === newName)) {
             Message.Error("There is already a control named {0}.", newName);
+            this.grid.sync();
+            return false;
+        }
+
+        /* A name the code still answers for is not free either -- the rule
+         * `uniqueName` learned. Renaming onto it would carry this control's
+         * handlers over methods already there, and two methods of one name in a
+         * class is the silent kind: the later one wins. */
+        const answered = Ide.FormFiles.handlersIn(this.ide.formFiles.siblingSource(), newName);
+        if (answered.length) {
+            Message.Error("The code already has handlers for {0}: {1}.\nRename or delete them first.",
+                          newName, answered.map((e) => `${newName}_${e}`).join(", "));
             this.grid.sync();
             return false;
         }

@@ -157,23 +157,29 @@ it came from. It was added the day a window shipped throwing six of them into a
 run that said *0 failed*: every assertion the phase made was true, and the
 window was broken.
 
-`tests/ide` is thirty-three **phases**, each a generator with a scope of its own,
+`tests/ide` is forty-one **phases**, each a generator with a scope of its own,
 listed in `PHASES` at the bottom of `Driver.js`. `./tests/run.sh ide <name>` runs
 every phase up to and including the last one whose name contains `<name>`:
 
 ```
 welcome files designer palette clipboard completion handlers events goto images
 watch tooldirs namespaces selfns views document help forms nested projects
-menus folders strings settings columns export errors recovery session search
-git debug running
+menus folders strings settings columns export apps errors problems names
+outline check quick recovery unsaved session search git debug launch running
 ```
+
+`unsaved` is the one about losing work: every road that used to drop typed
+text without asking -- Close all and Close others, leaving the project,
+writing a handler or renaming a control into a `.js` with unsaved edits,
+renaming a form with its `.js` open -- and the recovery snapshot a clean close
+or a discarded project leaves behind.
 
 `./tests/run.sh ide list` prints that list, which is the copy that cannot go
 stale; the one above is here to be read.
 
 The saving is the point of it: `welcome files` is **102** assertions and
-`designer` **364**, against **2420** for the whole project — measured at 3.7 s,
-8.6 s and 212 s on the machine this was last run on, where what carries over to
+`designer` **364**, against **2448** for the whole project — measured at 3.7 s,
+8.6 s and 254 s on the machine this was last run on, where what carries over to
 another machine is the proportion and not the seconds. Iterating on an early
 phase stops being minutes a time.
 

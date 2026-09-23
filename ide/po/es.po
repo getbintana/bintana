@@ -2145,3 +2145,27 @@ msgstr "No se pudo ejecutar {0}: {1}"
 #: modules/Translations.js:363
 msgid "{0} is not installed, or not on the PATH."
 msgstr "{0} no está instalado, o no está en el PATH."
+
+#: modules/TabSet.js
+msgid "Close tabs"
+msgstr "Cerrar pestañas"
+
+#: forms/MainForm.js
+msgid "Leave the project"
+msgstr "Dejar el proyecto"
+
+#: forms/MainForm.js
+msgid "Discard and continue"
+msgstr "Descartar y seguir"
+
+#: forms/MainForm.js
+msgid "Save all and continue"
+msgstr "Guardar todo y seguir"
+
+#: modules/Designer.js
+msgid ""
+"The code already has handlers for {0}: {1}.\n"
+"Rename or delete them first."
+msgstr ""
+"El código ya tiene handlers para {0}: {1}.\n"
+"Renombralos o borralos primero."

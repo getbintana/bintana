@@ -522,6 +522,14 @@ The strip ends in a button carrying a menu — *Close tab*, *Close others*,
 across the window from the tabs they act on, and a strip that has filled up is
 where one is looking when the thought arrives.
 
+**Closing several tabs asks once, naming the unsaved ones** — discard, or save
+and close — and so does every way out of the project (Open, a recent one, New,
+Clone), before anything moves. Both used to close with *force* and no question.
+A change the IDE makes to a `.js` by itself — a handler written by a double
+click, a control or a form renamed — lands in the open tab as well as in the
+file, on top of whatever was typed there and without saving it: see the
+`force` entry in `AGENTS.md`.
+
 It is **declared in `MainForm.form`**, on the notebook, with `"strip": "End"` —
 menu and all, since `Menu` is an ordinary property. It was built in code until
 the format had a word for it, and that was the problem: opening the IDE's own
@@ -1023,9 +1031,14 @@ tree, `serializeForm()` of the surface, so a design half-moved is a design and
 not a `.form` that was never written.
 
 **The snapshot is read once, when a project opens**, and only if one was left
-behind. Every ordinary way out goes through `quit()`, which throws it away first:
-*quit without saving* is an answer, and offering to undo it next time would be
-second-guessing the user. What is left behind is therefore what the IDE never got
+behind. Every ordinary way out throws it away first: `quit()` after *quit without
+saving*, `leaving()` when the X closes a window with nothing dirty, and
+`leaveProject` once opening another project has settled the question. Each is an
+answer, and offering to undo it next time would be second-guessing the user. The
+X used to be missing from that list -- it closes by *returning* from
+`Form_Close` and never reaches `quit()` -- so saving and closing within thirty
+seconds left the last snapshot behind, and the next open offered older text back
+as "recovered". What is left behind is therefore what the IDE never got
 to ask about — a crash, a kill, a power cut, a session that ended. The dialog
 offers **Recover** or **Discard**; recovering opens the tabs and leaves them
 dirty, because what is on screen is not what is in the file and the asterisk is

@@ -80,12 +80,14 @@ function insertMethod(source, className, method) {
     const close = endOfBlock(source, open);
     const at    = close >= 0 ? close : open + 1;
 
-    const out = source.slice(0, at) +
-                `\n    ${method}() {\n        \n    }\n` +
-                source.slice(at);
+    const snippet = `\n    ${method}() {\n        \n    }\n`;
+    const out     = source.slice(0, at) + snippet + source.slice(at);
 
-    /* The cursor goes to the blank line of the body, the one after the signature. */
-    return { source: out, line: Text.LineOf(out, out.indexOf(`${method}() {`, at)) + 1 };
+    /* The cursor goes to the blank line of the body, the one after the signature.
+     * `at` and `snippet` are for a caller inserting into a live editor rather
+     * than writing the whole text back. */
+    return { source: out, at, snippet,
+             line: Text.LineOf(out, out.indexOf(`${method}() {`, at)) + 1 };
 }
 
 /*
@@ -424,6 +426,13 @@ Ide.FormFiles = class FormFiles {
             Message.Error("{0} already exists.", newFormFile);
             return false;
         }
+
+        /* The rename is made from the files, so an unsaved `.form` is saved
+         * first -- the bargain writing a handler already makes. The `.js` half
+         * is not: its tab is carried along below, typed text and all. */
+        const formState = this.ide.openTabs.get(oldFormFile);
+        if (formState && this.ide.tabs.dirtyOf(oldFormFile, formState) &&
+            !this.ide.tabs.saveAllDirty([oldFormFile])) return false;
         if (newFolder) Directory.Make(File.Join(this.ide.project, newFolder));
 
         /*
@@ -455,23 +464,22 @@ Ide.FormFiles = class FormFiles {
         File.SaveJson(newForm, node);
         File.Delete(oldForm);
 
+        /* With word boundaries, so renaming Form1 does not touch Form1Extra.
+         * Only inside its own file. The namespace lives in the code, so moving
+         * the file is not enough: the declaration has to move with it or the
+         * class keeps answering to the name of the folder it left. Applying it
+         * twice changes nothing, which is what lets the open tab have it too. */
+        const renamedWord = new Regex(`\\b${Regex.Escape(oldName)}\\b`);
+        const retext = (source) =>
+            retargetNamespace(renamedWord.Replace(source, newName), newName, oldNs, newNs);
+
         const oldJsFile = sibling(oldFormFile, "js");
         const hasJs     = this.ide.files.includes(oldJsFile);
         if (hasJs) {
             const oldJs = File.Join(this.ide.project, oldJsFile);
             const newJs = File.Join(this.ide.project, newJsFile);
 
-            /* With word boundaries, so renaming Form1 does not touch
-             * Form1Extra.  Only inside its own file. */
-            let source = new Regex(`\\b${Regex.Escape(oldName)}\\b`)
-                .Replace(File.Load(oldJs), newName);
-
-            /* The namespace lives in the code, so moving the file is not enough:
-             * the declaration has to move with it or the class keeps answering
-             * to the name of the folder it left. */
-            source = retargetNamespace(source, newName, oldNs, newNs);
-
-            File.Save(newJs, source);
+            File.Save(newJs, retext(File.Load(oldJs)));
             File.Delete(oldJs);
             this.ide.renameSource(oldJsFile, newJsFile);
         }
@@ -487,8 +495,17 @@ Ide.FormFiles = class FormFiles {
             this.ide.log(`Renamed ${oldFull} to ${newFull} in ${retyped.join(", ")}\n`);
         }
 
+        /* The tabs follow the files, and **their text follows too**: the `.js`
+         * tab used to keep `class Form1` under its new name, and saving it
+         * wrote that into NewName.js -- undoing the rename, dirty or not. The
+         * `.form` was saved above, so it is reloaded; the `.js` gets the same
+         * edit the file got, on top of whatever was typed into it. */
         this.ide.renameTab(oldFormFile, newFormFile);
-        if (hasJs) this.ide.renameTab(oldJsFile, newJsFile);
+        this.ide.tabs.reloadFromDisk(newFormFile);
+        if (hasJs) {
+            this.ide.renameTab(oldJsFile, newJsFile);
+            this.ide.tabs.rewriteSource(newJsFile, retext);
+        }
 
         this.ide.listFiles();
         this.ide.openInTab(newFormFile);
@@ -748,21 +765,24 @@ Ide.FormFiles = class FormFiles {
                                  `${File.BaseName(formPath)}.js`);
         if (!File.Exists(jsPath)) return 0;
 
-        let moved = 0;
-        let source = File.Load(jsPath);
+        const quoted  = Regex.Escape(oldName);
+        const member  = new Regex(`\\bthis\\.${quoted}\\b`);
+        const handler = new Regex(`\\b${quoted}_(\\w+)`);
+        let   moved   = 0;
 
-        const quoted = Regex.Escape(oldName);
-
-        source = new Regex(`\\bthis\\.${quoted}\\b`).Replace(source, () => {
-            moved++;
-            return `this.${newName}`;
+        /* Counted on the text the user is looking at: the file and the tab can
+         * differ, and the log line is about what changed where they will read. */
+        this.ide.tabs.rewriteSource(File.Relative(jsPath, this.ide.project), (source) => {
+            moved = 0;
+            source = member.Replace(source, () => {
+                moved++;
+                return `this.${newName}`;
+            });
+            return handler.Replace(source, (match) => {
+                moved++;
+                return `${newName}_${match.Group(1)}`;
+            });
         });
-        source = new Regex(`\\b${quoted}_(\\w+)`).Replace(source, (match) => {
-            moved++;
-            return `${newName}_${match.Group(1)}`;
-        });
-
-        if (moved > 0) File.Save(jsPath, source);
         return moved;
     }
 
@@ -838,8 +858,21 @@ Ide.FormFiles = class FormFiles {
         const state = this.ide.tabs.activeState();
         if (state && this.ide.liveDirty(state) && !this.ide.save()) return false;
 
+        /*
+         * **The open tab is the source, when there is one.** This used to read
+         * the file, write the method into it and then `reloadFromDisk` the
+         * tab -- which assigns the editor's `Text`, so whatever had been typed
+         * into the `.js` and not saved was gone, and the undo history with it.
+         * With the tab open the method goes into its editor as one insertion:
+         * nothing typed is lost, Ctrl+Z takes the method back out, and a tab
+         * that was clean is saved again so the file says what it did before.
+         */
+        const js     = this.ide.openTabs.get(jsName);
+        const editor = js && js.editor ? js.editor : null;
+        const wasDirty = editor ? this.ide.liveDirty(js) : false;
+
         const method = `${controlName}_${eventName}`;
-        const source = File.Load(jsPath);
+        const source = editor ? editor.Text : File.Load(jsPath);
         const already = new Regex(`\\b${Regex.Escape(method)}\\s*\\(`);
 
         let line;
@@ -861,14 +894,22 @@ Ide.FormFiles = class FormFiles {
                 Message.Error("Adding {0}() to {1} would break it:\n{2}", method, jsName, bad);
                 return false;
             }
-            File.Save(jsPath, written.source);
+
+            if (editor) {
+                const start  = source.lastIndexOf("\n", written.at - 1) + 1;
+                const column = [...source.slice(start, written.at)].length + 1;
+
+                editor.Select(Text.LineOf(source, written.at), column, 0);
+                editor.Insert(written.snippet);
+                /* A tab off screen answers `dirtyOf` from its copied flag. */
+                js.dirty = true;
+                if (!wasDirty) this.ide.tabs.saveAllDirty([jsName]);
+            } else {
+                File.Save(jsPath, written.source);
+            }
             line = written.line;
             this.ide.log(`Added ${method}() to ${jsName}\n`);
         }
-
-        /* The .js on disk changed under the tab: if it was open, what is in
-         * memory is stale. */
-        this.ide.tabs.reloadFromDisk(jsName, line);
 
         this.ide.openInTab(jsName);
         this.ide.Editor.GotoLine(line);

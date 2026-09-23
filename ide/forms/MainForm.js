@@ -305,18 +305,14 @@ class MainForm extends Form {
     TabActions_Click() { this.TabActions.PopupMenu(0, 0); }
 
     MnuTabClose_Click()   { this.closeActiveTab(); }
-    MnuTabAll_Click()     { this.closeAllTabs(); }
+    MnuTabAll_Click()     { return this.closeAllTabs(); }
     MnuTabSaveAll_Click() { this.saveAllDirty(); }
 
     /* How often the dirty tabs are copied aside, which is the user's and not
      * ours: `Recovery` owns the question and the setting. */
     MnuRecovery_Click() { return this.recovery.ask(); }
 
-    MnuTabOthers_Click() {
-        const keep = this.activeFile;
-        for (const name of [...this.tabOrder])
-            if (name !== keep) this.closeTabByName(name, true);
-    }
+    MnuTabOthers_Click() { return this.tabs.closeOthers(this.activeFile); }
 
     /* ------------------------------------------------------------- project */
 
@@ -334,12 +330,15 @@ class MainForm extends Form {
         }
 
         /* Before the tabs go: what was open in the project being left is that
-         * project's session, and `closeAllTabs` is about to make it unanswerable. */
+         * project's session, and `discardAll` is about to make it unanswerable. */
         this.session.saveTabs();
 
         this.project = dir;
         this.git.forget();      /* another project is another repository */
-        this.closeAllTabs();
+        /* Without asking: every door that leads here asked first
+         * (`leaveProject`), and asking here would be asking after `project`
+         * had already moved. */
+        this.tabs.discardAll();
         this.Text = Locale.Text("Bintana IDE -- {0}", File.Name(dir));
 
         /* The workspace is what a project looks like; nothing takes the window
@@ -552,9 +551,31 @@ class MainForm extends Form {
     newProject() {
         const base = this.project ? File.Directory(this.project) : Application.Directory;
 
-        NewProjectForm.ask(base, (info) =>
+        this.leaveProject(() => NewProjectForm.ask(base, (info) =>
             this.startProject(File.Join(info.base, info.name), info.description,
-                              info.console));
+                              info.console)));
+    }
+
+    /*
+     * Every door out of the open project, asked once and before anything moves:
+     * Open, a recent project (menu or welcome page), New and Clone. It used to
+     * be nobody's -- `openProject` closed every tab with *force*, so opening
+     * another project dropped unsaved work in this one without a word. Asked at
+     * the door and not inside `openProject`, because by then the new project is
+     * being written (`createProject` sets `project` to write its first form)
+     * and a "no" would have nowhere to go back to.
+     */
+    leaveProject(then) {
+        /* Leaving is an answer as well: whatever is still dirty once the
+         * question is settled was chosen to be discarded, and a snapshot of it
+         * would offer that work back the next time this project opens. Here and
+         * not in `openProject`, because a new project has already moved
+         * `project` by the time it gets there. */
+        return this.tabs.whenSettled([...this.tabOrder],
+                                     Locale.Text("Leave the project"),
+                                     Locale.Text("Discard and continue"),
+                                     Locale.Text("Save all and continue"),
+                                     () => { this.recovery.forget(); then(); });
     }
 
     startProject(path, description, console) {
@@ -743,14 +764,14 @@ class MainForm extends Form {
     openInTab(name)      { return this.tabs.open(name); }
     switchToTab(name)    { this.tabs.switchTo(name); }
     closeActiveTab()     { this.tabs.closeActive(); }
-    closeAllTabs()       { this.tabs.closeAll(); }
+    closeAllTabs()       { return this.tabs.closeAll(); }
     closeTabByName(n, f) { this.tabs.closeByName(n, f); }
     renameTab(from, to)  { this.tabs.rename(from, to); }
     cycleTab(direction)  { this.tabs.cycle(direction); }
     renderTabs()         { this.tabs.render(); }
     setMode(designing)   { this.tabs.setMode(designing); }
     save()               { return this.tabs.save(); }
-    saveAllDirty()       { this.tabs.saveAllDirty(); }
+    saveAllDirty()       { return this.tabs.saveAllDirty(); }
     liveDirty(state)     { return this.tabs.liveDirty(state); }
 
     /* Whether the *active* tab has unsaved changes; `hasDirtyTabs` asks about
@@ -798,6 +819,12 @@ class MainForm extends Form {
     leaving() {
         this.stopShell();
         this.session.save();
+        /* Nothing unsaved is an answer too. The snapshot used to go only in
+         * `quit()` or on a tick that found nothing dirty, so saving and closing
+         * with the X inside thirty seconds left the last snapshot behind -- and
+         * the next open offered to "recover" text older than what was saved.
+         * With dirty tabs the only way here is `quit()`, which forgets anyway. */
+        if (!this.hasDirtyTabs()) this.recovery.forget();
     }
 
     /* ...and the way out that has an answer behind it: the dialog said quit, so
@@ -830,7 +857,7 @@ class MainForm extends Form {
             Locale.Text("Quit without saving"),
             () => this.quit(),
             { Text: Locale.Text("Save all and quit"),
-              Run:  () => { this.saveAllDirty(); this.quit(); } });
+              Run:  () => { if (this.saveAllDirty()) this.quit(); } });
     }
 
     /* The Notebook fires Switch while the .form is still loading, when no tab
@@ -1154,7 +1181,8 @@ class MainForm extends Form {
     /* -------------------------------------------------------------- eventos */
 
     BtnOpen_Click() {
-        Dialog.SelectFolder("Open a Bintana project", (dir) => this.openProject(dir));
+        this.leaveProject(() =>
+            Dialog.SelectFolder("Open a Bintana project", (dir) => this.openProject(dir)));
     }
 
     /* --- the welcome page -------------------------------------------------
@@ -1186,7 +1214,7 @@ class MainForm extends Form {
             Message.Warning("{0}\nis not there any more.", dir);
             return;
         }
-        this.openProject(dir);
+        this.leaveProject(() => this.openProject(dir));
     }
 
     BtnReload_Click() {
@@ -2249,9 +2277,11 @@ class MainForm extends Form {
      * sentence `openProject` already has.
      */
     MnuGitClone_Click() {
-        this.cloneAsk = AskForm.prompt(
-            Locale.Text("Clone a repository"), Locale.Text("From"), "",
-            (url) => this.cloneFrom(url.trim()));
+        this.leaveProject(() => {
+            this.cloneAsk = AskForm.prompt(
+                Locale.Text("Clone a repository"), Locale.Text("From"), "",
+                (url) => this.cloneFrom(url.trim()));
+        });
     }
 
     cloneFrom(url) {
@@ -2309,7 +2339,7 @@ class MainForm extends Form {
 
     MnuRecent_Click(index) {
         const dir = this.recent[index];
-        if (dir) this.openProject(dir);
+        if (dir) this.leaveProject(() => this.openProject(dir));
     }
 
     MnuReload_Click() { this.BtnReload_Click(); }

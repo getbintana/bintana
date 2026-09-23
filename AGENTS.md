@@ -1155,7 +1155,7 @@ Three things that will waste your time:
   with the first frame of its stack. **A new phase does not have to remember
   this**, which is the point; what it does mean is that a test deliberately
   provoking an error has to catch it.
-- **`tests/ide/Driver.js` is thirty-three phases, and the phase is the scope.** It used
+- **`tests/ide/Driver.js` is forty-one phases, and the phase is the scope.** It used
   to be one 4000-line generator where every `const` shared one scope, so a name
   near the top collided with one added at the bottom and the suite died with
   `SyntaxError: invalid redefinition of lexical identifier` — three times in one
@@ -1170,7 +1170,7 @@ Three things that will waste your time:
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
-  364 assertions against 2418 for the whole project -- 8.6 s against 185 on this
+  364 assertions against 2448 for the whole project -- 8.6 s against 254 on this
   machine -- which is what makes iterating on an early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.
@@ -2319,6 +2319,29 @@ person who wrote it either.
   shell, the session); put new work there and not in `quit()`. Found by reading
   the settings file after a real session and finding nothing in it -- no test
   could have failed, because the test drove `quit()`.
+- **A `force` flag on a close is a decision nobody asked about, and five
+  roads were taking it.** `closeByName(name, true)` skips the dirty question,
+  which is right *after* a question -- and Close all, Close others and
+  `openProject` called it with none, so opening a recent project dropped
+  unsaved work in this one without a word. The same afternoon found the other
+  shape of the same loss: writing a handler, renaming a control and renaming a
+  form all rewrote the `.js` **on disk** and then `reloadFromDisk`'d (or
+  ignored) the open tab, so text typed there and not saved was replaced, or a
+  stale tab saved `class Form1` back over the rename. The rules now:
+  **several tabs going is one question** (`TabSet.whenSettled`, which
+  `closeMany` and `MainForm.leaveProject` ask); **every door out of a project
+  asks before anything moves** (`leaveProject` on Open, Recent, New and Clone
+  -- inside `openProject` is too late, since a new project has moved `project`
+  to write its first form); and **a change the IDE makes to source goes to both
+  copies** (`TabSet.rewriteSource`: the file, and the open editor with its dirty
+  state kept) or, for a new handler, into the live editor as one insertion that
+  undo takes back. `reloadFromDisk` on a tab is only for a tab known clean.
+  `tests/ide`'s `unsaved` phase drives each road; against the old code ten of
+  its assertions fail before a missing dialog stops the phase.
+  **And the recovery snapshot is an answer too**: it went only in `quit()`, so
+  saving and closing with the X within thirty seconds left it behind to offer
+  older text back. `leaving()` forgets it when nothing is dirty, and
+  `leaveProject` forgets it once the question is settled.
 - **A `design` key that is not a property makes `AddNode` throw, and the control
   silently becomes a stand-in.** The designing branch applies the block *over*
   `properties`, so `"design": { "Item": "Chip" }` on a `RowList` does not do

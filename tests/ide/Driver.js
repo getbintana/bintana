@@ -54,7 +54,7 @@ function openFresh(ide, dir) {
      * *leaving* before it closes anything, so clearing the map and then opening
      * the same project again would put it straight back. Nothing open is not a
      * session, so closing is what empties the entry. */
-    ide.closeAllTabs();
+    ide.tabs.discardAll();
     Settings.Set("session.projects", {});
     ide.openProject(dir);
 }
@@ -11502,6 +11502,148 @@ function* p_recovery(ide) {
     check("and has nothing to offer", ide.recovery.offer(ide.project) === null);
 }
 
+/* --- unsaved: every road that used to drop it -----------------------------
+ *
+ * Five ways the IDE threw away typed and unsaved text without asking, each of
+ * which went through a path that *forced* or *reloaded* rather than asked:
+ * closing several tabs, leaving the project, writing a handler, renaming a
+ * control, renaming a form -- plus the recovery snapshot that outlived a clean
+ * close and offered old text back. Each assertion is the typed line surviving,
+ * or the question being asked before anything moves.
+ */
+function* p_unsaved(ide) {
+    ide.tabs.discardAll();
+    yield* settled(ide);
+
+    const SOURCE = [
+        "class Keep extends Form {",
+        "    Form_Open() {",
+        "    }",
+        "}",
+        "",
+    ].join("\n");
+    File.Save(File.Join(TMP, "Keep.js"), SOURCE);
+    File.SaveJson(File.Join(TMP, "Keep.form"), {
+        format: "bintana-form/1", class: "Keep",
+        properties: { Width: 300, Height: 160 },
+        children: [{ type: "Button", name: "Btn",
+                     properties: { X: 10, Y: 10, Width: 80, Height: 30, Text: "b" } }],
+    });
+    ide.listFiles();
+
+    const TYPED = "    /* typed, never saved */\n";
+    const typeInto = function* () {
+        ide.openInTab("Keep.js");
+        yield* settled(ide);
+        ide.Editor.Text = ide.Editor.Text.replace("    Form_Open() {", TYPED + "    Form_Open() {");
+        yield* settled(ide);
+    };
+
+    /* --- writing a handler into a dirty .js ------------------------------ */
+    yield* typeInto();
+    ide.openInTab("Keep.form");
+    yield* settled(ide);
+    check("a handler is written with the .js dirty",
+          ide.formFiles.openHandler("Btn", "Click"));
+    yield* settled(ide);
+    const withHandler = ide.Editor.Text;
+    check("the typed line survives the handler", withHandler.includes(TYPED), withHandler);
+    check("and the handler is in the same text", withHandler.includes("Btn_Click() {"), withHandler);
+    check("as an edit that undo can take back", ide.Editor.CanUndo);
+    check("the tab is still unsaved, since it was before",
+          ide.tabs.dirtyNames().includes("Keep.js"), ide.tabs.dirtyNames().join(","));
+    check("and nothing typed reached the file",
+          !File.Load(File.Join(TMP, "Keep.js")).includes(TYPED));
+
+    /* --- renaming a control with its .js dirty --------------------------- */
+    ide.openInTab("Keep.form");
+    yield* settled(ide);
+    ide.designer.select(byName(ide, "Btn"));
+    yield* settled(ide);
+    check("renaming the control works", ide.designer.renameControl("Ok"));
+    yield* settled(ide);
+    const jsState = ide.openTabs.get("Keep.js");
+    check("the open tab follows the rename",
+          jsState.editor.Text.includes("Ok_Click() {") &&
+          !jsState.editor.Text.includes("Btn_Click"), jsState.editor.Text);
+    check("keeping what was typed", jsState.editor.Text.includes(TYPED));
+    check("and staying unsaved", ide.tabs.dirtyNames().includes("Keep.js"));
+    /* The handler was only ever in the unsaved tab, so the file has none to
+     * move; what it must not have is the old name. */
+    check("while the file keeps no trace of the old name",
+          !File.Load(File.Join(TMP, "Keep.js")).includes("Btn_"));
+
+    /* A name the code still answers for is not free. */
+    ide.designer.select(byName(ide, "Ok"));
+    yield* settled(ide);
+    jsState.editor.Text = jsState.editor.Text.replace(
+        "    Form_Open() {", "    Gone_Click() {\n    }\n    Form_Open() {");
+    yield* settled(ide);
+    eq("renaming onto a name with handlers is refused",
+       ide.designer.renameControl("Gone"), false);
+    check("and the control keeps its name", !!byName(ide, "Ok"));
+
+    /* --- closing several tabs asks ---------------------------------------- */
+    ide.openInTab("Keep.form");
+    yield* settled(ide);
+    const asked = ide.MnuTabOthers_Click();
+    check("Close others asks about the unsaved one", !!asked);
+    check("and has closed nothing yet", ide.openTabs.has("Keep.js"));
+    asked.BtnOther.Emit("Click");                 /* Save and close */
+    yield* settled(ide);
+    check("Save and close closes it", !ide.openTabs.has("Keep.js"));
+    check("having saved what was typed",
+          File.Load(File.Join(TMP, "Keep.js")).includes(TYPED));
+
+    /* --- leaving the project asks ------------------------------------------ */
+    yield* typeInto();
+    let left = false;
+    const leaving = ide.leaveProject(() => { left = true; });
+    check("leaving with unsaved work asks", !!leaving && !left);
+    leaving.BtnNo.Emit("Click");
+    yield* settled(ide);
+    check("and No stays", !left && ide.openTabs.has("Keep.js"));
+
+    /* --- renaming a form with its .js dirty ------------------------------------ */
+    eq("a form renames with its .js unsaved", ide.renameForm("Keep", "Kept"), true);
+    yield* settled(ide);
+    const kept = ide.openTabs.get("Kept.js");
+    check("the open .js follows the class it holds",
+          kept && kept.editor.Text.includes("class Kept extends Form") &&
+          !kept.editor.Text.includes("class Keep "), kept && kept.editor.Text);
+    check("keeping what was typed into it", kept && kept.editor.Text.includes(TYPED));
+    check("still unsaved", ide.tabs.dirtyNames().includes("Kept.js"));
+    check("while the file on disk has the new class",
+          File.Load(File.Join(TMP, "Kept.js")).includes("class Kept extends Form"));
+    ide.tabs.saveAllDirty();
+    yield* settled(ide);
+
+    /* --- a clean close forgets the snapshot ---------------------------------- */
+    ide.openInTab("Kept.js");
+    yield* settled(ide);
+    ide.Editor.Text = ide.Editor.Text + "// dirty\n";
+    yield* settled(ide);
+    const file = ide.recovery.fileFor(ide.project);
+    check("a snapshot is written for the dirty tab", ide.recovery.snapshot() && File.Exists(file));
+    ide.tabs.saveAllDirty();
+    yield* settled(ide);
+    ide.leaving();
+    check("saving and closing leaves no snapshot to offer", !File.Exists(file));
+
+    /* And leaving the project is an answer too. */
+    ide.Editor.Text = ide.Editor.Text + "// dirty again\n";
+    yield* settled(ide);
+    ide.recovery.snapshot();
+    const discard = ide.leaveProject(() => { left = true; });
+    discard.BtnYes.Emit("Click");                 /* Discard and continue */
+    yield* settled(ide);
+    check("discarding goes on", left);
+    check("and takes the snapshot with it", !File.Exists(file));
+
+    ide.tabs.discardAll();
+    yield* settled(ide);
+}
+
 /*
  * The desk, as it was left: the window's own furniture, and the tabs of the
  * project that is open.
@@ -11512,7 +11654,7 @@ function* p_recovery(ide) {
  * answer about the work.
  */
 function* p_session(ide) {
-    ide.closeAllTabs();
+    ide.tabs.discardAll();
     yield* settled(ide);
 
     /* --- the window ------------------------------------------------------- */
@@ -11749,6 +11891,7 @@ const PHASES = [
     { name: "check", run: p_check },
     { name: "quick", run: p_quick },
     { name: "recovery", run: p_recovery },
+    { name: "unsaved",  run: p_unsaved },
     { name: "session", run: p_session },
     { name: "search", run: p_search },
     { name: "git", run: p_git },
