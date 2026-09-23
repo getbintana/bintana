@@ -1012,6 +1012,7 @@ declare const Locale: {
     Plural(...values: any[]): any;
     Read(...values: any[]): any;
     Text(...values: any[]): any;
+    Write(...values: any[]): any;
 };
 
 declare const Lock: {

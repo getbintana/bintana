@@ -13878,6 +13878,63 @@ function Main() {
 
         /* Reading is not using: the catalogue in force is untouched. */
         eq("reading a catalogue does not put it in use", Locale.Current, "");
+
+        /* --- and back out again ------------------------------------------- */
+
+        /*
+         * **The same promise from the other side**, and the one that matters
+         * for a file somebody edits: whatever the reader kept has to come out
+         * again, or an editor built on the pair destroys a translator's work
+         * the first time it saves. What is asserted is *nothing lost* and
+         * *writing twice changes nothing*, and not byte-identity: a value the
+         * file happened to split across quoted chunks comes back on one line,
+         * because the split is spelling. gettext's own tools re-wrap the same
+         * way, and asserting bytes would be asserting a formatter nobody wrote.
+         */
+        Directory.Make(SCRATCH);
+        const trip = File.Join(SCRATCH, "catalogue.po");
+
+        Locale.Write(trip, es);
+        eq("a catalogue survives being read and written back",
+           JSON.stringify(Locale.Read(trip)), JSON.stringify(es));
+
+        const once = File.Load(trip);
+        Locale.Write(trip, Locale.Read(trip));
+        eq("and writing it again changes not one byte", File.Load(trip), once);
+
+        /* The header is an entry like any other, so it goes out through the
+         * same loop -- and its metadata block is the multi-line spelling. */
+        check("the header keeps its comments and its block",
+              once.startsWith("# A catalogue") &&
+              /msgid ""\nmsgstr ""\n"/.test(once), once.slice(0, 120));
+
+        /* The `#~` tail has no msgid of its own, so it is written as the lines
+         * it came in as. */
+        check("the obsolete tail comes back line for line",
+              once.includes('#~ msgid "Gone"\n#~ msgstr "ido"'),
+              once.slice(-120));
+
+        /* --- and what it refuses ------------------------------------------ */
+
+        /*
+         * **Strict, because a writer is where a wrong type becomes a wrong
+         * file**: a number in a `msgstr` converted would be written as a
+         * translation nobody typed. And **the whole text is built before the
+         * file is touched**, so every one of these leaves the catalogue alone.
+         */
+        throws("a path that is not text is refused", () => Locale.Write(5, []));
+        throws("a list that is not a list is refused", () => Locale.Write(trip, "x"));
+        throws("an entry that is not an entry is refused",
+               () => Locale.Write(trip, [5]));
+        throws("a msgid that is not text is refused",
+               () => Locale.Write(trip, [{ msgid: 5, forms: [""] }]));
+        throws("and a form that is not text",
+               () => Locale.Write(trip, [{ msgid: "x", forms: [5] }]));
+        throws("a path that cannot be written says so",
+               () => Locale.Write(File.Join(SCRATCH, "no", "such", "x.po"), es));
+
+        eq("and none of them touched the catalogue", File.Load(trip), once);
+        File.Delete(trip);
     }
 
     /* --- a .form through the catalogue ---------------------------------- */

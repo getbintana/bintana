@@ -85,33 +85,6 @@ const LOCALE_NAME = /^[a-z]{2,3}(_[A-Za-z]{2,4})?$/;
  * to a program on this machine is not a property of the project, and putting it
  * in the manifest would commit one person's setup to everybody's checkout. */
 const PO_EDITOR_KEY = "translationEditor";
-/* A .po string, escaped and quoted. */
-function poQuote(text) {
-    return `"${String(text)
-        .replace(/\\/g, "\\\\")
-        .replace(/"/g, '\\"')
-        .replace(/\n/g, "\\n")
-        .replace(/\t/g, "\\t")}"`;
-}
-
-/*
- * `keyword "value"`, or the multi-line spelling when the value has newlines in
- * it: `keyword ""` and then one quoted chunk per line.
- *
- * That second form is what msgfmt and xgettext write, and the header -- which is
- * one entry whose value is the whole metadata block -- is unreadable without it.
- */
-function poLines(keyword, text) {
-    const s = String(text);
-    if (!s.includes("\n")) return [`${keyword} ${poQuote(s)}`];
-
-    const ends  = s.endsWith("\n");
-    const parts = s.split("\n");
-    if (ends) parts.pop();
-
-    return [`${keyword} ""`, ...parts.map((p, i) =>
-        poQuote(i === parts.length - 1 && !ends ? p : `${p}\n`))];
-}
 
 Ide.Translations = class Translations {
 
@@ -141,38 +114,17 @@ Ide.Translations = class Translations {
     }
 
     /*
-     * The file, back.  One loop and no special cases: the header is an ordinary
-     * entry whose msgid is "", and a block that is only comments -- the `#~` tail
-     * a merge leaves behind -- is one whose msgid is null.
+     * **Writing the file is `Locale.Write`'s, and it was eighty-seven lines
+     * here**: the quoting, the wrap, the header, the blank lines. That is one
+     * implementation of the format too many -- the reader it has to agree with
+     * is in C, and the promise the pair makes (whatever it cannot model rides
+     * along and is written back untouched) is either kept or broken at the
+     * writer. Keeping it in two places is how it gets broken.
      *
-     * Everything not modelled is written out exactly as it came in, which is what
-     * makes saving safe on a file this IDE only half understands.
+     * What stays here is the subject: reading a catalogue, making one from the
+     * template, updating the template. `isCatalogue` and the rest of the
+     * questions about a file are this class's for the same reason.
      */
-    write(path, entries) {
-        const out = [];
-
-        for (const e of entries) {
-            for (const c of e.comments || []) out.push(c);
-            if (e.flags && e.flags.length) out.push(`#, ${e.flags.join(", ")}`);
-
-            if (e.msgid !== null && e.msgid !== undefined) {
-                if (e.ctxt !== undefined) out.push(...poLines("msgctxt", e.ctxt));
-                out.push(...poLines("msgid", e.msgid));
-
-                if (e.plural !== undefined) {
-                    out.push(...poLines("msgid_plural", e.plural));
-                    for (let i = 0; i < Math.max(1, e.forms.length); i++)
-                        out.push(...poLines(`msgstr[${i}]`, e.forms[i] || ""));
-                } else {
-                    out.push(...poLines("msgstr", e.forms[0] || ""));
-                }
-            }
-            out.push("");
-        }
-
-        /* One trailing newline, like every other file this runtime writes. */
-        File.Save(path, `${out.join("\n").replace(/\n+$/, "")}\n`);
-    }
 
     /* ------------------------------------------------------ what a file is */
 
@@ -294,7 +246,7 @@ Ide.Translations = class Translations {
                 entry.flags = (entry.flags || []).filter((f) => f !== "fuzzy");
             }
 
-            this.write(path, entries);
+            Locale.Write(path, entries);
             Logger.Info(`new catalogue: po/${lang}.po`);
             if (then) then(File.Join("po", `${lang}.po`));
         });
@@ -403,7 +355,7 @@ Ide.Translations = class Translations {
 
         Directory.Make(this.dir);
         const pot = File.Join(this.dir, `${File.Name(this.ide.project)}.pot`);
-        File.Save(pot, this.template(found));
+        this.writeTemplate(pot, found);
 
         for (const line of this.ide.strings.warnings) Logger.Warning(line);
 
@@ -472,37 +424,34 @@ Ide.Translations = class Translations {
         Message.Info(lines.join("\n"));
     }
 
-    /* The .pot itself: a header with no charset surprises, then every entry with
-     * the places it came from. */
-    template(found) {
-        const out = [
-            "# Translation template for this project.",
-            "# Written by the Bintana IDE: Project > Update translations.",
-            "#",
-            'msgid ""',
-            'msgstr ""',
-            `"Project-Id-Version: ${File.Name(this.ide.project)}\\n"`,
-            '"MIME-Version: 1.0\\n"',
-            '"Content-Type: text/plain; charset=UTF-8\\n"',
-            '"Content-Transfer-Encoding: 8bit\\n"',
-            '"Plural-Forms: nplurals=2; plural=(n != 1);\\n"',
-            "",
-        ];
+    /*
+     * The .pot itself: a header with no charset surprises, then every entry with
+     * the places it came from -- built as the same entries `Locale.Read` answers
+     * with, so the template and a catalogue are one format written by one verb.
+     */
+    writeTemplate(path, found) {
+        const entries = [{
+            comments: ["# Translation template for this project.",
+                       "# Written by the Bintana IDE: Project > Update translations.",
+                       "#"],
+            msgid: "",
+            forms: [`Project-Id-Version: ${File.Name(this.ide.project)}\n` +
+                    "MIME-Version: 1.0\n" +
+                    "Content-Type: text/plain; charset=UTF-8\n" +
+                    "Content-Transfer-Encoding: 8bit\n" +
+                    "Plural-Forms: nplurals=2; plural=(n != 1);\n"],
+        }];
 
         for (const entry of found) {
-            for (const where of entry.where) out.push(`#: ${where}`);
-            if (entry.ctxt) out.push(`msgctxt ${poQuote(entry.ctxt)}`);
-
-            out.push(`msgid ${poQuote(entry.msgid)}`);
-            if (entry.plural) {
-                out.push(`msgid_plural ${poQuote(entry.plural)}`);
-                out.push('msgstr[0] ""');
-                out.push('msgstr[1] ""');
-            } else {
-                out.push('msgstr ""');
-            }
-            out.push("");
+            entries.push({
+                comments: entry.where.map((where) => `#: ${where}`),
+                ctxt:    entry.ctxt || undefined,
+                msgid:   entry.msgid,
+                plural:  entry.plural || undefined,
+                forms:   entry.plural ? ["", ""] : [""],
+            });
         }
-        return out.join("\n");
+
+        Locale.Write(path, entries);
     }
 };

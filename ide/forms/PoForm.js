@@ -14,9 +14,9 @@
  *
  * The one thing it must not get wrong is **losing what it does not understand**.
  * `Locale.Read` keeps every comment, flag and `#~` block as written, this edits
- * only the msgstr values and the fuzzy flag, and `Translations.write` puts the
- * rest back untouched. A catalogue holds a translator's work; an editor that
- * quietly drops a line of it is worse than no editor.
+ * only the msgstr values and the fuzzy flag, and `Locale.Write` puts the rest
+ * back untouched. A catalogue holds a translator's work; an editor that quietly
+ * drops a line of it is worse than no editor.
  */
 "use strict";
 
@@ -356,7 +356,7 @@ class PoForm extends Form {
 
     save() {
         try {
-            this.ide.catalogues.write(this.path, this.entries);
+            Locale.Write(this.path, this.entries);
         } catch (e) {
             Message.Error("Cannot save {0}: {1}", this.file, e.message);
             return false;

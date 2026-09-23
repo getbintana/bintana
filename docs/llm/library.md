@@ -139,6 +139,7 @@ A question that needs an answer is a form: [forms.md](forms.md#a-dialog-that-ask
 | `Current` | the catalogue in use, `""` for none. Assigning reloads, and affects only what is built afterwards |
 | `Available` | the catalogue names this project ships, sorted |
 | `Read(path)` | a catalogue as data, losing nothing |
+| `Write(path, entries)` | that data back as a `.po`, losing nothing either. The two are one pair: what the reader kept, the writer writes |
 | `Number(value, [decimals \| options])` | grouped, with the desktop's separators. As many decimals as it has unless told |
 | `Currency(value, [decimals \| options])` | money, with the symbol where this desktop puts it |
 | `Parse(text, [options])` | → the `Decimal` the text says, or `null`. The same format read backwards |

@@ -473,6 +473,7 @@ Locale.Available                               /* every po/*.po the project ship
 | `Plural(one, many, n, ...args)` | the form `n` takes by the catalogue's own `Plural-Forms` rule |
 | `Context(ctxt, msgid, ...args)` | gettext's `msgctxt`: the context is part of the key and is never shown |
 | `Read(path)` | a catalogue as data, **losing nothing** — every comment, flag and `#~` block, so it can be written back |
+| `Write(path, entries)` | that data back as a `.po`, losing nothing either. The writer half of the same promise |
 | `Current` | the catalogue in use, `""` for none. Assigning reloads and **only affects what is built afterwards** |
 | `Available` | the catalogue names, sorted |
 | `Number(value, [decimals])` | grouped, with the desktop's separators |

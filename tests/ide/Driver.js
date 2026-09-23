@@ -8218,7 +8218,7 @@ function* p_strings(ide) {
           File.Exists(sample), sample);
 
     const trip = File.Join(TMP, "po", "trip.po");
-    ide.catalogues.write(trip, Locale.Read(sample));
+    Locale.Write(trip, Locale.Read(sample));
 
     /*
      * *Nothing lost* is the claim, and it is the one that matters: every entry,
@@ -8236,7 +8236,7 @@ function* p_strings(ide) {
     /* And the spelling settles at once rather than drifting: a second pass is
      * the same file, so an editor cannot churn a diff every time it saves. */
     const once = File.Load(trip);
-    ide.catalogues.write(trip, Locale.Read(trip));
+    Locale.Write(trip, Locale.Read(trip));
     eq("and writing it again changes not one byte", File.Load(trip), once);
 
     check("the comments stay attached to their own entry, not adrift",

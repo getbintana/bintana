@@ -19,6 +19,7 @@ are written where they live.
 | `Plural(one, many, n, …args)` | the form `n` takes by the catalogue's own rule | [the catalogue](#the-catalogue) |
 | `Read(path)` | a catalogue as data, losing nothing | [the catalogue](#the-catalogue) |
 | `Text(msgid, …args)` | the catalogue's version, `{0}` filled in | [the catalogue](#the-catalogue) |
+| `Write(path, entries)` | those entries back as a `.po` | [the catalogue](#the-catalogue) |
 
 **The conventions**
 
@@ -42,6 +43,7 @@ are written where they live.
 | `Current` | which catalogue is in use, `""` for none. **Assigning reloads it, and affects only what is built afterwards** — a form already on screen keeps the words it was built with |
 | `Available` | the catalogue names this project ships, sorted — what a language menu is built from |
 | `Read(path)` | a catalogue as data, losing nothing: entries, contexts, plurals, comments and the fuzzy flags. What a translation editor reads |
+| `Write(path, entries)` | those entries back as a `.po` — the same shape `Read` answers with, so the two are one pair. **Nothing is lost in either direction**, which is what makes an editor built on them safe on a file it only half understands |
 
 **Most text needs none of these calls.** What a `.form` declares — a caption, a
 tooltip, a placeholder, the items of a list — goes through the catalogue by

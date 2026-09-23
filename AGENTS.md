@@ -1216,6 +1216,15 @@ Three things that will waste your time:
   the whole format. The suite asserts *nothing lost* and *writing twice changes
   nothing*, not byte-identity -- re-wrapping a split value is spelling, and
   asserting bytes would be asserting a formatter nobody wrote.
+  **And the promise is only as good as the writer, which is why `Locale.Write`
+  is the runtime's and not eighty-seven lines of JavaScript in the IDE.** Two
+  implementations of one format, one of them the reader's opposite number in C,
+  is how the promise gets broken silently. A writer is also where a wrong type
+  becomes a wrong file: a `msgid`, a form, a flag or a comment that is not text
+  is refused naming the entry and the property -- `JS_ToCString` would have
+  written a number as `"5"` and called it a translation -- and **the whole text
+  is built before the file is touched**, so a refusal leaves the catalogue as it
+  was rather than half rewritten.
 - **Selecting a row must never start a process.** A tree selection moves with the
   arrow keys, so "open it when it is selected" -- which is what the IDE does for
   every file -- would spawn a translation editor once per row walked through. A
@@ -1255,7 +1264,7 @@ Three things that will waste your time:
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
-  364 assertions against 2482 for the whole project -- 9.4 s against 271 on this
+  364 assertions against 2482 for the whole project -- 9.4 s against 265 on this
   machine -- which is what makes iterating on an early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.

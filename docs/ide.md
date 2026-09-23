@@ -3582,7 +3582,7 @@ case a RAD flow produces — your own application's strings, edited where you ar
 
 The one thing it must not get wrong is losing what it does not model.
 `Locale.Read` keeps every comment, flag and `#~` block, the editor changes only
-the msgstr values and the fuzzy flag, and `Translations.write` puts the rest back
+the msgstr values and the fuzzy flag, and `Locale.Write` puts the rest back
 untouched — the suite reads the hand-written `tests/widgets/po/zz.po`, writes it
 back, and asserts that nothing was lost and that a second pass changes not one
 byte.

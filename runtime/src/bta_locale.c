@@ -613,6 +613,71 @@ static bool po_load(const char *path)
     return po_parse(path, NULL, NULL);
 }
 
+/* --------------------------------------------------------------- .po writing */
+
+/*
+ * One `"..."` segment, escaped: the inverse of `po_unquote`.
+ *
+ * A newline becomes `\n` and not a real one, which is what keeps a value with a
+ * line break in it on one line of the file; `po_line` below is what splits a
+ * multi-line value the way msgfmt and xgettext write it.
+ */
+static void po_quote(GString *out, const char *s)
+{
+    g_string_append_c(out, '"');
+    for (const char *p = s; *p; p++) {
+        switch (*p) {
+        case '\\': g_string_append(out, "\\\\"); break;
+        case '"':  g_string_append(out, "\\\""); break;
+        case '\n': g_string_append(out, "\\n");  break;
+        case '\t': g_string_append(out, "\\t");  break;
+        default:   g_string_append_c(out, *p);   break;
+        }
+    }
+    g_string_append_c(out, '"');
+}
+
+/*
+ * `keyword "value"`, or the multi-line spelling when the value has newlines in
+ * it: `keyword ""` and then one quoted chunk per line.
+ *
+ * That second form is what msgfmt and xgettext write, and the header -- one
+ * entry whose value is the whole metadata block -- is unreadable without it.
+ * It is spelling and not content: the same value reads back as one string,
+ * which is why what the suite asserts is *nothing lost* and not byte-identity.
+ */
+static void po_line(GString *out, const char *keyword, const char *value)
+{
+    if (!strchr(value, '\n')) {
+        g_string_append_printf(out, "%s ", keyword);
+        po_quote(out, value);
+        g_string_append_c(out, '\n');
+        return;
+    }
+
+    bool   ends  = g_str_has_suffix(value, "\n");
+    char **parts = g_strsplit(value, "\n", -1);
+    guint  n     = g_strv_length(parts);
+
+    g_string_append_printf(out, "%s \"\"\n", keyword);
+
+    for (guint i = 0; i < n; i++) {
+        /* The empty piece a trailing newline leaves is not a chunk of its own. */
+        if (ends && i == n - 1)
+            break;
+
+        if (i == n - 1) {
+            po_quote(out, parts[i]);        /* the value does not end in \n */
+        } else {
+            char *chunk = g_strconcat(parts[i], "\n", NULL);
+            po_quote(out, chunk);
+            g_free(chunk);
+        }
+        g_string_append_c(out, '\n');
+    }
+    g_strfreev(parts);
+}
+
 static void catalogue_clear(void)
 {
     if (L.entries) {
@@ -909,9 +974,12 @@ static JSValue js_locale_plural(JSContext *ctx, JSValueConst this_val,
 static JSValue js_locale_read(JSContext *ctx, JSValueConst this_val,
                               int argc, JSValueConst *argv)
 {
-    const char *path = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
-    if (!path)
+    if (argc < 1 || !JS_IsString(argv[0]))
         return JS_ThrowTypeError(ctx, "Locale.Read(path) expects a path");
+
+    const char *path = JS_ToCString(ctx, argv[0]);
+    if (!path)
+        return JS_EXCEPTION;
 
     JSValue out = JS_NewArray(ctx);
     bool    ok  = po_parse(path, ctx, &out);
@@ -924,6 +992,253 @@ static JSValue js_locale_read(JSContext *ctx, JSValueConst this_val,
     }
     JS_FreeCString(ctx, path);
     return out;
+}
+
+/*
+ * One property as text: 1 with `*out` set, 0 when it is absent (or null), and
+ * -1 with the exception set when it is something else.
+ *
+ * **Strict, because a writer is where a wrong type becomes a wrong file.**  A
+ * number in a `msgstr` would go through `JS_ToCString` as "5" and be written as
+ * a translation nobody typed; naming the entry and the property is the
+ * difference between a refusal and a catalogue with a hole in it.
+ */
+static int po_read_string(JSContext *ctx, JSValueConst entry, const char *key,
+                          uint32_t index, char **out)
+{
+    *out = NULL;
+
+    JSValue v = JS_GetPropertyStr(ctx, entry, key);
+    if (JS_IsException(v))
+        return -1;
+    if (JS_IsUndefined(v) || JS_IsNull(v)) {
+        JS_FreeValue(ctx, v);
+        return 0;
+    }
+    if (!JS_IsString(v)) {
+        JS_FreeValue(ctx, v);
+        JS_ThrowTypeError(ctx,
+            "Locale.Write: entry %u has a %s that is not text", index, key);
+        return -1;
+    }
+
+    const char *s = JS_ToCString(ctx, v);
+    JS_FreeValue(ctx, v);
+    if (!s)
+        return -1;
+
+    *out = g_strdup(s);
+    JS_FreeCString(ctx, s);
+    return 1;
+}
+
+/* The same for a list of texts: absent is an empty list, and anything inside it
+ * that is not text is refused with the index it is at. */
+static bool po_read_strings(JSContext *ctx, JSValueConst entry, const char *key,
+                            uint32_t index, GPtrArray **out)
+{
+    *out = NULL;
+
+    JSValue v = JS_GetPropertyStr(ctx, entry, key);
+    if (JS_IsException(v))
+        return false;
+    if (JS_IsUndefined(v) || JS_IsNull(v)) {
+        JS_FreeValue(ctx, v);
+        return true;
+    }
+    if (!JS_IsArray(v)) {
+        JS_FreeValue(ctx, v);
+        JS_ThrowTypeError(ctx,
+            "Locale.Write: entry %u has a %s that is not a list", index, key);
+        return false;
+    }
+
+    uint32_t n   = 0;
+    JSValue  len = JS_GetPropertyStr(ctx, v, "length");
+    if (JS_ToUint32(ctx, &n, len)) {
+        JS_FreeValue(ctx, len);
+        JS_FreeValue(ctx, v);
+        return false;
+    }
+    JS_FreeValue(ctx, len);
+
+    GPtrArray *a = g_ptr_array_new_with_free_func(g_free);
+
+    for (uint32_t i = 0; i < n; i++) {
+        JSValue item = JS_GetPropertyUint32(ctx, v, i);
+
+        if (!JS_IsString(item)) {
+            JS_FreeValue(ctx, item);
+            JS_FreeValue(ctx, v);
+            g_ptr_array_free(a, TRUE);
+            JS_ThrowTypeError(ctx,
+                "Locale.Write: entry %u has a %s[%u] that is not text",
+                index, key, i);
+            return false;
+        }
+
+        const char *s = JS_ToCString(ctx, item);
+        JS_FreeValue(ctx, item);
+        if (!s) {
+            JS_FreeValue(ctx, v);
+            g_ptr_array_free(a, TRUE);
+            return false;
+        }
+        g_ptr_array_add(a, g_strdup(s));
+        JS_FreeCString(ctx, s);
+    }
+
+    JS_FreeValue(ctx, v);
+    *out = a;
+    return true;
+}
+
+/*
+ * One entry, as the file would have it.
+ *
+ * `msgid` null (or absent) is a block of comments and nothing else -- the `#~`
+ * tail a merge leaves behind -- and the only case with no msgid line.  Comments
+ * come before the flags because that is how the reader tells them apart: a `#,`
+ * line is a flag and every other `#` is a comment, whichever order they arrived
+ * in.
+ */
+static bool po_write_entry(JSContext *ctx, GString *out, JSValueConst entry,
+                           uint32_t index)
+{
+    GPtrArray *comments = NULL, *flags = NULL, *forms = NULL;
+    char      *ctxt = NULL, *msgid = NULL, *plural = NULL;
+    bool       ok   = false;
+
+    if (!JS_IsObject(entry) || JS_IsArray(entry)) {
+        JS_ThrowTypeError(ctx, "Locale.Write: entry %u is not an entry", index);
+        return false;
+    }
+
+    if (!po_read_strings(ctx, entry, "comments", index, &comments) ||
+        !po_read_strings(ctx, entry, "flags",    index, &flags) ||
+        !po_read_strings(ctx, entry, "forms",    index, &forms) ||
+        po_read_string(ctx, entry, "ctxt",   index, &ctxt)   < 0 ||
+        po_read_string(ctx, entry, "msgid",  index, &msgid)  < 0 ||
+        po_read_string(ctx, entry, "plural", index, &plural) < 0)
+        goto done;
+
+    for (guint i = 0; comments && i < comments->len; i++)
+        g_string_append_printf(out, "%s\n", (const char *)comments->pdata[i]);
+
+    if (flags && flags->len) {
+        g_string_append(out, "#, ");
+        for (guint i = 0; i < flags->len; i++) {
+            if (i)
+                g_string_append(out, ", ");
+            g_string_append(out, (const char *)flags->pdata[i]);
+        }
+        g_string_append_c(out, '\n');
+    }
+
+    if (msgid) {
+        if (ctxt)
+            po_line(out, "msgctxt", ctxt);
+        po_line(out, "msgid", msgid);
+
+        if (plural) {
+            po_line(out, "msgid_plural", plural);
+            guint n = (forms && forms->len) ? forms->len : 1;
+            for (guint i = 0; i < n; i++) {
+                char keyword[32];
+                g_snprintf(keyword, sizeof keyword, "msgstr[%u]", i);
+                po_line(out, keyword,
+                        (forms && i < forms->len) ? forms->pdata[i] : "");
+            }
+        } else {
+            po_line(out, "msgstr", (forms && forms->len) ? forms->pdata[0] : "");
+        }
+    }
+
+    g_string_append_c(out, '\n');       /* a blank line between entries */
+    ok = true;
+
+ done:
+    g_free(ctxt);
+    g_free(msgid);
+    g_free(plural);
+    if (comments) g_ptr_array_free(comments, TRUE);
+    if (flags)    g_ptr_array_free(flags, TRUE);
+    if (forms)    g_ptr_array_free(forms, TRUE);
+    return ok;
+}
+
+/*
+ * Locale.Write(path, entries): a catalogue back, losing nothing.
+ *
+ * The inverse of `Locale.Read`, and the same promise from the other side:
+ * whatever the reader kept has to come out again -- comments, flags, the `#~`
+ * tail -- or an editor built on the pair destroys a translator's work the first
+ * time it saves.  One loop and no special cases, the same way the reader is
+ * one parse: the header is an ordinary entry whose msgid is `""`, and a block
+ * that is only comments is one whose msgid is null.
+ *
+ * **The whole text is built before the file is touched**, so a refusal leaves
+ * the catalogue exactly as it was, and the write itself is
+ * `g_file_set_contents` -- a temporary and a rename, the promise `File.Save`
+ * makes.
+ */
+static JSValue js_locale_write(JSContext *ctx, JSValueConst this_val,
+                               int argc, JSValueConst *argv)
+{
+    if (argc < 2 || !JS_IsString(argv[0]))
+        return JS_ThrowTypeError(ctx,
+            "Locale.Write(path, entries) expects a path and a list");
+
+    if (!JS_IsArray(argv[1]))
+        return JS_ThrowTypeError(ctx,
+            "Locale.Write(path, entries) expects a list of entries");
+
+    uint32_t n   = 0;
+    JSValue  len = JS_GetPropertyStr(ctx, argv[1], "length");
+    if (JS_ToUint32(ctx, &n, len)) {
+        JS_FreeValue(ctx, len);
+        return JS_EXCEPTION;
+    }
+    JS_FreeValue(ctx, len);
+
+    const char *path = JS_ToCString(ctx, argv[0]);
+    if (!path)
+        return JS_EXCEPTION;
+
+    GString *out = g_string_new(NULL);
+
+    for (uint32_t i = 0; i < n; i++) {
+        JSValue entry = JS_GetPropertyUint32(ctx, argv[1], i);
+        bool    ok    = po_write_entry(ctx, out, entry, i);
+
+        JS_FreeValue(ctx, entry);
+        if (!ok) {
+            g_string_free(out, TRUE);
+            JS_FreeCString(ctx, path);
+            return JS_EXCEPTION;
+        }
+    }
+
+    /* One trailing newline, like every other file this runtime writes. */
+    while (out->len > 0 && out->str[out->len - 1] == '\n')
+        g_string_truncate(out, out->len - 1);
+    g_string_append_c(out, '\n');
+
+    GError *err = NULL;
+    bool    ok  = g_file_set_contents(path, out->str, (gssize)out->len, &err);
+
+    g_string_free(out, TRUE);
+
+    if (!ok) {
+        JSValue e = JS_ThrowTypeError(ctx, "Locale.Write: cannot write %s: %s",
+                                      path, err ? err->message : "unknown error");
+        g_clear_error(&err);
+        JS_FreeCString(ctx, path);
+        return e;
+    }
+
+    JS_FreeCString(ctx, path);
+    return JS_UNDEFINED;
 }
 
 static JSValue js_locale_get_current(JSContext *ctx, JSValueConst this_val)
@@ -2056,6 +2371,7 @@ static const JSCFunctionListEntry locale_props[] = {
     JS_CFUNC_DEF("Plural",  3, js_locale_plural),
     JS_CFUNC_DEF("Context", 2, js_locale_context),
     JS_CFUNC_DEF("Read",    1, js_locale_read),
+    JS_CFUNC_DEF("Write",   2, js_locale_write),
     JS_CFUNC_DEF("Number",  2, js_locale_number),
     JS_CFUNC_DEF("Date",    2, js_locale_date),
     JS_CFUNC_DEF("Currency", 2, js_locale_currency),
