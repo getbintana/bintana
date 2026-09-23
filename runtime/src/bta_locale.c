@@ -1127,7 +1127,7 @@ static void locale_group_run(GString *out, const char *digits, size_t n)
  * how an exact value reaches a label without being converted to floating point
  * on the way, which would be the one place the exactness could still be lost.
  */
-static char *locale_group(int64_t units, int scale)
+static char *locale_group_opt(int64_t units, int scale, bool group)
 {
     struct lconv *lc    = localeconv();
     const char   *point = lc->decimal_point[0] ? lc->decimal_point : ".";
@@ -1155,7 +1155,10 @@ static char *locale_group(int64_t units, int scale)
 
     GString *out = g_string_new(NULL);
 
-    locale_group_run(out, whole->str, whole->len);
+    if (group)
+        locale_group_run(out, whole->str, whole->len);
+    else
+        g_string_append_len(out, whole->str, whole->len);
 
     if (scale > 0) {
         g_string_append(out, point);
@@ -1168,6 +1171,252 @@ static char *locale_group(int64_t units, int scale)
     g_string_free(frac, TRUE);
     g_free(digits);
     return g_string_free(out, FALSE);
+}
+
+/* ------------------------------------------------- numbers, one way and back
+ *
+ * The one place a number becomes text and text becomes a number, because three
+ * callers need the same answer: `Locale.Number`/`Locale.Currency`, the
+ * `DecimalBox` that shows a value and parses what was typed, and any label or
+ * report that formats the same amount.  See `BtaNumberFmt` in bta.h for what a
+ * format may say.
+ */
+#ifdef G_OS_WIN32
+static char *locale_group_double(double value, int decimals);
+#endif
+
+void bta_number_fmt_default(BtaNumberFmt *f)
+{
+    f->places        = -1;
+    f->group         = true;
+    f->prefix        = NULL;
+    f->suffix        = NULL;
+    f->currency      = false;
+    f->symbol        = NULL;
+    f->symbol_before = false;
+    f->symbol_space  = false;
+}
+
+/* The symbol, its side and its gap: an override wins, then the currency's, and
+ * neither is a symbol at all when the locale has none. */
+static const char *number_symbol(const BtaNumberFmt *f, bool *before, bool *space)
+{
+    struct lconv *lc = localeconv();
+
+    *before = false;
+    *space  = false;
+
+    if (f->symbol && *f->symbol) {
+        *before = f->symbol_before;
+        *space  = f->symbol_space;
+        return f->symbol;
+    }
+    if (f->currency && lc->currency_symbol && *lc->currency_symbol) {
+        *before = lc->p_cs_precedes == 1;
+        *space  = lc->p_sep_by_space == 1;
+        return lc->currency_symbol;
+    }
+    return NULL;
+}
+
+char *bta_locale_format_number(JSContext *ctx, JSValueConst v, const BtaNumberFmt *f)
+{
+    struct lconv *lc    = localeconv();
+    bool          money = f->currency && !(f->symbol && *f->symbol);
+
+    /* What the currency's own places are, when the format does not say.  The
+     * same CHAR_MAX-is-no-answer reading `Locale.Currency` has always made. */
+    int want = f->places;
+    if (want < 0 && money) {
+        want = lc->frac_digits;
+        if (want == CHAR_MAX || want < 0 || want > DEC_SHOWN_MAX)
+            want = 2;
+    }
+
+    int64_t units = 0;
+    int     scale = 0;
+    int     held  = bta_decimal_parts(ctx, v, want, &units, &scale);
+
+    if (held < 0)
+        return NULL;
+
+    char *amount;
+
+    if (held > 0) {
+        /* A Decimal: its own digits, never a double -- the one place the
+         * exactness could still be dropped. */
+        amount = locale_group_opt(units, scale, f->group);
+    } else {
+        double value = 0;
+        if (!locale_finite(ctx, v, "Locale.Number", &value))
+            return NULL;
+
+        int decimals = want >= 0 ? want : locale_decimals_for(value);
+#ifdef G_OS_WIN32
+        amount = f->group ? locale_group_double(value, decimals)
+                          : g_strdup_printf("%.*f", decimals, value);
+#else
+        amount = f->group ? g_strdup_printf("%'.*f", decimals, value)
+                          : g_strdup_printf("%.*f", decimals, value);
+#endif
+    }
+
+    bool        before = false, space = false;
+    const char *symbol = number_symbol(f, &before, &space);
+    GString    *out    = g_string_new(NULL);
+
+    if (f->prefix)
+        g_string_append(out, f->prefix);
+    if (symbol && before) {
+        g_string_append(out, symbol);
+        if (space)
+            g_string_append_c(out, ' ');
+    }
+    g_string_append(out, amount);
+    if (symbol && !before) {
+        if (space)
+            g_string_append_c(out, ' ');
+        g_string_append(out, symbol);
+    }
+    if (f->suffix)
+        g_string_append(out, f->suffix);
+
+    g_free(amount);
+    return g_string_free(out, FALSE);
+}
+
+/* The last group's size, against the locale's rule: `1.234` is 1234 where the
+ * rule groups by three, and `1.5` is one and a half -- a dot typed as a decimal
+ * point, which is not this desktop's spelling but is what a hand does. */
+static bool locale_last_group_ok(const char *body, const char *sep)
+{
+    const char *last = NULL;
+
+    for (const char *p = strstr(body, sep); p; p = strstr(p + 1, sep))
+        last = p;
+    if (!last || last == body)
+        return false;
+
+    size_t after = strlen(last + strlen(sep));
+
+    for (size_t i = 0; i < after; i++)
+        if (!g_ascii_isdigit(last[strlen(sep) + i]))
+            return false;
+
+    struct lconv *lc   = localeconv();
+    int           step = lc->grouping && *lc->grouping && *lc->grouping != CHAR_MAX
+                             ? *lc->grouping : 3;
+
+    return after == (size_t)step;
+}
+
+static char *str_without(const char *s, const char *what)
+{
+    GString *out = g_string_new(NULL);
+
+    for (const char *p = s; *p; ) {
+        if (strncmp(p, what, strlen(what)) == 0) {
+            p += strlen(what);
+            continue;
+        }
+        g_string_append_c(out, *p++);
+    }
+    return g_string_free(out, FALSE);
+}
+
+/* `start`/`len` trimmed at the front by `what`, with the space the formatter
+ * may have left between them.  false when it is not there. */
+static bool strip_front(const char **start, size_t *len, const char *what)
+{
+    size_t n = strlen(what);
+
+    if (!n)
+        return true;
+    if (*len < n || strncmp(*start, what, n) != 0)
+        return false;
+
+    *start += n;
+    *len   -= n;
+    while (*len > 0 && g_ascii_isspace(**start)) {
+        (*start)++;
+        (*len)--;
+    }
+    return true;
+}
+
+static bool strip_back(const char *start, size_t *len, const char *what)
+{
+    size_t n = strlen(what);
+
+    if (!n)
+        return true;
+    if (*len < n || strncmp(start + *len - n, what, n) != 0)
+        return false;
+
+    *len -= n;
+    while (*len > 0 && g_ascii_isspace(start[*len - 1]))
+        (*len)--;
+    return true;
+}
+
+bool bta_locale_parse_number(const char *text, const BtaNumberFmt *f,
+                             int64_t *units, int *scale)
+{
+    if (!text)
+        return false;
+
+    while (g_ascii_isspace(*text))
+        text++;
+
+    const char *start = text;
+    size_t      len   = strlen(text);
+
+    while (len > 0 && g_ascii_isspace(start[len - 1]))
+        len--;
+
+    /* The affixes are the outside, so they come off first -- and the symbol
+     * sits inside them, where the formatter put it. */
+    if (!strip_front(&start, &len, f->prefix ? f->prefix : ""))
+        return false;
+
+    bool        before = false, space = false;
+    const char *symbol = number_symbol(f, &before, &space);
+    char       *sym    = symbol ? g_strdup(symbol) : NULL;
+
+    if (sym && before && !strip_front(&start, &len, sym)) {
+        g_free(sym);
+        return false;
+    }
+    if (sym && !before && !strip_back(start, &len, sym)) {
+        g_free(sym);
+        return false;
+    }
+    g_free(sym);
+
+    if (!strip_back(start, &len, f->suffix ? f->suffix : ""))
+        return false;
+
+    char *body = g_strndup(start, len);
+
+    struct lconv *lc    = localeconv();
+    const char   *point = lc->decimal_point[0] ? lc->decimal_point : ".";
+    const char   *sep   = lc->thousands_sep ? lc->thousands_sep : "";
+
+    char *flat = NULL;
+
+    if (*sep && strcmp(sep, point) != 0 && strstr(body, sep)) {
+        /* The point is there, so the separator can only be grouping; without
+         * it, the groups have to have the locale's size or it is a decimal
+         * point typed the foreign way. */
+        if (strstr(body, point) || locale_last_group_ok(body, sep))
+            flat = str_without(body, sep);
+    }
+
+    bool ok = bta_decimal_from_text(flat ? flat : body, units, scale);
+
+    g_free(flat);
+    g_free(body);
+    return ok;
 }
 
 #ifdef G_OS_WIN32
@@ -1211,60 +1460,151 @@ static char *locale_group_double(double value, int decimals)
  * first three and then by twos.  Which is the whole reason not to insert
  * separators by hand.
  */
+/*
+ * The second argument of `Locale.Number`/`Currency`/`Parse`: a number of
+ * places, as it has always been, or an object that says more.  The strings it
+ * reads are owned here because a `BtaNumberFmt` borrows them.
+ */
+typedef struct {
+    BtaNumberFmt fmt;
+    char        *prefix;
+    char        *suffix;
+    char        *symbol;
+} LocaleNumOpts;
+
+static void locale_opts_free(LocaleNumOpts *o)
+{
+    g_free(o->prefix);
+    g_free(o->suffix);
+    g_free(o->symbol);
+}
+
+static bool locale_opts_places(JSContext *ctx, JSValueConst v, const char *who,
+                               int *out)
+{
+    int32_t asked = 0;
+
+    if (!bta_to_int(ctx, v, who, &asked))
+        return false;
+    if (asked < 0 || asked > DEC_SHOWN_MAX) {
+        JS_ThrowRangeError(ctx, "%s: %d decimals is not between 0 and %d",
+                           who, asked, DEC_SHOWN_MAX);
+        return false;
+    }
+    *out = asked;
+    return true;
+}
+
+static bool locale_opts(JSContext *ctx, JSValueConst v, const char *who,
+                        LocaleNumOpts *o)
+{
+    bta_number_fmt_default(&o->fmt);
+
+    /* Owned by this struct and freed by `locale_opts_free` on every path, so
+     * they start empty and not as whatever the stack had. */
+    o->prefix = o->suffix = o->symbol = NULL;
+
+    if (JS_IsUndefined(v) || JS_IsNull(v))
+        return true;
+
+    if (!JS_IsObject(v) || JS_IsArray(v) || JS_IsFunction(ctx, v))
+        return locale_opts_places(ctx, v, who, &o->fmt.places);
+
+    JSValue p = JS_GetPropertyStr(ctx, v, "Decimals");
+    if (!JS_IsUndefined(p) && !JS_IsNull(p) &&
+        !locale_opts_places(ctx, p, who, &o->fmt.places)) {
+        JS_FreeValue(ctx, p);
+        return false;
+    }
+    JS_FreeValue(ctx, p);
+
+    JSValue g = JS_GetPropertyStr(ctx, v, "Group");
+    if (!JS_IsUndefined(g))
+        o->fmt.group = JS_ToBool(ctx, g) > 0;
+    JS_FreeValue(ctx, g);
+
+    JSValue c = JS_GetPropertyStr(ctx, v, "Currency");
+    if (!JS_IsUndefined(c))
+        o->fmt.currency = JS_ToBool(ctx, c) > 0;
+    JS_FreeValue(ctx, c);
+
+    const struct { const char *key; char **slot; const char **to; } names[] = {
+        { "Prefix", &o->prefix, &o->fmt.prefix },
+        { "Suffix", &o->suffix, &o->fmt.suffix },
+        { "Symbol", &o->symbol, &o->fmt.symbol },
+    };
+
+    for (size_t i = 0; i < G_N_ELEMENTS(names); i++) {
+        JSValue s = JS_GetPropertyStr(ctx, v, names[i].key);
+
+        if (!JS_IsUndefined(s) && !JS_IsNull(s)) {
+            const char *text = JS_ToCString(ctx, s);
+
+            if (!text) {
+                JS_FreeValue(ctx, s);
+                return false;
+            }
+            *names[i].slot = g_strdup(text);
+            *names[i].to   = *names[i].slot;
+            JS_FreeCString(ctx, text);
+        }
+        JS_FreeValue(ctx, s);
+    }
+
+    /*
+     * An override's side is the locale's unless told: a symbol for another
+     * currency wants to be placed the way this desktop places one -- `US$` goes
+     * before in Argentina, and the app does not have to know that.
+     */
+    struct lconv *lc = localeconv();
+    bool          before = lc->p_cs_precedes == 1;
+    bool          space  = lc->p_sep_by_space == 1;
+
+    JSValue b = JS_GetPropertyStr(ctx, v, "Before");
+    o->fmt.symbol_before = JS_IsUndefined(b) ? before : JS_ToBool(ctx, b) > 0;
+    JS_FreeValue(ctx, b);
+
+    JSValue sp = JS_GetPropertyStr(ctx, v, "Space");
+    o->fmt.symbol_space = JS_IsUndefined(sp) ? space : JS_ToBool(ctx, sp) > 0;
+    JS_FreeValue(ctx, sp);
+
+    return true;
+}
+
+/*
+ * Locale.Number(value, [decimals | options]) -- grouped, with the desktop's
+ * separators.
+ *
+ * The grouping is `%'` from POSIX, which reads `localeconv`'s `grouping` rule
+ * rather than assuming three: some locales group by four, and India groups the
+ * first three and then by twos.  Which is the whole reason not to insert
+ * separators by hand.
+ *
+ * The options object is the same one the `DecimalBox` keeps as its format:
+ * `{ Decimals, Group, Prefix, Suffix }`.  A `Decimal` goes through its own
+ * digits and never through a double, and an explicit `Decimals` rounds it --
+ * showing a value at a fixed number of places is exactly where a rounding
+ * decision belongs, which is what `Locale.Currency` has always done.
+ */
 static JSValue js_locale_number(JSContext *ctx, JSValueConst this_val,
                                 int argc, JSValueConst *argv)
 {
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "Locale.Number(value, [decimals]) needs a value");
 
-    /*
-     * A Decimal is written from its own digits and never through a double: it is
-     * exact, and this is the last place that exactness could be dropped.
-     */
-    int64_t units;
-    int     scale;
-    int     held = bta_decimal_parts(ctx, argv[0], -1, &units, &scale);
+    LocaleNumOpts o;
 
-    if (held < 0)
-        return JS_EXCEPTION;
-    if (held > 0) {
-        if (argc > 1 && !JS_IsUndefined(argv[1]) && !JS_IsNull(argv[1])) {
-            return JS_ThrowTypeError(ctx,
-                "Locale.Number: a Decimal carries its own places -- "
-                "round it with Round(n) to change them");
-        }
-        char   *shown = locale_group(units, scale);
-        JSValue out   = JS_NewString(ctx, shown);
-        g_free(shown);
-        return out;
-    }
-
-    double value = 0;
-    if (!locale_finite(ctx, argv[0], "Locale.Number", &value))
+    if (!locale_opts(ctx, argc > 1 ? argv[1] : JS_UNDEFINED, "Locale.Number", &o))
         return JS_EXCEPTION;
 
-    int decimals;
-    if (argc > 1 && !JS_IsUndefined(argv[1]) && !JS_IsNull(argv[1])) {
-        int32_t asked = 0;
-        if (JS_ToInt32(ctx, &asked, argv[1]))
-            return JS_EXCEPTION;
-        if (asked < 0 || asked > 20)
-            return JS_ThrowRangeError(ctx,
-                "Locale.Number: %d decimals is not between 0 and 20", asked);
-        decimals = asked;
-    } else {
-        decimals = locale_decimals_for(value);
-    }
+    char *shown = bta_locale_format_number(ctx, argv[0], &o.fmt);
 
-    /* g_strdup_printf rather than a buffer: the widest a double can print is
-     * 432 characters with separators in it, and a number nobody sized is a
-     * number somebody gets wrong. */
-#ifdef G_OS_WIN32
-    char *shown = locale_group_double(value, decimals);
-#else
-    char *shown = g_strdup_printf("%'.*f", decimals, value);
-#endif
+    locale_opts_free(&o);
+    if (!shown)
+        return JS_EXCEPTION;
+
     JSValue out = JS_NewString(ctx, shown);
+
     g_free(shown);
     return out;
 }
@@ -1444,66 +1784,70 @@ static JSValue js_locale_currency(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx,
             "Locale.Currency(value, [decimals]) needs a value");
 
-    struct lconv *lc     = localeconv();
-    int           places = lc->frac_digits;
+    LocaleNumOpts o;
 
-    /* CHAR_MAX is localeconv's "this locale does not say", which the C locale
-     * answers -- two is what everything else uses. */
-    if (places == CHAR_MAX || places < 0 || places > DEC_SHOWN_MAX)
-        places = 2;
-
-    if (argc > 1 && !JS_IsUndefined(argv[1]) && !JS_IsNull(argv[1])) {
-        int32_t asked = 0;
-        if (JS_ToInt32(ctx, &asked, argv[1]))
-            return JS_EXCEPTION;
-        if (asked < 0 || asked > DEC_SHOWN_MAX)
-            return JS_ThrowRangeError(ctx,
-                "Locale.Currency: %d decimal places is not between 0 and %d",
-                asked, DEC_SHOWN_MAX);
-        places = asked;
-    }
-
-    /* The amount, at `places`, as text -- exact when it came in exact. */
-    char   *amount = NULL;
-    int64_t units;
-    int     scale;
-
-    /* Rounded here rather than refused: showing money is exactly where a
-     * three-place value -- or an exact third -- has to become two, and `Round(n)`
-     * is how a caller says which rule when it is not the ordinary one. */
-    int held = bta_decimal_parts(ctx, argv[0], places, &units, &scale);
-
-    if (held < 0)
+    if (!locale_opts(ctx, argc > 1 ? argv[1] : JS_UNDEFINED, "Locale.Currency", &o))
         return JS_EXCEPTION;
-    if (held > 0) {
-        amount = locale_group(units, scale);
-    } else {
-        double value = 0;
-        if (!locale_finite(ctx, argv[0], "Locale.Currency", &value))
-            return JS_EXCEPTION;
-        amount = g_strdup_printf("%\'.*f", places, value);
-    }
 
-    /* The symbol, and the side it goes on.  `p_cs_precedes` is 1 for before and
-     * 0 for after; `p_sep_by_space` says whether a space comes between.  A
-     * locale with no symbol at all -- C is one -- gets the bare number, which is
-     * the honest answer rather than an invented currency. */
-    const char *symbol = lc->currency_symbol;
-    JSValue     out;
+    /*
+     * A currency by default, and **an override makes it another one**: the
+     * symbol is the app's and the side it goes on is still this desktop's, which
+     * is the whole of what a finance app handling several currencies needs --
+     * `{ Symbol: "US$" }` is `US$ 1.234,56` here and `$1,234.56` there without
+     * the program knowing either rule.
+     */
+    o.fmt.currency = true;
 
-    if (!symbol || !*symbol) {
-        out = JS_NewString(ctx, amount);
-    } else {
-        const char *gap = lc->p_sep_by_space == 1 ? " " : "";
-        char *shown = lc->p_cs_precedes == 1
-            ? g_strdup_printf("%s%s%s", symbol, gap, amount)
-            : g_strdup_printf("%s%s%s", amount, gap, symbol);
+    char *shown = bta_locale_format_number(ctx, argv[0], &o.fmt);
 
-        out = JS_NewString(ctx, shown);
-        g_free(shown);
-    }
-    g_free(amount);
+    locale_opts_free(&o);
+    if (!shown)
+        return JS_EXCEPTION;
+
+    JSValue out = JS_NewString(ctx, shown);
+
+    g_free(shown);
     return out;
+}
+
+/*
+ * Locale.Parse(text, [options]) -- the way back, or `null`.
+ *
+ * What a field that takes a number needs and had no word for: the same affixes
+ * and the same locale rules `Locale.Number` writes with, read backwards.  It
+ * answers a `Decimal` and never a double, and **`null` rather than a throw**
+ * when the text is not a number -- a field being typed into is not an error,
+ * and the caller decides what an empty or half-typed entry means.
+ *
+ *     Locale.Parse("1.234,56")                       // → 1234.56
+ *     Locale.Parse("12,5 kg", { Suffix: " kg" })     // → 12.5
+ *     Locale.Parse("US$ 1.234,56", { Symbol: "US$" })// → 1234.56
+ */
+static JSValue js_locale_parse(JSContext *ctx, JSValueConst this_val,
+                               int argc, JSValueConst *argv)
+{
+    if (argc < 1 || !JS_IsString(argv[0]))
+        return JS_ThrowTypeError(ctx, "Locale.Parse(text, [options]) needs text");
+
+    LocaleNumOpts o;
+
+    if (!locale_opts(ctx, argc > 1 ? argv[1] : JS_UNDEFINED, "Locale.Parse", &o))
+        return JS_EXCEPTION;
+
+    const char *text = JS_ToCString(ctx, argv[0]);
+    if (!text) {
+        locale_opts_free(&o);
+        return JS_EXCEPTION;
+    }
+
+    int64_t units = 0;
+    int     scale = 0;
+    bool    ok    = bta_locale_parse_number(text, &o.fmt, &units, &scale);
+
+    JS_FreeCString(ctx, text);
+    locale_opts_free(&o);
+
+    return ok ? bta_decimal_new(ctx, units, scale) : JS_NULL;
 }
 
 /*
@@ -1715,6 +2059,7 @@ static const JSCFunctionListEntry locale_props[] = {
     JS_CFUNC_DEF("Number",  2, js_locale_number),
     JS_CFUNC_DEF("Date",    2, js_locale_date),
     JS_CFUNC_DEF("Currency", 2, js_locale_currency),
+    JS_CFUNC_DEF("Parse",   2, js_locale_parse),
     JS_CFUNC_DEF("Compare", 2, js_locale_compare),
     JS_CFUNC_DEF("Matches", 2, js_locale_matches),
     JS_CGETSET_DEF("DecimalPoint", js_locale_get_point, NULL),

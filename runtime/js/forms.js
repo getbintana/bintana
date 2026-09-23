@@ -216,7 +216,12 @@ function settableProperties(widget) {
 
 function savableValue(v) {
     const t = typeof v;
-    return t === "string" || t === "number" || t === "boolean" || Array.isArray(v);
+    /* A `Decimal` is an object and **is** savable: `JSON.stringify` writes it
+     * through its own `toJSON`, so a `.form` carries its machine text and the
+     * setter reads it back.  Without this a decimal property -- a `DecimalBox`'s
+     * `Value` -- was skipped in silence, which is a value the file never had. */
+    return t === "string" || t === "number" || t === "boolean" || Array.isArray(v)
+        || v instanceof Decimal;
 }
 
 /*

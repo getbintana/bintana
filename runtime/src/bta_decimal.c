@@ -951,6 +951,22 @@ int bta_decimal_parts(JSContext *ctx, JSValueConst v, int want,
     return 1;
 }
 
+/*
+ * A decimal from whole units at a scale, which is what a C caller has: the
+ * `DecimalBox` builds its value from digits it parsed and never from a double.
+ * An exception is pending on failure, like every other constructor here.
+ */
+JSValue bta_decimal_new(JSContext *ctx, int64_t units, int scale)
+{
+    BtaDecimal v;
+
+    if (!dec_reduce(ctx, units, dec_pow10[scale > DEC_MAX_SCALE ? DEC_MAX_SCALE
+                                                               : (scale < 0 ? 0 : scale)],
+                    scale, &v))
+        return JS_EXCEPTION;
+    return dec_new(ctx, &v);
+}
+
 void bta_decimal_init(JSContext *ctx, JSValue global)
 {
     JSRuntime *rt = JS_GetRuntime(ctx);

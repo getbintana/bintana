@@ -79,7 +79,7 @@ for a control without a table in the middle.
 
 ## What is here
 
-**Every name this runtime publishes has a page**: 46 classes, 28 globals and the
+**Every name this runtime publishes has a page**: 47 classes, 28 globals and the
 3 components the shipped libraries publish. `tests/api.sh` holds each one to its
 members, twice — once in its summary and once where it is explained.
 
@@ -97,6 +97,7 @@ members, twice — once in its summary and once where it is explained.
 | [Container](widgets/Container.md) | what holds other controls |
 | [Control](widgets/Control.md) | the branch of the hierarchy for everything that is not a container |
 | [DatePicker](widgets/DatePicker.md) | a date on one line, with a calendar in its popover |
+| [DecimalBox](widgets/DecimalBox.md) | a number held exactly, shown with a unit or a currency |
 | [DrawingArea](widgets/DrawingArea.md) | a surface to draw on |
 | [Editor](widgets/Editor.md) | a buffer of text with a cursor in it |
 | [Expander](widgets/Expander.md) | a [`Frame`](widgets/Frame.md) that folds |

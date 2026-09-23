@@ -51,7 +51,7 @@ Namespace("Ide");
 const PALETTE_TABS = [
     { name: "Basic",  types: ["Button", "Label", "Image", "Picture", "Separator", "TextBox",
                               "CheckButton", "ToggleButton", "Switch", "LinkButton"] },
-    { name: "Data",   types: ["ComboBox", "SpinBox", "ListBox", "Slider",
+    { name: "Data",   types: ["ComboBox", "SpinBox", "DecimalBox", "ListBox", "Slider",
                               "DatePicker", "Calendar", "ColorButton", "FontButton",
                               "ProgressBar", "LevelBar", "Spinner"] },
     { name: "Views",  types: ["TreeView", "TableView", "TextEditor", "SourceEditor",
@@ -98,6 +98,11 @@ const PALETTE_ICON = {
     LevelBar:    ["display-brightness-symbolic", "bta-level-symbolic"],
     ComboBox: ["pan-down-symbolic",         "bta-combobox-symbolic"],
     SpinBox:  ["value-increase-symbolic",   "bta-spinbox-symbolic"],
+    /* A field with a point in it, which is what it is: a `SpinBox` that holds a
+     * decimal exactly. The calculator is the desktop's picture for a number
+     * being worked with; ours is behind it because a name only one theme has is
+     * a blank button on the next (tests/icons.sh). */
+    DecimalBox: ["accessories-calculator-symbolic", "bta-decimalbox-symbolic"],
     ListBox:  ["view-list-symbolic",        "bta-listbox-symbolic"],
     /*
      * The two date controls, and they must not share a picture: a `DatePicker` is

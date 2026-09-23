@@ -4521,6 +4521,7 @@ JSValue *bta_widget_note(BtaWidget *w, BtaNote which)
     case BTA_NOTE_COLUMNS:  return &w->columns;
     case BTA_NOTE_PAINTER:  return &w->painter;
     case BTA_NOTE_HANDLERS: return &w->handlers;
+    case BTA_NOTE_DECIMAL:  return &w->decimal;
     }
     g_assert_not_reached();
 }
@@ -5765,6 +5766,7 @@ static void widget_finalizer(JSRuntime *rt, JSValue val)
     JS_FreeValueRT(rt, w->columns);
     JS_FreeValueRT(rt, w->painter);
     JS_FreeValueRT(rt, w->handlers);
+    JS_FreeValueRT(rt, w->decimal);
 
     if (w->gtk) {
         /*
@@ -5819,6 +5821,7 @@ static void widget_gc_mark(JSRuntime *rt, JSValueConst val, JS_MarkFunc *mark_fu
         JS_MarkValue(rt, w->actions_spec, mark_func);
         JS_MarkValue(rt, w->columns, mark_func);
         JS_MarkValue(rt, w->painter, mark_func);
+        JS_MarkValue(rt, w->decimal, mark_func);
         JS_MarkValue(rt, w->handlers, mark_func);
     }
 }

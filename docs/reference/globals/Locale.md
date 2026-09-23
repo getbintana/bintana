@@ -25,11 +25,12 @@ are written where they live.
 | | | |
 |---|---|---|
 | `Compare(a, b)` | `-1`/`0`/`1`, in this desktop's order for names | [order and search](#order-and-search) |
-| `Currency(value, [decimals])` | money, with the symbol where this desktop puts it | [numbers and money](#numbers-and-money) |
+| `Currency(value, [decimals \| options])` | money, with the symbol where this desktop puts it | [numbers and money](#numbers-and-money) |
 | `Date(when, [format])` | a date or a time, written the way it is written here | [dates](#dates) |
 | `DecimalPoint` | the character this desktop writes a decimal with | [numbers and money](#numbers-and-money) |
 | `Matches(text, needle)` | whether a search for `needle` should find `text` | [order and search](#order-and-search) |
-| `Number(value, [decimals])` | grouped, with the desktop's separators | [numbers and money](#numbers-and-money) |
+| `Number(value, [decimals \| options])` | grouped, with the desktop's separators | [numbers and money](#numbers-and-money) |
+| `Parse(text, [options])` | → the `Decimal` the text says, or `null` | [numbers and money](#numbers-and-money) |
 
 ## The catalogue
 
@@ -53,14 +54,31 @@ number in it.
 
 | | |
 |---|---|
-| `Number(value, [decimals])` | grouped, with this desktop's separators. As many decimals as the value has, unless told |
-| `Currency(value, [decimals])` | money, with the symbol where this desktop puts it — which is before the number in some places and after it in others |
+| `Number(value, [decimals \| options])` | grouped, with this desktop's separators. As many decimals as the value has, unless told |
+| `Currency(value, [decimals \| options])` | money, with the symbol where this desktop puts it — which is before the number in some places and after it in others |
+| `Parse(text, [options])` | → a [`Decimal`](Decimal.md), or `null` when the text is not a number. **`null` and not a throw**: a field being typed into is not an error |
 | `DecimalPoint` | the character a decimal is written with here, for the rare case that has to parse one back |
 
 ```js
 Locale.Number(1234567.891)        // 1.234.567,891
 Locale.Number(1234567.891, 2)     // 1.234.567,89
+Locale.Number(km, { Decimals: 1, Suffix: " km" })   // 12,5 km
+Locale.Currency(v, { Symbol: "US$" })               // US$ 1.234,56
+Locale.Parse("1.234,56")          // → 1234.56
+Locale.Parse("12,5 kg", { Suffix: " kg" })
 ```
+
+**The options object is the same format a [`DecimalBox`](../widgets/DecimalBox.md)
+keeps**, so a label and a field spell an amount the same way:
+`{ Decimals, Group, Prefix, Suffix, Symbol, Before, Space, Currency }`. A unit is
+format and not prose — a suffix that has to be translated goes through
+[`Locale.Text`](#the-catalogue) at the call site.
+
+**`Symbol` is another currency, and the side it goes on is still this desktop's.**
+`{ Symbol: "US$" }` writes `US$ 1.234,56` here and `$1,234.56` on a US desktop,
+which is what a finance app handling several currencies needs — the symbol and
+the places are the currency's, the separators and the placement are the locale's,
+and there is no table of currencies in the runtime.
 
 **Both take a [`Decimal`](Decimal.md) and write it from its own digits**, never
 through a double — which is the other half of the exact-money story and the

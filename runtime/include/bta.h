@@ -45,6 +45,8 @@ typedef enum {
     BTA_NOTE_COLUMNS,    /* tables: the declared columns */
     BTA_NOTE_PAINTER,    /* drawing areas: made on the first frame painted */
     BTA_NOTE_HANDLERS,   /* the handlers `On(event, fn)` installed, by event */
+    BTA_NOTE_DECIMAL,    /* decimal boxes: the exact value, which the spin's
+                          * double is only a view of */
 } BtaNote;
 
 JSValue *bta_widget_note(BtaWidget *w, BtaNote which);
@@ -280,6 +282,10 @@ struct BtaWidget {
      * ordinary cycle that collects **because** `gc_mark` below reports it.
      */
     JSValue    handlers;
+    /* decimal boxes: the exact value.  The eighth note, and the one that is a
+     * strong reference to *the value the control shows* -- see bta_decimal.c's
+     * `bta_decimal_new` and the control's own note in bta_controls.c. */
+    JSValue    decimal;
 };
 
 struct BtaApp {
@@ -1143,9 +1149,44 @@ int bta_decimal_parts(JSContext *ctx, JSValueConst v, int want,
  */
 bool bta_decimal_from_text(const char *text, int64_t *units, int *scale);
 
+/* And the other way into the language: a Decimal value from whole units at a
+ * scale.  An exception is pending on failure. */
+JSValue bta_decimal_new(JSContext *ctx, int64_t units, int scale);
+
 /* And back -- `199` at 2 places is `"1.99"`.  A fresh string, g_free'd by the
  * caller. */
 char *bta_decimal_to_text(int64_t units, int scale);
+
+/*
+ * How a number is written: what `Locale.Number`/`Locale.Currency` take as their
+ * options object, and what a `DecimalBox` reads off its properties.  One struct
+ * because the control, a label and a report must spell the same amount the same
+ * way -- and `bta_locale_format_number` below is the one place that knows how.
+ */
+typedef struct {
+    int         places;        /* -1: the value's own, or the currency's */
+    bool        group;         /* thousands separators */
+    const char *prefix;        /* outside the number: "aprox. " */
+    const char *suffix;        /* and outside it: " kg", " h" */
+    bool        currency;      /* the locale's symbol and its side */
+    const char *symbol;        /* an override, or NULL for the locale's */
+    bool        symbol_before; /* an override's side, and its gap */
+    bool        symbol_space;
+} BtaNumberFmt;
+
+/* `places` -1 and grouping on, which is what `Locale.Number(v)` means. */
+void bta_number_fmt_default(BtaNumberFmt *f);
+
+/* Render `v` -- a Decimal, a number or numeric text -- with `f`.  NULL with an
+ * exception pending when `v` is not a number. */
+char *bta_locale_format_number(JSContext *ctx, JSValueConst v,
+                               const BtaNumberFmt *f);
+
+/* The way back: text into whole units at a scale, honouring the affixes and the
+ * locale's grouping and decimal point.  `false` when it is not a number, and
+ * **nothing is thrown** -- a field being typed into is not an error. */
+bool bta_locale_parse_number(const char *text, const BtaNumberFmt *f,
+                             int64_t *units, int *scale);
 
 void bta_locale_cleanup(void);
 /*

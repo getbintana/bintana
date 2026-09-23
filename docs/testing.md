@@ -1,7 +1,7 @@
 # Testing
 
 ```sh
-./tests/run.sh                          # all five projects, 6620 assertions
+./tests/run.sh                          # all five projects, 6661 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -178,8 +178,8 @@ or a discarded project leaves behind.
 stale; the one above is here to be read.
 
 The saving is the point of it: `welcome files` is **102** assertions and
-`designer` **364**, against **2455** for the whole project — measured at 3.7 s,
-9.4 s and 265 s on the machine this was last run on, where what carries over to
+`designer` **364**, against **2459** for the whole project — measured at 3.7 s,
+9.4 s and 268 s on the machine this was last run on, where what carries over to
 another machine is the proportion and not the seconds. Iterating on an early
 phase stops being minutes a time.
 
@@ -212,9 +212,9 @@ own says so with `reportsItself`.
 
 ### tests/widgets selects
 
-`tests/widgets` is 157 tests listed in `TESTS`, and a filter there **selects** rather
+`tests/widgets` is 160 tests listed in `TESTS`, and a filter there **selects** rather
 than running a prefix — `./tests/run.sh widgets record` is 71 assertions
-in a fifth of a second against 3839 in about eight. It can select because these tests are
+in a fifth of a second against 3876 in about eight. It can select because these tests are
 independent: each builds the controls it needs and deletes them again. The two that
 are not say so in the file:
 
@@ -343,8 +343,8 @@ a member has no row in the reference, or when an event is documented with a
 different number of arguments than the runtime passes.
 
 It parses rather than links, so it answers when the runtime does not build, which
-is the same bargain `tests/icons` and `tests/styles` make. 267 widget members and
-43 events as this is written, plus 11 class statics, 222 on the globals and 60
+is the same bargain `tests/icons` and `tests/styles` make. 274 widget members and
+44 events as this is written, plus 11 class statics, 247 on the globals and 60
 published by `lib/` -- the numbers `./tests/api.sh` prints, and every one of them
 has been stale at some point in this repository.
 

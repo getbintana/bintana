@@ -30,8 +30,9 @@ It is a `Widget` and a control like any other, so everything on
 - **It is a reading and not an input** — [`LevelBar`](LevelBar.md) or
   [`ProgressBar`](ProgressBar.md).
 - **It is a date** — [`DatePicker`](DatePicker.md).
-- **It is money** — still a `SpinBox` for the input, with the arithmetic in
-  `Decimal`: a double is not money.
+- **It is money, or anything the program totals** — [`DecimalBox`](DecimalBox.md),
+  which holds a `Decimal` and shows this desktop's separators, a unit and a
+  currency. A double is not money.
 
 ## The number
 
@@ -72,10 +73,11 @@ is not. Declaring `Min` and `Max` first is the habit worth having.
 
 ## What it does not do
 
-- **No formatting.** A thousands separator and a currency are
-  [`Locale`](../../llm/library.md#locale)'s, and they belong in a label beside
-  the field or in the value when it is shown, not in the field being typed into.
-- **No units.** Put them in a `Label` beside it.
+- **No formatting and no units.** [`DecimalBox`](DecimalBox.md) is this control
+  over a `Decimal` with the separators, a unit and a currency; a `SpinBox` is for
+  a measurement that is only compared with itself. A number that is shown with a
+  unit but never totalled is still this one, with the unit in a `Label` beside
+  it.
 
 ## See also
 

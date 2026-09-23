@@ -1,7 +1,7 @@
 # Controls
 
 **This is the complete surface, not a selection.** Every property, method and
-event of every class is below — 46 classes, 267 distinct members and 43 events,
+event of every class is below — 47 classes, 274 distinct members and 44 events,
 which is what `tests/api.sh` prints. If something is not here, the runtime does
 not have it, and you should not have to open the project tree to find that out.
 
@@ -34,7 +34,8 @@ Widget                            (abstract)
 ├── Control    (abstract)
 │   ├── Label  Button  Image  Separator  TextBox  CheckButton  Switch
 │   ├── ToggleButton  Picture  Spinner  LinkButton  LevelBar  ProgressBar
-│   ├── ListBox  ComboBox  SpinBox  Slider  DatePicker  Calendar  ColorButton
+│   ├── ListBox  ComboBox  SpinBox  DecimalBox  Slider  DatePicker  Calendar
+│   ├── ColorButton
 │   ├── FontButton
 │   ├── TreeView  TableView  Terminal  DrawingArea  Video
 │   └── Editor  (abstract)
@@ -117,7 +118,7 @@ that declares none.
 
 **Inherited by everything:** [`Widget`](#widget--inherited-by-everything) · [`Container`](#container--inherited-by-every-container)
 
-**Controls:** [`Label`](#label) · [`Button`](#button) · [`ToggleButton`](#togglebutton) · [`CheckButton`](#checkbutton) · [`Switch`](#switch) · [`Spinner`](#spinner) · [`Separator`](#separator) · [`LinkButton`](#linkbutton) · [`Image`](#image) · [`Picture`](#picture) · [`Video`](#video) · [`TextBox`](#textbox) · [`SpinBox`](#spinbox) · [`Slider`](#slider) · [`ProgressBar`](#progressbar) · [`LevelBar`](#levelbar) · [`DatePicker`](#datepicker) · [`Calendar`](#calendar) · [`ColorButton`](#colorbutton) · [`FontButton`](#fontbutton) · [`ListBox`](#listbox) · [`ComboBox`](#combobox) · [`TreeView`](#treeview) · [`TableView`](#tableview) · [`TextEditor`](#texteditor) · [`SourceEditor`](#sourceeditor) · [`Terminal`](#terminal) · [`DrawingArea`](#drawingarea)
+**Controls:** [`Label`](#label) · [`Button`](#button) · [`ToggleButton`](#togglebutton) · [`CheckButton`](#checkbutton) · [`Switch`](#switch) · [`Spinner`](#spinner) · [`Separator`](#separator) · [`LinkButton`](#linkbutton) · [`Image`](#image) · [`Picture`](#picture) · [`Video`](#video) · [`TextBox`](#textbox) · [`SpinBox`](#spinbox) · [`DecimalBox`](#decimalbox) · [`Slider`](#slider) · [`ProgressBar`](#progressbar) · [`LevelBar`](#levelbar) · [`DatePicker`](#datepicker) · [`Calendar`](#calendar) · [`ColorButton`](#colorbutton) · [`FontButton`](#fontbutton) · [`ListBox`](#listbox) · [`ComboBox`](#combobox) · [`TreeView`](#treeview) · [`TableView`](#tableview) · [`TextEditor`](#texteditor) · [`SourceEditor`](#sourceeditor) · [`Terminal`](#terminal) · [`DrawingArea`](#drawingarea)
 
 **Containers:** [`Panel`](#panel) · [`Frame`](#frame) · [`Expander`](#expander) · [`Grid`](#grid) · [`Flow`](#flow) · [`Scroller`](#scroller) · [`RowList`](#rowlist) · [`Overlay`](#overlay) · [`AspectFrame`](#aspectframe) · [`Split`](#split) · [`Notebook`](#notebook) · [`Switcher`](#switcher) · [`Form`](#form) · [`Component`](#component)
 
@@ -459,6 +460,45 @@ A number typed or stepped.
 | `Wrap` | past `Max` comes back to `Min` |
 | **event** `Change()` | the value changed, including from an assignment in code — the round trip goes out to GTK and back |
 | **event** `Activate()` | Enter in the field, or a double click on a row |
+
+## DecimalBox
+
+A number with a fixed number of places, **and it is exact**. `SpinBox` holds a
+double; this holds a `Decimal`, which is what money, a duration or a weight is.
+
+| Member | |
+|---|---|
+| `Currency` | the symbol, when `Format` is `"Currency"`: `""` is this desktop's, and `"US$"` is another one — placed the way this desktop places a symbol |
+| `Decimals` | the control's scale: places shown **and held**. Default `2`, up to `9` |
+| `Format` | `Number` `Currency`. Default `"Number"` |
+| `Group` | thousands separators, this desktop's rule. Default `false` |
+| `Max` | the ceiling, a `Decimal`. Default `1000000000000000` |
+| `Min` | the floor, likewise. Default `-1000000000000000` |
+| `Prefix` | text outside the number — `"aprox. "` |
+| `Step` | what one press of an arrow moves, a `Decimal`. Default `1` |
+| `Suffix` | text outside it — `" kg"`, `" h"`, `" km/h"` |
+| `Text` (ro) | what the field says, formatted |
+| `Value` | the number, a `Decimal` |
+| `Wrap` | past `Max` comes back to `Min` |
+| **event** `Change()` | the value changed, including from an assignment in code |
+| **event** `Activate()` | Enter in the field |
+
+**What it holds is what it shows.** `Decimals` is the scale of the value and not
+only of the text: a 3-place amount assigned to a 2-place box is rounded to two,
+which is what every spin in this family does and what keeps a step from losing
+the part it does not show. A program that needs to keep more precision than a
+field can display keeps it outside the field.
+
+**The spelling is the desktop's, and the unit is not prose.** The separators and
+the grouping come from the locale, and so does the side a currency symbol goes
+on — which is why a finance app handling several currencies sets `Currency` to
+the symbol and says nothing about where it goes. `Prefix`/`Suffix` are format,
+like `Style` or `Font`: a unit that has to be translated is assigned from code
+(`this.Weight.Suffix = Locale.Text(" kg")`) and is never collected into a
+catalogue, or every `kg` and `€` in the program would be an entry a translator
+is asked about. A unit that changes with the number — one pear, three pears — is
+a suffix set from `Change` with `Locale.Plural`, which is the signal every value
+change raises and needs no API of its own.
 
 ## Slider
 

@@ -478,11 +478,22 @@ nothing says so at runtime. The IDE's extractor reports it.
 Locale.Number(1234567.891)        // 1.234.567,891   — as many decimals as it has
 Locale.Number(1234567.891, 2)     // 1.234.567,89
 Locale.Number(3)                  // 3               — never "3,00"
+Locale.Number(km, { Decimals: 1, Suffix: " km" })   // 12,5 km
+Locale.Parse("1.234,56")          // → 1234.56
+Locale.Parse("12,5 kg", { Suffix: " kg" })
 Locale.Date(new Date())           // 31/08/26
 Locale.Date(customer.Since)       // a Field.Date holds "YYYY-MM-DD"
 Locale.Date(when, "DateTime")     // lun 31 ago 2026 14:05:09
 Locale.Date(when, "ISO")          // 2026-08-31T14:05:09-03
 ```
+
+**The second argument may be an options object**, which is the same format a
+[`DecimalBox`](widgets.md#decimalbox) keeps: `{ Decimals, Group, Prefix, Suffix,
+Symbol, Before, Space, Currency }`. `Locale.Parse` reads with it, and answers a
+`Decimal` or **`null`** — a field being typed into is not an error. The same
+object on `Currency` is what a finance app with several currencies uses:
+`{ Symbol: "US$" }` is another currency's symbol, and the side it goes on and the
+separators are still this desktop's.
 
 **`Locale.Current` and these two are different settings, deliberately.**
 `Current` picks which `.po` the project's prose comes from; `Number` and `Date`

@@ -447,7 +447,7 @@ const TESTS = [
     "Expand", "Spacing", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
     "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "Record", "Nested", "Database", "Action", "Groups",
-    "Toggle", "Switch", "Progress", "Slider", "Date", "Calendar", "Drawing", "Metrics", "Library", "Plugin", "ListMulti", "MenuState",
+    "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "Metrics", "Library", "Plugin", "ListMulti", "MenuState",
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
@@ -7789,6 +7789,97 @@ function Main() {
 
     Spin1_Change() { this.spinChanges++; }
 
+    /* --- DecimalBox: a decimal, exactly ------------------------------------
+     *
+     * A `SpinBox` holds a double; this holds a `Decimal` and shows it with the
+     * desktop's spelling, a unit and a symbol.  Money is the case that asked for
+     * it and not the only one: `{ Suffix: " h", Decimals: 1 }` is a duration.
+     *
+     * The separators are the locale's, so what is asserted about the *text* has
+     * to hold in any locale -- the exact strings are the machine ones `Value`
+     * answers, which are the same everywhere.
+     */
+    testDecimalBox() {
+        const b = new DecimalBox();
+        this.Fixed1.Add(b);
+        b.Name = "Dec1";
+
+        eq("a fresh box holds zero at two places", b.Value.toString(), "0.00");
+        eq("with grouping off", b.Group, false);
+        eq("as a Number", b.Format, "Number");
+        eq("and no unit", b.Suffix, "");
+
+        b.Value = new Decimal("1234.567");
+        eq("a Decimal is rounded to the control's scale", b.Value.toString(), "1234.57");
+        check("and shown with this desktop's spelling", /^1234[.,]57$/.test(b.Text), b.Text);
+
+        b.Value = "1234.567";
+        eq("machine text is what a .form carries", b.Value.toString(), "1234.57");
+        b.Value = "1.234,56";
+        eq("and locale text is read too", b.Value.toString(), "1234.56");
+
+        throws("a word is refused", () => { b.Value = "hola"; });
+        eq("leaving the value as it was", b.Value.toString(), "1234.56");
+
+        b.Suffix = " kg";
+        eq("a unit is format and not value", b.Value.toString(), "1234.56");
+        check("and it is shown", /^1234[.,]56 kg$/.test(b.Text), b.Text);
+
+        /* Grouping follows the locale's rule; the C locale has none, so what is
+         * asserted is that the digits survive and the unit stays. */
+        b.Group = true;
+        eq("every digit survives the grouping",
+           b.Text.replace(/[^0-9]/g, ""), "123456");
+        check("and the unit is still there", b.Text.endsWith(" kg"), b.Text);
+        b.Group = false;
+
+        b.Suffix = "";
+        b.Currency = "US$";
+        b.Format = "Currency";
+        check("another currency is placed by this desktop", b.Text.includes("US$"), b.Text);
+        eq("with the value's digits", b.Text.replace(/[^0-9]/g, ""), "123456");
+        throws("Format takes two words", () => { b.Format = "Money"; });
+        eq("and a refused one leaves it", b.Format, "Currency");
+
+        /* The limits are Decimals too, and they clamp like a spin's. */
+        b.Min = new Decimal("-10");
+        b.Max = new Decimal("10");
+        b.Value = new Decimal("50");
+        eq("Max clamps", b.Value.toString(), "10.00");
+        throws("Min above Max is refused", () => { b.Min = new Decimal("20"); });
+        eq("with the limit it had", b.Min.toString(), "-10");
+        eq("and Step is a Decimal", b.Step.toString(), "1");
+
+        /* The `.form` round trip, which a Decimal-valued property needed:
+         * `savableValue` used to skip every object and wrote nothing. */
+        const node = b.Serialize();
+        eq("Value is saved as its machine text", `${node.properties.Value}`, "10.00");
+        eq("and the limits with it", `${node.properties.Max}`, "10");
+
+        let changed = 0;
+        b.On("Change", () => changed++);
+        b.Value = new Decimal("3");
+        eq("setting the value reports Change", changed, 1);
+        b.On("Change", null);
+
+        /* A unit that changes with the number -- a plural -- is a suffix set
+         * from `Change`, which is the signal every value change raises. The
+         * two forms go through `Locale.Plural`, so the catalogue's own
+         * Plural-Forms rule picks one and the extractor collects both. */
+        b.Currency = "";
+        b.Format = "Number";
+        b.Decimals = 0;
+        b.Suffix = " peras";
+        b.On("Change", () => { b.Suffix = Locale.Plural(" pera", " peras", b.Value); });
+        b.Value = new Decimal("1");
+        eq("the unit follows the number", b.Text, "1 pera");
+        b.Value = new Decimal("3");
+        eq("and pluralises with it", b.Text, "3 peras");
+        b.On("Change", null);
+
+        b.Delete();
+    }
+
     /* --- RowList --------------------------------------------------------- */
     /* --- Flow ----------------------------------------------------------------
      *
@@ -12753,7 +12844,11 @@ function Main() {
         const NODES = {
             Label: "label", Button: "button", ToggleButton: "button",
             LinkButton: "button", CheckButton: "checkbutton", TextBox: "entry",
-            SpinBox: "spinbutton", ComboBox: "dropdown", Switch: "switch",
+            SpinBox: "spinbutton",
+            /* A GtkSpinButton with the exact value in a note: same widget, so
+             * the same node, and a stylesheet written for one reaches both. */
+            DecimalBox: "spinbutton",
+            ComboBox: "dropdown", Switch: "switch",
             Slider: "scale", ProgressBar: "progressbar", LevelBar: "levelbar",
             Image: "image", Picture: "picture", Separator: "separator",
             /* A GtkPicture wearing a paintable: the node is what the widget
@@ -14756,6 +14851,33 @@ function Main() {
             check(`Locale.Number refuses ${what}`,
                   complaint.includes("Locale.Number"), complaint);
         }
+
+        /*
+         * --- the options object, and the way back ---------------------------
+         *
+         * The same format a `DecimalBox` keeps: `Locale.Number`/`Currency` write
+         * with it and `Locale.Parse` reads with it, so a label and a field can
+         * never spell an amount two ways.
+         */
+        const km = Locale.Number(new Decimal("1234.567"), { Decimals: 1, Suffix: " km" });
+        check("an option says the places",
+              km.endsWith(" km") && km.replace(/[^0-9]/g, "") === "12346", km);
+        eq("and the unit is outside the value",
+           Locale.Parse(km, { Suffix: " km" }).toString(), "1234.6");
+
+        const usd = Locale.Currency(new Decimal("1234.56"), { Symbol: "US$" });
+        check("a symbol override is used", usd.includes("US$"), usd);
+        eq("and parses back",
+           Locale.Parse(usd, { Symbol: "US$" }).toString(), "1234.56");
+
+        eq("a grouped number round-trips",
+           Locale.Parse(Locale.Number(1234.56, 2)).toString(), "1234.56");
+        eq("a plain machine one reads as itself",
+           Locale.Parse("1234.56").toString(), "1234.56");
+        eq("a comma is a decimal point too",
+           Locale.Parse("12,5").toString(), "12.5");
+        eq("what is not a number is null and not a throw", Locale.Parse("hola"), null);
+        throws("and the text is required", () => Locale.Parse(3));
 
         /* --- Date: what is locale-independent --- */
         const when = new Date(2026, 7, 31, 14, 5, 9);

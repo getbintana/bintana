@@ -138,8 +138,9 @@ A question that needs an answer is a form: [forms.md](forms.md#a-dialog-that-ask
 | `Current` | the catalogue in use, `""` for none. Assigning reloads, and affects only what is built afterwards |
 | `Available` | the catalogue names this project ships, sorted |
 | `Read(path)` | a catalogue as data, losing nothing |
-| `Number(value, [decimals])` | grouped, with the desktop's separators. As many decimals as it has unless told |
-| `Currency(value, [decimals])` | money, with the symbol where this desktop puts it |
+| `Number(value, [decimals \| options])` | grouped, with the desktop's separators. As many decimals as it has unless told |
+| `Currency(value, [decimals \| options])` | money, with the symbol where this desktop puts it |
+| `Parse(text, [options])` | → the `Decimal` the text says, or `null`. The same format read backwards |
 | `Date(when, [format])` | `"Date"` `"Time"` `"DateTime"` `"ISO"` `"Weekday"` `"Month"`. `when` is a `Date` **or** a `"YYYY-MM-DD"` string |
 | `Compare(a, b)` | `-1`/`0`/`1`, in the order this desktop puts names in |
 | `Matches(text, needle)` | whether a search for `needle` should find `text`, accents folded |
@@ -148,11 +149,24 @@ A question that needs an answer is a form: [forms.md](forms.md#a-dialog-that-ask
 ```js
 Locale.Number(1234567.891)        // 1.234.567,891
 Locale.Number(1234567.891, 2)     // 1.234.567,89
+Locale.Number(km, { Decimals: 1, Suffix: " km" })   // 12,5 km
+Locale.Currency(v, { Symbol: "US$" })               // US$ 1.234,56
+Locale.Parse("1.234,56")          // → 1234.56
+Locale.Parse("12,5 kg", { Suffix: " kg" })
 Locale.Date(new Date())           // 31/08/26
 Locale.Date(when, "DateTime")     // lun 31 ago 2026 14:05:09
 Locale.Compare("Ñanculeo", "Ortiz")
 Locale.Matches("Echeverría", "ver")   // true
 ```
+
+**The options object is the same one a `DecimalBox` keeps as its format** —
+`{ Decimals, Group, Prefix, Suffix, Symbol, Before, Space, Currency }` — so a
+label, a report and a field spell an amount the same way, and `Locale.Parse` is
+the same format read backwards. `Symbol` is another currency's symbol and the
+side it goes on stays this desktop's (`US$ 1.234,56` here, `$1,234.56` there).
+A `Decimal` goes through its own digits in both directions, and `Parse` answers
+`null` rather than throwing: text that is not a number yet is an ordinary state
+in a field somebody is typing into.
 
 **`Locale.Date` takes a calendar date as it stands**, so nothing a
 [`Day`](#day) or a `Field.Date` holds ever needs converting:

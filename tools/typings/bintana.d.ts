@@ -250,6 +250,20 @@ declare class SpinBox extends Widget {
     Value: number;
     Wrap: boolean;
 }
+declare class DecimalBox extends Widget {
+    Currency: string;
+    Decimals: number;
+    Format: string;
+    Group: boolean;
+    Max: any;
+    Min: any;
+    Prefix: string;
+    Step: any;
+    Suffix: string;
+    Value: any;
+    Wrap: boolean;
+    readonly Text: string;
+}
 declare class Picture extends Widget {
     File: string;
     Fit: string;
@@ -993,6 +1007,7 @@ declare const Locale: {
     DecimalPoint: any;
     Matches(...values: any[]): any;
     Number(...values: any[]): any;
+    Parse(...values: any[]): any;
     Plural(...values: any[]): any;
     Read(...values: any[]): any;
     Text(...values: any[]): any;

@@ -1221,7 +1221,7 @@ Three things that will waste your time:
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
-  364 assertions against 2455 for the whole project -- 9.4 s against 265 on this
+  364 assertions against 2459 for the whole project -- 9.4 s against 268 on this
   machine -- which is what makes iterating on an early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.
@@ -1744,6 +1744,30 @@ person who wrote it either.
   `gdk_rgba_parse` refused it from inside a `Draw`. The alpha goes through
   `g_ascii_formatd`, and `tests/widgets` matches the **whole** string now -- the
   prefix test it had accepted the comma.
+- **The order of the two parsers is the whole of a number setter, and getting it
+  backwards is silent.** `DecimalBox.Value` takes machine text (`"1234.567"`,
+  what a `.form` and `Decimal.toJSON()` carry) and this desktop's spelling
+  (`"1.234,56"`) -- and the locale parser **first** read Argentina's grouping
+  separator as a decimal point, so `"1234.567"` became `1234567`: a value off by
+  a thousand, from a file the serialiser had written correctly. Machine text
+  first, locale second, and only text that is not machine-readable falls
+  through.
+- **A `Decimal`-valued property was invisible to the serialiser, and
+  `savableValue` is where.** The serialiser walks the prototype chain for
+  accessors and then filters what it found -- strings, numbers, booleans and
+  arrays -- so every object was skipped as "not a plain value". A `Decimal` is an
+  object and **is** savable (`JSON.stringify` writes it through its own
+  `toJSON`), so `DecimalBox.Value` was not written and a field came back at zero
+  with nothing said. `v instanceof Decimal` is the one object that passes the
+  filter; a new property holding one needs no other change, and one holding a
+  *different* object will be skipped the same way.
+- **`GTK_INPUT_ERROR` leaves GTK using an uninitialized `new_value`.** The
+  documented way to refuse what was typed into a `GtkSpinButton` is to answer
+  `GTK_INPUT_ERROR` from the `input` handler, and it reads a `gdouble` the
+  handler never wrote -- measured, the field came out holding a denormal. A
+  refusal restores the text itself (`gtk_editable_set_text` on the entry) and
+  answers `true`, which is what `DecimalBox` does; the double is only a view and
+  the exact value lives in a note, so the handler always has the text it wants.
 - **A `.desktop` entry's `Exec` is quoted twice, and the outer layer is not the
   one you think.** `Exec` has a quoting of its own -- every argument in double
   quotes, with `"`, `` ` ``, `$` and `\` escaped inside them, and `%` doubled

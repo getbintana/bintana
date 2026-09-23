@@ -6,6 +6,7 @@
  */
 #include "bta.h"
 
+#include <locale.h>
 #include <math.h>
 #include <string.h>
 
@@ -3911,7 +3912,7 @@ static void on_spin_changed(GtkSpinButton *b, gpointer user_data)
 }
 
 #if GTK_CHECK_VERSION(4, 14, 0)
-static void on_spin_activate(GtkSpinButton *b, gpointer user_data)
+static void on_enter_activate(GtkSpinButton *b, gpointer user_data)
 {
     bta_emit((BtaWidget *)user_data, "Activate", 0, NULL);
 }
@@ -3923,8 +3924,8 @@ static void on_spin_activate(GtkSpinButton *b, gpointer user_data)
  * compiles differently and no header scan sees it. The fallback is the same
  * event said with a key controller: Enter in the field.
  */
-static gboolean on_spin_key(GtkEventControllerKey *c, guint key,
-                            guint code, GdkModifierType state, gpointer user_data)
+static gboolean on_enter_key(GtkEventControllerKey *c, guint key,
+                             guint code, GdkModifierType state, gpointer user_data)
 {
     if (key != GDK_KEY_Return && key != GDK_KEY_KP_Enter)
         return GDK_EVENT_PROPAGATE;
@@ -3933,6 +3934,22 @@ static gboolean on_spin_key(GtkEventControllerKey *c, guint key,
     return GDK_EVENT_PROPAGATE;
 }
 #endif
+
+/* Enter means `Activate` in any field built on a `GtkSpinButton`, whichever GTK
+ * this is -- one place, because the two controls share it. */
+static void wire_enter(GtkWidget *gtk, BtaWidget *w)
+{
+#if GTK_CHECK_VERSION(4, 14, 0)
+    g_signal_connect(gtk, "activate", G_CALLBACK(on_enter_activate), w);
+#else
+    {
+        GtkEventController *keys = gtk_event_controller_key_new();
+
+        g_signal_connect(keys, "key-pressed", G_CALLBACK(on_enter_key), w);
+        gtk_widget_add_controller(gtk, keys);
+    }
+#endif
+}
 
 /*
  * The range is wide by default on purpose: properties are applied in whatever
@@ -3950,16 +3967,7 @@ static void build_spinbox(BtaWidget *w)
     gtk_editable_set_max_width_chars(GTK_EDITABLE(w->gtk), 6);
 
     g_signal_connect(w->gtk, "value-changed", G_CALLBACK(on_spin_changed),  w);
-#if GTK_CHECK_VERSION(4, 14, 0)
-    g_signal_connect(w->gtk, "activate",      G_CALLBACK(on_spin_activate), w);
-#else
-    {
-        GtkEventController *keys = gtk_event_controller_key_new();
-
-        g_signal_connect(keys, "key-pressed", G_CALLBACK(on_spin_key), w);
-        gtk_widget_add_controller(w->gtk, keys);
-    }
-#endif
+    wire_enter(w->gtk, w);
 }
 
 enum { SPIN_VALUE, SPIN_MIN, SPIN_MAX, SPIN_STEP, SPIN_DECIMALS };
@@ -4087,6 +4095,678 @@ static const JSCFunctionListEntry spinbox_props[] = {
     JS_CGETSET_MAGIC_DEF("Decimals", spin_get, spin_set, SPIN_DECIMALS),
     JS_CGETSET_MAGIC_DEF("Wrap",     spin_get_flag, spin_set_flag, SPIN_WRAP),
     JS_CGETSET_MAGIC_DEF("Numeric",  spin_get_flag, spin_set_flag, SPIN_NUMERIC),
+};
+
+/* ------------------------------------------------------------- DecimalBox */
+
+/*
+ * A number with a fixed number of places, and **the value is exact**.
+ *
+ * `GtkSpinButton` is a composite of a `GtkText` and two arrows and its value is
+ * a double; this keeps the value the application reads and writes as a
+ * `Decimal` in a note, and uses the spin's `output`/`input` signals -- the two
+ * conversions GTK itself offers -- so the double is only ever a *view*: the
+ * arrows step it, and what a person types is parsed exactly.
+ *
+ * It is not a money control.  Money is the case that asked for it, and `Format`
+ * knows the desktop's currency, but a duration, a weight or a percentage are the
+ * same control with a `Suffix`: `{ Suffix: " h", Decimals: 1 }` is `1,5 h`.
+ *
+ * The three things measured before this was written, on GTK 4.22:
+ *
+ *  - `output` runs **before** `value-changed`, and the text at that moment is
+ *    the old one -- so the handler renders from the note and returns TRUE, and
+ *    never lets GTK's default formatting run.
+ *  - a step changes the double first, so `output` is where the new double has
+ *    to be read back into the note (rounded to `Decimals`); a parse sets a
+ *    guard instead, because there the note is already the truth.
+ *  - `input` returning `GTK_INPUT_ERROR` leaves GTK using an **uninitialized**
+ *    `new_value` -- the field came out holding a denormal.  A refusal restores
+ *    the text itself and answers TRUE.
+ */
+#define DECIMAL_STATE_KEY    "bta-decimal-state"
+#define DECIMAL_UPDATING_KEY "bta-decimal-updating"
+#define DBX_MAX_DECIMALS     9
+
+enum { DBX_NUMBER, DBX_CURRENCY };
+
+typedef struct {
+    char *min;      /* machine text, exact, so a huge limit survives a read */
+    char *max;
+    char *step;
+    char *prefix;
+    char *suffix;
+    char *symbol;   /* `Currency`: the symbol, "" for the desktop's */
+    bool  group;
+    int   format;
+} DecimalBoxState;
+
+static void decimal_state_free(DecimalBoxState *st)
+{
+    g_free(st->min);
+    g_free(st->max);
+    g_free(st->step);
+    g_free(st->prefix);
+    g_free(st->suffix);
+    g_free(st->symbol);
+    g_free(st);
+}
+
+static DecimalBoxState *decimal_state(BtaWidget *w)
+{
+    DecimalBoxState *st = g_object_get_data(G_OBJECT(w->gtk), DECIMAL_STATE_KEY);
+
+    if (!st) {
+        st = g_new0(DecimalBoxState, 1);
+        g_object_set_data_full(G_OBJECT(w->gtk), DECIMAL_STATE_KEY, st,
+                               (GDestroyNotify)decimal_state_free);
+    }
+    return st;
+}
+
+static JSValue *decimal_note(BtaWidget *w)
+{
+    return bta_widget_note(w, BTA_NOTE_DECIMAL);
+}
+
+static JSValue decimal_value(BtaWidget *w)
+{
+    return JS_DupValue(w->ctx, *decimal_note(w));
+}
+
+/* Units at a scale, as a double -- for the spin's own state, which is only a
+ * view.  A value too big for a double is clamped by the spin's range anyway. */
+static double decimal_as_double(int64_t units, int scale)
+{
+    return (double)units / pow(10.0, scale);
+}
+
+static int decimal_cmp(int64_t u1, int s1, int64_t u2, int s2)
+{
+    __int128 a = u1, b = u2;
+
+    while (s1 < s2) { a *= 10; s1++; }
+    while (s2 < s1) { b *= 10; s2++; }
+
+    return a < b ? -1 : (a > b ? 1 : 0);
+}
+
+/*
+ * The value at `places`, rounded away from zero -- the same rule `Decimal`'s
+ * own `Round` defaults to.
+ *
+ * **`Decimals` is the control's scale: what it holds is what it shows.** The
+ * alternative -- keep more precision than is displayed -- would be lost on the
+ * first arrow anyway, because a step goes through the spin's double and comes
+ * back at this scale; and a program that needs to keep a longer value has no
+ * business keeping it in a field that cannot show it.
+ */
+static void decimal_at_scale(int64_t *units, int *scale, int places)
+{
+    if (*scale < places) {
+        /* Widened too, so what `Value` answers says the places it shows.  A
+         * value too big to widen keeps its own scale: the display pads with
+         * zeros anyway, and an overflow here would be a wrong number. */
+        __int128 w = *units;
+
+        for (int i = *scale; i < places; i++)
+            w *= 10;
+        if (w <= INT64_MAX && w >= INT64_MIN) {
+            *units = (int64_t)w;
+            *scale = places;
+        }
+        return;
+    }
+    if (*scale == places)
+        return;
+
+    int64_t div = 1;
+
+    for (int i = *scale - places; i > 0; i--)
+        div *= 10;
+
+    int64_t u    = *units;
+    int64_t q    = u / div;
+    int64_t r    = u % div;
+    int64_t absr = r < 0 ? -r : r;
+
+    if (absr >= div / 2)
+        q += (u < 0 ? -1 : 1);
+
+    *units = q;
+    *scale = places;
+}
+
+/* The value inside `Min`/`Max`, in place, which is what a spin means by them. */
+static void decimal_inside(BtaWidget *w, int64_t *units, int *scale)
+{
+    DecimalBoxState *st = decimal_state(w);
+    int64_t          lu;
+    int              ls;
+
+    if (st->min && bta_decimal_from_text(st->min, &lu, &ls) &&
+        decimal_cmp(*units, *scale, lu, ls) < 0) {
+        *units = lu;
+        *scale = ls;
+    }
+    if (st->max && bta_decimal_from_text(st->max, &lu, &ls) &&
+        decimal_cmp(*units, *scale, lu, ls) > 0) {
+        *units = lu;
+        *scale = ls;
+    }
+}
+
+/* A double as a Decimal at `places`, through its machine text and never through
+ * the shortest-double reading: this is a *rounded* view and the rounding is the
+ * control's `Decimals`. */
+static JSValue decimal_from_double(JSContext *ctx, double d, int places)
+{
+    char buf[512], format[8];
+
+    g_snprintf(format, sizeof format, "%%.%df", places);
+    g_ascii_formatd(buf, sizeof buf, format, d);
+
+    int64_t units;
+    int     scale;
+
+    if (!bta_decimal_from_text(buf, &units, &scale))
+        return JS_NULL;
+    return bta_decimal_new(ctx, units, scale);
+}
+
+static void decimal_format(BtaWidget *w, BtaNumberFmt *f)
+{
+    DecimalBoxState *st = decimal_state(w);
+
+    bta_number_fmt_default(f);
+    f->places   = gtk_spin_button_get_digits(GTK_SPIN_BUTTON(w->gtk));
+    f->group    = st->group;
+    f->prefix   = st->prefix;
+    f->suffix   = st->suffix;
+    f->currency = st->format == DBX_CURRENCY;
+    f->symbol   = st->symbol;
+
+    /* Another currency is placed the way this desktop places one: `US$` goes
+     * before in Argentina and after in Germany, and the app says neither. */
+    if (st->symbol && *st->symbol) {
+        struct lconv *lc = localeconv();
+
+        f->symbol_before = lc->p_cs_precedes == 1;
+        f->symbol_space  = lc->p_sep_by_space == 1;
+    }
+}
+
+static void decimal_render(BtaWidget *w)
+{
+    BtaNumberFmt f;
+    JSValue      v = decimal_value(w);
+
+    decimal_format(w, &f);
+
+    char *shown = bta_locale_format_number(w->ctx, v, &f);
+
+    JS_FreeValue(w->ctx, v);
+    if (shown) {
+        gtk_editable_set_text(GTK_EDITABLE(w->gtk), shown);
+        g_free(shown);
+    }
+}
+
+/* The double is the new truth: a step, a wrap or a clamp from GTK itself. */
+static void decimal_read_back(BtaWidget *w)
+{
+    GtkSpinButton *spin = GTK_SPIN_BUTTON(w->gtk);
+    JSValue        nv   = decimal_from_double(w->ctx,
+                                              gtk_spin_button_get_value(spin),
+                                              gtk_spin_button_get_digits(spin));
+
+    if (JS_IsException(nv)) {
+        JS_FreeValue(w->ctx, JS_GetException(w->ctx));
+    } else if (!JS_IsNull(nv)) {
+        JSValue *slot = decimal_note(w);
+
+        JS_FreeValue(w->ctx, *slot);
+        *slot = nv;
+        return;
+    }
+    JS_FreeValue(w->ctx, nv);
+}
+
+static gboolean on_decimal_output(GtkSpinButton *spin, gpointer user_data)
+{
+    BtaWidget *w = user_data;
+
+    if (g_object_get_data(G_OBJECT(spin), DECIMAL_UPDATING_KEY)) {
+        g_object_set_data(G_OBJECT(spin), DECIMAL_UPDATING_KEY, NULL);
+    } else {
+        decimal_read_back(w);
+    }
+    decimal_render(w);
+    return TRUE;      /* handled: GTK's own formatting never runs */
+}
+
+static gint on_decimal_input(GtkSpinButton *spin, gdouble *new_value,
+                             gpointer user_data)
+{
+    BtaWidget *w = user_data;
+    BtaNumberFmt f;
+
+    decimal_format(w, &f);
+
+    const char *text = gtk_editable_get_text(GTK_EDITABLE(spin));
+    int64_t     units;
+    int         scale;
+
+    if (bta_locale_parse_number(text, &f, &units, &scale)) {
+        decimal_inside(w, &units, &scale);
+        decimal_at_scale(&units, &scale, f.places);
+
+        JSValue v = bta_decimal_new(w->ctx, units, scale);
+
+        if (!JS_IsException(v)) {
+            JSValue *slot = decimal_note(w);
+
+            JS_FreeValue(w->ctx, *slot);
+            *slot = v;
+
+            *new_value = decimal_as_double(units, scale);
+            g_object_set_data(G_OBJECT(spin), DECIMAL_UPDATING_KEY,
+                              GINT_TO_POINTER(1));
+            return TRUE;
+        }
+        JS_FreeValue(w->ctx, JS_GetException(w->ctx));
+    }
+
+    /* Refused: the value stands and the text goes back to what it said.  **TRUE
+     * and never GTK_INPUT_ERROR** -- measured, that answer leaves GTK using an
+     * uninitialized `new_value`. */
+    *new_value = gtk_spin_button_get_value(spin);
+    decimal_render(w);
+    return TRUE;
+}
+
+static void on_decimal_changed(GtkSpinButton *spin, gpointer user_data)
+{
+    g_object_set_data(G_OBJECT(spin), DECIMAL_UPDATING_KEY, NULL);
+    bta_emit((BtaWidget *)user_data, "Change", 0, NULL);
+}
+
+/*
+ * A value from JavaScript: a Decimal, a number or text.
+ *
+ * **Text is machine text first and locale text second**, and the order is
+ * load-bearing: a `.form` and `Decimal.toJSON()` both spell a decimal the C way
+ * (`"1234.567"`), and the locale parser reads that dot as Argentina's grouping
+ * separator -- so `"1234.567"` came back as `1234567`.  Only what the machine
+ * form cannot read falls through to the locale, which is what lets a person
+ * write `"1.234,56"` from code.
+ */
+static JSValue decimal_parts_js(JSContext *ctx, JSValueConst val,
+                                int64_t *units, int *scale)
+{
+    if (JS_IsString(val) || JS_IsNumber(val)) {
+        const char *s = JS_ToCString(ctx, val);
+        if (!s)
+            return JS_EXCEPTION;
+
+        bool ok = bta_decimal_from_text(s, units, scale);
+
+        if (!ok) {
+            BtaNumberFmt f;
+
+            bta_number_fmt_default(&f);
+            f.group = true;
+            ok      = bta_locale_parse_number(s, &f, units, scale);
+        }
+        if (!ok)
+            JS_ThrowTypeError(ctx, "Value: '%s' is not a number", s);
+        JS_FreeCString(ctx, s);
+        return ok ? JS_UNDEFINED : JS_EXCEPTION;
+    }
+
+    int held = bta_decimal_parts(ctx, val, -1, units, scale);
+
+    if (held < 0)
+        return JS_EXCEPTION;
+    if (held == 0)
+        return JS_ThrowTypeError(ctx, "Value expects a Decimal, a number or "
+                                      "numeric text");
+    return JS_UNDEFINED;
+}
+
+static void decimal_put(BtaWidget *w, int64_t units, int scale)
+{
+    decimal_inside(w, &units, &scale);
+    decimal_at_scale(&units, &scale, gtk_spin_button_get_digits(
+                                         GTK_SPIN_BUTTON(w->gtk)));
+
+    JSValue v = bta_decimal_new(w->ctx, units, scale);
+
+    if (JS_IsException(v)) {
+        JS_FreeValue(w->ctx, JS_GetException(w->ctx));
+        return;
+    }
+
+    JSValue *slot = decimal_note(w);
+
+    JS_FreeValue(w->ctx, *slot);
+    *slot = v;
+
+    g_object_set_data(G_OBJECT(w->gtk), DECIMAL_UPDATING_KEY, GINT_TO_POINTER(1));
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(w->gtk),
+                              decimal_as_double(units, scale));
+    /* Cleared here too: a set_value that lands on the value it already had
+     * emits nothing, and a guard left standing would swallow the next step. */
+    g_object_set_data(G_OBJECT(w->gtk), DECIMAL_UPDATING_KEY, NULL);
+
+    decimal_render(w);
+}
+
+static JSValue decimalbox_get_value(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    return decimal_value(w);
+}
+
+static JSValue decimalbox_set_value(JSContext *ctx, JSValueConst this_val,
+                                    JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    int64_t units;
+    int     scale;
+
+    if (JS_IsException(decimal_parts_js(ctx, val, &units, &scale)))
+        return JS_EXCEPTION;
+
+    decimal_put(w, units, scale);
+    return JS_UNDEFINED;
+}
+
+enum { DBX_MIN, DBX_MAX, DBX_STEP };
+
+/* The three limits are Decimals kept as machine text, so reading one back is
+ * exact however big it is -- the spin's own range is a double and would round
+ * it. */
+static JSValue decimalbox_get_limit(JSContext *ctx, JSValueConst this_val,
+                                    int magic)
+{
+    BtaWidget       *w  = bta_this(ctx, this_val);
+    DecimalBoxState *st = w ? decimal_state(w) : NULL;
+
+    if (!st)
+        return JS_EXCEPTION;
+
+    const char *held = magic == DBX_MIN ? st->min
+                     : magic == DBX_MAX ? st->max : st->step;
+    int64_t     units;
+    int         scale;
+
+    if (!held || !bta_decimal_from_text(held, &units, &scale))
+        return JS_ThrowInternalError(ctx, "this box lost its own limits");
+
+    return bta_decimal_new(ctx, units, scale);
+}
+
+static JSValue decimalbox_set_limit(JSContext *ctx, JSValueConst this_val,
+                                    JSValueConst val, int magic)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    int64_t units;
+    int     scale;
+
+    if (JS_IsException(decimal_parts_js(ctx, val, &units, &scale)))
+        return JS_EXCEPTION;
+
+    DecimalBoxState *st = decimal_state(w);
+
+    /*
+     * Validated **before** anything is written: a refused assignment leaves the
+     * box as it was, which is the rule every setter here follows.
+     */
+    if (magic != DBX_STEP) {
+        int64_t lo_u = units, hi_u = units;
+        int     lo_s = scale, hi_s = scale;
+
+        if (magic == DBX_MIN) {
+            if (st->max && bta_decimal_from_text(st->max, &hi_u, &hi_s) &&
+                decimal_cmp(lo_u, lo_s, hi_u, hi_s) > 0)
+                return JS_ThrowRangeError(ctx, "Min is above Max");
+        } else {
+            if (st->min && bta_decimal_from_text(st->min, &lo_u, &lo_s) &&
+                decimal_cmp(lo_u, lo_s, hi_u, hi_s) > 0)
+                return JS_ThrowRangeError(ctx, "Min is above Max");
+        }
+    }
+
+    char  *text = bta_decimal_to_text(units, scale);
+    char **slot = magic == DBX_MIN ? &st->min
+                : magic == DBX_MAX ? &st->max : &st->step;
+
+    g_free(*slot);
+    *slot = text;
+
+    if (magic == DBX_STEP) {
+        gtk_spin_button_set_increments(GTK_SPIN_BUTTON(w->gtk),
+                                       decimal_as_double(units, scale),
+                                       decimal_as_double(units, scale) * 10);
+    } else {
+        int64_t mu;
+        int     ms;
+        double  lo = -1000000000000000.0, hi = 1000000000000000.0;
+
+        if (st->min && bta_decimal_from_text(st->min, &mu, &ms))
+            lo = decimal_as_double(mu, ms);
+        if (st->max && bta_decimal_from_text(st->max, &mu, &ms))
+            hi = decimal_as_double(mu, ms);
+
+        gtk_spin_button_set_range(GTK_SPIN_BUTTON(w->gtk), lo, hi);
+    }
+
+    /* The value may have just been put outside them. */
+    JSValue v = decimal_value(w);
+
+    if (bta_decimal_parts(ctx, v, -1, &units, &scale) > 0)
+        decimal_put(w, units, scale);
+    JS_FreeValue(ctx, v);
+
+    return JS_UNDEFINED;
+}
+
+static JSValue decimalbox_get_decimals(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    return JS_NewInt32(ctx, gtk_spin_button_get_digits(GTK_SPIN_BUTTON(w->gtk)));
+}
+
+static JSValue decimalbox_set_decimals(JSContext *ctx, JSValueConst this_val,
+                                       JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    int32_t places;
+    if (!bta_to_int(ctx, val, "Decimals", &places))
+        return JS_EXCEPTION;
+    if (places < 0 || places > DBX_MAX_DECIMALS)
+        return JS_ThrowRangeError(ctx,
+            "Decimals: %d is not between 0 and %d", places, DBX_MAX_DECIMALS);
+
+    gtk_spin_button_set_digits(GTK_SPIN_BUTTON(w->gtk), places);
+    decimal_render(w);
+    return JS_UNDEFINED;
+}
+
+enum { DBX_GROUP, DBX_WRAP, DBX_PREFIX, DBX_SUFFIX, DBX_CURRENCY_SYMBOL };
+
+static JSValue decimalbox_get_setting(JSContext *ctx, JSValueConst this_val,
+                                      int magic)
+{
+    BtaWidget       *w  = bta_this(ctx, this_val);
+    DecimalBoxState *st = w ? decimal_state(w) : NULL;
+
+    if (!st)
+        return JS_EXCEPTION;
+
+    switch (magic) {
+    case DBX_GROUP:  return JS_NewBool(ctx, st->group);
+    case DBX_WRAP:   return JS_NewBool(ctx, gtk_spin_button_get_wrap(
+                                                GTK_SPIN_BUTTON(w->gtk)));
+    case DBX_PREFIX: return JS_NewString(ctx, st->prefix ? st->prefix : "");
+    case DBX_SUFFIX: return JS_NewString(ctx, st->suffix ? st->suffix : "");
+    default:         return JS_NewString(ctx, st->symbol ? st->symbol : "");
+    }
+}
+
+static JSValue decimalbox_set_setting(JSContext *ctx, JSValueConst this_val,
+                                      JSValueConst val, int magic)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    DecimalBoxState *st = decimal_state(w);
+
+    if (magic == DBX_GROUP) {
+        int on = JS_ToBool(ctx, val);
+        if (on < 0)
+            return JS_EXCEPTION;
+        st->group = on;
+    } else if (magic == DBX_WRAP) {
+        int on = JS_ToBool(ctx, val);
+        if (on < 0)
+            return JS_EXCEPTION;
+        gtk_spin_button_set_wrap(GTK_SPIN_BUTTON(w->gtk), on);
+        return JS_UNDEFINED;
+    } else {
+        if (!JS_IsString(val))
+            return JS_ThrowTypeError(ctx, "this setting is text");
+        const char *s = JS_ToCString(ctx, val);
+        if (!s)
+            return JS_EXCEPTION;
+
+        char **slot = magic == DBX_PREFIX ? &st->prefix
+                    : magic == DBX_SUFFIX ? &st->suffix : &st->symbol;
+
+        g_free(*slot);
+        *slot = g_strdup(s);
+        JS_FreeCString(ctx, s);
+    }
+
+    decimal_render(w);
+    return JS_UNDEFINED;
+}
+
+static JSValue decimalbox_get_format(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    return JS_NewString(ctx, decimal_state(w)->format == DBX_CURRENCY
+                                ? "Currency" : "Number");
+}
+
+static JSValue decimalbox_set_format(JSContext *ctx, JSValueConst this_val,
+                                     JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    const char *s = JS_ToCString(ctx, val);
+    if (!s)
+        return JS_EXCEPTION;
+
+    if (!g_ascii_strcasecmp(s, "Number"))
+        decimal_state(w)->format = DBX_NUMBER;
+    else if (!g_ascii_strcasecmp(s, "Currency"))
+        decimal_state(w)->format = DBX_CURRENCY;
+    else {
+        JSValue e = JS_ThrowRangeError(ctx,
+            "Format: 'Number' or 'Currency', not '%s'", s);
+        JS_FreeCString(ctx, s);
+        return e;
+    }
+
+    JS_FreeCString(ctx, s);
+    decimal_render(w);
+    return JS_UNDEFINED;
+}
+
+static const char *decimalbox_options(const char *prop)
+{
+    return !strcmp(prop, "Format") ? "Number,Currency" : NULL;
+}
+
+static void build_decimalbox(BtaWidget *w)
+{
+    /* The range is the double's own safe integer band, which is where an exact
+     * step still lands: Min/Max say more and are kept as Decimals. */
+    w->gtk = gtk_spin_button_new_with_range(-1000000000000000.0,
+                                            1000000000000000.0, 1);
+    gtk_spin_button_set_digits(GTK_SPIN_BUTTON(w->gtk), 2);
+    /* Off: the parsing is ours, and GTK's own numeric filter would refuse the
+     * grouping and the affixes a person is allowed to type. */
+    gtk_spin_button_set_numeric(GTK_SPIN_BUTTON(w->gtk), FALSE);
+    gtk_editable_set_width_chars(GTK_EDITABLE(w->gtk), 12);
+    gtk_editable_set_max_width_chars(GTK_EDITABLE(w->gtk), 12);
+
+    DecimalBoxState *st = decimal_state(w);
+
+    st->min    = g_strdup("-1000000000000000");
+    st->max    = g_strdup("1000000000000000");
+    st->step   = g_strdup("1");
+    st->prefix = g_strdup("");
+    st->suffix = g_strdup("");
+    st->symbol = g_strdup("");
+    st->group  = false;
+    st->format = DBX_NUMBER;
+
+    JSValue *slot = decimal_note(w);
+
+    JS_FreeValue(w->ctx, *slot);
+    *slot = bta_decimal_new(w->ctx, 0, 2);
+
+    g_signal_connect(w->gtk, "output",        G_CALLBACK(on_decimal_output),  w);
+    g_signal_connect(w->gtk, "input",         G_CALLBACK(on_decimal_input),   w);
+    g_signal_connect(w->gtk, "value-changed", G_CALLBACK(on_decimal_changed), w);
+    wire_enter(w->gtk, w);
+}
+
+/* What the field says, formatted -- a reading, like `ListBox.Text`: what is in
+ * it is the `Value` and not a second way to set one. */
+static JSValue decimalbox_get_text(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    return JS_NewString(ctx, gtk_editable_get_text(GTK_EDITABLE(w->gtk)));
+}
+
+static const JSCFunctionListEntry decimalbox_props[] = {
+    JS_CGETSET_DEF("Value", decimalbox_get_value, decimalbox_set_value),
+    JS_CGETSET_DEF("Text",  decimalbox_get_text,  NULL),
+    JS_CGETSET_MAGIC_DEF("Min",   decimalbox_get_limit, decimalbox_set_limit, DBX_MIN),
+    JS_CGETSET_MAGIC_DEF("Max",   decimalbox_get_limit, decimalbox_set_limit, DBX_MAX),
+    JS_CGETSET_MAGIC_DEF("Step",  decimalbox_get_limit, decimalbox_set_limit, DBX_STEP),
+    JS_CGETSET_DEF("Decimals", decimalbox_get_decimals, decimalbox_set_decimals),
+    JS_CGETSET_MAGIC_DEF("Group",   decimalbox_get_setting, decimalbox_set_setting, DBX_GROUP),
+    JS_CGETSET_MAGIC_DEF("Wrap",    decimalbox_get_setting, decimalbox_set_setting, DBX_WRAP),
+    JS_CGETSET_MAGIC_DEF("Prefix",  decimalbox_get_setting, decimalbox_set_setting, DBX_PREFIX),
+    JS_CGETSET_MAGIC_DEF("Suffix",  decimalbox_get_setting, decimalbox_set_setting, DBX_SUFFIX),
+    JS_CGETSET_MAGIC_DEF("Currency", decimalbox_get_setting, decimalbox_set_setting,
+                         DBX_CURRENCY_SYMBOL),
+    JS_CGETSET_DEF("Format", decimalbox_get_format, decimalbox_set_format),
 };
 
 /* ---------------------------------------------------------- ToggleButton */
@@ -6400,6 +7080,11 @@ void bta_core_register(void)
         /* Change() */
         /* Activate() */
         BTA_CLASS     ("SpinBox",   "Control",   build_spinbox,  spinbox_props,   false, "Change,Activate"),
+        /* Change() */
+        /* Activate() */
+        BTA_CLASS_ENUM_TEXT("DecimalBox", "Control", build_decimalbox,
+                            decimalbox_props, false, decimalbox_options, NULL,
+                            "Change,Activate"),
         /* Three small ones, each a word the vocabulary was missing: work with no
          * end in sight, an address, and a reading. */
         BTA_CLASS_ENUM("Picture",    "Control", build_picture,    picture_props,

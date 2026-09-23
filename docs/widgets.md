@@ -693,7 +693,7 @@ did nothing:
 | `Button`, `ToggleButton`, `LinkButton` | `button` | `> label` |
 | `CheckButton` | `checkbutton` | |
 | `TextBox` | `entry` | |
-| `SpinBox` | `spinbutton` | `> text` |
+| `SpinBox`, `DecimalBox` | `spinbutton` | `> text` |
 | `ComboBox` | `dropdown` | `> button > box > stack` |
 | `Switch` / `Slider` / `ProgressBar` / `Image` / `Separator` | `switch` / `scale` / `progressbar` / `image` / `separator` | |
 | `ColorButton` | `colorbutton` | `> button > colorswatch` |
@@ -1491,6 +1491,41 @@ be worse than not having one.
 `Change` fires per click on the arrow and per keystroke — which is why the
 designer's grid coalesces consecutive edits of one property into a single undo
 entry.
+
+### DecimalBox
+
+A `GtkSpinButton` whose value is **a `Decimal` and not a double**, which is the
+difference that matters: `19.99 * 3` is `59.97` and not `59.97000000000001`, and
+a field that shows `1.234,56` holds exactly that. It is not a money control — a
+duration, a weight or a rate is the same control with a `Suffix` — but money is
+the case that asked for it.
+
+**The double is only a view.** `GtkSpinButton` is a composite of a `GtkText` and
+two arrows and its own value is a double, so the exact value lives in a note and
+the widget's two conversions are the whole of the bridge: `output` renders the
+note (and reads the double back when an arrow moved it, rounded to `Decimals`),
+`input` parses what was typed. Both were measured before this was written:
+`output` runs *before* `value-changed` and the text at that moment is the old
+one, and `input` answering `GTK_INPUT_ERROR` leaves GTK using an **uninitialized**
+`new_value` — the field came out holding a denormal. A refusal restores the text
+itself and answers `true` instead.
+
+`Decimals` is the field's scale and not only its display: a 3-place amount
+assigned to a 2-place box is held at two, which is what keeps an arrow from
+losing the part the field does not show. The text is this desktop's spelling —
+separators, grouping, and the side a symbol goes on — while the *symbol* and the
+places are the currency's: `Currency = "US$"` is placed by the locale, which is
+what a finance app with several currencies needs. `Prefix`/`Suffix` are format
+and **not prose**, like `Style` or `Font`: a unit that has to be translated is
+assigned from code with `Locale.Text`, or every `kg` and `€` in the program would
+be an entry a translator is asked about. A unit that changes with the number —
+one pear, three pears — is a suffix set from `Change` with `Locale.Plural`, which
+is the signal every value change raises and needs no API of its own.
+
+The `.form` carries `Value` as the decimal's machine text (`"1234.567"`), and the
+setter reads machine text first and the locale's spelling second — the other
+order read Argentina's grouping separator as a decimal point and turned
+`"1234.567"` into `1234567`.
 
 ### ColorButton
 
