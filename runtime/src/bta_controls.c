@@ -3910,10 +3910,29 @@ static void on_spin_changed(GtkSpinButton *b, gpointer user_data)
     bta_emit((BtaWidget *)user_data, "Change", 0, NULL);
 }
 
+#if GTK_CHECK_VERSION(4, 14, 0)
 static void on_spin_activate(GtkSpinButton *b, gpointer user_data)
 {
     bta_emit((BtaWidget *)user_data, "Activate", 0, NULL);
 }
+#else
+/*
+ * `GtkSpinButton::activate` is **4.14**, and this tree's floor is 4.10: on the
+ * older GTK the connect above would be a critical at startup and an `Activate`
+ * that never fires -- the floor trap in its signal shape, where nothing
+ * compiles differently and no header scan sees it. The fallback is the same
+ * event said with a key controller: Enter in the field.
+ */
+static gboolean on_spin_key(GtkEventControllerKey *c, guint key,
+                            guint code, GdkModifierType state, gpointer user_data)
+{
+    if (key != GDK_KEY_Return && key != GDK_KEY_KP_Enter)
+        return GDK_EVENT_PROPAGATE;
+
+    bta_emit((BtaWidget *)user_data, "Activate", 0, NULL);
+    return GDK_EVENT_PROPAGATE;
+}
+#endif
 
 /*
  * The range is wide by default on purpose: properties are applied in whatever
@@ -3931,7 +3950,16 @@ static void build_spinbox(BtaWidget *w)
     gtk_editable_set_max_width_chars(GTK_EDITABLE(w->gtk), 6);
 
     g_signal_connect(w->gtk, "value-changed", G_CALLBACK(on_spin_changed),  w);
+#if GTK_CHECK_VERSION(4, 14, 0)
     g_signal_connect(w->gtk, "activate",      G_CALLBACK(on_spin_activate), w);
+#else
+    {
+        GtkEventController *keys = gtk_event_controller_key_new();
+
+        g_signal_connect(keys, "key-pressed", G_CALLBACK(on_spin_key), w);
+        gtk_widget_add_controller(w->gtk, keys);
+    }
+#endif
 }
 
 enum { SPIN_VALUE, SPIN_MIN, SPIN_MAX, SPIN_STEP, SPIN_DECIMALS };

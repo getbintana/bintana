@@ -3324,6 +3324,13 @@ person who wrote it either.
   falling back to `select_day` and `load_from_data`. CI runs GTK 4.14, so no run
   here could ever have said so; the check is `GDK_AVAILABLE_IN_*` in the header,
   which is the same rule the `GDK_ACTION_NONE` note above states.
+  **And a signal is not a call, so that scan did not see it**:
+  `GtkSpinButton::activate` is **4.14**, and on 4.10–4.13 the `g_signal_connect`
+  was a critical at startup and `SpinBox`'s `Activate` an event that never
+  fired -- nothing compiles differently. It is guarded now, with a key
+  controller for the older GTK. A signal's `version` is in the GIR
+  (`/usr/share/gir-1.0/Gtk-4.0.gir`) or the docs, and a property's is too;
+  check both, not only the functions.
 - **A leading comment can make a valid SVG unreadable.** gdk-pixbuf decides a
   file is SVG by looking for `<svg` in its first bytes, so a header comment long
   enough to push the element past that window loads as *"Unrecognized image file
