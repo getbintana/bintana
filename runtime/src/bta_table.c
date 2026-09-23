@@ -2415,13 +2415,14 @@ static JSValue table_activate(JSContext *ctx, JSValueConst this_val,
         }
     }
 
-    /* Nothing there is nothing to choose, and not an error. */
+    /* Nothing there is nothing to choose, and not an error: it answers
+     * `false`. */
     if (index < 0 || (guint)index >= n)
-        return JS_UNDEFINED;
+        return JS_NewBool(ctx, false);
 
     gtk_selection_model_select_item(sel, (guint)index, TRUE);
     g_signal_emit_by_name(w->inner, "activate", (guint)index);
-    return JS_UNDEFINED;
+    return JS_NewBool(ctx, true);
 }
 
 /*

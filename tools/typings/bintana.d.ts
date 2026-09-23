@@ -194,7 +194,9 @@ declare class TextBox extends Widget {
     Purpose: string;
     ReadOnly: boolean;
     Text: string;
-    readonly SelectedText: string;
+    readonly Offset: number;
+    readonly Selection: string;
+    Insert(text: any): any;
     Select(start: any, length: any): any;
     SelectAll(): any;
 }
@@ -210,27 +212,34 @@ declare class ListBox extends Widget {
     ActivateOnSingleClick: boolean;
     Index: number;
     Items: any[];
+    Key: string;
     MultiSelect: boolean;
     readonly Count: number;
     readonly Selection: any[];
     readonly Text: string;
     Activate(index: any): any;
-    Add(text: any): any;
+    Add(text: any, key?: any): any;
     Clear(): any;
     Deselect(index: any): any;
     DeselectAll(): any;
+    KeyAt(index: any): any;
     RemoveRow(index: any): any;
     Reveal(index: any): any;
     Select(index: any): any;
     SelectAll(): any;
+    SetText(index: any, text: any): any;
 }
 declare class ComboBox extends Widget {
     Index: number;
     Items: any[];
+    Key: string;
     Text: string;
     readonly Count: number;
-    Add(text: any): any;
+    Add(text: any, key?: any): any;
     Clear(): any;
+    KeyAt(index: any): any;
+    RemoveRow(index: any): any;
+    SetText(index: any, text: any): any;
 }
 declare class SpinBox extends Widget {
     Decimals: number;

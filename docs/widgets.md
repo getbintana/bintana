@@ -996,7 +996,8 @@ end up disagreeing.
 question — a right-aligned column of numbers is made of both.
 
 **The selection** is `Select(start, length)`, `SelectAll()` and the read-only
-`SelectedText`. `Select(5)` with no length is a cursor rather than a selection,
+`Selection` and `Offset`. `Select(5)` with no length is a cursor rather than a
+selection,
 which is how one puts the caret somewhere; a length past the end is the end,
 because the caller is usually a search that just found something and clamping is
 what it would have written itself. `SelectAll()` is what every field that opens
@@ -1407,8 +1408,21 @@ measured under an `Xvfb` of the probe's own with `xdotool`, and the commands are
 
 A `GtkListBox` of label rows in a scroller. `Items` is an array of strings and
 round-trips through the `.form`; `Index` is the selection or `-1`;
-`Text` is read-only, being whatever is selected. `Add`, `RemoveRow(i)` and
-`Clear` mutate the list.
+`Text` is read-only, being whatever is selected. `Add`, `RemoveRow(i)`,
+`SetText(i, t)` and `Clear` mutate the list.
+
+**A row may carry the application's own name for it.** `Add("Abrir", "open")`
+gives the row a key, `Key` reads the selected one and assigning selects the row
+it belongs to, and `KeyAt(i)` reads one without selecting it. It is VB's
+`ItemData`, and what it is for is the case the text cannot answer: a list of
+translated words compared by `Text` stops working the moment the catalogue has
+an entry for one of them. A `RowList` has none, because its rows are widgets and
+are their own identity.
+
+**A row that is not there**: a verb that *changes* the list (`RemoveRow`,
+`SetText`) refuses with a `RangeError`, while `Select`, `Deselect`, `Reveal` and
+`Activate` answer `false` — asking about a row that is not there is an ordinary
+question, and a list with nothing selected is an ordinary state.
 
 `Index = -1` is legitimate and has to survive: the property grid's spin for it
 allows negatives for exactly this reason.

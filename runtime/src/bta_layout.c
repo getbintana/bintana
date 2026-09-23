@@ -1230,13 +1230,14 @@ static JSValue rowlist_activate(JSContext *ctx, JSValueConst this_val,
 
     GtkListBoxRow *row = index >= 0 ? rowlist_row(w, index) : NULL;
 
-    /* Nothing there is nothing to choose, and not an error. */
+    /* Nothing there is nothing to choose, and not an error: it answers
+     * `false`, the same answer `Select` gives. */
     if (!row)
-        return JS_UNDEFINED;
+        return JS_NewBool(ctx, false);
 
     gtk_list_box_select_row(GTK_LIST_BOX(w->slot), row);
     g_signal_emit_by_name(w->slot, "row-activated", row);
-    return JS_UNDEFINED;
+    return JS_NewBool(ctx, true);
 }
 
 /*
@@ -1261,14 +1262,16 @@ static JSValue rowlist_remove(JSContext *ctx, JSValueConst this_val,
     if (JS_ToInt32(ctx, &i, argv[0]))
         return JS_EXCEPTION;
 
-    GtkListBoxRow *row   = i < 0 ? NULL : rowlist_row(w, i);
-    BtaWidget     *child = row ? bta_slot_child(GTK_WIDGET(row)) : NULL;
+    GtkListBoxRow *row = i < 0 ? NULL : rowlist_row(w, i);
+    if (!row)
+        return JS_ThrowRangeError(ctx, "RemoveRow: there is no row %d", i);
 
+    BtaWidget *child = bta_slot_child(GTK_WIDGET(row));
     if (!child)
-        return JS_NewBool(ctx, false);
+        return JS_UNDEFINED;      /* a row with nothing in it: nothing to take out */
     if (!bta_container_detach(ctx, child))
         return JS_EXCEPTION;
-    return JS_NewBool(ctx, true);
+    return JS_UNDEFINED;
 }
 
 /* `Reveal(index)` -- the row into view. See `listbox_reveal`. */

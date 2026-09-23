@@ -435,7 +435,9 @@ One line of editable text.
 | `Purpose` | `Text` `Digits` `Number` `Phone` `Url` `Email` `Name` — what the keyboard and the input method should expect. Default `"Text"` |
 | `ReadOnly` | shown but not editable |
 | `Text` | what is in it |
-| `SelectedText` (ro) | what is selected, `""` for nothing |
+| `Selection` (ro) | what is selected, `""` for nothing. The same name, and the same question, as `Editor.Selection` |
+| `Offset` (ro) | the caret's position in characters — `SelStart` |
+| `Insert(text)` | writes it at the caret and leaves the caret after it, without rebuilding `Text` (which would move the caret to the end) |
 | `Select(start, length)` | selects that run |
 | `SelectAll()` | selects everything, so typing replaces it |
 | **event** `Change()` | the value changed, including from an assignment in code — the round trip goes out to GTK and back |
@@ -603,6 +605,14 @@ code does not; `Select` and `Activate` are the two events, with
 `ActivateOnSingleClick` deciding which click raises the second. What differs is
 what `Add` takes — and what taking one out is called.
 
+**A row that is not there.** A verb that *changes* the list — `RemoveRow`,
+`RemovePage`, `RemoveNode`, `SetText` — refuses with a **`RangeError`**: an
+index or a key that does not exist is a mistake in the program, and doing
+nothing would leave it to be discovered somewhere else. `Select`, `Deselect`,
+`Reveal` and `Activate` answer **`false`** instead, because asking about a row
+that is not there is an ordinary question — a list with nothing selected is an
+ordinary state — and `Select`'s answer is what a form branches on.
+
 **Taking one out names the address, not the class.** `RemoveRow(index)` on a
 `ListBox`, a `RowList` and a flat `TableView`; `RemovePage(index)` on a
 `Notebook` and a `Switcher`; `RemoveNode(key)` on a `TreeView` and on a
@@ -616,8 +626,15 @@ address it wants where a single `Remove(x)` could not.
 What is not shared is what one control alone can answer: `Items` and `Text` need
 rows that *are* text (`ListBox`, and `ComboBox` beside it), `Filter` needs rows
 that are widgets (`RowList`), `Columns`, `Cell` and `Sortable` need fields
-(`TableView`), and `Key`, `Expanded` and the rest of the nesting words belong to
-the two that nest.
+(`TableView`), and `Expanded` and the rest of the nesting words belong to the two
+that nest.
+
+**`Key` is the application's own name for a row**, and not its text: a list of
+translated strings cannot be addressed by what it says, so `Add(text, [key])`
+gives a row a name, `Key` reads the selected one and assigning selects the row it
+belongs to, and `KeyAt(index)` reads one without selecting it. It is on
+`ListBox`, `ComboBox`, `TreeView` and `TableView` — the two that nest already had
+it — and not on a `RowList`, whose rows are widgets and are their own identity.
 
 ## ListBox
 
@@ -632,12 +649,15 @@ A list of strings.
 | `Text` (ro) | the selected row's text |
 | `Count` (ro) | how many rows |
 | `Selection` (ro) | the selected indices, as an array |
-| `Activate(index)` | raises `Activate` for that row, as a double click would |
-| `Add(text)` | one row at the end |
+| `Key` | the selected row's application key; assigning selects the row it belongs to, `""` clears the selection, and a key nothing has is a `RangeError` |
+| `KeyAt(index)` | → that row's key, without selecting it. **`RangeError`** when there is no such row |
+| `Activate(index)` | raises `Activate` for that row, as a double click would; answers whether there was one |
+| `Add(text, [key])` | one row at the end, with the application's own name for it |
 | `Clear()` | empties it |
 | `Deselect(index)` | unselects it |
 | `DeselectAll()` | selects nothing |
-| `RemoveRow(index)` | takes that row out |
+| `RemoveRow(index)` | takes that row out. **`RangeError`** when there is no such row |
+| `SetText(index, text)` | renames one in place. **Translated**. `RangeError` when there is no such row |
 | `Reveal(index)` | brings that row into view, with the least scrolling it takes. Answers whether there was one |
 | `Select(index)` | selects that row |
 | `SelectAll()` | with `MultiSelect` |
@@ -654,7 +674,11 @@ A drop-down.
 | `Items` | the drop-down's contents. **Translated** |
 | `Text` | the chosen text |
 | `Count` (ro) | how many |
-| `Add(text)` | one more |
+| `Key` | the selected row's application key; assigning selects the row it belongs to, and a key nothing has is a `RangeError`. `""` moves nothing, as `Index = -1` does — a drop-down with items always has one chosen |
+| `KeyAt(index)` | → that row's key, without selecting it. **`RangeError`** when there is no such row |
+| `Add(text, [key])` | one more, with the application's own name for it |
+| `RemoveRow(index)` | takes that row out. **`RangeError`** when there is no such row |
+| `SetText(index, text)` | renames one in place. **Translated**. `RangeError` when there is no such row |
 | `Clear()` | empties it |
 | **event** `Select()` | the selection moved. Ask `Index` or `Text` for what it is now |
 
@@ -697,7 +721,7 @@ Three things differ, and each for a reason worth knowing:
 | `Exists(key)` | → whether that node is there |
 | `RemoveNode(key)` | takes that node out **and the subtree with it** — a node whose parent is gone is not something this control can show |
 | `Reveal(index)` | brings that visible row into view, with the least scrolling it takes. Answers whether there was one |
-| `Activate([index])` | raises `Activate` for that visible position, as a double click would; the selected row with no argument |
+| `Activate([index])` | raises `Activate` for that visible position, as a double click would; the selected row with no argument. Answers whether there was one |
 | `SetText(key, text)` | renames a node. **Translated** |
 | `SetIcon(key, name)` | its icon, or `""` for none. One column, so no column argument — otherwise it is `TableView`'s |
 | `ExpandAll()` | every node |
@@ -721,7 +745,7 @@ A list with columns, **and its rows may nest**. The control to reach for wheneve
 | `Sortable` | makes the headers clickable. **The table does not reorder itself** — it raises `Sort` |
 | `Selection` (ro) | the selected indices |
 | `ActivateOnSingleClick` | raise `Activate` on one click instead of two. Default `false` |
-| `Activate([index])` | raises `Activate` for that visible position, as a double click would; the selected row with no argument. In both the flat and the tree shape, because a click lands on a position |
+| `Activate([index])` | raises `Activate` for that visible position, as a double click would; the selected row with no argument. Answers whether there was one. In both the flat and the tree shape, because a click lands on a position |
 | `Add(values, [options])` | one row, as an array of strings. A row shorter than there are columns reads `""` for the rest. Clears an on-demand `Count`. **`options` is `{ Key, Parent, Icon }`, and a row with a `Key` is a node**: the first one makes this table a tree, `Parent` is the key of the node it goes under (absent is a root), and `Icon` is the picture for its first column — the same one `TreeView.Add` takes, so a node need not be added and then decorated |
 | `AutoExpand` | opens a node as it arrives, and again when it gains a child after being closed by hand. Default `true`. A tree only. The same mechanism `TreeView` uses, answering the same |
 | `Key` | the selected node's key; assigning selects, opening the way to it. `""` selects nothing. A tree only |
@@ -1199,11 +1223,11 @@ One row per child, each row **a widget of its own**, with scrolling and selectio
 | `Count` (ro) | how many rows, hidden ones included |
 | `MultiSelect` | more than one row at a time |
 | `Selection` (ro) | the selected indices, as an array |
-| `Activate([index])` | raises `Activate` for that row, as a double click would; the selected one with no argument |
+| `Activate([index])` | raises `Activate` for that row, as a double click would; the selected one with no argument. Answers whether there was one |
 | `Deselect(index)` | unselects it |
 | `DeselectAll()` | selects nothing |
 | `Refilter()` | says the answer to `Filter` may have changed. The whole of the API on this side — what a handler answers *from* is yours |
-| `RemoveRow(index)` | takes that row out, **and the control in it goes with it**: the row is the widget's wrapper, so this is the same as deleting the child |
+| `RemoveRow(index)` | takes that row out, **and the control in it goes with it**: the row is the widget's wrapper, so this is the same as deleting the child. **`RangeError`** when there is no such row |
 | `Reveal(index)` | brings that row into view, with the least scrolling it takes. Answers whether there was one |
 | `Select(index)` | selects that row |
 | `SelectAll()` | with `MultiSelect` |

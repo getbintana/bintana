@@ -142,7 +142,7 @@ key space; if the same tree holds files and categories, `cat:forms` and
 |---|---|
 | `Key` | the selected node's key, `""` for none. Assigning selects that node, **opening the way to it**, and raises `Select` |
 | `Text` (ro) | the words of the selected node, `""` when nothing is selected |
-| `Activate([index])` | the double click from code; the selected node with no argument |
+| `Activate([index])` | the double click from code; the selected node with no argument. Answers whether there was one |
 | `ActivateOnSingleClick` | raise `Activate` on one click instead of two. Default `false` |
 | **event** `Select()` | the selection moved — by the user, by an assignment, or because what was selected is no longer visible |
 | **event** `Activate()` | a double click on a node, or Enter on it: the gesture for *open this one* |

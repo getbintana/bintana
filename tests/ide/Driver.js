@@ -9963,7 +9963,7 @@ function* p_quick(ide) {
      * the palette turned back into the file picker while somebody was typing.
      */
     eq("...with nothing selected, so typing does not eat the >",
-       QuickForm.open.TxtFind.SelectedText, "");
+       QuickForm.open.TxtFind.Selection, "");
 
     QuickForm.open.BtnCancel.Click();
     yield* until(() => QuickForm.open === null);

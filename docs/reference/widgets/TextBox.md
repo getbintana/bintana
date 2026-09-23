@@ -23,7 +23,9 @@ It is a `Widget` and a control like any other, so everything on
 | `Placeholder` | shown while it is empty. **Translated** | [what is in it](#what-is-in-it) |
 | `Purpose` | what the keyboard should expect | [what the field expects](#what-the-field-expects) |
 | `ReadOnly` | shown but not editable | [what is in it](#what-is-in-it) |
-| `SelectedText` (ro) | what is selected, `""` for nothing | [the selection](#the-selection) |
+| `Selection` (ro) | what is selected, `""` for nothing | [the selection](#the-selection) |
+| `Offset` (ro) | the caret's position in characters | [the selection](#the-selection) |
+| `Insert(text)` | writes it at the caret | [what is in it](#what-is-in-it) |
 | `Text` | what is in it. **Translated** | [what is in it](#what-is-in-it) |
 
 **Methods**
@@ -99,7 +101,9 @@ not about typing, so set it before the value.
 
 | | |
 |---|---|
-| `SelectedText` (ro) | what is selected, `""` when nothing is |
+| `Selection` (ro) | what is selected, `""` when nothing is. The same name, and the same question, as `Editor.Selection` |
+| `Offset` (ro) | the caret's position in characters, counting from `0` — `SelStart` |
+| `Insert(text)` | writes it at the caret and leaves the caret after it. Not `Text = ...`, which rebuilds the field and puts the caret at the end |
 | `Select(start, length)` | selects that run, counting from `0` |
 | `SelectAll()` | selects everything, so **the next keystroke replaces it** |
 

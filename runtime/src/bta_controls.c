@@ -2440,12 +2440,58 @@ static JSValue textbox_get_selected(JSContext *ctx, JSValueConst this_val)
     return out;
 }
 
+/* The caret's position in characters, which is what `Editor.Offset` is: the
+ * same question about the same thing, so it has the same name. */
+static JSValue textbox_get_offset(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    return JS_NewInt32(ctx, gtk_editable_get_position(GTK_EDITABLE(w->gtk)));
+}
+
+/*
+ * `Insert(text)` -- at the caret, which is what typing does and what
+ * `Editor.Insert` does. The pair with `Offset` is `SelStart`'s, and it is how a
+ * program completes or formats what somebody is typing without rebuilding the
+ * whole `Text` (which moves the caret to the end).
+ */
+static JSValue textbox_insert(JSContext *ctx, JSValueConst this_val,
+                              int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    if (argc < 1 || JS_IsUndefined(argv[0]) || JS_IsNull(argv[0]))
+        return JS_ThrowTypeError(ctx, "Insert(text) needs the text");
+
+    const char *s = JS_ToCString(ctx, argv[0]);
+    if (!s)
+        return JS_EXCEPTION;
+
+    GtkEditable *e  = GTK_EDITABLE(w->gtk);
+    int          at = gtk_editable_get_position(e);
+
+    /* The position comes back pointing after what went in, and the caret is put
+     * there: a programmatic insert does not move the cursor on its own, and
+     * leaving it where it was is not what typing does. */
+    gtk_editable_insert_text(e, s, -1, &at);
+    gtk_editable_set_position(e, at);
+    JS_FreeCString(ctx, s);
+    return JS_UNDEFINED;
+}
+
 static const JSCFunctionListEntry textbox_props[] = {
     JS_CGETSET_DEF("Text", textbox_get_text, textbox_set_text),
     JS_CGETSET_DEF("MaxLength", textbox_get_maxlength, textbox_set_maxlength),
     JS_CGETSET_DEF("Purpose",   textbox_get_purpose,   textbox_set_purpose),
     JS_CGETSET_DEF("Alignment", textbox_get_alignment, textbox_set_alignment),
-    JS_CGETSET_DEF("SelectedText", textbox_get_selected, NULL),
+    /* The name `Editor` uses, and not a second one: a `TextBox` and a
+     * `TextEditor` answer the same question. */
+    JS_CGETSET_DEF("Selection", textbox_get_selected, NULL),
+    JS_CGETSET_DEF("Offset",    textbox_get_offset,   NULL),
+    /* Insert(text) */
+    JS_CFUNC_DEF("Insert", 1, textbox_insert),
     /* Select(start, length) */
     JS_CFUNC_DEF("Select",    2, textbox_select),
     /* SelectAll() */
@@ -2906,13 +2952,32 @@ static const char *row_text(GtkListBoxRow *row)
     return GTK_IS_LABEL(child) ? gtk_label_get_text(GTK_LABEL(child)) : NULL;
 }
 
-static void listbox_append(BtaWidget *w, const char *text)
+/*
+ * The application's own name for a row, which is VB's `ItemData`.
+ *
+ * A list of translated strings cannot be addressed by its text -- the words
+ * change with the language and are not identity -- so a row may carry a key:
+ * `Add("Abrir", "open")`, and `Key` is what a handler reads and what selects
+ * the row it belongs to. Stored on GTK's row, so it dies with the row and there
+ * is no second array to keep in step with `Items`.
+ */
+#define LISTBOX_ROW_KEY "bta-row-key"
+
+static void listbox_append(BtaWidget *w, const char *text, const char *key)
 {
     GtkWidget *label = gtk_label_new(text);
     gtk_label_set_xalign(GTK_LABEL(label), 0.0f);
     gtk_widget_set_margin_start(label, 4);
     gtk_widget_set_margin_end(label, 4);
     gtk_list_box_append(GTK_LIST_BOX(w->inner), label);
+
+    if (key && *key) {
+        GtkListBoxRow *row = gtk_list_box_get_row_at_index(GTK_LIST_BOX(w->inner),
+                                                           listbox_count(w) - 1);
+        if (row)
+            g_object_set_data_full(G_OBJECT(row), LISTBOX_ROW_KEY,
+                                   g_strdup(key), g_free);
+    }
 }
 
 static void listbox_clear(BtaWidget *w)
@@ -2970,7 +3035,7 @@ static JSValue listbox_set_items(JSContext *ctx, JSValueConst this_val, JSValueC
 
     listbox_clear(w);
     for (guint i = 0; i < keep->len; i++)
-        listbox_append(w, g_ptr_array_index(keep, i));
+        listbox_append(w, g_ptr_array_index(keep, i), NULL);
     g_ptr_array_free(keep, TRUE);
     return JS_UNDEFINED;
 }
@@ -3161,14 +3226,108 @@ static JSValue listbox_add(JSContext *ctx, JSValueConst this_val,
      * `argc == 1` with `undefined` -- and used to append the text
      * "undefined". */
     if (argc < 1 || JS_IsUndefined(argv[0]) || JS_IsNull(argv[0]))
-        return JS_ThrowTypeError(ctx, "Add(text) needs the text");
+        return JS_ThrowTypeError(ctx, "Add(text, [key]) needs the text");
 
     const char *s = JS_ToCString(ctx, argv[0]);
     if (!s)
         return JS_EXCEPTION;
-    listbox_append(w, s);
+
+    const char *key = NULL;
+    if (argc > 1 && !JS_IsUndefined(argv[1]) && !JS_IsNull(argv[1])) {
+        key = JS_ToCString(ctx, argv[1]);
+        if (!key) {
+            JS_FreeCString(ctx, s);
+            return JS_EXCEPTION;
+        }
+    }
+
+    listbox_append(w, s, key);
+    JS_FreeCString(ctx, key);
     JS_FreeCString(ctx, s);
     return JS_UNDEFINED;
+}
+
+static GtkListBoxRow *listbox_row_by_key(BtaWidget *w, const char *key)
+{
+    int n = listbox_count(w);
+
+    for (int i = 0; i < n; i++) {
+        GtkListBoxRow *row = gtk_list_box_get_row_at_index(GTK_LIST_BOX(w->inner), i);
+        const char *k = row ? g_object_get_data(G_OBJECT(row), LISTBOX_ROW_KEY) : NULL;
+
+        if (k && !strcmp(k, key))
+            return row;
+    }
+    return NULL;
+}
+
+/*
+ * `Key` -- the selected row's key, and assigning selects the row it belongs to.
+ * `""` clears the selection, and a key nothing has is a `RangeError`, the same
+ * bargain `TreeView.Key` makes.
+ */
+static JSValue listbox_get_key(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    GtkListBoxRow *row = listbox_first_selected(w);
+    const char    *k   = row ? g_object_get_data(G_OBJECT(row), LISTBOX_ROW_KEY) : NULL;
+
+    return JS_NewString(ctx, k ? k : "");
+}
+
+static JSValue listbox_set_key(JSContext *ctx, JSValueConst this_val,
+                               JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    const char *key = JS_ToCString(ctx, val);
+    if (!key)
+        return JS_EXCEPTION;
+
+    if (!*key) {
+        gtk_list_box_unselect_all(GTK_LIST_BOX(w->inner));
+        JS_FreeCString(ctx, key);
+        return JS_UNDEFINED;
+    }
+
+    GtkListBoxRow *row = listbox_row_by_key(w, key);
+    if (!row) {
+        JSValue e = JS_ThrowRangeError(ctx, "Key: there is no row with the key '%s'",
+                                       key);
+        JS_FreeCString(ctx, key);
+        return e;
+    }
+
+    gtk_list_box_select_row(GTK_LIST_BOX(w->inner), row);
+    JS_FreeCString(ctx, key);
+    return JS_UNDEFINED;
+}
+
+/* `KeyAt(index)` -- one row's key without selecting it. */
+static JSValue listbox_key_at(JSContext *ctx, JSValueConst this_val,
+                              int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "KeyAt(index) needs a row index");
+
+    int32_t i;
+    if (JS_ToInt32(ctx, &i, argv[0]))
+        return JS_EXCEPTION;
+    if (i < 0 || i >= listbox_count(w))
+        return JS_ThrowRangeError(ctx, "KeyAt: there is no row %d", i);
+
+    GtkListBoxRow *row = gtk_list_box_get_row_at_index(GTK_LIST_BOX(w->inner), i);
+    const char    *k   = row ? g_object_get_data(G_OBJECT(row), LISTBOX_ROW_KEY) : NULL;
+
+    return JS_NewString(ctx, k ? k : "");
 }
 
 static JSValue listbox_clear_js(JSContext *ctx, JSValueConst this_val,
@@ -3195,8 +3354,49 @@ static JSValue listbox_remove(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     GtkListBoxRow *row = gtk_list_box_get_row_at_index(GTK_LIST_BOX(w->inner), i);
-    if (row)
-        gtk_list_box_remove(GTK_LIST_BOX(w->inner), GTK_WIDGET(row));
+    if (!row)
+        return JS_ThrowRangeError(ctx, "RemoveRow: there is no row %d", i);
+
+    gtk_list_box_remove(GTK_LIST_BOX(w->inner), GTK_WIDGET(row));
+    return JS_UNDEFINED;
+}
+
+/*
+ * `SetText(index, text)` -- one row's words, in place.
+ *
+ * A `ListBox` had `Items` and no way to change one of them, so a program that
+ * renamed a row read the whole list back, changed the string and wrote it
+ * again -- with the selection and the scroll lost on the way.
+ */
+static JSValue listbox_set_text(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    if (argc < 2)
+        return JS_ThrowTypeError(ctx, "SetText(index, text) needs a row and the text");
+
+    int32_t i;
+    if (JS_ToInt32(ctx, &i, argv[0]))
+        return JS_EXCEPTION;
+
+    if (JS_IsUndefined(argv[1]) || JS_IsNull(argv[1]))
+        return JS_ThrowTypeError(ctx, "SetText(index, text) needs the text");
+    const char *s = JS_ToCString(ctx, argv[1]);
+    if (!s)
+        return JS_EXCEPTION;
+
+    GtkListBoxRow *row = gtk_list_box_get_row_at_index(GTK_LIST_BOX(w->inner), i);
+    if (!row) {
+        JS_FreeCString(ctx, s);
+        return JS_ThrowRangeError(ctx, "SetText: there is no row %d", i);
+    }
+
+    GtkWidget *label = gtk_list_box_row_get_child(GTK_LIST_BOX_ROW(row));
+    if (GTK_IS_LABEL(label))
+        gtk_label_set_text(GTK_LABEL(label), s);
+    JS_FreeCString(ctx, s);
     return JS_UNDEFINED;
 }
 
@@ -3255,9 +3455,10 @@ static JSValue listbox_activate(JSContext *ctx, JSValueConst this_val,
         ? gtk_list_box_get_row_at_index(GTK_LIST_BOX(w->inner), index) : NULL;
 
     /* Nothing there is nothing to choose, and not an error: a list one has not
-     * selected in yet is an ordinary state. */
+     * selected in yet is an ordinary state -- so it answers `false`, the same
+     * answer `Select` gives. */
     if (!row)
-        return JS_UNDEFINED;
+        return JS_NewBool(ctx, false);
 
     /*
      * Selected first, because that is what the double click did: `Activate`
@@ -3266,6 +3467,7 @@ static JSValue listbox_activate(JSContext *ctx, JSValueConst this_val,
      */
     gtk_list_box_select_row(GTK_LIST_BOX(w->inner), row);
     g_signal_emit_by_name(w->inner, "row-activated", row);
+    return JS_NewBool(ctx, true);
     return JS_UNDEFINED;
 }
 
@@ -3276,14 +3478,19 @@ static const JSCFunctionListEntry listbox_props[] = {
     JS_CGETSET_DEF("Count", listbox_get_count, NULL),
     JS_CGETSET_DEF("MultiSelect", listbox_get_multi,     listbox_set_multi),
     JS_CGETSET_DEF("Selection",   listbox_get_selection, NULL),
+    JS_CGETSET_DEF("Key",         listbox_get_key,       listbox_set_key),
     JS_CGETSET_DEF("ActivateOnSingleClick",
                    listbox_get_single, listbox_set_single),
-    /* Add(text) */
-    JS_CFUNC_DEF("Add",    1, listbox_add),
+    /* Add(text, [key]) */
+    JS_CFUNC_DEF("Add",    2, listbox_add),
+    /* KeyAt(index) */
+    JS_CFUNC_DEF("KeyAt",  1, listbox_key_at),
     /* Clear() */
     JS_CFUNC_DEF("Clear",  0, listbox_clear_js),
     /* RemoveRow(index) */
     JS_CFUNC_DEF("RemoveRow", 1, listbox_remove),
+    /* SetText(index, text) */
+    JS_CFUNC_DEF("SetText",   2, listbox_set_text),
     /* Reveal(index) */
     JS_CFUNC_DEF("Reveal",    1, listbox_reveal),
     /* Select(index) */
@@ -3328,6 +3535,10 @@ static GtkStringList *combo_model(BtaWidget *w)
 {
     return GTK_STRING_LIST(gtk_drop_down_get_model(GTK_DROP_DOWN(w->gtk)));
 }
+
+/* The parallel array of keys; defined below, beside the four doors that keep it
+ * in step with the model. */
+static GPtrArray *combo_keys(BtaWidget *w);
 
 static guint combo_count(BtaWidget *w)
 {
@@ -3383,6 +3594,10 @@ static JSValue combo_set_items(JSContext *ctx, JSValueConst this_val, JSValueCon
      * so a Select handler never sees a half-filled list. */
     gtk_string_list_splice(combo_model(w), 0, combo_count(w), (const char *const *)strv);
     g_strfreev(strv);
+
+    /* The keys are a parallel array and this is one of the four doors that
+     * changes the model: a list assigned as strings has no keys. */
+    g_ptr_array_set_size(combo_keys(w), n);
     return JS_UNDEFINED;
 }
 
@@ -3471,6 +3686,29 @@ static JSValue combo_get_count(JSContext *ctx, JSValueConst this_val)
     return JS_NewInt32(ctx, (int)combo_count(w));
 }
 
+/*
+ * The keys, one per row, beside a model that can only hold strings.
+ *
+ * `GtkStringList` has no place for an application's own name for a row, so the
+ * keys are a parallel array -- and **every mutation of the model has to touch
+ * it**: `Items`, `Add`, `RemoveRow` and `Clear` are the four doors, and a
+ * fifth added later without a line here is a key that answers for the wrong
+ * row. It dies with the widget.
+ */
+#define COMBO_KEYS_KEY "bta-combo-keys"
+
+static GPtrArray *combo_keys(BtaWidget *w)
+{
+    GPtrArray *keys = g_object_get_data(G_OBJECT(w->gtk), COMBO_KEYS_KEY);
+
+    if (!keys) {
+        keys = g_ptr_array_new_with_free_func(g_free);
+        g_object_set_data_full(G_OBJECT(w->gtk), COMBO_KEYS_KEY, keys,
+                               (GDestroyNotify)g_ptr_array_unref);
+    }
+    return keys;
+}
+
 static JSValue combo_add(JSContext *ctx, JSValueConst this_val,
                          int argc, JSValueConst *argv)
 {
@@ -3479,12 +3717,158 @@ static JSValue combo_add(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     if (argc < 1 || JS_IsUndefined(argv[0]) || JS_IsNull(argv[0]))
-        return JS_ThrowTypeError(ctx, "Add(text) needs the text");
+        return JS_ThrowTypeError(ctx, "Add(text, [key]) needs the text");
 
     const char *s = JS_ToCString(ctx, argv[0]);
     if (!s)
         return JS_EXCEPTION;
+
+    const char *key = NULL;
+    if (argc > 1 && !JS_IsUndefined(argv[1]) && !JS_IsNull(argv[1])) {
+        key = JS_ToCString(ctx, argv[1]);
+        if (!key) {
+            JS_FreeCString(ctx, s);
+            return JS_EXCEPTION;
+        }
+    }
+
     gtk_string_list_append(combo_model(w), s);
+    g_ptr_array_add(combo_keys(w), key ? g_strdup(key) : NULL);
+
+    JS_FreeCString(ctx, key);
+    JS_FreeCString(ctx, s);
+    return JS_UNDEFINED;
+}
+
+/* `Key` -- the selected row's key, and assigning selects the row it belongs to. */
+static JSValue combo_get_key(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    guint sel = gtk_drop_down_get_selected(GTK_DROP_DOWN(w->gtk));
+    if (sel == GTK_INVALID_LIST_POSITION)
+        return JS_NewString(ctx, "");
+
+    GPtrArray *keys = combo_keys(w);
+    const char *k = sel < keys->len ? g_ptr_array_index(keys, sel) : NULL;
+
+    return JS_NewString(ctx, k ? k : "");
+}
+
+static JSValue combo_set_key(JSContext *ctx, JSValueConst this_val,
+                             JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    const char *key = JS_ToCString(ctx, val);
+    if (!key)
+        return JS_EXCEPTION;
+
+    /* An empty key is not an empty selection: a drop-down with items always has
+     * one chosen, which is what `gtk_drop_down_set_autoselect`'s default means.
+     * The same answer `Index = -1` gives: it moves nothing. */
+    if (!*key) {
+        JS_FreeCString(ctx, key);
+        return JS_UNDEFINED;
+    }
+
+    GPtrArray *keys = combo_keys(w);
+
+    for (guint i = 0; i < keys->len; i++) {
+        const char *k = g_ptr_array_index(keys, i);
+
+        if (k && !strcmp(k, key)) {
+            gtk_drop_down_set_selected(GTK_DROP_DOWN(w->gtk), i);
+            JS_FreeCString(ctx, key);
+            return JS_UNDEFINED;
+        }
+    }
+
+    JSValue e = JS_ThrowRangeError(ctx, "Key: there is no row with the key '%s'",
+                                   key);
+    JS_FreeCString(ctx, key);
+    return e;
+}
+
+/* `KeyAt(index)` -- one row's key without selecting it. */
+static JSValue combo_key_at(JSContext *ctx, JSValueConst this_val,
+                            int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "KeyAt(index) needs a row index");
+
+    int32_t i;
+    if (JS_ToInt32(ctx, &i, argv[0]))
+        return JS_EXCEPTION;
+    if (i < 0 || (guint)i >= combo_count(w))
+        return JS_ThrowRangeError(ctx, "KeyAt: there is no row %d", i);
+
+    GPtrArray *keys = combo_keys(w);
+    const char *k = g_ptr_array_index(keys, (guint)i);
+
+    return JS_NewString(ctx, k ? k : "");
+}
+
+/*
+ * `RemoveRow(index)` and `SetText(index, text)` -- the two item verbs a
+ * `ComboBox` was missing, and the reason a program ended up comparing
+ * translated strings to find the row it wanted.
+ */
+static JSValue combo_remove(JSContext *ctx, JSValueConst this_val,
+                            int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "RemoveRow(index) needs a row index");
+
+    int32_t i;
+    if (JS_ToInt32(ctx, &i, argv[0]))
+        return JS_EXCEPTION;
+    if (i < 0 || (guint)i >= combo_count(w))
+        return JS_ThrowRangeError(ctx, "RemoveRow: there is no row %d", i);
+
+    gtk_string_list_splice(combo_model(w), (guint)i, 1, NULL);
+    g_ptr_array_remove_index(combo_keys(w), (guint)i);
+    return JS_UNDEFINED;
+}
+
+static JSValue combo_set_row_text(JSContext *ctx, JSValueConst this_val,
+                              int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    if (argc < 2)
+        return JS_ThrowTypeError(ctx, "SetText(index, text) needs a row and the text");
+
+    int32_t i;
+    if (JS_ToInt32(ctx, &i, argv[0]))
+        return JS_EXCEPTION;
+
+    if (JS_IsUndefined(argv[1]) || JS_IsNull(argv[1]))
+        return JS_ThrowTypeError(ctx, "SetText(index, text) needs the text");
+    const char *s = JS_ToCString(ctx, argv[1]);
+    if (!s)
+        return JS_EXCEPTION;
+
+    if (i < 0 || (guint)i >= combo_count(w)) {
+        JS_FreeCString(ctx, s);
+        return JS_ThrowRangeError(ctx, "SetText: there is no row %d", i);
+    }
+
+    /* `splice` copies what it is handed, so the borrowed string is enough. */
+    const char *one[2] = { s, NULL };
+
+    gtk_string_list_splice(combo_model(w), (guint)i, 1, one);
     JS_FreeCString(ctx, s);
     return JS_UNDEFINED;
 }
@@ -3497,16 +3881,24 @@ static JSValue combo_clear(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     gtk_string_list_splice(combo_model(w), 0, combo_count(w), NULL);
+    g_ptr_array_set_size(combo_keys(w), 0);
     return JS_UNDEFINED;
 }
 
 static const JSCFunctionListEntry combobox_props[] = {
     JS_CGETSET_DEF("Items", combo_get_items, combo_set_items),
+    JS_CGETSET_DEF("Key",   combo_get_key,   combo_set_key),
     JS_CGETSET_DEF("Index", combo_get_index, combo_set_index),
     JS_CGETSET_DEF("Text",  combo_get_text,  combo_set_text),
     JS_CGETSET_DEF("Count", combo_get_count, NULL),
-    /* Add(text) */
-    JS_CFUNC_DEF("Add",   1, combo_add),
+    /* Add(text, [key]) */
+    JS_CFUNC_DEF("Add",   2, combo_add),
+    /* KeyAt(index) */
+    JS_CFUNC_DEF("KeyAt", 1, combo_key_at),
+    /* RemoveRow(index) */
+    JS_CFUNC_DEF("RemoveRow", 1, combo_remove),
+    /* SetText(index, text) */
+    JS_CFUNC_DEF("SetText",   2, combo_set_row_text),
     /* Clear() */
     JS_CFUNC_DEF("Clear", 0, combo_clear),
 };

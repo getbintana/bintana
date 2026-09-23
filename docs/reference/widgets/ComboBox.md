@@ -17,7 +17,11 @@ It is a `Widget` and a control like any other, so everything on
 | `Index` | which is chosen, `-1` for none. Default `-1` | [what is chosen](#what-is-chosen) |
 | `Items` | the contents, as an array of strings. **Translated** | [the list](#the-list) |
 | `Text` | the chosen text | [what is chosen](#what-is-chosen) |
-| `Add(text)` | one more row | [the list](#the-list) |
+| `Add(text, [key])` | one more row, with the application's own name for it | [the list](#the-list) |
+| `Key` | the selected row's key; assigning selects | [what is chosen](#what-is-chosen) |
+| `KeyAt(index)` | → that row's key, without selecting it | [the list](#the-list) |
+| `RemoveRow(index)` | takes a row out | [the list](#the-list) |
+| `SetText(index, text)` | renames one in place | [the list](#the-list) |
 | `Clear()` | empties it | [the list](#the-list) |
 | **event** `Select()` | the selection moved | [what is chosen](#what-is-chosen) |
 
@@ -37,9 +41,16 @@ It is a `Widget` and a control like any other, so everything on
 | | |
 |---|---|
 | `Items` | the contents, as an array of strings. Assigning replaces every row at once. **Translated**: a list declared in a `.form` goes through the catalogue |
-| `Add(text)` | one more, at the end |
+| `Add(text, [key])` | one more, at the end. `key` is the application's own name for it |
+| `KeyAt(index)` | → that row's key, without selecting it. **`RangeError`** when there is no such row |
+| `RemoveRow(index)` | takes one out. **`RangeError`** when there is no such row |
+| `SetText(index, text)` | renames one in place, leaving the selection where it is. **Translated**; **`RangeError`** when there is no such row |
 | `Clear()` | empties it, and nothing is chosen afterwards |
 | `Count` (ro) | how many rows there are |
+
+**Renaming one row is not `Items` again.** Reading the array, changing a string
+and assigning it back loses the selection and is how a program ends up comparing
+translated text to find the row it wanted; `SetText` is one row, in place.
 
 **Words go in the `.form`, data comes from code.** A drop-down of *Small /
 Medium / Large* is prose and belongs in the file, where a translator finds it; a
@@ -50,6 +61,7 @@ drop-down of the project's files is filled from code and must not be.
 | | |
 |---|---|
 | `Index` | which row is chosen, `-1` for none. Assigning chooses it and raises `Select` |
+| `Key` | the chosen row's key, `""` for none; assigning chooses the row it belongs to, and a key nothing has is a `RangeError`. `""` moves nothing, as `Index = -1` does |
 | `Text` | the chosen row's words. Reading it is reading the *translated* text |
 | **event** `Select()` | the selection moved — by the user or by an assignment |
 

@@ -108,7 +108,7 @@ built row from being measured.
 | `Add(control)` | `Container`'s: one control, one row, at the end |
 | `Clear()` | `Container`'s: empties it, destroying every row's control |
 | `Children` (ro) | `Container`'s: the controls, one per row, in order |
-| `RemoveRow(index)` | takes that row out — **and the control in it goes with it**: the row is the widget's wrapper, so this is the same as deleting the child |
+| `RemoveRow(index)` | takes that row out — **and the control in it goes with it**: the row is the widget's wrapper, so this is the same as deleting the child. **`RangeError`** when there is no such row |
 | `Reveal(index)` | brings that row into view with the least scrolling it takes, and answers whether there was one |
 | `Count` (ro) | how many rows there are, **hidden ones included** |
 
@@ -133,7 +133,7 @@ is being designed* (`item` in [formats.md](../../formats.md#item-what-a-list-hol
 | `Deselect(index)` | unselects it |
 | `SelectAll()` | with `MultiSelect` |
 | `DeselectAll()` | selects nothing |
-| `Activate([index])` | raises `Activate` for that row from code; the selected one with no argument |
+| `Activate([index])` | raises `Activate` for that row from code; the selected one with no argument. Answers whether there was one |
 | `ActivateOnSingleClick` | raise `Activate` on one click instead of two. Default `false` |
 | **event** `Select()` | the selection moved. Ask `Index` or `Selection` for which rows; what is *in* them is the widgets you put there |
 | **event** `Activate()` | a double click on a row, or Enter on it |

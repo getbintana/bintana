@@ -4066,23 +4066,34 @@ class WidgetsForm extends Form {
 
         /* --- the selection -------------------------------------------------- */
         t.Text = "hola mundo";
-        eq("nothing is highlighted to begin with", t.SelectedText, "");
+        eq("nothing is highlighted to begin with", t.Selection, "");
 
         t.Select(5, 5);
-        eq("Select highlights from there", t.SelectedText, "mundo");
+        eq("Select highlights from there", t.Selection, "mundo");
 
         t.Select(2);
-        eq("with no length it is a cursor and not a selection", t.SelectedText, "");
+        eq("with no length it is a cursor and not a selection", t.Selection, "");
 
         t.Select(5, 999);
-        eq("past the end is the end", t.SelectedText, "mundo");
+        eq("past the end is the end", t.Selection, "mundo");
 
         t.SelectAll();
-        eq("SelectAll takes the lot", t.SelectedText, "hola mundo");
+        eq("SelectAll takes the lot", t.Selection, "hola mundo");
         throws("and a position is not negative", () => t.Select(-1, 2));
 
-        check("SelectedText is a reading and not a setting",
-              !("SelectedText" in t.Serialize().properties));
+        check("Selection is a reading and not a setting",
+              !("Selection" in t.Serialize().properties));
+
+        /* `Offset` and `Insert` are `SelStart`'s pair: where the caret is, and
+         * putting text there without rebuilding `Text` (which would move the
+         * caret to the end). */
+        t.Text = "hola mundo";
+        t.Select(4, 0);
+        eq("Offset is where the caret is", t.Offset, 4);
+        t.Insert(" querido");
+        eq("Insert writes at the caret", t.Text, "hola querido mundo");
+        eq("and leaves it after what it wrote", t.Offset, 12);
+        throws("Insert refuses no argument at all", () => t.Insert());
 
         t.Delete();
     }
@@ -7212,8 +7223,9 @@ function Main() {
         lb.Activate();
         eq("nothing chosen is nothing to choose, and not an error",
            JSON.stringify(this.multiChose), "[3,1]");
-        lb.Activate(99);
-        eq("nor is a row that is not there",
+        check("and answers false for a row that is not there",
+              lb.Activate(99) === false);
+        eq("nor does that raise anything",
            JSON.stringify(this.multiChose), "[3,1]");
 
         /* Two clicks by default, like every other list here; one for a list that
@@ -7228,6 +7240,34 @@ function Main() {
            lb.ActivateOnSingleClick, true);
         eq("and then it is saved",
            lb.Serialize().properties.ActivateOnSingleClick, true);
+
+        /* --- the application's own name for a row, which is not its text */
+        const keyed = new ListBox();
+        keyed.Add("Abrir", "open");
+        keyed.Add("Guardar", "save");
+        eq("KeyAt reads a row's key", keyed.KeyAt(1), "save");
+        keyed.Key = "save";
+        eq("assigning Key selects the row it belongs to", keyed.Index, 1);
+        eq("and Key reads the selected row's", keyed.Key, "save");
+        throws("a key nothing has is refused", () => { keyed.Key = "borrar"; });
+        eq("and the selection stands", keyed.Index, 1);
+        keyed.Key = "";
+        eq("an empty key clears the selection", keyed.Index, -1);
+        throws("KeyAt refuses an index that is not there", () => keyed.KeyAt(9));
+
+        keyed.Items = ["solo texto"];
+        eq("a list assigned as strings has no keys", keyed.KeyAt(0), "");
+        keyed.Delete();
+
+        /* --- renaming one row, which `Items` could not do without a rewrite */
+        lb.SetText(1, "dos y medio");
+        eq("SetText renames a row in place", lb.Items[1], "dos y medio");
+        eq("and the rest stand",
+           JSON.stringify(lb.Items),
+           '["uno","dos y medio","tres","cuatro"]');
+        throws("an index that is not there is refused", () => lb.SetText(9, "x"));
+        throws("and SetText needs the text",            () => lb.SetText(0));
+        eq("and the list stands", lb.Items.length, 4);
 
         lb.Delete();
     }
@@ -7625,9 +7665,48 @@ function Main() {
         eq("Add appends at the end", c.Count, 4);
         eq("and does not touch the selection", c.Text, "azul");
 
+        /*
+         * The two item verbs it was missing: removing a row, and renaming one
+         * in place. Without them a program read the whole list back, changed a
+         * string and wrote it again -- comparing translated strings to find the
+         * row it wanted.
+         */
+        /* --- the application's own name for a row, which is not its text */
+        const keyed = new ComboBox();
+        keyed.Add("Abrir", "open");
+        keyed.Add("Guardar", "save");
+        eq("KeyAt reads a row's key", keyed.KeyAt(1), "save");
+        keyed.Index = 0;
+        eq("Key is the selected row's", keyed.Key, "open");
+        keyed.Key = "save";
+        eq("assigning Key selects the row it belongs to", keyed.Index, 1);
+        throws("a key nothing has is refused", () => { keyed.Key = "borrar"; });
+        eq("and the selection stands", keyed.Index, 1);
+        throws("KeyAt refuses an index that is not there", () => keyed.KeyAt(9));
+        keyed.RemoveRow(1);
+        eq("removing a row takes its key with it", keyed.KeyAt(0), "open");
+        keyed.Key = "";
+        eq("an empty key moves nothing, as Index = -1 does", keyed.Index, 0);
+        keyed.Delete();
+
+        c.SetText(1, "esmeralda");
+        eq("SetText renames a row", c.Items[1], "esmeralda");
+        eq("and reads back through Items",
+           JSON.stringify(c.Items), '["rojo","esmeralda","azul","negro"]');
+
+        c.RemoveRow(0);
+        eq("RemoveRow takes one out", c.Count, 3);
+        eq("and the rest move up", c.Items[0], "esmeralda");
+        throws("an index that is not there is refused",
+               () => c.RemoveRow(9));
+        throws("and so is renaming one",
+               () => c.SetText(9, "x"));
+        throws("SetText needs the text", () => c.SetText(0));
+        eq("and none of those changed the list", c.Count, 3);
+
         const node = c.Serialize();
         check("Items is saved", sameJson(node.properties.Items,
-              ["rojo", "verde", "azul", "negro"]), JSON.stringify(node.properties));
+              ["esmeralda", "azul", "negro"]), JSON.stringify(node.properties));
         check("Count is read-only, and not saved",
               !("Count" in node.properties), JSON.stringify(node.properties));
 
@@ -7933,10 +8012,10 @@ function Main() {
          * as deleting the child, and `Children` says so.
          */
         const before = list.Children.length;
-        eq("RemoveRow answers whether there was a row", list.RemoveRow(0), true);
+        list.RemoveRow(0);
         eq("and it is gone",        list.Count, before - 1);
         eq("with its widget",       list.Children.length, before - 1);
-        eq("a row that is not there is not an error", list.RemoveRow(99), false);
+        throws("a row that is not there is refused", () => list.RemoveRow(99));
 
         throws("it refuses Arrangement: the rows are its arrangement",
                () => { list.Arrangement = "Vertical"; });

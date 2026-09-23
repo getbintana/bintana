@@ -32,11 +32,14 @@ matters is in the section.
 | | | |
 |---|---|---|
 | `Activate(index)` | raises `Activate` for that row | [the selection](#the-selection) |
-| `Add(text)` | one row at the end | [the rows](#the-rows) |
+| `Add(text, [key])` | one row at the end, with the application's own name for it | [the rows](#the-rows) |
+| `Key` | the selected row's key; assigning selects | [the rows](#the-rows) |
+| `KeyAt(index)` | → that row's key, without selecting it | [the rows](#the-rows) |
 | `Clear()` | empties it | [the rows](#the-rows) |
 | `Deselect(index)` | unselects a row | [the selection](#the-selection) |
 | `DeselectAll()` | selects nothing | [the selection](#the-selection) |
 | `RemoveRow(index)` | takes a row out | [the rows](#the-rows) |
+| `SetText(index, text)` | renames one in place | [the rows](#the-rows) |
 | `Reveal(index)` | brings that row into view | [the rows](#the-rows) |
 | `Select(index)` | selects a row | [the selection](#the-selection) |
 | `SelectAll()` | every row, with `MultiSelect` | [the selection](#the-selection) |
@@ -92,8 +95,11 @@ why the rows go in in the array's order and stay in it.
 | | |
 |---|---|
 | `Items` | the whole list, as an array of strings. Assigning replaces every row at once; reading gives the rows as they are now. **Translated** — a list declared in a `.form` goes through the catalogue |
-| `Add(text)` | one row at the end, which is what a list being filled a row at a time wants |
-| `RemoveRow(index)` | takes that row out |
+| `Add(text, [key])` | one row at the end, which is what a list being filled a row at a time wants. `key` is the application's own name for it |
+| `Key` | the selected row's key, `""` for none; assigning selects the row it belongs to, `""` clears the selection, and a key nothing has is a `RangeError`. **Compare `Key`, never `Text`** — the words are prose and a translated build answers in another language |
+| `KeyAt(index)` | → that row's key, without selecting it. **`RangeError`** when there is no such row |
+| `RemoveRow(index)` | takes that row out. **`RangeError`** when there is no such row |
+| `SetText(index, text)` | renames one in place, leaving the selection and the scroll where they are. **Translated**; **`RangeError`** when there is no such row |
 | `Reveal(index)` | brings that row into view with the least scrolling it takes, and answers whether there was one |
 | `Clear()` | empties it |
 | `Count` (ro) | how many rows there are |

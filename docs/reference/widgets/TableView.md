@@ -227,7 +227,7 @@ perfectly until somebody selects two.
 | `Deselect(index)` | unselects it |
 | `SelectAll()` | with `MultiSelect` |
 | `DeselectAll()` | selects nothing |
-| `Activate([index])` | the double click from code; the selected row with no argument |
+| `Activate([index])` | the double click from code; the selected row with no argument. Answers whether there was one |
 | `ActivateOnSingleClick` | raise `Activate` on one click instead of two. Default `false` |
 | **event** `Select()` | the selection moved — by the user or by an assignment. Ask `Index` for where it is and `Cell`/`Row` for what is there; `Key` when the table is a tree |
 | **event** `Activate()` | a double click on a row, or Enter on it. The gesture for *open this one* |
