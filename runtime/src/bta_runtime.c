@@ -9,6 +9,8 @@
  * its widgets is built. See bta_app_run. */
 #include <gtksourceview/gtksource.h>
 
+#include <errno.h>
+#include <glib/gstdio.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -519,6 +521,9 @@ static const char *const log_level_names[] = {
 /* Debug is off unless asked for: it exists to be left in the code. */
 static int  log_threshold = BTA_LOG_INFO;
 static bool log_to_platform;   /* the system's own log, when it has one */
+/* `Target = "/a/file"`: the lines go here, opened once and appended to. */
+static char *log_file_path;
+static FILE *log_file;
 static bool logging;           /* a handler that logs must not come back here */
 
 static int log_level_by_name(const char *name)
@@ -574,6 +579,13 @@ static bool log_handled_by_app(JSContext *ctx, int level, const char *text)
  */
 static void log_write(int level, const char *text)
 {
+    /* A file target is a target: the line goes there and nowhere else. */
+    if (log_file) {
+        fprintf(log_file, "%s: %s\n", log_level_names[level], text);
+        fflush(log_file);
+        return;
+    }
+
     if (log_to_platform && bta_journal_send(level, text))
         return;
 
@@ -667,8 +679,20 @@ static JSValue js_log_set_level(JSContext *ctx, JSValueConst this_val,
     return e;
 }
 
+static void log_close_file(void)
+{
+    if (log_file) {
+        fclose(log_file);
+        log_file = NULL;
+    }
+    g_free(log_file_path);
+    log_file_path = NULL;
+}
+
 static JSValue js_log_get_target(JSContext *ctx, JSValueConst this_val)
 {
+    if (log_file_path)
+        return JS_NewString(ctx, log_file_path);
     return JS_NewString(ctx, log_to_platform ? "Journal" : "Terminal");
 }
 
@@ -682,16 +706,35 @@ static JSValue js_log_set_target(JSContext *ctx, JSValueConst this_val,
     JSValue e = JS_UNDEFINED;
     if (!g_ascii_strcasecmp(name, "Terminal")) {
         log_to_platform = false;
+        log_close_file();
     } else if (!g_ascii_strcasecmp(name, "Journal")) {
         /* Refused rather than ignored: an application that asked to log to the
          * journal and got the terminal would never find out. */
-        if (!bta_journal_available())
+        if (!bta_journal_available()) {
             e = JS_ThrowRangeError(ctx, "Logger.Target: this build has no journal");
-        else
+        } else {
             log_to_platform = true;
+            log_close_file();
+        }
     } else {
-        e = JS_ThrowRangeError(ctx, "Logger.Target: 'Terminal' or 'Journal', not '%s'",
-                               name);
+        /*
+         * **Anything else is a file to append to.** A log line by line was the
+         * `File.Append` case one level up, and the file is opened *before* the
+         * old target is dropped: a path that cannot be written leaves the
+         * target exactly as it was, which is what a refused assignment means
+         * everywhere else.
+         */
+        FILE *f = g_fopen(name, "ab");
+
+        if (!f) {
+            e = JS_ThrowRangeError(ctx, "Logger.Target: cannot open '%s': %s",
+                                   name, g_strerror(errno));
+        } else {
+            log_close_file();
+            log_file_path   = g_strdup(name);
+            log_file        = f;
+            log_to_platform = false;
+        }
     }
 
     JS_FreeCString(ctx, name);
@@ -779,12 +822,15 @@ static JSValue js_message(JSContext *ctx, JSValueConst this_val,
 
     if (argc > 0) {
         const char *msgid = JS_ToCString(ctx, argv[0]);
-        if (msgid) {
-            const char *found = bta_locale_lookup(NULL, msgid);
-            text = bta_locale_format(ctx, found ? found : msgid,
-                                     argc - 1, argv + 1);
-            JS_FreeCString(ctx, msgid);
-        }
+        if (!msgid)
+            return JS_EXCEPTION;
+
+        const char *found = bta_locale_lookup(NULL, msgid);
+        text = bta_locale_format(ctx, found ? found : msgid,
+                                 argc - 1, argv + 1);
+        JS_FreeCString(ctx, msgid);
+        if (!text)
+            return JS_EXCEPTION;       /* an argument could not become text */
     }
     BtaApp *app = bta_current_app();
 
@@ -1538,8 +1584,13 @@ static JSValue js_library_path(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "LibraryPath expects (name, [project])");
 
     const char *project = NULL;
-    if (argc > 1 && !JS_IsUndefined(argv[1]) && !JS_IsNull(argv[1]))
+    if (argc > 1 && !JS_IsUndefined(argv[1]) && !JS_IsNull(argv[1])) {
         project = JS_ToCString(ctx, argv[1]);
+        if (!project) {
+            JS_FreeCString(ctx, name);
+            return JS_EXCEPTION;       /* it threw on the way; that stands */
+        }
+    }
 
     BtaApp *app = bta_current_app();
     char   *dir = lib_resolve(project ? project : (app ? app->dir : NULL),

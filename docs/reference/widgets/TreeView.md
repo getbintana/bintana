@@ -32,6 +32,8 @@ matters is in the section.
 |---|---|---|
 | `Add(key, text, [parentKey], [icon])` | a node, under another or at the root | [the nodes](#the-nodes) |
 | `Clear()` | empties the whole tree | [the nodes](#the-nodes) |
+| `Activate([index])` | raises `Activate` for that visible position, as a double click would; the selected node with no argument | [the selection](#the-selection) |
+| `ActivateOnSingleClick` | raise `Activate` on one click instead of two. Default `false` | [the selection](#the-selection) |
 | `CollapseAll()` | closes every node | [opening and closing](#opening-and-closing) |
 | `CollapseNode(key)` | closes one | [opening and closing](#opening-and-closing) |
 | `Exists(key)` | → whether that node is there | [the nodes](#the-nodes) |
@@ -39,6 +41,7 @@ matters is in the section.
 | `ExpandNode(key)` | opens one, and the way to it | [opening and closing](#opening-and-closing) |
 | `Expanded(key)` | → whether it is open | [opening and closing](#opening-and-closing) |
 | `RemoveNode(key)` | takes a node out, **and its subtree** | [the nodes](#the-nodes) |
+| `Reveal(index)` | brings that visible row into view | [the nodes](#the-nodes) |
 | `SetIcon(key, name)` | its picture, `""` for none | [the nodes](#the-nodes) |
 | `SetText(key, text)` | renames it | [the nodes](#the-nodes) |
 
@@ -119,6 +122,7 @@ nothing has added yet is not there to go under.
 | `SetText(key, text)` | renames a node, keeping it where it is — and keeping the selection on it. **Translated** |
 | `SetIcon(key, name)` | its picture, or `""` for none. One column, so no column argument |
 | `RemoveNode(key)` | takes that node out **and the subtree with it** — a node whose parent is gone is not something this control can show |
+| `Reveal(index)` | brings that visible row into view with the least scrolling it takes, and answers whether there was one. The index is a visible position, like `Activate`'s |
 | `Exists(key)` | → whether that node is there. The question you ask *before* you know, so it answers rather than throwing |
 | `Clear()` | empties the whole tree |
 | `Count` (ro) | how many nodes there are, **at every level**, open or closed |
@@ -138,12 +142,21 @@ key space; if the same tree holds files and categories, `cat:forms` and
 |---|---|
 | `Key` | the selected node's key, `""` for none. Assigning selects that node, **opening the way to it**, and raises `Select` |
 | `Text` (ro) | the words of the selected node, `""` when nothing is selected |
+| `Activate([index])` | the double click from code; the selected node with no argument |
+| `ActivateOnSingleClick` | raise `Activate` on one click instead of two. Default `false` |
 | **event** `Select()` | the selection moved — by the user, by an assignment, or because what was selected is no longer visible |
 | **event** `Activate()` | a double click on a node, or Enter on it: the gesture for *open this one* |
 
 **There is no `MultiSelect` and no `Index`.** A hierarchy is selected one node at
 a time — which is what a tree has meant since the first one — and a position in
 it is a position in the *visible* list, so it is not something to keep.
+
+**`Activate([index])` is the double click from code**, and
+`ActivateOnSingleClick` decides which click raises the event in the first place
+(default `false`, like every other list here). The index is the visible position
+— what a click lands on — and with no argument it is the node already selected,
+which is what Enter does. A position that is not there is nothing to activate
+and not an error.
 
 **`Select` is for following the selection and `Activate` for acting on it**, the
 same division every list here makes: a tree that opened a file every time

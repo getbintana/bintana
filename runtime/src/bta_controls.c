@@ -2950,14 +2950,28 @@ static JSValue listbox_set_items(JSContext *ctx, JSValueConst this_val, JSValueC
     JS_ToUint32(ctx, &n, lenv);
     JS_FreeValue(ctx, lenv);
 
-    listbox_clear(w);
+    /* Converted before the list is touched: a value that cannot become text is
+     * a refusal, and refusing after a `clear` would leave a half-filled list --
+     * the `AddNode` trap. */
+    GPtrArray *keep = g_ptr_array_new();
     for (uint32_t i = 0; i < n; i++) {
         JSValue     e = JS_GetPropertyUint32(ctx, val, i);
         const char *s = JS_ToCString(ctx, e);
-        listbox_append(w, s ? s : "");
+
+        if (!s) {
+            JS_FreeValue(ctx, e);
+            g_ptr_array_free(keep, TRUE);
+            return JS_EXCEPTION;   /* it threw on the way; that stands */
+        }
+        g_ptr_array_add(keep, g_strdup(s));
         JS_FreeCString(ctx, s);
         JS_FreeValue(ctx, e);
     }
+
+    listbox_clear(w);
+    for (guint i = 0; i < keep->len; i++)
+        listbox_append(w, g_ptr_array_index(keep, i));
+    g_ptr_array_free(keep, TRUE);
     return JS_UNDEFINED;
 }
 
@@ -3143,8 +3157,16 @@ static JSValue listbox_add(JSContext *ctx, JSValueConst this_val,
     if (!w)
         return JS_EXCEPTION;
 
-    const char *s = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
-    listbox_append(w, s ? s : "");
+    /* QuickJS pads `argv` to the declared arity, so `Add()` arrives as
+     * `argc == 1` with `undefined` -- and used to append the text
+     * "undefined". */
+    if (argc < 1 || JS_IsUndefined(argv[0]) || JS_IsNull(argv[0]))
+        return JS_ThrowTypeError(ctx, "Add(text) needs the text");
+
+    const char *s = JS_ToCString(ctx, argv[0]);
+    if (!s)
+        return JS_EXCEPTION;
+    listbox_append(w, s);
     JS_FreeCString(ctx, s);
     return JS_UNDEFINED;
 }
@@ -3176,6 +3198,31 @@ static JSValue listbox_remove(JSContext *ctx, JSValueConst this_val,
     if (row)
         gtk_list_box_remove(GTK_LIST_BOX(w->inner), GTK_WIDGET(row));
     return JS_UNDEFINED;
+}
+
+/*
+ * `Reveal(index)` -- bring that row into view, which is what selecting from
+ * code does not do and what a list built from a search result needs.
+ */
+static JSValue listbox_reveal(JSContext *ctx, JSValueConst this_val,
+                              int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    int32_t i;
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "Reveal(index) needs a row index");
+    if (JS_ToInt32(ctx, &i, argv[0]))
+        return JS_EXCEPTION;
+
+    GtkListBoxRow *row = gtk_list_box_get_row_at_index(GTK_LIST_BOX(w->inner), i);
+    if (!row)
+        return JS_NewBool(ctx, false);      /* no such row: not an error */
+
+    bta_widget_reveal(GTK_WIDGET(row));
+    return JS_NewBool(ctx, true);
 }
 
 /*
@@ -3237,6 +3284,8 @@ static const JSCFunctionListEntry listbox_props[] = {
     JS_CFUNC_DEF("Clear",  0, listbox_clear_js),
     /* RemoveRow(index) */
     JS_CFUNC_DEF("RemoveRow", 1, listbox_remove),
+    /* Reveal(index) */
+    JS_CFUNC_DEF("Reveal",    1, listbox_reveal),
     /* Select(index) */
     JS_CFUNC_MAGIC_DEF("Select",   1, listbox_select_one, LB_SELECT),
     /* Deselect(index) */
@@ -3319,7 +3368,13 @@ static JSValue combo_set_items(JSContext *ctx, JSValueConst this_val, JSValueCon
     for (uint32_t i = 0; i < n; i++) {
         JSValue     e = JS_GetPropertyUint32(ctx, val, i);
         const char *s = JS_ToCString(ctx, e);
-        strv[i] = g_strdup(s ? s : "");
+
+        if (!s) {
+            JS_FreeValue(ctx, e);
+            g_strfreev(strv);          /* zeroed, so it stops at the first NULL */
+            return JS_EXCEPTION;       /* it threw on the way; that stands */
+        }
+        strv[i] = g_strdup(s);
         JS_FreeCString(ctx, s);
         JS_FreeValue(ctx, e);
     }
@@ -3423,8 +3478,13 @@ static JSValue combo_add(JSContext *ctx, JSValueConst this_val,
     if (!w)
         return JS_EXCEPTION;
 
-    const char *s = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
-    gtk_string_list_append(combo_model(w), s ? s : "");
+    if (argc < 1 || JS_IsUndefined(argv[0]) || JS_IsNull(argv[0]))
+        return JS_ThrowTypeError(ctx, "Add(text) needs the text");
+
+    const char *s = JS_ToCString(ctx, argv[0]);
+    if (!s)
+        return JS_EXCEPTION;
+    gtk_string_list_append(combo_model(w), s);
     JS_FreeCString(ctx, s);
     return JS_UNDEFINED;
 }

@@ -657,6 +657,7 @@ With no display (or before the application is up) they print to stderr.
 |---|---|
 | `Load(path)` | the whole file as a string; throws if unreadable |
 | `Save(path, text)` | writes it — **atomically**: a temporary beside it, renamed over |
+| `Append(path, text)` | adds to the end, creating the file if it is not there |
 | `Exists(path)`, `IsDir(path)` | |
 | `Delete(path)` | `g_remove`: a file, or an **empty** directory. Throws if it fails |
 | `Trash(path)` | to the desktop's trash, whole for a folder. Throws where there is no trash |
@@ -881,6 +882,7 @@ const job = Exec(["make", "-j4"], { Directory: build, Environment: { CC: "clang"
 | `Stderr` | `"separate"` keeps the two output streams apart; merged is the default |
 | `Timeout` | milliseconds to wait before ending the child; absent means wait forever |
 | `KillAfter` | milliseconds between the guard's two signals, `5000` by default; `0` sends both at once |
+| `Input` | **`Exec.Wait` only**: the text or `Bytes` the child reads, written before its stdin is closed — what makes `Exec.Wait(["sort"], { Input: text })` a filter |
 
 `Environment` is a change and not a replacement, deliberately: what a caller has is the
 environment it got plus an edit to it, and spelling that as a whole environment
@@ -916,6 +918,7 @@ arrives as `out` however this is asked for.
 | `Kill()` | make it end (SIGKILL) |
 | `TimedOut` | whether the guard is what ended it, rather than the child itself |
 | `Write(text)` | a line to the child's stdin. A newline is added when there is not one, because a line is what the other side is blocked on; answers whether there was still a child to write to |
+| `CloseInput()` | the end of the child's stdin, after what `Write` queued — what tells `sort`, `wc` or `jq` that the input is over; answers whether there was still a pipe to close |
 
 `Running` and `ExitCode` are written onto the handle rather than asked of the
 child, because the question outlives the child: the ordinary place to read an exit
@@ -1964,7 +1967,7 @@ Spelled out rather than `Log`, which next to a number reads as a logarithm.
 | | |
 |---|---|
 | `Logger.Level` | `"Debug"`, `"Info"` (default), `"Warning"`, `"Error"`, `"None"` — below it, nothing is even formatted |
-| `Logger.Target` | `"Terminal"` (default) or `"Journal"` |
+| `Logger.Target` | `"Terminal"` (default), `"Journal"`, or **a file path** — the lines are appended there and go nowhere else. A path that cannot be opened is refused and the target stands |
 | `Logger.Handler` | `(level, text) => …` — set it and it takes over completely |
 
 **The base is stdout and stderr**, which every system has: `Debug` and `Info` to
@@ -1974,6 +1977,11 @@ looks for them.
 **`Logger.Handler` is how an application logs its own way** — to a file, to a widget,
 to a socket. It takes over completely; a handler that throws is reported once to
 stderr and cannot log its way back in.
+
+**`Logger.Target = "/a/file.log"` is the file without a handler**, opened once in
+append mode and flushed per line, so a program that just wants a log does not
+write the `Handler` and the `File.Append` under it. `Logger.Target` reads back the
+path, and `"Terminal"` closes it and gives the streams back.
 
 **Platform backends are extensions.** `Logger.Target = "Journal"` writes straight to
 the systemd journal with the level as its syslog priority, and it is compiled in

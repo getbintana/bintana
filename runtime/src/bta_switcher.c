@@ -298,14 +298,19 @@ static JSValue switcher_set_tabs(JSContext *ctx, JSValueConst this_val,
     if (rc < 0)
         return JS_EXCEPTION;
 
-    /* Read once: the list is both applied now and kept for the pages that do
-     * not exist yet. */
+    /* Read once -- and converted before anything is touched: a value that
+     * cannot become text is a refusal, not a page with no title. */
     GPtrArray *keep = g_ptr_array_new();
     for (uint32_t i = 0; i < n; i++) {
         JSValue     e = JS_GetPropertyUint32(ctx, val, i);
         const char *s = JS_ToCString(ctx, e);
 
-        g_ptr_array_add(keep, g_strdup(s ? s : ""));
+        if (!s) {
+            JS_FreeValue(ctx, e);
+            g_ptr_array_free(keep, TRUE);
+            return JS_EXCEPTION;   /* it threw on the way; that stands */
+        }
+        g_ptr_array_add(keep, g_strdup(s));
         JS_FreeCString(ctx, s);
         JS_FreeValue(ctx, e);
     }

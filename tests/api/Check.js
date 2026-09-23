@@ -553,6 +553,8 @@ function checkGlobalsListed(root, problems) {
 const CLASS_NAME = new Regex("BTA_CLASS(?:_\\w+)?\\s*\\(\\s*\"(\\w+)\"");
 const CLASS_REG = new Regex(
     "BTA_CLASS(?:_\\w+)?\\s*\\(\\s*\"(\\w+)\"\\s*,\\s*(?:\"\\w+\"|NULL)\\s*,\\s*\\w+\\s*,\\s*(\\w+)");
+const CLASS_PARENT = new Regex(
+    "BTA_CLASS(?:_\\w+)?\\s*\\(\\s*\"(\\w+)\"\\s*,\\s*(?:\"(\\w+)\"|NULL)");
 
 /*
  * table -> class, off the registrations: the only place those two facts are
@@ -575,6 +577,75 @@ function tableClasses(root) {
             owner[TABLE_ALIAS[m.Group(2)] || m.Group(2)] = m.Group(1);
     }
     return owner;
+}
+
+/*
+ * A subclass member that shadows one of its base's, and **says something
+ * different**.
+ *
+ * The `Expand`/`ExpandNode` and `Remove`/`RemoveRow` traps: a method on a
+ * subclass hides the base's on the prototype, and this check could not see it
+ * because the base's row documents the name *somewhere* -- `api.sh` asks
+ * whether a name is documented, not under which class.
+ *
+ * Two kinds are checkable, and the check is deliberately no wider than that:
+ * a property answered by a method (or the reverse), and two methods declaring a
+ * different number of parameters. **A property overridden by a property is
+ * legitimate** -- `Split.Arrangement` narrows what its `Fixed` slot accepts on
+ * purpose -- and a method overridden by a method with the same signature is an
+ * override, not a shadow. What is left out is a subclass that redefines the
+ * same name with the same shape and a different *meaning*, which no parser can
+ * tell; the signature comments are what make even this much mechanical.
+ */
+function checkShadows(root, members, problems) {
+    const parent = {};
+    const owner  = tableClasses(root);
+
+    for (const c of sources(root)) {
+        const src = File.Load(c);
+        for (const m of CLASS_PARENT.Matches(src))
+            parent[m.Group(1)] = m.Group(2) || null;
+    }
+
+    const mine = {};
+    for (const m of members) {
+        const cls = owner[m.table];
+        if (!cls) continue;
+        if (!mine[cls]) mine[cls] = [];
+        if (!mine[cls].some((one) => one.name === m.name && one.kind === m.kind))
+            mine[cls].push(m);
+    }
+
+    let checked = 0;
+
+    for (const cls in mine) {
+        for (let up = parent[cls]; up; up = parent[up]) {
+            const base = mine[up];
+            if (!base) continue;
+
+            for (const m of mine[cls]) {
+                const b = base.find((one) => one.name === m.name);
+                if (!b) continue;
+
+                checked++;
+                if (b.kind !== m.kind) {
+                    problems.push(`${cls}.${m.name} is a ${m.kind} and shadows ` +
+                                  `${up}.${b.name}, a ${b.kind}`);
+                    continue;
+                }
+                if (m.kind !== "method") continue;
+
+                const a = Widget.Signature(cls, m.name);
+                const z = Widget.Signature(up, b.name);
+
+                if (a !== null && z !== null &&
+                    signatureParams(a).length !== signatureParams(z).length)
+                    problems.push(`${cls}.${m.name}${a} shadows ` +
+                                  `${up}.${b.name}${z}`);
+            }
+        }
+    }
+    return checked;
 }
 
 function checkReference(root, members, events, problems) {
@@ -1344,6 +1415,7 @@ function Main() {
     const libs    = checkLibraryPages(root, problems);
     const links   = checkLinks(root, problems);
     const scopes  = checkLibraryScopes(root, problems);
+    const shadows = checkShadows(root, members, problems);
 
     for (const p of problems) print(`  ${p}`);
     print(problems.length
@@ -1352,7 +1424,8 @@ function Main() {
           `${globals} on globals, ${lib} in lib/ and ${typings} declared for an editor`
         : `api: ${seen.size} widget members and ${Dictionary.Count(events)} events, ` +
           `plus ${statics} class statics, ${globals} on the globals and ${lib} ` +
-          `published by lib/, ` +
+          `published by lib/, ${shadows} member${shadows === 1 ? "" : "s"} checked ` +
+          `for shadowing a base one, ` +
           `all declared for an editor (${typings} names, the runtime's and the ` +
           `IDE's own forms) and documented -- and ${ref.checked} again in the ${ref.pages} ` +
           `long page${ref.pages === 1 ? "" : "s"} of docs/reference/widgets, ` +

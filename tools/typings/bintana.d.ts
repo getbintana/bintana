@@ -220,6 +220,7 @@ declare class ListBox extends Widget {
     Deselect(index: any): any;
     DeselectAll(): any;
     RemoveRow(index: any): any;
+    Reveal(index: any): any;
     Select(index: any): any;
     SelectAll(): any;
 }
@@ -414,6 +415,7 @@ declare class RowList extends Widget {
     Refilter(): any;
     RemoveRow(index: any): any;
     Reorder(child: any, index: any): any;
+    Reveal(index: any): any;
     Select(index: any): any;
     SelectAll(): any;
 }
@@ -640,10 +642,12 @@ declare class Terminal extends Widget {
     Stop(): any;
 }
 declare class TreeView extends Widget {
+    ActivateOnSingleClick: boolean;
     AutoExpand: boolean;
     Key: string;
     readonly Count: number;
     readonly Text: string;
+    Activate(index?: any): any;
     Add(key: any, text: any, parentKey?: any, icon?: any): any;
     Clear(): any;
     CollapseAll(): any;
@@ -653,10 +657,12 @@ declare class TreeView extends Widget {
     ExpandNode(key: any): any;
     Expanded(key: any): any;
     RemoveNode(key: any): any;
+    Reveal(index: any): any;
     SetIcon(key: any, name: any): any;
     SetText(key: any, text: any): any;
 }
 declare class TableView extends Widget {
+    ActivateOnSingleClick: boolean;
     AutoExpand: boolean;
     ColumnLines: boolean;
     Columns: any[];
@@ -667,6 +673,7 @@ declare class TableView extends Widget {
     RowLines: boolean;
     Sortable: boolean;
     readonly Selection: any[];
+    Activate(index?: any): any;
     Add(values: any, options?: any): any;
     Cell(row: any, column: any): any;
     Clear(): any;
@@ -680,6 +687,7 @@ declare class TableView extends Widget {
     Expanded(key: any): any;
     RemoveNode(key: any): any;
     RemoveRow(index: any): any;
+    Reveal(index: any): any;
     Row(index: any): any;
     Select(index: any): any;
     SelectAll(): any;
@@ -860,6 +868,7 @@ declare const Environment: {
 
 declare const File: {
     Absolute(...values: any[]): any;
+    Append(...values: any[]): any;
     BaseName(...values: any[]): any;
     Copy(...values: any[]): any;
     Delete(...values: any[]): any;

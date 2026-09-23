@@ -44,12 +44,15 @@ not repeated here.
 | `CollapseNode(key)` | closes one | [a tree](#a-tree) |
 | `Deselect(index)` | unselects a row | [the selection](#the-selection) |
 | `DeselectAll()` | selects nothing | [the selection](#the-selection) |
+| `Activate([index])` | raises `Activate` for that visible position, as a double click would; the selected row with no argument | [the selection](#the-selection) |
+| `ActivateOnSingleClick` | raise `Activate` on one click instead of two. Default `false` | [the selection](#the-selection) |
 | `Exists(key)` | → whether that node is there | [a tree](#a-tree) |
 | `ExpandAll()` | opens every node | [a tree](#a-tree) |
 | `ExpandNode(key)` | opens one, and the way to it | [a tree](#a-tree) |
 | `Expanded(key)` | → whether it is open | [a tree](#a-tree) |
 | `RemoveRow(index)` | takes a row out. Flat only | [the rows](#the-rows-it-holds) |
 | `RemoveNode(key)` | takes a node out, and its subtree. Tree only | [a tree](#a-tree) |
+| `Reveal(index)` | brings that visible row into view | [the rows](#the-rows-it-holds) |
 | `Row(index)` | → that row's values | [the rows](#the-rows-it-holds) |
 | `Select(index)` | selects a row | [the selection](#the-selection) |
 | `SelectAll()` | every row, with `MultiSelect` | [the selection](#the-selection) |
@@ -194,6 +197,7 @@ row shorter than there are columns simply reads blank in the rest.
 | `SetIcon(row, column, name)` | an icon from the theme beside a cell's text. `""` takes it off |
 | `RemoveRow(index)` | takes that row out. **Flat only** — a tree says `RemoveNode(key)`, and this one refuses with that sentence |
 | `RemoveNode(key)` | takes that node out, **and the subtree with it**. **Tree only** — a flat table says `RemoveRow(index)` |
+| `Reveal(index)` | brings that visible row into view with the least scrolling it takes, and answers whether there was one |
 | `Clear()` | empties it — **and forgets which of the three shapes this table was** |
 
 **In a tree, every one of these takes a key where it says `row`** — see
@@ -223,12 +227,22 @@ perfectly until somebody selects two.
 | `Deselect(index)` | unselects it |
 | `SelectAll()` | with `MultiSelect` |
 | `DeselectAll()` | selects nothing |
+| `Activate([index])` | the double click from code; the selected row with no argument |
+| `ActivateOnSingleClick` | raise `Activate` on one click instead of two. Default `false` |
 | **event** `Select()` | the selection moved — by the user or by an assignment. Ask `Index` for where it is and `Cell`/`Row` for what is there; `Key` when the table is a tree |
 | **event** `Activate()` | a double click on a row, or Enter on it. The gesture for *open this one* |
 
 `Select` fires for a selection made in code as well as one made with the mouse,
 which is what a form wants: the button under the table is enabled in one place
 rather than in every place that moves the selection.
+
+**`Activate([index])` is the double click from code**, and
+`ActivateOnSingleClick` decides which click raises the event in the first place
+(default `false`, like every other list here). The index is the visible position
+— what a click lands on — and with no argument it is the row already selected,
+which is what Enter does. It is the same verb in the flat and the tree shape,
+because a click lands on a position; a position that is not there is nothing to
+activate and not an error.
 
 **`Index` answers the first selected row**, once there is more than one:
 selecting 0, then 2, then 3 leaves `Index` at `0` and `Selection` at `[0, 2, 3]`.

@@ -743,6 +743,9 @@ GdkTexture *bta_texture_from_bytes(JSContext *ctx, JSValueConst val, const char 
  * that look like this question answer wrongly). Takes a GtkWidget rather than a
  * BtaWidget because a Painter asks it about the surface it is painting. */
 bool bta_widget_dark(GtkWidget *at);
+/* Scroll a row into view inside whatever scrolled window holds it -- the
+ * arithmetic `GtkListBox` has no call for. */
+void bta_widget_reveal(GtkWidget *target);
 /* The Widget prototype's own accessors, shared by the class table. */
 const JSCFunctionListEntry *bta_widget_base_props(int *count);
 /* The values `Cursor` accepts, comma separated, for Widget's `options`. Built

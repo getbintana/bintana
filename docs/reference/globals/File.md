@@ -25,6 +25,7 @@ with `[object Object]`, and is now a refusal that says so.
 | `LoadJson(path)` | → it, parsed | [json](#json) |
 | `LoadXml(path)` | → it, as an XML document | [xml](#xml) |
 | `Save(path, text)` | writes it **atomically** | [text](#text) |
+| `Append(path, text)` | adds to the end, creating it if needed | [text](#text) |
 | `SaveBytes(path, bytes)` | those bytes, exactly | [bytes](#bytes) |
 | `SaveJson(path, value)` | one canonical shape | [json](#json) |
 | `SaveXml(path, node)` | the canonical XML shape, atomically | [xml](#xml) |
@@ -64,6 +65,7 @@ with `[object Object]`, and is now a refusal that says so.
 |---|---|
 | `Load(path)` | the whole file as a string. **Throws if it cannot be read**, and the message names the file: there is no `null` to test for and no silent empty string |
 | `Save(path, text)` | writes it **atomically** — a temporary beside it, renamed over — so a failed write leaves the old file intact and a reader never sees half a file |
+| `Append(path, text)` | adds `text` to the end, and creates the file when it is not there. A log or a CSV written line by line wants this: `Save(path, Load(path) + line)` is the whole file through memory for every line, and a window in which another writer's line is overwritten |
 
 **Text is UTF-8 throughout.** `Load` decodes and `Save` encodes, which is why
 [`Copy`](#moving-and-removing) exists: `Save(to, Load(from))` is right for source

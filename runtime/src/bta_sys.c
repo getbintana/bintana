@@ -155,6 +155,69 @@ static JSValue sys_file_save(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
+/*
+ * `File.Append(path, text)` -- a line onto the end of a file, without reading
+ * it.
+ *
+ * Writing a log or a CSV line by line used to be `Load` + `Save`: the whole
+ * file through memory and back for every line, which is O(n²) for n lines, and
+ * a window in which a line another writer put there is overwritten. The
+ * operation that was missing is `g_file_append_to`, and the file is created
+ * when it is not there.
+ */
+static JSValue sys_file_append(JSContext *ctx, JSValueConst this_val,
+                               int argc, JSValueConst *argv)
+{
+    if (argc < 2)
+        return JS_ThrowTypeError(ctx,
+            "File.Append(path, text) needs a path and the text");
+
+    const char *path = file_path(ctx, argv[0], "File.Append");
+    if (!path)
+        return JS_EXCEPTION;
+
+    if (!JS_IsString(argv[1])) {
+        JS_FreeCString(ctx, path);
+        return JS_ThrowTypeError(ctx, "File.Append(path, text) needs the text, "
+                                      "as a string");
+    }
+
+    size_t      len  = 0;
+    const char *text = JS_ToCStringLen(ctx, &len, argv[1]);
+    if (!text) {
+        JS_FreeCString(ctx, path);
+        return JS_EXCEPTION;
+    }
+
+    GFile            *file  = g_file_new_for_path(path);
+    GError           *error = NULL;
+    GFileOutputStream *out  = g_file_append_to(file, G_FILE_CREATE_NONE, NULL,
+                                               &error);
+    JSValue           e     = JS_UNDEFINED;
+
+    if (!out) {
+        e = JS_ThrowInternalError(ctx, "cannot append to %s: %s", path,
+                                  error ? error->message : "unknown error");
+    } else {
+        gsize written = 0;
+
+        if (!g_output_stream_write_all(G_OUTPUT_STREAM(out), text, len,
+                                       &written, NULL, &error))
+            e = JS_ThrowInternalError(ctx, "cannot write %s: %s", path,
+                                      error ? error->message : "unknown error");
+        else if (!g_output_stream_close(G_OUTPUT_STREAM(out), NULL, &error))
+            e = JS_ThrowInternalError(ctx, "cannot close %s: %s", path,
+                                      error ? error->message : "unknown error");
+        g_object_unref(out);
+    }
+
+    g_clear_error(&error);
+    g_object_unref(file);
+    JS_FreeCString(ctx, text);
+    JS_FreeCString(ctx, path);
+    return e;
+}
+
 enum { FT_EXISTS, FT_ISDIR };
 
 static JSValue sys_file_test(JSContext *ctx, JSValueConst this_val,
@@ -1262,6 +1325,9 @@ typedef struct {
      * one is in flight -- see exec_write. */
     GQueue            unwritten;
     bool              writing;
+    /* `CloseInput` asked: the pipe is closed once everything queued is out,
+     * which is what lets a filter see EOF. */
+    bool              close_input;
 } ExecJob;
 
 static GList *exec_jobs;   /* ExecJob*, live children */
@@ -1792,8 +1858,26 @@ static void on_exec_written(GObject *src, GAsyncResult *res, gpointer user_data)
 
 static void exec_write_next(ExecJob *job)
 {
-    if (job->writing || g_queue_is_empty(&job->unwritten) || !job->in)
+    if (job->writing || !job->in)
         return;
+
+    if (g_queue_is_empty(&job->unwritten)) {
+        if (job->close_input) {
+            /*
+             * Everything queued is in the child's hands, so the end of the pipe
+             * can be said. The close is synchronous and cannot block: the pipe
+             * is unbuffered and there is no operation in flight. `in` is
+             * borrowed from the process, so it is dropped and not unref'd.
+             */
+            GError *error = NULL;
+
+            g_output_stream_close(job->in, NULL, &error);
+            g_clear_error(&error);
+            job->in          = NULL;
+            job->close_input = false;
+        }
+        return;
+    }
 
     ExecWrite *op = g_new0(ExecWrite, 1);
     gsize      len = 0;
@@ -1852,6 +1936,37 @@ static JSValue exec_write(JSContext *ctx, JSValueConst this_val,
     exec_write_next(job);
 
     return JS_TRUE;
+}
+
+/*
+ * `CloseInput()` -- the end of the child's stdin, after what `Write` queued.
+ *
+ * Without it there is no way to tell a filter the input is over, which is what
+ * `sort`, `wc`, `jq`, `git apply` and `patch` all wait for: the child reads
+ * until EOF and answers, and a pipe that is never closed is a child that never
+ * answers. It is queued behind the lines rather than closing on the spot --
+ * closing first would drop them, which is the opposite of what a filter wants.
+ */
+static JSValue exec_close_input(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv, int magic,
+                                JSValue *data)
+{
+    int32_t id = 0;
+    JS_ToInt32(ctx, &id, data[0]);
+
+    for (GList *l = exec_jobs; l; l = l->next) {
+        ExecJob *job = l->data;
+
+        if (job->id != id)
+            continue;
+        if (!job->in || job->reaped)
+            return JS_FALSE;
+
+        job->close_input = true;
+        exec_write_next(job);
+        return JS_TRUE;
+    }
+    return JS_FALSE;
 }
 
 static JSValue exec_signal(JSContext *ctx, JSValueConst this_val,
@@ -2144,6 +2259,8 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
                       JS_NewCFunctionData(ctx, exec_signal, 0, 1, 1, &idv));
     JS_SetPropertyStr(ctx, handle, "Write",
                       JS_NewCFunctionData(ctx, exec_write, 1, 0, 1, &idv));
+    JS_SetPropertyStr(ctx, handle, "CloseInput",
+                      JS_NewCFunctionData(ctx, exec_close_input, 0, 0, 1, &idv));
     JS_FreeValue(ctx, idv);
 
     job->handle = JS_DupValue(ctx, handle);
@@ -2203,6 +2320,56 @@ static gboolean on_exec_wait_late(gpointer data)
 {
     *(bool *)data = true;
     return G_SOURCE_REMOVE;
+}
+
+/*
+ * `{ Input }`: what the child reads, before its stdin is closed.
+ *
+ * Text or `Bytes` -- a patch, a list of lines, a document -- and it is what
+ * makes `Exec.Wait(["sort"], { Input: text })` a filter. The child sees the end
+ * of its input when the buffer is written and the pipe closed, which is what
+ * communicate does; without a buffer the pipe is closed at once, which is what
+ * it always did.
+ *
+ * Converted **before the child is spawned**: a value that cannot become text is
+ * a refusal, and refusing after the spawn would leave a child running with
+ * nothing to read.
+ */
+static bool exec_wait_input(JSContext *ctx, JSValueConst opts, GBytes **out)
+{
+    *out = NULL;
+    if (!JS_IsObject(opts))
+        return true;
+
+    JSValue iv = JS_GetPropertyStr(ctx, opts, "Input");
+    if (JS_IsUndefined(iv) || JS_IsNull(iv)) {
+        JS_FreeValue(ctx, iv);
+        return true;
+    }
+
+    if (JS_IsString(iv)) {
+        size_t      len = 0;
+        const char *s   = JS_ToCStringLen(ctx, &len, iv);
+
+        JS_FreeValue(ctx, iv);
+        if (!s)
+            return false;              /* it threw on the way; that stands */
+        *out = g_bytes_new(s, len);
+        JS_FreeCString(ctx, s);
+        return true;
+    }
+
+    size_t         len = 0;
+    const uint8_t *b   = bta_bytes_get(iv, &len);
+
+    JS_FreeValue(ctx, iv);
+    if (!b) {
+        JS_ThrowTypeError(ctx, "Exec.Wait: Input is the text or Bytes to write "
+                               "to the child");
+        return false;
+    }
+    *out = g_bytes_new(b, len);
+    return true;
 }
 
 static GSource *exec_wait_guard(GMainContext *where, unsigned ms, bool *flag)
@@ -2273,9 +2440,15 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
             "object -- Wait takes no callbacks, it answers with a record");
     }
 
-    GPtrArray *args = exec_build_argv(ctx, argv[0], "Exec.Wait");
-    if (!args)
+    GBytes *input = NULL;
+    if (!exec_wait_input(ctx, opts, &input))
         return JS_EXCEPTION;
+
+    GPtrArray *args = exec_build_argv(ctx, argv[0], "Exec.Wait");
+    if (!args) {
+        g_clear_pointer(&input, g_bytes_unref);
+        return JS_EXCEPTION;
+    }
 
     bool     split      = exec_wants_split(ctx, opts);
     unsigned timeout    = exec_millis(ctx, opts, "Timeout", 0);
@@ -2304,6 +2477,7 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
 
     if (!launcher) {
         g_ptr_array_unref(args);
+        g_clear_pointer(&input, g_bytes_unref);
         g_main_context_pop_thread_default(priv);
         g_main_context_unref(priv);
         return JS_EXCEPTION;       /* it threw on the way; that stands */
@@ -2319,6 +2493,7 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
         JSValue e = JS_ThrowInternalError(ctx, "Exec.Wait failed: %s",
                                           err ? err->message : "unknown error");
         g_clear_error(&err);
+        g_clear_pointer(&input, g_bytes_unref);
         g_main_context_pop_thread_default(priv);
         g_main_context_unref(priv);
         return e;
@@ -2346,10 +2521,11 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
      * the pipe is closed, so a child that reads stdin sees the end of it rather
      * than waiting for a `Wait` that is already blocked on the child.
      */
-    GBytes *nothing = g_bytes_new_static("", 0);
+    GBytes *stdin_bytes = input ? input : g_bytes_new_static("", 0);
 
-    g_subprocess_communicate_async(proc, nothing, NULL, on_exec_wait_done, &w);
-    g_bytes_unref(nothing);
+    input = NULL;   /* the operation holds its own reference to it */
+    g_subprocess_communicate_async(proc, stdin_bytes, NULL, on_exec_wait_done, &w);
+    g_bytes_unref(stdin_bytes);
 
     bool     late  = false;
     GSource *guard = exec_wait_guard(priv, timeout, &late);
@@ -3525,6 +3701,8 @@ void bta_sys_init(JSContext *ctx, JSValue global)
     JSValue file = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, file, "Load",   JS_NewCFunction(ctx, sys_file_load, "Load", 1));
     JS_SetPropertyStr(ctx, file, "Save",   JS_NewCFunction(ctx, sys_file_save, "Save", 2));
+    JS_SetPropertyStr(ctx, file, "Append",
+                      JS_NewCFunction(ctx, sys_file_append, "Append", 2));
     JS_SetPropertyStr(ctx, file, "Delete", JS_NewCFunction(ctx, sys_file_delete, "Delete", 1));
     JS_SetPropertyStr(ctx, file, "Open",
                       JS_NewCFunction(ctx, sys_file_open, "Open", 1));

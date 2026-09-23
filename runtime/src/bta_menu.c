@@ -518,24 +518,37 @@ static JSValue menuitem_set_items(JSContext *ctx, JSValueConst this_val,
     if (rc < 0)
         return JS_EXCEPTION;
 
-    g_menu_remove_all(mi->sub);
-
+    /*
+     * Converted before the menu is touched: a label that cannot become text is
+     * a refusal, and refusing after `g_menu_remove_all` would leave a menu
+     * half rebuilt -- the `AddNode` trap, on a menu.
+     */
+    char **labels = g_new0(char *, n + 1);
     for (uint32_t i = 0; i < n; i++) {
         JSValue     e = JS_GetPropertyUint32(ctx, val, i);
         const char *s = JS_ToCString(ctx, e);
-        JS_FreeValue(ctx, e);
 
-        char *label = escape_mnemonics(s ? s : "");
+        if (!s) {
+            JS_FreeValue(ctx, e);
+            g_strfreev(labels);        /* zeroed, so it stops at the first NULL */
+            return JS_EXCEPTION;       /* it threw on the way; that stands */
+        }
+        labels[i] = escape_mnemonics(s);
         JS_FreeCString(ctx, s);
+        JS_FreeValue(ctx, e);
+    }
 
-        GMenuItem *item = g_menu_item_new(label, NULL);
-        g_free(label);
+    g_menu_remove_all(mi->sub);
+
+    for (uint32_t i = 0; i < n; i++) {
+        GMenuItem *item = g_menu_item_new(labels[i], NULL);
 
         g_menu_item_set_action_and_target_value(item, mi->path,
                                                 g_variant_new_int32((gint32)i));
         g_menu_append_item(mi->sub, item);
         g_object_unref(item);
     }
+    g_strfreev(labels);
 
     JS_FreeValue(ctx, mi->items);
     mi->items = JS_DupValue(ctx, val);

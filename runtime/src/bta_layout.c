@@ -1271,6 +1271,28 @@ static JSValue rowlist_remove(JSContext *ctx, JSValueConst this_val,
     return JS_NewBool(ctx, true);
 }
 
+/* `Reveal(index)` -- the row into view. See `listbox_reveal`. */
+static JSValue rowlist_reveal(JSContext *ctx, JSValueConst this_val,
+                              int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    int32_t i;
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "Reveal(index) needs a row index");
+    if (JS_ToInt32(ctx, &i, argv[0]))
+        return JS_EXCEPTION;
+
+    GtkListBoxRow *row = i < 0 ? NULL : rowlist_row(w, i);
+    if (!row)
+        return JS_NewBool(ctx, false);
+
+    bta_widget_reveal(GTK_WIDGET(row));
+    return JS_NewBool(ctx, true);
+}
+
 static const JSCFunctionListEntry rowlist_props[] = {
     JS_CGETSET_DEF("Index", rowlist_get_index, rowlist_set_index),
     JS_CGETSET_DEF("Count", rowlist_get_count, NULL),
@@ -1282,6 +1304,8 @@ static const JSCFunctionListEntry rowlist_props[] = {
     JS_CFUNC_DEF("Refilter", 0, rowlist_refilter),
     /* RemoveRow(index) */
     JS_CFUNC_DEF("RemoveRow", 1, rowlist_remove),
+    /* Reveal(index) */
+    JS_CFUNC_DEF("Reveal",   1, rowlist_reveal),
     /* Activate([index]) */
     JS_CFUNC_DEF("Activate", 1, rowlist_activate),
     /* Select(index) */

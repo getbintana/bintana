@@ -4452,6 +4452,39 @@ static JSValue w_get_dark(JSContext *ctx, JSValueConst this_val)
     return JS_NewBool(ctx, bta_widget_dark(w->gtk));
 }
 
+/*
+ * Bring a row into view inside the scrolled window that holds it.
+ *
+ * `GtkListBox` has no `scroll_to` in GTK4, so this is the arithmetic every
+ * scrolled window does: where the row is against the visible page, and the
+ * adjustment moved by exactly the difference. It is what the list and column
+ * views do internally, and what their 4.12 `scroll_to` wraps -- the four lists
+ * share one `Reveal`, and the two that have the function use it.
+ *
+ * Nothing happens for a row that is already visible, which is the whole point
+ * of *minimum scrolling*: a `Reveal` after every selection must not move the
+ * view under somebody who is reading it.
+ */
+void bta_widget_reveal(GtkWidget *target)
+{
+    GtkWidget *scroll = gtk_widget_get_ancestor(target, GTK_TYPE_SCROLLED_WINDOW);
+    if (!scroll)
+        return;
+
+    graphene_rect_t r;
+    if (!gtk_widget_compute_bounds(target, scroll, &r))
+        return;
+
+    GtkAdjustment *v    = gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(scroll));
+    double         page = gtk_adjustment_get_page_size(v);
+    double         y    = r.origin.y;
+
+    if (y < 0)
+        gtk_adjustment_set_value(v, gtk_adjustment_get_value(v) + y);
+    else if (y + r.size.height > page)
+        gtk_adjustment_set_value(v, gtk_adjustment_get_value(v) + y + r.size.height - page);
+}
+
 /* ------------------------------------------------- the runtime's own notes
  *
  * Six things the runtime knows about a widget that the application does not:

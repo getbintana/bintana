@@ -34,8 +34,12 @@ All four join their arguments with a space, like `print`.
 
 | | |
 |---|---|
-| `Target` | where the lines are written |
+| `Target` | where the lines are written: `"Terminal"` (the default, and stdout/stderr under it), `"Journal"` where the build has one, or **a file path** — opened in append mode and flushed per line, and it reads back as the path |
 | `Handler` | assign `(level, text) => …` and every line arrives there instead — which is how a log pane inside the application is fed, and how a test captures what was logged |
+
+A target that cannot be opened — a path in a directory that is not there — is
+**refused**, and the target it had stands. `Logger.Target = "Terminal"` closes
+the file and gives the streams back.
 
 ## A log is not a message
 

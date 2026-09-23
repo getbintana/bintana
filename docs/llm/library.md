@@ -190,6 +190,7 @@ the file with `[object Object]`.
 |---|---|
 | `Load(path)` | the whole file as a string; throws if unreadable |
 | `Save(path, text)` | **atomically** — a temporary beside it, renamed over, so a failed write leaves the old file intact |
+| `Append(path, text)` | onto the end, creating the file if it is not there — a log or a CSV line at a time, without reading the whole file back for each one |
 | `LoadJson(path)` | parsed, and the error names the file |
 | `SaveJson(path, value)` | one canonical shape: indented by two, one trailing newline |
 | `LoadXml(path)` | as an XML document — see [Xml](#xml) — and the error names the file |
@@ -370,14 +371,16 @@ An options object may come between the argv and the callbacks:
 | `Stderr` | `"separate"` keeps the streams apart — the line callback then gets `"out"`/`"err"` as its second argument. Merged is the default, and merging is what keeps the order |
 | `Timeout` | milliseconds before the child is ended; absent waits forever |
 | `KillAfter` | milliseconds between SIGTERM and SIGKILL, `5000` by default |
+| `Input` | **`Wait` only**: the text or `Bytes` the child reads, before its stdin is closed. What makes `Exec.Wait(["sort"], { Input: text })` a filter |
 
 The handle: `ProcessId`, `Running`, `ExitCode` (`null` while it runs; `-1` for a
 child stopped by a signal), `TimedOut`, `Stop()` (SIGTERM), `Kill()` (SIGKILL),
 `Write(text)` (a line to its stdin; a newline is added when there is not one,
-and it answers whether there was still a child to write to). `Write` is queued
-and never blocks, so a child that echoes what it reads cannot hang the program;
-and `Stop`/`Kill`/`Timeout` still reach a grandchild that holds the output after
-the leader has exited.
+and it answers whether there was still a child to write to), `CloseInput()` (the
+end of its stdin, after what `Write` queued -- what tells `sort`, `wc` or `jq`
+that the input is over). `Write` is queued and never blocks, so a child that
+echoes what it reads cannot hang the program; and `Stop`/`Kill`/`Timeout` still
+reach a grandchild that holds the output after the leader has exited.
 
 A child that speaks a protocol as well as printing gets a stream of its own:
 `Control` in the options is a callback for the child's **descriptor 3**, one
@@ -995,7 +998,8 @@ name the program did not choose needs it.
 ## Logger
 
 `Logger.Debug`, `Info`, `Warning`, `Error` — arguments joined with a space, like
-`print`. Plus `Level`, `Target`, `Handler`. This is what `console` used to be.
+`print`. Plus `Level`, `Target` (`"Terminal"`, `"Journal"`, or a file path to
+append to) and `Handler`. This is what `console` used to be.
 
 ## Clipboard
 

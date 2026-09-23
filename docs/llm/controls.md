@@ -598,7 +598,8 @@ same:
 selected row and `Count` is how many; `MultiSelect` with `Selection`,
 `Select(i)`, `Deselect(i)`, `SelectAll()` and `DeselectAll()` are the same six
 members wherever more than one row can be chosen; `Add` and `Clear` put rows in
-and take them out; `Select` and `Activate` are the two events, with
+and take them out; `Reveal(index)` brings one into view, which selecting from
+code does not; `Select` and `Activate` are the two events, with
 `ActivateOnSingleClick` deciding which click raises the second. What differs is
 what `Add` takes — and what taking one out is called.
 
@@ -637,6 +638,7 @@ A list of strings.
 | `Deselect(index)` | unselects it |
 | `DeselectAll()` | selects nothing |
 | `RemoveRow(index)` | takes that row out |
+| `Reveal(index)` | brings that row into view, with the least scrolling it takes. Answers whether there was one |
 | `Select(index)` | selects that row |
 | `SelectAll()` | with `MultiSelect` |
 | **event** `Select()` | the selection moved. Ask `Index` or `Text` for what it is now |
@@ -683,6 +685,7 @@ Three things differ, and each for a reason worth knowing:
 
 | Member | |
 |---|---|
+| `ActivateOnSingleClick` | raise `Activate` on one click instead of two. Default `false` |
 | `AutoExpand` | open a node as it arrives, and again when it gains a child after being closed by hand. Default `true`. A node with nothing under it reads as open too, which hides nothing and is what turns the arrow off. `TableView`'s is the same mechanism and answers the same |
 | `Key` | the selected node's key; assigning selects. Keys are yours to choose — a path, an id |
 | `Text` (ro) | the selected node's text |
@@ -693,6 +696,8 @@ Three things differ, and each for a reason worth knowing:
 | `CollapseNode(key)` | closes it |
 | `Exists(key)` | → whether that node is there |
 | `RemoveNode(key)` | takes that node out **and the subtree with it** — a node whose parent is gone is not something this control can show |
+| `Reveal(index)` | brings that visible row into view, with the least scrolling it takes. Answers whether there was one |
+| `Activate([index])` | raises `Activate` for that visible position, as a double click would; the selected row with no argument |
 | `SetText(key, text)` | renames a node. **Translated** |
 | `SetIcon(key, name)` | its icon, or `""` for none. One column, so no column argument — otherwise it is `TableView`'s |
 | `ExpandAll()` | every node |
@@ -715,6 +720,8 @@ A list with columns, **and its rows may nest**. The control to reach for wheneve
 | `RowLines` | rules between rows. Default `true` |
 | `Sortable` | makes the headers clickable. **The table does not reorder itself** — it raises `Sort` |
 | `Selection` (ro) | the selected indices |
+| `ActivateOnSingleClick` | raise `Activate` on one click instead of two. Default `false` |
+| `Activate([index])` | raises `Activate` for that visible position, as a double click would; the selected row with no argument. In both the flat and the tree shape, because a click lands on a position |
 | `Add(values, [options])` | one row, as an array of strings. A row shorter than there are columns reads `""` for the rest. Clears an on-demand `Count`. **`options` is `{ Key, Parent, Icon }`, and a row with a `Key` is a node**: the first one makes this table a tree, `Parent` is the key of the node it goes under (absent is a root), and `Icon` is the picture for its first column — the same one `TreeView.Add` takes, so a node need not be added and then decorated |
 | `AutoExpand` | opens a node as it arrives, and again when it gains a child after being closed by hand. Default `true`. A tree only. The same mechanism `TreeView` uses, answering the same |
 | `Key` | the selected node's key; assigning selects, opening the way to it. `""` selects nothing. A tree only |
@@ -726,6 +733,7 @@ A list with columns, **and its rows may nest**. The control to reach for wheneve
 | `Clear()` | empties it |
 | `RemoveRow(index)` | takes a row out. **Flat only** — on a tree, `RemoveNode(key)` |
 | `RemoveNode(key)` | takes that node out **and the subtree with it**. **Tree only** — on a flat table, `RemoveRow(index)` |
+| `Reveal(index)` | brings that visible row into view, with the least scrolling it takes. Answers whether there was one |
 | `Row(index)` | → that row's values. Refused on an on-demand table |
 | `SetCell(row, column, value)` | one cell, in place |
 | `SetIcon(row, column, name)` | an icon beside a cell's text. Refused on an on-demand table |
@@ -1196,6 +1204,7 @@ One row per child, each row **a widget of its own**, with scrolling and selectio
 | `DeselectAll()` | selects nothing |
 | `Refilter()` | says the answer to `Filter` may have changed. The whole of the API on this side — what a handler answers *from* is yours |
 | `RemoveRow(index)` | takes that row out, **and the control in it goes with it**: the row is the widget's wrapper, so this is the same as deleting the child |
+| `Reveal(index)` | brings that row into view, with the least scrolling it takes. Answers whether there was one |
 | `Select(index)` | selects that row |
 | `SelectAll()` | with `MultiSelect` |
 | **event** `Select()` | the selection moved. Ask `Index` or `Selection` for which rows; what is *in* them is the widgets you put there |

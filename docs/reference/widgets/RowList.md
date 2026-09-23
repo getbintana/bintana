@@ -40,6 +40,7 @@ rows](#the-rows).
 | `DeselectAll()` | selects nothing | [the selection](#the-selection) |
 | `Refilter()` | the answer to `Filter` may have changed | [filtering](#filtering) |
 | `RemoveRow(index)` | takes a row out, **and its control with it** | [the rows](#the-rows) |
+| `Reveal(index)` | brings that row into view | [the rows](#the-rows) |
 | `Select(index)` | selects a row | [the selection](#the-selection) |
 | `SelectAll()` | every row, with `MultiSelect` | [the selection](#the-selection) |
 
@@ -108,6 +109,7 @@ built row from being measured.
 | `Clear()` | `Container`'s: empties it, destroying every row's control |
 | `Children` (ro) | `Container`'s: the controls, one per row, in order |
 | `RemoveRow(index)` | takes that row out — **and the control in it goes with it**: the row is the widget's wrapper, so this is the same as deleting the child |
+| `Reveal(index)` | brings that row into view with the least scrolling it takes, and answers whether there was one |
 | `Count` (ro) | how many rows there are, **hidden ones included** |
 
 **A row is a control and nothing else is a row.** What the row stands for lives in

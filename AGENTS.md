@@ -3476,7 +3476,14 @@ person who wrote it either.
   variable, the header was not sent, and the error landed on whatever called
   into JS next. **A conversion failure is a refusal from the verb**, not a
   skipped entry; a `Query` value of `undefined`/`null` is not sent; and
-  `first` moves only when an entry really went in.
+  `first` moves only when an entry really went in. The same sweep reached
+  `Locale.Text`'s arguments, a list's `Items`, `Add` **with no argument at all**
+  (QuickJS pads `argv` to the declared arity, so it appended the text
+  "undefined"), a dynamic menu's labels and a switcher's tabs -- and each
+  converts everything **before** it touches what it is filling, so a refusal
+  leaves the list, the menu or the tab strip exactly as it was. That is the
+  `AddNode` rule applied to a conversion: *a value the runtime refuses throws
+  with the subtree already half built* is a worse refusal than none.
 - **An empty `JS_EXCEPTION` is not a refusal, and in some builds it is a
   crash.** Fifteen methods -- the list and table `Select`/`Deselect`, `Remove`,
   `PickAt`/`ContainerAt`/`LocalPoint`, the editor's `OffsetAt`/`LineOf`/
@@ -3533,7 +3540,13 @@ person who wrote it either.
   its address -- and `Remove()` detaches on all six, which `Removal` asserts.
   **When a subclass needs a member the base already has, the subclass member is
   the one that gets a new name**; check the base table before naming it
-  (`grep -n 'JS_C\(GETSET\|FUNC\)' runtime/src/bta_widget.c`).
+  (`grep -n 'JS_C\(GETSET\|FUNC\)' runtime/src/bta_widget.c`). `tests/api`
+  checks it now, and is deliberately no wider than the mechanical half: a
+  property answered by a method (or the reverse), or two methods declaring a
+  different number of parameters, fail the check. A property over a property is
+  legitimate -- `Split.Arrangement` narrows its `Fixed` slot on purpose -- and so
+  is an override with the same signature (`Form.Show` over `Widget.Show`), which
+  is what the five pairs it found are.
 - **`git status --porcelain=v1 -z` spells a rename `R  new\0old\0`**, and the
   IDE read it the other way round: the new file was marked `[D]` and the old
   one was the row offered to open, so a renamed file could not be clicked and

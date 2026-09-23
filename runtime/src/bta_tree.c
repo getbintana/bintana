@@ -783,6 +783,107 @@ static JSValue tree_expand_all(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
+/*
+ * `ActivateOnSingleClick` and `Activate([index])` -- the two members the four
+ * lists share and this one was missing.
+ *
+ * A `GtkListView` raises `activate` on a double click, or on one when told to;
+ * the property is GTK's own, and the verb is what a double click does without
+ * one. With no argument it is the row already selected, which is what Enter
+ * does; with one, that visible position, because a click lands on a position
+ * and not on a key.
+ */
+static JSValue tree_get_single_click(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    return JS_NewBool(ctx, gtk_list_view_get_single_click_activate(
+                               GTK_LIST_VIEW(w->inner)));
+}
+
+static JSValue tree_set_single_click(JSContext *ctx, JSValueConst this_val,
+                                     JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    int on = JS_ToBool(ctx, val);
+    if (on < 0)
+        return JS_EXCEPTION;
+
+    gtk_list_view_set_single_click_activate(GTK_LIST_VIEW(w->inner), on);
+    return JS_UNDEFINED;
+}
+
+static JSValue tree_activate(JSContext *ctx, JSValueConst this_val,
+                             int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    GtkSelectionModel *sel = GTK_SELECTION_MODEL(tree_selection(w));
+    guint              n   = g_list_model_get_n_items(G_LIST_MODEL(sel));
+    int32_t            index = -1;
+
+    if (argc > 0 && !JS_IsUndefined(argv[0])) {
+        if (JS_ToInt32(ctx, &index, argv[0]))
+            return JS_EXCEPTION;
+    } else {
+        for (guint i = 0; i < n; i++) {
+            if (gtk_selection_model_is_selected(sel, i)) {
+                index = (int32_t)i;
+                break;
+            }
+        }
+    }
+
+    /* Nothing there is nothing to choose, and not an error: a list one has not
+     * selected in yet is an ordinary state. */
+    if (index < 0 || (guint)index >= n)
+        return JS_UNDEFINED;
+
+    gtk_selection_model_select_item(sel, (guint)index, TRUE);
+    g_signal_emit_by_name(w->inner, "activate", (guint)index);
+    return JS_UNDEFINED;
+}
+
+/*
+ * `Reveal(index)` -- that visible row into view, with the minimum scrolling it
+ * takes. `gtk_list_view_scroll_to` is 4.12 and the floor is 4.10, so the older
+ * GTK gets the action the function wraps; it is the same code underneath.
+ */
+static JSValue tree_reveal_row(JSContext *ctx, JSValueConst this_val,
+                           int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    int32_t index;
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "Reveal(index) needs a row index");
+    if (JS_ToInt32(ctx, &index, argv[0]))
+        return JS_EXCEPTION;
+
+    GtkSelectionModel *sel = GTK_SELECTION_MODEL(tree_selection(w));
+    guint              n   = g_list_model_get_n_items(G_LIST_MODEL(sel));
+
+    if (index < 0 || (guint)index >= n)
+        return JS_NewBool(ctx, false);
+
+#if GTK_CHECK_VERSION(4, 12, 0)
+    gtk_list_view_scroll_to(GTK_LIST_VIEW(w->inner), (guint)index,
+                            GTK_LIST_SCROLL_NONE, NULL);
+#else
+    gtk_widget_activate_action(w->inner, "list.scroll-to-item", "u",
+                               (guint)index);
+#endif
+    return JS_NewBool(ctx, true);
+}
+
 static JSValue tree_get_autoexpand(JSContext *ctx, JSValueConst this_val)
 {
     BtaWidget *w = bta_this(ctx, this_val);
@@ -825,6 +926,12 @@ static const JSCFunctionListEntry tree_props[] = {
     /* Exists(key) */
     JS_CFUNC_DEF("Exists", 1, tree_exists),
     JS_CGETSET_DEF("AutoExpand", tree_get_autoexpand, tree_set_autoexpand),
+    JS_CGETSET_DEF("ActivateOnSingleClick",
+                   tree_get_single_click, tree_set_single_click),
+    /* Activate([index]) */
+    JS_CFUNC_DEF("Activate", 1, tree_activate),
+    /* Reveal(index) */
+    JS_CFUNC_DEF("Reveal",   1, tree_reveal_row),
     /* Not "Expand": Widget already has one, the boolean that decides who
      * absorbs slack in a box.  A method of that name would shadow it on the
      * prototype and then be shadowed right back the moment a .form set the

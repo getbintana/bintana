@@ -2361,6 +2361,103 @@ static JSValue table_select_every(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
+/*
+ * `ActivateOnSingleClick` and `Activate([index])`, the same two members every
+ * other list has. A `GtkColumnView` raises `activate` on a double click, or on
+ * one when told to; the verb is what a double click does without one, and the
+ * position is the visible one -- which is what `Index` answers and what a click
+ * lands on, in both the flat and the tree shape.
+ */
+static JSValue table_get_single_click(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    return JS_NewBool(ctx, gtk_column_view_get_single_click_activate(
+                               GTK_COLUMN_VIEW(w->inner)));
+}
+
+static JSValue table_set_single_click(JSContext *ctx, JSValueConst this_val,
+                                      JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    int on = JS_ToBool(ctx, val);
+    if (on < 0)
+        return JS_EXCEPTION;
+
+    gtk_column_view_set_single_click_activate(GTK_COLUMN_VIEW(w->inner), on);
+    return JS_UNDEFINED;
+}
+
+static JSValue table_activate(JSContext *ctx, JSValueConst this_val,
+                              int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    GtkSelectionModel *sel = table_model(w);
+    guint              n   = g_list_model_get_n_items(G_LIST_MODEL(sel));
+    int32_t            index = -1;
+
+    if (argc > 0 && !JS_IsUndefined(argv[0])) {
+        if (JS_ToInt32(ctx, &index, argv[0]))
+            return JS_EXCEPTION;
+    } else {
+        for (guint i = 0; i < n; i++) {
+            if (gtk_selection_model_is_selected(sel, i)) {
+                index = (int32_t)i;
+                break;
+            }
+        }
+    }
+
+    /* Nothing there is nothing to choose, and not an error. */
+    if (index < 0 || (guint)index >= n)
+        return JS_UNDEFINED;
+
+    gtk_selection_model_select_item(sel, (guint)index, TRUE);
+    g_signal_emit_by_name(w->inner, "activate", (guint)index);
+    return JS_UNDEFINED;
+}
+
+/*
+ * `Reveal(index)` -- that visible row into view, the same verb every list has.
+ * `gtk_column_view_scroll_to` is 4.12 and the floor is 4.10, so the older GTK
+ * gets the action the function wraps.
+ */
+static JSValue table_reveal_row(JSContext *ctx, JSValueConst this_val,
+                            int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    int32_t index;
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "Reveal(index) needs a row index");
+    if (JS_ToInt32(ctx, &index, argv[0]))
+        return JS_EXCEPTION;
+
+    GtkSelectionModel *sel = table_model(w);
+    guint              n   = g_list_model_get_n_items(G_LIST_MODEL(sel));
+
+    if (index < 0 || (guint)index >= n)
+        return JS_NewBool(ctx, false);
+
+#if GTK_CHECK_VERSION(4, 12, 0)
+    gtk_column_view_scroll_to(GTK_COLUMN_VIEW(w->inner), (guint)index, NULL,
+                              GTK_LIST_SCROLL_NONE, NULL);
+#else
+    gtk_widget_activate_action(w->inner, "list.scroll-to-item", "u",
+                               (guint)index);
+#endif
+    return JS_NewBool(ctx, true);
+}
+
 static const JSCFunctionListEntry table_props[] = {
     JS_CGETSET_DEF("Columns",     table_get_columns,   table_set_columns),
     JS_CGETSET_DEF("Count",       table_get_count,     table_set_count),
@@ -2371,6 +2468,12 @@ static const JSCFunctionListEntry table_props[] = {
     JS_CGETSET_MAGIC_DEF("ColumnLines", table_get_flag, table_set_flag, TAB_HEADERS),
     JS_CGETSET_DEF("Key",        table_get_key,        table_set_key),
     JS_CGETSET_DEF("AutoExpand", table_get_autoexpand, table_set_autoexpand),
+    JS_CGETSET_DEF("ActivateOnSingleClick",
+                   table_get_single_click, table_set_single_click),
+    /* Activate([index]) */
+    JS_CFUNC_DEF("Activate", 1, table_activate),
+    /* Reveal(index) */
+    JS_CFUNC_DEF("Reveal",   1, table_reveal_row),
     /* Add(values, [options]) */
     JS_CFUNC_DEF("Add",     2, table_add),
     /* ExpandNode(key) */

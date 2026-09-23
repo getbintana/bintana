@@ -37,6 +37,7 @@ matters is in the section.
 | `Deselect(index)` | unselects a row | [the selection](#the-selection) |
 | `DeselectAll()` | selects nothing | [the selection](#the-selection) |
 | `RemoveRow(index)` | takes a row out | [the rows](#the-rows) |
+| `Reveal(index)` | brings that row into view | [the rows](#the-rows) |
 | `Select(index)` | selects a row | [the selection](#the-selection) |
 | `SelectAll()` | every row, with `MultiSelect` | [the selection](#the-selection) |
 
@@ -93,6 +94,7 @@ why the rows go in in the array's order and stay in it.
 | `Items` | the whole list, as an array of strings. Assigning replaces every row at once; reading gives the rows as they are now. **Translated** — a list declared in a `.form` goes through the catalogue |
 | `Add(text)` | one row at the end, which is what a list being filled a row at a time wants |
 | `RemoveRow(index)` | takes that row out |
+| `Reveal(index)` | brings that row into view with the least scrolling it takes, and answers whether there was one |
 | `Clear()` | empties it |
 | `Count` (ro) | how many rows there are |
 

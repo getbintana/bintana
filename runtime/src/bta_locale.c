@@ -711,11 +711,22 @@ char *bta_locale_format(JSContext *ctx, const char *text,
     if (argc <= 0 || !strchr(text, '{'))
         return g_strdup(text);
 
-    /* The arguments as strings, once: a template may name the same one twice. */
+    /*
+     * The arguments as strings, once: a template may name the same one twice.
+     * **A value that cannot become text is a refusal** and not an empty
+     * substitution -- `as[i] = g_strdup(s ? s : "")` swallowed the failure with
+     * the conversion's exception still pending, so the template came out with a
+     * hole in it and the error landed on whoever asked next.
+     */
     char **as = g_new0(char *, (size_t)argc + 1);
     for (int i = 0; i < argc; i++) {
         const char *s = JS_ToCString(ctx, argv[i]);
-        as[i] = g_strdup(s ? s : "");
+
+        if (!s) {
+            g_strfreev(as);            /* zeroed, so it stops at the first NULL */
+            return NULL;               /* it threw on the way; that stands */
+        }
+        as[i] = g_strdup(s);
         JS_FreeCString(ctx, s);
     }
 
@@ -771,10 +782,14 @@ static JSValue js_locale_text(JSContext *ctx, JSValueConst this_val,
     const char *found = bta_locale_lookup(NULL, msgid);
     char       *out   = bta_locale_format(ctx, found ? found : msgid,
                                           argc - 1, argv + 1);
-    JSValue     r     = JS_NewString(ctx, out);
+
+    JS_FreeCString(ctx, msgid);
+    if (!out)
+        return JS_EXCEPTION;           /* an argument could not become text */
+
+    JSValue r = JS_NewString(ctx, out);
 
     g_free(out);
-    JS_FreeCString(ctx, msgid);
     return r;
 }
 
@@ -801,11 +816,15 @@ static JSValue js_locale_context(JSContext *ctx, JSValueConst this_val,
     const char *found = bta_locale_lookup(ctxt, msgid);
     char       *out   = bta_locale_format(ctx, found ? found : msgid,
                                           argc - 2, argv + 2);
-    JSValue     r     = JS_NewString(ctx, out);
 
-    g_free(out);
     JS_FreeCString(ctx, ctxt);
     JS_FreeCString(ctx, msgid);
+    if (!out)
+        return JS_EXCEPTION;           /* an argument could not become text */
+
+    JSValue r = JS_NewString(ctx, out);
+
+    g_free(out);
     return r;
 }
 
@@ -846,15 +865,19 @@ static JSValue js_locale_plural(JSContext *ctx, JSValueConst this_val,
     for (int i = 3; i < argc; i++)
         args[i - 2] = JS_DupValue(ctx, argv[i]);
 
-    char   *out = bta_locale_format(ctx, text, argc - 2, args);
-    JSValue r   = JS_NewString(ctx, out);
+    char *out = bta_locale_format(ctx, text, argc - 2, args);
 
     for (int i = 0; i < argc - 2; i++)
         JS_FreeValue(ctx, args[i]);
     g_free(args);
-    g_free(out);
     JS_FreeCString(ctx, one);
     JS_FreeCString(ctx, many);
+    if (!out)
+        return JS_EXCEPTION;           /* an argument could not become text */
+
+    JSValue r = JS_NewString(ctx, out);
+
+    g_free(out);
     return r;
 }
 

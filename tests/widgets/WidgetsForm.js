@@ -448,7 +448,7 @@ const TESTS = [
     "CloseVeto",
     "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "Record", "Nested", "Database", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "Date", "Calendar", "Drawing", "Metrics", "Library", "Plugin", "ListMulti", "MenuState",
-    "RowList", "RowFilter", "PropertyOptions", "CssNode", "TabAction", "Image", "Switcher", "Reorder", "Aspect",
+    "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
     "CuratedLanguage", "Dictionary", "Regex", "Bytes", "Hash", "Screen", "JsonFiles", "XmlFiles", "XmlRecord", "Log", "Apply", "TimerShorthand", "Terminal",
@@ -480,6 +480,9 @@ const TESTS = [
     "ExecControlLate",
     /* Async: more into a child's stdin than a pipe holds, while it echoes. */
     "ExecWriteLarge",
+    /* Async: lines into a filter and then the end of its input, which is what
+     * makes it answer. */
+    "ExecCloseInput",
     /* Async: a child that quits with a print dialog still open. */
     "PrintAtQuit",
     /* Async: a leader gone and its grandchild still holding the pipe. */
@@ -1254,6 +1257,35 @@ class WidgetsForm extends Form {
                () => Http.Get("http://127.0.0.1:1/", { Headers: { X: bad } }, () => {}));
         throws("Http refuses a query value that cannot become text",
                () => Http.Get("http://127.0.0.1:1/", { Query: { x: bad } }, () => {}));
+
+        /*
+         * And the same rule where a value is interpolated or fills a list: the
+         * refusal comes before anything is touched, so what was there stands.
+         */
+        throws("Locale.Text refuses an argument that cannot become text",
+               () => Locale.Text("x {0}", bad));
+        throws("Message refuses one too", () => Message.Info("x {0}", bad));
+        throws("Application.LibraryPath refuses a project that is not text",
+               () => Application.LibraryPath("charts", bad));
+
+        const lb = new ListBox();
+        lb.Items = ["a", "b"];
+        throws("ListBox.Items refuses a value that cannot become text",
+               () => { lb.Items = ["a", bad]; });
+        eq("and the list it had stands", lb.Items.join(), "a,b");
+        throws("ListBox.Add refuses no argument at all", () => lb.Add());
+        eq("and nothing was added", lb.Count, 2);
+        lb.Delete();
+
+        const cb = new ComboBox();
+        throws("ComboBox.Add refuses no argument at all", () => cb.Add());
+        cb.Delete();
+
+        const sw = new Switcher();
+        sw.Add(new Panel());
+        throws("Switcher.Tabs refuses a value that cannot become text",
+               () => { sw.Tabs = ["ok", bad]; });
+        sw.Delete();
     }
 
     testSplits() {
@@ -7487,6 +7519,28 @@ function Main() {
         eq("and then there is no text", t.Text, "");
 
         /*
+         * **The two members every list shares**, which this control had an
+         * `Activate` event without: what raises it on one click, and how to
+         * raise it from code.
+         */
+        let activated = 0;
+        t.On("Activate", () => activated++);
+
+        eq("ActivateOnSingleClick is off by default", t.ActivateOnSingleClick, false);
+        t.ActivateOnSingleClick = true;
+        eq("and reads back", t.ActivateOnSingleClick, true);
+        t.ActivateOnSingleClick = false;
+
+        t.Key = "raiz2";
+        t.Activate();
+        eq("Activate() raises it for the selected row", activated, 1);
+        t.Activate(0);
+        eq("and for the one it is given", activated, 2);
+        eq("selecting it on the way", t.Key, "raiz1");
+        t.Activate(99);
+        eq("a position that is not there is not an error", activated, 2);
+
+        /*
          * **`Remove(key)` takes the subtree with it.** A tree that could only be
          * emptied whole was the one gap the four lists did not share -- and a
          * node whose parent is gone is not something this control can show, so
@@ -7912,6 +7966,94 @@ function Main() {
      * *sets* anything, which is exactly the point, so what proves a row is hidden
      * is that GTK gave it no room.
      */
+    /*
+     * `Reveal(index)` -- the row into view, which selecting from code does not
+     * do and which a list built from a search result needs.
+     *
+     * **The RowList half is the one that can be measured**, because its rows are
+     * widgets of the application's and a `Bounds()` can be asked of one. For the
+     * other three the call contract is asserted and the scrolling is GTK's own
+     * `scroll_to`; saying so here is cheaper than a test that pretends to have
+     * watched it.
+     */
+    testReveal() {
+        const list = new RowList();
+        this.Fixed1.Add(list);
+        list.Name = "RevealRows";
+        list.Move(4, 4);
+        list.Resize(160, 100);
+
+        const rows = [];
+        for (let i = 0; i < 60; i++) {
+            const label = new Label();
+            label.Text = `fila ${i}`;
+            list.Add(label);
+            rows.push(label);
+        }
+
+        throws("Reveal refuses a missing index", () => list.Reveal());
+
+        until("the list is laid out", () => list.Bounds().Height > 0, () => {
+            const height = list.Bounds().Height;
+
+            check("the last row starts out of sight",
+                  rows[59].Bounds(list).Y >= height,
+                  JSON.stringify(rows[59].Bounds(list)));
+
+            check("Reveal answers for a row that is there",
+                  list.Reveal(59) === true);
+
+            until("and brings it into view",
+                  () => rows[59].Bounds(list).Y < height, () => {
+                const last = rows[59].Bounds(list);
+
+                check("the last row is in view",
+                      last.Y >= 0 && last.Y < height, JSON.stringify(last));
+
+                list.Reveal(0);
+                until("and back to the first",
+                      () => rows[0].Bounds(list).Y >= 0, () => {
+                    const first = rows[0].Bounds(list);
+
+                    check("the first row is in view", first.Y >= 0,
+                          JSON.stringify(first));
+                    check("Reveal says no to a row that is not there",
+                          list.Reveal(999) === false);
+                    check("and to a negative one", list.Reveal(-1) === false);
+
+                    /*
+                     * The same verb on the other three, with their own
+                     * addressing -- a visible position -- and the same answer
+                     * for one that is not there.
+                     */
+                    const lb = new ListBox();
+                    this.Fixed1.Add(lb);
+                    for (let i = 0; i < 60; i++) lb.Add(`r${i}`);
+                    check("ListBox.Reveal", lb.Reveal(59) === true);
+                    check("...and no such row", lb.Reveal(999) === false);
+                    lb.Delete();
+
+                    const tv = new TreeView();
+                    this.Fixed1.Add(tv);
+                    for (let i = 0; i < 60; i++) tv.Add(`k${i}`, `n${i}`);
+                    check("TreeView.Reveal", tv.Reveal(59) === true);
+                    check("...and no such node", tv.Reveal(999) === false);
+                    tv.Delete();
+
+                    const tab = new TableView();
+                    this.Fixed1.Add(tab);
+                    tab.Columns = [{ Text: "N" }];
+                    for (let i = 0; i < 60; i++) tab.Add([`r${i}`]);
+                    check("TableView.Reveal", tab.Reveal(59) === true);
+                    check("...and no such row", tab.Reveal(999) === false);
+                    tab.Delete();
+
+                    list.Delete();
+                });
+            });
+        });
+    }
+
     testRowFilter() {
         const list = new RowList();
         list.Name = "Filter1";
@@ -9929,7 +10071,27 @@ function Main() {
 
         throws("an unknown level is refused", () => { Logger.Level = "Chatty"; });
         eq("and the old one stands", Logger.Level, "Info");
-        throws("an unknown target is refused", () => { Logger.Target = "Carrier pigeon"; });
+
+        /* A target is a word or a path, and a path that cannot be opened is
+         * refused with the target it had standing. */
+        throws("a target that cannot be opened is refused",
+               () => { Logger.Target = "/no/such/directory/app.log"; });
+        eq("and the old one stands", Logger.Target, "Terminal");
+
+        /*
+         * And a path is a target: the lines go there, flushed per line, with no
+         * `Handler` and no `File.Append` under it.
+         */
+        Directory.Make(SCRATCH);
+        const logPath = File.Join(SCRATCH, "app.log");
+        if (File.Exists(logPath)) File.Delete(logPath);
+
+        Logger.Target = logPath;
+        eq("a path reads back as itself", Logger.Target, logPath);
+        Logger.Info("al archivo");
+        Logger.Target = "Terminal";
+        check("and the line is in the file",
+              File.Load(logPath).includes("Info: al archivo"), File.Load(logPath));
 
         /*
          * The journal is an extension, not part of logging: on a system that has
@@ -11857,6 +12019,28 @@ function Main() {
         eq("DeselectAll leaves none",  t.Selection.length, 0);
         t.MultiSelect = false;
 
+        /*
+         * **And the two members every list shares**, which this control had an
+         * `Activate` event without: what raises it on one click, and how to
+         * raise it from code.
+         */
+        let activated = 0;
+        t.On("Activate", () => activated++);
+
+        eq("ActivateOnSingleClick is off by default", t.ActivateOnSingleClick, false);
+        t.ActivateOnSingleClick = true;
+        eq("and reads back", t.ActivateOnSingleClick, true);
+        t.ActivateOnSingleClick = false;
+
+        t.Index = 0;
+        t.Activate();
+        eq("Activate() raises it for the selected row", activated, 1);
+        t.Activate(1);
+        eq("and for the one it is given", activated, 2);
+        eq("selecting it on the way", t.Index, 1);
+        t.Activate(99);
+        eq("a position that is not there is not an error", activated, 2);
+
         t.Delete();
     }
 
@@ -13586,6 +13770,18 @@ function Main() {
 
         File.Save(path, "hola\nmundo\n");
         eq("Save then Load", File.Load(path), "hola\nmundo\n");
+
+        /* --- appending, which is the log/CSV case: no read, no rewrite. */
+        const log = File.Join(SCRATCH, "append.txt");
+        if (File.Exists(log)) File.Delete(log);
+
+        File.Append(log, "uno\n");
+        File.Append(log, "dos\n");
+        eq("Append creates it and adds", File.Load(log), "uno\ndos\n");
+        File.Append(log, "tres");
+        eq("and adds without a newline of its own", File.Load(log), "uno\ndos\ntres");
+        throws("Append refuses text that is not a string", () => File.Append(log, {}));
+        eq("and wrote nothing", File.Load(log), "uno\ndos\ntres");
         eq("Exists finds it", File.Exists(path), true);
         eq("a file is not a dir", File.IsDir(path), false);
         eq("the dir is a dir", File.IsDir(SCRATCH), true);
@@ -15075,6 +15271,18 @@ function Main() {
            Exec.Wait(["sh", "-c", "echo [$BTA_GOING]"],
                      { Environment: { BTA_GOING: null } }).Output.trim(), "[]");
         Environment.Set("BTA_GOING", null);
+
+        /* --- `{ Input }`: the child reads it and sees the end, which is what
+         * makes this a filter rather than a command. */
+        const sorted = Exec.Wait(["sort"], { Input: "b\na\n" });
+        eq("Input is what the child reads", sorted.Output, "a\nb\n");
+        eq("and the pipe is closed, so sort answers", sorted.ExitCode, 0);
+
+        const piped = Exec.Wait(["cat"], { Input: new Bytes("bytes\ny bytes\n") });
+        eq("Input takes Bytes too", piped.Output, "bytes\ny bytes\n");
+
+        throws("Input refuses what cannot become text",
+               () => Exec.Wait(["cat"], { Input: { toString: null } }));
 
         /* A child stopped by a signal did not exit, so it has no status of its
          * own -- reported as -1, as the callback spelling reports it. */
@@ -18516,6 +18724,42 @@ function Main() {
         let queued = true;
         for (let i = 0; i < LINES; i++) queued = job.Write(row) && queued;
         check("three hundred kilobytes are taken without blocking", queued);
+    }
+
+    /*
+     * `CloseInput()` is how a filter is told the input is over.
+     *
+     * `Write` queues lines and the child reads until EOF, so without this
+     * `sort` never answers -- which is why `sort`, `wc`, `jq`, `git apply` and
+     * `patch` could not be used from a program. It is queued behind the lines
+     * too: closing first would drop them.
+     */
+    testExecCloseInput() {
+        if (!Application.HasCommand("sort")) return;
+
+        const got   = [];
+        let   first = null;
+
+        waiting++;
+        const job = Exec(["sort"],
+                         (line) => got.push(line),
+                         (code) => {
+                             waiting--;
+                             eq("the filter answers once its input ends",
+                                got.join("|"), "a|b|c");
+                             eq("and exits 0", code, 0);
+                             check("CloseInput answered true while the pipe was open",
+                                   first === true);
+                             /* Asked again at the end, when the pipe is closed
+                              * and the job is still there to be asked. */
+                             check("and false once it is closed",
+                                   job.CloseInput() === false);
+                         });
+
+        job.Write("b");
+        job.Write("a");
+        job.Write("c");
+        first = job.CloseInput();
     }
 
     /*

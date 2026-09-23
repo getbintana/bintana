@@ -22,8 +22,8 @@ read asynchronously and split into lines, and both callbacks are optional.
 | `Exec.Wait(argv, [options])` | runs it and **waits**, answering what it printed | [waiting for one](#waiting-for-one) |
 
 **The handle**: `ProcessId`, `Running`, `ExitCode` (`null` while it runs, `-1`
-for a child stopped by a signal), `TimedOut`, `Stop()`, `Kill()` and
-`Write(text)`.
+for a child stopped by a signal), `TimedOut`, `Stop()`, `Kill()`, `Write(text)`
+and `CloseInput()`.
 
 **The options**:
 
@@ -34,6 +34,7 @@ for a child stopped by a signal), `TimedOut`, `Stop()`, `Kill()` and
 | `Stderr` | `"separate"` keeps the streams apart — the line callback then gets `"out"`/`"err"` as its second argument. Merged is the default, and merging is what keeps the order |
 | `Timeout` | milliseconds before the child is ended; absent waits forever |
 | `KillAfter` | milliseconds between SIGTERM and SIGKILL, `5000` by default |
+| `Input` | **`Exec.Wait` only**: the text or `Bytes` the child reads, written before its stdin is closed — what makes `Exec.Wait(["sort"], { Input: text })` a filter |
 | `Control` | a callback for a **third stream** — descriptor 3 in the child, one line at a time — for a child that speaks a protocol as well as printing |
 
 ## Running one
@@ -99,6 +100,7 @@ a line and answers.
 | | |
 |---|---|
 | `Write(text)` | writes a line to the child's stdin. A newline is added when there is not one, because a line is what the other side is waiting on. **Queued, and never blocks**: lines go out in order while the program keeps running, so a child that writes while it reads cannot deadlock it. Answers whether there was still a child to write to, the way `Stop` does |
+| `CloseInput()` | the end of the child's stdin — after everything `Write` queued, so closing cannot drop a line. What tells a filter (`sort`, `wc`, `jq`, `git apply`) that the input is over, which is the thing it is waiting for. Answers whether there was still a pipe to close |
 | `Control` | an option: a callback for the child's **descriptor 3**, called once per line — until the run is over (stdout drained, child exited); a line after that is dropped |
 
 ```js
