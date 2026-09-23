@@ -12120,6 +12120,36 @@ function Main() {
         t.Activate(99);
         eq("a position that is not there is not an error", activated, 2);
 
+        /*
+         * **A column may be editable**, which is a `GtkEditableLabel` in the
+         * cell and `CellEdit(row, column, text)` raised when the edit ends.
+         *
+         * The edit itself is a pointer gesture and cannot be driven from here,
+         * so what this holds is the declaration and the event's contract: the
+         * handler is asked with the three, and its `false` is the veto. The
+         * gesture is on the by-hand list, next to whether a popover opened.
+         */
+        t.Columns = [{ Text: "A", Editable: true }, { Text: "B" }];
+        eq("Editable is part of the declaration and round-trips",
+           JSON.stringify(t.Columns), '[{"Text":"A","Editable":true},{"Text":"B"}]');
+        throws("and it is a boolean",
+               () => { t.Columns = [{ Text: "A", Editable: "yes" }]; });
+        eq("and a refused declaration leaves the columns as they were",
+           JSON.stringify(t.Columns), '[{"Text":"A","Editable":true},{"Text":"B"}]');
+
+        this.cellEdits = [];
+        t.On("CellEdit", (row, column, text) => {
+            this.cellEdits.push([row, column, text]);
+            return false;
+        });
+        eq("a refused edit answers false", t.Emit("CellEdit", 0, 0, "otro"), false);
+        eq("and the handler is asked with the row, the column and the text",
+           JSON.stringify(this.cellEdits), '[[0,0,"otro"]]');
+
+        t.On("CellEdit", null);
+        eq("with no handler the event is taken",
+           t.Emit("CellEdit", 0, 0, "otro"), undefined);
+
         t.Delete();
     }
 

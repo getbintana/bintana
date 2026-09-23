@@ -737,7 +737,7 @@ A list with columns, **and its rows may nest**. The control to reach for wheneve
 | Member | |
 |---|---|
 | `ColumnLines` | rules between columns |
-| `Columns` | an array of `{ Text, Width, Alignment }`. `Text` is **translated**; `Width: 0` sizes itself and the last column takes the slack |
+| `Columns` | an array of `{ Text, Width, Alignment, Editable }`. `Text` is **translated**; `Width: 0` sizes itself and the last column takes the slack; `Editable: true` makes a cell a field — clicked, typed and committed — and an editable column reads left-aligned, because a `GtkEditableLabel` is not a label |
 | `Count` | how many rows — **settable**, which is the on-demand mode: the table then asks `Data(row, column)` for each cell it draws |
 | `Index` | the selected row, `-1` for none. Default `-1` |
 | `MultiSelect` | more than one row |
@@ -770,6 +770,7 @@ A list with columns, **and its rows may nest**. The control to reach for wheneve
 | **event** `Activate()` | Enter in the field, or a double click on a row |
 | **event** `Data(row, column)` | an on-demand table needs a cell. **The return value is the answer**: a string, or `{ Text, Icon }` |
 | **event** `Sort(column, ascending)` | a sortable header was clicked. **The handler decides** — `SortBy` is what actually reorders |
+| **event** `CellEdit(row, column, text)` | an editable cell's edit ended. `row` is an index in a flat table and a key in a tree, as every verb here addresses one. **Returning `false` refuses the edit** and the cell goes back to what it said; anything else is taken and the text is written into the row — an on-demand table holds no cells, so there it is the handler's to store |
 
 ### A table is flat or a tree
 

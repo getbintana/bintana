@@ -164,7 +164,7 @@ scrollbar away from the rows, which is the opposite of what was wanted.
 
 | | |
 |---|---|
-| `Columns` | the headings: an array of `{ Text, Width, Alignment }`. `Text` is **translated**; `Width` is a request in pixels and `0` means the column sizes itself; `Alignment` is `Left` `Center` `Right` |
+| `Columns` | the headings: an array of `{ Text, Width, Alignment, Editable }`. `Text` is **translated**; `Width` is a request in pixels and `0` means the column sizes itself; `Alignment` is `Left` `Center` `Right`; `Editable: true` makes each cell a field that is clicked, typed and committed |
 | `ColumnLines` | rules between the columns. Default `false` |
 | `RowLines` | rules between the rows. Default `true` |
 
@@ -282,6 +282,7 @@ Set `Count` and answer `Data`:
 |---|---|
 | `Count` | how many rows there are. Assigning it puts the table in this shape and clears any rows it held |
 | **event** `Data(row, column)` | the table needs a cell. **The return value is the answer**: a string, or `{ Text, Icon }` for a cell with a picture |
+| **event** `CellEdit(row, column, text)` | an editable cell's edit ended — Enter, or the focus moving away. `row` is an index in a flat table and a key in a tree, as every verb here addresses one. **Returning `false` refuses it** and the cell goes back to what it said; anything else is taken and the text is written into the row. An on-demand table holds no cells, so there the handler stores it |
 
 ```js
 Form_Open()            { this.Big.Count = 100000; }
@@ -302,6 +303,26 @@ open a file, do not query a database, do not write to a control.
 being honest: the values are not in the table, they are wherever your handler
 reads them, and the table cannot answer for somebody else's data. `Add` is not
 refused — it clears the count and the table starts holding rows again.
+
+## Editing a cell
+
+A column declared `Editable: true` draws its cells as fields: clicked, typed and
+committed with Enter or by leaving. When the edit ends, `CellEdit(row, column,
+text)` is raised and **its answer decides**: `false` puts back what the cell
+said, anything else means *taken* and the text is written into the row. That
+makes the event a notification with a veto rather than a request — a program
+that wants validation, or that wants to store the value somewhere of its own,
+has the one hook.
+
+```js
+Files_Columns   = [{ Text: "Name", Editable: true }, { Text: "Size" }];
+Files_CellEdit  = (row, column, text) => text.trim() !== "";   // empty refuses
+```
+
+An editable column reads **left-aligned**: the cell is a `GtkEditableLabel` and
+not a `GtkLabel`, and `Alignment` is the label's property. A table that answers
+`Data` holds no cells to write, so there the handler stores the value and the
+cell asks again on the next bind.
 
 ## A tree
 

@@ -555,18 +555,32 @@ static void table_row_changed(BtaWidget *w, BtaTableRow *row, int at)
  * no icons at all, which is most of them; both controls make the same choice, so
  * at least they agree. Give a column an icon on every row or on none.
  */
+static void on_cell_edited(GObject *obj, GParamSpec *pspec, gpointer user_data);
+
 static void on_setup_cell(GtkSignalListItemFactory *f, GtkListItem *item,
                           gpointer user_data)
 {
     GtkWidget *box   = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
     GtkWidget *image = gtk_image_new();
-    GtkWidget *label = gtk_label_new("");
+    bool       editable = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(f),
+                                                            "bta-editable"));
+    /* **An editable cell is a `GtkEditableLabel`**, which is a label until it is
+     * clicked and then a field; a `GtkLabel` has no such state and swapping one
+     * for the other on a click is a second implementation of what GTK already
+     * has. It is not a `GtkLabel`, so `Alignment` and ellipsizing are the
+     * label's and not this one's: an editable column reads left-aligned. */
+    GtkWidget *label = editable ? gtk_editable_label_new("") : gtk_label_new("");
 
     /* Left by default and right for numbers, which is what `Alignment` says;
      * the factory carries it because a label is made here and bound there. */
     float x = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(f), "bta-xalign")) / 100.0f;
-    gtk_label_set_xalign(GTK_LABEL(label), x);
-    gtk_label_set_ellipsize(GTK_LABEL(label), PANGO_ELLIPSIZE_END);
+    if (!editable) {
+        gtk_label_set_xalign(GTK_LABEL(label), x);
+        gtk_label_set_ellipsize(GTK_LABEL(label), PANGO_ELLIPSIZE_END);
+    } else {
+        g_object_set_data(G_OBJECT(label), "bta-edit-widget", user_data);
+        g_signal_connect(label, "notify::editing", G_CALLBACK(on_cell_edited), NULL);
+    }
     gtk_widget_set_hexpand(label, TRUE);
 
     gtk_box_append(GTK_BOX(box), image);
@@ -676,6 +690,74 @@ static void on_unbind_cell(GtkSignalListItemFactory *f, GtkListItem *item,
         g_signal_handler_disconnect(model, id);
     g_object_set_data(G_OBJECT(item), WATCH_HANDLER_KEY, NULL);
     g_object_set_data(G_OBJECT(item), WATCH_MODEL_KEY, NULL);
+
+    /* A row being recycled must not answer for the one that had this cell: the
+     * edit that finishes after the rebind would be reported with a stale
+     * address. The widget is the same, which is the whole recycling contract. */
+    GtkWidget *box = gtk_list_item_get_child(item);
+
+    if (GTK_IS_TREE_EXPANDER(box))
+        box = gtk_tree_expander_get_child(GTK_TREE_EXPANDER(box));
+    if (box) {
+        GtkWidget *lbl = gtk_widget_get_last_child(box);
+
+        if (GTK_IS_EDITABLE_LABEL(lbl))
+            g_object_set_data(G_OBJECT(lbl), "bta-edit-row", NULL);
+    }
+}
+
+/*
+ * The edit is over: report it and let the application decide.
+ *
+ * `CellEdit(row, column, text)` is raised when `GtkEditableLabel` leaves its
+ * editing state -- Enter, or the focus moving away -- with the row addressed
+ * the way every other table verb addresses one: an index in a flat table, the
+ * key in a tree. **A handler that answers `false` refuses the edit** and the
+ * cell goes back to what it said; anything else means *taken*, and the text is
+ * written into the row. An on-demand table holds no cells to write, so there it
+ * is the handler's to store and the cell will ask `Data` again.
+ */
+static void on_cell_edited(GObject *obj, GParamSpec *pspec, gpointer user_data)
+{
+    if (gtk_editable_label_get_editing(GTK_EDITABLE_LABEL(obj)))
+        return;                    /* the other half of the notify pair */
+
+    BtaWidget   *w   = g_object_get_data(obj, "bta-edit-widget");
+    BtaTableRow *row = g_object_get_data(obj, "bta-edit-row");
+    guint        col = GPOINTER_TO_UINT(g_object_get_data(obj, "bta-edit-col"));
+    const char  *old = g_object_get_data(obj, "bta-edit-old");
+    const char  *now = gtk_editable_get_text(GTK_EDITABLE(obj));
+
+    if (!w || !row || !now || (old && !strcmp(old, now)))
+        return;
+
+    JSContext *ctx  = w->ctx;
+    JSValue    argv[3];
+
+    argv[0] = table_state(w)->tree
+                  ? JS_NewString(ctx, row->key ? row->key : "")
+                  : JS_NewInt32(ctx, (int)row->index);
+    argv[1] = JS_NewInt32(ctx, (int)col);
+    argv[2] = JS_NewString(ctx, now);
+
+    JSValue r = bta_emit_answer(w, "CellEdit", 3, argv, NULL);
+
+    if (JS_IsStrictEqual(ctx, r, JS_FALSE)) {
+        gtk_editable_set_text(GTK_EDITABLE(obj), old ? old : "");
+    } else if (row->cells) {
+        /* Taken: the typed text goes into the row, which is what makes the
+         * event a notification with a veto rather than a request. */
+        while (row->cells->len <= col)
+            g_ptr_array_add(row->cells, g_strdup(""));
+        g_free(row->cells->pdata[col]);
+        row->cells->pdata[col] = g_strdup(now);
+
+        table_row_changed(w, row, table_state(w)->tree ? -1 : (int)row->index);
+    }
+
+    JS_FreeValue(ctx, r);
+    for (int i = 0; i < 3; i++)
+        JS_FreeValue(ctx, argv[i]);
 }
 
 static void on_bind_cell(GtkSignalListItemFactory *f, GtkListItem *item,
@@ -731,7 +813,18 @@ static void on_bind_cell(GtkSignalListItemFactory *f, GtkListItem *item,
     char *text = NULL, *icon = NULL;
     cell_of(w, row, col, &text, &icon);
 
-    gtk_label_set_text(GTK_LABEL(lbl), text ? text : "");
+    if (GTK_IS_EDITABLE_LABEL(lbl)) {
+        /* What the cell says now, and the address its edit will be reported
+         * with -- the row is only valid while bound, which is why `unbind`
+         * clears it. */
+        g_object_set_data_full(G_OBJECT(lbl), "bta-edit-old",
+                               g_strdup(text ? text : ""), g_free);
+        g_object_set_data(G_OBJECT(lbl), "bta-edit-row", row);
+        g_object_set_data(G_OBJECT(lbl), "bta-edit-col", GUINT_TO_POINTER(col));
+        gtk_editable_set_text(GTK_EDITABLE(lbl), text ? text : "");
+    } else {
+        gtk_label_set_text(GTK_LABEL(lbl), text ? text : "");
+    }
 
     /* An icon the theme cannot really draw is dropped rather than shown as the
      * broken-image glyph -- the same bargain Button.Icon and a TreeView node
@@ -1215,6 +1308,15 @@ static bool table_build_columns(JSContext *ctx, BtaWidget *w, JSValueConst list)
             return false;
         }
 
+        JSValue ev = JS_GetPropertyStr(ctx, col, "Editable");
+        if (!JS_IsUndefined(ev) && !JS_IsBool(ev)) {
+            JS_FreeValue(ctx, ev);
+            JS_FreeValue(ctx, col);
+            JS_ThrowTypeError(ctx, "%s: Editable is a boolean", where);
+            return false;
+        }
+        JS_FreeValue(ctx, ev);
+
         bool bad = false;
         alignment_of(ctx, col, where, &bad);
         JS_FreeValue(ctx, col);
@@ -1246,17 +1348,24 @@ static bool table_build_columns(JSContext *ctx, BtaWidget *w, JSValueConst list)
         bool  bad = false;
         float x   = alignment_of(ctx, col, "Columns", &bad);
 
+        JSValue ev       = JS_GetPropertyStr(ctx, col, "Editable");
+        bool    editable = JS_ToBool(ctx, ev) > 0;
+
+        JS_FreeValue(ctx, ev);
+
         GtkListItemFactory *f = gtk_signal_list_item_factory_new();
         g_object_set_data(G_OBJECT(f), COLUMN_INDEX_KEY, GUINT_TO_POINTER(i));
         if (i == 0 && table_state(w)->tree)
             g_object_set_data(G_OBJECT(f), TREE_COLUMN_KEY, GINT_TO_POINTER(1));
         g_object_set_data(G_OBJECT(f), "bta-xalign",
                           GINT_TO_POINTER((int)(x * 100)));
+        g_object_set_data(G_OBJECT(f), "bta-editable",
+                          GINT_TO_POINTER(editable));
         g_signal_connect(f, "setup", G_CALLBACK(on_setup_cell), w);
         g_signal_connect(f, "bind",  G_CALLBACK(on_bind_cell),  w);
-        /* Only the column that carries the expander watches anything, and it is
-         * the only one that has to let go. */
-        if (i == 0 && table_state(w)->tree)
+        /* Only the column that carries the expander watches anything, and only
+         * an editable one has an address to let go of -- either is a reason. */
+        if ((i == 0 && table_state(w)->tree) || editable)
             g_signal_connect(f, "unbind", G_CALLBACK(on_unbind_cell), w);
 
         GtkColumnViewColumn *c =
@@ -2530,8 +2639,10 @@ void bta_table_register(void)
         /* Activate() */
         /* Data(row, column) */
         /* Sort(column, ascending) */
+        /* CellEdit(row, column, text) */
         BTA_CLASS_ENUM_TEXT("TableView", "Control", build_table, table_props, false,
-                            table_options, "Columns.Text", "Select,Activate,Data,Sort"),
+                            table_options, "Columns.Text",
+                            "Select,Activate,Data,Sort,CellEdit"),
     };
     bta_register_classes(rows, (int)G_N_ELEMENTS(rows));
 }
