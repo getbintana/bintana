@@ -117,6 +117,7 @@ per application. On every run:
 | `ide/**`, `docs/**` | the IDE alone |
 | `examples/hello/**` | the example alone |
 | an application's own repository | it alone |
+| an application's registration (its `app.json`: `finish-args`, `project`, `watch`…) | it alone -- the entry's hash is part of the state, since no commit in any source can see a change here |
 
 ## What users do
 

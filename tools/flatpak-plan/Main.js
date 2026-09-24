@@ -30,6 +30,7 @@
  * | `repo` | where the source lives. Absent means this runtime's own repository, which is what the IDE and the examples are |
  * | `ref` | the branch or tag to build. Absent means the default branch (or, for this repository, the ref the base is being built from) |
  * | `watch` | the paths in that source whose change rebuilds it. Default `.`, meaning all of it. Only consulted for a source this run has the history of: a `repo` of its own is rebuilt when its commit moves |
+ * | `finish-args` | extra `flatpak build-finish` permissions, passed through to `tools/pack.sh` |
  *
  * **A source with a `repo` of its own needs no history here**: it is rebuilt
  * when the recorded commit and its HEAD differ, and `watch` is not read. The
@@ -37,9 +38,16 @@
  * rebuilt only when something under its own paths changed -- which is the whole
  * point of `watch`.
  *
+ * **The entry is rebuilt when the entry itself changes**, which is the one
+ * change no commit in any source can see: the state holds its hash
+ * (`entry`, sha256 of the file's text) and a `finish-args` added here has to
+ * reach the package. Without it, editing the registry changed nothing and the
+ * published application kept the permissions it was built with -- found
+ * adding `--filesystem=home` to `project` and watching the CI say *nothing*.
+ *
  * The state is `builds.json` from the published branch: the tag, the base's
- * commit, and one entry per application with the repository it came from and
- * the commit it was built at.
+ * commit, and one entry per application with the repository it came from, the
+ * commit it was built at and the hash of its registration.
  */
 "use strict";
 
@@ -128,6 +136,8 @@ function Main() {
         if (!rebuild) {
             if (!recorded || !recorded.commit)
                 rebuild = true;
+            else if (recorded.entry !== app.entry)
+                rebuild = true;
             else if (recorded.repo && recorded.repo !== repo)
                 rebuild = true;
             else if (app.repo)
@@ -187,6 +197,7 @@ function discover(appsDir) {
         app.name  = name;
         app.repo  = app.repo  || "";
         app.watch = Array.isArray(app.watch) && app.watch.length ? app.watch : ["."];
+        app.entry = File.Hash(path);          /* sha256, the file's own bytes */
 
         out.push(app);
     }

@@ -12,7 +12,9 @@
 #     tool, the vendor                     because a base's files are copied
 #                                          into each application at build time;
 #   - `ide/**` or `examples/hello/**`    -> that application alone;
-#   - an application's own repository    -> it alone, when its commit moved.
+#   - an application's own repository    -> it alone, when its commit moved;
+#   - an application's registration      -> it alone, when its `app.json` changed
+#     (`finish-args` among them)            -- no commit in any source can see it.
 name: flatpak repository
 
 on:
@@ -126,9 +128,11 @@ jobs:
 
           # What each ref that was just built is at now, so the next run knows
           # what moved. The entries of the applications this run did not build
-          # are left where they were.
+          # are left where they were. `entry` is sha256 of the registration
+          # file's bytes, which is what the planner's File.Hash answers -- the
+          # digest sha256sum prints, with no text in between.
           python3 - "${{ steps.plan.outputs.tag }}" ${{ steps.plan.outputs.refs }} <<'EOF'
-          import json, os, subprocess, sys
+          import hashlib, json, os, subprocess, sys
 
           tag, refs = sys.argv[1], sys.argv[2:]
           path  = "published/builds.json"
@@ -145,10 +149,12 @@ jobs:
               if ref == "BaseApp":
                   state["base"] = commit("sources/bintana")
                   continue
-              app = json.load(open(f"ci/apps/{ref}/app.json"))
+              entry = f"ci/apps/{ref}/app.json"
+              app   = json.load(open(entry))
               state["apps"][ref] = {
                   "repo":   app.get("repo", bintana),
                   "commit": commit(f"sources/{ref}" if app.get("repo") else "sources/bintana"),
+                  "entry":  hashlib.sha256(open(entry, "rb").read()).hexdigest(),
               }
 
           json.dump(state, open(path, "w"), indent=2)
