@@ -1096,6 +1096,24 @@ Five things cost a build cycle each when this was built, so they are here:
 
 [#6818]: https://github.com/flatpak/flatpak/issues/6818
 
+**And a package's file dialog is the desktop's portal, with no other.** GTK
+routes a sandboxed application's chooser through
+`org.freedesktop.portal.Desktop` — `gdk_running_in_sandbox()` is just
+`/.flatpak-info`, and `gdk_display_should_use_portal` returns `TRUE` before it
+probes anything — so a desktop whose portal cannot start gives the application
+**no file dialog at all**, silently, which reads as the application being
+broken. `bintana-project` was reported exactly that way. A GTK application run
+from a source tree is not sandboxed, probes the portal, and falls back to its
+own chooser when the probe fails; that is the difference between the IDE and a
+package, and not a difference in the code.
+
+Two things follow for an application that opens files. The registry entry
+declares `finish-args` (`tools/pack.sh --finish-args`), since the default is
+only what a windowed program needs — and `--filesystem=home` is still wanted
+with a working portal, because the portal hands over one file at a time at a
+`/run/user/<uid>/doc/...` path that dies with the session, so a path the
+program remembered cannot be reopened.
+
 ## Tests
 
 Five Bintana projects are run by the suite — `ide`, `markdown`, `report`,

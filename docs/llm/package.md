@@ -13,9 +13,13 @@ file the project carries. The IDE uses `Metainfo` to edit it -- *Project →
 Application info…* -- and `tools/pack` is the command line around `Package`:
 
 ```sh
-tools/pack.sh <project> <out>
+tools/pack.sh <project> <out> [--finish-args <a,b,c>]
 flatpak-builder <out>/<id>.json
 ```
+
+`--finish-args` is how an application asks for more than a window: the default
+is the four permissions an ordinary one needs, and a program that opens the
+user's files adds `--filesystem=home` (or a narrower one).
 
 ## Package
 

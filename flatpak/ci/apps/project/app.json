@@ -1,5 +1,12 @@
 {
   "id": "io.github.getbintana.Project",
   "repo": "https://github.com/getbintana/bintana-project.git",
-  "project": "."
+  "project": ".",
+  "finish-args": [
+    "--share=ipc",
+    "--socket=wayland",
+    "--socket=fallback-x11",
+    "--device=dri",
+    "--filesystem=home"
+  ]
 }

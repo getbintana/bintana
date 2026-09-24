@@ -67,6 +67,21 @@ what a package installs under.
 | `project` | the Bintana project inside that repository, packaged by `tools/pack.sh` |
 | `manifest` | **or** a Flatpak manifest, built as it is -- what the IDE uses, because it ships the reference F1 reads as well as its project |
 | `watch` | the paths in the source whose change rebuilds it. Default `.`, meaning all of it |
+| `finish-args` | the sandbox permissions. The default is the four a windowed application needs (`--share=ipc`, both display sockets, `--device=dri`); a program that opens the user's files adds `--filesystem=home`, or a narrower one |
+
+**A package's file dialog is the desktop's portal, and it has no other.**  GTK
+routes every sandboxed application's chooser through
+`org.freedesktop.portal.Desktop` -- `gdk_running_in_sandbox()` is just
+`/.flatpak-info` -- and does **not** fall back to its own dialog. On a desktop
+whose portal is not running, an application has no file dialog at all, which
+looks exactly like a broken application. (An application run from a source
+tree is not sandboxed: GTK probes the portal, the probe fails, and its own
+chooser comes up.)
+
+`--filesystem=home` is what an application that opens files wants even with a
+working portal: the portal hands over one file at a time, at a
+`/run/user/<uid>/doc/...` path that is gone when the session ends, so a path
+the program remembered cannot be reopened.
 
 **An application that lives in the runtime's repository** -- the IDE and the
 examples -- leaves `repo` out and names a path inside it:

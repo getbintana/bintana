@@ -89,6 +89,11 @@ json() {
     python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get(sys.argv[2],""))' "$1" "$2"
 }
 
+# A list-valued field, as the comma-separated text `tools/pack` takes.
+json_list() {
+    python3 -c 'import json,sys;print(",".join(json.load(open(sys.argv[1])).get(sys.argv[2],[])))' "$1" "$2"
+}
+
 for ref in "${refs[@]}"; do
     echo "== $ref"
 
@@ -121,10 +126,14 @@ for ref in "${refs[@]}"; do
 
     # A project: `tools/pack.sh` writes the build context -- the project, the
     # metainfo, the entry, the icon and the manifest -- and the manifest it
-    # wrote is what is built.
+    # wrote is what is built.  The registration's `finish-args`, when it has
+    # them, are the sandbox permissions the application asked for; without
+    # them the default is a windowed application's four, and one that opens
+    # the user's files has to say so.
     out="$work/$ref-out"
     rm -rf "$out"
-    "$bintana/tools/pack.sh" "$src/$project" "$out"
+    finish=$(json_list "$entry" "finish-args")
+    "$bintana/tools/pack.sh" "$src/$project" "$out" ${finish:+--finish-args "$finish"}
     flatpak-builder --user --install --force-clean --install-deps-from=flathub \
         --repo="$repo" "$work/$ref" "$out/$id.json"
 done
