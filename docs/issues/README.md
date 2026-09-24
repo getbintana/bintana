@@ -15,7 +15,6 @@ in the same form.
 | [ISSUE-editable-combo.md](ISSUE-editable-combo.md) | No editable / autocompleting combo |
 | [ISSUE-fixed-fill-child.md](ISSUE-fixed-fill-child.md) | A `Fixed` container does not stretch a `Fill` child when it grows |
 | [ISSUE-menu-label-extraction.md](ISSUE-menu-label-extraction.md) | A control's menu labels never reach a catalogue |
-| [ISSUE-packaging.md](ISSUE-packaging.md) | No way to hand over an application without its project tree |
 | [ISSUE-worker-locale-order.md](ISSUE-worker-locale-order.md) | A `Task` has no `Locale`, so a worker cannot order names |
 
 **A gap that is filled is deleted, not archived.** What the runtime can do is in

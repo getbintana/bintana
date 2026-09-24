@@ -1,16 +1,18 @@
 # Flatpak: la aplicación empaquetada, y un runtime compartido
 
-**Status: fases 0 a 5 hechas y la 6 preparada.** La fase 0 (el spike) dejó los
-manifiestos en [`flatpak/`](../../flatpak/), que construyen y corren, y lo que
-midió está abajo. La fase 1 le dio al proyecto su `id`: `Application.Id`, la
-clase de ventana en los dos backends, y el IDE que lo pide al crear y lo edita
-después. La fase 2 le dio a `Xml` los atributos con namespace (`xml:lang`), la
-fase 3 el `<id>.metainfo.xml` como parte del proyecto con su editor, la fase 4
-el generador (`lib/package` + `tools/pack`), y la fase 5 la división de los
-manifiestos y `tools/flatpak-build.sh`. La fase 6 es el repo de pruebas: el
-workflow está en [`flatpak/ci/`](../../flatpak/ci/README.md) y espera que el
-repositorio se cree. Este plan es el diseño; lo que el runtime puede hacer está
-en [`llm/`](../llm/README.md).
+**Status: fases 0 a 5 hechas, y la 6 construida salvo su disparo inmediato.** La
+fase 0 (el spike) dejó los manifiestos en [`flatpak/`](../../flatpak/), que
+construyen y corren, y lo que midió está abajo. La fase 1 le dio al proyecto su
+`id`: `Application.Id`, la clase de ventana en los dos backends, y el IDE que lo
+pide al crear y lo edita después. La fase 2 le dio a `Xml` los atributos con
+namespace (`xml:lang`), la fase 3 el `<id>.metainfo.xml` como parte del proyecto
+con su editor, la fase 4 el generador (`lib/package` + `tools/pack`), y la fase
+5 la división de los manifiestos y `tools/flatpak-build.sh`. La fase 6 es el
+repo de pruebas, y **existe**: `getbintana/flatpak` publica el BaseApp, el IDE,
+el ejemplo y una app de otro repositorio, corre el smoke antes de cada publish,
+y el issue que este plan contestaba (`ISSUE-packaging.md`) está borrado. Lo que
+queda de ella está al final de su sección. Este plan es el diseño; lo que el
+runtime puede hacer está en [`llm/`](../llm/README.md).
 
 ## What the application needed
 
@@ -123,27 +125,25 @@ opcional para construir localmente sin ensuciar el host (bwrap necesita
 
 ## Fase 6 — El repo de pruebas y su CI
 
-Un repo nuevo (`getbintana/flatpak`) con el workflow y una rama `gh-pages` con
-el repo publicado; los manifiestos quedan en el principal para no duplicarlos.
-El CI construye BaseApp, IDE y un ejemplo, publica con `--generate-static-deltas`
-(sin firma para las pruebas) y corre el smoke que ya se midió:
-`flatpak run --command=bintana <app> --version` más un proyecto consola.
+El repo existe (`getbintana/flatpak`), con el workflow y una rama `gh-pages` que
+publica; los manifiestos quedan en el principal para no duplicarlos. El CI
+construye el BaseApp, el IDE, el ejemplo y una **app de otro repositorio** (que
+es lo que mide el camino completo de un tercero), publica con
+`--generate-static-deltas` sin firma, y **corre el smoke antes del push**: el
+`--version` del runtime dentro de cada paquete más un proyecto consola a través
+de cada uno, que es lo que ve un paquete que construye y no corre.
 
-**La incrementalidad se registra, no se adivina.** Un `builds.json` en el repo
-publicado guarda por ref el commit construido y los prefijos que lo componen; en
-cada corrida el CI compara contra el ref objetivo:
+**La incrementalidad se registra, no se adivina**, y la regla vive donde no se
+puede quedar vieja: `builds.json` en el repo publicado guarda por ref el commit
+construido, su repositorio de origen y el hash de su entrada, y
+[`flatpak/ci/README.md`](../../flatpak/ci/README.md) tiene la tabla de qué
+reconstruye qué, con el caso que ningún commit de ningún fuente puede ver (un
+`finish-args` que cambió).
 
-| cambió | se reconstruye |
-|---|---|
-| `runtime/**`, `vendor/**`, `lib/**`, `CMakeLists.txt` | el BaseApp **y todas las apps** |
-| `ide/**`, `docs/**` | solo el IDE |
-| `examples/hello/**` | solo el ejemplo |
-| un tag nuevo en el principal | todo, y queda registrado |
-
-El disparo arranca con `workflow_dispatch` + `schedule` (sin secretos) y pasa a
-`repository_dispatch` desde el workflow de tag cuando el repo principal sea
-público, que es lo que el disparo inmediato necesita. El SDK se cachea
-(`actions/cache` sobre `~/.local/share/flatpak`): son 837 MB por corrida.
+**Lo que queda de esta fase es el disparo inmediato**: hoy un tag nuevo espera
+el `schedule` o un `workflow_dispatch` a mano, y el `repository_dispatch` desde
+el workflow del principal necesita un token. El SDK se cachea (`actions/cache`
+sobre `~/.local/share/flatpak`): son 837 MB por corrida.
 
 ## What is deliberately not here
 

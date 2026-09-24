@@ -178,7 +178,6 @@ needed and what it did instead.
 | No watch, no immediate window, and no changing a value while stopped — the debugger stops, steps and **shows** what a frame holds, and that is where it ends | [`docs/plans/debug-plan.md`](../plans/debug-plan.md), stages 3 to 6. A loop written entirely on one line also stops only once |
 | No git in the IDE — no status, no diff before committing, no stage or push | [`docs/plans/git-plan.md`](../plans/git-plan.md). What there is instead: the `Terminal` tab, a real shell in the project directory. The plan's core is a side-by-side diff viewer; its one open gap is below |
 | A word for *do this, then that* | [`docs/plans/async-plan.md`](../plans/async-plan.md) |
-| Packaging an application without the project tree | [ISSUE-packaging](../issues/ISSUE-packaging.md) |
 | No editable / autocompleting combo | [ISSUE-editable-combo](../issues/ISSUE-editable-combo.md) |
 | A control laid onto a page — `Print` sends what a `Draw` paints, so a form with real widgets on it still has no path to paper except drawing it by hand | [controls.md](controls.md#drawingarea) |
 | A `Fixed` container that does not stretch a `Fill` child when it itself grows — a reusable component that wants to fill its cell has to change its `Arrangement` | [ISSUE-fixed-fill-child](../issues/ISSUE-fixed-fill-child.md) |

@@ -2443,8 +2443,9 @@ off and says so, rather than opening nothing.
 ## Exporting the project
 
 *Project → Export project…* (`Ctrl+Shift+E`) writes the whole directory as one
-`.tar` beside it. Not the [packaging](issues/ISSUE-packaging.md) — that is an application
-*without* its project tree — but the smaller question that comes before it:
+`.tar` beside it. Not [packaging the application](llm/package.md) — that is an
+application *without* its project tree — but the smaller question that comes
+before it:
 handing a project to somebody without either end needing the IDE to do it.
 
 **Plain tar and nothing else.** A Bintana project is text, so what an archive of

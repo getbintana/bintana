@@ -176,10 +176,12 @@ If either half fails, this plan is redesigned before the loader is touched.
 ## Docs, in the same change (the AGENTS.md rule)
 
 - `docs/formats.md`: the `.bta` layout, what is encoded, what stays clear, why.
-- `docs/issues/ISSUE-packaging.md`: **deleted** once covered — an answered
-  issue is deleted, and in three places, which is what AGENTS.md asks for: the
-  file, its row in `docs/issues/README.md`, and its row in
-  `docs/llm/issues.md`. Whatever is left over (installer, signing) becomes a new
-  issue if it earns one.
+- `docs/issues/ISSUE-packaging.md` is **already gone**: the Flatpak plan
+  answered the handing-over half — an application installed from a repository,
+  without the developer's tree — and deleted it in the three places AGENTS.md
+  asks for. What this plan is for is the half that issue did not ask: the
+  installed application still carries its JavaScript, so whoever can open its
+  directory can rewrite it. Whatever is left over when this is built (signing,
+  an installer) becomes a new issue if it earns one.
 - IDE support (*Export bundle…* on top of `Ide.Exporter`) is an explicit later
   phase, not part of this change.
