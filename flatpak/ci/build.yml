@@ -51,8 +51,12 @@ jobs:
       - name: flatpak-builder
         run: |
           sudo apt-get update
+          # `elfutils` is what flatpak-builder strips with (`eu-strip`, and
+          # `eu-elfcompress` for the debug info); it is not a dependency of the
+          # package on Ubuntu, and without it the build dies at the last step
+          # of the first module.
           sudo apt-get install -y --no-install-recommends \
-              flatpak flatpak-builder appstream
+              flatpak flatpak-builder appstream elfutils
           flatpak remote-add --user --if-not-exists flathub \
               https://dl.flathub.org/repo/flathub.flatpakrepo
 
