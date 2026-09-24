@@ -51,15 +51,26 @@ jobs:
       - name: flatpak-builder
         run: |
           sudo apt-get update
-          # `elfutils` is what flatpak-builder strips with (`eu-strip`, and
-          # `eu-elfcompress` for the debug info); it is not a dependency of the
-          # package on Ubuntu, and without it the build dies at the last step
-          # of the first module. `ostree` is the CLI `tools/flatpak-build.sh`
-          # initializes the repository with, because the target is a checkout
-          # of `gh-pages` and flatpak-builder will not make a repository in a
-          # directory that already has anything in it.
+          # Three host-side tools are named because nothing in the dependency
+          # chain declares them and every failure lands after minutes of
+          # compiling:
+          #
+          # - `elfutils`: flatpak-builder execs `eu-strip` to split debuginfo,
+          #   and Ubuntu only Recommends it -- *Failed to execute child process
+          #   "eu-strip"*, at the last step of the first module.
+          # - `ostree`: the CLI `tools/flatpak-build.sh` initializes the
+          #   repository with, because the target is a checkout of `gh-pages`
+          #   and flatpak-builder will not make a repository in a directory
+          #   that already has anything in it -- *opendir(objects)*, at the
+          #   export.
+          # - `librsvg2-common`: the host's gdk-pixbuf SVG loader. `appstreamcli
+          #   compose` rasterizes a scalable icon through it (it wants a
+          #   128x128@2 variant), and the x86_64 image ships without it -- so a
+          #   compose dies with `file-read-error`, after the build, whose
+          #   message names no file. A Fedora desktop carries it, which is why
+          #   a local build never fails.
           sudo apt-get install -y --no-install-recommends \
-              flatpak flatpak-builder appstream elfutils ostree
+              flatpak flatpak-builder appstream elfutils ostree librsvg2-common
           flatpak remote-add --user --if-not-exists flathub \
               https://dl.flathub.org/repo/flathub.flatpakrepo
 

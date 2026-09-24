@@ -188,14 +188,15 @@ flatpak-builder --user --install \
 flatpak run <id>
 ```
 
-It needs `flatpak-builder`, **`elfutils`** and **`ostree`**. `eu-strip` and
-`eu-elfcompress` are what flatpak-builder strips and compresses a module with,
-and `ostree` is what `tools/flatpak-build.sh` initializes the repository with --
-neither arrives as a dependency of the package on Ubuntu, and without the first
-the build dies at the last step of the first module, after the compile, and
-without the second at the export, because the repository may be a checkout of
-the published branch and flatpak-builder will not make one in a directory that
-already has anything in it.
+Three host-side tools nothing declares, and each failure lands after minutes
+of compiling: `elfutils` is flatpak-builder's own stripper (`eu-strip`,
+`eu-elfcompress`); `ostree` is what `tools/flatpak-build.sh` initializes the
+repository with, because the target may be a checkout of the published branch
+and flatpak-builder will not make one in a directory that already has anything
+in it; and `librsvg2-common` is the host's gdk-pixbuf SVG loader, which
+`appstreamcli compose` rasterizes a scalable icon through -- without it the
+compose dies with `file-read-error`, naming no file. A Fedora desktop carries
+all three, which is why a local build does not meet any of them.
 
 It needs the shared BaseApp, which is where the runtime comes from -- the same
 one every Bintana application is built on, so nothing here rebuilds GTK or the
