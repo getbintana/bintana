@@ -111,6 +111,13 @@ flatpak remote-add --if-not-exists --no-gpg-verify bintana \
 flatpak install bintana com.example.MyApp
 ```
 
+**A publish takes a few minutes to be visible.** GitHub Pages serves the
+repository with `cache-control: max-age=600`, so the `summary` a client reads
+can be up to ten minutes old -- and the symptom is a package the CI has just
+built answering *nothing matches* from `flatpak install`. `flatpak remote-ls`
+(or the install, retried once the CDN has it) picks it up; `flatpak update
+--appstream` refreshes the metadata branch and **not** the summary.
+
 **`--no-gpg-verify` is for the first tests.** The repository is unsigned until
 there is a project key; then the summary is signed with
 `tools/flatpak-build.sh <repo> <apps> <sources> --sign <key>` and the public key
