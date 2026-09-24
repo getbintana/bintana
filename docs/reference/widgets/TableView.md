@@ -26,6 +26,7 @@ not repeated here.
 | `ColumnLines` | rules between the columns | [the columns](#the-columns) |
 | `Columns` | the headings and their widths | [the columns](#the-columns) |
 | `Count` | how many rows — **settable** | [the rows](#the-rows-it-holds), [on demand](#on-demand-a-table-that-holds-nothing) |
+| `HeaderMenu` | the menu a column heading offers | [the heading's menu](#the-headings-menu) |
 | `Index` | the selected row | [the selection](#the-selection) |
 | `Key` | the selected node's key | [a tree](#a-tree) |
 | `MultiSelect` | more than one row at a time | [the selection](#the-selection) |
@@ -67,6 +68,7 @@ not repeated here.
 |---|---|---|
 | `Activate()` | a row was double clicked | [the selection](#the-selection) |
 | `Data(row, column)` | a cell is needed — **the answer is the return value** | [on demand](#on-demand-a-table-that-holds-nothing) |
+| `HeaderClick(column, button, ctrl, shift)` | a heading was pressed — **the answer is the menu** | [the heading's menu](#the-headings-menu) |
 | `Select()` | the selection moved | [the selection](#the-selection) |
 | `Sort(column, ascending)` | a heading was clicked — **the handler decides** | [sorting](#sorting) |
 
@@ -273,6 +275,54 @@ the source, or reading it backwards — and the rows redraw where they are.
 **The selection follows the rows through a sort**, in both shapes: the rows that
 were selected are still the selected ones, at whatever positions they have moved
 to. The same is true of `SetCell` — changing a cell does not move the highlight.
+
+## The heading's menu
+
+A right click on a column heading offers that heading's menu, and the menu is
+the one `HeaderMenu` declares:
+
+```js
+Tasks.HeaderMenu = [{ name: "MnuColumns", text: Locale.Text("Columns…") },
+                    { separator: true },
+                    { name: "MnuHide", text: Locale.Text("Hide this column") }];
+```
+
+A label declared in a `.form` is prose the extractor already collects and the
+menu builder translates; one that lives only in code is wrapped in
+`Locale.Text`, which is what puts it in the catalogue.
+
+| | |
+|---|---|
+| `HeaderMenu` | the menu, as the same array of items `Menu` takes |
+| **event** `HeaderClick(column, button, ctrl, shift)` | a heading was pressed. `button` is `1` primary, `2` middle, `3` secondary. **The return value is the menu of the secondary click** |
+
+**Every item is told which column it was opened over**, last and after whatever
+its kind already carries: `MnuHide_Click(column)`, a `check` item's
+`Click(on, column)`, a dynamic one's `Click(index, text, column)`. That is what
+makes *Hide this column* writable at all, and it is why **the menu is built for
+each click** rather than once: a menu whose items act on "this column" has to be
+instantiated for the one that was clicked. The consequence to know: the state a
+program sets on an item from code — `this.MnuHide.Enabled = false` — does not
+survive the next right click. A menu that depends on the context answers it from
+the event, which is also where a dynamic menu is built:
+
+```js
+Tasks_HeaderClick(column, button, ctrl, shift) {
+    if (button !== 3) return;
+    this.headColumn = column;
+    return [{ name: "MnuHide", text: Locale.Text("Hide this column") },
+            { name: "MnuDel",  text: Locale.Text("Delete column"),
+              enabled: this.Tasks.Columns.length > 1 }];
+}
+```
+
+**`HeaderClick` is the heading's press for every button**, and the only pointer
+event a heading raises: GTK's own title gesture claims the press, so the
+`MouseDown` a control reports never arrives on a heading. The secondary click is
+the one that asks for a menu — GTK presents it below the heading — and a primary
+click still sorts when `Sortable` is on. The event is also what a custom order
+hangs off: turn `Sortable` off and reorder in the handler, or keep it and use
+another button for another order.
 
 ## On demand: a table that holds nothing
 

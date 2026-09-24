@@ -442,7 +442,7 @@ const TESTS = [
     /* Early on purpose: they show windows of their own, and the pushed-surface
      * assertions in the async tail measure a form on the frame it settles. See
      * the note below. */
-    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator", "TableView", "TableTree", "TableOnDemand", "TableSort", "TableIcon", "TableProse",
+    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableTree", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
     "Expand", "Spacing", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
@@ -3662,6 +3662,20 @@ class WidgetsForm extends Form {
             v.Pause();
             eq("Pause is not playing", v.Playing, false);
             check("and it holds a position", v.Position > 0, String(v.Position));
+
+            /*
+             * **The end the `until` below waits for has to be a new one.**
+             * The clip is a second long, and getting here takes two `until`s
+             * -- the length, then a decoded frame -- so on a machine slow
+             * enough (a sanitizer, or a loaded one) it can already have
+             * ended: `Ended` fired while the frame phase was still waiting,
+             * the counter below was already non-zero, and the `until` read
+             * the end of the *previous* playback -- Position back at 0 and
+             * Playing true, which is what a restarted clip looks like and
+             * not a failure of the player. Reset here, so what is waited for
+             * is this playback's end.
+             */
+            this.mediaEnded = 0;
             v.Play();
             eq("and Play picks it up again", v.Playing, true);
 
@@ -12500,6 +12514,90 @@ function Main() {
      * is recorded is what arrived. */
     SortT_Sort(column, ascending) { this.sorts.push([column, ascending]); }
 
+    /*
+     * The heading's menu and its click. What a GTK heading cannot do from here
+     * is be clicked, so this holds the declaration, the event with all of its
+     * context, and the return contract; the hit test and the menu GTK shows
+     * are on the by-hand list.
+     */
+    testTableHeaderMenu() {
+        const t = new TableView();
+        this.Fixed1.Add(t);
+        t.Name = "HdrT";
+        t.Columns = [{ Text: "A" }, { Text: "B" }];
+        this.heads = [];
+
+        eq("a table still leads with Select", t.EventNames()[0], "Select");
+        check("and the heading click is one of its events",
+              t.EventNames().includes("HeaderClick"),
+              JSON.stringify(t.EventNames()));
+
+        const spec = [
+            { name: "HdrMnuColumns", text: "Columns…" },
+            { separator: true },
+            { name: "HdrMnuHide", text: "Hide this column" },
+            { name: "HdrMnuOff",  text: "Not now", enabled: false },
+        ];
+        t.HeaderMenu = spec;
+
+        eq("the heading menu reads back as declared",
+           JSON.stringify(t.HeaderMenu), JSON.stringify(spec));
+        check("its items are bound on the form, as Menu's are",
+              this.HdrMnuHide && this.HdrMnuHide.Enabled === true);
+        check("and a spec may declare one disabled, as an Action's does",
+              this.HdrMnuOff && this.HdrMnuOff.Enabled === false);
+        check("and the serialiser writes it",
+              JSON.stringify(t.Serialize().properties.HeaderMenu) === JSON.stringify(spec),
+              JSON.stringify(t.Serialize().properties.HeaderMenu));
+
+        /* La columna, el botón y los modificadores, en todo click. */
+        t.Emit("HeaderClick", 1, 3, true, false);
+        eq("a heading click arrives with all of it",
+           JSON.stringify(this.heads), "[[1,3,true,false]]");
+        t.Emit("HeaderClick", 0, 1, false, true);
+        eq("...and for any button", JSON.stringify(this.heads[1]), "[0,1,false,true]");
+
+        /* El retorno del handler es el menú del click secundario: lo que se
+         * puede afirmar desde acá es que el evento lo entrega. */
+        const answer = t.Emit("HeaderClick", 1, 3, false, false);
+        check("the handler's answer is what the menu is built from",
+              Array.isArray(answer) && answer[0].name === "HdrDyn",
+              JSON.stringify(answer));
+
+        /* Un control sin nombre escucha por On, que es la otra puerta. */
+        const u = new TableView();
+        this.Fixed1.Add(u);
+        u.Columns = [{ Text: "A" }];
+        this.onHead = null;
+        u.On("HeaderClick", (column, button, ctrl, shift) => {
+            this.onHead = [column, button, ctrl, shift];
+        });
+        u.Emit("HeaderClick", 0, 2, true, true);
+        eq("and a handler on the control hears it",
+           JSON.stringify(this.onHead), "[0,2,true,true]");
+        u.Delete();
+
+        throws("a heading menu that is not an array is refused",
+               () => { t.HeaderMenu = "x"; });
+        throws("an item with no name is refused where it is written",
+               () => { t.HeaderMenu = [{ text: "no name" }]; });
+
+        t.HeaderMenu = null;
+        eq("null clears it", t.HeaderMenu, undefined);
+        check("and the serialiser then leaves it out",
+              !("HeaderMenu" in t.Serialize().properties),
+              JSON.stringify(t.Serialize().properties));
+
+        t.Delete();
+    }
+
+    /* Lo que llegó al encabezado, y la respuesta que el runtime arma: el
+     * menú dinámico se devuelve desde el handler. */
+    HdrT_HeaderClick(column, button, ctrl, shift) {
+        this.heads.push([column, button, ctrl, shift]);
+        return button === 3 ? [{ name: "HdrDyn", text: "Dynamic" }] : undefined;
+    }
+
     /* An icon beside a cell's text, which is what makes a list of files look
      * like one. */
     testTableIcon() {
@@ -13444,6 +13542,13 @@ function Main() {
         p.Menu = [{ name: "MnuCtxTwo", text: "Two" }];
         eq("reassigning replaces the menu", p.Menu.length, 1);
         check("with the new item exposed", !!this.MnuCtxTwo);
+
+        /* An item that points at a command has no action of its own, so an
+         * `enabled` of its own would be a value nothing reads -- and the
+         * command's own is where availability lives. Refused rather than
+         * ignored, which is what the name-and-action pair beside it does. */
+        throws("an item pointing at a command refuses an enabled of its own",
+               () => { p.Menu = [{ action: "ActTest", enabled: false }]; });
 
         /* A control that has no menu of its own passes the click outwards: a
          * Button handles the press itself, so the event never reaches the

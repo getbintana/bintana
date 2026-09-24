@@ -1157,6 +1157,188 @@ static JSValue table_sort_column(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
+/* ---------------------------------------------------------- header menus */
+
+/*
+ * `HeaderMenu` -- the menu a column heading offers, and `HeaderClick(column,
+ * button, ctrl, shift)` -- the heading's press.
+ *
+ * **The heading is the one surface of a column view that reports nothing.**
+ * GTK's own title gesture claims the press (`click_pressed_cb` in
+ * `gtkcolumnviewtitle.c`), so the bubble-phase controllers every other control
+ * has never see it; measured before this existed: a secondary click on a
+ * heading arrived as no `MouseDown` at all. So the press is caught in the
+ * **capture** phase, which runs first, and it is deliberately **not claimed**:
+ * GTK's gesture stays alive to sort on the primary release and to present the
+ * model below on the secondary one.
+ *
+ * The model is built for each click rather than kept, because an item has to
+ * know which column it was opened over -- see `bta_menu_header_build`.
+ */
+
+static JSValue table_get_header_menu(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    return JS_DupValue(ctx, w->header_menu);
+}
+
+static JSValue table_set_header_menu(JSContext *ctx, JSValueConst this_val,
+                                     JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    if (!JS_IsArray(val) && !JS_IsNull(val) && !JS_IsUndefined(val))
+        return JS_ThrowTypeError(ctx, "HeaderMenu takes an array of items, or null");
+
+    /*
+     * Built once here and thrown away, and that is what refuses a bad spec
+     * where it is written: an item with no name fails while the .form is being
+     * loaded and not when somebody right-clicks a heading. It also binds the
+     * item names on the form, exactly as assigning `Menu` does. The menu that
+     * is shown is built again per click, with the column.
+     */
+    if (JS_IsArray(val)) {
+        GMenu *model = bta_menu_header_build(ctx, w->form, w, val, -1);
+        if (!model)
+            return JS_EXCEPTION;
+        g_object_unref(model);
+    }
+
+    JS_FreeValue(ctx, w->header_menu);
+    w->header_menu = JS_IsArray(val) ? JS_DupValue(ctx, val) : JS_UNDEFINED;
+    return JS_UNDEFINED;
+}
+
+/*
+ * Which heading is under a point of the view, or -1.
+ *
+ * The heading row is the column view's **first child** and the titles are its
+ * children **in column order** -- GTK's own structure, checked in 4.10 and
+ * 4.22, and there is no public accessor for either. Hidden columns are not
+ * children (a column's title is created and removed with its visibility), so a
+ * child's index is the column's; the day `Columns[i].Visible` exists, this is
+ * the walk that has to change.
+ *
+ * `x` and not the whole point for the column: the titles are allocated at
+ * their column's x, so the first whose range contains the point is the one
+ * drawn under it.
+ */
+static int table_heading_at(BtaWidget *w, double x, double y)
+{
+    GtkWidget *header = gtk_widget_get_first_child(w->inner);
+    if (!header || !gtk_widget_is_visible(header))
+        return -1;
+
+    graphene_rect_t r;
+    if (!gtk_widget_compute_bounds(header, w->inner, &r))
+        return -1;
+    if (y < r.origin.y || y >= r.origin.y + r.size.height)
+        return -1;
+
+    int i = 0;
+    for (GtkWidget *ch = gtk_widget_get_first_child(header); ch;
+         ch = gtk_widget_get_next_sibling(ch), i++) {
+        if (!gtk_widget_is_visible(ch))
+            continue;
+
+        graphene_rect_t cr;
+        if (gtk_widget_compute_bounds(ch, w->inner, &cr) &&
+            x >= cr.origin.x && x < cr.origin.x + cr.size.width)
+            return i;
+    }
+    return -1;
+}
+
+static void on_header_pressed(GtkGestureClick *g, int n_press,
+                              double x, double y, gpointer user_data)
+{
+    BtaWidget *w = user_data;
+
+    int column = table_heading_at(w, x, y);
+    if (column < 0)
+        return;
+
+    int button = (int)gtk_gesture_single_get_current_button(GTK_GESTURE_SINGLE(g));
+    GdkModifierType state =
+        gtk_event_controller_get_current_event_state(GTK_EVENT_CONTROLLER(g));
+
+    JSContext *ctx = w->ctx;
+    JSValue    argv[4] = {
+        JS_NewInt32(ctx, column),
+        JS_NewInt32(ctx, button),
+        JS_NewBool(ctx, (state & GDK_CONTROL_MASK) != 0),
+        JS_NewBool(ctx, (state & GDK_SHIFT_MASK) != 0),
+    };
+
+    JSValue answer = bta_emit_answer(w, "HeaderClick", 4, argv, NULL);
+
+    for (int i = 0; i < 4; i++)
+        JS_FreeValue(ctx, argv[i]);
+
+    /*
+     * Only the secondary click asks for a menu, and that is GTK's rule as much
+     * as ours: `click_released_cb` presents the column's model for the
+     * secondary button and sorts for the primary. The others are told and
+     * that is all.
+     */
+    if (button != GDK_BUTTON_SECONDARY) {
+        JS_FreeValue(ctx, answer);
+        return;
+    }
+
+    /* Both owned: the answer may *be* the spec, so it is duplicated rather than
+     * taken, and freed once below. */
+    JSValue spec = JS_IsArray(answer) ? JS_DupValue(ctx, answer)
+                                      : JS_DupValue(ctx, w->header_menu);
+    JS_FreeValue(ctx, answer);
+
+    GListModel *cols = gtk_column_view_get_columns(GTK_COLUMN_VIEW(w->inner));
+    if (column >= (int)g_list_model_get_n_items(cols)) {
+        JS_FreeValue(ctx, spec);
+        return;
+    }
+    GtkColumnViewColumn *c = g_list_model_get_item(cols, (guint)column);
+
+    uint32_t n = 0;
+    if (JS_IsArray(spec)) {
+        JSValue lenv = JS_GetPropertyStr(ctx, spec, "length");
+        JS_ToUint32(ctx, &n, lenv);
+        JS_FreeValue(ctx, lenv);
+    }
+
+    /*
+     * Nothing to offer -- no answer, no declaration, or an empty array -- and
+     * the column is cleared rather than left with whatever an earlier click
+     * put on it.
+     */
+    if (n == 0) {
+        gtk_column_view_column_set_header_menu(c, NULL);
+        JS_FreeValue(ctx, spec);
+        g_object_unref(c);
+        return;
+    }
+
+    GMenu *model = bta_menu_header_build(ctx, w->form, w, spec, column);
+    JS_FreeValue(ctx, spec);
+
+    if (!model) {
+        /* A spec the walker refused. Reported, and no stale menu is left
+         * standing in its place. */
+        bta_dump_error(ctx);
+        gtk_column_view_column_set_header_menu(c, NULL);
+        g_object_unref(c);
+        return;
+    }
+
+    gtk_column_view_column_set_header_menu(c, G_MENU_MODEL(model));
+    g_object_unref(model);
+    g_object_unref(c);
+}
+
 /* ------------------------------------------------------------- selection */
 
 static void on_selection_changed(GtkSelectionModel *model, guint pos, guint n,
@@ -1212,6 +1394,18 @@ static void build_table(BtaWidget *w)
     bta_widget_watch(w, sel);
     g_signal_connect(w->inner, "activate", G_CALLBACK(on_row_activated), w);
 
+    /*
+     * The heading's press, in the **capture** phase and for any button: GTK's
+     * title gesture claims it before the bubble phase ever runs, and claiming
+     * ours would be what stopped GTK from sorting on the primary release and
+     * from showing the menu on the secondary one. See the header-menu section.
+     */
+    GtkGesture *header = gtk_gesture_click_new();
+    gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(header), 0);
+    gtk_event_controller_set_propagation_phase(GTK_EVENT_CONTROLLER(header),
+                                               GTK_PHASE_CAPTURE);
+    g_signal_connect(header, "pressed", G_CALLBACK(on_header_pressed), w);
+    gtk_widget_add_controller(w->inner, GTK_EVENT_CONTROLLER(header));
 }
 
 /* --------------------------------------------------------------- columns */
@@ -2612,6 +2806,7 @@ static const JSCFunctionListEntry table_props[] = {
     JS_CFUNC_DEF("SetCell", 3, table_set_cell),
     /* SetIcon(row, column, name) */
     JS_CFUNC_DEF("SetIcon", 3, table_set_icon),
+    JS_CGETSET_DEF("HeaderMenu", table_get_header_menu, table_set_header_menu),
     JS_CGETSET_DEF("Sortable", table_get_sortable, table_set_sortable),
     /* Select(index) */
     JS_CFUNC_MAGIC_DEF("Select",      1, table_select_one,   TB_SELECT),
@@ -2640,9 +2835,10 @@ void bta_table_register(void)
         /* Data(row, column) */
         /* Sort(column, ascending) */
         /* CellEdit(row, column, text) */
+        /* HeaderClick(column, button, ctrl, shift) */
         BTA_CLASS_ENUM_TEXT("TableView", "Control", build_table, table_props, false,
                             table_options, "Columns.Text",
-                            "Select,Activate,Data,Sort,CellEdit"),
+                            "Select,Activate,Data,Sort,CellEdit,HeaderClick"),
     };
     bta_register_classes(rows, (int)G_N_ELEMENTS(rows));
 }

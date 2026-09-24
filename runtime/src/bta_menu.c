@@ -56,6 +56,10 @@
  * a control binding to one has to name the same group the menu does. */
 #define MENU_GROUP  BTA_ACTION_GROUP
 #define POPUP_GROUP "popup"
+/* A table's heading menu: its own group, inserted on the column view, because
+ * the popover GTK builds lives on the column's title and resolves `header.` by
+ * walking up from there. */
+#define HEADER_GROUP "header"
 
 JSClassID bta_menuitem_class_id;
 
@@ -79,6 +83,14 @@ typedef struct {
     GSimpleAction *action;
     char          *path;      /* "form.MnuSave": how a menu item names the action */
     BtaItemKind    kind;
+
+    /*
+     * The heading this item was built for, or -1 for every menu that is not a
+     * table's heading menu.  A heading menu is built for each click, so the
+     * value is the column that click was over and the handler's trailing
+     * argument -- see `bta_menu_header_build`.
+     */
+    int            column;
 
     /* Dynamic items only: the submenu their entries are appended to, and the
      * labels last assigned, which is also what a Click reports back. */
@@ -675,7 +687,7 @@ static void on_menu_activate(GSimpleAction *action, GVariant *param, gpointer us
 {
     BtaMenuItem *mi   = user_data;
     JSContext   *ctx  = mi->ctx;
-    JSValue      argv[2];
+    JSValue      argv[3];
     int          argc = 0;
 
     /*
@@ -706,6 +718,14 @@ static void on_menu_activate(GSimpleAction *action, GVariant *param, gpointer us
         argv[1] = JS_GetPropertyUint32(ctx, mi->items, (uint32_t)i);
         argc    = 2;
     }
+
+    /*
+     * A heading menu's item is told which column it was opened over, last and
+     * after whatever its kind already carries: `Click(column)`, `Click(on,
+     * column)`, `Click(index, text, column)`.
+     */
+    if (mi->column >= 0)
+        argv[argc++] = JS_NewInt32(ctx, mi->column);
 
     JS_FreeValue(ctx, bta_emit_on(ctx, mi->form, mi->name, "Click", argc, argv));
 
@@ -912,7 +932,7 @@ int bta_actions_build(JSContext *ctx, JSValueConst form_obj, BtaWidget *w,
 
 static BtaMenuItem *make_item(JSContext *ctx, JSValueConst form, const char *name,
                               JSValueConst spec, GSimpleActionGroup *group,
-                              const char *prefix, BtaItemKind kind)
+                              const char *prefix, BtaItemKind kind, int column)
 {
     bool many = kind == ITEM_DYNAMIC || kind == ITEM_RADIO;
 
@@ -923,6 +943,7 @@ static BtaMenuItem *make_item(JSContext *ctx, JSValueConst form, const char *nam
     mi->name   = g_strdup(name);
     mi->path   = g_strdup_printf("%s.%s", prefix, name);
     mi->kind   = kind;
+    mi->column = column;
 
     /*
      * The parameter type says how many commands the item is, and the state says
@@ -986,6 +1007,18 @@ static BtaMenuItem *make_item(JSContext *ctx, JSValueConst form, const char *nam
     g_signal_connect(mi->action, "activate", G_CALLBACK(on_menu_activate), mi);
     g_action_map_add_action(G_ACTION_MAP(group), G_ACTION(mi->action));
 
+    /*
+     * A spec may declare the item disabled, which is the state a command's
+     * `enabled` already is (`bta_actions_build`) -- and it is what lets a menu
+     * built for the moment say *this cannot be done now* without leaving the
+     * entry out: the last column of a table cannot be hidden, and a menu that
+     * loses a row as the state changes is a menu the eye has to re-read.
+     */
+    JSValue on = JS_GetPropertyStr(ctx, spec, "enabled");
+    if (!JS_IsUndefined(on))
+        g_simple_action_set_enabled(mi->action, JS_ToBool(ctx, on));
+    JS_FreeValue(ctx, on);
+
     /* An accelerator can only name a command that takes no argument, so the two
      * that are many commands have none: which entry would it press? */
     if (!many)
@@ -994,11 +1027,12 @@ static BtaMenuItem *make_item(JSContext *ctx, JSValueConst form, const char *nam
 }
 
 static GMenu *build_items(JSContext *ctx, JSValueConst form, JSValueConst arr,
-                          GSimpleActionGroup *group, const char *prefix);
+                          GSimpleActionGroup *group, const char *prefix,
+                          int column);
 
 static bool append_item(JSContext *ctx, JSValueConst form, GMenu *section,
                         JSValueConst spec, GSimpleActionGroup *group,
-                        const char *prefix)
+                        const char *prefix, int column)
 {
     char *text = spec_str(ctx, spec, "text");
     char *name = spec_str(ctx, spec, "name");
@@ -1025,7 +1059,7 @@ static bool append_item(JSContext *ctx, JSValueConst form, GMenu *section,
 
     JSValue kids = JS_GetPropertyStr(ctx, spec, "children");
     if (JS_IsArray(kids)) {
-        GMenu *sub = build_items(ctx, form, kids, group, prefix);
+        GMenu *sub = build_items(ctx, form, kids, group, prefix, column);
         if (sub) {
             g_menu_append_submenu(section, text ? text : "", G_MENU_MODEL(sub));
             g_object_unref(sub);
@@ -1059,6 +1093,20 @@ static bool append_item(JSContext *ctx, JSValueConst form, GMenu *section,
                                    "\"action\" -- an item that points at a "
                                    "command is not one, so it needs no name of "
                                    "its own", name);
+            g_free(points_at);
+            goto out;
+        }
+        /* And it takes the command's `Enabled`, so an `enabled` of its own
+         * would be a value nothing reads: the item has no action to disable. */
+        JSValue off = JS_GetPropertyStr(ctx, spec, "enabled");
+        bool    has = !JS_IsUndefined(off);
+        JS_FreeValue(ctx, off);
+
+        if (has) {
+            JS_ThrowTypeError(ctx, "menu: '%s' has both an \"action\" and an "
+                                   "\"enabled\" -- the command is the object, "
+                                   "and one assignment to its Enabled greys "
+                                   "every place it appears", points_at);
             g_free(points_at);
             goto out;
         }
@@ -1133,7 +1181,7 @@ static bool append_item(JSContext *ctx, JSValueConst form, GMenu *section,
                      : check   ? ITEM_CHECK
                                : ITEM_PLAIN;
 
-    BtaMenuItem *mi = make_item(ctx, form, name, spec, group, prefix, kind);
+    BtaMenuItem *mi = make_item(ctx, form, name, spec, group, prefix, kind, column);
     if (!mi)
         goto out;
 
@@ -1158,7 +1206,8 @@ out:
  * So each run of items between separators becomes one section.
  */
 static GMenu *build_items(JSContext *ctx, JSValueConst form, JSValueConst arr,
-                          GSimpleActionGroup *group, const char *prefix)
+                          GSimpleActionGroup *group, const char *prefix,
+                          int column)
 {
     JSValue  lenv = JS_GetPropertyStr(ctx, arr, "length");
     uint32_t n    = 0;
@@ -1181,7 +1230,7 @@ static GMenu *build_items(JSContext *ctx, JSValueConst form, JSValueConst arr,
             g_object_unref(section);
             section = g_menu_new();
         } else {
-            ok = append_item(ctx, form, section, spec, group, prefix);
+            ok = append_item(ctx, form, section, spec, group, prefix, column);
         }
         JS_FreeValue(ctx, spec);
     }
@@ -1218,7 +1267,7 @@ int bta_menus_build(JSContext *ctx, JSValueConst form_obj, BtaWidget *w,
      * bound to one: a command has one name, so it resolves in one place. */
     GSimpleActionGroup *group = bta_form_actions(w);
     GMenu              *model = build_items(ctx, form_obj, menus, group,
-                                            MENU_GROUP);
+                                            MENU_GROUP, -1);
 
     if (!model)
         return -1;
@@ -1285,7 +1334,7 @@ int bta_menu_popup_build(JSContext *ctx, JSValueConst form_obj, BtaWidget *w,
         return 0;                      /* clearing it is not an error */
 
     GSimpleActionGroup *group = g_simple_action_group_new();
-    GMenu              *model = build_items(ctx, form_obj, menus, group, POPUP_GROUP);
+    GMenu              *model = build_items(ctx, form_obj, menus, group, POPUP_GROUP, -1);
 
     if (!model) {
         g_object_unref(group);
@@ -1316,6 +1365,45 @@ void bta_menu_popup_show(BtaWidget *w, double x, double y)
     GdkRectangle at = { (int)x, (int)y, 1, 1 };
     gtk_popover_set_pointing_to(GTK_POPOVER(w->popup), &at);
     gtk_popover_popup(GTK_POPOVER(w->popup));
+}
+
+/*
+ * ------------------------------------------------------ heading menus
+ *
+ * The same walker, one more time, for a column's heading.  What is different
+ * is only where it is shown and what the items are told: GTK owns the popover
+ * here (`GtkColumnViewColumn:header-menu`, which it presents on the heading's
+ * own secondary click), so this returns the model for the caller to set, and
+ * every item carries the column it was built for.
+ *
+ * Built per click and not kept: a menu whose items act on "this column" has to
+ * be instantiated for the column that was clicked, and the alternative -- one
+ * model whose items are annotated just before the popover opens -- has to know
+ * which wrappers the installed model still owns after another one replaced it.
+ * The cost is that item state a program sets from code does not survive the
+ * next click; a menu that depends on context answers it from the event.
+ */
+GMenu *bta_menu_header_build(JSContext *ctx, JSValueConst form_obj,
+                             BtaWidget *w, JSValueConst menus, int column)
+{
+    if (!w || !w->inner || !JS_IsArray(menus))
+        return NULL;
+
+    GSimpleActionGroup *group = g_simple_action_group_new();
+    GMenu              *model = build_items(ctx, form_obj, menus, group,
+                                            HEADER_GROUP, column);
+
+    if (!model) {
+        g_object_unref(group);
+        return NULL;
+    }
+
+    /* Inserted rather than only returned: the popover GTK builds is parented
+     * to the column's title, inside the view, and resolves `header.MnuX` by
+     * walking up from there. */
+    gtk_widget_insert_action_group(w->inner, HEADER_GROUP, G_ACTION_GROUP(group));
+    g_object_unref(group);
+    return model;
 }
 
 void bta_menu_init(JSContext *ctx)

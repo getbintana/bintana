@@ -14,6 +14,7 @@ in the same form.
 |---|---|
 | [ISSUE-editable-combo.md](ISSUE-editable-combo.md) | No editable / autocompleting combo |
 | [ISSUE-fixed-fill-child.md](ISSUE-fixed-fill-child.md) | A `Fixed` container does not stretch a `Fill` child when it grows |
+| [ISSUE-menu-label-extraction.md](ISSUE-menu-label-extraction.md) | A control's menu labels never reach a catalogue |
 | [ISSUE-packaging.md](ISSUE-packaging.md) | No way to hand over an application without its project tree |
 | [ISSUE-worker-locale-order.md](ISSUE-worker-locale-order.md) | A `Task` has no `Locale`, so a worker cannot order names |
 
@@ -22,7 +23,7 @@ in the same form.
 past its answer is a second description of the same feature, written by somebody
 who did not have it yet, in the directory of things that are missing.
 
-Twenty-five have gone that way — twenty-three filled, one refused, and one that was
+Twenty-six have gone that way — twenty-four filled, one refused, and one that was
 never missing. Filled: a drawing that could not carry an image, text that could not be measured outside a `Draw`, a
 document that could only leave as one PNG per page, a program that had to run
 `sha256sum` to hash anything, an application that could not ask how big the
@@ -57,7 +58,10 @@ only be asked what it has by building one: `Widget.PropertyNames(type)`,
 `Methods`, `EventNames`, `TextProperties`, `PropertyOptions` and `Member` answer
 by name, abstract classes included, so a palette, a property grid and the
 extractor stop making disposable controls — the grid's base-properties pass used
-to construct every widget type there is.
+to construct every widget type there is, and a column heading that could offer
+nothing: `HeaderMenu` declares its menu and `HeaderClick(column, button, ctrl,
+shift)` is the press — the one surface of a column view GTK reports nothing
+for — with every item told the column it was opened over.
 
 Never missing: a container that fills the room it is given **and** scrolls when
 it cannot. It was reported against a wall of cameras whose count is only known

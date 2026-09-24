@@ -690,6 +690,7 @@ declare class TableView extends Widget {
     ColumnLines: boolean;
     Columns: any[];
     Count: number;
+    HeaderMenu: any;
     Index: number;
     Key: string;
     MultiSelect: boolean;

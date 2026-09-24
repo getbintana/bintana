@@ -531,6 +531,7 @@ Menus are declared on the form, next to its controls:
 | `dynamic` | `true` for a submenu whose entries the application assigns |
 | `check` | `true` for an item that ticks on and off; `Value` is the tick |
 | `radio` | `true` on a `dynamic` item: marks the entry chosen, and `Value` is its index |
+| `enabled` | `false` for an item that starts disabled, as a command declares |
 
 The IDE edits this block with `Ctrl+M` rather than by hand; see
 [ide.md](ide.md#the-menu-editor).

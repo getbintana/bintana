@@ -779,6 +779,7 @@ A list with columns, **and its rows may nest**. The control to reach for wheneve
 | `ColumnLines` | rules between columns |
 | `Columns` | an array of `{ Text, Width, Alignment, Editable }`. `Text` is **translated**; `Width: 0` sizes itself and the last column takes the slack; `Editable: true` makes a cell a field — clicked, typed and committed — and an editable column reads left-aligned, because a `GtkEditableLabel` is not a label |
 | `Count` | how many rows — **settable**, which is the on-demand mode: the table then asks `Data(row, column)` for each cell it draws |
+| `HeaderMenu` | the menu a column heading offers on a secondary click, as the same array of items `Menu` takes. Built for each click, and every item's handler is told the column, last: `MnuHide_Click(column)` |
 | `Index` | the selected row, `-1` for none. Default `-1` |
 | `MultiSelect` | more than one row |
 | `RowLines` | rules between rows. Default `true` |
@@ -811,6 +812,9 @@ A list with columns, **and its rows may nest**. The control to reach for wheneve
 | **event** `Data(row, column)` | an on-demand table needs a cell. **The return value is the answer**: a string, or `{ Text, Icon }` |
 | **event** `Sort(column, ascending)` | a sortable header was clicked. **The handler decides** — `SortBy` is what actually reorders |
 | **event** `CellEdit(row, column, text)` | an editable cell's edit ended. `row` is an index in a flat table and a key in a tree, as every verb here addresses one. **Returning `false` refuses the edit** and the cell goes back to what it said; anything else is taken and the text is written into the row — an on-demand table holds no cells, so there it is the handler's to store |
+| **event** `HeaderClick(column, button, ctrl, shift)` | a column heading was pressed — the one pointer event a heading raises, because GTK claims its press before the bubble phase. `button` is `1` primary, `2` middle, `3` secondary. **The return value is the menu of the secondary click**: an array replaces `HeaderMenu` for that click, anything else falls back to it. A primary click also raises `Sort` when `Sortable`, on the release |
+
+**The heading's menu is built for each click**, which is what lets an item act on the column it was opened over — and it is why the state a program sets on an item from code does not survive the next right-click. A menu that depends on the context answers it from `HeaderClick`, and a program that wants its own order turns `Sortable` off and orders in the handler.
 
 ### A table is flat or a tree
 

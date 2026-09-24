@@ -3644,6 +3644,25 @@ person who wrote it either.
   the tree marked the wrong half. Measured with a real `git mv`; `filesIn`
   (`show --name-status -z`, `R100\0old\0new\0`) was already right -- the two
   commands order the pair differently, which is why the wrong one survived.
+- **A `GtkColumnView`'s heading is the one surface of a widget here that raises
+  no pointer event, and GTK is why.** Its title gesture claims the press
+  (`click_pressed_cb` in `gtkcolumnviewtitle.c`) before the bubble phase runs,
+  so the `MouseDown` a control reports never arrives on a heading -- measured,
+  and the reason `TableView.HeaderClick(column, button, ctrl, shift)` exists.
+  The runtime's own gesture is in the **capture** phase (which runs first) and
+  **does not claim**, because claiming is what would stop GTK from sorting on
+  the primary release and from presenting the column's `header-menu` model on
+  the secondary one -- the model is installed at the press, GTK shows it at the
+  release. Two facts of GTK's own structure are load-bearing and commented
+  where they are read: the heading row is the view's **first child** and its
+  titles are children **in column order** (hidden columns are not children), so
+  a child's index is the column's -- checked in 4.10 and 4.22, no public
+  accessor for either, and `Columns[i].Visible` would invalidate the walk.
+  **And the menu is built for each click**, because an item has to know which
+  column it was opened over: the wrappers on the form are replaced with it, so
+  `this.MnuHide.Enabled = false` set from code does not survive the next right
+  click. Context belongs in the event's answer (`{ enabled: … }`), which is the
+  same rule `Sort` already states for sorting.
 
 ## Xml and Record
 
@@ -4021,6 +4040,12 @@ text cannot be modelled beside its attributes (`<guid isPermaLink>`), and
   the form -- otherwise a context menu naming a command would silently get a
   second, empty one. GTK resolves it by walking up from wherever the popover is
   parented.
+  **An item that points at a command refuses an `enabled` of its own**, and that
+  is the same rule as the pair above: the command is the object, so an `enabled`
+  there is a value nothing reads -- and it would look exactly like the one that
+  greys every place the command appears. A plain item's spec *does* take
+  `enabled` (the key `actions` already had), which is what lets a menu built for
+  the moment say *not now* without leaving the entry out.
 - **And the IDE lost six names it only had for want of somewhere to put a
   command.** `MnuCvDel`, `MnuTrDel`, `MnuCvRaise`, `MnuTrRaise`, `MnuCvLower`,
   `MnuTrLower` existed because "a menu item is exposed on the form by name, and

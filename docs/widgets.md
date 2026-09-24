@@ -1748,6 +1748,27 @@ hand does, and the answer for that is
 apart for a long time, which is how the IDE's project tree came to file every
 accented file name after Z.
 
+**The heading is the one surface of a column view that reports nothing, and the
+menu is built for each click.** GTK's own title gesture claims the press
+(`click_pressed_cb` in `gtkcolumnviewtitle.c`), so the bubble-phase controllers
+every other control has never see it — measured before this existed: a secondary
+click on a heading arrived as no `MouseDown` at all. So the press is caught in
+the **capture** phase, which runs first, and it is deliberately **not claimed**:
+GTK's gesture stays alive to sort on the primary release and to present the
+column's `header-menu` model on the secondary one. The model is built per click
+because an item has to know which column it was opened over — the alternative,
+one model whose item wrappers are annotated just before the popover opens, has
+to know which wrappers the installed model still owns after another one replaced
+it — and the cost is that `this.MnuHide.Enabled` set from code does not survive
+the next right click. Context belongs in the event's answer.
+`HeaderClick(column, button, ctrl, shift)` is that event, for every button, and
+it is also what a custom order hangs off: `Sortable` off and the handler orders,
+or `Sortable` on and the primary click stays GTK's. The walk that decides which
+column a point is over reads the heading row as the view's **first child** and
+its titles **in column order** — GTK's own structure, checked in 4.10 and 4.22,
+and there is no public accessor for either; hidden columns are not children, so
+the child's index is the column's until a `Columns[i].Visible` exists.
+
 **What it does not do yet**, said rather than implied: editing a cell in place by
 clicking it — which in Gambas is exactly what separates `GridView` from
 `TableView`, so this one does not yet mean what that one does — and per-column

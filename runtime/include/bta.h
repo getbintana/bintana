@@ -236,6 +236,15 @@ struct BtaWidget {
     JSValue    menu;
 
     /*
+     * A `TableView`'s heading menu: the spec, as declared -- no popover of
+     * ours, because GTK builds the one a column shows from the model it is
+     * given. Kept so the getter and the serialiser answer with what the .form
+     * said, and built again for each heading click, because an item has to
+     * know which column it was opened over.
+     */
+    JSValue    header_menu;
+
+    /*
      * The runtime's own notes about this widget -- held **here** and not as own
      * properties of the wrapper, which is where they used to live.
      *
@@ -1004,6 +1013,20 @@ int  bta_menus_build(JSContext *ctx, JSValueConst form_obj, BtaWidget *w,
  * menu the widget had; a NULL or empty spec leaves it with none. */
 int  bta_menu_popup_build(JSContext *ctx, JSValueConst form_obj, BtaWidget *w,
                           JSValueConst menus);
+/*
+ * The same spec again, for a table's column heading.  Built with `column` so
+ * every item's Click handler is told which heading it was opened over -- the
+ * trailing argument, after whatever the item's kind already carries.
+ *
+ * The model is the caller's: a table sets it on the column, which is what GTK
+ * shows.  The action group is inserted on the widget's `inner` and left there,
+ * because the popover GTK builds is parented to the column's title and has to
+ * reach it.  NULL with a pending exception when the spec is refused, which the
+ * caller reports with bta_dump_error; `column` of -1 is a spec being checked,
+ * not one being opened.
+ */
+GMenu *bta_menu_header_build(JSContext *ctx, JSValueConst form_obj,
+                             BtaWidget *w, JSValueConst menus, int column);
 /* Pops the widget's context menu up at a point in its own coordinates. */
 void bta_menu_popup_show(BtaWidget *w, double x, double y);
 /* Drops it: called from the widget finaliser, which owns the popover. */

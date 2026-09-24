@@ -25,6 +25,14 @@
  * whole argument for it being there: a hundred thousand rows, a few dozen
  * questions.
  *
+ * **And it is the page that carries the heading's menu**, because a menu that
+ * hides a column belongs where the columns are the application's own view of
+ * data it keeps elsewhere: hiding one is a change of *view*, and `Data` maps
+ * the visible column back to the logical one. `HeaderClick` is the signal --
+ * a right click on a heading -- and the menu is built at that moment because
+ * what it offers depends on it: the last column cannot be hidden. A menu that
+ * never changes is declared in the `.form` instead, as `HeaderMenu`.
+ *
  * **The third page is the one that used to need two controls.** A `TreeView` for
  * the hierarchy and a `TableView` beside it for the fields, re-filled whenever
  * the selection moved -- which lost the headings over the tree, the alignment
@@ -89,6 +97,20 @@ class Form1 extends Form {
      * flag: the rows are computed from their index. */
     bigDescending = false;
 
+    /*
+     * The columns of the page that does not hold its rows, and the ones the
+     * user has hidden.
+     *
+     * `Columns` is a list of *positions*: a cell is whatever the nth column
+     * says, so hiding one is rebuilding the list -- and `Data` then has to know
+     * which logical column a visible one is. That translation is `bigMap`, and
+     * it is a plain lookup on purpose: `Data` runs once per visible cell per
+     * rebind, and anything computed there is slow on every scroll.
+     */
+    bigColumns = null;
+    bigHidden  = [];
+    bigMap     = [0, 1, 2];
+
     Form_Open() {
         /* --- the page that holds its rows ------------------------------- */
         for (const row of FILES) this.addFile(row);
@@ -97,6 +119,10 @@ class Form1 extends Form {
         this.growTree();
 
         /* --- the page that does not -------------------------------------- */
+        /* The three the .form declares, kept as the logical set: the headings
+         * come back with their text already translated, which is what the menu
+         * shows and what the status line quotes. */
+        this.bigColumns = this.Big.Columns.map((c) => ({ ...c }));
         this.Big.Count = BIG_ROWS;
 
         /*
@@ -289,12 +315,78 @@ class Form1 extends Form {
          * and here the rows *are* their index -- so descending is a mirror. */
         const n = this.bigDescending ? BIG_ROWS - 1 - row : row;
 
-        if (column === 0) return String(n);
-        if (column === 1) return String(n * n);
+        /* Which logical column this visible one is, which is the whole of what
+         * hiding a column costs the handler: one lookup. */
+        switch (this.bigMap[column]) {
+        case 0:  return String(n);
+        case 1:  return String(n * n);
+        default: return n % 3 === 0
+                     ? { Text: Locale.Text("yes"), Icon: iconFor("Form") }
+                     : Locale.Text("no");
+        }
+    }
 
-        return n % 3 === 0
-            ? { Text: Locale.Text("yes"), Icon: iconFor("Form") }
-            : Locale.Text("no");
+    /*
+     * The heading's menu. **Built here and not declared in the `.form`**,
+     * because what it offers depends on the moment: hiding the last column is
+     * not offered, and *Show every column* only means something while one is
+     * hidden. `enabled` is how a menu says that, and a menu built for each
+     * click is the only place it can be said -- a declared `HeaderMenu` is for
+     * a menu that never changes.
+     *
+     * The return value is the menu, and the runtime builds it with the column
+     * this click was over: `MnuBigHide_Click` is told which one.
+     */
+    Big_HeaderClick(column, button, ctrl, shift) {
+        if (button !== 3) return;
+
+        return [
+            { name: "MnuBigHide", text: Locale.Text("Hide this column"),
+              enabled: this.bigMap.length > 1 },
+            { name: "MnuBigShow", text: Locale.Text("Show every column"),
+              enabled: this.bigHidden.length > 0 },
+        ];
+    }
+
+    /*
+     * The visible columns are the declared ones without the hidden, and the map
+     * `Data` reads is rebuilt with them. The re-ask is how a virtual table is
+     * refreshed -- `Count` to something else and back says every row changed --
+     * and nothing was reordered: what changed is the answer.
+     */
+    applyBigColumns() {
+        const shown = [];
+
+        this.bigMap = [];
+        for (let i = 0; i < this.bigColumns.length; i++) {
+            if (this.bigHidden.includes(i)) continue;
+            this.bigMap.push(i);
+            shown.push(this.bigColumns[i]);
+        }
+
+        this.Big.Columns = shown;
+        this.Big.Count = 0;
+        this.Big.Count = BIG_ROWS;
+    }
+
+    /* The column is the visible one this click was over; the map turns it into
+     * the logical one, which is what `bigHidden` keeps. */
+    MnuBigHide_Click(column) {
+        if (this.bigMap.length <= 1) return;      /* the item is greyed; this is the guard */
+
+        const logical = this.bigMap[column];
+        if (logical === undefined) return;
+
+        this.bigHidden.push(logical);
+        this.applyBigColumns();
+        this.LblStatus.Text = Locale.Text("Column {0} is hidden.",
+                                          this.bigColumns[logical].Text);
+    }
+
+    MnuBigShow_Click() {
+        this.bigHidden = [];
+        this.applyBigColumns();
+        this.LblStatus.Text = Locale.Text("Every column is shown again.");
     }
 
     Big_Sort(column, ascending) {
@@ -319,7 +411,7 @@ class Form1 extends Form {
         /* One literal, however long: joined with `+` only the first piece is
          * extracted, so no catalogue could ever match it. */
         this.LblBig.Text = Locale.Text(
-            "{0} rows, and {1} questions asked so far. Scroll, and watch the second number: a table that answers Data is only ever asked about what is on screen.",
+            "{0} rows, and {1} questions asked so far. Scroll, and watch the second number: a table that answers Data is only ever asked about what is on screen. Right click a heading to hide a column.",
             BIG_ROWS, this.dataCalls);
     }
 }

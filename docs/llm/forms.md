@@ -415,6 +415,7 @@ Declared on the form, next to its controls, and handled like any other event.
 | `dynamic` | `true` for a submenu whose entries the application assigns |
 | `check` | `true` for an item that ticks on and off; `Value` is the tick |
 | `radio` | `true` on a `dynamic` item: marks the chosen entry, `Value` is its index |
+| `enabled` | `false` for an item that starts disabled. The same state a command declares, for an item that is nobody's command — and the only way a menu built for the moment can say *not now* without leaving the entry out |
 
 Each item is exposed by name with `Name`, `Enabled`, `Value`, `Click()` and —
 on a `dynamic` one — `Items`, the entries the application assigns. It answers

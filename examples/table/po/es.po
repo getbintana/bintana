@@ -119,8 +119,26 @@ msgid "no"
 msgstr "no"
 
 #: Form1.js
-msgid "{0} rows, and {1} questions asked so far. Scroll, and watch the second number: a table that answers Data is only ever asked about what is on screen."
-msgstr "{0} filas, y {1} preguntas hechas hasta ahora. Andá scrolleando y mirá el segundo número: a una tabla que contesta Data sólo se le pregunta por lo que está en pantalla."
+msgid "{0} rows, and {1} questions asked so far. Scroll, and watch the second number: a table that answers Data is only ever asked about what is on screen. Right click a heading to hide a column."
+msgstr "{0} filas, y {1} preguntas hechas hasta ahora. Andá scrolleando y mirá el segundo número: a una tabla que contesta Data sólo se le pregunta por lo que está en pantalla. Clic derecho en un encabezado para ocultar una columna."
+
+#. The heading's menu, which this page builds at each click because what it
+#. offers depends on it -- see Big_HeaderClick.
+#: Form1.js
+msgid "Hide this column"
+msgstr "Ocultar esta columna"
+
+#: Form1.js
+msgid "Show every column"
+msgstr "Mostrar todas las columnas"
+
+#: Form1.js
+msgid "Column {0} is hidden."
+msgstr "La columna {0} quedó oculta."
+
+#: Form1.js
+msgid "Every column is shown again."
+msgstr "Todas las columnas están de vuelta."
 
 #. The third page: a table whose rows nest.
 #: Form1.form

@@ -5784,6 +5784,7 @@ static void widget_finalizer(JSRuntime *rt, JSValue val)
      * GTK complains loudly about finalising a widget that still has one. */
     bta_menu_popup_free(w);
     JS_FreeValueRT(rt, w->menu);
+    JS_FreeValueRT(rt, w->header_menu);
 
     /* The seven notes; every one of them is marked above. */
     JS_FreeValueRT(rt, w->declared);
@@ -5842,6 +5843,7 @@ static void widget_gc_mark(JSRuntime *rt, JSValueConst val, JS_MarkFunc *mark_fu
     if (w) {
         JS_MarkValue(rt, w->form, mark_func);
         JS_MarkValue(rt, w->menu, mark_func);
+        JS_MarkValue(rt, w->header_menu, mark_func);
         JS_MarkValue(rt, w->declared, mark_func);
         JS_MarkValue(rt, w->children, mark_func);
         JS_MarkValue(rt, w->menus, mark_func);
@@ -5982,6 +5984,7 @@ static JSValue bta_ctor(JSContext *ctx, JSValueConst new_target,
     w->font_scale = 1.0;
     w->span     = 1;           /* one column, likewise */
     w->menu     = JS_UNDEFINED;
+    w->header_menu = JS_UNDEFINED;
     /* The runtime's notes about this widget: nothing said yet, and `g_new0`
      * does not spell that -- JS_UNDEFINED is not all-zero on every build. */
     w->declared = JS_UNDEFINED;
