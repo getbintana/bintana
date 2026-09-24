@@ -42,6 +42,16 @@ fi
 work=build-flatpak
 mkdir -p "$repo" "$work"
 
+# **The target may be a checkout of the published branch.** `gh-pages` has a
+# `.git` in it, and flatpak-builder reads any directory that already exists as
+# the repository -- so it dies at the export with `opendir(objects): No such
+# file or directory` instead of making one. An *empty* directory it creates
+# itself; one with anything else in it has to be made here, in the mode flatpak
+# repositories use.
+if [ ! -d "$repo/objects" ]; then
+    ostree init --repo="$repo" --mode=archive-z2
+fi
+
 for app in "${apps[@]}"; do
     echo "== $app"
     flatpak-builder --user --install --force-clean \

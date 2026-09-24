@@ -188,10 +188,14 @@ flatpak-builder --user --install \
 flatpak run <id>
 ```
 
-It needs `flatpak-builder` and **`elfutils`** -- `eu-strip` and
-`eu-elfcompress` are what it strips and compresses a module with, and on Ubuntu
-and Fedora they do not arrive with the package: without them the build dies at
-the last step of the first module, after the compile.
+It needs `flatpak-builder`, **`elfutils`** and **`ostree`**. `eu-strip` and
+`eu-elfcompress` are what flatpak-builder strips and compresses a module with,
+and `ostree` is what `tools/flatpak-build.sh` initializes the repository with --
+neither arrives as a dependency of the package on Ubuntu, and without the first
+the build dies at the last step of the first module, after the compile, and
+without the second at the export, because the repository may be a checkout of
+the published branch and flatpak-builder will not make one in a directory that
+already has anything in it.
 
 It needs the shared BaseApp, which is where the runtime comes from -- the same
 one every Bintana application is built on, so nothing here rebuilds GTK or the

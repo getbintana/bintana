@@ -15,12 +15,16 @@
 # the same image, so a build that works here works there.
 FROM ubuntu:24.04
 
-# `elfutils` is flatpak-builder's stripper (`eu-strip`, `eu-elfcompress`); it is
-# not a dependency of the package on Ubuntu, and without it the build dies at
-# the last step of the first module.
+# `elfutils` is flatpak-builder's stripper (`eu-strip`, `eu-elfcompress`) and
+# `ostree` is the CLI the build script initializes the repository with; neither
+# is a dependency of the package on Ubuntu, and without the first the build
+# dies at the last step of the first module, and without the second at the
+# export -- the target is a checkout of the published branch, with a `.git` in
+# it, and flatpak-builder will not make a repository in a directory that
+# already has anything in it.
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        ca-certificates flatpak flatpak-builder elfutils \
+        ca-certificates flatpak flatpak-builder elfutils ostree \
     && rm -rf /var/lib/apt/lists/*
 
 # The runtime and the SDK come from here, and `--install-deps-from=flathub`
