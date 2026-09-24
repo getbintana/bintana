@@ -1051,13 +1051,27 @@ manifest — with `tools/pack.sh` as its command line. The manifest is JSON
 (flatpak-builder reads both, and the runtime already writes JSON) and the output
 directory is a build context: everything the manifest names is beside it.
 
-`tools/flatpak-build.sh` builds this repository's own three refs into a
-publishable repository — with no application named, all of them; naming some,
-those — and [`flatpak/ci/`](flatpak/ci/README.md) is the workflow and the setup
-of the repository those are published to. **What it rebuilds is decided from
-`builds.json` and not guessed**: a new tag is everything, the runtime's paths
-are the base *and every app*, and `ide/**` or `examples/hello/**` are that one
-ref — which is why the base does not carry the IDE or the examples.
+**The applications are a registry and not a list in the CI.**
+`flatpak/ci/apps/<name>/app.json` is one application — its id, where its source
+is, and whether it is packaged from a project (`tools/pack.sh`) or built from a
+manifest — and adding an application is adding the directory. `tools/
+flatpak-plan` discovers them and prints what has to be rebuilt:
+
+- a new tag, or no state at all, is everything;
+- the runtime's paths, `lib/`, the vendor and the packaging tool are the
+  BaseApp **and every application**, because a base's files are copied into each
+  application at build time;
+- `ide/**` or `examples/hello/**` are that one application — which is why the
+  base does not carry the IDE or the examples;
+- an application's own repository is that application alone, when the commit it
+  was built at and its HEAD differ (`watch` is not consulted there: a source
+  with a `repo` of its own is checked out shallow, so there is no history to
+  diff).
+
+`tools/flatpak-build.sh` builds what the plan names into a publishable
+repository — `BaseApp` or registry directories, all of them when none is named
+— and [`flatpak/ci/README.md`](flatpak/ci/README.md) is the format, the
+one-time setup and the workflow that runs both.
 
 Five things cost a build cycle each when this was built, so they are here:
 

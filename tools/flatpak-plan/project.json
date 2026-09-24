@@ -1,0 +1,8 @@
+{
+  "name": "flatpak-plan",
+  "version": "0.1.0",
+  "main": "Main",
+  "sources": [
+    "Main.js"
+  ]
+}

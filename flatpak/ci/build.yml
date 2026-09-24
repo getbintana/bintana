@@ -1,20 +1,18 @@
 # The Flatpak repository: what `flatpak remote-add bintana https://getbintana.github.io/flatpak/`
-# serves. Copy this file to `.github/workflows/build.yml` in that repository;
-# see README.md beside it for the one-time setup.
+# serves. Copy this file to `.github/workflows/build.yml` in that repository,
+# and `apps/` beside it; see README.md for the one-time setup.
 #
-# **What it rebuilds is decided and not guessed.** `builds.json` on the
-# `gh-pages` branch records the source commit and tag the published refs were
-# built from, and this compares that against the source's HEAD:
+# **The applications are discovered, not listed.** Every directory in `apps/`
+# with an `app.json` is one, and adding an application is adding the directory
+# -- nothing in this file names one. `tools/flatpak-plan` reads the registry and
+# `builds.json` on `gh-pages` and prints what has to be rebuilt:
 #
-#   - a new tag                        -> everything;
-#   - the runtime, `lib/`, the vendor  -> the BaseApp **and every app**, because
-#     a BaseApp's files are copied into each application at build time;
-#   - `ide/**` or `docs/**`            -> the IDE alone;
-#   - `examples/hello/**`              -> the example alone.
-#
-# For the first tests it runs on a schedule and on demand. A
-# `repository_dispatch` from the source repository's tag workflow is the
-# immediate version, and it needs a token there.
+#   - a new tag, or no state at all      -> the BaseApp and every application;
+#   - the runtime, `lib/`, the packaging -> the BaseApp and every application,
+#     tool, the vendor                     because a base's files are copied
+#                                          into each application at build time;
+#   - `ide/**` or `examples/hello/**`    -> that application alone;
+#   - an application's own repository    -> it alone, when its commit moved.
 name: flatpak repository
 
 on:
@@ -41,36 +39,57 @@ jobs:
           ref: gh-pages
           path: published
 
-      - name: The source
+      - name: This repository, for the registry
+        uses: actions/checkout@v4
+        with:
+          path: ci
+
+      - name: The runtime's source
         uses: actions/checkout@v4
         with:
           repository: getbintana/bintana
-          path: source
+          path: sources/bintana
           fetch-depth: 0
 
-      - name: flatpak-builder
+      # One checkout per application with a repository of its own, named after
+      # its directory in the registry. The ones that live in the runtime's
+      # repository are the checkout above.
+      - name: The applications' sources
+        run: |
+          set -euo pipefail
+          for entry in ci/apps/*/app.json; do
+              [ -e "$entry" ] || continue
+              name=$(basename "$(dirname "$entry")")
+              repo=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("repo",""))' "$entry")
+              [ -n "$repo" ] || continue
+
+              ref=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("ref",""))' "$entry")
+              echo "== $name: $repo${ref:+ at $ref}"
+              git clone --quiet ${ref:+--branch "$ref"} --depth 1 "$repo" "sources/$name"
+          done
+
+      - name: The tools
         run: |
           sudo apt-get update
-          # Three host-side tools are named because nothing in the dependency
-          # chain declares them and every failure lands after minutes of
-          # compiling:
+          # Three host-side tools nothing declares, and every failure lands
+          # after minutes of compiling:
+          # - `elfutils`: flatpak-builder's `eu-strip`, which Ubuntu only
+          #   Recommends -- *Failed to execute child process "eu-strip"*;
+          # - `ostree`: what the build script initializes the repository with,
+          #   because the target is a checkout of `gh-pages` with a `.git` in
+          #   it -- *opendir(objects)* at the export;
+          # - `librsvg2-common`: the host's gdk-pixbuf SVG loader, which
+          #   `appstreamcli compose` rasterizes a scalable icon through -- and
+          #   the x86_64 image ships without it, so the compose dies with
+          #   `file-read-error`, naming no file.
           #
-          # - `elfutils`: flatpak-builder execs `eu-strip` to split debuginfo,
-          #   and Ubuntu only Recommends it -- *Failed to execute child process
-          #   "eu-strip"*, at the last step of the first module.
-          # - `ostree`: the CLI `tools/flatpak-build.sh` initializes the
-          #   repository with, because the target is a checkout of `gh-pages`
-          #   and flatpak-builder will not make a repository in a directory
-          #   that already has anything in it -- *opendir(objects)*, at the
-          #   export.
-          # - `librsvg2-common`: the host's gdk-pixbuf SVG loader. `appstreamcli
-          #   compose` rasterizes a scalable icon through it (it wants a
-          #   128x128@2 variant), and the x86_64 image ships without it -- so a
-          #   compose dies with `file-read-error`, after the build, whose
-          #   message names no file. A Fedora desktop carries it, which is why
-          #   a local build never fails.
+          # The rest builds the tool that writes a project's package
+          # (`tools/pack.sh`): it is a Bintana program, so it needs the same
+          # headers a developer does.
           sudo apt-get install -y --no-install-recommends \
-              flatpak flatpak-builder appstream elfutils ostree librsvg2-common
+              flatpak flatpak-builder appstream elfutils ostree librsvg2-common \
+              build-essential cmake pkg-config \
+              libgtk-4-dev libgtksourceview-5-dev
           flatpak remote-add --user --if-not-exists flathub \
               https://dl.flathub.org/repo/flathub.flatpakrepo
 
@@ -81,80 +100,64 @@ jobs:
           path: ~/.local/share/flatpak
           key: flatpak-runtime-${{ env.RUNTIME }}
 
+      - name: The packaging tool
+        run: |
+          set -euo pipefail
+          cmake -S sources/bintana -B sources/bintana/build \
+                -DCMAKE_BUILD_TYPE=Release >/dev/null
+          cmake --build sources/bintana/build -j"$(nproc)"
+
       - name: What changed
         id: plan
         run: |
           set -euo pipefail
-
-          old_commit=""; old_tag=""
-          if [ -f published/builds.json ]; then
-              old_commit=$(python3 -c "import json;print(json.load(open('published/builds.json')).get('commit',''))")
-              old_tag=$(python3 -c "import json;print(json.load(open('published/builds.json')).get('tag',''))")
-          fi
-
-          new_commit=$(git -C source rev-parse HEAD)
-          new_tag=$(git -C source describe --tags --abbrev=0 2>/dev/null || echo "")
-
-          touches() {
-              [ -n "$old_commit" ] || return 0
-              ! git -C source diff --quiet "$old_commit" "$new_commit" -- "$@"
-          }
-
-          refs=""
-          if [ -z "$old_commit" ] || [ "$old_tag" != "$new_tag" ]; then
-              refs="BaseApp Ide Hello"
-          elif touches runtime vendor lib CMakeLists.txt \
-                      tools/embed_text.cmake tools/extract_signatures.cmake \
-                      tools/bintana.pc.in tools/bintana-uninstalled.pc.in; then
-              refs="BaseApp Ide Hello"
-          else
-              if touches ide docs tools/bintana-ide.svg tools/bintana-ide.desktop; then
-                  refs="$refs Ide"
-              fi
-              if touches examples/hello; then
-                  refs="$refs Hello"
-              fi
-          fi
-
+          refs=$(sources/bintana/build/bintana sources/bintana/tools/flatpak-plan \
+                     ci/apps sources published/builds.json | tr '\n' ' ')
+          echo "decided: ${refs:-nothing}"
           echo "refs=$refs" >> "$GITHUB_OUTPUT"
-          echo "commit=$new_commit" >> "$GITHUB_OUTPUT"
-          echo "tag=$new_tag" >> "$GITHUB_OUTPUT"
-          echo "decided: '${refs:-nothing}'"
+          echo "tag=$(git -C sources/bintana describe --tags --abbrev=0 || true)" >> "$GITHUB_OUTPUT"
 
       - name: Build and publish
         if: steps.plan.outputs.refs != ''
         run: |
           set -euo pipefail
+          sources/bintana/tools/flatpak-build.sh \
+              "$PWD/published" ci/apps sources ${{ steps.plan.outputs.refs }}
 
-          # The published repository is where the BaseApp is, and an application
-          # built on it needs it installed. The repository is **unsigned** until
-          # there is a project key, which is what `--no-gpg-verify` says; and on
-          # the very first run it is empty, with no summary to read -- adding
-          # the remote then fails, so it is only done once there is one.
-          if [ -f published/summary ]; then
-              flatpak remote-add --user --if-not-exists --no-gpg-verify \
-                  bintana "$PWD/published"
-              flatpak install --user -y --noninteractive bintana \
-                  io.github.getbintana.BaseApp//0.1 || true
-          fi
+          # What each ref that was just built is at now, so the next run knows
+          # what moved. The entries of the applications this run did not build
+          # are left where they were.
+          python3 - "${{ steps.plan.outputs.tag }}" ${{ steps.plan.outputs.refs }} <<'EOF'
+          import json, os, subprocess, sys
 
-          # An absolute path: the build script moves to the source checkout,
-          # where `published` means something else.
-          source/tools/flatpak-build.sh "$PWD/published" ${{ steps.plan.outputs.refs }}
+          tag, refs = sys.argv[1], sys.argv[2:]
+          path  = "published/builds.json"
+          state = json.load(open(path)) if os.path.exists(path) else {}
+          state["tag"] = tag
+          state.setdefault("apps", {})
 
-          python3 - "${{ steps.plan.outputs.commit }}" "${{ steps.plan.outputs.tag }}" <<'EOF'
-          import json, sys
-          json.dump({"commit": sys.argv[1], "tag": sys.argv[2]},
-                    open("published/builds.json", "w"), indent=2)
+          def commit(where):
+              return subprocess.check_output(
+                  ["git", "-C", where, "rev-parse", "HEAD"], text=True).strip()
+
+          bintana = "https://github.com/getbintana/bintana.git"
+          for ref in refs:
+              if ref == "BaseApp":
+                  state["base"] = commit("sources/bintana")
+                  continue
+              app = json.load(open(f"ci/apps/{ref}/app.json"))
+              state["apps"][ref] = {
+                  "repo":   app.get("repo", bintana),
+                  "commit": commit(f"sources/{ref}" if app.get("repo") else "sources/bintana"),
+              }
+
+          json.dump(state, open(path, "w"), indent=2)
           EOF
 
           cd published
           git config user.name  "bintana-flatpak"
           git config user.email "noreply@github.com"
           git add -A
-
-          # A daily run with nothing new builds nothing, and there is nothing
-          # to commit -- which is not a failure.
           if git diff --cached --quiet; then
               echo "nothing new to publish"
           else

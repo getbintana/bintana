@@ -220,10 +220,12 @@ there.
 copied into each application when it is built -- that is what makes one runtime
 on disk serve every app -- so a change to the runtime means rebuilding and
 republishing every application, in one run. `tools/flatpak-build.sh` is that
-run: with no application named it builds the BaseApp, the IDE and the example
-into one repository, and naming some builds those -- which is what a CI does
-when only one application changed. [`flatpak/ci/`](../flatpak/ci/README.md) is
-the workflow that decides, and the repository it publishes to.
+run: with no application named it builds the BaseApp and every application in
+the registry, and naming some builds those. `tools/flatpak-plan` is what decides
+which ones -- from the registry and from `builds.json`, and not from a list in
+the CI, so adding an application is adding a directory:
+[`flatpak/ci/`](../flatpak/ci/README.md) is the registry's format, the workflow
+that runs both, and the repository it publishes to.
 
 **Building locally wants a flatpak that works.** flatpak 1.18.0 to 1.18.2 have a
 [regression](https://github.com/flatpak/flatpak/issues/6818) that makes

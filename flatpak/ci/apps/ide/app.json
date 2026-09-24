@@ -1,0 +1,10 @@
+{
+  "id": "io.github.getbintana.Ide",
+  "manifest": "flatpak/io.github.getbintana.Ide.yml",
+  "watch": [
+    "ide",
+    "docs",
+    "tools/bintana-ide.svg",
+    "tools/bintana-ide.desktop"
+  ]
+}

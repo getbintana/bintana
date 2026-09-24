@@ -105,3 +105,11 @@ because an attribute's namespace has to be named:
 `el.SetAttrNS(Metainfo.XMLNS, "lang", "es")` writes `<name xml:lang="es">`, and
 `el.AttrNS(Metainfo.XMLNS, "lang")` reads it back. `Attr("lang")` answers `null`
 for it, since an unprefixed name means an attribute with no namespace at all.
+
+**A translated description is a `<p xml:lang="es">` inside the one
+`<description>`, not a `<description xml:lang="es">` of its own.**
+`appstreamcli` refuses the second with `metainfo-localized-description-tag` and
+then two warnings that say the description has no valid content — a sentence
+about the element and not about the shape. A summary is the other way round: a
+`<summary xml:lang="es">` is an element of its own. `write` preserves both,
+because it replaces only the primary elements.
