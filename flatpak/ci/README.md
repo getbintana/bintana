@@ -119,6 +119,17 @@ per application. On every run:
 | an application's own repository | it alone |
 | an application's registration (its `app.json`: `finish-args`, `project`, `watch`…) | it alone -- the entry's hash is part of the state, since no commit in any source can see a change here |
 
+## What it runs
+
+Before the push, every package this run built is asked to run:
+`flatpak run --command=bintana <id> --version`, and one console project through
+each of them. The project is a `main` project -- which never initialises GTK --
+so the smoke needs no display, and it is the thing that sees a package which
+builds and does not run. Its one statement divides a `Decimal` and multiplies it
+back, which is the vendored arithmetic patch answering from inside the package.
+It runs **before** the publish, so a package that does not run is not published
+either.
+
 ## What users do
 
 ```sh

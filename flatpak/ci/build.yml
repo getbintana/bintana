@@ -119,7 +119,7 @@ jobs:
           echo "refs=$refs" >> "$GITHUB_OUTPUT"
           echo "tag=$(git -C sources/bintana describe --tags --abbrev=0 || true)" >> "$GITHUB_OUTPUT"
 
-      - name: Build and publish
+      - name: Build
         if: steps.plan.outputs.refs != ''
         run: |
           set -euo pipefail
@@ -160,6 +160,50 @@ jobs:
           json.dump(state, open(path, "w"), indent=2)
           EOF
 
+      # What was just built, run.  `flatpak-builder --install` has each package
+      # in the runner's own installation by now, so this asks the packages
+      # themselves: the runtime binary in every one of them, and one console
+      # project through each -- a `main` project never initialises GTK, which
+      # is what lets it run with no display.  A package that builds and does
+      # not run is the one failure nothing else here would see, and this runs
+      # *before* the push so it is not published either.
+      - name: Smoke
+        if: steps.plan.outputs.refs != ''
+        run: |
+          set -euo pipefail
+
+          smoke=$(mktemp -d)
+          cat > "$smoke/project.json" <<'EOF'
+          {
+              "name": "smoke",
+              "main": "Main",
+              "sources": ["Main.js"]
+          }
+          EOF
+          cat > "$smoke/Main.js" <<'EOF'
+          function Main() {
+              const answer = new Decimal("10") / 3 * 3;
+              print("smoke: " + answer);
+              Application.Quit(answer.toString() === "10" ? 0 : 1);
+          }
+          EOF
+
+          for ref in ${{ steps.plan.outputs.refs }}; do
+              if [ "$ref" = "BaseApp" ]; then
+                  id=io.github.getbintana.BaseApp
+              else
+                  id=$(python3 -c "import json; print(json.load(open('ci/apps/$ref/app.json'))['id'])")
+              fi
+
+              echo "-- $ref: $id"
+              flatpak run --command=bintana "$id" --version
+              flatpak run --command=bintana --filesystem="$smoke" "$id" "$smoke"
+          done
+
+      - name: Publish
+        if: steps.plan.outputs.refs != ''
+        run: |
+          set -euo pipefail
           cd published
           git config user.name  "bintana-flatpak"
           git config user.email "noreply@github.com"
