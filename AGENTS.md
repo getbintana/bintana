@@ -1095,6 +1095,7 @@ Five things cost a build cycle each when this was built, so they are here:
   Ubuntu 24.04 is older than the regression.
 
 [#6818]: https://github.com/flatpak/flatpak/issues/6818
+[#1983]: https://github.com/flatpak/xdg-desktop-portal/issues/1983
 
 **And a package's file dialog is the desktop's portal, with no other.** GTK
 routes a sandboxed application's chooser through
@@ -1105,7 +1106,22 @@ probes anything — so a desktop whose portal cannot start gives the application
 broken. `bintana-project` was reported exactly that way. A GTK application run
 from a source tree is not sandboxed, probes the portal, and falls back to its
 own chooser when the probe fails; that is the difference between the IDE and a
-package, and not a difference in the code.
+package, and not a difference in the code. **Why this machine's portal could
+not start, since the symptom names the application and the cause is nowhere
+near it**: xdg-desktop-portal 1.22 added `Requisite=graphical-session.target`,
+an Xfce session never activates that target, and `RefuseManualStart=yes` on the
+target then leaves the portal unstartable — so *every* packaged application
+loses its file dialogs at once ([#1983], fixed upstream; a distro package will
+carry it). The workaround is a **full** user unit
+(`~/.config/systemd/user/xdg-desktop-portal.service` with `Requires=dbus.service`
+where the `Requisite` was), not a drop-in: dependency directives merge across
+fragments and a `Requisite=` written in `override.conf` is silently ignored.
+Measure before blaming the code, from the host and from inside the package —
+`gdbus call --session --dest org.freedesktop.portal.Desktop --object-path
+/org/freedesktop/portal/desktop --method org.freedesktop.DBus.Properties.Get
+org.freedesktop.portal.FileChooser version` answers `(<uint32 4>,)` when it
+works, and the package's `gdbus` is there to ask with (`flatpak run
+--command=sh <id> -c '…'`).
 
 Two things follow for an application that opens files. The registry entry
 declares `finish-args` (`tools/pack.sh --finish-args`), since the default is
