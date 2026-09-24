@@ -62,6 +62,17 @@ if [ ! -d "$repo/objects" ]; then
     ostree init --repo="$repo" --mode=archive-z2
 fi
 
+# **A repository that was committed and checked out again has lost two of its
+# directories.**  `refs/mirrors/` and `refs/remotes/` are empty, and git does
+# not record an empty directory -- so they are there the first time and gone the
+# next, while `objects/` and the ref files under `refs/heads/` come back.  The
+# failure names the directory and not the publish step that dropped it:
+#
+#     error: Listing refs: opendir(refs/remotes): No such file or directory
+#
+# `flatpak build-update-repo` lists them, so they are made and not assumed.
+mkdir -p "$repo/refs/heads" "$repo/refs/mirrors" "$repo/refs/remotes"
+
 # An application built on the base needs it installed, and the repository is
 # where it is when this run is not building it.
 if [[ ! " ${refs[*]} " =~ " BaseApp " ]] && [ -f "$repo/summary" ]; then

@@ -120,11 +120,12 @@ function Main() {
           desk.includes("Name[es]=Notas"), desk);
     check("and the class the window really has",
           desk.includes("StartupWMClass=io.github.getbintana.Notes"), desk);
-    /* `Exec` quotes every argument -- that is the format's spelling, measured
-     * against `gio launch` -- and the field code is appended after it, because
-     * `Exec` would double its `%` as a literal. */
+    /* The command is bare -- it needs no quoting, and a quoted first word
+     * makes `flatpak build-export` look for a binary whose name has the quotes
+     * in it -- and the field code is appended, because `Exec` would double its
+     * `%` as a literal. */
     check("running the command, with a field code and not through Exec",
-          desk.includes('Exec="bintana-notes" %f'), desk);
+          desk.includes("Exec=bintana-notes %f"), desk);
 
     if (Application.HasCommand("desktop-file-validate")) {
         const r = Exec.Wait(["desktop-file-validate", written.Desktop],
