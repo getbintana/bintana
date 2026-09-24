@@ -134,6 +134,17 @@ built answering *nothing matches* from `flatpak install`. `flatpak remote-ls`
 (or the install, retried once the CDN has it) picks it up; `flatpak update
 --appstream` refreshes the metadata branch and **not** the summary.
 
+**The CI's flatpak adds an `x11` socket the manifest never asked for.** The
+three applications built on the runner carry
+`sockets=x11;wayland;fallback-x11;` where the manifest declares only
+`wayland` and `fallback-x11` -- measured against the same manifest built here
+with Flatpak 1.18.2 and flatpak-builder 1.4.10, which produces exactly what the
+manifest says, and the runner's Ubuntu 24.04 packages are older than both. It
+is one permission more than declared (on a Wayland session the application may
+also use XWayland) and nothing else differs; written here so the next person
+diffing a package against its manifest knows it is the runner and not the
+generator.
+
 **`--no-gpg-verify` is for the first tests.** The repository is unsigned until
 there is a project key; then the summary is signed with
 `tools/flatpak-build.sh <repo> <apps> <sources> --sign <key>` and the public key
