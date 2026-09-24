@@ -150,11 +150,22 @@ Ide.Manifest = class Manifest {
             return;
         }
 
+        /* The id the project had, so a change can take the metainfo with it:
+         * the file is named after the id, and an id that moves without the
+         * file leaves a metainfo nothing looks for. */
+        const before = config.Id;
+
         /* Kept while it is open, for the same reason the menu editor is: it is
          * what lets a test drive it. */
         ide.projectEditor = ProjectForm.edit(
             config, ide.classNames(), this.loadOrder(), this.libraries(),
-            (edited) => this.apply(edited));
+            (edited) => {
+                /* The rename comes first, so the listing `apply` ends with
+                 * shows the file where it is now. */
+                if (edited.Id !== before)
+                    Metainfo.rename(ide.project, edited.Id);
+                this.apply(edited);
+            });
     }
 
     /*

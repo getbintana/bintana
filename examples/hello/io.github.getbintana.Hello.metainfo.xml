@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.getbintana.Hello</id>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <name>hello</name>
+  <summary>The hello example, as a small application</summary>
+  <description>
+    <p>A form with a text box and a button, which is what every Bintana project starts from.</p>
+  </description>
+  <launchable type="desktop-id">io.github.getbintana.Hello.desktop</launchable>
+  <icon type="stock">io.github.getbintana.Hello</icon>
+  <categories>
+    <category>Development</category>
+  </categories>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="1.0" date="2026-09-24"/>
+  </releases>
+  <developer id="io.github.getbintana">
+    <name>Bintana</name>
+  </developer>
+  <url type="homepage">https://github.com/getbintana/bintana</url>
+  <name xml:lang="es">hola</name>
+  <summary xml:lang="es">El ejemplo hola, como una pequeña aplicación</summary>
+</component>

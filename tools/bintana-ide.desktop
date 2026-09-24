@@ -4,9 +4,12 @@
 # and a path baked in here would be the configure-time prefix rather than
 # wherever the install actually landed.
 #
-# `StartupWMClass` is what ties a window back to this file -- see the note in
-# `bintana-ide.in` about the name the launcher starts the runtime under.  Without
-# it the desktop sees a window of class `bintana` belonging to nothing it knows.
+# `StartupWMClass` is what ties a window back to this file, and it is the IDE's
+# application id -- the string `ide/project.json` declares, which the runtime
+# hands to `GtkApplication` (Wayland's app id) and to the program name (X11's
+# `WM_CLASS`).  It used to be `bintana-ide`, the name the launcher started the
+# runtime under; the id is the same mechanism with the name the entry is
+# installed as, so the window and the file agree on all three.
 [Desktop Entry]
 Type=Application
 Version=1.0
@@ -21,4 +24,4 @@ Icon=bintana-ide
 Terminal=false
 Categories=Development;IDE;GUIDesigner;
 Keywords=Bintana;RAD;forms;JavaScript;GTK;
-StartupWMClass=bintana-ide
+StartupWMClass=io.github.getbintana.Ide

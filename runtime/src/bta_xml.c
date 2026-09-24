@@ -655,7 +655,16 @@ static JSValue xml_node_set_text(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
-/* Attr(name) -- the value, "" for one that is there and empty, null for none. */
+/*
+ * Attr(name) -- the value, "" for one that is there and empty, null for none.
+ *
+ * **An attribute with no namespace**, which is what a name with no prefix is in
+ * XML: `xml:lang` and `lang` are two different attributes, and this answered
+ * the first when asked for the second -- `xmlGetProp` matches by local name.
+ * `AttrNS(uri, name)` is how the namespaced one is read, and `AttributeNames`
+ * still lists the local name of every attribute, so a record mapping a file
+ * reports `xml:lang` as unmodelled rather than losing it in silence.
+ */
 static JSValue xml_node_attr(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
@@ -668,7 +677,44 @@ static JSValue xml_node_attr(JSContext *ctx, JSValueConst this_val,
     const char  *name = JS_ToCString(ctx, argv[0]);
     if (!name)
         return JS_EXCEPTION;
-    xmlChar *v = xmlGetProp(n->node, BAD_CAST name);
+    xmlChar *v = xmlGetNoNsProp(n->node, BAD_CAST name);
+    JS_FreeCString(ctx, name);
+
+    if (!v)
+        return JS_NULL;
+    JSValue out = JS_NewString(ctx, (const char *)v);
+    xmlFree(v);
+    return out;
+}
+
+/* AttrNS(uri, name) -- the value of an attribute that belongs to a namespace. */
+static JSValue xml_node_attr_ns(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv)
+{
+    BtaXmlNode *n = node_this(ctx, this_val);
+    if (!n)
+        return JS_EXCEPTION;
+    if (argc < 2 || !JS_IsString(argv[0]) || !JS_IsString(argv[1]))
+        return JS_ThrowTypeError(ctx, "AttrNS(uri, name) expects the namespace "
+                                      "URI and the attribute name");
+
+    const char *uri  = JS_ToCString(ctx, argv[0]);
+    const char *name = JS_ToCString(ctx, argv[1]);
+    if (!uri || !name) {
+        if (uri)  JS_FreeCString(ctx, uri);
+        if (name) JS_FreeCString(ctx, name);
+        return JS_EXCEPTION;
+    }
+    if (!xml_name_ok(name)) {
+        JSValue e = JS_ThrowTypeError(ctx, "AttrNS: '%s' is not an XML "
+                                           "attribute name", name);
+        JS_FreeCString(ctx, uri);
+        JS_FreeCString(ctx, name);
+        return e;
+    }
+
+    xmlChar *v = xmlGetNsProp(n->node, BAD_CAST name, BAD_CAST uri);
+    JS_FreeCString(ctx, uri);
     JS_FreeCString(ctx, name);
 
     if (!v)
@@ -709,6 +755,95 @@ static JSValue xml_node_set_attr(JSContext *ctx, JSValueConst this_val,
     JS_FreeCString(ctx, v);
     if (!made)
         return JS_EXCEPTION;
+    return JS_UNDEFINED;
+}
+
+/*
+ * SetAttrNS(uri, name, value) -- writes an attribute that belongs to a
+ * namespace, which is how `xml:lang` is spelled.
+ *
+ * **The namespace has to be in scope, and it is looked up rather than made
+ * here.**  A declaration belongs to the document; inventing one would put a
+ * prefix on an element that never asked for it, and an attribute namespace
+ * cannot be a default one -- a default declaration does not apply to
+ * attributes, so the value would come back namespace-less.  The XML namespace
+ * (`xml:lang`, `xml:space`) is built into every document, so it is always
+ * found, on a detached element too -- measured against libxml2 2.12.
+ */
+static JSValue xml_node_set_attr_ns(JSContext *ctx, JSValueConst this_val,
+                                    int argc, JSValueConst *argv)
+{
+    BtaXmlNode *n = node_this(ctx, this_val);
+    if (!n)
+        return JS_EXCEPTION;
+    if (argc < 3 || !JS_IsString(argv[0]) || !JS_IsString(argv[1]) ||
+        !JS_IsString(argv[2]))
+        return JS_ThrowTypeError(ctx, "SetAttrNS(uri, name, value) expects the "
+                                      "namespace, the name and the value as text");
+
+    const char *uri  = JS_ToCString(ctx, argv[0]);
+    const char *name = JS_ToCString(ctx, argv[1]);
+    const char *v    = JS_ToCString(ctx, argv[2]);
+    if (!uri || !name || !v) {
+        if (uri)  JS_FreeCString(ctx, uri);
+        if (name) JS_FreeCString(ctx, name);
+        if (v)    JS_FreeCString(ctx, v);
+        return JS_EXCEPTION;
+    }
+    if (!xml_name_ok(name)) {
+        JSValue e = JS_ThrowTypeError(ctx, "SetAttrNS: '%s' is not an XML "
+                                           "attribute name", name);
+        JS_FreeCString(ctx, uri);
+        JS_FreeCString(ctx, name);
+        JS_FreeCString(ctx, v);
+        return e;
+    }
+
+    xmlNsPtr ns = xmlSearchNsByHref(n->node->doc, n->node, BAD_CAST uri);
+    if (!ns) {
+        JSValue e = JS_ThrowTypeError(ctx,
+            "SetAttrNS: no namespace '%s' is declared on this element -- "
+            "declare it with SetNamespace first", uri);
+        JS_FreeCString(ctx, uri);
+        JS_FreeCString(ctx, name);
+        JS_FreeCString(ctx, v);
+        return e;
+    }
+
+    xmlAttrPtr made = xmlSetNsProp(n->node, ns, BAD_CAST name, BAD_CAST v);
+    JS_FreeCString(ctx, uri);
+    JS_FreeCString(ctx, name);
+    JS_FreeCString(ctx, v);
+    if (!made)
+        return JS_EXCEPTION;
+    return JS_UNDEFINED;
+}
+
+/* RemoveAttrNS(uri, name) */
+static JSValue xml_node_remove_attr_ns(JSContext *ctx, JSValueConst this_val,
+                                       int argc, JSValueConst *argv)
+{
+    BtaXmlNode *n = node_this(ctx, this_val);
+    if (!n)
+        return JS_EXCEPTION;
+    if (argc < 2 || !JS_IsString(argv[0]) || !JS_IsString(argv[1]))
+        return JS_ThrowTypeError(ctx, "RemoveAttrNS(uri, name) expects the "
+                                      "namespace URI and the attribute name");
+
+    const char *uri  = JS_ToCString(ctx, argv[0]);
+    const char *name = JS_ToCString(ctx, argv[1]);
+    if (!uri || !name) {
+        if (uri)  JS_FreeCString(ctx, uri);
+        if (name) JS_FreeCString(ctx, name);
+        return JS_EXCEPTION;
+    }
+
+    xmlAttrPtr a = xmlHasNsProp(n->node, BAD_CAST name, BAD_CAST uri);
+    if (a)
+        xmlRemoveProp(a);
+
+    JS_FreeCString(ctx, uri);
+    JS_FreeCString(ctx, name);
     return JS_UNDEFINED;
 }
 
@@ -1009,6 +1144,9 @@ static const JSCFunctionListEntry xml_node_props[] = {
     JS_CFUNC_DEF("Attr",           1, xml_node_attr),
     JS_CFUNC_DEF("SetAttr",        2, xml_node_set_attr),
     JS_CFUNC_DEF("RemoveAttr",     1, xml_node_remove_attr),
+    JS_CFUNC_DEF("AttrNS",         2, xml_node_attr_ns),
+    JS_CFUNC_DEF("SetAttrNS",      3, xml_node_set_attr_ns),
+    JS_CFUNC_DEF("RemoveAttrNS",   2, xml_node_remove_attr_ns),
     JS_CFUNC_DEF("AttributeNames", 0, xml_node_attribute_names),
     JS_CFUNC_DEF("Find",           1, xml_node_find),
     JS_CFUNC_DEF("FindAll",        1, xml_node_find_all),

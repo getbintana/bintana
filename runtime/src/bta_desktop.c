@@ -276,38 +276,26 @@ static JSValue entries_read(JSContext *ctx, JSValueConst this_val,
  * makes: a temporary beside it, renamed over, so a failure leaves whatever was
  * there.
  */
-static JSValue entries_install(JSContext *ctx, JSValueConst this_val,
-                               int argc, JSValueConst *argv)
+/* The body both verbs share: serialise the entry, refuse what is not one, and
+ * write it atomically at `path`.  `who` names the caller in every sentence --
+ * the two verbs differ in where they write and not in what they accept. */
+static JSValue entry_write_file(JSContext *ctx, const char *path,
+                                JSValueConst entry, const char *who)
 {
-    const char *id = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
-    if (!id)
-        return JS_ThrowTypeError(ctx,
-            "Desktop.Entries.Install(id, entry) needs an id");
-    if (!entries_id(ctx, id, "Desktop.Entries.Install")) {
-        JS_FreeCString(ctx, id);
-        return JS_EXCEPTION;
-    }
-    if (argc < 2 || !JS_IsObject(argv[1])) {
-        JS_FreeCString(ctx, id);
-        return JS_ThrowTypeError(ctx,
-            "Desktop.Entries.Install(id, entry) needs the entry as an object");
-    }
-
     GKeyFile        *kf    = g_key_file_new();
     JSPropertyEnum  *groups = NULL;
     uint32_t         ngroups = 0;
     JSValue          err    = JS_UNDEFINED;
 
-    if (JS_GetOwnPropertyNames(ctx, &groups, &ngroups, argv[1],
+    if (JS_GetOwnPropertyNames(ctx, &groups, &ngroups, entry,
                                JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) < 0) {
         g_key_file_free(kf);
-        JS_FreeCString(ctx, id);
         return JS_EXCEPTION;
     }
 
     for (uint32_t g = 0; g < ngroups && !JS_IsException(err); g++) {
         const char *group = JS_AtomToCString(ctx, groups[g].atom);
-        JSValue     body  = JS_GetProperty(ctx, argv[1], groups[g].atom);
+        JSValue     body  = JS_GetProperty(ctx, entry, groups[g].atom);
 
         if (!group) {
             JS_FreeValue(ctx, body);
@@ -316,7 +304,7 @@ static JSValue entries_install(JSContext *ctx, JSValueConst this_val,
         }
         if (!JS_IsObject(body)) {
             err = JS_ThrowTypeError(ctx,
-                "Desktop.Entries.Install: [%s] is not an object of keys", group);
+                "%s: [%s] is not an object of keys", who, group);
         } else {
             JSPropertyEnum *keys = NULL;
             uint32_t        nkeys = 0;
@@ -333,8 +321,8 @@ static JSValue entries_install(JSContext *ctx, JSValueConst this_val,
 
                     if (!key || !text) {
                         err = JS_ThrowTypeError(ctx,
-                            "Desktop.Entries.Install: %s in [%s] must be text",
-                            key ? key : "a key", group);
+                            "%s: %s in [%s] must be text",
+                            who, key ? key : "a key", group);
                         JS_FreeCString(ctx, key);
                         JS_FreeCString(ctx, text);
                         JS_FreeValue(ctx, val);
@@ -355,7 +343,6 @@ static JSValue entries_install(JSContext *ctx, JSValueConst this_val,
 
     if (JS_IsException(err)) {
         g_key_file_free(kf);
-        JS_FreeCString(ctx, id);
         return err;
     }
 
@@ -364,11 +351,8 @@ static JSValue entries_install(JSContext *ctx, JSValueConst this_val,
         !g_key_file_has_key(kf, group, "Type", NULL) ||
         !g_key_file_has_key(kf, group, "Name", NULL)) {
         g_key_file_free(kf);
-        JSValue e = JS_ThrowTypeError(ctx,
-            "Desktop.Entries.Install: an entry needs a [%s] group with Type and Name",
-            group);
-        JS_FreeCString(ctx, id);
-        return e;
+        return JS_ThrowTypeError(ctx,
+            "%s: an entry needs a [%s] group with Type and Name", who, group);
     }
 
     char *type = g_key_file_get_string(kf, group, "Type", NULL);
@@ -377,14 +361,11 @@ static JSValue entries_install(JSContext *ctx, JSValueConst this_val,
     g_free(type);
     if (app && !g_key_file_has_key(kf, group, "Exec", NULL)) {
         g_key_file_free(kf);
-        JSValue e = JS_ThrowTypeError(ctx,
-            "Desktop.Entries.Install: an application needs an Exec");
-        JS_FreeCString(ctx, id);
-        return e;
+        return JS_ThrowTypeError(ctx,
+            "%s: an application needs an Exec", who);
     }
 
-    char  *path = entries_path(id);
-    char  *dir  = entries_dir();
+    char  *dir  = g_path_get_dirname(path);
     gsize  len  = 0;
     gchar *text = g_key_file_to_data(kf, &len, NULL);
     GError *error = NULL;
@@ -399,20 +380,73 @@ static JSValue entries_install(JSContext *ctx, JSValueConst this_val,
         g_clear_error(&error);
         g_free(text);
         g_free(dir);
-        g_free(path);
         g_key_file_free(kf);
-        JS_FreeCString(ctx, id);
         return e;
     }
 
     g_free(text);
     g_free(dir);
     g_key_file_free(kf);
+    return JS_UNDEFINED;
+}
+
+/*
+ * `Desktop.Entries.Install(id, entry)` -- writes `Directory/<id>.desktop` and
+ * answers the path it wrote.
+ */
+static JSValue entries_install(JSContext *ctx, JSValueConst this_val,
+                               int argc, JSValueConst *argv)
+{
+    const char *id = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    if (!id)
+        return JS_ThrowTypeError(ctx,
+            "Desktop.Entries.Install(id, entry) needs an id");
+    if (!entries_id(ctx, id, "Desktop.Entries.Install")) {
+        JS_FreeCString(ctx, id);
+        return JS_EXCEPTION;
+    }
+    if (argc < 2 || !JS_IsObject(argv[1])) {
+        JS_FreeCString(ctx, id);
+        return JS_ThrowTypeError(ctx,
+            "Desktop.Entries.Install(id, entry) needs the entry as an object");
+    }
+
+    char   *path = entries_path(id);
+    JSValue made = entry_write_file(ctx, path, argv[1],
+                                    "Desktop.Entries.Install");
+    JS_FreeCString(ctx, id);
+    if (JS_IsException(made)) {
+        g_free(path);
+        return made;
+    }
 
     JSValue answer = JS_NewString(ctx, path);
     g_free(path);
-    JS_FreeCString(ctx, id);
     return answer;
+}
+
+/*
+ * `Desktop.Entries.Write(path, entry)` -- the same entry, at a path the caller
+ * names, which is what a packaging step needs: the entry a package installs is
+ * not one this user's menu has, and `Install` writes to the one place a menu
+ * reads.  The directory is made when it is not there, the same way `Install`
+ * makes its own, so a caller writing into a staging tree does not have to.
+ */
+static JSValue entries_write(JSContext *ctx, JSValueConst this_val,
+                             int argc, JSValueConst *argv)
+{
+    if (argc < 2 || !JS_IsString(argv[0]) || !JS_IsObject(argv[1]))
+        return JS_ThrowTypeError(ctx, "Desktop.Entries.Write(path, entry) needs "
+                                      "the path and the entry as an object");
+
+    const char *path = JS_ToCString(ctx, argv[0]);
+    if (!path)
+        return JS_EXCEPTION;
+
+    JSValue made = entry_write_file(ctx, path, argv[1],
+                                    "Desktop.Entries.Write");
+    JS_FreeCString(ctx, path);
+    return made;
 }
 
 /* ----------------------------------------------------------------- Uninstall
@@ -544,6 +578,8 @@ void bta_desktop_init(JSContext *ctx, JSValue global)
                       JS_NewCFunction(ctx, entries_read, "Read", 1));
     JS_SetPropertyStr(ctx, entries, "Install",
                       JS_NewCFunction(ctx, entries_install, "Install", 2));
+    JS_SetPropertyStr(ctx, entries, "Write",
+                      JS_NewCFunction(ctx, entries_write, "Write", 2));
     JS_SetPropertyStr(ctx, entries, "Uninstall",
                       JS_NewCFunction(ctx, entries_uninstall, "Uninstall", 1));
     g_free(dir);

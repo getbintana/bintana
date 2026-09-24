@@ -1,0 +1,16 @@
+# A Bintana application's menu entry. The launcher is a plain script around
+# the runtime (`bintana <project>`), and the window's class is the project's
+# own id -- which is what StartupWMClass matches, and what the entry is
+# installed under.
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Hello
+Name[es]=Hola
+Comment=The Bintana hello example, as an installed application
+Comment[es]=El ejemplo hola de Bintana, como aplicación instalada
+Exec=bintana-hello
+Icon=io.github.getbintana.Hello
+Terminal=false
+Categories=Development;
+StartupWMClass=io.github.getbintana.Hello

@@ -1091,6 +1091,13 @@ static bool install_globals(BtaApp *app)
      * project declares none: a version is optional, and absent is not an error.
      */
     JS_SetPropertyStr(ctx, application, "Version", JS_NewString(ctx, app->version));
+    /*
+     * The application's own identity, in reverse DNS -- the name its window is
+     * classed by, its metainfo declares and its package installs under.  "" for
+     * a project that declares none, which is an ordinary project and not a
+     * fault: the window then keeps the program's name, as it always did.
+     */
+    JS_SetPropertyStr(ctx, application, "Id", JS_NewString(ctx, app->id));
     JS_SetPropertyStr(ctx, application, "Directory", JS_NewString(ctx, app->dir));
     JS_SetPropertyStr(ctx, application, "Quit",
                       JS_NewCFunction(ctx, js_quit, "Quit", 1));
@@ -1993,6 +2000,7 @@ BtaApp *bta_app_new(const char *project_dir)
     /* Defaults, overridden by project.json below. */
     app->name    = g_path_get_basename(app->dir);
     app->version = g_strdup("");
+    app->id      = g_strdup("");
     app->startup = g_strdup("Form1");
 
     char *cfg_path = g_build_filename(app->dir, "project.json", NULL);
@@ -2006,9 +2014,11 @@ BtaApp *bta_app_new(const char *project_dir)
         } else {
             g_free(app->name);
             g_free(app->version);
+            g_free(app->id);
             g_free(app->startup);
             app->name    = json_str(app->ctx, cfg, "name", "app");
             app->version = json_str(app->ctx, cfg, "version", "");
+            app->id      = json_str(app->ctx, cfg, "id", "");
             app->startup = json_str(app->ctx, cfg, "startup", "Form1");
             /* A project declares one or the other: "startup" opens a form,
              * "main" calls a function and never touches the display. */
@@ -2022,6 +2032,24 @@ BtaApp *bta_app_new(const char *project_dir)
         fprintf(stderr, "bintana: no project.json in %s, using defaults\n", app->dir);
     }
     g_free(cfg_path);
+
+    /*
+     * An id that is not one is refused here rather than ignored, and the
+     * difference matters: the id is the window's own class, the `<id>` of the
+     * metainfo and the name a package installs under, so a typo would be a
+     * window nothing recognises -- in silence, because every one of those is
+     * something nobody looks at until a dock shows the wrong icon.
+     *
+     * The rule is the platform's (`g_application_id_is_valid`: reverse-DNS,
+     * at least one dot, no element starting with a digit) and not a second one
+     * written here -- the same rule `GtkApplication` and AppStream apply.
+     */
+    if (app->id[0] && !g_application_id_is_valid(app->id)) {
+        fprintf(stderr,
+                "bintana: project.json id \"%s\" is not an application id "
+                "(a reverse-DNS name like org.example.App)\n", app->id);
+        exit(2);
+    }
 
     if (!app->sources) {
         JSValue empty = JS_NewObject(app->ctx);
@@ -2062,6 +2090,7 @@ void bta_app_free(BtaApp *app)
     g_free(app->dir);
     g_free(app->name);
     g_free(app->version);
+    g_free(app->id);
     g_free(app->startup);
     g_free(app->entry);
     /* Owns its paths (collect_libs builds it with g_free as the element free
@@ -2334,7 +2363,29 @@ int bta_app_run(BtaApp *app, int argc, char **argv)
         return rc;
     }
 
-    app->gapp = gtk_application_new(NULL, G_APPLICATION_NON_UNIQUE);
+    /*
+     * **The window's identity is the application's, on both backends, and it
+     * takes two calls because GTK reads it from two places.**  Wayland takes
+     * the xdg-toplevel app id from the `GtkApplication`
+     * (`gdktoplevel-wayland.c`: `application.application_id`, falling back to
+     * the program name).  X11 builds `WM_CLASS` out of the program name and
+     * never looks at the application id (`gdksurface-x11.c`), which is why the
+     * id becomes the program name too -- `StartupWMClass` is one string, and it
+     * has to match on both.
+     *
+     * `G_APPLICATION_NON_UNIQUE` keeps two instances of one project legal,
+     * which is what this runtime has always allowed: a project is opened by
+     * path, and the same path twice is a person's business.
+     *
+     * A project with no id keeps the old answer: no application id, and the
+     * program name is whatever it was started as -- which is what the
+     * `exec -a bintana-ide` launcher still exists for.
+     */
+    if (app->id[0])
+        g_set_prgname(app->id);
+
+    app->gapp = gtk_application_new(app->id[0] ? app->id : NULL,
+                                    G_APPLICATION_NON_UNIQUE);
     g_signal_connect(app->gapp, "activate", G_CALLBACK(on_activate), app);
 
     int rc = g_application_run(G_APPLICATION(app->gapp), argc, argv);

@@ -5866,9 +5866,13 @@ function* p_projects(ide) {
     const FRESH = "/tmp/bta-test-ide-fresco";
     removeTree(FRESH);      /* a run that failed here would leave one behind */
     check("the target does not exist yet", !File.Exists(FRESH));
-    eq("creating a project makes the folder", ide.startProject(FRESH), true);
+    eq("creating a project makes the folder",
+       ide.startProject(FRESH, "", false, "io.github.getbintana.Fresh"), true);
     check("the folder is there now", File.IsDir(FRESH));
     check("with a project inside", File.Exists(File.Join(FRESH, "project.json")));
+    eq("and the application id it was created with",
+       File.LoadJson(File.Join(FRESH, "project.json")).id,
+       "io.github.getbintana.Fresh");
 
     /*
      * --- a project with no window -------------------------------------------
@@ -5929,6 +5933,26 @@ function* p_projects(ide) {
             JSON.parse(File.Load(File.Join(FRESH, "project.json")))));
     removeTree(FRESH);
 
+    /*
+     * The rule the dialogs and the runtime share, checked where it lives.
+     *
+     * **An invalid id cannot be driven through `accept` from here**: the
+     * refusal is a `Message.Error`, which is a modal dialog and nothing in a
+     * test dismisses one -- the same trap the file dialogs set. What is
+     * checked instead is the rule itself, and `tests/widgets` runs a project
+     * with a bad id as a child, which is where the runtime's half is asserted.
+     */
+    check("the application id rule takes a reverse-DNS name",
+          Ide.ProjectFile.idValid("io.github.getbintana.App"));
+    check("...refuses one with no dot at all", !Ide.ProjectFile.idValid("App"));
+    check("...and one whose element starts with a digit",
+          !Ide.ProjectFile.idValid("io.github.2App"));
+    check("...and one with a character the platform refuses",
+          !Ide.ProjectFile.idValid("io.github.my app"));
+    check("the manifest lint reports a bad id",
+          new Ide.ProjectFile({ Name: "x", Startup: "F", Id: "nope" })
+              .Validate().some((p) => p.includes("not an application id")));
+
     /* --- the new-project dialog ------------------------------------------- */
     let asked = null;
     const np = NewProjectForm.ask("/tmp", (info) => { asked = info; });
@@ -5952,13 +5976,18 @@ function* p_projects(ide) {
     np.TxtName.SetFocus();
     yield* until(() => np.TxtName.Focused);
     np.TxtName_Activate();
-    yield* until(() => np.CmbKind.Focused);
-    /* The row after the name is what the project *is*, which the dialog gained
-     * when a project stopped always meaning a window. The handler asks the tab
-     * order rather than naming a control, so it followed the form. */
+    yield* until(() => np.TxtId.Focused);
+    /* The row after the name is the application id, which the dialog gained so
+     * a project declares its identity from the beginning. The handler asks the
+     * tab order rather than naming a control, so it followed the form. */
     check("Enter in the name field walks to whatever the tab order has next",
-          np.CmbKind.Focused && !np.TxtName.Focused,
-          `name ${np.TxtName.Focused}, kind ${np.CmbKind.Focused}`);
+          np.TxtId.Focused && !np.TxtName.Focused,
+          `name ${np.TxtName.Focused}, id ${np.TxtId.Focused}`);
+
+    np.TxtId_Activate();
+    yield* until(() => np.CmbKind.Focused);
+    check("...and from there to the kind", np.CmbKind.Focused,
+          `id ${np.TxtId.Focused}, kind ${np.CmbKind.Focused}`);
 
     /*
      * --- and what it will create says which kind it is ---------------------
@@ -5995,6 +6024,7 @@ function* p_projects(ide) {
 
     np.TxtBase.Text = "/tmp";
     np.TxtDesc.Text = "  a test  ";
+    np.TxtId.Text   = "io.github.getbintana.MiApp";
     np.BtnCreate_Click();
 
     check("accepting answers with what was filled in", asked !== null);
@@ -6002,6 +6032,8 @@ function* p_projects(ide) {
     eq("the base", asked.base, "/tmp");
     eq("and the description, trimmed", asked.description, "a test");
     eq("and which kind of project it is", asked.console, false);
+    eq("and the application id it was given", asked.id,
+       "io.github.getbintana.MiApp");
 
     /* And the kind travels with the rest: the dialog is what asks, and creating
      * is what obeys. */
@@ -8668,6 +8700,8 @@ function* p_settings(ide) {
     eq("showing the name it has",     pdlg.TxtPrName.Text, named);
     eq("and the version, which it now has a row for", pdlg.TxtPrVersion.Text,
        File.LoadJson(manifestPath).version || "");
+    eq("and no application id, which this project does not declare",
+       pdlg.TxtPrId.Text, "");
     eq("and where it starts",         pdlg.CmbPrStartup.Text, otherClass);
     check("offered as a choice among the project's classes",
           pdlg.CmbPrStartup.Count > 1, `${pdlg.CmbPrStartup.Count} classes`);
@@ -8746,14 +8780,113 @@ function* p_settings(ide) {
     const pd4 = ide.projectEditor;
     pd4.TxtPrDesc.Text = "the child project";
     pd4.TxtPrVersion.Text = "  2.5  ";
+    pd4.TxtPrId.Text = "io.github.getbintana.IdeChild";
     pd4.CmbPrStartup.Text = startedAt;       /* back to the one that quits */
     pd4.BtnPrOk_Click();
 
     const onDisk = File.LoadJson(manifestPath);
     eq("accepting writes what was edited", onDisk.description, "the child project");
     eq("and the version, trimmed",         onDisk.version, "2.5");
+    eq("and the application id with it",   onDisk.id, "io.github.getbintana.IdeChild");
     eq("and the startup with it",          onDisk.startup, startedAt);
     eq("the tree follows",                 ide.startupClass, startedAt);
+
+    /*
+     * --- the application info ------------------------------------------------
+     *
+     * The metainfo is part of the project and not of a packaging step: the
+     * dialog writes a minimal one when there is none, its `<id>` and `<name>`
+     * are the project's own, and what it does not model -- translations above
+     * all -- is what the raw XML tab is for.
+     */
+    ide.MnuMetainfo.Click();
+    yield;
+
+    const mf = ide.metainfoEditor;
+    check("the application info dialog opens", !!mf);
+    if (mf) {
+        const mpath = Metainfo.find(ide.project);
+        check("and writes the file, named after the id",
+              mpath !== null &&
+              File.Name(mpath) === "io.github.getbintana.IdeChild.metainfo.xml",
+              mpath);
+        eq("showing the id project.json declares", mf.TxtId.Text,
+           "io.github.getbintana.IdeChild");
+        eq("and its name", mf.TxtName.Text, named);
+        eq("with nothing to complain about yet", mf.LblProblem.Text, "");
+
+        /* An empty summary is refused in the dialog -- the sentence is next to
+         * the field, which is also what makes the refusal testable. */
+        mf.TxtSummary.Text = "";
+        mf.BtnSave_Click();
+        check("an empty summary is refused", mf.Visible && mf.LblProblem.Text !== "",
+              mf.LblProblem.Text);
+
+        mf.TxtSummary.Text = "A child project for the tests";
+        mf.TxtDesc.Text    = "First paragraph.\n\nSecond paragraph.";
+        mf.TxtDevId.Text   = "io.github.getbintana";
+        mf.TxtDevName.Text = "Bintana";
+        mf.TxtHome.Text    = "https://github.com/getbintana/bintana";
+        mf.TxtCats.Text    = "Development, Utility";
+        mf.BtnSave_Click();
+        yield;
+
+        check("saving closes the dialog", !mf.Visible);
+
+        const info = Metainfo.read(File.LoadXml(mpath));
+        eq("the summary landed", info.Summary, "A child project for the tests");
+        eq("both paragraphs, in order", info.Description,
+           "First paragraph.\n\nSecond paragraph.");
+        eq("the developer", info.DeveloperName, "Bintana");
+        eq("and its id", info.DeveloperId, "io.github.getbintana");
+        eq("the categories as they were typed", info.Categories,
+           "Development, Utility");
+        eq("and the manifest agrees with the file",
+           Metainfo.problems(File.LoadXml(mpath), mpath,
+                                 ide.manifest.read()).length, 0);
+
+        /* A hand-edit that disagrees is what `problems` is for: the form writes
+         * the identity on every save, so the two cannot drift while it is the
+         * writer. */
+        const drifted = File.LoadXml(mpath);
+        drifted.Root.Find("name").Text = "Something Else";
+        check("a name that disagrees with project.json is reported",
+              Metainfo.problems(drifted, mpath, ide.manifest.read())
+                  .some((p) => p.includes("project.json")));
+
+        /* And the raw road: the file is in the tree and opens as XML, which is
+         * where translations (`xml:lang`) and everything else live. */
+        ide.openInTab(File.Name(mpath));
+        yield;
+        eq("the metainfo opens as a tab", ide.activeFile, File.Name(mpath));
+        eq("with XML highlighting", ide.Editor.Language, "xml");
+
+        /* A new id takes the file with it: a metainfo named after the old one
+         * is one nothing looks for, and the `<id>` inside has to agree. */
+        ide.MnuProjectSettings.Click();
+        const pd5 = ide.projectEditor;
+        pd5.TxtPrId.Text = "io.github.getbintana.IdeChild2";
+        pd5.BtnPrOk_Click();
+        yield;
+
+        check("a new id moves the metainfo",
+              !File.Exists(File.Join(ide.project,
+                                     "io.github.getbintana.IdeChild.metainfo.xml")));
+        const moved = Metainfo.find(ide.project);
+        eq("to the name the new id wants", moved && File.Name(moved),
+           "io.github.getbintana.IdeChild2.metainfo.xml");
+        eq("with its <id> rewritten", moved && Metainfo.read(File.LoadXml(moved)).Id,
+           "io.github.getbintana.IdeChild2");
+
+        /* And back, so the rest of the run works on the project it knows. */
+        ide.MnuProjectSettings.Click();
+        const pd6 = ide.projectEditor;
+        pd6.TxtPrId.Text = "io.github.getbintana.IdeChild";
+        pd6.BtnPrOk_Click();
+        yield;
+        eq("and back again", File.Name(Metainfo.find(ide.project)),
+           "io.github.getbintana.IdeChild.metainfo.xml");
+    }
 
     /*
      * Turning this project into a console one and back, through the dialog.
@@ -9114,10 +9247,18 @@ function* p_export(ide) {
  *
  * The runtime's half -- the format, the escaping, the refusals, and a real
  * `gio launch` reading the command back -- is `tests/widgets`' `Desktop` test.
- * What is here is the IDE's: the dialog, the id taken from the name, an entry
- * that points at **this** executable and **this** project, and finding it again
- * to update or remove.  Driven through the menu item, because that is the road
- * a person takes.
+ * What is here is the IDE's: the dialog, the id the entry is installed under,
+ * an entry that points at **this** executable and **this** project, and finding
+ * it again to update or remove.  Driven through the menu item, because that is
+ * the road a person takes.
+ *
+ * **And there are two ids now, which is the one thing this phase asserts
+ * twice.**  A project that declares an application id installs under it, and
+ * the entry claims that id as `StartupWMClass` -- the window really is classed
+ * by it.  A project that declares none installs under a slug of the name and
+ * claims no class, because its window is `bintana`'s.  The dialog road below is
+ * the first; the second is driven straight through `Ide.Apps`, since what
+ * changes between them is only which string names the file.
  */
 function* p_apps(ide) {
     const at = () => Ide.Apps.installed(ide.project);
@@ -9136,6 +9277,22 @@ function* p_apps(ide) {
     eq("the id is a slug of the name", Ide.Apps.idFor("My App 2"), "my-app-2");
     eq("a name of punctuation still gets one",
        Ide.Apps.idFor("!!!"), "bintana-app");
+
+    /*
+     * A project with no application id takes that slug as the entry's name and
+     * claims no window class -- its window really is `bintana`'s, and an entry
+     * claiming otherwise is one the dock can never match.
+     */
+    const slugproj = "/tmp/bta-test-ide-slugproj";
+    Ide.Apps.install(slugproj, { Name: "My App 2", AppId: "" });
+    const slugged = Ide.Apps.installed(slugproj);
+    check("a project with no id installs under the slug", !!slugged);
+    if (slugged) {
+        eq("...with the slug as the file's name", slugged.Id, "my-app-2");
+        check("...and no window class claimed",
+              !("StartupWMClass" in slugged.Entry), slugged.Entry.StartupWMClass);
+    }
+    Ide.Apps.uninstall("my-app-2");
 
     /* --- the dialog, through the menu item --------------------------------- */
     check("with a project open, installing is on offer", ide.MnuAppInstall.Enabled);
@@ -9157,7 +9314,7 @@ function* p_apps(ide) {
     dlg.TxtAppName.Text = "Bta Suite App";
     dlg.showState();
     check("the state line names the file to be written",
-          dlg.LblAppWhere.Text.includes("bta-suite-app.desktop"),
+          dlg.LblAppWhere.Text.includes("io.github.getbintana.IdeChild.desktop"),
           dlg.LblAppWhere.Text);
     eq("the button says what it will do", dlg.BtnAppInstall.Text,
        Locale.Text("Install"));
@@ -9170,8 +9327,10 @@ function* p_apps(ide) {
     check("installing writes an entry this project owns", installed !== null);
     if (!installed) return;
 
-    eq("under the id the name slugs to", installed.Id, "bta-suite-app");
+    eq("under the project's own id", installed.Id, "io.github.getbintana.IdeChild");
     eq("named what was typed", installed.Entry.Name, "Bta Suite App");
+    eq("and claiming the class the window really has",
+       installed.Entry.StartupWMClass, "io.github.getbintana.IdeChild");
     eq("running this runtime on this project",
        installed.Entry.Exec,
        Desktop.Entries.Exec([Application.Executable, ide.project]));
@@ -9198,21 +9357,26 @@ function* p_apps(ide) {
        Locale.Text("Update"));
     check("and something to remove", again.BtnAppUninstall.Visible);
     check("saying where it is",
-          again.LblAppWhere.Text.includes("bta-suite-app.desktop"),
+          again.LblAppWhere.Text.includes("io.github.getbintana.IdeChild.desktop"),
           again.LblAppWhere.Text);
 
-    /* Renaming moves the file instead of leaving the old one behind: the id is
-     * the file's name, and two entries for one program is a menu that offers it
-     * twice. */
+    /*
+     * Renaming the *name* keeps the file, because the project's id is what
+     * names it -- the id is identity and the name is what a menu shows.  A
+     * project without an id is the other case, and there a rename moves the
+     * file: two entries for one program is a menu that offers it twice.
+     */
     again.TxtAppName.Text = "Bta Suite App Renamed";
     again.showState();
     again.BtnAppInstall.Click();
     yield;
 
-    check("renaming takes the old entry away",
-          !Desktop.Entries.Installed().includes("bta-suite-app"));
+    check("the slug was never a file", !Desktop.Entries.Installed().includes("bta-suite-app"));
     const renamed = at();
-    eq("and writes the new one", renamed && renamed.Id, "bta-suite-app-renamed");
+    eq("renaming the name keeps the id", renamed && renamed.Id,
+       "io.github.getbintana.IdeChild");
+    eq("and updates what the menu shows", renamed && renamed.Entry.Name,
+       "Bta Suite App Renamed");
 
     /* --- and removing it --------------------------------------------------- */
     ide.MnuAppInstall.Click();
@@ -9228,7 +9392,7 @@ function* p_apps(ide) {
     check("uninstalling leaves nothing this project owns", at() === null);
     check("and the file is gone",
           !File.Exists(File.Join(Desktop.Entries.Directory,
-                                 "bta-suite-app-renamed.desktop")));
+                                 "io.github.getbintana.IdeChild.desktop")));
 }
 
 function* p_errors(ide) {

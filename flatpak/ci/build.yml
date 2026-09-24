@@ -1,0 +1,145 @@
+# The Flatpak repository: what `flatpak remote-add bintana https://getbintana.github.io/flatpak/`
+# serves. Copy this file to `.github/workflows/build.yml` in that repository;
+# see README.md beside it for the one-time setup.
+#
+# **What it rebuilds is decided and not guessed.** `builds.json` on the
+# `gh-pages` branch records the source commit and tag the published refs were
+# built from, and this compares that against the source's HEAD:
+#
+#   - a new tag                        -> everything;
+#   - the runtime, `lib/`, the vendor  -> the BaseApp **and every app**, because
+#     a BaseApp's files are copied into each application at build time;
+#   - `ide/**` or `docs/**`            -> the IDE alone;
+#   - `examples/hello/**`              -> the example alone.
+#
+# For the first tests it runs on a schedule and on demand. A
+# `repository_dispatch` from the source repository's tag workflow is the
+# immediate version, and it needs a token there.
+name: flatpak repository
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * *"
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+env:
+  RUNTIME: "50"
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: The published repository
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: published
+
+      - name: The source
+        uses: actions/checkout@v4
+        with:
+          repository: getbintana/bintana
+          path: source
+          fetch-depth: 0
+
+      - name: flatpak-builder
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+              flatpak flatpak-builder appstream
+          flatpak remote-add --user --if-not-exists flathub \
+              https://dl.flathub.org/repo/flathub.flatpakrepo
+
+      # The SDK and the runtime are 800 MB, and they are the same every run.
+      - name: Cache the runtime
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/flatpak
+          key: flatpak-runtime-${{ env.RUNTIME }}
+
+      - name: What changed
+        id: plan
+        run: |
+          set -euo pipefail
+
+          old_commit=""; old_tag=""
+          if [ -f published/builds.json ]; then
+              old_commit=$(python3 -c "import json;print(json.load(open('published/builds.json')).get('commit',''))")
+              old_tag=$(python3 -c "import json;print(json.load(open('published/builds.json')).get('tag',''))")
+          fi
+
+          new_commit=$(git -C source rev-parse HEAD)
+          new_tag=$(git -C source describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          touches() {
+              [ -n "$old_commit" ] || return 0
+              ! git -C source diff --quiet "$old_commit" "$new_commit" -- "$@"
+          }
+
+          refs=""
+          if [ -z "$old_commit" ] || [ "$old_tag" != "$new_tag" ]; then
+              refs="BaseApp Ide Hello"
+          elif touches runtime vendor lib CMakeLists.txt \
+                      tools/embed_text.cmake tools/extract_signatures.cmake \
+                      tools/bintana.pc.in tools/bintana-uninstalled.pc.in; then
+              refs="BaseApp Ide Hello"
+          else
+              if touches ide docs tools/bintana-ide.svg tools/bintana-ide.desktop; then
+                  refs="$refs Ide"
+              fi
+              if touches examples/hello; then
+                  refs="$refs Hello"
+              fi
+          fi
+
+          echo "refs=$refs" >> "$GITHUB_OUTPUT"
+          echo "commit=$new_commit" >> "$GITHUB_OUTPUT"
+          echo "tag=$new_tag" >> "$GITHUB_OUTPUT"
+          echo "decided: '${refs:-nothing}'"
+
+      - name: Build and publish
+        if: steps.plan.outputs.refs != ''
+        run: |
+          set -euo pipefail
+
+          # The published repository is where the BaseApp is, and an application
+          # built on it needs it installed. The repository is **unsigned** until
+          # there is a project key, which is what `--no-gpg-verify` says; and on
+          # the very first run it is empty, with no summary to read -- adding
+          # the remote then fails, so it is only done once there is one.
+          if [ -f published/summary ]; then
+              flatpak remote-add --user --if-not-exists --no-gpg-verify \
+                  bintana "$PWD/published"
+              flatpak install --user -y --noninteractive bintana \
+                  io.github.getbintana.BaseApp//0.1 || true
+          fi
+
+          # An absolute path: the build script moves to the source checkout,
+          # where `published` means something else.
+          source/tools/flatpak-build.sh "$PWD/published" ${{ steps.plan.outputs.refs }}
+
+          python3 - "${{ steps.plan.outputs.commit }}" "${{ steps.plan.outputs.tag }}" <<'EOF'
+          import json, sys
+          json.dump({"commit": sys.argv[1], "tag": sys.argv[2]},
+                    open("published/builds.json", "w"), indent=2)
+          EOF
+
+          cd published
+          git config user.name  "bintana-flatpak"
+          git config user.email "noreply@github.com"
+          git add -A
+
+          # A daily run with nothing new builds nothing, and there is nothing
+          # to commit -- which is not a failure.
+          if git diff --cached --quiet; then
+              echo "nothing new to publish"
+          else
+              git commit -m "flatpak: ${{ steps.plan.outputs.refs }} at ${{ steps.plan.outputs.tag }}"
+              git push
+          fi

@@ -43,6 +43,11 @@ const EDITABLE = {
      * click away, because a tab that could not edit it would be the IDE refusing
      * to let anybody fix a typo in their own project. */
     md:   "markdown",
+    /* XML, which in a project means the metainfo: `<id>.metainfo.xml`. It opens
+     * as text with GtkSourceView's own XML highlighting, and the structured
+     * editor is a menu item of its own -- this raw road is where translations,
+     * screenshots and whatever else the form does not model are written. */
+    xml:  "xml",
     po:   false,    /* a catalogue: shown, and handed to a translation editor */
     pot:  false,    /* ...and the template it is updated from */
 

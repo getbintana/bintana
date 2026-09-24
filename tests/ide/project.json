@@ -29,6 +29,7 @@
     "../../ide/forms/ProjectForm.js",
     "../../ide/modules/Apps.js",
     "../../ide/forms/AppForm.js",
+    "../../ide/forms/MetainfoForm.js",
     "../../ide/modules/Classes.js",
     "../../ide/modules/ProjectTree.js",
     "../../ide/modules/FormFiles.js",
@@ -66,6 +67,7 @@
     "Driver.js"
   ],
   "uses": [
-    "markdown"
+    "markdown",
+    "package"
   ]
 }

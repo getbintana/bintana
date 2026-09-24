@@ -1,0 +1,271 @@
+{
+  "format": "bintana-form/1",
+  "class": "MetainfoForm",
+  "properties": {
+    "Arrangement": "Vertical",
+    "Height": 640,
+    "Text": "Application info",
+    "Width": 660
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "PnlContent",
+      "properties": {
+        "Arrangement": "Vertical",
+        "Expand": true,
+        "Margin": 16,
+        "Spacing": 10
+      },
+      "children": [
+        {
+          "type": "Label",
+          "name": "LblWhere",
+          "properties": {
+            "HAlign": "Fill",
+            "Style": "dim-label",
+            "Text": ""
+          }
+        },
+        {
+          "type": "Grid",
+          "name": "Fields",
+          "properties": {
+            "Columns": 2,
+            "Spacing": 8
+          },
+          "children": [
+            {
+              "type": "Label",
+              "name": "LblId",
+              "properties": {
+                "HAlign": "End",
+                "Text": "Application id:"
+              }
+            },
+            {
+              "type": "TextBox",
+              "name": "TxtId",
+              "properties": {
+                "HAlign": "Fill",
+                "HExpand": true,
+                "ReadOnly": true,
+                "Tooltip": "From project.json, and the same string everywhere: edit it in Project settings"
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblName",
+              "properties": {
+                "HAlign": "End",
+                "Text": "Name:"
+              }
+            },
+            {
+              "type": "TextBox",
+              "name": "TxtName",
+              "properties": {
+                "HAlign": "Fill",
+                "HExpand": true,
+                "ReadOnly": true,
+                "Tooltip": "From project.json: the name a software centre shows is the project's own"
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblSummary",
+              "properties": {
+                "HAlign": "End",
+                "Text": "Summary:"
+              }
+            },
+            {
+              "type": "TextBox",
+              "name": "TxtSummary",
+              "properties": {
+                "HAlign": "Fill",
+                "HExpand": true,
+                "Placeholder": "One line, shown under the name"
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblDevId",
+              "properties": {
+                "HAlign": "End",
+                "Text": "Developer id:"
+              }
+            },
+            {
+              "type": "TextBox",
+              "name": "TxtDevId",
+              "properties": {
+                "HAlign": "Fill",
+                "HExpand": true,
+                "Placeholder": "io.github.you"
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblDevName",
+              "properties": {
+                "HAlign": "End",
+                "Text": "Developer:"
+              }
+            },
+            {
+              "type": "TextBox",
+              "name": "TxtDevName",
+              "properties": {
+                "HAlign": "Fill",
+                "HExpand": true
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblMetaLic",
+              "properties": {
+                "HAlign": "End",
+                "Text": "Metadata license:"
+              }
+            },
+            {
+              "type": "TextBox",
+              "name": "TxtMetaLic",
+              "properties": {
+                "HAlign": "Fill",
+                "HExpand": true,
+                "Placeholder": "MIT",
+                "Tooltip": "The license of this metadata file, not of the program: MIT and FSFAP are the usual answers"
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblProjLic",
+              "properties": {
+                "HAlign": "End",
+                "Text": "Project license:"
+              }
+            },
+            {
+              "type": "TextBox",
+              "name": "TxtProjLic",
+              "properties": {
+                "HAlign": "Fill",
+                "HExpand": true,
+                "Placeholder": "MIT",
+                "Tooltip": "An SPDX id, or \"proprietary\""
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblHome",
+              "properties": {
+                "HAlign": "End",
+                "Text": "Homepage:"
+              }
+            },
+            {
+              "type": "TextBox",
+              "name": "TxtHome",
+              "properties": {
+                "HAlign": "Fill",
+                "HExpand": true,
+                "Placeholder": "https://..."
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblBug",
+              "properties": {
+                "HAlign": "End",
+                "Text": "Bug tracker:"
+              }
+            },
+            {
+              "type": "TextBox",
+              "name": "TxtBug",
+              "properties": {
+                "HAlign": "Fill",
+                "HExpand": true,
+                "Placeholder": "https://..."
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblCats",
+              "properties": {
+                "HAlign": "End",
+                "Text": "Categories:"
+              }
+            },
+            {
+              "type": "TextBox",
+              "name": "TxtCats",
+              "properties": {
+                "HAlign": "Fill",
+                "HExpand": true,
+                "Tooltip": "Comma-separated AppStream categories, like Utility, Office, Graphics"
+              }
+            }
+          ]
+        },
+        {
+          "type": "Label",
+          "name": "LblDesc",
+          "properties": {
+            "HAlign": "Start",
+            "Text": "Description:"
+          }
+        },
+        {
+          "type": "TextEditor",
+          "name": "TxtDesc",
+          "properties": {
+            "HAlign": "Fill",
+            "HExpand": true,
+            "VExpand": true,
+            "Wrap": true
+          }
+        },
+        {
+          "type": "Label",
+          "name": "LblProblem",
+          "properties": {
+            "HAlign": "Fill",
+            "Wrap": true,
+            "Text": ""
+          }
+        },
+        {
+          "type": "Panel",
+          "name": "PnlButtons",
+          "properties": {
+            "Arrangement": "Horizontal",
+            "HAlign": "End",
+            "Spacing": 8
+          },
+          "children": [
+            {
+              "type": "Button",
+              "name": "BtnCancel",
+              "properties": {
+                "Text": "Cancel",
+                "Cancel": true
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnSave",
+              "properties": {
+                "Text": "Save",
+                "Style": "suggested-action",
+                "Default": true
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

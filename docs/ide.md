@@ -2522,12 +2522,16 @@ entry built with it, launches it through `gio` — a real `GDesktopAppInfo`, the
 same road a menu takes — and reads the arguments back, a space, a percent, a
 quote, a dollar, a backslash and an accent included.
 
-**What is not promised is the window's identity.** The entry runs `bintana`, and
-the runtime sets no GTK application id, so a dock may group the running window
-under whatever *that* name resolves to and not under this entry. The system's own
-`bintana-ide` solves it with a bash launcher and `exec -a`; a project gets no
-launcher of its own yet, and the cost of one would be a second file per
-application to write, keep and remove.
+**The window's identity is the project's id, when it declares one.** The runtime
+hands `project.json`'s `id` to `GtkApplication` — Wayland's app id — and to the
+program name, which is what X11 builds `WM_CLASS` from; the entry then carries
+the same string as `StartupWMClass`, and a dock groups the running window under
+the entry that started it. A project with no id installs under a slug of the
+name and claims **no** class: its window really is `bintana`'s, and an entry
+claiming otherwise is one the dock can never match. That is also why the entry
+is installed under the project's id rather than the slug — the file's name and
+the window's class are then the same name, which is what the specification means
+by an application id.
 
 **And it is the Linux desktop's for now.** A `.desktop` file is the freedesktop
 format and nothing on Windows reads one; a Start-menu shortcut is the equivalent
@@ -2535,6 +2539,38 @@ there, and it is the packaging item in
 [the portability plan](plans/portability-plan.md#out-of-scope-here-and-why). The
 runtime's `Desktop.Entries` compiles and answers on Windows because the XDG
 directories do — what is missing is a format to write.
+
+## The application's info
+
+*Project → Application info…* edits the project's `<id>.metainfo.xml`, the
+AppStream file a package, an installer and a software centre read. It is part of
+the project and not of a packaging step: a project created with an id gets a
+minimal one beside `project.json`, and the dialog writes one the first time it
+is opened on a project that has none.
+
+The **id and the name are shown and not edited**: they are `project.json`'s, and
+they are one identity in three places — the window's class, the package's name
+and what a software centre shows. The form writes them from the record on every
+save, so the two files cannot drift while it is the writer; editing them is
+*Project settings*, which renames the metainfo to follow and rewrites its
+`<id>`, `<launchable>` and `<icon>` with it. A hand-edit that leaves the two
+disagreeing is what `Metainfo.problems` reports — it is what a packaging
+step refuses over, because an installer that shows one name and installs another
+is not something a dock can explain.
+
+**The form edits the common fields and keeps everything else.** Summary,
+description (blank-line-separated paragraphs), developer, the two licenses,
+homepage, bug tracker and categories; releases, screenshots, `<provides>` and
+everything a person added by hand stay where they were, because the DOM keeps
+what it is not asked about. Translations are the reason that matters: a
+`<name xml:lang="es">` is a different element from the primary `<name>`, and an
+editor that replaced the whole subtree would eat them in silence. The form only
+touches the primary elements — and the raw XML tab, one double click away in the
+tree, is where translations and the rest are written, now that
+[`Xml`](reference/globals/Xml.md) can set `xml:lang`.
+
+An empty summary is refused in the dialog rather than in a message box: the
+sentence belongs next to the field it is about.
 
 ---
 

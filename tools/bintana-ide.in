@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 #
 # The installed IDE, as one word.
 #
@@ -12,14 +12,15 @@
 # DESTDIR. What stays true is the hop between bindir and the IDE's data
 # directory -- @BTA_BIN_TO_IDE@ -- because both move together.
 #
-# **`exec -a bintana-ide` is not a flourish.** The runtime sets no GTK application
-# id, so a window's class is the name the program was started under: `bintana`, for
-# every Bintana application there is. Started under this name the IDE's window
-# says `bintana-ide`, which is what `StartupWMClass` in bintana-ide.desktop matches --
-# and that match is what puts the IDE's own icon and name in the dock instead of
-# a generic one.  It is also why this is bash and not sh: `exec -a` is not POSIX.
+# **The window's class is not this script's business.** It used to be: the
+# runtime set no GTK application id, so this started the runtime under a name of
+# its own (`exec -a bintana-ide`) and `StartupWMClass` matched that. The IDE now
+# declares an application id, the runtime hands it to `GtkApplication` and to the
+# program name, and the desktop file names the same string -- so this is a plain
+# `exec`, and nothing here decides what the window is called. It is `/bin/sh`
+# for the same reason: `exec -a` was the only bashism it ever had.
 set -u
 
 here=$(dirname "$(readlink -f "$0")")
 
-exec -a bintana-ide "$here/bintana" "$here/@BTA_BIN_TO_IDE@" "$@"
+exec "$here/bintana" "$here/@BTA_BIN_TO_IDE@" "$@"

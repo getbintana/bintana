@@ -3,7 +3,7 @@
   "class": "NewProjectForm",
   "properties": {
     "Arrangement": "Vertical",
-    "Height": 260,
+    "Height": 306,
     "Text": "New project",
     "Width": 520,
     "Resizable": false
@@ -41,6 +41,24 @@
               "properties": {
                 "HAlign": "Fill",
                 "HExpand": true
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblId",
+              "properties": {
+                "HAlign": "End",
+                "Text": "Application id:"
+              }
+            },
+            {
+              "type": "TextBox",
+              "name": "TxtId",
+              "properties": {
+                "HAlign": "Fill",
+                "HExpand": true,
+                "Placeholder": "io.github.you.MyApp",
+                "Tooltip": "Reverse-DNS identity: the window's own class, the metainfo's <id> and the name a package installs under. Optional here -- a project without one runs, and cannot be packaged."
               }
             },
             {

@@ -1,0 +1,46 @@
+# A Bintana application as a Flatpak, on top of the shared BaseApp: this is
+# the recipe a project follows -- its own project directory, a launcher, a
+# menu entry and an icon, and nothing else. `examples/hello` is the project.
+#
+# **This is the shape `lib/package` writes for any project.** The manifest
+# `tools/pack.sh` generates has the same parts, with the paths computed from
+# the id; this one is written out because the repository's own example is also
+# the reference a person reads.
+id: io.github.getbintana.Hello
+branch: stable
+runtime: org.gnome.Platform
+runtime-version: '50'
+sdk: org.gnome.Sdk
+base: io.github.getbintana.BaseApp
+base-version: '0.1'
+command: bintana-hello
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+modules:
+  - name: hello
+    buildsystem: simple
+    build-commands:
+      # A module's build directory holds the project's own contents, so the
+      # whole of it is the application -- and a file added to the example
+      # travels without a list here to update.
+      - mkdir -p /app/share/io.github.getbintana.Hello
+      - cp -r . /app/share/io.github.getbintana.Hello/
+      - install -Dm755 bintana-hello /app/bin/bintana-hello
+      - install -Dm644 io.github.getbintana.Hello.desktop /app/share/applications/io.github.getbintana.Hello.desktop
+      # The metainfo goes where AppStream looks for it, and the icon is named
+      # after the id: that is the name the desktop's `Icon=` asks the theme for
+      # and the one AppStream looks for.
+      - install -Dm644 io.github.getbintana.Hello.metainfo.xml /app/share/metainfo/io.github.getbintana.Hello.metainfo.xml
+      - install -Dm644 icons/hello.svg /app/share/icons/hicolor/scalable/apps/io.github.getbintana.Hello.svg
+    sources:
+      - type: dir
+        path: ../examples/hello
+      - type: file
+        path: io.github.getbintana.Hello.desktop
+      - type: script
+        dest-filename: bintana-hello
+        commands:
+          - exec /app/bin/bintana /app/share/io.github.getbintana.Hello "$@"

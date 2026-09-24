@@ -15,6 +15,7 @@ The running program: what it is called, where its files are, and how it ends.
 | `Executable` | the `bintana` binary, so a project can re-invoke it | [where its files are](#where-its-files-are) |
 | `HasCommand(name)` | → whether that program is on the PATH | [asking about the machine](#asking-about-the-machine) |
 | `HasIcon(name)` | → whether that icon will actually **draw** something | [asking about the machine](#asking-about-the-machine) |
+| `Id` | the application's reverse-DNS identity | [the project](#the-project) |
 | `Icons([contains])` | → every icon name available, sorted | [asking about the machine](#asking-about-the-machine) |
 | `Libraries([project])` | → the names of every library the six places offer | [libraries](#libraries) |
 | `LibraryPath(name, [project])` | → where a library by that name is, or `""` | [libraries](#libraries) |
@@ -28,6 +29,7 @@ The running program: what it is called, where its files are, and how it ends.
 | | |
 |---|---|
 | `Name` | from `project.json` |
+| `Id` | from `project.json`: the application's identity in reverse DNS — `io.github.you.App`. It is **one name in three places**: the window's own class (the runtime hands it to `GtkApplication` for Wayland and to the program name for X11's `WM_CLASS`), the `<id>` of the project's metainfo, and the Flatpak app id. `""` when the project declares none, which is an ordinary project classed by the program's name; a value that is not an application id **stops the program when the project loads**, because every one of those three is something nobody looks at until a dock shows the wrong icon |
 | `Version` | what the **project** calls its release; `""` when it declares none. **`BTA_VERSION` is the runtime's** and is not this — showing the wrong one is what an About box does until it knows the difference |
 | `BTA_VERSION` | **a bare global, not a member of this** — the runtime's own release as text, the one number `CMakeLists.txt` declares, and what `bintana --version` prints. It is here because this is where the confusion lives; a worker has it too |
 | `Arguments` | whatever followed the project directory on the command line, as an array |

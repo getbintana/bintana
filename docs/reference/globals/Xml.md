@@ -26,9 +26,12 @@ is where that design is argued.
 | `Namespace` (ro) | its namespace URI, `""` when there is none | [names and namespaces](#names-and-namespaces) |
 | `SetNamespace(uri, [prefix])` | puts the element in that namespace | [names and namespaces](#names-and-namespaces) |
 | `Text` | all the character data under it; assigning replaces the children | [reading](#reading) |
-| `Attr(name)` | the value, `""`, or `null` for none | [attributes](#attributes) |
+| `Attr(name)` | the value of an attribute **with no namespace**, `""`, or `null` | [attributes](#attributes) |
 | `SetAttr(name, value)` | both as text; creates or replaces | [attributes](#attributes) |
 | `RemoveAttr(name)` | takes it away | [attributes](#attributes) |
+| `AttrNS(uri, name)` | the same for an attribute in that namespace | [attributes](#attributes) |
+| `SetAttrNS(uri, name, value)` | writes one, which is how `xml:lang` is spelled | [attributes](#attributes) |
+| `RemoveAttrNS(uri, name)` | takes it away | [attributes](#attributes) |
 | `AttributeNames()` | the local names | [attributes](#attributes) |
 | `Children` (ro) | its element children, in file order | [children](#children) |
 | `Find(name)` | the first direct child called that, or `null` | [children](#children) |
@@ -89,7 +92,35 @@ walk is a loop, not a path language.
 | `Attr(name)` | the value; `""` for one that is present and empty, `null` for one that is not |
 | `SetAttr(name, value)` | both as text; creates or replaces |
 | `RemoveAttr(name)` | |
+| `AttrNS(uri, name)` | the value of an attribute that belongs to a namespace |
+| `SetAttrNS(uri, name, value)` | writes one |
+| `RemoveAttrNS(uri, name)` | |
 | `AttributeNames()` | the local names |
+
+**`Attr` and `AttrNS` are two different questions, and `xml:lang` is why.** In
+XML an unprefixed name is an attribute with *no* namespace, so `xml:lang` and
+`lang` are two attributes; `Attr("lang")` answers only for the second, and the
+first is `AttrNS("http://www.w3.org/XML/1998/namespace", "lang")`. That is what
+an AppStream metainfo needs to read and write translations:
+
+```js
+const XMLNS = "http://www.w3.org/XML/1998/namespace";
+
+el.SetAttrNS(XMLNS, "lang", "es");     // <name xml:lang="es">Hola</name>
+el.AttrNS(XMLNS, "lang");              // "es"
+el.Attr("lang");                       // null -- a different attribute
+```
+
+The namespace has to be **declared in scope** for `SetAttrNS`; the XML one is
+built into every document (a detached element too) and always works, and any
+other is refused by URI with a sentence, because an invented declaration is a
+prefix on an element that never asked for it. An attribute namespace cannot be a
+default one, so `SetNamespace` -- which puts the *element* in a namespace -- is
+not the way to declare one.
+
+`AttributeNames()` lists the **local** name of every attribute, namespaced ones
+included, so a record mapping a file reports `xml:lang` as unmodelled rather
+than losing it in silence; `Attr` will not read it by that name.
 
 An `xmlns` declaration is not in `AttributeNames()` and cannot be read with
 `Attr`: in a document's tree it is the namespace, which is what `Namespace`,

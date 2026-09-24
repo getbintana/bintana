@@ -1,5 +1,6 @@
 {
   "name": "Bintana IDE",
+  "id": "io.github.getbintana.Ide",
   "version": "0.1.0",
   "startup": "MainForm",
   "sources": [
@@ -29,6 +30,7 @@
     "forms/ProjectForm.js",
     "modules/Apps.js",
     "forms/AppForm.js",
+    "forms/MetainfoForm.js",
     "modules/Classes.js",
     "modules/ProjectTree.js",
     "modules/FormFiles.js",
@@ -65,6 +67,7 @@
     "forms/MainForm.js"
   ],
   "uses": [
-    "markdown"
+    "markdown",
+    "package"
   ]
 }

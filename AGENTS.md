@@ -109,6 +109,7 @@ tests/try.sh <project> [args...]                  # run any project, on a virtua
 ./tests/icons.sh                                  # which declared icons this desktop has, and which draw
 ./tests/styles.sh                                 # which style classes its theme defines
 ./tests/install.sh                                # what `make install` produces, run out of a staging prefix
+./tests/pack.sh                                   # what `lib/package` writes, read back file by file
 ```
 
 **Nothing here opens a window, and that is the scripts' doing rather than
@@ -422,6 +423,20 @@ a test runner, a build step, a tool that reads the icon themes off the disk. It 
 **not** a way to write a test — a test that does not go through GTK proves nothing
 about a GTK binding, which is the whole point of `tests/`. See
 [`docs/formats.md`](docs/formats.md#main-a-project-with-no-window).
+
+**A project's `id` is its window's class, and making it one takes two calls in
+two places because GTK reads it from two.** `gtk_application_new(id, …)` is what
+Wayland reads — `gdktoplevel-wayland.c` takes the xdg-toplevel app id from
+`application.application_id` — and `g_set_prgname(id)` is what X11 reads:
+`gdksurface-x11.c` builds `WM_CLASS` out of the program name and **never looks
+at the application id**. One id, two calls, because `StartupWMClass` is one
+string and it has to match on both — and a window classed by something else is
+one no dock recognises, in silence. The rule is the platform's
+(`g_application_id_is_valid`: reverse DNS, at least one dot, no element starting
+with a digit) and it is refused **at load**, naming the key, rather than
+ignored; a project that declares none keeps the old answer, which is the
+program's own name. `GtkApplication` also takes the id as the default window
+icon when the theme has one by that name (`gtkapplication.c`).
 
 ## The six patches in vendor/
 
@@ -1020,6 +1035,53 @@ its go-to-symbol all go empty together -- with the suite red in `tests/widgets`
   freed on both early-outs) and `bta_notebook.c:161` (the output is assigned on
   every path that returns success).
 
+## Flatpak, and the packaging step
+
+**One identity runs through the whole chain.** `project.json`'s `id` becomes
+`Application.Id`; the runtime hands it to `GtkApplication` (Wayland's app id) and
+to the program name (X11's `WM_CLASS`), so it is the window's class; the
+project's `<id>.metainfo.xml` declares the same string; and a package installs
+under it. The IDE asks for it when a project is created, *Project settings*
+renames the metainfo when it changes, and the runtime refuses one that is not an
+application id **at load**, naming the key.
+
+The packaging step is [`lib/package`](docs/llm/package.md) — `Metainfo`, the
+AppStream file, and `Package`, which writes the four artefacts and the Flatpak
+manifest — with `tools/pack.sh` as its command line. The manifest is JSON
+(flatpak-builder reads both, and the runtime already writes JSON) and the output
+directory is a build context: everything the manifest names is beside it.
+
+`tools/flatpak-build.sh` builds this repository's own three refs into a
+publishable repository — with no application named, all of them; naming some,
+those — and [`flatpak/ci/`](flatpak/ci/README.md) is the workflow and the setup
+of the repository those are published to. **What it rebuilds is decided from
+`builds.json` and not guessed**: a new tag is everything, the runtime's paths
+are the base *and every app*, and `ide/**` or `examples/hello/**` are that one
+ref — which is why the base does not carry the IDE or the examples.
+
+Five things cost a build cycle each when this was built, so they are here:
+
+- **AppStream will not compose an application with no icon**, and it says
+  `icon-not-found` from `appstreamcli` half a build after the mistake, naming a
+  file nobody wrote. `Package.Write` refuses a project with no drawing, and the
+  icon is copied as `<id>.<ext>` -- the name the desktop's `Icon=` asks the
+  theme for.
+- **The BaseApp is baked into each application at build time**, not mounted at
+  runtime: the IDE runs with the BaseApp uninstalled, and a runtime change means
+  rebuilding and republishing *every* application, in one run.
+- **flatpak-builder's state dir has to be on the same filesystem as the build
+  dir** (`--state-dir`): the default `./.flatpak-builder` under a btrfs checkout
+  and a `/tmp` target is *"not on the same filesystem"* and nothing builds.
+- **A `dir` source merges into the build directory** (`flatpak_cp_a` with
+  `MERGE`), so a manifest cannot put the project under a subdirectory: the
+  generated one copies the top-level names it listed instead.
+- **flatpak 1.18.0 to 1.18.2 have a regression** ([#6818]) that makes
+  `build-init --base` fail with `lsetxattr(security.selinux): Operation not
+  supported`; 1.18.3 fixes it, it is not SELinux (permissive fails too), and CI's
+  Ubuntu 24.04 is older than the regression.
+
+[#6818]: https://github.com/flatpak/flatpak/issues/6818
+
 ## Tests
 
 Five Bintana projects are run by the suite — `ide`, `markdown`, `report`,
@@ -1028,7 +1090,8 @@ non-zero status on failure. They are applications, not a harness — write
 assertions the way the suite already does. A project is any directory under
 `tests/` with a `project.json` that does not declare `main`, so adding one is
 adding a directory: nothing lists them. (The console projects — `api`, `icons`,
-`install`, `runner`, `styles` — are tools and are driven by their own `.sh`.)
+`install`, `pack`, `runner`, `styles` — are tools and are driven by their own
+`.sh`.)
 
 **`tests/plugins/` is not a project**: it holds the C sources of the native
 plugins the suite loads (`testplug.c` — the reference implementation

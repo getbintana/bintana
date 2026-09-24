@@ -1,8 +1,9 @@
 /*
- * The project's own settings: what it is called, where it starts, which
- * libraries it uses, and in which order its code is loaded.
+ * The project's own settings: what it is called, what it is in reverse DNS,
+ * where it starts, which libraries it uses, and in which order its code is
+ * loaded.
  *
- * All four are `project.json`, which the IDE already reads as a `ProjectFile`
+ * All of them are `project.json`, which the IDE already reads as a `ProjectFile`
  * record -- so this dialog does not check anything itself.  It assigns to the
  * record and lets the setters refuse what they refuse, which is how the field
  * that is wrong gets named without this file knowing what the rules are.  Add a
@@ -47,6 +48,7 @@ class ProjectForm extends Form {
 
         dlg.TxtPrName.Text    = record.Name;
         dlg.TxtPrVersion.Text = record.Version;
+        dlg.TxtPrId.Text      = record.Id;
         dlg.TxtPrDesc.Text    = record.Description;
 
         /*
@@ -264,6 +266,7 @@ class ProjectForm extends Form {
         const fields = [
             ["Name",        this.TxtPrName.Text.trim()],
             ["Version",     this.TxtPrVersion.Text.trim()],
+            ["Id",          this.TxtPrId.Text.trim()],
             ["Startup",     console ? "" : starts],
             ["Main",        console ? starts : ""],
             ["Description", this.TxtPrDesc.Text.trim()],
@@ -276,6 +279,17 @@ class ProjectForm extends Form {
                 Message.Error("project.json was left alone:\n{0}", e.message);
                 return false;
             }
+        }
+
+        /* The record cannot refuse a bad id -- the rule is the platform's and
+         * a `Field` speaks about one value -- so it is checked here, where the
+         * person who typed it still is. The same rule the runtime enforces when
+         * the project loads, and `ProjectFile.idValid` is the one copy of it
+         * this side has. */
+        if (this.record.Id && !Ide.ProjectFile.idValid(this.record.Id)) {
+            Message.Error("\"{0}\" is not an application id. Use a reverse-DNS " +
+                          "name like io.github.you.App.", this.record.Id);
+            return false;
         }
         return true;
     }
@@ -307,6 +321,7 @@ class ProjectForm extends Form {
      * second time, in the copy nobody updates when the form is redrawn. */
     TxtPrName_Activate()    { this.FocusNext(); }
     TxtPrVersion_Activate() { this.FocusNext(); }
+    TxtPrId_Activate()      { this.FocusNext(); }
     TxtPrDesc_Activate() { this.accept(); }
 
     BtnPrOk_Click()     { this.accept(); }

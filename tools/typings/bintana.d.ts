@@ -764,6 +764,7 @@ declare const Application: {
     HasCommand(...values: any[]): any;
     HasIcon(...values: any[]): any;
     Icons(...values: any[]): any;
+    Id: any;
     Libraries(...values: any[]): any;
     LibraryPath(...values: any[]): any;
     Name: any;
@@ -1153,6 +1154,7 @@ declare class XmlDocument {
 declare class XmlNode {
     Add(...values: any[]): any;
     Attr(...values: any[]): any;
+    AttrNS(...values: any[]): any;
     AttributeNames(...values: any[]): any;
     Children: any;
     Copy(...values: any[]): any;
@@ -1165,7 +1167,9 @@ declare class XmlNode {
     Prefix: any;
     Remove(...values: any[]): any;
     RemoveAttr(...values: any[]): any;
+    RemoveAttrNS(...values: any[]): any;
     SetAttr(...values: any[]): any;
+    SetAttrNS(...values: any[]): any;
     SetNamespace(...values: any[]): any;
     Text: any;
 }

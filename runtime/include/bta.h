@@ -307,6 +307,15 @@ struct BtaApp {
     /* What the project calls its own release, verbatim out of project.json;
      * "" when it declares none, which is an ordinary state and not a fault. */
     char           *version;
+    /*
+     * project.json's "id": the application's reverse-DNS identity, and the one
+     * name its window class, its metainfo and its package all share.  "" when
+     * the project declares none -- an ordinary project, whose window is classed
+     * by the program's name as it always was.  `bta_app_new` refuses one that
+     * is not an application id; see `bta_app_run` for where it becomes the
+     * window's.
+     */
+    char           *id;
     char           *startup;  /* class name of the form to open first */
     /*
      * project.json's "main": the function to call instead of opening a form.

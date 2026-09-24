@@ -44,7 +44,8 @@ dest=$(cd "$dest" && pwd)
 # tree is exactly what lands here.
 cmake --install "$build" --prefix "$dest"
 
-# The Linux launcher is a bash script with `exec -a`; Windows gets a .cmd.
+# The Linux launcher is a shell script that resolves its own location; Windows
+# gets a .cmd that does the same.
 rm -f "$dest/bin/bintana-ide"
 
 # --- 2. every DLL the executable links ---------------------------------------
@@ -168,9 +169,9 @@ printf '[Settings]\ngtk-font-name=Segoe UI 9\n' > "$dest/etc/gtk-4.0/settings.in
 #
 # The Windows spelling of `bintana-ide`: the IDE is the project directory beside
 # this binary, resolved from the script's own location so the tree can be
-# unzipped anywhere.  There is no `exec -a` to borrow -- Windows has no
-# per-window application id here -- so this only has to start the right
-# project and hand the arguments over.
+# unzipped anywhere.  Nothing here has to name the window -- the runtime takes
+# the class from the project's own id -- so this only starts the right project
+# and hands the arguments over.
 cat > "$dest/bin/bintana-ide.cmd" <<'EOF'
 @echo off
 rem The IDE, from wherever this tree was unzipped to.

@@ -36,7 +36,10 @@ const ROOTS = [
     File.Join(Environment.HomeDirectory, ".icons"),
 ];
 
-const SKIP = ["build", "build-asan", "vendor", ".git", "node_modules"];
+/* `flatpak/` and `build-flatpak/` are build output of a package -- copies of
+ * the tree's `.form` files -- and a copy would be reported twice. */
+const SKIP = ["build", "build-asan", "build-flatpak", "flatpak", "vendor",
+              ".git", "node_modules"];
 
 function Main() {
     desktopTheme((theme) => {

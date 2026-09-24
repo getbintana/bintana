@@ -91,6 +91,7 @@ soon as it lists the files. Qualifying the name is the way out.
 ```json
 {
   "name": "Bintana IDE",
+  "id": "io.github.getbintana.Ide",
   "version": "0.1.0",
   "startup": "MainForm",
   "sources": ["AskForm.js", "ConfirmForm.js", "Designer.js", "MainForm.js"],
@@ -102,6 +103,7 @@ soon as it lists the files. Qualifying the name is the way out.
 | Key | Meaning |
 |---|---|
 | `name` | `Application.Name`, and the folder under `~/.config/bintana` that `Application.ConfigDirectory` points at |
+| `id` | `Application.Id`: the application's identity in reverse DNS, optional. It is the window's class — `GtkApplication`'s application id, and the program name X11 builds `WM_CLASS` from — and the name its `<id>.metainfo.xml` and a package carry. A value that is not an application id (at least one dot, no element starting with a digit — the platform's `g_application_id_is_valid`) **stops the program when the project loads**, because a class nothing matches is a window no dock recognises |
 | `version` | `Application.Version`; free text, optional. What the project calls its own release — not the runtime's, which is `BTA_VERSION` |
 | `startup` | the class instantiated and shown at launch |
 | `main` | a **function** to call instead, for a project with no window (below). Excludes `startup` |
@@ -207,6 +209,33 @@ console, and opens the project anyway — refusing would leave the one program t
 can fix the file unable to open it. A key the runtime does not know is left
 untouched when the IDE saves, so a manifest from a newer version survives an older
 one editing it.
+
+## The metainfo: `<id>.metainfo.xml`
+
+An optional file beside `project.json`, and the only one in a project the
+**runtime never reads**: it is AppStream metadata, so the programs that read it
+are a software centre, an installer and the packaging tool — the AppStream
+specification's own format, written and read with [`Xml`](reference/globals/Xml.md).
+
+| | |
+|---|---|
+| the name | `<id>.metainfo.xml`, from `project.json`'s `id`. A project with no id has none, and is the one thing that cannot be packaged |
+| `<id>` | the same string as `project.json`'s `id` |
+| the primary `<name>` | the same string as `project.json`'s `name`; a `<name xml:lang="es">` is a translation and is not that name |
+| everything else | AppStream's: `<summary>`, `<description>` and its `<p>` paragraphs, `<developer>`, the two licenses, `<url type="homepage">`, `<categories>`, `<releases>`, `<screenshots>`… |
+
+**The identity is checked, and the rest is not.** Those two strings are the
+project's identity — the window's class, the package's name and what a software
+centre shows are one name — so `Metainfo.problems` reports a file whose
+`<id>`, `<name>` or file name disagrees with the manifest, and the packaging
+step refuses over it. Everything else is prose a person edits.
+
+**The IDE edits it two ways, and they do not fight.** *Application info…* edits
+the common fields and writes the identity from the manifest on every save, so
+the two cannot drift while it is the writer; the raw tab (the file opens as XML
+in the tree) is where translations, screenshots and anything the form does not
+model are written. Both are lossless: the DOM keeps what it is not asked about,
+so a `<p xml:lang="es">` survives an edit of the primary description.
 
 ## Libraries: `uses`
 

@@ -7,6 +7,7 @@ Every name here is a global: ambient, always present, no import.
 | | |
 |---|---|
 | `Name` | from `project.json` |
+| `Id` | from `project.json`: the reverse-DNS identity the window is classed by, the metainfo declares and a package installs under; `""` when it declares none. A bad one stops the program when the project loads |
 | `Version` | what the *project* calls its release; `""` when it declares none |
 | `Directory` | the project directory, absolute |
 | `ConfigDirectory` | `~/.config/bintana/<name>`, created at startup |
@@ -81,6 +82,7 @@ of them.
 | `Installed()` | the ids of the entries this user has, sorted |
 | `Read(id)` | one entry as data, or `null` when there is none |
 | `Install(id, entry)` | writes `Directory/<id>.desktop`, **atomically**; answers the path |
+| `Write(path, entry)` | the same entry at a path you name, making the directory; for a package, which is not this user's menu |
 | `Uninstall(id)` | removes it; answers whether there was one |
 
 An id is the file's name without `.desktop` — letters, digits, `-`, `_` and `.`
@@ -288,8 +290,9 @@ A **document** answers `Root` (→ element, or `null`). An **element** answers:
 |---|---|
 | `Name`, `Prefix`, `Namespace` | the local name, the prefix, the URI — `""` when there is none |
 | `Text` | all the character data under it; assigning replaces the children |
-| `Attr(name)` | the value, `""` for one that is present and empty, `null` for one that is not |
+| `Attr(name)` | the value of an attribute **with no namespace**, `""` for one that is present and empty, `null` for one that is not |
 | `SetAttr(name, value)`, `RemoveAttr(name)` | both as text |
+| `AttrNS(uri, name)`, `SetAttrNS(uri, name, value)`, `RemoveAttrNS(uri, name)` | the same for an attribute in a namespace — `xml:lang` is `AttrNS("http://www.w3.org/XML/1998/namespace", "lang")`, since an unprefixed name means no namespace at all. `SetAttrNS` refuses a namespace not declared in scope |
 | `AttributeNames()` | the local names, sorted as the file had them |
 | `Children` | its element children, in order |
 | `Find(name)`, `FindAll(name)` | direct children by local name — `Find` answers `null` |

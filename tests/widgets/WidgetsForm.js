@@ -436,6 +436,9 @@ const TESTS = [
      * armed a deadline (see the note above ExecWait). Its last assertions are a
      * launch landing on a later turn, which `until` counts. */
     "Desktop",
+    /* Blocking too, and in the same group: it runs children with `Exec.Wait`
+     * to see a project's own id answered, and a bad one refused. */
+    "ApplicationId",
     "Time",
     "Stopwatch",
     "Shortcut", "Decimal", "FieldDecimal",
@@ -9714,6 +9717,46 @@ function Main() {
         check("RemoveAttr takes it away", el.Attr("Kind") === null);
 
         /*
+         * Namespaced attributes, which is how `xml:lang` is spelled -- and the
+         * pair that makes `Attr` and `AttrNS` different questions. `xml:lang`
+         * and `lang` are two attributes, and `Attr("lang")` used to answer the
+         * namespaced one because libxml2's `xmlGetProp` matches by local name;
+         * it asks only for the unnamespaced one now.
+         */
+        const XMLNS = "http://www.w3.org/XML/1998/namespace";
+        const named = Xml.Element("Name");
+        named.Text = "Hola";
+        named.SetAttrNS(XMLNS, "lang", "es");
+        eq("a namespaced attribute reads back", named.AttrNS(XMLNS, "lang"), "es");
+        check("Attr asks only for the unnamespaced one",
+              named.Attr("lang") === null);
+        eq("and AttributeNames still lists its local name",
+           named.AttributeNames().join(","), "lang");
+        check("the serialized form carries the prefix",
+              Xml.Stringify(named).includes('xml:lang="es"'), Xml.Stringify(named));
+
+        named.SetAttrNS(XMLNS, "lang", "en");
+        eq("writing it again replaces it", named.AttrNS(XMLNS, "lang"), "en");
+        named.RemoveAttrNS(XMLNS, "lang");
+        check("RemoveAttrNS takes it away", named.AttrNS(XMLNS, "lang") === null);
+
+        /* A namespace that is not in scope is refused by name: making one up
+         * would put a prefix on an element that never asked for it. */
+        let nsRefusal = "";
+        try { named.SetAttrNS("urn:x-nothing", "a", "b"); }
+        catch (e) { nsRefusal = e.message; }
+        check("an undeclared namespace is refused",
+              nsRefusal.includes("urn:x-nothing"), nsRefusal);
+
+        /* And a parsed document keeps its translations through a rewrite. */
+        const trans = Xml.Parse('<component><name xml:lang="es">Hola</name></component>');
+        const tname = trans.Root.Find("name");
+        eq("a parsed xml:lang reads", tname.AttrNS(XMLNS, "lang"), "es");
+        tname.SetAttrNS(XMLNS, "lang", "en");
+        check("and an edit survives the writer",
+              Xml.Stringify(trans).includes('xml:lang="en"'), Xml.Stringify(trans));
+
+        /*
          * A node from another tree is **copied in**, and `Add` answers the node
          * that is in this tree -- moving it would have to repoint every wrapper
          * under it.  Within one tree it moves, as a DOM does.
@@ -14632,6 +14675,36 @@ function Main() {
         check("and none of those wrote anything",
               !File.Exists(File.Join(Desktop.Entries.Directory, "bta-bad.desktop")));
 
+        /*
+         * `Write` is the packaging half: the same entry at a path the caller
+         * names, making the directory. What is asserted is that it writes what
+         * `Install` writes and refuses what `Install` refuses -- the verb
+         * differs in where it writes and in nothing else.
+         */
+        const stage  = File.Join(SCRATCH, "stage");
+        const staged = File.Join(stage, "deep", "bta-written.desktop");
+        if (File.IsDir(stage)) Directory.DeleteTree(stage);
+        check("the staged directory is not there yet", !File.IsDir(stage));
+
+        Desktop.Entries.Write(staged, {
+            "Desktop Entry": {
+                Type: "Application",
+                Name: "Staged",
+                Exec: exec,
+            },
+        });
+        check("Write makes the directory and the file", File.Exists(staged));
+        check("with the entry in it",
+              File.Load(staged).includes("Name=Staged"), File.Load(staged));
+        check("and the same quoting Install would write",
+              File.Load(staged).includes(`Exec=${exec}`), File.Load(staged));
+
+        throws("Write refuses an application with no Exec",
+               () => Desktop.Entries.Write(staged,
+                       { "Desktop Entry": { Type: "Application", Name: "x" } }));
+        throws("and needs the path", () => Desktop.Entries.Write());
+        if (File.IsDir(stage)) Directory.DeleteTree(stage);
+
         /* And a file the runtime did not write, holding a value the key file's
          * syntax cannot express: reading it is refused, naming the key, rather
          * than answered with half of itself.  The parser is GLib's and it is
@@ -15686,6 +15759,67 @@ function Main() {
              * machine cannot produce. */
             eq("with no tzdata both children are UTC", east[0], west[0]);
         }
+    }
+
+    /* --- Application.Id ---------------------------------------------------
+     *
+     * The identity a project declares, which is the window's own class -- so
+     * the interesting half is not that the string comes back but that one which
+     * is not an application id **stops the program** instead of being ignored.
+     * A window classed by a typo is one no dock recognises, and nobody looks
+     * until the icon is wrong.
+     *
+     * Children, because both answers are about a *project* and this one
+     * declares no id. `Exec.Wait` blocks, so it belongs with the other blocking
+     * tests near the top of the run rather than in the asynchronous tail.
+     */
+    testApplicationId() {
+        const dir = File.Join(SCRATCH, "appid");
+        Directory.Make(dir);
+        File.SaveJson(File.Join(dir, "project.json"),
+                      { name: "appid", id: "io.github.getbintana.WidgetProbe",
+                        main: "main" });
+        File.Save(File.Join(dir, "Main.js"),
+                  'function main() {\n' +
+                  '    print("id:" + Application.Id);\n' +
+                  '    print("name:" + Application.Name);\n' +
+                  '    Application.Quit(0);\n' +
+                  '}\n');
+
+        const ran = Exec.Wait([Application.Executable, dir], { Timeout: 20000 });
+        check("a project with an id runs", ran.ExitCode === 0, ran.Output);
+
+        const said = ran.Output.trim().split("\n");
+        eq("and Application.Id answers it", said[0],
+           "id:io.github.getbintana.WidgetProbe");
+        eq("with the name still its own", said[1], "name:appid");
+
+        /* No id at all is an ordinary project: it runs, and answers "". */
+        const plain = File.Join(SCRATCH, "noid");
+        Directory.Make(plain);
+        File.SaveJson(File.Join(plain, "project.json"),
+                      { name: "noid", main: "main" });
+        File.Save(File.Join(plain, "Main.js"),
+                  'function main() {\n' +
+                  '    print("[" + Application.Id + "]");\n' +
+                  '    Application.Quit(0);\n' +
+                  '}\n');
+
+        const bare = Exec.Wait([Application.Executable, plain], { Timeout: 20000 });
+        eq("a project without an id runs", bare.ExitCode, 0);
+        eq("and answers the empty string", bare.Output.trim(), "[]");
+
+        /* And one that is not an application id stops the program, naming it. */
+        File.SaveJson(File.Join(dir, "project.json"),
+                      { name: "appid", id: "no-es-un-id", main: "main" });
+
+        const bad = Exec.Wait([Application.Executable, dir],
+                              { Timeout: 20000, Stderr: "separate" });
+        eq("a bad id stops the program", bad.ExitCode, 2);
+        check("...saying which one and why",
+              (bad.Errors || "").includes("no-es-un-id") &&
+              (bad.Errors || "").includes("not an application id"),
+              bad.Errors);
     }
 
     /* --- Exec.Wait ------------------------------------------------------

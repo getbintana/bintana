@@ -1,0 +1,67 @@
+# The IDE as the first client of the BaseApp: the project, the reference F1
+# reads, and the menu entry that starts it.
+#
+# **What this app adds is what only the IDE needs**, which is the whole reason
+# the base does not carry it: a change to `ide/**` or `docs/**` rebuilds this
+# ref and leaves the base -- and every other application -- alone.
+#
+# **The launcher is the manifest's one line and not `tools/bintana-ide.in`.**
+# That script resolves its own location because an install can move; inside a
+# package there is nothing to resolve -- the IDE is at `/app/share/bintana/ide`
+# and the runtime is at `/app/bin/bintana`, which is what this script says. The
+# window's class is the project's id, which the runtime sets from
+# `ide/project.json`, so no `exec -a` is needed.
+id: io.github.getbintana.Ide
+branch: stable
+runtime: org.gnome.Platform
+runtime-version: '50'
+sdk: org.gnome.Sdk
+base: io.github.getbintana.BaseApp
+base-version: '0.1'
+command: bintana-ide
+# `host` because an IDE opens and writes the projects it is pointed at;
+# the network is git, the shipped examples and the user's own Http calls.
+finish-args:
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --filesystem=host
+modules:
+  # A module has a build directory of its own, so a `dir` source is the whole
+  # of what is there -- and a file added to `ide/` travels without this
+  # manifest learning about it.
+  - name: ide
+    buildsystem: simple
+    build-commands:
+      - mkdir -p /app/share/bintana/ide
+      - cp -r . /app/share/bintana/ide/
+      # The project's metainfo goes where AppStream looks for it as well as
+      # beside the project it describes.
+      - install -Dm644 io.github.getbintana.Ide.metainfo.xml /app/share/metainfo/io.github.getbintana.Ide.metainfo.xml
+    sources:
+      - type: dir
+        path: ../ide
+  - name: reference
+    buildsystem: simple
+    build-commands:
+      - mkdir -p /app/share/doc/bintana/docs
+      - cp -r . /app/share/doc/bintana/docs/
+    sources:
+      - type: dir
+        path: ../docs
+  - name: menu-entry
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 bintana-ide /app/bin/bintana-ide
+      - install -Dm644 io.github.getbintana.Ide.desktop /app/share/applications/io.github.getbintana.Ide.desktop
+      - install -Dm644 bintana-ide.svg /app/share/icons/hicolor/scalable/apps/io.github.getbintana.Ide.svg
+    sources:
+      - type: script
+        dest-filename: bintana-ide
+        commands:
+          - exec /app/bin/bintana /app/share/bintana/ide "$@"
+      - type: file
+        path: io.github.getbintana.Ide.desktop
+      - type: file
+        path: ../tools/bintana-ide.svg

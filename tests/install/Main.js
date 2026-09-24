@@ -21,10 +21,10 @@
  * `IDE de Bintana — hello` under `LANGUAGE=es`: three separate things had to
  * be found for that one string -- the installed sources, the installed
  * `po/es.po`, and the project the launcher was handed -- and one string is how
- * they are asked about together. Its class is `bintana-ide`, which is what the
- * installed `bintana-ide.desktop` says it matches; that is the other end of the
- * same question, and the reason the launcher starts the runtime under a name of
- * its own.
+ * they are asked about together. Its class is the IDE's application id, which
+ * is what the installed `bintana-ide.desktop` says it matches; that is the
+ * other end of the same question, and both ends read it from the installed
+ * `project.json` rather than naming it here.
  *
  * **This is a console project, and it runs the IDE on an X server it starts
  * itself.** Not `xvfb-run`, which owns the display it makes and hands it to one
@@ -397,10 +397,18 @@ function opens(prefix, work, done) {
      * file, not that anybody agrees with its wording. */
     const want = translated(prefix, "Bintana IDE -- {0}").replace("{0}", File.Name(project));
 
+    /* The class the window is expected to have, read out of the installed
+     * `project.json` for the same reason the title is read out of the installed
+     * catalogue: the question is whether the two installed halves agree, not
+     * whether anybody remembers the string. */
+    const ideId = (File.LoadJson(File.Join(prefix, "share", "bintana", "ide",
+                                           "project.json")) || {}).id || "";
+    check("the installed IDE declares an application id", ideId !== "");
+
     let ticks = 0;
     let grace = 2;
     const poll = new Timer(250, () => {
-        const title = shown(server.name);
+        const title = shown(server.name, ideId);
 
         /* A child that died gets two more ticks before anything is concluded
          * about it: the exit callback and the last of its output are two
@@ -419,7 +427,7 @@ function opens(prefix, work, done) {
               ended !== null ? `it exited with ${ended} first` : `nothing in ${APPEAR / 4}s`);
         if (title) eq("...whose title says the installed po/es.po was read", title, want);
         eq("...of the class the installed .desktop matches",
-           entryValue(prefix, "StartupWMClass"), "bintana-ide");
+           entryValue(prefix, "StartupWMClass"), ideId);
 
         check("it is still running", ended === null, `exited with ${ended}`);
         check("and said nothing on the way up", output.length === 0,
@@ -441,11 +449,12 @@ function opens(prefix, work, done) {
  *
  * It puts up more than one window of its class -- the title bar it draws itself
  * needs one to measure in -- and only the real one carries a name, so the name
- * is what tells them apart. */
-function shown(display) {
-    for (const id of windows(display)) {
+ * is what tells them apart.  The one without a name is the leader, which GTK
+ * names after the application id. */
+function shown(display, ideId) {
+    for (const id of windows(display, ideId)) {
         const name = xdo(display, ["getwindowname", id]);
-        if (name && name !== "bintana-ide") return name;
+        if (name && name !== ideId) return name;
     }
     return "";
 }
@@ -483,11 +492,13 @@ function display() {
     return null;
 }
 
-/* The ids of the windows whose class is exactly ours -- xdotool takes a regular
- * expression, so the anchors are what keep this from matching a `bintana-ide2`
- * somebody is running beside it. */
-function windows(name) {
-    return xdo(name, ["search", "--classname", "^bintana-ide$"]).split("\n").filter(Boolean);
+/* The ids of the windows whose class is exactly the IDE's -- xdotool takes a
+ * regular expression, so the anchors are what keep this from matching a
+ * `io.github.getbintana.Ide2` somebody is running beside it, and the dots are
+ * escaped because in a regular expression they would match any character. */
+function windows(name, ideId) {
+    const exact = "^" + ideId.replace(/\./g, "\\.") + "$";
+    return xdo(name, ["search", "--classname", exact]).split("\n").filter(Boolean);
 }
 
 /* One xdotool question, answered with what it printed or "" -- every caller

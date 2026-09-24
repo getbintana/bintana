@@ -1,0 +1,26 @@
+# The IDE's menu entry, inside Flatpak.
+#
+# Same shape as tools/bintana-ide.desktop, with the two things an app ref
+# needs: the file is named after the app id, and the icon it names is the icon
+# installed beside it. Flatpak rewrites `Exec` when it exports this file, so
+# what a menu runs is `flatpak run --command=bintana-ide ...`, and `%f` becomes
+# `--file-forwarding`.
+#
+# `StartupWMClass` is the app id, which is what the runtime hands to
+# `GtkApplication` and to the program name -- the window and this file agree
+# because both take the name from `ide/project.json`'s id.
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Bintana IDE
+Name[es]=IDE de Bintana
+GenericName=Form designer
+GenericName[es]=Diseñador de formularios
+Comment=Design forms and write the code behind them
+Comment[es]=Diseñá formularios y escribí el código detrás de ellos
+Exec=bintana-ide %f
+Icon=io.github.getbintana.Ide
+Terminal=false
+Categories=Development;IDE;GUIDesigner;
+Keywords=Bintana;RAD;forms;JavaScript;GTK;
+StartupWMClass=io.github.getbintana.Ide

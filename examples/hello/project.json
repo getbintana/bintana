@@ -1,5 +1,6 @@
 {
   "name": "hello",
+  "id": "io.github.getbintana.Hello",
   "startup": "Form1",
   "sources": [
     "About.js",

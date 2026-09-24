@@ -28,6 +28,7 @@ class AppForm extends Form {
         const found = Ide.Apps.installed(project);
 
         dlg.project   = project;
+        dlg.appId     = config.Id || "";
         dlg.onChanged = onChanged;
         /* The id the entry really has, which is what Uninstall takes. It is not
          * recomputed from the name while the dialog is open: renaming is a
@@ -51,13 +52,13 @@ class AppForm extends Form {
     /*
      * What the buttons say, and where the entry is going.
      *
-     * Both depend on the name, since the id is a slug of it -- so this runs on
-     * every keystroke, and an empty name is not installable: the runtime would
-     * refuse the entry it produces, and saying so here is cheaper than a
-     * complaint after the click.
+     * The id is the project's own when it declares one and a slug of the name
+     * otherwise -- so this runs on every keystroke, and an empty name is not
+     * installable: the runtime would refuse the entry it produces, and saying
+     * so here is cheaper than a complaint after the click.
      */
     showState() {
-        const id = Ide.Apps.idFor(this.TxtAppName.Text);
+        const id = this.appId || Ide.Apps.idFor(this.TxtAppName.Text);
 
         this.LblAppWhere.Text = this.installed
             ? Locale.Text("Installed for this user as {0}.desktop, in {1}",
@@ -74,6 +75,7 @@ class AppForm extends Form {
     fields() {
         return {
             Name:    this.TxtAppName.Text.trim(),
+            AppId:   this.appId,
             Comment: this.TxtAppComment.Text.trim(),
             Icon:    this.TxtAppIcon.Text.trim(),
         };

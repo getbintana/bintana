@@ -25,6 +25,7 @@ Desktop.Entries.Installed()            // ["hello", "world"]
 | `Entries` | the desktop entries module | [desktop entries](#desktop-entries) |
 | `Exec(argv)` | the `Exec=` value for a command | [the command line](#the-command-line) |
 | `Install(id, entry)` | writes one, atomically | [installing](#installing) |
+| `Write(path, entry)` | writes one at a path you name | [installing](#installing) |
 | `Installed()` | the ids this user has | [what is installed](#what-is-installed) |
 | `Read(id)` | one entry as data, or `null` | [reading](#reading) |
 | `Uninstall(id)` | removes one | [installing](#installing) |
@@ -92,7 +93,15 @@ one that is already gone is how a caller finds out.
 | | |
 |---|---|
 | `Install(id, entry)` | writes `Directory/<id>.desktop` and answers the path. Atomic — a temporary beside it, renamed over — so a failure leaves whatever was there |
+| `Write(path, entry)` | the same entry and the same checks at a path the caller names, **making the directory** when it is not there. For the entry a package installs, which is not one this user's menu has; answers nothing |
 | `Uninstall(id)` | removes it, answering whether there was one. A file that is there and cannot be removed throws |
+
+**`Write` is the half a packaging step needs.** `Install` addresses the one
+directory a menu reads and names the file after an id; a package builds a tree
+of its own and writes `<id>.desktop` into it before anything is installed, so
+what it needs is the entry's format, its validation and its quoting at a path of
+its choosing — which is what `Write` is, and why it is not a mode on `Install`:
+one writes to this user's menu, the other to wherever the caller says.
 
 ```js
 Desktop.Entries.Install("hello", {

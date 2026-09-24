@@ -1,0 +1,11 @@
+{
+  "name": "pack",
+  "version": "0.1.0",
+  "main": "Main",
+  "uses": [
+    "package"
+  ],
+  "sources": [
+    "Main.js"
+  ]
+}

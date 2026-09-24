@@ -570,7 +570,7 @@ class MainForm extends Form {
 
         this.leaveProject(() => NewProjectForm.ask(base, (info) =>
             this.startProject(File.Join(info.base, info.name), info.description,
-                              info.console)));
+                              info.console, info.id)));
     }
 
     /*
@@ -595,17 +595,17 @@ class MainForm extends Form {
                                      () => { this.recovery.forget(); then(); });
     }
 
-    startProject(path, description, console) {
+    startProject(path, description, console, id) {
         if (File.Exists(path) && !File.IsDir(path)) {
             Message.Error("{0} already exists and is not a folder.", File.Name(path));
             return false;
         }
 
         Directory.Make(path);
-        return this.createProject(path, description, console);
+        return this.createProject(path, description, console, id);
     }
 
-    createProject(dir, description, console) {
+    createProject(dir, description, console, id) {
         if (File.Exists(File.Join(dir, "project.json"))) {
             Message.Error("{0} is already a project.", File.Name(dir));
             return false;
@@ -621,18 +621,25 @@ class MainForm extends Form {
          * the runtime finds a form by name wherever the file is, and a folder is
          * a namespace only where somebody asked for one.
          */
-        if (console) return this.createConsoleProject(dir, description);
+        if (console) return this.createConsoleProject(dir, description, id);
 
         const first = inFolder(FORM_DIR, "Form1");
 
         const config = new Ide.ProjectFile({
             Name:        File.Name(dir),
+            Id:          id || "",
             Startup:     "Form1",
             Sources:     [`${first}.js`],
             Description: description || "",
         });
 
         File.SaveJson(File.Join(dir, "project.json"), config);
+
+        /* A project that declares an id gets its metainfo from the start: it is
+         * part of what the project *is*, and creating it later is a step nobody
+         * remembers. Without an id there is no name for the file, and the
+         * Application info dialog is where one is made once there is. */
+        if (id) Metainfo.create(dir, config);
 
         /* A project starts with a stylesheet, empty but for what it is for.
          * The runtime finds app.css by name, so an existing project gets one by
@@ -662,15 +669,17 @@ class MainForm extends Form {
      * root rather than in a folder: `forms/` is where a form goes because a
      * project grows several, and a `main` is one function in one place.
      */
-    createConsoleProject(dir, description) {
+    createConsoleProject(dir, description, id) {
         const config = new Ide.ProjectFile({
             Name:        File.Name(dir),
+            Id:          id || "",
             Main:        "Main",
             Sources:     ["Main.js"],
             Description: description || "",
         });
 
         File.SaveJson(File.Join(dir, "project.json"), config);
+        if (id) Metainfo.create(dir, config);
         File.Save(File.Join(dir, "Main.js"), MAIN_JS);
 
         this.project = File.Absolute(dir);
@@ -731,6 +740,12 @@ class MainForm extends Form {
         }
         this.appEditor = AppForm.edit(this.project, this.manifest.read() || {},
                                       () => this.refresh());
+    }
+
+    /* Kept while it is open, for the same reason the app editor is: it is what
+     * lets a test drive the dialog. */
+    editMetainfo() {
+        this.metainfoEditor = MetainfoForm.open(this);
     }
 
     /* --- creating, renaming and deleting ------------------------------------
@@ -1092,6 +1107,7 @@ class MainForm extends Form {
         this.MnuProjectSettings.Enabled = open;
         this.MnuExport.Enabled = open;
         this.MnuAppInstall.Enabled = open;
+        this.MnuMetainfo.Enabled = open;
         this.launch.show();
 
         /* Searching needs text: a form tab is a tree, and Ctrl+F loses its
@@ -1392,6 +1408,14 @@ class MainForm extends Form {
     MnuTidy_Click()   { this.tidyProject(); }
     MnuExport_Click() { this.exporter.run(); }
     MnuAppInstall_Click() { this.installAsApp(); }
+
+    /*
+     * The metainfo: the AppStream file a package, an installer and a software
+     * centre read.  The dialog writes a minimal one when the project has none,
+     * so this is also how a project gets its first -- and the file is in the
+     * tree beside `project.json` from then on, where the raw tab edits it.
+     */
+    MnuMetainfo_Click() { this.editMetainfo(); }
 
     /*
      * Extraction: every string the project shows a person, into po/<name>.pot,

@@ -3,3 +3,6 @@ build-asan/
 .cache/
 compile_commands.json
 tests/widgets/RoundTrip.form
+flatpak/.flatpak-builder/
+flatpak/repo/
+build-flatpak/

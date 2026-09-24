@@ -1,0 +1,63 @@
+# The Bintana runtime as a shared BaseApp: one build of the runtime, and every
+# Bintana application on top of it is its project and little else.
+#
+# **A BaseApp is an ordinary app ref whose `files/` are copied into every
+# dependent application at build time** (`flatpak build-init --base`), which is
+# why this manifest has no launcher and no desktop file: what it installs is the
+# runtime and the libraries every application loads. The IDE, the examples and
+# the reference are the IDE app's, and a project's are its own -- that division
+# is what makes *rebuild only what changed* possible, because a change to the
+# IDE does not touch this ref.
+#
+# **The runtime's own layout is already the Flatpak layout.** `bin/bintana`
+# finds `share/bintana/lib` by relative hops from its own executable, so
+# `/app/bin/bintana` finds `/app/share/...` with no change to the C. See
+# `lib_candidates` in bta_runtime.c and the install table in docs/installing.md.
+#
+# **For a build service the source is the repository at a tag** (`type: git`,
+# `url: https://github.com/getbintana/bintana.git`, `tag: v0.1.0`), which is
+# what a service can fetch. `type: dir` is what the checkout itself uses.
+id: io.github.getbintana.BaseApp
+branch: '0.1'
+runtime: org.gnome.Platform
+runtime-version: '50'
+sdk: org.gnome.Sdk
+# Named on purpose: without it flatpak-builder finds two executables in
+# /app/bin and picks one by readdir order. A dependent app has its own
+# `command`; this one is what `flatpak run` on the base itself would use.
+command: bintana
+build-options:
+  cflags: -O2
+  cxxflags: -O2
+# What belongs to an application is removed here and installed by that
+# application: the IDE (its project, its reference and its launcher), the
+# examples, and the drawings and desktop file `cmake --install` lays down.
+cleanup:
+  - /include
+  - /lib/cmake
+  - /lib/pkgconfig
+  - /share/aclocal
+  - /share/applications
+  - /share/doc
+  - /share/gtk-doc
+  - /share/icons
+  - /share/man
+  - /share/pkgconfig
+  - /share/bintana/ide
+  - /share/bintana/examples
+  - /bin/bintana-ide
+  - '*.la'
+  - '*.a'
+modules:
+  - name: bintana
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+    sources:
+      - type: dir
+        path: ..
+        skip:
+          - .cache
+          - .git
+          - build
+          - build-asan

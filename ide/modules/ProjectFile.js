@@ -44,6 +44,24 @@ Ide.ProjectFile = class ProjectFile extends Record {
         Main:    Field.Text({ max: 120 }),
 
         /*
+         * The application's identity, in reverse DNS -- `io.github.you.App`.
+         *
+         * It is the one name the whole chain shares: the runtime hands it to
+         * `GtkApplication` and to the program name, so it is the window's own
+         * class; the project's `<id>.metainfo.xml` declares it; and a package
+         * installs under it. A window that is classed by something else is one
+         * a dock shows with a generic icon, which is why the runtime refuses a
+         * bad one instead of ignoring it.
+         *
+         * Optional: a project without one is an ordinary project, classed by
+         * the program's name as it always was, and it simply cannot be
+         * packaged. Not a `Field` check because a `Field` speaks about one
+         * value and the rule is the platform's -- `Validate` reports it and
+         * `idValid` is the rule, written once for this side.
+         */
+        Id:      Field.Text({ max: 255 }),
+
+        /*
          * Load order, and only needed when one class extends another of the same
          * project.  Empty is legitimate and means "every .js under the project,
          * sorted by path" -- so it is not required, and an empty list is not a
@@ -112,7 +130,26 @@ Ide.ProjectFile = class ProjectFile extends Record {
             out.push(`declares both startup (${this.Startup}) and main (${this.Main}); ` +
                      "the runtime calls main and never opens the form");
 
+        if (this.Id && !ProjectFile.idValid(this.Id))
+            out.push(`"${this.Id}" is not an application id -- a reverse-DNS name ` +
+                     "like io.github.you.App");
+
         return out;
+    }
+
+    /*
+     * Whether a string is an application id, in the shape the runtime enforces
+     * -- reverse DNS, at least one dot, no element starting with a digit.
+     *
+     * **The runtime asks the platform and this is the same rule written
+     * here**, because the IDE cannot call GIO: `bta_app_new` refuses a bad id
+     * with `g_application_id_is_valid`, and the dialogs refuse one with this.
+     * Two spellings of one rule is the kind of copy that drifts, which is why
+     * the two are one paragraph apart in `docs/formats.md` and why the tests
+     * put the same bad ids through both.
+     */
+    static idValid(text) {
+        return /^[A-Za-z_-][A-Za-z0-9_-]*(\.[A-Za-z_-][A-Za-z0-9_-]*)+$/.test(text);
     }
 
     /*

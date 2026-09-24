@@ -1,10 +1,17 @@
 /*
- * The new project's details: name, description and where to create it.
+ * The new project's details: name, application id, description and where to
+ * create it.
  *
  * The base folder is a text field with an icon that opens the folder chooser.
  * One can pick it with the dialog or type the path by hand, and either way it
  * stays visible before accepting -- which the folder chooser used on its own
  * did not give.
+ *
+ * **The application id is asked from the beginning** and is optional: a
+ * project without one runs like any other, and it is the packaging chain that
+ * needs it -- the window's class, the metainfo and the Flatpak app all carry
+ * it. Asking here is what keeps it from being a thing to remember later, when
+ * the name is already in a dozen files.
  */
 "use strict";
 
@@ -59,10 +66,19 @@ class NewProjectForm extends Form {
     accept() {
         const name = this.TxtName.Text.trim();
         const base = this.TxtBase.Text.trim();
+        const id   = this.TxtId.Text.trim();
 
         if (!name || !base) return;
         if (BAD_NAME.test(name)) {
             Message.Error("\"{0}\" is not usable as a folder name.", name);
+            return;
+        }
+        /* Optional, and checked when it is there: an id that is not one is a
+         * window class nothing matches, so it is cheaper to say so here than
+         * to meet it as a generic icon in a dock. */
+        if (id && !Ide.ProjectFile.idValid(id)) {
+            Message.Error("\"{0}\" is not an application id. Use a reverse-DNS " +
+                          "name like io.github.you.App.", id);
             return;
         }
         if (!File.IsDir(base)) {
@@ -70,7 +86,7 @@ class NewProjectForm extends Form {
             return;
         }
 
-        const info = { name, base, description: this.TxtDesc.Text.trim(),
+        const info = { name, base, id, description: this.TxtDesc.Text.trim(),
                        console: this.CmbKind.Text === Ide.Kind.Function };
         this.dismiss();
         if (this.onAccept) this.onAccept(info);
@@ -112,6 +128,7 @@ class NewProjectForm extends Form {
     /* The tab order decides which field is next, not this line. See
      * ProjectForm for why that matters. */
     TxtName_Activate() { this.FocusNext(); }
+    TxtId_Activate()   { this.FocusNext(); }
     TxtDesc_Activate() { this.accept(); }
     TxtBase_Activate() { this.accept(); }
 

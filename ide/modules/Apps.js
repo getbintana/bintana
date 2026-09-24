@@ -21,13 +21,17 @@
  * quoted by `Desktop.Entries.Exec`, so a path with a space in it is one
  * argument and not two.
  *
- * **And no launcher of its own.**  The system's `bintana-ide` script exists to
- * hand the window a name a menu entry can match (`exec -a`), which is why it is
- * bash and `StartupWMClass` names it.  A project's entry gets none of that: the
- * window it opens is `bintana`'s, so a dock may group it under whatever that
- * name resolves to and not under this entry.  Making that right means writing
- * and keeping a second file per application, which is a decision to take on its
- * own and not one to smuggle into an install button.
+ * **The window's identity is the project's id, and that is what makes
+ * `StartupWMClass` writable here.**  A project that declares an id is classed
+ * by it -- the runtime hands it to `GtkApplication` and to the program name --
+ * so the entry carries the same string and a dock groups the running window
+ * under this entry.  A project without an id gets no `StartupWMClass`, which is
+ * the honest answer: its window is `bintana`'s, and claiming otherwise would be
+ * an entry that matches nothing.
+ *
+ * That is also why the entry is installed under the project's id when there is
+ * one: the file name and the window's class are then the same name, which is
+ * what the desktop entry specification means by an application id.
  */
 "use strict";
 
@@ -36,12 +40,17 @@ Namespace("Ide");
 Ide.Apps = class Apps {
 
     /*
-     * The id an entry is installed under: the file's name without `.desktop`.
+     * The id an entry is installed under when the project declares none: the
+     * file's name without `.desktop`, made of a slug of the name it was given.
      *
      * Letters, digits, `-`, `_` and `.` are what the specification allows and
      * what the runtime checks, so everything else becomes a dash -- and a name
      * that was all punctuation falls back to a word rather than installing a
      * `.desktop` with no name at all.
+     *
+     * A project that *does* declare an id installs under that one instead --
+     * see `install` -- because the file name and the window's class are then
+     * the same name.
      */
     static idFor(name) {
         const slug = String(name || "")
@@ -72,6 +81,12 @@ Ide.Apps = class Apps {
         if (fields.Comment) entry.Comment = fields.Comment;
         if (fields.Icon)    entry.Icon    = fields.Icon;
 
+        /* The class the running window really has, which is the project's id
+         * when it declares one. Written only then: an entry claiming a class
+         * nothing will ever have is worse than no claim, because the dock goes
+         * on showing a generic icon with the entry looking correct. */
+        if (fields.AppId) entry.StartupWMClass = fields.AppId;
+
         return { "Desktop Entry": entry };
     }
 
@@ -98,7 +113,7 @@ Ide.Apps = class Apps {
      * would offer the same application in the menu twice.
      */
     static install(project, fields) {
-        const id  = Apps.idFor(fields.Name);
+        const id  = fields.AppId || Apps.idFor(fields.Name);
         const was = Apps.installed(project);
 
         if (was && was.Id !== id)

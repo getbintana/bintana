@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.getbintana.Ide</id>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <name>Bintana IDE</name>
+  <summary>Design forms and write the code behind them</summary>
+  <description>
+    <p>Bintana is a RAD environment for building desktop apps with visual forms and plain JavaScript on GTK4.</p>
+    <p>The IDE designs the forms, edits the code behind them and runs the project.</p>
+  </description>
+  <launchable type="desktop-id">io.github.getbintana.Ide.desktop</launchable>
+  <icon type="stock">io.github.getbintana.Ide</icon>
+  <categories>
+    <category>Development</category>
+    <category>IDE</category>
+    <category>GUIDesigner</category>
+  </categories>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-09-24"/>
+  </releases>
+  <developer id="io.github.getbintana">
+    <name>Bintana</name>
+  </developer>
+  <url type="homepage">https://github.com/getbintana/bintana</url>
+  <url type="bugtracker">https://github.com/getbintana/bintana/issues</url>
+  <name xml:lang="es">IDE de Bintana</name>
+  <summary xml:lang="es">Diseñá formularios y escribí el código detrás de ellos</summary>
+</component>

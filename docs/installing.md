@@ -174,6 +174,54 @@ The features that need one say which package is missing, the same way a build
 without them always does. A distribution package makes the opposite trade, and
 that is the packager's to make.
 
+## Flatpak
+
+The other way to ship an application: a package that brings its runtime, with
+the project inside it. `tools/pack.sh` turns a project into the files a package
+is built from, and `flatpak-builder` builds them.
+
+```sh
+tools/pack.sh ~/my-project /tmp/my-app       # the metainfo, the .desktop,
+                                             # the icon and <id>.json
+flatpak-builder --user --install \
+    --install-deps-from=flathub /tmp/my-app/build /tmp/my-app/<id>.json
+flatpak run <id>
+```
+
+It needs the shared BaseApp, which is where the runtime comes from -- the same
+one every Bintana application is built on, so nothing here rebuilds GTK or the
+interpreter:
+
+```sh
+flatpak install --user flathub org.gnome.Platform//50 org.gnome.Sdk//50
+# ...and the BaseApp from the repository it is published in
+flatpak remote-add --if-not-exists --no-gpg-verify bintana https://...
+flatpak install --user bintana io.github.getbintana.BaseApp//0.1
+```
+
+The project must declare an `id`, have an `icons/` drawing and carry a
+`<id>.metainfo.xml` -- *Project → Application info…* in the IDE writes one. What
+each file has to say, and what the packaging step refuses, is
+[`lib/package`](llm/package.md); the Flatpak manifest is JSON and the output
+directory is a build context, so it can be copied to a build machine and built
+there.
+
+**The BaseApp is a build dependency and not a runtime one.** Its files are
+copied into each application when it is built -- that is what makes one runtime
+on disk serve every app -- so a change to the runtime means rebuilding and
+republishing every application, in one run. `tools/flatpak-build.sh` is that
+run: with no application named it builds the BaseApp, the IDE and the example
+into one repository, and naming some builds those -- which is what a CI does
+when only one application changed. [`flatpak/ci/`](../flatpak/ci/README.md) is
+the workflow that decides, and the repository it publishes to.
+
+**Building locally wants a flatpak that works.** flatpak 1.18.0 to 1.18.2 have a
+[regression](https://github.com/flatpak/flatpak/issues/6818) that makes
+`build-init --base` fail with `lsetxattr(security.selinux): Operation not
+supported`; it is fixed in 1.18.3, and it is not SELinux -- the call fails in
+permissive mode too. The CI runs Ubuntu 24.04, whose flatpak is older than the
+regression.
+
 ## Uninstall
 
 ```sh

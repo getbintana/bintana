@@ -4,7 +4,7 @@
   "properties": {
     "Text": "Project",
     "Width": 560,
-    "Height": 652
+    "Height": 698
   },
   "children": [
     {
@@ -54,10 +54,34 @@
     },
     {
       "type": "Label",
-      "name": "LblPrStartup",
+      "name": "LblPrId",
       "properties": {
         "X": 16,
         "Y": 114,
+        "Width": 110,
+        "Height": 24,
+        "Text": "Application id:"
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtPrId",
+      "properties": {
+        "X": 134,
+        "Y": 108,
+        "Width": 410,
+        "Height": 34,
+        "HAlign": "Fill",
+        "Placeholder": "io.github.you.MyApp",
+        "Tooltip": "Reverse-DNS identity: the window's class, the metainfo's <id> and the Flatpak app id. Optional -- a project without one runs, and cannot be packaged."
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblPrStartup",
+      "properties": {
+        "X": 16,
+        "Y": 160,
         "Width": 110,
         "Height": 24,
         "Text": "Starts at:"
@@ -68,7 +92,7 @@
       "name": "CmbPrKind",
       "properties": {
         "X": 134,
-        "Y": 108,
+        "Y": 154,
         "Width": 126,
         "Height": 34,
         "Items": [
@@ -83,7 +107,7 @@
       "name": "CmbPrStartup",
       "properties": {
         "X": 268,
-        "Y": 108,
+        "Y": 154,
         "Width": 276,
         "Height": 34,
         "HAlign": "Fill"
@@ -94,7 +118,7 @@
       "name": "TxtPrMain",
       "properties": {
         "X": 268,
-        "Y": 108,
+        "Y": 154,
         "Width": 276,
         "Height": 34,
         "Visible": false,
@@ -106,7 +130,7 @@
       "name": "LblPrDesc",
       "properties": {
         "X": 16,
-        "Y": 160,
+        "Y": 206,
         "Width": 110,
         "Height": 24,
         "Text": "Description:"
@@ -117,7 +141,7 @@
       "name": "TxtPrDesc",
       "properties": {
         "X": 134,
-        "Y": 154,
+        "Y": 200,
         "Width": 410,
         "Height": 34,
         "HAlign": "Fill"
@@ -128,7 +152,7 @@
       "name": "LblPrUses",
       "properties": {
         "X": 16,
-        "Y": 204,
+        "Y": 250,
         "Width": 200,
         "Height": 24,
         "Text": "Libraries:"
@@ -139,7 +163,7 @@
       "name": "LstPrUses",
       "properties": {
         "X": 16,
-        "Y": 232,
+        "Y": 278,
         "Width": 528,
         "Height": 110,
         "HAlign": "Fill"
@@ -150,7 +174,7 @@
       "name": "LblPrUsesHint",
       "properties": {
         "X": 16,
-        "Y": 350,
+        "Y": 396,
         "Width": 528,
         "Height": 36,
         "Text": "",
@@ -164,7 +188,7 @@
       "name": "LblPrOrder",
       "properties": {
         "X": 16,
-        "Y": 396,
+        "Y": 442,
         "Width": 200,
         "Height": 24,
         "Text": "Load order:"
@@ -175,7 +199,7 @@
       "name": "LstPrSources",
       "properties": {
         "X": 16,
-        "Y": 424,
+        "Y": 470,
         "Width": 424,
         "Height": 120,
         "HAlign": "Fill",
@@ -187,7 +211,7 @@
       "name": "BtnPrUp",
       "properties": {
         "X": 452,
-        "Y": 424,
+        "Y": 470,
         "Width": 92,
         "Height": 32,
         "Text": "Up",
@@ -199,7 +223,7 @@
       "name": "BtnPrDown",
       "properties": {
         "X": 452,
-        "Y": 462,
+        "Y": 508,
         "Width": 92,
         "Height": 32,
         "Text": "Down",
@@ -211,7 +235,7 @@
       "name": "BtnPrDecide",
       "properties": {
         "X": 452,
-        "Y": 510,
+        "Y": 556,
         "Width": 92,
         "Height": 32,
         "Text": "Decide",
@@ -224,7 +248,7 @@
       "name": "LblPrHint",
       "properties": {
         "X": 16,
-        "Y": 556,
+        "Y": 602,
         "Width": 528,
         "Height": 40,
         "Text": "",
@@ -239,7 +263,7 @@
       "name": "BtnPrCancel",
       "properties": {
         "X": 354,
-        "Y": 604,
+        "Y": 650,
         "Width": 90,
         "Height": 32,
         "Text": "Cancel",
@@ -253,7 +277,7 @@
       "name": "BtnPrOk",
       "properties": {
         "X": 454,
-        "Y": 604,
+        "Y": 650,
         "Width": 90,
         "Height": 32,
         "Text": "OK",

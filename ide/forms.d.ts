@@ -319,6 +319,7 @@ interface MainForm {
     MnuTidy: MenuItem;
     MnuExport: MenuItem;
     MnuAppInstall: MenuItem;
+    MnuMetainfo: MenuItem;
     MnuCheck: MenuItem;
     MnuProjectSettings: MenuItem;
     MnuGitMenu: MenuItem;
@@ -391,11 +392,45 @@ interface MenuForm {
     BtnOk: Button;
 }
 
+interface MetainfoForm {
+    PnlContent: Panel;
+    LblWhere: Label;
+    Fields: Grid;
+    LblId: Label;
+    TxtId: TextBox;
+    LblName: Label;
+    TxtName: TextBox;
+    LblSummary: Label;
+    TxtSummary: TextBox;
+    LblDevId: Label;
+    TxtDevId: TextBox;
+    LblDevName: Label;
+    TxtDevName: TextBox;
+    LblMetaLic: Label;
+    TxtMetaLic: TextBox;
+    LblProjLic: Label;
+    TxtProjLic: TextBox;
+    LblHome: Label;
+    TxtHome: TextBox;
+    LblBug: Label;
+    TxtBug: TextBox;
+    LblCats: Label;
+    TxtCats: TextBox;
+    LblDesc: Label;
+    TxtDesc: TextEditor;
+    LblProblem: Label;
+    PnlButtons: Panel;
+    BtnCancel: Button;
+    BtnSave: Button;
+}
+
 interface NewProjectForm {
     PnlContent: Panel;
     Fields: Grid;
     LblName: Label;
     TxtName: TextBox;
+    LblId: Label;
+    TxtId: TextBox;
     LblKind: Label;
     CmbKind: ComboBox;
     LblDesc: Label;
@@ -430,6 +465,8 @@ interface ProjectForm {
     TxtPrName: TextBox;
     LblPrVersion: Label;
     TxtPrVersion: TextBox;
+    LblPrId: Label;
+    TxtPrId: TextBox;
     LblPrStartup: Label;
     CmbPrKind: ComboBox;
     CmbPrStartup: ComboBox;
