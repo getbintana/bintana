@@ -8,7 +8,7 @@
 #
 #   cmake -S . -B build -G Ninja
 #   cmake --build build -j
-#   tools/windows-portable.sh build stage/bintana-0.1.0-windows-x86_64
+#   tools/windows-portable.sh build stage/bintana-0.2.0-windows-x86_64
 #
 # The layout is the install prefix with GTK's runtime data under it, which is
 # the layout GLib computes its own prefix from on Windows -- a DLL in

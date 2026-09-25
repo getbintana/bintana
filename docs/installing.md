@@ -158,7 +158,7 @@ It is the install prefix, so it is extracted anywhere and runs without
 installing:
 
 ```sh
-tar xzf bintana-0.1.0-linux-x86_64.tar.gz
+tar xzf bintana-0.2.0-linux-x86_64.tar.gz
 ./bin/bintana-ide                    # the IDE
 ./bin/bintana share/bintana/examples/hello
 ```
@@ -214,7 +214,7 @@ interpreter:
 flatpak install --user flathub org.gnome.Platform//50 org.gnome.Sdk//50
 # ...and the BaseApp from the repository it is published in
 flatpak remote-add --if-not-exists --no-gpg-verify bintana https://...
-flatpak install --user bintana io.github.getbintana.BaseApp//0.1
+flatpak install --user bintana io.github.getbintana.BaseApp//0.2
 ```
 
 The project must declare an `id`, have an `icons/` drawing and carry a

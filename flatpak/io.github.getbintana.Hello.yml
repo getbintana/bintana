@@ -12,7 +12,7 @@ runtime: org.gnome.Platform
 runtime-version: '50'
 sdk: org.gnome.Sdk
 base: io.github.getbintana.BaseApp
-base-version: '0.1'
+base-version: '0.2'
 command: bintana-hello
 finish-args:
   - --share=ipc

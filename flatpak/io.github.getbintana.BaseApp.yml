@@ -15,10 +15,10 @@
 # `lib_candidates` in bta_runtime.c and the install table in docs/installing.md.
 #
 # **For a build service the source is the repository at a tag** (`type: git`,
-# `url: https://github.com/getbintana/bintana.git`, `tag: v0.1.0`), which is
+# `url: https://github.com/getbintana/bintana.git`, `tag: v0.2.0`), which is
 # what a service can fetch. `type: dir` is what the checkout itself uses.
 id: io.github.getbintana.BaseApp
-branch: '0.1'
+branch: '0.2'
 runtime: org.gnome.Platform
 runtime-version: '50'
 sdk: org.gnome.Sdk

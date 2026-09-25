@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 # The version lives here and nowhere else. It used to be a literal in rad.js
 # while this line had none, so the two numbers could differ and nothing would
 # say so; BTA_VERSION is set from this now (see bta_runtime.c).
-project(bintana VERSION 0.1.0 LANGUAGES C)
+project(bintana VERSION 0.2.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
