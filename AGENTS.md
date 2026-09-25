@@ -1286,7 +1286,12 @@ delivered while the job was alive -- correct behaviour -- and the test went red
 in every sanitized run while passing five out of five standalone. The sleep is
 two seconds now, which is an order of magnitude of headroom for the free path.
 The lesson is the same one: **find every clock a test depends on, not only the
-one it waits on.**
+one it waits on.** `tests/ide`'s `recovery` phase had one more: the IDE's own thirty-second
+snapshot tick, which could land between answering the recovery offer and
+asserting the snapshot was gone -- with the tab deliberately left dirty, so the
+tick wrote a correct new one. Never inside an ordinary run, once under
+`asan.sh`, whose `ide` takes ten minutes. The phase stops the tick and takes
+its snapshots by hand.
 
 **And a rectangle is not a promise either: measure it again before every
 gesture.** The stack assertions took the overlay's rectangle once and aimed two
@@ -3910,6 +3915,15 @@ person who wrote it either.
   an idle now, `Running` stays true until it runs (the port is still held,
   which is the truth about the socket), and the counter is **global** because
   it is decremented after a call that may have freed the server it belongs to.
+  **And the finaliser is the second door to the same disconnect.** A handler
+  that lets go of the last reference (`srv = null` after the `Answer`) has the
+  server finalised inside the dispatch, and `http_server_free` disconnected at
+  once -- the same closed connection, and the fix in `Stop` could not see it.
+  The finaliser hands the `SoupServer` and its gate to an idle when
+  `http_dispatching > 0` (`HttpLateStop`); the struct itself goes at once,
+  since nothing after the call reads it. `testHttpServerDropped` is red without
+  it. The rule: **a deferral written into a verb is owed by every other road to
+  the same effect**, and a finaliser is always one of them.
 - **A clipboard read and a file dialog are jobs with a pending operation, and
   teardown has to cancel them.** Both passed a NULL `GCancellable` and were
   freed at cleanup with the operation still armed -- the `ExecJob` crash's
@@ -4549,6 +4563,16 @@ text cannot be modelled beside its attributes (`<guid isPermaLink>`), and
   protects. It also closed a segfault -- an `OnEnded` that dropped the last
   reference freed the struct under the emit, and the next line read `m->ctx`
   (`list_del` on 0x0, in `bta_drain_jobs`).
+  **A `Video` has no keepalive, so it had the same hole left open.** Its
+  engine state is the picture's qdata, not a JS reference, and `media_on_eos`
+  and `media_on_error` both ended in `media_drop_self(m)` -- written for the
+  AudioPlayer, whose `self` keeps `m` alive across the emit. A handler that
+  takes the Video out (`Vid_Ended() { this.Vid.Remove(); this.Vid =
+  undefined; }`) finalised the widget, the qdata and `m` inside the emit, and
+  the drop read freed memory: `heap-use-after-free` under build-asan, on both
+  roads. Whether it is a video is read before the event and nothing after it
+  touches `m` for one. `testVideoDroppedInHandler` runs the error road as a
+  child, which needs no clip.
 - **Never ask a pipeline whether it is playing.** `gst_element_get_state`
   with a zero timeout reads not-PLAYING during a flushing seek -- which is
   what `Loop` is -- and while a network stream refills. The console loop asks
@@ -4820,6 +4844,16 @@ text cannot be modelled beside its attributes (`<guid isPermaLink>`), and
   control prints once at a time. `bta_paint_busy` does not cover that: between
   two sheets there is no frame open, which is why the suite probes it from
   `Paginate` and not from `DrawPage`.
+  **Going async moved where the refusals land, and they did not follow.** A
+  `Paginate` that throws, a range the new paper leaves empty and a `DrawPage`
+  that throws all raise an exception and mark the run failed -- right for
+  `ToFile`, whose caller is on the stack and returns `JS_EXCEPTION`. On `Send`
+  they run inside GTK's signals of an operation nobody waits on, and
+  `on_print_done` dumped only its own errors, so the exception stayed on the
+  context for whoever called into JavaScript next. `print_fail` reports it on
+  the spot when the run has a callback. Found by reading, since no headless
+  run can answer the dialog; `on_draw` had the same shape answered years
+  before.
 
 ## Task: what a thread costs here
 

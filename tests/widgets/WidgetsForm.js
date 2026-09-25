@@ -441,6 +441,8 @@ const TESTS = [
     "ApplicationId",
     /* Blocking as well: a child that spawns into terminals it then drops. */
     "TerminalSpawnLifetime",
+    /* And one more child: a Video whose Error handler takes it out. */
+    "VideoDroppedInHandler",
     "Time",
     "Stopwatch",
     "Shortcut", "Decimal", "FieldDecimal",
@@ -481,6 +483,7 @@ const TESTS = [
     /* Async: a handler that answers and then stops its own server -- the shape
      * of every `/shutdown` endpoint. */
     "HttpServerStop",
+    "HttpServerDropped",
     /* Async: a line that arrives a third of a second after its child ended. */
     "ExecControlLate",
     /* Async: more into a child's stdin than a pipe holds, while it echoes. */
@@ -3700,6 +3703,56 @@ class WidgetsForm extends Form {
                 this.mediaAudioPhase(cue, box);
             });
         });
+    }
+
+    /*
+     * **A Video's handler may free the player it is being told about.** A
+     * Video's engine state belongs to the picture, not to a JS reference, so a
+     * handler that takes the control out and drops it -- `Vid_Error() {
+     * this.Vid.Remove(); this.Vid = undefined; }` -- finalised it inside the
+     * emit, and `media_on_eos`/`media_on_error` then read it: a
+     * heap-use-after-free under build-asan on both roads. A child, for the
+     * reason `testTerminalSpawnLifetime` is one; the error road because it
+     * needs no clip -- a file that is not there is enough -- and skipped where
+     * there is no GTK4 sink to build a pipeline with.
+     */
+    testVideoDroppedInHandler() {
+        if (!Widget.Available("Video")) return;
+
+        const dir = File.Join(SCRATCH, "viddrop");
+        Directory.Make(dir);
+        File.SaveJson(File.Join(dir, "project.json"),
+                      { name: "viddrop", startup: "V", sources: ["V.js"] });
+        File.SaveJson(File.Join(dir, "V.form"),
+                      { type: "Form", name: "V",
+                        properties: { Width: 300, Height: 200 },
+                        children: [{ type: "Video", name: "Vid",
+                                     properties: { X: 0, Y: 0, Width: 160, Height: 120 } }] });
+        File.Save(File.Join(dir, "V.js"),
+                  'class V extends Form {\n' +
+                  '    Form_Open() {\n' +
+                  '        this.Visible = false;\n' +
+                  '        this.Vid.Uri = ' + JSON.stringify(File.Join(dir, "missing.ogv")) + ';\n' +
+                  '        try { this.Vid.Play(); }\n' +
+                  '        catch (e) { print("SKIP " + e.message); Application.Quit(0); return; }\n' +
+                  '        Timer.After(15000, () => { print("TIMEOUT"); Application.Quit(3); });\n' +
+                  '    }\n' +
+                  '    Vid_Error(message, kind) {\n' +
+                  '        this.Vid.Remove();\n' +
+                  '        this.Vid = undefined;\n' +
+                  '        Timer.After(300, () => { print("DONE " + kind); Application.Quit(0); });\n' +
+                  '    }\n' +
+                  '}\n');
+
+        const ran = Exec.Wait([Application.Executable, dir], { Timeout: 60000 });
+        if (ran.Output.includes("SKIP")) {
+            print(`  (skipping the dropped-Video child: ${ran.Output.trim()})`);
+            return;
+        }
+        eq("a Video dropped by its own Error handler leaves a program that ends cleanly",
+           ran.ExitCode, 0);
+        check("...having reported the error first", ran.Output.includes("DONE NotFound"),
+              ran.Output);
     }
 
     MediaVid_Ended() { this.mediaEnded = (this.mediaEnded || 0) + 1; }
@@ -17676,6 +17729,31 @@ function Main() {
              * which is the truth about the socket. */
             until("and the server is stopped afterwards", () => !srv.Running, done);
         }, (e) => done(`request errored: ${e.Message}`));
+    }
+
+    /*
+     * The same `/shutdown` shape arriving through the finaliser: the handler
+     * lets go of the last reference to its server, which is finalised inside
+     * the dispatch -- and the finaliser disconnected at once, so the client got
+     * a closed connection. It hands the disconnect to an idle now, as `Stop`
+     * does.
+     */
+    testHttpServerDropped() {
+        let srv = null;
+        try { srv = Http.Server({ Port: 0 }); } catch (e) { return; }   /* no libsoup */
+
+        srv.Request = (req) => { req.Answer(200, "bye"); srv = null; };
+        srv.Start();
+        const url = srv.Url;
+
+        waiting++;
+        const done = (why) => { waiting--; if (why) failures.push(why); };
+        Http.Get(url, { Timeout: 5000 }, (r) => {
+            eq("a server dropped inside its own handler still answers",
+               r.Body.ToText(), "bye");
+            eq("...and that reference really was the last", srv, null);
+            done();
+        }, (e) => done(`a server dropped in its handler cut the answer: ${e.Message}`));
     }
 
     testHttpServer() {

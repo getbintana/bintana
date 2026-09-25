@@ -11866,6 +11866,17 @@ function* p_recovery(ide) {
         children: [],
     };
 
+    /*
+     * **The IDE's own tick is held for the phase**, and the snapshots below are
+     * taken by hand. Recovering leaves the tab dirty on purpose, so a tick that
+     * lands between answering the offer and asking whether the snapshot is gone
+     * writes a new one -- which is correct behaviour and a red assertion. Every
+     * thirty seconds is never under an ordinary run and was once under
+     * `tests/asan.sh`, whose `ide` takes ten minutes. The phase re-arms it with
+     * `start()` further down, which is what it tests about the interval.
+     */
+    if (ide.recovery.timer) ide.recovery.timer.Stop();
+
     const path = File.Join(TMP, "Recover.js");
     File.Save(path, SOURCE);
     File.SaveJson(File.Join(TMP, "Recover.form"), FORM);

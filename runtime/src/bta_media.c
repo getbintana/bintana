@@ -1258,8 +1258,19 @@ static void media_on_eos(BtaMedia *m)
     if (m->playbin)
         gst_element_set_state(m->playbin, GST_STATE_PAUSED);
     m->wants = false;
+
+    /*
+     * **A Video's `m` is not held across the event.** It belongs to the
+     * picture's qdata, and a handler that takes the control out and drops it
+     * (`Vid_Ended() { this.Vid.Remove(); this.Vid = undefined; }`) finalises
+     * the widget, the qdata and `m` inside the emit -- so reading `m->self`
+     * afterwards was a heap-use-after-free, measured under build-asan. A Video
+     * has no `self` to drop anyway: the answer is read before the event.
+     */
+    bool video = m->is_video;
     media_fire_ended(m);
-    media_drop_self(m);   /* the last line: it may finalise m */
+    if (!video)
+        media_drop_self(m);   /* the last line: it may finalise m */
 }
 
 /* What kind of failure it was, in the Http client's vocabulary and for the
@@ -1320,11 +1331,15 @@ static void media_on_error(BtaMedia *m, GstMessage *msg)
 
     if (dbg)
         bta_log_debug(m->ctx, dbg);
+
+    /* The same as the end above: a Video's handler may free `m`. */
+    bool video = m->is_video;
     media_fire_error(m, text, media_kind_for(err));
     g_free(text);
     g_clear_error(&err);
     g_free(dbg);
-    media_drop_self(m);   /* the last line: it may finalise m */
+    if (!video)
+        media_drop_self(m);   /* the last line: it may finalise m */
 }
 
 /*

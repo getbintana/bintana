@@ -3070,6 +3070,27 @@ static HttpReqData *http_req_data(JSValueConst v)
         ? JS_GetOpaque(v, http_request_class_id) : NULL;
 }
 
+/* What a server finalised inside its own handler still owes: the disconnect,
+ * a turn of the loop later, so the answer the handler wrote is sent first. */
+typedef struct {
+    SoupServer     *server;
+    SoupAuthDomain *auth_domain;
+} HttpLateStop;
+
+static gboolean http_late_stop(gpointer data)
+{
+    HttpLateStop *late = data;
+
+    if (late->auth_domain) {
+        soup_server_remove_auth_domain(late->server, late->auth_domain);
+        g_object_unref(late->auth_domain);
+    }
+    soup_server_disconnect(late->server);
+    g_object_unref(late->server);
+    g_free(late);
+    return G_SOURCE_REMOVE;
+}
+
 /* `rt` is the runtime to free the handler against, or NULL when the caller
  * has already dropped it (teardown, which runs before the wrappers die). */
 static void http_server_free(JSRuntime *rt, HttpServerData *s)
@@ -3081,6 +3102,26 @@ static void http_server_free(JSRuntime *rt, HttpServerData *s)
         s->stop_idle = 0;
     }
     http_servers = g_list_remove(http_servers, s);
+
+    /*
+     * **Finalised inside a handler, it disconnects the way `Stop` does: after
+     * the handler.** `srv.Request = req => { req.Answer(200, "bye"); srv =
+     * null; }` dropped the last reference mid-dispatch, the finaliser
+     * disconnected at once, and the client got a closed connection instead of
+     * the answer -- the `/shutdown` case `Stop` already defers for, arriving by
+     * the other door. The struct goes now (nothing after the call reads it);
+     * the socket and the gate go on an idle that owns them.
+     */
+    if (http_dispatching > 0 && s->server && s->running) {
+        HttpLateStop *late = g_new0(HttpLateStop, 1);
+
+        late->server      = s->server;          /* the reference moves */
+        late->auth_domain = s->auth_domain;     /* and so does this one */
+        s->server         = NULL;
+        s->auth_domain    = NULL;
+        g_idle_add(http_late_stop, late);
+    }
+
     if (s->auth_domain) {
         if (s->server && s->running)
             soup_server_remove_auth_domain(s->server, s->auth_domain);

@@ -313,6 +313,23 @@ static void print_ended(BtaWidget *w)
  * past it is a range with nothing in it, which is an error rather than an empty
  * file.
  */
+/*
+ * A run that failed with an exception pending, reported where it belongs.
+ *
+ * On `ToFile` the caller is still on the stack and returns `JS_EXCEPTION`, so
+ * the exception is its answer. On `Send` these handlers run inside GTK's
+ * signals of an operation nobody is waiting on, and `on_print_done` only
+ * dumped errors of its own: the exception stayed on the context and landed on
+ * whatever called into JavaScript next -- the "lands on whoever asks next"
+ * shape. So on that road it is reported here, as every handler's error is.
+ */
+static void print_fail(PrintRun *run)
+{
+    run->ok = false;
+    if (JS_IsFunction(run->w->ctx, run->cb))
+        bta_dump_error(run->w->ctx);
+}
+
 static void on_begin_print(GtkPrintOperation *op, GtkPrintContext *context,
                            gpointer data)
 {
@@ -330,14 +347,16 @@ static void on_begin_print(GtkPrintOperation *op, GtkPrintContext *context,
     JSValue      answer  = bta_emit_answer(run->w, "Paginate", 2, argv, &threw);
     int32_t      pages   = 0;
 
-    if (threw || JS_ToInt32(ctx, &pages, answer))
+    /* Only a number is an answer: converting anything else could throw (a
+     * Symbol) and leave that on the context too. */
+    if (threw || !JS_IsNumber(answer) || JS_ToInt32(ctx, &pages, answer))
         pages = 0;
     JS_FreeValue(ctx, answer);
 
     if (threw) {
         JS_ThrowInternalError(ctx, "the Paginate handler threw: nothing was "
                                    "printed past the error above");
-        run->ok = false;
+        print_fail(run);
         return;
     }
     /* A handler that answers nothing usable is a handler that has nothing to
@@ -358,7 +377,7 @@ static void on_begin_print(GtkPrintOperation *op, GtkPrintContext *context,
         JS_ThrowRangeError(ctx, "%s: this paper is %d page%s and the range "
                                 "starts at %d", run->who, run->pages,
                            run->pages == 1 ? "" : "s", run->from);
-        run->ok = false;
+        print_fail(run);
         return;
     }
 
@@ -391,7 +410,7 @@ static void on_draw_page(GtkPrintOperation *op, GtkPrintContext *context,
     run->last = page;
 
     if (!bta_paint_page(run->w, cr, (int)(dw + 0.5), (int)(dh + 0.5), page))
-        run->ok = false;
+        print_fail(run);
 }
 
 /*
