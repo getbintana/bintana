@@ -1,0 +1,74 @@
+{
+  "format": "bintana-form/1",
+  "class": "Choice",
+  "properties": {
+    "Arrangement": "Horizontal",
+    "HAlign": "Fill",
+    "Height": 40,
+    "Spacing": 10
+  },
+  "children": [
+    {
+      "type": "Image",
+      "name": "Img",
+      "properties": {
+        "Size": 20,
+        "VAlign": "Center",
+        "Visible": false
+      },
+      "design": {
+        "Icon": "audio-speakers-symbolic"
+      }
+    },
+    {
+      "type": "Panel",
+      "name": "Texts",
+      "properties": {
+        "Arrangement": "Vertical",
+        "HAlign": "Fill",
+        "HExpand": true,
+        "VAlign": "Center",
+        "X": 0,
+        "Y": 0
+      },
+      "children": [
+        {
+          "type": "Label",
+          "name": "LblTitle",
+          "properties": {
+            "Alignment": "Left",
+            "HAlign": "Fill",
+            "HExpand": true
+          },
+          "design": {
+            "Text": "Digital Output"
+          }
+        },
+        {
+          "type": "Label",
+          "name": "LblDetail",
+          "properties": {
+            "Alignment": "Left",
+            "Ellipsize": true,
+            "HAlign": "Fill",
+            "HExpand": true,
+            "Style": "dim-label"
+          },
+          "design": {
+            "Text": "Built-in Audio"
+          }
+        }
+      ]
+    },
+    {
+      "type": "Image",
+      "name": "ImgCheck",
+      "properties": {
+        "Icon": "checkbox-checked-symbolic",
+        "Size": 16,
+        "VAlign": "Center",
+        "Visible": false
+      }
+    }
+  ]
+}

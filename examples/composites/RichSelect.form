@@ -1,0 +1,40 @@
+{
+  "format": "bintana-form/1",
+  "class": "RichSelect",
+  "properties": {
+    "Height": 40,
+    "Width": 360
+  },
+  "children": [
+    {
+      "type": "Button",
+      "name": "Face",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 40,
+        "Width": 360,
+        "X": 0,
+        "Y": 0
+      }
+    },
+    {
+      "type": "Popover",
+      "name": "Pop",
+      "children": [
+        {
+          "type": "RowList",
+          "name": "Lst",
+          "properties": {
+            "ActivateOnSingleClick": true,
+            "Height": 220,
+            "Width": 360
+          },
+          "item": {
+            "of": "Choice",
+            "count": 3
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -6,6 +6,16 @@ primitives, and that was the right call for all four -- the about box even thoug
 GTK has one of its own, because an icon, three labels and a button were there
 already.
 
+And check whether it is a **component**: the fields a form keeps needing that a
+toolkit does not ship -- a combo you can type in, a select whose rows carry a
+picture and a second line, a field that holds a set of words -- are one class
+each in [`examples/composites`](../examples/composites), built from controls that
+already exist. A component is public in the way that matters (it is placed from
+the palette, its properties are in the `.form` and its events are
+`<name>_<event>`), and it costs the runtime nothing. The one thing it cannot do
+is be a single control for a program that never loads the project's sources --
+which is the line between a component and the C below.
+
 When it does belong in C, the shape is small. Any C change needs a rebuild
 (`cmake --build build -j`); `.js` and `.form` files are data read at run time and
 need none.

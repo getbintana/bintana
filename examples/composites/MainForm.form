@@ -1,0 +1,168 @@
+{
+  "format": "bintana-form/1",
+  "class": "MainForm",
+  "properties": {
+    "Height": 560,
+    "Text": "Composites",
+    "Width": 460
+  },
+  "children": [
+    {
+      "type": "Notebook",
+      "name": "Pages",
+      "properties": {
+        "Current": 0,
+        "HAlign": "Fill",
+        "Height": 540,
+        "MinHeight": 360,
+        "MinWidth": 320,
+        "Tabs": [
+          "Editable combo",
+          "Rich select",
+          "Tags"
+        ],
+        "VAlign": "Fill",
+        "Width": 440,
+        "X": 10,
+        "Y": 10
+      },
+      "children": [
+        {
+          "type": "Panel",
+          "name": "PageSuggest",
+          "properties": {
+            "Arrangement": "Vertical",
+            "Margin": 16,
+            "Spacing": 12
+          },
+          "children": [
+            {
+              "type": "Label",
+              "name": "LblSugHead",
+              "properties": {
+                "Style": "title-4",
+                "Text": "Editable combo",
+                "Wrap": true
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblSugWhat",
+              "properties": {
+                "Style": "dim-label",
+                "Text": "Type to narrow the list. Enter takes the highlighted row, and text no list has is just as good a value.",
+                "Wrap": true
+              }
+            },
+            {
+              "type": "Suggest",
+              "name": "Sug1",
+              "properties": {
+                "HAlign": "Fill"
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblSugSaid",
+              "properties": {
+                "Style": "dim-label",
+                "Text": "(nothing yet)",
+                "Wrap": true
+              }
+            }
+          ]
+        },
+        {
+          "type": "Panel",
+          "name": "PageSelect",
+          "properties": {
+            "Arrangement": "Vertical",
+            "Margin": 16,
+            "Spacing": 12
+          },
+          "children": [
+            {
+              "type": "Label",
+              "name": "LblSelHead",
+              "properties": {
+                "Style": "title-4",
+                "Text": "Rich select",
+                "Wrap": true
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblSelWhat",
+              "properties": {
+                "Style": "dim-label",
+                "Text": "A closed list whose rows are a picture, a name and a line of detail. It is a popover with a menu's behaviour: arrows move, Enter takes, a click outside closes.",
+                "Wrap": true
+              }
+            },
+            {
+              "type": "RichSelect",
+              "name": "Sel1",
+              "properties": {
+                "HAlign": "Fill"
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblSelSaid",
+              "properties": {
+                "Style": "dim-label",
+                "Text": "(nothing yet)",
+                "Wrap": true
+              }
+            }
+          ]
+        },
+        {
+          "type": "Panel",
+          "name": "PageTags",
+          "properties": {
+            "Arrangement": "Vertical",
+            "Margin": 16,
+            "Spacing": 12
+          },
+          "children": [
+            {
+              "type": "Label",
+              "name": "LblTagHead",
+              "properties": {
+                "Style": "title-4",
+                "Text": "Tags",
+                "Wrap": true
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblTagWhat",
+              "properties": {
+                "Style": "dim-label",
+                "Text": "Enter adds the word as a chip, the cross on a chip takes it out, and the whole list is one array the program owns.",
+                "Wrap": true
+              }
+            },
+            {
+              "type": "Tags",
+              "name": "Tag1",
+              "properties": {
+                "HAlign": "Fill"
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblTagSaid",
+              "properties": {
+                "Style": "dim-label",
+                "Text": "(nothing yet)",
+                "Wrap": true
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

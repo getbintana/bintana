@@ -1,0 +1,13 @@
+{
+  "name": "Composites",
+  "startup": "MainForm",
+  "sources": [
+    "MainForm.js",
+    "Suggest.js",
+    "Choice.js",
+    "RichSelect.js",
+    "Tags.js"
+  ],
+  "version": "1.0",
+  "description": "The fields a form keeps needing that are not controls: an editable combo, a rich select and a tag field, each built out of ordinary ones"
+}

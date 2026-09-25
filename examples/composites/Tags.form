@@ -1,0 +1,39 @@
+{
+  "format": "bintana-form/1",
+  "class": "Tags",
+  "properties": {
+    "Arrangement": "Vertical",
+    "Height": 116,
+    "Spacing": 8,
+    "Width": 360
+  },
+  "children": [
+    {
+      "type": "Flow",
+      "name": "Chips",
+      "properties": {
+        "ColumnSpacing": 6,
+        "HAlign": "Fill",
+        "Height": 64,
+        "MinHeight": 40,
+        "RowSpacing": 6,
+        "Width": 360,
+        "X": 0,
+        "Y": 0
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtAdd",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 36,
+        "Icon": "list-add-symbolic",
+        "Placeholder": "Add a tag and press Enter",
+        "Width": 360,
+        "X": 0,
+        "Y": 72
+      }
+    }
+  ]
+}
