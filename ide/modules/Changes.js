@@ -257,11 +257,15 @@ Ide.Changes = class Changes {
                                 files.length),
             Locale.Text("Discard"),
             () => {
-                this.ide.git.discard(files);
-                /* The files changed underneath whatever is open: each tab is
-                 * watching its own and the reload bar is what that looks like. */
-                this.after();
-                this.ide.listFiles();
+                try {
+                    this.ide.git.discard(files);
+                } finally {
+                    /* The files changed underneath whatever is open: each tab
+                     * is watching its own and the reload bar is what that
+                     * looks like -- and what did go has gone, error or not. */
+                    this.after();
+                    this.ide.listFiles();
+                }
             });
     }
 

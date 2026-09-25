@@ -172,8 +172,8 @@ Every control and every container has all of this.
 | `VAlign` | the same, vertically |
 | `VExpand` | absorbs vertical slack |
 | `Visible` | shown or not. `true` by default; a `Form` starts `false` |
-| `Width` | width **requested**: a minimum, not an exact size. Reads the allocation when nothing was declared |
-| `X` | left edge in pixels, in the parent's coordinates. Means nothing in a row or a column |
+| `Width` | width **requested**: a minimum, not an exact size. Reads the allocation when nothing was declared. `0`..`32767` (or `-1`, *not asked*) — a display holds no more, and more was a `BadAlloc` that killed the process; the same for `Height`, `MinWidth`, `MinHeight` and `Resize` |
+| `X` | left edge in pixels, in the parent's coordinates. Means nothing in a row or a column. `-32767`..`32767`, like `Y` and `Move` |
 | `Y` | top edge, likewise |
 | `Focused` (ro) | whether the focus is **within** it — a `TextBox`'s focus really sits on the entry inside it |
 | `Bounds([container])` | → `{ X, Y, Width, Height }`, what GTK really allocated — in window coordinates, or in a container's if one is passed |

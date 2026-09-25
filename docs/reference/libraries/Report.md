@@ -54,7 +54,7 @@ It is a [`Component`](../widgets/Component.md), so everything on
 |---|---|
 | `Paper` | `A4`, `Letter` or `A5`, in **points** — 72 to the inch, so A4 is 595×842 |
 | `Orientation` | `Portrait` or `Landscape` |
-| `Margins` | the gutter, in points: one number for all four edges, or `{ Top, Right, Bottom, Left }` |
+| `Margins` | the gutter, in points: one number for all four edges, or `{ Top, Right, Bottom, Left }`, each side a finite number or refused |
 
 Changing any of these **re-measures silently** — read `PageCount` back on the
 next line — because they can be written in a `.form`, and an event raised while a

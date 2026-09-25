@@ -31,7 +31,7 @@ designable and serialised.
 |---|---|
 | `Paper` | `A4` `Letter` `A5`, the sheet in points (72 to the inch). `"A4"` |
 | `Orientation` | `Portrait` `Landscape`. `"Portrait"` |
-| `Margins` | the gutter around the content, in points: one number for all four edges, or `{ Top, Right, Bottom, Left }`. `40` |
+| `Margins` | the gutter around the content, in points: one number for all four edges, or `{ Top, Right, Bottom, Left }`. `40`. Every side is a finite number or the assignment throws |
 | `Page` | the current page, **one-based**. Assigning clamps to `[1, PageCount]`, so a page past the end is the last one, not a blank. Turning a page **redraws and does not re-measure**. `1` |
 | `PageCount` (ro) | how many pages the data and the sections make. Measures lazily, so it is answerable in `Form_Open` before anything has drawn. An empty report is one blank page, not none |
 | `Data` | the rows: an array of plain objects. `Field` elements read a key off the current row; the group bands read the keys named by each group's `.On`. `[]` |

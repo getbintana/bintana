@@ -2186,7 +2186,8 @@ Ide.Designer = class Designer {
 
         const left = [];
         const walk = (control) => {
-            for (const event of Ide.FormFiles.handlersIn(source, control.Name))
+            for (const event of Ide.FormFiles.handlersIn(source, control.Name,
+                                                         this.eventsOf(control)))
                 left.push(`${control.Name}_${event}`);
             if ("Children" in control) for (const kid of control.Children) walk(kid);
         };
@@ -2262,7 +2263,9 @@ Ide.Designer = class Designer {
          * `uniqueName` learned. Renaming onto it would carry this control's
          * handlers over methods already there, and two methods of one name in a
          * class is the silent kind: the later one wins. */
-        const answered = Ide.FormFiles.handlersIn(this.ide.formFiles.siblingSource(), newName);
+        const events   = this.eventsOf(control);
+        const answered = Ide.FormFiles.handlersIn(this.ide.formFiles.siblingSource(),
+                                                  newName, events);
         if (answered.length) {
             Message.Error("The code already has handlers for {0}: {1}.\nRename or delete them first.",
                           newName, answered.map((e) => `${newName}_${e}`).join(", "));
@@ -2270,7 +2273,7 @@ Ide.Designer = class Designer {
             return false;
         }
 
-        const moved = this.ide.renameHandlers(this.path, oldName, newName);
+        const moved = this.ide.renameHandlers(this.path, oldName, newName, events);
         control.Name = newName;
 
         this.save();

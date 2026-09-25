@@ -101,7 +101,7 @@ listed in [llm/markdown.md](../../llm/markdown.md).
 | | |
 |---|---|
 | `MaxWidth` | the measure of the text column, in pixels. Past that the column keeps this width and is **centred**: a document pinned to the left of a maximised window is a line of ninety words |
-| `Margins` | the gutter around it: one number, or `{ Top, Right, Bottom, Left }` |
+| `Margins` | the gutter around it: one number, or `{ Top, Right, Bottom, Left }`, each side a finite number or refused. Margins that leave no printable height on the paper are refused by `SavePdf` and `Send` -- the pagination could never advance past them |
 | `BaseFont` | the body font. Everything else is it in proportion — a heading is it scaled and emboldened — so a document set larger is *entirely* larger |
 | `CodeFont` | what a code span and a code block are set in. `""` is the desktop's monospace at the body's size |
 

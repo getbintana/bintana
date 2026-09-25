@@ -3295,6 +3295,211 @@ function* p_handlers(ide) {
  * never "did it change" but "did somebody else change it" -- and the assertion
  * that matters most here is the negative one: saving must not put a notice up.
  */
+/*
+ * A file that is not UTF-8, which `File.Load` can only answer as text with
+ * U+FFFD where every invalid byte was -- so opening a Latin-1 `.js` and saving
+ * it replaced every accented letter, for good. It opens read-only now and no
+ * road writes it: each one is driven here and the bytes compared after.
+ */
+function* p_foreign(ide) {
+    /* "// cañón" with the two letters as Latin-1 bytes, and a class. */
+    const latin = [0x2f, 0x2f, 0x20, 0x63, 0x61, 0xf1, 0xf3, 0x6e, 0x0a];
+    for (const c of "class Latin extends Form {\n}\n") latin.push(c.charCodeAt(0));
+    const path  = File.Join(TMP, "Latin.js");
+    const fpath = File.Join(TMP, "Latin.form");
+    File.SaveBytes(path, new Bytes(latin));
+    File.SaveBytes(fpath, new Bytes([0x7b, 0x22, 0xe9, 0x22, 0x3a, 0x31, 0x7d, 0x0a]));
+    const hash  = File.Hash(path);
+    const fhash = File.Hash(fpath);
+    ide.listFiles();
+
+    const said = ide.LogView.Text.length;
+    ide.openInTab("Latin.js");
+    yield* settled(ide);
+
+    const state = ide.openTabs.get("Latin.js");
+    check("a file that is not UTF-8 opens", !!state && ide.activeFile === "Latin.js");
+    check("read-only", state && state.foreign && ide.Editor.ReadOnly);
+    check("and the log says why",
+          ide.LogView.Text.slice(said).includes("Latin.js") &&
+          ide.LogView.Text.slice(said).includes("UTF-8"),
+          ide.LogView.Text.slice(said));
+    ide.refresh();
+    check("and so does the status bar", ide.LblStatus.Text.includes("UTF-8"),
+          ide.LblStatus.Text);
+
+    /* Text assigned from code is the one way a read-only editor gets dirty. */
+    ide.Editor.Text = `${ide.Editor.Text}// más\n`;
+    eq("saving it is refused", ide.tabs.save(), false);
+    eq("and so is saving everything", ide.tabs.saveAllDirty(), false);
+    ide.tabs.rewriteSource("Latin.js", (t) => `${t}// rewritten\n`);
+    eq("no recovery snapshot is taken of it", ide.tabs.contentOf("Latin.js"), null);
+    eq("nor restored into it",
+       ide.tabs.restore({ name: "Latin.js", mode: "edit", text: "x" }), false);
+    eq("not a byte of the file changed", File.Hash(path), hash);
+
+    ide.tabs.reloadFromDisk("Latin.js");
+    check("reloading it keeps it read-only", ide.Editor.ReadOnly && state.foreign);
+
+    /* A .form that is not UTF-8 is not drawn: a designer would serialise it. */
+    ide.openInTab("Latin.form");
+    yield* settled(ide);
+    const fstate = ide.openTabs.get("Latin.form");
+    check("a .form that is not UTF-8 opens as read-only text",
+          fstate && fstate.mode === "edit" && fstate.foreign && ide.Editor.ReadOnly);
+    eq("and is not written either", File.Hash(fpath), fhash);
+
+    /* And U+FFFD in a file that *is* UTF-8 is a character, not a verdict. */
+    File.Save(File.Join(TMP, "Replacement.js"), "// \uFFFD\n");
+    ide.listFiles();
+    ide.openInTab("Replacement.js");
+    yield* settled(ide);
+    check("a UTF-8 file holding U+FFFD is an ordinary tab",
+          !ide.openTabs.get("Replacement.js").foreign && !ide.Editor.ReadOnly);
+
+    for (const n of ["Latin.js", "Latin.form", "Replacement.js"]) {
+        ide.closeTabByName(n, true);
+        File.Delete(File.Join(TMP, n));
+    }
+    ide.listFiles();
+    yield* settled(ide);
+}
+
+/*
+ * A control's handlers are its name and one of its events, and nothing longer:
+ * `\bBtn_(\w+)` took `Btn_Ok_Click`, the handler of a control called `Btn_Ok`,
+ * so renaming `Btn` moved somebody else's code -- and the free-name check read
+ * `Btn_Ok_Click` as `Btn` + `Ok_Click` and refused a name nobody was using.
+ */
+function* p_prefixes(ide) {
+    const SOURCE = [
+        "class Pre extends Form {",
+        "    Btn_Click() {",
+        "    }",
+        "    Btn_Ok_Click() {",
+        "    }",
+        "}",
+        "",
+    ].join("\n");
+    File.Save(File.Join(TMP, "Pre.js"), SOURCE);
+    File.SaveJson(File.Join(TMP, "Pre.form"), {
+        format: "bintana-form/1", class: "Pre",
+        properties: { Width: 300, Height: 160 },
+        children: [
+            { type: "Button", name: "Btn",
+              properties: { X: 10, Y: 10, Width: 80, Height: 30, Text: "a" } },
+            { type: "Button", name: "Btn_Ok",
+              properties: { X: 10, Y: 50, Width: 80, Height: 30, Text: "b" } },
+        ],
+    });
+    ide.listFiles();
+    ide.openInTab("Pre.form");
+    yield* settled(ide);
+
+    ide.designer.select(byName(ide, "Btn"));
+    yield* settled(ide);
+    check("renaming a control whose name another one starts with",
+          ide.designer.renameControl("Save"));
+    yield* settled(ide);
+    let js = File.Load(File.Join(TMP, "Pre.js"));
+    check("moves its own handler", js.includes("Save_Click()"), js);
+    check("and leaves the other control's alone",
+          js.includes("Btn_Ok_Click()") && !js.includes("Save_Ok_Click"), js);
+
+    /* And back: `Btn_Ok_Click` is not a handler of a control called `Btn`. */
+    ide.designer.select(byName(ide, "Save"));
+    yield* settled(ide);
+    check("a name another control's handlers start with is free",
+          ide.designer.renameControl("Btn"));
+    yield* settled(ide);
+    js = File.Load(File.Join(TMP, "Pre.js"));
+    check("and the handler comes back under it",
+          js.includes("    Btn_Click()") && js.includes("Btn_Ok_Click()"), js);
+    eq("Btn_Ok's handlers are not Btn's",
+       Ide.FormFiles.handlersIn(js, "Btn").join(), "Click");
+
+    for (const n of ["Pre.form", "Pre.js"]) {
+        ide.closeTabByName(n, true);
+        File.Delete(File.Join(TMP, n));
+    }
+    ide.listFiles();
+    yield* settled(ide);
+}
+
+/*
+ * A form open in a tab behind another one, rewritten by the IDE itself: its
+ * **designer** is what saves, and it used to keep the old tree, class and path
+ * while only `state.root` heard about the change -- so saving that tab after a
+ * rename wrote the `.form` it had left, and after a class was renamed it put
+ * the old type back into the form that places it.
+ */
+function* p_background(ide) {
+    const form = (cls, children) => ({
+        format: "bintana-form/1", class: cls,
+        properties: { Width: 300, Height: 160 }, children,
+    });
+    File.SaveJson(File.Join(TMP, "Bg.form"), form("Bg", [
+        { type: "Button", name: "B", properties: { X: 10, Y: 10, Width: 80, Height: 30, Text: "b" } }]));
+    File.Save(File.Join(TMP, "Bg.js"), "class Bg extends Form {\n}\n");
+    File.SaveJson(File.Join(TMP, "Part.form"), form("Part", []));
+    File.Save(File.Join(TMP, "Part.js"), "class Part extends Component {\n}\n");
+    File.SaveJson(File.Join(TMP, "Host.form"), form("Host", [
+        { type: "Part", name: "P1", properties: { X: 10, Y: 10, Width: 80, Height: 30 } }]));
+    File.Save(File.Join(TMP, "Host.js"), "class Host extends Form {\n}\n");
+    ide.listFiles();
+
+    /* --- a rename of the tab behind ---------------------------------------- */
+    ide.openInTab("Bg.form");
+    yield* settled(ide);
+    ide.openInTab("Host.form");
+    yield* settled(ide);
+    eq("the form is renamed while its tab is behind another",
+       ide.renameForm("Bg", "Bg2"), true);
+    yield* settled(ide);
+    const bg = ide.openTabs.get("Bg2.form");
+    check("its designer follows the new path",
+          bg && bg.designer && bg.designer.path.endsWith("Bg2.form"),
+          bg && bg.designer ? bg.designer.path : "no tab");
+    eq("and the new class", bg && bg.designer.serializeForm().class, "Bg2");
+    ide.openInTab("Bg2.form");
+    yield* settled(ide);
+    ide.designer.touch();
+    ide.save();
+    yield* settled(ide);
+    check("saving it does not bring the old file back",
+          !File.Exists(File.Join(TMP, "Bg.form")));
+    eq("and writes the new one with its class",
+       File.LoadJson(File.Join(TMP, "Bg2.form")).class, "Bg2");
+
+    /* --- a class renamed that the tab behind places ----------------------- */
+    ide.openInTab("Host.form");
+    yield* settled(ide);
+    ide.openInTab("Bg2.form");
+    yield* settled(ide);
+    eq("a class the tab behind places is renamed", ide.renameForm("Part", "Piece"), true);
+    yield* settled(ide);
+    const host = ide.openTabs.get("Host.form");
+    check("and nothing raises the reload bar for the IDE's own write",
+          !host.changedOnDisk);
+    ide.openInTab("Host.form");
+    yield* settled(ide);
+    eq("the tab behind draws the new type",
+       ide.designer.serializeForm().children[0].type, "Piece");
+    ide.designer.touch();
+    ide.save();
+    yield* settled(ide);
+    eq("and saving it keeps the new type",
+       File.LoadJson(File.Join(TMP, "Host.form")).children[0].type, "Piece");
+
+    for (const n of ["Bg2.form", "Bg2.js", "Piece.form", "Piece.js", "Host.form", "Host.js"]) {
+        ide.closeTabByName(n, true);
+        if (File.Exists(File.Join(TMP, n))) File.Delete(File.Join(TMP, n));
+        ide.dropSource(n);
+    }
+    ide.listFiles();
+    yield* settled(ide);
+}
+
 function* p_watch(ide) {
     const name = "Child.js";
     const path = File.Join(TMP, name);
@@ -11414,6 +11619,61 @@ function* p_git(ide) {
     yield* settled(ide);
 
     /*
+     * --- a path is a path, not a pattern ------------------------------------
+     *
+     * `--` keeps a file called `-f` a file and does nothing about `[`: git
+     * reads what follows it as a glob, so discarding `data[1].json` restored
+     * `data1.json` too -- and the change somebody meant to keep was gone.
+     */
+    File.Save(File.Join(repo, "data[1].json"), "uno\n");
+    File.Save(File.Join(repo, "data1.json"), "uno\n");
+    run("add", "-A");
+    run("commit", "-qm", "corchetes");
+    File.Save(File.Join(repo, "data[1].json"), "cambiado\n");
+    File.Save(File.Join(repo, "data1.json"), "cambiado\n");
+    ide.refreshGit();
+    yield* settled(ide);
+
+    git.discard(["data[1].json"]);
+    eq("discarding a file with brackets in its name restores it",
+       File.Load(File.Join(repo, "data[1].json")), "uno\n");
+    eq("and not the file its name would match as a pattern",
+       File.Load(File.Join(repo, "data1.json")), "cambiado\n");
+    git.stage(["data[1].json"]);
+    eq("staging takes the name literally too",
+       run("diff", "--cached", "--name-only").Output.trim(), "");
+    run("checkout", "--", "data1.json");
+
+    /*
+     * And an untracked **folder**, which the porcelain names as one row
+     * (`?? nueva/`): `File.Delete` takes an empty directory and nothing else,
+     * so it threw -- after the restore beside it had run -- and the window was
+     * left offering rows that were already gone.
+     */
+    Directory.Make(File.Join(repo, "nueva"));
+    File.Save(File.Join(repo, "nueva", "a.txt"), "a\n");
+    const dos = File.Load(File.Join(repo, "Dos.js"));
+    File.Save(File.Join(repo, "Dos.js"), `${dos}// otra\n`);
+    ide.refreshGit();
+    yield* settled(ide);
+
+    const fresh = git.split().unstaged.map((r) => r.path);
+    check("an untracked folder is one row", fresh.some((p) => p.startsWith("nueva")),
+          JSON.stringify(fresh));
+    let threw = "";
+    try {
+        git.discard(fresh);
+    } catch (e) {
+        threw = e.message;
+    }
+    eq("discarding an untracked folder does not throw", threw, "");
+    check("and the folder is gone", !File.Exists(File.Join(repo, "nueva")));
+    eq("with the tracked change beside it restored",
+       File.Load(File.Join(repo, "Dos.js")), dos);
+    ide.refreshGit();
+    yield* settled(ide);
+
+    /*
      * --- back to what the phases after this one expect ----------------------
      *
      * This one opened a **project of its own**, which nothing else here does:
@@ -12353,6 +12613,9 @@ const PHASES = [
     { name: "goto", run: p_goto },
     { name: "images", run: p_images },
     { name: "watch", run: p_watch },
+    { name: "foreign", run: p_foreign },
+    { name: "prefixes", run: p_prefixes },
+    { name: "background", run: p_background },
     { name: "tooldirs", run: p_tooldirs },
     { name: "namespaces", run: p_namespaces },
     { name: "selfns", run: p_selfns },

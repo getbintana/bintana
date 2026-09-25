@@ -990,6 +990,18 @@ Three things it is careful about:
   change, because saying it twice would make it something one closes without
   reading.
 
+### A file that is not UTF-8
+
+`File.Load` answers text, and an invalid byte cannot be text: it comes back as
+U+FFFD. So a Latin-1 `.js` opened and saved lost every accented letter, for good
+and without a word. **Such a file opens read-only** -- as text, even a `.form`,
+since a designer would serialise it back -- the log says it is not UTF-8 and will
+not be saved from the IDE, and the status bar says *read-only: not UTF-8* for as
+long as it is on screen. The test is the bytes' (`Bytes.ToText()` refuses what is
+not valid UTF-8), not a search for U+FFFD, which a UTF-8 file may hold on purpose.
+No road writes one: saving, saving everything, the IDE's own rewrites of a source
+(a control's handlers following a rename), a recovery snapshot and its restore.
+
 ## What a save says about the file
 
 Saving a `.js` compiles it -- `Application.CheckSource`, which does not run it --
@@ -1769,7 +1781,18 @@ somebody using it, not guessed here.
 **Discard asks, and says which sentence it means.** It is the one thing here
 with no undo, and it sits one button over from something harmless. An untracked
 file is not restored but *deleted* -- `git restore` has nothing to restore it
-from -- which is a different sentence and is said as one.
+from -- which is a different sentence and is said as one. A new file goes to the
+desktop's trash where there is one, as every delete in the IDE does, and an
+untracked **folder** -- which the porcelain names as one row, `?? d/` -- goes
+whole; it used to reach `File.Delete`, which takes only an empty directory, and
+throw after the restore beside it had already run. Whatever happens, the window
+and the page refresh afterwards.
+
+**Every path is handed to git as a path.** `--` stops a file called `-f` being a
+flag and does nothing about `[`, `*` or `?`, which git still reads as a glob: so
+discarding `data[1].json` also restored `data1.json`. Every invocation passes
+`--literal-pathspecs`, since every path the IDE hands git is one git named; the
+`-- .` that scopes a listing to the project means the same read literally.
 
 **A project need not be the root of its repository**, and that is not a detail:
 `examples/clients` lives inside this one. git names a file from the root of the
@@ -2103,6 +2126,19 @@ and the prompt is kept as `ide.renamePrompt` so it can.
 Renaming a form (`F2`) moves **both** files, rewrites the class name inside the
 `.js`, and updates `sources` and `startup` in `project.json`. Moving only the
 `.form` would leave the runtime looking for a `<Class>.form` that no longer exists.
+
+**A handler is the control's name and one of its events, and nothing longer.**
+Renaming `Btn` carries `Btn_Click` and leaves `Btn_Ok_Click` -- the handler of a
+control called `Btn_Ok` -- where it is; the pattern used to be `Btn_(\w+)`, and
+`\w` takes the underscore. The same rule answers *is this name free*: `Btn_Ok`'s
+handlers do not make `Btn` taken.
+
+**A form open in a tab behind another is rewritten with the file.** A rename, a
+tidy into folders and a class renamed that the form places all rewrite `.form`
+files the IDE may have open; the tab's own designer is what saves, and it used to
+keep the old tree, class and path, so saving that tab wrote the old file back.
+A tab not on screen is marked and its designer reloads when it is shown; one with
+unsaved work gets the retype on top of that work and stays unsaved.
 
 References from *other* files are deliberately **not** rewritten: the IDE lists
 which files still name the old class and leaves them alone, rather than blindly

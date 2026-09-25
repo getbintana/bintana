@@ -710,6 +710,31 @@ static JSValue w_get_geom(JSContext *ctx, JSValueConst this_val, int magic)
     }
 }
 
+/*
+ * **A geometry has a range, and it is the display's.** `bta_to_int` takes any
+ * `int32`, which was two failures a long way from the assignment: a `Width` of
+ * two billion grew the window past what X can hold and the process died of
+ * `BadAlloc`; an `X` near `INT32_MAX` with `HAlign: "End"` overflowed the
+ * surface's `offset + size` arithmetic -- undefined in C, measured as a
+ * `Bounds().X` of `-2147483648`. 32767 is what X11 and every GDK backend
+ * hold as a coordinate; a size is not negative (bar -1, *not asked*), a
+ * coordinate may be (a control drawn partly off its surface is ordinary).
+ */
+#define BTA_GEOM_MAX 32767
+
+static bool geom_in_range(JSContext *ctx, const char *name, int32_t n, bool size)
+{
+    /* -1 is a size nobody asked for -- what a control starts with, and what
+     * `Resize(w)` carries over for the height it was not given. */
+    int32_t lo = size ? -1 : -BTA_GEOM_MAX;
+
+    if (n < lo || n > BTA_GEOM_MAX) {
+        JS_ThrowRangeError(ctx, "%s: %d is outside %d..%d", name, n, lo, BTA_GEOM_MAX);
+        return false;
+    }
+    return true;
+}
+
 static JSValue w_set_geom(JSContext *ctx, JSValueConst this_val,
                           JSValueConst val, int magic)
 {
@@ -726,6 +751,10 @@ static JSValue w_set_geom(JSContext *ctx, JSValueConst this_val,
                     magic >= 0 && magic < (int)G_N_ELEMENTS(NAMES) ? NAMES[magic]
                                                                    : "geometry",
                     &n))
+        return JS_EXCEPTION;
+    if (!geom_in_range(ctx, magic >= 0 && magic < (int)G_N_ELEMENTS(NAMES)
+                                ? NAMES[magic] : "geometry",
+                       n, magic != GEOM_X && magic != GEOM_Y))
         return JS_EXCEPTION;
 
     switch (magic) {
@@ -2112,6 +2141,8 @@ static JSValue w_move(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
     if (argc > 1 && !bta_to_int(ctx, argv[1], "Move", &y))
         return JS_EXCEPTION;
+    if (!geom_in_range(ctx, "Move", x, false) || !geom_in_range(ctx, "Move", y, false))
+        return JS_EXCEPTION;
 
     w->x = x;
     w->y = y;
@@ -2130,6 +2161,9 @@ static JSValue w_resize(JSContext *ctx, JSValueConst this_val,
     if (argc > 0 && !bta_to_int(ctx, argv[0], "Resize", &width))
         return JS_EXCEPTION;
     if (argc > 1 && !bta_to_int(ctx, argv[1], "Resize", &height))
+        return JS_EXCEPTION;
+    if (!geom_in_range(ctx, "Resize", width, true) ||
+        !geom_in_range(ctx, "Resize", height, true))
         return JS_EXCEPTION;
 
     w->w = width;

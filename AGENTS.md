@@ -555,6 +555,23 @@ hold. `docs/plans/debug-plan.md` is the design and the measurements.
   or an immediate runs JavaScript while the program is held; without a flag the
   hook fires inside it and the debugger stops in itself, with the program's
   stack underneath. `dbg.evaluating` is that flag and every entry point sets it.
+- **An audit found four ways the channel ended the program wrongly, and each is
+  now a rule.** *The IDE going away* set RUN and left every breakpoint and
+  stop-on-throw armed, so the next breakpoint said so down a closed pipe and
+  SIGPIPE killed the program (exit -13, the code after it never run):
+  `detach()` disarms everything on end of input or `EPIPE`, and SIGPIPE is
+  **blocked around the write** and taken off the queue with `sigtimedwait`
+  rather than ignored, because an ignored signal is inherited by every child
+  `Exec` starts. *The debugger's own JavaScript* -- `JS_ParseJSON` of an order,
+  the getters `locals` renders -- stopped the program inside the debugger when
+  stop-on-throw was on: every order runs under `evaluating`
+  (`obey_as_debugger`). *`JS_DebugSetLocal`* returned early on a frame with no
+  locals without freeing the value, and `JS_FreeRuntime` aborted (134) -- the
+  vendor patch now frees it on every road. *Two orders in one write* went into
+  stdio's buffer while `poll` watched the descriptor, and the second waited
+  forever: stdin is unbuffered under `--debug`. `testDebuggerOrders` is red on
+  the old binary for the second and third; the SIGPIPE half needs the channel
+  closed from outside and was measured with a Python driver.
 - **Dropping this patch does not fail to build.** The handler is never called,
   `--debug` waits for a debugger that can never stop anything, and the IDE's
   Debug menu does nothing at all. `tests/widgets` asserts it (`testDebugger`):
@@ -1421,7 +1438,7 @@ Three things that will waste your time:
   with the first frame of its stack. **A new phase does not have to remember
   this**, which is the point; what it does mean is that a test deliberately
   provoking an error has to catch it.
-- **`tests/ide/Driver.js` is forty-two phases, and the phase is the scope.** It used
+- **`tests/ide/Driver.js` is forty-five phases, and the phase is the scope.** It used
   to be one 4000-line generator where every `const` shared one scope, so a name
   near the top collided with one added at the bottom and the suite died with
   `SyntaxError: invalid redefinition of lexical identifier` — three times in one
@@ -1436,7 +1453,7 @@ Three things that will waste your time:
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
-  364 assertions against 2533 for the whole project -- 9.4 s against 265 on this
+  364 assertions against 2568 for the whole project -- 9.4 s against 265 on this
   machine -- which is what makes iterating on an early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.
@@ -1872,6 +1889,16 @@ person who wrote it either.
   frames above now, and **not** from `_by_data`, which this note used to blame and
   which the backtrace clears: our sweeps pass the `BtaWidget` as data and GTK's
   handler carries the notebook, so they cannot be reaching it.
+- **A geometry is the display's range, not `int32`'s.** `bta_to_int` accepts
+  anything an integer holds, and two failures were a long way from the
+  assignment: `Width = 2147483000` grew the window past what X can allocate and
+  the process died of `BadAlloc`, and `X = 2147483600` with `HAlign: "End"`
+  overflowed `offset + size` in `bta_fixed.c` -- undefined in C, measured as a
+  `Bounds().X` of `-2147483648`. `geom_in_range` refuses outside ±32767 for a
+  coordinate and `-1..32767` for a size (`-1` is *not asked*, what a control
+  starts with and what `Resize(w)` carries for the height). The range check is
+  in the setters rather than the layout because a clamp there would make a
+  property read back something the program did not write.
 - **Every numeric setter goes through `bta_to_number` / `bta_to_int`, and must.**
   `JS_ToInt32` cannot fail: ToNumber of a string that is not a number is NaN and
   ToInt32(NaN) is 0, so a setter that converts its own value silently accepts
@@ -2035,6 +2062,12 @@ person who wrote it either.
   decides whether it is settable**, tracked with a `seen` list rather than a
   check on the result. `forms.js`, and the general fix rather than a special
   case for one class.
+- **A margin that uses up the paper is a loop that never ends.** `lib/markdown`'s
+  `pageBreaks` advanced by the printable height, and `Margins = 421` on A4
+  leaves none: `SavePdf` and `Send` hung the program. It refuses before the
+  loop and throws if a page ever fails to advance; the object form of `Margins`
+  refuses a side that is not a finite number in both `markdown` and `report`,
+  which the number form always had.
 - **`printf("%g")` writes the locale's decimal separator, and this machine writes
   a comma.** `Ratio = 1.5` came back `"1,5"`, which is what the `.form` would
   then carry and what `JSON.parse` would read as **nothing** -- the same fault
@@ -2767,6 +2800,29 @@ person who wrote it either.
   style-editor sentences, a property-grid hint -- each in `ide.pot` as its first
   half, which no translation can ever match. `tests/ide`'s `strings` phase runs
   the lint over the real `ide/` now and fails on any.
+- **`--` is not literal: git still globs what follows it.** Discarding
+  `data[1].json` also restored `data1.json`, silently and with no undo.
+  `Ide.Git` passes `--literal-pathspecs` on every call; a new git call built
+  outside `run`/`remote` has to carry it too. An untracked folder is one
+  porcelain row (`?? d/`) and `File.Delete` takes only an empty directory, so
+  discarding one threw halfway -- it goes to the trash now, like every other
+  delete the IDE makes.
+- **`File.Load` cannot say a file was not UTF-8; it answers U+FFFD.** An IDE
+  that saved what it read destroyed every Latin-1 accent. The test is
+  `Bytes.ToText()` throwing, not a search for U+FFFD (a file may hold one). A tab
+  with `state.foreign` is read-only and every writing road refuses it -- save,
+  save all, `rewriteSource`, recovery -- so a new road that writes a tab asks
+  `state.foreign` first.
+- **A handler is `<name>_<one event>`, never `<name>_\w+`.** `\w` takes `_`,
+  so renaming `Btn` moved `Btn_Ok`'s `Btn_Ok_Click`, and `Btn` read as taken
+  because of it; renaming also clears undo, so it could not be taken back.
+  `handlersIn`/`renameHandlers` take `designer.eventsOf(control)`.
+- **A design tab behind another has a live designer, and it is what saves.**
+  Setting `state.root` alone was invisible: `loadActiveState` loads nothing by
+  design, so after a rename or a retype, saving that tab wrote the old `.form`
+  back beside the new one. Go through `TabSet.setRoot`, which marks the tab
+  `stale` so it reloads when shown -- and never load a background designer
+  directly, since it would drive the shared side panel.
 - **A `force` flag on a close is a decision nobody asked about, and five
   roads were taking it.** `closeByName(name, true)` skips the dirty question,
   which is right *after* a question -- and Close all, Close others and
@@ -3418,6 +3474,17 @@ person who wrote it either.
   it came from. **Whatever watches a replaceable object has to unwatch the one it
   replaces** -- `g_ptr_array_remove_index_fast` on `w->watched`, which
   `on_form_realized` was already doing for its surface.
+- **`CellEdit` read everything after the handler it had just called, and the
+  row index was never there.** `on_cell_edited` passed `row->index`, which only
+  `bta_table_model_item` ever writes -- so in a flat table built with `Add`
+  every real edit reported and redrew **row 0**, and the suite could not see it
+  because it only ever raised the event with `Emit("CellEdit", 0, ...)`. And a
+  handler that called `Clear`, `RemoveRow` or `SetCell` unbound or rebound the
+  label synchronously, freeing the row, `bta-edit-old` and the label's buffer
+  the code went on to read. The index is asked of the store now, before and
+  after; the row, the label and the table's wrapper are held and both texts
+  copied across the emit. **Not assertable from the suite**: a real
+  `GtkEditableLabel` edit needs a pointer, so this one is a by-hand check.
 - **`GtkColumnView` cannot hide its heading row**, and that fact decides a design
   question rather than being a detail of one. `set_show_row_separators` and
   `set_show_column_separators` are what can be turned off; `set_header_factory`

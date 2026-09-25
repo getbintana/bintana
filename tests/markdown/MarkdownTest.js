@@ -695,6 +695,21 @@ class MarkdownTest extends Form {
         check("and out as a document", File.Exists(pdf));
         check("of more than one page", pages > 1, pages);
 
+        /* Margins that cover the whole sheet leave no band to put a page in:
+         * the pagination never advanced, and the export hung for good. */
+        const hadMargins = this.Doc.Margins;
+        this.Doc.Margins = 421;
+        throws("margins that leave no room on the sheet are refused, not a hang",
+               () => this.Doc.SavePdf(this.at("full.pdf")));
+        this.Doc.Margins = { Top: 421, Bottom: 421 };
+        throws("and so are a top and a bottom that meet",
+               () => this.Doc.SavePdf(this.at("full.pdf")));
+        throws("and a side that is not a number",
+               () => { this.Doc.Margins = { Top: "x" }; });
+        throws("nor a finite one", () => { this.Doc.Margins = { Left: NaN }; });
+        this.Doc.Margins = hadMargins;
+        eq("a refused side leaves the margins as they were", this.Doc.Margins, hadMargins);
+
         const small5 = this.Doc.SavePdf(this.at("a5.pdf"), "A5");
         check("a smaller sheet takes more of them", small5 > pages, `${small5} against ${pages}`);
         throws("and a sheet that is not one is refused",

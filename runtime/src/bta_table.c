@@ -725,26 +725,58 @@ static void on_cell_edited(GObject *obj, GParamSpec *pspec, gpointer user_data)
     BtaWidget   *w   = g_object_get_data(obj, "bta-edit-widget");
     BtaTableRow *row = g_object_get_data(obj, "bta-edit-row");
     guint        col = GPOINTER_TO_UINT(g_object_get_data(obj, "bta-edit-col"));
-    const char  *old = g_object_get_data(obj, "bta-edit-old");
-    const char  *now = gtk_editable_get_text(GTK_EDITABLE(obj));
+    const char  *was = g_object_get_data(obj, "bta-edit-old");
+    const char  *txt = gtk_editable_get_text(GTK_EDITABLE(obj));
 
-    if (!w || !row || !now || (old && !strcmp(old, now)))
+    if (!w || !row || !txt || (was && !strcmp(was, txt)))
         return;
 
+    /*
+     * **Everything the handler could change is taken before it runs.** A
+     * `CellEdit` that calls `Clear()`, `RemoveRow()` or `SetCell()` on the same
+     * row unbinds or rebinds this label synchronously: the row's last
+     * reference goes with the list item, `bta-edit-old` is freed and replaced,
+     * and the label's own buffer is rewritten -- and all three were read after
+     * the emit. So the row is referenced, both texts are copied, the label is
+     * held, and the table's own wrapper is held so `w` outlives a handler that
+     * deletes the control.
+     */
     JSContext *ctx  = w->ctx;
-    JSValue    argv[3];
+    JSValue    self = JS_DupValue(ctx, w->self);
+    char      *old  = g_strdup(was ? was : "");
+    char      *now  = g_strdup(txt);
+
+    g_object_ref(row);
+    g_object_ref(obj);
+
+    /*
+     * **A flat row's index is where it sits, asked now.** `row->index` is only
+     * ever written for an on-demand row (`bta_table_model_item`); a row `Add`
+     * made kept 0, so every real edit in a flat table reported row 0 and
+     * redrew row 0. The event was only ever raised by `Emit` in the suite,
+     * with row 0, which is why nothing said so.
+     */
+    int     at = row->cells ? table_index_in(table_store_of(w, row), row)
+                            : (int)row->index;
+    JSValue argv[3];
 
     argv[0] = table_state(w)->tree
                   ? JS_NewString(ctx, row->key ? row->key : "")
-                  : JS_NewInt32(ctx, (int)row->index);
+                  : JS_NewInt32(ctx, at);
     argv[1] = JS_NewInt32(ctx, (int)col);
     argv[2] = JS_NewString(ctx, now);
 
     JSValue r = bta_emit_answer(w, "CellEdit", 3, argv, NULL);
 
+    /* Whatever the handler did, the row may be gone from the table and the
+     * label bound to another -- so each answer checks it is still about them. */
+    bool still = g_object_get_data(obj, "bta-edit-row") == row;
+    int  here  = row->cells ? table_index_in(table_store_of(w, row), row) : -1;
+
     if (JS_IsStrictEqual(ctx, r, JS_FALSE)) {
-        gtk_editable_set_text(GTK_EDITABLE(obj), old ? old : "");
-    } else if (row->cells) {
+        if (still)
+            gtk_editable_set_text(GTK_EDITABLE(obj), old);
+    } else if (row->cells && here >= 0) {
         /* Taken: the typed text goes into the row, which is what makes the
          * event a notification with a veto rather than a request. */
         while (row->cells->len <= col)
@@ -752,12 +784,17 @@ static void on_cell_edited(GObject *obj, GParamSpec *pspec, gpointer user_data)
         g_free(row->cells->pdata[col]);
         row->cells->pdata[col] = g_strdup(now);
 
-        table_row_changed(w, row, table_state(w)->tree ? -1 : (int)row->index);
+        table_row_changed(w, row, table_state(w)->tree ? -1 : here);
     }
 
     JS_FreeValue(ctx, r);
     for (int i = 0; i < 3; i++)
         JS_FreeValue(ctx, argv[i]);
+    g_free(old);
+    g_free(now);
+    g_object_unref(obj);
+    g_object_unref(row);
+    JS_FreeValue(ctx, self);
 }
 
 static void on_bind_cell(GtkSignalListItemFactory *f, GtkListItem *item,

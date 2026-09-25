@@ -484,6 +484,7 @@ const TESTS = [
      * of every `/shutdown` endpoint. */
     "HttpServerStop",
     "HttpServerDropped",
+    "DebuggerOrders",
     /* Async: a line that arrives a third of a second after its child ended. */
     "ExecControlLate",
     /* Async: more into a child's stdin than a pipe holds, while it echoes. */
@@ -11536,6 +11537,16 @@ function Main() {
         const moved = new Button();
         this.Fixed1.Add(moved);
         throws("Move takes numbers", () => moved.Move("10px", 5));
+        /* A geometry is the display's range: a Width of two billion killed
+         * the process with X's BadAlloc, and an X near INT32_MAX overflowed
+         * the surface's arithmetic into a negative Bounds(). */
+        throws("a Width past what a display holds is refused", () => moved.Width = 2147483000);
+        throws("so is an X", () => moved.X = 2147483600);
+        throws("and a negative size", () => moved.Resize(-5, 10));
+        moved.X = -20;
+        eq("a control drawn partly off its surface is ordinary", moved.X, -20);
+        moved.Width = -1;
+        eq("and -1 is still the size nobody asked for", moved.SizeRequest()[0], -1);
         moved.Delete();
 
         /* A path is a string: these created or opened `./undefined`. */
@@ -19758,6 +19769,81 @@ function Main() {
 
         check("Write answers whether there was a child to write to",
               typeof job.Write === "function");
+    }
+
+    /*
+     * Two orders an audit found the debugger mishandling, each of which ended
+     * the program wrongly. **A `set` on a frame with no locals** leaked the
+     * value it was handed -- the vendor patch's early return -- and
+     * `JS_FreeRuntime` aborted at exit (134). **Two orders in one write** went
+     * into stdio's buffer together while `poll` watched the descriptor, so a
+     * `pause` behind a `clear` was never seen and the program ran to the end.
+     * The third, a detached IDE killing the program with SIGPIPE, needs the
+     * channel closed from this side, which `Exec` cannot do; it was measured by
+     * hand (exit -13 before, 0 after).
+     */
+    testDebuggerOrders() {
+        const proj = File.Join(SCRATCH, "dbg-orders");
+
+        Directory.Make(proj);
+        File.Save(File.Join(proj, "project.json"),
+                  JSON.stringify({ name: "dbgorders", main: "Main", sources: ["Main.js"] }));
+        File.Save(File.Join(proj, "Main.js"),
+                  'function quiet() {\n' +
+                  '    print("quiet");\n' +
+                  '}\n' +
+                  'function Main() {\n' +
+                  '    quiet();\n' +
+                  '    let i = 0;\n' +
+                  '    const t0 = Date.now();\n' +
+                  '    while (Date.now() - t0 < 3000) i++;\n' +
+                  '    print("ran out");\n' +
+                  '    Application.Quit(0);\n' +
+                  '}\n');
+
+        const reasons = [];
+        let   sent    = false;
+
+        waiting++;
+        const job = Exec([Application.Executable, "--debug", proj],
+            {
+                Timeout: 20000,
+                Control: (line) => {
+                    const msg  = JSON.parse(line);
+                    const kind = msg.event || msg.reply;
+
+                    if (kind === "ready") {
+                        job.Write(JSON.stringify({ do: "break", file: "Main.js", line: 2, id: 1 }));
+                        job.Write(JSON.stringify({ do: "continue" }));
+                    } else if (kind === "stopped") {
+                        reasons.push(msg.reason);
+                        if (msg.reason === "breakpoint") {
+                            /* `quiet` has no locals at all. */
+                            job.Write(JSON.stringify({ do: "set", frame: 0, name: "x",
+                                                       text: "({ a: 1 })" }));
+                            job.Write(JSON.stringify({ do: "clear", id: 1 }));
+                            job.Write(JSON.stringify({ do: "continue" }));
+                            if (!sent) {
+                                sent = true;
+                                /* Both in one write, while it runs. */
+                                Timer.After(300, () => job.Write(
+                                    JSON.stringify({ do: "clear", id: 7 }) + "\n" +
+                                    JSON.stringify({ do: "pause" })));
+                            }
+                        } else {
+                            job.Write(JSON.stringify({ do: "continue" }));
+                        }
+                    }
+                },
+            },
+            () => {},
+            (code) => {
+                eq("a set on a frame with no locals leaves a program that exits cleanly",
+                   code, 0);
+                check("two orders in one write are both obeyed: the pause arrived",
+                      reasons.includes("pause"), JSON.stringify(reasons));
+                waiting--;
+            });
     }
 
 

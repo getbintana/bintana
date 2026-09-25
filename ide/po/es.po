@@ -1364,6 +1364,12 @@ msgstr "   formulario {0}x{1}"
 msgid "   Ln {0}, Col {1}"
 msgstr "   Lín {0}, Col {1}"
 
+msgid "   read-only: not UTF-8"
+msgstr "   solo lectura: no es UTF-8"
+
+msgid "{0} is not UTF-8: it is open read-only and will not be saved from the IDE."
+msgstr "{0} no es UTF-8: está abierto en solo lectura y el IDE no lo va a guardar."
+
 #: forms/MainForm.js:1536
 msgid "Nothing wrong with the project"
 msgstr "No hay nada mal en el proyecto"

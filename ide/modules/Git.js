@@ -57,6 +57,16 @@ const NO_PROMPT = {
 const GIT_TIMEOUT = 8000;
 
 /*
+ * **Every path handed to git is a path, not a pattern.** `--` stops a file
+ * called `-f` being a flag and does nothing about `[`, `*` or `?`: git still
+ * reads what follows as a pathspec glob, so discarding `data[1].json` also
+ * restored `data1.json` -- measured, and with no word about it. Every path this
+ * class passes is one git itself named, so none of them is ever meant as a
+ * pattern, and `-- .` is the same *here and below* read literally.
+ */
+const GIT_LITERAL = ["--literal-pathspecs"];
+
+/*
  * What `status --porcelain=v1 -z` says about a path, as one letter.
  *
  * The two columns are the index and the worktree, and the IDE shows one
@@ -191,7 +201,7 @@ Ide.Git = class Git {
         if (!this.available || !this.ide.project)
             return { ok: false, out: "", code: -1 };
 
-        const r = Exec.Wait(["git", "-C", this.ide.project, ...args],
+        const r = Exec.Wait(["git", ...GIT_LITERAL, "-C", this.ide.project, ...args],
                             { Timeout: GIT_TIMEOUT });
 
         return { ok: r.ExitCode === 0, out: r.Output, code: r.ExitCode };
@@ -208,7 +218,7 @@ Ide.Git = class Git {
         if (this.job) return false;
 
         this.ide.log(`> git ${args.join(" ")}\n`);
-        this.job = Exec(["git", "-C", this.ide.project, ...args],
+        this.job = Exec(["git", ...GIT_LITERAL, "-C", this.ide.project, ...args],
                         { Directory: this.ide.project, Environment: NO_PROMPT },
                         (line) => this.ide.log(`${line}\n`),
                         (code) => {
@@ -480,13 +490,35 @@ Ide.Git = class Git {
      * sentences. Asking is the caller's job -- a module does not open windows --
      * and telling them apart is `untracked` below, which is what the caller asks
      * to word it.
+     *
+     * **An untracked folder is one row**: the porcelain says `?? d/` about a
+     * directory git has never seen any file of, so `File.Delete` -- which
+     * takes a file or an *empty* directory -- threw on it, after the restore
+     * had already run, and the window that asked was left showing a state
+     * that was no longer true. It goes to the trash like anything else the
+     * IDE deletes (`FormFiles.deleteFiles`), whole, and `DeleteTree` is the
+     * fallback where there is no trash. A failure is logged and the rest go
+     * on; the caller refreshes either way.
      */
     discard(paths) {
         const known = paths.filter((f) => this.stateOf(f) !== UNTRACKED);
         const fresh = paths.filter((f) => this.stateOf(f) === UNTRACKED);
 
-        if (known.length) this.run(["restore", "--", ...known]);
-        for (const f of fresh) File.Delete(File.Join(this.ide.project, f));
+        if (known.length) this.act(["restore", "--"], known);
+        for (const f of fresh) {
+            const path = File.Join(this.ide.project, f.replace(/\/$/, ""));
+            if (!File.Exists(path)) continue;
+            try {
+                try {
+                    File.Trash(path);
+                } catch (e) {
+                    if (File.IsDir(path)) Directory.DeleteTree(path);
+                    else File.Delete(path);
+                }
+            } catch (e) {
+                this.ide.log(`git: cannot delete ${f}: ${e.message}\n`);
+            }
+        }
     }
 
     /* Which of these git has never been told about, so a caller can say

@@ -8952,8 +8952,13 @@ bool JS_DebugSetLocal(JSContext *ctx, int index, const char *name, JSValue value
     int                 i;
     bool                done = false;
 
-    if (!b || !b->vardefs)
+    /* Bintana patch: the value is the callee's on every road, this one too --
+     * a frame with no locals returned with it unreleased, and JS_FreeRuntime
+     * then aborted on the object it left alive. */
+    if (!b || !b->vardefs) {
+        JS_FreeValue(ctx, value);
         return false;
+    }
 
     want = JS_NewAtom(ctx, name);
     for (i = 0; i < b->arg_count + b->var_count; i++) {

@@ -323,12 +323,18 @@ class GitForm extends Form {
                                 files.length),
             Locale.Text("Discard"),
             () => {
-                git.discard(files);
-
-                /* The worktree changed underneath: the tabs are watching their
-                 * files and will offer to reload, which is what that bar is for. */
-                this.reload();
-                this.ide.listFiles();
+                /* `finally`, because whatever of the list did go has gone: a
+                 * window left showing the rows it had would offer to discard
+                 * them again. */
+                try {
+                    git.discard(files);
+                } finally {
+                    /* The worktree changed underneath: the tabs are watching
+                     * their files and will offer to reload, which is what that
+                     * bar is for. */
+                    this.reload();
+                    this.ide.listFiles();
+                }
             });
     }
 

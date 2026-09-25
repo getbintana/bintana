@@ -197,6 +197,7 @@ Ide.TabSet = class TabSet {
             ed.Language = state.language;
             ed.Text     = state.text;
             ed.Modified = false;
+            ed.ReadOnly = !!state.foreign;
             state.editor = ed;
 
             /*
@@ -302,6 +303,41 @@ Ide.TabSet = class TabSet {
         return true;
     }
 
+    /*
+     * **A file that is not UTF-8 opens read-only, and is never written from
+     * here.** `File.Load` answers text, and text cannot hold a byte that is not
+     * one: every invalid sequence becomes U+FFFD. So a Latin-1 `.js` opened and
+     * saved came back with every accented letter replaced -- silently, and for
+     * good, since the bytes were never in the IDE to be put back.
+     *
+     * The question is the bytes' and not the text's: `Bytes.ToText()` refuses
+     * what is not valid UTF-8, where looking for U+FFFD in the text would call
+     * a file that legitimately contains one foreign. Every road that writes a
+     * tab asks `state.foreign` -- save, save all, the IDE's own rewrites of a
+     * source, a recovery snapshot and its restore -- and the editor is
+     * `ReadOnly`, so it never becomes dirty and no question on the way out
+     * offers to save it.
+     */
+    static notUtf8(path) {
+        try {
+            File.LoadBytes(path).ToText();
+            return false;
+        } catch (e) {
+            return true;
+        }
+    }
+
+    /* Whether an open tab is one of those, for the status bar. */
+    isForeign(name) {
+        const state = name ? this.openTabs.get(name) : null;
+        return !!(state && state.foreign);
+    }
+
+    warnForeign(name) {
+        this.ide.log(Locale.Text("{0} is not UTF-8: it is open read-only and will not be saved from the IDE.",
+                                 name) + "\n");
+    }
+
     makeState(name) {
         const path = File.Join(this.ide.project, name);
         if (!File.Exists(path)) {
@@ -309,6 +345,20 @@ Ide.TabSet = class TabSet {
             return null;
         }
         const ext = File.Extension(name).toLowerCase();
+
+        /* Read-only as text, whatever it is: a designer would serialise it
+         * back, which is the write this exists to prevent. */
+        if (Ide.TabSet.notUtf8(path)) {
+            const onDisk = File.Load(path);
+            this.warnForeign(name);
+            return {
+                name, mode: "edit", foreign: true,
+                text: onDisk, onDisk,
+                language: EDITABLE[ext] || "",
+                line: 1, column: 1,
+                dirty: false,
+            };
+        }
 
         /*
          * What the file said when it was read, kept whatever the mode is. It is
@@ -426,6 +476,14 @@ Ide.TabSet = class TabSet {
             /* Nothing to load: this tab's designer has had the form open all
              * along, with its selection and its undo history.  What changes
              * hands is the shared side panel, which `adopt` fills in. */
+            /* ...unless the file was rewritten while the tab was behind
+             * another one -- see `setRoot`. Loaded now, when this designer is
+             * the one the shared side panel speaks for. */
+            if (state.stale && state.designer) {
+                state.stale = false;
+                state.designer.loadRoot(state.root, File.Join(this.ide.project, name));
+                state.designer.dirty = state.dirty;
+            }
             this.ide.designer.setComponents(this.ide.components);
             this.ide.designer.adopt();
         } else {
@@ -596,6 +654,11 @@ Ide.TabSet = class TabSet {
         if (!state) return;
         this.ide.debugger_.renamed(oldName, newName);
         state.name = newName;
+        /* The designer saves to its own `path`, and a tab renamed while it is
+         * not on screen is not reloaded until it is: without this, saving it
+         * wrote the file it used to be. */
+        if (state.designer)
+            state.designer.path = File.Join(this.ide.project, newName);
         /* The watch was on the old path, which is gone: a change to the file
          * the tab now holds would go unnoticed, and the tab would go on
          * answering for a path nothing is at. */
@@ -633,14 +696,17 @@ Ide.TabSet = class TabSet {
          * file the IDE itself just wrote reads as somebody else's change. */
         try { state.onDisk = File.Load(path); } catch (e) { /* gone */ }
 
-        if (state.mode === "design") {
-            state.root  = File.LoadJson(path);
-            state.dirty = false;
-            if (this.ide.activeFile === name) {
-                this.ide.designer.loadRoot(state.root, path);
-                this.ide.designer.dirty = false;
-                this.ide.designer.refresh();
-            }
+        /* A file that has become UTF-8 since, or stopped being it, changes
+         * whether the tab may write -- and a form that stopped being one
+         * cannot be drawn, so it is left to be closed and opened again. */
+        const foreign = Ide.TabSet.notUtf8(path);
+        if (foreign && !state.foreign) this.warnForeign(name);
+
+        if (state.mode === "design" && foreign) {
+            state.foreign = true;
+        } else if (state.mode === "design") {
+            state.foreign = false;
+            this.setRoot(name, File.LoadJson(path), false);
         } else {
             state.text     = File.Load(path);
             state.line     = targetLine || 1;
@@ -648,8 +714,9 @@ Ide.TabSet = class TabSet {
             state.dirty    = false;
             /* The tab's own editor, whether or not it is the one on screen: a
              * file that changed on disk changed for every tab holding it. */
+            state.foreign  = foreign;
             if (state.editor) {
-                state.editor.ReadOnly = false;
+                state.editor.ReadOnly = foreign;
                 state.editor.Text     = state.text;
                 state.editor.Modified = false;
                 if (targetLine) state.editor.GotoLine(targetLine);
@@ -658,6 +725,38 @@ Ide.TabSet = class TabSet {
              * source is left where it is: what changed is the text it is
              * editing, which the editor above already has. */
             if (state.document && !state.document.editing()) state.document.refresh();
+        }
+    }
+
+    /*
+     * A design tab handed a new tree -- the file reloaded, or a rewrite the IDE
+     * made to it, like a class retyped.
+     *
+     * **A tab behind another one has a designer too, and that designer is what
+     * saves.** This used to set `state.root` alone for a tab not on screen, and
+     * the tab's own designer kept the old tree, the old class and the old path:
+     * `loadActiveState` has nothing to load, by design, so switching to it
+     * showed the old form and saving it wrote the old `.form` back -- after a
+     * rename, under the name it had left. The tab is marked `stale` instead and
+     * its designer loads the tree when it comes on screen, because loading it
+     * now would have it drive the side panel, which speaks for the tab that is.
+     */
+    setRoot(name, root, dirty) {
+        const state = this.openTabs.get(name);
+        if (!state || state.mode !== "design") return;
+
+        state.root  = root;
+        state.dirty = dirty;
+        if (!state.designer) return;
+
+        if (this.ide.activeFile === name) {
+            state.stale = false;
+            state.designer.loadRoot(root, File.Join(this.ide.project, name));
+            state.designer.dirty = dirty;
+            state.designer.refresh();
+        } else {
+            state.stale = true;
+            state.designer.dirty = dirty;
         }
     }
 
@@ -734,6 +833,7 @@ Ide.TabSet = class TabSet {
         if (!state) return false;
 
         if (!this.liveDirty(state)) return true;   // nothing to save
+        if (state.foreign) { this.warnForeign(state.name); return false; }
 
         if (state.mode === "design") {
             if (!this.ide.designer.save()) return false;
@@ -897,6 +997,13 @@ Ide.TabSet = class TabSet {
         const path  = File.Join(this.ide.project, name);
         const state = this.openTabs.get(name);
 
+        /* Not a byte of a file that is not UTF-8: the rewrite would be its
+         * text, which is the file with its accents gone. Said, not skipped. */
+        if ((state && state.foreign) || (File.Exists(path) && Ide.TabSet.notUtf8(path))) {
+            this.warnForeign(name);
+            return;
+        }
+
         if (File.Exists(path)) {
             const disk = File.Load(path);
             const next = change(disk);
@@ -936,6 +1043,7 @@ Ide.TabSet = class TabSet {
             const state = this.openTabs.get(name);
             if (!state) continue;
             if (!this.dirtyOf(name, state)) continue;
+            if (state.foreign) { this.warnForeign(name); ok = false; continue; }
             this.switchTo(name);
             if (state.mode === "design") {
                 if (!this.ide.designer.save()) { ok = false; continue; }
@@ -999,12 +1107,12 @@ Ide.TabSet = class TabSet {
      */
     contentOf(name) {
         const state = this.openTabs.get(name);
-        if (!state) return null;
+        if (!state || state.foreign) return null;
 
         if (state.mode === "design") {
             return { name, mode: "design",
-                     root: state.designer ? state.designer.serializeForm()
-                                          : state.root };
+                     root: state.designer && !state.stale
+                         ? state.designer.serializeForm() : state.root };
         }
         return { name, mode: "edit",
                  text: state.editor ? state.editor.Text : state.text };
@@ -1022,7 +1130,7 @@ Ide.TabSet = class TabSet {
         if (!snap || !snap.name || !this.open(snap.name)) return false;
 
         const state = this.openTabs.get(snap.name);
-        if (!state || state.mode !== snap.mode) return false;
+        if (!state || state.mode !== snap.mode || state.foreign) return false;
 
         if (snap.mode === "design") {
             if (!state.designer) return false;

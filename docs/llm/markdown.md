@@ -40,7 +40,7 @@ designable and serialised.
 | `BaseFont` | the body font, a Pango description. Everything else is this in proportion — a heading is it scaled and emboldened. `""` is the desktop's |
 | `CodeFont` | what a code span and a code block are set in. `""` is the monospace at the body's size |
 | `MaxWidth` | the measure of the text column, in pixels. Past that the column keeps this width and is **centred**: a document pinned to the left of a maximised window is a line of ninety words. `0` is the whole width |
-| `Margins` | the gutter around the document, in pixels: one number for all four edges, or `{ Top, Right, Bottom, Left }`. `24` |
+| `Margins` | the gutter around the document, in pixels: one number for all four edges, or `{ Top, Right, Bottom, Left }`. `24`. Every side is a finite number or the assignment throws; margins that leave no printable height on the sheet make `SavePdf`/`Send` throw |
 | `Paper` | `A4` `Letter` `A5` — what `SavePdf` uses when it is not told one. `"A4"` |
 | `Scroll` | how far down it is scrolled, in pixels. Assigning **clamps** to `[0, ScrollMax]`, so a number past the end is the end |
 | `ScrollMax` (ro) | the largest `Scroll` that still shows text: the document's height minus one view. `0` when it all fits |

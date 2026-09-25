@@ -557,10 +557,24 @@ Ide.FormFiles = class FormFiles {
                 File.SaveJson(path, root);
                 touched.push(file);
 
-                /* Whatever is open has to be reloaded from disk, or saving that
-                 * tab would put the old type back. */
+                /* Whatever is open has to take it too, or saving that tab
+                 * would put the old type back: its **designer**, and not only
+                 * `state.root`, which a tab behind another one never read
+                 * again. A tab with unsaved work gets the same retype on top
+                 * of that work and stays unsaved -- `rewriteSource`'s bargain
+                 * for a `.js` -- and a clean one is simply the file again. */
                 const state = this.ide.openTabs.get(file);
-                if (state && state.mode === "design") state.root = root;
+                if (state && state.mode === "design" && !state.foreign) {
+                    if (this.ide.tabs.dirtyOf(file, state)) {
+                        const live = state.designer && !state.stale
+                            ? state.designer.serializeForm() : state.root;
+                        walk(live.children);
+                        this.ide.tabs.setRoot(file, live, true);
+                        try { state.onDisk = File.Load(path); } catch (e) { /* gone */ }
+                    } else {
+                        this.ide.tabs.reloadFromDisk(file);
+                    }
+                }
             }
         }
         return touched;
@@ -767,14 +781,26 @@ Ide.FormFiles = class FormFiles {
      * the handlers, and neither of them touches a Button10 that merely shares a
      * prefix.  Returns how many references moved.
      */
-    renameHandlers(formPath, oldName, newName) {
+    /*
+     * **A handler is the control's name and one of its events, and nothing
+     * longer.** The pattern was `Old_(\w+)`, and `\w` takes `_`: renaming `Btn`
+     * moved `Btn_Ok_Click` -- the handler of a control called `Btn_Ok` -- to
+     * `Save_Ok_Click`, which answers for nobody. The suffix is one of `events`
+     * (the control's own list, which the designer has) and must end the word,
+     * so `Old_Ok_Click` cannot be read as `Old` + `Ok_Click`. With no list the
+     * suffix is still a single word with no `_` in it, which no event has.
+     */
+    renameHandlers(formPath, oldName, newName, events) {
         const jsPath = File.Join(File.Directory(formPath),
                                  `${File.BaseName(formPath)}.js`);
         if (!File.Exists(jsPath)) return 0;
 
         const quoted  = Regex.Escape(oldName);
         const member  = new Regex(`\\bthis\\.${quoted}\\b`);
-        const handler = new Regex(`\\b${quoted}_(\\w+)`);
+        const suffix  = events && events.length
+            ? `(${events.map((e) => Regex.Escape(e)).join("|")})`
+            : "([A-Za-z0-9]+)";
+        const handler = new Regex(`\\b${quoted}_${suffix}\\b`);
         let   moved   = 0;
 
         /* Counted on the text the user is looking at: the file and the tab can
@@ -831,14 +857,21 @@ Ide.FormFiles = class FormFiles {
      * compiler knows which of the two it is looking at, and this is where that
      * is asked for.
      */
-    static handlersIn(source, controlName) {
+    /* `events`, when the caller has them, is what the suffix has to be one
+     * of; without them it is still one word with no `_`, because
+     * `Btn_Ok_Click` is `Btn_Ok`'s handler and not `Btn`'s -- which made a name
+     * look taken, and made a rename refuse, over another control's code. */
+    static handlersIn(source, controlName, events) {
         if (!source || !controlName) return [];
 
         const prefix = `${controlName}_`;
         return Application.Symbols(source)
                           .filter((s) => s.Kind === "Method" &&
                                          s.Name.startsWith(prefix))
-                          .map((s) => s.Name.slice(prefix.length));
+                          .map((s) => s.Name.slice(prefix.length))
+                          .filter((e) => events && events.length
+                                         ? events.includes(e)
+                                         : e !== "" && !e.includes("_"));
     }
 
     openHandler(controlName, eventName) {

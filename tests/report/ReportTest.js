@@ -173,6 +173,12 @@ class ReportTest extends Form {
         throws("Paper refuses an unknown size",   () => { this.Rep.Paper = "Foolscap"; });
         throws("Orientation refuses a third way", () => { this.Rep.Orientation = "Sideways"; });
         throws("Margins refuse a string",         () => { this.Rep.Margins = "wide"; });
+        /* The object form used to take `Number` of each side, and a NaN margin
+         * draws nothing at all. */
+        throws("a margin side that is not a number is refused",
+               () => { this.Rep.Margins = { Top: "x" }; });
+        throws("and one that is not finite",
+               () => { this.Rep.Margins = { Bottom: Infinity }; });
         throws("Data refuses a non-array",        () => { this.Rep.Data = "rows"; });
         throws("Sections refuse an array",        () => { this.Rep.Sections = []; });
 

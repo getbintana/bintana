@@ -772,8 +772,8 @@ class MainForm extends Form {
     /* Renaming a control carries its handlers along, and double clicking one
      * writes the handler that is not there yet: both edit the class's source,
      * which is why the designer asks the window for them. */
-    renameHandlers(formPath, oldName, newName) {
-        return this.formFiles.renameHandlers(formPath, oldName, newName);
+    renameHandlers(formPath, oldName, newName, events) {
+        return this.formFiles.renameHandlers(formPath, oldName, newName, events);
     }
     openHandler(controlName, eventName) {
         return this.formFiles.openHandler(controlName, eventName);
@@ -1204,6 +1204,10 @@ class MainForm extends Form {
             status = Locale.Plural("{0} file", "{0} files", this.files.length);
         } else {
             status = `${this.activeFile}${dirty ? " *" : ""}`;
+            /* Said where the file is named, for as long as it is on screen:
+             * the log line went by when it was opened. */
+            if (this.tabs.isForeign(this.activeFile))
+                status += Locale.Text("   read-only: not UTF-8");
             if (this.designing) {
                 const sel = this.designer.selected;
                 /* With nothing selected the form is what is being edited, so

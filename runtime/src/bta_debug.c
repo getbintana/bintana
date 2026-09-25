@@ -47,6 +47,8 @@
  */
 #ifndef G_OS_WIN32
 #include <poll.h>
+#include <pthread.h>
+#include <signal.h>
 #endif
 
 /* Where events go.  Descriptor 3 by convention: 0, 1 and 2 are spoken for. */
@@ -215,6 +217,44 @@ static void say_armed(JSContext *ctx, BtaBreak *bp)
 /* ------------------------------------------------------------------ writing */
 
 /*
+ * **The IDE went away: let the program go, for good.** End of input used to
+ * set RUN and leave every breakpoint armed and stop-on-throw on, so the next
+ * breakpoint stopped again, tried to say so down a pipe nobody reads, and --
+ * with SIGPIPE at its default -- killed the program with signal 13, the code
+ * after the breakpoint never run. Measured: a breakpoint in a function called
+ * three times, both pipes closed at the first stop. Detached, nothing is armed
+ * and nothing is said.
+ */
+static void detach(JSContext *ctx)
+{
+    dbg.attached = false;
+    dbg.mode     = RUN;
+    if (dbg.breaks)
+        g_ptr_array_set_size(dbg.breaks, 0);
+    if (dbg.stop_on_throw) {
+        dbg.stop_on_throw = false;
+        JS_DebugStopOnThrow(JS_GetRuntime(ctx), false);
+    }
+}
+
+/* One order, run as the debugger's own work: `obey` parses JSON and `locals`
+ * runs getters, and with stop-on-throw on either one throwing stopped the
+ * program *inside the debugger* -- a nested stop, with the reply held back and
+ * frame 0 the getter. Measured with a malformed line and with a getter that
+ * throws. */
+static bool obey(JSContext *ctx, const char *line, int depth_now);
+
+static bool obey_as_debugger(JSContext *ctx, const char *line, int depth_now)
+{
+    bool was = dbg.evaluating;
+
+    dbg.evaluating = true;
+    bool done = obey(ctx, line, depth_now);
+    dbg.evaluating = was;
+    return done;
+}
+
+/*
  * One line out, and a failure that is not fatal.
  *
  * A program run with `--debug` and no channel -- somebody trying it by hand --
@@ -226,11 +266,41 @@ static void emit(const char *json)
     size_t      len = strlen(json);
     const char *nl  = "\n";
 
-    if (write(CONTROL_FD, json, len) < 0 || write(CONTROL_FD, nl, 1) < 0) {
+    /*
+     * SIGPIPE is held off for these two writes and not ignored for the
+     * process: an ignored signal is inherited across `exec`, so every child an
+     * `Exec` started under `--debug` would have run with it ignored. Blocked,
+     * a write to a closed reader answers EPIPE, the pending signal is taken
+     * off the queue, and the mask goes back as it was.
+     */
+#ifndef G_OS_WIN32
+    sigset_t pipe_set, was_set;
+
+    sigemptyset(&pipe_set);
+    sigaddset(&pipe_set, SIGPIPE);
+    pthread_sigmask(SIG_BLOCK, &pipe_set, &was_set);
+#endif
+    bool failed = write(CONTROL_FD, json, len) < 0 || write(CONTROL_FD, nl, 1) < 0;
+    int  why    = errno;
+#ifndef G_OS_WIN32
+    if (failed && why == EPIPE) {
+        struct timespec now = { 0, 0 };
+        sigtimedwait(&pipe_set, NULL, &now);
+    }
+    pthread_sigmask(SIG_SETMASK, &was_set, NULL);
+#endif
+    errno = why;
+
+    if (failed) {
         if (errno == EBADF) {
             fprintf(stderr, "bintana debug: %s\n", json);
             return;
         }
+        /* The reader closed its end: the same as end of input, and said the
+         * only way left -- the signal was held off above, so this is where it
+         * arrives instead. */
+        if (errno == EPIPE && dbg.ctx)
+            detach(dbg.ctx);
     }
 }
 
@@ -709,14 +779,13 @@ static void wait_for_orders(JSContext *ctx, int depth_now)
 
     for (;;) {
         if (!fgets(line, sizeof line, stdin)) {
-            dbg.mode = RUN;
-            dbg.attached = false;
+            detach(ctx);
             return;
         }
         g_strchomp(line);
         if (!*line)
             continue;
-        if (obey(ctx, line, depth_now))
+        if (obey_as_debugger(ctx, line, depth_now))
             return;
     }
 }
@@ -768,12 +837,12 @@ static void take_messages(JSContext *ctx, int depth_now)
 
     while (poll(&in, 1, 0) > 0 && (in.revents & POLLIN)) {
         if (!fgets(line, sizeof line, stdin)) {
-            dbg.attached = false;
+            detach(ctx);
             return;
         }
         g_strchomp(line);
         if (*line)
-            obey(ctx, line, depth_now);
+            obey_as_debugger(ctx, line, depth_now);
     }
 #else
     (void)ctx;
@@ -909,6 +978,16 @@ void bta_debug_start(JSContext *ctx)
     dbg.mode   = RUN;
 
     JS_SetDebugHandler(JS_GetRuntime(ctx), on_step, NULL);
+
+    /*
+     * Unbuffered, because `take_messages` asks `poll` whether the IDE said
+     * anything and then reads with `fgets`: two lines in one write went into
+     * stdio's buffer together, `poll` then saw nothing on the descriptor, and
+     * the second -- a `pause`, measured -- waited for bytes that never came
+     * while the program ran to the end. Read a byte at a time, what `poll`
+     * answers is what there is.
+     */
+    setvbuf(stdin, NULL, _IONBF, 0);
 
     /*
      * Say hello and wait, before a line of the project has run: the IDE has
