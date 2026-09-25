@@ -921,6 +921,19 @@ its go-to-symbol all go empty together -- with the suite red in `tests/widgets`
   (`self`), since `run->w` was a raw `BtaWidget*` and a control built only to
   be printed could be collected under an open dialog -- the AudioPlayer
   keepalive's lesson, and absent from `gc_mark` for the same reason.
+- **`Terminal.Run` was a tenth async shape, and nobody had counted it.**
+  `vte_terminal_spawn_async` answers on a later turn and was handed the raw
+  `BtaWidget*`, with no cancellable and nothing holding it: `t.Run(cmd);
+  t.Delete(); t = null` plus a collection before the answer wrote into freed
+  memory -- measured, twenty terminals and a 400 000-object ball are a
+  `heap-use-after-free` in `on_spawned` under `build-asan`, and clean with the
+  fix. The callback is handed the **scroller** now, referenced for the spawn,
+  and asks it for its `BtaWidget` (`BTA_WIDGET_QUARK`, which the finaliser
+  clears); none means nothing to report to, and the pty hangs the child up when
+  the terminal goes. That is the cheap shape for any GIO-style callback on a
+  widget: a reference to the GObject and a lookup through the quark, rather than
+  a pointer to the wrapper. `testTerminalSpawnLifetime` runs it as a child, so
+  under `tests/asan.sh` the report lands in the log that script reads.
 - **A callback the program can replace from inside itself has to be held for
   its own call.** `Http.Server`'s `Request` is documented as replaceable while
   running, and `http_server_set_request` releases the old function at once --

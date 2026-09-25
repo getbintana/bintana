@@ -439,6 +439,8 @@ const TESTS = [
     /* Blocking too, and in the same group: it runs children with `Exec.Wait`
      * to see a project's own id answered, and a bad one refused. */
     "ApplicationId",
+    /* Blocking as well: a child that spawns into terminals it then drops. */
+    "TerminalSpawnLifetime",
     "Time",
     "Stopwatch",
     "Shortcut", "Decimal", "FieldDecimal",
@@ -11256,6 +11258,56 @@ function Main() {
     }
 
     Term1_Link(text) { this.linked = text; }
+
+    /*
+     * **A spawn outlives the terminal that asked for it.** VTE answers a
+     * `Run` on a later turn, and the callback was handed the raw `BtaWidget`:
+     * a terminal deleted and dropped before the answer came, plus a collection
+     * in between, had the answer written into freed memory. Measured under
+     * `build-asan`: twenty such terminals and a 400 000-object ball are a
+     * `heap-use-after-free` in `on_spawned` without the fix and clean with it.
+     *
+     * A child, because the collection has to happen in a process whose end
+     * is the assertion -- and because under `tests/asan.sh` the child is the
+     * sanitized binary too, so the report lands in the log that script reads.
+     * An ordinary build may well survive the old code, which is why the
+     * ordinary run asserts only that the child ends cleanly.
+     */
+    testTerminalSpawnLifetime() {
+        if (!Widget.Available("Terminal")) return;
+
+        const dir = File.Join(SCRATCH, "termspawn");
+        Directory.Make(dir);
+        File.SaveJson(File.Join(dir, "project.json"),
+                      { name: "termspawn", startup: "T", sources: ["T.js"] });
+        File.SaveJson(File.Join(dir, "T.form"),
+                      { format: "bintana-form/1", class: "T",
+                        properties: { Width: 300, Height: 200 }, children: [] });
+        File.Save(File.Join(dir, "T.js"),
+                  'class T extends Form {\n' +
+                  '    Form_Open() {\n' +
+                  '        this.Visible = false;\n' +
+                  '        Timer.After(100, () => {\n' +
+                  '            for (let k = 0; k < 20; k++) {\n' +
+                  '                let t = new Terminal();\n' +
+                  '                this.Add(t);\n' +
+                  '                t.Run(k % 2 ? ["true"] : ["/nonexistent-bta-binary"]);\n' +
+                  '                t.Delete();\n' +
+                  '                t = null;\n' +
+                  '            }\n' +
+                  '            let ball = [];\n' +
+                  '            for (let i = 0; i < 400000; i++) ball.push({ i });\n' +
+                  '            ball = null;\n' +
+                  '            Timer.After(1000, () => { print("DONE"); Application.Quit(0); });\n' +
+                  '        });\n' +
+                  '    }\n' +
+                  '}\n');
+
+        const ran = Exec.Wait([Application.Executable, dir], { Timeout: 60000 });
+        eq("terminals dropped mid-spawn leave a program that ends cleanly",
+           ran.ExitCode, 0);
+        check("...having run to the end", ran.Output.includes("DONE"), ran.Output);
+    }
 
     checkTerminal() {
         if (!this.term) return;        /* no VTE: testTerminal said so and finished */

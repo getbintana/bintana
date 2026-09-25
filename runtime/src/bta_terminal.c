@@ -459,9 +459,27 @@ static void term_build(BtaWidget *w)
     gtk_widget_add_controller(w->inner, clicks);
 }
 
+/*
+ * **The spawn outlives whoever asked for it**, and the answer is found again
+ * rather than remembered. VTE runs the spawn on a thread and calls back on the
+ * loop later; `t.Run(cmd); t.Delete(); t = null` and a collection in between
+ * finalised the `BtaWidget` the callback was handed, and it then fed text into
+ * the terminal and raised `Exit` on freed memory. So the callback is handed the
+ * *scroller*, referenced for the length of the spawn -- a GObject, which
+ * outlives the wrapper whenever a container holds it -- and asks it for its
+ * `BtaWidget`, which the finaliser clears (`BTA_WIDGET_QUARK` on `w->gtk`). No
+ * wrapper, nothing to raise: the child is left to the pty, which hangs it up
+ * when the terminal goes, as closing a terminal window always has.
+ */
 static void on_spawned(VteTerminal *term, GPid pid, GError *error, gpointer user_data)
 {
-    BtaWidget *w = user_data;
+    GtkWidget *scroller = user_data;
+    BtaWidget *w        = g_object_get_data(G_OBJECT(scroller), BTA_WIDGET_QUARK);
+
+    if (!w || !term) {
+        g_object_unref(scroller);
+        return;
+    }
 
     if (error) {
         char *msg = g_strdup_printf("\r\n[no se pudo ejecutar: %s]\r\n", error->message);
@@ -471,9 +489,10 @@ static void on_spawned(VteTerminal *term, GPid pid, GError *error, gpointer user
         JSValue arg = JS_NewInt32(w->ctx, -1);
         bta_emit(w, "Exit", 1, &arg);
         JS_FreeValue(w->ctx, arg);
-        return;
+    } else {
+        terminal_set_pid(w, pid);
     }
-    terminal_set_pid(w, pid);
+    g_object_unref(scroller);
 }
 
 static bool term_spawn(JSContext *ctx, BtaWidget *w, char **argv, const char *cwd)
@@ -481,7 +500,7 @@ static bool term_spawn(JSContext *ctx, BtaWidget *w, char **argv, const char *cw
     vte_terminal_spawn_async(VTE_TERMINAL(w->inner), VTE_PTY_DEFAULT, cwd,
                              argv, NULL,
                              G_SPAWN_SEARCH_PATH, NULL, NULL, NULL,
-                             -1, NULL, on_spawned, w);
+                             -1, NULL, on_spawned, g_object_ref(w->gtk));
     return true;
 }
 
