@@ -242,11 +242,23 @@ class ReportTest extends Form {
            this.Rep.PageCount, 4);
 
         /* A band taller than the whole content area is placed anyway -- the
-         * author's error, and breaking on it would loop forever. */
-        this.Rep.Sections = { Detail: { Height: 5000,
-                              Elements: [{ Kind: "Field", Field: "T", X: 0, Y: 0 }] } };
-        this.Rep.Data = rows(1, 3);
-        eq("a band taller than the page is placed, not looped on", this.Rep.PageCount, 3);
+         * author's error, and breaking on it would loop forever. **And it is
+         * said, once**: it used to be cut off at the page's foot in silence. */
+        const logged = [];
+        const before = Logger.Handler;
+        Logger.Handler = (level, text) => logged.push(`${level} ${text}`);
+        try {
+            this.Rep.Sections = { Detail: { Height: 5000,
+                                  Elements: [{ Kind: "Field", Field: "T", X: 0, Y: 0 }] } };
+            this.Rep.Data = rows(1, 3);
+            eq("a band taller than the page is placed, not looped on", this.Rep.PageCount, 3);
+            this.Rep.Refresh();
+        } finally {
+            Logger.Handler = before;
+        }
+        const tall = logged.filter((l) => l.includes("Detail band is 5000 points"));
+        eq("a band taller than the page is warned about once", tall.length, 1);
+        check("as a warning", tall.length && /warn/i.test(tall[0]), JSON.stringify(logged));
     }
 
     /* ------------------------------------------------------- Page and events */
@@ -265,15 +277,25 @@ class ReportTest extends Form {
         this.Rep.Data = rows(1, 19);
         eq("Prepared fires on a same-count data change", this.prepared.length, 1);
 
+        /* **An assignment raises no `Page`**: a property setter must not raise
+         * an event, since a `.form` declaring one fires it before the host's
+         * other controls exist. It used to. */
         this.moved = [];
         this.Rep.Page = 99;
         eq("Page clamps to the last page", this.Rep.Page, 3);
-        check("Page reports the move", this.moved.length === 1 && this.moved[0] === 3,
-              JSON.stringify(this.moved));
+        eq("and an assignment raises no Page", this.moved.length, 0);
 
+        /* Nor does a paper change that pulls the page back: those setters
+         * re-measure silently, as Prepared already did. */
+        this.Rep.Paper = "A5";
+        this.Rep.Page  = 99;
+        const onA5 = this.Rep.Page;
         this.moved = [];
+        this.Rep.Paper = "A4";
+        eq("a paper that pulls the page back says nothing either", this.moved.length, 0);
+        check("but the page is inside the count", this.Rep.Page <= this.Rep.PageCount,
+              `${this.Rep.Page} of ${this.Rep.PageCount}, from ${onA5}`);
         this.Rep.Page = 3;
-        eq("Page says nothing about standing still", this.moved.length, 0);
 
         this.Rep.Page = 0;
         eq("Page clamps to the first page", this.Rep.Page, 1);
@@ -893,6 +915,27 @@ class ReportTest extends Form {
         const base = c.yOf(c.lastBox, 0);
         check("a decimated stack's second band stays on the first",
               fills.length >= 2 && path2.length > 10 && low < base - 1, `lowest ${low}, baseline ${base}`);
+
+        /* ---- the hover on a stack is on the band, at the top of it
+         *
+         * The mark was drawn at the series' own value -- 3, inside the first
+         * band -- where the band it names ends at 5 + 3. And only the first
+         * series could ever be hovered, whichever band the pointer was in. */
+        c.Series = [{ Values: [5, 5, 5] }, { Values: [3, 3, 3] }];
+        draw();
+        const sx = c.xOf(c.lastBox, 1);
+        const onTop = c.at(sx, c.yOf(c.lastBox, 6.5));
+        eq("the pointer in the upper band is on the second series",
+           onTop && onTop.series, 1);
+        eq("...and reports that series' own value", onTop && onTop.value, 3);
+        eq("the pointer in the lower band is on the first", (c.at(sx, c.yOf(c.lastBox, 2)) || {}).series, 0);
+        c.hover = onTop;
+        const marked = draw().split("\n").find((l) => l.startsWith("Arc") && l.includes(" r3.5 ")) || "";
+        const markY  = Number((marked.match(/^Arc \([-\d.]+,([-\d.]+)\)/) || [])[1]);
+        check("the mark sits on the top of its band",
+              Math.abs(markY - c.yOf(c.lastBox, 8)) < 0.6,
+              `${marked} against ${c.yOf(c.lastBox, 8)}`);
+        c.hover = null;
         c.Stacked = false;
 
         /* ---- a wheel over the whole series is not consumed */

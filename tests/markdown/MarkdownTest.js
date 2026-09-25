@@ -171,6 +171,24 @@ class MarkdownTest extends Form {
 
         this.Doc.Text = "# Only\n\nOne line.";
         eq("and a new document replaces the old", this.Doc.Headings.length, 1);
+
+        /* **An anchor is made of letters of any script, and it is unique.**
+         * `\w` is ASCII: `Введение` slugged to "" and `Instalación` to
+         * `instalacin`, and two headings called `Setup` shared one anchor, so
+         * `ScrollTo` and a `#setup` link could only reach the first. */
+        this.Doc.Text = "# Введение\n\n## Instalación\n\n## Setup\n\n## Setup\n\n" +
+                        "> ## Setup\n\n## Hello, World! (v2)\n\n" +
+                        "A long paragraph. ".repeat(400);
+        eq("a heading in another script has an anchor",
+           this.Doc.Headings[0].Id, "введение");
+        eq("an accent is kept", this.Doc.Headings[1].Id, "instalación");
+        eq("the same words twice are two anchors",
+           this.Doc.Headings.slice(2, 5).map((h) => h.Id).join(), "setup,setup-1,setup-2");
+        eq("and an ASCII heading slugs as it always did",
+           this.Doc.Headings[5].Id, "hello-world-v2");
+        this.Doc.Scroll = 0;
+        check("ScrollTo reaches the second of two", this.Doc.ScrollTo("setup-1") &&
+              this.Doc.Scroll > 0, this.Doc.Scroll);
         this.Doc.Text = SAMPLE;
     }
 
@@ -234,6 +252,16 @@ class MarkdownTest extends Form {
         this.Doc.Text = "one\ntwo";
         eq("and an ordinary newline is a space", this.Doc.ContentHeight, flat);
 
+        /* **An underscore does not close inside a word**, the mirror of not
+         * opening inside one: `_foo_bar` is literal in CommonMark, and was
+         * `<i>foo</i>bar`. An asterisk keeps its intraword emphasis. */
+        this.Doc.Text = "An _foo_bar here, and _real_ emphasis, and a*b*c.";
+        const intra = this.textLine(this.drawn(600), "here");
+        check("an underscore inside a word closes nothing",
+              intra.includes("_foo_bar") && !intra.includes("<i>foo</i>"), intra);
+        check("while one at a word's edge still does", intra.includes("<i>real</i>"), intra);
+        check("and an asterisk still works inside a word", intra.includes("a<i>b</i>c"), intra);
+
         this.Doc.Text = SAMPLE;
     }
 
@@ -282,6 +310,24 @@ class MarkdownTest extends Form {
         this.Doc.Text = "| a | b |\n|---|---|\n| 1 | 2 |";
         check("a table with headings still has one",
               this.drawn(600).some((l) => l.startsWith("Color #f2f1f0")));
+
+        /* **A delimiter row has as many cells as the header**, or it is not
+         * one: `a | b` over `---` is GFM's setext heading, and was a table of
+         * two columns under a delimiter that declared one. */
+        this.Doc.Text = "a | b\n---\n\ntext";
+        eq("a one-cell delimiter under two cells makes a heading",
+           this.Doc.Headings.map((h) => h.Text).join(), "a | b");
+
+        /* **A tab is indentation to the next multiple of four.** Counted as
+         * one column, the nested item was a sibling and drew a `•`. */
+        this.Doc.Text = "-\tone\n\t- nested";
+        const tabbed = this.drawn(600);
+        check("a tab-indented item nests", tabbed.some((l) => l.includes('"◦"')),
+              JSON.stringify(tabbed.filter((l) => l.startsWith("Text"))));
+        this.Doc.Text = "```\n\tkept\n```";
+        check("and a tab inside a fence is the code's",
+              this.textLine(this.drawn(600), "kept").includes("\tkept"),
+              this.textLine(this.drawn(600), "kept"));
 
         /* **A word in a code span is measured in the code font.** A monospace is
          * wider than the body face, so a column of member names -- which is what
@@ -344,12 +390,20 @@ class MarkdownTest extends Form {
         eq("a document taller than its view can be scrolled",
            this.Doc.ScrollMax > 0, true);
 
+        /* **An assignment says nothing**: a property setter must not raise an
+         * event, since a `.form` declaring it would raise one before the host's
+         * other controls exist. The reader's gestures and the verbs do. */
         this.Doc.Scroll = 100;
         eq("the scroll is where it was put", this.Doc.Scroll, 100);
-        eq("and it said so once", this.moved.length, 1);
+        eq("and an assignment raises no Scroll", this.moved.length, 0);
 
-        this.Doc.Scroll = 100;
-        eq("an assignment that changes nothing says nothing", this.moved.length, 1);
+        this.Doc.Canvas_KeyPress("Down");
+        eq("a key that moves the view says so once", this.moved.length, 1);
+        eq("with where it went", this.moved[0], this.Doc.Scroll);
+
+        this.Doc.Canvas_KeyPress("Home");
+        this.Doc.Canvas_KeyPress("Home");
+        eq("a gesture that changes nothing says nothing", this.moved.length, 2);
 
         this.Doc.Scroll = -50;
         eq("before the beginning is the beginning", this.Doc.Scroll, 0);

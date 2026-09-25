@@ -64,9 +64,19 @@ const EDITABLE = {
     bmp:  false,
 };
 
+/* What the table says about an extension, **own keys only**: `EDITABLE[ext]`
+ * and `ext in EDITABLE` both walk to `Object.prototype`, so a file called
+ * `x.constructor` read as editable and its tab was handed the inherited
+ * function as a `Language`. `undefined` for an extension the table does not
+ * name. */
+function editableOf(ext) {
+    const key = String(ext).toLowerCase();
+    return Dictionary.Has(EDITABLE, key) ? EDITABLE[key] : undefined;
+}
+
 /* Whether a file of this extension opens in a tab at all. */
 function opensInTab(file) {
-    return EDITABLE[File.Extension(file).toLowerCase()] !== false;
+    return editableOf(File.Extension(file)) !== false;
 }
 
 /* And whether it opens as a rendered document rather than as its source. */
@@ -354,7 +364,7 @@ Ide.TabSet = class TabSet {
             return {
                 name, mode: "edit", foreign: true,
                 text: onDisk, onDisk,
-                language: EDITABLE[ext] || "",
+                language: editableOf(ext) || "",
                 line: 1, column: 1,
                 dirty: false,
             };
@@ -378,7 +388,7 @@ Ide.TabSet = class TabSet {
             name, mode: "edit",
             text: onDisk,
             onDisk,
-            language: EDITABLE[ext] || "",
+            language: editableOf(ext) || "",
             line: 1, column: 1,
             dirty: false,
         };

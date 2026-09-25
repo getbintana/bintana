@@ -41,7 +41,7 @@ designable and serialised.
 | `Send([setup], cb)` | **every page, to paper**, through [`Printer`](library.md#printer): this fills in how many pages there are and the paper and orientation the report was laid out for, and `{ Copies, From, To }` say the job. **A paper chosen in the dialog scales the page rather than re-flowing it**, and the page count does not move — a report's bands are declared in its own points, so it declares no `Paginate` (a `Markdown` does). **Async**, like every dialog here: `cb({ Copies, From, To })` is what was actually sent, and is **not called** when the dialog was cancelled. **To a file it is `SavePdf`**: a PDF is not a printer with a `Copies` of 3 |
 | `Save(path, [page], [scale])` | one page to a PNG. `page` defaults to the current one, `scale` to `2` (144 dpi — an A4 page is a 1190px-wide PNG). The export runs the same `Draw` at the exact paper size, clamps the page the way `Page` does, and **does not move the report** |
 | **event** `Prepared(count)` | the pages were computed: `Data`, `Sections` or `Refresh()`. `count` is the new `PageCount`. Changing the paper, the orientation or the margins re-measures **silently** — read `PageCount` back on the next line — because those can be written in a `.form`, and an event raised while a form is loading arrives before the form's other controls exist |
-| **event** `Page(page)` | the current page moved. `page` is one-based. It also fires when data that shrank pulled the current page back inside the new count |
+| **event** `Page(page)` | the data moved the current page: `Data`, `Sections` or `Refresh()` left fewer pages than `Page`, and it was pulled back inside the new count. `page` is one-based. **Assigning `Page` raises nothing** — a property setter must not, since a `.form` declaring it would raise it before the host's other controls exist — so the code that turns a page updates its own display. The paper, the orientation and the margins pull the page back silently too |
 
 ### `Sections`
 
@@ -58,8 +58,12 @@ in points, and it is what pagination adds up. The five fixed bands:
 
 The page header and footer sit at fixed positions; the other bands **flow**
 between them and start a new page when the next band does not fit. A band taller
-than the whole content area is placed anyway — that is the author's error, not
-the engine's.
+than the whole content area is placed anyway and **cut off at the foot of the
+page** — that is the author's error, not the engine's, and breaking on it would
+loop — and it is said: one `Logger.Warning` per band per `Sections`, naming the
+band, its height and the room there was. A warning and not a throw, because an
+`Auto` band that outgrows the page on one row should not cost every other row
+its report.
 
 **`Height: "Auto"` is the band that grows.** Instead of a number, a band may say
 `Auto`: it is then as tall as the lowest bottom its elements reach, plus

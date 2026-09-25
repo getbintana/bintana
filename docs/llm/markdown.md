@@ -45,7 +45,7 @@ designable and serialised.
 | `Scroll` | how far down it is scrolled, in pixels. Assigning **clamps** to `[0, ScrollMax]`, so a number past the end is the end |
 | `ScrollMax` (ro) | the largest `Scroll` that still shows text: the document's height minus one view. `0` when it all fits |
 | `ContentHeight` (ro) | how tall the whole document is. Measures lazily, so it is answerable in `Form_Open` before anything has drawn |
-| `Headings` (ro) | every heading in order: `{ Level, Text, Id, Y }`. What a table of contents is built from. `Text` is the words without their emphasis, `Id` the anchor GitHub would give them |
+| `Headings` (ro) | every heading in order: `{ Level, Text, Id, Y }`. What a table of contents is built from. `Text` is the words without their emphasis, `Id` the anchor GitHub would give them — letters and digits of any script kept, lower-cased, and a repeated heading numbered (`setup`, `setup-1`, `setup-2`) |
 | `Selection` (ro) | what the reader has selected, as text. Runs are joined with a newline, so three paragraphs paste as three paragraphs. `""` when nothing is |
 | `SelectAll()` | every word in the document — what Ctrl+A does; → whether there was anything |
 | `Deselect()` | nothing selected — what Escape does; → whether there had been something |
@@ -58,7 +58,7 @@ designable and serialised.
 | `Save(path, [width], [scale])` | the **whole document** as one PNG — not the view. `width` is the column it is laid out at and defaults to the one on screen; `scale` is `2`, so the text is sharp |
 | `SavePdf(path, [paper])` | every page, one file; → how many. Vector, so the text in it is text. The cut is **pulled up to the top of whatever block straddles it**, so a heading, a row or a picture is never sliced across a page |
 | `Send([setup], cb)` | **every page, to paper**, through [`Printer`](library.md#printer). `setup` is `{ Paper, Copies, From, To }`; `Paper` is what the dialog **opens on** and the pagination is `SavePdf`'s. **A paper chosen in the dialog re-flows the document rather than scaling it**: this declares `Paginate`, so the sheet count follows the paper that is really coming out. **Async**, like every dialog here: `cb({ Copies, From, To })` is what was actually sent, and is **not called** when the dialog was cancelled. **To a file it is `SavePdf`** |
-| **event** `Scroll(y)` | the view moved — by the wheel, a key, the indicator, or an assignment. `y` is the new offset |
+| **event** `Scroll(y)` | the reader moved the view — the wheel, a key, the indicator — or `ScrollTo`/`Find` did. **An assignment to `Scroll` raises nothing**: a property setter must not, since a `.form` declaring it would raise it before the host's other controls exist. `y` is the new offset |
 | **event** `Link(href, text)` | a link was clicked. `href` is the address exactly as the document wrote it and `text` the words that were clicked. **Answer `true` and it is dealt with**; otherwise a `#anchor` scrolls the document and anything else is left alone |
 | **event** `Select(text)` | the selection settled: a drag that ended, a double click, `SelectAll()`, `Deselect()`. `text` is `Selection`, `""` when it was cleared. **Not raised while the pointer is still moving** — a host enabling a *Copy* button does not want sixty of these a second |
 
@@ -70,11 +70,11 @@ CommonMark, in the useful subset. What is in:
 |---|---|
 | headings | `# ` through `###### `, and the underlined (`===`, `---`) kind. The top two levels get a rule under them |
 | paragraphs | wrapped at the column; a line ending in two spaces is a hard break, any other newline is a space |
-| emphasis | `*italic*`, `**bold**`, `~~struck~~`. An `_` only opens emphasis at the edge of a word, so `snake_case` stays one word |
+| emphasis | `*italic*`, `**bold**`, `~~struck~~`. An `_` only opens or closes emphasis at the edge of a word, so `snake_case` and `_foo_bar` stay literal; `*` works inside a word (`a*b*c`) |
 | code | `` `spans` `` and fenced blocks (``` or `~~~`), and four-space indented blocks. The language on a fence is read and **not** used: see below |
-| lists | `-` `*` `+` and `1.` `1)`, nested, tight or loose. An ordered list starts at the number it says |
+| lists | `-` `*` `+` and `1.` `1)`, nested, tight or loose. An ordered list starts at the number it says. A tab in the indentation counts to the next multiple of four columns (inside a fence it is left alone) |
 | quotes | `>`, nested, with their lazy continuation lines |
-| tables | the GitHub kind, with `:---:` alignment. Columns take what their widest cell needs and are shrunk in proportion when the row does not fit |
+| tables | the GitHub kind, with `:---:` alignment. The delimiter row must have as many cells as the header, or it is not a table (`a \| b` over `---` is a heading). Columns take what their widest cell needs and are shrunk in proportion when the row does not fit |
 | rules | `---`, `***`, `___` |
 | links | `[text](href)` and `<https://…>` autolinks. Clicked, they raise `Link` — see below |
 | images | `![alt](file.png)` on a line of its own. Relative to `Path`'s folder, or to the project |

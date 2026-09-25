@@ -479,6 +479,14 @@ function* p_files(ide) {
     check("and the stylesheet is a file of the project like any other",
           ide.FileTree.Exists("app.css"), JSON.stringify(ide.files));
 
+    /* The table of what opens is asked by its own keys: `ext in EDITABLE`
+     * walked to `Object.prototype`, so `x.constructor` was a file the tree
+     * listed and a tab would open with a function for a Language. */
+    eq("an extension the table does not name is not editable",
+       editableOf("constructor"), undefined);
+    eq("...nor is one Object.prototype happens to have", editableOf("toString"), undefined);
+    eq("and one it names still answers", editableOf("JS"), "js");
+
     ide.FileTree.Key = "Child.js";             /* fires FileTree_Select */
     eq("selecting loads the file", ide.activeFile, "Child.js");
     check("the editor shows the contents",

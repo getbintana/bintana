@@ -1458,7 +1458,7 @@ Three things that will waste your time:
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
-  364 assertions against 2591 for the whole project -- 9.4 s against 265 on this
+  364 assertions against 2594 for the whole project -- 9.4 s against 265 on this
   machine -- which is what makes iterating on an early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.
@@ -3429,6 +3429,20 @@ person who wrote it either.
   **`DrawingArea.Dump()` is capped** (`DUMP_CAP`, ending in `...`), so an
   assertion about the second band of a 4000-sample chart read the first and
   passed against the bug -- save narrow and assert the markers are there.
+- **A setter that "only clamps" can still raise events through what it calls.**
+  `Report`'s `Page` setter emitted `Page`, and so did `remeasure()`, which the
+  `Paper`/`Orientation`/`Margins` setters call -- so a `.form` declaring `Paper`
+  raised `Page` during load while the docs said those re-measure silently. The
+  event lives in `Refresh()` alone now. `Markdown.Scroll` is split the same
+  way: `place()` is silent, `moveTo()` is the reader's gesture and emits.
+  Before calling a setter silent, read everything it calls.
+- **`\w` is ASCII, and in a slug it deletes whole headings.** `Введение`
+  slugged to `""`, so every Cyrillic heading shared one anchor.
+  `/[\p{L}\p{M}\p{N}_]/u` keeps exactly what `\w` kept, so no ASCII anchor
+  moved, and anchors are numbered on repeat (`setup`, `setup-1`) or `ScrollTo`
+  only ever reached the first. And **tabs are indentation except inside a
+  fence**: expanding them before parsing is right for a list and wrong for a
+  Makefile in a code block, which is why `untabbed()` tracks fences.
 - **A chart assertion sets every property it depends on.** The *stacked Line
   turned Bar* check passed against the bug in a copy with the section before it
   removed, because `Type` was still the default `Bar` it inherited.

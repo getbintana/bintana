@@ -968,9 +968,16 @@ Ide.FormFiles = class FormFiles {
             /* Synthesised code, checked before it lands: insertMethod works on
              * text, and a file the IDE broke is worse than a handler it did not
              * write.  Asking is not running -- CheckSource only compiles. */
+            /* A file that does not compile is refused even when the IDE did not
+             * break it -- deliberately (the `handlers` phase asserts it): the
+             * handler is inserted into text, and landing it in a file whose
+             * structure the parser cannot read is a guess about where the class
+             * ends. The answer is `{Message, Line, Column}` -- handed whole to
+             * the message it read `[object Object]`. */
             const bad = Application.CheckSource(written.source);
             if (bad) {
-                Message.Error("Adding {0}() to {1} would break it:\n{2}", method, jsName, bad);
+                Message.Error("Adding {0}() to {1} would break it:\n{2}:{3}: {4}",
+                              method, jsName, bad.Line, bad.Column, bad.Message);
                 return false;
             }
 

@@ -59,7 +59,7 @@ declare any of them.
 | `Refresh()` | redraws now. Assigning any property already does |
 | `Save(path, width, height)` | the same drawing to a PNG of any size — a chart in a report, or in a bug report |
 | **event** `Select(series, at, value)` | a click on a bar, a point or a slice. `at` is the index into that series' `Values` |
-| **event** `Hover(series, at, value)` | the pointer passing over one, which is not a selection: a chart that reported a click as a hover could not have a tooltip |
+| **event** `Hover(series, at, value)` | the pointer passing over one, which is not a selection: a chart that reported a click as a hover could not have a tooltip. On a line or an area it is the first series; on a **stacked** `Area` it is the band the pointer is inside (the top one above them all), `value` is that series' own value, and the mark is drawn at the top of its band |
 | **event** `Range(from, count)` | the window changed — the wheel, a drag, or the double click that resets it |
 
 ### `Series`

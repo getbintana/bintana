@@ -45,7 +45,7 @@ It is a [`Component`](../widgets/Component.md), so everything on
 | `Save(path, [page], [scale])` | one page to a PNG | [off the screen](#off-the-screen) |
 | `SavePdf(path)` | **every page, one file** | [off the screen](#off-the-screen) |
 | `Send([setup], cb)` | **every page, to paper** | [off the screen](#off-the-screen) |
-| **event** `Page(page)` | the current page moved | [turning the pages](#turning-the-pages) |
+| **event** `Page(page)` | the data moved the current page (an assignment raises nothing) | [turning the pages](#turning-the-pages) |
 | **event** `Prepared(count)` | the pages were computed | [the data](#the-data) |
 
 ## The paper
@@ -112,7 +112,7 @@ is in [llm/report.md](../../llm/report.md).
 |---|---|
 | `Page` | the current page, **one-based**. Assigning **clamps** to `[1, PageCount]`, so a page past the end is the last one and not a blank |
 | `PageCount` (ro) | how many pages there are. **Measures lazily**, so it is answerable in `Form_Open` before anything has drawn. An empty report is one blank page, not none |
-| **event** `Page(page)` | the current page moved — including when data that shrank pulled it back inside the new count |
+| **event** `Page(page)` | the current page was moved **by the data** — `Data`, `Sections` or `Refresh()` left fewer pages, and it was pulled back inside the new count. **Assigning `Page` raises nothing**, because a property setter must not raise an event: the code that turns a page updates its own display |
 
 **Turning a page redraws and does not re-measure.** That is what the two passes
 buy: the pages were worked out when the data arrived, and `Page` only chooses
@@ -139,6 +139,10 @@ invisible drawing.
 - **No sorting.** See [the data](#the-data).
 - **A declared height does not grow.** `Wrap` re-flows within it and cuts what is
   left over; the band that grows is the one that says `Height: "Auto"`.
+- **A band is never split across pages.** One taller than the room between the
+  page header and footer is placed anyway and cut off at the page's foot, with
+  one `Logger.Warning` per band per `Sections` naming it — see
+  [llm/report.md](../../llm/report.md#sections).
 
 ## See also
 

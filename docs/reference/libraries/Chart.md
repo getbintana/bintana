@@ -153,7 +153,7 @@ chart inside a [`Scroller`](../widgets/Scroller.md) still scrolls it at the ends
 | | |
 |---|---|
 | **event** `Select(series, at, value)` | a click on a bar, a point or a slice. `at` is the index into that series' `Values` |
-| **event** `Hover(series, at, value)` | the pointer passing over one, **which is not a selection**: a chart that reported a click as a hover could not have a tooltip |
+| **event** `Hover(series, at, value)` | the pointer passing over one, **which is not a selection**: a chart that reported a click as a hover could not have a tooltip. On a line or an area it is the first series; on a **stacked** `Area` it is the band the pointer is inside (the top one above them all), `value` is that series' own value, and the mark is drawn at the top of its band |
 | **event** `Range(from, count)` | the window changed |
 
 `Select` and `Hover` are raised whether or not the chart is zoomable, and both

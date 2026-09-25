@@ -1900,10 +1900,10 @@ msgstr "No se encontró la clase {0} en {1}."
 #: modules/FormFiles.js:868
 msgid ""
 "Adding {0}() to {1} would break it:\n"
-"{2}"
+"{2}:{3}: {4}"
 msgstr ""
 "Agregar {0}() a {1} lo rompería:\n"
-"{2}"
+"{2}:{3}: {4}"
 
 #: modules/Git.js:708
 msgid "detached"

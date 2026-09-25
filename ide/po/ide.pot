@@ -1846,7 +1846,7 @@ msgid "Class {0} not found in {1}."
 msgstr ""
 
 #: modules/FormFiles.js:868
-msgid "Adding {0}() to {1} would break it:\n{2}"
+msgid "Adding {0}() to {1} would break it:\n{2}:{3}: {4}"
 msgstr ""
 
 #: modules/Git.js:708

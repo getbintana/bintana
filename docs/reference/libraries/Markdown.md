@@ -111,7 +111,7 @@ listed in [llm/markdown.md](../../llm/markdown.md).
 |---|---|
 | `Scroll` | the offset in pixels. Assigning **clamps** to `[0, ScrollMax]` |
 | `ScrollMax` (ro) | the document's height minus one view |
-| **event** `Scroll(y)` | the view moved — by the wheel, a key, the indicator, or an assignment |
+| **event** `Scroll(y)` | the reader moved the view — the wheel, a key, the indicator — or `ScrollTo`/`Find` did. **An assignment to `Scroll` raises nothing**, because a property setter must not raise an event |
 
 The component scrolls itself: the wheel, `Up` `Down` `Page_Up` `Page_Down`
 `Home` `End` and the space bar, and a drawn overlay indicator that can be
@@ -123,7 +123,7 @@ drawing has no size of its own to ask with.
 
 | | |
 |---|---|
-| `Headings` (ro) | every heading in order: `{ Level, Text, Id, Y }`. `Text` is the words without their emphasis and `Id` the anchor GitHub would give them |
+| `Headings` (ro) | every heading in order: `{ Level, Text, Id, Y }`. `Text` is the words without their emphasis and `Id` the anchor GitHub would give them — letters and digits of any script kept, lower-cased, and a repeated heading numbered (`setup`, `setup-1`, `setup-2`) |
 | `ScrollTo(id)` | put a heading at the top of the view. Takes an `Id`, a `#anchor` or the heading's own words; → whether one was found |
 | `Find(text)` | the first run holding that text: **selects it and scrolls it into view**; → whether there was one. Case is folded and nothing else is |
 | `FindNext()` | the next one after the selection, **wrapping** round to the top |

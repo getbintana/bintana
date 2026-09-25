@@ -215,16 +215,18 @@ class ReportForm extends Form {
     }
 
     /* The report says back where it is. Two events: `Prepared` when the pages
-     * were (re)computed, `Page` when the current one moved -- which is how the
+     * were (re)computed, `Page` when the data moved the current one -- which is how the
      * footer's "page X of Y" and the buttons stay honest without this form
      * having to remember to update them everywhere. */
     Report_Prepared(count) { this.showPage(); }
 
     Report_Page(page) { this.showPage(); }
 
-    BtnPrev_Click() { this.Report.Page = this.Report.Page - 1; }
+    /* **Assigning `Page` raises nothing** -- a property setter must not -- so
+     * the buttons that turn it say so themselves. */
+    BtnPrev_Click() { this.Report.Page = this.Report.Page - 1; this.showPage(); }
 
-    BtnNext_Click() { this.Report.Page = this.Report.Page + 1; }
+    BtnNext_Click() { this.Report.Page = this.Report.Page + 1; this.showPage(); }
 
     /* One page, as a picture. `2` is 144 dpi: an A4 page is a 1190px-wide PNG.
      * This is what to reach for when a page is going into something else -- an

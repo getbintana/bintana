@@ -1527,7 +1527,7 @@ class MainForm extends Form {
      */
     opensAsText(name) {
         if (!name || !this.project) return false;
-        if (EDITABLE[File.Extension(name).toLowerCase()]) return true;
+        if (editableOf(File.Extension(name))) return true;
 
         const info = File.Info(File.Join(this.project, name));
         return !!(info && !info.IsDir && info.Type.startsWith("text/"));

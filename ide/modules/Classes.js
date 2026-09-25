@@ -303,10 +303,10 @@ Ide.Classes = class Classes {
             const rel = inFolder(folder, name);
             if (File.IsDir(File.Join(this.ide.project, rel))) {
                 out.push(...this.scan(rel));
-                /* `in` and not a truthiness test: an entry may be `false`, which
+                /* Named at all and not a truthiness test: an entry may be `false`, which
                  * means the project owns the file and the tree shows it but no
                  * tab opens it (a .po goes to a translation editor). */
-            } else if (File.Extension(name).toLowerCase() in EDITABLE) {
+            } else if (editableOf(File.Extension(name)) !== undefined) {
                 out.push(rel);
             }
         }
