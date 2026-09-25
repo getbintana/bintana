@@ -1,0 +1,12 @@
+{
+  "name": "QR",
+  "startup": "QrForm",
+  "uses": [
+    "qr"
+  ],
+  "sources": [
+    "QrForm.js"
+  ],
+  "version": "1.0",
+  "description": "QR codes from the qr library: any text, its version, mode and mask, and the symbol to the clipboard, a PNG or an SVG"
+}

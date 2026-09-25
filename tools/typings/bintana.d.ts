@@ -809,7 +809,9 @@ declare class Bytes {
 
 declare const Clipboard: {
     Copy(...values: any[]): any;
+    CopyImage(...values: any[]): any;
     Paste(...values: any[]): any;
+    PasteImage(...values: any[]): any;
 };
 
 declare class Connection {

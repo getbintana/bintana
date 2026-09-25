@@ -4923,8 +4923,9 @@ static const char *orient_options(const char *prop)
  *
  * The complaint is the setter's, and it names what it got rather than what it
  * wanted: `Bytes` that are not an image is the ordinary failure here -- an HTTP
- * error page answered with 200, most often -- and *cannot show 1.2 kB: unknown
- * image format* is the sentence that ends that hunt.
+ * error page answered with 200, most often -- and *cannot read 1.2 kB: unknown
+ * image format* is the sentence that ends that hunt. "Read" and not "show"
+ * because the clipboard takes the same road without showing anything.
  */
 GdkTexture *bta_texture_from_bytes(JSContext *ctx, JSValueConst val,
                                    const char *who)
@@ -4948,7 +4949,7 @@ GdkTexture *bta_texture_from_bytes(JSContext *ctx, JSValueConst val,
 
     g_bytes_unref(held);
     if (!texture) {
-        JS_ThrowTypeError(ctx, "%s: cannot show %zu bytes: %s", who, len,
+        JS_ThrowTypeError(ctx, "%s: cannot read %zu bytes: %s", who, len,
                           error ? error->message : "not an image");
         g_clear_error(&error);
         return NULL;

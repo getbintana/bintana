@@ -49,9 +49,9 @@ editing anything under `examples/`, `ide/`, `lib/` or `tests/` needs no rebuild.
 LANGUAGE=es ./build/bintana ide examples/hello   # the IDE in Spanish
 ```
 
-`./build/bintana` finds the shipped libraries (`lib/charts`, `lib/report`,
-`lib/markdown`) one hop from its own binary, so nothing has to be installed to
-run an example or the IDE from the source tree.
+`./build/bintana` finds the shipped libraries (`lib/charts`, `lib/markdown`,
+`lib/package`, `lib/qr`, `lib/report`) one hop from its own binary, so nothing
+has to be installed to run an example or the IDE from the source tree.
 
 ## Install
 

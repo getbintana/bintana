@@ -298,15 +298,19 @@ would resolve it. The IDE's project dialog ticks them off the second one; it is
 in the runtime because a second copy of a six-entry search path drifts, and the
 copy that drifts is the one nobody runs from a shell.
 
-Three ship here. `lib/charts` is [`examples/charts`](../examples/charts)' chart
+Five ship here. `lib/charts` is [`examples/charts`](../examples/charts)' chart
 component, `lib/report` is the banded `Report` that
-[`examples/report`](../examples/report) draws a statement of account with, and
+[`examples/report`](../examples/report) draws a statement of account with,
 `lib/markdown` is the document viewer
-[`examples/markdown`](../examples/markdown) reads its own guide in. All three
-use none of the three optional files, which is the ordinary case for a library of
-one class. What they publish is documented like the runtime's own surface, in
-[llm/charts.md](llm/charts.md), [llm/report.md](llm/report.md) and
-[llm/markdown.md](llm/markdown.md), and
+[`examples/markdown`](../examples/markdown) reads its own guide in, and `lib/qr`
+is the encoder and the view [`examples/qr`](../examples/qr) draws codes with;
+`lib/package` is the packaging step the IDE uses and
+[`tools/pack.sh`](../tools/pack.sh) is a command line around. None of them uses
+any of the optional files beside its classes, which is the ordinary case for a
+library that is a handful of classes. What they publish is documented like the
+runtime's own surface, in [llm/charts.md](llm/charts.md),
+[llm/report.md](llm/report.md), [llm/markdown.md](llm/markdown.md),
+[llm/qr.md](llm/qr.md) and [llm/package.md](llm/package.md), and
 `tests/api.sh` holds those pages to the same completeness rule it holds
 `llm/controls.md` to: **a library that ships with the runtime is part of the
 contract**, and a property nobody wrote down is a property nobody can use.

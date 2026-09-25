@@ -463,7 +463,7 @@ const TESTS = [
     "File", "Dir", "Trash", "Environment",
     /* Async too: its answers land on later turns of the loop, like Exec's,
      * and a run filtered to it alone would report before they arrive. */
-    "Task", "Lock",
+    "Task", "Lock", "Clipboard",
     /* Async, and last but one: its callbacks land on later turns of the loop,
      * like Exec's, and it stops its own server before the run ends. */
     "Http",    /* Async as well, and it dribbles on purpose: its server writes a line
@@ -6794,6 +6794,75 @@ function Main() {
 
         File.Delete(path);
         File.Delete(bigPath);
+    }
+
+    /* --- Clipboard ----------------------------------------------------------
+     *
+     * Both directions are asserted, and the round trip is the point: a copy
+     * that never reached the selection and a paste that reads somebody else's
+     * are different failures, and a call that quietly did nothing looks like
+     * both. Reading is asynchronous -- `Paste` and `PasteImage` take a callback
+     * -- which is why this one is counted and chained.
+     *
+     * The image is `tests/widgets/images/wide.png`, 120x80: a real PNG the
+     * theme did not draw, so the size that comes back is the file's.
+     */
+    testClipboard() {
+        const png = File.LoadBytes(File.Join(IMAGES, "wide.png"));
+
+        eq("an image has to be Bytes", refusal(() => Clipboard.CopyImage("wide.png")),
+           "Clipboard.CopyImage expects Bytes -- what Http answers with and " +
+           "File.LoadBytes reads");
+        eq("and not nothing", refusal(() => Clipboard.CopyImage(new Bytes())),
+           "Clipboard.CopyImage: no bytes at all");
+
+        Directory.Make(SCRATCH);
+        const note = File.Join(SCRATCH, "not-an-image.txt");
+        File.Save(note, "esto no es una imagen");
+        const notImage = refusal(() => Clipboard.CopyImage(File.LoadBytes(note)));
+        check("bytes that are not an image are refused",
+              notImage !== null && notImage.startsWith("Clipboard.CopyImage: cannot read "),
+              notImage);
+        throws("reading an image needs a callback", () => Clipboard.PasteImage());
+
+        /*
+         * Three answers, one per callback: text on the clipboard answers `null`
+         * to an image, an image answers `""` to text, and the image itself
+         * comes back as the PNG that went in -- re-encoded by GDK, so what the
+         * assertions read is the picture and not the bytes.
+         */
+        waiting++;
+        let done = false;
+        const finish = () => { if (!done) { done = true; waiting--; } };
+        const fail   = (why) => { failures.push(`Clipboard: ${why}`); finish(); };
+
+        Clipboard.Copy("palabra");
+        Clipboard.PasteImage((bytes) => {
+            if (bytes !== null) { fail("a text clipboard answered an image"); return; }
+
+            Clipboard.CopyImage(png);
+            Clipboard.PasteImage((image) => {
+                check("an image copied comes back as Bytes", image instanceof Bytes);
+                if (!(image instanceof Bytes)) { fail("no image came back"); return; }
+
+                eq("as a PNG", image.Slice(1, 3).ToText(), "PNG");
+                const pic = new Picture();
+                pic.LoadBytes(image);
+                eq("of the size that went in", pic.SourceWidth, 120);
+                eq("...and height",            pic.SourceHeight, 80);
+                pic.Delete();
+
+                Clipboard.Paste((text) => {
+                    eq("and text asked of an image is empty", text, "");
+                    finish();
+                });
+            });
+        });
+
+        /* A read that never answers would leave the run waiting on the counter
+         * instead of failing, which is the silence `until` has a comment
+         * about. */
+        Timer.After(3000, () => { if (!done) fail("no answer from the clipboard"); });
     }
 
     /* --- Screen -------------------------------------------------------------

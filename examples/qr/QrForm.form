@@ -1,0 +1,147 @@
+{
+  "format": "bintana-form/1",
+  "class": "QrForm",
+  "properties": {
+    "Text": "QR codes",
+    "Width": 760,
+    "Height": 480,
+    "Arrangement": "Horizontal",
+    "Spacing": 16,
+    "Margin": 16
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "TextPage",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Spacing": 16,
+        "Expand": true
+      },
+      "children": [
+        {
+          "type": "Panel",
+          "name": "TextSide",
+          "properties": {
+            "Arrangement": "Vertical",
+            "Spacing": 8,
+            "Width": 340
+          },
+          "children": [
+            {
+              "type": "Label",
+              "name": "LblInput",
+              "properties": {
+                "Text": "Text to encode",
+                "Alignment": "Start"
+              }
+            },
+            {
+              "type": "TextEditor",
+              "name": "Input",
+              "properties": {
+                "Expand": true,
+                "Text": "https://github.com/getbintana/bintana"
+              }
+            },
+            {
+              "type": "Grid",
+              "name": "Options",
+              "properties": {
+                "Columns": 2,
+                "ColumnSpacing": 8,
+                "RowSpacing": 6
+              },
+              "children": [
+                {
+                  "type": "Label",
+                  "name": "LblEcc",
+                  "properties": {
+                    "Text": "Error correction",
+                    "Alignment": "Start"
+                  }
+                },
+                {
+                  "type": "ComboBox",
+                  "name": "Ecc",
+                  "properties": {
+                    "HExpand": true
+                  }
+                },
+                {
+                  "type": "Label",
+                  "name": "LblQuiet",
+                  "properties": {
+                    "Text": "Quiet zone",
+                    "Alignment": "Start"
+                  }
+                },
+                {
+                  "type": "SpinBox",
+                  "name": "Quiet",
+                  "properties": {
+                    "Min": 0,
+                    "Max": 16,
+                    "Value": 4,
+                    "HExpand": true
+                  }
+                }
+              ]
+            },
+            {
+              "type": "Label",
+              "name": "LblInfo",
+              "properties": {
+                "Text": "",
+                "Style": "dim-label",
+                "Alignment": "Start",
+                "Wrap": true
+              }
+            },
+            {
+              "type": "Panel",
+              "name": "TextButtons",
+              "properties": {
+                "Arrangement": "Horizontal",
+                "Spacing": 8
+              },
+              "children": [
+                {
+                  "type": "Button",
+                  "name": "BtnCopy",
+                  "properties": {
+                    "Text": "Copy",
+                    "Width": 100
+                  }
+                },
+                {
+                  "type": "Button",
+                  "name": "BtnPng",
+                  "properties": {
+                    "Text": "Save PNG…",
+                    "Width": 110
+                  }
+                },
+                {
+                  "type": "Button",
+                  "name": "BtnSvg",
+                  "properties": {
+                    "Text": "Save SVG…",
+                    "Width": 110
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "QrView",
+          "name": "TextCode",
+          "properties": {
+            "Expand": true
+          }
+        }
+      ]
+    }
+  ]
+}

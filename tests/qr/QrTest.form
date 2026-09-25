@@ -1,0 +1,17 @@
+{
+  "format": "bintana-form/1",
+  "class": "QrTest",
+  "properties": {
+    "Text": "qr",
+    "Width": 400,
+    "Height": 400,
+    "Arrangement": "Vertical"
+  },
+  "children": [
+    {
+      "type": "QrView",
+      "name": "View",
+      "properties": { "Expand": true }
+    }
+  ]
+}

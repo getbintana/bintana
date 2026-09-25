@@ -1132,7 +1132,7 @@ program remembered cannot be reopened.
 
 ## Tests
 
-Five Bintana projects are run by the suite — `ide`, `markdown`, `report`,
+Six Bintana projects are run by the suite — `ide`, `markdown`, `qr`, `report`,
 `smoke` and `widgets` — each printing `N passed, M failed` and quitting with a
 non-zero status on failure. They are applications, not a harness — write
 assertions the way the suite already does. A project is any directory under

@@ -3053,6 +3053,95 @@ static JSValue sys_clip_paste(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
+/* --------------------------------------------------- the clipboard, images */
+
+/*
+ * An image is `Bytes` and not a control: the same currency `Http` answers with
+ * and `Picture.LoadBytes` takes, and exactly what `QrView.ToPng()` and
+ * `DrawingArea.ToPng()` hand over. GDK sniffs the format, so an application
+ * never names one -- a PNG, a JPEG, anything a loader knows, and the same road
+ * the picture controls already take (`bta_texture_from_bytes`).
+ */
+static JSValue sys_clip_copy_image(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv)
+{
+    GdkTexture *texture = bta_texture_from_bytes(ctx,
+                                argc > 0 ? argv[0] : JS_UNDEFINED,
+                                "Clipboard.CopyImage");
+    if (!texture)
+        return JS_EXCEPTION;
+
+    GdkClipboard *clip = clipboard_of();
+    if (clip)
+        gdk_clipboard_set_texture(clip, texture);
+
+    g_object_unref(texture);
+    return JS_UNDEFINED;
+}
+
+static void on_paste_image(GObject *src, GAsyncResult *res, gpointer user_data)
+{
+    PasteJob *job  = user_data;
+    GError   *err  = NULL;
+    GdkTexture *texture = gdk_clipboard_read_texture_finish(GDK_CLIPBOARD(src), res, &err);
+
+    g_clear_error(&err);   /* nothing to paste is null, not an error */
+
+    /* The same membership question `on_paste` asks and for the same reason:
+     * teardown frees the job with the read still armed, and the context goes
+     * with it. Nothing of the job's is touched on that road. */
+    if (!g_list_find(paste_jobs, job)) {
+        g_clear_object(&texture);
+        return;
+    }
+
+    /* A clipboard holding text answers null: asking for an image where there
+     * is none is as ordinary as an empty clipboard. */
+    JSValue arg = JS_NULL;
+    if (texture) {
+        GBytes *png = gdk_texture_save_to_png_bytes(texture);
+
+        if (png) {
+            size_t      len  = 0;
+            const void *data = g_bytes_get_data(png, &len);
+
+            arg = bta_bytes_new(job->ctx, data, len);
+            g_bytes_unref(png);
+        }
+        g_object_unref(texture);
+    }
+
+    JSValue r = JS_Call(job->ctx, job->cb, JS_UNDEFINED, 1, &arg);
+    if (JS_IsException(r))
+        bta_dump_error(job->ctx);
+    JS_FreeValue(job->ctx, r);
+    JS_FreeValue(job->ctx, arg);
+    bta_drain_jobs(JS_GetRuntime(job->ctx));
+
+    paste_job_free(job);
+}
+
+static JSValue sys_clip_paste_image(JSContext *ctx, JSValueConst this_val,
+                                    int argc, JSValueConst *argv)
+{
+    if (argc < 1 || !JS_IsFunction(ctx, argv[0]))
+        return JS_ThrowTypeError(ctx,
+            "Clipboard.PasteImage(cb) needs a callback: reading is asynchronous");
+
+    GdkClipboard *clip = clipboard_of();
+    if (!clip)
+        return JS_ThrowInternalError(ctx, "no display, no clipboard");
+
+    PasteJob *job = g_new0(PasteJob, 1);
+    job->ctx    = ctx;
+    job->cb     = JS_DupValue(ctx, argv[0]);
+    job->cancel = g_cancellable_new();
+    paste_jobs  = g_list_prepend(paste_jobs, job);
+
+    gdk_clipboard_read_texture_async(clip, job->cancel, on_paste_image, job);
+    return JS_UNDEFINED;
+}
+
 /* ---------------------------------------------------------------- Dialog */
 
 /*
@@ -3865,6 +3954,10 @@ void bta_sys_init(JSContext *ctx, JSValue global)
                       JS_NewCFunction(ctx, sys_clip_copy, "Copy", 1));
     JS_SetPropertyStr(ctx, clipboard, "Paste",
                       JS_NewCFunction(ctx, sys_clip_paste, "Paste", 1));
+    JS_SetPropertyStr(ctx, clipboard, "CopyImage",
+                      JS_NewCFunction(ctx, sys_clip_copy_image, "CopyImage", 1));
+    JS_SetPropertyStr(ctx, clipboard, "PasteImage",
+                      JS_NewCFunction(ctx, sys_clip_paste_image, "PasteImage", 1));
     JS_SetPropertyStr(ctx, global, "Clipboard", clipboard);
 }
 

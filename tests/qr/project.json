@@ -1,0 +1,6 @@
+{
+  "name": "qr",
+  "startup": "QrTest",
+  "uses": ["qr"],
+  "sources": ["QrTest.js"]
+}

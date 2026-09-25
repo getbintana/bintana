@@ -1026,6 +1026,12 @@ append to) and `Handler`. This is what `console` used to be.
 the clipboard belongs to whoever owns the selection, so its contents arrive when
 that application answers. `""` when there is nothing to paste, not an error.
 
+`Clipboard.CopyImage(bytes)` and `Clipboard.PasteImage(cb)` are the same pair
+for a picture. `bytes` is an image GDK decodes from the bytes themselves — what
+`QrView.ToPng()` and `DrawingArea.ToPng()` answer with — and the callback gets
+a PNG as `Bytes`, or `null` when the clipboard holds no image. It is `Bytes` and
+not a control because it is a value: `Picture.LoadBytes` reads the same one.
+
 ## Record and Field
 
 The shape data has, declared once — what a control's properties are to a

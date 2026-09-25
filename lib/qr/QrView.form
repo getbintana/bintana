@@ -1,0 +1,8 @@
+{
+  "format": "bintana-form/1",
+  "class": "QrView",
+  "properties": { "Width": 160, "Height": 160, "Arrangement": "Vertical" },
+  "children": [
+    { "type": "DrawingArea", "name": "Canvas", "properties": { "Expand": true } }
+  ]
+}

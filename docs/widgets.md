@@ -1146,7 +1146,7 @@ It is a **verb** and `File` stays a property, which is the same line `Image`
 draws: a property is designable and serialisable, and bytes are neither. The
 rule that matters is unchanged — one source at a time, the last one wins — so
 bytes clear `File` and `SourceWidth`/`SourceHeight` measure what is really
-shown. The complaint names what it got rather than what it wanted (*cannot show
+shown. The complaint names what it got rather than what it wanted (*cannot read
 17 bytes: unknown image format*), because bytes that are not an image are the
 ordinary failure here: an error page answered with 200, most often.
 

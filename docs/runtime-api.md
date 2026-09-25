@@ -2034,11 +2034,21 @@ questions: is it available, and take this message at this level.
 
 - `Clipboard.Copy(text)` — immediate.
 - `Clipboard.Paste(cb)` — `cb(text)`, and `""` when there is nothing to paste.
+- `Clipboard.CopyImage(bytes)` — a picture, immediate. `bytes` is an image GDK
+  decodes from the bytes themselves — a PNG from `QrView.ToPng()` or
+  `DrawingArea.ToPng()` — and no filename is involved.
+- `Clipboard.PasteImage(cb)` — `cb(bytes)` with a PNG, or `null` when the
+  clipboard holds no image.
 
 Copying is a call and pasting is an answer that arrives: the clipboard's contents
 belong to whoever owns the selection, and come when that application replies.
-Nothing to paste is an empty string, not an error — a clipboard holding an image
-is as ordinary as an empty one.
+Nothing to paste is an empty string — or `null` for an image — not an error, and
+that is the pair's ordinary state whatever the other one holds.
+
+An image is [`Bytes`](#bytes) and not a control, for the reason
+`Picture.LoadBytes` takes bytes: what goes on the clipboard is a value, and the
+same one can be written to a file or posted. GDK sniffs the format, so PNG and
+JPEG are both accepted and an application never names one.
 
 ## Waiting for GTK
 
