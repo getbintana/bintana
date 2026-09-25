@@ -597,6 +597,22 @@ function tableClasses(root) {
  * same name with the same shape and a different *meaning*, which no parser can
  * tell; the signature comments are what make even this much mechanical.
  */
+/*
+ * A shadow that is deliberate, named with the sentence that argues it.
+ *
+ * `Popover.Visible` is the one, and it is the *shape* this check exists for: a
+ * read-only property over `Widget`'s settable one is a name a program will try
+ * to assign and cannot. Here that is the point -- the popover's `Visible` is
+ * its open state, and assigning it would build a popup surface before the
+ * window exists, which is a crash inside GTK (measured). The refusal is at
+ * every door a program asks through, which is what makes it safe to leave:
+ * `Widget.PropertyNames` leaves it out, `Widget.Member` answers `ReadOnly`, a
+ * `.form` that declares it is refused at load and the serialiser never writes
+ * it. A second name here needs the same kind of argument, which is why this is
+ * a list and not a rule.
+ */
+const SHADOW_INTENDED = ["Popover.Visible"];
+
 function checkShadows(root, members, problems) {
     const parent = {};
     const owner  = tableClasses(root);
@@ -626,6 +642,7 @@ function checkShadows(root, members, problems) {
             for (const m of mine[cls]) {
                 const b = base.find((one) => one.name === m.name);
                 if (!b) continue;
+                if (SHADOW_INTENDED.includes(`${cls}.${m.name}`)) continue;
 
                 checked++;
                 if (b.kind !== m.kind) {

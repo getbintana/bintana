@@ -451,7 +451,7 @@ const TESTS = [
     "CloseVeto",
     "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "Record", "Nested", "Database", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "Metrics", "Library", "Plugin", "ListMulti", "MenuState",
-    "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Image", "Switcher", "Reorder", "Aspect",
+    "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
     "CuratedLanguage", "Dictionary", "Regex", "Bytes", "Hash", "Screen", "JsonFiles", "XmlFiles", "XmlRecord", "Log", "Apply", "TimerShorthand", "Terminal",
@@ -556,6 +556,9 @@ const NEEDS = {
      * runs before the window is presented and a completion asked for off screen
      * is asked of nothing. */
     Completion:     ["Exec"],
+    /* It opens once the window is laid out, which is a frame after Form_Open,
+     * and the run has to still be going when the popup maps and closes. */
+    Popover:        ["Exec"],
 };
 
 /*
@@ -13136,6 +13139,129 @@ function Main() {
      * Read off GTK rather than declared, so it cannot drift from what the widget
      * is; written down here, so it cannot change without somebody saying so.
      */
+    /*
+     * Popover: a surface that floats over a control instead of taking room.
+     *
+     * The three things measured before it was written are the three that are
+     * asserted here. It contributes **no measure** to the container it lives
+     * in (GTK skips it in every layout, measured closed and open). Opening it
+     * is `Popup(anchor)` and nothing else -- a `Visible = true` before the
+     * window exists is a crash inside GTK, measured -- so `Visible` is
+     * read-only and `Show()` refuses. And **a closed popover is not a Tab
+     * stop**: GTK leaves the surface's focus child pointing at it, so a walk
+     * that started from there found nothing left and `FocusNext()` answered
+     * `false` on a panel full of controls.
+     */
+    testPopover() {
+        /*
+         * The one property a class takes away from `Widget`. ReadOnly is the
+         * kind a `.form` refuses to load over, which is the point: the loader
+         * would assign it while the window is still being built.
+         */
+        eq("Visible is read-only on a Popover",
+           Widget.Member("Popover", "Visible"), "ReadOnly");
+        check("and it is not offered as settable",
+              !Widget.PropertyNames("Popover").includes("Visible"));
+        eq("Position offers its four sides",
+           JSON.stringify(Widget.PropertyOptions("Popover", "Position")),
+           JSON.stringify(["Top", "Bottom", "Left", "Right"]));
+
+        const panel = new Panel();
+        panel.Arrangement = "Vertical";
+        this.Fixed1.Add(panel);
+
+        /* A declared size, and not for the popover's sake: an empty TextBox in
+         * a box has a natural minimum of nothing, so the anchor a popup needs a
+         * rectangle from would measure 0x0 until something else widened the
+         * box. */
+        const anchor = new Button();
+        anchor.Text = "anchor";
+        anchor.Resize(140, 34);
+        panel.Add(anchor);
+
+        const pop = new Popover();
+        panel.Add(pop);
+
+        eq("a popover is a Single container", pop.Placement, "Single");
+        eq("it starts closed", pop.Visible, false);
+        eq("Position starts at the bottom", pop.Position, "Bottom");
+        eq("no arrow by default, unlike GTK", pop.Arrow, false);
+        eq("autohide on by default", pop.Autohide, true);
+
+        pop.Position = "Top";
+        eq("Position round-trips", pop.Position, "Top");
+        pop.Arrow = true;
+        eq("Arrow round-trips", pop.Arrow, true);
+        pop.Autohide = false;
+        eq("Autohide round-trips", pop.Autohide, false);
+        pop.Position = "Bottom";
+        pop.Arrow = false;
+        pop.Autohide = true;
+        check("a side that is not one is refused by name",
+              (refusal(() => pop.Position = "Middle") || "").includes("Middle"));
+
+        /* Opening has a verb and no switch: both refusals name it. */
+        check("Show() refuses and names Popup()",
+              (refusal(() => pop.Show()) || "").includes("Popup"));
+        throws("Popup(anchor) is not optional", () => pop.Popup());
+
+        /* A popover in no form has nowhere to be positioned from. */
+        const loose = new Popover();
+        check("a popover in no container refuses to open",
+              (refusal(() => loose.Popup(anchor)) || "").includes("not in a form"));
+        loose.Delete();
+
+        let opens = 0, closes = 0;
+        pop.On("Open",  () => opens++);
+        pop.On("Close", () => closes++);
+
+        const content = new Label();
+        content.Text = "suggestions";
+        pop.Add(content);
+        eq("the content is its one child", pop.Children.length, 1);
+        eq("and it is the widget that went in", pop.Children[0], content);
+
+        /* GTK's popover holds one child, so a second is refused where it is
+         * asked for rather than silently replacing the first. */
+        throws("a second child is refused", () => pop.Add(new Label()));
+
+        /* Opened once the window is up: Form_Open runs before it is presented,
+         * and the anchor has no rectangle until then. */
+        until("the anchor has a rectangle", () => anchor.Bounds().Width > 0, () => {
+            pop.Popup(anchor);
+            eq("it is open", pop.Visible, true);
+
+            until("the open event arrives", () => opens === 1, () => {
+                /* Open is the whole state: it is not written down. */
+                check("an open popover does not serialise Visible",
+                      !("Visible" in pop.Serialize().properties));
+
+                pop.Close();
+                eq("it is closed", pop.Visible, false);
+
+                until("and the close event arrives", () => closes === 1, () => {
+                    /*
+                     * The regression the closed popover left behind: the walk
+                     * used to start from the popover GTK still named and go
+                     * nowhere.
+                     */
+                    check("a closed popover is not where Tab stops", panel.FocusNext());
+                    eq("the focus went to the control beside it", anchor.Focused, true);
+
+                    pop.Clear();
+                    eq("Clear empties it", pop.Children.length, 0);
+                    pop.Add(content);
+                    eq("and it takes a child again", pop.Children.length, 1);
+
+                    content.Remove();
+                    eq("Remove takes the content out", pop.Children.length, 0);
+
+                    panel.Delete();
+                });
+            });
+        });
+    }
+
     testCssNode() {
         const NODES = {
             Label: "label", Button: "button", ToggleButton: "button",
@@ -13172,6 +13298,9 @@ function Main() {
             /* GTK's own, and **not** `frame`: a GtkAspectFrame is not a
              * GtkFrame -- it descends from GtkWidget and has no caption. */
             AspectFrame: "aspectframe",
+            /* The popup's own surface, and not the slot it was added to: a
+             * stylesheet that means the panel must not reach it. */
+            Popover: "popover",
             Expander: "expander-widget", Form: "window",
         };
 

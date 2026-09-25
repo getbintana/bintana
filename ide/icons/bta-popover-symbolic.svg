@@ -1,0 +1,4 @@
+<!-- A surface over a control, with the tail saying what it points at. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path fill-rule="evenodd" d="M1.5 1.5h13v9h-3.9L8 14.2 5.4 10.5H1.5z M2.7 2.7v6.6h3.7L8 12.2l1.6-2.9h3.7V2.7z"/>
+</svg>

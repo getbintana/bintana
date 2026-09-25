@@ -79,7 +79,7 @@ for a control without a table in the middle.
 
 ## What is here
 
-**Every name this runtime publishes has a page**: 47 classes, 32 globals and the
+**Every name this runtime publishes has a page**: 48 classes, 32 globals and the
 7 classes the shipped libraries publish. `tests/api.sh` holds each one to its
 members, twice — once in its summary and once where it is explained.
 
@@ -115,6 +115,7 @@ members, twice — once in its summary and once where it is explained.
 | [Overlay](widgets/Overlay.md) | stacked: the first child fills, the rest float on top |
 | [Panel](widgets/Panel.md) | the plain container: a box, a group, a toolbar, a region of a window |
 | [Picture](widgets/Picture.md) | a photograph, which is not an icon |
+| [Popover](widgets/Popover.md) | a surface that floats over a control instead of taking room |
 | [ProgressBar](widgets/ProgressBar.md) | work with an end in sight |
 | [RowList](widgets/RowList.md) | one row per child, and **each row is a widget you built** |
 | [Scroller](widgets/Scroller.md) | content whose size is not its parent's business |

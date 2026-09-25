@@ -744,6 +744,12 @@ BtaWidget *bta_slot_child(GtkWidget *child);
 /* The direct GTK child of the slot that carries `child`: itself, or the row or
  * cell a RowList or a Flow wrapped it in. The inverse of bta_slot_child(). */
 GtkWidget *bta_child_holder(GtkWidget *child);
+/* What a slot reports as its first content widget, which is not always GTK's
+ * first child: a `GtkPopover` wraps its content in a `GtkPopoverContent` of its
+ * own, and the widget an application means is `gtk_popover_get_child`. Every
+ * walk over a slot starts here, so the wrapper stays out of `Children`, `Clear`
+ * and the binding cascade. */
+GtkWidget *bta_slot_first_child(GtkWidget *slot);
 /* How many of ours a slot holds, wrappers looked through -- what an index in
  * `Reorder` is counted against. */
 int        bta_container_count(GtkWidget *slot);

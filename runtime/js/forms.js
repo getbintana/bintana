@@ -198,20 +198,37 @@ const POSITION = ["X", "Y"];
 const SIZE = ["Width", "Height"];
 
 
-/* Settable properties, walking up to (but not including) Object.prototype. */
+/*
+ * Settable properties, walking up to (but not including) Object.prototype.
+ *
+ * **The most derived class that declares a name decides whether it is
+ * settable**, which is the same boundary `Widget.Member` walks to and the
+ * reason the guard is a `seen` list rather than a check on the result. It was
+ * once "whichever class in the chain happens to have both a getter and a
+ * setter", so a subclass could not take a property away: `Popover` declares
+ * `Visible` getter-only -- it is the open state and assigning it would build a
+ * popup surface before the window exists -- and the walk went on to `Widget`'s
+ * getter/setter pair and offered, serialised and loaded a property the class
+ * had just refused. A read-only override that the property grid and the
+ * serialiser both ignore is what a class says *this is a question, not a
+ * switch* with.
+ */
 function settableProperties(widget) {
-    const names = [];
+    const out  = [];
+    const seen = [];
+
     for (let p = prototypeOf(widget); p && p !== objectProto;
          p = prototypeOf(p)) {
         for (const key of ownNames(p)) {
+            if (seen.includes(key)) continue;
+            seen.push(key);
+
             const d = ownDescriptor(p, key);
-            if (d && typeof d.get === "function" && typeof d.set === "function"
-                && !names.includes(key)) {
-                names.push(key);
-            }
+            if (d && typeof d.get === "function" && typeof d.set === "function")
+                out.push(key);
         }
     }
-    return names.sort();
+    return out.sort();
 }
 
 function savableValue(v) {

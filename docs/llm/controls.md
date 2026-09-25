@@ -43,13 +43,16 @@ Widget                            (abstract)
 │       └── SourceEditor    GtkSourceView: languages, gutter, search, marks
 └── Container  (abstract)
     ├── Panel  Frame  Expander  Grid  Flow  Scroller  RowList  Overlay  AspectFrame
-    ├── Split  Notebook  Switcher
+    ├── Split  Notebook  Switcher  Popover
     ├── Form
     └── Component
 ```
 
 `Widget`, `Control`, `Container` and `Editor` cannot be instantiated. `Form` and `Component`
 are what a project's own classes extend.
+
+[`examples/factory`](../../examples/factory) is this whole page as a window: a
+tab per family, each class shown in a few of the configurations it is used in.
 
 ### What there is, and what this build can run
 
@@ -61,6 +64,13 @@ position a palette, a `.form` loader and an extractor are all in:
 | `Widget.Types()` → array | every class the runtime has, in registration order |
 | `Widget.New(type)` → widget | makes one. The runtime's classes first, then the project's own and its libraries' — which is how a component appears in a `.form` as an ordinary `"type"`. Throws on a name that is neither |
 | `Widget.Available(type)` → boolean | whether **this machine** can run one. `false` for a name that is no class at all, so it answers rather than throwing |
+
+**`Types()` is every class, the six that cannot be placed included.** The four
+abstract roots are in it — `Widget.PropertyNames("Widget")` answers where
+`Widget.New("Widget")` refuses — and so are `Form` and `Component`. A palette
+filters those six out: the first four are not controls, and the last two are not
+*in* a window, one being the window itself and the other with no class of its own
+being nothing to place.
 
 `Types` and `Available` are not the same list, and the difference is the point:
 [`Terminal`](#terminal) is always in `Types()` because the class is always there
@@ -120,7 +130,7 @@ that declares none.
 
 **Controls:** [`Label`](#label) · [`Button`](#button) · [`ToggleButton`](#togglebutton) · [`CheckButton`](#checkbutton) · [`Switch`](#switch) · [`Spinner`](#spinner) · [`Separator`](#separator) · [`LinkButton`](#linkbutton) · [`Image`](#image) · [`Picture`](#picture) · [`Video`](#video) · [`TextBox`](#textbox) · [`SpinBox`](#spinbox) · [`DecimalBox`](#decimalbox) · [`Slider`](#slider) · [`ProgressBar`](#progressbar) · [`LevelBar`](#levelbar) · [`DatePicker`](#datepicker) · [`Calendar`](#calendar) · [`ColorButton`](#colorbutton) · [`FontButton`](#fontbutton) · [`ListBox`](#listbox) · [`ComboBox`](#combobox) · [`TreeView`](#treeview) · [`TableView`](#tableview) · [`TextEditor`](#texteditor) · [`SourceEditor`](#sourceeditor) · [`Terminal`](#terminal) · [`DrawingArea`](#drawingarea)
 
-**Containers:** [`Panel`](#panel) · [`Frame`](#frame) · [`Expander`](#expander) · [`Grid`](#grid) · [`Flow`](#flow) · [`Scroller`](#scroller) · [`RowList`](#rowlist) · [`Overlay`](#overlay) · [`AspectFrame`](#aspectframe) · [`Split`](#split) · [`Notebook`](#notebook) · [`Switcher`](#switcher) · [`Form`](#form) · [`Component`](#component)
+**Containers:** [`Panel`](#panel) · [`Frame`](#frame) · [`Expander`](#expander) · [`Grid`](#grid) · [`Flow`](#flow) · [`Scroller`](#scroller) · [`RowList`](#rowlist) · [`Overlay`](#overlay) · [`AspectFrame`](#aspectframe) · [`Split`](#split) · [`Notebook`](#notebook) · [`Switcher`](#switcher) · [`Popover`](#popover) · [`Form`](#form) · [`Component`](#component)
 
 ## Widget — inherited by everything
 
@@ -710,7 +720,7 @@ A drop-down.
 
 | Member | |
 |---|---|
-| `Index` | which is chosen, `-1` for none. Default `-1` |
+| `Index` | which is chosen; `-1` when the list is empty. Assigning chooses the row; **assigning `-1` moves nothing**, because a drop-down with items always has one chosen (the first, until told otherwise) |
 | `Items` | the drop-down's contents. **Translated** |
 | `Text` | the chosen text |
 | `Count` (ro) | how many |
@@ -1348,6 +1358,54 @@ axis and the proportion on the other — and a child requesting nothing gives 0x
 `Placement` is `Single`: there is no coordinate to give the child and no order to
 put it in, so a second `Add` is refused rather than silently replacing the first.
 
+## Popover
+
+A surface that floats over a control instead of taking room in the layout: the
+list of suggestions under a field, the rows a button drops, a small form that
+belongs to whatever it points at.
+
+| Member | |
+|---|---|
+| `Position` | which side of the anchor it prefers: `Top` `Bottom` `Left` `Right`. Default `"Bottom"` |
+| `Arrow` | draw the tail pointing back at the control. Default `false`, unlike GTK's own — a menu wants the tail and a list of suggestions flush against a field does not |
+| `Autohide` | close on a click outside or Escape. Default `true` |
+| `Visible` (ro) | whether it is open. **Read-only**: opening has a verb, and this is the question half |
+| `Popup(anchor)` | opens it over that control. The anchor must have a rectangle and the window must be up |
+| `Close()` | closes it, and is safe at any time |
+| `Show()` | refuses and names `Popup(anchor)`; the inherited one would build a popup surface before the window exists |
+| **event** `Open()` | it came up, however it was asked |
+| **event** `Close()` | it went down: `Close()`, autohide, or the window going with it |
+
+It is a child of a container like any other — the `.form` draws it beside what it
+belongs to, the loader adopts it, `Children` reaches its content and `Clear()`
+empties it — and it contributes **no measure**: a box holding a button and a
+popover as tall as a paragraph still asks for the button's 34 pixels, closed and
+open. What decides where it appears is `Popup`, not the slot, so a `Fixed`
+surface does not give it a rectangle and a box does not stretch it. `Placement`
+is `Single` for the same reason an `AspectFrame`'s is: one child, one place, and
+a gesture there is *land*.
+
+```js
+/* A field that drops a list of matches. */
+Txt_Change() { this.Sug.Popup(this.Txt); }
+Txt_KeyPress(key) {
+    if (key === "Escape") { this.Sug.Close(); return true; }
+    return false;
+}
+Lst_Activate() { this.Txt.Text = this.Lst.Text; this.Sug.Close(); }
+```
+
+**`Visible` is the open state and not a design property**, which is the one
+place a class takes a property away from `Widget`: the loader assigns what a
+`.form` declares while the window is still being built, and
+`gtk_widget_set_visible(TRUE)` on a popover with no toplevel is a crash inside
+GTK — measured, not a warning. So `Widget.Member("Popover", "Visible")` answers
+`ReadOnly`, a `.form` that declares it is refused, the property grid does not
+offer it and the serialiser never writes it. **A closed popover is not a Tab
+stop** either: GTK leaves the surface's focus child pointing at it, so the walk
+that started there found nothing left, and `FocusNext()` answered `false` on a
+panel full of controls until it was left out.
+
 ## Split
 
 Two children with a draggable divider.
@@ -1369,11 +1427,11 @@ Pages in tabs. Its `children` **are** its pages.
 | `Strip` | `Top` `Bottom` `Start` `End` `None` — where the tabs are, or that there are none. Default `"Top"` |
 | `Tabs` | the strip, as an array of strings. **Translated** |
 | `Count` (ro) | how many **pages** — an action widget in the strip is not one |
-| `Append(child, [label])` | one more page |
+| `Append(child, [label])` | one more page. **`label` is a widget** (a `Label`) — a tab has room for one, where a `Switcher`'s page name is a string |
 | `GetAction(where)` | → the widget in that end of the strip, or `null` |
 | `RemovePage(index)` | takes a page out |
 | `SetAction(control, [where])` | puts a widget **in the tab strip** instead of making it a page. `where` is `Start` or `End`; `null` takes it out. In a `.form` this is a child carrying `"strip": "End"` |
-| `SetTabLabel(index, label)` | renames one tab |
+| `SetTabLabel(index, label)` | renames one tab. `label` is a widget, as in `Append` |
 | **event** `Switch(index)` | a different page is showing |
 
 ## Switcher
@@ -1386,7 +1444,7 @@ Pages picked from a strip of linked buttons.
 | `Strip` | `Top` `Bottom` `Start` `End` `None` — `None` is a bare stack only code switches. Default `"Top"` |
 | `Tabs` | the strip, as strings. **Translated**. A segmented control has nowhere for a widget, so this is the whole of it |
 | `Count` (ro) | how many pages |
-| `Append(child, [name])` | one more page |
+| `Append(child, [name])` | one more page. `name` is a **string** — a segmented control has nowhere for a widget |
 | `RemovePage(index)` | takes one out |
 | **event** `Switch(index)` | a different page is showing |
 
@@ -1460,4 +1518,5 @@ Do not file an issue for these; the argument is written down and settled.
   or refiltered it is the wrong row's tick — which is the single most common bug
   in every toolkit that offers one. Keep a `Set` of what is on, show it when you
   build the row, and update it in the button's `Click`. Then filtering, sorting
-  and rebuilding cannot lie.
+  and rebuilding cannot lie. [`examples/todo`](../../examples/todo) is the shape
+  at its smallest.

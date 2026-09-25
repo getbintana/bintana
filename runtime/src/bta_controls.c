@@ -919,11 +919,12 @@ static JSValue cont_get_placement(JSContext *ctx, JSValueConst this_val)
 
     /* One child, and one place to put it: there is no coordinate to give it, no
      * order to put it in and nothing to choose -- an `AspectFrame` hands its
-     * child the whole rectangle the proportion works out. A gesture there is
-     * *land*, which is why it needs a word of its own: told `Coordinates` an
-     * editor offers X/Y that do nothing, told `Order` it asks for an order the
-     * container has not got. */
-    if (GTK_IS_ASPECT_FRAME(w->slot))
+     * child the whole rectangle the proportion works out, and a `Popover`
+     * holds its content in a surface of its own with no rectangle on this
+     * form at all. A gesture there is *land*, which is why it needs a word of
+     * its own: told `Coordinates` an editor offers X/Y that do nothing, told
+     * `Order` it asks for an order the container has not got. */
+    if (GTK_IS_ASPECT_FRAME(w->slot) || GTK_IS_POPOVER(w->slot))
         return JS_NewString(ctx, "Single");
 
     /* Nothing answers this today -- every container the runtime has is one of
@@ -1061,7 +1062,7 @@ static JSValue cont_get_children(JSContext *ctx, JSValueConst this_val)
         return arr;
     }
 
-    for (GtkWidget *c = gtk_widget_get_first_child(p->slot);
+    for (GtkWidget *c = bta_slot_first_child(p->slot);
          c; c = gtk_widget_get_next_sibling(c)) {
 
         BtaWidget *cw = bta_slot_child(c);
@@ -1122,7 +1123,7 @@ JSValue bta_container_clear(JSContext *ctx, JSValueConst this_val)
      */
     GPtrArray *ours = g_ptr_array_new_with_free_func(g_object_unref);
 
-    for (GtkWidget *c = gtk_widget_get_first_child(p->slot); c;
+    for (GtkWidget *c = bta_slot_first_child(p->slot); c;
          c = gtk_widget_get_next_sibling(c)) {
         /* A ListBox's rows are text and have no wrapper, and they *are* its
          * contents -- the one kind of child that is ours without being one of
@@ -6798,6 +6799,267 @@ static const JSCFunctionListEntry fontbutton_props[] = {
     JS_CGETSET_DEF("Value", fontbtn_get_value, fontbtn_set_value),
 };
 
+/* --------------------------------------------------------------- Popover */
+
+/*
+ * A surface that floats over a control instead of taking room in the layout.
+ *
+ * GTK's `GtkPopover` is the primitive, and the shape of the wrapper answers the
+ * two questions it raises:
+ *
+ * - **Where it lives.** It is an ordinary child of a container -- the `.form`
+ *   draws it beside whatever it belongs to and the loader adopts it like any
+ *   other control -- but a popover contributes **no measure**: measured, a box
+ *   holding a button and a popover as tall as a paragraph still asks for the
+ *   button's 34 pixels, closed *and* open. What positions it is `Popup`, not
+ *   the slot, so a `Panel` arranged by coordinates does not give it a
+ *   rectangle and a box does not stretch it.
+ * - **What opens it.** `Popup(anchor)` and nothing else. `Visible` is
+ *   read-only here and `Show()` refuses, because a popover with no anchor has
+ *   nowhere to be -- and `gtk_widget_set_visible(TRUE)` on one whose window is
+ *   not up yet does not merely misplace it, it **crashes** (the surface is
+ *   made against a toplevel that is not there). That is why the property is a
+ *   question and not a switch.
+ *
+ * `Close()` is safe at any time: hiding before anything is shown is a no-op.
+ */
+static void on_popover_open(GtkWidget *pop, gpointer user_data)
+{
+    bta_emit((BtaWidget *)user_data, "Open", 0, NULL);
+}
+
+static void on_popover_closed(GtkPopover *pop, gpointer user_data)
+{
+    bta_emit((BtaWidget *)user_data, "Close", 0, NULL);
+}
+
+static void build_popover(BtaWidget *w)
+{
+    GtkWidget *pop = gtk_popover_new();
+
+    /* Off by default, unlike GTK's own: the arrow is a tail pointing at the
+     * control, which is what a menu wants and what a list of suggestions drawn
+     * flush against a field does not. `Arrow = true` brings it back. */
+    gtk_popover_set_has_arrow(GTK_POPOVER(pop), FALSE);
+
+    w->gtk  = pop;
+    w->slot = pop;              /* the popover is its own slot */
+
+    /* Both halves a program needs to hear, wherever they came from: `map` when
+     * it came up, `closed` when it went down -- `Close()`, autohide, or the
+     * control it points at going with the window. */
+    g_signal_connect(pop, "map",    G_CALLBACK(on_popover_open), w);
+    g_signal_connect(pop, "closed", G_CALLBACK(on_popover_closed), w);
+}
+
+static JSValue popover_get_position(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    switch (gtk_popover_get_position(GTK_POPOVER(w->gtk))) {
+    case GTK_POS_TOP:    return JS_NewString(ctx, "Top");
+    case GTK_POS_LEFT:   return JS_NewString(ctx, "Left");
+    case GTK_POS_RIGHT:  return JS_NewString(ctx, "Right");
+    default:             return JS_NewString(ctx, "Bottom");
+    }
+}
+
+static JSValue popover_set_position(JSContext *ctx, JSValueConst this_val,
+                                    JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    const char *s = JS_ToCString(ctx, val);
+    if (!s)
+        return JS_EXCEPTION;
+
+    GtkPositionType at;
+
+    if (g_str_equal(s, "Top"))         at = GTK_POS_TOP;
+    else if (g_str_equal(s, "Bottom")) at = GTK_POS_BOTTOM;
+    else if (g_str_equal(s, "Left"))   at = GTK_POS_LEFT;
+    else if (g_str_equal(s, "Right"))  at = GTK_POS_RIGHT;
+    else {
+        JSValue e = JS_ThrowRangeError(ctx,
+            "'%s' is not a Position: Top, Bottom, Left or Right", s);
+        JS_FreeCString(ctx, s);
+        return e;
+    }
+
+    JS_FreeCString(ctx, s);
+    gtk_popover_set_position(GTK_POPOVER(w->gtk), at);
+    return JS_UNDEFINED;
+}
+
+static JSValue popover_get_arrow(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    return JS_NewBool(ctx, gtk_popover_get_has_arrow(GTK_POPOVER(w->gtk)));
+}
+
+static JSValue popover_set_arrow(JSContext *ctx, JSValueConst this_val,
+                                 JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    gtk_popover_set_has_arrow(GTK_POPOVER(w->gtk), JS_ToBool(ctx, val) > 0);
+    return JS_UNDEFINED;
+}
+
+static JSValue popover_get_autohide(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    return JS_NewBool(ctx, gtk_popover_get_autohide(GTK_POPOVER(w->gtk)));
+}
+
+static JSValue popover_set_autohide(JSContext *ctx, JSValueConst this_val,
+                                    JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    gtk_popover_set_autohide(GTK_POPOVER(w->gtk), JS_ToBool(ctx, val) > 0);
+    return JS_UNDEFINED;
+}
+
+/*
+ * Read-only, and the one place a class shadows a property `Widget` already
+ * had. It is the popover's *open state* and not something a `.form` may
+ * declare: the loader would assign it while the window is still being built,
+ * and GTK makes the popup's surface against a toplevel that is not there yet.
+ * `Widget.Member("Popover", "Visible")` answers `ReadOnly`, which is the name
+ * a `.form` refuses to load over, and the serialiser never writes it.
+ */
+static JSValue popover_get_visible(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    return JS_NewBool(ctx, gtk_widget_get_visible(w->gtk));
+}
+
+/* Show() refuses, and it has to: the inherited one calls
+ * `gtk_widget_set_visible` on a popover with no anchor and no window, which is
+ * the crash the paragraph above is about. */
+static JSValue popover_show(JSContext *ctx, JSValueConst this_val,
+                            int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    return JS_ThrowTypeError(ctx,
+        "%s opens over a control: assign nothing and call Popup(anchor)",
+        w->name ? w->name : "a popover");
+}
+
+/* Popup(anchor) */
+static JSValue popover_popup(JSContext *ctx, JSValueConst this_val,
+                             int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "Popup(anchor) needs the control it points at");
+
+    BtaWidget *anchor = bta_widget_of(argv[0]);
+    if (!anchor || !anchor->gtk)
+        return JS_ThrowTypeError(ctx, "Popup(anchor) expects a control");
+
+    /* Where it lives is where it is positioned from: the slot it was added to
+     * is the coordinate space `pointing_to` is read in. */
+    GtkWidget *parent = gtk_widget_get_parent(w->gtk);
+    if (!parent)
+        return JS_ThrowTypeError(ctx,
+            "%s is not in a form: add the popover to a container before opening it",
+            w->name ? w->name : "a popover");
+
+    /* The anchor has to have been laid out, which it cannot have been before
+     * the window is up -- and opening one that early is the crash above. */
+    GtkRoot *root = gtk_widget_get_root(parent);
+
+    if (!root || !gtk_widget_get_mapped(anchor->gtk))
+        return JS_ThrowTypeError(ctx,
+            "%s cannot open before the window is shown",
+            w->name ? w->name : "a popover");
+
+    /*
+     * **GTK reads the window's focus while it shows an autohide popover**, and
+     * asserts when there is none: `gtk_popover_focus` gets the root's focus
+     * widget and asks whether it is an ancestor, with a `NULL` that is not a
+     * widget. Measured -- a window whose focus was lost (the popover before
+     * this one closed onto a panel, which cannot take it) plus a popover whose
+     * content has nothing focusable is one critical per open.
+     *
+     * So the window is given a focus on the way in, and the anchor is first:
+     * it is where the interaction came from, and a field that opens a list of
+     * suggestions should go on having the keyboard. An anchor that cannot take
+     * focus (a `Label`) leaves the window's own first focusable control, which
+     * is enough for GTK's walk to have an answer.
+     */
+    if (!gtk_root_get_focus(root)) {
+        gtk_widget_grab_focus(anchor->gtk);
+        if (!gtk_root_get_focus(root))
+            gtk_widget_child_focus(GTK_WIDGET(root), GTK_DIR_TAB_FORWARD);
+    }
+
+    graphene_rect_t r;
+
+    if (!gtk_widget_compute_bounds(anchor->gtk, parent, &r))
+        return JS_ThrowTypeError(ctx,
+            "Popup: %s is not in this window",
+            anchor->name ? anchor->name : "the anchor");
+
+    GdkRectangle at = {
+        (int)r.origin.x, (int)r.origin.y,
+        MAX(1, (int)r.size.width), MAX(1, r.size.height)
+    };
+
+    gtk_popover_set_pointing_to(GTK_POPOVER(w->gtk), &at);
+    gtk_popover_popup(GTK_POPOVER(w->gtk));
+    return JS_UNDEFINED;
+}
+
+/* Close() */
+static JSValue popover_close(JSContext *ctx, JSValueConst this_val,
+                             int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    if (gtk_widget_get_visible(w->gtk))
+        gtk_popover_popdown(GTK_POPOVER(w->gtk));
+    return JS_UNDEFINED;
+}
+
+static const char *popover_options(const char *prop)
+{
+    return !strcmp(prop, "Position") ? "Top,Bottom,Left,Right" : NULL;
+}
+
+static const JSCFunctionListEntry popover_props[] = {
+    JS_CGETSET_DEF("Position", popover_get_position, popover_set_position),
+    JS_CGETSET_DEF("Arrow",    popover_get_arrow,    popover_set_arrow),
+    JS_CGETSET_DEF("Autohide", popover_get_autohide, popover_set_autohide),
+    /* Read-only: the open state, not a design property. See above. */
+    JS_CGETSET_DEF("Visible",  popover_get_visible,  NULL),
+    /* Popup(anchor) */
+    JS_CFUNC_DEF("Popup", 1, popover_popup),
+    /* Close() */
+    JS_CFUNC_DEF("Close", 0, popover_close),
+    /* Show() */
+    JS_CFUNC_DEF("Show",  0, popover_show),
+};
+
 /* ---------------------------------------------------------- registration */
 
 /* The values a container's or a label's enumerated properties accept. Declared
@@ -7120,6 +7382,10 @@ void bta_core_register(void)
         /* Change() */
         BTA_CLASS     ("FontButton",  "Control",  build_fontbutton,
                        fontbutton_props, false, "Change"),
+        /* Open() */
+        /* Close() */
+        BTA_CLASS_ENUM("Popover", "Container", build_popover, popover_props,
+                       false, popover_options, "Open,Close"),
     };
     bta_register_classes(rows, (int)G_N_ELEMENTS(rows));
 }

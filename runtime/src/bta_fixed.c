@@ -411,6 +411,19 @@ static gboolean bta_fixed_focus(GtkWidget *widget, GtkDirectionType direction)
 
     for (GtkWidget *c = gtk_widget_get_first_child(widget);
          c; c = gtk_widget_get_next_sibling(c)) {
+        /*
+         * **A popover is not a stop**, and leaving it out of the list is also
+         * what keeps the walk from starting in the wrong place: GTK sets the
+         * surface's `focus_child` to the popover while it is open, and a closed
+         * one goes on naming it -- so the walk began *after* the popover it
+         * could not focus and found nothing left, and `FocusNext()` answered
+         * `false` on a form full of focusable controls. Its content is modal
+         * while the popover is up, and the program puts the focus where it
+         * wants when it comes down.
+         */
+        if (GTK_IS_POPOVER(c))
+            continue;
+
         BtaWidget *cw = bta_slot_child(c);
         TabStop    s  = { c, cw ? cw->tab_index : 0, seq++ };
         g_array_append_val(stops, s);

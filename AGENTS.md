@@ -1905,6 +1905,52 @@ person who wrote it either.
   full. Its `Placement` is `Single`, the sixth word: one child and one place, so
   a gesture there is *land* -- told `Coordinates` an editor offers X/Y that do
   nothing, told `Order` it asks for an order the container has not got.
+- **A `GtkPopover` is a surface and not a widget in the layout, and five things
+  were measured before it could be one of ours.** Each is a bullet because each
+  one changed the design:
+  - **It contributes no measure.** A box holding a button and a popover as tall
+    as a paragraph still asks for the button's 34 pixels, closed *and* open --
+    which is what makes it safe to draw one into a `.form` at all.
+  - **GTK 4.22 wraps its content in a `GtkPopoverContent` of its own**, so
+    `gtk_widget_get_first_child(popover)` is that wrapper and the widget an
+    application means is `gtk_popover_get_child`. Every walk over a slot goes
+    through `bta_slot_first_child` now (`Children`, `Clear`, the binding
+    cascade) and `bta_container_detach` finds the popover as the content's
+    *ancestor* -- without which `Remove()` of the content refused with *cannot
+    remove from this container*, and `Children` answered `0` about a popover
+    holding a `RowList`. **A `GtkPopover` setter is a property, not an
+    unparent**: `Clear`, `Remove` and a second `Add` all go through
+    `gtk_popover_set_child`.
+  - **`gtk_widget_set_visible(TRUE)` before there is a toplevel is a segfault**,
+    not a warning: the popup surface is made against a toplevel that is not
+    there. That is why `Visible` is **read-only on a `Popover`** -- the one
+    place a class shadows a property `Widget` already had -- and why `Show()`
+    refuses and `Popup(anchor)` is the only verb. `Widget.Member("Popover",
+    "Visible")` answers `ReadOnly`, so a `.form` that declares it is refused at
+    load; the serialiser never writes it, and the property grid never offers
+    it. (`tests/api.sh` flags the shadow; it is on the deliberate list there.)
+  - **GTK's autohide focus walk asserts on a window with no focus.** With
+    `Autohide` on and nothing focusable inside, `gtk_popover_focus` reads
+    `gtk_root_get_focus` and calls `gtk_widget_is_ancestor` on the `NULL` --
+    one critical per open, measured, after a popover closed onto a panel that
+    cannot take the focus. `Popup` seeds one: the anchor if it can take it
+    (which also keeps the keyboard in the field that opened a suggestion list),
+    otherwise the window's own first focusable control.
+  - **A closed popover is not a Tab stop, and leaving it in the list broke the
+    walk.** GTK sets the surface's `focus_child` to the popover while it is
+    open and a closed one goes on naming it, so `bta_fixed_focus` started
+    *after* the popover it could not focus and found nothing left -- `FocusNext()`
+    answered `false` on a panel full of controls. `bta_fixed_focus` skips
+    `GTK_IS_POPOVER` when it builds its stops.
+- **`settableProperties` had the override rule backwards, and a read-only
+  property could not be taken away.** The walk collected a name if *any* class
+  in the chain had both accessors, so a subclass's getter-only declaration was
+  skipped and the base's setter was offered, serialised and loaded anyway --
+  exactly the `Popover.Visible` that has to be refused. It is the boundary
+  `Widget.Member` already walked: **the most derived class that declares a name
+  decides whether it is settable**, tracked with a `seen` list rather than a
+  check on the result. `forms.js`, and the general fix rather than a special
+  case for one class.
 - **`printf("%g")` writes the locale's decimal separator, and this machine writes
   a comma.** `Ratio = 1.5` came back `"1,5"`, which is what the `.form` would
   then carry and what `JSON.parse` would read as **nothing** -- the same fault

@@ -57,7 +57,7 @@ const PALETTE_TABS = [
     { name: "Views",  types: ["TreeView", "TableView", "TextEditor", "SourceEditor",
                               "Terminal", "RowList", "Flow", "DrawingArea", "Video"] },
     { name: "Boxes",  types: ["Panel", "Grid", "Frame", "Expander", "Scroller", "AspectFrame"] },
-    { name: "Split",  types: ["Split", "Notebook", "Switcher", "Overlay"] },
+    { name: "Split",  types: ["Split", "Notebook", "Switcher", "Overlay", "Popover"] },
 ];
 
 /*
@@ -193,6 +193,9 @@ const PALETTE_ICON = {
      * which is the `Notebook`'s -- and a notebook shows one page where an
      * overlay shows all of them at once. */
     Overlay:  ["bta-overlay-symbolic"],
+    /* A surface that floats over a control, which no theme has a picture for:
+     * the tail is what tells it apart from the `Overlay`'s two layers. */
+    Popover:  ["bta-popover-symbolic"],
     Scroller: ["view-continuous-symbolic", "bta-panel-symbolic"],
     /* A proportion kept inside the room there is, which is what "fit best" has
      * meant since every image viewer had that button -- and the one drawn here

@@ -38,7 +38,6 @@ declare class Widget {
     Tooltip: string;
     VAlign: string;
     VExpand: boolean;
-    Visible: boolean;
     Width: number;
     X: number;
     Y: number;
@@ -104,6 +103,7 @@ declare class Form extends Widget {
     Resizable: boolean;
     Spacing: number;
     Text: string;
+    Visible: boolean;
     readonly CancelButton: any;
     readonly Children: any[];
     readonly DefaultButton: any;
@@ -128,6 +128,7 @@ declare class Panel extends Widget {
     Arrangement: string;
     Homogeneous: boolean;
     Spacing: number;
+    Visible: boolean;
     readonly Children: any[];
     readonly Placement: string;
     Add(widget: any): any;
@@ -146,6 +147,7 @@ declare class Component extends Widget {
     Arrangement: string;
     Homogeneous: boolean;
     Spacing: number;
+    Visible: boolean;
     readonly Children: any[];
     readonly Placement: string;
     Add(widget: any): any;
@@ -166,6 +168,7 @@ declare class Label extends Widget {
     Markup: boolean;
     Selectable: boolean;
     Text: string;
+    Visible: boolean;
     Wrap: boolean;
 }
 declare class Button extends Widget {
@@ -173,16 +176,19 @@ declare class Button extends Widget {
     Default: boolean;
     Icon: string;
     Text: string;
+    Visible: boolean;
     Click(): any;
 }
 declare class Image extends Widget {
     File: string;
     Icon: string;
     Size: number;
+    Visible: boolean;
     LoadBytes(bytes: any): any;
 }
 declare class Separator extends Widget {
     Orientation: string;
+    Visible: boolean;
 }
 declare class TextBox extends Widget {
     ActivatesDefault: boolean;
@@ -194,6 +200,7 @@ declare class TextBox extends Widget {
     Purpose: string;
     ReadOnly: boolean;
     Text: string;
+    Visible: boolean;
     readonly Offset: number;
     readonly Selection: string;
     Insert(text: any): any;
@@ -204,9 +211,11 @@ declare class CheckButton extends Widget {
     Active: boolean;
     Group: string;
     Text: string;
+    Visible: boolean;
 }
 declare class Switch extends Widget {
     Active: boolean;
+    Visible: boolean;
 }
 declare class ListBox extends Widget {
     ActivateOnSingleClick: boolean;
@@ -214,6 +223,7 @@ declare class ListBox extends Widget {
     Items: any[];
     Key: string;
     MultiSelect: boolean;
+    Visible: boolean;
     readonly Count: number;
     readonly Selection: any[];
     readonly Text: string;
@@ -234,6 +244,7 @@ declare class ComboBox extends Widget {
     Items: any[];
     Key: string;
     Text: string;
+    Visible: boolean;
     readonly Count: number;
     Add(text: any, key?: any): any;
     Clear(): any;
@@ -248,6 +259,7 @@ declare class SpinBox extends Widget {
     Numeric: boolean;
     Step: number;
     Value: number;
+    Visible: boolean;
     Wrap: boolean;
 }
 declare class DecimalBox extends Widget {
@@ -261,12 +273,14 @@ declare class DecimalBox extends Widget {
     Step: any;
     Suffix: string;
     Value: any;
+    Visible: boolean;
     Wrap: boolean;
     readonly Text: string;
 }
 declare class Picture extends Widget {
     File: string;
     Fit: string;
+    Visible: boolean;
     Zoom: number;
     readonly SourceHeight: number;
     readonly SourceWidth: number;
@@ -274,10 +288,12 @@ declare class Picture extends Widget {
 }
 declare class Spinner extends Widget {
     Active: boolean;
+    Visible: boolean;
 }
 declare class LinkButton extends Widget {
     Text: string;
     Uri: string;
+    Visible: boolean;
 }
 declare class LevelBar extends Widget {
     Max: number;
@@ -285,11 +301,13 @@ declare class LevelBar extends Widget {
     Mode: string;
     Orientation: string;
     Value: number;
+    Visible: boolean;
 }
 declare class ToggleButton extends Widget {
     Active: boolean;
     Icon: string;
     Text: string;
+    Visible: boolean;
     Click(): any;
 }
 declare class ProgressBar extends Widget {
@@ -297,6 +315,7 @@ declare class ProgressBar extends Widget {
     ShowText: boolean;
     Text: string;
     Value: number;
+    Visible: boolean;
     Pulse(): any;
 }
 declare class Slider extends Widget {
@@ -309,6 +328,7 @@ declare class Slider extends Widget {
     Step: number;
     Value: number;
     ValuePosition: string;
+    Visible: boolean;
     ClearMarks(): any;
     Mark(value: any, text?: any): any;
 }
@@ -316,12 +336,14 @@ declare class DatePicker extends Widget {
     Format: string;
     Placeholder: string;
     Value: string;
+    Visible: boolean;
 }
 declare class Calendar extends Widget {
     ShowDayNames: boolean;
     ShowHeading: boolean;
     ShowWeekNumbers: boolean;
     Value: string;
+    Visible: boolean;
     readonly Marks: any[];
     ClearMarks(): any;
     Mark(date: any): any;
@@ -329,9 +351,35 @@ declare class Calendar extends Widget {
 }
 declare class ColorButton extends Widget {
     Value: string;
+    Visible: boolean;
 }
 declare class FontButton extends Widget {
     Value: string;
+    Visible: boolean;
+}
+declare class Popover extends Widget {
+    Anchored: boolean;
+    Arrangement: string;
+    Arrow: boolean;
+    Autohide: boolean;
+    Homogeneous: boolean;
+    Position: string;
+    Spacing: number;
+    readonly Children: any[];
+    readonly Placement: string;
+    readonly Visible: boolean;
+    Add(widget: any): any;
+    AddNode(node: any): any;
+    BuildChildren(node: any): any;
+    Clear(): any;
+    Close(): any;
+    ContainerAt(x: any, y: any, ignore?: any): any;
+    FocusNext(): any;
+    FocusPrevious(): any;
+    LocalPoint(x: any, y: any, from: any): any;
+    PickAt(x: any, y: any): any;
+    Popup(anchor: any): any;
+    Reorder(child: any, index: any): any;
 }
 declare class Split extends Widget {
     Anchored: boolean;
@@ -340,6 +388,7 @@ declare class Split extends Widget {
     Homogeneous: boolean;
     Position: number;
     Spacing: number;
+    Visible: boolean;
     WideHandle: boolean;
     readonly Children: any[];
     readonly Placement: string;
@@ -360,6 +409,7 @@ declare class Frame extends Widget {
     Homogeneous: boolean;
     Spacing: number;
     Text: string;
+    Visible: boolean;
     readonly Children: any[];
     readonly Placement: string;
     Add(widget: any): any;
@@ -380,6 +430,7 @@ declare class Expander extends Widget {
     Homogeneous: boolean;
     Spacing: number;
     Text: string;
+    Visible: boolean;
     readonly Children: any[];
     readonly Placement: string;
     Add(widget: any): any;
@@ -398,6 +449,7 @@ declare class Overlay extends Widget {
     Arrangement: string;
     Homogeneous: boolean;
     Spacing: number;
+    Visible: boolean;
     readonly Children: any[];
     readonly Placement: string;
     Add(widget: any): any;
@@ -419,6 +471,7 @@ declare class RowList extends Widget {
     Index: number;
     MultiSelect: boolean;
     Spacing: number;
+    Visible: boolean;
     readonly Children: any[];
     readonly Count: number;
     readonly Placement: string;
@@ -450,6 +503,7 @@ declare class Scroller extends Widget {
     ScrollY: number;
     Scrollbars: string;
     Spacing: number;
+    Visible: boolean;
     readonly Children: any[];
     readonly Placement: string;
     readonly ScrollMaxX: number;
@@ -471,6 +525,7 @@ declare class AspectFrame extends Widget {
     Homogeneous: boolean;
     Ratio: string;
     Spacing: number;
+    Visible: boolean;
     readonly Children: any[];
     readonly Placement: string;
     Add(widget: any): any;
@@ -493,6 +548,7 @@ declare class Flow extends Widget {
     MinPerLine: number;
     RowSpacing: number;
     Spacing: number;
+    Visible: boolean;
     readonly Children: any[];
     readonly Placement: string;
     Add(widget: any): any;
@@ -514,6 +570,7 @@ declare class Grid extends Widget {
     Homogeneous: boolean;
     RowSpacing: number;
     Spacing: number;
+    Visible: boolean;
     readonly Children: any[];
     readonly Placement: string;
     Add(widget: any): any;
@@ -535,6 +592,7 @@ declare class Notebook extends Widget {
     Spacing: number;
     Strip: string;
     Tabs: any[];
+    Visible: boolean;
     readonly Children: any[];
     readonly Count: number;
     readonly Placement: string;
@@ -562,6 +620,7 @@ declare class Switcher extends Widget {
     Spacing: number;
     Strip: string;
     Tabs: any[];
+    Visible: boolean;
     readonly Children: any[];
     readonly Count: number;
     readonly Placement: string;
@@ -579,6 +638,7 @@ declare class Switcher extends Widget {
     Reorder(child: any, index: any): any;
 }
 declare class DrawingArea extends Widget {
+    Visible: boolean;
     Redraw(): any;
     Save(path: any, width?: any, height?: any): any;
     SavePdf(path: any, width: any, height: any, pages?: any, before?: any): any;
@@ -590,6 +650,7 @@ declare class TextEditor extends Widget {
     ScrollX: number;
     ScrollY: number;
     Text: string;
+    Visible: boolean;
     Wrap: boolean;
     readonly CanRedo: boolean;
     readonly CanUndo: boolean;
@@ -621,6 +682,7 @@ declare class SourceEditor extends Widget {
     ShowMarks: boolean;
     Text: string;
     Theme: string;
+    Visible: boolean;
     Wrap: boolean;
     readonly CanRedo: boolean;
     readonly CanUndo: boolean;
@@ -655,6 +717,7 @@ declare class SourceEditor extends Widget {
 declare class Terminal extends Widget {
     LinkPattern: string;
     ScrollbackLines: number;
+    Visible: boolean;
     readonly Available: boolean;
     readonly Running: boolean;
     readonly Text: string;
@@ -668,6 +731,7 @@ declare class TreeView extends Widget {
     ActivateOnSingleClick: boolean;
     AutoExpand: boolean;
     Key: string;
+    Visible: boolean;
     readonly Count: number;
     readonly Text: string;
     Activate(index?: any): any;
@@ -696,6 +760,7 @@ declare class TableView extends Widget {
     MultiSelect: boolean;
     RowLines: boolean;
     Sortable: boolean;
+    Visible: boolean;
     readonly Selection: any[];
     Activate(index?: any): any;
     Add(values: any, options?: any): any;
@@ -728,6 +793,7 @@ declare class Video extends Widget {
     Password: string;
     Uri: string;
     User: string;
+    Visible: boolean;
     Volume: number;
     readonly Available: boolean;
     readonly Buffering: number;

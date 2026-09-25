@@ -3331,6 +3331,70 @@ one child and one place, so there is no coordinate to give it and no order to
 put it in. A second `Add` is refused where it is asked for, because GTK would
 drop the first one without a word.
 
+### Popover
+
+A `GtkPopover`: a surface that floats over a control instead of taking room in
+the layout. It is an ordinary child of a container — a `.form` draws it and the
+loader adopts it — but what decides where it appears is `Popup(anchor)`, so a
+surface of coordinates does not give it a rectangle and a box does not stretch
+it. `Placement` is `Single`, like an `AspectFrame`: one child, one place.
+
+**A popover contributes no measure**, which is what makes it safe to draw into a
+form at all. Measured: a box holding a button and a popover as tall as a
+paragraph still asks for the button's 34 pixels, closed *and* open.
+
+**It has a verb and not a switch.** `Popup(anchor)` opens it over a control —
+which must have a rectangle and be in a window that is up — and `Close()` closes
+it. `Visible` is read-only: it is the open state, and the loader would assign it
+while the form is still being built. That is not a nicety either:
+`gtk_widget_set_visible(TRUE)` on a popover with no toplevel **crashes** inside
+GTK, measured before the property was taken away. So `Widget.Member("Popover",
+"Visible")` answers `ReadOnly`, a `.form` that declares it is refused, the
+property grid does not offer it, and the serialiser never writes it — the one
+place a class shadows a property `Widget` already had.
+
+**And opening gives the window a focus if it had none**, the anchor first. GTK's
+autohide focus walk reads the window's focused widget and asserts on a `NULL`,
+so a window whose focus was lost (the popover before this one closed onto a panel
+that cannot take it) plus a popover whose content has nothing focusable was one
+`gtk_widget_is_ancestor` critical per open. The runtime seeds it, which also
+means a suggestion list opened from a field goes on having the keyboard where
+the field is.
+
+**A closed popover is not a Tab stop.** GTK sets the surface's `focus_child` to
+the popover while it is open and a closed one goes on naming it, so the walk in
+`bta_fixed_focus` began *after* the popover it could not focus and found nothing
+left: `FocusNext()` answered `false` on a panel full of controls. Popovers are
+left out of the stops.
+
+[`examples/todo`](../examples/todo) is the smallest real one: every row
+carries a three-dots button that drops its options, and each row's popover is a
+child of the row -- invisible, no room taken -- so it is deleted with the row
+and its handlers are the row's own. It is a popover and not a `Menu` because a
+menu item's handler is looked up on the *form* by name, and there is one row too
+many for that.
+
+[`examples/composites`](../examples/composites) has the two flags that decide
+how a popover behaves, and each one is a whole design. **`Autohide: true`** is
+GTK's menu: the popup takes the keyboard, arrows walk the list, Enter activates,
+Escape and a click outside close it -- which is what a select wants.
+**`Autohide: false`** leaves the keyboard in the field, so typing goes on
+reaching the entry that opened it; the program closes it instead, and the price
+is that a click on a bare background moves no focus and tells it nothing. A
+suggestion list is the second shape, and there is no way to have both.
+
+Two GTK details the wrapper exists for, both measured:
+
+- **GTK wraps a popover's content in a `GtkPopoverContent` of its own**, so
+  `gtk_widget_get_first_child` answers GTK's widget and not the application's.
+  `bta_slot_first_child` is the one door every walk over a slot goes through, and
+  `bta_container_detach` finds the popover as the content's *ancestor* — without
+  which `Remove()` of the content refused with *cannot remove from this
+  container* and `Children` answered nothing.
+- **Its own child is a property**, like an `AspectFrame`'s: `Clear()`, `Remove()`
+  and a second `Add` all go through `gtk_popover_set_child`, or GTK keeps its
+  pointer and the popover goes on believing it is full.
+
 ### RowList
 
 A `GtkListBox` in a scroller: one row per child, each row **a widget of its own**.
