@@ -52,6 +52,7 @@ jobs:
           repository: getbintana/bintana
           path: sources/bintana
           fetch-depth: 0
+          submodules: recursive
 
       # One checkout per application with a repository of its own, named after
       # its directory in the registry. The ones that live in the runtime's

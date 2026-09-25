@@ -49,6 +49,12 @@ fi
 
 bintana="$sources/bintana"
 [[ -d $bintana ]] || { echo "flatpak-build: no bintana checkout at $bintana" >&2; exit 2; }
+# The runtime's QuickJS is a submodule, and `type: dir` copies what is on disk:
+# a checkout that was never initialised builds everything except the engine.
+[[ -f $bintana/vendor/quickjs/quickjs.c ]] || {
+    echo "flatpak-build: $bintana/vendor/quickjs is empty -- run: git -C $bintana submodule update --init --recursive" >&2
+    exit 2
+}
 
 work="$here/build-flatpak"
 mkdir -p "$repo" "$work"
