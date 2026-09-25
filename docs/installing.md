@@ -14,7 +14,7 @@ and macOS in [plans/macos-plan.md](plans/macos-plan.md).
 | **GLib, GIO, GModule** | come with GTK. GModule is the plugin loader, `gio-unix-2.0` is `Exec`'s third stream |
 | **a C11 compiler** | gcc or clang |
 | **CMake 3.16+** and **pkg-config** | the build |
-| **QuickJS** | **not a dependency to install**: quickjs-ng v0.16.1 is vendored in `vendor/quickjs`, with six patches of ours in it ([AGENTS.md](../AGENTS.md#the-six-patches-in-vendor)) |
+| **QuickJS** | **not a dependency to install**: quickjs-ng v0.17.0, plus the six patches of ours, is vendored in `vendor/quickjs` as a git submodule ([AGENTS.md](../AGENTS.md#the-six-patches-in-vendor)) |
 
 Six more are optional, and CMake prints what it found either way. Without each
 the runtime builds and the thing itself says which package is missing when it is
@@ -34,7 +34,15 @@ sudo apt install build-essential cmake pkg-config libgtk-4-dev libgtksourceview-
 
 ## Build
 
+QuickJS lives in a submodule, so the clone has to bring it along -- and a
+checkout that did not says so at the configure step, naming the one command
+that fixes it:
+
 ```sh
+git clone --recurse-submodules https://github.com/getbintana/bintana.git
+# or, in a clone that is already there:
+git submodule update --init
+
 cmake -S . -B build
 cmake --build build -j"$(nproc)"
 ```
