@@ -1,0 +1,39 @@
+{
+  "format": "bintana-form/1",
+  "class": "TodoForm",
+  "properties": {
+    "Text": "To-Do",
+    "Width": 420,
+    "Height": 520
+  },
+  "children": [
+    {
+      "type": "TextBox",
+      "name": "TxtNew",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 40,
+        "Icon": "list-add-symbolic",
+        "Placeholder": "What needs doing?",
+        "Width": 396,
+        "X": 12,
+        "Y": 12
+      }
+    },
+    {
+      "type": "RowList",
+      "name": "Todos",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 448,
+        "MinHeight": 80,
+        "MinWidth": 220,
+        "Style": "frame",
+        "VAlign": "Fill",
+        "Width": 396,
+        "X": 12,
+        "Y": 60
+      }
+    }
+  ]
+}

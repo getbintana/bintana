@@ -1,0 +1,9 @@
+{
+  "name": "Todo",
+  "startup": "TodoForm",
+  "sources": [
+    "TodoForm.js"
+  ],
+  "version": "1.0",
+  "description": "A list of check boxes: the tick lives in your data, the strike-through is markup, and each row drops its options from a popover"
+}
