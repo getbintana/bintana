@@ -99,7 +99,7 @@ It is a [`Component`](../widgets/Component.md), so everything on
 | On a series | |
 |---|---|
 | `Name` | what the legend says. **Translated** (`Series.Name`). Defaults to `Series 1`, `Series 2`, … |
-| `Values` | the numbers. Everything is `Number()`ed on the way in |
+| `Values` | the numbers. A number or numeric text is a value; **anything else — `null`, `undefined`, `NaN`, `""`, a word — is a gap**: a line or an area stops there and starts again at the next value, a bar is not drawn, and the pointer over it reports nothing. A gap is never a zero |
 | `Color` | any CSS colour; omitted, it takes the next of the library's eight, chosen to hold up on a light theme and a dark one |
 | `Axis` | `"Left"` or `"Right"`. **`"Right"` gives that series its own range, ticks and margin** — two series in different units on one scale is the classic chart that lies |
 
@@ -109,7 +109,7 @@ It is a [`Component`](../widgets/Component.md), so everything on
 |---|---|
 | `Labels` | the category axis, as strings. As many as there are values is a label per bar; **fewer** is marks spread evenly across the plot; a pie names its slices from them |
 | `Marks` | `[{ At, Text }]`, `At` being an index into the values — a **real** time axis, where the caller says where each label goes. Replaces `Labels` on the x axis while it is set |
-| `YMin` | pins the bottom of the y axis; `""` works it out from the data, on *nice* numbers rather than on the data's own extremes |
+| `YMin` | pins the bottom of the y axis; `""` (or `null`) works it out from the data, on *nice* numbers rather than on the data's own extremes. A value that is not a finite number is refused where it is assigned — stored, it left the axis with no ticks and every frame threw |
 | `YMax` | likewise the top |
 | `Grid` | the horizontal rules behind the data |
 | `Legend` | `None`, `Top` or `Bottom`. It wraps to at most **three** rows and whatever did not fit is not drawn: a legend of thirty series is the wrong control, and eating the plot to hold one is worse |
@@ -146,8 +146,9 @@ arithmetic once.**
 
 Nothing until `Zoomable`, and then: the wheel zooms about the pointer, a drag
 pans, and a double click goes back to all of it. Each raises `Range`, and **the
-wheel notch is only consumed when the view actually changed**, so a chart inside
-a [`Scroller`](../widgets/Scroller.md) still scrolls it at the ends.
+wheel notch is only consumed when the view actually changed** — zooming out a
+view that already shows everything answers `false` and raises no `Range` — so a
+chart inside a [`Scroller`](../widgets/Scroller.md) still scrolls it at the ends.
 
 | | |
 |---|---|

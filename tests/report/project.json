@@ -1,6 +1,6 @@
 {
   "name": "report",
   "startup": "ReportTest",
-  "uses": ["report"],
+  "uses": ["report", "charts"],
   "sources": ["ReportTest.js"]
 }

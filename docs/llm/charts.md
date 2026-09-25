@@ -47,7 +47,7 @@ declare any of them.
 | `Stacked` | series piled instead of side by side. Applies to `Bar` and `Area`; a line and a pie **ignore** it rather than refusing, so the order of two lines in a `.form` never matters. `false` |
 | `ShowValues` | the number on the bar or the percentage in the slice, drawn only where it measures as fitting. `false` |
 | `Title` | above the plot. **Translated**. `""` |
-| `YMin` | pins the bottom of the axis; `""` works it out from the data. `""` |
+| `YMin` | pins the bottom of the axis; `""` (or `null`) works it out from the data. Anything that is not a finite number is **refused** where it is assigned. `""` |
 | `YMax` | likewise the top. `""` |
 | `Decimals` | how the numbers are written, `0` to `6`; goes through `Locale.Number`, so the separators are the user's. `0` |
 | `Antialias` | smooth edges. Off is faster and looks it; `Reduced` is the knob that actually matters. `true` |
@@ -74,7 +74,7 @@ chart.Series = [
 | | |
 |---|---|
 | `Name` | what the legend says. **Translated** (`Series.Name`). Defaults to `Series 1`, `Series 2`, … |
-| `Values` | the numbers. Everything is `Number()`ed on the way in |
+| `Values` | the numbers. A number or numeric text is a value; **anything else — `null`, `undefined`, `NaN`, `""`, a word — is a gap**: a line or an area stops there and starts again at the next value, a bar is not drawn, and the pointer over it reports nothing. A gap is never a zero |
 | `Color` | any CSS colour; omitted, it takes the next of the library's eight, chosen to hold up on a light theme and a dark one |
 | `Axis` | `"Left"` or `"Right"`. `"Right"` gives that series **its own** range, ticks and margin — two series in different units on one scale is the classic chart that lies |
 
@@ -82,14 +82,18 @@ Assigning `Series` replaces the lot; it is a value, not a handle, so mutating th
 array you passed changes nothing until you assign again or call `Refresh()`.
 
 A **pie or doughnut reads the first series only** and names its slices from
-`Labels`: a pie of two series is two pies, so it draws one.
+`Labels`: a pie of two series is two pies, so it draws one. Only positive values
+are slices, and **each keeps its own index** — a zero between two slices leaves
+its label, its colour and its `Select`/`Hover` index where they were, and the
+legend still names it.
 
 ## What the pointer does
 
 Nothing until `Zoomable`, and then: the wheel zooms about the pointer, a drag
 pans, and a double click goes back to all of it. Each of the three raises
-`Range`, and the wheel notch is only consumed when the view actually changed, so
-a chart inside a `Scroller` still scrolls it at the ends.
+`Range`, and the wheel notch is only consumed when the view actually changed —
+zooming out a view that already shows everything answers `false` and raises no
+`Range` — so a chart inside a `Scroller` still scrolls it at the ends.
 
 `Select` and `Hover` are raised whether or not the chart is zoomable, and both
 carry the index into the *whole* series — never the position on screen.

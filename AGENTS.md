@@ -569,7 +569,12 @@ hold. `docs/plans/debug-plan.md` is the design and the measurements.
   locals without freeing the value, and `JS_FreeRuntime` aborted (134) -- the
   vendor patch now frees it on every road. *Two orders in one write* went into
   stdio's buffer while `poll` watched the descriptor, and the second waited
-  forever: stdin is unbuffered under `--debug`. `testDebuggerOrders` is red on
+  forever: stdin is unbuffered under `--debug`. Two more from the same audit:
+  an order past **8 KB** was split by a fixed `fgets` buffer into two fragments
+  that each failed to parse, so a long `eval` never answered -- `read_order`
+  reads a whole line into a `GString`; and a breakpoint matched the file by a
+  **bare suffix**, so one on `Form1.js` stopped in `MyForm1.js` (and an empty
+  name in every file) -- `path_is` wants the tail to start at a separator. `testDebuggerOrders` is red on
   the old binary for the second and third; the SIGPIPE half needs the channel
   closed from outside and was measured with a Python driver.
 - **Dropping this patch does not fail to build.** The handler is never called,
@@ -1453,7 +1458,7 @@ Three things that will waste your time:
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
-  364 assertions against 2568 for the whole project -- 9.4 s against 265 on this
+  364 assertions against 2591 for the whole project -- 9.4 s against 265 on this
   machine -- which is what makes iterating on an early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.
@@ -1777,6 +1782,15 @@ person who wrote it either.
   size, so a `Panel` a box stretched to 280 has no business calling its declared
   60 the design. Getting that wrong broke two assertions in `testAnchors` and is
   what the `is_form` check in `bta_fixed.c` is for.
+- **The design height is the declared one less what sits around the surface,
+  read off the widgets.** It was `MIN(declared, allocated)` -- a menu bar's
+  subtraction guessed from the allocation, right only when the window opens at
+  the size it declares. A form drawn 400 tall and opened at 300 (a remembered
+  size, a `Resize` in `Form_Open`) latched 300, and a `Fill` panel drawn 380
+  tall kept a negative gap at every size after: 560 tall in a 480 window,
+  measured. Now it subtracts the other children of the surface's holder (the
+  menu bar) and the surface's own margins, which are the same numbers whatever
+  size the window happens to be; `testDesignHeightShort` is red without it.
 - **A `Fill` child's far-side gap is part of what the surface has to measure.**
   `bta_fixed_measure` asked for `offset + minimum`, which is the left coordinate
   and nothing about the right margin -- so the control that grew pushed the
@@ -2823,6 +2837,26 @@ person who wrote it either.
   back beside the new one. Go through `TabSet.setRoot`, which marks the tab
   `stale` so it reloads when shown -- and never load a background designer
   directly, since it would drive the shared side panel.
+- **The suite's temp directory may have no trash, and the old delete hid it.**
+  `File.Trash` fails there on this machine, so every *Delete from project* in
+  `tests/ide` fell through to a permanent `File.Delete` without a word -- the
+  very thing the comment above `deleteFiles` said it never did. It asks now
+  (*Delete permanently*), and a test that deletes goes through
+  `deleteAnswering()`. Whether a trash exists is the machine's, so a test of the
+  no-trash road fakes `File.Trash` rather than relying on it.
+- **An unanswered recovery offer outlives its dialog.** Closing it with the X
+  means *later*: the tick used to find nothing dirty and forget the snapshot
+  while the dialog was still asking. The tick and every door out keep it now,
+  and it rides along in every snapshot of that project until Recover or
+  Discard -- so a phase that opens a project with a pending snapshot leaves the
+  offer held for the phases after it, and one that asserts exact snapshot
+  contents calls `ide.recovery.drop()` first.
+- **`-z` rename records carry two paths in either column.** Consume the old
+  name and still read both letters: filing `R?` as staged-only hid the edit in
+  an `RM`, which could then be neither staged nor discarded. And **push asks
+  where** when the branch follows nothing and there are several remotes --
+  `--set-upstream origin` was a guess that failed on a repository whose only
+  remote had another name.
 - **A `force` flag on a close is a decision nobody asked about, and five
   roads were taking it.** `closeByName(name, true)` skips the dirty question,
   which is right *after* a question -- and Close all, Close others and
@@ -3382,6 +3416,22 @@ person who wrote it either.
   of `GSK_RENDERER=cairo`, `gl`, `ngl` and `vulkan`: a cairo node is rasterised on
   the CPU whichever renderer composites the result, so there is no "it will be
   fine on a real GPU" to hope for -- and no reason to suspect Xvfb either.
+- **A value that is not a number is a gap in a line, and it used to be a lost
+  frame.** The painter refuses NaN and a throw inside `Draw` ends the frame, so a
+  `null` in a Line or Area series -- ordinary in data from a query -- drew
+  nothing at all past it. `Chart.numberOf` makes null, `""`, booleans and text
+  that is not a number `NaN` (null and `""` used to be 0, silently), and Line and
+  Area draw separate runs that stop at a gap, decimation included. Three smaller
+  things came with it: **divide before multiplying** when mapping to pixels --
+  `(v - lo) * h / (hi - lo)` overflowed near the top of a double where
+  `(v - lo) / (hi - lo) * h` does not; **never name a class static `valueOf`**
+  or any other `Function.prototype` member, it shadows what coercion calls; and
+  **`DrawingArea.Dump()` is capped** (`DUMP_CAP`, ending in `...`), so an
+  assertion about the second band of a 4000-sample chart read the first and
+  passed against the bug -- save narrow and assert the markers are there.
+- **A chart assertion sets every property it depends on.** The *stacked Line
+  turned Bar* check passed against the bug in a copy with the section before it
+  removed, because `Type` was still the default `Bar` it inherited.
 - **`Push`/`Pop` does not save the font.** It saves the colour, the pen, the
   transform and the clip -- cairo's own state -- and the font lives on the
   `PangoLayout` beside it. `lib/report` wrapped every element in a `Push`/`Pop`
@@ -3474,6 +3524,12 @@ person who wrote it either.
   it came from. **Whatever watches a replaceable object has to unwatch the one it
   replaces** -- `g_ptr_array_remove_index_fast` on `w->watched`, which
   `on_form_realized` was already doing for its surface.
+- **`Clear()` is the way out of every mode, on-demand included.** It reset a
+  tree to flat but left a table answering `Data` with its `Count`, so
+  `Add(values, { Key })` refused with *Clear() it first* and `Clear()` could not
+  satisfy it. And a `Data` answer whose `Text` or `Icon` failed to convert left
+  the exception pending inside a bind -- reported now like a `Data` that throws,
+  with `null` meaning no icon rather than the icon named `null`.
 - **`CellEdit` read everything after the handler it had just called, and the
   row index was never there.** `on_cell_edited` passed `row->index`, which only
   `bta_table_model_item` ever writes -- so in a flat table built with `Add`

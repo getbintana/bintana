@@ -96,6 +96,7 @@ static struct {
 static int  bta_cmp_int(const void *a, const void *b);
 static void free_break(gpointer p);
 static int  resolve_line(const char *file, int line);
+static bool path_is(const char *path, const char *file);
 static void emit_object(JSContext *ctx, JSValue object);
 typedef struct BtaBreakStruct BtaBreak;
 static void say_armed(JSContext *ctx, BtaBreak *bp);
@@ -147,7 +148,7 @@ void bta_debug_compiled(JSContext *ctx, const char *path, JSValueConst compiled)
         BtaBreak *bp = g_ptr_array_index(dbg.breaks, k);
         int       at;
 
-        if (bp->line != bp->asked || !g_str_has_suffix(path, bp->file)) {
+        if (bp->line != bp->asked || !path_is(path, bp->file)) {
             k++;
             continue;
         }
@@ -160,6 +161,22 @@ void bta_debug_compiled(JSContext *ctx, const char *path, JSValueConst compiled)
         say_armed(ctx, bp);
         k++;
     }
+}
+
+/*
+ * **Whether the engine's path is the file the IDE named: a tail that starts at
+ * a path separator, not any tail.** The IDE names a file the way the project
+ * does and the engine the way it was loaded, so one is a tail of the other --
+ * but a bare suffix made a breakpoint on `Form1.js` stop in `MyForm1.js`, and
+ * an empty name match every file there is.
+ */
+static bool path_is(const char *path, const char *file)
+{
+    size_t pl = strlen(path), fl = strlen(file);
+
+    if (!fl || fl > pl || strcmp(path + pl - fl, file))
+        return false;
+    return pl == fl || path[pl - fl - 1] == '/' || path[pl - fl - 1] == '\\';
 }
 
 static int bta_cmp_int(const void *a, const void *b)
@@ -189,7 +206,7 @@ static int resolve_line(const char *file, int line)
 
         /* The IDE names a file the way the project does and the engine names it
            the way it was loaded, so one has to be a tail of the other. */
-        if (!g_str_has_suffix(path, file))
+        if (!path_is(path, file))
             continue;
 
         for (guint i = 0; i < set->len; i++) {
@@ -773,21 +790,42 @@ static bool obey(JSContext *ctx, const char *line, int depth_now)
  * the IDE went away -- releases the program rather than leaving it stopped
  * forever with nobody to tell it anything.
  */
+/*
+ * One order, however long. A fixed buffer split a line past 8 KB -- an `eval`
+ * of a long expression, a `set` of a long value -- into two fragments that each
+ * failed to parse, so the order was dropped and the IDE never had its answer.
+ * False at end of input. stdin is unbuffered under `--debug`, so this reads a
+ * byte at a time, which for orders of a few dozen bytes is nothing.
+ */
+static bool read_order(GString *into)
+{
+    int c;
+
+    g_string_truncate(into, 0);
+    while ((c = fgetc(stdin)) != EOF) {
+        if (c == '\n')
+            return true;
+        g_string_append_c(into, (char)c);
+    }
+    return into->len > 0;
+}
+
 static void wait_for_orders(JSContext *ctx, int depth_now)
 {
-    char line[8192];
+    GString *order = g_string_new(NULL);
 
     for (;;) {
-        if (!fgets(line, sizeof line, stdin)) {
+        if (!read_order(order)) {
             detach(ctx);
-            return;
+            break;
         }
-        g_strchomp(line);
-        if (!*line)
+        g_strchomp(order->str);
+        if (!*order->str)
             continue;
-        if (obey_as_debugger(ctx, line, depth_now))
-            return;
+        if (obey_as_debugger(ctx, order->str, depth_now))
+            break;
     }
+    g_string_free(order, TRUE);
 }
 
 /* ------------------------------------------------------------- the handler */
@@ -803,7 +841,7 @@ static BtaBreak *break_at(const char *file, int line)
         /* The IDE names a file the way the project does and the engine names it
            the way it was loaded, so the shorter one has to be a tail of the
            other -- `forms/Form1.js` against `/home/…/forms/Form1.js`. */
-        if (g_str_has_suffix(file, bp->file))
+        if (path_is(file, bp->file))
             return bp;
     }
     return NULL;
@@ -832,18 +870,19 @@ static bool step_wants_this(int depth_now)
 static void take_messages(JSContext *ctx, int depth_now)
 {
 #ifndef G_OS_WIN32
-    struct pollfd in = { .fd = STDIN_FILENO, .events = POLLIN };
-    char          line[8192];
+    struct pollfd in    = { .fd = STDIN_FILENO, .events = POLLIN };
+    GString      *order = g_string_new(NULL);
 
-    while (poll(&in, 1, 0) > 0 && (in.revents & POLLIN)) {
-        if (!fgets(line, sizeof line, stdin)) {
+    while (poll(&in, 1, 0) > 0 && (in.revents & (POLLIN | POLLHUP))) {
+        if (!read_order(order)) {
             detach(ctx);
-            return;
+            break;
         }
-        g_strchomp(line);
-        if (*line)
-            obey_as_debugger(ctx, line, depth_now);
+        g_strchomp(order->str);
+        if (*order->str)
+            obey_as_debugger(ctx, order->str, depth_now);
     }
+    g_string_free(order, TRUE);
 #else
     (void)ctx;
     (void)depth_now;

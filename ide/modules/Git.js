@@ -77,6 +77,16 @@ const GIT_LITERAL = ["--literal-pathspecs"];
  */
 const UNTRACKED = "?";
 
+/*
+ * Whether a porcelain record carries a second path -- the name it had. With
+ * `-z` that is the *next* record, in either column: `R` or `C` in the index is
+ * the ordinary case, and a worktree rename (` R`, an intent-to-add file) is the
+ * same shape from the other side.
+ */
+function porcelainRenamed(index, tree) {
+    return index === "R" || index === "C" || tree === "R" || tree === "C";
+}
+
 Ide.Git = class Git {
 
     /** @param {MainForm} ide */
@@ -293,12 +303,7 @@ Ide.Git = class Git {
              * read as a file whose state is the first letter of its own name.
              * The new one is what the tree marks: marking the old as deleted
              * and the new as *gone* was exactly backwards. */
-            if (index === "R" || index === "C") {
-                parts[++i];                          /* the old name */
-                out.set(path, index);
-                staged++;
-                continue;
-            }
+            if (porcelainRenamed(index, tree)) parts[++i];    /* the old name */
 
             if (index === "?" ) {
                 out.set(path, UNTRACKED);
@@ -448,15 +453,46 @@ Ide.Git = class Git {
      * `--set-upstream` on a branch that follows nothing, because the alternative
      * is git refusing with an instruction to re-run the command with that flag,
      * which is a computer asking a person to retype what it already knows. On a
-     * branch that has one it is absent and the push is an ordinary push.
+     * branch that has one it is absent and the push is an ordinary push -- to
+     * wherever that branch already goes, which is git's business and not ours.
+     *
+     * **And the remote is the repository's, never a name assumed.** This used
+     * to say `origin` whatever the repository called its remote, so a clone
+     * whose remote was `upstream` could not push at all and a repository with
+     * two pushed to the first by accident. One remote is the answer; several is
+     * a question, put with `AskForm` and naming them, because which server a
+     * branch belongs on is exactly the thing only the person knows. What comes
+     * back is `false` when a job is already running, the dialog when it asked,
+     * and `true` when the push started.
      */
     push(done) {
-        const args = ["push"];
+        if (this.job) return false;
+        if (this.aheadBehind() || !this.branchName)
+            return this.remote(["push"], done);
 
-        if (!this.aheadBehind() && this.branchName)
-            args.push("--set-upstream", "origin", this.branchName);
+        const names = this.remotes();
+        if (names.length === 0) {
+            this.ide.log("git: there is no remote to push to\n");
+            return false;
+        }
+        if (names.length === 1) return this.pushTo(names[0], done);
 
-        return this.remote(args, done);
+        return AskForm.prompt(
+            Locale.Text("Push"),
+            Locale.Text("The branch {0} follows nothing yet. Push it to which remote? ({1})",
+                        this.branchName, names.join(", ")),
+            names.includes("origin") ? "origin" : names[0],
+            (answer) => {
+                if (!names.includes(answer)) {
+                    Message.Error("{0} is not a remote of this repository.", answer);
+                    return;
+                }
+                this.pushTo(answer, done);
+            });
+    }
+
+    pushTo(name, done) {
+        return this.remote(["push", "--set-upstream", name, this.branchName], done);
     }
 
     /* --- changing what is about to be committed ----------------------------- */
@@ -681,11 +717,13 @@ Ide.Git = class Git {
              * record is the old one -- `git mv viejo nuevo` answers
              * `R  nuevo\0viejo\0`. The old one is consumed so it is not read
              * as a file, and what the panel offers to open is the new one. */
-            if (index === "R" || index === "C") {
-                parts[++i];                          /* the old name */
-                out.staged.push({ path, state: index });
-                continue;
-            }
+            /* **And a rename is still a record with two columns.** `RM` is
+             * renamed in the index *and* edited again since, and reading it as
+             * staged alone hid the edit: the panel could not list, stage or
+             * discard it, while `git status` shows it on both sides. So the old
+             * name is consumed and the two letters are read like any other
+             * record's. */
+            if (porcelainRenamed(index, tree)) parts[++i];    /* the old name */
 
             if (index !== " ") out.staged.push({ path, state: index });
             if (tree  !== " ") out.unstaged.push({ path, state: tree });

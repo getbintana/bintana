@@ -744,30 +744,71 @@ Ide.FormFiles = class FormFiles {
      * desktop's trash" are not the same sentence to whoever changes their mind.
      */
     deleteFiles(targets) {
-        let trashed = 0;
+        const trashed = [], stuck = [];
 
         for (const name of targets) {
             const path = File.Join(this.ide.project, name);
-            if (File.Exists(path)) {
-                try {
-                    File.Trash(path);
-                    trashed++;
-                } catch (e) {
-                    File.Delete(path);
-                }
+            if (!File.Exists(path)) {
+                trashed.push(name);      /* already gone: only the tab and the source list */
+                continue;
             }
-            if (File.IsExtension(name, "js")) this.ide.dropSource(name);
+            try {
+                File.Trash(path);
+                trashed.push(name);
+            } catch (e) {
+                stuck.push(name);
+            }
         }
 
+        this.removed(trashed, `Moved to the trash: ${trashed.join(", ")}\n`);
+        if (!stuck.length) return true;
+
+        /*
+         * **No trash is a question, not a licence.** This used to fall through
+         * to `File.Delete` on the spot, so on exactly the filesystems the
+         * comment above names the confirmation had said *delete* and the file
+         * was gone for good -- the one outcome the trash exists to avoid, taken
+         * without saying so. The dialog is what a test drives.
+         */
+        return ConfirmForm.ask(Locale.Text("Delete permanently"),
+            Locale.Text("There is no trash here, so these cannot be recovered once deleted:\n\n{0}",
+                        stuck.join("\n")),
+            Locale.Text("Delete permanently"), () => this.deleteForGood(stuck));
+    }
+
+    /* The second answer, and a failure is said rather than thrown: a handler
+     * that throws leaves the tree listing files that are half gone. */
+    deleteForGood(targets) {
+        const gone = [], failed = [];
+
+        for (const name of targets) {
+            try {
+                File.Delete(File.Join(this.ide.project, name));
+                gone.push(name);
+            } catch (e) {
+                failed.push(`${name}: ${e.message}`);
+            }
+        }
+
+        this.removed(gone, `Deleted ${gone.join(", ")}\n`);
+        if (failed.length)
+            Message.Error("Could not delete:\n\n{0}", failed.join("\n"));
+        return failed.length === 0;
+    }
+
+    /* What follows a file leaving the project, however it left. */
+    removed(names, said) {
+        if (!names.length) return;
+
+        for (const name of names)
+            if (File.IsExtension(name, "js")) this.ide.dropSource(name);
+
         /* Close the tabs of what was deleted before re-listing the tree. */
-        for (const name of targets) this.ide.closeTabByName(name, /* force */ true);
+        for (const name of names) this.ide.closeTabByName(name, /* force */ true);
 
         this.ide.warnMissingStartup();
         this.ide.listFiles();
-        this.ide.log(trashed === targets.length
-            ? `Moved to the trash: ${targets.join(", ")}\n`
-            : `Deleted ${targets.join(", ")}\n`);
-        return true;
+        this.ide.log(said);
     }
 
     /*

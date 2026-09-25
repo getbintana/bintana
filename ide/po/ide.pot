@@ -2070,3 +2070,18 @@ msgstr ""
 #: modules/Translations.js:363
 msgid "{0} is not installed, or not on the PATH."
 msgstr ""
+
+msgid "Delete permanently"
+msgstr ""
+
+msgid "The branch {0} follows nothing yet. Push it to which remote? ({1})"
+msgstr ""
+
+msgid "There is no trash here, so these cannot be recovered once deleted:\n\n{0}"
+msgstr ""
+
+msgid "{0} is not a remote of this repository."
+msgstr ""
+
+msgid "Could not delete:\n\n{0}"
+msgstr ""

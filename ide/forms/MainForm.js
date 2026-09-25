@@ -2330,7 +2330,7 @@ class MainForm extends Form {
         });
     }
 
-    MnuGitPush_Click() { this.git.push(() => this.refreshGit()); }
+    MnuGitPush_Click() { return this.git.push(() => this.refreshGit()); }
 
     /*
      * Cloning, which is the one git command that runs where there is no project.

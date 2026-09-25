@@ -93,6 +93,12 @@ flow is measured *between*, so their height has to be known before any row is.
 `{ On, Header, Footer }` — and they nest, exactly as a spreadsheet's subtotal
 ladder does. **An open group's headers repeat at the top of every page its rows
 run onto**, so a detail row that lands alone on page 2 still says whose it is.
+A group turns when its key changes **by value** — two `Decimal`s of the same
+number are one group, not two objects.
+
+`Min` and `Max` compare numerically and exactly when every value of the field
+is a number, numeric text or a `Decimal`, and as text with `Locale.Compare`
+otherwise.
 
 An element is `{ X, Y, Kind, … }`: `Text` (fixed words), `Field` (a value off the
 row, or `@Page`/`@Pages`), `Total` (`Sum` `Count` `Min` `Max` `Avg`), `Line`,

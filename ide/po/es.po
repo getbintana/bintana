@@ -2175,3 +2175,18 @@ msgid ""
 msgstr ""
 "El código ya tiene handlers para {0}: {1}.\n"
 "Renombralos o borralos primero."
+
+msgid "Delete permanently"
+msgstr "Borrar definitivamente"
+
+msgid "The branch {0} follows nothing yet. Push it to which remote? ({1})"
+msgstr "La rama {0} todavía no sigue a ninguna. ¿A qué remoto la subo? ({1})"
+
+msgid "There is no trash here, so these cannot be recovered once deleted:\n\n{0}"
+msgstr "Acá no hay papelera, así que esto no se va a poder recuperar una vez borrado:\n\n{0}"
+
+msgid "{0} is not a remote of this repository."
+msgstr "{0} no es un remoto de este repositorio."
+
+msgid "Could not delete:\n\n{0}"
+msgstr "No se pudo borrar:\n\n{0}"

@@ -110,6 +110,8 @@ class ReportTest extends Form {
             this.testSave();
             this.testPdf();
             this.testPrint();
+            this.testExtremes();
+            this.testCharts();
         } catch (e) {
             failures.push(`uncaught: ${e.message}\n${e.stack || ""}`);
         }
@@ -747,6 +749,177 @@ class ReportTest extends Form {
         throws("and a range outside the document",
                () => this.Rep.Send({ From: 1, To: this.Rep.PageCount + 5 },
                                     () => {}));
+    }
+
+    /* ------------------------------------------------ Min, Max, group keys
+     *
+     * Asked of the engine rather than read off a page: what is under test is
+     * which value wins, and `computeTotals` is where that is decided. Both of
+     * these shipped wrong -- `<` over the raw values, and `===` over the keys.
+     */
+    testExtremes() {
+        const rep = this.Rep;
+        const of  = (vals) => rep.computeTotals(vals.map((v) => ({ V: v })), ["V"]).V;
+
+        /* Numeric text is a number: as text, "10" is before "9". */
+        const text = of(["9", "10", "2"]);
+        eq("Min over numeric text is the smallest number", text.Min, "2");
+        eq("...and Max the largest", text.Max, "10");
+
+        /* A Decimal among numbers and numeric text compares by value. */
+        const mixed = of([new Decimal("9.5"), "10", 2]);
+        eq("Min over a mixed numeric column", mixed.Min, 2);
+        eq("...and Max", mixed.Max, "10");
+
+        /* Exactly: a double cannot tell these two apart. */
+        const fine = new Decimal("9007199254740992.5");
+        eq("a Decimal compares exactly against numeric text",
+           of([fine, "9007199254740993"]).Max, "9007199254740993");
+
+        /* Anything else is text, in this desktop's order. */
+        const names = ["Zapata", "Álvarez", "Ñanculeo"];
+        const sorted = names.slice().sort(Locale.Compare);
+        const byName = of(names);
+        eq("Min over names is the first by Locale.Compare", byName.Min, sorted[0]);
+        eq("...and Max the last", byName.Max, sorted[2]);
+
+        /* A Decimal group key: three rows of one price are one group. */
+        rep.Sections = {
+            Groups: [{ On: "P",
+                       Footer: { Height: 20, Elements: [{ Kind: "Text", Text: "closed", X: 0, Y: 0 }] } }],
+            Detail: { Height: 20, Elements: [{ Kind: "Text", Text: ".", X: 0, Y: 0 }] },
+        };
+        rep.Data = [{ P: new Decimal("1.50") }, { P: new Decimal("1.50") },
+                    { P: new Decimal("1.5") },  { P: new Decimal("2.00") }];
+        const t = this.texts(this.page(1));
+        eq("Decimal group keys compare by value, not identity",
+           t.filter((x) => x === "closed").length, 2);
+    }
+
+    /* ------------------------------------------------------------- charts
+     *
+     * `lib/charts`' own regressions, here because a chart is tested inside
+     * `tests/widgets` only as a child project -- and because this is the
+     * project that already asserts drawings off `Dump()`. Each one shipped: a
+     * frame that threw (which on screen draws nothing and says nothing), a range
+     * cached across a change of `Type`, a pie whose slices were renumbered, a
+     * stack whose second band fell to the baseline, a wheel notch consumed for
+     * nothing, and a lone slot drawn a quarter of the way across.
+     */
+    testCharts() {
+        const c = new Chart();
+        c.Height = 120;
+        this.Add(c);
+        const png  = File.Join(SCRATCH, "chart.png");
+        const draw = () => { c.Save(png, 400, 240); return c.Canvas.Dump(); };
+        const drew = (name) => {
+            try { draw(); passed++; } catch (e) { failures.push(`${name}: ${e.message}`); }
+        };
+        c.Legend = "None";
+        c.Grid   = false;
+
+        /* ---- gaps */
+        c.Type   = "Line";
+        c.Series = [{ Values: [1, 2, null, 4, "x", undefined, 7, ""] }];
+        check("null, undefined and non-numeric text are gaps",
+              c.Series[0].Values.filter((v) => isNaN(v)).length === 4,
+              JSON.stringify(c.Series[0].Values));
+        eq("...and numeric text is still a number", (c.Series = [{ Values: ["3"] }], c.Series[0].Values[0]), 3);
+        c.Series = [{ Values: [1, 2, null, 4, "x", undefined, 7] }];
+        drew("a line with gaps draws");
+        /* Three runs: 1-2, 4, 7 -- one MoveTo each, before the Stroke. */
+        const line = draw().split("\n");
+        const upTo = line.findIndex((l) => l.startsWith("Stroke"));
+        eq("...as a line that stops at each gap",
+           line.slice(0, upTo).filter((l) => l.startsWith("MoveTo")).length, 3);
+        c.Type = "Area";
+        drew("an area with gaps draws");
+        c.Stacked = true;
+        c.Series = [{ Values: [1, null, 3] }, { Values: [2, 2, "n/a"] }];
+        drew("a stacked area with gaps draws");
+        c.Stacked = false;
+        c.Type = "Line";
+        c.Series = [{ Values: [1, 2, null, 4] }];
+        draw();
+        const gapX = c.xOf(c.lastBox, 2);
+        eq("the pointer over a gap finds nothing", c.at(gapX, 50), null);
+        c.hover = { series: 0, at: 2, value: NaN };
+        drew("a highlight on a gap does not lose the frame");
+        c.hover = null;
+
+        /* ---- the y range */
+        throws("YMin refuses a word", () => { c.YMin = "abc"; });
+        throws("YMax refuses NaN",   () => { c.YMax = NaN; });
+        throws("...and infinity",    () => { c.YMax = Infinity; });
+        c.YMin = null;
+        eq("null works the axis out, like \"\"", c.YMin, "");
+        c.Series = [{ Values: [1e308, -1e308] }];
+        drew("a range wider than a double still draws");
+
+        /* ---- the range follows the type */
+        c.Type    = "Line";
+        c.Stacked = true;
+        c.Series  = [{ Values: [5, 5] }, { Values: [5, 5] }];
+        draw();
+        c.Type = "Bar";
+        draw();
+        check("a stacked Line turned Bar measures the stack",
+              c.lastBox.hi >= 10, `hi ${c.lastBox.hi}`);
+        c.Stacked = false;
+
+        /* ---- a pie keeps each value's index */
+        c.Type   = "Pie";
+        c.Series = [{ Values: [3, 0, 2] }];
+        draw();
+        eq("a pie's slices keep their values' indices",
+           JSON.stringify(c.slices.map((x) => x.at)), "[0,2]");
+
+        /* ---- a long stack shares its indices */
+        const a = [], b = [];
+        for (let i = 0; i < 600; i++) { a.push(1 + i % 7); b.push(1 + (i * 3) % 11); }
+        c.Type = "Area"; c.Stacked = true; c.Curved = false;
+        c.Series = [{ Values: a }, { Values: b }];
+        /* Narrow, so 600 samples are decimated and the dump stays under its cap. */
+        c.Save(png, 120, 240);
+        const lines = c.Canvas.Dump().split("\n");
+        const fills = lines.map((l, i) => l.startsWith("Fill") ? i : -1).filter((i) => i >= 0);
+        const band2 = lines.slice(fills[0], fills[1]);
+        const path2 = band2.slice(band2.findIndex((l) => l.startsWith("Stroke")) + 1);
+        let low = -Infinity;
+        for (const l of path2) {
+            const m = l.match(/^(?:MoveTo|LineTo) \([-\d.]+,([-\d.]+)\)/);
+            if (m) low = Math.max(low, Number(m[1]));
+        }
+        const base = c.yOf(c.lastBox, 0);
+        check("a decimated stack's second band stays on the first",
+              fills.length >= 2 && path2.length > 10 && low < base - 1, `lowest ${low}, baseline ${base}`);
+        c.Stacked = false;
+
+        /* ---- a wheel over the whole series is not consumed */
+        c.Type = "Line";
+        const fifty = [];
+        for (let i = 0; i < 50; i++) fifty.push(i);
+        c.Series = [{ Values: fifty }];
+        c.Zoomable = true;
+        draw();
+        let ranges = 0;
+        c.On("Range", () => { ranges++; });
+        eq("zooming out a whole view is not consumed", c.Canvas_MouseWheel(0, 1), false);
+        eq("...and raises no Range", ranges, 0);
+        eq("zooming in still is", c.Canvas_MouseWheel(0, -1), true);
+        eq("...with one Range", ranges, 1);
+        c.Zoomable = false;
+        c.Count = 0; c.From = 0;
+
+        /* ---- one slot is in the middle */
+        c.Type = "Bar";
+        c.Series = [{ Values: [5] }];
+        draw();
+        const bar = c.bars[0], mid = (c.lastBox.left + c.lastBox.right) / 2;
+        check("a lone bar is centred", Math.abs(bar.x + bar.w / 2 - mid) < 4,
+              `bar at ${bar.x + bar.w / 2}, middle ${mid}`);
+
+        c.Remove();
     }
 
     /* --------------------------------------------------------------- report */

@@ -71,6 +71,9 @@ Ide.Recovery = class Recovery {
          * since costs a `stringify` and no disk at all -- which is most ticks:
          * a person types in bursts and thinks in between. */
         this.last  = "";
+        /* A snapshot that was offered and not answered yet: `{ project, shot }`,
+         * or null. See `offer`. */
+        this.unanswered = null;
     }
 
     get folder() { return File.Join(Application.ConfigDirectory, FOLDER); }
@@ -172,9 +175,15 @@ Ide.Recovery = class Recovery {
         const ide = this.ide;
         if (!ide.project) return false;
 
+        const held  = this.held();
         const names = ide.tabs.dirtyNames();
         if (!names.length) {
-            this.forget();
+            /* Nothing dirty *now* says nothing about the work an unanswered
+             * offer is still holding: the tick used to find a freshly opened
+             * project clean and delete the very file the dialog was asking
+             * about -- so a person who took thirty seconds to read it, or
+             * closed it to decide later, lost it. */
+            if (!held) this.forget();
             return false;
         }
 
@@ -183,6 +192,12 @@ Ide.Recovery = class Recovery {
             const one = ide.tabs.contentOf(name);
             if (one) files.push(one);
         }
+        /* The same reason with dirty tabs: what the offer holds rides along
+         * under every name the session has not written over, or the new
+         * snapshot would replace the old one and take its work with it. */
+        if (held)
+            for (const old of held.files)
+                if (!files.some((f) => f.name === old.name)) files.push(old);
 
         /* The signature is the files and not the whole snapshot: the timestamp
          * changes on every tick and would make every tick a write. */
@@ -207,9 +222,40 @@ Ide.Recovery = class Recovery {
         return true;
     }
 
-    /* The user has answered, one way or the other. */
+    /*
+     * The snapshot an offer put and nobody has answered, or null -- and only
+     * for the project that is open, since a project left behind keeps its own
+     * file and is asked again when it opens.
+     */
+    held() {
+        const u = this.unanswered;
+        return u && u.project === this.ide.project ? u.shot : null;
+    }
+
+    /*
+     * A door out has answered about the tabs that are open -- quitting,
+     * leaving the project, closing with nothing dirty -- and about nothing
+     * else. **An offer that was closed without an answer is not among what
+     * those doors decided**: "later" is what the X on that dialog means, so its
+     * snapshot is written back as it was offered, to be asked about next time.
+     */
     forget() {
+        const shot = this.held();
+        this.unanswered = null;
+        if (!shot) return this.drop();
+
         this.last = "";
+        try {
+            File.SaveJson(this.fileFor(this.ide.project), shot);
+        } catch (e) {
+            this.ide.log(`Recovery: ${e.message}\n`);
+        }
+    }
+
+    /* The user has answered the offer itself, one way or the other. */
+    drop() {
+        this.last = "";
+        this.unanswered = null;
         if (!this.ide.project) return;
 
         const path = this.fileFor(this.ide.project);
@@ -248,6 +294,7 @@ Ide.Recovery = class Recovery {
      */
     offer(project) {
         const shot = this.pending(project);
+        this.unanswered = shot ? { project, shot } : null;
         if (!shot) return null;
 
         const list = shot.files.map((f) => f.name).join(", ");
@@ -260,7 +307,7 @@ Ide.Recovery = class Recovery {
                           shot.files.length, list) + when,
             Locale.Text("Recover"),
             () => this.restore(shot),
-            { Text: Locale.Text("Discard"), Run: () => this.forget() });
+            { Text: Locale.Text("Discard"), Run: () => this.drop() });
     }
 
     /*
@@ -279,7 +326,7 @@ Ide.Recovery = class Recovery {
         /* Answered, so the file goes -- and the tabs are dirty again, so the
          * next tick writes a fresh one. The net is back up within a tick of the
          * recovery, which is the same guarantee it gives the rest of the time. */
-        this.forget();
+        this.drop();
         this.ide.refresh();
         return done;
     }

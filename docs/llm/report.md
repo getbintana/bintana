@@ -90,7 +90,10 @@ with no grouping.
 
 Grouping is **consecutive equal** values — the Crystal Reports model, which never
 reorders the data, because reordering is a second opinion about what the user
-meant. Sort first; the example sorts with `Locale.Compare`.
+meant. Sort first; the example sorts with `Locale.Compare`. **Equal is by
+value**: two `Decimal`s are one group when they are the same number (`1.50` and
+`1.5` included), any other object when it writes the same JSON, and everything
+else by `===`.
 
 **An open group's headers repeat at the top of every page its rows run onto.**
 A group that breaks across a page boundary puts its `Header` — and every header
@@ -140,9 +143,12 @@ which is why there is nothing to disagree with it. The operations:
 - `Sum` keeps a `Decimal` exact — money that goes in as `Decimal` comes out as
   `Decimal`, summed with its own arithmetic — and only falls back to the double
   when the values are plain numbers or strings.
-- `Min` and `Max` compare the raw values, so a date column's `Min` is the
-  earliest date (`"YYYY-MM-DD"` orders lexically) and a name's `Min` is the
-  first alphabetically.
+- `Min` and `Max` compare **numerically, and exactly**, when every value of the
+  field is a number, numeric text or a `Decimal` — so `"10"` beats `"9"` and a
+  `Decimal` is never rounded through a double to be compared. Otherwise they
+  compare as text with `Locale.Compare`: a date column's `Min` is the earliest
+  date (`"YYYY-MM-DD"` orders as text) and a name's `Min` is the first in this
+  desktop's order. The value answered is the row's own, not a conversion of it.
 - `Avg` is always a plain number: an average has no exact decimal text, and how
   many places to round it to is the caller's decision.
 

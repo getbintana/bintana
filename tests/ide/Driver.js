@@ -93,6 +93,19 @@ function* until(what, tries = 30) {
  * there is that GTK is done; waiting for a specific number would be counting
  * frames again, which is what made these tests flaky in the first place.
  */
+/*
+ * Deleting from the project, answered. With a trash under the project
+ * `deleteFiles` answers `true`; without one -- which is what the suite's own
+ * directory is on some machines and not on others -- it asks before deleting
+ * for good, and this says yes. Either way the answer is whether it happened.
+ */
+function deleteAnswering(ide, targets) {
+    const r = ide.deleteFiles(targets);
+    if (!(r instanceof ConfirmForm)) return r;
+    r.BtnYes.Emit("Click");
+    return targets.every((t) => !File.Exists(File.Join(ide.project, t)));
+}
+
 function* settled(ide) {
     const controls = () => (ide.designing ? ide.designer.allControls() : []);
 
@@ -4767,7 +4780,7 @@ function* p_forms(ide) {
     eq("a form counts as its pair", ide.pairOf("Ventana.form").length, 2);
     eq("a lone file counts as itself", ide.pairOf("project.json").length, 1);
 
-    eq("deleting the pair succeeds", ide.deleteFiles(ide.pairOf("Ventana.form")), true);
+    eq("deleting the pair succeeds", deleteAnswering(ide, ide.pairOf("Ventana.form")), true);
     check("both files are gone",
           !File.Exists(File.Join(TMP, "Ventana.form")) &&
           !File.Exists(File.Join(TMP, "Ventana.js")));
@@ -4783,6 +4796,51 @@ function* p_forms(ide) {
     check("and a neighbour took its place",
           ide.activeFile !== null && ide.activeFile !== "Ventana.form" && ide.activeFile !== "Ventana.js",
           ide.activeFile);
+
+    /* --- a project with no trash under it -----------------------------------
+     * A share, a stick, a tmpfs: `File.Trash` refuses, and the delete used to
+     * fall through to `File.Delete` without a word. It asks now, and a delete
+     * that fails is said rather than thrown. The refusal is faked because
+     * whether the suite's own directory has a trash depends on the machine. */
+    const bare = File.Join(TMP, "SinPapelera.txt");
+    const realTrash = File.Trash, realDelete = File.Delete, realError = Message.Error;
+    const saidErr = [];
+    let noTrash = null;
+    try {
+        File.Trash = () => { throw new Error("no trash on this filesystem"); };
+        File.Save(bare, "x\n");
+        noTrash = ide.deleteFiles(["SinPapelera.txt"]);
+        check("with no trash a permanent delete is asked", noTrash instanceof ConfirmForm,
+              String(noTrash));
+        check("and nothing is deleted before the answer", File.Exists(bare));
+        if (noTrash instanceof ConfirmForm) noTrash.BtnNo.Emit("Click");
+        yield* settled(ide);
+        check("saying no keeps the file", File.Exists(bare));
+
+        File.Delete = () => { throw new Error("read-only"); };
+        Message.Error = (...args) => { saidErr.push(Locale.Text(...args)); };
+        noTrash = ide.deleteFiles(["SinPapelera.txt"]);
+        let threw = "";
+        try {
+            if (noTrash instanceof ConfirmForm) noTrash.BtnYes.Emit("Click");
+        } catch (e) {
+            threw = e.message;
+        }
+        eq("a delete that fails does not throw", threw, "");
+        check("it says so", saidErr.some((m) => m.includes("SinPapelera.txt")),
+              JSON.stringify(saidErr));
+        File.Delete = realDelete;
+
+        noTrash = ide.deleteFiles(["SinPapelera.txt"]);
+        if (noTrash instanceof ConfirmForm) noTrash.BtnYes.Emit("Click");
+        yield* settled(ide);
+        check("saying yes deletes it", !File.Exists(bare));
+    } finally {
+        File.Trash = realTrash;
+        File.Delete = realDelete;
+        Message.Error = realError;
+        if (File.Exists(bare)) File.Delete(bare);
+    }
 
     /* --- renaming a control -------------------------------------------------
      * What this tests: that the handlers move with the control.  Button10 exists
@@ -7737,11 +7795,11 @@ function* p_folders(ide) {
      * any more is not a node any more. Two classes are in `Widgets` now -- the
      * one that moved kept it -- so both have to go. */
     eq("removing one class of a namespace succeeds",
-       ide.deleteFiles(ide.pairOf("Widgets/Segundo.form")), true);
+       deleteAnswering(ide, ide.pairOf("Widgets/Segundo.form")), true);
     check("and the namespace stays while a class is still in it",
           ide.FileTree.Exists("ns:Widgets"));
     eq("removing the last one succeeds too",
-       ide.deleteFiles(ide.pairOf("Paneles/Cuadro.form")), true);
+       deleteAnswering(ide, ide.pairOf("Paneles/Cuadro.form")), true);
     check("and the namespace goes with it",
           !ide.FileTree.Exists("ns:Widgets"));
     check("and so does the folder it was in, which is now empty",
@@ -7990,7 +8048,7 @@ function* p_folders(ide) {
     ide.openNamed("Paneles/Cuadro.form");
     yield;                 // let GTK allocate the design area
     eq("deleting a foldered pair succeeds",
-       ide.deleteFiles(ide.pairOf("Paneles/Cuadro.form")), true);
+       deleteAnswering(ide, ide.pairOf("Paneles/Cuadro.form")), true);
     check("both files are gone",
           !File.Exists(File.Join(TMP, "Paneles", "Cuadro.form")) &&
           !File.Exists(File.Join(TMP, "Paneles", "Cuadro.js")));
@@ -11445,6 +11503,50 @@ function* p_git(ide) {
           ide.LblStatus.Text);
 
     /*
+     * --- which remote a new branch goes to ------------------------------------
+     *
+     * The push used to say `--set-upstream origin` whatever the repository
+     * called its remotes, so with two of them it chose for the person -- and
+     * with one called anything else it could not push at all. Now a branch that
+     * follows something pushes plainly, one remote is used, and several is a
+     * question. A second bare repository is the second remote.
+     */
+    const backup = File.Join(TMP, "gitbackup");
+    Directory.Make(backup);
+    wipe(backup);
+    Exec.Wait(["git", "init", "-q", "--bare", backup], { Timeout: 8000 });
+    const mainBranch = git.branchName;
+    run("remote", "add", "backup", backup);
+    run("checkout", "-q", "-b", "rama");
+    ide.refreshGit();
+
+    eq("two remotes are listed", git.remoteNames.slice().sort().join(), "backup,origin");
+    const which = ide.MnuGitPush_Click();
+    check("a new branch with two remotes asks which", which instanceof AskForm,
+          String(which));
+    check("and nothing has been pushed yet", git.job === null);
+    which.TxtValue.Text = "backup";
+    which.BtnOk.Emit("Click");
+    check("the answer starts the push", git.job !== null);
+    yield* until(() => git.job === null, 300);
+    yield* settled(ide);
+    eq("to the remote that was chosen",
+       run("rev-parse", "--abbrev-ref", "rama@{u}").Output.trim(), "backup/rama");
+
+    const heardFrom = ide.LogView.Text.length;
+    eq("a branch that follows one pushes without asking", ide.MnuGitPush_Click(), true);
+    yield* until(() => git.job === null, 300);
+    yield* settled(ide);
+    check("and plainly", ide.LogView.Text.slice(heardFrom).includes("> git push\n"),
+          ide.LogView.Text.slice(heardFrom));
+
+    run("checkout", "-q", mainBranch);
+    run("branch", "-q", "-D", "rama");
+    run("remote", "remove", "backup");
+    ide.refreshGit();
+    eq("and the repository is back to one remote", git.remoteNames.join(), "origin");
+
+    /*
      * Cloning, which is the one command that runs where there is no project --
      * driven from `cloneInto` because the two answers before it are a prompt and
      * the desktop's folder chooser, and neither is a thing a test can answer.
@@ -11612,6 +11714,25 @@ function* p_git(ide) {
     eq("the changes panel offers the new name",
        git.split().staged.map((r) => r.path).join(), "Dos.js");
     eq("with the rename's state", git.split().staged[0].state, "R");
+
+    /* And a rename edited again since is `RM`, which is two columns like any
+     * record: read as staged alone, the edit was on neither side of the panel
+     * and could not be staged or thrown away. `git status` shows it twice. */
+    const renamedText = File.Load(File.Join(repo, "Dos.js"));
+    File.Save(File.Join(repo, "Dos.js"), `${renamedText}// editado tras el mv\n`);
+    ide.refreshGit();
+    yield* settled(ide);
+
+    eq("a renamed and edited file is still staged as a rename",
+       git.split().staged.map((r) => `${r.path}:${r.state}`).join(), "Dos.js:R");
+    eq("and its edit is on the unstaged side",
+       git.split().unstaged.map((r) => `${r.path}:${r.state}`).join(), "Dos.js:M");
+    eq("the tree marks what is left to do", git.stateOf("Dos.js"), "M");
+    git.discard(["Dos.js"]);
+    ide.refreshGit();
+    eq("so the edit can be thrown away", File.Load(File.Join(repo, "Dos.js")), renamedText);
+    eq("leaving the rename staged",
+       git.split().staged.map((r) => `${r.path}:${r.state}`).join(), "Dos.js:R");
 
     /* Committed, so nothing below finds the repository mid-gesture. */
     run("commit", "-qm", "renombrado");
@@ -12136,6 +12257,11 @@ function* p_recovery(ide) {
      * `start()` further down, which is what it tests about the interval.
      */
     if (ide.recovery.timer) ide.recovery.timer.Stop();
+    /* And whatever an earlier phase's `openProject` offered and nobody
+     * answered is thrown away, since an unanswered offer rides along in every
+     * snapshot of its project -- which is the point of it, and would put that
+     * phase's tabs into this one's. */
+    ide.recovery.drop();
 
     const path = File.Join(TMP, "Recover.js");
     File.Save(path, SOURCE);
@@ -12172,6 +12298,28 @@ function* p_recovery(ide) {
     ide.Editor.Text = SOURCE;
     ide.Editor.Modified = false;
     yield* settled(ide);
+
+    /*
+     * **A tick while the offer is still up must not answer it.** The timer is
+     * running by the time a project opens, and the project it opens has no
+     * dirty tab yet -- so the old tick read *nothing to recover* and deleted
+     * the file the dialog was asking about. Closing the dialog without an
+     * answer is "later", and the doors out keep it for next time.
+     */
+    const holds = () => {
+        const p = ide.recovery.pending(ide.project);
+        return !!p && p.files.some((f) => f.name === "Recover.js" && f.text === typed);
+    };
+    const later = ide.recovery.offer(ide.project);
+    check("the offer is up", !!later);
+    ide.recovery.snapshot();
+    check("a tick while it asks keeps the snapshot", holds());
+    later.BtnNo.Emit("Click");
+    yield* settled(ide);
+    ide.recovery.snapshot();
+    check("so does a tick after it was closed unanswered", holds());
+    ide.recovery.forget();
+    check("and a door out keeps it for next time", holds());
 
     const asked = ide.recovery.offer(ide.project);
     check("a project with one pending asks", !!asked);

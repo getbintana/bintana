@@ -284,8 +284,31 @@ static void bta_fixed_layout_allocate(GtkLayoutManager *manager, GtkWidget *widg
         int dw = own && own->drawn_w > 0 ? own->drawn_w : (own ? own->w : 0);
         int dh = own && own->drawn_h > 0 ? own->drawn_h : (own ? own->h : 0);
 
-        self->design_w = (declared && dw > 0) ? dw              : width;
-        self->design_h = (declared && dh > 0) ? MIN(dh, height) : height;
+        /*
+         * **The declared height, less what the window puts above the surface
+         * and around it** -- a menu bar, and a form's `Margin` -- and not
+         * `MIN(dh, height)`, which was that subtraction guessed from the
+         * allocation. The guess is right only when the window opens at the
+         * size it declares: a form declared 400 tall and opened at 300 (a
+         * remembered size, a `Resize` in `Form_Open`) latched 300 as its
+         * design, and a `Fill` panel drawn 380 tall inside it kept its
+         * negative gap at every size after -- 560 tall in a 480 window,
+         * measured. What is subtracted is read off the widgets, so it is the
+         * same number whatever size the window happens to be.
+         */
+        int chrome = gtk_widget_get_margin_top(widget) +
+                     gtk_widget_get_margin_bottom(widget);
+        GtkWidget *holder = gtk_widget_get_parent(widget);
+
+        if (holder && !GTK_IS_WINDOW(holder)) {
+            for (GtkWidget *c = gtk_widget_get_first_child(holder); c;
+                 c = gtk_widget_get_next_sibling(c))
+                if (c != widget && gtk_widget_get_visible(c))
+                    chrome += gtk_widget_get_height(c);
+        }
+
+        self->design_w = (declared && dw > 0) ? dw : width;
+        self->design_h = (declared && dh > 0) ? MAX(dh - chrome, 1) : height;
 
         /*
          * Measuring needs the design size to know what gap a stretched control

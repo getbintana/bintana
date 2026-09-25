@@ -641,8 +641,18 @@ static void cell_of(BtaWidget *w, BtaTableRow *row, guint col,
     } else if (JS_IsObject(r)) {
         JSValue     tv = JS_GetPropertyStr(ctx, r, "Text");
         JSValue     iv = JS_GetPropertyStr(ctx, r, "Icon");
-        const char *ts = JS_IsUndefined(tv) ? NULL : JS_ToCString(ctx, tv);
-        const char *is = JS_IsUndefined(iv) ? NULL : JS_ToCString(ctx, iv);
+        bool        no_t = JS_IsUndefined(tv) || JS_IsNull(tv);
+        bool        no_i = JS_IsUndefined(iv) || JS_IsNull(iv);
+        const char *ts = no_t ? NULL : JS_ToCString(ctx, tv);
+        const char *is = no_i ? NULL : JS_ToCString(ctx, iv);
+
+        /* A `Text` or `Icon` whose conversion throws (a `toString` that throws,
+         * a Symbol) is reported the way a `Data` handler that throws is: this
+         * runs inside a bind, with nobody to hand it to, and left pending it
+         * landed on whatever called into JavaScript next. `null` is no icon,
+         * not the icon called "null". */
+        if ((!no_t && !ts) || (!no_i && !is))
+            bta_dump_error(ctx);
 
         *text = g_strdup(ts ? ts : "");
         *icon = is && *is ? g_strdup(is) : NULL;
@@ -1919,6 +1929,18 @@ static JSValue table_clear(JSContext *ctx, JSValueConst this_val,
     TableState *st = table_state(w);
 
     g_list_store_remove_all(st->rows);
+
+    /*
+     * **And out of on-demand mode.** `Count` then `Clear()` left the table
+     * answering `Data` with its `Count` intact, and `Add(values, { Key })` then
+     * refused with *"a flat list of Count rows -- Clear() it first"*, which
+     * `Clear()` could not satisfy: the door the refusal named went nowhere.
+     * Emptying a table is emptying it, whichever way it was filled.
+     */
+    if (st->virt) {
+        g_clear_object(&st->virt);
+        table_use_model(w, G_LIST_MODEL(st->rows));
+    }
 
     /*
      * **And it is the way back out of the tree.** A table is flat or a tree,

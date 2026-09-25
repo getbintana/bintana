@@ -443,6 +443,8 @@ const TESTS = [
     "TerminalSpawnLifetime",
     /* And one more child: a Video whose Error handler takes it out. */
     "VideoDroppedInHandler",
+    /* A child too: a form opened shorter than it was drawn. */
+    "DesignHeightShort",
     "Time",
     "Stopwatch",
     "Shortcut", "Decimal", "FieldDecimal",
@@ -3754,6 +3756,49 @@ class WidgetsForm extends Form {
            ran.ExitCode, 0);
         check("...having reported the error first", ran.Output.includes("DONE NotFound"),
               ran.Output);
+    }
+
+    /*
+     * **A form opened shorter than it declares keeps its declared design.** The
+     * surface latched `MIN(declared, allocated)` as its design height -- the
+     * subtraction of a menu bar, guessed from the allocation -- so a form
+     * drawn 400 tall and opened at 300 took 300 as its design, and a `Fill`
+     * panel drawn 380 tall inside it kept a negative gap at every size after:
+     * 560 tall in a 480 window. A child, because the latch happens once, on
+     * the first allocation of a form that has not been shown yet.
+     */
+    testDesignHeightShort() {
+        const dir = File.Join(SCRATCH, "designshort");
+        Directory.Make(dir);
+        File.SaveJson(File.Join(dir, "project.json"),
+                      { name: "designshort", startup: "F", sources: ["F.js"] });
+        File.SaveJson(File.Join(dir, "F.form"),
+                      { format: "bintana-form/1", class: "F",
+                        properties: { Width: 400, Height: 400 },
+                        children: [{ type: "Panel", name: "P",
+                                     properties: { X: 10, Y: 10, Width: 380, Height: 380,
+                                                   HAlign: "Fill", VAlign: "Fill" } }] });
+        File.Save(File.Join(dir, "F.js"),
+                  'class F extends Form {\n' +
+                  '    Form_Open() {\n' +
+                  '        this.Resize(400, 300);\n' +
+                  '        Timer.After(700, () => {\n' +
+                  '            const a = this.P.Bounds().Height;\n' +
+                  '            this.Resize(400, 480);\n' +
+                  '            Timer.After(700, () => {\n' +
+                  '                print(`H ${a} ${this.P.Bounds().Height}`);\n' +
+                  '                Application.Quit(0);\n' +
+                  '            });\n' +
+                  '        });\n' +
+                  '    }\n' +
+                  '}\n');
+
+        const ran = Exec.Wait([Application.Executable, dir], { Timeout: 30000 });
+        const m   = ran.Output.match(/H (\d+) (\d+)/);
+        check("the child measured its panel", !!m, ran.Output);
+        if (!m) return;
+        eq("opened 100 short, a Fill panel keeps its 10 px gaps", Number(m[1]), 280);
+        eq("...and grows with the window after", Number(m[2]), 460);
     }
 
     MediaVid_Ended() { this.mediaEnded = (this.mediaEnded || 0) + 1; }
@@ -11525,6 +11570,15 @@ function Main() {
         throws("a table's row index is not a word", () => tb.Cell("x", 0));
         throws("nor is its column", () => tb.SetCell(0, "x", "b"));
         eq("the cell is untouched", tb.Cell(0, 0), "a");
+
+        /* Clear() leaves on-demand mode too: it used to keep Count, and the
+         * refusal that told the program to Clear() first could not be met. */
+        tb.Clear();
+        tb.Count = 5;
+        tb.Clear();
+        eq("Clear() empties an on-demand table", tb.Count, 0);
+        tb.Add(["x"], { Key: "k" });
+        eq("...and it can become a tree after", tb.Count, 1);
         tb.Delete();
 
         const nb = new Notebook();
@@ -19803,6 +19857,10 @@ function Main() {
 
         const reasons = [];
         let   sent    = false;
+        let   longAnswer = null;
+        const stoppedAt  = [];
+        /* Past the 8 KB buffer that split an order in two. */
+        const longExpr = "1" + " + 0".repeat(3000);
 
         waiting++;
         const job = Exec([Application.Executable, "--debug", proj],
@@ -19813,11 +19871,18 @@ function Main() {
                     const kind = msg.event || msg.reply;
 
                     if (kind === "ready") {
+                        /* A tail that does not start at a separator is another
+                         * file: `ain.js` is not `Main.js`, and used to stop in it. */
+                        job.Write(JSON.stringify({ do: "break", file: "ain.js", line: 5, id: 9 }));
                         job.Write(JSON.stringify({ do: "break", file: "Main.js", line: 2, id: 1 }));
                         job.Write(JSON.stringify({ do: "continue" }));
+                    } else if (kind === "eval") {
+                        longAnswer = msg.value;
                     } else if (kind === "stopped") {
                         reasons.push(msg.reason);
+                        if (msg.reason === "breakpoint") stoppedAt.push(msg.frames[0].Line);
                         if (msg.reason === "breakpoint") {
+                            job.Write(JSON.stringify({ do: "eval", frame: 0, text: longExpr }));
                             /* `quiet` has no locals at all. */
                             job.Write(JSON.stringify({ do: "set", frame: 0, name: "x",
                                                        text: "({ a: 1 })" }));
@@ -19842,6 +19907,9 @@ function Main() {
                    code, 0);
                 check("two orders in one write are both obeyed: the pause arrived",
                       reasons.includes("pause"), JSON.stringify(reasons));
+                eq("an order longer than 8 KB is answered whole", longAnswer, "1");
+                eq("a breakpoint on a bare tail of the name stops nowhere: only Main.js:2",
+                   JSON.stringify(stoppedAt), "[2]");
                 waiting--;
             });
     }

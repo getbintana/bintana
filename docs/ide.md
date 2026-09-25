@@ -1053,6 +1053,16 @@ offers **Recover** or **Discard**; recovering opens the tabs and leaves them
 dirty, because what is on screen is not what is in the file and the asterisk is
 the honest answer. Nothing is written to the project by recovering either.
 
+**Closing that dialog is *later*, not an answer.** The tick is already running
+when a project opens, and the project it opens has nothing dirty yet -- so the
+tick used to read *nothing to recover* and delete the very file the dialog was
+asking about, and anybody who took thirty seconds to read it, or closed it to
+decide later, lost the work. An offer nobody answered is now held: a tick with
+nothing dirty leaves its file alone, a tick with dirty tabs writes them *and* the
+held files under every name the session has not written over, and the doors out
+(`quit()`, `leaving()`, `leaveProject`) write the held snapshot back as it was
+offered, so the next open asks again. Only **Recover** and **Discard** end it.
+
 **How often is the user's**, under **File > Autosave...**, kept in `Settings` as
 `recovery.seconds` beside the external translation editor — the IDE's other
 preference about how it behaves rather than about a project. Thirty seconds by
@@ -1730,6 +1740,13 @@ space or an accent in it, which in a project written in Spanish is not an edge
 case. Parsing it needed a runtime fix: `Exec.Wait` stopped at the first NUL, so
 one such name read fine and a *list* of them read as one entry.
 
+**A rename is still a record with two columns.** With `-z` a rename carries its
+old name as the next record, and the parse used to consume it and file the path
+as staged -- so `RM`, renamed in the index and edited since, had its edit on
+neither side of the Changes window and could not be staged or discarded. The old
+name is consumed and the two letters are then read like any other record's: the
+rename staged, the edit unstaged, as `git status` shows it.
+
 **The tree says what changed, the status bar says where you are.** A row gets
 `name [M]` through `SetText`, put on after the rows exist -- the tree's job is
 to say what the project holds and git's to say what has changed about it, and
@@ -1787,6 +1804,11 @@ untracked **folder** -- which the porcelain names as one row, `?? d/` -- goes
 whole; it used to reach `File.Delete`, which takes only an empty directory, and
 throw after the restore beside it had already run. Whatever happens, the window
 and the page refresh afterwards.
+
+*Delete from project* is the same rule from the file tree: to the trash, and on a
+filesystem with none (a share, a stick, a tmpfs) **a second question** --
+*delete permanently?* -- rather than the `File.Delete` it used to fall through
+to without a word. A delete that then fails is said in a dialog, not thrown.
 
 **Every path is handed to git as a path.** `--` stops a file called `-f` being a
 flag and does nothing about `[`, `*` or `?`, which git still reads as a glob: so
@@ -1925,7 +1947,12 @@ so a pull that would need a merge stops and says so instead of opening an editor
 for a merge message inside a child nobody is looking at. **Push carries
 `--set-upstream` on a branch that follows nothing**, because the alternative is
 git refusing with an instruction to re-run the command with that flag, which is a
-computer asking a person to retype what it already knows.
+computer asking a person to retype what it already knows. **Which remote is the
+repository's**: it used to be `origin` whatever the remotes were called, so a
+clone whose remote was `upstream` could not push at all and a repository with two
+pushed to the first by accident. A branch that follows something pushes plainly;
+one remote is used; several is a question (`AskForm`, naming them). The remotes
+are asked when *Push* is pressed and never in `refresh()`.
 
 The status bar grows git's own arrows once the branch follows one: `↑2` is two
 commits made here and not pushed, `↓1` one fetched and not merged. They count
