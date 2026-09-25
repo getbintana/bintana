@@ -1,0 +1,9 @@
+{
+  "name": "Factory",
+  "startup": "FactoryForm",
+  "sources": [
+    "FactoryForm.js"
+  ],
+  "version": "1.0",
+  "description": "Every widget this runtime has, in the configurations it is used in, on a tab per family"
+}

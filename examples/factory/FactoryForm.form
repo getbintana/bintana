@@ -1,0 +1,25 @@
+{
+  "format": "bintana-form/1",
+  "class": "FactoryForm",
+  "properties": {
+    "Text": "Widget factory",
+    "Width": 1100,
+    "Height": 740
+  },
+  "children": [
+    {
+      "type": "Switcher",
+      "name": "Tabs",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 716,
+        "MinWidth": 700,
+        "Strip": "Top",
+        "VAlign": "Fill",
+        "Width": 1076,
+        "X": 12,
+        "Y": 12
+      }
+    }
+  ]
+}
