@@ -15,6 +15,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install dependencies
         run: |
@@ -74,6 +76,26 @@ jobs:
       - name: Test the install
         run: ./tests/install.sh
 
+  # **The vendored QuickJS is a commit of the fork's branch.** A submodule pins
+  # one commit and `git submodule update --remote` can pin any commit at all, so
+  # this is what says it is a point on `getbintana/quickjs`'s `bintana` and not
+  # something that fell out of a rebase.  A job of its own because it wants the
+  # submodule's full history, and every other job is content with the one commit
+  # it builds.
+  pin:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: The vendored QuickJS is on the fork's bintana branch
+        run: |
+          git -C vendor/quickjs fetch origin bintana
+          git -C vendor/quickjs merge-base --is-ancestor HEAD FETCH_HEAD
+
   # A second job and not a second step: it builds the whole runtime again with
   # clang and the sanitizer, so failing here says something different from
   # failing above and the two should be readable apart.
@@ -82,6 +104,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install dependencies
         run: |
@@ -127,6 +151,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install dependencies, without VTE
         run: |
@@ -187,6 +213,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install dependencies
         run: |
@@ -276,6 +304,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install dependencies
         run: |
@@ -349,6 +379,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install dependencies
         run: |
@@ -446,6 +478,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - uses: msys2/setup-msys2@v2
         with:

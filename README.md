@@ -17,13 +17,15 @@ application then has.
 ## Quickstart
 
 ```sh
+git clone --recurse-submodules https://github.com/getbintana/bintana.git
+cd bintana
 cmake -S . -B build && cmake --build build -j
 ./build/bintana ide examples/hello    # the IDE, opening an example project
 ./tests/run.sh                        # the suite, on a virtual display
 ```
 
 Dependencies: `gtk4` (4.10 or newer), `gtksourceview-5` (both with headers),
-a C compiler, CMake and pkg-config. QuickJS is vendored. Per-distribution
+a C compiler, CMake and pkg-config. QuickJS is vendored as a submodule. Per-distribution
 package names, the optional dependencies, installing and uninstalling are in
 [docs/installing.md](docs/installing.md).
 

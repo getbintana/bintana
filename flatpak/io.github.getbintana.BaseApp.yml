@@ -59,5 +59,6 @@ modules:
         skip:
           - .cache
           - .git
+          - vendor/quickjs/.git
           - build
           - build-asan

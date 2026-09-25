@@ -179,8 +179,9 @@ falls back to it anyway when there is no `DISPLAY`/`WAYLAND_DISPLAY`, which is
 what `.github/workflows/ci.yml` relies on. Anything you drive by hand still needs a real display. Build deps:
 `gtk4` (**4.10 or newer** -- `GtkAlertDialog` and `GtkFileDialog`),
 `gtksourceview-5` (with headers), pkg-config, and `gmodule-2.0`, which is the
-plugin loader and comes with glib. QuickJS is vendored, so
-nothing to install for it. Six are optional and CMake says what it found either
+plugin loader and comes with glib. QuickJS is vendored as a submodule, so
+nothing to install for it -- and a fresh clone wants `--recurse-submodules`, or
+`git submodule update --init` before the first configure. Six are optional and CMake says what it found either
 way: `sqlite3`, `libsystemd`, `libsoup-3.0`, `gstreamer-1.0`,
 **`vte-2.91-gtk4`** -- the pty behind `Terminal`, and the only dependency with
 no Windows port -- and `libxml2`, which is what `Xml` parses with. The last is
@@ -441,9 +442,28 @@ icon when the theme has one by that name (`gtkapplication.c`).
 
 ## The six patches in vendor/
 
-All six are marked `Bintana patch` in the source, and an upgrade that drops
-one takes a feature or brings a bug back with it. Grep for the marker after any
-QuickJS upgrade; there is no build-time check that they survived.
+`vendor/quickjs` is a **submodule** of
+[`getbintana/quickjs`](https://github.com/getbintana/quickjs), branch `bintana`:
+upstream **v0.17.0** plus the six patches below, one commit each. The fork's
+`BINTANA.md` is the recipe; what follows is what each patch does and what
+dropping it costs.
+
+An upgrade happens in two repositories:
+
+```sh
+# in a checkout of the fork
+git fetch upstream --tags && git rebase v0.18.0 bintana   # resolve, build
+git push --force-with-lease origin bintana
+
+# in this tree
+git submodule update --remote vendor/quickjs              # and commit the pin
+```
+
+Then the suite. All six are marked `Bintana patch` in the source, and
+**dropping one does not fail to build** -- that is the property they share and
+the reason `tests/widgets` asserts each of them (`Decimal`, `JsonFiles`,
+`strictChecks`, `testDebugger`, `testCuratedLanguage`). Grep the fork for the
+marker after a rebase; there is no build-time check that they survived.
 
 ### 1. Operators on a Decimal
 

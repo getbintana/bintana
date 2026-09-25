@@ -74,9 +74,9 @@ shim below already has its place.
 | `runtime/src/bta_plugin.c` | no work of its own: GModule names the suffix (`.dll`) and does the load, and the plugin contract is a table of function pointers, so a plugin compiled by MSVC, MinGW or clang links nothing and needs no export list. `BTA_PLUGIN_EXPORT` is the one platform line, at the plugin's side of the header |
 | `bta_journal.c`, `bta_terminal.c` | no work: both are already stubbed without their dependency, and everything either stub needs (`signal.h`, `sys/wait.h`) is inside the `#ifdef` |
 
-QuickJS is already portable, and the two patches in `vendor/` — arithmetic on
-a `Decimal`, and `js_atod` for JSON numbers — are platform-independent, so
-nothing there changes.
+QuickJS is already portable, and the patches in `vendor/` — arithmetic on
+a `Decimal`, `js_atod` for JSON numbers and the rest — are platform-independent,
+so nothing there changes.
 
 ## Stage 2 — the IDE and the examples (1–2 weeks)
 

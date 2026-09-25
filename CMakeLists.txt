@@ -95,7 +95,17 @@ pkg_check_modules(GSTREAMER IMPORTED_TARGET gstreamer-1.0)
 pkg_check_modules(LIBXML IMPORTED_TARGET libxml-2.0)
 
 # ---------------------------------------------------------------- QuickJS ---
-# quickjs-ng, vendored under vendor/quickjs (see vendor/quickjs/VERSION).
+# A fork of quickjs-ng, vendored under vendor/quickjs as a submodule:
+# `getbintana/quickjs`, branch `bintana`, which is upstream v0.17.0 plus the
+# six commits the runtime's patches live in.  See AGENTS.md.
+# A clone without `--recurse-submodules` leaves the directory empty, and the
+# answer here names the one command that fixes it rather than letting the
+# compiler fail on a missing `quickjs.c` three targets away.
+if(NOT EXISTS "${CMAKE_SOURCE_DIR}/vendor/quickjs/quickjs.c")
+    message(FATAL_ERROR
+        "vendor/quickjs is empty -- run: git submodule update --init --recursive")
+endif()
+
 add_library(quickjs STATIC
     vendor/quickjs/quickjs.c
     vendor/quickjs/dtoa.c
