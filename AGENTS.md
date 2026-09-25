@@ -434,7 +434,8 @@ string and it has to match on both — and a window classed by something else is
 one no dock recognises, in silence. The rule is the platform's
 (`g_application_id_is_valid`: reverse DNS, at least one dot, no element starting
 with a digit) and it is refused **at load**, naming the key, rather than
-ignored; a project that declares none keeps the old answer, which is the
+ignored -- and so is an `id` that is not a string, which `json_str`'s fallback
+used to read as no id at all; a project that declares none keeps the old answer, which is the
 program's own name. `GtkApplication` also takes the id as the default window
 icon when the theme has one by that name (`gtkapplication.c`).
 
@@ -1094,6 +1095,37 @@ Five things cost a build cycle each when this was built, so they are here:
   supported`; 1.18.3 fixes it, it is not SELinux (permissive fails too), and CI's
   Ubuntu 24.04 is older than the regression.
 
+- **`icons/` holds the application's drawing and its controls' glyphs, so
+  "the first drawing in `icons/`" is a glyph as often as it is the
+  application.** `Package`, `Metainfo.create` and the IDE's desktop-entry dialog
+  each took the alphabetically first svg/png. All three ask
+  `Package.iconOf(project, id)` now: `icons/<id>.svg|png`, else the only
+  drawing not named `*-symbolic`, else a refusal naming `icons/<id>.svg`. A PNG
+  is measured from its IHDR (bytes 16-23, big-endian), because where it installs
+  is its size -- it used to go under `128x128` whatever it was.
+- **A copy whose destination is inside its source never ends.** `tools/pack h
+  h/dist` copied `dist` into `dist/project/dist`, until the path was too long,
+  leaving 9.6 MB behind. `Package.topLevel` compares absolute paths and leaves a
+  top-level output out; one nested deeper is refused, since `Directory.Copy` has
+  no exclude. And every refusal comes **before** `Directory.Make(out)`, so a
+  refused run leaves no half-written build context.
+- **`appstreamcli validate` exits non-zero on warnings.** `url-homepage-missing`
+  alone is exit 3, and a fresh metainfo cannot know a homepage -- so a test
+  asserts on the `E:` lines, not the status. What *was* an error, and shipped:
+  `Metainfo.create` wrote an empty `<description><p/>` and copied a multi-line
+  Description into `<summary>`; `Metainfo.problems` refuses both now, so
+  `Package.Write` cannot hand one to flatpak-builder.
+- **The BaseApp's version is written by hand in four places and derived in one.**
+  `Package` takes it from `BTA_VERSION`; the manifests, `docs/installing.md` and
+  `flatpak-build.sh` spelled `0.1`. `tests/pack` compares them now, and the
+  build script installs the base with `--or-update` instead of `|| true`, which
+  had turned a failed install into an obscure `build-init --base` error later.
+  An application's own manifest is always in what `tools/flatpak-plan` watches
+  -- the IDE's was not, so editing its finish-args rebuilt nothing.
+- **A regex over a whole file wants `{ Multiline: true }` for `^`.** Without it
+  `^branch:` matches nothing, and a version check reads "no version found"
+  rather than failing on the real disagreement.
+
 [#6818]: https://github.com/flatpak/flatpak/issues/6818
 [#1983]: https://github.com/flatpak/xdg-desktop-portal/issues/1983
 
@@ -1386,7 +1418,7 @@ Three things that will waste your time:
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
-  364 assertions against 2482 for the whole project -- 9.4 s against 265 on this
+  364 assertions against 2533 for the whole project -- 9.4 s against 265 on this
   machine -- which is what makes iterating on an early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.
@@ -1832,7 +1864,22 @@ person who wrote it either.
   helper; `""` and `null` stay `0`, and `Radius`/`Padding`/`Shadow`/`Border` go
   through `sizes_parse` and are untouched. A new numeric property that calls
   `JS_ToInt32` directly is the regression to watch for.
-- **`Arrangement` is only on a container whose slot is a `BtaFixed`.**- **`Arrangement` is only on a container whose slot is a `BtaFixed`.** `Panel`,
+  **And it was never only setters.** An audit found forty-five *method*
+  arguments still converting with a bare `JS_ToInt32` -- every list's
+  `RemoveRow`/`Select`/`Activate`/`Reveal`, `RemovePage`, the table's
+  `Cell`/`SetCell`/`SortBy`, the editors' line verbs, `Move`/`Resize` -- so
+  `lb.RemoveRow(undefined)`, or a key passed where an index goes, quietly took
+  out **the first row**. The rule was written as a rule about setters and read
+  as one; the danger is a conversion, wherever it is. They are `bta_to_int`
+  with the method's name now, and `testArgumentRefusals` holds a sample of each
+  family. The same sweep found the timer: `setTimer` read its delay with
+  `JS_ToInt32`, so `Timer.Every("abc", fn)` ran on every turn of the loop and
+  `3e9` wrapped negative into `0`. It is `bta_to_number`, clamped to a `guint`
+  (Infinity is forty-nine days), and `Timer.After`/`Every` refuse a tick that is
+  not a function -- `fire` skipped one in silence, so `Timer.After(fn, 300)`,
+  the arguments swapped, ran nothing ever. Found by making exactly that mistake
+  in a probe during the same audit.
+- **`Arrangement` is only on a container whose slot is a `BtaFixed`.** `Panel`,
   `Frame`, `Expander`, `Scroller`, `Form` and a `Component` have one; `Split`
   overrides the property with `Horizontal`/`Vertical` and no `Fixed`; `Grid`,
   `Flow`, `RowList`, `Overlay`, `Notebook` and `Switcher` throw *arranges its
@@ -1913,9 +1960,12 @@ person who wrote it either.
     which is what makes it safe to draw one into a `.form` at all.
   - **GTK 4.22 wraps its content in a `GtkPopoverContent` of its own**, so
     `gtk_widget_get_first_child(popover)` is that wrapper and the widget an
-    application means is `gtk_popover_get_child`. Every walk over a slot goes
-    through `bta_slot_first_child` now (`Children`, `Clear`, the binding
-    cascade) and `bta_container_detach` finds the popover as the content's
+    application means is `gtk_popover_get_child`. Every walk over a slot that
+    can be a popover goes through `bta_slot_first_child` now (`Children`,
+    `Clear`, the binding cascade, `bta_container_count`, and the
+    `Default`/`Cancel` searches `bta_widget_flagged` and `form_keep_one` --
+    which this sentence claimed for a commit while those two still read GTK's
+    first child, so a `Cancel` button inside a popover was never found) and `bta_container_detach` finds the popover as the content's
     *ancestor* -- without which `Remove()` of the content refused with *cannot
     remove from this container*, and `Children` answered `0` about a popover
     holding a `RowList`. **A `GtkPopover` setter is a property, not an
@@ -1936,6 +1986,22 @@ person who wrote it either.
     cannot take the focus. `Popup` seeds one: the anchor if it can take it
     (which also keeps the keyboard in the field that opened a suggestion list),
     otherwise the window's own first focusable control.
+  - **Only a container that lays children out through a layout manager can
+    hold one.** GTK presents a popover from `gtk_layout_manager_allocate`,
+    which skips it through `should_layout`; a `GtkPaned`'s halves, a
+    `GtkAspectFrame`'s child, a notebook's or stack's page and an overlay's base
+    are allocated by the container itself, so the popover got an ordinary
+    rectangle and opening it was `pixman_region32_init_rect: Invalid
+    rectangle` (a page added `gtk_widget_map` criticals the moment it was
+    added). Measured by probe on each; a surface, a `Grid`, a `Flow` and a
+    `RowList` are clean. `bta_container_attach` refuses the rest, and an
+    `Overlay` whole: its floaters are laid out properly, but `Reorder(x, 0)`,
+    `Lower()` and the base leaving all promote one to base.
+  - **`Popup` asks the popover's own container, not only the anchor.** The point
+    is computed in the container's coordinates, and a hidden one has none: the
+    popover opened pointing at nothing while `Open` fired. And the focus seed
+    raises `GotFocus` synchronously, so everything read before it is read again
+    after -- a handler can take the popover out between the two.
   - **A closed popover is not a Tab stop, and leaving it in the list broke the
     walk.** GTK sets the surface's `focus_child` to the popover while it is
     open and a closed one goes on naming it, so `bta_fixed_focus` started
@@ -2580,7 +2646,23 @@ person who wrote it either.
 - **`Menu` needs the widget to be in a form's tree already.** It names handlers on
   `w->form`, and a widget that has not been added to anything has none -- the
   property setter says so where it is set. Build, `Add`, *then* assign `Menu`;
-  which is the `.form` loader's order too.
+  which is the `.form` loader's order too. **"Says so" was not true until the
+  audit**: the answer was `cannot set property 'MnuX' of undefined` from inside
+  `make_item`, and `HeaderMenu` inherited it. Both setters refuse now with the
+  same sentence, before building anything.
+- **A menu item's action outlives its wrapper, so the wrapper's finaliser has to
+  disconnect it.** `make_item` binds `form[name]` to a fresh wrapper, and the
+  wrapper owns `mi`; the `GSimpleAction` is held by the group too. Rebinding the
+  name -- which `HeaderMenu` does on *every* right click, and which two menus
+  sharing an item name do the first time the second is built -- finalised the
+  old wrapper and left its action connected to a freed `mi`: the menu bar's
+  `form.MnuCopy`, activated after a heading menu reused the name, ran
+  `on_menu_activate` on freed memory. `menuitem_finalizer` and
+  `action_finalizer` both `g_signal_handlers_disconnect_by_data` now (the latter
+  also dropped a reference it never released). The orphaned action does
+  nothing, which is the truth about an item nothing can reach. What is still
+  open is the *collision itself*: a heading menu item named like a menu bar
+  item takes the name, and `this.MnuCopy` then answers the heading's.
 - **A menu bar's label is translated by the process that builds it.**
   `append_item` calls `bta_locale_lookup`, so a menu previewed inside the IDE is
   drawn against the IDE's catalogue. There is no way to opt out from JS. A `Text`
@@ -2646,6 +2728,27 @@ person who wrote it either.
   shell, the session); put new work there and not in `quit()`. Found by reading
   the settings file after a real session and finding nothing in it -- no test
   could have failed, because the test drove `quit()`.
+- **Write the thing that cannot fail first, and let the fallible follow-up
+  report.** Project settings renamed the metainfo *before* writing
+  `project.json`: a metainfo that would not parse threw out of the accept
+  callback with the dialog already closed, losing every edit, and a refused
+  field left the file renamed to an id the manifest never got. `apply()`
+  answers whether it wrote, and the metainfo follows only a written one
+  (`Manifest.followIdentity`), carrying `<name>` along with the id -- a renamed
+  project used to leave `<name>` behind and `Package.Write` then refused.
+- **An operation that renames a file the IDE may have open renames the tab
+  too.** `Metainfo.rename` deleted the old file while its tab kept the old
+  path, and saving the tab wrote it back beside the new one, old id and all --
+  two metainfo files, and `Metainfo.find` free to pick the stale one. `FormFiles`
+  already did `renameTab` + `reloadFromDisk`; `Manifest.metainfoMoved` is the
+  same pair. A rename onto a file that exists is refused, and only a stock
+  `<icon>` is rewritten -- a `remote` or `local` one is the author's.
+- **A lint nobody runs over the IDE is a lint about other people's projects.**
+  `Ide.Strings` has always warned about a msgid joined from two literals, and
+  the IDE had seven -- the id error in New project and Project settings, three
+  style-editor sentences, a property-grid hint -- each in `ide.pot` as its first
+  half, which no translation can ever match. `tests/ide`'s `strings` phase runs
+  the lint over the real `ide/` now and fails on any.
 - **A `force` flag on a close is a decision nobody asked about, and five
   roads were taking it.** `closeByName(name, true)` skips the dirty question,
   which is right *after* a question -- and Close all, Close others and
@@ -3734,8 +3837,19 @@ person who wrote it either.
   `JS_ToCString` converts anything, so `File.Save(undefined, t)` wrote
   `./undefined`, `File.Delete(undefined)` deleted it, and `File.Save(p, rec)`
   without the `Serialize()` replaced the file with `[object Object]` -- all
-  atomically and all silent. `file_path` in `bta_sys.c` is the one door the
-  file verbs go through now, and `Save`'s text is checked as text. The other
+  atomically and all silent. `bta_file_path` in `bta_sys.c` is the one door the
+  file verbs go through now, and `Save`'s text is checked as text. **"The file
+  verbs" was half of them until an audit counted**: the fix went through the
+  verbs that write a file and left the rest on `JS_ToCString`, so
+  `Directory.Make(cfg.Dir)` with the key missing made a folder called
+  `undefined`, `Directory.DeleteTree({})` would remove `./[object Object]`,
+  and `Database.Sqlite`, `DrawingArea.Save`/`SavePdf` and `Printer.ToFile`
+  created files by that name. Every one of them is on the door now (it is
+  exported for the three outside `bta_sys.c`). `Exists`/`IsDir` are the one
+  deliberate difference: a question about something that is not a path answers
+  `false`, which is what it always answered a missing file. The path-part verbs
+  (`File.Name`, `Extension`, `Directory`) still convert -- they never touch the
+  disk. The other
   half is the loops: `Exec`'s `Environment`, the client's and `Answer`'s
   `Headers` and the `Query` builder each skipped an entry whose conversion
   failed and left the exception pending, so the child started without the
@@ -3902,6 +4016,18 @@ bag. Five things are worth knowing before touching either half:
   URI on a parsed root with a default `xmlns`. It reads the element's own
   `nsDef` first now: the same URI is reused, another is refused naming the one
   there.
+- **`xmlHasNsProp` answers a DTD's default too, and what it hands back then is
+  not an attribute.** It looks the name up with `xmlCheckDTD` on, and for an
+  attribute the element does not carry but the DTD declares a default for, it
+  returns the DTD's `xmlAttribute` *declaration* cast to `xmlAttrPtr`.
+  `xmlRemoveProp` then walks that thing's "parent" -- the `xmlDtd` -- as if it
+  were an element: `RemoveAttrNS` on `<!ATTLIST r xml:lang CDATA "en">` was a
+  segfault (exit 139), and not under the sanitizer build, whose layout
+  differed. The type is checked (`XML_ATTRIBUTE_NODE`) before removing; a
+  default is not on the element to take out. `RemoveAttr` never had it because
+  `xmlUnsetProp` does not consult the DTD. Any new call that answers an
+  `xmlAttrPtr` from a lookup wants the same check. And `SetAttrNS` returned an
+  empty `JS_EXCEPTION` when libxml2 answered NULL; it throws a sentence now.
 - **`Field.DateTime` exists because XML's `dateTime` is a date and a time**
   together, which `Date` and `Time` cannot say between them; and the namespace
   on `static Xml` is a **list** because MSPDI's own XSD and its own files

@@ -654,6 +654,12 @@ BtaWidget *bta_this(JSContext *ctx, JSValueConst this_val);
 void       bta_widget_styles_hold(void);
 void       bta_widget_styles_release(void);
 
+/* A path argument: a string, or a TypeError naming `who`. `JS_ToCString` would
+ * turn `undefined` into a file called `./undefined` -- which `Directory.Make`
+ * created and `Database.Sqlite` opened. Every verb that touches the disk with a
+ * path the program passed goes through this (bta_sys.c). */
+const char *bta_file_path(JSContext *ctx, JSValueConst v, const char *who);
+
 /* A number from a property setter, or false with a TypeError naming the value.
  * Every numeric setter goes through these: JS_ToInt32 turns a string that is not
  * a number into 0 without failing, which is how `Margin = "0 0 0 12"` was a

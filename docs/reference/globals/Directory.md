@@ -55,6 +55,10 @@ recoverable, which is the kinder verb wherever the user is the one deciding.
 
 ## What goes wrong
 
+- **A folder called `undefined` appeared.** A path that is not a string —
+  `Directory.Make(cfg.Dir)` with the key missing — is refused with a sentence
+  now; it used to be converted, and `undefined` is a perfectly good folder name.
+
 - **It threw instead of answering an empty list.** All three throw when the path
   is not a directory — `cannot list <path>` — because *there is nothing there*
   and *it is empty* are different answers and a program that confuses them

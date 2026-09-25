@@ -2160,7 +2160,7 @@ static JSValue area_save(JSContext *ctx, JSValueConst this_val,
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "Save expects (path, [width], [height])");
 
-    const char *path = JS_ToCString(ctx, argv[0]);
+    const char *path = bta_file_path(ctx, argv[0], "Save");
     if (!path)
         return JS_EXCEPTION;
 
@@ -2265,7 +2265,7 @@ static JSValue area_save_pdf(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "SavePdf expects "
                                       "(path, width, height, [pages], [before])");
 
-    const char *path = JS_ToCString(ctx, argv[0]);
+    const char *path = bta_file_path(ctx, argv[0], "SavePdf");
     if (!path)
         return JS_EXCEPTION;
 

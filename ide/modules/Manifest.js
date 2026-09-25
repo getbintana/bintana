@@ -150,22 +150,71 @@ Ide.Manifest = class Manifest {
             return;
         }
 
-        /* The id the project had, so a change can take the metainfo with it:
-         * the file is named after the id, and an id that moves without the
-         * file leaves a metainfo nothing looks for. */
-        const before = config.Id;
+        /* The identity the project had, so a change can take the metainfo
+         * with it: the file is named after the id and its primary `<name>` is
+         * the project's, and either moving without the file leaves a metainfo
+         * `Package.Write` refuses. */
+        const before = { Id: config.Id, Name: config.Name };
 
         /* Kept while it is open, for the same reason the menu editor is: it is
          * what lets a test drive it. */
         ide.projectEditor = ProjectForm.edit(
             config, ide.classNames(), this.loadOrder(), this.libraries(),
             (edited) => {
-                /* The rename comes first, so the listing `apply` ends with
-                 * shows the file where it is now. */
-                if (edited.Id !== before)
-                    Metainfo.rename(ide.project, edited.Id);
-                this.apply(edited);
+                /*
+                 * **The settings first, and the metainfo after them.**  The
+                 * rename used to come first, and it reads the file: a metainfo
+                 * that would not parse threw out of here with the dialog
+                 * already closed, and every edit in it was lost -- while an
+                 * `apply` that refused left the file renamed to an id the
+                 * manifest never got.  Now the manifest is written or not, and
+                 * only a written one moves the metainfo; a metainfo that cannot
+                 * follow is said, and costs the settings nothing.
+                 */
+                if (!this.apply(edited)) return;
+                if (edited.Id !== before.Id || edited.Name !== before.Name)
+                    this.followIdentity(edited);
             });
+    }
+
+    /*
+     * The metainfo, brought in line with a new id or name, and its tab with it.
+     *
+     * **The tab is renamed with the file**, the way `FormFiles` renames a form's:
+     * left alone, it answered for a path nothing was at any more, and saving it
+     * wrote the old file back -- beside the new one, with the old id in it.
+     */
+    followIdentity(edited) {
+        const ide  = this.ide;
+        const from = Metainfo.find(ide.project);
+        if (!from) return;
+
+        let to;
+        try {
+            to = Metainfo.rename(ide.project, edited.Id || Metainfo.read(File.LoadXml(from)).Id, edited.Name);
+        } catch (e) {
+            Message.Error("project.json was saved, but {0} could not follow it:\n{1}",
+                          File.Name(from), e.message);
+            return;
+        }
+        this.metainfoMoved(from, to);
+        ide.listFiles();
+    }
+
+    /*
+     * A metainfo written or moved by something other than its tab: the tab
+     * follows the name, and takes the new text when nothing unsaved is in it.
+     * A tab with edits keeps them -- and saves them where the file is now.
+     */
+    metainfoMoved(fromPath, toPath) {
+        const ide  = this.ide;
+        const from = File.Relative(fromPath, ide.project);
+        const to   = File.Relative(toPath, ide.project);
+
+        if (from !== to) ide.renameTab(from, to);
+
+        const state = ide.tabs.openTabs.get(to);
+        if (state && !ide.tabs.dirtyOf(to, state)) ide.tabs.reloadFromDisk(to);
     }
 
     /*
@@ -201,7 +250,10 @@ Ide.Manifest = class Manifest {
                    .filter((f) => File.IsExtension(f, "js")).sort();
     }
 
+    /* Answers whether `project.json` was written: a refused field, or a file
+     * that could not be read, is `false`, and was already said. */
     apply(edited) {
+        let written = false;
         this.update((config) => {
             /*
              * **Every field the record declares, asked of the record.** This used
@@ -226,11 +278,14 @@ Ide.Manifest = class Manifest {
              * nobody asked for -- and the dialog's *Decide* is where that choice
              * is made on purpose. */
             if (edited.Lists) config.Sources = edited.Sources;
+            written = true;
         });
+        if (!written) return false;
 
         /* The tree marks the startup form, and the name may have moved. */
         this.ide.listFiles();
         this.ide.log("project.json saved\n");
+        return true;
     }
 
     /*

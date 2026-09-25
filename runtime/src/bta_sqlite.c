@@ -1106,7 +1106,7 @@ static JSValue database_sqlite(JSContext *ctx, JSValueConst this_val,
                                       "\":memory:\" for a database that lasts "
                                       "as long as the program");
 
-    const char *path = JS_ToCString(ctx, argv[0]);
+    const char *path = bta_file_path(ctx, argv[0], "Database.Sqlite");
     if (!path)
         return JS_EXCEPTION;
 

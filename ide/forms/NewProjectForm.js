@@ -77,8 +77,7 @@ class NewProjectForm extends Form {
          * window class nothing matches, so it is cheaper to say so here than
          * to meet it as a generic icon in a dock. */
         if (id && !Ide.ProjectFile.idValid(id)) {
-            Message.Error("\"{0}\" is not an application id. Use a reverse-DNS " +
-                          "name like io.github.you.App.", id);
+            Message.Error("\"{0}\" is not an application id. Use a reverse-DNS name like io.github.you.App.", id);
             return;
         }
         if (!File.IsDir(base)) {

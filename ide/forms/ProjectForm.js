@@ -287,8 +287,7 @@ class ProjectForm extends Form {
          * the project loads, and `ProjectFile.idValid` is the one copy of it
          * this side has. */
         if (this.record.Id && !Ide.ProjectFile.idValid(this.record.Id)) {
-            Message.Error("\"{0}\" is not an application id. Use a reverse-DNS " +
-                          "name like io.github.you.App.", this.record.Id);
+            Message.Error("\"{0}\" is not an application id. Use a reverse-DNS name like io.github.you.App.", this.record.Id);
             return false;
         }
         return true;

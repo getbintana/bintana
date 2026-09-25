@@ -16,7 +16,7 @@
 | Key | Meaning |
 |---|---|
 | `name` | `Application.Name`, and the folder under `~/.config/bintana` the settings go in |
-| `id` | reverse-DNS identity, optional: `Application.Id` reads it back. It is the window's class (`GtkApplication`'s application id, and the program name X11's `WM_CLASS` is built from) and the name the project's `<id>.metainfo.xml` and a package carry. A value that is not an application id (at least one dot, no element starting with a digit) stops the program when the project loads |
+| `id` | reverse-DNS identity, optional: `Application.Id` reads it back. It is the window's class (`GtkApplication`'s application id, and the program name X11's `WM_CLASS` is built from) and the name the project's `<id>.metainfo.xml` and a package carry. A value that is not a string, or not an application id (at least one dot, no element starting with a digit) stops the program when the project loads |
 | `version` | free text, optional. `Application.Version` reads it back; `""` when absent. **Not** the runtime's version, which is `BTA_VERSION` |
 | `startup` | the class instantiated and shown at launch. A `Form` subclass |
 | `main` | a **function** to call instead, for a tool with no window. Excludes `startup` |

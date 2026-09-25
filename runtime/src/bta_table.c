@@ -443,7 +443,7 @@ static BtaTableRow *table_row_arg(JSContext *ctx, BtaWidget *w, JSValueConst v,
     }
 
     int32_t i;
-    if (JS_ToInt32(ctx, &i, v)) {
+    if (!bta_to_int(ctx, v, "row", &i)) {
         *bad = true;
         return NULL;
     }
@@ -867,7 +867,7 @@ static JSValue table_set_icon(JSContext *ctx, JSValueConst this_val,
             "return { Text, Icon } from the handler instead");
 
     int32_t c;
-    if (argc < 3 || JS_ToInt32(ctx, &c, argv[1]))
+    if (argc < 3 || !bta_to_int(ctx, argv[1], "SetIcon", &c))
         return JS_ThrowTypeError(ctx, st->tree
             ? "SetIcon(key, column, name) expects a key, a column and a name"
             : "SetIcon(row, column, name) expects two numbers and a name");
@@ -1072,7 +1072,7 @@ static JSValue table_sort_by(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     int32_t col;
-    if (argc < 1 || JS_ToInt32(ctx, &col, argv[0]))
+    if (argc < 1 || !bta_to_int(ctx, argv[0], "SortBy", &col))
         return JS_ThrowTypeError(ctx, "SortBy(column, [ascending]) expects a column");
     if (col < 0)
         return JS_ThrowRangeError(ctx, "SortBy: %d is not a column", col);
@@ -1137,7 +1137,7 @@ static JSValue table_sort_column(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     int32_t col;
-    if (argc < 1 || JS_ToInt32(ctx, &col, argv[0]))
+    if (argc < 1 || !bta_to_int(ctx, argv[0], "SortColumn", &col))
         return JS_ThrowTypeError(ctx,
             "SortColumn(column, [ascending]) expects a column");
 
@@ -1201,6 +1201,11 @@ static JSValue table_set_header_menu(JSContext *ctx, JSValueConst this_val,
      * item names on the form, exactly as assigning `Menu` does. The menu that
      * is shown is built again per click, with the column.
      */
+    if (JS_IsArray(val) && !JS_IsObject(w->form))
+        return JS_ThrowTypeError(ctx,
+            "HeaderMenu names handlers on the form: add %s to a form before "
+            "assigning it", w->name ? w->name : "the table");
+
     if (JS_IsArray(val)) {
         GMenu *model = bta_menu_header_build(ctx, w->form, w, val, -1);
         if (!model)
@@ -1961,7 +1966,7 @@ static JSValue table_remove_row(JSContext *ctx, JSValueConst this_val,
     int32_t i;
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "RemoveRow(index) expects a row");
-    if (JS_ToInt32(ctx, &i, argv[0]))
+    if (!bta_to_int(ctx, argv[0], "RemoveRow", &i))
         return JS_EXCEPTION;
 
     GListStore *rows = st->rows;
@@ -2110,7 +2115,7 @@ static JSValue table_cell(JSContext *ctx, JSValueConst this_val,
             "read them where the handler does", "Cell");
 
     int32_t c;
-    if (argc < 2 || JS_ToInt32(ctx, &c, argv[1]))
+    if (argc < 2 || !bta_to_int(ctx, argv[1], "Cell", &c))
         return JS_ThrowTypeError(ctx, table_state(w)->tree
             ? "Cell(key, column) expects a key and a column"
             : "Cell(row, column) expects two numbers");
@@ -2144,7 +2149,7 @@ static JSValue table_set_cell(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     int32_t c;
-    if (argc < 3 || JS_ToInt32(ctx, &c, argv[1]))
+    if (argc < 3 || !bta_to_int(ctx, argv[1], "SetCell", &c))
         return JS_ThrowTypeError(ctx, table_state(w)->tree
             ? "SetCell(key, column, value) expects a key, a column and a value"
             : "SetCell(row, column, value) expects two numbers and a value");
@@ -2625,7 +2630,7 @@ static JSValue table_select_one(JSContext *ctx, JSValueConst this_val,
     if (argc < 1)
         return JS_ThrowTypeError(ctx,
             "Select(index)/Deselect(index) needs a row index");
-    if (JS_ToInt32(ctx, &i, argv[0]))
+    if (!bta_to_int(ctx, argv[0], "Select", &i))
         return JS_EXCEPTION;        /* it threw on the way; that stands */
 
     GtkSelectionModel *sel = table_model(w);
@@ -2707,7 +2712,7 @@ static JSValue table_activate(JSContext *ctx, JSValueConst this_val,
     int32_t            index = -1;
 
     if (argc > 0 && !JS_IsUndefined(argv[0])) {
-        if (JS_ToInt32(ctx, &index, argv[0]))
+        if (!bta_to_int(ctx, argv[0], "Activate", &index))
             return JS_EXCEPTION;
     } else {
         for (guint i = 0; i < n; i++) {
@@ -2743,7 +2748,7 @@ static JSValue table_reveal_row(JSContext *ctx, JSValueConst this_val,
     int32_t index;
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "Reveal(index) needs a row index");
-    if (JS_ToInt32(ctx, &index, argv[0]))
+    if (!bta_to_int(ctx, argv[0], "Reveal", &index))
         return JS_EXCEPTION;
 
     GtkSelectionModel *sel = table_model(w);

@@ -87,9 +87,7 @@ Ide.Styles = class Styles {
             }
         }
         return Locale.Text(
-            "It dresses what a control keeps inside itself, which a class on the " +
-            "control cannot reach. A rule of your own in app.css can: see the " +
-            "styling section of docs/widgets.md.");
+            "It dresses what a control keeps inside itself, which a class on the control cannot reach. A rule of your own in app.css can: see the styling section of docs/widgets.md.");
     }
 
     static find(name) {

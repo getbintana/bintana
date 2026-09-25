@@ -682,6 +682,8 @@ static JSValue tree_exists(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     const char *key = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    if (argc > 0 && !key)
+        return JS_EXCEPTION;                  /* a conversion that threw stands */
     bool        has = key && g_hash_table_contains(tree_index(w), key);
     JS_FreeCString(ctx, key);
     return JS_NewBool(ctx, has);
@@ -829,7 +831,7 @@ static JSValue tree_activate(JSContext *ctx, JSValueConst this_val,
     int32_t            index = -1;
 
     if (argc > 0 && !JS_IsUndefined(argv[0])) {
-        if (JS_ToInt32(ctx, &index, argv[0]))
+        if (!bta_to_int(ctx, argv[0], "Activate", &index))
             return JS_EXCEPTION;
     } else {
         for (guint i = 0; i < n; i++) {
@@ -865,7 +867,7 @@ static JSValue tree_reveal_row(JSContext *ctx, JSValueConst this_val,
     int32_t index;
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "Reveal(index) needs a row index");
-    if (JS_ToInt32(ctx, &index, argv[0]))
+    if (!bta_to_int(ctx, argv[0], "Reveal", &index))
         return JS_EXCEPTION;
 
     GtkSelectionModel *sel = GTK_SELECTION_MODEL(tree_selection(w));

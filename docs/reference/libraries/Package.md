@@ -54,17 +54,38 @@ is:
 | `Icon` | `<out>/<id>.svg` or `<out>/<id>.png` |
 | `Project` | `<out>/project/`, the copy the manifest builds from |
 
-**The project copy leaves out hidden entries.** `.git` and `.cache` are not the
-program; everything else travels, including a `lib/` of its own. It is a copy
-and not a reference, so the output directory can be moved and built anywhere --
-which is what a build machine needs.
+**The project copy leaves out hidden entries**, and the output directory when
+it is one of the project's own top-level folders (`tools/pack.sh h h/dist`):
+it used to copy itself into itself without end. An output *deeper* inside one
+of them (`h/build/pkg`), or the project itself, is refused. `.git` and `.cache`
+are not the program; everything else travels, including a `lib/` of its own. It
+is a copy and not a reference, so the output directory can be moved and built
+anywhere -- which is what a build machine needs.
 
-**And it refuses, with a sentence, what would become a wrong package.** A
-project with no `id` (there is nothing to install under and no name for the
-metainfo), one with no metainfo, one with no icon (AppStream will not compose an
-application without one), and one whose metainfo disagrees with `project.json`.
-Each of those fails half a build later otherwise, by another program, naming
-something nobody wrote.
+**And it refuses, with a sentence, what would become a wrong package** --
+**before it writes anything**, so a refusal leaves no half-made build context.
+A project with no `id` (there is nothing to install under and no name for the
+metainfo), one with no metainfo, one with no icon or an icon it cannot tell
+apart (see below), and one whose metainfo disagrees with `project.json` or
+would fail `appstreamcli validate` (`Metainfo.problems`). Each of those fails
+half a build later otherwise, by another program, naming something nobody wrote.
+
+## The icon
+
+`icons/` holds the application's drawing **and the glyphs its controls draw**,
+so which file is the application's is decided, not guessed:
+
+1. `icons/<id>.svg`, then `icons/<id>.png` -- the name the desktop's `Icon=`
+   asks the theme for;
+2. otherwise the **one** svg or png there whose name does not end in
+   `-symbolic` (a control's glyph);
+3. otherwise a refusal naming `icons/<id>.svg`.
+
+An svg is installed under `hicolor/scalable`. A PNG is **measured** -- its
+width and height are read out of the file -- and installed under `hicolor/<w>x<h>`;
+one that is not square, or whose size the theme has no place for (64, 72, 96,
+128, 192, 256, 384, 480 or 512), is refused. It used to go under `128x128`
+whatever it was.
 
 ## The manifest
 

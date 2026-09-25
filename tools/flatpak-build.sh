@@ -73,13 +73,33 @@ fi
 # `flatpak build-update-repo` lists them, so they are made and not assumed.
 mkdir -p "$repo/refs/heads" "$repo/refs/mirrors" "$repo/refs/remotes"
 
+# The base's branch, read from the one manifest that declares it rather than
+# written here a second time: `tests/pack.sh` holds that manifest (and the other
+# hand-written copies) to the runtime's own version, so this cannot drift.
+base_branch=$(sed -n "s/^branch: *'\{0,1\}\([^']*\)'\{0,1\} *$/\1/p" \
+                  "$bintana/flatpak/io.github.getbintana.BaseApp.yml")
+[[ -n $base_branch ]] || { echo "flatpak-build: the BaseApp manifest declares no branch" >&2; exit 2; }
+base_ref="io.github.getbintana.BaseApp//$base_branch"
+
 # An application built on the base needs it installed, and the repository is
 # where it is when this run is not building it.
-if [[ ! " ${refs[*]} " =~ " BaseApp " ]] && [ -f "$repo/summary" ]; then
-    flatpak remote-add --user --if-not-exists --no-gpg-verify bintana "$repo" \
-        2>/dev/null || true
-    flatpak install --user -y --noninteractive bintana \
-        io.github.getbintana.BaseApp//0.1 || true
+#
+# **A failure here stops the run, with the ref in the sentence.**  It used to
+# end in `|| true`, so a base that could not be installed was found one step
+# later by `flatpak build-init --base`, whose complaint names neither the base
+# nor the repository.  `--or-update` is what makes *already installed* a
+# success rather than something to swallow.
+if [[ ! " ${refs[*]} " =~ " BaseApp " ]]; then
+    if [ -f "$repo/summary" ]; then
+        flatpak remote-add --user --if-not-exists --no-gpg-verify bintana "$repo"
+        flatpak install --user -y --noninteractive --or-update bintana "$base_ref" || {
+            echo "flatpak-build: cannot install $base_ref from $repo -- build BaseApp in this run, or publish it there first" >&2
+            exit 2
+        }
+    elif ! flatpak info --user "$base_ref" >/dev/null 2>&1; then
+        echo "flatpak-build: $base_ref is not being built, not in $repo and not installed -- name BaseApp among the refs" >&2
+        exit 2
+    fi
 fi
 
 # One field of an application's registration. `python3` is the runner's and

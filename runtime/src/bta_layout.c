@@ -1145,7 +1145,7 @@ static JSValue rowlist_select_one(JSContext *ctx, JSValueConst this_val,
     if (argc < 1)
         return JS_ThrowTypeError(ctx,
             "Select(index)/Deselect(index) needs a row index");
-    if (JS_ToInt32(ctx, &i, argv[0]))
+    if (!bta_to_int(ctx, argv[0], "Select", &i))
         return JS_EXCEPTION;        /* it threw on the way; that stands */
 
     GtkListBoxRow *row = i < 0 ? NULL : rowlist_row(w, i);
@@ -1221,7 +1221,7 @@ static JSValue rowlist_activate(JSContext *ctx, JSValueConst this_val,
     int32_t index = -1;
 
     if (argc > 0 && !JS_IsUndefined(argv[0])) {
-        if (JS_ToInt32(ctx, &index, argv[0]))
+        if (!bta_to_int(ctx, argv[0], "Activate", &index))
             return JS_EXCEPTION;
     } else {
         GtkListBoxRow *at = gtk_list_box_get_selected_row(GTK_LIST_BOX(w->slot));
@@ -1259,7 +1259,7 @@ static JSValue rowlist_remove(JSContext *ctx, JSValueConst this_val,
     int32_t i;
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "RemoveRow(index) needs a row index");
-    if (JS_ToInt32(ctx, &i, argv[0]))
+    if (!bta_to_int(ctx, argv[0], "RemoveRow", &i))
         return JS_EXCEPTION;
 
     GtkListBoxRow *row = i < 0 ? NULL : rowlist_row(w, i);
@@ -1285,7 +1285,7 @@ static JSValue rowlist_reveal(JSContext *ctx, JSValueConst this_val,
     int32_t i;
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "Reveal(index) needs a row index");
-    if (JS_ToInt32(ctx, &i, argv[0]))
+    if (!bta_to_int(ctx, argv[0], "Reveal", &i))
         return JS_EXCEPTION;
 
     GtkListBoxRow *row = i < 0 ? NULL : rowlist_row(w, i);

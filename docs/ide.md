@@ -2554,7 +2554,13 @@ they are one identity in three places — the window's class, the package's name
 and what a software centre shows. The form writes them from the record on every
 save, so the two files cannot drift while it is the writer; editing them is
 *Project settings*, which renames the metainfo to follow and rewrites its
-`<id>`, `<launchable>` and `<icon>` with it. A hand-edit that leaves the two
+`<id>`, `<launchable>`, a stock `<icon>` and its primary `<name>` with it --
+**after** `project.json` is written, so a metainfo that cannot follow (one that
+does not parse, or a file already at the new name) is reported and costs the
+settings nothing. An open tab of the metainfo follows the file, as a form's tab
+follows a rename; left alone it would save the old file back beside the new
+one. A file the dialog creates is in the tree at once, Cancel or not. A
+hand-edit that leaves the two
 disagreeing is what `Metainfo.problems` reports — it is what a packaging
 step refuses over, because an installer that shows one name and installs another
 is not something a dock can explain.

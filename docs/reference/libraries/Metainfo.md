@@ -29,8 +29,8 @@ disagrees with `project.json`.
 | `read(doc)` | → the common fields as data | [the fields](#the-fields) |
 | `write(doc, fields, config)` | writes them, identity included | [the fields](#the-fields) |
 | `create(project, config)` | → a minimal one, written | [creating one](#creating-one) |
-| `problems(doc, path, config)` | → what disagrees with `project.json` | [the identity](#the-identity) |
-| `rename(project, newId)` | the file follows the id | [the identity](#the-identity) |
+| `problems(doc, path, config)` | → what disagrees with `project.json`, and what AppStream would refuse | [the identity](#the-identity) |
+| `rename(project, newId, [newName])` | the file follows the id, and `<name>` the name | [the identity](#the-identity) |
 | `translations(doc)` | → the `xml:lang` names and summaries | [translations](#translations) |
 | `XMLNS` | the XML namespace, for `xml:lang` | [translations](#translations) |
 
@@ -78,20 +78,29 @@ two files cannot drift while this is the writer.
 - `<id>` is not `project.json`'s `id`;
 - the primary `<name>` is not `project.json`'s `name`;
 - the file's own name is not `<id>.metainfo.xml`;
-- the project declares no id at all, so there is nothing to agree with.
+- the project declares no id at all, so there is nothing to agree with;
+- and three things `appstreamcli validate` refuses: an empty `<summary>`, a
+  `<summary>` with a line break in it, and a `<description>` with no text.
+  `Package.Write` asks this, so a package cannot ship a file the validator
+  rejects.
 
-`rename(project, newId)` is the other half: the file is moved to the new name
-and its `<id>`, `<launchable>` and `<icon>` are rewritten with it. A metainfo
-named after an id the project no longer has is one nothing looks for.
+`rename(project, newId, [newName])` is the other half: the file is moved to the
+new name and its `<id>`, `<launchable>` and a **stock** `<icon>` are rewritten
+with it -- a `remote` or `local` icon is a URL or a path and is left alone --
+and, given `newName`, the primary `<name>`. A metainfo named after an id the
+project no longer has is one nothing looks for. **A file already at the new name
+is refused**, and nothing is moved: it is somebody's metainfo.
 
 ## Creating one
 
 `create(project, config)` writes a minimal, valid metainfo beside
 `project.json`: the id, the two licenses, the name, the summary from the
-project's description, an empty description paragraph, the launchable
+project's description -- its first line, without a closing full stop, or
+`<Name>, made with Bintana` when there is none -- the description as its
+paragraphs (a sentence naming the application when there is none), the launchable
 (`<id>.desktop`), the release the manifest declares with today's date, and a
 content rating. It writes `<icon type="stock">` **only when the project ships a
-drawing**, because an icon element naming a theme icon that is not there is
+drawing** -- the one [`Package`](Package.md#the-icon) would package -- because an icon element naming a theme icon that is not there is
 worse than none: the package then claims something it cannot draw.
 
 ## Translations

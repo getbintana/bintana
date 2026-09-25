@@ -438,7 +438,7 @@ static JSValue switcher_remove(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "RemovePage(index) needs a page index");
 
     int32_t index;
-    if (JS_ToInt32(ctx, &index, argv[0]))
+    if (!bta_to_int(ctx, argv[0], "RemovePage", &index))
         return JS_EXCEPTION;
 
     GtkWidget *page = stack_nth(w->slot, index);

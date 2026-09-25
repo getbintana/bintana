@@ -1191,7 +1191,7 @@ msgid "New class"
 msgstr ""
 
 #: forms/ClassForm.js:56
-msgid "{0} says more than this can edit — a gradient, a transition or a "
+msgid "{0} says more than this can edit — a gradient, a transition or a selector of its own. Open {1} and edit it there."
 msgstr ""
 
 #: forms/ClassForm.js:211
@@ -1199,7 +1199,7 @@ msgid "A class with nothing in it would do nothing."
 msgstr ""
 
 #: forms/ClassForm.js:197
-msgid "{0} is not a class name: a letter first, then letters, "
+msgid "{0} is not a class name: a letter first, then letters, digits, dashes or underscores."
 msgstr ""
 
 #: forms/ColumnForm.js:186
@@ -1655,7 +1655,7 @@ msgid "No class"
 msgstr ""
 
 #: forms/StyleForm.js:222
-msgid "Pick one of the project's own classes to edit. "
+msgid "Pick one of the project's own classes to edit. The theme's belong to the desktop."
 msgstr ""
 
 #: forms/SymbolForm.js:150
@@ -1968,7 +1968,7 @@ msgid "Edit the columns"
 msgstr ""
 
 #: modules/PropertyGrid.js:1423
-msgid "The class goes on this control's {0} node. One written for another "
+msgid "The class goes on this control's {0} node. One written for another node is saved and does nothing."
 msgstr ""
 
 #: modules/PropertyGrid.js:1462
@@ -2032,7 +2032,7 @@ msgid "The theme writes this one for {0}."
 msgstr ""
 
 #: modules/Styles.js:89
-msgid "It dresses what a control keeps inside itself, which a class on the "
+msgid "It dresses what a control keeps inside itself, which a class on the control cannot reach. A rule of your own in app.css can: see the styling section of docs/widgets.md."
 msgstr ""
 
 #: modules/TabSet.js:190

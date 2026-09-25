@@ -303,7 +303,7 @@ static void form_keep_one(BtaWidget *w, bool cancel, BtaWidget *keep)
     if (!w || !w->slot)
         return;
 
-    for (GtkWidget *c = gtk_widget_get_first_child(w->slot);
+    for (GtkWidget *c = bta_slot_first_child(w->slot);
          c; c = gtk_widget_get_next_sibling(c)) {
 
         BtaWidget *cw = bta_slot_child(c);
@@ -1313,7 +1313,7 @@ static JSValue cont_reorder(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "Reorder(child, index) expects a widget");
 
     int32_t index = 0;
-    if (argc < 2 || JS_ToInt32(ctx, &index, argv[1]))
+    if (argc < 2 || !bta_to_int(ctx, argv[1], "Reorder", &index))
         return JS_ThrowTypeError(ctx, "Reorder(child, index) expects an index");
 
     return bta_container_reorder(ctx, p, child, index)
@@ -2400,9 +2400,9 @@ static JSValue textbox_select(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     int32_t start = 0, len = 0;
-    if (argc > 0 && JS_ToInt32(ctx, &start, argv[0]))
+    if (argc > 0 && !bta_to_int(ctx, argv[0], "Select", &start))
         return JS_EXCEPTION;
-    if (argc > 1 && !JS_IsUndefined(argv[1]) && JS_ToInt32(ctx, &len, argv[1]))
+    if (argc > 1 && !JS_IsUndefined(argv[1]) && !bta_to_int(ctx, argv[1], "Select", &len))
         return JS_EXCEPTION;
 
     if (start < 0 || len < 0)
@@ -3168,7 +3168,7 @@ static JSValue listbox_select_one(JSContext *ctx, JSValueConst this_val,
     if (argc < 1)
         return JS_ThrowTypeError(ctx,
             "Select(index)/Deselect(index) needs a row index");
-    if (JS_ToInt32(ctx, &i, argv[0]))
+    if (!bta_to_int(ctx, argv[0], "Select", &i))
         return JS_EXCEPTION;        /* it threw on the way; that stands */
 
     GtkListBoxRow *row = gtk_list_box_get_row_at_index(GTK_LIST_BOX(w->inner), i);
@@ -3321,7 +3321,7 @@ static JSValue listbox_key_at(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "KeyAt(index) needs a row index");
 
     int32_t i;
-    if (JS_ToInt32(ctx, &i, argv[0]))
+    if (!bta_to_int(ctx, argv[0], "KeyAt", &i))
         return JS_EXCEPTION;
     if (i < 0 || i >= listbox_count(w))
         return JS_ThrowRangeError(ctx, "KeyAt: there is no row %d", i);
@@ -3352,7 +3352,7 @@ static JSValue listbox_remove(JSContext *ctx, JSValueConst this_val,
     int32_t i;
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "RemoveRow(index) needs a row index");
-    if (JS_ToInt32(ctx, &i, argv[0]))
+    if (!bta_to_int(ctx, argv[0], "RemoveRow", &i))
         return JS_EXCEPTION;
 
     GtkListBoxRow *row = gtk_list_box_get_row_at_index(GTK_LIST_BOX(w->inner), i);
@@ -3380,7 +3380,7 @@ static JSValue listbox_set_text(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "SetText(index, text) needs a row and the text");
 
     int32_t i;
-    if (JS_ToInt32(ctx, &i, argv[0]))
+    if (!bta_to_int(ctx, argv[0], "SetText", &i))
         return JS_EXCEPTION;
 
     if (JS_IsUndefined(argv[1]) || JS_IsNull(argv[1]))
@@ -3416,7 +3416,7 @@ static JSValue listbox_reveal(JSContext *ctx, JSValueConst this_val,
     int32_t i;
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "Reveal(index) needs a row index");
-    if (JS_ToInt32(ctx, &i, argv[0]))
+    if (!bta_to_int(ctx, argv[0], "Reveal", &i))
         return JS_EXCEPTION;
 
     GtkListBoxRow *row = gtk_list_box_get_row_at_index(GTK_LIST_BOX(w->inner), i);
@@ -3446,7 +3446,7 @@ static JSValue listbox_activate(JSContext *ctx, JSValueConst this_val,
 
     int index;
     if (argc > 0 && !JS_IsUndefined(argv[0])) {
-        if (JS_ToInt32(ctx, &index, argv[0]))
+        if (!bta_to_int(ctx, argv[0], "Activate", &index))
             return JS_EXCEPTION;
     } else {
         GtkListBoxRow *at = gtk_list_box_get_selected_row(GTK_LIST_BOX(w->inner));
@@ -3807,7 +3807,7 @@ static JSValue combo_key_at(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "KeyAt(index) needs a row index");
 
     int32_t i;
-    if (JS_ToInt32(ctx, &i, argv[0]))
+    if (!bta_to_int(ctx, argv[0], "KeyAt", &i))
         return JS_EXCEPTION;
     if (i < 0 || (guint)i >= combo_count(w))
         return JS_ThrowRangeError(ctx, "KeyAt: there is no row %d", i);
@@ -3833,7 +3833,7 @@ static JSValue combo_remove(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "RemoveRow(index) needs a row index");
 
     int32_t i;
-    if (JS_ToInt32(ctx, &i, argv[0]))
+    if (!bta_to_int(ctx, argv[0], "RemoveRow", &i))
         return JS_EXCEPTION;
     if (i < 0 || (guint)i >= combo_count(w))
         return JS_ThrowRangeError(ctx, "RemoveRow: there is no row %d", i);
@@ -3853,7 +3853,7 @@ static JSValue combo_set_row_text(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "SetText(index, text) needs a row and the text");
 
     int32_t i;
-    if (JS_ToInt32(ctx, &i, argv[0]))
+    if (!bta_to_int(ctx, argv[0], "SetText", &i))
         return JS_EXCEPTION;
 
     if (JS_IsUndefined(argv[1]) || JS_IsNull(argv[1]))
@@ -4024,7 +4024,15 @@ static JSValue spin_set(JSContext *ctx, JSValueConst this_val,
         gtk_spin_button_set_value(sb, v);
         break;
     case SPIN_DECIMALS:
-        gtk_spin_button_set_digits(sb, (guint)(v < 0 ? 0 : v));
+        /* A whole number GTK will take: casting Infinity or 1e12 to a `guint`
+         * is undefined in C, and past twenty GTK prints a critical and keeps
+         * the old value while the setter says nothing -- `DecimalBox`'s rule. */
+        if (v < 0 || v > 20 || v != (double)(guint)v)
+            return JS_ThrowRangeError(ctx, "Decimals: %s is not a whole number "
+                                           "between 0 and 20",
+                                      g_ascii_dtostr((char[G_ASCII_DTOSTR_BUF_SIZE]){0},
+                                                     G_ASCII_DTOSTR_BUF_SIZE, v));
+        gtk_spin_button_set_digits(sb, (guint)v);
         break;
     case SPIN_STEP:
         /* Page is what PageUp moves by; ten steps is the usual feel. */
@@ -6986,11 +6994,23 @@ static JSValue popover_popup(JSContext *ctx, JSValueConst this_val,
     /* The anchor has to have been laid out, which it cannot have been before
      * the window is up -- and opening one that early is the crash above. */
     GtkRoot *root = gtk_widget_get_root(parent);
+    const char *me = w->name ? w->name : "a popover";
 
-    if (!root || !gtk_widget_get_mapped(anchor->gtk))
+    if (!root)
         return JS_ThrowTypeError(ctx,
-            "%s cannot open before the window is shown",
-            w->name ? w->name : "a popover");
+            "%s cannot open: it is not on screen -- before the window is "
+            "shown, or inside a collapsed Expander or a hidden page", me);
+
+    /* Its own container has to be on screen as well as the anchor: the point is
+     * worked out in the container's coordinates, and a hidden one has none, so
+     * the popover opened pointing at nothing while `Open` said all was well. */
+    if (!gtk_widget_get_mapped(parent))
+        return JS_ThrowTypeError(ctx,
+            "%s cannot open: the container it is in is not on screen", me);
+    if (!gtk_widget_get_mapped(anchor->gtk))
+        return JS_ThrowTypeError(ctx,
+            "%s cannot open: %s is not on screen", me,
+            anchor->name ? anchor->name : "the anchor");
 
     /*
      * **GTK reads the window's focus while it shows an autohide popover**, and
@@ -7010,6 +7030,16 @@ static JSValue popover_popup(JSContext *ctx, JSValueConst this_val,
         gtk_widget_grab_focus(anchor->gtk);
         if (!gtk_root_get_focus(root))
             gtk_widget_child_focus(GTK_WIDGET(root), GTK_DIR_TAB_FORWARD);
+
+        /* Moving the focus raises `GotFocus`/`LostFocus` synchronously, and a
+         * handler may take the popover out or hide its container: everything
+         * read above is read again. */
+        parent = gtk_widget_get_parent(w->gtk);
+        if (!parent || !gtk_widget_get_mapped(parent) ||
+            !gtk_widget_get_mapped(anchor->gtk))
+            return JS_ThrowTypeError(ctx,
+                "%s cannot open: a focus handler took it or %s off the screen",
+                me, anchor->name ? anchor->name : "the anchor");
     }
 
     graphene_rect_t r;
@@ -7021,7 +7051,7 @@ static JSValue popover_popup(JSContext *ctx, JSValueConst this_val,
 
     GdkRectangle at = {
         (int)r.origin.x, (int)r.origin.y,
-        MAX(1, (int)r.size.width), MAX(1, r.size.height)
+        MAX(1, (int)r.size.width), MAX(1, (int)r.size.height)
     };
 
     gtk_popover_set_pointing_to(GTK_POPOVER(w->gtk), &at);

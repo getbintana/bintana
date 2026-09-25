@@ -22,7 +22,7 @@ Every name here is a global: ambient, always present, no import.
 | `LibraryPath(name, [project])` | where a library by that name is, or `""` — the same six-place search the runtime does for `uses`. Published so a tool that opens *other* projects asks about theirs rather than keeping a second copy of the path |
 | `Libraries([project])` | the names of every library those same six places offer, sorted, each one once. The other direction of the lookup: `LibraryPath` resolves a name you already know, this is what a dialog that offers a choice needs |
 | `OnError` | assign `(message, stack) => …` to take over uncaught errors |
-| `Quit(code)` | quit with that exit status |
+| `Quit(code)` | quit with that exit status. A `code` that is not a number is refused rather than read as `0`, which a runner would take for success; `Quit()` is `0` |
 
 `BTA_VERSION` is the **runtime's** version, and is not
 `Application.Version`. Showing the wrong one is what an About box does until it
@@ -202,7 +202,11 @@ Most text needs none of this: see
 A **path is a string** and `Save`'s text is a string: anything else is refused
 with a sentence. It used to convert, so `Save(undefined, t)` wrote `./undefined`,
 `Delete(undefined)` deleted it, and a record without its `Serialize()` replaced
-the file with `[object Object]`.
+the file with `[object Object]`. The same holds for every verb here and in
+[`Directory`](#directory) that touches the disk, and for `Database.Sqlite`,
+`DrawingArea.Save`/`SavePdf` and `Printer.ToFile` — `Directory.Make(undefined)`
+made a folder called `undefined`. The one exception is the question:
+`Exists`/`IsDir` of something that is not a string answer `false`.
 
 | | |
 |---|---|
@@ -213,7 +217,7 @@ the file with `[object Object]`.
 | `SaveJson(path, value)` | one canonical shape: indented by two, one trailing newline |
 | `LoadXml(path)` | as an XML document — see [Xml](#xml) — and the error names the file |
 | `SaveXml(path, node)` | the canonical XML shape, atomically, honouring neither locale nor encoding guesses |
-| `Exists(path)`, `IsDir(path)` | |
+| `Exists(path)`, `IsDir(path)` | `false` for anything that is not a string, rather than asking about a file called `undefined` |
 | `Delete(path)` | a file, or an **empty** directory. Throws on failure |
 | `Trash(path)` | to the desktop's trash, whole for a folder. Throws where there is no trash |
 | `Rename(from, to)` | also moves; refuses to clobber |
@@ -343,6 +347,8 @@ is installed in a worker too, so a big file can be parsed off the main thread.
 | `Files(path, [pattern-or-options])` | the **full paths** of the files, sorted |
 | `Folders(path, [pattern-or-options])` | the same for directories |
 | `Make(path)` | creates it and any missing parent |
+
+Every path is a string, refused otherwise — see [File](#file).
 | `Copy(from, to)`, `Delete(path)`, `DeleteTree(path)` | |
 
 ```js
@@ -671,7 +677,11 @@ const clock = Timer.Every(1000, () => this.tick());   // repeat
 clock.Stop();
 ```
 
-Both hand the `Timer` back, so what was started can be stopped. The full object:
+Both hand the `Timer` back, so what was started can be stopped. **The delay
+comes first and has to be a number, and the tick has to be a function**: both
+used to be taken whatever they were, so `Timer.After(fn, 300)` ran nothing ever
+and `Timer.Every("abc", fn)` ran on every turn of the loop. `Infinity` is about
+forty-nine days, which is what never means to a timer. The full object:
 `new Timer(delay, tick)`, `Delay`, `Tick`, `Enabled`, `Start([delay])`,
 `Stop()`, `Once([delay])`.
 

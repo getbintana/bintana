@@ -561,7 +561,8 @@ static JSValue ed_replace(JSContext *ctx, JSValueConst this_val,
 
     const char *with = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
     if (!with)
-        return JS_EXCEPTION;
+        return argc > 0 ? JS_EXCEPTION
+                        : JS_ThrowTypeError(ctx, "Replace(text) needs the replacement text");
 
     GtkTextBuffer *buf = GTK_TEXT_BUFFER(buffer_of(w));
     GtkTextIter    a, b;
@@ -598,7 +599,8 @@ static JSValue ed_replace_all(JSContext *ctx, JSValueConst this_val,
 
     const char *with = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
     if (!with)
-        return JS_EXCEPTION;
+        return argc > 0 ? JS_EXCEPTION
+                        : JS_ThrowTypeError(ctx, "ReplaceAll(text) needs the replacement text");
 
     GError *err = NULL;
     guint   n   = gtk_source_search_context_replace_all(sc, with, -1, &err);
@@ -1210,7 +1212,7 @@ static JSValue ed_mark(JSContext *ctx, JSValueConst this_val,
     int32_t line;
     if (argc < 2)
         return JS_ThrowTypeError(ctx, "Mark(line, kind, [text]) needs a line and a kind");
-    if (JS_ToInt32(ctx, &line, argv[0]))
+    if (!bta_to_int(ctx, argv[0], "Mark", &line))
         return JS_EXCEPTION;
 
     const char *name = JS_ToCString(ctx, argv[1]);
@@ -1286,7 +1288,7 @@ static JSValue ed_unmark(JSContext *ctx, JSValueConst this_val,
     int32_t line;
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "Unmark(line, [kind]) needs a line");
-    if (JS_ToInt32(ctx, &line, argv[0]))
+    if (!bta_to_int(ctx, argv[0], "Unmark", &line))
         return JS_EXCEPTION;
 
     const char *cat = NULL;

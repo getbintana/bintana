@@ -368,9 +368,9 @@ static JSValue ed_offset_at(JSContext *ctx, JSValueConst this_val,
     int32_t line = 1, column = 1;
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "OffsetAt(line, [column]) needs a line");
-    if (JS_ToInt32(ctx, &line, argv[0]))
+    if (!bta_to_int(ctx, argv[0], "OffsetAt", &line))
         return JS_EXCEPTION;
-    if (argc > 1 && !JS_IsUndefined(argv[1]) && JS_ToInt32(ctx, &column, argv[1]))
+    if (argc > 1 && !JS_IsUndefined(argv[1]) && !bta_to_int(ctx, argv[1], "OffsetAt", &column))
         return JS_EXCEPTION;
     if (column < 1)
         column = 1;
@@ -404,7 +404,7 @@ static JSValue ed_line_of(JSContext *ctx, JSValueConst this_val,
     int32_t index = 0;
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "LineOf(index) needs an index");
-    if (JS_ToInt32(ctx, &index, argv[0]))
+    if (!bta_to_int(ctx, argv[0], "LineOf", &index))
         return JS_EXCEPTION;
 
     GtkTextBuffer *buf = buffer_of(w);
@@ -428,7 +428,7 @@ static JSValue ed_goto_line(JSContext *ctx, JSValueConst this_val,
     int32_t line;
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "GotoLine(line) needs a line");
-    if (JS_ToInt32(ctx, &line, argv[0]))
+    if (!bta_to_int(ctx, argv[0], "GotoLine", &line))
         return JS_EXCEPTION;
 
     GtkTextBuffer *buf = buffer_of(w);
@@ -468,8 +468,9 @@ static JSValue ed_insert(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     const char *s = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
-    if (s)
-        gtk_text_buffer_insert_at_cursor(buffer_of(w), s, -1);
+    if (!s)
+        return argc > 0 ? JS_EXCEPTION : JS_UNDEFINED;   /* a conversion that threw stands */
+    gtk_text_buffer_insert_at_cursor(buffer_of(w), s, -1);
     JS_FreeCString(ctx, s);
     return JS_UNDEFINED;
 }
@@ -486,7 +487,7 @@ static JSValue ed_append(JSContext *ctx, JSValueConst this_val,
 
     const char *s = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
     if (!s)
-        return JS_UNDEFINED;
+        return argc > 0 ? JS_EXCEPTION : JS_UNDEFINED;   /* a conversion that threw stands */
 
     GtkTextBuffer *buf = buffer_of(w);
     GtkTextIter    end;
@@ -589,11 +590,11 @@ static JSValue ed_select(JSContext *ctx, JSValueConst this_val,
     int32_t line, column = 1, length = 0;
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "Select(line, [column], [length]) needs a line");
-    if (JS_ToInt32(ctx, &line, argv[0]))
+    if (!bta_to_int(ctx, argv[0], "Select", &line))
         return JS_EXCEPTION;
-    if (argc > 1 && !JS_IsUndefined(argv[1]) && JS_ToInt32(ctx, &column, argv[1]))
+    if (argc > 1 && !JS_IsUndefined(argv[1]) && !bta_to_int(ctx, argv[1], "Select", &column))
         return JS_EXCEPTION;
-    if (argc > 2 && !JS_IsUndefined(argv[2]) && JS_ToInt32(ctx, &length, argv[2]))
+    if (argc > 2 && !JS_IsUndefined(argv[2]) && !bta_to_int(ctx, argv[2], "Select", &length))
         return JS_EXCEPTION;
 
     GtkTextBuffer *buf = buffer_of(w);

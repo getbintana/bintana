@@ -61,6 +61,10 @@ that runs when typing stops, a preview that redraws when a slider settles.
   it and `Stop()` it in `Form_Close`.
 - **The clock drifted.** Ticks were counted instead of a clock being read.
 - **A measurement in `Form_Open` answered zero.** `Timer.After(0, …)`.
+- **Nothing ever happened.** The arguments were the wrong way round —
+  `Timer.After(fn, 300)` — which is refused now, as is a delay that is not a
+  number: both used to be taken, and ran nothing, or ran on every turn of the
+  loop.
 - **Two timers for one thing.** `Start()` on a running timer restarts it, which
   is usually what a debounce wants.
 

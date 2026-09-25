@@ -815,7 +815,8 @@ static JSValue xml_node_set_attr_ns(JSContext *ctx, JSValueConst this_val,
     JS_FreeCString(ctx, name);
     JS_FreeCString(ctx, v);
     if (!made)
-        return JS_EXCEPTION;
+        return JS_ThrowInternalError(ctx, "SetAttrNS: libxml2 could not set "
+                                          "the attribute");
     return JS_UNDEFINED;
 }
 
@@ -838,8 +839,15 @@ static JSValue xml_node_remove_attr_ns(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
     }
 
+    /*
+     * `xmlHasNsProp` also answers a default the DTD declares, and what it hands
+     * back then is the DTD's `xmlAttribute` declaration cast to an attribute:
+     * `xmlRemoveProp` walks its "parent" (the DTD) as if it were an element and
+     * the process dies.  Only an attribute the element really carries can be
+     * removed; a default is not in the element to take out.
+     */
     xmlAttrPtr a = xmlHasNsProp(n->node, BAD_CAST name, BAD_CAST uri);
-    if (a)
+    if (a && a->type == XML_ATTRIBUTE_NODE)
         xmlRemoveProp(a);
 
     JS_FreeCString(ctx, uri);
@@ -1007,7 +1015,7 @@ static JSValue xml_node_insert(JSContext *ctx, JSValueConst this_val,
                                       "position and the node");
 
     int32_t index = 0;
-    if (JS_ToInt32(ctx, &index, argv[0]))
+    if (!bta_to_int(ctx, argv[0], "Insert", &index))
         return JS_EXCEPTION;
     if (index < 0)
         return JS_ThrowRangeError(ctx, "Insert: %d is not a position", index);

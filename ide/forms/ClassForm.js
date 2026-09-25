@@ -52,8 +52,7 @@ class ClassForm extends Form {
 
         if (name && !props) {
             Message.Info(
-                "{0} says more than this can edit — a gradient, a transition or a " +
-                "selector of its own. Open {1} and edit it there.", name, SHEET);
+                "{0} says more than this can edit — a gradient, a transition or a selector of its own. Open {1} and edit it there.", name, SHEET);
             return null;
         }
 
@@ -191,8 +190,7 @@ class ClassForm extends Form {
         const name = this.TxtName.Text.trim();
 
         if (!Ide.Sheet.isName(name)) {
-            Message.Error("{0} is not a class name: a letter first, then letters, " +
-                          "digits, dashes or underscores.", name || "''");
+            Message.Error("{0} is not a class name: a letter first, then letters, digits, dashes or underscores.", name || "''");
             return;
         }
 

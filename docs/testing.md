@@ -1,12 +1,12 @@
 # Testing
 
 ```sh
-./tests/run.sh                          # all six projects, 6955 assertions
+./tests/run.sh                          # all six projects, 7012 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
 ./tests/run.sh ide list                 # what it can be asked for
-./tests/pack.sh                         # lib/package, the packaging step's output
+./tests/pack.sh                         # lib/package, the packaging step's output: 57 assertions
 BINTANA=/other/bintana ./tests/run.sh
 TIMEOUT=300 ./tests/run.sh              # a slower machine than the one this was written on
 HEADLESS= ./tests/run.sh                # ...on your own screen; see below
@@ -180,7 +180,7 @@ or a discarded project leaves behind.
 stale; the one above is here to be read.
 
 The saving is the point of it: `welcome files` is **102** assertions and
-`designer` **365**, against **2525** for the whole project — measured at 3.7 s,
+`designer` **365**, against **2533** for the whole project — measured at 3.7 s,
 9.0 s and 242 s on the machine this was last run on, where what carries over to
 another machine is the proportion and not the seconds. Iterating on an early
 phase stops being minutes a time.
@@ -216,7 +216,7 @@ own says so with `reportsItself`.
 
 `tests/widgets` is 162 tests listed in `TESTS`, and a filter there **selects** rather
 than running a prefix — `./tests/run.sh widgets record` is 140 assertions
-against 3984 in about eight. It can select because these tests are
+against 4033 in about eight. It can select because these tests are
 independent: each builds the controls it needs and deletes them again. The two that
 are not say so in the file:
 

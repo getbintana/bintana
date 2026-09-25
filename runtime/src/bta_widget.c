@@ -243,7 +243,7 @@ BtaWidget *bta_widget_flagged(BtaWidget *w, bool cancel)
     if (!w || !w->slot)
         return NULL;
 
-    for (GtkWidget *c = gtk_widget_get_first_child(w->slot);
+    for (GtkWidget *c = bta_slot_first_child(w->slot);
          c; c = gtk_widget_get_next_sibling(c)) {
 
         BtaWidget *cw = bta_slot_child(c);
@@ -1263,7 +1263,13 @@ static JSValue w_set_menu(JSContext *ctx, JSValueConst this_val, JSValueConst va
 
     /* The items name handlers on the form, so a widget with no form yet has
      * nowhere to dispatch to -- which is the .form loader's order of business,
-     * not an error: it binds the control and then applies the properties. */
+     * not an error: it binds the control and then applies the properties.
+     * Built in code, the order is the program's, and it is told which one. */
+    if (JS_IsArray(val) && !JS_IsObject(w->form))
+        return JS_ThrowTypeError(ctx,
+            "Menu names handlers on the form: add %s to a form before "
+            "assigning it", w->name ? w->name : "the control");
+
     if (bta_menu_popup_build(ctx, w->form, w, val) < 0)
         return JS_EXCEPTION;
 
@@ -1283,8 +1289,10 @@ static JSValue w_popup_menu(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     double x = 0, y = 0;
-    if (argc > 0) JS_ToFloat64(ctx, &x, argv[0]);
-    if (argc > 1) JS_ToFloat64(ctx, &y, argv[1]);
+    if (argc > 0 && !bta_to_number(ctx, argv[0], "PopupMenu", &x))
+        return JS_EXCEPTION;
+    if (argc > 1 && !bta_to_number(ctx, argv[1], "PopupMenu", &y))
+        return JS_EXCEPTION;
 
     /* The same walk a right click does, so "open the menu for this point"
      * means one thing however it was asked for. */
@@ -2100,9 +2108,9 @@ static JSValue w_move(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     int32_t x = w->x, y = w->y;
-    if (argc > 0 && JS_ToInt32(ctx, &x, argv[0]))
+    if (argc > 0 && !bta_to_int(ctx, argv[0], "Move", &x))
         return JS_EXCEPTION;
-    if (argc > 1 && JS_ToInt32(ctx, &y, argv[1]))
+    if (argc > 1 && !bta_to_int(ctx, argv[1], "Move", &y))
         return JS_EXCEPTION;
 
     w->x = x;
@@ -2119,9 +2127,9 @@ static JSValue w_resize(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     int32_t width = w->w, height = w->h;
-    if (argc > 0 && JS_ToInt32(ctx, &width, argv[0]))
+    if (argc > 0 && !bta_to_int(ctx, argv[0], "Resize", &width))
         return JS_EXCEPTION;
-    if (argc > 1 && JS_ToInt32(ctx, &height, argv[1]))
+    if (argc > 1 && !bta_to_int(ctx, argv[1], "Resize", &height))
         return JS_EXCEPTION;
 
     w->w = width;
@@ -5061,7 +5069,7 @@ int bta_container_count(GtkWidget *slot)
 {
     int n = 0;
 
-    for (GtkWidget *c = gtk_widget_get_first_child(slot); c;
+    for (GtkWidget *c = bta_slot_first_child(slot); c;
          c = gtk_widget_get_next_sibling(c))
         if (bta_slot_child(c))
             n++;
@@ -5079,6 +5087,30 @@ bool bta_container_attach(JSContext *ctx, BtaWidget *parent, BtaWidget *child)
     }
     if (child->is_form) {
         JS_ThrowTypeError(ctx, "a form cannot be added to a container");
+        return false;
+    }
+
+    /*
+     * **A popover can only live where a layout manager places the children.**
+     * GTK presents a popover from `gtk_layout_manager_allocate`, which skips it
+     * through `should_layout`; a container that allocates its child itself --
+     * a paned's halves, an aspect frame's one, a notebook's or a stack's page,
+     * an overlay's base -- hands the popover an ordinary rectangle, and opening
+     * it then is `pixman_region32_init_rect: Invalid rectangle` (a page adds a
+     * `gtk_widget_map` critical on top, the moment it is added). Measured on
+     * each of those; a surface, a grid, a flow and a row list are clean. An
+     * overlay's floaters are laid out properly, and refused all the same:
+     * `Reorder(x, 0)`, `Lower()` and taking the base out all promote a floater
+     * to base, so an overlay can never promise a popover stays one. Refused
+     * here, before anything is attached.
+     */
+    if (GTK_IS_POPOVER(child->gtk) &&
+        (GTK_IS_PANED(slot) || GTK_IS_ASPECT_FRAME(slot) ||
+         GTK_IS_NOTEBOOK(slot) || GTK_IS_STACK(slot) || GTK_IS_POPOVER(slot) ||
+         GTK_IS_OVERLAY(slot))) {
+        JS_ThrowTypeError(ctx, "a Popover cannot go directly in %s: put it in a "
+                          "Panel (or any surface) inside it",
+                          parent->name ? parent->name : "this container");
         return false;
     }
 

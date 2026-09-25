@@ -75,7 +75,7 @@ char *bta_exe_path(void)
  * atomically, and all silent. A number or an object in a position whose value
  * is a file name is a mistake being made, so it is named here instead.
  */
-static const char *file_path(JSContext *ctx, JSValueConst v, const char *who)
+const char *bta_file_path(JSContext *ctx, JSValueConst v, const char *who)
 {
     if (!JS_IsString(v)) {
         JS_ThrowTypeError(ctx, "%s expects a path, as a string", who);
@@ -90,7 +90,7 @@ static JSValue sys_file_load(JSContext *ctx, JSValueConst this_val,
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "File.Load(path) needs a path");
 
-    const char *path = file_path(ctx, argv[0], "File.Load");
+    const char *path = bta_file_path(ctx, argv[0], "File.Load");
     if (!path)
         return JS_EXCEPTION;
 
@@ -118,7 +118,7 @@ static JSValue sys_file_save(JSContext *ctx, JSValueConst this_val,
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "File.Save(path, text) needs a path");
 
-    const char *path = file_path(ctx, argv[0], "File.Save");
+    const char *path = bta_file_path(ctx, argv[0], "File.Save");
     if (!path)
         return JS_EXCEPTION;
 
@@ -172,7 +172,7 @@ static JSValue sys_file_append(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx,
             "File.Append(path, text) needs a path and the text");
 
-    const char *path = file_path(ctx, argv[0], "File.Append");
+    const char *path = bta_file_path(ctx, argv[0], "File.Append");
     if (!path)
         return JS_EXCEPTION;
 
@@ -223,9 +223,14 @@ enum { FT_EXISTS, FT_ISDIR };
 static JSValue sys_file_test(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv, int magic)
 {
-    const char *path = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
-    if (!path)
+    /* Only a string can name a file: `File.Exists(undefined)` asked about a
+     * file called `./undefined`. Anything else exists nowhere, which is the
+     * answer this question has always given a missing path. */
+    if (argc < 1 || !JS_IsString(argv[0]))
         return JS_NewBool(ctx, false);
+    const char *path = JS_ToCString(ctx, argv[0]);
+    if (!path)
+        return JS_EXCEPTION;
 
     bool r = g_file_test(path, magic == FT_ISDIR ? G_FILE_TEST_IS_DIR
                                                  : G_FILE_TEST_EXISTS);
@@ -237,7 +242,7 @@ static JSValue sys_file_test(JSContext *ctx, JSValueConst this_val,
 static JSValue sys_file_absolute(JSContext *ctx, JSValueConst this_val,
                                  int argc, JSValueConst *argv)
 {
-    const char *path = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    const char *path = argc > 0 ? bta_file_path(ctx, argv[0], "File.Absolute") : NULL;
     if (!path)
         return JS_ThrowTypeError(ctx, "File.Absolute(path) needs a path");
 
@@ -450,10 +455,10 @@ static JSValue sys_file_rename(JSContext *ctx, JSValueConst this_val,
     if (argc < 2)
         return JS_ThrowTypeError(ctx, "File.Rename(from, to) needs both paths");
 
-    const char *from = file_path(ctx, argv[0], "File.Rename");
+    const char *from = bta_file_path(ctx, argv[0], "File.Rename");
     if (!from)
         return JS_EXCEPTION;
-    const char *to = file_path(ctx, argv[1], "File.Rename");
+    const char *to = bta_file_path(ctx, argv[1], "File.Rename");
     if (!to) {
         JS_FreeCString(ctx, from);
         return JS_EXCEPTION;      /* it threw on the way; that stands */
@@ -489,10 +494,10 @@ static JSValue sys_file_copy(JSContext *ctx, JSValueConst this_val,
     if (argc < 2)
         return JS_ThrowTypeError(ctx, "File.Copy(from, to) needs both paths");
 
-    const char *from = file_path(ctx, argv[0], "File.Copy");
+    const char *from = bta_file_path(ctx, argv[0], "File.Copy");
     if (!from)
         return JS_EXCEPTION;
-    const char *to = file_path(ctx, argv[1], "File.Copy");
+    const char *to = bta_file_path(ctx, argv[1], "File.Copy");
     if (!to) {
         JS_FreeCString(ctx, from);
         return JS_EXCEPTION;      /* it threw on the way; that stands */
@@ -545,7 +550,7 @@ static JSValue sys_file_copy(JSContext *ctx, JSValueConst this_val,
 static JSValue sys_file_info(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
-    const char *path = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    const char *path = argc > 0 ? bta_file_path(ctx, argv[0], "File.Info") : NULL;
     if (!path)
         return JS_ThrowTypeError(ctx, "File.Info(path) needs a path");
 
@@ -651,7 +656,7 @@ static void on_launched(GObject *source, GAsyncResult *result, gpointer data)
 static JSValue sys_file_open(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
-    const char *path = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    const char *path = argc > 0 ? bta_file_path(ctx, argv[0], "File.Open") : NULL;
     if (!path)
         return JS_ThrowTypeError(ctx, "File.Open(path) needs a path");
 
@@ -825,7 +830,7 @@ static JSValue sys_file_watch(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx,
             "File.Watch(path, (event, path) => ...) needs a path and a function");
 
-    const char *path = file_path(ctx, argv[0], "File.Watch");
+    const char *path = bta_file_path(ctx, argv[0], "File.Watch");
     if (!path)
         return JS_EXCEPTION;
 
@@ -871,7 +876,7 @@ static JSValue sys_file_delete(JSContext *ctx, JSValueConst this_val,
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "File.Delete(path) needs a path");
 
-    const char *path = file_path(ctx, argv[0], "File.Delete");
+    const char *path = bta_file_path(ctx, argv[0], "File.Delete");
     if (!path)
         return JS_EXCEPTION;
 
@@ -905,7 +910,7 @@ static JSValue sys_file_trash(JSContext *ctx, JSValueConst this_val,
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "File.Trash(path) needs a path");
 
-    const char *path = file_path(ctx, argv[0], "File.Trash");
+    const char *path = bta_file_path(ctx, argv[0], "File.Trash");
     if (!path)
         return JS_EXCEPTION;
 
@@ -980,8 +985,8 @@ static bool copy_tree(GFile *src, GFile *dst, GError **error)
 static JSValue sys_dir_copy(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv)
 {
-    const char *from = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
-    const char *to   = argc > 1 ? JS_ToCString(ctx, argv[1]) : NULL;
+    const char *from = argc > 0 ? bta_file_path(ctx, argv[0], "Directory.Copy") : NULL;
+    const char *to   = argc > 1 ? bta_file_path(ctx, argv[1], "Directory.Copy") : NULL;
 
     if (!from || !to) {
         JS_FreeCString(ctx, from);
@@ -1056,7 +1061,7 @@ static bool delete_tree(GFile *dir, GError **error)
 static JSValue sys_dir_delete(JSContext *ctx, JSValueConst this_val,
                               int argc, JSValueConst *argv)
 {
-    const char *path = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    const char *path = argc > 0 ? bta_file_path(ctx, argv[0], "Directory.Delete") : NULL;
     if (!path)
         return JS_ThrowTypeError(ctx, "Directory.Delete(path) needs a path");
 
@@ -1071,7 +1076,7 @@ static JSValue sys_dir_delete(JSContext *ctx, JSValueConst this_val,
 static JSValue sys_dir_delete_tree(JSContext *ctx, JSValueConst this_val,
                                    int argc, JSValueConst *argv)
 {
-    const char *path = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    const char *path = argc > 0 ? bta_file_path(ctx, argv[0], "Directory.DeleteTree") : NULL;
     if (!path)
         return JS_ThrowTypeError(ctx, "Directory.DeleteTree(path) needs a path");
 
@@ -1099,13 +1104,13 @@ static JSValue sys_dir_delete_tree(JSContext *ctx, JSValueConst this_val,
 static JSValue sys_dir_list(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv)
 {
-    const char *path = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    const char *path = argc > 0 ? bta_file_path(ctx, argv[0], "Directory.List") : NULL;
     if (!path)
         return JS_ThrowTypeError(ctx, "Directory.List(path) needs a path");
 
     /* Optional glob, e.g. Directory.List(dir, "*.js"). */
     const char *pattern = argc > 1 && JS_IsString(argv[1])
-                              ? JS_ToCString(ctx, argv[1]) : NULL;
+                              ? bta_file_path(ctx, argv[1], "Directory.List") : NULL;
 
     GError *err = NULL;
     GDir   *dir = g_dir_open(path, 0, &err);
@@ -1146,7 +1151,7 @@ static JSValue sys_dir_list(JSContext *ctx, JSValueConst this_val,
 static JSValue sys_dir_make(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv)
 {
-    const char *path = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    const char *path = argc > 0 ? bta_file_path(ctx, argv[0], "Directory.Make") : NULL;
     if (!path)
         return JS_ThrowTypeError(ctx, "Directory.Make(path) needs a path");
 
@@ -1220,7 +1225,7 @@ static void dir_walk(const char *root, GPatternSpec *spec, bool recursive,
 static JSValue sys_dir_walk(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv, int magic)
 {
-    const char *path = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    const char *path = argc > 0 ? bta_file_path(ctx, argv[0], magic ? "Directory.Folders" : "Directory.Files") : NULL;
     if (!path)
         return JS_ThrowTypeError(ctx, magic ? "Directory.Folders(path) needs a path"
                                             : "Directory.Files(path) needs a path");
@@ -2638,11 +2643,19 @@ static JSValue sys_set_timer(JSContext *ctx, JSValueConst this_val,
     if (argc < 1 || !JS_IsFunction(ctx, argv[0]))
         return JS_ThrowTypeError(ctx, "a function is required");
 
-    int32_t ms = 0;
-    if (argc > 1 && JS_ToInt32(ctx, &ms, argv[1]))
+    /*
+     * A delay that is not a number is refused rather than read as 0: ToInt32
+     * made `"500ms"`, `NaN` and a `Timer.After(fn, 300)` with its arguments the
+     * wrong way round all fire at once -- and an `Every` at 0 runs on every
+     * turn of the loop, a core at 100 % with nothing said. Past what a `guint`
+     * of milliseconds holds (Infinity included) is clamped to that, about
+     * forty-nine days, which is what "never" means to a timer; ToInt32 used to
+     * wrap 3e9 negative and then clamp *that* to 0.
+     */
+    double d = 0;
+    if (argc > 1 && !bta_to_number(ctx, argv[1], "Timer delay", &d))
         return JS_EXCEPTION;
-    if (ms < 0)
-        ms = 0;
+    guint ms = d <= 0 ? 0 : d >= (double)G_MAXUINT ? G_MAXUINT : (guint)d;
 
     TimerJob *t = g_new0(TimerJob, 1);
     t->ctx    = ctx;
@@ -2664,8 +2677,10 @@ static JSValue sys_clear_timer(JSContext *ctx, JSValueConst this_val,
                                int argc, JSValueConst *argv)
 {
     int32_t id;
-    if (argc < 1 || JS_ToInt32(ctx, &id, argv[0]))
+    if (argc < 1)
         return JS_UNDEFINED;
+    if (JS_ToInt32(ctx, &id, argv[0]))
+        return JS_EXCEPTION;              /* the conversion threw: it stands */
 
     if (timers && g_hash_table_contains(timers, GUINT_TO_POINTER(id)))
         g_source_remove((guint)id);   /* fires timer_destroy */
@@ -3567,7 +3582,7 @@ static JSValue sys_file_load_bytes(JSContext *ctx, JSValueConst this_val,
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "File.LoadBytes(path) needs a path");
 
-    const char *path = file_path(ctx, argv[0], "File.LoadBytes");
+    const char *path = bta_file_path(ctx, argv[0], "File.LoadBytes");
     if (!path)
         return JS_EXCEPTION;
 
@@ -3595,7 +3610,7 @@ static JSValue sys_file_save_bytes(JSContext *ctx, JSValueConst this_val,
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "File.SaveBytes(path, bytes) needs a path");
 
-    const char *path = file_path(ctx, argv[0], "File.SaveBytes");
+    const char *path = bta_file_path(ctx, argv[0], "File.SaveBytes");
     if (!path)
         return JS_EXCEPTION;
 
@@ -3738,7 +3753,7 @@ static int hash_kind(JSContext *ctx, JSValueConst v, const char *who)
 static JSValue sys_file_hash(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
-    const char *path = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    const char *path = argc > 0 ? bta_file_path(ctx, argv[0], "File.Hash") : NULL;
     if (!path)
         return JS_ThrowTypeError(ctx, "File.Hash(path, [algorithm]) needs a path");
 

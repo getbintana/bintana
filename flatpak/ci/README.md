@@ -66,7 +66,7 @@ what a package installs under.
 | `ref` | the branch or tag to build. Absent means the default branch. A commit id is not a ref: put a tag on what you want |
 | `project` | the Bintana project inside that repository, packaged by `tools/pack.sh` |
 | `manifest` | **or** a Flatpak manifest, built as it is -- what the IDE uses, because it ships the reference F1 reads as well as its project |
-| `watch` | the paths in the source whose change rebuilds it. Default `.`, meaning all of it |
+| `watch` | the paths in the source whose change rebuilds it. Default `.`, meaning all of it. A `manifest` is watched whether it is listed or not |
 | `finish-args` | the sandbox permissions. The default is the four a windowed application needs (`--share=ipc`, both display sockets, `--device=dri`); a program that opens the user's files adds `--filesystem=home`, or a narrower one |
 
 **A package's file dialog is the desktop's portal, and it has no other.**  GTK

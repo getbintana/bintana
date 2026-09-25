@@ -190,7 +190,211 @@ function Main() {
     eq("and the command name is derived from the last element",
        Package.commandName("org.example.My App"), "bintana-my-app");
 
+    checkRefusalsWriteNothing(root);
+    checkCreateIsValid(root);
+    checkOutputInside(root);
+    checkIconChoice(root);
+    checkRename(root);
+    checkBaseVersion();
+
     report(root);
+}
+
+/* A scratch project: a manifest, a metainfo that agrees with it, and whatever
+ * drawings are named. */
+function scratch(root, name, drawings) {
+    const dir = File.Join(root, name);
+    const id  = `io.github.getbintana.${name}`;
+    Directory.Make(File.Join(dir, "icons"));
+    File.SaveJson(File.Join(dir, "project.json"), { name, id, main: "Main" });
+    File.Save(File.Join(dir, "Main.js"), "\"use strict\";\nfunction Main() {}\n");
+    for (const d of drawings || []) {
+        if (typeof d === "string")
+            File.Save(File.Join(dir, "icons", d),
+                      "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\"></svg>\n");
+        else
+            File.SaveBytes(File.Join(dir, "icons", d.name), png(d.w, d.h));
+    }
+    Metainfo.create(dir, { Id: id, Name: name, Description: "A scratch project." });
+    return { dir, id };
+}
+
+/* The first 33 bytes of a PNG -- the signature and the IHDR chunk -- which is
+ * all the packaging step reads of one. */
+function png(w, h) {
+    const be = (n) => [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255];
+    return new Bytes([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+                      0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]
+                         .concat(be(w), be(h), [8, 6, 0, 0, 0], [0, 0, 0, 0]));
+}
+
+/* A refusal leaves nothing behind: the no-icon check used to come after the
+ * metainfo and the entry were already written into the output. */
+function checkRefusalsWriteNothing(root) {
+    const p   = scratch(root, "Bare", []);
+    const out = File.Join(root, "out-bare");
+    throws("a project with no drawing is refused",
+           () => Package.Write(p.dir, out), "no icon");
+    check("and the refusal wrote nothing", !File.IsDir(out),
+          File.IsDir(out) ? Directory.List(out).join(", ") : "");
+}
+
+/* What `create` writes is what AppStream's validator accepts, and `problems`
+ * refuses what it would not. */
+function checkCreateIsValid(root) {
+    const p = scratch(root, "Made", ["app.svg"]);
+    Directory.DeleteTree(p.dir);
+    Directory.Make(p.dir);
+    const path = Metainfo.create(p.dir, { Id: p.id, Name: "Made",
+                                          Description: "The first line.\nAnd a second." });
+    const doc  = File.LoadXml(path);
+    const info = Metainfo.read(doc);
+
+    eq("a summary is the description's first line, without its full stop",
+       info.Summary, "The first line");
+    check("and has text in its description", info.Description.trim() !== "",
+          JSON.stringify(info.Description));
+    eq("so problems has nothing to say about a fresh file",
+       Metainfo.problems(doc, path, { Id: p.id, Name: "Made" }).join("; "), "");
+
+    const bare = Metainfo.read(File.LoadXml(
+        Metainfo.create(File.Join(root, "Made"), { Id: `${p.id}2`, Name: "Made" })));
+    check("a project with no description still gets a summary and a paragraph",
+          bare.Summary !== "" && bare.Description !== "", JSON.stringify(bare));
+
+    if (Application.HasCommand("appstreamcli")) {
+        const r = Exec.Wait(["appstreamcli", "validate", "--no-net", "--no-color", path],
+                            { Timeout: 30000, Stderr: "separate" });
+        const errors = (r.Output + r.Errors).split("\n").filter((l) => /^E:/.test(l));
+        eq("and appstreamcli validate reports no error in it", errors.join("\n"), "");
+    } else {
+        print("no appstreamcli: the created metainfo is unvalidated");
+    }
+
+    const cfg = { Id: p.id, Name: "Made" };
+    const broken = (edit) => { const d = File.LoadXml(path); edit(d.Root); return d; };
+    check("an empty summary is a problem",
+          Metainfo.problems(broken((r) => { r.Find("summary").Text = ""; }), path, cfg)
+              .some((x) => x.includes("<summary> is empty")));
+    check("so is one with a line break",
+          Metainfo.problems(broken((r) => { r.Find("summary").Text = "a\nb"; }), path, cfg)
+              .some((x) => x.includes("line break")));
+    check("and a description with no text",
+          Metainfo.problems(broken((r) => {
+              for (const q of r.Find("description").FindAll("p")) q.Text = "";
+          }), path, cfg).some((x) => x.includes("<description> has no text")));
+}
+
+/* An output directory inside the project is left out of the copy -- it used
+ * to copy itself into itself without end -- and one deeper inside an entry is
+ * refused before anything is written. */
+function checkOutputInside(root) {
+    const p   = scratch(root, "Inner", ["app.svg"]);
+    const out = File.Join(p.dir, "dist");
+    let written = null;
+    try { written = Package.Write(p.dir, out); } catch (e) { check("an output inside the project is written", false, e.message); }
+    if (written) {
+        check("an output inside the project is not copied into itself",
+              !File.Exists(File.Join(written.Project, "dist")),
+              Directory.List(written.Project).join(", "));
+        const cmds = File.LoadJson(written.Manifest).modules[0]["build-commands"].join("\n");
+        check("nor named in the build commands", !cmds.includes("'dist'"), cmds);
+    }
+
+    const deep = File.Join(p.dir, "icons", "out");
+    throws("an output deeper inside one of its folders is refused",
+           () => Package.Write(p.dir, deep), "inside the project");
+    check("before anything is written", !File.IsDir(deep));
+    throws("and so is the project itself as the output",
+           () => Package.Write(p.dir, p.dir), "holds the project");
+}
+
+/* Which drawing is the application's: the one named after the id, else the
+ * only one that is not a control's glyph -- and a PNG goes where its size says. */
+function checkIconChoice(root) {
+    const named = scratch(root, "Named", ["aaa-symbolic.svg", "zz.svg"]);
+    File.Save(File.Join(named.dir, "icons", `${named.id}.svg`), "<svg xmlns=\"http://www.w3.org/2000/svg\"/>\n");
+    eq("the drawing named after the id is the icon",
+       File.Name(Package.iconOf(named.dir, named.id).Path || ""), `${named.id}.svg`);
+
+    const one = scratch(root, "One", ["aaa-symbolic.svg", "app.svg"]);
+    eq("one drawing beside the glyphs is unambiguous, and the glyph is not it",
+       File.Name(Package.iconOf(one.dir, one.id).Path || ""), "app.svg");
+
+    const two = scratch(root, "Two", ["a.svg", "b.svg"]);
+    throws("two drawings and none named after the id is refused",
+           () => Package.Write(two.dir, File.Join(root, "out-two")), `${two.id}.svg`);
+
+    const big = scratch(root, "Big", [{ name: "app.png", w: 256, h: 256 }]);
+    const w   = Package.Write(big.dir, File.Join(root, "out-big"));
+    const cmds = File.LoadJson(w.Manifest).modules[0]["build-commands"].join("\n");
+    check("a 256 pixel PNG is installed as 256x256", cmds.includes("hicolor/256x256/apps/"), cmds);
+
+    const wide = scratch(root, "Wide", [{ name: "app.png", w: 128, h: 64 }]);
+    throws("a PNG that is not square is refused",
+           () => Package.Write(wide.dir, File.Join(root, "out-wide")), "square");
+    const tiny = scratch(root, "Tiny", [{ name: "app.png", w: 32, h: 32 }]);
+    throws("and one too small for AppStream",
+           () => Package.Write(tiny.dir, File.Join(root, "out-tiny")), "32x32");
+}
+
+/* The file follows the identity: the stock icon and the primary name with it,
+ * anything else left alone, and nobody's file overwritten. */
+function checkRename(root) {
+    const p   = scratch(root, "Moving", ["app.svg"]);
+    const doc = File.LoadXml(Metainfo.find(p.dir));
+    const remote = doc.Root.Add("icon");
+    remote.SetAttr("type", "remote");
+    remote.Text = "https://example.org/icon.png";
+    const es = doc.Root.Add("name");
+    es.SetAttrNS(Metainfo.XMLNS, "lang", "es");
+    es.Text = "Moviendo";
+    File.SaveXml(Metainfo.find(p.dir), doc);
+
+    const moved = Metainfo.rename(p.dir, "io.github.getbintana.Moved", "Moved");
+    eq("renaming moves the file", File.Name(moved), "io.github.getbintana.Moved.metainfo.xml");
+    const after = File.LoadXml(moved).Root;
+    const icons = after.FindAll("icon");
+    eq("the stock icon follows the id",
+       icons.filter((i) => i.Attr("type") === "stock").map((i) => i.Text).join(),
+       "io.github.getbintana.Moved");
+    eq("a remote one is left alone",
+       icons.filter((i) => i.Attr("type") === "remote").map((i) => i.Text).join(),
+       "https://example.org/icon.png");
+    eq("the primary name follows", Metainfo.read(File.LoadXml(moved)).Name, "Moved");
+    eq("and a translated one is left alone",
+       after.FindAll("name").filter((n) => n.AttrNS(Metainfo.XMLNS, "lang") === "es")
+            .map((n) => n.Text).join(), "Moviendo");
+
+    File.Save(File.Join(p.dir, "io.github.getbintana.Taken.metainfo.xml"), "<component/>\n");
+    throws("a file already at the new name is refused",
+           () => Metainfo.rename(p.dir, "io.github.getbintana.Taken"), "already exists");
+    check("and the one being moved is still there", File.Exists(moved));
+}
+
+/* The BaseApp's branch is written by hand in the manifests and the manual,
+ * and `Package` derives it from `BTA_VERSION`: the two have to agree, or a
+ * package asks for a base nobody built. */
+function checkBaseVersion() {
+    const tree = File.Join(Application.Directory, "..", "..");
+    const want = Package.defaults.BaseVersion;
+    const seen = [];
+
+    const grab = (rel, re) => {
+        const path = File.Join(tree, rel);
+        if (!File.Exists(path)) { seen.push(`${rel}: missing`); return; }
+        const found = new Regex(re, { Multiline: true }).Matches(File.Load(path)).map((m) => m.Group(1));
+        if (!found.length) seen.push(`${rel}: no version found`);
+        for (const v of found) if (v !== want) seen.push(`${rel}: ${v}`);
+    };
+
+    grab("flatpak/io.github.getbintana.BaseApp.yml", "^branch: *'?([0-9.]+)'?");
+    for (const f of Directory.Files(File.Join(tree, "flatpak"), "*.yml"))
+        if (!f.endsWith("BaseApp.yml"))
+            grab(`flatpak/${File.Name(f)}`, "^base-version: *'?([0-9.]+)'?");
+    grab("docs/installing.md", "BaseApp//([0-9.]+)");
+
+    eq(`the hand-written BaseApp versions are the runtime's ${want}`, seen.join("; "), "");
 }
 
 function report(root) {

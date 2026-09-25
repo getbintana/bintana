@@ -455,7 +455,7 @@ const TESTS = [
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
     "CuratedLanguage", "Dictionary", "Regex", "Bytes", "Hash", "Screen", "JsonFiles", "XmlFiles", "XmlRecord", "Log", "Apply", "TimerShorthand", "Terminal",
-    "Settings", "Timer", "Icons", "Font", "Style", "Radius", "Padding", "Shadow", "StyleRule",
+    "Settings", "Timer", "ArgumentRefusals", "Icons", "Font", "Style", "Radius", "Padding", "Shadow", "StyleRule",
     "ColorButton",
     "ColorDialog", "FileDialog", "IconList", "FormIcon", "ButtonClick",
     "Available", "TextProperties", "ClassIntrospection", "Signatures", "Locale", "LocaleRead", "TranslatedForm", "Fill", "DesignValues",
@@ -9817,6 +9817,20 @@ function Main() {
         named.RemoveAttrNS(XMLNS, "lang");
         check("RemoveAttrNS takes it away", named.AttrNS(XMLNS, "lang") === null);
 
+        /* A default the DTD declares is found by libxml2's lookup as the DTD's
+         * own declaration, and removing that as if it were the element's
+         * attribute was a segfault.  There is nothing on the element to take
+         * out, so it is a no-op; an attribute the element does carry still
+         * goes. */
+        const dtd = Xml.Parse('<!DOCTYPE r [<!ATTLIST r xml:lang CDATA "en">]>' +
+                              '<r><s xml:lang="es"/></r>');
+        dtd.Root.RemoveAttrNS(XMLNS, "lang");
+        check("removing a DTD default does not take the process down", true);
+        const carried = dtd.Root.Find("s");
+        carried.RemoveAttrNS(XMLNS, "lang");
+        check("an attribute the element carries still goes beside a DTD",
+              !Xml.Stringify(carried).includes("xml:lang"), Xml.Stringify(carried));
+
         /* A namespace that is not in scope is refused by name: making one up
          * would put a prefix on an element that never asked for it. */
         let nsRefusal = "";
@@ -11363,6 +11377,111 @@ function Main() {
         t.Once(10);
         eq("Once counts as running", t.Enabled, true);
         t.Stop();
+
+        /*
+         * A delay that is not a number, and a tick that is not a function,
+         * are refused. ToInt32 made `"abc"` a 0 -- an `Every` that ran on every
+         * turn of the loop -- and `fire` skipped a tick that was not a
+         * function, so `Timer.After(fn, 300)` with the arguments the wrong way
+         * round ran nothing, ever, and said nothing.
+         */
+        throws("a delay that is not a number is refused",
+               () => Timer.After("abc", () => {}));
+        check("the arguments the wrong way round are refused by name",
+              (refusal(() => Timer.After(() => {}, 300)) || "").includes("function"));
+        throws("Every refuses a missing tick too", () => Timer.Every(100));
+        const far = Timer.After(Infinity, () => { far.fired = true; });
+        eq("an infinite delay is armed rather than firing at once", far.Enabled, true);
+        far.Stop();
+    }
+
+    /* --- what an argument is ------------------------------------------------
+     *
+     * The conversions the audit found still going through `JS_ToInt32` or
+     * `JS_ToCString`, each of which read a mistake as something else: an index
+     * of `undefined` as row 0, a path of `undefined` as a file called
+     * `./undefined`. Each assertion names what it used to do.
+     */
+    testArgumentRefusals() {
+        const lb = new ListBox();
+        this.Fixed1.Add(lb);
+        lb.Items = ["uno", "dos"];
+        throws("RemoveRow(undefined) is refused", () => lb.RemoveRow(undefined));
+        throws("RemoveRow of a word is refused", () => lb.RemoveRow("dos"));
+        eq("and the first row was not the one that went", lb.Items.join(","), "uno,dos");
+        throws("Select of a word is refused", () => lb.Select("x"));
+        lb.Delete();
+
+        const tb = new TableView();
+        this.Fixed1.Add(tb);
+        tb.Columns = [{ Text: "A" }];
+        tb.Add(["a"]);
+        throws("a table's row index is not a word", () => tb.Cell("x", 0));
+        throws("nor is its column", () => tb.SetCell(0, "x", "b"));
+        eq("the cell is untouched", tb.Cell(0, 0), "a");
+        tb.Delete();
+
+        const nb = new Notebook();
+        this.Fixed1.Add(nb);
+        nb.Append(new Panel());
+        throws("RemovePage(undefined) is refused", () => nb.RemovePage(undefined));
+        eq("and the page is still there", nb.Children.length, 1);
+        nb.Delete();
+
+        const moved = new Button();
+        this.Fixed1.Add(moved);
+        throws("Move takes numbers", () => moved.Move("10px", 5));
+        moved.Delete();
+
+        /* A path is a string: these created or opened `./undefined`. */
+        const cwd = Environment.CurrentDirectory;
+        throws("Directory.Make(undefined) is refused", () => Directory.Make(undefined));
+        throws("Directory.DeleteTree of an object is refused",
+               () => Directory.DeleteTree({}));
+        throws("Database.Sqlite(undefined) is refused", () => Database.Sqlite(undefined));
+        check("and nothing called undefined was made",
+              !File.Exists(File.Join(cwd, "undefined")));
+        eq("File.Exists of something that is not a path is false",
+           File.Exists(undefined), false);
+
+        const sp = new SpinBox();
+        this.Fixed1.Add(sp);
+        throws("Decimals past what GTK takes is refused", () => sp.Decimals = 25);
+        throws("and so is a fraction of a decimal", () => sp.Decimals = 1.5);
+        sp.Decimals = 3;
+        eq("a whole number in range is taken", sp.Decimals, 3);
+        sp.Delete();
+
+        /* An empty JS_EXCEPTION threw an object with no message at all. */
+        const ed = new SourceEditor();
+        this.Fixed1.Add(ed);
+        ed.Text = "aaa";
+        ed.Search("a");
+        check("Replace() with nothing names its argument",
+              (refusal(() => ed.Replace()) || "").includes("Replace(text)"));
+        check("ReplaceAll() too",
+              (refusal(() => ed.ReplaceAll()) || "").includes("ReplaceAll(text)"));
+        eq("and the text is untouched", ed.Text, "aaa");
+
+        /* A conversion that throws reaches the caller instead of lingering on
+         * the context for whoever asks next. */
+        const bad = { toString() { throw new Error("no text here"); } };
+        check("Insert reports a conversion that throws",
+              (refusal(() => ed.Insert(bad)) || "").includes("no text here"));
+        ed.Delete();
+
+        /* A menu names handlers on its form, so one built before the control
+         * is in a form is told so, the same sentence either way. */
+        const loose = new Button();
+        check("Menu before a form says so",
+              (refusal(() => loose.Menu = [{ name: "MnuLoose", text: "x" }]) || "")
+                  .includes("add"));
+        const lt = new TableView();
+        check("and HeaderMenu too",
+              (refusal(() => lt.HeaderMenu = [{ name: "MnuLooseH", text: "x" }]) || "")
+                  .includes("add"));
+        loose.Delete();
+        lt.Delete();
     }
 
     /* --- icons -------------------------------------------------------------
@@ -13210,6 +13329,38 @@ function Main() {
               (refusal(() => pop.Show()) || "").includes("Popup"));
         throws("Popup(anchor) is not optional", () => pop.Popup());
 
+        /*
+         * Only a container that lays its children out through a layout can
+         * hold one: GTK presents a popover from `gtk_layout_manager_allocate`,
+         * and the containers that allocate a child themselves handed it an
+         * ordinary rectangle -- opening it was `pixman_region32_init_rect:
+         * Invalid rectangle`, a page added a `gtk_widget_map` critical on top.
+         */
+        for (const type of ["Split", "AspectFrame", "Notebook", "Switcher",
+                            "Overlay", "Popover"]) {
+            const host = Widget.New(type);
+            this.Fixed1.Add(host);
+            const stray = new Popover();
+            check(`a Popover is refused directly in a ${type}`,
+                  (refusal(() => host.Add(stray)) || "").includes("Panel"));
+            eq(`and the ${type} holds nothing afterwards`, host.Children.length, 0);
+            stray.Delete();
+            host.Delete();
+        }
+
+        /* A Cancel button inside a popover is found like one anywhere else:
+         * the walks that look for it went through GTK's first child, which on
+         * a popover is GTK's own `GtkPopoverContent`. */
+        const inPop = new Popover();
+        this.Fixed1.Add(inPop);
+        const holder = new Panel();
+        inPop.Add(holder);
+        const esc = new Button();
+        esc.Cancel = true;
+        holder.Add(esc);
+        check("a Cancel button inside a popover is the form's", this.CancelButton === esc);
+        inPop.Delete();
+
         /* A popover in no form has nowhere to be positioned from. */
         const loose = new Popover();
         check("a popover in no container refuses to open",
@@ -13260,6 +13411,21 @@ function Main() {
 
                     content.Remove();
                     eq("Remove takes the content out", pop.Children.length, 0);
+
+                    /* Its own container has to be on screen too: the point is
+                     * worked out in its coordinates, and a hidden one opened a
+                     * popover pointing at nothing while `Open` said all was
+                     * well. */
+                    const hidden = new Panel();
+                    hidden.Visible = false;
+                    this.Fixed1.Add(hidden);
+                    const buried = new Popover();
+                    hidden.Add(buried);
+                    buried.Add(new Label());
+                    check("a popover in a hidden container refuses to open",
+                          (refusal(() => buried.Popup(anchor)) || "").includes("container"));
+                    eq("and it is not open", buried.Visible, false);
+                    hidden.Delete();
 
                     panel.Delete();
                 });
@@ -16023,6 +16189,30 @@ function Main() {
               (bad.Errors || "").includes("no-es-un-id") &&
               (bad.Errors || "").includes("not an application id"),
               bad.Errors);
+
+        /* An id that is not text at all used to fall back to no id -- the
+         * silence the refusal exists to end. */
+        File.SaveJson(File.Join(dir, "project.json"),
+                      { name: "appid", id: 5, main: "main" });
+        const num = Exec.Wait([Application.Executable, dir],
+                              { Timeout: 20000, Stderr: "separate" });
+        eq("an id that is not a string stops the program too", num.ExitCode, 2);
+        check("...saying it is not a string",
+              (num.Errors || "").includes("not a string"), num.Errors);
+
+        /* And a status that is not a number is refused rather than read as 0,
+         * which a runner took for success. */
+        File.SaveJson(File.Join(dir, "project.json"),
+                      { name: "appid", main: "main" });
+        File.Save(File.Join(dir, "Main.js"),
+                  'function main() {\n' +
+                  '    try { Application.Quit("fail"); }\n' +
+                  '    catch (e) { print(e.message); Application.Quit(3); }\n' +
+                  '}\n');
+        const word = Exec.Wait([Application.Executable, dir], { Timeout: 20000 });
+        eq("Quit refuses a word, and a number after it is the status", word.ExitCode, 3);
+        check("...naming what it was handed",
+              word.Output.includes('"fail" is not a number'), word.Output);
     }
 
     /* --- Exec.Wait ------------------------------------------------------

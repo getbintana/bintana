@@ -29,7 +29,7 @@
  * | `project` **or** `manifest` | a Bintana project, packaged by `tools/pack.sh`, or a Flatpak manifest, built as it is. Exactly one |
  * | `repo` | where the source lives. Absent means this runtime's own repository, which is what the IDE and the examples are |
  * | `ref` | the branch or tag to build. Absent means the default branch (or, for this repository, the ref the base is being built from) |
- * | `watch` | the paths in that source whose change rebuilds it. Default `.`, meaning all of it. Only consulted for a source this run has the history of: a `repo` of its own is rebuilt when its commit moves |
+ * | `watch` | the paths in that source whose change rebuilds it. Default `.`, meaning all of it; a `manifest` is always watched as well. Only consulted for a source this run has the history of: a `repo` of its own is rebuilt when its commit moves |
  * | `finish-args` | extra `flatpak build-finish` permissions, passed through to `tools/pack.sh` |
  *
  * **A source with a `repo` of its own needs no history here**: it is rebuilt
@@ -197,6 +197,15 @@ function discover(appsDir) {
         app.name  = name;
         app.repo  = app.repo  || "";
         app.watch = Array.isArray(app.watch) && app.watch.length ? app.watch : ["."];
+
+        /* **A manifest is part of what it builds.**  The IDE's registration
+         * watched `ide`, `docs` and its two desktop files and not
+         * `flatpak/io.github.getbintana.Ide.yml`, so an edit to the manifest
+         * itself -- a module, a permission, a source -- rebuilt nothing.  The
+         * one path every manifest-built application depends on is added here
+         * rather than remembered in each entry. */
+        if (app.manifest && !app.watch.includes(".") && !app.watch.includes(app.manifest))
+            app.watch = app.watch.concat(app.manifest);
         app.entry = File.Hash(path);          /* sha256, the file's own bytes */
 
         out.push(app);

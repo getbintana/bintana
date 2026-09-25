@@ -41,7 +41,7 @@ class AppForm extends Form {
         dlg.TxtAppComment.Text = entry ? (entry.Comment || "")
                                        : (config.Description || "");
         dlg.TxtAppIcon.Text    = entry ? (entry.Icon || "")
-                                       : Ide.Apps.defaultIcon(project);
+                                       : Ide.Apps.defaultIcon(project, config.Id);
 
         dlg.showState();
         dlg.Show();

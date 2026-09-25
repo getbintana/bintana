@@ -211,8 +211,7 @@ class StyleForm extends Form {
         const name = at >= 0 && this.rows[at] ? this.rows[at][0] : "";
 
         if (!name || Ide.Styles.find(name)) {
-            Message.Info("Pick one of the project's own classes to edit. " +
-                         "The theme's belong to the desktop.");
+            Message.Info("Pick one of the project's own classes to edit. The theme's belong to the desktop.");
             return;
         }
         this.editClass(name);

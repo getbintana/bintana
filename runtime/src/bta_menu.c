@@ -168,6 +168,12 @@ static void action_finalizer(JSRuntime *rt, JSValue val)
 
     if (!a)
         return;
+    /* The group holds the action too and outlives this wrapper whenever the
+     * form's name is rebound, so its `activate` must stop pointing at `a`. */
+    if (a->action) {
+        g_signal_handlers_disconnect_by_data(a->action, a);
+        g_clear_object(&a->action);
+    }
     JS_FreeValueRT(rt, a->form);
     g_free(a->icon);
     g_free(a->text);
@@ -418,6 +424,18 @@ static void menuitem_finalizer(JSRuntime *rt, JSValue val)
 
     JS_FreeValueRT(rt, mi->form);
     JS_FreeValueRT(rt, mi->items);
+
+    /*
+     * **The action outlives this wrapper**: the popup's or the bar's group
+     * holds it, and the wrapper goes as soon as the form's name is bound to
+     * another -- which a heading menu does on every right click, and two menus
+     * sharing an item name do the first time the second is built. Leaving the
+     * handler connected left the menu bar's `form.MnuCopy` activating a freed
+     * `mi`. Disconnected, the orphaned action does nothing, which is the truth
+     * about an item nothing can reach any more.
+     */
+    if (mi->action)
+        g_signal_handlers_disconnect_by_data(mi->action, mi);
     g_clear_object(&mi->action);
     g_clear_object(&mi->sub);
     g_free(mi->path);

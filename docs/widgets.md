@@ -3339,12 +3339,23 @@ loader adopts it — but what decides where it appears is `Popup(anchor)`, so a
 surface of coordinates does not give it a rectangle and a box does not stretch
 it. `Placement` is `Single`, like an `AspectFrame`: one child, one place.
 
+**Only a container that lays its children out through a layout manager can
+hold one**: a surface, a `Grid`, a `Flow`, a `RowList`. GTK presents a popover
+from `gtk_layout_manager_allocate`, which skips it; a `Split`'s halves, an
+`AspectFrame`'s child, a `Notebook`/`Switcher` page and an `Overlay`'s base are
+allocated by the container itself, and a popover given an ordinary rectangle
+there died on opening with `pixman_region32_init_rect: Invalid rectangle` (a
+page added a `gtk_widget_map` critical the moment it was added). Measured on
+each. `bta_container_attach` refuses it, and an `Overlay` entirely, since a
+floater is promoted to base by `Reorder(x, 0)`, `Lower()` or the base leaving.
+
 **A popover contributes no measure**, which is what makes it safe to draw into a
 form at all. Measured: a box holding a button and a popover as tall as a
 paragraph still asks for the button's 34 pixels, closed *and* open.
 
 **It has a verb and not a switch.** `Popup(anchor)` opens it over a control —
-which must have a rectangle and be in a window that is up — and `Close()` closes
+which must be on screen, and so must the container the popover is in, since the
+point is worked out in that container's coordinates — and `Close()` closes
 it. `Visible` is read-only: it is the open state, and the loader would assign it
 while the form is still being built. That is not a nicety either:
 `gtk_widget_set_visible(TRUE)` on a popover with no toplevel **crashes** inside
@@ -3387,7 +3398,10 @@ Two GTK details the wrapper exists for, both measured:
 
 - **GTK wraps a popover's content in a `GtkPopoverContent` of its own**, so
   `gtk_widget_get_first_child` answers GTK's widget and not the application's.
-  `bta_slot_first_child` is the one door every walk over a slot goes through, and
+  `bta_slot_first_child` is the one door every walk over a slot that can be a
+  popover goes through (`Children`, `Clear`, the binding cascade, the count an
+  index is checked against, and the `Default`/`Cancel` searches, which missed a
+  button inside a popover until they did), and
   `bta_container_detach` finds the popover as the content's *ancestor* — without
   which `Remove()` of the content refused with *cannot remove from this
   container* and `Children` answered nothing.

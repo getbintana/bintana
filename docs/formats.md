@@ -103,7 +103,7 @@ soon as it lists the files. Qualifying the name is the way out.
 | Key | Meaning |
 |---|---|
 | `name` | `Application.Name`, and the folder under `~/.config/bintana` that `Application.ConfigDirectory` points at |
-| `id` | `Application.Id`: the application's identity in reverse DNS, optional. It is the window's class — `GtkApplication`'s application id, and the program name X11 builds `WM_CLASS` from — and the name its `<id>.metainfo.xml` and a package carry. A value that is not an application id (at least one dot, no element starting with a digit — the platform's `g_application_id_is_valid`) **stops the program when the project loads**, because a class nothing matches is a window no dock recognises |
+| `id` | `Application.Id`: the application's identity in reverse DNS, optional. It is the window's class — `GtkApplication`'s application id, and the program name X11 builds `WM_CLASS` from — and the name its `<id>.metainfo.xml` and a package carry. A value that is not a string, or not an application id (at least one dot, no element starting with a digit — the platform's `g_application_id_is_valid`) **stops the program when the project loads**, because a class nothing matches is a window no dock recognises |
 | `version` | `Application.Version`; free text, optional. What the project calls its own release — not the runtime's, which is `BTA_VERSION` |
 | `startup` | the class instantiated and shown at launch |
 | `main` | a **function** to call instead, for a project with no window (below). Excludes `startup` |

@@ -33,9 +33,14 @@ class MetainfoForm extends Form {
             return null;
         }
 
+        /* A file made here is in the tree at once, not when the dialog is
+         * saved: Cancel is an answer about the fields, and the file it leaves
+         * behind is a real one the tree would otherwise not show. */
         let path = Metainfo.find(ide.project);
-        if (!path)
+        if (!path) {
             path = Metainfo.create(ide.project, config);
+            ide.listFiles();
+        }
 
         return MetainfoForm.edit(ide, path);
     }
@@ -118,9 +123,20 @@ class MetainfoForm extends Form {
             return;
         }
 
+        /* Somebody else's file at the name the id wants is not this one's to
+         * replace -- the same refusal `Metainfo.rename` makes. */
+        if (wanted !== this.path && File.Exists(wanted)) {
+            this.LblProblem.Text = Locale.Text("{0} already exists, so this file was not moved over it.", File.Name(wanted));
+            return;
+        }
+
         Metainfo.save(wanted, this.doc);
         if (wanted !== this.path)
             File.Delete(this.path);
+
+        /* An open tab of the file follows it, or saving that tab would write
+         * the old file back beside the new one. */
+        this.ide.manifest.metainfoMoved(this.path, wanted);
         this.path = wanted;
 
         /* The tree lists what is on disk, and the file may be new -- made by

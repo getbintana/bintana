@@ -156,7 +156,7 @@ Every control and every container has all of this.
 | `HExpand` | absorbs horizontal slack |
 | `Height` | height, likewise |
 | `Margin` | room around it, **one** number for all four sides. Not a list. On a `Form` it insets the contents — a window has no outside |
-| `Menu` | a context menu, as the same array of items a form's `menus` uses. Reassigning replaces it |
+| `Menu` | a context menu, as the same array of items a form's `menus` uses. Reassigning replaces it. The items name handlers on the form, so a control built in code is **added before** its `Menu` is assigned — before that it is refused with a sentence |
 | `MinHeight` | the same for `VAlign` |
 | `MinWidth` | the floor a stretched control may not be squeezed below. Only means something on an axis whose `HAlign` is `Fill` |
 | `Name` | how the form reaches it (`this.<Name>`) and the prefix of its handlers. A valid JS identifier |
@@ -461,7 +461,7 @@ A number typed or stepped.
 
 | Member | |
 |---|---|
-| `Decimals` | places shown and accepted |
+| `Decimals` | places shown and accepted: a whole number from `0` to `20`, refused otherwise |
 | `Max` | the ceiling, likewise. Default `1000000` |
 | `Min` | the floor. **Declare it before `Value`** or the value is clamped to the factory range. Default `-1000000` |
 | `Numeric` | refuse anything that is not a number. Default `true` |
@@ -663,6 +663,11 @@ nothing would leave it to be discovered somewhere else. `Select`, `Deselect`,
 that is not there is an ordinary question — a list with nothing selected is an
 ordinary state — and `Select`'s answer is what a form branches on.
 
+**An index is a number, and anything else is refused** — a `TypeError`, on every
+verb that takes one, before anything moves. It used to be converted, and a
+conversion makes `undefined` or a key passed by mistake into `0`:
+`lb.RemoveRow(undefined)` quietly took out the *first* row.
+
 **Taking one out names the address, not the class.** `RemoveRow(index)` on a
 `ListBox`, a `RowList` and a flat `TableView`; `RemovePage(index)` on a
 `Notebook` and a `Switcher`; `RemoveNode(key)` on a `TreeView` and on a
@@ -789,7 +794,7 @@ A list with columns, **and its rows may nest**. The control to reach for wheneve
 | `ColumnLines` | rules between columns |
 | `Columns` | an array of `{ Text, Width, Alignment, Editable }`. `Text` is **translated**; `Width: 0` sizes itself and the last column takes the slack; `Editable: true` makes a cell a field — clicked, typed and committed — and an editable column reads left-aligned, because a `GtkEditableLabel` is not a label |
 | `Count` | how many rows — **settable**, which is the on-demand mode: the table then asks `Data(row, column)` for each cell it draws |
-| `HeaderMenu` | the menu a column heading offers on a secondary click, as the same array of items `Menu` takes. Built for each click, and every item's handler is told the column, last: `MnuHide_Click(column)` |
+| `HeaderMenu` | the menu a column heading offers on a secondary click, as the same array of items `Menu` takes. Built for each click, and every item's handler is told the column, last: `MnuHide_Click(column)`. Like `Menu`, refused on a table that is not in a form yet |
 | `Index` | the selected row, `-1` for none. Default `-1` |
 | `MultiSelect` | more than one row |
 | `RowLines` | rules between rows. Default `true` |
@@ -1370,13 +1375,13 @@ belongs to whatever it points at.
 | `Arrow` | draw the tail pointing back at the control. Default `false`, unlike GTK's own — a menu wants the tail and a list of suggestions flush against a field does not |
 | `Autohide` | close on a click outside or Escape. Default `true` |
 | `Visible` (ro) | whether it is open. **Read-only**: opening has a verb, and this is the question half |
-| `Popup(anchor)` | opens it over that control. The anchor must have a rectangle and the window must be up |
+| `Popup(anchor)` | opens it over that control. The anchor **and the container the popover is in** must be on screen — a hidden panel, a collapsed `Expander` or a page not shown is refused with a sentence. The point is taken once: an anchor that moves, scrolls or is deleted afterwards leaves the popover where it opened |
 | `Close()` | closes it, and is safe at any time |
 | `Show()` | refuses and names `Popup(anchor)`; the inherited one would build a popup surface before the window exists |
 | **event** `Open()` | it came up, however it was asked |
-| **event** `Close()` | it went down: `Close()`, autohide, or the window going with it |
+| **event** `Close()` | it went down: `Close()`, autohide, or the window going with it. **Not** when the popover itself is deleted or taken out while open — its handlers are unhooked before GTK takes it down |
 
-It is a child of a container like any other — the `.form` draws it beside what it
+It is a child of a container like almost any other — the `.form` draws it beside what it
 belongs to, the loader adopts it, `Children` reaches its content and `Clear()`
 empties it — and it contributes **no measure**: a box holding a button and a
 popover as tall as a paragraph still asks for the button's 34 pixels, closed and
@@ -1384,6 +1389,14 @@ open. What decides where it appears is `Popup`, not the slot, so a `Fixed`
 surface does not give it a rectangle and a box does not stretch it. `Placement`
 is `Single` for the same reason an `AspectFrame`'s is: one child, one place, and
 a gesture there is *land*.
+
+**It goes on a surface, a `Grid`, a `Flow` or a `RowList`, and nowhere else.** A
+`Split`, an `AspectFrame`, a `Notebook` or `Switcher` page, an `Overlay` and
+another `Popover` allocate their children themselves rather than through a
+layout, and GTK presents a popover only from a layout: opening one there was
+`pixman_region32_init_rect: Invalid rectangle`. `Add` refuses it and names the
+fix, which is a `Panel` in between. A `Default`/`Cancel` button inside a popover
+is found like one anywhere else in the form.
 
 ```js
 /* A field that drops a list of matches. */

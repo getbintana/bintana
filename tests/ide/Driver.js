@@ -8209,6 +8209,21 @@ function* p_strings(ide) {
     check("and a Style assigned from code is not prose and is left alone",
           !warned.includes("heading"), warned);
 
+    /*
+     * **And the IDE's own source passes the lint that finds a joined msgid.**
+     * The lint existed and the IDE is not a project anybody extracts from here,
+     * so four messages sat built with `+` out of two literals -- the id error in
+     * New project and Project settings, a class name in the style editor, a
+     * hint in the style list -- each in the catalogue as its first half, which
+     * no translation can ever match.  Asked of the real `ide/`, file by file.
+     */
+    const ideDir = File.Join(Application.Directory, "..", "..", "ide");
+    const own    = new Ide.Strings({ project: ideDir });
+    for (const path of own.projectFiles(".js", ideDir)) own.fromSource(path);
+    const joined = own.warnings.filter((w) => w.includes("two literals joined"));
+    check("no message in the IDE is two literals joined", joined.length === 0,
+          joined.join("\n"));
+
     /* --- the template ---------------------------------------------------- */
     ide.catalogues.update();
     yield* until(() => File.Exists(File.Join(TMP, "po",
@@ -8933,6 +8948,73 @@ function* p_settings(ide) {
         yield;
         eq("and back again", File.Name(Metainfo.find(ide.project)),
            "io.github.getbintana.IdeChild.metainfo.xml");
+
+        /* **The open tab followed both moves.** It was opened above, before
+         * the id changed, and used to go on answering for the old path: saving
+         * it wrote the old file back beside the new one. */
+        const metaName = "io.github.getbintana.IdeChild.metainfo.xml";
+        check("the metainfo's tab followed the file",
+              ide.openTabs.has(metaName) &&
+              !ide.openTabs.has("io.github.getbintana.IdeChild2.metainfo.xml"),
+              JSON.stringify([...ide.openTabs.keys()]));
+        ide.switchToTab(metaName);
+        yield;
+        check("and holds the text the rename wrote",
+              ide.Editor.Text.includes("<id>io.github.getbintana.IdeChild</id>"),
+              ide.Editor.Text.slice(0, 200));
+        ide.MnuProjectSettings.Click();
+        const pdId = ide.projectEditor;
+        pdId.TxtPrId.Text = "io.github.getbintana.IdeChild3";
+        pdId.BtnPrOk_Click();
+        yield;
+        ide.tabs.save();
+        yield;
+        check("so saving the tab writes the file where it is now, and no other",
+              !File.Exists(File.Join(ide.project, metaName)) &&
+              File.Exists(File.Join(ide.project, "io.github.getbintana.IdeChild3.metainfo.xml")),
+              Directory.List(ide.project).join(", "));
+
+        /* **A new name keeps `<name>` in step**, which `Package.Write` compares
+         * with project.json and refused on. */
+        ide.MnuProjectSettings.Click();
+        const pdName = ide.projectEditor;
+        pdName.TxtPrId.Text   = "io.github.getbintana.IdeChild";
+        pdName.TxtPrName.Text = `${named}Renamed`;
+        pdName.BtnPrOk_Click();
+        yield;
+        const afterName = Metainfo.find(ide.project);
+        eq("a new project name reaches the metainfo's <name>",
+           afterName && Metainfo.read(File.LoadXml(afterName)).Name, `${named}Renamed`);
+        eq("so the two still agree",
+           afterName && Metainfo.problems(File.LoadXml(afterName), afterName,
+                                          ide.manifest.read()).join("; "), "");
+
+        /* **A metainfo that cannot follow costs the settings nothing.** The
+         * rename used to run first and throw on a file it could not parse, with
+         * the dialog already closed -- losing every edit in it. The refusal is
+         * a `Message.Error`, a modal nothing here dismisses, so it is caught
+         * for the length of the gesture. */
+        const saidErr  = [];
+        const realErr  = Message.Error;
+        const goodText = File.Load(afterName);
+        File.Save(afterName, "<component><id>not closed");
+        Message.Error = (...args) => { saidErr.push(Locale.Text(...args)); };
+        try {
+            ide.MnuProjectSettings.Click();
+            const pdBad = ide.projectEditor;
+            pdBad.TxtPrName.Text = named;
+            pdBad.TxtPrDesc.Text = "edited over a broken metainfo";
+            pdBad.BtnPrOk_Click();
+            yield;
+        } finally {
+            Message.Error = realErr;
+        }
+        eq("an unreadable metainfo does not lose the settings",
+           File.LoadJson(manifestPath).description, "edited over a broken metainfo");
+        check("and says the metainfo could not follow",
+              saidErr.some((m) => m.includes("could not follow")), JSON.stringify(saidErr));
+        File.Save(afterName, goodText.replace(`${named}Renamed`, named));
+        ide.tabs.reloadFromDisk(File.Name(afterName));
     }
 
     /*

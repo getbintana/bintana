@@ -1448,8 +1448,7 @@ Ide.PropertyGrid = class PropertyGrid {
 
         const node = this.styleNode();
         return node ? Locale.Text(
-            "The class goes on this control's {0} node. One written for another " +
-            "node is saved and does nothing.", node) : "";
+            "The class goes on this control's {0} node. One written for another node is saved and does nothing.", node) : "";
     }
 
     /* The node the class would land on, or "" when there is no live control to

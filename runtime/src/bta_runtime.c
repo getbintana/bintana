@@ -863,9 +863,13 @@ static JSValue js_print(JSContext *ctx, JSValueConst this_val,
 static JSValue js_quit(JSContext *ctx, JSValueConst this_val,
                        int argc, JSValueConst *argv)
 {
-    int code = 0;
-    if (argc > 0)
-        JS_ToInt32(ctx, &code, argv[0]);
+    /* A status is a number, and a word is refused rather than read as 0:
+     * `Quit("fail")` exited 0, which a runner reads as success. `undefined` is
+     * the one non-number that means 0 -- `Quit()` with nothing to say. */
+    int32_t code = 0;
+    if (argc > 0 && !JS_IsUndefined(argv[0]) &&
+        !bta_to_int(ctx, argv[0], "Application.Quit", &code))
+        return JS_EXCEPTION;
 
     if (g_app) {
         g_app->exit_code = code;
@@ -2019,6 +2023,19 @@ BtaApp *bta_app_new(const char *project_dir)
             app->name    = json_str(app->ctx, cfg, "name", "app");
             app->version = json_str(app->ctx, cfg, "version", "");
             app->id      = json_str(app->ctx, cfg, "id", "");
+            /* `json_str` falls back for a value that is not text, which for
+             * the id meant `"id": 5` was the same as no id -- the silence the
+             * refusal below exists to end. Anything present and not text is
+             * refused by the same door. */
+            JSValue idv = JS_GetPropertyStr(app->ctx, cfg, "id");
+            bool    bad = !JS_IsUndefined(idv) && !JS_IsString(idv);
+            JS_FreeValue(app->ctx, idv);
+            if (bad) {
+                fprintf(stderr, "bintana: project.json id is not a string: it "
+                                "has to be a reverse-DNS name like "
+                                "org.example.App\n");
+                exit(2);
+            }
             app->startup = json_str(app->ctx, cfg, "startup", "Form1");
             /* A project declares one or the other: "startup" opens a form,
              * "main" calls a function and never touches the display. */

@@ -162,8 +162,9 @@ static JSValue term_feed(JSContext *ctx, JSValueConst this_val,
 
     size_t      len = 0;
     const char *s   = argc > 0 ? JS_ToCStringLen(ctx, &len, argv[0]) : NULL;
-    if (s)
-        term_write(w, s, len);
+    if (!s)
+        return argc > 0 ? JS_EXCEPTION : JS_UNDEFINED;   /* a conversion that threw stands */
+    term_write(w, s, len);
     JS_FreeCString(ctx, s);
     return JS_UNDEFINED;
 }

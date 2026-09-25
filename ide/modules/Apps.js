@@ -138,15 +138,14 @@ Ide.Apps = class Apps {
      * with `GDesktopAppInfo`).  A theme name stays a name, because it is one
      * every desktop has.
      */
-    static defaultIcon(project) {
-        const dir = File.Join(project, "icons");
-
-        if (File.IsDir(dir)) {
-            const drawn = Directory.Files(dir)
-                .filter((f) => ["svg", "png"].includes(File.Extension(f).toLowerCase()));
-
-            if (drawn.length) return drawn.sort()[0];
-        }
+    static defaultIcon(project, id) {
+        /* **Which drawing is the application's is `lib/package`'s answer**,
+         * the one a package ships: `icons/<id>.svg` or `.png`, or the only
+         * drawing there that is not a control's `-symbolic` glyph.  This used
+         * to take the alphabetically first file in `icons/`, which in a project
+         * with glyphs of its own is a glyph. */
+        const own = Package.iconOf(project, id || "");
+        if (own.Path) return own.Path;
         return Application.HasIcon("application-x-executable")
                    ? "application-x-executable" : "";
     }

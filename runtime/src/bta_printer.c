@@ -701,7 +701,7 @@ static JSValue printer_to_file(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "Printer.ToFile(area, path, [setup]) "
                                       "needs a control and a path");
 
-    const char *path = JS_ToCString(ctx, argv[1]);
+    const char *path = bta_file_path(ctx, argv[1], "Printer.ToFile");
     if (!path)
         return JS_EXCEPTION;
 

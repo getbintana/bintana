@@ -294,8 +294,17 @@ GLOBAL.Timer = class Timer {
      * Both hand back the Timer, so what was started can still be stopped --
      * which a bare id never let you do without keeping it somewhere.
      */
-    static After(delay, tick) { return new Timer(delay, tick).Once(); }
-    static Every(delay, tick) { return new Timer(delay, tick).Start(); }
+    static After(delay, tick) { return new Timer(delay, Timer.ticking(tick, "After")).Once(); }
+    static Every(delay, tick) { return new Timer(delay, Timer.ticking(tick, "Every")).Start(); }
+
+    /* A timer started with nothing to call is a mistake nothing reports:
+     * `fire` skips a tick that is not a function, so `Timer.After(fn, 300)` --
+     * the arguments the wrong way round -- ran nothing, forever. */
+    static ticking(tick, verb) {
+        if (typeof tick !== "function")
+            throw new TypeError(`Timer.${verb}(delay, tick) needs a function as its second argument`);
+        return tick;
+    }
 };
 
 /* ------------------------------------------------------------------------
