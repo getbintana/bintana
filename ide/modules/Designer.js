@@ -428,6 +428,16 @@ Ide.Designer = class Designer {
 
         try {
             /*
+             * **One level at a time**, and that is the whole of what keeps a
+             * stand-in to the node that needed one. `AddNode` builds the node
+             * *and its whole subtree* in one call, so a descendant the IDE
+             * cannot instantiate -- a component of the project, or of a library
+             * it uses -- threw out of the container being built, and the
+             * container became the stand-in with every sibling gone. A form
+             * whose component sat two levels down opened as a board with one
+             * grey `[Panel]` on it. Built shallow and recursed here, the throw
+             * is caught where it happened.
+             *
              * `true` is "this is a drawing of an application, not one".  Two
              * things follow from it and both are load-bearing here: prose is left
              * as the file wrote it, so a designer running in Spanish cannot bake
@@ -435,12 +445,14 @@ Ide.Designer = class Designer {
              * is applied over the properties, which is how a label whose text the
              * code fills in has something to be laid out by.
              */
-            const built = parent.AddNode(node, true);
+            const built = parent.AddNode({ ...node, children: [] }, true);
 
             /* ...and what a list holds while it is being drawn, which is the
              * other half of the same idea and cannot be a property: see
              * `showItem`. */
             if (node.item) this.showItem(built, node.item);
+
+            for (const child of node.children || []) this.buildNode(built, child);
             return built;
         } catch (e) {
             for (const built of parent.Children.slice(had)) built.Delete();

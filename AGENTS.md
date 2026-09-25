@@ -2395,6 +2395,16 @@ person who wrote it either.
   has to take the leftovers out first, or the stand-in's node and the controls
   that did get built are both written to the file. The IDE's own `MainForm` went
   through one save and came back with six controls duplicated.
+- **...and `AddNode` builds the node *and its whole subtree* in one call, which
+  makes a failure land on an ancestor.** The designer caught the throw for a
+  component it cannot instantiate while the panel around it was being built, so
+  the panel became the stand-in and its siblings were deleted: opening
+  `examples/qr/QrForm.form` was a board with one grey `[Panel TextPage]` and
+  nothing else on it, and the save was innocent (a stand-in carries its node),
+  which is why it read as "the IDE cannot open this form". `buildNode` builds
+  one level at a time now -- `parent.AddNode({ ...node, children: [] }, true)`
+  and then recurses -- so the stand-in replaces exactly the node that failed.
+  `tests/ide`'s `forms` phase has the nested case.
 - **A `Width`/`Height` in a box is a *minimum*, not a size.** A `SourceEditor`
   declared 605 tall makes the notebook holding it 605 tall, and a `Scroller`
   declared 520 wide is a canvas the split can no longer squeeze. Everything in a

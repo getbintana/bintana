@@ -3113,6 +3113,16 @@ project, or a control carrying a value the runtime refuses (`Style: ".danger"`,
 a colour that is not one). The stand-in carries the whole node, so the file
 round-trips.
 
+**The stand-in is scoped to the node that needed one, and that is why `buildNode`
+builds one level at a time.** `Container.AddNode` builds a node *and its whole
+subtree* in one call, so a descendant the IDE cannot instantiate threw out of
+the container being built — and the container became the stand-in with every
+sibling deleted. A form whose component sat two levels down opened as a board
+with one grey `[Panel]` on it. `buildNode` now calls
+`parent.AddNode({ ...node, children: [] }, true)` and recurses over the node's
+own children, so the throw is caught where it happened and the rest of the tree
+is built beside it.
+
 What that costs, and what has to be paid before the stand-in goes in:
 `Container.AddNode` parents a control **before** it applies its properties, so a
 throw leaves a half-built subtree in the container. A stand-in beside it means

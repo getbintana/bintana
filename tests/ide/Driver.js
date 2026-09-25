@@ -4962,6 +4962,53 @@ function* p_forms(ide) {
                             .children.find((c) => c.type === "Marcador");
     eq("renaming a stand-in reaches the file", renamedComp.name, "Marcador9");
 
+    /*
+     * **A component nested inside another control**, which is where a stand-in
+     * used to cost the whole ancestor. `AddNode` builds a node *and its
+     * children* in one call, so the throw for a class the IDE cannot
+     * instantiate arrived while the panel around it was being built -- and the
+     * panel became the stand-in, taking its siblings with it. Opening a form
+     * whose component sat two levels down was a board with one grey `[Panel]`
+     * on it, which is what the `qr` example's `QrView` did.
+     */
+    File.Save(File.Join(TMP, "Nested.js"), "class Nested extends Form {\n}\n");
+    File.SaveJson(File.Join(TMP, "Nested.form"), {
+        format: "bintana-form/1", class: "Nested",
+        properties: { Text: "Nested", Width: 400, Height: 300 },
+        children: [
+            { type: "Panel", name: "Box",
+              properties: { Arrangement: "Vertical", Spacing: 6 },
+              children: [
+                  { type: "Button", name: "BtnInside",
+                    properties: { Text: "Inside" } },
+                  { type: "Marcador", name: "CompInside" },
+              ] },
+        ],
+    });
+    ide.listFiles();
+    ide.openNamed("Nested.form");
+    yield* settled(ide);
+
+    const box = byName(ide, "Box");
+    check("a panel holding a component is still drawn as itself",
+          box !== undefined && box.constructor.name === "Panel",
+          ide.designer.allControls().map((c) => `${c.Name}:${c.constructor.name}`).join(" "));
+    check("its own controls survive", byName(ide, "BtnInside") !== undefined,
+          box ? box.Children.map((c) => c.Name).join(",") : "no panel");
+    const inside = byName(ide, "CompInside");
+    check("and the component is the stand-in",
+          inside !== undefined && !!inside.__node && inside.__node.type === "Marcador",
+          inside ? inside.constructor.name : "missing");
+
+    ide.BtnSave_Click();
+    const nestedFile = JSON.parse(File.Load(File.Join(TMP, "Nested.form")));
+    const nestedBox  = (nestedFile.children || []).find((c) => c.name === "Box");
+    check("a save keeps both of them under the panel",
+          nestedBox !== undefined &&
+          (nestedBox.children || []).some((c) => c.type === "Button") &&
+          (nestedBox.children || []).some((c) => c.type === "Marcador"),
+          JSON.stringify(nestedFile));
+
     /* And with no project open there is nothing of the project to offer. */
     ide.designer.setComponents([]);
     check("closing the project empties the component tab",
