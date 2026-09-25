@@ -817,6 +817,12 @@ strip that cannot grow: a window title over a form, a path in a status bar. **A
 label can only give one of the two answers**, so setting either turns the other
 off — text that wraps has no end to put the ellipsis at.
 
+**Both need a width to be clamped up to**, and a label given none has nothing to
+be ellipsized or wrapped into: `max-width-chars` collapses the request and there
+is no `Width` to put it back. Measured while building a table of forty values —
+every cell came out `...` until the labels stopped asking to be ellipsized, and
+the same table with `Wrap` would have been a column one character wide.
+
 ### Button
 
 `Text` and `Icon`, **and both at once**: a `GtkButton` shows either a label or one

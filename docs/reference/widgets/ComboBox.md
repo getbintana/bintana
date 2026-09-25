@@ -14,7 +14,7 @@ It is a `Widget` and a control like any other, so everything on
 | | | |
 |---|---|---|
 | `Count` (ro) | how many rows | [the list](#the-list) |
-| `Index` | which is chosen, `-1` for none. Default `-1` | [what is chosen](#what-is-chosen) |
+| `Index` | which is chosen; `-1` when the list is empty. Default `-1` | [what is chosen](#what-is-chosen) |
 | `Items` | the contents, as an array of strings. **Translated** | [the list](#the-list) |
 | `Text` | the chosen text | [what is chosen](#what-is-chosen) |
 | `Add(text, [key])` | one more row, with the application's own name for it | [the list](#the-list) |
@@ -40,7 +40,7 @@ It is a `Widget` and a control like any other, so everything on
 
 | | |
 |---|---|
-| `Items` | the contents, as an array of strings. Assigning replaces every row at once. **Translated**: a list declared in a `.form` goes through the catalogue |
+| `Items` | the contents, as an array of strings. Assigning replaces every row at once **and chooses the first one** — a non-empty drop-down always has something chosen. **Translated**: a list declared in a `.form` goes through the catalogue |
 | `Add(text, [key])` | one more, at the end. `key` is the application's own name for it |
 | `KeyAt(index)` | → that row's key, without selecting it. **`RangeError`** when there is no such row |
 | `RemoveRow(index)` | takes one out. **`RangeError`** when there is no such row |
@@ -60,7 +60,7 @@ drop-down of the project's files is filled from code and must not be.
 
 | | |
 |---|---|
-| `Index` | which row is chosen, `-1` for none. Assigning chooses it and raises `Select` |
+| `Index` | which row is chosen; `-1` when the list is empty. Assigning chooses the row and raises `Select`; **assigning `-1` moves nothing**, because a drop-down with items always has one chosen |
 | `Key` | the chosen row's key, `""` for none; assigning chooses the row it belongs to, and a key nothing has is a `RangeError`. `""` moves nothing, as `Index = -1` does |
 | `Text` | the chosen row's words. Reading it is reading the *translated* text |
 | **event** `Select()` | the selection moved — by the user or by an assignment |
@@ -76,8 +76,12 @@ an entry for it.
 - **The comparison stopped working in another language.** Compare `Index`.
 - **Assigning `Index` ran the handler.** It does; guard while a form fills
   itself in.
-- **Nothing is chosen at the start.** `Index` is `-1` by default: a drop-down
-  that should open on something says so — in the `.form` or right after `Items`.
+- **`Index = -1` did not clear it.** It moves nothing: assigning `Items` chooses
+  the first row, and only `Clear()` leaves a drop-down with nothing chosen. A
+  field that must be able to say *nothing chosen* gives the combo a row that
+  means it — `Items = ["—", …]` — and selects that one.
+- **It opened on the first row without being told.** That is the same fact from
+  the other side: a non-empty drop-down always has one chosen.
 - **`Clear()` left the handler thinking something was chosen.** It leaves
   nothing chosen, and what a form shows about the selection is yours to update.
 

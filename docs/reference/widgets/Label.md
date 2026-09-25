@@ -134,6 +134,12 @@ rather than what happens to be drawn.
   width to work against.
 - **`Wrap` did nothing.** The label has no width to wrap at — in a box it needs
   `HExpand`, on a surface a declared `Width`.
+- **Everything came out as `…`.** `Ellipsize` collapses the label's width request
+  to one character, which GTK clamps back up to a declared `Width` — so a label
+  given no width (a `Grid` cell, a `Fixed` with none) has nothing to be
+  ellipsized into and a table of values comes out as a column of `...`. `Wrap`
+  needs the width for the same reason; there the symptom is a column one
+  character wide instead.
 - **Turning on `Ellipsize` turned off `Wrap`.** They are exclusive; see above.
 - **Centring did nothing.** `Alignment` centres the words inside the label;
   `HAlign` centres the label. The label is probably exactly as wide as its words.

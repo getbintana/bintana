@@ -32,7 +32,7 @@ follows is what is its own.
 
 | | |
 |---|---|
-| `Append(child, [name])` | one more page. The child is the page |
+| `Append(child, [name])` | one more page. The child is the page, and `name` is a **string** — a segmented control has nowhere for a widget, where a [`Notebook`](Notebook.md)'s tab label is one |
 | `RemovePage(index)` | takes it out, with the control in it |
 | `Count` (ro) | how many there are |
 

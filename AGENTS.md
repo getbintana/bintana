@@ -1725,6 +1725,14 @@ person who wrote it either.
   growth *and* the whole slack, ending up past the edge it is anchored to.
   `anchor_axis` takes the declared size and the floor separately for this reason;
   it used to take `max(declared, floor)` and add the slack to that.
+- **`Ellipsize` and `Wrap` collapse a label's width request, so a label with no
+  declared `Width` has nothing to wrap or ellipsize into.** `label_fit` sets
+  `max-width-chars = 1` for either, and GTK clamps the request back up to the
+  declared `Width` -- which a value label in a `Grid` cell has not got, so a
+  table of forty values drawn while building `examples/factory` came out as a
+  column of `...` while `Text` answered every one of them. It reads as a table
+  of missing values and it is a table of labels with no box; the fix is the
+  width or not asking, never the label.
 - **An anchor keeps the gap a control was *drawn* with, so a container can only
   be drawn in coordinates if its size follows from what the `.form` declares.**
   A guess taken from a measurement is wrong for good: the IDE's `SidePanel` is
@@ -4027,10 +4035,15 @@ text cannot be modelled beside its attributes (`<guid isPermaLink>`), and
 
 ## Two widget limits that leak into a shape
 
-- **A `ComboBox` has no empty text.** `cmb.Text = ""` throws `'' is not one of
-  <name>'s items`, because the text *is* one of the items and "nothing chosen" is
-  `Index = -1`. So a form that clears its fields when there is no record has to
-  branch: `if (rec) cmb.Text = rec.Field; else cmb.Index = -1`.
+- **A `ComboBox` has no empty text and, with items, no empty state.**
+  `cmb.Text = ""` throws `'' is not one of <name>'s items`, and `Index = -1`
+  **moves nothing**: GTK's autoselect leaves the first row chosen the moment
+  `Items` is assigned, and only `Clear()` leaves none. Measured -- `Items` then
+  `Index = -1` still reads the first row, and a sample written to show *nothing
+  chosen* came up saying *Low*. So a form whose field can be empty gives the
+  combo a placeholder row (`Items = ["—", …]`) and selects that when there is
+  no record; `Index = -1` is what an *empty* list reads, not a way to empty
+  one.
 - **A `DatePicker` has no empty state at all.** Its default is today and there is
   no value meaning *no date*, so an **optional `Field.Date` cannot round-trip
   through one**: showing an empty date puts today in the control, and reading it

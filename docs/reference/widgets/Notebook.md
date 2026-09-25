@@ -27,7 +27,7 @@ follows is what is its own.
 
 | | |
 |---|---|
-| `Append(child, [label])` | one more page, at the end. The child **is** the page — usually a [`Panel`](Panel.md), which is then an ordinary container |
+| `Append(child, [label])` | one more page, at the end. The child **is** the page — usually a [`Panel`](Panel.md), which is then an ordinary container. **`label` is a widget too** (a [`Label`](Label.md)), not text: a tab has room for one, where a [`Switcher`](Switcher.md)'s page name is a string. A tab label that has to change is a `Label` you keep and mutate |
 | `RemovePage(index)` | takes that page out, and the control in it goes with it |
 | `Count` (ro) | how many pages there are. **An action widget in the strip is not one** |
 
@@ -51,7 +51,7 @@ than leaving a blank band. That is what the IDE does when every file is closed.
 |---|---|
 | `Strip` | where the tabs are: `Top` `Bottom` `Start` `End`, or `None` for no strip at all — which is a notebook only code switches, and a [`Switcher`](Switcher.md) is usually the better answer |
 | `Tabs` | the labels, as an array of strings. **Translated** |
-| `SetTabLabel(index, label)` | renames one — what a tab showing a file name and an asterisk needs |
+| `SetTabLabel(index, label)` | renames one, and **`label` is a widget** like `Append`'s — what a tab showing a file name and an asterisk needs |
 
 ## A widget in the strip
 
