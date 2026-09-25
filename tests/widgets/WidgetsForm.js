@@ -7920,7 +7920,12 @@ function Main() {
 
         b.Value = "1234.567";
         eq("machine text is what a .form carries", b.Value.toString(), "1234.57");
-        b.Value = "1.234,56";
+
+        /* The locale's own spelling, written by the runtime and read back --
+         * `1.234,56` where the desktop writes a comma and `1234.56` in the C
+         * locale, which is the one CI runs.  The old literal was only text on
+         * a desktop that writes one, and the assertion went red there. */
+        b.Value = Locale.Number(1234.56, 2);
         eq("and locale text is read too", b.Value.toString(), "1234.56");
 
         throws("a word is refused", () => { b.Value = "hola"; });
