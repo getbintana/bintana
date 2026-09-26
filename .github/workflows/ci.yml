@@ -539,6 +539,10 @@ jobs:
       # the `makensis.exe` of the same name in `Bin` -- without that folder
       # every compile fails with `Unable to start child process, error 0x2`,
       # which names neither the forwarder nor the folder it looked in.
+      # **And `Contrib` is the Modern UI.** `Include/MUI2.nsh` is a one-line
+      # forwarder to `Contrib/Modern UI 2`, which holds the headers, the
+      # languages and `UIs/modern.exe` -- without it the compile dies on line
+      # 5 naming the folder it could not find.
       - name: Bundle the NSIS compiler
         run: |
           set -euo pipefail
@@ -553,11 +557,12 @@ jobs:
             if [ -n "$exe" ]; then
               base=$(dirname "$exe")
               mkdir -p "$dest"
-              for f in makensis.exe COPYING Include Stubs Plugins Bin; do
+              for f in makensis.exe COPYING Bin Include Stubs Plugins Contrib; do
                 [ -e "$base/$f" ] && mv "$base/$f" "$dest/"
               done
               if [ -f "$dest/Bin/makensis.exe" ] && [ -d "$dest/Include" ] \
-                  && [ -d "$dest/Stubs" ]; then
+                  && [ -d "$dest/Stubs" ] \
+                  && [ -f "$dest/Contrib/Modern UI 2/MUI2.nsh" ]; then
                 echo "nsis bundle: $(find "$dest" -type f | wc -l) files"
               else
                 echo "incomplete NSIS bundle -- leaving it out" >&2

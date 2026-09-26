@@ -189,8 +189,8 @@ VTE) so that none of them becomes a shared library the downloader has to have.
 
 The Windows zip carries its own NSIS under `share/bintana/tools/nsis` -- the
 subset of the official distribution `makensis.exe` needs beside itself
-(`Bin` with the real compiler, `Include`, the stubs, `COPYING`) -- so *Project
-→ Windows installer…* builds a setup without anything installed: the tree's
+(`Bin` with the real compiler, `Include`, `Contrib` with the Modern UI, the
+stubs, `COPYING`) -- so *Project → Windows installer…* builds a setup without anything installed: the tree's
 compiler first, a `makensis` on the PATH after it. The CI stages that directory
 from the official `nsis-3.12.zip`; a hand-staged tree without it still builds,
 against a separately installed NSIS.
