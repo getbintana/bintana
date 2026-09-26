@@ -5435,7 +5435,7 @@ function Main() {
                        code !== 0, String(code));
                  check("...saying which item and why",
                        all.includes("menu item 'Actions'") &&
-                       all.includes("a Form already has a member of that name"), all);
+                       all.includes("the form already has a member of that name"), all);
                  check("...and the form never opened", !all.includes("ran"), all);
                  waiting--;
                  this.commandNameTakenByForm();
@@ -11652,6 +11652,38 @@ function Main() {
                   .includes("add"));
         loose.Delete();
         lt.Delete();
+
+        /* A name on the form belongs to one thing: a second menu taking an
+         * item's name left the first menu's item dead. Refused, pointing at
+         * `actions`, which is what one command in several menus is for. */
+        const one = new Button(), two = new Button();
+        this.Fixed1.Add(one);
+        this.Fixed1.Add(two);
+        one.Menu = [{ name: "MnuShared", text: "x" }];
+        one.Menu = [{ name: "MnuShared", text: "x again" }];
+        check("rebuilding the same menu keeps its own names", !!this.MnuShared);
+        const shared = refusal(() => two.Menu = [{ name: "MnuShared", text: "y" }]) || "";
+        check("a second menu cannot take an item's name", shared.includes("MnuShared"), shared);
+        check("...and the refusal says to use an action", shared.includes("actions"), shared);
+        check("a menu item cannot take a control's name either",
+              (refusal(() => two.Menu = [{ name: "Fixed1", text: "z" }]) || "").includes("member"));
+        one.Delete();
+        two.Delete();
+        delete this.MnuShared;
+
+        /* A drawing publishes nothing on the form it is drawn on: a drawn
+         * control's Menu is kept as the file says and not built, or drawing a
+         * form would take its host's items away -- the IDE drawing its own
+         * MainForm did exactly that. */
+        const board = new Panel();
+        this.Fixed1.Add(board);
+        board.AddNode({ type: "Button", name: "DrawnBtn",
+                        properties: { Menu: [{ name: "MnuDrawn", text: "d" }] } }, true);
+        check("a drawn control's menu is not built on the host form", this.MnuDrawn === undefined);
+        const drawn = board.Children[0].Serialize();
+        eq("...and it is still what the file said when saved",
+           JSON.stringify(drawn.properties.Menu), JSON.stringify([{ name: "MnuDrawn", text: "d" }]));
+        board.Delete();
     }
 
     /* --- icons -------------------------------------------------------------

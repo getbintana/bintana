@@ -672,12 +672,31 @@ function translateDeclared(value) {
     return value;
 }
 
+/*
+ * **A drawing publishes nothing on the form it is drawn on.** A control's
+ * `Menu` and a table's `HeaderMenu` put every item on the form by name, and a
+ * drawing's form is the *designer's* -- so a drawn menu replaced the host's
+ * own items of the same name (the IDE drawing its own `MainForm.form` took the
+ * real tab strip's menu away), dispatched to the host's handlers, and took its
+ * accelerators. Now that a second menu taking a name is refused, it would
+ * refuse instead and the control would become a stand-in. So in a drawing the
+ * two are kept as the file says -- a note the serialiser writes back, the same
+ * one a translated caption leaves -- and not built. The menu bar is the
+ * designer's own preview (`Ide.MenuBar`), which sanitises for the same reasons.
+ */
+const DRAWN_NOT_BUILT = ["Menu", "HeaderMenu"];
+
 function applyNode(widget, node, designing) {
     const properties = node.properties || {};
     const texts      = widget.TextProperties();
 
     for (const key in properties) {
         const declared = properties[key];
+
+        if (designing && DRAWN_NOT_BUILT.includes(key)) {
+            declaredNotes(widget)[key] = [declared, widget[key]];
+            continue;
+        }
         const applied  = !designing && texts.includes(key)
             ? translateDeclared(declared) : declared;
 

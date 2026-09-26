@@ -156,7 +156,7 @@ Every control and every container has all of this.
 | `HExpand` | absorbs horizontal slack |
 | `Height` | height, likewise |
 | `Margin` | room around it, **one** number for all four sides. Not a list. On a `Form` it insets the contents — a window has no outside |
-| `Menu` | a context menu, as the same array of items a form's `menus` uses. Reassigning replaces it. The items name handlers on the form, so a control built in code is **added before** its `Menu` is assigned — before that it is refused with a sentence |
+| `Menu` | a context menu, as the same array of items a form's `menus` uses. Reassigning replaces it. The items name handlers on the form, so a control built in code is **added before** its `Menu` is assigned — before that it is refused with a sentence. **An item's name belongs to one menu**: a second menu declaring it, or a name already taken by a control or a member of the form, is refused — one command in several menus is a form `action` with an `{ "action": … }` item in each. Rebuilding the same menu is fine |
 | `MinHeight` | the same for `VAlign` |
 | `MinWidth` | the floor a stretched control may not be squeezed below. Only means something on an axis whose `HAlign` is `Fill` |
 | `Name` | how the form reaches it (`this.<Name>`) and the prefix of its handlers. A valid JS identifier |

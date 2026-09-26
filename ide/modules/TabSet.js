@@ -93,15 +93,17 @@ const BOARD_MARGIN = 8;
  * switch, because a menu exposes its items on the form by name and the names are
  * the same on every tab.
  *
- * **Three of its four entries point at a command** and so carry no name at all,
- * which is most of what that reassignment was for: `MnuCvDel` existed because
- * two widgets cannot both own `MnuDel`, and an item that points at an action is
- * not a widget that owns anything. Rename is still its own, because renaming
- * from the canvas renames the *selection* and renaming from the tree renames the
- * row the pointer is on -- two commands that read the same and are not.
+ * **Every entry points at a command** and so carries no name at all. That is
+ * not tidiness any more: every form tab has a canvas of its own and this menu
+ * is assigned to the active one on each switch, and a named item assigned to a
+ * second canvas is a second menu taking the first one's name -- which the
+ * runtime refuses now, since the first menu's item went dead when it was
+ * allowed. `ActRenameCtl` renames the *selection*; the tree's `MnuTrRename`
+ * renames the row the pointer is on, a different command, and keeps its name
+ * because the tree's menu is built once.
  */
 const CANVAS_MENU = [
-    { name: "MnuCvRename", text: "Rename..." },
+    { action: "ActRenameCtl" },
     { action: "ActDelCtl" },
     { separator: true },
     { action: "ActRaise" },
@@ -823,7 +825,7 @@ Ide.TabSet = class TabSet {
             this.ide.Canvas       = state.canvas.canvas;
             this.ide.Surface      = state.canvas.surface;
             this.ide.Glass        = state.canvas.glass;
-            /* Re-exposes MnuCv* on the form as this tab's; see CANVAS_MENU. */
+            /* This tab's canvas carries the menu; see CANVAS_MENU. */
             this.ide.Glass.Menu   = CANVAS_MENU;
         }
 

@@ -25,6 +25,11 @@
       "text": "Send to back",
       "icon": "go-down",
       "enabled": false
+    },
+    {
+      "name": "ActRenameCtl",
+      "text": "Rename...",
+      "enabled": false
     }
   ],
   "menus": [

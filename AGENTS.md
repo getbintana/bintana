@@ -2745,9 +2745,23 @@ person who wrote it either.
   `on_menu_activate` on freed memory. `menuitem_finalizer` and
   `action_finalizer` both `g_signal_handlers_disconnect_by_data` now (the latter
   also dropped a reference it never released). The orphaned action does
-  nothing, which is the truth about an item nothing can reach. What is still
-  open is the *collision itself*: a heading menu item named like a menu bar
-  item takes the name, and `this.MnuCopy` then answers the heading's.
+  nothing, which is the truth about an item nothing can reach.
+  **And the collision itself is refused now**, which is Matias's call: a name
+  on the form belongs to one thing, so `make_item` reads `form[name]` first and
+  refuses a name held by an item of *another* menu, a control, a command or a
+  member, pointing at `actions` -- one command, an `{ "action": … }` item in
+  each menu. *The same menu* is told apart by an owner (the widget whose
+  `Menu`/`HeaderMenu` it is, or the form for its bar) plus the prefix in
+  `path`, set around `build_items` in the three entry points, so a heading menu
+  rebuilt on every right click and a `Menu` assigned again still pass. Two
+  things it found at once: the IDE's canvas menu, assigned to each form tab's
+  own canvas, re-published `MnuCvRename` from a second widget -- it is the
+  command `ActRenameCtl` now -- and **the designer built a drawn control's
+  `Menu` live on the IDE's own form**, so drawing `MainForm.form` had been
+  replacing the real tab strip's items. A drawing now keeps `Menu` and
+  `HeaderMenu` as a declared note and builds neither (`DRAWN_NOT_BUILT` in
+  `forms.js`); the serialiser writes the note back as it does a translated
+  caption.
 - **A menu bar's label is translated by the process that builds it.**
   `append_item` calls `bta_locale_lookup`, so a menu previewed inside the IDE is
   drawn against the IDE's catalogue. There is no way to opt out from JS. A `Text`

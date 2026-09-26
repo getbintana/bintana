@@ -1943,11 +1943,12 @@ class MainForm extends Form {
      * here at all. There used to be two extra sets -- `MnuCvDel`, `MnuTrDel` --
      * because a menu item is exposed on the form by name and two widgets cannot
      * both own `MnuDel`. An item that points at a command is not one, so it
-     * needs no name.  Renaming is still two, because the canvas renames the
-     * selection and the tree renames the row the pointer is on: two commands
-     * that read the same and are not.
+     * needs no name.  Renaming is two commands that read the same and are not --
+     * the canvas renames the selection (`ActRenameCtl`, a command because the
+     * canvas menu is reassigned to each tab's canvas) and the tree renames the
+     * row the pointer is on (`MnuTrRename`).
      */
-    MnuCvRename_Click() { this.renameSelectedControl(); }
+    ActRenameCtl_Click() { this.renameSelectedControl(); }
     MnuTrRename_Click() { this.designer.tree.renameFromKey(this.WidgetTree.Key); }
 
     /* These two apply to the tree and not to a selection, so unlike the rest

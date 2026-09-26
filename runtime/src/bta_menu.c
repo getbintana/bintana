@@ -92,6 +92,11 @@ typedef struct {
      */
     int            column;
 
+    /* Which menu built it: the widget whose `Menu`/`HeaderMenu` this is, or the
+     * form for its menu bar -- with `path`'s prefix, what tells rebuilding the
+     * same menu from a second menu taking the name. Compared, never read. */
+    const void    *owner;
+
     /* Dynamic items only: the submenu their entries are appended to, and the
      * labels last assigned, which is also what a Click reports back. */
     GMenu         *sub;
@@ -948,6 +953,10 @@ int bta_actions_build(JSContext *ctx, JSValueConst form_obj, BtaWidget *w,
     return 0;
 }
 
+/* The menu being built right now. Set by the three entry points around their
+ * `build_items`, which never nests one of them inside another. */
+static const void *building_owner;
+
 static BtaMenuItem *make_item(JSContext *ctx, JSValueConst form, const char *name,
                               JSValueConst spec, GSimpleActionGroup *group,
                               const char *prefix, BtaItemKind kind, int column)
@@ -962,6 +971,48 @@ static BtaMenuItem *make_item(JSContext *ctx, JSValueConst form, const char *nam
     mi->path   = g_strdup_printf("%s.%s", prefix, name);
     mi->kind   = kind;
     mi->column = column;
+    mi->owner  = building_owner;
+
+    /*
+     * **A name on the form belongs to one thing.** An item is published as
+     * `form[name]`, so a second menu declaring the same name *replaced* the
+     * first menu's wrapper: that item went dead (and, until its finaliser
+     * disconnected the action, ran its handler on freed memory), and
+     * `this.MnuCopy` answered for whichever menu was built last. The same
+     * assignment would overwrite a control, a command or a method. So it is
+     * refused, and the refusal says what sharing is for: one command declared
+     * in `actions`, and an item in each menu pointing at it. Rebuilding the
+     * *same* menu -- a heading menu on every right click, `Menu` assigned
+     * again -- is its own name coming back, and passes.
+     */
+    JSValue cur = JS_GetPropertyStr(ctx, form, name);
+    if (JS_IsException(cur)) {
+        g_free(mi->path); g_free(mi->name);
+        JS_FreeValue(ctx, mi->form); JS_FreeValue(ctx, mi->items);
+        g_free(mi);
+        return NULL;
+    }
+    if (!JS_IsUndefined(cur)) {
+        BtaMenuItem *old  = JS_GetOpaque(cur, bta_menuitem_class_id);
+        const char  *dot  = old ? strrchr(old->path, '.') : NULL;
+        bool         same = old && old->owner == building_owner && dot &&
+                            (size_t)(dot - old->path) == strlen(prefix) &&
+                            !strncmp(old->path, prefix, strlen(prefix));
+
+        JS_FreeValue(ctx, cur);
+        if (!same) {
+            JS_ThrowTypeError(ctx,
+                "menu item '%s': the form already has %s of that name -- a name "
+                "on the form belongs to one thing. To offer one command in "
+                "several menus, declare it once in `actions` and point each "
+                "item at it with { \"action\": \"...\" }",
+                name, old ? "an item in another menu" : "a member");
+            g_free(mi->path); g_free(mi->name);
+            JS_FreeValue(ctx, mi->form); JS_FreeValue(ctx, mi->items);
+            g_free(mi);
+            return NULL;
+        }
+    }
 
     /*
      * The parameter type says how many commands the item is, and the state says
@@ -1284,8 +1335,10 @@ int bta_menus_build(JSContext *ctx, JSValueConst form_obj, BtaWidget *w,
     /* The form's own group, shared with its `actions` and with every control
      * bound to one: a command has one name, so it resolves in one place. */
     GSimpleActionGroup *group = bta_form_actions(w);
+    building_owner = w;
     GMenu              *model = build_items(ctx, form_obj, menus, group,
                                             MENU_GROUP, -1);
+    building_owner = NULL;
 
     if (!model)
         return -1;
@@ -1352,7 +1405,9 @@ int bta_menu_popup_build(JSContext *ctx, JSValueConst form_obj, BtaWidget *w,
         return 0;                      /* clearing it is not an error */
 
     GSimpleActionGroup *group = g_simple_action_group_new();
+    building_owner = w;
     GMenu              *model = build_items(ctx, form_obj, menus, group, POPUP_GROUP, -1);
+    building_owner = NULL;
 
     if (!model) {
         g_object_unref(group);
@@ -1408,8 +1463,10 @@ GMenu *bta_menu_header_build(JSContext *ctx, JSValueConst form_obj,
         return NULL;
 
     GSimpleActionGroup *group = g_simple_action_group_new();
+    building_owner = w;
     GMenu              *model = build_items(ctx, form_obj, menus, group,
                                             HEADER_GROUP, column);
+    building_owner = NULL;
 
     if (!model) {
         g_object_unref(group);

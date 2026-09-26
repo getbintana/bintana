@@ -361,6 +361,7 @@ interface MainForm {
     ActDelCtl: Action;
     ActRaise: Action;
     ActLower: Action;
+    ActRenameCtl: Action;
 }
 
 interface MenuForm {

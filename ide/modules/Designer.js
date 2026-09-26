@@ -968,13 +968,12 @@ Ide.Designer = class Designer {
         this.ide.ActRaise.Enabled  = has;
         this.ide.ActLower.Enabled  = has;
 
-        /* Renaming is not a command in this sense: the canvas renames the
-         * selection and the tree renames the row the pointer is on, so they are
-         * two items with one condition rather than one command in two places. */
-        for (const prefix of ["Cv", "Tr"]) {
-            const item = this.ide[`Mnu${prefix}Rename`];
-            if (item) item.Enabled = has;
-        }
+        /* Renaming is two things with one condition: the canvas's command
+         * renames the selection, the tree's item renames the row the pointer is
+         * on. The first is a command only because the canvas menu is assigned
+         * to each tab's canvas, and a named item cannot be in two menus. */
+        this.ide.ActRenameCtl.Enabled = has;
+        if (this.ide.MnuTrRename) this.ide.MnuTrRename.Enabled = has;
         /* Saving is the toolbar's -- one Save for a form and for a .js, enabled
          * by `refresh()` from the same `isDirty()` the menu's Ctrl+S reads.  A
          * second button for it in the design bar answered a question the panel
