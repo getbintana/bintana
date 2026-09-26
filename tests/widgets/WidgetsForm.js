@@ -12891,17 +12891,20 @@ function Main() {
 
         /* What a cell holds is text, and plain collation put "10" before "9".
          * Natural order compares runs of digits as numbers; the comparator is
-         * for what it still reads wrongly -- a minus sign, grouped thousands. */
+         * for what it still reads wrongly -- a minus sign, grouped thousands.
+         * Where the minus lands under natural order is the platform's answer,
+         * not the table's -- first here, last on the runner's older glib -- so
+         * it is filtered out wherever it is, and what is asserted is the rest. */
         const nat = new TableView();
         this.Fixed1.Add(nat);
         nat.Columns = [{ Text: "N" }, { Text: "Tag" }];
         for (const [n, tag] of [["10", "a"], ["9", "b"], ["-5", "c"], ["100", "d"], ["9", "e"]])
             nat.Add([n, tag]);
         const col = (c) => Array.from({ length: nat.Count }, (_, i) => nat.Cell(i, c)).join(",");
+        const noMinus = (s) => s.split(",").filter((x) => x !== "-5" && x !== "c").join(",");
         nat.SortBy(0, true);
-        eq("natural order: 9 before 10 before 100",
-           col(0).replace("-5,", ""), "9,9,10,100");
-        eq("and equal cells keep the order they had", col(1).replace(/c,?/, ""), "b,e,a,d");
+        eq("natural order: 9 before 10 before 100", noMinus(col(0)), "9,9,10,100");
+        eq("and equal cells keep the order they had", noMinus(col(1)), "b,e,a,d");
         nat.SortBy(0, true, (x, y) => Number(x) - Number(y));
         eq("a comparator reads what natural order cannot", col(0), "-5,9,9,10,100");
         nat.SortBy(0, false, (x, y) => Number(x) - Number(y));

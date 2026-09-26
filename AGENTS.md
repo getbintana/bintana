@@ -3622,6 +3622,13 @@ person who wrote it either.
   `g_list_store_splice`. A comparator that throws or answers no number abandons
   the sort with the store untouched -- in a tree, the levels already sorted stay
   sorted, since each is its own store.
+  **And where the minus lands is glib's answer, not the table's**: `-5` sorts
+  first under this machine's glib 2.88 and last under the runner's 2.80, so a
+  test that stripped it with `.replace("-5,", "")` passed here and failed there
+  -- green here, red on `no-xml`, `no-unix-print` and `no-vte`, which are the
+  only jobs that run this green machine's suite against that older library.
+  The test filters the minus row wherever it lands now; asserting its position
+  would be asserting a library version.
 - **`GtkColumnView` cannot hide its heading row**, and that fact decides a design
   question rather than being a detail of one. `set_show_row_separators` and
   `set_show_column_separators` are what can be turned off; `set_header_factory`
