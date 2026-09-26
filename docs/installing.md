@@ -187,13 +187,13 @@ VTE) so that none of them becomes a shared library the downloader has to have.
 
 ### The compiler inside the Windows build
 
-The Windows zip carries its own NSIS under `share/bintana/tools/nsis` — the
+The Windows zip carries its own NSIS under `share/bintana/tools/nsis` -- the
 subset of the official distribution `makensis.exe` needs beside itself
-(`Include`, the stubs, `COPYING`) — so *Project → Windows installer…* builds a
-setup without anything installed: the tree's compiler first, a `makensis` on
-the PATH after it. The CI stages that directory from the official
-`nsis-3.12.zip`; a hand-staged tree without it still builds, against a
-separately installed NSIS.
+(`Bin` with the real compiler, `Include`, the stubs, `COPYING`) -- so *Project
+→ Windows installer…* builds a setup without anything installed: the tree's
+compiler first, a `makensis` on the PATH after it. The CI stages that directory
+from the official `nsis-3.12.zip`; a hand-staged tree without it still builds,
+against a separately installed NSIS.
 
 NSIS is zlib/libpng licensed and redistributes freely, which is what makes
 shipping it possible: the bundle keeps its `COPYING`, and a compiler that is

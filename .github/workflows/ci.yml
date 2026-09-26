@@ -527,12 +527,18 @@ jobs:
           ls -l "$name.zip"
 
       # The compiler the IDE builds Windows installers with: the subset of the
-      # official NSIS distribution `makensis.exe` needs beside itself, staged
+      # official NSIS distribution `makensis` needs beside itself, staged
       # into the tree so no machine needs NSIS installed. NSIS is zlib/libpng
       # licensed and redistributes freely -- `COPYING` travels with it, and
       # `docs/installing.md` says so. Non-fatal throughout: without the bundle
       # the IDE falls back to a `makensis` on the PATH, so a failed download
       # is a smaller zip and not a failed job.
+      #
+      # **The `Bin` directory is the compiler.** The `makensis.exe` at the
+      # distribution's root is a 2 KiB forwarder (`Contrib/SubStart`) that runs
+      # the `makensis.exe` of the same name in `Bin` -- without that folder
+      # every compile fails with `Unable to start child process, error 0x2`,
+      # which names neither the forwarder nor the folder it looked in.
       - name: Bundle the NSIS compiler
         run: |
           set -euo pipefail
@@ -547,10 +553,10 @@ jobs:
             if [ -n "$exe" ]; then
               base=$(dirname "$exe")
               mkdir -p "$dest"
-              for f in makensis.exe COPYING Include Stubs Plugins; do
+              for f in makensis.exe COPYING Include Stubs Plugins Bin; do
                 [ -e "$base/$f" ] && mv "$base/$f" "$dest/"
               done
-              if [ -f "$dest/makensis.exe" ] && [ -d "$dest/Include" ] \
+              if [ -f "$dest/Bin/makensis.exe" ] && [ -d "$dest/Include" ] \
                   && [ -d "$dest/Stubs" ]; then
                 echo "nsis bundle: $(find "$dest" -type f | wc -l) files"
               else
