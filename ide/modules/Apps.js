@@ -48,9 +48,8 @@ Ide.Apps = class Apps {
      * that was all punctuation falls back to a word rather than installing a
      * `.desktop` with no name at all.
      *
-     * A project that *does* declare an id installs under that one instead --
-     * see `install` -- because the file name and the window's class are then
-     * the same name.
+     * A project that *does* declare an id installs under `<id>.devel` --
+     * see `entryId`.
      */
     static idFor(name) {
         const slug = String(name || "")
@@ -60,6 +59,22 @@ Ide.Apps = class Apps {
             .replace(/^[-.]+|[-.]+$/g, "");
 
         return slug || "bintana-app";
+    }
+
+    /*
+     * The name the entry is installed under: `<id>.devel` for a project that
+     * declares an id, a slug of the name otherwise.
+     *
+     * **Not `<id>` itself**, which it was: a desktop file's name is its
+     * desktop-file id, and `<id>.desktop` is exactly what a Flatpak of the same
+     * application exports -- a user-level entry of that name takes precedence,
+     * so installing from the IDE hid the packaged application from the menu
+     * and the menu launched the source tree instead. `.devel` is the suffix
+     * GNOME's own development builds use. The window's class is still the id
+     * (`StartupWMClass`), which is a different key and what the dock matches.
+     */
+    static entryId(appId, name) {
+        return appId ? `${appId}.devel` : Apps.idFor(name);
     }
 
     /*
@@ -113,7 +128,7 @@ Ide.Apps = class Apps {
      * would offer the same application in the menu twice.
      */
     static install(project, fields) {
-        const id  = fields.AppId || Apps.idFor(fields.Name);
+        const id  = Apps.entryId(fields.AppId, fields.Name);
         const was = Apps.installed(project);
 
         if (was && was.Id !== id)

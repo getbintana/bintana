@@ -2592,10 +2592,17 @@ program name, which is what X11 builds `WM_CLASS` from; the entry then carries
 the same string as `StartupWMClass`, and a dock groups the running window under
 the entry that started it. A project with no id installs under a slug of the
 name and claims **no** class: its window really is `bintana`'s, and an entry
-claiming otherwise is one the dock can never match. That is also why the entry
-is installed under the project's id rather than the slug — the file's name and
-the window's class are then the same name, which is what the specification means
-by an application id.
+claiming otherwise is one the dock can never match.
+
+**A project with an id installs as `<id>.devel.desktop`**, and not as
+`<id>.desktop`, which it used to. A desktop file's name is its desktop-file id,
+and `<id>.desktop` is exactly what a Flatpak of the same application exports —
+a user-level entry of that name wins, so installing from the IDE hid the
+packaged application from the menu and the menu started the source tree
+instead. `.devel` is the suffix GNOME's own development builds use; the window
+is still matched by `StartupWMClass`, which is the id. An entry an earlier IDE
+left under the bare id is still found — by `X-Bintana-Project`, as every entry
+is — so *Update* moves it to the new name and *Uninstall* removes it.
 
 **And it is the Linux desktop's for now.** A `.desktop` file is the freedesktop
 format and nothing on Windows reads one; a Start-menu shortcut is the equivalent

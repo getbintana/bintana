@@ -182,6 +182,7 @@ needed and what it did instead.
 | A control laid onto a page — `Print` sends what a `Draw` paints, so a form with real widgets on it still has no path to paper except drawing it by hand | [controls.md](controls.md#drawingarea) |
 | A `Fixed` container that does not stretch a `Fill` child when it itself grows — a reusable component that wants to fill its cell has to change its `Arrangement` | [ISSUE-fixed-fill-child](../issues/ISSUE-fixed-fill-child.md) |
 | No `Locale` inside a `Task`, so a worker cannot order names — the sort has to come back to the main thread, which is what the worker was for | [ISSUE-worker-locale-order](../issues/ISSUE-worker-locale-order.md) |
+| A `Popover` dropped on the design canvas cannot be seen, clicked or dropped into — the control tree is the only road to it, and its content goes in by editing the `.form` | [ISSUE-popover-designer](../issues/ISSUE-popover-designer.md) |
 | A control's `Menu`/`HeaderMenu` declared in a `.form` is invisible to the extractor — the labels are translated at runtime and never reach a catalogue, so the IDE's own four context menus are English under a Spanish one | [ISSUE-menu-label-extraction](../issues/ISSUE-menu-label-extraction.md) |
 
 ## One more thing

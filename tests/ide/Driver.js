@@ -9714,7 +9714,7 @@ function* p_apps(ide) {
     dlg.TxtAppName.Text = "Bta Suite App";
     dlg.showState();
     check("the state line names the file to be written",
-          dlg.LblAppWhere.Text.includes("io.github.getbintana.IdeChild.desktop"),
+          dlg.LblAppWhere.Text.includes("io.github.getbintana.IdeChild.devel.desktop"),
           dlg.LblAppWhere.Text);
     eq("the button says what it will do", dlg.BtnAppInstall.Text,
        Locale.Text("Install"));
@@ -9727,7 +9727,8 @@ function* p_apps(ide) {
     check("installing writes an entry this project owns", installed !== null);
     if (!installed) return;
 
-    eq("under the project's own id", installed.Id, "io.github.getbintana.IdeChild");
+    eq("under the project's own id, as a development entry", installed.Id,
+       "io.github.getbintana.IdeChild.devel");
     eq("named what was typed", installed.Entry.Name, "Bta Suite App");
     eq("and claiming the class the window really has",
        installed.Entry.StartupWMClass, "io.github.getbintana.IdeChild");
@@ -9757,7 +9758,7 @@ function* p_apps(ide) {
        Locale.Text("Update"));
     check("and something to remove", again.BtnAppUninstall.Visible);
     check("saying where it is",
-          again.LblAppWhere.Text.includes("io.github.getbintana.IdeChild.desktop"),
+          again.LblAppWhere.Text.includes("io.github.getbintana.IdeChild.devel.desktop"),
           again.LblAppWhere.Text);
 
     /*
@@ -9774,7 +9775,7 @@ function* p_apps(ide) {
     check("the slug was never a file", !Desktop.Entries.Installed().includes("bta-suite-app"));
     const renamed = at();
     eq("renaming the name keeps the id", renamed && renamed.Id,
-       "io.github.getbintana.IdeChild");
+       "io.github.getbintana.IdeChild.devel");
     eq("and updates what the menu shows", renamed && renamed.Entry.Name,
        "Bta Suite App Renamed");
 
@@ -9792,7 +9793,36 @@ function* p_apps(ide) {
     check("uninstalling leaves nothing this project owns", at() === null);
     check("and the file is gone",
           !File.Exists(File.Join(Desktop.Entries.Directory,
-                                 "io.github.getbintana.IdeChild.desktop")));
+                                 "io.github.getbintana.IdeChild.devel.desktop")));
+
+    /*
+     * **An entry an earlier IDE installed under the bare id is still this
+     * project's**, and both buttons have to reach it: it is the name a Flatpak
+     * of the application exports, so leaving it would go on hiding the
+     * package from the menu. What says an entry is ours is `X-Bintana-Project`
+     * and not its name, which is why Update moves it and Uninstall takes it.
+     */
+    const bare = "io.github.getbintana.IdeChild";
+    Desktop.Entries.Install(bare, Ide.Apps.entry(ide.project,
+        { Name: "Old Entry", AppId: bare }));
+    eq("an entry under the bare id is found as this project's", at() && at().Id, bare);
+
+    ide.MnuAppInstall.Click();
+    yield;
+    const legacy = ide.appEditor;
+    check("the dialog offers to remove it", !!legacy && legacy.BtnAppUninstall.Visible);
+    if (!legacy) return;
+    legacy.BtnAppInstall.Click();
+    yield;
+    eq("updating moves it to the development name", at() && at().Id, `${bare}.devel`);
+    check("and takes the bare one out of the menu",
+          !Desktop.Entries.Installed().includes(bare));
+
+    ide.MnuAppInstall.Click();
+    yield;
+    ide.appEditor.BtnAppUninstall.Click();
+    yield;
+    check("and Uninstall takes the moved one too", at() === null);
 }
 
 function* p_errors(ide) {

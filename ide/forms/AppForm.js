@@ -58,7 +58,7 @@ class AppForm extends Form {
      * so here is cheaper than a complaint after the click.
      */
     showState() {
-        const id = this.appId || Ide.Apps.idFor(this.TxtAppName.Text);
+        const id = Ide.Apps.entryId(this.appId, this.TxtAppName.Text);
 
         this.LblAppWhere.Text = this.installed
             ? Locale.Text("Installed for this user as {0}.desktop, in {1}",

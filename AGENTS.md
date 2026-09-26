@@ -1478,7 +1478,7 @@ Three things that will waste your time:
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
-  364 assertions against 2594 for the whole project -- 9.4 s against 265 on this
+  364 assertions against 2599 for the whole project -- 9.4 s against 265 on this
   machine -- which is what makes iterating on an early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.
@@ -2154,6 +2154,14 @@ person who wrote it either.
   accent in one command. Writing the string by hand in JS is the regression to
   watch for, and it is the build-another-parser mistake this file keeps warning
   about.
+- **The IDE's menu entry is `<id>.devel.desktop`, because `<id>.desktop` is the
+  Flatpak's.** A desktop file's name is its desktop-file id and a user-level one
+  wins, so installing a project from the IDE under its bare id hid the packaged
+  application of the same id and the menu started the source tree. The window
+  is still matched by `StartupWMClass` (the id), and an entry an older IDE left
+  under the bare id is found by `X-Bintana-Project` like any other, so Update
+  moves it and Uninstall removes it. `Ide.Apps.entryId` is the one place the
+  name is decided -- the dialog's state line asks it too.
 - **A generated menu entry is a file a test can leave in somebody's menu.**
   `tests/ide`'s `apps` phase installs a real `.desktop` under
   `$XDG_DATA_HOME/applications`, which without care is the developer's own menu
