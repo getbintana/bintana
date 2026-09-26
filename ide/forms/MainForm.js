@@ -181,6 +181,7 @@ class MainForm extends Form {
     strings   = new Ide.Strings(this);       // what the project shows, extracted
     catalogues = new Ide.Translations(this); // the .po files, and msgmerge
     exporter  = new Ide.Exporter(this);      // the project tree as one .tar
+    installer = new Ide.Installer(this);     // the project as a Windows setup
     tabs      = new Ide.TabSet(this);        // the open files
     completion = new Ide.Completion(this);   // what the editor proposes
     recovery  = new Ide.Recovery(this);      // the dirty tabs, copied aside
@@ -1108,6 +1109,7 @@ class MainForm extends Form {
         this.MnuExport.Enabled = open;
         this.MnuAppInstall.Enabled = open;
         this.MnuMetainfo.Enabled = open;
+        this.MnuInstaller.Enabled = open;
         this.launch.show();
 
         /* Searching needs text: a form tab is a tree, and Ctrl+F loses its
@@ -1412,6 +1414,7 @@ class MainForm extends Form {
     MnuTidy_Click()   { this.tidyProject(); }
     MnuExport_Click() { this.exporter.run(); }
     MnuAppInstall_Click() { this.installAsApp(); }
+    MnuInstaller_Click() { this.installer.run(); }
 
     /*
      * The metainfo: the AppStream file a package, an installer and a software

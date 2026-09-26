@@ -295,6 +295,10 @@
           "text": "Application info..."
         },
         {
+          "name": "MnuInstaller",
+          "text": "Windows installer..."
+        },
+        {
           "separator": true
         },
         {

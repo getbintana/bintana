@@ -1,12 +1,12 @@
 # Testing
 
 ```sh
-./tests/run.sh                          # all six projects, 7168 assertions
+./tests/run.sh                          # all six projects, 7174 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
 ./tests/run.sh ide list                 # what it can be asked for
-./tests/pack.sh                         # lib/package, the packaging step's output: 57 assertions
+./tests/pack.sh                         # lib/package, the packaging step's output: 91 assertions
 BINTANA=/other/bintana ./tests/run.sh
 TIMEOUT=300 ./tests/run.sh              # a slower machine than the one this was written on
 HEADLESS= ./tests/run.sh                # ...on your own screen; see below

@@ -526,6 +526,48 @@ jobs:
           echo "$name.zip" > zip-name.txt
           ls -l "$name.zip"
 
+      # The compiler the IDE builds Windows installers with: the subset of the
+      # official NSIS distribution `makensis.exe` needs beside itself, staged
+      # into the tree so no machine needs NSIS installed. NSIS is zlib/libpng
+      # licensed and redistributes freely -- `COPYING` travels with it, and
+      # `docs/installing.md` says so. Non-fatal throughout: without the bundle
+      # the IDE falls back to a `makensis` on the PATH, so a failed download
+      # is a smaller zip and not a failed job.
+      - name: Bundle the NSIS compiler
+        run: |
+          set -euo pipefail
+          name=$(basename "$(cat zip-name.txt)" .zip)
+          dest="stage/$name/share/bintana/tools/nsis"
+          work=stage/nsis-bundle
+          rm -rf "$work" && mkdir -p "$work"
+          if curl -fsSL -o "$work/nsis.zip" \
+              "https://sourceforge.net/projects/nsis/files/NSIS%203/3.12/nsis-3.12.zip/download" \
+              && (cd "$work" && cmake -E tar xf nsis.zip); then
+            exe=$(find "$work" -name makensis.exe -not -path "*/Bin/*" | head -1)
+            if [ -n "$exe" ]; then
+              base=$(dirname "$exe")
+              mkdir -p "$dest"
+              for f in makensis.exe COPYING Include Stubs Plugins; do
+                [ -e "$base/$f" ] && mv "$base/$f" "$dest/"
+              done
+              if [ -f "$dest/makensis.exe" ] && [ -d "$dest/Include" ] \
+                  && [ -d "$dest/Stubs" ]; then
+                echo "nsis bundle: $(find "$dest" -type f | wc -l) files"
+              else
+                echo "incomplete NSIS bundle -- leaving it out" >&2
+                rm -rf "$dest"
+              fi
+            else
+              echo "no makensis.exe in the NSIS archive -- leaving it out" >&2
+            fi
+          else
+            echo "NSIS download failed -- the zip ships without its compiler" >&2
+          fi
+          rm -rf "$work"
+          # Whatever made it in, the artifact is the tree as it stands.
+          (cd "stage/$name" && cmake -E tar cf "$GITHUB_WORKSPACE/$name.zip" \
+                                      --format=zip -- .)
+
       # And the staged tree is run, because a zip nobody opened is a guess.
       # `--version` proves the DLL closure; the api check proves the runtime
       # works out of a tree that is not the build one (`tests/api.sh` finds the

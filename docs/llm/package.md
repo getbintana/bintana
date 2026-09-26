@@ -8,9 +8,10 @@ icon and the Flatpak manifest that turns them into an application.
   "uses": ["package"] }
 ```
 
-Two classes: `Package`, which writes the artefacts, and `Metainfo`, the AppStream
-file the project carries. The IDE uses `Metainfo` to edit it -- *Project →
-Application info…* -- and `tools/pack` is the command line around `Package`:
+Three classes: `Package`, which writes the artefacts, `Metainfo`, the AppStream
+file the project carries, and `Nsis`, the same project as a Windows installer.
+The IDE uses `Metainfo` to edit it -- *Project → Application info…* -- and
+`tools/pack` is the command line around `Package`:
 
 ```sh
 tools/pack.sh <project> <out> [--finish-args <a,b,c>]
@@ -56,6 +57,25 @@ validate` would refuse (an empty or multi-line `<summary>`, an empty
 program, an application that installs under one name and claims another, an
 appstream compose that fails with `icon-not-found`, or a package nothing can
 describe.
+
+## Nsis
+
+`Nsis` is Windows-only, and says so in its name: the project as an NSIS
+installer -- the Windows runtime tree, the project itself and a `.cmd`
+launcher, installed per-user with an uninstaller. `Script(project, out)`
+writes `<out>/<id>.nsi` out of the metainfo (and `<out>/<id>.ico` when the
+project ships `icons/<id>.png`), `Stage(project, out, [options])` copies the
+payload into `<out>/payload`, and `Build(script, exe, [options])` verifies
+that payload runs and compiles it with `makensis`. Only `Build` needs Windows;
+`Script` is text and `Stage` copies whatever tree it is pointed at.
+
+The metainfo becomes the installer as: `Name` (installer, Start Menu folder,
+`DisplayName`), `Summary` (`FileDescription`), `Description` (the welcome
+page), `DeveloperName` (`Publisher`), `Homepage` (`URLInfoAbout` and the
+finish link). `ProjectLicense`, `Categories` and `Bugtracker` travel nowhere:
+an id is not copyright text, and Windows has no categories. The IDE builds
+this under *Project → Windows installer…*; the compiler is the tree's own
+`share/bintana/tools/nsis` first and a `makensis` on the PATH after it.
 
 ## Metainfo
 

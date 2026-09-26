@@ -2517,7 +2517,6 @@ question nobody asked. One format is one code path, one filter in the chooser an
 one sentence here.
 
 `Exporter` is deliberately two halves, and the seam is the modal dialog:
-
 - `run()` asks — `HasCommand("tar")` before trying, so a missing tar is a
   sentence and not three error lines; `saveAllDirty()` first, because an archive
   of what is on disk while something is unsaved hands over a project other than
@@ -2546,6 +2545,24 @@ Two decisions in `write` that are not obvious:
 It is also the first caller of `Dialog.SaveFile`, and reads the way that call was
 meant to: a name to suggest, a folder to start in, and a filter whose label is
 the caller's own prose.
+
+## The Windows installer
+
+*Project → Windows installer…* is the open project as a setup executable: an
+NSIS script out of the project's metainfo ([`Nsis`](llm/package.md#nsis)),
+the payload staged from the Windows runtime tree the IDE runs from, compiled
+with `makensis` — per-user, with Start Menu entries and an uninstaller.
+Outside Windows the same item writes the `.nsi` into a chosen folder and says
+compiling is Windows, because the payload is a Windows tree and proving it
+runs means running it.
+
+The suggestion is best-effort (a project with no id yet still reaches the
+chooser); the refusals live where they can name the fix — no metainfo, a
+metainfo that disagrees with `project.json`, a tree that is not a staged
+runtime — and the compiler is the tree's own `share/bintana/tools/nsis` first,
+a `makensis` on the PATH after it. `tests/ide` drives the item with a double
+in the chooser and runs the script half on a scratch project; the mapping, the
+payload and the refusals are `tests/pack`'s.
 
 ## Installing it in the menu
 

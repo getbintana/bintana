@@ -47,6 +47,7 @@
     "../../ide/modules/Strings.js",
     "../../ide/modules/Translations.js",
     "../../ide/modules/Exporter.js",
+    "../../ide/modules/Installer.js",
     "../../ide/forms/PoForm.js",
     "../../ide/modules/Document.js",
     "../../ide/modules/TabSet.js",

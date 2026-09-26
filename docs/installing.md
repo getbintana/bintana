@@ -178,6 +178,20 @@ needs GTK 4.10+ and GtkSourceView 5), it is built on `ubuntu-24.04` and so wants
 a glibc at least as new (2.39 — Fedora 40, Debian 13, Ubuntu 24.04), and it is
 built **without** the optional dependencies (`sqlite3`, `libsoup`, GStreamer,
 VTE) so that none of them becomes a shared library the downloader has to have.
+
+### The compiler inside the Windows build
+
+The Windows zip carries its own NSIS under `share/bintana/tools/nsis` — the
+subset of the official distribution `makensis.exe` needs beside itself
+(`Include`, the stubs, `COPYING`) — so *Project → Windows installer…* builds a
+setup without anything installed: the tree's compiler first, a `makensis` on
+the PATH after it. The CI stages that directory from the official
+`nsis-3.12.zip`; a hand-staged tree without it still builds, against a
+separately installed NSIS.
+
+NSIS is zlib/libpng licensed and redistributes freely, which is what makes
+shipping it possible: the bundle keeps its `COPYING`, and a compiler that is
+not there is a sentence naming both roads rather than a failure.
 The features that need one say which package is missing, the same way a build
 without them always does. A distribution package makes the opposite trade, and
 that is the packager's to make.

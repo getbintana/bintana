@@ -2114,6 +2114,16 @@ person who wrote it either.
   `gdk_rgba_parse` refused it from inside a `Draw`. The alpha goes through
   `g_ascii_formatd`, and `tests/widgets` matches the **whole** string now -- the
   prefix test it had accepted the comma.
+- **`$$` writes one dollar, so `"$$"` as a replacement string is a no-op.**
+  `$` patterns are special in the *replacement* too (`$$` for one, `$&` for the
+  match), so escaping `$` for NSIS with `.replace(/\$/g, "$$")` changed nothing
+  -- every `$` in the prose reached the script, where it opens a variable that
+  is not there. Four in the source for two in the answer (`"$$$$"`), and the
+  same family as the comma above: a formatting call whose output is shaped by
+  something other than its input. The template-literal spellings next to it had
+  the same shape twice -- `` `$\"` `` is `$"` and `` `$\t` `` a real tab, where
+  NSIS wants `$\"` and `$\t` -- and all three were caught by a test reading the
+  escaped prose back rather than by reading the code.
 - **The order of the two parsers is the whole of a number setter, and getting it
   backwards is silent.** `DecimalBox.Value` takes machine text (`"1234.567"`,
   what a `.form` and `Decimal.toJSON()` carry) and this desktop's spelling

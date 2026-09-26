@@ -320,6 +320,7 @@ interface MainForm {
     MnuExport: MenuItem;
     MnuAppInstall: MenuItem;
     MnuMetainfo: MenuItem;
+    MnuInstaller: MenuItem;
     MnuCheck: MenuItem;
     MnuProjectSettings: MenuItem;
     MnuGitMenu: MenuItem;

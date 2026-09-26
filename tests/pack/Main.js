@@ -196,6 +196,7 @@ function Main() {
     checkIconChoice(root);
     checkRename(root);
     checkBaseVersion();
+    checkNsis(root);
 
     report(root);
 }
@@ -395,6 +396,169 @@ function checkBaseVersion() {
     grab("docs/installing.md", "BaseApp//([0-9.]+)");
 
     eq(`the hand-written BaseApp versions are the runtime's ${want}`, seen.join("; "), "");
+}
+
+/* `Nsis`: the script out of the metainfo, the payload out of a tree, and the
+ * refusals before either is written. Compiling is Windows -- `Build` says so
+ * anywhere else -- so what is tried here is everything up to it. */
+function checkNsis(root) {
+    const dir = File.Join(root, "Setup");
+    const id  = "io.github.getbintana.Setup";
+    Directory.Make(File.Join(dir, "icons"));
+    File.SaveJson(File.Join(dir, "project.json"),
+                  { name: "Setup", id, version: "2.1", main: "Main" });
+    File.Save(File.Join(dir, "Main.js"), "\"use strict\";\nfunction Main() {}\n");
+    File.SaveBytes(File.Join(dir, "icons", `${id}.png`), png(256, 256));
+
+    Metainfo.create(dir, { Id: id, Name: "Setup",
+                           Description: "Sets things up.\n\nA second paragraph." });
+    const doc = File.LoadXml(Metainfo.find(dir));
+    Metainfo.write(doc, {
+        Summary:         "Sets things up",
+        Description:     "First $pecial paragraph.\n\nA \"quoted\" second.",
+        DeveloperId:     "io.github.getbintana",
+        DeveloperName:   "Bintana",
+        MetadataLicense: "MIT",
+        ProjectLicense:  "MIT",
+        Homepage:        "https://example.org/setup",
+        Bugtracker:      "",
+        Categories:      "Utility",
+    }, { Id: id, Name: "Setup" });
+    File.SaveXml(Metainfo.find(dir), doc);
+
+    const out = File.Join(root, "out-nsis");
+    const ctx = Nsis.Script(dir, out);
+
+    eq("the installer command is the id's last element", ctx.Command, "bintana-setup");
+    eq("the payload is beside the script", ctx.Payload, File.Join(out, "payload"));
+    check("with no note when the icon is a PNG", ctx.Note === "", ctx.Note);
+
+    const nsi = File.Load(ctx.Script);
+    check("the script names the application", nsi.includes(`Name "Setup"`), nsi);
+    check("installed per-user, with no elevation",
+          nsi.includes("RequestExecutionLevel user") &&
+          nsi.includes(`InstallDir "$LOCALAPPDATA\\Programs\\bintana-setup"`), nsi);
+    check("registered for uninstall under the id",
+          nsi.includes("CurrentVersion\\Uninstall\\io.github.getbintana.Setup"), nsi);
+    check("described by the metainfo",
+          nsi.includes(`VIAddVersionKey "FileDescription" "Sets things up"`) &&
+          nsi.includes(`WriteRegStr HKCU`) &&
+          nsi.includes(`"Publisher" "Bintana"`) &&
+          nsi.includes(`"URLInfoAbout" "https://example.org/setup"`), nsi);
+    eq("with the version's numeric head as the version resource",
+       new Regex(`^VIProductVersion "(.*)"`, { Multiline: true }).Matches(nsi)
+           .map((m) => m.Group(1)).join(), "2.1.0.0");
+    check("welcoming with the description",
+          nsi.includes("MUI_WELCOMEPAGE_TEXT"), nsi);
+    check("with the prose escaped for NSIS",
+          nsi.includes("First $$pecial paragraph.") &&
+          nsi.includes(`A $\\"quoted$\\" second.`), nsi);
+    check("installing the payload beside the script",
+          nsi.includes(`File /r "payload\\*"`), nsi);
+    check("wearing the wrapped icon",
+          nsi.includes(`Icon "io.github.getbintana.Setup.ico"`), nsi);
+    eq("named after the command and the version by default",
+       new Regex(`^!define OUTFILE "(.*)"`, { Multiline: true }).Matches(nsi)
+           .map((m) => m.Group(1)).join(),
+       "bintana-setup-2.1-windows-x86_64.exe");
+
+    check("the icon travels beside the script", File.Exists(ctx.Icon), ctx.Icon || "");
+    const ico = File.LoadBytes(ctx.Icon);
+    eq("as an ICO holding the PNG",
+       ico.Slice(0, 6).ToHex(), "000001000100");
+    eq("a 256-pixel side spelled the format's way",
+       ico.At(6) * 256 + ico.At(7), 0);
+    eq("directory, one entry and the file's own bytes",
+       ico.Length, 6 + 16 + png(256, 256).Length);
+
+    /* An svg-only project keeps NSIS's own icon, and is told which file would
+     * change that. */
+    const svg = scratch(root, "SvgSetup", ["app.svg"]);
+    const sctx = Nsis.Script(svg.dir, File.Join(root, "out-nsis-svg"));
+    eq("with no PNG there is no .ico", sctx.Icon, null);
+    check("and the script claims none",
+          !new Regex("^Icon ", { Multiline: true }).IsMatch(File.Load(sctx.Script)));
+    check("but names the file that would change it",
+          sctx.Note.includes(`${svg.id}.png`), sctx.Note);
+
+    /* --- what it refuses -------------------------------------------------- */
+    const nometa = File.Join(root, "nsis-nometa");
+    Directory.Make(nometa);
+    File.SaveJson(File.Join(nometa, "project.json"),
+                  { name: "NoMeta", id: "io.github.getbintana.NoMeta", main: "Main" });
+    throws("a project with no metainfo is refused",
+           () => Nsis.Script(nometa, File.Join(root, "out-nsis-nometa")),
+           "metainfo.xml");
+
+    const drifted = File.Join(root, "nsis-drifted");
+    Directory.Make(drifted);
+    File.SaveJson(File.Join(drifted, "project.json"),
+                  { name: "Drifted", id: "io.github.getbintana.Drifted", main: "Main" });
+    Metainfo.create(drifted, { Id: "io.github.getbintana.Drifted", Name: "Drifted",
+                               Description: "Drifted." });
+    const ddoc = File.LoadXml(Metainfo.find(drifted));
+    ddoc.Root.Find("name").Text = "Something Else";
+    File.SaveXml(Metainfo.find(drifted), ddoc);
+    throws("a metainfo that disagrees with project.json is refused",
+           () => Nsis.Script(drifted, File.Join(root, "out-nsis-drifted")),
+           "does not agree");
+
+    const two = scratch(root, "TwoSetup", ["a.svg", "b.svg"]);
+    throws("two drawings and none named after the id is refused",
+           () => Nsis.Script(two.dir, File.Join(root, "out-nsis-two")),
+           "none is named");
+
+    /* --- the payload, out of a pointed-at tree ------------------------------ */
+    const prefix = File.Join(root, "prefix");
+    const put = (rel, text) => {
+        Directory.Make(File.Directory(File.Join(prefix, rel)));
+        File.Save(File.Join(prefix, rel), text);
+    };
+    put(File.Join("bin", "bintana.exe"), "MZ");
+    put(File.Join("bin", "libgtk-4.dll"), "DLL");
+    put(File.Join("bin", "bintana-ide.cmd"), "the IDE's launcher");
+    put(File.Join("share", "glib-2.0", "schemas", "x.schema"), "schemas");
+    put(File.Join("share", "bintana", "lib", "x.js"), "a shipped library");
+    put(File.Join("share", "bintana", "ide", "Main.js"), "the IDE");
+    put(File.Join("etc", "gtk-4.0", "settings.ini"), "font");
+
+    const staged = Nsis.Stage(dir, File.Join(root, "out-stage"), { Prefix: prefix });
+    check("the executable travels",
+          File.Exists(File.Join(staged, "bin", "bintana.exe")));
+    check("and its DLLs",
+          File.Exists(File.Join(staged, "bin", "libgtk-4.dll")));
+    check("but not the IDE's launcher",
+          !File.Exists(File.Join(staged, "bin", "bintana-ide.cmd")));
+    check("with the data GTK opens by name",
+          File.Exists(File.Join(staged, "share", "glib-2.0", "schemas", "x.schema")) &&
+          File.Exists(File.Join(staged, "etc", "gtk-4.0", "settings.ini")));
+    check("and the shipped libraries the project's uses resolve from",
+          File.Exists(File.Join(staged, "share", "bintana", "lib", "x.js")));
+    check("without the IDE beside them",
+          !File.IsDir(File.Join(staged, "share", "bintana", "ide")));
+    check("the project travels as the application",
+          File.Exists(File.Join(staged, "share", "bintana", "apps",
+                                "bintana-setup", "Main.js")));
+    const launcher = File.Load(File.Join(staged, "bin", "bintana-setup.cmd"));
+    check("with a launcher that runs the runtime on it",
+          launcher.includes("bintana.exe") &&
+          launcher.includes("share\\bintana\\apps\\bintana-setup"), launcher);
+
+    throws("a prefix with no staged executable is refused",
+           () => Nsis.Stage(dir, File.Join(root, "out-stage-bare"),
+                            { Prefix: File.Join(root, "nsis-nometa") }),
+           "no bin/bintana.exe");
+    throws("the project itself as the output is refused",
+           () => Nsis.Stage(dir, dir), "holds the project");
+
+    /* Compiling is Windows: anywhere else the refusal names where it happens,
+     * and on Windows the payload is verified before any compiler is asked. */
+    if (Environment.OS === "Windows")
+        throws("an unstaged script is refused before any compiler",
+               () => Nsis.Build(ctx.Script, File.Join(root, "setup.exe")), "Stage");
+    else
+        throws("compiling anywhere else is refused",
+               () => Nsis.Build(ctx.Script, File.Join(root, "setup.exe")), "Windows");
 }
 
 function report(root) {

@@ -116,9 +116,13 @@ so nothing there changes.
   session, and `tests/install` (Xvfb + xdotool) and `tests/icons`/`styles`
   (they read the Linux theme off the disk) are Linux-only as they stand. A
   second plan, and the first caller that wants it.
-- **Packaging.** A ZIP or an installer with the DLLs collected (`ntldd`), a
-  `bintana-ide.cmd` launcher and a Start-menu entry. The runtime's own
-  install layout is already right; what is missing is a Windows face for it.
+- **Packaging.** The ZIP exists (`tools/windows-portable.sh`, attached by the
+  `windows` job), and the installer is `lib/package/Nsis.js` behind *Project →
+  Windows installer…*: an NSIS script out of the project's metainfo, staged
+  from the running tree, compiled on Windows by the `makensis` the tree ships
+  under `share/bintana/tools/nsis`. What is still missing is a signature (no
+  certificate) and an end-to-end run of a produced installer on a real desktop
+  -- CI builds the compiler bundle but cannot click through a setup.
 - **A real terminal on Windows.** ConPTY (Windows 10 1809+) plus an emulation
   core — MSYS2 has `libvterm` — behind the same `Terminal` surface. That is its
   own plan, and the day it lands `Available` becomes true and the IDE's tab

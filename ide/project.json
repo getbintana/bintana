@@ -48,6 +48,7 @@
     "modules/Strings.js",
     "modules/Translations.js",
     "modules/Exporter.js",
+    "modules/Installer.js",
     "forms/PoForm.js",
     "modules/Document.js",
     "modules/TabSet.js",
