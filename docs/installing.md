@@ -152,7 +152,13 @@ The `package` job in the CI produces exactly that tree as one file —
 artifact of the run; a tag also attaches it to the release. The `windows` job
 does the same for Windows, as a `.zip` with the GTK runtime data
 (`tools/windows-portable.sh`), and that one **is unverified**: it is built and
-staged by the job, but the IDE on Windows is a first look and not a claim.
+staged by the job, but the IDE on Windows is a first look and not a claim. The
+same job also builds `bintana-<version>-windows-<arch>-setup.exe` -- the IDE
+as a per-user installer, compiled by the staged tree out of its own metainfo
+(`tools/pack.sh --nsis`) -- which a tag attaches to the release beside the zip.
+A setup that never arrives is the installer step's warning in the log, not a
+failed job: the zip is the established artifact, and the toolchain around the
+installer (a download, the runner's own NSIS) is outside this repository.
 
 It is the install prefix, so it is extracted anywhere and runs without
 installing:

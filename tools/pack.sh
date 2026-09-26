@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # The packaging step, from a shell: the project, and where the files go.
 #
-#   tools/pack.sh <project> <out>
+#   tools/pack.sh <project> <out> [--finish-args <a,b,c>]
+#   tools/pack.sh --nsis <project> <out> [--exe <file>] [--prefix <tree>]
 #
 # It is `tools/pack`, a console project, so this is only the ten lines that
 # find the runtime -- the same shape `tests/*.sh` have, and for the same

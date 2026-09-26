@@ -16,6 +16,7 @@ The IDE uses `Metainfo` to edit it -- *Project → Application info…* -- and
 ```sh
 tools/pack.sh <project> <out> [--finish-args <a,b,c>]
 flatpak-builder <out>/<id>.json
+tools/pack.sh --nsis <project> <out> [--exe <file>] [--prefix <tree>]
 ```
 
 `--finish-args` is how an application asks for more than a window: the default

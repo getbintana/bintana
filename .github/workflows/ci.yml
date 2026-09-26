@@ -568,6 +568,29 @@ jobs:
           (cd "stage/$name" && cmake -E tar cf "$GITHUB_WORKSPACE/$name.zip" \
                                       --format=zip -- .)
 
+      # The installer itself: the IDE project as a setup executable, built by
+      # the staged tree out of its own metainfo (`tools/pack.sh --nsis`). The
+      # compiler is the bundle above, falling back to the runner's own NSIS,
+      # which the image carries under Program Files. Tolerant on purpose: the
+      # zip is the established artifact, and a toolchain outside this
+      # repository (a download, a runner image) must not take it down -- but a
+      # failure here is a warning in the log, and a tag without a setup is a
+      # question for it.
+      - name: Build the Windows installer
+        run: |
+          set -euo pipefail
+          name=$(basename "$(cat zip-name.txt)" .zip)
+          rm -f setup-name.txt
+          export PATH="$PATH:/c/Program Files (x86)/NSIS"
+          if BINTANA="$PWD/stage/$name/bin/bintana.exe" tools/pack.sh --nsis ide \
+              stage/installer --exe "$PWD/$name-setup.exe" \
+              --prefix "$PWD/stage/$name"; then
+            echo "$name-setup.exe" > setup-name.txt
+            ls -l "$name-setup.exe"
+          else
+            echo "installer build failed -- the release ships the zip only" >&2
+          fi
+
       # And the staged tree is run, because a zip nobody opened is a guess.
       # `--version` proves the DLL closure; the api check proves the runtime
       # works out of a tree that is not the build one (`tests/api.sh` finds the
@@ -594,7 +617,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: bintana-windows
-          path: bintana-*.zip
+          path: |
+            bintana-*.zip
+            bintana-*-setup.exe
           if-no-files-found: error
 
       - name: Attach it to the release, when this is a tag
@@ -615,3 +640,10 @@ jobs:
             || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" \
                                --generate-notes || true
           gh release upload "$GITHUB_REF_NAME" "$file" --clobber
+          # The setup beside the zip, when the installer step built one -- a
+          # tag without it is the warning that step left in the log.
+          if [ -f setup-name.txt ]; then
+            gh release upload "$GITHUB_REF_NAME" "$(cat setup-name.txt)" --clobber
+          else
+            echo "no setup built -- the release ships the zip only"
+          fi
