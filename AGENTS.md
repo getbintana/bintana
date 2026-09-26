@@ -3575,6 +3575,21 @@ person who wrote it either.
   after; the row, the label and the table's wrapper are held and both texts
   copied across the emit. **Not assertable from the suite**: a real
   `GtkEditableLabel` edit needs a pointer, so this one is a by-hand check.
+- **A table sorts the text it shows, so the order has to know about numbers
+  without knowing the format.** `SortBy` compared cells with `g_utf8_collate`,
+  and every column of numbers came out `10, 100, 9`. A per-column type was the
+  obvious fix and the wrong one: the cell holds display text, which may be
+  `1.234,56`, and parsing it would be guessing a format. So the default is
+  **natural order** (`g_utf8_collate_key_for_filename`: the locale's collation
+  with digit runs compared as numbers, one key per row computed once, not per
+  comparison), and `SortBy(col, asc, compare)` hands the two cells' text to the
+  program for what natural order reads wrongly -- a minus sign, grouped
+  thousands, a day-first date. **It is stable now**, by a tie broken on the
+  position the row had, because `g_list_store_sort` promised nothing about equal
+  rows and a second sort could shuffle the first; the rows go back in with one
+  `g_list_store_splice`. A comparator that throws or answers no number abandons
+  the sort with the store untouched -- in a tree, the levels already sorted stay
+  sorted, since each is its own store.
 - **`GtkColumnView` cannot hide its heading row**, and that fact decides a design
   question rather than being a detail of one. `set_show_row_separators` and
   `set_show_column_separators` are what can be turned off; `set_header_factory`

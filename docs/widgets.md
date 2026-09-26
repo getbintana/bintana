@@ -1746,8 +1746,12 @@ change becomes `Sort(column, ascending)`. Declaring `Columns` rebuilds the
 columns and a rebuilt column has no sorter, so the flag is re-applied — which is
 asserted, because the failure is silent headers.
 
-`SortBy` collates: it compares with `g_utf8_collate`, so a column of names comes
-out in the desktop's order and not in codepoint order. A table that sorts its own
+`SortBy` collates **naturally**: `g_utf8_collate_key_for_filename`, so a column
+of names comes out in the desktop's order and not in codepoint order, and a run
+of digits is compared as a number -- `9` before `10`, which plain collation got
+the other way round in every column of numbers. A third argument, `compare(a,
+b)` over the two cells' text, is for what natural order cannot read (a minus
+sign, grouped thousands, a day-first date), and ties keep their previous order. A table that sorts its own
 rows therefore needs nothing said about it — but a list an application sorts by
 hand does, and the answer for that is
 [`Locale.Compare`](runtime-api.md#ordering-names-and-finding-one). The two were

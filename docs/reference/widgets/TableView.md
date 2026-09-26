@@ -59,7 +59,7 @@ not repeated here.
 | `SelectAll()` | every row, with `MultiSelect` | [the selection](#the-selection) |
 | `SetCell(row, column, value)` | one cell, in place | [the rows](#the-rows-it-holds) |
 | `SetIcon(row, column, name)` | an icon beside a cell | [the rows](#the-rows-it-holds) |
-| `SortBy(column, [ascending])` | reorders the rows it holds | [sorting](#sorting) |
+| `SortBy(column, [ascending], [compare])` | reorders the rows it holds | [sorting](#sorting) |
 | `SortColumn(column, [ascending])` | clicks a heading from code | [sorting](#sorting) |
 
 **Events**
@@ -256,7 +256,7 @@ Ask `Selection` whenever `MultiSelect` is on.
 |---|---|
 | `Sortable` | the headings become clickable. Default `false` |
 | **event** `Sort(column, ascending)` | one was clicked. **The handler decides what happens** |
-| `SortBy(column, [ascending])` | actually reorders the rows the table holds |
+| `SortBy(column, [ascending], [compare])` | actually reorders the rows the table holds — natural order, or `compare(a, b)` over the two cells' text |
 | `SortColumn(column, [ascending])` | the same as clicking that heading from code: the arrow moves and `Sort` is raised |
 
 **A sortable table does not sort itself**, and this is the one thing about it
@@ -268,6 +268,25 @@ one line:
 ```js
 Files_Sort(column, ascending) { this.Files.SortBy(column, ascending); }
 ```
+
+**The order is the order of what the cells show**, because a table keeps the
+text it draws and not the value it was given. By default that is *natural*
+order -- the desktop's collation, with runs of digits compared as numbers, so
+`9` comes before `10` and `Factura 9` before `Factura 10`. What it reads wrongly
+is a minus sign, a grouped thousand (`1.234,56` against `999,00`) and a date
+written day first; for those the program says how, and only the program can:
+
+```js
+Totals_Sort(column, ascending) {
+    this.Totals.SortBy(column, ascending,
+        (a, b) => Locale.Parse(a) - Locale.Parse(b));
+}
+```
+
+The sort is **stable** -- equal cells keep the order they had -- so sorting by
+one column and then by another leaves the first order inside the second. A
+comparator that throws, or answers something that is not a number, leaves the
+rows exactly as they were and the error reaches the caller.
 
 An on-demand table answers it by changing what its `Data` handler reads — sorting
 the source, or reading it backwards — and the rows redraw where they are.

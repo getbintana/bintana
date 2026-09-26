@@ -12857,6 +12857,34 @@ function Main() {
 
         throws("a column that is not there is refused", () => t.SortBy(-1, true));
 
+        /* What a cell holds is text, and plain collation put "10" before "9".
+         * Natural order compares runs of digits as numbers; the comparator is
+         * for what it still reads wrongly -- a minus sign, grouped thousands. */
+        const nat = new TableView();
+        this.Fixed1.Add(nat);
+        nat.Columns = [{ Text: "N" }, { Text: "Tag" }];
+        for (const [n, tag] of [["10", "a"], ["9", "b"], ["-5", "c"], ["100", "d"], ["9", "e"]])
+            nat.Add([n, tag]);
+        const col = (c) => Array.from({ length: nat.Count }, (_, i) => nat.Cell(i, c)).join(",");
+        nat.SortBy(0, true);
+        eq("natural order: 9 before 10 before 100",
+           col(0).replace("-5,", ""), "9,9,10,100");
+        eq("and equal cells keep the order they had", col(1).replace(/c,?/, ""), "b,e,a,d");
+        nat.SortBy(0, true, (x, y) => Number(x) - Number(y));
+        eq("a comparator reads what natural order cannot", col(0), "-5,9,9,10,100");
+        nat.SortBy(0, false, (x, y) => Number(x) - Number(y));
+        eq("...descending too, ties still in their previous order",
+           col(0) + "|" + col(1), "100,10,9,9,-5|d,a,b,e,c");
+        const before = col(1);
+        check("a comparator that throws reaches the caller",
+              (refusal(() => nat.SortBy(0, true, () => { throw new Error("nope"); })) || "")
+                  .includes("nope"));
+        eq("...and the rows are left as they were", col(1), before);
+        throws("a comparator that answers no number is refused",
+               () => nat.SortBy(0, true, () => "x"));
+        throws("and one that is not a function", () => nat.SortBy(0, true, 5));
+        nat.Delete();
+
         /* Declaring columns rebuilds them, and a rebuilt column has no sorter:
          * the flag has to be re-applied or the headers go dead. */
         t.Columns = [{ Text: "Name" }, { Text: "N" }, { Text: "More" }];

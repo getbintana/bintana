@@ -782,7 +782,7 @@ declare class TableView extends Widget {
     SelectAll(): any;
     SetCell(row: any, column: any, value: any): any;
     SetIcon(row: any, column: any, name: any): any;
-    SortBy(column: any, ascending?: any): any;
+    SortBy(column: any, ascending?: any, compare?: any): any;
     SortColumn(column: any, ascending?: any): any;
 }
 declare class Video extends Widget {

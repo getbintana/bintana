@@ -1080,35 +1080,140 @@ static JSValue table_set_sortable(JSContext *ctx, JSValueConst this_val,
 }
 
 /*
- * SortBy(column, ascending) -- reorder the rows the table holds.
+ * SortBy(column, [ascending], [compare]) -- reorder the rows the table holds.
  *
  * What a `Sort` handler calls when the table owns its data. On a table that
  * answers `Data` there is nothing here to sort, and saying so beats quietly
  * doing nothing.
+ *
+ * **What a cell holds is the text it shows**, so the order is an order of text
+ * -- and it used to be the plainest one, `g_utf8_collate`, which put `"10"`
+ * before `"9"` in every column of numbers anybody sorted. Two answers now:
+ *
+ *   - **By default, natural order** (`g_utf8_collate_key_for_filename`): the
+ *     locale's collation, with runs of digits compared as numbers -- `9` before
+ *     `10`, `Factura 9` before `Factura 10`. It is what a file manager does, and
+ *     it covers most columns of numbers with no declaration at all.
+ *   - **`compare(a, b)` when it does not**: the two cells' text, answered with a
+ *     number like `Array.sort`'s comparator. A minus sign, a thousands
+ *     separator (`1.234,56` against `999,00`) or a `d/m/Y` date are the cases
+ *     natural order reads wrongly, and only the program knows which the column
+ *     holds. It is also why this is not a per-column type: parsing the text a
+ *     cell shows is guessing a format, which this runtime does not do.
+ *
+ * **Stable**, by a tie broken on the position the row had: `g_list_store_sort`
+ * promised nothing about equal rows, so a second sort could shuffle what the
+ * first had ordered. Sorting by one column and then another now gives the
+ * second column's order with the first's inside it.
  */
-typedef struct { guint col; bool up; } SortKey;
+typedef struct {
+    guint      col;
+    bool       up;
+    JSContext *ctx;
+    JSValue    compare;   /* a function, or undefined for natural order */
+    bool       failed;    /* the comparator threw or answered nothing usable */
+} SortKey;
 
-static int compare_rows(gconstpointer a, gconstpointer b, gpointer user_data)
+typedef struct {
+    BtaTableRow *row;
+    char        *natural; /* the collation key, when there is no comparator */
+    guint        was;     /* where it sat, the tie-break */
+} SortEntry;
+
+static int compare_entries(gconstpointer pa, gconstpointer pb, gpointer user_data)
 {
-    const SortKey *k = user_data;
-    int cmp = g_utf8_collate(row_cell((BtaTableRow *)a, k->col),
-                             row_cell((BtaTableRow *)b, k->col));
-    return k->up ? cmp : -cmp;
+    const SortEntry *a = pa, *b = pb;
+    SortKey         *k = user_data;
+    int              cmp = 0;
+
+    if (JS_IsUndefined(k->compare)) {
+        cmp = strcmp(a->natural, b->natural);
+    } else if (!k->failed) {
+        JSValue argv[2] = {
+            JS_NewString(k->ctx, row_cell(a->row, k->col)),
+            JS_NewString(k->ctx, row_cell(b->row, k->col)),
+        };
+        JSValue r = JS_Call(k->ctx, k->compare, JS_UNDEFINED, 2, argv);
+        double  d = 0;
+
+        JS_FreeValue(k->ctx, argv[0]);
+        JS_FreeValue(k->ctx, argv[1]);
+        if (JS_IsException(r)) {
+            k->failed = true;          /* it stands, and the sort is abandoned */
+        } else if (!JS_IsNumber(r) || JS_ToFloat64(k->ctx, &d, r) || isnan(d)) {
+            JS_ThrowTypeError(k->ctx, "SortBy: compare(a, b) has to answer a "
+                                      "number, as Array.sort's does");
+            k->failed = true;
+        } else {
+            cmp = d < 0 ? -1 : d > 0 ? 1 : 0;
+        }
+        JS_FreeValue(k->ctx, r);
+    }
+
+    if (!k->up)
+        cmp = -cmp;
+    /* The tie is broken the same way in both directions: a descending sort
+     * keeps equal rows in the order they were, as an ascending one does. */
+    return cmp ? cmp : (a->was < b->was ? -1 : a->was > b->was ? 1 : 0);
+}
+
+/* One store in its new order, or untouched if the comparator failed. */
+static bool table_sort_store(GListStore *store, SortKey *key)
+{
+    GListModel *model = G_LIST_MODEL(store);
+    guint       n     = g_list_model_get_n_items(model);
+
+    if (n < 2)
+        return true;
+
+    SortEntry *e = g_new0(SortEntry, n);
+
+    for (guint i = 0; i < n; i++) {
+        e[i].row = g_list_model_get_item(model, i);
+        e[i].was = i;
+        if (JS_IsUndefined(key->compare))
+            e[i].natural = g_utf8_collate_key_for_filename(row_cell(e[i].row, key->col), -1);
+    }
+
+#if GLIB_CHECK_VERSION(2, 82, 0)
+    g_sort_array(e, n, sizeof *e, compare_entries, key);
+#else
+    g_qsort_with_data(e, (gint)n, sizeof *e, compare_entries, key);
+#endif
+
+    if (!key->failed) {
+        gpointer *rows = g_new(gpointer, n);
+
+        for (guint i = 0; i < n; i++)
+            rows[i] = e[i].row;
+        g_list_store_splice(store, 0, n, rows, n);
+        g_free(rows);
+    }
+
+    for (guint i = 0; i < n; i++) {
+        g_object_unref(e[i].row);
+        g_free(e[i].natural);
+    }
+    g_free(e);
+    return !key->failed;
 }
 
 /* Each level in its own order: the roots, then every node's children. */
-static void table_sort_levels(GListStore *store, SortKey *key)
+static bool table_sort_levels(GListStore *store, SortKey *key)
 {
     GListModel *model = G_LIST_MODEL(store);
 
-    g_list_store_sort(store, compare_rows, key);
+    if (!table_sort_store(store, key))
+        return false;
     for (guint i = 0, n = g_list_model_get_n_items(model); i < n; i++) {
         BtaTableRow *node = g_list_model_get_item(model, i);
+        bool         ok   = !node->children || table_sort_levels(node->children, key);
 
-        if (node->children)
-            table_sort_levels(node->children, key);
         g_object_unref(node);
+        if (!ok)
+            return false;
     }
+    return true;
 }
 
 static JSValue table_sort_by(JSContext *ctx, JSValueConst this_val,
@@ -1120,7 +1225,7 @@ static JSValue table_sort_by(JSContext *ctx, JSValueConst this_val,
 
     int32_t col;
     if (argc < 1 || !bta_to_int(ctx, argv[0], "SortBy", &col))
-        return JS_ThrowTypeError(ctx, "SortBy(column, [ascending]) expects a column");
+        return JS_ThrowTypeError(ctx, "SortBy(column, [ascending], [compare]) expects a column");
     if (col < 0)
         return JS_ThrowRangeError(ctx, "SortBy: %d is not a column", col);
 
@@ -1130,7 +1235,17 @@ static JSValue table_sort_by(JSContext *ctx, JSValueConst this_val,
             "SortBy: a table that answers Data holds no rows to sort; "
             "sort what the handler reads instead");
 
-    SortKey key = { (guint)col, argc < 2 || JS_ToBool(ctx, argv[1]) > 0 };
+    if (argc > 2 && !JS_IsUndefined(argv[2]) && !JS_IsFunction(ctx, argv[2]))
+        return JS_ThrowTypeError(ctx, "SortBy: compare has to be a function "
+                                      "(a, b) answering a number");
+
+    SortKey key = {
+        (guint)col,
+        argc < 2 || JS_IsUndefined(argv[1]) || JS_ToBool(ctx, argv[1]) > 0,
+        ctx,
+        argc > 2 ? argv[2] : JS_UNDEFINED,
+        false,
+    };
 
     /* **In a tree, siblings are sorted within each parent** -- sorting the
      * flattened list would put a child above its own parent, which is not an
@@ -1138,10 +1253,8 @@ static JSValue table_sort_by(JSContext *ctx, JSValueConst this_val,
      * `GtkTreeListRowSorter` exists; it is not needed here because the sorter
      * the columns carry never reorders anything (see `Sortable`) and this is
      * the reordering. */
-    if (!st->tree) {
-        g_list_store_sort(st->rows, compare_rows, &key);
-        return JS_UNDEFINED;
-    }
+    if (!st->tree)
+        return table_sort_store(st->rows, &key) ? JS_UNDEFINED : JS_EXCEPTION;
 
     /*
      * **And the selection is put back, which a flat table gets for free.** GTK's
@@ -1154,12 +1267,12 @@ static JSValue table_sort_by(JSContext *ctx, JSValueConst this_val,
      */
     BtaTableRow *was = table_selected_node(w);
 
-    table_sort_levels(st->rows, &key);
+    bool ok = table_sort_levels(st->rows, &key);
     if (was) {
         table_select_node(w, was);
         g_object_unref(was);
     }
-    return JS_UNDEFINED;
+    return ok ? JS_UNDEFINED : JS_EXCEPTION;
 }
 
 /*
@@ -2880,8 +2993,8 @@ static const JSCFunctionListEntry table_props[] = {
     JS_CFUNC_MAGIC_DEF("SelectAll",   0, table_select_every, TB_ALL),
     /* DeselectAll() */
     JS_CFUNC_MAGIC_DEF("DeselectAll", 0, table_select_every, TB_NONE),
-    /* SortBy(column, [ascending]) */
-    JS_CFUNC_DEF("SortBy",  2, table_sort_by),
+    /* SortBy(column, [ascending], [compare]) */
+    JS_CFUNC_DEF("SortBy",  3, table_sort_by),
     /* SortColumn(column, [ascending]) */
     JS_CFUNC_DEF("SortColumn", 2, table_sort_column),
 };

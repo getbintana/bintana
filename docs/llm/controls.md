@@ -820,7 +820,7 @@ A list with columns, **and its rows may nest**. The control to reach for wheneve
 | `Select(index)`, `Deselect(index)` | move the selection from code. `Select` leaves the others alone where several are allowed |
 | `SelectAll()` | with `MultiSelect` |
 | `DeselectAll()` | selects nothing |
-| `SortBy(column, [ascending])` | actually reorders the rows it holds |
+| `SortBy(column, [ascending], [compare])` | actually reorders the rows it holds, **by the text the cells show**: natural order by default (`9` before `10`, the locale's collation otherwise), or `compare(a, b)` — the two cells' text, answering a number as `Array.sort`'s does — for what natural order reads wrongly: a minus sign, grouped thousands, a `d/m/Y` date. **Stable**: equal cells keep the order they had, so sorting by one column and then another nests them. A comparator that throws leaves the rows as they were |
 | `SortColumn(column, [ascending])` | the heading clicked from code: the arrow moves and `Sort` is raised |
 | **event** `Select()` | the selection moved. Ask `Index` for where it is, `Cell`/`Row` for what — and `Key` when this table is a tree |
 | **event** `Activate()` | Enter in the field, or a double click on a row |
