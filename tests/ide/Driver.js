@@ -251,6 +251,10 @@ function makeChildProject() {
      */
     Directory.Make(File.Join(TMP, "lib", "gadgets"));
     File.Save(File.Join(TMP, "lib", "gadgets", "Dial.js"),
+              'class Gadget extends Widget {\n' +
+              '    static Make() { return new Gadget(); }\n' +
+              '    face() {}\n' +
+              '}\n' +
               'class Dial extends Component {\n' +
               '    static Events = ["Turn"];\n' +
               '    static Make(v) { return new Dial().Value = v; }\n' +
@@ -3022,6 +3026,21 @@ function* p_completion(ide) {
     const dial = answer("", "Dial.");
     check("a library class offers its members, read out of the parser",
           dial.includes("Value"), JSON.stringify(dial));
+
+    /* **And the surface it inherits, which is the other 66 of the 68.** `Dial`
+     * is a `Component`, and before the supertype reached the parser there was
+     * no way to ask for anything above the class's own body: the list after the
+     * dot was 2 names long and a class of 68 was being described as a class of
+     * 2. A completion list that is a fraction of the truth *lies* -- somebody
+     * types `Dial.W`, sees no `Width`, and concludes the class has none. */
+    check("and what it inherits, which is most of it",
+          dial.includes("Width") && dial.includes("Add") && dial.includes("Bounds") &&
+          dial.includes("On") && dial.includes("Delete"),
+          JSON.stringify(dial.length) + " " + JSON.stringify(dial.slice(0, 10)));
+    check("so the list is a whole class and not a fragment of one",
+          dial.length > 40, JSON.stringify(dial.length));
+    check("and it is the runtime answering, not a second reader in the IDE",
+          typeof Widget.Members === "function", "");
     /* **An accessor reaches the parser as a method of the same name, and a
      * `static` reaches it as one too** -- so both are offered, and the label
      * says `()` for each. That is the honest limit: telling them apart would

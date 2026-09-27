@@ -642,67 +642,60 @@ Ide.Completion = class Completion {
      * narrow-to-wider rule the method scan uses.
      */
     /*
-     * The members of a class, asked in the order that keeps the most answer.
+     * The members of a class, and **one question asked once**.
      *
-     * **First the runtime**, which is the only one that can tell a property from
-     * a method and a static from an instance -- and it answers for a widget, a
-     * class of rad.js like `Timer`, and a global object like `File`.
+     * `Widget.Members` answers for everything this process can resolve -- a
+     * widget, a class of `rad.js` like `Timer`, a global that is a bag of
+     * functions like `File`. What it could not answer for was a class of a
+     * library the IDE *reads* and never runs: `Confirm` is a lexical binding
+     * with no class behind it in this process, so the list after the dot was
+     * empty.
      *
-     * **Then the source**, and the reason it is here is that a library class is
-     * a lexical binding in a file the IDE never runs: `Confirm` is a name with
-     * no class behind it in this process, so the lookup refuses and the members
-     * after the dot were empty. The parser is what answers instead, through the
-     * same `Application.Symbols` this module already asks for its outline.
+     * **The fix is the `Sources` option, and it is in the runtime rather than
+     * here for the reason everything else in this module is.** A second reader
+     * in JavaScript means a second answer to "what does this class have", and
+     * the two disagree at the edges: the first version here filtered nothing
+     * and offered `Dial.turn`, which the runtime hides, so the same class had a
+     * different surface depending on which reader found it. The runtime reads
+     * the sources with the parser `Application.Symbols` already uses, follows
+     * the `extends` chain, and hands the walk back to its own class table at
+     * the first base the sources do not declare -- which is `Form`, and a
+     * hundred names this module had no way to produce at all.
      *
-     * **What the parser does not say, and what is therefore not shown:** a
-     * `static` and an accessor reach `js_parse_class` the same way a method
-     * does, so both come back as `Method` and the completion labels them all
-     * `()`. Telling them apart would mean a pattern over the source -- a second
-     * parser, which is the one thing that drifts -- or a seventh change to the
-     * vendored engine. The names are exact, which is what a person is typing
-     * towards, and the label does not claim to be more than it is.
+     * **The sources are the project's and the libraries it `uses`**, read once
+     * by `declaredClasses` and kept, because a popover is built on every
+     * keystroke and a walk of every library is not something to do there.
      */
     membersOfClass2(name) {
         if (!this._members || this._membersFor !== name) {
             this._membersFor = name;
             this._members    = [];
 
-            let found = null;
-            try { found = Widget.Members(name); } catch (e) { found = null; }
+            const found = this.declaredClasses();
+            const list  = [...found.sources.values()];
 
-            for (const m of found || []) {
+            /* **A refusal is caught and answered as nothing, always.** The verb
+             * refuses with a name because a caller that wants to know should be
+             * told; a completion wants a list, and a name this project does not
+             * declare is a name the popover has no business answering. The
+             * first version re-threw when sources were present and one test
+             * caught an uncaught error where a class from a library this project
+             * does not use was asked about. */
+            let got = null;
+            try {
+                got = Widget.Members(name, { Sources: list });
+            } catch (e) {
+                if (!list.length) {
+                    try { got = Widget.Members(name); } catch (e2) { got = null; }
+                }
+            }
+
+            for (const m of got || []) {
                 const kind = m.Kind;
                 this._members.push({
                     Text: m.Name,
                     Detail: kind === "Method" ? "()" : (kind === "Static" ? "static" : ""),
                 });
-            }
-
-            /* Not asked of the runtime: `Member` is about one name and `Members`
-             * refused, so there is nothing to ask. The source the walk kept is
-             * what is left, and only for a class the walk actually saw. */
-            if (!this._members.length) {
-                const src = this.declaredClasses().sources.get(name);
-                if (src) {
-                    const own = new Set();
-                    for (const sym of Application.Symbols(src)) {
-                        if (sym.Kind !== "Method") continue;
-                        /* `Parent` is the class a method was declared in, so a
-                         * base class's methods are not this class's to offer --
-                         * and the class itself is not one of its own members. */
-                        if (sym.Parent !== name || own.has(sym.Name)) continue;
-                        /* **The same convention `Widget.Members` applies, and the
-                         * first version here did not** -- so `Dial.turn` was
-                         * offered by the source and hidden by the runtime, for
-                         * the same class, in the same popover. A lower-case
-                         * member is the class talking to itself, and a completion
-                         * that offers it is offering something a caller cannot
-                         * write from outside. */
-                        if (!/^[A-Z]/.test(sym.Name)) continue;
-                        own.add(sym.Name);
-                        this._members.push({ Text: sym.Name, Detail: "()" });
-                    }
-                }
             }
         }
         return this._members;

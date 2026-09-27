@@ -10943,6 +10943,96 @@ function Main() {
            cls("Member").Super, "Base");
         eq("and a method inside it is not itself a subclass",
            shape.find((x) => x.Name === "A").Super, "");
+
+        /*
+         * **`Widget.Members` with `Sources`: a class this process never loaded,
+         * and the chain above it.**  A library's class is a lexical binding in a
+         * file the host does not run, so there was nothing to ask and an editor
+         * was offered 2 of the 68 names the class has.  The sources are read
+         * with the same parser, the `extends` chain is followed, and the walk
+         * goes back to the class table at the first base the sources do not
+         * declare -- which is `Form`.
+         */
+        /* **Two shapes, because the chain ends two ways.** `Leaf` is declared
+         * entirely among the sources, so the walk is parser from end to end; a
+         * base that is *not* among them ends the walk in the class table, which
+         * is the ordinary case for a form class and the one an editor needed. */
+        const lib = "class Base { BaseOnly() {} }\n" +
+                    "class Mid extends Base { Mid() {} }\n" +
+                    "class Leaf extends Mid { Leaf() {} lower() {} }\n" +
+                    "class Formish extends Form { Formish() {} }\n" +
+                    "class Alone extends Widget { Alone() {} }\n" +
+                    "class Orphan extends NotHere { Lonely() {} }\n" +
+                    "class Ring1 extends Ring2 {}\n" +
+                    "class Ring2 extends Ring1 {}\n" +
+                    "class Called extends make(Base) {}\n";
+        const srcs = { Sources: [lib] };
+        const has  = (n) => Widget.Members(n, srcs).map((m) => m.Name);
+
+        check("a class declared only in a source answers, and so does its base",
+              has("Leaf").includes("Leaf") && has("Leaf").includes("Mid") &&
+              has("Leaf").includes("BaseOnly"),
+              JSON.stringify(has("Leaf")));
+        eq("...and the parser's answer is only what the sources declared",
+           JSON.stringify(has("Leaf")), '["Leaf","Mid","BaseOnly"]');
+        check("a base the sources do not declare ends the walk in the class table",
+              has("Formish").includes("Formish") && has("Formish").includes("Width") &&
+              has("Formish").includes("Bounds") && has("Formish").includes("Show"),
+              JSON.stringify(has("Formish").slice(0, 6)));
+        check("...which is most of the class and not a fragment of one",
+              has("Formish").length > 40, has("Formish").length);
+        check("a class extending Widget is answered the same way",
+              has("Alone").includes("Alone") && has("Alone").includes("Width"),
+              JSON.stringify(has("Alone").slice(0, 4)));
+        check("a lower-case member is not offered here either",
+              !has("Leaf").includes("lower"), JSON.stringify(has("Leaf").slice(0, 8)));
+        check("a base that is nowhere gives what the class has and stops",
+              JSON.stringify(has("Orphan")) === '["Lonely"]',
+              JSON.stringify(has("Orphan")));
+        check("an extends that is a call contributes nothing and does not throw",
+              has("Called").length === 0, JSON.stringify(has("Called")));
+        /* **A cycle is not a hang.** Two classes extending each other is
+         * something a person writes by accident and a merge produces, and the
+         * walk is a loop over a chain. */
+        check("a cycle in the chain terminates rather than hanging",
+              has("Ring1").length === 0, JSON.stringify(has("Ring1").length));
+
+        /* **A library class may shadow a runtime global, and the project's own
+         * declaration is the one that answers** -- `Dialog` is a real global
+         * full of static functions, so asking the class table first described a
+         * different class than the one being written. */
+        const shadow = "class Dialog extends Form { Ask() {} }\n";
+        check("a class whose name the runtime also has takes the source's answer",
+              Widget.Members("Dialog", { Sources: [shadow] }).length > 40 &&
+              Widget.Members("Dialog", { Sources: [shadow] })[0].Name === "Ask",
+              JSON.stringify(Widget.Members("Dialog", { Sources: [shadow] })
+                  .slice(0, 3).map((m) => m.Name)));
+        check("and without the source the global's own answer is unchanged",
+              Widget.Members("Dialog").length > 0 &&
+              Widget.Members("Dialog").length < 40,
+              Widget.Members("Dialog").length);
+
+        /* **The refusals, named.** A source is text: `JS_ToCString` converts
+         * anything, so a number would have become the source `"5"` and answered
+         * "this class declares nothing" as though the caller had said so. */
+        eq("a Sources that is not an array is refused",
+           (() => { try { Widget.Members("Leaf", { Sources: 1 }); return ""; }
+                    catch (e) { return e.message; } })(),
+           "Members: Sources must be an array of source texts");
+        eq("a Sources entry that is not a string is refused",
+           (() => { try { Widget.Members("Leaf", { Sources: [5] }); return ""; }
+                    catch (e) { return e.message; } })(),
+           "Members: Sources[0] is not a source text");
+        eq("and a name neither here nor declared says so, naming both",
+           (() => { try { Widget.Members("NoSuchClass", srcs); return ""; }
+                    catch (e) { return e.message; } })(),
+           "Members: 'NoSuchClass' is not a class, and no source among Sources declares it");
+        eq("and without Sources the refusal is the original one",
+           (() => { try { Widget.Members("NoSuchClass"); return ""; }
+                    catch (e) { return e.message; } })(),
+           "Members: 'NoSuchClass' is not a class");
+        check("a refused call left the verb working",
+              Widget.Members("Button").length > 40, Widget.Members("Button").length);
         /* **The property the report moving could have cost.** A class with an
          * `extends` is now reported *after* the heritage is parsed, so a class
          * that breaks in its own body is the case worth holding: it must still

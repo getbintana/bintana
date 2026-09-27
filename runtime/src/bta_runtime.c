@@ -486,13 +486,17 @@ static void symbol_report(void *opaque, JSSymbolKind kind, const char *name,
  * after it, so nothing else in the program pays for the feature and the code
  * the runtime itself compiles -- `rad.js`, every `.form` -- is not walked.
  */
-static JSValue js_application_symbols(JSContext *ctx, JSValueConst this_val,
-                                      int argc, JSValueConst *argv)
+/*
+ * `bta_symbols(ctx, text)`: what a compile declares, as the array
+ * `Application.Symbols` hands back.  **Exported because there are now two
+ * consumers and not one** -- the editor's outline, and `Widget.Members`'s answer
+ * for a class in a file this process never runs, which is the same parser for
+ * the same reason: an object's members cannot be had from the source, only its
+ * declarations can, and reading them twice with two different readers is the
+ * shape that drifts.
+ */
+JSValue bta_symbols(JSContext *ctx, const char *src)
 {
-    const char *src = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
-    if (!src)
-        return JS_ThrowTypeError(ctx, "Application.Symbols(text) needs text");
-
     SymbolSink sink = { ctx, JS_NewArray(ctx), 0 };
     JSRuntime *rt   = JS_GetRuntime(ctx);
 
@@ -503,7 +507,6 @@ static JSValue js_application_symbols(JSContext *ctx, JSValueConst this_val,
                         JS_EVAL_FLAG_COMPILE_ONLY);
 
     JS_SetSymbolHandler(rt, NULL, NULL);
-    JS_FreeCString(ctx, src);
 
     /* Compiled and not run, so the only thing it can hand back is an error --
      * and the symbols collected before it are the answer, not the error. */
@@ -513,6 +516,18 @@ static JSValue js_application_symbols(JSContext *ctx, JSValueConst this_val,
         JS_FreeValue(ctx, r);
 
     return sink.list;
+}
+
+static JSValue js_application_symbols(JSContext *ctx, JSValueConst this_val,
+                                      int argc, JSValueConst *argv)
+{
+    const char *src = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    if (!src)
+        return JS_ThrowTypeError(ctx, "Application.Symbols(text) needs text");
+
+    JSValue out = bta_symbols(ctx, src);
+    JS_FreeCString(ctx, src);
+    return out;
 }
 
 static bool is_identifier(const char *s)

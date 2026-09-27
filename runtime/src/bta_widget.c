@@ -3192,67 +3192,18 @@ static void take(JSContext *ctx, JSValue out, GPtrArray *names, uint32_t *n,
  * because a lower-case one is the class talking to itself: this repository's own
  * convention, and the one `Widget.Methods` already applies.
  */
-static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
-                                 int argc, JSValueConst *argv)
+static void take_members_of_resolved(JSContext *ctx, JSValueConst klass,
+                                     JSValue out, GPtrArray *names,
+                                     uint32_t *n)
 {
-    const char *type = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
-    if (!type)
-        return JS_ThrowTypeError(ctx, "Members(type) expects a type name");
-
-    /* The resolution without the guard: `class_proto_for` refuses a class that
-     * is not a widget, and this question does not care. */
-    JSValue klass = bta_lookup_global(ctx, type);
-    if (JS_IsException(klass)) {
-        /* **Two things were wrong on one line, and the first is the one that
-         * reads as a crash.** The message was built from `type` *after* the
-         * `JS_FreeCString` that freed it -- a use-after-free on exactly the path
-         * a mistyped name takes, since that is the only path that throws -- and
-         * the exception `bta_lookup_global` had already set was left pending
-         * underneath the one thrown here.
-         *
-         * **The order is the fix and both halves of it are load-bearing.** The
-         * lookup throws its own complaint -- an unusable class name, a property
-         * get that failed, a `JS_Eval` of a name that is not there -- and this
-         * verb answers a *different* question, so that one is consumed with the
-         * idiom `JS_ToCString` failures use elsewhere in this file
-         * (`JS_GetException` takes the pending value off the context, and
-         * `JS_FreeValue` releases it) rather than dropped: dropping it is what
-         * leaves a second error for whoever reaches the context next, half a
-         * program away from the call that caused it.
-         *
-         * Then the message, which formats `type` **while it is alive**, and only
-         * then the free. */
-        JS_FreeValue(ctx, JS_GetException(ctx));
-        JS_ThrowTypeError(ctx, "Members: '%s' is not a class", type);
-        JS_FreeCString(ctx, type);
-        return JS_EXCEPTION;
-    }
-
-    /*
-     * **A class or a global that is an object**, and both are the same lookup:
-     * `bta_lookup_global` does not tell them apart and neither does a caller.
-     * A class carries a `prototype` and its statics are the class's own
-     * properties; a global like `File` or `Locale` is a bag of functions and has
-     * neither, so the *same walk* runs over the object itself and the static
-     * half is simply not there.
-     *
-     * That is what removes the hand-written list this verb exists to replace: an
-     * editor asking `Widget.Members("Printer")` gets its members, and asking
-     * `Widget.Members("Timer")` gets those, and there is no third place where a
-     * name is turned into something to walk.
-     */
-    JSValue proto = JS_GetPropertyStr(ctx, klass, "prototype");
-    bool   is_class = JS_IsObject(proto);
-    JS_FreeCString(ctx, type);
+    JSValue proto    = JS_GetPropertyStr(ctx, klass, "prototype");
+    bool    is_class = JS_IsObject(proto);
 
     /* The array is filled in place and the names kept beside it: a `JSValue` is
      * a struct and not a pointer, so a `GPtrArray` of them would be storing a
      * truncated value -- and the names are what the de-duplication needs, which
      * is the one case that is easy to get wrong (a static whose name the
      * instance already has). */
-    JSValue     out   = JS_NewArray(ctx);
-    GPtrArray  *names = g_ptr_array_new();
-    uint32_t    n     = 0;
 
     /* The instance members -- the prototype's own chain for a class, and the
      * object's own keys for a global that is a bag of functions. */
@@ -3278,10 +3229,10 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
                     if (nm && *nm && g_ascii_isupper(nm[0]) &&
                         !g_str_equal(nm, "constructor")) {
                         if (JS_IsFunction(ctx, d.value))
-                            take(ctx, out, names, &n, nm, "Method");
+                            take(ctx, out, names, n, nm, "Method");
                         else if (JS_IsFunction(ctx, d.getter) ||
                                  JS_IsFunction(ctx, d.setter))
-                            take(ctx, out, names, &n, nm, "Property");
+                            take(ctx, out, names, n, nm, "Property");
                     }
                     if (nm) JS_FreeCString(ctx, nm);
                     JS_FreeValue(ctx, d.value);
@@ -3314,7 +3265,7 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
                     if (JS_IsFunction(ctx, d.value) ||
                         JS_IsFunction(ctx, d.getter) ||
                         JS_IsFunction(ctx, d.setter))
-                        take(ctx, out, names, &n, nm, "Static");
+                        take(ctx, out, names, n, nm, "Static");
                 }
                 if (nm) JS_FreeCString(ctx, nm);
                 JS_FreeValue(ctx, d.value);
@@ -3326,7 +3277,299 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
     }
 
     JS_FreeValue(ctx, proto);
-    JS_FreeValue(ctx, klass);
+}
+
+/* An array's length, read the one way.  A `char **` that answers NULL is an
+ * empty list and not a failure, so a caller does not have to ask twice. */
+static uint32_t array_length(JSContext *ctx, JSValueConst arr)
+{
+    JSValue  lenv = JS_GetPropertyStr(ctx, arr, "length");
+    uint32_t l = 0;
+
+    if (JS_ToUint32(ctx, &l, lenv) != 0)
+        l = 0;
+    JS_FreeValue(ctx, lenv);
+    return l;
+}
+
+static char **out_empty(void)
+{
+    return g_new0(char *, 1);
+}
+
+/* What a set of sources declares: class name -> its base class and its own
+ * public members.  The key is the reason there is a struct rather than two
+ * tables: a class and its base have to travel together, because the walk below
+ * follows one to the other. */
+typedef struct {
+    char      *base;
+    GPtrArray *members;   /* char *, capitals only, the runtime's convention */
+} DeclClass;
+
+static void decl_class_free(gpointer data)
+{
+    DeclClass *d = data;
+    g_free(d->base);
+    g_ptr_array_free(d->members, TRUE);
+    g_free(d);
+}
+
+static DeclClass *decl_class_get(GHashTable *index, const char *name)
+{
+    DeclClass *d = g_hash_table_lookup(index, name);
+    if (d)
+        return d;
+    d = g_new0(DeclClass, 1);
+    d->members = g_ptr_array_new();
+    g_hash_table_insert(index, g_strdup(name), d);
+    return d;
+}
+
+/* The `Sources` option read as a list of texts, or refused.  **Every entry is
+ * converted before any of it is parsed**, which is the rule every other verb
+ * that fills something follows: a refusal leaves the answer not built rather
+ * than half of it. */
+static char **sources_arg(JSContext *ctx, JSValueConst options, bool *refused)
+{
+    JSValue   arr;
+    uint32_t  len, i, n = 0;
+    char    **out;
+
+    *refused = false;
+    if (JS_IsUndefined(options) || JS_IsNull(options))
+        return NULL;
+
+    arr = JS_GetPropertyStr(ctx, options, "Sources");
+    if (JS_IsException(arr)) {
+        *refused = true;
+        return NULL;
+    }
+    if (JS_IsUndefined(arr) || JS_IsNull(arr)) {
+        JS_FreeValue(ctx, arr);
+        return NULL;
+    }
+    if (!JS_IsArray(arr)) {
+        JS_FreeValue(ctx, arr);
+        JS_ThrowTypeError(ctx, "Members: Sources must be an array of source texts");
+        *refused = true;
+        return NULL;
+    }
+
+    len = array_length(ctx, arr);
+    if (len == 0) {
+        JS_FreeValue(ctx, arr);
+        return out_empty();
+    }
+
+    out = g_new0(char *, len + 1);
+    for (i = 0; i < len; i++) {
+        JSValue  item = JS_GetPropertyUint32(ctx, arr, i);
+        /* **A source is text and a non-string is refused**, which is this
+         * file's rule about conversions and not a new one: `JS_ToCString`
+         * converts anything, so `Sources: [5]` would become the source `"5"`
+         * and `Sources: [SomeClass]` the text `"function SomeClass()..."` --
+         * both parsing to nothing and both answering "this class declares
+         * nothing" as though the caller had said so. */
+        const char *text = NULL;
+        if (!JS_IsString(item))
+            JS_ThrowTypeError(ctx, "Members: Sources[%u] is not a source text", i);
+        else
+            text = JS_ToCString(ctx, item);
+        JS_FreeValue(ctx, item);
+        if (!text) {
+            guint k;
+            for (k = 0; k < n; k++) g_free(out[k]);
+            g_free(out);
+            JS_FreeValue(ctx, arr);
+            *refused = true;
+            return NULL;
+        }
+        out[n++] = g_strdup(text);
+        JS_FreeCString(ctx, text);
+    }
+    JS_FreeValue(ctx, arr);
+    return out;
+}
+
+static GHashTable *decl_index_build(JSContext *ctx, char **sources, int count)
+{
+    GHashTable *index = g_hash_table_new_full(g_str_hash, g_str_equal,
+                                              g_free, decl_class_free);
+
+    for (int i = 0; i < count; i++) {
+        JSValue list = bta_symbols(ctx, sources[i]);
+        uint32_t len  = array_length(ctx, list);
+        uint32_t k;
+
+        for (k = 0; k < len; k++) {
+            JSValue  sym = JS_GetPropertyUint32(ctx, list, k);
+            JSValue  nm  = JS_GetPropertyStr(ctx, sym, "Name");
+            const char *name = JS_ToCString(ctx, nm);
+            JS_FreeValue(ctx, nm);
+            if (!name) { JS_FreeValue(ctx, JS_GetException(ctx)); JS_FreeValue(ctx, sym); continue; }
+
+            JSValue  kindv = JS_GetPropertyStr(ctx, sym, "Kind");
+            const char *kind = JS_ToCString(ctx, kindv);
+            JS_FreeValue(ctx, kindv);
+            if (!kind) { JS_FreeValue(ctx, JS_GetException(ctx)); JS_FreeCString(ctx, name); JS_FreeValue(ctx, sym); continue; }
+
+            if (g_str_equal(kind, "Class")) {
+                JSValue  supv = JS_GetPropertyStr(ctx, sym, "Super");
+                const char *sup = JS_ToCString(ctx, supv);
+                JS_FreeValue(ctx, supv);
+                if (sup) {
+                    DeclClass *d = decl_class_get(index, name);
+                    if (*sup && !d->base) d->base = g_strdup(sup);
+                    JS_FreeCString(ctx, sup);
+                } else {
+                    JS_FreeValue(ctx, JS_GetException(ctx));
+                }
+            } else if (g_str_equal(kind, "Method")) {
+                /* A method's `Parent` is the class it was declared in, so a base
+                 * class's methods land on that class and are offered to the
+                 * class that extends it. */
+                JSValue  pv = JS_GetPropertyStr(ctx, sym, "Parent");
+                const char *parent = JS_ToCString(ctx, pv);
+                JS_FreeValue(ctx, pv);
+                if (parent && *parent) {
+                    /* **The runtime's own convention, and the source walk is
+                     * bound by it like the class-table one is.** A lower-case
+                     * name is the class talking to itself, and a class that is
+                     * loaded does not list it either -- so a class answered from
+                     * its source must not, or the same class would have a
+                     * different surface depending on which reader found it. */
+                    if (g_ascii_isupper(name[0]))
+                        g_ptr_array_add(decl_class_get(index, parent)->members,
+                                        g_strdup(name));
+                }
+                if (parent) JS_FreeCString(ctx, parent);
+            }
+            JS_FreeCString(ctx, kind);
+            JS_FreeCString(ctx, name);
+            JS_FreeValue(ctx, sym);
+        }
+        JS_FreeValue(ctx, list);
+    }
+    return index;
+}
+
+/*
+ * `Widget.Members(type, [options])`, with one option and one reason for it.
+ *
+ * **`{ Sources: [text, ...] }` is what a caller hands over when the class is a
+ * lexical binding in a file this process never runs** -- a library's class, read
+ * by an editor that must not execute the project it is editing. Without it
+ * `bta_lookup_global` refuses and there is no answer at all, which is what an
+ * editor was living with: `Confirm.` offered 2 names out of 68.
+ *
+ * **The order is the project's own declarations first, and that is not
+ * arbitrary.** A library may declare a class whose name the runtime also has --
+ * `Dialog` is one, and it is a global object full of static functions -- and in
+ * a program that uses that library, `Dialog.` means the library's class. Asking
+ * the class table first answered about a different class than the one being
+ * written. The project's shadowing the runtime is the same rule the runtime's own
+ * library search follows.
+ *
+ * **The walk is a chain, and the chain is the whole answer**: the class's own
+ * declarations, then its base's, and so on. A base that is *not* among the
+ * sources ends the walk in the class table, which is where the answer is better
+ * than any parser could produce -- `Form` and everything above it, a hundred
+ * names. That is the ordinary case for a form class, and the two readers meet
+ * exactly there.
+ *
+ * **What the source half does not say, and does not pretend to:** a `static` and
+ * an accessor both reach the parser as a method of the same name, so both come
+ * back as `Method`. Separating them is a further patch in the vendored engine,
+ * and until it exists the labels are coarser here than for a class that is
+ * loaded -- the *names* are exact either way, and a name is what a caller is
+ * typing towards.
+ */
+static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
+                                 int argc, JSValueConst *argv)
+{
+    const char *type = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    if (!type)
+        return JS_ThrowTypeError(ctx, "Members(type) expects a type name");
+
+    JSValue    out   = JS_NewArray(ctx);
+    GPtrArray *names = g_ptr_array_new();
+    uint32_t   n     = 0;
+
+    char      **sources = NULL;
+    GHashTable *index   = NULL;
+    bool        refused = false;
+
+    /* Read and refused *before* anything is built, which is the rule every
+     * verb that fills something follows: a bad option leaves no answer rather
+     * than half of one. */
+    if (argc > 1)
+        sources = sources_arg(ctx, argv[1], &refused);
+    if (refused) {
+        JS_FreeCString(ctx, type);
+        JS_FreeValue(ctx, out);
+        g_ptr_array_free(names, TRUE);
+        return JS_EXCEPTION;
+    }
+    if (sources) {
+        index = decl_index_build(ctx, sources, g_strv_length(sources));
+        DeclClass *own = g_hash_table_lookup(index, type);
+        if (own) {
+            int guard = 0;
+            for (DeclClass *d = own; d && guard < 64; guard++) {
+                for (guint i = 0; i < d->members->len; i++)
+                    take(ctx, out, names, &n,
+                         g_ptr_array_index(d->members, i), "Method");
+                if (!d->base)
+                    break;
+                if (g_hash_table_contains(index, d->base)) {
+                    d = g_hash_table_lookup(index, d->base);
+                    continue;
+                }
+                /* The end of the sources is not the end of the answer. */
+                JSValue up = bta_lookup_global(ctx, d->base);
+                if (!JS_IsException(up)) {
+                    take_members_of_resolved(ctx, up, out, names, &n);
+                    JS_FreeValue(ctx, up);
+                } else {
+                    /* **Consumed, not dropped.** An exception left pending under
+                     * the one thrown below is an error somebody else reports. */
+                    JS_FreeValue(ctx, JS_GetException(ctx));
+                }
+                break;
+            }
+        }
+    }
+
+    /* The class table answers for whatever the sources did not: a widget, a
+     * class of rad.js, a global that is a bag of functions. The resolution
+     * without the guard -- `class_proto_for` refuses a class that is not a
+     * widget, and this question does not care. */
+    if (!sources || !g_hash_table_contains(index, type)) {
+        JSValue klass = bta_lookup_global(ctx, type);
+        if (!JS_IsException(klass)) {
+            take_members_of_resolved(ctx, klass, out, names, &n);
+            JS_FreeValue(ctx, klass);
+        } else {
+            JS_FreeValue(ctx, JS_GetException(ctx));
+            if (sources)
+                JS_ThrowTypeError(ctx, "Members: '%s' is not a class, and no "
+                                  "source among Sources declares it", type);
+            else
+                JS_ThrowTypeError(ctx, "Members: '%s' is not a class", type);
+            JS_FreeCString(ctx, type);
+            if (sources) g_hash_table_destroy(index);
+            g_strfreev(sources);
+            JS_FreeValue(ctx, out);
+            g_ptr_array_free(names, TRUE);
+            return JS_EXCEPTION;
+        }
+    }
+
+    JS_FreeCString(ctx, type);
+    if (sources) {
+        g_hash_table_destroy(index);
+        g_strfreev(sources);
+    }
 
     for (guint i = 0; i < names->len; i++)
         g_free(g_ptr_array_index(names, i));
@@ -6543,10 +6786,10 @@ void bta_widgets_init(JSContext *ctx, JSValue global)
             JS_SetPropertyStr(ctx, ctor, "Methods",
                               JS_NewCFunction(ctx, w_methods_by_type,
                                               "Methods", 1));
-            /* Members(type) */
+            /* Members(type, [options]) */
             JS_SetPropertyStr(ctx, ctor, "Members",
                               JS_NewCFunction(ctx, w_members_by_type,
-                                              "Members", 1));
+                                              "Members", 2));
             JS_SetPropertyStr(ctx, ctor, "EventNames",
                               JS_NewCFunction(ctx, w_event_names_by_type,
                                               "EventNames", 1));
