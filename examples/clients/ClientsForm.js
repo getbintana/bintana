@@ -510,8 +510,8 @@ class ClientsForm extends Form {
         if (!c || at < 0)
             return;
 
-        Confirm.ask(Locale.Text("Delete {0} and its orders?", c.Name),
-                    Locale.Text("Delete"), () => {
+        Confirm.Ask(Locale.Text("Delete {0} and its orders?", c.Name),
+                    () => {
             try {
                 /* Its orders go with it, and not from here: the schema says
                  * `ON DELETE CASCADE` and the driver turns `foreign_keys` on, so
@@ -526,7 +526,7 @@ class ClientsForm extends Form {
             this.Clients.RemoveRow(at);
             this.pick();
             this.say(Locale.Text("Deleted {0}", c.Name));
-        });
+        }, { Title: Locale.Text("Clients"), Accept: Locale.Text("Delete") });
     }
 
     /* --- the orders, which is the detail ----------------------------------- */

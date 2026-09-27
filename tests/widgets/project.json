@@ -8,5 +8,8 @@
     "Translated.js",
     "TaskWork.js",
     "WidgetsForm.js"
+  ],
+  "uses": [
+    "dialog"
   ]
 }

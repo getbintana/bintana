@@ -463,7 +463,7 @@ const TESTS = [
     "CuratedLanguage", "Dictionary", "Regex", "Bytes", "Hash", "Screen", "JsonFiles", "XmlFiles", "XmlRecord", "Log", "Apply", "TimerShorthand", "Terminal",
     "Settings", "Timer", "ArgumentRefusals", "Icons", "Font", "Style", "Radius", "Padding", "Shadow", "StyleRule",
     "ColorButton",
-    "ColorDialog", "FileDialog", "IconList", "FormIcon", "ButtonClick",
+    "ColorDialog", "FileDialog", "Dialog", "IconList", "FormIcon", "ButtonClick",
     "Available", "TextProperties", "ClassIntrospection", "Signatures", "Locale", "LocaleRead", "TranslatedForm", "Fill", "DesignValues",
     "Grid",
     "File", "Dir", "Trash", "Environment",
@@ -12123,6 +12123,136 @@ function Main() {
          * AGENTS.md, next to whether a popover appeared, and every refusal is
          * here, where a refusal shows nothing by construction.
          */
+    }
+
+    /*
+     * `lib/dialog`, and the one test here that **shows a window of its own
+     * twice** and closes both before it ends.
+     *
+     * That is the thing `testFileDialog` above deliberately does not do, and
+     * the reason is in its own comment: a modal nothing in JS can close sits on
+     * top of the form the next test measures. These are different -- every one
+     * of them is closed by calling the handler a click would call, which is an
+     * ordinary road and leaves nothing behind -- so they can be driven, and the
+     * promise they make is the one that matters and cannot be read off the
+     * state: **a callback runs on the answer and on nothing else.**
+     */
+    testDialog() {
+        let answered = 0;
+
+        /* --- the yes/no, and cancelling answering nothing ------------------ */
+        const dlg = Confirm.Ask("Delete this one?", () => { answered++; },
+                                { Title: "The title", Accept: "Delete" });
+        eq("the question is modal, so it is a question",
+           dlg.Modal, true);
+        eq("and it says what it was asked",
+           dlg.LblMessage.Text, "Delete this one?");
+        eq("with the title the caller gave it", dlg.Text, "The title");
+        eq("and the accepting button wearing the verb",
+           dlg.BtnAccept.Text, "Delete");
+        /* **The design decision, and the reason `ask` exists rather than
+         * `new Confirm()`.** Nothing here is `Default` -- *neither* button --
+         * because `Default` is what Enter means when the focus is somewhere
+         * else, and making the destructive one the default is exactly the
+         * reflex to avoid. Enter destroys nothing because the *focus* is on the
+         * button that says no, and Escape because `Cancel: true` is on that same
+         * button. Asserting `Default` is `false` on both is the assertion that
+         * would catch an implementation that took the other road. */
+        eq("neither button is Default, so Enter has no destructive default to find",
+           dlg.BtnCancel.Default || dlg.BtnAccept.Default, false);
+        eq("and Escape means no through the same button, declared in the .form",
+           dlg.BtnCancel.Cancel, true);
+        /* **The one claim here that needs a frame**, so it is the one that
+         * waits: `Focused` is about *within*, and the focus a `SetFocus` moved
+         * is only settled once the window is presented. `SetFocus` is called
+         * after `Show()` in the class and that order is not tidiness -- before
+         * the window is on screen there is no root to hand focus to, which is
+         * the `Form_Open` trap again. */
+        until("the question takes the focus", () => dlg.BtnCancel.Focused, () => {
+            eq("and it is the cancel button, which is what makes Enter mean no",
+               dlg.BtnCancel.Focused, true);
+        });
+
+        dlg.BtnCancel_Click();
+        eq("cancelling answers nothing at all", answered, 0);
+        eq("and the window is gone", dlg.Visible, false);
+
+        /* The same dialog, accepted. */
+        const yes = Confirm.Ask("Delete this one?", () => { answered++; },
+                                { Title: "The title", Accept: "Delete" });
+        yes.BtnAccept_Click();
+        eq("accepting answers, once", answered, 1);
+
+        /* --- the prompt, and an empty field not being an answer ------------ */
+        let got = null;
+        const ask = AskText.Prompt("What is it called?",
+                                   (value, checked) => { got = [value, checked]; },
+                                   { Title: "Name it", Initial: "the old name" });
+        eq("the prompt is modal too", ask.Modal, true);
+        eq("and asks what it says it asks",
+           ask.LblPrompt.Text, "What is it called?");
+        eq("offering the value to be replaced",
+           ask.TxtValue.Text, "the old name");
+        eq("and Enter in the field is the answer, which is the other half of "
+           + "the split from the dialog above",
+           ask.TxtValue.ActivatesDefault, true);
+        eq("while the yes/no had no field to activate it",
+           dlg.TxtValue, undefined);
+        eq("no checkbox unless one was asked for",
+           ask.ChkOption.Visible, false);
+
+        /* Nothing typed: the window stays up and the callback never runs. A
+         * dialog that closed itself on an empty field is one a mistyped Enter
+         * throws the work away with. */
+        ask.TxtValue.Text = "   ";
+        ask.BtnOk_Click();
+        eq("an empty field answers nothing", got, null);
+        eq("and the window is still up", ask.Visible, true);
+
+        ask.TxtValue.Text = "  the new name  ";
+        ask.BtnOk_Click();
+        eq("a name answers, trimmed", got[0], "the new name");
+        eq("and with no checkbox the second argument is false", got[1], false);
+        eq("and the window closed", ask.Visible, false);
+
+        /* --- the checkbox, and the window growing to hold it --------------- */
+        const before = ask.Height;
+        let withBox = null;
+        const both = AskText.Prompt("What is it called?",
+                                    (value, checked) => { withBox = checked; },
+                                    { Title: "Name it",
+                                      Option: { Text: "Also rename the file",
+                                                Checked: true } });
+        eq("a checkbox asked for is shown",
+           both.ChkOption.Visible, true);
+        eq("carrying the caller's label",
+           both.ChkOption.Text, "Also rename the file");
+        eq("and its state", both.ChkOption.Active, true);
+        /* **The window grew by exactly what the checkbox takes**, and that is
+         * the claim worth holding: the dialog is laid out by coordinates, so a
+         * checkbox with no room makes the buttons sit on top of it. The value
+         * is the one the source moves them by. */
+        eq("and the window made room for it",
+           both.Height - before, 34);
+        both.BtnCancel_Click();
+        eq("and cancelling it answers nothing either", withBox, null);
+
+        /* A checkbox that is offered and left alone answers `false`, which is
+         * what makes `Option` usable without the caller testing for its
+         * presence. */
+        const unchecked = AskText.Prompt("What is it called?",
+                                         (value, checked) => { withBox = checked; },
+                                         { Option: { Text: "Also" } });
+        /* With a value, because without one the field is empty and an empty
+         * field answers nothing -- which is the claim three assertions above
+         * and not a thing to route around here. */
+        unchecked.TxtValue.Text = "typed";
+        unchecked.BtnOk_Click();
+        eq("a checkbox nobody ticked answers false, not undefined", withBox, false);
+
+        /* Both windows are closed now, so nothing is left on screen for the
+         * next test to measure -- which is the whole of why the file-dialog
+         * test above asserts refusals only. */
     }
 
     /*

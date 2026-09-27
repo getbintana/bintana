@@ -355,7 +355,17 @@ tidied later.** A new form with nothing open goes to `forms/`, a new component t
 a file open the new one lands *beside it*, which was always the rule and is the
 one people expect: one creates a form while working on another.
 
-**Unless the project has no window at all.** *New project* asks what it starts at
+**And the two kinds differ in their libraries too.** A new **form** project
+starts with `uses: ["dialog"]` — the two questions every program asks, which were
+five hand-written copies in this tree before they were a library. It is a
+**default and not a requirement**: it is a list in `MainForm.js` (`NEW_FORM_USES`)
+so the next library that earns one is a line rather than a second mechanism, the
+dialog that edits libraries can drop it, and nothing checks that a project wants
+what it was given. A project that starts at a **function** does not get it, and
+that is not tidiness — a `main` project never initialises GTK, so it cannot make
+a widget at all, and every class in `lib/dialog` is a `Form`.
+
+**Unless the project has no window at all.** *New project* asks what it starts at**Unless the project has no window at all.** *New project* asks what it starts at
 before where it goes — *a form* or *a function* — and a project that starts at a
 function is a different set of files: `main` in the manifest, `Main.js` at the
 root rather than in `forms/` (a folder is where several of a kind go, and a `main`

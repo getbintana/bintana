@@ -45,6 +45,37 @@ const SOURCE_LINK = "[\\w./+-]+\\.(?:js|form|json):\\d+";
  * cost. Half of it goes when it is passed, so the trim is rare. */
 const LOG_MAX = 200000;
 
+/*
+ * The libraries a new *form* project starts with.
+ *
+ * **Why a library is a default at all, which is a decision and not a
+ * convenience.** The runtime refuses a blocking `MsgBox` because GTK4's dialogs
+ * are fire-and-forget, and `docs/llm/issues.md` records the answer as *"a
+ * question is a form"*. That is right and it is the wrong thing to meet on the
+ * first day: it means **every** application writes a yes/no window and a
+ * one-field window by hand before it does anything else, and the tree had three
+ * copies of the first and two of the second, all written from the same two
+ * examples. `lib/dialog` is those five, merged. A default puts them one call
+ * away instead of one file away.
+ *
+ * **A list and not a special case**, so the second library that earns this is
+ * one line here rather than a second mechanism. What earns it is a thing a
+ * project cannot do without and that a *project's author* should not have to
+ * write; what does not is anything a caller might reasonably do without.
+ *
+ * **Only for form projects, and that is not tidiness.** A `main` project never
+ * calls `gtk_init` -- a project with a `main` has no display, so it cannot make
+ * widgets at all -- and both of these classes are `Form` subclasses. A console
+ * project carrying `uses: ["dialog"]` would be a manifest that names a library
+ * whose every class is a window, and a person reading it would be misled.
+ *
+ * **It is a default and not a requirement.** The key is an ordinary field on
+ * `ProjectFile`, the dialog that edits libraries can drop it, and
+ * `examples/clients` shows a project that uses it. Nothing checks that a
+ * project wants what it was given.
+ */
+const NEW_FORM_USES = ["dialog"];
+
 /* The stylesheet a new project starts with: how the application looks, in the
  * one place that answers for it.  A control wears a class from here by setting
  * Style; Background, Foreground and Font on a control are the exception. */
@@ -631,6 +662,7 @@ class MainForm extends Form {
             Id:          id || "",
             Startup:     "Form1",
             Sources:     [`${first}.js`],
+            Uses:        NEW_FORM_USES,
             Description: description || "",
         });
 
@@ -666,9 +698,14 @@ class MainForm extends Form {
      * A project with no window: `main`, one source, and nothing else.
      *
      * No form, and **no app.css** -- how an application looks is a decision a
-     * program with nothing on screen does not have to make. The file sits at the
-     * root rather than in a folder: `forms/` is where a form goes because a
+     * program with nothing on screen does not have to make. The file sits at
+     * the root rather than in a folder: `forms/` is where a form goes because a
      * project grows several, and a `main` is one function in one place.
+     *
+     * **And no `uses`, where a form project gets `NEW_FORM_USES`.** A `main`
+     * project never initialises GTK, so it cannot make a widget at all, and
+     * every class in `lib/dialog` is a `Form`. A manifest naming it would be
+     * describing a window to a program that has no display.
      */
     createConsoleProject(dir, description, id) {
         const config = new Ide.ProjectFile({

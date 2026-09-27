@@ -888,7 +888,7 @@ class Board extends Form {
     BtnDel_Click() {
         const t = this.selTask === null ? null : this.taskById(this.selTask);
         if (!t) return;
-        Confirm.ask(Locale.Text("Delete {0}?", t.Title), Locale.Text("Delete"), () => {
+        Confirm.Ask(Locale.Text("Delete {0}?", t.Title), () => {
             const kept = [];
             for (const one of this.tasks)
                 if (one.Id !== t.Id) kept.push(one);
@@ -902,7 +902,7 @@ class Board extends Form {
             this.rebuildAll();
             this.refilter();
             this.say(Locale.Text("Deleted {0}", t.Title));
-        });
+        }, { Title: Locale.Text("Kanban"), Accept: Locale.Text("Delete") });
     }
 
     /* --- columns ------------------------------------------------------------ */
@@ -964,8 +964,7 @@ class Board extends Form {
                                       Locale.Plural("{0} task", "{0} tasks", rule.count)));
             return;
         }
-        Confirm.ask(Locale.Text("Delete {0}?", cdef.title),
-                    Locale.Text("Delete"), () => {
+        Confirm.Ask(Locale.Text("Delete {0}?", cdef.title), () => {
             const kept = [];
             for (const c of this.cols)
                 if (c.id !== id) kept.push(c);
@@ -979,6 +978,6 @@ class Board extends Form {
             this.buildColumns();
             this.rebuildAll();
             this.refilter();
-        });
+        }, { Title: Locale.Text("Kanban"), Accept: Locale.Text("Delete") });
     }
 }

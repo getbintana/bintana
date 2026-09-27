@@ -1,22 +1,46 @@
 {
   "format": "bintana-form/1",
-  "class": "AskName",
+  "class": "AskText",
   "properties": {
-    "Text": "Notes",
-    "Width": 380,
-    "Height": 150,
-    "Resizable": false
+    "Height": 140,
+    "Resizable": false,
+    "Text": "",
+    "Width": 380
   },
   "children": [
     {
       "type": "Label",
       "name": "LblPrompt",
-      "properties": { "HAlign": "Fill", "Height": 20, "Width": 348, "X": 16, "Y": 20 }
+      "properties": {
+        "HAlign": "Fill",
+        "Width": 348,
+        "X": 16,
+        "Y": 16
+      }
     },
     {
       "type": "TextBox",
-      "name": "TxtName",
-      "properties": { "HAlign": "Fill", "Height": 34, "Width": 348, "X": 16, "Y": 48 }
+      "name": "TxtValue",
+      "properties": {
+        "ActivatesDefault": true,
+        "HAlign": "Fill",
+        "Height": 34,
+        "Width": 348,
+        "X": 16,
+        "Y": 44
+      }
+    },
+    {
+      "type": "CheckButton",
+      "name": "ChkOption",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 26,
+        "Visible": false,
+        "Width": 348,
+        "X": 16,
+        "Y": 84
+      }
     },
     {
       "type": "Button",
@@ -28,8 +52,8 @@
         "Text": "Cancel",
         "VAlign": "End",
         "Width": 90,
-        "X": 170,
-        "Y": 100
+        "X": 176,
+        "Y": 92
       }
     },
     {
@@ -44,7 +68,7 @@
         "VAlign": "End",
         "Width": 90,
         "X": 274,
-        "Y": 100
+        "Y": 92
       }
     }
   ]

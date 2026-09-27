@@ -80,6 +80,38 @@ class TestForm extends Form {
         check("Report is here with the others",   typeof Report === "function");
         check("and Markdown", typeof Markdown === "function");
         check("and Chart",    typeof Chart === "function");
+        check("and both of the questions", typeof Confirm === "function" &&
+                                       typeof AskText === "function");
+
+        /* `lib/dialog`'s two classes are `Form` subclasses, so *building* one
+         * runs the `.form` loader against the class -- which is the thing that
+         * can be wrong and the thing a `typeof` cannot see. Neither is shown:
+         * a smoke run leaves no window on screen, and what is asserted here is
+         * that the form and its controls came up, not how a dialog behaves.
+         * `tests/widgets` drives the behaviour. */
+        const ask = new AskText();
+        eq("a question's own class is what it is",
+           ask instanceof AskText, true);
+        eq("and it built its field", typeof ask.TxtValue.Text, "string");
+        eq("with the focus going there, not to a button",
+           ask.TxtValue.Focusable, true);
+        const dlg = new Confirm();
+        eq("and the yes/no is a form too", dlg instanceof Confirm, true);
+        eq("whose accepting button carries the destructive style",
+           dlg.BtnAccept.Style, "destructive-action");
+        eq("and whose cancel is not Default, so Enter cannot destroy anything",
+           dlg.BtnCancel.Default, false);
+        eq("while the prompt's OK is, because there Enter is the answer",
+           ask.BtnOk.Default, true);
+
+        /* The declared prose, and *which* prose: the two labels each class owns
+         * and not the caller's. This is the declaration the extractor would read
+         * if it could reach a library, which it cannot -- `docs/llm/dialog.md`
+         * says so and says what a project does instead. */
+        eq("the yes/no declares its two labels",
+           Confirm.TextProperties.join(","), "BtnAccept,BtnCancel");
+        eq("and the prompt its own two",
+           AskText.TextProperties.join(","), "BtnOk,BtnCancel");
 
         /* And the table they used to keep a copy of each is one table. */
         eq("a paper size is the runtime's", Printer.Papers.A4.Width, 595);
@@ -256,7 +288,8 @@ class TestForm extends Form {
          */
         const libs = Application.Libraries();
         check("the libraries that ship here are offered",
-              libs.includes("charts") && libs.includes("report"),
+              libs.includes("charts") && libs.includes("report") &&
+              libs.includes("dialog"),
               JSON.stringify(libs));
         check("every name it offers resolves",
               libs.every((name) => Application.LibraryPath(name) !== ""),

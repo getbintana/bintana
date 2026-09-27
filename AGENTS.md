@@ -1091,6 +1091,166 @@ its go-to-symbol all go empty together -- with the suite red in `tests/widgets`
   freed on both early-outs) and `bta_notebook.c:161` (the output is assigned on
   every path that returns success).
 
+## A library is promoted by being the default, not by being asked for
+
+**`lib/dialog` exists because this tree had seven hand-written question
+dialogs, and one of them said why.** Four were plain copies and are gone:
+`examples/notes/Confirm.js`, `examples/clients/Confirm.js` and
+`examples/kanban/Confirm.js` (the second opens by saying it is *copied from* the
+first), and `examples/notes/AskName.js`. `examples/clients/Confirm.js` carried
+the sentence that settled it: *"Two applications wanting the same four widgets is
+what a `lib/` library is for, and one of them is not enough to write one."*
+There were three. **When a comment in an example says "a `lib/` library is for
+this", the count of copies is the ticket**, and the third copy is not a reason to
+wait for a fourth.
+
+**And the count was four when it started.** Two more turned up while the library
+was being written, and neither is in `lib/`:
+
+- `ide/forms/AskForm.js` and `ide/forms/ConfirmForm.js` are the **IDE's own**,
+  and they are still there. `AskForm` has a checkbox the shipped `AskText` grew
+  out of, and it has eight call sites with assertions on it; converting the IDE
+  is its own piece of work and not a side effect of shipping a library.
+- `examples/kanban/ColumnDialog.js` is a prompt **with a validation error beside
+  the field** — it refuses a name already in use. That is a shape neither shipped
+  class has, and it is the answer to "when is a question not one of the two":
+  adding an error line, a colour or a second field is a new question; a plain
+  prompt with a different word on the button is not. `llm/forms.md` says so where
+  somebody reading it decides.
+
+**The verb is a capital, and that is not a style choice.** Every other library
+publishes `Package.Write`, `QrCode.Encode`, `Nsis.Script`, `Chart.Refresh` — and
+`Confirm.ask` was filtered out of `bintana.d.ts` by the very convention this
+repository documents (*a capital initial is public, a lower-case one is the class
+talking to itself*), which is how a static verb that is really private gets
+caught. It is `Confirm.Ask` and `AskText.Prompt`.
+
+**What promotion actually is here: the new-project wizard, and nothing else.**
+`NEW_FORM_USES` in `ide/forms/MainForm.js` is a list with `dialog` in it, and
+`createProject` writes it into the manifest. The rule that makes it a *default*
+rather than a requirement — it is an ordinary `ProjectFile` field, the libraries
+dialog can drop it, `examples/clients` shows a project carrying it by choice, and
+nothing checks that a project wants what it was given. **And it is a list so the
+second library that earns it is a line**, because a special case per library is
+the shape this file keeps warning about everywhere else. **A `main` project does
+not get it**, and that is the half that is a decision: a `main` project never
+initialises GTK, so it cannot make a widget at all and every class in the library
+is a `Form`; a manifest naming it would be describing a window to a program with
+no display. `tests/ide`'s `projects` phase asserts both halves, and the second
+one only exists because a default nobody checked is a default that drifts.
+
+**Two classes and not one with a flag, and the reason is a declaration in a
+`.form`.** `Default` is what Enter means when the focus is somewhere else, so
+making a destructive button the default is exactly the reflex to avoid —
+`Confirm` has **nothing** `Default` and puts the focus on the button that says no,
+while `AskText` is `Default` and its field is `ActivatesDefault`. Neither could
+be a flag: a form cannot know which question it is being asked. **A test that
+asserted `BtnCancel.Default === true` would have been asserting the opposite of
+the design, and would have passed a wrong implementation** — the assertion that
+catches one is `BtnCancel.Default || BtnAccept.Default` being `false`, plus the
+focus, and both were put in after the first version got it backwards.
+
+**A library's own prose has no msgid, and that is not fixable from where it
+looks.** `static TextProperties = ["BtnAccept", "BtnCancel"]` puts the two labels
+through the catalogue when the `.form` loads, and the extractor cannot reach
+them: `Ide.Strings`' `projectFiles` walks from `this.ide.project`, so a `.form`
+under `lib/` is invisible to it. **The answer is that a caller passes its own
+words** — `{ Accept: "Delete" }` at the call site is a literal in the project's
+own `.js`, which is exactly where the extractor looks. It is the same shape as the
+one in *A prose position the runtime owns*: the declaration is half a promise
+and the other half is a caller's to keep.
+
+**A library's classes are declared now, and the four that could not be are
+named on the output rather than left out.** `tools/typings` walks `lib/`, takes
+each class from `Application.Symbols`, and asks the runtime the same four things
+it asks for its own: `PropertyNames` for the properties, `EventNames` for the
+events, `PropertyOptions(type, name)` for an enum's words, and
+`Member(type, name, kind)` for property against read-only. **Which methods are
+statics is answered rather than parsed**: `Widget.Methods(type)` walks the
+prototype, so it holds every instance method and no static, and the difference
+between the two sets is the answer. Nothing reads a `.js` to tell a static from
+a method. Six of the ten ship; `QrCode`, `Package`, `Metainfo` and `Nsis` are
+**not widget classes**, so nothing answers the members *they* carry, and a
+declaration that published `Encode` while omitting `Version` and `Size` would
+report every *use* as a missing property — which is worse than the `any` it
+replaces, because `tsc`'s "does not exist" reads as authoritative. So a class is
+declared whole or not at all, the four are printed on every run, and the trigger
+that brings them back is a class query that answers for a non-widget.
+
+**And no parameter list, because there is no way to reach one.** `Widget` has no
+static that resolves a name to a class — `Widget.Class`, `Widget.Resolve`,
+`Widget.Lookup` are all `undefined` — and without the class there is no way to
+read the `static Signatures` a library would declare its own arity in, which is
+the mechanism `completion-plan.md` describes and that no shipped library uses yet.
+So a library method is declared with its name and no parameters, which is the
+floor that plan measured for everything else and is a **truthful** file where a
+guessed signature would not be. An editor still offers the member.
+
+**The generator found two of my own mistakes, and both are worth more than the
+feature.** A **class accessor reaches `js_parse_class` as a method of the same
+name**, and `Widget.Methods` does not list it — an accessor is not a function
+valued *data* property — so the first version declared all nineteen of `Chart`'s
+properties a second time as statics. **A duplicate identifier is the one thing
+`tsc` found in this file when it was written**, and the same trap of a name
+meaning two things is what the whole `MainForm` list is about: skip a method whose
+name is already a property, and `PropertyNames` already carries it. The second was
+a **method I added with a name the class already had** — `typeOf(v)` beside the
+existing `typeOf(sample, name)`. Nothing failed: a class body with two of a name
+takes the *last*, mine was the first, and the runtime's own declarations were
+untouched, so the only symptom was that **every library property came out `any`**
+— which is what a missing second argument does to a helper that indexes with it.
+*`grep -c "^    <name>(" tools/typings/TypingsForm.js` before adding a method to a
+generator, for the reason `MainForm` has two `renameSelected`.*
+
+**And running `tsc` over what comes out found three more, which is the check's
+whole argument.** It is the one `AGENTS.md` names as *not* a dependency and
+*not about to become one*, and it had not been run since the file was written:
+
+- **`bintana.d.ts` had six syntax errors, and they were suppressing
+  everything.** `Editor.Replace`'s signature comment said `Replace(with)`,
+  which became a parameter called `with` — a reserved word, because a `.d.ts` is
+  strict mode. A declaration file with parse errors does not merely *look*
+  wrong: **`tsc` reported nothing else at all**, so a project with checking on
+  had no diagnostics. **A C-legal identifier is not always a TypeScript-legal
+  one**, and the runtime's own refusal had already called it something else —
+  `"Replace(text) needs the replacement text"`, in `bta_editor.c`, disagreeing
+  with the comment three lines below it. The fix is the source, and the guard
+  is in the generator so the next one cannot do it again.
+- **`Timer` is declared by hand, and it was stale.** `Timer` is a class in
+  rad.js, so nothing answers it, so it is in the generator's hand-written
+  `EXTRA` block — a second list to drift, which is the thing this file says
+  about a hundred other places. `Timer.After` was missing, so an editor
+  reported *Property 'After' does not exist* on a call that runs, on the verb
+  the whole language story leans on for having replaced `setTimeout`. Two lines.
+- **The reserved-word list was written from memory and was wrong in both
+  directions.** It included the contextual keywords, and `of` is **not**
+  reserved — so `Widget.SetItem(of, count)` was renamed to `of_` and a
+  *correct* declaration began disagreeing with the runtime. `api.sh` caught it
+  by name, which is the check that compares the output against the source and
+  the only reason the file was not left in that state. **A list written from
+  memory is wrong in both directions, and `of`/`as`/`from`/`get`/`set` are all
+  legal where `with` is not.**
+
+**So: `npx --package typescript@5 tsc --noEmit --lib es2022 --target es2022
+tools/typings/bintana.d.ts` is a check worth running when this file changes**,
+and it is the only one in this repository that needs a tool it does not
+otherwise have. The negative case is what makes it a test rather than a smoke:
+a project with `checkJs` on reports `Property 'AskNope' does not exist on type
+'typeof Confirm'` for a call that is not there, and **reports nothing for the
+correct one** — which is the whole contract, in both directions.
+
+**And `api.sh` does not count a library whose whole API is `static`.** The
+"published by `lib/`" figure comes from `LIB_GET`/`LIB_METHOD`, and `LIB_METHOD`
+drops a `static` — the same rule the runtime's own class statics follow, and
+reported in their own bucket (the "11 class statics"). So the number did not move
+when `dialog` landed, and the two **classes** did: "76 top-level names in `lib/`"
+went to 78. **When a library is added, that first number is the one that proves
+it was seen**, and it is why `docs/issues/README.md`'s "a library with no page at
+all is invisible to the check" has a companion worth remembering: a library whose
+members are all statics is *counted* and not *checked*, and the reference pages
+are what check it.
+
+## The declarations existed and nobody got them
 ## Flatpak, and the packaging step
 
 **One identity runs through the whole chain.** `project.json`'s `id` becomes
