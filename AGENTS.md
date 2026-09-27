@@ -1393,6 +1393,21 @@ So there were two fixes, and **only one of them is in the IDE**:
   have become the source `"5"` and answered "this class declares nothing" as though
   the caller had said so.
 
+  **And a form's children, which is the last name that was missing everywhere.**
+  `Confirm.BtnAccept` exists -- the library's own code does
+  `dlg.BtnAccept.Text = ...` -- and was in no list: the loader assigns each node by
+  name onto the form it builds, so a child is an **own property of the instance**
+  and every one of these walks is over the **prototype chain**. It is one bug and
+  not two, and the condition that hid it said so: the first version read the forms
+  only when `Sources` was also given, so it answered the IDE and *not* the
+  generator, which runs with the libraries loaded and gets the class-table walk
+  instead. **`Forms` therefore applies to a class that is loaded as well as one only
+  declared**, and the assertion for the loaded half is the one that was silently
+  passing before it existed. Reading a `.form` needs no display -- `JS_ParseJSON`
+  and a walk of `children` -- and the pairing is the form's own `class` key and
+  **not the file's name**, because a component declared in `Widgets.js` has
+  `Widgets.form`.
+
   **What it still does not say:** a `static` and an accessor both reach
   `js_parse_class` as a method of the same name, so both come back as `Method` and
   are labelled `()`. Telling them apart is the **eighth** vendor patch, and it needs

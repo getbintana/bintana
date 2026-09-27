@@ -366,6 +366,7 @@ Ide.Completion = class Completion {
 
         const out  = [];
         const seen = new Map();
+        const forms = [];
         const take = (src) => {
             for (const sym of Application.Symbols(src))
                 if (sym.Kind === "Class" && !seen.has(sym.Name)) {
@@ -418,7 +419,26 @@ Ide.Completion = class Completion {
                 if (f.endsWith(".js")) take(File.Load(File.Join(dir, f)));
             }
         }
-        this._declared = { names: out, sources: seen };
+        /* **And the `.form` files, for the same walk and the same reason.** A
+         * child of a form is an *own property of the instance* -- the loader
+         * assigns each node by name onto the form it builds -- so it is on no
+         * prototype chain, and neither the runtime's class-table walk nor the
+         * parser can see it. `Dial.Face` existed and the popup did not offer it.
+         *
+         * They are the project's and its libraries' `.form` files, read once and
+         * kept for the life of the project, because a popover is built on every
+         * keystroke. `Ide.Classes` already walks these files for the palette's
+         * library tab, so this reads the same walk a second time rather than
+         * having a second notion of what a `.form` is. */
+        const addForms = (dir) => {
+            for (const path of Directory.Files(dir, { Pattern: "*.form",
+                                                      Recursive: true }))
+                if (File.Exists(path)) forms.push(File.Load(path));
+        };
+        if (this.ide.project) addForms(this.ide.project);
+        for (const { dir } of this.ide.classes.libraries || []) addForms(dir);
+
+        this._declared = { names: out, sources: seen, forms };
         return this._declared;
     }
 
@@ -683,7 +703,7 @@ Ide.Completion = class Completion {
              * does not use was asked about. */
             let got = null;
             try {
-                got = Widget.Members(name, { Sources: list });
+                got = Widget.Members(name, { Sources: list, Forms: found.forms });
             } catch (e) {
                 if (!list.length) {
                     try { got = Widget.Members(name); } catch (e2) { got = null; }

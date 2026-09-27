@@ -3302,6 +3302,7 @@ static char **out_empty(void)
  * tables: a class and its base have to travel together, because the walk below
  * follows one to the other. */
 typedef struct {
+    char      *name;      /* its own, so a walk can ask what this entry is *for* */
     char      *base;
     GPtrArray *members;   /* char *, capitals only, the runtime's convention */
 } DeclClass;
@@ -3309,6 +3310,7 @@ typedef struct {
 static void decl_class_free(gpointer data)
 {
     DeclClass *d = data;
+    g_free(d->name);
     g_free(d->base);
     g_ptr_array_free(d->members, TRUE);
     g_free(d);
@@ -3320,16 +3322,18 @@ static DeclClass *decl_class_get(GHashTable *index, const char *name)
     if (d)
         return d;
     d = g_new0(DeclClass, 1);
+    d->name    = g_strdup(name);
     d->members = g_ptr_array_new();
     g_hash_table_insert(index, g_strdup(name), d);
     return d;
 }
 
-/* The `Sources` option read as a list of texts, or refused.  **Every entry is
+/* One of the list-of-texts options read, or refused.  **Every entry is
  * converted before any of it is parsed**, which is the rule every other verb
  * that fills something follows: a refusal leaves the answer not built rather
  * than half of it. */
-static char **sources_arg(JSContext *ctx, JSValueConst options, bool *refused)
+static char **texts_arg(JSContext *ctx, JSValueConst options, const char *key,
+                        bool *refused)
 {
     JSValue   arr;
     uint32_t  len, i, n = 0;
@@ -3339,7 +3343,7 @@ static char **sources_arg(JSContext *ctx, JSValueConst options, bool *refused)
     if (JS_IsUndefined(options) || JS_IsNull(options))
         return NULL;
 
-    arr = JS_GetPropertyStr(ctx, options, "Sources");
+    arr = JS_GetPropertyStr(ctx, options, key);
     if (JS_IsException(arr)) {
         *refused = true;
         return NULL;
@@ -3350,7 +3354,7 @@ static char **sources_arg(JSContext *ctx, JSValueConst options, bool *refused)
     }
     if (!JS_IsArray(arr)) {
         JS_FreeValue(ctx, arr);
-        JS_ThrowTypeError(ctx, "Members: Sources must be an array of source texts");
+        JS_ThrowTypeError(ctx, "Members: %s must be an array of source texts", key);
         *refused = true;
         return NULL;
     }
@@ -3372,7 +3376,7 @@ static char **sources_arg(JSContext *ctx, JSValueConst options, bool *refused)
          * nothing" as though the caller had said so. */
         const char *text = NULL;
         if (!JS_IsString(item))
-            JS_ThrowTypeError(ctx, "Members: Sources[%u] is not a source text", i);
+            JS_ThrowTypeError(ctx, "Members: %s[%u] is not a source text", key, i);
         else
             text = JS_ToCString(ctx, item);
         JS_FreeValue(ctx, item);
@@ -3388,6 +3392,94 @@ static char **sources_arg(JSContext *ctx, JSValueConst options, bool *refused)
         JS_FreeCString(ctx, text);
     }
     JS_FreeValue(ctx, arr);
+    return out;
+}
+
+/* The `{ Forms: [...] }` option, and the children it names.
+ *
+ * **A child of a `.form` is an own property of the *instance*, and that is the
+ * whole reason it is invisible.** The loader assigns each node by name onto the
+ * form it is building, so `Confirm.BtnAccept` exists at runtime -- the library's
+ * own code does `dlg.BtnAccept.Text = ...` -- and the walk every one of these
+ * verbs does is over the **prototype chain**, where an own property is not. So
+ * the name was missing from the completion, and from the generated declarations,
+ * which is a name that does not exist as far as an editor is concerned.
+ *
+ * **The `.form` is the only place that knows them**, and reading it needs no
+ * display: `JS_ParseJSON` and a walk of `children`, which is what the loader
+ * itself does with the same file. Nothing is built, nothing is realised, and the
+ * answer is a name and nothing else.
+ *
+ * **Only the name, and only the immediate child.** A child's own members are a
+ * hop away -- `Confirm.BtnAccept.Text` -- and a completion after one dot offers
+ * `BtnAccept`, not `Text`; flattening the subtree would answer a question
+ * nobody asked. The child *type* is read and not used, which is worth saying
+ * because it is the thing a reader expects to see consumed: the node's type is
+ * the control's, and a control's members are `Widget.Members(control)`'s job,
+ * not this one's.
+ */
+static GPtrArray *form_children_of(JSContext *ctx, const char *form_text,
+                                   const char *class_name)
+{
+    JSValue     root, kids, cls;
+    GPtrArray  *out = g_ptr_array_new();
+    uint32_t    len = 0, i;
+
+    root = JS_ParseJSON(ctx, form_text, strlen(form_text), "<form>");
+    if (JS_IsException(root)) {
+        /* A `.form` that does not parse is the loader's complaint, not this
+         * verb's, and a completion must not refuse a class over a file the
+         * designer has half typed. */
+        JS_FreeValue(ctx, JS_GetException(ctx));
+        g_ptr_array_free(out, TRUE);
+        return NULL;
+    }
+    if (!JS_IsObject(root)) {
+        JS_FreeValue(ctx, root);
+        return NULL;
+    }
+
+    /* **The pairing is the form's own `class`, and not the file's name.** A
+     * `.form` may be named after something else -- a component declared in a
+     * file called `Widgets.js` has `Widgets.form` -- so the name of the file is
+     * not an answer, and the key is what the loader itself reads. */
+    cls = JS_GetPropertyStr(ctx, root, "class");
+    {
+        const char *c = JS_ToCString(ctx, cls);
+        bool match = c && g_str_equal(c, class_name);
+        if (c) JS_FreeCString(ctx, c);
+        JS_FreeValue(ctx, cls);
+        if (!match) {
+            JS_FreeValue(ctx, root);
+            return NULL;
+        }
+    }
+
+    kids = JS_GetPropertyStr(ctx, root, "children");
+    if (JS_IsException(kids)) {
+        JS_FreeValue(ctx, JS_GetException(ctx));
+        JS_FreeValue(ctx, root);
+        return NULL;
+    }
+    len = array_length(ctx, kids);
+
+    for (i = 0; i < len; i++) {
+        JSValue  node  = JS_GetPropertyUint32(ctx, kids, i);
+        JSValue  nv    = JS_GetPropertyStr(ctx, node, "name");
+        const char *nm = JS_ToCString(ctx, nv);
+        JS_FreeValue(ctx, nv);
+        /* **The same convention the other two readers apply, and it is the one
+         * that has been wrong twice in this file**: a lower-case name is the
+         * class talking to itself, so a child called `row` is not a member a
+         * caller may write and is not offered. */
+        if (nm && *nm && g_ascii_isupper(nm[0]))
+            g_ptr_array_add(out, g_strdup(nm));
+        if (nm) JS_FreeCString(ctx, nm);
+        JS_FreeValue(ctx, node);
+    }
+
+    JS_FreeValue(ctx, kids);
+    JS_FreeValue(ctx, root);
     return out;
 }
 
@@ -3453,6 +3545,32 @@ static GHashTable *decl_index_build(JSContext *ctx, char **sources, int count)
     return index;
 }
 
+
+/* The children of one class, from whichever of the `Forms` declares it.  **Its
+ * own function and not a step in the chain**, because a child is an own
+ * property of the *instance* and a form class is invisible to a prototype walk
+ * whether it is loaded or only declared: `Confirm.BtnAccept` was missing from
+ * the answer in both cases, which is the whole bug and not two of them. */
+static void take_form_children(JSContext *ctx, char **forms,
+                              const char *class_name, JSValue out,
+                              GPtrArray *names, uint32_t *n)
+{
+    int count = (int) g_strv_length(forms);
+
+    for (int f = 0; f < count; f++) {
+        GPtrArray *kids = form_children_of(ctx, forms[f], class_name);
+
+        if (!kids)
+            continue;
+        for (guint i = 0; i < kids->len; i++) {
+            take(ctx, out, names, n, g_ptr_array_index(kids, i), "Property");
+            g_free(g_ptr_array_index(kids, i));
+        }
+        g_ptr_array_free(kids, TRUE);
+        break;      /* the first form that pairs with the class is the one */
+    }
+}
+
 /*
  * `Widget.Members(type, [options])`, with one option and one reason for it.
  *
@@ -3496,16 +3614,22 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
     uint32_t   n     = 0;
 
     char      **sources = NULL;
+    char      **forms   = NULL;
     GHashTable *index   = NULL;
     bool        refused = false;
 
     /* Read and refused *before* anything is built, which is the rule every
      * verb that fills something follows: a bad option leaves no answer rather
-     * than half of one. */
-    if (argc > 1)
-        sources = sources_arg(ctx, argv[1], &refused);
+     * than half of one.  `Forms` after `Sources` for the same reason and not
+     * because it does not matter: a bad `Sources` must not have built an index
+     * by the time the bad `Forms` is noticed. */
+    if (argc > 1) {
+        sources = texts_arg(ctx, argv[1], "Sources", &refused);
+        if (!refused) forms = texts_arg(ctx, argv[1], "Forms", &refused);
+    }
     if (refused) {
         JS_FreeCString(ctx, type);
+        g_strfreev(sources);
         JS_FreeValue(ctx, out);
         g_ptr_array_free(names, TRUE);
         return JS_EXCEPTION;
@@ -3519,6 +3643,13 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
                 for (guint i = 0; i < d->members->len; i++)
                     take(ctx, out, names, &n,
                          g_ptr_array_index(d->members, i), "Method");
+
+                /* A form class's own children, ahead of the base chain: they
+                 * are the class's instance properties, and that is the layer a
+                 * caller meets them in. */
+                if (forms)
+                    take_form_children(ctx, forms, d->name, out, names, &n);
+
                 if (!d->base)
                     break;
                 if (g_hash_table_contains(index, d->base)) {
@@ -3548,6 +3679,15 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
         JSValue klass = bta_lookup_global(ctx, type);
         if (!JS_IsException(klass)) {
             take_members_of_resolved(ctx, klass, out, names, &n);
+            /* **And here too, and the first version did not**: a loaded form
+             * class has children the prototype walk cannot see either, so
+             * asking for a library's class with the libraries loaded -- which is
+             * what `tools/typings` does -- got the same missing name as the IDE
+             * did. The bug was one bug, not two, and the condition it was under
+             * was the clue: the children were only read when `Sources` was also
+             * given, and nothing about them needs it. */
+            if (forms)
+                take_form_children(ctx, forms, type, out, names, &n);
             JS_FreeValue(ctx, klass);
         } else {
             JS_FreeValue(ctx, JS_GetException(ctx));
@@ -3559,6 +3699,7 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
             JS_FreeCString(ctx, type);
             if (sources) g_hash_table_destroy(index);
             g_strfreev(sources);
+            g_strfreev(forms);
             JS_FreeValue(ctx, out);
             g_ptr_array_free(names, TRUE);
             return JS_EXCEPTION;
@@ -3566,10 +3707,9 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
     }
 
     JS_FreeCString(ctx, type);
-    if (sources) {
-        g_hash_table_destroy(index);
-        g_strfreev(sources);
-    }
+    if (sources) g_hash_table_destroy(index);
+    g_strfreev(sources);
+    g_strfreev(forms);
 
     for (guint i = 0; i < names->len; i++)
         g_free(g_ptr_array_index(names, i));

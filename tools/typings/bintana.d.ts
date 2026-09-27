@@ -268,12 +268,12 @@ declare class DecimalBox extends Widget {
     Decimals: number;
     Format: string;
     Group: boolean;
-    Max: any;
-    Min: any;
+    Max: Decimal;
+    Min: Decimal;
     Prefix: string;
-    Step: any;
+    Step: Decimal;
     Suffix: string;
-    Value: any;
+    Value: Decimal;
     Visible: boolean;
     Wrap: boolean;
     readonly Text: string;
@@ -1467,6 +1467,8 @@ declare class Chart extends Component {
     Menu: any | null;
     /**  */
     Item: any | null;
+    /**  `[object Object]` by default. */
+    Canvas: DrawingArea | null;
     Refresh(...values: any[]): void;
     Save(...values: any[]): void;
     Canvas_Draw(...values: any[]): void;
@@ -1528,7 +1530,7 @@ declare class AskText extends Form {
     /**  */
     DefaultButton: any | null;
     /**  `[object Object]` by default. */
-    CancelButton: any | null;
+    CancelButton: Button | null;
     /**  `false` by default. */
     Resizable: boolean | null;
     /**  `false` by default. */
@@ -1635,6 +1637,16 @@ declare class AskText extends Form {
     Menu: any | null;
     /**  */
     Item: any | null;
+    /**  `[object Object]` by default. */
+    LblPrompt: Label | null;
+    /**  `[object Object]` by default. */
+    TxtValue: TextBox | null;
+    /**  `[object Object]` by default. */
+    ChkOption: CheckButton | null;
+    /**  `[object Object]` by default. */
+    BtnCancel: Button | null;
+    /**  `[object Object]` by default. */
+    BtnOk: Button | null;
     BtnOk_Click(...values: any[]): void;
     BtnCancel_Click(...values: any[]): void;
     Show(...values: any[]): void;
@@ -1694,7 +1706,7 @@ declare class Confirm extends Form {
     /**  */
     DefaultButton: any | null;
     /**  `[object Object]` by default. */
-    CancelButton: any | null;
+    CancelButton: Button | null;
     /**  `false` by default. */
     Resizable: boolean | null;
     /**  `false` by default. */
@@ -1801,6 +1813,12 @@ declare class Confirm extends Form {
     Menu: any | null;
     /**  */
     Item: any | null;
+    /**  `[object Object]` by default. */
+    LblMessage: Label | null;
+    /**  `[object Object]` by default. */
+    BtnCancel: Button | null;
+    /**  `[object Object]` by default. */
+    BtnAccept: Button | null;
     BtnAccept_Click(...values: any[]): void;
     BtnCancel_Click(...values: any[]): void;
     Show(...values: any[]): void;
@@ -1965,6 +1983,8 @@ declare class Markdown extends Component {
     Menu: any | null;
     /**  */
     Item: any | null;
+    /**  `[object Object]` by default. */
+    Canvas: DrawingArea | null;
     Load(...values: any[]): void;
     Refresh(...values: any[]): void;
     ScrollTo(...values: any[]): void;
@@ -2168,6 +2188,8 @@ declare class QrView extends Component {
     Menu: any | null;
     /**  */
     Item: any | null;
+    /**  `[object Object]` by default. */
+    Canvas: DrawingArea | null;
     Refresh(...values: any[]): void;
     Save(...values: any[]): void;
     ToPng(...values: any[]): void;
@@ -2227,7 +2249,7 @@ declare class Report extends Component {
     /**  `` by default. */
     Data: any[] | null;
     /**  `[object Object]` by default. */
-    Sections: any | null;
+    Sections: Object | null;
     /**  `1` by default. */
     PageCount: number | null;
     /** One of "Fixed" | "Horizontal" | "Vertical". `Vertical` by default. */
@@ -2320,6 +2342,8 @@ declare class Report extends Component {
     Menu: any | null;
     /**  */
     Item: any | null;
+    /**  `[object Object]` by default. */
+    Canvas: DrawingArea | null;
     Refresh(...values: any[]): void;
     Save(...values: any[]): void;
     SavePdf(...values: any[]): void;

@@ -3061,6 +3061,17 @@ function* p_completion(ide) {
           answer("Af", "Timer.").includes("After"),
           JSON.stringify(answer("Af", "Timer.")));
 
+    /* **A child of the library's own `.form`, which is the last thing that was
+     * missing.** `Dial`'s form declares a `Face` label; it is an own property
+     * of the instance, so no prototype walk sees it, and the popup after
+     * `Dial.` did not offer it. */
+    check("a form's own child is offered, which no prototype walk can see",
+          answer("Fac", "Dial.").includes("Face"),
+          JSON.stringify(answer("Fac", "Dial.")));
+    check("and it is offered next to the class's own members",
+          answer("", "Dial.").includes("Face"),
+          JSON.stringify(answer("", "Dial.").slice(0, 6)));
+
     /* --- this. : the controls on the form beside this file ------------------ */
     const mine = answer("", "        this.");
     check("`this.` offers the form's own controls",

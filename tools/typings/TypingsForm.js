@@ -286,6 +286,7 @@ class TypingsForm extends Form {
     libraryTypes(root, runtimeText) {
         this.root = root;
         this.skipped  = [];
+        this.forms    = [];
         /* **Every name the runtime half already declared, read out of what it
          * wrote.** `Record` is the one that matters and it is a real trap: it is
          * a class in rad.js, so the prelude walk below would declare it a second
@@ -343,6 +344,16 @@ class TypingsForm extends Form {
                 continue;
             }
 
+            /* **The library's `.form` files, once, for the same reason the IDE
+             * reads them: a form's children are own properties of the instance,
+             * so they are on no prototype chain and no class-table walk can see
+             * them.** `Confirm.BtnAccept` exists -- the library's own code does
+             * `dlg.BtnAccept.Text = ...` -- and without this it was declared
+             * nowhere, which in an editor is *"Property does not exist"* on a
+             * name that works. */
+            for (const form of Directory.Files(dir, "*.form"))
+                this.forms.push(File.Load(form));
+
             for (const file of Directory.Files(dir, "*.js")) {
                 for (const sym of Application.Symbols(File.Load(file))) {
                     if (sym.Kind !== "Class") continue;
@@ -376,7 +387,7 @@ class TypingsForm extends Form {
 
         let all;
         try {
-            all = Widget.Members(name);
+            all = Widget.Members(name, { Forms: this.forms });
         } catch (e) {
             this.skipped.push(`${name} (lib/${lib}): ${e.message} -- see ${doc}`);
             return [];
@@ -816,6 +827,23 @@ class TypingsForm extends Form {
 
         const t = typeof value;
         if (t === "string" || t === "number" || t === "boolean") return t;
+
+        /* **A control is a declared class and not `any`.** `Confirm.BtnAccept` is
+         * a `Button`, and every widget class is declared in this same file, so
+         * writing `any` for it makes `BtnAccept.Text` -- the one thing anybody
+         * does with a dialog -- type-check against nothing. A value that is not
+         * a control is still `any`: a class name the file does not declare would
+         * be a *worse* answer than `any`, because `tsc` reports an unknown type
+         * as an error and says nothing about the value. */
+        try {
+            /* **A static, and it takes a constructor** -- `Widget.TypeName` is
+             * how the serialiser and the loader ask a node's own type
+             * (`forms.js`: `Widget.TypeName(this.constructor)`), and reading it
+             * off the instance answers `undefined`, which is what the first
+             * version did and why every child came out `any`. */
+            const control = Widget.TypeName(value.constructor);
+            if (control) return control;
+        } catch (e) { /* not a control */ }
         return "any";
     }
 
