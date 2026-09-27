@@ -1,7 +1,7 @@
 # Testing
 
 ```sh
-./tests/run.sh                          # all six projects, 7371 assertions
+./tests/run.sh                          # all six projects, 7382 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -374,7 +374,13 @@ every global the C installs and fails on a `Method` or `Static` with no
 `Signature` -- proved by deleting
 `/* Load(path) */` and watching it name `File.Load`. A verb written in
 JavaScript passes without a comment, because the parser reads its parameters
-out of its own source. **The call hint's two runtime verbs** are asserted in
+out of its own source. **The names in scope**: `testCuratedLanguage` holds
+the ninth patch's report (each declared name at its line, every function as a
+span with its parameters, an arrow, one that broke), and `tests/ide`'s
+`completion` holds what a bare name offers from it -- a parameter and a local of
+the function around the cursor ahead of the globals, a top-level name of the
+file, another function's local absent, and another project file's top-level
+names as globals. **The call hint's two runtime verbs** are asserted in
 `tests/widgets` -- `CursorBounds()` moving down with the line and right with the
 column once the editor is laid out, and `Popup(anchor, rect)` opening and
 refusing a rect that is not one -- and `tests/ide`'s `completion` holds `callAt`

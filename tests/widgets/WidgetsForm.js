@@ -453,7 +453,7 @@ const TESTS = [
      * the note below. */
     "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableTree", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
-    "Expand", "Spacing", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
+    "Expand", "Spacing", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "CursorBounds", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
     "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "Record", "Nested", "Database", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "Metrics", "Library", "Plugin", "ListMulti", "MenuState",
@@ -1454,6 +1454,42 @@ class WidgetsForm extends Form {
      * *builds* a GtkScrolledWindow around its view: it is the same thing
      * underneath and the same number has to come out of both.
      */
+    testCursorBounds() {
+        /* Its own editor, and not `testEditorScroll`'s: that one is deleted
+         * when its own chain of waits is done, and a wait here that had not
+         * come true by then never would -- one run in several. */
+        const ed = new TextEditor();
+        this.Fixed1.Add(ed);
+        ed.Wrap = false;
+        ed.Resize(200, 120);
+        let text = "";
+        for (let i = 1; i <= 20; i++) text += `line ${i}\n`;
+        ed.Text = text;
+
+        /* **Where the cursor is drawn**, in the control's coordinates --
+         * what a hint beside it points `Popup(editor, rect)` at. It moves down
+         * with the line and right with the column, and at the top of the file
+         * it is inside the control. **Only once the control has a rectangle**:
+         * before that there is nothing to be drawn in, and a first version of
+         * this read garbage in a full run -- where it runs before the window
+         * is up -- and passed or failed on the timing. */
+        until("the editor is laid out", () => ed.Bounds().Width > 0, () => {
+            ed.Select(1, 1, 0);
+            const c1 = ed.CursorBounds();
+            ed.Select(3, 1, 0);
+            const c3 = ed.CursorBounds();
+            ed.Select(1, 5, 0);
+            const c15 = ed.CursorBounds();
+            check("the cursor's rectangle is inside the control at the top",
+                  c1.X >= 0 && c1.Y >= 0 && c1.X < 200 && c1.Y < 120 && c1.Height > 0,
+                  JSON.stringify(c1));
+            check("...lower two lines down", c3.Y > c1.Y, JSON.stringify([c1, c3]));
+            check("...and further right four columns along", c15.X > c1.X,
+                  JSON.stringify([c1, c15]));
+            ed.Delete();
+        });
+    }
+
     testEditorScroll() {
         /*
          * Its own editor on the surface, and not the `.form`'s.
@@ -1480,30 +1516,6 @@ class WidgetsForm extends Form {
          * assigned this turn and has no measured height yet, so the adjustment
          * still describes an empty view -- the same rule `testScrolling` above
          * follows, and the same one `Bounds()` does. */
-        /* **Where the cursor is drawn**, in the control's coordinates --
-         * what a hint beside it points `Popup(editor, rect)` at. It moves down
-         * with the line and right with the column, and at the top of the file
-         * it is inside the control. **Only once the control has a rectangle**:
-         * before that there is nothing to be drawn in, and a first version of
-         * this read garbage in a full run -- where it runs before the window
-         * is up -- and passed or failed on the timing. */
-        until("the editor is laid out", () => ed.Bounds().Width > 0, () => {
-            const keep = ed.Line;
-            ed.Select(1, 1, 0);
-            const c1 = ed.CursorBounds();
-            ed.Select(3, 1, 0);
-            const c3 = ed.CursorBounds();
-            ed.Select(1, 5, 0);
-            const c15 = ed.CursorBounds();
-            check("the cursor's rectangle is inside the control at the top",
-                  c1.X >= 0 && c1.Y >= 0 && c1.X < 200 && c1.Y < 120 && c1.Height > 0,
-                  JSON.stringify(c1));
-            check("...lower two lines down", c3.Y > c1.Y, JSON.stringify([c1, c3]));
-            check("...and further right four columns along", c15.X > c1.X,
-                  JSON.stringify([c1, c15]));
-            ed.Select(keep, 1, 0);
-        });
-
         until("a long file is measured", () => ed.ScrollMaxY > 0, () => {
             check("and then it has somewhere to go", ed.ScrollMaxY > 0,
                   String(ed.ScrollMaxY));
@@ -10890,12 +10902,15 @@ function Main() {
             "// class Ghost { Gone() {} }\n" +
             'const s = "class Fake { Nope() {} }";\n');
 
-        const named = (n) => sym.find((x) => x.Name === n);
+        /* What a file *declares*: the scopes and variables the ninth patch
+         * added are another question, asked below. */
+        const declared = (x) => x.Kind !== "Variable" && x.Kind !== "Scope";
+        const named = (n) => sym.find((x) => x.Name === n && declared(x));
 
         eq("a top-level function is a declaration", named("Top").Kind, "Function");
         eq("...on the line it is written", named("Top").Line, 1);
         eq("and one nested inside is not reported",
-           sym.filter((x) => x.Name === "inner").length, 0);
+           sym.filter((x) => x.Name === "inner" && declared(x)).length, 0);
 
         eq("a class is a declaration", named("One").Kind, "Class");
         eq("...on its own line", named("One").Line, 4);
@@ -10963,6 +10978,32 @@ function Main() {
         /* **A static accessor is the class's, not the instance's.** It was a
          * plain `Getter`, which put `static get Fields()` -- the one thing a
          * `Record` subclass declares that way -- on the instance. */
+        /* **Every scope and every declared name**, which is what lets an
+         * editor say what a name can mean where the cursor is: each function
+         * as the lines it spans with its parameters -- an arrow too, and one
+         * that broke, up to where it broke -- and each `let`/`const`/`var`,
+         * destructured name, `for...of` variable and `catch` binding at its
+         * line. */
+        const scoped = Application.Symbols(
+            "const TOP = 1;\n" +                              /* 1 */
+            "function go(a, b = 2) {\n" +                     /* 2 */
+            "    const { p, q } = a;\n" +                     /* 3 */
+            "    for (const item of b) [1].map((v) => v);\n" + /* 4 */
+            "    try { } catch (err) { }\n" +                 /* 5 */
+            "}\n" +                                           /* 6 */
+            "function half(n) {\n" +                          /* 7 */
+            "    const z = File.Load(\n");                    /* 8, broken */
+        const vars = scoped.filter((x) => x.Kind === "Variable").map((x) => `${x.Name}@${x.Line}`);
+        eq("every declared name is reported at its line",
+           vars.join(" "), "TOP@1 p@3 q@3 item@4 err@5 z@8");
+        const spans = scoped.filter((x) => x.Kind === "Scope").map((x) => `${x.Params}${x.Line}-${x.End}`);
+        check("every function is a scope with its parameters and its lines",
+              spans.includes("(a, [b])2-6") && spans.includes("(v)4-4"), JSON.stringify(spans));
+        check("...and one that broke is a scope up to where it broke",
+              spans.includes("(n)7-9"), JSON.stringify(spans));
+        eq("a declaration is not a scope, so End is 0",
+           scoped.find((x) => x.Name === "TOP").End, 0);
+
         eq("a static getter says so", nested("Fields", "StaticGetter").Kind, "StaticGetter");
         eq("and a static setter", nested("Fields", "StaticSetter").Kind, "StaticSetter");
 
@@ -10987,7 +11028,7 @@ function Main() {
          * is typing in: the declarations reached are the answer, and the
          * complaint is `CheckSource`'s. */
         const part = Application.Symbols(
-            "class Ok {\n    A() {}\n}\nclass Bad extnds X {\n");
+            "class Ok {\n    A() {}\n}\nclass Bad extnds X {\n").filter(declared);
         eq("broken source answers what it reached", part.length, 3);
         eq("...the class that was complete", part[0].Name, "Ok");
         eq("...its method", part[1].Name, "A");

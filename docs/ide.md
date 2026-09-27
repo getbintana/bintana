@@ -933,6 +933,13 @@ keystroke:
 - **The file's own methods are scanned from the text**, since the IDE edits the
   project's code rather than loading it, and the scan is redone only when the
   text is not the one it was taken from.
+- **A bare name offers what is in scope first.** The parameters of every
+  function around the cursor and the variables declared in them above it, then
+  what the file declares at its top level, then the globals -- among them every
+  other project file's top-level names, since they share one scope. Out of the
+  parser's `Scope` and `Variable` report, so a word in a comment is not a local
+  and another function's local is not in scope; a block's `let` is offered
+  after its block has closed, which is the only way this is wrong.
 - **Inside a call, which argument.** `File.Save(p, |` puts `Save(path, **text**)`
   above the cursor (`Ide.CallTip`): `Completion.callAt` reads the text before
   the cursor forwards -- a comma separates arguments only outside a string, a

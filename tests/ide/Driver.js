@@ -3457,6 +3457,54 @@ function* p_completion(ide) {
     eq("a call nothing declares an answer for still offers nothing",
        answer("", "        makeThing().").length, 0);
 
+    /* --- the names in scope at the cursor --------------------------------------
+     *
+     * A bare name offers the parameters of every function around the cursor
+     * and the variables declared in them above it, before the globals -- out
+     * of the parser's report of scopes and variables, so a word in a comment
+     * is not a local and a local of another function is not in scope. And
+     * what a project file declares at its top level is a global to every
+     * other file, since they share one scope. */
+    ide.Editor.Text = ide.Editor.Text +
+        "function Scoped(alpha, beta = 2) {\n" +
+        "    const gamma = 1;\n" +
+        "    // here\n" +
+        "}\n" +
+        "function Other(delta) {\n    const epsilon = 1;\n}\n" +
+        "const TOPLEVEL = 5;\n";
+    yield* settled(ide);
+    const srcLines = ide.Editor.Text.split("\n");
+    const here = srcLines.indexOf("    // here") + 1;
+    const scoped = ide.Editor_Complete("x", here, 5, "    ");
+    const names = scoped.map((p) => p.Text);
+    check("a parameter of the function around the cursor is offered",
+          scoped.some((p) => p.Text === "alpha" && p.Detail === "parameter") &&
+          names.includes("beta"), JSON.stringify(scoped.slice(0, 6)));
+    check("...and a local declared above it",
+          scoped.some((p) => p.Text === "gamma" && p.Detail === "local"),
+          JSON.stringify(scoped.slice(0, 6)));
+    check("...and a top-level name of the file",
+          names.includes("TOPLEVEL"), JSON.stringify(scoped.slice(0, 8)));
+    check("...before the globals",
+          names.indexOf("alpha") >= 0 && names.indexOf("alpha") < names.indexOf("File"),
+          `${names.indexOf("alpha")} / ${names.indexOf("File")}`);
+    check("a local of another function is not in scope",
+          !names.includes("epsilon") && !names.includes("delta"), "");
+    const outside = ide.Editor_Complete("x", srcLines.length, 1, "").map((p) => p.Text);
+    check("outside the function its local and its parameters are not offered",
+          !outside.includes("gamma") && !outside.includes("alpha") &&
+          outside.includes("TOPLEVEL"), "");
+    File.Save(File.Join(TMP, "Shared.js"), "const SHARED_THING = 1;\nfunction sharedHelper(x) { }\n");
+    ide.listFiles();
+    yield* settled(ide);
+    const shared = answer("SHA", "        const s = ");
+    check("another project file's top-level names are globals here",
+          shared.includes("SHARED_THING") && shared.includes("sharedHelper"),
+          JSON.stringify(shared.filter((n) => n.startsWith("S")).slice(0, 8)));
+    File.Delete(File.Join(TMP, "Shared.js"));
+    ide.listFiles();
+    yield* settled(ide);
+
     /* --- the call being written ----------------------------------------------
      *
      * Which call the cursor is inside and which argument, asked of the text

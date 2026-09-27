@@ -136,6 +136,52 @@ function completionSteps(expr) {
 }
 
 /*
+ * The names a file puts in scope at a line, out of the parser's report: the
+ * parameters of every function that contains the line (innermost first), the
+ * variables declared inside those functions above it, and what the file
+ * declares at its top level -- variables and functions -- anywhere, since a
+ * top-level name is in scope before its line is reached as far as a function
+ * called later is concerned.
+ *
+ * `Scope` is a function as the lines it spans and `Variable` a declared name
+ * at its line; a variable belongs to the innermost scope that contains its
+ * line, and is offered only when that scope contains the cursor too. Block
+ * scope is not modelled -- a `let` inside an `if` above the cursor is offered
+ * after the `if` has closed -- which is the wrong direction to be wrong in
+ * only by a name the person can see.
+ */
+function completionScopeNames(symbols, line) {
+    const scopes = symbols.filter((s) => s.Kind === "Scope");
+    const inner  = (at) => {
+        let best = null;
+        for (const sc of scopes)
+            if (sc.Line <= at && at <= sc.End &&
+                (!best || sc.Line >= best.Line)) best = sc;
+        return best;
+    };
+    const open = scopes.filter((sc) => sc.Line <= line && line <= sc.End)
+                       .sort((a, b) => b.Line - a.Line);
+    const out = [];
+    const add = (name, detail) => {
+        if (name && !out.some((e) => e.Text === name)) out.push({ Text: name, Detail: detail });
+    };
+
+    for (const sc of open)
+        for (const p of (sc.Params || "").replace(/^\(|\)$/g, "").split(","))
+            add(p.trim().replace(/^\[|\]$/g, "").replace(/^\.\.\./, ""), "parameter");
+
+    for (const v of symbols) {
+        if (v.Kind !== "Variable") continue;
+        const home = inner(v.Line);
+        if (!home) add(v.Name, "top level");
+        else if (v.Line <= line && open.includes(home)) add(v.Name, "local");
+    }
+    for (const f of symbols)
+        if (f.Kind === "Function") add(f.Name, "function");
+    return out;
+}
+
+/*
  * What a declared answer means as a thing to complete after: the text after the
  * arrow in a signature comment (`-> Bytes`, `-> string[]`, `-> { X, Y }`).
  * `null` is "nothing to offer" -- a boolean, `any`, or nothing declared.
@@ -331,7 +377,8 @@ Ide.Completion = class Completion {
              * apart on the one piece of evidence that distinguishes them. */
             if (!/[\w$]/.test(word)) return [];
             if (HANDLER_WORD.test(word)) return [];
-            return this.globals(word);
+            return this.inScope(word, line).concat(
+                this.globals(word).filter((g) => !this._scopeNames.has(g.Text)));
         }
 
         const parts = path[1].split(".");
@@ -632,11 +679,37 @@ Ide.Completion = class Completion {
         return out;
     }
 
+    /*
+     * The parameters and locals where the cursor is, asked of the parser over
+     * the text on screen -- before the globals, since they are what a person
+     * inside a function reaches for first, and they were offered only as the
+     * words provider's spellings: any word in the file, a comment's included,
+     * with nothing to say which were in scope. Parsed again only when the text
+     * moved.
+     */
+    inScope(word, line) {
+        this._scopeNames = new Set();
+        const editor = this.ide.Editor;
+        if (!editor) return [];
+        const text = editor.Text;
+        if (!this._here || this._here.text !== text) {
+            let syms = [];
+            try { syms = Application.Symbols(text); } catch (e) { syms = []; }
+            this._here = { text, syms };
+        }
+        const out = completionScopeNames(this._here.syms, line || editor.Line)
+                        .filter((e) => e.Text !== word);
+        for (const e of out) this._scopeNames.add(e.Text);
+        return out;
+    }
+
     collectGlobals() {
         const out = [];
         for (const name of Application.Globals()) if (!out.includes(name)) out.push(name);
         for (const name of Widget.Types())          if (!out.includes(name)) out.push(name);
         for (const name of this.classNames())      if (!out.includes(name)) out.push(name);
+        for (const name of this.declaredClasses().tops)
+            if (!out.includes(name)) out.push(name);
         return out.sort();
     }
 
@@ -694,21 +767,31 @@ Ide.Completion = class Completion {
         let changed = !this._declared;
         const names = [];
         const sources = new Map();
+        const tops = [];
 
         for (const [path, text] of live) {
             let cached = this._parsed.get(path);
             if (!cached || cached.text !== text) {
                 const classes = [];
+                const tops = [];
                 try {
-                    for (const sym of Application.Symbols(text))
+                    const syms = Application.Symbols(text);
+                    for (const sym of syms)
                         if (sym.Kind === "Class") classes.push(sym.Name);
+                    /* What the file declares at its top level is a name every
+                     * other file of the project can write: they are evaluated
+                     * into one global scope. */
+                    for (const e of completionScopeNames(syms, 0))
+                        if (e.Detail === "top level" || e.Detail === "function")
+                            tops.push(e.Text);
                 } catch (e) { /* half a file is still a file */ }
-                cached = { text, classes };
+                cached = { text, classes, tops };
                 this._parsed.set(path, cached);
                 changed = true;
             }
             for (const c of cached.classes)
                 if (!sources.has(c)) { sources.set(c, text); names.push(c); }
+            for (const t of cached.tops) if (!tops.includes(t)) tops.push(t);
         }
 
         const formList = [...forms.values()];
@@ -718,7 +801,7 @@ Ide.Completion = class Completion {
             return this._declared;
 
         this.generation = (this.generation || 0) + 1;
-        this._declared = { names, sources, forms: formList };
+        this._declared = { names, sources, forms: formList, tops };
         return this._declared;
     }
 

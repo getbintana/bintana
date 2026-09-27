@@ -52,7 +52,7 @@ The running program: what it is called, where its files are, and how it ends.
 | `HasCommand(name)` | whether that program is on the PATH. **The question that does not need an exception**, since [`Exec`](Exec.md) throws when the program is not there |
 | `DecorationLayout` | how this desktop arranges a title bar — which buttons, and on which side. What a drawn title bar reads to look like the real one |
 | `CheckSource(text)` | `null` when the text is valid JavaScript, else `{ Message, Line, Column }`. What an editor checks a file with before saving it, and the answer `new Function(src)` is not allowed to give |
-| `Symbols(text)` | `[{ Name, Kind, Line, Parent, Super, Params }]`: the classes, methods and top-level functions the text declares, with the line of each. What an editor lists a file with, and the answer a pattern is not allowed to guess at |
+| `Symbols(text)` | `[{ Name, Kind, Line, Parent, Super, Params, End }]`: the classes, methods and top-level functions the text declares, with the line of each. What an editor lists a file with, and the answer a pattern is not allowed to guess at |
 
 **`Symbols` is `CheckSource`'s compile asked a different question.** `Kind` is
 `"Class"`, `"Function"`, or one of the member kinds below, `Parent` is the class a method is in and
@@ -79,6 +79,16 @@ parse is still listed, with what was read of it.
 learned to tell them apart, and a reader that cannot say which is the
 difference between `Value: T` and `Value(): T` — or, for `static get Fields()`,
 between a property of the instance and one of the class.
+
+**`Variable` and `Scope` are what a name can mean where the cursor is.** A
+`Variable` is every declared name at its line -- a `let`, a `const`, a `var`, a
+`catch` binding, each name a destructuring declares, a `for...of` variable -- and
+a `Scope` is every function, arrows and function expressions included, with its
+`Params` and the lines it spans, `Line` to `End` (`End` is 0 for every other
+kind). An editor puts them together: the scopes that contain a line give their
+parameters, and the variables declared inside them above it are the locals. A
+function that does not parse is a scope up to where it broke -- which is where
+somebody is typing.
 
 **`Super` is what makes the answer a shape and not a list of names.** It is the
 name in a class's `extends` clause, and `""` for a class that declares none,

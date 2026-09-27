@@ -434,11 +434,11 @@ used to read as no id at all; a project that declares none keeps the old answer,
 program's own name. `GtkApplication` also takes the id as the default window
 icon when the theme has one by that name (`gtkapplication.c`).
 
-## The eight patches in vendor/
+## The nine patches in vendor/
 
 `vendor/quickjs` is a **submodule** of
 [`getbintana/quickjs`](https://github.com/getbintana/quickjs), branch `bintana`:
-upstream **v0.17.0** plus the eight patches below, one commit each (the eighth
+upstream **v0.17.0** plus the nine patches below, one commit each (the eighth
 carries a fix as a second commit, `1493dc7`, until it is squashed into it). The fork's
 `BINTANA.md` is the recipe; what follows is what each patch does and what
 dropping it costs.
@@ -482,11 +482,11 @@ git push --force-with-lease origin bintana
 git submodule update --remote vendor/quickjs              # and commit the pin
 ```
 
-Then the suite. All eight are marked `Bintana patch` in the source, and
+Then the suite. All nine are marked `Bintana patch` in the source, and
 **dropping one does not fail to build** -- that is the property they share and
 the reason `tests/widgets` asserts each of them (`Decimal`, `JsonFiles`,
 `strictChecks`, `testDebugger`, `testCuratedLanguage`) -- the last of which now carries
-the seventh and the eighth. Grep the fork for the
+the seventh, the eighth and the ninth. Grep the fork for the
 marker after a rebase; there is no build-time check that they survived.
 
 ### 1. Operators on a Decimal
@@ -804,6 +804,35 @@ asserts it in `testCuratedLanguage` (the three kinds, and the parameters of a
 plain, an accessor and a static), and `tests/ide` asserts that a library class's
 method says its parameter *names* — which is the half no runtime verb could
 reach.
+
+### 9. The parser reports every scope and every declared variable
+
+`JS_SYMBOL_VARIABLE` and `JS_SYMBOL_SCOPE`, and the handler gains an
+`end_line`. It is what lets the IDE offer, for a bare name, the parameters and
+locals in scope at the cursor rather than every word in the buffer.
+
+**The variable is reported in `js_define_var` and nowhere else**, because all
+four declaration paths go through it -- `js_parse_var`, the `for...of` head and
+both destructuring branches -- and a `catch` binding does too; four call sites
+would have been four places to forget one. The name has been read by then, so
+the line is `last_line_num`. **The scope is reported at `done:`**, for every
+function the parser finishes -- an arrow and a function expression as much as a
+method -- with `last_line_num` as its end, and in the `fail` path with the
+current token's line: a function that broke is a scope up to where it broke,
+which is the line somebody is typing on. A scope may be anonymous, which is the
+one kind `js_report_symbol_span` lets through with no name.
+
+**Every existing consumer filters by `Kind`**, and the ones that did not --
+`tests/widgets`' `named()`, and a count of what broken source reached -- were
+asserting over *every* symbol and broke on the first run; they ask for
+declarations now. Anything new that reads `Application.Symbols` whole wants the
+same filter.
+
+**Dropping it does not fail to build**: the report is the eighth patch's with
+two kinds fewer, and the IDE's bare names go back to the globals alone.
+`tests/widgets` asserts it (`testCuratedLanguage`: each declared name at its
+line, a scope with its parameters and span, an arrow, and one that broke) and
+`tests/ide`'s `completion` asserts what the IDE makes of it.
 
 ## Memory rules
 
@@ -1524,7 +1553,12 @@ anchor instead of at the whole of it. Three things measured on the way:
   first test read `{ X: -3, Y: -17 }` in a full run -- where `tests/widgets`'
   synchronous half runs inside `Form_Open`, before anything is allocated --
   and passed alone, where the timing differed. It waits for `Bounds().Width >
-  0` now; the number means nothing until the control has a rectangle.
+  0` now; the number means nothing until the control has a rectangle. **And
+  in a test of its own, with its own editor**: it first borrowed
+  `testEditorScroll`'s, whose own chain of waits deletes it when done, so one
+  run in several the wait here had not come true by then and never would --
+  *never became true* on a check that was right. A wait on a control another
+  test owns is a race with that test's teardown.
 - **A comma is an argument separator only outside a string, a comment and a
   nested bracket**, so `callAt` reads the text forwards (forty lines back is
   enough, and keeps a long file off the keystroke), not backwards: only a

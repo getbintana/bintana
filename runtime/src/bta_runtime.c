@@ -440,13 +440,17 @@ static const char *symbol_kind_name(JSSymbolKind kind)
     /* An accessor of the class itself: a property of the constructor. */
     case JS_SYMBOL_STATIC_GETTER: return "StaticGetter";
     case JS_SYMBOL_STATIC_SETTER: return "StaticSetter";
+    /* A declared name at its line, and a function as the span it covers:
+     * together they say what a name can mean where the cursor is. */
+    case JS_SYMBOL_VARIABLE:      return "Variable";
+    case JS_SYMBOL_SCOPE:         return "Scope";
     }
     return "";
 }
 
 static void symbol_report(void *opaque, JSSymbolKind kind, const char *name,
                           const char *parent, const char *supertype,
-                          const char *params, int line)
+                          const char *params, int line, int end_line)
 {
     SymbolSink *sink = opaque;
     JSContext  *ctx  = sink->ctx;
@@ -472,6 +476,8 @@ static void symbol_report(void *opaque, JSSymbolKind kind, const char *name,
      * [options], ...rest)`.  Empty for anything that is not a member, and for a
      * method that takes none. */
     JS_SetPropertyStr(ctx, obj, "Params", JS_NewString(ctx, params ? params : ""));
+    /* The last line of a `Scope`, and 0 for everything else. */
+    JS_SetPropertyStr(ctx, obj, "End", JS_NewInt32(ctx, end_line));
 
     /* The value is taken either way; the count only moves when it landed, so
      * an array this hands back never has a hole for a caller to trip on. */
