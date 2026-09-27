@@ -1479,6 +1479,27 @@ So there were two fixes, and **only one of them is in the IDE**:
   comment -- a declaration built from it is *weaker* than one built from names
   and not a wrong one, which is the difference that matters.
 
+  **And then the check that makes all of it hold**, which is the piece that was
+  missing the whole time and the reason the four silently skipped classes and
+  `Confirm.BtnAccept` could sit there for years. `api.sh` asked about the
+  runtime's classes -- `Widget.Types()` is the widget table and `lib/charts` is
+  not in it -- so **no member of any library was ever compared against the
+  generated file.** It does now, over every shipped library, with the sources and
+  the forms, and it names the class and the member. It also rejects a declaration
+  whose parameter is a name nobody wrote, which is the `a1: any` regression: the
+  first version of that check matched a line whose *name* was a placeholder and
+  went green on the exact thing it was added for, because the generator writes
+  `Ask(a1: any, a2: any)` -- the placeholder is a parameter of a real method.
+  **And the third consumer is the popup**, which the two file checks cannot
+  reach: `tests/ide`'s `completion` asks the editor for the same members the
+  runtime describes, over every widget class and the test project's own library,
+  so a name that exists and is not offered is red with the class named.
+
+  **All three were proved by breaking them** rather than by reading them green: a
+  declaration deleted, an `a1` injected, and `Delete` filtered out of the popup.
+  An oracle nobody has watched fail is a claim, and this file has been wrong about
+  one before.
+
   **And then the names, which are the one answer nobody has to write.** The
   eighth fork patch has the parser report them, so a class in a file the host
   does not run gets `Ask(message, onConfirm, options)` with the real names --
