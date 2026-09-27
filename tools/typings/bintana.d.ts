@@ -1269,11 +1269,11 @@ declare class XmlNode {
 declare class Timer {
     /**  */
     Enabled: any | null;
-    Start(a1: any): void;
+    Start(): void;
     Stop(): void;
-    Once(a1: any): void;
-    static After(a1: any, a2: any): any;
-    static Every(a1: any, a2: any): any;
+    Once(): void;
+    static After(delay: any, tick: any): any;
+    static Every(delay: any, tick: any): any;
 }
 
 /** runtime/js/Stopwatch. Every member: docs/reference/globals/Stopwatch.md */
@@ -1289,19 +1289,19 @@ declare class Stopwatch {
 
 /** runtime/js/Match. Every member: docs/reference/globals/Match.md */
 declare class Match {
-    Group(a1: any): void;
+    Group(which: any): void;
 }
 
 /** runtime/js/Regex. Every member: docs/reference/globals/Regex.md */
 declare class Regex {
     /**  */
     Pattern: any | null;
-    IsMatch(a1: any): void;
-    Match(a1: any): void;
-    Matches(a1: any): void;
-    Replace(a1: any, a2: any, a3: any): void;
-    Split(a1: any): void;
-    static Escape(a1: any): any;
+    IsMatch(text: any): void;
+    Match(text: any, start?: any): void;
+    Matches(text: any): void;
+    Replace(text: any, replacement: any, count: any): void;
+    Split(text: any): void;
+    static Escape(text: any): any;
 }
 
 /** runtime/js/Record. Every member: docs/reference/globals/Record.md */
@@ -1329,14 +1329,14 @@ declare class Table {
     Connection: any | null;
     /**  */
     Shape: any | null;
-    Where(a1: any): void;
+    Where(row: any): void;
     All(): void;
-    Find(): void;
-    Count(a1: any): void;
-    Insert(a1: any): void;
-    Update(a1: any): void;
-    Save(a1: any): void;
-    Delete(a1: any): void;
+    Find(k: any, i: any): void;
+    Count(sql: any, ...params: any[]): void;
+    Insert(c: any): void;
+    Update(k: any): void;
+    Save(k: any): void;
+    Delete(k: any): void;
 }
 
 /** charts/Chart. Every member: docs/reference/libraries/Chart.md */
@@ -1470,14 +1470,14 @@ declare class Chart extends Component {
     /**  `[object Object]` by default. */
     Canvas: DrawingArea | null;
     Refresh(): void;
-    Save(a1: any, a2: any, a3: any): void;
-    Canvas_Draw(a1: any, a2: any, a3: any): void;
-    Canvas_MouseWheel(a1: any, a2: any): void;
-    Canvas_MouseMove(a1: any, a2: any): void;
+    Save(path: any, width: any, height: any): void;
+    Canvas_Draw(p: any, width: any, height: any): void;
+    Canvas_MouseWheel(dx: any, dy: any): void;
+    Canvas_MouseMove(x: any, y: any): void;
     Canvas_MouseLeave(): void;
-    Canvas_MouseDown(a1: any, a2: any): void;
-    Canvas_MouseUp(a1: any, a2: any): void;
-    Canvas_DblClick(a1: any, a2: any): void;
+    Canvas_MouseDown(x: any, y: any): void;
+    Canvas_MouseUp(x: any, y: any): void;
+    Canvas_DblClick(x: any, y: any): void;
     FocusNext(): void;
     FocusPrevious(): void;
     Reorder(child: any, index: any): void;
@@ -1692,7 +1692,7 @@ declare class AskText extends Form {
     SetItem(of: any, count: any): void;
     SetDesign(name: any, value: any): void;
     DesignValue(name: any): void;
-    static Prompt(a1: any, a2: any, a3: any): any;
+    static Prompt(label: any, onAccept: any, options: any): any;
 }
 
 /** dialog/Confirm. Every member: docs/reference/libraries/Confirm.md */
@@ -1864,7 +1864,7 @@ declare class Confirm extends Form {
     SetItem(of: any, count: any): void;
     SetDesign(name: any, value: any): void;
     DesignValue(name: any): void;
-    static Ask(a1: any, a2: any, a3: any): any;
+    static Ask(message: any, onConfirm: any, options: any): any;
 }
 
 /** markdown/Markdown. Every member: docs/reference/libraries/Markdown.md */
@@ -1985,26 +1985,26 @@ declare class Markdown extends Component {
     Item: any | null;
     /**  `[object Object]` by default. */
     Canvas: DrawingArea | null;
-    Load(a1: any): void;
+    Load(path: any): void;
     Refresh(): void;
-    ScrollTo(a1: any): void;
-    SelectAll(): void;
+    ScrollTo(h: any): void;
+    SelectAll(it: any): void;
     Deselect(): void;
     Copy(): void;
-    Find(a1: any): void;
+    Find(text: any): void;
     FindNext(): void;
-    Save(a1: any, a2: any, a3: any): void;
-    SavePdf(a1: any, a2: any): void;
-    Send(a1: any, a2: any): void;
-    Canvas_Paginate(a1: any, a2: any): void;
-    Canvas_DrawPage(a1: any, a2: any, a3: any, a4: any): void;
-    Canvas_Draw(a1: any, a2: any, a3: any): void;
-    Canvas_MouseWheel(a1: any, a2: any): void;
-    Canvas_MouseDown(a1: any, a2: any, a3: any): void;
-    Canvas_MouseMove(a1: any, a2: any): void;
-    Canvas_MouseUp(a1: any, a2: any, a3: any): void;
-    Canvas_DblClick(a1: any, a2: any, a3: any): void;
-    Canvas_KeyPress(a1: any, a2: any): void;
+    Save(path: any, width: any, scale: any): void;
+    SavePdf(path: any, paper: any): void;
+    Send(sent: any): void;
+    Canvas_Paginate(width: any, height: any): void;
+    Canvas_DrawPage(p: any, page: any, width: any, height: any): void;
+    Canvas_Draw(p: any, width: any, height: any): void;
+    Canvas_MouseWheel(dx: any, dy: any): void;
+    Canvas_MouseDown(x: any, y: any, button: any): void;
+    Canvas_MouseMove(x: any, y: any): void;
+    Canvas_MouseUp(x: any, y: any, button: any): void;
+    Canvas_DblClick(x: any, y: any, button: any): void;
+    Canvas_KeyPress(key: any, ctrl: any): void;
     FocusNext(): void;
     FocusPrevious(): void;
     Reorder(child: any, index: any): void;
@@ -2052,15 +2052,15 @@ declare class Metainfo {
 
 /** package/Nsis. Every member: docs/reference/libraries/Nsis.md */
 declare class Nsis {
-    static Script(a1: any, a2: any): any;
-    static Stage(a1: any, a2: any, a3: any): any;
-    static Build(a1: any, a2: any, a3: any): any;
-    static Ico(a1: any): any;
+    static Script(project: any, out: any): any;
+    static Stage(project: any, out: any, options: any): any;
+    static Build(script: any, exe: any, options: any): any;
+    static Ico(n: any): any;
 }
 
 /** package/Package. Every member: docs/reference/libraries/Package.md */
 declare class Package {
-    static Write(a1: any, a2: any, a3: any): any;
+    static Write(project: any, out: any, options: any): any;
 }
 
 /** qr/QrCode. Every member: docs/reference/libraries/QrCode.md */
@@ -2075,11 +2075,11 @@ declare class QrCode {
     Mode: any | null;
     /**  */
     Size: any | null;
-    Dark(a1: any, a2: any): void;
-    Paint(a1: any, a2: any, a3: any, a4: any, a5: any): void;
-    ToSvg(a1: any): void;
-    ToText(a1: any): void;
-    static Encode(a1: any, a2: any): any;
+    Dark(x: any, y: any): void;
+    Paint(p: any, x: any, y: any, side: any, opts: any): void;
+    ToSvg(opts: any): void;
+    ToText(opts: any): void;
+    static Encode(value: any, n: any): any;
 }
 
 /** qr/QrView. Every member: docs/reference/libraries/QrView.md */
@@ -2191,10 +2191,10 @@ declare class QrView extends Component {
     /**  `[object Object]` by default. */
     Canvas: DrawingArea | null;
     Refresh(): void;
-    Save(a1: any, a2: any): void;
-    ToPng(a1: any): void;
+    Save(path: any, side: any): void;
+    ToPng(side: any): void;
     ToSvg(): void;
-    Canvas_Draw(a1: any, a2: any, a3: any): void;
+    Canvas_Draw(p: any, width: any, height: any): void;
     FocusNext(): void;
     FocusPrevious(): void;
     Reorder(child: any, index: any): void;
@@ -2345,11 +2345,11 @@ declare class Report extends Component {
     /**  `[object Object]` by default. */
     Canvas: DrawingArea | null;
     Refresh(): void;
-    Save(a1: any, a2: any, a3: any): void;
-    SavePdf(a1: any): void;
-    Send(a1: any, a2: any): void;
-    Canvas_DrawPage(a1: any, a2: any, a3: any, a4: any): void;
-    Canvas_Draw(a1: any, a2: any, a3: any): void;
+    Save(path: any, page: any, scale: any): void;
+    SavePdf(page: any): void;
+    Send(setup: any, cb: any): void;
+    Canvas_DrawPage(p: any, page: any, width: any, height: any): void;
+    Canvas_Draw(p: any, width: any, height: any): void;
     FocusNext(): void;
     FocusPrevious(): void;
     Reorder(child: any, index: any): void;

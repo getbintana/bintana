@@ -287,6 +287,7 @@ class TypingsForm extends Form {
         this.root = root;
         this.skipped  = [];
         this.forms    = [];
+        this.sources  = [];
         /* **Every name the runtime half already declared, read out of what it
          * wrote.** `Record` is the one that matters and it is a real trap: it is
          * a class in rad.js, so the prelude walk below would declare it a second
@@ -329,7 +330,9 @@ class TypingsForm extends Form {
         for (const file of ["rad.js", "forms.js"]) {
             const path = File.Join(root, "runtime", "js", file);
             if (!File.Exists(path)) continue;
-            for (const sym of Application.Symbols(File.Load(path))) {
+            const text = File.Load(path);
+            this.sources.push(text);
+            for (const sym of Application.Symbols(text)) {
                 if (sym.Kind !== "Class") continue;
                 if (this.declared.includes(sym.Name)) continue;
                 this.declared.push(sym.Name);
@@ -354,8 +357,18 @@ class TypingsForm extends Form {
             for (const form of Directory.Files(dir, "*.form"))
                 this.forms.push(File.Load(form));
 
+            /* **The sources, handed to the verb as well as read here.** A class
+             * this process *has loaded* is answered from the class table, which
+             * knows the kinds and the C-declared signatures and not a parameter
+             * name -- so `Confirm.Ask` was written as a count when its own source
+             * said `Ask(message, onConfirm, options)` all along. Passing the text
+             * costs nothing: the walk stops at the first base the sources do not
+             * declare, which is `Form` or `Widget`, and those are answered by
+             * the table exactly as before. */
             for (const file of Directory.Files(dir, "*.js")) {
-                for (const sym of Application.Symbols(File.Load(file))) {
+                const text = File.Load(file);
+                this.sources.push(text);
+                for (const sym of Application.Symbols(text)) {
                     if (sym.Kind !== "Class") continue;
                     this.declared.push(sym.Name);
                     out.push(...this.libraryClass(sym.Name, lib, file));
@@ -750,15 +763,8 @@ class TypingsForm extends Form {
             if (typeof declared === "string" && declared) return declared;
         } catch (e) { /* not a widget class: the count below is the answer */ }
 
-        if (member && typeof member.Params === "number" && member.Params >= 0) {
-            /* **Names without types, because `tsArgs` writes those.** The first
-             * version emitted `a1: any` here and the declaration came out
-             * `a1: any: any` -- one declaration of the type and one of the
-             * parameter, which is the second place the same answer is written. */
-            const args = [];
-            for (let i = 0; i < member.Params; i++) args.push(`a${i + 1}`);
-            return `(${args.join(", ")})`;
-        }
+        if (member && typeof member.Params === "number" && member.Params > 0)
+            return member.Params;          /* a count, not a spelling */
         return null;
     }
 
@@ -766,7 +772,8 @@ class TypingsForm extends Form {
     membersOf(type) {
         this._members = this._members || {};
         if (!(type in this._members)) {
-            try { this._members[type] = Widget.Members(type, { Forms: this.forms }); }
+            try { this._members[type] = Widget.Members(type, { Forms: this.forms,
+                                                           Sources: this.sources }); }
             catch (e) { this._members[type] = []; }
         }
         return this._members[type];
@@ -790,10 +797,46 @@ class TypingsForm extends Form {
      * `const c = Confirm.Ask(...)` is not, and the two spellings are the
      * difference between a declaration that helps and one that annoys.
      */
+    /*
+     * A method line, and **three shapes** rather than two.
+     *
+     * A declared signature gives the names, and `tsArgs` writes the types.
+     *
+     * A **count** gives a rest tuple with a variadic tail:
+     * `(...values: [any, any, ...any[]])`.  That is measured, not argued:
+     *
+     *     .M(1, 2)        ok
+     *     .M(1, 2, 3, 4)  ok
+     *     .M(1)           Expected at least 2 arguments, but got 1
+     *     .M()            Expected at least 2 arguments, but got 0
+     *
+     * **The tail is the whole reason, and it is a fact about `Function.length`:
+     * it counts the parameters before the first default**, so a method
+     * `Make(a, b = 1)` reports 1 and its second parameter is perfectly legal.
+     * A fixed tuple without the tail would reject the correct call, and an
+     * *empty* tuple would be worse than useless -- `length` of 0 does not mean
+     * "takes nothing", it means "nothing required", so `(...values: [])` turns
+     * `O.M(1)` into an error. A count of zero therefore gets the plain rest,
+     * which checks nothing rather than something wrong.
+     *
+     * **And no `a1: any, a2: any`.**  The first version of this wrote
+     * placeholder names for a count, and fifty-nine of them were in the
+     * shipped declaration file across thirteen classes -- a generated file full
+     * of `a1: any` is one a reader learns to skip, which is the opposite of
+     * what it is for. The names are not there to be had, so the count says
+     * only what it knows.
+     */
     methodLine(name, sig, returns) {
+        const tail = returns || "any";
         if (sig === null)
-            return `    ${name}(...values: any[]): ${returns || "any"};`;
-        return `    ${name}(${this.tsArgs(sig)}): ${returns || "any"};`;
+            return `    ${name}(...values: any[]): ${tail};`;
+        if (typeof sig === "number") {
+            const required = [];
+            for (let i = 0; i < sig; i++) required.push("any");
+            required.push("...any[]");
+            return `    ${name}(...values: [${required.join(", ")}]): ${tail};`;
+        }
+        return `    ${name}(${this.tsArgs(sig)}): ${tail};`;
     }
 
     tsArgs(sig) {

@@ -1479,13 +1479,33 @@ So there were two fixes, and **only one of them is in the IDE**:
   comment -- a declaration built from it is *weaker* than one built from names
   and not a wrong one, which is the difference that matters.
 
-  **The names are not discoverable and never will be**, in this language or any
-  other built on ECMAScript: a parameter's name is discarded at parse time and
-  the function object does not carry it. So `static Signatures` stays as what it
-  is -- decoration, for a class that wants its parameters spelled out -- and the
-  generator's own fallback comment ("the rest form and not empty parentheses" --
-  a declaration that is true rather than one that is wrong) is what a tier is
-  for.
+  **And then the names, which are the one answer nobody has to write.** The
+  eighth fork patch has the parser report them, so a class in a file the host
+  does not run gets `Ask(message, onConfirm, options)` with the real names --
+  which means the generator now hands its own sources to `Widget.Members`, and
+  **every** library class and every class of `rad.js` is declared with its
+  parameters spelled. `static Signatures` stays as decoration: a class that
+  wants to say something the parser cannot, which is now nothing.
+
+  **A generated declaration file full of `a1: any` is one a reader learns to
+  skip**, and the first version of this wrote fifty-nine of them across thirteen
+  classes -- the whole surface of the libraries, every one of which had its names
+  in a file the generator had just read. The fix was two calls, and the order
+  matters: the count is `Function.length` and the names are the parser, so
+  passing the sources turns the count into the names. What is left is a **rest
+  tuple with a variadic tail**, `(...values: [any, any, ...any[]])`:
+
+      .M(1, 2)        ok
+      .M(1, 2, 3, 4)  ok
+      .M(1)           Expected at least 2 arguments, but got 1
+
+  **The tail is the whole reason it is a tuple and not a pair of names**, and it
+  is a fact about `Function.length`: it counts the parameters *before the first
+  default*, so `Make(a, b = 1)` reports 1 and its second argument is perfectly
+  legal. And **a count of zero gets the plain rest rather than an empty tuple**,
+  because `length` of 0 does not mean "takes nothing" -- it means "nothing
+  required" -- and `(...values: [])` turns a correct call into an error. Both
+  measured rather than argued; the empty tuple is the one that looked right.
 
   **Which left a gap worth naming, because two consumers of one verb now
   disagree.** `Widget.New` is the case: `bintana.d.ts` says
