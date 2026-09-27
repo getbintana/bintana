@@ -737,12 +737,19 @@ class TypingsForm extends Form {
      * *'Timer' is not a widget class* before writing a line of the file.
      */
     sigOf(type, name) {
+        const member = this.membersOf(type).find((m) => m.Name === name);
+
+        /* **The member's own signature first**: the parser's spelling, with the
+         * real parameter names, for a class declared in a file the generator
+         * would otherwise have to refuse. */
+        if (member && typeof member.Signature === "string" && member.Signature)
+            return member.Signature;
+
         try {
             const declared = Widget.Signature(type, name);
             if (typeof declared === "string" && declared) return declared;
         } catch (e) { /* not a widget class: the count below is the answer */ }
 
-        const member = this.membersOf(type).find((m) => m.Name === name);
         if (member && typeof member.Params === "number" && member.Params >= 0) {
             /* **Names without types, because `tsArgs` writes those.** The first
              * version emitted `a1: any` here and the declaration came out

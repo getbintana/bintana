@@ -3119,6 +3119,18 @@ function* p_completion(ide) {
      * declaration file says `static New(type: string): Widget;` because the
      * generator writes that by hand; the popup now says the same number
      * without anybody having written it. */
+    /* **The names, for a class the IDE reads rather than runs.** `Dial`'s
+     * `static Make(v)` is declared in a library this project `uses` and the IDE
+     * never evaluates it, so the parameter name is only in the source -- and the
+     * parser had it all along. This is the tier the runtime half cannot reach
+     * and the reason the eighth patch was worth writing. */
+    check("a library class's method says its parameter names",
+          det("Make", "Dial.") === "static (v)",
+          JSON.stringify(det("Make", "Dial.")));
+    check("and a getter of one is a property, not a method",
+          ask("", "Dial.").find((e) => e.Text === "Value").Detail === "",
+          JSON.stringify(ask("", "Dial.").find((e) => e.Text === "Value")));
+
     check("a method that takes nothing says so, and that is now a fact",
           det("FocusNext", "Container.") === "()",
           JSON.stringify(det("FocusNext", "Container.")));

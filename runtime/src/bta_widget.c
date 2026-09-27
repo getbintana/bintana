@@ -3191,6 +3191,39 @@ static void take_params(JSContext *ctx, JSValue out, GPtrArray *names,
                         uint32_t *n, const char *name, const char *kind,
                         int params);
 
+/* `take` with a signature, and a count derived from it when there is no
+ * `Function.length` to read -- which is the case for a member declared in a
+ * source rather than built.  The count is the number of names in the list, so a
+ * method the parser read gives the same number the function object would have,
+ * and the two paths meet on it. */
+static void take_params_sig(JSContext *ctx, JSValue out, GPtrArray *names,
+                             uint32_t *n, const char *name, const char *kind,
+                             int params, const char *sig);
+
+static void take_sig(JSContext *ctx, JSValue out, GPtrArray *names, uint32_t *n,
+                     const char *name, const char *kind, const char *params)
+{
+    int count = -1;
+
+    if (params && *params) {
+        /* Between the parentheses, and the count is commas plus one over
+         * whatever is left -- which is why the brackets and the dots do not
+         * matter: `[b]` is one parameter and `...rest` is one parameter.  The
+         * first version counted over the whole string and `(a)` came out 0,
+         * which is the one method shape that is most of them. */
+        const char *open  = strchr(params, '(');
+        const char *close = strrchr(params, ')');
+        if (open && close && close > open) {
+            int commas = 0;
+            for (const char *q = open + 1; q < close; q++)
+                if (*q == ',') commas++;
+            count = (close == open + 1) ? 0 : commas + 1;
+        }
+    }
+    take_params_sig(ctx, out, names, n, name, kind, count,
+                    (params && *params) ? params : NULL);
+}
+
 static void take(JSContext *ctx, JSValue out, GPtrArray *names, uint32_t *n,
                  const char *name, const char *kind)
 {
@@ -3215,9 +3248,9 @@ static void take_fn(JSContext *ctx, JSValue out, GPtrArray *names, uint32_t *n,
     take_params(ctx, out, names, n, name, kind, params);
 }
 
-static void take_params(JSContext *ctx, JSValue out, GPtrArray *names,
-                        uint32_t *n, const char *name, const char *kind,
-                        int params)
+static void take_params_sig(JSContext *ctx, JSValue out, GPtrArray *names,
+                            uint32_t *n, const char *name, const char *kind,
+                            int params, const char *sig)
 {
     for (guint i = 0; i < names->len; i++)
         if (g_str_equal(g_ptr_array_index(names, i), name)) return;
@@ -3227,7 +3260,21 @@ static void take_params(JSContext *ctx, JSValue out, GPtrArray *names,
     JS_SetPropertyStr(ctx, item, "Name", JS_NewString(ctx, name));
     JS_SetPropertyStr(ctx, item, "Kind", JS_NewString(ctx, kind));
     JS_SetPropertyStr(ctx, item, "Params", JS_NewInt32(ctx, params));
+    /* **The declared spelling, when there is one.** `Params` is the count and
+     * always available for a member that was built; this is the *names*, and it
+     * only exists for a member the parser read or a class that declared it --
+     * which is the whole of a library class's public surface, and the reason a
+     * completion for one can say `Ask(message, [options])` rather than a count. */
+    JS_SetPropertyStr(ctx, item, "Signature",
+                      JS_NewString(ctx, sig ? sig : ""));
     JS_SetPropertyUint32(ctx, out, (*n)++, item);
+}
+
+static void take_params(JSContext *ctx, JSValue out, GPtrArray *names,
+                        uint32_t *n, const char *name, const char *kind,
+                        int params)
+{
+    take_params_sig(ctx, out, names, n, name, kind, params, NULL);
 }
 
 /*
@@ -3379,10 +3426,20 @@ static char **out_empty(void)
  * public members.  The key is the reason there is a struct rather than two
  * tables: a class and its base have to travel together, because the walk below
  * follows one to the other. */
+/* One declared member: its name, **what kind of thing it is**, and its
+ * parameter list.  The kind is not decoration: a getter and a plain function
+ * reach the parser as a method of the same name, and `Name: T` and `Name(): T`
+ * are different declarations. */
+typedef struct {
+    char *name;
+    char *kind;
+    char *params;
+} DeclMember;
+
 typedef struct {
     char      *name;      /* its own, so a walk can ask what this entry is *for* */
     char      *base;
-    GPtrArray *members;   /* char *, capitals only, the runtime's convention */
+    GPtrArray *members;   /* DeclMember *, capitals only, the runtime's convention */
 } DeclClass;
 
 static void decl_class_free(gpointer data)
@@ -3594,13 +3651,25 @@ static GHashTable *decl_index_build(JSContext *ctx, char **sources, int count)
                 } else {
                     JS_FreeValue(ctx, JS_GetException(ctx));
                 }
-            } else if (g_str_equal(kind, "Method")) {
-                /* A method's `Parent` is the class it was declared in, so a base
-                 * class's methods land on that class and are offered to the
-                 * class that extends it. */
+            } else if (g_str_equal(kind, "Method") ||
+                       g_str_equal(kind, "Static") ||
+                       g_str_equal(kind, "Getter") ||
+                       g_str_equal(kind, "Setter")) {
+                /* A member's `Parent` is the class it was declared in, so a base
+                 * class's members land on that class and are offered to the class
+                 * that extends it.
+                 *
+                 * **The four kinds are one answer to four questions**, and they
+                 * were one answer until the parser learned to tell them apart: a
+                 * `get X` is a property, a `static Y()` is a property of the
+                 * class and not of an instance, and a member list that cannot say
+                 * which is offering a caller something it cannot write. */
                 JSValue  pv = JS_GetPropertyStr(ctx, sym, "Parent");
                 const char *parent = JS_ToCString(ctx, pv);
                 JS_FreeValue(ctx, pv);
+                JSValue  qv = JS_GetPropertyStr(ctx, sym, "Params");
+                const char *params = JS_ToCString(ctx, qv);
+                JS_FreeValue(ctx, qv);
                 if (parent && *parent) {
                     /* **The runtime's own convention, and the source walk is
                      * bound by it like the class-table one is.** A lower-case
@@ -3608,10 +3677,18 @@ static GHashTable *decl_index_build(JSContext *ctx, char **sources, int count)
                      * loaded does not list it either -- so a class answered from
                      * its source must not, or the same class would have a
                      * different surface depending on which reader found it. */
-                    if (g_ascii_isupper(name[0]))
-                        g_ptr_array_add(decl_class_get(index, parent)->members,
-                                        g_strdup(name));
+                    if (g_ascii_isupper(name[0])) {
+                        DeclMember *m = g_new0(DeclMember, 1);
+                        m->name   = g_strdup(name);
+                        m->kind   = g_strdup(g_str_equal(kind, "Static") ? "Static"
+                                                 : (g_str_equal(kind, "Getter") ||
+                                                    g_str_equal(kind, "Setter"))
+                                                 ? "Property" : "Method");
+                        m->params = g_strdup(params ? params : "");
+                        g_ptr_array_add(decl_class_get(index, parent)->members, m);
+                    }
                 }
+                if (params) JS_FreeCString(ctx, params);
                 if (parent) JS_FreeCString(ctx, parent);
             }
             JS_FreeCString(ctx, kind);
@@ -3718,9 +3795,10 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
         if (own) {
             int guard = 0;
             for (DeclClass *d = own; d && guard < 64; guard++) {
-                for (guint i = 0; i < d->members->len; i++)
-                    take(ctx, out, names, &n,
-                         g_ptr_array_index(d->members, i), "Method");
+                for (guint i = 0; i < d->members->len; i++) {
+                    DeclMember *m = g_ptr_array_index(d->members, i);
+                    take_sig(ctx, out, names, &n, m->name, m->kind, m->params);
+                }
 
                 /* A form class's own children, ahead of the base chain: they
                  * are the class's instance properties, and that is the layer a

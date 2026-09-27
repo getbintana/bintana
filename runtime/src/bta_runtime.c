@@ -429,12 +429,21 @@ static const char *symbol_kind_name(JSSymbolKind kind)
     case JS_SYMBOL_CLASS:    return "Class";
     case JS_SYMBOL_METHOD:   return "Method";
     case JS_SYMBOL_FUNCTION: return "Function";
+    /* **A member of a class, and the three ways of not being a plain method.**
+     * They all reach the parser as a method of the same name, so before this
+     * `get Value()`, `static Make()` and `turn()` were one answer and an editor
+     * could not tell a property from a function -- which is the difference
+     * between `Value: number` and `Value(): number` in a declaration. */
+    case JS_SYMBOL_STATIC:  return "Static";
+    case JS_SYMBOL_GETTER:  return "Getter";
+    case JS_SYMBOL_SETTER:  return "Setter";
     }
     return "";
 }
 
 static void symbol_report(void *opaque, JSSymbolKind kind, const char *name,
-                          const char *parent, const char *supertype, int line)
+                          const char *parent, const char *supertype,
+                          const char *params, int line)
 {
     SymbolSink *sink = opaque;
     JSContext  *ctx  = sink->ctx;
@@ -456,6 +465,10 @@ static void symbol_report(void *opaque, JSSymbolKind kind, const char *name,
      * and for a class whose `extends` is not a plain identifier -- see
      * JSSymbolHandler in quickjs.h for why that is the limit. */
     JS_SetPropertyStr(ctx, obj, "Super", JS_NewString(ctx, supertype ? supertype : ""));
+    /* The parameter list, in the spelling a declaration uses -- `(message,
+     * [options], ...rest)`.  Empty for anything that is not a member, and for a
+     * method that takes none. */
+    JS_SetPropertyStr(ctx, obj, "Params", JS_NewString(ctx, params ? params : ""));
 
     /* The value is taken either way; the count only moves when it landed, so
      * an array this hands back never has a hole for a caller to trip on. */

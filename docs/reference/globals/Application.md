@@ -52,13 +52,26 @@ The running program: what it is called, where its files are, and how it ends.
 | `HasCommand(name)` | whether that program is on the PATH. **The question that does not need an exception**, since [`Exec`](Exec.md) throws when the program is not there |
 | `DecorationLayout` | how this desktop arranges a title bar — which buttons, and on which side. What a drawn title bar reads to look like the real one |
 | `CheckSource(text)` | `null` when the text is valid JavaScript, else `{ Message, Line, Column }`. What an editor checks a file with before saving it, and the answer `new Function(src)` is not allowed to give |
-| `Symbols(text)` | `[{ Name, Kind, Line, Parent, Super }]`: the classes, methods and top-level functions the text declares, with the line of each. What an editor lists a file with, and the answer a pattern is not allowed to guess at |
+| `Symbols(text)` | `[{ Name, Kind, Line, Parent, Super, Params }]`: the classes, methods and top-level functions the text declares, with the line of each. What an editor lists a file with, and the answer a pattern is not allowed to guess at |
 
 **`Symbols` is `CheckSource`'s compile asked a different question.** `Kind` is
 `"Class"`, `"Method"` or `"Function"`, `Parent` is the class a method is in and
 `""` otherwise, and the parser is the one that would run the file — so a
 declaration in a comment or a string is not one, and a method is a method at any
 indentation.
+
+**`Params` is what a host cannot get any other way.** ECMAScript discards a
+parameter's name when it compiles the declaration, so the function object keeps
+the count and not the names, and the count is a *lower bound* the moment one
+parameter has a default — `(a, b = 1, c)` reports 1. The parser has the names,
+in order, with which are optional and which is a rest, and reports them in the
+spelling a declaration uses: `""` for a class or a top-level function, `()` for
+a member that takes none.
+
+**`Kind` carries the three ways of not being a plain method.** `Static`,
+`Getter` and `Setter` were all `Method` before the parser learned to tell them
+apart, and a reader that cannot say which is the difference between `Value: T`
+and `Value(): T`.
 
 **`Super` is what makes the answer a shape and not a list of names.** It is the
 name in a class's `extends` clause, and `""` for a class that declares none,

@@ -10850,10 +10850,11 @@ function Main() {
             "    function inner() {}\n" +       /* 2 */
             "}\n" +                             /* 3 */
             "class One {\n" +                   /* 4 */
-            "    Plain() {}\n" +                /* 5 */
+            "    Plain(a) {}\n" +               /* 5 */
             "    static Make() {}\n" +          /* 6 */
             "    get Value() { return 1; }\n" + /* 7 */
             "    set Value(v) {}\n" +           /* 8 */
+            "    set Value2(w) {}\n" +          /* 8 */
             "}\n" +                             /* 9 */
             "Ide.Events = class Events {\n" +   /* 10 */
             "    Click() {}\n" +                /* 11 */
@@ -10874,7 +10875,30 @@ function Main() {
         eq("a class is a declaration", named("One").Kind, "Class");
         eq("...on its own line", named("One").Line, 4);
         eq("and its methods belong to it", named("Plain").Parent, "One");
-        eq("...including a static one", named("Make").Kind, "Method");
+        /* **A static and an accessor are told apart, and this assertion used to
+         * say the opposite.** It was written when the parser reported all three
+         * as `Method` -- so it recorded the limitation as though it were the
+         * answer, and nothing failed while a `get Value()` and a
+         * `static Make()` were the same thing to a reader. The eighth patch is
+         * what makes the three distinguishable. */
+        eq("...and a static says so, which it did not used to",
+           named("Make").Kind, "Static");
+        eq("and an accessor is a Getter, not a Method",
+           named("Value").Kind, "Getter");
+        eq("and a setter is a Setter, so the pair is two declarations",
+           named("Value2").Kind, "Setter");
+        eq("a plain one is still a Method", named("Plain").Kind, "Method");
+        /* **And the parameters, in the spelling a declaration uses.** This is
+         * the information ECMAScript throws away: the function object keeps the
+         * count and not the names, so a class in a file the host never runs has
+         * nothing else to ask. */
+        eq("a method's parameters come out with the names",
+           named("Plain").Params, "(a)");
+        eq("a method that takes nothing says so, as a pair",
+           named("Value").Params, "()");
+        eq("a static's come out too", named("Make").Params, "()");
+        eq("and a class is not a member, so it has no parameters at all",
+           named("One").Params, "");
         eq("a getter and a setter are two", sym.filter((x) => x.Name === "Value").length, 2);
         eq("the constructor of a class is not invented",
            sym.filter((x) => x.Name === "constructor").length, 0);
@@ -10888,7 +10912,7 @@ function Main() {
          * name arrives after the body, so it is reported after its methods. */
         eq("an anonymous class takes the assignment's name",
            named("Anon").Kind, "Class");
-        eq("...on the line the class starts", named("Anon").Line, 13);
+        eq("...on the line the class starts", named("Anon").Line, 14);
         eq("...with its methods belonging to nobody yet", named("Only").Parent, "");
 
         eq("a class in a comment is not a class", named("Ghost"), undefined);

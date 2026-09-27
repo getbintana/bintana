@@ -742,13 +742,6 @@ cannot happen where it did:
   `grep -rhoE "class \w+ extends [\w.]+" --include="*.js"` over `ide/ lib/
   examples/ tests/ runtime/js/`.
 
-**And the parser cannot tell a `static` from an accessor**, which is the eighth
-patch and not this one: all three reach `js_parse_class` as a method of the same
-name, so `Application.Symbols` reports `static Make()`, `get Value()` and
-`turn()` identically. Separating them is three more `JSSymbolKind` values and no
-signature change — which is why it is a patch of its own and could be applied
-without this one.
-
 **Dropping this patch does not fail to build** and nothing stops working: the
 symbol report is the sixth patch's, unchanged in everything but one more
 argument. `tests/widgets` asserts it (`testCuratedLanguage`: a class that
@@ -756,6 +749,51 @@ extends one, a chain, one that extends nothing, an `extends` that is a call, a
 method, and **a class that breaks in its body still carrying the supertype it
 read before the break**), and without it the editor's completion of a library
 class is the 2 of 68 again.
+
+### 8. The parser reports a member's parameters, and its kind
+
+`JS_SYMBOL_STATIC` / `_GETTER` / `_SETTER` beside `JS_SYMBOL_METHOD`, and a
+`params` on every method, in the spelling a declaration uses: `[name]`
+optional, `...name` a rest.
+
+**The two arrived in one commit, and the plan said two.** The seventh was going
+to be `static`-versus-accessor alone and separable; the parameters are the
+parameter loop in `js_parse_function_decl2`, and the kind is only known at the
+call site — **so reporting the parameters moves the report, and a moved report
+sees the kind for nothing.** Two patches would have been one patch and one
+patch that had to wait for the other.
+
+**The parameters are the one answer a host cannot get elsewhere**, and that is
+what the seventh patch's author had already worked out from the other side:
+ECMAScript discards a parameter's name at parse time, so the function object
+keeps the count and not the names, and `Function.length` is a *lower bound* the
+moment one parameter has a default. A class in a file the host never runs has
+neither. The loop is the last place the information exists — `Make(a, b)` and
+`WithOpts(a, b = 1)` and `WithRest(a, ...rest)` all read out of it.
+
+**And a `static` and an accessor were the same answer to three questions.** All
+three reach `js_parse_class` as a method of the same name, so
+`Application.Symbols` reported `static Make()`, `get Value()` and `turn()`
+identically — and the test said `Make` was a `Method`, which is how a
+limitation ends up written down as an expectation. `Chart.Refresh` and
+`Widget.New` are properties of their class and not of an instance; a `get X` is
+a property. The difference is `Value: T` against `Value(): T`.
+
+**Three bugs the shape of it produced, all in the first version.** The buffer
+was zeroed *inside* the parameter loop, so only the last parameter of a method
+with more than one survived — `Make(a, b)` reported `b`. A rest was marked
+optional on top of being a rest, and `...rest` came out `[...rest]`, a rest that
+takes nothing. And the parentheses went on nowhere for the first attempt, so the
+host received `a` where it expected `(a)`: **the parentheses are added by the
+reporter and not by the loop**, which is what makes one spelling for the parser's
+answer and for a class's own `Signatures`.
+
+**Dropping it does not fail to build** either, and the fallback is the seventh
+patch's answer with no kinds: a member's name and nothing else. `tests/widgets`
+asserts it in `testCuratedLanguage` (the three kinds, and the parameters of a
+plain, an accessor and a static), and `tests/ide` asserts that a library class's
+method says its parameter *names* — which is the half no runtime verb could
+reach.
 
 ## Memory rules
 

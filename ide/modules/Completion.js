@@ -688,8 +688,17 @@ Ide.Completion = class Completion {
         const kind = member.Kind;
         if (kind !== "Method" && kind !== "Static") return "";
 
-        let sig = null;
-        try { sig = Widget.Signature(className, member.Name); } catch (e) { sig = null; }
+        /* **Three answers, in the order that keeps the most.** The member's own
+         * `Signature` first, which is what the parser wrote for a class in a file
+         * this process never runs -- `Ask(message, [options])` with the real
+         * names, because the parser had them. Then `Widget.Signature`, which has
+         * the names for a class the runtime knows. And then the count, which
+         * needs nothing written at all. */
+        let sig = (typeof member.Signature === "string" && member.Signature)
+                  ? member.Signature : null;
+        if (!sig) {
+            try { sig = Widget.Signature(className, member.Name); } catch (e) { sig = null; }
+        }
 
         /* **The count, discovered, and that is what makes this work for a
          * library.** A person writing one should not have to spell the arity of
