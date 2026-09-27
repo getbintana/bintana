@@ -1480,9 +1480,34 @@ class WidgetsForm extends Form {
          * assigned this turn and has no measured height yet, so the adjustment
          * still describes an empty view -- the same rule `testScrolling` above
          * follows, and the same one `Bounds()` does. */
+        /* **Where the cursor is drawn**, in the control's coordinates --
+         * what a hint beside it points `Popup(editor, rect)` at. It moves down
+         * with the line and right with the column, and at the top of the file
+         * it is inside the control. **Only once the control has a rectangle**:
+         * before that there is nothing to be drawn in, and a first version of
+         * this read garbage in a full run -- where it runs before the window
+         * is up -- and passed or failed on the timing. */
+        until("the editor is laid out", () => ed.Bounds().Width > 0, () => {
+            const keep = ed.Line;
+            ed.Select(1, 1, 0);
+            const c1 = ed.CursorBounds();
+            ed.Select(3, 1, 0);
+            const c3 = ed.CursorBounds();
+            ed.Select(1, 5, 0);
+            const c15 = ed.CursorBounds();
+            check("the cursor's rectangle is inside the control at the top",
+                  c1.X >= 0 && c1.Y >= 0 && c1.X < 200 && c1.Y < 120 && c1.Height > 0,
+                  JSON.stringify(c1));
+            check("...lower two lines down", c3.Y > c1.Y, JSON.stringify([c1, c3]));
+            check("...and further right four columns along", c15.X > c1.X,
+                  JSON.stringify([c1, c15]));
+            ed.Select(keep, 1, 0);
+        });
+
         until("a long file is measured", () => ed.ScrollMaxY > 0, () => {
             check("and then it has somewhere to go", ed.ScrollMaxY > 0,
                   String(ed.ScrollMaxY));
+
 
             /*
              * **Nothing here is a fixed number of pixels**, and that is the
@@ -13897,6 +13922,18 @@ function Main() {
                           (refusal(() => buried.Popup(anchor)) || "").includes("container"));
                     eq("and it is not open", buried.Visible, false);
                     hidden.Delete();
+
+                    /* **A rectangle inside the anchor**, which is what a hint
+                     * beside an editor's cursor points at: opened with one, and
+                     * refused for something that is not one. */
+                    pop.Add(content);
+                    throws("a rect that is not an object is refused",
+                           () => pop.Popup(anchor, 5));
+                    throws("a rect field that is not a number is refused",
+                           () => pop.Popup(anchor, { X: "left" }));
+                    pop.Popup(anchor, { X: 2, Y: 2, Width: 1, Height: 1 });
+                    eq("it opens pointed at a rectangle inside the anchor", pop.Visible, true);
+                    pop.Close();
 
                     panel.Delete();
                 });

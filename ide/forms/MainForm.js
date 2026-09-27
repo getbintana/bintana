@@ -215,6 +215,7 @@ class MainForm extends Form {
     installer = new Ide.Installer(this);     // the project as a Windows setup
     tabs      = new Ide.TabSet(this);        // the open files
     completion = new Ide.Completion(this);   // what the editor proposes
+    callTip    = new Ide.CallTip(this);      // the parameters of the call being written
     recovery  = new Ide.Recovery(this);      // the dirty tabs, copied aside
     session   = new Ide.Session(this);       // the desk, as it was left
     /* The palette is one widget for every open form, so it is the window's and
@@ -1693,6 +1694,9 @@ class MainForm extends Form {
 
     Editor_Cursor() {
         this.refresh();
+        /* The cursor moving is the question *which argument am I in*, typed or
+         * walked into with the arrows. */
+        this.callTip.update();
         /* And the outline marks the method the caret is now inside, which is the
          * half of Visual Basic's procedure dropdown that was not the jump. */
         this.outline.follow();
@@ -1732,6 +1736,12 @@ class MainForm extends Form {
         }
         if (key === "Tab" && ctrl) {
             this.cycleTab(shift ? -1 : 1);
+            return true;
+        }
+        /* Escape puts the parameter hint away first: it is the smaller thing
+         * on screen, and it comes back by itself on the next move. */
+        if (key === "Escape" && this.callTip.visible) {
+            this.callTip.close(true);
             return true;
         }
         /* Escape closes the find bar from the text as well as from the bar: one

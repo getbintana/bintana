@@ -418,6 +418,50 @@ static JSValue ed_line_of(JSContext *ctx, JSValueConst this_val,
     return out;
 }
 
+/*
+ * CursorBounds(): where the insertion cursor is drawn, `{ X, Y, Width, Height }`
+ * in the control's own coordinates -- the space `Popover.Popup(editor, rect)`
+ * reads, which is what a hint beside the cursor is made of.
+ *
+ * `get_iter_location` answers in buffer coordinates, which scroll; the view
+ * turns those into its window's, and `compute_point` carries them from the
+ * view to the control, which is the scroller around it. A cursor scrolled out
+ * of sight answers a rectangle outside the control's own, which is the truth
+ * and is the caller's to test.
+ */
+static JSValue ed_cursor_bounds(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    GtkTextView   *view = GTK_TEXT_VIEW(w->inner);
+    GtkTextBuffer *buf  = buffer_of(w);
+    GtkTextIter    it;
+    GdkRectangle   r;
+    int            x, y;
+
+    gtk_text_buffer_get_iter_at_mark(buf, &it, gtk_text_buffer_get_insert(buf));
+    gtk_text_view_get_iter_location(view, &it, &r);
+    gtk_text_view_buffer_to_window_coords(view, GTK_TEXT_WINDOW_WIDGET,
+                                          r.x, r.y, &x, &y);
+
+    graphene_point_t from = GRAPHENE_POINT_INIT((float)x, (float)y), to;
+    if (w->gtk != w->inner &&
+        gtk_widget_compute_point(w->inner, w->gtk, &from, &to)) {
+        x = (int)to.x;
+        y = (int)to.y;
+    }
+
+    JSValue out = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, out, "X",      JS_NewInt32(ctx, x));
+    JS_SetPropertyStr(ctx, out, "Y",      JS_NewInt32(ctx, y));
+    JS_SetPropertyStr(ctx, out, "Width",  JS_NewInt32(ctx, MAX(1, r.width)));
+    JS_SetPropertyStr(ctx, out, "Height", JS_NewInt32(ctx, MAX(1, r.height)));
+    return out;
+}
+
 static JSValue ed_goto_line(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv)
 {
@@ -655,6 +699,8 @@ static const JSCFunctionListEntry editor_props[] = {
     JS_CGETSET_MAGIC_DEF("CanRedo",  ed_get_flag, NULL,        ED_CANREDO),
     /* GotoLine(line) */
     JS_CFUNC_DEF("GotoLine", 1, ed_goto_line),
+    /* CursorBounds() -> { X, Y, Width, Height } */
+    JS_CFUNC_DEF("CursorBounds", 0, ed_cursor_bounds),
     /* Select(line, [column], [length]) */
     JS_CFUNC_DEF("Select",   3, ed_select),
     /* LineOf(index) */

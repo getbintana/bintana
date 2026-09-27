@@ -3457,6 +3457,60 @@ function* p_completion(ide) {
     eq("a call nothing declares an answer for still offers nothing",
        answer("", "        makeThing().").length, 0);
 
+    /* --- the call being written ----------------------------------------------
+     *
+     * Which call the cursor is inside and which argument, asked of the text
+     * before it: a comma is only a separator outside a string, a comment and a
+     * nested bracket, and the callee is resolved the way a dot is. */
+    const at = (t) => ide.completion.callAt(t);
+    const save = at("        File.Save(p, ");
+    check("the call the cursor is in, and which argument",
+          save && save.Name === "Save" && save.Signature === "(path, text)" && save.Index === 1,
+          JSON.stringify(save));
+    eq("a comma inside a string is not a separator",
+       (at('        File.Load("a, b') || {}).Index, 0);
+    const walk = at("        Directory.Files(d, { Recursive: true, Pat");
+    check("an object being written is still that call's argument",
+          walk && walk.Name === "Files" && walk.Index === 1, JSON.stringify(walk));
+    const inner = at("        File.Save(File.Join(a, ");
+    check("the innermost call is the one that answers",
+          inner && inner.Name === "Join" && inner.Index === 1, JSON.stringify(inner));
+    eq("a closed call is not the one the cursor is in",
+       (at("        File.Save(File.Join(a, b), ") || {}).Name, "Save");
+    eq("a bracket that is not a call shows nothing", at("        if (x, "), null);
+    eq("a comment is not code", at("        // File.Save(p, "), null);
+    const own = at("        this.go(");
+    check("a method of the file being edited is read by the parser",
+          own && own.Name === "go" && own.Signature === "()", JSON.stringify(own));
+
+    /* **And on screen, pointed at the cursor.** A popover that does not hide
+     * itself, so typing goes on underneath it; Escape puts it away for this
+     * call and it stays away until the cursor is in another. */
+    const ed = ide.Editor;
+    ed.Text = ed.Text + "function Tip() {\n    File.Save(p, ";
+    const lines = ed.Text.split("\n");
+    ed.Select(lines.length, Array.from(lines[lines.length - 1]).length + 1, 0);
+    ed.SetFocus();
+    yield* settled(ide);
+    const hadFocus = ed.Focused;
+    ide.callTip.update();
+    yield* settled(ide);
+    check("the hint is up beside a call being written", ide.callTip.visible, "");
+    check("...with the argument the cursor is in made bold",
+          ide.callTip.label && ide.callTip.label.Text === "Save(path, <b>text</b>)",
+          ide.callTip.label ? ide.callTip.label.Text : "no label");
+    check("...and the keyboard is still the editor's", hadFocus && ed.Focused,
+          `before ${hadFocus}, after ${ed.Focused}`);
+    eq("Escape puts it away", ide.Editor_KeyPress("Escape", false, false), true);
+    yield* settled(ide);
+    check("...and it is away", !ide.callTip.visible, "");
+    ide.callTip.update();
+    check("...and stays away for the same call", !ide.callTip.visible, "");
+    ed.Text = ed.Text + "x);\n";
+    ide.callTip.update();
+    yield* settled(ide);
+    check("leaving the call takes the hint away", !ide.callTip.visible, "");
+
     /* The tabs go before the files do: an open tab whose file disappears is a
      * question the IDE asks in a dialog, which is right for a person and a hung
      * test. */

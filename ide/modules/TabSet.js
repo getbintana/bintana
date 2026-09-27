@@ -404,6 +404,8 @@ Ide.TabSet = class TabSet {
      * cuts that off.
      */
     switchTo(name) {
+        /* A hint about a call in one file has nothing to say over another. */
+        if (this.ide.callTip) this.ide.callTip.close();
         if (this.ide.activeFile === name) return;
         if (!this.openTabs.has(name)) return;
 

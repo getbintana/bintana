@@ -384,6 +384,87 @@ Ide.Completion = class Completion {
         return this.chainAnswer(path[1]);
     }
 
+    /* --- the call the cursor is in ------------------------------------------ */
+
+    /*
+     * `{ Name, Signature, Index, At }` for the innermost call the text ends
+     * inside, or null: which function, what it declares, which argument the
+     * cursor is in (counted from zero), and where its bracket opened, which is
+     * what tells two calls of one name apart.
+     *
+     * **Read forwards, because a comma is only an argument separator outside a
+     * string, a comment and a nested bracket**, and only a forward read knows
+     * which of those it is in -- `File.Load("a, b` is the first argument. The
+     * callee is the chain before the bracket, resolved the way the popup
+     * resolves a dot: `File.Save(`, `this.Btn.Move(`, `db.Query(` all answer
+     * what the member declares. `this.go(` is a method of the file on screen,
+     * read by the parser. A bracket that is not a call -- `if (`, a function's
+     * own parameter list -- resolves to nothing and shows nothing.
+     */
+    callAt(text) {
+        const stack = [];
+        let quote = null;
+        for (let i = 0; i < text.length; i++) {
+            const c = text[i];
+            if (quote) {
+                if (c === "\\") i++;
+                else if (c === quote) quote = null;
+                continue;
+            }
+            if (c === '"' || c === "'" || c === "`") { quote = c; continue; }
+            if (c === "/" && text[i + 1] === "/") {
+                const nl = text.indexOf("\n", i);
+                if (nl < 0) return null;            /* the cursor is in a comment */
+                i = nl;
+                continue;
+            }
+            if (c === "/" && text[i + 1] === "*") {
+                const end = text.indexOf("*/", i + 2);
+                if (end < 0) return null;
+                i = end + 1;
+                continue;
+            }
+            if (c === "(" || c === "[" || c === "{") stack.push({ c, at: i, commas: 0 });
+            else if (c === ")" || c === "]" || c === "}") stack.pop();
+            else if (c === "," && stack.length) stack[stack.length - 1].commas++;
+        }
+
+        /* The innermost call: an object or a list being written inside one is
+         * still that call's argument. */
+        let call = null;
+        for (let k = stack.length - 1; k >= 0; k--)
+            if (stack[k].c === "(") { call = stack[k]; break; }
+        if (!call) return null;
+
+        const expr  = completionChain(text.slice(0, call.at) + ".");
+        const steps = completionSteps(expr);
+        if (!steps) return null;
+        const last = steps[steps.length - 1];
+        if (last.index || last.call) return null;
+
+        const found = (sig) => sig
+            ? { Name: last.name, Signature: sig, Index: call.commas, At: call.at } : null;
+
+        /* `this.go(`: a method of the class being edited, named by the parser. */
+        if (steps.length === 2 && steps[0].name === "this") {
+            const editor = this.ide.Editor;
+            let own = null;
+            try {
+                own = Application.Symbols(editor ? editor.Text : "")
+                        .find((x) => x.Name === last.name && x.Kind === "Method");
+            } catch (e) { own = null; }
+            if (own) return found(own.Params || "()");
+        }
+        if (steps.length < 2) return null;
+
+        const owner = expr.slice(0, expr.length - last.name.length).replace(/\.$/, "");
+        const t = this.resolveChain(owner, 0);
+        if (!t) return null;
+        const m = this.membersOfTypeRaw(t).find((x) => x.Name === last.name &&
+                                                 (x.Kind === "Method" || x.Kind === "Static"));
+        return m ? found(m.Signature) : null;
+    }
+
     /* --- following a chain -------------------------------------------------- */
 
     /*

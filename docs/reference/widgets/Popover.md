@@ -14,7 +14,7 @@ everything there is here too; what follows is what is its own.
 | `Arrow` | draw the tail pointing back at the control | [opening](#opening) |
 | `Autohide` | close on a click outside or Escape | [opening](#opening) |
 | `Visible` (ro) | whether it is open — **read-only** | [closing](#closing) |
-| `Popup(anchor)` | opens it over that control | [opening](#opening) |
+| `Popup(anchor, [rect])` | opens it over that control, or pointed at a rectangle inside it | [opening](#opening) |
 | `Close()` | closes it, and is safe at any time | [closing](#closing) |
 | `Show()` | refuses, and names `Popup(anchor)` | [opening](#opening) |
 | **event** `Open()` | it came up, however it was asked | [the two events](#the-two-events) |
@@ -70,7 +70,7 @@ arrows, Enter, Escape and a click outside do the work.
 
 | | |
 |---|---|
-| `Popup(anchor)` | opens it over that control. The anchor must have been laid out and the window must be up, because the popup is positioned against the anchor's rectangle |
+| `Popup(anchor, [rect])` | opens it over that control. The anchor must have been laid out and the window must be up, because the popup is positioned against the anchor's rectangle. With `rect` — `{ X, Y, Width, Height }` in the anchor's own coordinates — it points at that rectangle inside the anchor instead of at the whole of it: `Popup(editor, editor.CursorBounds())` is a hint beside the cursor, with `Autohide` off so typing goes on underneath |
 | `Position` | `Top`, `Bottom`, `Left` or `Right`: the side of the anchor it **prefers**, and GTK moves it when there is no room there. Default `"Bottom"` |
 | `Arrow` | the tail. `false` by default, unlike GTK's own popover: a menu wants the tail and a list of suggestions flush against a field does not |
 | `Autohide` | `true` by default: a click outside or Escape closes it, and `Close` is raised |

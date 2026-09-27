@@ -1,7 +1,7 @@
 # Testing
 
 ```sh
-./tests/run.sh                          # all six projects, 7350 assertions
+./tests/run.sh                          # all six projects, 7371 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -374,7 +374,14 @@ every global the C installs and fails on a `Method` or `Static` with no
 `Signature` -- proved by deleting
 `/* Load(path) */` and watching it name `File.Load`. A verb written in
 JavaScript passes without a comment, because the parser reads its parameters
-out of its own source. **And the prototypes no global holds** — the ones named
+out of its own source. **The call hint's two runtime verbs** are asserted in
+`tests/widgets` -- `CursorBounds()` moving down with the line and right with the
+column once the editor is laid out, and `Popup(anchor, rect)` opening and
+refusing a rect that is not one -- and `tests/ide`'s `completion` holds `callAt`
+(the argument index, a comma inside a string, an object inside a call, nested
+calls, `if (`, a comment, `this.go(`) and the hint itself: up, bold on the
+right argument, the focus still the editor's, Escape putting it away for that
+call. **And the prototypes no global holds** — the ones named
 with a `type X` comment — are asked the same question (238 verbs in all as this
 is written), since their table is the whole of what an editor knows about them.
 

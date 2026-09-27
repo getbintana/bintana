@@ -29,6 +29,7 @@ everything here works the same in both.
 | `Wrap` | wrap long lines | [what is in it](#what-is-in-it) |
 | `Append(text)` | at the end, scrolling there | [what is in it](#what-is-in-it) |
 | `Clear()` | empties it | [what is in it](#what-is-in-it) |
+| `CursorBounds()` | → where the cursor is drawn, `{ X, Y, Width, Height }` | [the cursor](#the-cursor) |
 | `GotoLine(line)` | puts the cursor there and scrolls to it | [the cursor](#the-cursor) |
 | `Insert(text)` | at the cursor | [what is in it](#what-is-in-it) |
 | `LineOf(index)` | the line a search's index falls on | [the cursor](#the-cursor) |
@@ -62,6 +63,7 @@ everything here works the same in both.
 | `Offset` (ro) | the cursor's position as an absolute **character** offset — the same unit `Column` counts in |
 | `Selection` (ro) | the selected text, `""` for none |
 | `GotoLine(line)` | puts the cursor there and scrolls to it |
+| `CursorBounds()` | `{ X, Y, Width, Height }`: where the insertion cursor is drawn, in the control's own coordinates. It is what a hint beside the cursor points at — `Popover.Popup(editor, editor.CursorBounds())`. Read it once the control has a rectangle; before the window is up there is nothing to be drawn in |
 | `LineOf(index)` | the line a search's index falls on, 1-based and clamped — the number `Regex.Index` gives, counted in UTF-16 units |
 | `Select(line, [column], [length])` | selects from there. A column past the end of the line is the end of the line |
 | `OffsetAt(line, [column])` | the character offset of that position — the inverse read of `Offset`, clamped as `Select` clamps |

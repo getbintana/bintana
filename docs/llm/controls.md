@@ -900,6 +900,7 @@ shape — a `GtkSourceView` *is* a `GtkTextView`.
 | `Append(text)` | at the end, scrolling there, whatever the cursor was doing |
 | `Clear()` | empties it |
 | `GotoLine(line)` | puts the cursor there and scrolls to it |
+| `CursorBounds()` → `{ X, Y, Width, Height }` | where the insertion cursor is drawn, in the control's own coordinates — what `Popover.Popup(editor, rect)` points at for a hint beside the cursor. Only once the control has been laid out; a cursor scrolled out of view answers a rectangle outside the control, which is the truth and the caller's to test |
 | `LineOf(index)` | the line a **search's index** falls on, 1-based and clamped — `index` is the number `Regex.Index` gives, and it counts UTF-16 units |
 | `OffsetAt(line, [column])` | the character offset of that position, clamped as `Select` clamps — the inverse read of `Offset` |
 | `Insert(text)` | at the cursor. The selection is left alone, so on a selected word this lands after it rather than replacing it |
@@ -1396,7 +1397,7 @@ belongs to whatever it points at.
 | `Arrow` | draw the tail pointing back at the control. Default `false`, unlike GTK's own — a menu wants the tail and a list of suggestions flush against a field does not |
 | `Autohide` | close on a click outside or Escape. Default `true` |
 | `Visible` (ro) | whether it is open. **Read-only**: opening has a verb, and this is the question half |
-| `Popup(anchor)` | opens it over that control. The anchor **and the container the popover is in** must be on screen — a hidden panel, a collapsed `Expander` or a page not shown is refused with a sentence. The point is taken once: an anchor that moves, scrolls or is deleted afterwards leaves the popover where it opened |
+| `Popup(anchor, [rect])` | opens it over that control — or, with `rect` (`{ X, Y, Width, Height }` in the anchor's own coordinates), pointed at that rectangle inside it, which is how a hint sits beside an editor's cursor (`Editor.CursorBounds()`). A field that is not a number is refused. The anchor **and the container the popover is in** must be on screen — a hidden panel, a collapsed `Expander` or a page not shown is refused with a sentence. The point is taken once: an anchor that moves, scrolls or is deleted afterwards leaves the popover where it opened |
 | `Close()` | closes it, and is safe at any time |
 | `Show()` | refuses and names `Popup(anchor)`; the inherited one would build a popup surface before the window exists |
 | **event** `Open()` | it came up, however it was asked |

@@ -6969,7 +6969,7 @@ static JSValue popover_show(JSContext *ctx, JSValueConst this_val,
         w->name ? w->name : "a popover");
 }
 
-/* Popup(anchor) */
+/* Popup(anchor, [rect]) */
 static JSValue popover_popup(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
@@ -7054,6 +7054,40 @@ static JSValue popover_popup(JSContext *ctx, JSValueConst this_val,
         MAX(1, (int)r.size.width), MAX(1, (int)r.size.height)
     };
 
+    /*
+     * **A rectangle inside the anchor**, when one is given -- `{ X, Y, Width,
+     * Height }` in the anchor's own coordinates, which is what
+     * `Editor.CursorBounds()` answers. It is what a hint beside the cursor
+     * needs: the popover points at a place in a control and not at the whole
+     * of it. Read as numbers and refused as anything else, like every
+     * geometry here; a missing field is the anchor's own.
+     */
+    if (argc > 1 && !JS_IsUndefined(argv[1]) && !JS_IsNull(argv[1])) {
+        if (!JS_IsObject(argv[1]))
+            return JS_ThrowTypeError(ctx,
+                "Popup(anchor, rect): rect is { X, Y, Width, Height }");
+        static const char *keys[] = { "X", "Y", "Width", "Height" };
+        int32_t v[4] = { 0, 0, at.width, at.height };
+        for (int k = 0; k < 4; k++) {
+            JSValue f = JS_GetPropertyStr(ctx, argv[1], keys[k]);
+            if (JS_IsException(f))
+                return JS_EXCEPTION;
+            if (!JS_IsUndefined(f) && !bta_to_int(ctx, f, "Popup", &v[k])) {
+                JS_FreeValue(ctx, f);
+                return JS_EXCEPTION;
+            }
+            JS_FreeValue(ctx, f);
+        }
+        graphene_point_t from = GRAPHENE_POINT_INIT((float)v[0], (float)v[1]), to;
+        if (!gtk_widget_compute_point(anchor->gtk, parent, &from, &to))
+            return JS_ThrowTypeError(ctx, "Popup: %s is not in this window",
+                                     anchor->name ? anchor->name : "the anchor");
+        at.x      = (int)to.x;
+        at.y      = (int)to.y;
+        at.width  = MAX(1, v[2]);
+        at.height = MAX(1, v[3]);
+    }
+
     gtk_popover_set_pointing_to(GTK_POPOVER(w->gtk), &at);
     gtk_popover_popup(GTK_POPOVER(w->gtk));
     return JS_UNDEFINED;
@@ -7082,8 +7116,8 @@ static const JSCFunctionListEntry popover_props[] = {
     JS_CGETSET_DEF("Autohide", popover_get_autohide, popover_set_autohide),
     /* Read-only: the open state, not a design property. See above. */
     JS_CGETSET_DEF("Visible",  popover_get_visible,  NULL),
-    /* Popup(anchor) */
-    JS_CFUNC_DEF("Popup", 1, popover_popup),
+    /* Popup(anchor, [rect]) */
+    JS_CFUNC_DEF("Popup", 2, popover_popup),
     /* Close() */
     JS_CFUNC_DEF("Close", 0, popover_close),
     /* Show() */

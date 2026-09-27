@@ -933,6 +933,14 @@ keystroke:
 - **The file's own methods are scanned from the text**, since the IDE edits the
   project's code rather than loading it, and the scan is redone only when the
   text is not the one it was taken from.
+- **Inside a call, which argument.** `File.Save(p, |` puts `Save(path, **text**)`
+  above the cursor (`Ide.CallTip`): `Completion.callAt` reads the text before
+  the cursor forwards -- a comma separates arguments only outside a string, a
+  comment and a nested bracket -- finds the innermost open call, and asks its
+  signature the way a dot asks a member; `this.go(` is a method of the file on
+  screen, read by the parser. The popover does not hide itself, so the keyboard
+  stays in the editor; Escape puts it away for that call, and moving into
+  another brings it back.
 - **Past a call, what the call declares it answers.** `File.Info(p).` offers
   `Size` and `IsDir`, `File.Load(p).` a string's methods, `Directory.Files(d)[0].`
   the element's, `this.Btn.Bounds().` the rectangle, and a local assigned from a

@@ -1509,6 +1509,31 @@ call is that call's answer, `this.X` is the control's class or the field's
 from a field and from a local, and through a named type; with `stepType`
 returning nothing six of those go red.
 
+**And inside a call, which argument -- `Ide.CallTip`.** `File.Save(p, |` shows
+`Save(path, <b>text</b>)` above the cursor. The IDE needed two runtime verbs
+for it and got them as ordinary API: `Editor.CursorBounds()` (where the cursor
+is drawn, in the control's coordinates: `get_iter_location`, then
+`buffer_to_window_coords`, then `compute_point` from the view to the scroller)
+and `Popover.Popup(anchor, [rect])`, which points at a rectangle inside the
+anchor instead of at the whole of it. Three things measured on the way:
+- **An `Autohide` popover takes the keyboard; one without it does not.** The
+  hint is `Autohide: false`, and `tests/ide` asserts the editor still has the
+  focus with it open -- after asserting it had the focus first, because a check
+  that the focus *stayed* passes trivially when nothing had it.
+- **`CursorBounds()` before the window is up is garbage, not an error.** The
+  first test read `{ X: -3, Y: -17 }` in a full run -- where `tests/widgets`'
+  synchronous half runs inside `Form_Open`, before anything is allocated --
+  and passed alone, where the timing differed. It waits for `Bounds().Width >
+  0` now; the number means nothing until the control has a rectangle.
+- **A comma is an argument separator only outside a string, a comment and a
+  nested bracket**, so `callAt` reads the text forwards (forty lines back is
+  enough, and keeps a long file off the keystroke), not backwards: only a
+  forward read knows which of those it is in. The innermost open `(` is the
+  call; an `{` or `[` inside it is still its argument.
+Placement was checked by eye once, on an `Xvfb` with a root capture (a
+popover is its own surface and does not show in a window capture): the hint
+sits directly above the cursor with the argument in bold.
+
 **And the classes are the open tabs' before they are the disk's.**
 `declaredClasses` used to walk the project once and keep what the files said,
 so a class written in a tab and not saved was no class at all -- no bare name,
