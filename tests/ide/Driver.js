@@ -3075,12 +3075,16 @@ function* p_completion(ide) {
         const hit = ask(word, before).find((e) => e.Text === word);
         return hit ? hit.Detail : "(not offered)";
     };
-    check("a method's parameters are said, and they were not",
-          det("Add", "Container.").length > 2 && det("Add", "Container.") !== "()",
-          JSON.stringify(det("Add", "Container.")));
-    check("an optional one keeps its brackets, as the reference spells it",
-          det("Bounds", "Container.").includes("container"),
-          JSON.stringify(det("Bounds", "Container.")));
+    /* **The names, where they were declared.** The runtime's own methods carry a
+     * signature beside their C entry, and that is better than a count: a person
+     * reading `Bounds([container])` learns it takes the container it is
+     * relative to and that the container is optional. */
+    check("a declared signature says the names, and the brackets",
+          det("Add", "Container.") === "(widget)" &&
+          det("Bounds", "Container.") === "([container])" &&
+          det("On", "Widget.") === "(event, fn)",
+          JSON.stringify([det("Add", "Container."), det("Bounds", "Container."),
+                          det("On", "Widget.")]));
     check("a property says nothing, which is what separates it from a method",
           det("Width", "Container.") === "" && det("Tooltip", "Container.") === "",
           JSON.stringify([det("Width", "Container."),
@@ -3099,9 +3103,25 @@ function* p_completion(ide) {
     check("a declared signature is said, name and all",
           det("DesignValue", "Widget.") === "(name)",
           JSON.stringify(det("DesignValue", "Widget.")));
-    check("a static with no declared signature says the kind and the floor",
-          det("New", "Widget.") === "static ()",
+    /* **And the count, where nothing was declared -- which is the half the user
+     * objected to having to write.** `Widget.New` has no signature comment and
+     * never had: the extractor only attaches one to a `JSCFunctionListEntry`
+     * table and every class static is registered with `JS_SetPropertyStr`. It
+     * takes one argument and now says so, because the function object knows. */
+    check("a static nobody declared says the kind and the discovered count",
+          det("New", "Widget.") === "static (a1)",
           JSON.stringify(det("New", "Widget.")));
+
+    /* **The count, and the point of asking for it at all: nobody wrote it
+     * down.** `Container.Add` and `Widget.On` are two parameters because the
+     * function says so, and `Widget.New` takes one for the same reason -- a
+     * signature nobody declared, and the answer `Function.length` gives. The
+     * declaration file says `static New(type: string): Widget;` because the
+     * generator writes that by hand; the popup now says the same number
+     * without anybody having written it. */
+    check("a method that takes nothing says so, and that is now a fact",
+          det("FocusNext", "Container.") === "()",
+          JSON.stringify(det("FocusNext", "Container.")));
     check("a member of a class the runtime never ran keeps the honest floor",
           ask("", "Dial.").every((e) => typeof e.Detail === "string"),
           JSON.stringify(ask("", "Dial.").slice(0, 3)));
@@ -3175,8 +3195,13 @@ function* p_completion(ide) {
     const file = answer("", "        File.");
     check("a global offers what it really holds",
           file.includes("Load") && file.includes("Save"), JSON.stringify(file));
-    eq("and says which of them are called",
-       ask("", "        File.").find((p) => p.Text === "Load").Detail, "()");
+    /* **This said `()` and was wrong.** `File.Load(path)` takes a path, and the
+     * popup said it takes nothing -- because `()` was the placeholder for *no
+     * signature declared* and a test that asserted the placeholder read as a
+     * claim about the function. Asking the count instead is what noticed: the
+     * answer is one argument and it was always one argument. */
+    eq("and says how many arguments, which `()` never did",
+       ask("", "        File.").find((p) => p.Text === "Load").Detail, "(a1)");
 
     /* --- a namespace of this project ------------------------------------------
      *

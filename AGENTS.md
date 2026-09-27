@@ -1419,6 +1419,36 @@ So there were two fixes, and **only one of them is in the IDE**:
   takes nothing. A property says nothing, which is what separates it from a
   method, and that is a question worth asking rather than a blank to leave.
 
+  **And then the count, discovered, which removed the reason to declare
+  anything.** The first version of this asked the runtime for a signature and got
+  nothing for a library, and the obvious next move -- a `static Signatures` in
+  each of the six libraries -- was the wrong one, and the objection to it is the
+  right one: **nobody should have to write the arity of fifty methods for an
+  editor to catch `Ask()`.** `Function.length` is the engine's own answer and it
+  is right for every declaration without a default, so `Widget.Members` grew a
+  `Params` field read off the function value and both consumers ask for it:
+  `QrCode.Encode(text, opts)` is two arguments, `Nsis.Stage` three, `Chart.Save`
+  three, `Widget.On` two, and `Widget.Width` is `-1` because it is a property.
+  **Three tiers, and the order is the design**: a declared `static Signatures`
+  wins because it has the parameter *names*; the discovered count is next and
+  needs nothing written; the rest form is what nobody knows, and it is now the
+  exception rather than the rule.
+
+  **And what made the tier a truth is a rule the specification states, which is
+  worth keeping rather than rediscovering**: `length` is the number of parameters
+  *before the first default or rest*, so `(a, b = 1, c)` is 1 and `(a, ...rest)`
+  is 1. `Params` is therefore a lower bound and `sigOf` says so in its own
+  comment -- a declaration built from it is *weaker* than one built from names
+  and not a wrong one, which is the difference that matters.
+
+  **The names are not discoverable and never will be**, in this language or any
+  other built on ECMAScript: a parameter's name is discarded at parse time and
+  the function object does not carry it. So `static Signatures` stays as what it
+  is -- decoration, for a class that wants its parameters spelled out -- and the
+  generator's own fallback comment ("the rest form and not empty parentheses" --
+  a declaration that is true rather than one that is wrong) is what a tier is
+  for.
+
   **Which left a gap worth naming, because two consumers of one verb now
   disagree.** `Widget.New` is the case: `bintana.d.ts` says
   `static New(type: string): Widget;` because the generator **writes that by

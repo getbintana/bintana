@@ -3071,6 +3071,24 @@ static JSValue signature_of_proto(JSContext *ctx, JSValueConst start,
     }
     JS_FreeValue(ctx, proto);
     JS_FreeAtom(ctx, atom);
+
+    /* **And then the class's own declaration, which is where a static's
+     * parameters live.** A static is a property of the *constructor*, so the
+     * walk above -- which is over prototypes, and is the right walk for an
+     * instance method -- never finds it: `Confirm.Ask` answered null with
+     * `static Signatures = { Ask: "(message, [onConfirm], [options])" }` right
+     * there in the class. `signature_at` reads `ctor.Signatures`, and it also
+     * reads the generated table, so asking it *last* keeps the rule that
+     * stands: the walk answers first, and the class's own answer is what is
+     * left over.
+     *
+     * Which is also what makes `static Signatures` usable at all. A class of
+     * rad.js or a library declares its own arity that way, and before this the
+     * mechanism worked for `Form.Serialize` and for nothing else -- a class
+     * whose members are mostly statics, which is what a library class is. */
+    if (JS_IsNull(found))
+        found = signature_at(ctx, start, member, false);
+
     return found;
 }
 
@@ -3143,10 +3161,63 @@ static JSValue w_methods_by_type(JSContext *ctx, JSValueConst this_val,
     return names_to_array(ctx, names);
 }
 
-/* One `{ Name, Kind }` of `Members`, the shape the IDE's completion and
- * `tools/typings` both want: a name, and what kind of thing it is. */
+/* One entry of `Members`, the shape the IDE's completion and `tools/typings`
+ * both want: a name, what kind of thing it is, and **how many arguments it
+ * takes**.
+ *
+ * **The count is discovered and not declared, and that is the whole point of
+ * it.** A person writing a library should not have to spell the arity of fifty
+ * methods for an editor to catch `Ask()`. `Function.length` is the engine's own
+ * answer -- the number of parameters before the first default or rest -- and it
+ * is right for the overwhelmingly common declaration, which is what makes it
+ * worth having over nothing.
+ *
+ * **And it is a lower bound the moment a parameter has a default**, because that
+ * is the specification's rule and not a shortcut:
+ *
+ *     (a, b, c)        -> 3
+ *     (a, b = 1, c)    -> 1
+ *     (a, ...rest)     -> 1
+ *
+ * so `Params` is a count and never a claim that the list is complete. `-1` means
+ * nobody knows, which is a property, a global that is not a class, and -- until
+ * the parser reports them -- a method read out of a source.
+ *
+ * **The names are not here and cannot be.** ECMAScript discards a parameter's
+ * name at parse time, so there is nothing on the function object to read; a
+ * class that wants them spelled out says so with `static Signatures`, and that
+ * is decoration over a count, not the way the count is obtained. */
+static void take_params(JSContext *ctx, JSValue out, GPtrArray *names,
+                        uint32_t *n, const char *name, const char *kind,
+                        int params);
+
 static void take(JSContext *ctx, JSValue out, GPtrArray *names, uint32_t *n,
                  const char *name, const char *kind)
+{
+    take_params(ctx, out, names, n, name, kind, -1);
+}
+
+/* `take` with the count read off a function value, or -1 when there is none. */
+static void take_fn(JSContext *ctx, JSValue out, GPtrArray *names, uint32_t *n,
+                    const char *name, const char *kind, JSValueConst fn)
+{
+    int params = -1;
+
+    if (JS_IsFunction(ctx, fn)) {
+        JSValue len = JS_GetPropertyStr(ctx, fn, "length");
+        int32_t    l;
+        if (JS_ToInt32(ctx, &l, len) == 0 && l >= 0)
+            params = l;
+        else
+            JS_FreeValue(ctx, JS_GetException(ctx));
+        JS_FreeValue(ctx, len);
+    }
+    take_params(ctx, out, names, n, name, kind, params);
+}
+
+static void take_params(JSContext *ctx, JSValue out, GPtrArray *names,
+                        uint32_t *n, const char *name, const char *kind,
+                        int params)
 {
     for (guint i = 0; i < names->len; i++)
         if (g_str_equal(g_ptr_array_index(names, i), name)) return;
@@ -3155,12 +3226,18 @@ static void take(JSContext *ctx, JSValue out, GPtrArray *names, uint32_t *n,
     JSValue item = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, item, "Name", JS_NewString(ctx, name));
     JS_SetPropertyStr(ctx, item, "Kind", JS_NewString(ctx, kind));
+    JS_SetPropertyStr(ctx, item, "Params", JS_NewInt32(ctx, params));
     JS_SetPropertyUint32(ctx, out, (*n)++, item);
 }
 
 /*
  * `Widget.Members(type)`: the public members of **any** class a name resolves to,
- * each with its kind -- `Property`, `ReadOnly`, `Method` or `Static`.
+ * each with its kind -- `Property`, `ReadOnly`, `Method` or `Static` -- **and
+ * `Params`, the number of arguments it takes, read off the function value
+ * rather than declared by anybody.** `Widget.Signature` is the better answer
+ * where it exists, because it has the parameter *names*; `Params` is the answer
+ * that needs no hand-written declaration, which is what makes it the one a
+ * library gets for free. `Style`, `Icon` and a property answer `-1`.
  *
  * **It exists because the three verbs above refuse, and that refusal is right.**
  * `PropertyNames`, `Methods` and `EventNames` answer about a *widget*, and a
@@ -3229,7 +3306,7 @@ static void take_members_of_resolved(JSContext *ctx, JSValueConst klass,
                     if (nm && *nm && g_ascii_isupper(nm[0]) &&
                         !g_str_equal(nm, "constructor")) {
                         if (JS_IsFunction(ctx, d.value))
-                            take(ctx, out, names, n, nm, "Method");
+                            take_fn(ctx, out, names, n, nm, "Method", d.value);
                         else if (JS_IsFunction(ctx, d.getter) ||
                                  JS_IsFunction(ctx, d.setter))
                             take(ctx, out, names, n, nm, "Property");
@@ -3262,9 +3339,10 @@ static void take_members_of_resolved(JSContext *ctx, JSValueConst klass,
                 const char *nm = JS_AtomToCString(ctx, tab[i].atom);
                 if (nm && *nm && g_ascii_isupper(nm[0]) &&
                     !g_str_equal(nm, "prototype") && !g_str_equal(nm, "name")) {
-                    if (JS_IsFunction(ctx, d.value) ||
-                        JS_IsFunction(ctx, d.getter) ||
-                        JS_IsFunction(ctx, d.setter))
+                    if (JS_IsFunction(ctx, d.value))
+                        take_fn(ctx, out, names, n, nm, "Static", d.value);
+                    else if (JS_IsFunction(ctx, d.getter) ||
+                             JS_IsFunction(ctx, d.setter))
                         take(ctx, out, names, n, nm, "Static");
                 }
                 if (nm) JS_FreeCString(ctx, nm);

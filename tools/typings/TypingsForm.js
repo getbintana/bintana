@@ -460,14 +460,22 @@ class TypingsForm extends Form {
             out.push(`    readonly ${p}: ${isWidget ? this.typeOf(sample, p) : "any"};`);
         }
 
+        /* **The declared arity, and the rest form only where there is none.**
+         *
+         * The rest form and not empty parentheses is the whole difference
+         * between a declaration that is true and one that is wrong:
+         * `Ask(): any` says the member takes no arguments, so every correct call
+         * is `Expected 0 arguments, but got 3`. The same failure the file
+         * exists to prevent, pointed the other way.
+         *
+         * **And the rest form is now the exception rather than the rule**,
+         * and the reason is the shape of the answer rather than a decision: a
+         * library gets its argument counts because the engine knows them, not
+         * because somebody wrote them down. See `sigOf`. */
         for (const m of methods.concat(statics)) {
             const when = statics.includes(m) ? "static " : "";
-            /* The rest form and not empty parentheses, and that is the whole
-             * difference between a declaration that is true and one that is
-             * wrong: `Ask(): any` says the member takes no arguments, so every
-             * correct call is `Expected 0 arguments, but got 3`. The same
-             * failure the file exists to prevent, pointed the other way. */
-            out.push(`    ${when}${m}(...values: any[]): ${when ? "any" : "void"};`);
+            out.push(`    ${when}${this.methodLine(m, this.sigOf(name, m),
+                                              when ? "any" : "void").trim()}`);
         }
 
         out.push("}");
@@ -700,6 +708,64 @@ class TypingsForm extends Form {
     }
 
     /*
+     * The signature to declare a member with, in three tiers.
+     *
+     * **A declared one wins**: `static Signatures` says the parameter names and
+     * the optionality, and there is nothing better than an answer somebody wrote
+     * about their own class. It is **decoration, not the way a count is
+     * obtained** -- which is the correction to what this generator assumed for
+     * every library it ever declared, and the reason nobody had to write fifty
+     * of them down.
+     *
+     * **Then the count, discovered.** `Widget.Members` reads `Function.length` --
+     * the number of parameters before the first default -- so
+     * `QrCode.Encode(text, opts)` is two arguments and the declaration says two.
+     * Measured over the six libraries: `Encode` 2, `Nsis.Script` 2,
+     * `Nsis.Stage` 3, `Chart.Save` 3, `Markdown.Load` 1, `Widget.On` 2, and
+     * `Widget.Width` -1 because it is a property and not a call.
+     *
+     * **And then the floor.** `-1` is nobody knowing -- a property, or a method
+     * read out of a source rather than built -- and the rest form is what that
+     * gets. `a: any, b: any` instead of `message: string, options?: object` is a
+     * weaker declaration and not a wrong one: the count is real, and the names
+     * are not there to be had because ECMAScript discards them at parse time.
+     *
+     * **Every call here is guarded, and `Widget.Signature` is the one that
+     * throws**: it refuses a class that is not a widget, which is right -- it
+     * asks about a method -- and `Timer`, `QrCode` and `Nsis` are not one. The
+     * first version of this asked it bare and the generator stopped with
+     * *'Timer' is not a widget class* before writing a line of the file.
+     */
+    sigOf(type, name) {
+        try {
+            const declared = Widget.Signature(type, name);
+            if (typeof declared === "string" && declared) return declared;
+        } catch (e) { /* not a widget class: the count below is the answer */ }
+
+        const member = this.membersOf(type).find((m) => m.Name === name);
+        if (member && typeof member.Params === "number" && member.Params >= 0) {
+            /* **Names without types, because `tsArgs` writes those.** The first
+             * version emitted `a1: any` here and the declaration came out
+             * `a1: any: any` -- one declaration of the type and one of the
+             * parameter, which is the second place the same answer is written. */
+            const args = [];
+            for (let i = 0; i < member.Params; i++) args.push(`a${i + 1}`);
+            return `(${args.join(", ")})`;
+        }
+        return null;
+    }
+
+    /* One `Widget.Members` answer per class, asked once. */
+    membersOf(type) {
+        this._members = this._members || {};
+        if (!(type in this._members)) {
+            try { this._members[type] = Widget.Members(type, { Forms: this.forms }); }
+            catch (e) { this._members[type] = []; }
+        }
+        return this._members[type];
+    }
+
+    /*
      * A method, with the parameters the class declares for it.
      *
      * A signature is the documentation's own spelling -- `([container])`,
@@ -709,10 +775,18 @@ class TypingsForm extends Form {
      * says. A method that declares nothing falls back to the permissive
      * spelling rather than claiming it takes none.
      */
-    methodLine(name, sig) {
+    /*
+     * A method line. **The return type is an argument and not a constant**, which
+     * it was not while this only ever wrote the runtime's half: an instance
+     * method returns `void` here and a static returns `any`, because a caller
+     * that writes `const n = chart.Refresh()` is wrong and a caller that writes
+     * `const c = Confirm.Ask(...)` is not, and the two spellings are the
+     * difference between a declaration that helps and one that annoys.
+     */
+    methodLine(name, sig, returns) {
         if (sig === null)
-            return `    ${name}(...values: any[]): any;`;
-        return `    ${name}(${this.tsArgs(sig)}): any;`;
+            return `    ${name}(...values: any[]): ${returns || "any"};`;
+        return `    ${name}(${this.tsArgs(sig)}): ${returns || "any"};`;
     }
 
     tsArgs(sig) {

@@ -690,6 +690,22 @@ Ide.Completion = class Completion {
 
         let sig = null;
         try { sig = Widget.Signature(className, member.Name); } catch (e) { sig = null; }
+
+        /* **The count, discovered, and that is what makes this work for a
+         * library.** A person writing one should not have to spell the arity of
+         * every method for a popup to say it: `Widget.Members` reads
+         * `Function.length` off the value, and for a class this process has
+         * *not* built the answer is -1 until the parser reports it.
+         *
+         * And a class the runtime refuses is not an error here: `Signature`
+         * refuses a class that is not a widget, which is right for its own
+         * question and is most of what a popup asks about. */
+        if ((!sig || typeof sig !== "string") && typeof member.Params === "number"
+            && member.Params >= 0) {
+            const args = [];
+            for (let i = 0; i < member.Params; i++) args.push("a" + (i + 1));
+            sig = "(" + args.join(", ") + ")";
+        }
         /* **A blank answer is a property, not a method, and the difference is the
          * whole point of asking.** `Widget.Member` is the verb that says which,
          * and it answers for one name. */
