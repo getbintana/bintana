@@ -985,223 +985,6 @@ function checkLibraryPages(root, problems) {
     return { checked, pages, missing: Dictionary.Count(mine) - pages };
 }
 
-/*
- * Is `tools/typings/bintana.d.ts` still the runtime's surface?
- *
- * That file is **generated**, which is the reason it needs guarding rather than
- * the reason it does not: a generated file that nobody regenerates is a stale
- * file, and nothing about it looks stale. `tests/typings.sh` writes it, this
- * says when it stopped being true -- which is the same bargain `docs/llm/`
- * makes, one step further out.
- *
- * What is compared is the **name**, and not the shape: the declaration types
- * most things `any` on purpose (a getter that throws is not a type), so
- * demanding a signature would be demanding something the generator never
- * claimed. A member that exists in C and is nowhere in that file is the failure
- * worth having, because it is the one that makes an editor say a real property
- * does not exist.
- */
-function checkTypings(root, members, problems) {
-    const path = File.Join(root, "tools/typings/bintana.d.ts");
-
-    if (!File.Exists(path)) {
-        problems.push("no declarations at tools/typings/bintana.d.ts -- " +
-                      "run tests/typings.sh");
-        return 0;
-    }
-    const text  = File.Load(path);
-    const seen  = new Set();
-    let   count = 0;
-
-    /*
-     * And the globals built one `JS_SetPropertyStr` at a time -- `File`,
-     * `Dialog`, `Application` and the rest -- which are in no table, so their
-     * members are read out of the C the way `checkGlobals` reads them. Without
-     * this, the stale file is invisible for exactly the half of the surface
-     * that is written by hand: `File.Within` was added, the declarations were
-     * not regenerated, and nothing failed.
-     */
-    const all = members.slice();
-    for (const c of sources(root)) {
-        const src = File.Load(c);
-
-        for (const v in GLOBAL_VARS) {
-            /* A module inside a global -- `Desktop.Entries` -- is one `any` in
-             * the declarations, so its members cannot be asked for by name. */
-            if (GLOBAL_VARS[v].indexOf(".") >= 0) continue;
-
-            for (const m of setPropOn(v).Matches(src))
-                all.push({ name: m.Group(1), table: GLOBAL_VARS[v] });
-        }
-    }
-
-    for (const m of all) {
-        if (seen.has(m.name)) continue;
-        seen.add(m.name);
-
-        /* A property is `Name:` and a method is `Name(`, at the start of a
-         * declaration line and after whatever qualifies it -- `readonly` for
-         * the ones `PropertyNames()` leaves out, `static` for the four on
-         * `Widget` itself. Narrow enough that the word turning up in a comment
-         * does not count as a declaration. */
-        const line = new Regex("^\\s*(?:readonly\\s+|static\\s+)?" +
-                               Regex.Escape(m.name) + "\\s*[:(]",
-                               { Multiline: true });
-
-        if (!line.IsMatch(text))
-            problems.push(`${m.name} (${m.table}) is not in bintana.d.ts -- ` +
-                          `run tests/typings.sh`);
-        count++;
-    }
-
-    /*
-     * **Every member of every shipped library, class by class.**
-     *
-     * This is the check whose absence cost the most, and it is worth saying what
-     * the absence looked like: four library classes were skipped by the
-     * generator **and nothing failed**, because the loop above asks about the
-     * runtime's own classes and a library's class is not one -- `Widget.Types()`
-     * is the widget table and `lib/charts` is not in it. So "a member that
-     * exists, that an editor is asked about, and that is declared nowhere" was
-     * the ordinary state for as long as nobody asked, and the fix was seven lines
-     * of runtime while the problem stayed invisible -- which makes it a property
-     * of the *check* and not of the generator.
-     *
-     * **And the answer used is the complete one**: the sources and the forms,
-     * because a form's children are own properties of the instance and the last
-     * name to be missing everywhere was `Confirm.BtnAccept`, which the library's
-     * own code uses.
-     */
-    const asked        = [];
-    const source_texts = [];
-    const form_texts   = [];
-
-    for (const lib of Application.Libraries()) {
-        const dir = Application.LibraryPath(lib);
-        if (!dir) continue;
-
-        for (const form of Directory.Files(dir, "*.form"))
-            form_texts.push(File.Load(form));
-        for (const file of Directory.Files(dir, "*.js")) {
-            const source = File.Load(file);
-            source_texts.push(source);
-            for (const sym of Application.Symbols(source))
-                if (sym.Kind === "Class") asked.push(sym.Name);
-        }
-    }
-
-    const blocks2 = declarationBlocks(text);
-
-    for (const name of asked) {
-        const block = blocks2[name];
-        if (!block) {
-            problems.push(`${name} is not declared in bintana.d.ts -- ` +
-                          `run tests/typings.sh`);
-            continue;
-        }
-
-        let all = null;
-        try {
-            all = Widget.Members(name, { Sources: source_texts,
-                                         Forms: form_texts });
-        } catch (e) {
-            problems.push(`${name}: Widget.Members refused -- ${e.message}`);
-            continue;
-        }
-
-        for (const m of all) {
-            count++;
-            const line = new Regex("^ {4}(?:readonly )?(?:static )?" +
-                                   Regex.Escape(m.Name) + "\\s*[:(]",
-                                   { Multiline: true });
-            if (!line.IsMatch(block.join("\n")))
-                problems.push(`${name}.${m.Name} is in the runtime and not in ` +
-                              `bintana.d.ts -- run tests/typings.sh`);
-        }
-    }
-
-    /*
-     * **And no line carries a name nobody wrote.** `a1: any` is what a
-     * generated file full of placeholders looks like, and the first version of
-     * the parameter work wrote fifty-nine of them into this file across thirteen
-     * classes -- every one of which had its parameter names in a source the
-     * generator had just read. A test over the whole file rather than over one
-     * member, so it holds for a class nobody thought to test.
-     */
-    for (const line of text.split("\n")) {
-        if (!line.startsWith("    ") || line.startsWith("    /**")) continue;
-
-        /* **Inside the parameter list, and that is where they are.** The first
-         * version of this matched a line whose *name* was a placeholder, which
-         * is a declaration of `a1` and not what the generator writes: it wrote
-         * `Ask(a1: any, a2: any, a3: any)`, fifty-nine of them, with the
-         * placeholder as a parameter of a real method. The check went green on
-         * the exact thing it was added for. */
-        const fake = new Regex("[\\s,(]([a-z]\\d+)\\??\\s*:")
-                        .Match(line.slice(4));
-        if (fake)
-            problems.push(`bintana.d.ts: ${line.trim()} names a parameter ` +
-                          "nobody wrote -- run tests/typings.sh");
-        count++;
-    }
-
-    /*
-     * ...and with the **parameters the runtime declares**, class by class: a
-     * name means different parameters in different classes -- `Serialize` is
-     * `(parentIsFixed)` on `Widget` and `()` on `Form` -- so a line has to be
-     * compared under its own class and not found anywhere in the file.
-     */
-    const widgets = new Set(Widget.Types());
-    const blocks  = declarationBlocks(text);
-
-    for (const cls in blocks) {
-        if (!widgets.has(cls)) continue;      /* a global class, not a widget */
-
-        for (const line of blocks[cls]) {
-            const m = new Regex("^ {4}([A-Za-z_]\\w*)\\(([^)]*)\\):").Match(line);
-            if (!m) continue;
-
-            const sig = Widget.Signature(cls, m.Group(1));
-            if (sig === null) continue;
-
-            const got  = declarationParams(m.Group(2)).join(",");
-            const want = signatureParams(sig).join(",");
-
-            if (got !== want)
-                problems.push(`bintana.d.ts: ${cls}.${m.Group(1)} is declared ` +
-                              `with (${got}), the runtime declares ${sig}`);
-            count++;
-        }
-    }
-    return count + checkFormTypings(root, problems);
-}
-
-/*
- * `bintana.d.ts` split into its class bodies, by name: the file is generated
- * class by class, and a method's parameters only mean anything under the class
- * that declares it.
- */
-function declarationBlocks(text) {
-    const blocks = {};
-    let   current = null;
-
-    for (const line of text.split("\n")) {
-        const open = new Regex("^declare class (\\w+)").Match(line);
-        if (open) {
-            current = open.Group(1);
-            blocks[current] = [];
-            continue;
-        }
-        if (line.startsWith("}")) {
-            current = null;
-            continue;
-        }
-        if (current)
-            blocks[current].push(line);
-    }
-    return blocks;
-}
-
 /* A parameter list split at its **top-level** commas, so `[{A, B}]` is one
  * argument and not three. */
 function splitTop(text) {
@@ -1224,8 +1007,7 @@ function splitTop(text) {
 }
 
 /* The parameter names a declared signature has: `([container])` is
- * `container`, `(...args)` is `args`, and a `{…}` shape is the `options` the
- * generator names it. */
+ * `container`, `(...args)` is `args`, and a `{…}` shape is `options`. */
 function signatureParams(sig) {
     return splitTop(sig.slice(1, -1)).map((part) => {
         let arg = part;
@@ -1235,70 +1017,6 @@ function signatureParams(sig) {
     });
 }
 
-/* The same for a line of TypeScript: `container?: any, ...args: any[]`. */
-function declarationParams(text) {
-    return splitTop(text).map((part) => {
-        const name = part.split(":")[0].trim();
-        if (name.startsWith("{")) return "options";
-        return name.replace(/^\.\.\./, "").replace(/\?$/, "");
-    }).filter((name) => name !== "");
-}
-
-/*
- * And the other half of the same bargain: `ide/forms.d.ts` against the `.form`
- * files it was generated from.
- *
- * That one goes stale a different way -- not when the runtime gains a member,
- * but when somebody draws a control -- and it is the file that makes the IDE's
- * own sources navigable in an editor that is not the IDE. A `.form` under `ide/`
- * that names something the declaration has no field for is a control an editor
- * will say does not exist.
- *
- * All three blocks a `.form` binds by name, because the loader binds all three:
- * `children`, `menus` and `actions`.
- */
-function checkFormTypings(root, problems) {
-    const path = File.Join(root, "ide/forms.d.ts");
-
-    if (!File.Exists(path)) {
-        problems.push("no declarations at ide/forms.d.ts -- run tests/typings.sh");
-        return 0;
-    }
-    const text  = File.Load(path);
-    let   count = 0;
-
-    const named = (nodes, out) => {
-        for (const node of nodes || []) {
-            if (node.name) out.push(node.name);
-            named(node.children, out);
-        }
-        return out;
-    };
-
-    const walk = (folder) => {
-        for (const file of Directory.Files(folder, "*.form")) {
-            let spec;
-            try { spec = File.LoadJson(file); } catch (e) { continue; }
-
-            const names = named(spec.children, [])
-                .concat(named(spec.menus, []), named(spec.actions, []));
-
-            for (const name of names) {
-                const field = new Regex("^\\s*" + Regex.Escape(name) + "\\s*:",
-                                        { Multiline: true });
-                if (!field.IsMatch(text))
-                    problems.push(`${File.Name(file)} names ${name} and ` +
-                                  `ide/forms.d.ts has no field for it -- ` +
-                                  `run tests/typings.sh`);
-                count++;
-            }
-        }
-        for (const sub of Directory.Folders(folder)) walk(sub);
-    };
-    walk(File.Join(root, "ide"));
-    return count;
-}
-
 /*
  * ------------------------------------------------ what a class answers
  *
@@ -1306,10 +1024,9 @@ function checkFormTypings(root, problems) {
  * `Methods`, `EventNames`, `TextProperties`, `PropertyOptions`, `Member`, and
  * the `New`/`Types`/`Available` they joined -- are built by
  * `JS_SetPropertyStr` on the root constructor, which is in no
- * `JSCFunctionListEntry` table. So the scan above cannot see them and neither
- * could the typings check: measured when this was written, `New`, `Types` and
- * `Available` were public, called by the IDE and declared for an editor, and
- * nothing here would have failed had any of them lost its row.
+ * `JSCFunctionListEntry` table. So the scan above cannot see them: measured
+ * when this was written, `New`, `Types` and `Available` were public and called
+ * by the IDE, and nothing here would have failed had any of them lost its row.
  *
  * They are read from where they are installed and held to the same rule, with
  * the qualified spelling -- `` `Widget.Types(` `` -- because that is what tells
@@ -1321,7 +1038,6 @@ const WIDGET_STATIC = new Regex(
 function checkWidgetStatics(root, problems) {
     const src = File.Load(File.Join(root, "runtime/src/bta_widget.c"));
     const doc = File.Load(File.Join(root, "docs/llm/controls.md"));
-    const dts = File.Load(File.Join(root, "tools/typings/bintana.d.ts"));
     let   count = 0;
 
     for (const m of WIDGET_STATIC.Matches(src)) {
@@ -1330,11 +1046,6 @@ function checkWidgetStatics(root, problems) {
 
         if (!doc.includes("`Widget." + name + "("))
             problems.push(`Widget.${name} is installed and has no row in controls.md`);
-
-        if (!new Regex("^\\s*static\\s+" + name + "\\s*[:(]",
-                       { Multiline: true }).IsMatch(dts))
-            problems.push(`Widget.${name} is installed and is not declared in ` +
-                          `bintana.d.ts -- run tests/typings.sh`);
     }
 
     /*
@@ -1354,7 +1065,7 @@ function checkWidgetStatics(root, problems) {
      * **And every method and event declares its parameters.** A signature lives
      * beside the member -- a comment above its C entry, or a `static
      * Signatures` on a class of the project's own -- and one that is missing is
-     * a method `bintana.d.ts` cannot write and an editor cannot hint. Asked of
+     * a method the IDE's completion cannot hint. Asked of
      * the runtime rather than of the comments, so it is the same answer a
      * caller gets.
      */
@@ -1371,6 +1082,44 @@ function checkWidgetStatics(root, problems) {
                               `comment above the class row that lists it`);
     }
     return count;
+}
+
+/*
+ * ------------------------------------------ what a global's verbs are called
+ *
+ * **Every native verb of a global declares its parameters**, the rule the
+ * widgets' methods have been held to -- and it was not, for the half of the
+ * language a program uses most: `File.Load`, `Locale.Text`, `Widget.New` and
+ * a hundred and sixty more are registered with `JS_SetPropertyStr` or in a
+ * table no class row owns, and the extractor only read comments above a class
+ * table's entries. So the completion popup said `(...)` for every one of them.
+ *
+ * Asked of the runtime, as `Widget.Members` answers the IDE: a `Method` or a
+ * `Static` with no `Signature` is the failure. A verb written in JavaScript is
+ * answered by the parser out of its own source and needs nothing written; one
+ * written in C needs the one-line comment above its entry. Only the globals
+ * the C installs are asked, because those are the ones whose parameters exist
+ * nowhere else.
+ */
+function checkGlobalSignatures(root, problems) {
+    const names = new Set(["Widget"]);
+    for (const c of sources(root))
+        for (const m of GLOBAL_INSTALL.Matches(File.Load(c))) names.add(m.Group(1));
+
+    let checked = 0;
+    for (const name of [...names].sort()) {
+        let members;
+        try { members = Widget.Members(name); } catch (e) { continue; }
+        for (const m of members) {
+            if (m.Kind !== "Method" && m.Kind !== "Static") continue;
+            checked++;
+            if (!m.Signature)
+                problems.push(`${name}.${m.Name} declares no signature -- a ` +
+                              `one-line /* ${m.Name}(...) */ above the line that ` +
+                              `installs it`);
+        }
+    }
+    return checked;
 }
 
 /* ------------------------------------------------------------------- links
@@ -1514,8 +1263,8 @@ function Main() {
     }
 
     const lib     = checkLibraries(root, problems);
-    const typings = checkTypings(root, members, problems);
     const statics = checkWidgetStatics(root, problems);
+    const verbs   = checkGlobalSignatures(root, problems);
     const globals = checkGlobals(root, problems);
     const named   = checkGlobalsListed(root, problems);
     const ref     = checkReference(root, members, events, problems);
@@ -1529,13 +1278,13 @@ function Main() {
     print(problems.length
         ? `api: ${problems.length} undocumented or wrong, of ${seen.size} widget ` +
           `members, ${statics} class statics, ${Dictionary.Count(events)} events, ` +
-          `${globals} on globals, ${lib} in lib/ and ${typings} declared for an editor`
+          `${globals} on globals and ${lib} in lib/`
         : `api: ${seen.size} widget members and ${Dictionary.Count(events)} events, ` +
           `plus ${statics} class statics, ${globals} on the globals and ${lib} ` +
-          `published by lib/, ${shadows} member${shadows === 1 ? "" : "s"} checked ` +
+          `published by lib/, ${verbs} global verbs with their parameters named, ` +
+          `${shadows} member${shadows === 1 ? "" : "s"} checked ` +
           `for shadowing a base one, ` +
-          `all declared for an editor (${typings} names, the runtime's and the ` +
-          `IDE's own forms) and documented -- and ${ref.checked} again in the ${ref.pages} ` +
+          `all documented -- and ${ref.checked} again in the ${ref.pages} ` +
           `long page${ref.pages === 1 ? "" : "s"} of docs/reference/widgets, ` +
           `${ref.missing} more with members of their own still to write, ` +
           `${glob.checked} in the ${glob.pages} of docs/reference/globals, ` +

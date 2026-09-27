@@ -279,8 +279,11 @@ function ReadFolder(folder) {
   build-time flag or a probe (`Terminal`, `Video`) rather than a plugin: the
   class has to be there for a `.form` to load, whether or not this machine can
   run it.
-- **Appear in `bintana.d.ts`.**  Completion in an editor is generated from the
-  runtime's own surface; a plugin's globals are the library's to document.
+- **Be offered by name before the project runs.**  The IDE completes a bare
+  name out of `Application.Globals()` and the libraries' sources, and a
+  plugin's globals exist only once the `.so` is loaded -- which the IDE never
+  does for the project it edits.  A plugin's globals are the library's to
+  document.
 - **Use the runtime's helpers.**  `bta.h` is not installed and not part of the
   contract: a plugin has the table and the C library it wraps.
 - **Be unloaded and reloaded.**  A plugin is loaded once per process, in

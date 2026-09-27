@@ -918,10 +918,11 @@ is measured in [plans/completion-plan.md](plans/completion-plan.md)** -- and the
 says the blocker is a *declaration* and not an analyser. TypeScript, handed a
 complete `.d.ts`, resolves **exactly** what a table lookup resolves: `this.ide.`
 is `any` for it too, because a constructor parameter is not written down
-anywhere. The declarations are written now -- `tests/typings.sh` generates them
--- so **VS Code works on a Bintana project with nothing installed**, and the
-analyser is still waiting for somebody who needs the two rows a lookup cannot
-answer.
+anywhere. **The completion is the IDE's own and nobody else's**: a generator of
+`.d.ts` declarations for outside editors existed for a while and was removed,
+because nothing here consumed it and every name it declared was a name the
+runtime already answers through `Widget.Members` -- the analyser is still
+waiting for somebody who needs the two rows a lookup cannot answer.
 
 Two things it has to be careful about, both because the handler runs on the
 keystroke:
@@ -932,6 +933,12 @@ keystroke:
 - **The file's own methods are scanned from the text**, since the IDE edits the
   project's code rather than loading it, and the scan is redone only when the
   text is not the one it was taken from.
+- **The classes a name can be are the open tabs' first, then the disk's.** The
+  project's and its libraries' `.js` and `.form` files are walked once per
+  project; every open tab is read live over them -- the editor's text, or a
+  designer's tree -- so a class typed and not saved is offered as a bare name
+  and after its dot, and an edit to it is what the next popup says. Each file is
+  parsed again only when its text changed.
 
 The heading is `CompletionTitle`, set per tab and translated like any caption.
 

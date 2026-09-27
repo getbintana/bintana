@@ -140,6 +140,7 @@ static JSValue lock_hold(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry lock_props[] = {
+    /* Hold(name, fn) */
     JS_CFUNC_DEF("Hold", 2, lock_hold),
 };
 

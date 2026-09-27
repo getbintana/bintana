@@ -1234,12 +1234,16 @@ void bta_xml_init(JSContext *ctx, JSValue global)
 
     JSValue xml = JS_NewObject(ctx);
 
+    /* Parse(text) */
     JS_SetPropertyStr(ctx, xml, "Parse",
                       JS_NewCFunction(ctx, xml_parse, "Parse", 1));
+    /* ParseBytes(bytes) */
     JS_SetPropertyStr(ctx, xml, "ParseBytes",
                       JS_NewCFunction(ctx, xml_parse_bytes, "ParseBytes", 1));
+    /* Stringify(node) */
     JS_SetPropertyStr(ctx, xml, "Stringify",
                       JS_NewCFunction(ctx, xml_stringify, "Stringify", 1));
+    /* Element(name) */
     JS_SetPropertyStr(ctx, xml, "Element",
                       JS_NewCFunction(ctx, xml_element, "Element", 1));
 #ifdef BTA_HAVE_LIBXML

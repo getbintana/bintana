@@ -3161,8 +3161,7 @@ static JSValue w_methods_by_type(JSContext *ctx, JSValueConst this_val,
     return names_to_array(ctx, names);
 }
 
-/* One entry of `Members`, the shape the IDE's completion and `tools/typings`
- * both want: a name, what kind of thing it is, and **how many arguments it
+/* One entry of `Members`, the shape the IDE's completion wants: a name, what kind of thing it is, and **how many arguments it
  * takes**.
  *
  * **The count is discovered and not declared, and that is the whole point of
@@ -3180,22 +3179,21 @@ static JSValue w_methods_by_type(JSContext *ctx, JSValueConst this_val,
  *     (a, ...rest)     -> 1
  *
  * so `Params` is a count and never a claim that the list is complete. `-1` means
- * nobody knows, which is a property, a global that is not a class, and -- until
- * the parser reports them -- a method read out of a source.
+ * nobody knows, which is a property and a static accessor.
  *
- * **The names are not here and cannot be.** ECMAScript discards a parameter's
- * name at parse time, so there is nothing on the function object to read; a
- * class that wants them spelled out says so with `static Signatures`, and that
- * is decoration over a count, not the way the count is obtained. */
+ * **The names are not on the function object.** ECMAScript discards a
+ * parameter's name at parse time; for a member read out of a source the parser
+ * reports them (`Signature`), and a built member has only the count. */
 static void take_params(JSContext *ctx, JSValue out, GPtrArray *names,
                         uint32_t *n, const char *name, const char *kind,
                         int params);
 
 /* `take` with a signature, and a count derived from it when there is no
  * `Function.length` to read -- which is the case for a member declared in a
- * source rather than built.  The count is the number of names in the list, so a
- * method the parser read gives the same number the function object would have,
- * and the two paths meet on it. */
+ * source rather than built.  The count is the names before the first `[x]` or
+ * `...x`, which is `Function.length`'s own rule, so a method the parser read
+ * gives the same number the function object would have and the two paths meet
+ * on it. */
 static void take_params_sig(JSContext *ctx, JSValue out, GPtrArray *names,
                              uint32_t *n, const char *name, const char *kind,
                              int params, const char *sig);
@@ -3206,18 +3204,25 @@ static void take_sig(JSContext *ctx, JSValue out, GPtrArray *names, uint32_t *n,
     int count = -1;
 
     if (params && *params) {
-        /* Between the parentheses, and the count is commas plus one over
-         * whatever is left -- which is why the brackets and the dots do not
-         * matter: `[b]` is one parameter and `...rest` is one parameter.  The
-         * first version counted over the whole string and `(a)` came out 0,
-         * which is the one method shape that is most of them. */
+        /* Between the parentheses, one parameter per comma-separated entry,
+         * stopping at the first that is optional or a rest: `(a, [b], ...c)`
+         * is 1, as `Function.length` says of `(a, b = 1, ...c)`.  The first
+         * version counted every entry, so the same method answered 3 read and
+         * 1 built. */
         const char *open  = strchr(params, '(');
         const char *close = strrchr(params, ')');
         if (open && close && close > open) {
-            int commas = 0;
-            for (const char *q = open + 1; q < close; q++)
-                if (*q == ',') commas++;
-            count = (close == open + 1) ? 0 : commas + 1;
+            const char *q = open + 1;
+            count = 0;
+            while (q < close) {
+                while (q < close && *q == ' ') q++;
+                /* `[x]` or `...x`: an optional or a rest ends the count. */
+                if (q >= close || *q == '[' || *q == '.')
+                    break;
+                count++;
+                while (q < close && *q != ',') q++;
+                if (q < close) q++;          /* past the comma */
+            }
         }
     }
     take_params_sig(ctx, out, names, n, name, kind, count,
@@ -3230,9 +3235,101 @@ static void take(JSContext *ctx, JSValue out, GPtrArray *names, uint32_t *n,
     take_params(ctx, out, names, n, name, kind, -1);
 }
 
-/* `take` with the count read off a function value, or -1 when there is none. */
-static void take_fn(JSContext *ctx, JSValue out, GPtrArray *names, uint32_t *n,
-                    const char *name, const char *kind, JSValueConst fn)
+/* `take` with the count read off a function value, or -1 when there is none,
+ * and the declared parameter list when the C beside the member wrote one. */
+static void take_fn_sig(JSContext *ctx, JSValue out, GPtrArray *names,
+                        uint32_t *n, const char *name, const char *kind,
+                        JSValueConst fn, const char *sig);
+
+/* The parameter list of a function written in JavaScript, read out of its own
+ * source by the parser -- or NULL for a native one, whose source is
+ * `[native code]` and whose parameters only the comment beside its C entry can
+ * name.
+ *
+ * **The engine keeps the source of every function it compiled**, `rad.js`'s
+ * and `forms.js`'s included, so `File.LoadJson` and `Timer.After` carry their
+ * own parameter names and nobody has to write them twice.  What is taken out
+ * of the source is only the text between the first bracket and its partner --
+ * or the lone name before an `=>` -- and the *spelling* is the parser's: it is
+ * compiled as `function __p(<that text>) {}` and `bta_symbols` answers, so a
+ * default is `[name]` and a rest `...name` exactly as for a class in a file.
+ * Strings and nested brackets in a default value are skipped while matching. */
+static char *source_signature(JSContext *ctx, JSValueConst fn)
+{
+    JSValue     text = JS_ToString(ctx, fn);
+    const char *src  = JS_IsException(text) ? NULL : JS_ToCString(ctx, text);
+    char       *out  = NULL;
+
+    JS_FreeValue(ctx, text);
+    if (!src) {
+        JS_FreeValue(ctx, JS_GetException(ctx));
+        return NULL;
+    }
+    if (strstr(src, "[native code]")) {
+        JS_FreeCString(ctx, src);
+        return NULL;
+    }
+
+    const char *p = src;
+    while (*p == ' ' || *p == '\t' || *p == '\n') p++;
+    const char *from = NULL, *to = NULL;
+
+    /* `x => ...`: one bare name, and the arrow is what says so. */
+    const char *q = p;
+    while (g_ascii_isalnum(*q) || *q == '_' || *q == '$') q++;
+    const char *after = q;
+    while (*after == ' ') after++;
+    if (q > p && after[0] == '=' && after[1] == '>') {
+        from = p;
+        to   = q;
+    } else {
+        const char *open = strchr(p, '(');
+        if (open) {
+            int  depth = 0;
+            char quote = 0;
+            for (const char *c = open; *c; c++) {
+                if (quote) {
+                    if (*c == '\\' && c[1]) c++;
+                    else if (*c == quote) quote = 0;
+                    continue;
+                }
+                if (*c == '"' || *c == '\'' || *c == '`') { quote = *c; continue; }
+                if (*c == '(') depth++;
+                else if (*c == ')' && --depth == 0) {
+                    from = open + 1;
+                    to   = c;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (from && to && to >= from) {
+        char   *wrapped = g_strdup_printf("function __p(%.*s) {}",
+                                          (int) (to - from), from);
+        JSValue list    = bta_symbols(ctx, wrapped);
+        JSValue first   = JS_GetPropertyUint32(ctx, list, 0);
+        JSValue params  = JS_IsObject(first)
+                          ? JS_GetPropertyStr(ctx, first, "Params") : JS_UNDEFINED;
+        const char *ps  = JS_IsString(params) ? JS_ToCString(ctx, params) : NULL;
+
+        /* A function of no parameters reports "" at the top level, which is
+         * `()` to a member. */
+        if (ps)
+            out = g_strdup(*ps ? ps : "()");
+        if (ps) JS_FreeCString(ctx, ps);
+        JS_FreeValue(ctx, params);
+        JS_FreeValue(ctx, first);
+        JS_FreeValue(ctx, list);
+        g_free(wrapped);
+    }
+    JS_FreeCString(ctx, src);
+    return out;
+}
+
+static void take_fn_sig(JSContext *ctx, JSValue out, GPtrArray *names,
+                        uint32_t *n, const char *name, const char *kind,
+                        JSValueConst fn, const char *sig)
 {
     int params = -1;
 
@@ -3245,7 +3342,36 @@ static void take_fn(JSContext *ctx, JSValue out, GPtrArray *names, uint32_t *n,
             JS_FreeValue(ctx, JS_GetException(ctx));
         JS_FreeValue(ctx, len);
     }
-    take_params(ctx, out, names, n, name, kind, params);
+    /* Declared first, then read out of the function's own source. */
+    char *read = (!sig && JS_IsFunction(ctx, fn)) ? source_signature(ctx, fn) : NULL;
+    take_params_sig(ctx, out, names, n, name, kind, params, sig ? sig : read);
+    g_free(read);
+}
+
+/* What the C beside a member declared about its parameters, for a member found
+ * on `at` while answering about `type`.  A prototype in the class table answers
+ * under its own class's name -- which is how `Button` finds `Widget.Bounds` --
+ * and anything else under the name that was asked about: `File`, whose members
+ * sit on the object itself, and `Bytes`, whose instance methods sit on a
+ * prototype the extractor named after its constructor.  NULL when nothing was
+ * declared, which is the popup's `(...)`. */
+static char *declared_signature(JSContext *ctx, JSValueConst at,
+                                const char *type, const char *member)
+{
+    /* The class table's own comment, or a class's `static Signatures` --
+     * `signature_at` is the answer `Widget.Signature` gives, so the two verbs
+     * cannot disagree about one member. */
+    JSValue v = signature_at(ctx, at, member, false);
+    if (JS_IsString(v)) {
+        const char *c   = JS_ToCString(ctx, v);
+        char       *out = c ? g_strdup(c) : NULL;
+        if (c) JS_FreeCString(ctx, c);
+        JS_FreeValue(ctx, v);
+        return out;
+    }
+    JS_FreeValue(ctx, v);
+    const char *t = type ? signature_for(type, member, false) : NULL;
+    return t ? g_strdup(t) : NULL;
 }
 
 static void take_params_sig(JSContext *ctx, JSValue out, GPtrArray *names,
@@ -3294,14 +3420,13 @@ static void take_params(JSContext *ctx, JSValue out, GPtrArray *names,
  * load-bearing.
  *
  * What the refusal left with **no way to be asked** is the question a completion
- * engine and a declaration generator actually have, which is not *what does a
- * control have* but *what does this name have*: `Timer.After` on a class in
+ * engine actually has, which is not *what does a control have* but *what does
+ * this name have*: `Timer.After` on a class in
  * rad.js, `Package.Write` on a library class, `QrCode.Encode` on a value class --
  * none of them a widget, all of them public, and none of them reachable. The
- * IDE offered `Timer.` and got **zero** entries for it, and `tools/typings`
- * declared `Timer` **by hand** and skipped four classes for the same reason.
- * So one runtime answer unblocked both, which is the argument for putting it
- * here rather than in either of them.
+ * IDE offered `Timer.` and got **zero** entries for it. The answer is here and
+ * not in the IDE because what a class has is the runtime's to say, and a
+ * second reader in JavaScript would be a second answer.
  *
  * The name resolves the way `Widget.New` resolves it -- `bta_lookup_global` --
  * so a class of the project and a class of a loaded library both answer.
@@ -3317,8 +3442,8 @@ static void take_params(JSContext *ctx, JSValue out, GPtrArray *names,
  * convention, and the one `Widget.Methods` already applies.
  */
 static void take_members_of_resolved(JSContext *ctx, JSValueConst klass,
-                                     JSValue out, GPtrArray *names,
-                                     uint32_t *n)
+                                     const char *type, JSValue out,
+                                     GPtrArray *names, uint32_t *n)
 {
     JSValue proto    = JS_GetPropertyStr(ctx, klass, "prototype");
     bool    is_class = JS_IsObject(proto);
@@ -3352,10 +3477,19 @@ static void take_members_of_resolved(JSContext *ctx, JSValueConst klass,
                      * purpose is what a caller may write. */
                     if (nm && *nm && g_ascii_isupper(nm[0]) &&
                         !g_str_equal(nm, "constructor")) {
-                        if (JS_IsFunction(ctx, d.value))
-                            take_fn(ctx, out, names, n, nm, "Method", d.value);
-                        else if (JS_IsFunction(ctx, d.getter) ||
-                                 JS_IsFunction(ctx, d.setter))
+                        if (JS_IsFunction(ctx, d.value)) {
+                            char *sig = declared_signature(ctx, at, type, nm);
+                            take_fn_sig(ctx, out, names, n, nm, "Method",
+                                        d.value, sig);
+                            g_free(sig);
+                        }
+                        /* A getter with no setter is `ReadOnly`, the word
+                         * `Widget.Member` gives the same name -- one class, one
+                         * answer, whichever verb is asked. */
+                        else if (JS_IsFunction(ctx, d.getter) &&
+                                 !JS_IsFunction(ctx, d.setter))
+                            take(ctx, out, names, n, nm, "ReadOnly");
+                        else if (JS_IsFunction(ctx, d.setter))
                             take(ctx, out, names, n, nm, "Property");
                     }
                     if (nm) JS_FreeCString(ctx, nm);
@@ -3386,8 +3520,12 @@ static void take_members_of_resolved(JSContext *ctx, JSValueConst klass,
                 const char *nm = JS_AtomToCString(ctx, tab[i].atom);
                 if (nm && *nm && g_ascii_isupper(nm[0]) &&
                     !g_str_equal(nm, "prototype") && !g_str_equal(nm, "name")) {
+                    /* A static answers under the class's own name: the
+                     * extractor names `Widget.New` after the constructor the
+                     * statics are set on. */
                     if (JS_IsFunction(ctx, d.value))
-                        take_fn(ctx, out, names, n, nm, "Static", d.value);
+                        take_fn_sig(ctx, out, names, n, nm, "Static", d.value,
+                                    type ? signature_for(type, nm, false) : NULL);
                     else if (JS_IsFunction(ctx, d.getter) ||
                              JS_IsFunction(ctx, d.setter))
                         take(ctx, out, names, n, nm, "Static");
@@ -3436,6 +3574,15 @@ typedef struct {
     char *params;
 } DeclMember;
 
+static void decl_member_free(gpointer data)
+{
+    DeclMember *m = data;
+    g_free(m->name);
+    g_free(m->kind);
+    g_free(m->params);
+    g_free(m);
+}
+
 typedef struct {
     char      *name;      /* its own, so a walk can ask what this entry is *for* */
     char      *base;
@@ -3458,7 +3605,7 @@ static DeclClass *decl_class_get(GHashTable *index, const char *name)
         return d;
     d = g_new0(DeclClass, 1);
     d->name    = g_strdup(name);
-    d->members = g_ptr_array_new();
+    d->members = g_ptr_array_new_with_free_func(decl_member_free);
     g_hash_table_insert(index, g_strdup(name), d);
     return d;
 }
@@ -3618,6 +3765,46 @@ static GPtrArray *form_children_of(JSContext *ctx, const char *form_text,
     return out;
 }
 
+/* One member the parser reported, in the vocabulary a loaded class answers
+ * with.  **An accessor is two reports and one member**: `get X` alone is
+ * `ReadOnly`, a `set X` beside it makes it a `Property`, which is what
+ * `take_members_of_resolved` says of the same class once it is loaded.  A
+ * property carries no parameter list -- the parser hands a getter `()`, and a
+ * `Signature` on a property would read as a method.  An accessor of the class
+ * itself is a `Static` with nothing known about arguments, the answer the
+ * loaded walk gives a static accessor. */
+static void decl_add_member(DeclClass *d, const char *name, const char *kind,
+                            const char *params)
+{
+    bool getter = g_str_equal(kind, "Getter");
+    bool setter = g_str_equal(kind, "Setter");
+    bool accessor = getter || setter;
+    bool static_accessor = g_str_equal(kind, "StaticGetter") ||
+                           g_str_equal(kind, "StaticSetter");
+
+    for (guint i = 0; i < d->members->len; i++) {
+        DeclMember *m = g_ptr_array_index(d->members, i);
+        if (!g_str_equal(m->name, name))
+            continue;
+        /* The other half of an accessor already listed. */
+        if (accessor && (g_str_equal(m->kind, "ReadOnly") ||
+                         g_str_equal(m->kind, "Property"))) {
+            g_free(m->kind);
+            m->kind = g_strdup("Property");
+        }
+        return;
+    }
+
+    DeclMember *m = g_new0(DeclMember, 1);
+    m->name   = g_strdup(name);
+    m->kind   = g_strdup(getter ? "ReadOnly"
+                         : setter ? "Property"
+                         : (static_accessor || g_str_equal(kind, "Static"))
+                           ? "Static" : "Method");
+    m->params = g_strdup((accessor || static_accessor || !params) ? "" : params);
+    g_ptr_array_add(d->members, m);
+}
+
 static GHashTable *decl_index_build(JSContext *ctx, char **sources, int count)
 {
     GHashTable *index = g_hash_table_new_full(g_str_hash, g_str_equal,
@@ -3654,7 +3841,9 @@ static GHashTable *decl_index_build(JSContext *ctx, char **sources, int count)
             } else if (g_str_equal(kind, "Method") ||
                        g_str_equal(kind, "Static") ||
                        g_str_equal(kind, "Getter") ||
-                       g_str_equal(kind, "Setter")) {
+                       g_str_equal(kind, "Setter") ||
+                       g_str_equal(kind, "StaticGetter") ||
+                       g_str_equal(kind, "StaticSetter")) {
                 /* A member's `Parent` is the class it was declared in, so a base
                  * class's members land on that class and are offered to the class
                  * that extends it.
@@ -3677,16 +3866,9 @@ static GHashTable *decl_index_build(JSContext *ctx, char **sources, int count)
                      * loaded does not list it either -- so a class answered from
                      * its source must not, or the same class would have a
                      * different surface depending on which reader found it. */
-                    if (g_ascii_isupper(name[0])) {
-                        DeclMember *m = g_new0(DeclMember, 1);
-                        m->name   = g_strdup(name);
-                        m->kind   = g_strdup(g_str_equal(kind, "Static") ? "Static"
-                                                 : (g_str_equal(kind, "Getter") ||
-                                                    g_str_equal(kind, "Setter"))
-                                                 ? "Property" : "Method");
-                        m->params = g_strdup(params ? params : "");
-                        g_ptr_array_add(decl_class_get(index, parent)->members, m);
-                    }
+                    if (g_ascii_isupper(name[0]))
+                        decl_add_member(decl_class_get(index, parent),
+                                        name, kind, params);
                 }
                 if (params) JS_FreeCString(ctx, params);
                 if (parent) JS_FreeCString(ctx, parent);
@@ -3750,12 +3932,12 @@ static void take_form_children(JSContext *ctx, char **forms,
  * names. That is the ordinary case for a form class, and the two readers meet
  * exactly there.
  *
- * **What the source half does not say, and does not pretend to:** a `static` and
- * an accessor both reach the parser as a method of the same name, so both come
- * back as `Method`. Separating them is a further patch in the vendored engine,
- * and until it exists the labels are coarser here than for a class that is
- * loaded -- the *names* are exact either way, and a name is what a caller is
- * typing towards.
+ * **The source half answers in the loaded half's vocabulary**: the parser tells
+ * a `static`, a getter, a setter and a static accessor apart, and
+ * `decl_add_member` turns them into `Static`, `ReadOnly`, `Property` and
+ * `Method` exactly as `take_members_of_resolved` would for the same class once
+ * it is loaded -- the property the tests hold, since two readers that disagree
+ * are two answers.
  */
 static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
                                  int argc, JSValueConst *argv)
@@ -3815,7 +3997,7 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
                 /* The end of the sources is not the end of the answer. */
                 JSValue up = bta_lookup_global(ctx, d->base);
                 if (!JS_IsException(up)) {
-                    take_members_of_resolved(ctx, up, out, names, &n);
+                    take_members_of_resolved(ctx, up, d->base, out, names, &n);
                     JS_FreeValue(ctx, up);
                 } else {
                     /* **Consumed, not dropped.** An exception left pending under
@@ -3834,12 +4016,12 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
     if (!sources || !g_hash_table_contains(index, type)) {
         JSValue klass = bta_lookup_global(ctx, type);
         if (!JS_IsException(klass)) {
-            take_members_of_resolved(ctx, klass, out, names, &n);
+            take_members_of_resolved(ctx, klass, type, out, names, &n);
             /* **And here too, and the first version did not**: a loaded form
              * class has children the prototype walk cannot see either, so
-             * asking for a library's class with the libraries loaded -- which is
-             * what `tools/typings` does -- got the same missing name as the IDE
-             * did. The bug was one bug, not two, and the condition it was under
+             * asking for a library's class with the libraries loaded got the
+             * same missing name as asking with only its source. The bug was one
+             * bug, not two, and the condition it was under
              * was the clue: the children were only read when `Sources` was also
              * given, and nothing about them needs it. */
             if (forms)
@@ -3857,6 +4039,10 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
             g_strfreev(sources);
             g_strfreev(forms);
             JS_FreeValue(ctx, out);
+            /* The names a source walk already took are owned strings, and this
+             * road left them behind while the one below freed them. */
+            for (guint i = 0; i < names->len; i++)
+                g_free(g_ptr_array_index(names, i));
             g_ptr_array_free(names, TRUE);
             return JS_EXCEPTION;
         }
@@ -5361,9 +5547,9 @@ static JSValue note_set(JSContext *ctx, JSValueConst this_val, JSValueConst val,
  *
  * **This table is not published surface**, which is the one thing to know about
  * it: `tests/api.sh` reads every `JSCFunctionListEntry` in this tree and demands
- * a documented row for each entry, and `tools/typings` writes each into
- * `bintana.d.ts`. Both of them skip this one by name, and say so where they do
- * -- an exception written down twice rather than a table hidden from a scanner.
+ * a documented row for each entry, and it skips this one by name and says so
+ * where it does -- an exception written down rather than a table hidden from a
+ * scanner.
  *
  * `__declared` is the only one with a setter, because `rad.js` leaves the same
  * note the loader does -- a filled-in template, a design value -- and both sides
@@ -7061,12 +7247,15 @@ void bta_widgets_init(JSContext *ctx, JSValue global)
          * usable from a .form because both agree on it.
          */
         if (!cls->parent) {
+            /* New(type) */
             JS_SetPropertyStr(ctx, ctor, "New",
                               JS_NewCFunction(ctx, w_new_by_type, "New", 1));
             /* ...and what there is to make one of. */
+            /* Types() */
             JS_SetPropertyStr(ctx, ctor, "Types",
                               JS_NewCFunction(ctx, w_types, "Types", 0));
             /* ...and which of those this build can actually run. */
+            /* Available(type) */
             JS_SetPropertyStr(ctx, ctor, "Available",
                               JS_NewCFunction(ctx, w_available, "Available", 1));
 
@@ -7079,6 +7268,7 @@ void bta_widgets_init(JSContext *ctx, JSValue global)
             JS_SetPropertyStr(ctx, ctor, "PropertyNames",
                               JS_NewCFunction(ctx, w_property_names_by_type,
                                               "PropertyNames", 1));
+            /* Methods(type) */
             JS_SetPropertyStr(ctx, ctor, "Methods",
                               JS_NewCFunction(ctx, w_methods_by_type,
                                               "Methods", 1));
@@ -7095,13 +7285,16 @@ void bta_widgets_init(JSContext *ctx, JSValue global)
             JS_SetPropertyStr(ctx, ctor, "PropertyOptions",
                               JS_NewCFunction(ctx, w_property_options_by_type,
                                               "PropertyOptions", 2));
+            /* Member(type, name) */
             JS_SetPropertyStr(ctx, ctor, "Member",
                               JS_NewCFunction(ctx, w_member_by_type,
                                               "Member", 2));
             /* ...and the parameters each of them declares beside itself. */
+            /* Signature(type, name) */
             JS_SetPropertyStr(ctx, ctor, "Signature",
                               JS_NewCFunction(ctx, w_signature_by_type,
                                               "Signature", 2));
+            /* EventSignature(type, name) */
             JS_SetPropertyStr(ctx, ctor, "EventSignature",
                               JS_NewCFunction(ctx, w_event_signature_by_type,
                                               "EventSignature", 2));

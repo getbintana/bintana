@@ -105,7 +105,6 @@ TIMEOUT=300 ./tests/run.sh                        # a slower machine than this o
 ./tests/asan.sh                                   # suite under AddressSanitizer
 tests/try.sh <project> [args...]                  # run any project, on a virtual display
 ./tests/api.sh                                    # is docs/llm/ still the whole public surface, and do the links land?
-./tests/typings.sh                                # rewrite bintana.d.ts (api.sh fails when it is stale)
 ./tests/icons.sh                                  # which declared icons this desktop has, and which draw
 ./tests/styles.sh                                 # which style classes its theme defines
 ./tests/install.sh                                # what `make install` produces, run out of a staging prefix
@@ -145,29 +144,19 @@ number of arguments. Both of those were real: `MouseWheel` was written
 `Application.LibraryPath` had been public and called by the IDE with no row
 anywhere.
 
-**It also holds `tools/typings/bintana.d.ts` to the same surface**, which is what
-makes a *generated* file worth having rather than a stale one nobody notices: run
-`./tests/typings.sh` after adding a member, or `api.sh` fails naming it. That
-check found sixteen read-only properties missing the hour it was written --
-`Children`, `Focused`, `Line`, `CanUndo` and twelve more -- because
-`PropertyNames()` answers *what a property grid can set*, which is the right
-answer to a different question. **And it covered only the table-driven half**:
-`File.Within` was added, the declarations were not regenerated, and the check
-passed -- the globals built one `JS_SetPropertyStr` at a time were in no list it
-read. It reads their names out of the C now, the way `checkGlobals` does, and the
-one exception is `Desktop.Entries`, which the declarations hold as a single
-`any`.
+**There is no declaration file for outside editors, and that is a decision.**
+A generator (`tools/typings`) wrote `bintana.d.ts` for VS Code, and `api.sh`
+held it to the runtime; it was removed because nothing here consumed it and the
+completion that matters is the IDE's own, which asks the runtime
+(`Widget.Members`, `Application.Symbols`) and never read a declaration. A
+generated file with no consumer is a check about itself. Do not bring one back
+to fix a completion: fix the runtime verb the IDE asks.
 
 **Every one of those but `asan.sh` is a Bintana project now** — `tests/runner`,
 `tests/icons`, `tests/styles`, `tests/install`, each a console project (`"main"`,
 no display) with a ten-line `.sh` in front of it that finds the binary. There is
 no Python left in the repository, and adding a desk tool means writing a project,
 not a script.
-
-`tools/typings` is the exception that proves what a console project cannot do:
-it asks real controls what they have, and `Widget.New` refuses in a project with
-a `main` — *"a project with a `main` has no display, so it cannot make widgets"*.
-So it is a **form** project run headless, with a window nobody sees.
 
 `tests/install.sh` is the only one that needs no `HEADLESS` of its own, and it is
 not an exception to the rule above: it never uses the caller's display at all. It brings up an `Xvfb` of its own, because the check is a second command
@@ -380,7 +369,9 @@ touching them:
 - **The parameters are declared beside the member**, because a function knows
   its count and not its names: one line directly above the C entry —
   `/* Bounds([container]) */` — or, for an event, above the class row that
-  already lists it. `tools/extract_signatures.cmake` turns those comments into
+  already lists it, and for a global's verb or a class static above the
+  `JS_SetPropertyStr` that installs it (`/* Load(path) */`, owned by whatever
+  global the variable is installed as). `tools/extract_signatures.cmake` turns those comments into
   `generated/bta_signatures.h` and the runtime answers with it, so there is no
   second declaration to drift. A JS class states its own as
   `static Signatures`. **`Signature` is the method's and `EventSignature` the
@@ -388,9 +379,9 @@ touching them:
   selects a row and the event that says the selection moved — and the walk stops
   at the first class that declares the member, so an override
   (`Form.Serialize`) answers its own. `tests/api` fails on a method or event
-  that declares none, and compares both `controls.md`/`reference/widgets` and
-  `bintana.d.ts` against what the runtime answers.
-- **And the table parser in `tests/api` and `tools/typings` was `[^}]*`**, which
+  that declares none, and compares `controls.md`/`reference/widgets` against
+  what the runtime answers.
+- **And the table parser in `tests/api` was `[^}]*`**, which
   a signature comment with an options object broke: `/* Search(text,
   [{CaseSensitive, …}]) */` stopped the body at its first `}` and every member
   of that table was silently lost — a completeness check that stops checking
@@ -443,11 +434,12 @@ used to read as no id at all; a project that declares none keeps the old answer,
 program's own name. `GtkApplication` also takes the id as the default window
 icon when the theme has one by that name (`gtkapplication.c`).
 
-## The seven patches in vendor/
+## The eight patches in vendor/
 
 `vendor/quickjs` is a **submodule** of
 [`getbintana/quickjs`](https://github.com/getbintana/quickjs), branch `bintana`:
-upstream **v0.17.0** plus the seven patches below, one commit each. The fork's
+upstream **v0.17.0** plus the eight patches below, one commit each (the eighth
+carries a fix as a second commit, `1493dc7`, until it is squashed into it). The fork's
 `BINTANA.md` is the recipe; what follows is what each patch does and what
 dropping it costs.
 
@@ -490,11 +482,11 @@ git push --force-with-lease origin bintana
 git submodule update --remote vendor/quickjs              # and commit the pin
 ```
 
-Then the suite. All seven are marked `Bintana patch` in the source, and
+Then the suite. All eight are marked `Bintana patch` in the source, and
 **dropping one does not fail to build** -- that is the property they share and
 the reason `tests/widgets` asserts each of them (`Decimal`, `JsonFiles`,
 `strictChecks`, `testDebugger`, `testCuratedLanguage`) -- the last of which now carries
-the seventh. Grep the fork for the
+the seventh and the eighth. Grep the fork for the
 marker after a rebase; there is no build-time check that they survived.
 
 ### 1. Operators on a Decimal
@@ -787,6 +779,24 @@ takes nothing. And the parentheses went on nowhere for the first attempt, so the
 host received `a` where it expected `(a)`: **the parentheses are added by the
 reporter and not by the loop**, which is what makes one spelling for the parser's
 answer and for a class's own `Signatures`.
+
+**And a fourth, which every test passed and generated output shipped.** The buffer lived on `JSParseState` -- one for the whole parse -- and
+a method is reported *after* its body, so any nested function with a
+parenthesised list overwrote it: `Ask(message, options)` with a
+`map((x, y, z) => x)` inside reported `(x,y,z)`, and a top-level function,
+reported *before* its own loop, carried the previous function's list.
+The declaration generator of the time (since removed) wrote
+`QrCode.Encode(value, n)` for `Encode(text, opts)` and `Table.Where(row)` for
+`Where(sql, ...params)`, and `api.sh` was green, because the generator and the
+check read the same parser -- **an oracle that shares its
+source with the thing it checks agrees with it, bugs included.** The list is a
+field of `JSFunctionDef` now (a nested function has its own `fd`), the function
+report comes right after the loop (and in the `fail` path, so a half-typed list
+still lists the function), and `testCuratedLanguage` holds every nested shape:
+an arrow in the body, a function in a getter, an arrow in a default, two
+top-level functions in a row. The same commit gave a `static get`/`set` kinds of
+its own (`StaticGetter`/`StaticSetter`) -- it was reported as an instance
+getter.
 
 **Dropping it does not fail to build** either, and the fallback is the seventh
 patch's answer with no kinds: a member's name and nothing else. `tests/widgets`
@@ -1242,7 +1252,7 @@ was being written, and neither is in `lib/`:
 
 **The verb is a capital, and that is not a style choice.** Every other library
 publishes `Package.Write`, `QrCode.Encode`, `Nsis.Script`, `Chart.Refresh` — and
-`Confirm.ask` was filtered out of `bintana.d.ts` by the very convention this
+`Confirm.ask` was left out of every member list by the very convention this
 repository documents (*a capital initial is public, a lower-case one is the class
 talking to itself*), which is how a static verb that is really private gets
 caught. It is `Confirm.Ask` and `AskText.Prompt`.
@@ -1281,85 +1291,6 @@ words** — `{ Accept: "Delete" }` at the call site is a literal in the project'
 own `.js`, which is exactly where the extractor looks. It is the same shape as the
 one in *A prose position the runtime owns*: the declaration is half a promise
 and the other half is a caller's to keep.
-
-**A library's classes are declared now, and the four that could not be are
-named on the output rather than left out.** `tools/typings` walks `lib/`, takes
-each class from `Application.Symbols`, and asks the runtime the same four things
-it asks for its own: `PropertyNames` for the properties, `EventNames` for the
-events, `PropertyOptions(type, name)` for an enum's words, and
-`Member(type, name, kind)` for property against read-only. **Which methods are
-statics is answered rather than parsed**: `Widget.Methods(type)` walks the
-prototype, so it holds every instance method and no static, and the difference
-between the two sets is the answer. Nothing reads a `.js` to tell a static from
-a method. Six of the ten ship; `QrCode`, `Package`, `Metainfo` and `Nsis` are
-**not widget classes**, so nothing answers the members *they* carry, and a
-declaration that published `Encode` while omitting `Version` and `Size` would
-report every *use* as a missing property — which is worse than the `any` it
-replaces, because `tsc`'s "does not exist" reads as authoritative. So a class is
-declared whole or not at all, the four are printed on every run, and the trigger
-that brings them back is a class query that answers for a non-widget.
-
-**And no parameter list, because there is no way to reach one.** `Widget` has no
-static that resolves a name to a class — `Widget.Class`, `Widget.Resolve`,
-`Widget.Lookup` are all `undefined` — and without the class there is no way to
-read the `static Signatures` a library would declare its own arity in, which is
-the mechanism `completion-plan.md` describes and that no shipped library uses yet.
-So a library method is declared with its name and no parameters, which is the
-floor that plan measured for everything else and is a **truthful** file where a
-guessed signature would not be. An editor still offers the member.
-
-**The generator found two of my own mistakes, and both are worth more than the
-feature.** A **class accessor reaches `js_parse_class` as a method of the same
-name**, and `Widget.Methods` does not list it — an accessor is not a function
-valued *data* property — so the first version declared all nineteen of `Chart`'s
-properties a second time as statics. **A duplicate identifier is the one thing
-`tsc` found in this file when it was written**, and the same trap of a name
-meaning two things is what the whole `MainForm` list is about: skip a method whose
-name is already a property, and `PropertyNames` already carries it. The second was
-a **method I added with a name the class already had** — `typeOf(v)` beside the
-existing `typeOf(sample, name)`. Nothing failed: a class body with two of a name
-takes the *last*, mine was the first, and the runtime's own declarations were
-untouched, so the only symptom was that **every library property came out `any`**
-— which is what a missing second argument does to a helper that indexes with it.
-*`grep -c "^    <name>(" tools/typings/TypingsForm.js` before adding a method to a
-generator, for the reason `MainForm` has two `renameSelected`.*
-
-**And running `tsc` over what comes out found three more, which is the check's
-whole argument.** It is the one `AGENTS.md` names as *not* a dependency and
-*not about to become one*, and it had not been run since the file was written:
-
-- **`bintana.d.ts` had six syntax errors, and they were suppressing
-  everything.** `Editor.Replace`'s signature comment said `Replace(with)`,
-  which became a parameter called `with` — a reserved word, because a `.d.ts` is
-  strict mode. A declaration file with parse errors does not merely *look*
-  wrong: **`tsc` reported nothing else at all**, so a project with checking on
-  had no diagnostics. **A C-legal identifier is not always a TypeScript-legal
-  one**, and the runtime's own refusal had already called it something else —
-  `"Replace(text) needs the replacement text"`, in `bta_editor.c`, disagreeing
-  with the comment three lines below it. The fix is the source, and the guard
-  is in the generator so the next one cannot do it again.
-- **`Timer` is declared by hand, and it was stale.** `Timer` is a class in
-  rad.js, so nothing answers it, so it is in the generator's hand-written
-  `EXTRA` block — a second list to drift, which is the thing this file says
-  about a hundred other places. `Timer.After` was missing, so an editor
-  reported *Property 'After' does not exist* on a call that runs, on the verb
-  the whole language story leans on for having replaced `setTimeout`. Two lines.
-- **The reserved-word list was written from memory and was wrong in both
-  directions.** It included the contextual keywords, and `of` is **not**
-  reserved — so `Widget.SetItem(of, count)` was renamed to `of_` and a
-  *correct* declaration began disagreeing with the runtime. `api.sh` caught it
-  by name, which is the check that compares the output against the source and
-  the only reason the file was not left in that state. **A list written from
-  memory is wrong in both directions, and `of`/`as`/`from`/`get`/`set` are all
-  legal where `with` is not.**
-
-**So: `npx --package typescript@5 tsc --noEmit --lib es2022 --target es2022
-tools/typings/bintana.d.ts` is a check worth running when this file changes**,
-and it is the only one in this repository that needs a tool it does not
-otherwise have. The negative case is what makes it a test rather than a smoke:
-a project with `checkJs` on reports `Property 'AskNope' does not exist on type
-'typeof Confirm'` for a call that is not there, and **reports nothing for the
-correct one** — which is the whole contract, in both directions.
 
 **And `api.sh` does not count a library whose whole API is `static`.** The
 "published by `lib/`" figure comes from `LIB_GET`/`LIB_METHOD`, and `LIB_METHOD`
@@ -1437,9 +1368,8 @@ So there were two fixes, and **only one of them is in the IDE**:
   name onto the form it builds, so a child is an **own property of the instance**
   and every one of these walks is over the **prototype chain**. It is one bug and
   not two, and the condition that hid it said so: the first version read the forms
-  only when `Sources` was also given, so it answered the IDE and *not* the
-  generator, which runs with the libraries loaded and gets the class-table walk
-  instead. **`Forms` therefore applies to a class that is loaded as well as one only
+  only when `Sources` was also given, so it answered a class read from its source
+  and *not* one that is loaded, which gets the class-table walk instead. **`Forms` therefore applies to a class that is loaded as well as one only
   declared**, and the assertion for the loaded half is the one that was silently
   passing before it existed. Reading a `.form` needs no display -- `JS_ParseJSON`
   and a walk of `children` -- and the pairing is the form's own `class` key and
@@ -1447,11 +1377,8 @@ So there were two fixes, and **only one of them is in the IDE**:
   `Widgets.form`.
 
   **And the popup asks for the signature rather than writing one.** `Detail` used
-  to be a `()` typed here, which is the runtime's own placeholder for *no
-  signature is declared* -- `() => any` in a declaration file and `Expected 0
-  arguments` in an editor are the same wrong answer pointed differently, so the
-  generator already refuses to emit an empty pair. It is the honest floor and not
-  a claim that a member takes nothing. What was not honest was asking nobody:
+  to be a `()` typed here, which reads as *takes no arguments* when all it meant
+  was *nobody declared a signature*. What was not honest was asking nobody:
   `Widget.Signature` answers for every method of the runtime from the comment
   beside its C entry, and `Container.Add` was shown the same as a member that
   takes nothing. A property says nothing, which is what separates it from a
@@ -1464,7 +1391,7 @@ So there were two fixes, and **only one of them is in the IDE**:
   right one: **nobody should have to write the arity of fifty methods for an
   editor to catch `Ask()`.** `Function.length` is the engine's own answer and it
   is right for every declaration without a default, so `Widget.Members` grew a
-  `Params` field read off the function value and both consumers ask for it:
+  `Params` field read off the function value:
   `QrCode.Encode(text, opts)` is two arguments, `Nsis.Stage` three, `Chart.Save`
   three, `Widget.On` two, and `Widget.Width` is `-1` because it is a property.
   **Three tiers, and the order is the design**: a declared `static Signatures`
@@ -1475,64 +1402,28 @@ So there were two fixes, and **only one of them is in the IDE**:
   **And what made the tier a truth is a rule the specification states, which is
   worth keeping rather than rediscovering**: `length` is the number of parameters
   *before the first default or rest*, so `(a, b = 1, c)` is 1 and `(a, ...rest)`
-  is 1. `Params` is therefore a lower bound and `sigOf` says so in its own
-  comment -- a declaration built from it is *weaker* than one built from names
-  and not a wrong one, which is the difference that matters.
+  is 1. `Params` is therefore a lower bound -- an answer built from it is
+  *weaker* than one built from names and not a wrong one, which is the difference
+  that matters.
 
-  **And then the check that makes all of it hold**, which is the piece that was
-  missing the whole time and the reason the four silently skipped classes and
-  `Confirm.BtnAccept` could sit there for years. `api.sh` asked about the
-  runtime's classes -- `Widget.Types()` is the widget table and `lib/charts` is
-  not in it -- so **no member of any library was ever compared against the
-  generated file.** It does now, over every shipped library, with the sources and
-  the forms, and it names the class and the member. It also rejects a declaration
-  whose parameter is a name nobody wrote, which is the `a1: any` regression: the
-  first version of that check matched a line whose *name* was a placeholder and
-  went green on the exact thing it was added for, because the generator writes
-  `Ask(a1: any, a2: any)` -- the placeholder is a parameter of a real method.
-  **And the third consumer is the popup**, which the two file checks cannot
-  reach: `tests/ide`'s `completion` asks the editor for the same members the
-  runtime describes, over every widget class and the test project's own library,
-  so a name that exists and is not offered is red with the class named.
-
-  **All three were proved by breaking them** rather than by reading them green: a
-  declaration deleted, an `a1` injected, and `Delete` filtered out of the popup.
-  An oracle nobody has watched fail is a claim, and this file has been wrong about
-  one before.
+  **And then the check that makes all of it hold**: `tests/ide`'s `completion`
+  asks the editor for the same members the runtime describes, over every widget
+  class and the test project's own library, so a name that exists and is not
+  offered is red with the class named. **It was proved by breaking it** --
+  `Delete` filtered out of the popup -- rather than by reading it green: an oracle
+  nobody has watched fail is a claim, and this file has been wrong about one
+  before.
 
   **And then the names, which are the one answer nobody has to write.** The
   eighth fork patch has the parser report them, so a class in a file the host
-  does not run gets `Ask(message, onConfirm, options)` with the real names --
-  which means the generator now hands its own sources to `Widget.Members`, and
-  **every** library class and every class of `rad.js` is declared with its
-  parameters spelled. `static Signatures` stays as decoration: a class that
-  wants to say something the parser cannot, which is now nothing.
+  does not run gets `Ask(message, onConfirm, options)` with the real names.
+  `static Signatures` stays as decoration: a class that wants to say something
+  the parser cannot, which is now nothing.
 
-  **A generated declaration file full of `a1: any` is one a reader learns to
-  skip**, and the first version of this wrote fifty-nine of them across thirteen
-  classes -- the whole surface of the libraries, every one of which had its names
-  in a file the generator had just read. The fix was two calls, and the order
-  matters: the count is `Function.length` and the names are the parser, so
-  passing the sources turns the count into the names. What is left is a **rest
-  tuple with a variadic tail**, `(...values: [any, any, ...any[]])`:
-
-      .M(1, 2)        ok
-      .M(1, 2, 3, 4)  ok
-      .M(1)           Expected at least 2 arguments, but got 1
-
-  **The tail is the whole reason it is a tuple and not a pair of names**, and it
-  is a fact about `Function.length`: it counts the parameters *before the first
-  default*, so `Make(a, b = 1)` reports 1 and its second argument is perfectly
-  legal. And **a count of zero gets the plain rest rather than an empty tuple**,
-  because `length` of 0 does not mean "takes nothing" -- it means "nothing
-  required" -- and `(...values: [])` turns a correct call into an error. Both
-  measured rather than argued; the empty tuple is the one that looked right.
-
-  **The count belongs in the declaration file and not in the popup**, and the
-  first version had it in both. It built `(a1, a2, a3)` from the count, so
-  `File.Load` came out `Load(a1)` -- a name that is not the parameter's, on a verb
-  that reads as though it were, and the same placeholder smell as the generated
-  file. What a popup can honestly say is **`(...)`**: there are arguments and this
+  **The count does not belong in the popup**, and the first version had it
+  there. It built `(a1, a2, a3)` from the count, so `File.Load` came out
+  `Load(a1)` -- a name that is not the parameter's, on a verb that reads as though
+  it were. What a popup can honestly say is **`(...)`**: there are arguments and this
   does not say which. **`()` claims the member takes none**, which for
   `File.Load(path)` is false and was once *asserted*; `(...)` is a gap that reads
   as one. The two are told apart by whether a signature was **declared**, not by
@@ -1543,25 +1434,55 @@ So there were two fixes, and **only one of them is in the IDE**:
   which is a property of the whole list and so holds for a class nobody thought to
   test.
 
-  **Which left a gap worth naming, because two consumers of one verb now
-  disagree.** `Widget.New` is the case: `bintana.d.ts` says
-  `static New(type: string): Widget;` because the generator **writes that by
-  hand**, and the popup says `static ()` because there is no signature declared
-  where the runtime reads one from. The reason is in
-  `tools/extract_signatures.cmake`: a one-line signature comment is only attached
-  to a following `JSCFunctionListEntry` table, and **every class static in this
-  tree is registered with `JS_SetPropertyStr` instead** -- so no static has a
-  declared signature at all, and `Widget.Member` cannot even classify one (it
-  walks the prototype, and a static is the constructor's). Teaching the extractor
-  the `JS_SetPropertyStr` shape would declare dozens of statics at once and change
-  the declaration file substantially, which is a piece of work of its own rather
-  than a line. Asserted as it is, in `tests/ide`'s `completion`.
+  **And the gap it left, closed: a global's verbs and a class's statics.**
+  `File.Load`, `Locale.Text`, `Widget.New` and 160 more showed `(...)`,
+  because they are registered with `JS_SetPropertyStr` (or in a table no class
+  row owns) and the extractor only read comments above a class table's
+  entries. It reads the comment above a `JS_SetPropertyStr` now and **names the
+  owner by following the variable**: `JS_SetPropertyStr(ctx, global, "File",
+  file)` makes `file`'s members `File`'s, `JS_SetConstructor` makes a
+  prototype's table its constructor's (`Bytes.Slice`), a variable hung off
+  another is a dotted owner (`Desktop.Entries`), and variables are scoped per C
+  function because every file reuses `proto` and `ctor`. The root widget
+  constructor is the one no line names -- the class-table loop computes it --
+  and `VAR_ALIASES` in the script is that one line. **Two registrations were a
+  loop over a table of names** (`Message`'s three, `File`'s four path parts)
+  and were unrolled, since a loop has nowhere to write four comments; a
+  database driver is installed by `bta_database_driver`, which the script
+  reads as `Database`'s member line. `tests/api` asks `Widget.Members` of every
+  global the C installs and fails on a `Method`/`Static` with no `Signature` --
+  proved by deleting `/* Load(path) */` and watching it name `File.Load`.
+  **A verb written in JavaScript needs nothing written**: the engine keeps the
+  source of every function it compiled, so `source_signature` takes the text
+  between the first bracket and its partner (or the name before `=>`),
+  compiles `function __p(<that>) {}` and lets `bta_symbols` spell it --
+  `Timer.After` answers `(delay, tick)` and `File.LoadJson` `(path)` with no
+  declaration anywhere. The order is declared first (C comment, then a class's
+  `static Signatures`, through the same `signature_at` `Widget.Signature`
+  uses), then the source. The popup no longer asks `Widget.Signature` itself:
+  `Widget.Members` carries the answer, and `(...)` is what is left for a native
+  function in a shape the script does not read -- none, today.
 
-  **What it still does not say:** a `static` and an accessor both reach
-  `js_parse_class` as a method of the same name, so both come back as `Method` and
-  are labelled `()`. Telling them apart is the **eighth** vendor patch, and it needs
-  no signature change -- three more `JSSymbolKind` values -- which is why it was left
-  separable rather than folded in here.
+  **The kinds are the eighth patch's**, and `Widget.Members` answers a class
+  read out of a source in the same words it answers a loaded one: `Static`,
+  `ReadOnly` for a getter alone (the loaded walk called that `Property` for a
+  while, disagreeing with `Widget.Member` about the same name), one `Property`
+  for a getter and a setter, and no `Signature` on a property. `Params` counted
+  from a signature follows `Function.length`'s rule -- the names before the first
+  `[x]` or `...x` -- or `(a, [b], ...c)` answered 3 read and 1 built.
+
+**And the classes are the open tabs' before they are the disk's.**
+`declaredClasses` used to walk the project once and keep what the files said,
+so a class written in a tab and not saved was no class at all -- no bare name,
+nothing after its dot -- and a method added in another tab waited for a save.
+The disk is walked once per project now (`diskFiles`) and every open tab is laid
+over it live through `TabSet.contentOf`, keyed by the project-relative name a
+tab uses; each file keeps the text its classes were parsed from and is parsed
+again only when that text moved, and a `generation` counter is what the
+member and bare-name caches key on -- a cache keyed on the *name* alone was the
+reason an edit could not reach the popup. `tests/ide`'s `completion` types a
+class into a tab, asserts the file on disk lacks it, and edits it once more;
+with the tab layer switched off three assertions go red.
 
 **And the hand-written table went, and that is the part worth keeping.** It held
 fourteen global names and was missing about eighteen -- `Printer.` and `Http.`
@@ -1591,10 +1512,8 @@ word, which is what a half-typed handler looks like.
 the load-bearing half: a property grid, a palette and the serialiser all need
 `Widget.PropertyNames("Util")` on an ordinary class to refuse, or the grid offers a
 shape it cannot read. What the refusal left with **no way to be asked** was a
-different question -- *what does this name have* -- and two consumers were asking
-it. One runtime answer unblocked both, which is the argument for it being in the
-runtime rather than in either of them: `tools/typings` was declaring `Timer` **by
-hand** and skipping four classes for exactly this reason.
+different question -- *what does this name have* -- and the answer is the
+runtime's, so the IDE holds no second reader of what a class has.
 
 - **A `JSValue` string is not `malloc`'d, so `tests/asan.sh` cannot see you free
   it and use it.** QuickJS here has its own **arena allocator**:
@@ -2045,6 +1964,19 @@ entry below is something that cost somebody a debugging session and now costs a
 paragraph. Add to it when you are surprised; nothing here was obvious to the
 person who wrote it either.
 
+- **A CMake script that reads C with `file(STRINGS)` is reading a CMake list,
+  and a list is not lines.** `[` ... `]` groups and `;` separates, so one
+  unbalanced bracket (`*q == '['`) merged every following line of
+  `bta_widget.c` into one item and **twenty** signature comments stopped being
+  lines -- `Widget.Signature("Button", "Bounds")` answered `null`, the build was
+  green, and only `testSignatures` noticed. It happened again, quietly, in
+  `bta_runtime.c` and `bta_locale.c`: every `Application` and `Locale` verb was
+  commented and none reached the table. `tools/extract_signatures.cmake` reads
+  each file with `file(READ)`, swaps `[`, `]`, `;` and `\` for markers, splits on
+  newlines and puts the markers back only in a kept argument list
+  (`bta_read_lines`/`bta_unmark`) -- so the C no longer has to be balanced for
+  the extractor. **Any new CMake script over C source wants the same macro.**
+  Count `build/generated/bta_signatures.h` before and after a change to it.
 - **Fedora's `pkg-config` does search `/usr/local`, and the way to ask whether
   it does answers wrongly.** `pkg-config --variable pc_path pkg-config` prints
   `/usr/lib64/pkgconfig:/usr/share/pkgconfig`, so `/usr/local/lib64/pkgconfig`
@@ -5054,15 +4986,6 @@ text cannot be modelled beside its attributes (`<guid isPermaLink>`), and
   the day it was written: `Application.LibraryPath` (which the IDE calls) and
   `Decimal`'s `toString`/`toJSON` (which are why `${d}` and `JSON.stringify(d)`
   are exact).
-- **A new global needs a line in *two* hand-kept tables, and only one of them
-  fails.** `GLOBAL_TABLES` in `tests/api/Check.js` is what makes the reference's
-  completeness checkable; `NOT_A_WIDGET` in `tools/typings/TypingsForm.js` is
-  what puts the global in `bintana.d.ts`. A table the generator has never heard
-  of is simply not generated, so there is nothing stale for the staleness check
-  to catch -- `Lock` was documented, counted and asserted while an editor had
-  never heard of it, with `api.sh` green and printing *all declared for an
-  editor*. **Add both lines in the same change**, and read the declaration file
-  afterwards rather than trusting the total.
 - **Adding a global means adding a line to `GLOBAL_TABLES` or `GLOBAL_VARS` in
   `tests/api/Check.js`, and that is deliberate rather than a chore.** The scan
   cannot infer them: the very same

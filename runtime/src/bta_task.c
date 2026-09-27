@@ -319,8 +319,11 @@ static gboolean task_deliver(gpointer data);
  * runtime is nothing at all.  It is also what tests/api.sh reads, so a member
  * here without a row in docs/llm/library.md fails the build. */
 static const JSCFunctionListEntry task_props[] = {
+    /* Start(data, [options]) */
     JS_CFUNC_DEF("Start",  2, task_start),
+    /* Stop([options]) */
     JS_CFUNC_DEF("Stop",   1, task_stop),
+    /* Report(value) */
     JS_CFUNC_DEF("Report", 1, task_report),
     JS_CGETSET_DEF("Stopping", task_get_stopping, NULL),
 };

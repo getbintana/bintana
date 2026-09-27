@@ -55,7 +55,7 @@ The running program: what it is called, where its files are, and how it ends.
 | `Symbols(text)` | `[{ Name, Kind, Line, Parent, Super, Params }]`: the classes, methods and top-level functions the text declares, with the line of each. What an editor lists a file with, and the answer a pattern is not allowed to guess at |
 
 **`Symbols` is `CheckSource`'s compile asked a different question.** `Kind` is
-`"Class"`, `"Method"` or `"Function"`, `Parent` is the class a method is in and
+`"Class"`, `"Function"`, or one of the member kinds below, `Parent` is the class a method is in and
 `""` otherwise, and the parser is the one that would run the file — so a
 declaration in a comment or a string is not one, and a method is a method at any
 indentation.
@@ -65,13 +65,20 @@ parameter's name when it compiles the declaration, so the function object keeps
 the count and not the names, and the count is a *lower bound* the moment one
 parameter has a default — `(a, b = 1, c)` reports 1. The parser has the names,
 in order, with which are optional and which is a rest, and reports them in the
-spelling a declaration uses: `""` for a class or a top-level function, `()` for
-a member that takes none.
+spelling a declaration uses — `(message, [options], ...rest)`, separated by
+`, ` — with `""` for a class, `()` for a member that takes none, and a
+top-level function's own list (`""` when it takes none). **The list is the
+function's own**, whatever its body holds: an arrow in the body or a function
+in a default value has a list of its own and does not replace it — which is
+exactly what it did before, when `Ask(message, options)` with a
+`map((x, y, z) => x)` inside reported `(x,y,z)`. A function whose list does not
+parse is still listed, with what was read of it.
 
-**`Kind` carries the three ways of not being a plain method.** `Static`,
-`Getter` and `Setter` were all `Method` before the parser learned to tell them
-apart, and a reader that cannot say which is the difference between `Value: T`
-and `Value(): T`.
+**`Kind` carries the ways of not being a plain method.** `Static`, `Getter`,
+`Setter`, `StaticGetter` and `StaticSetter` were all `Method` before the parser
+learned to tell them apart, and a reader that cannot say which is the
+difference between `Value: T` and `Value(): T` — or, for `static get Fields()`,
+between a property of the instance and one of the class.
 
 **`Super` is what makes the answer a shape and not a list of names.** It is the
 name in a class's `extends` clause, and `""` for a class that declares none,

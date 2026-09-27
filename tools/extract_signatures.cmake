@@ -18,21 +18,67 @@
 # table belongs to is read off the registration line, the same rule `tests/api`
 # reads it with; `base` is the one alias, for Widget's own table.
 #
+# **A global's members are declared the same way**, and their owner is not in
+# any class row, so it is worked out from the C that installs them:
+#
+#     /* Load(path) */
+#     JS_SetPropertyStr(ctx, file, "Load", JS_NewCFunction(...));
+#     ...
+#     JS_SetPropertyStr(ctx, global, "File", file);
+#
+# makes the owner `File`. A table installed with `JS_SetPropertyFunctionList`
+# on a variable is owned the same way, a prototype joined to a constructor with
+# `JS_SetConstructor` is owned by the constructor's name, and a variable hung
+# off another (`Desktop.Entries`) is owned by the dotted path. Variables are
+# scoped by the C function they are in -- a line that is exactly `{` opens one
+# -- because every file reuses `proto` and `ctor`. The one variable no
+# installation names is the root widget class's constructor, which the class
+# table loop hands to `Widget` by computing its name; `VAR_ALIASES` is that line.
+#
 # The output is a C table and not a JS one so the runtime can publish it with
-# no control built and no display: `Widget.Signature(type, name)`.
+# no control built and no display: `Widget.Signature(type, name)`, and the
+# `Signature` of each member `Widget.Members` lists.
 
 set(_owners "")     # table name -> class name
 set(_entries "")    # "owner|member|signature|event" in source order
+set(_rawtables "")  # "table|member|signature" whose table no class row owns
+set(_rawvars "")    # "file:scope:var|member|signature" set on a variable
+set(_edges "")      # "file:scope:var=parent|Name" -- var installed as parent.Name
+set(_tabvars "")    # "table=file:scope:var" -- a table installed on a var
+set(_protos "")     # "file:scope:proto=file:scope:ctor" -- JS_SetConstructor
+set(VAR_ALIASES "bta_widget.c:ctor=Widget")
 
 # The sources are globbed here rather than listed on the command line: a list
 # has a separator the shell would eat, and CMake writes an argument out as it
 # was given. The build's own DEPENDS names the files, so an edit still rebuilds.
 file(GLOB SOURCES "${SRC_DIR}/*.c")
 
+# **Every line, and only lines.** `file(STRINGS)` hands back a CMake list, and a
+# list treats `[` ... `]` as grouping and `;` as a separator -- so one unbalanced
+# bracket in a C file (`*q == '['`) merged every line after it into one item,
+# and the signatures below it vanished with the build green. The text is read
+# whole with the three characters swapped for markers first, split on newlines,
+# and the markers put back only where an argument list is kept.
+macro(bta_read_lines path out)
+    file(READ "${path}" _text)
+    string(REPLACE "[" "<LB>" _text "${_text}")
+    string(REPLACE "]" "<RB>" _text "${_text}")
+    string(REPLACE ";" "<SC>" _text "${_text}")
+    string(REPLACE "\\" "<BS>" _text "${_text}")
+    string(REPLACE "\n" ";" ${out} "${_text}")
+endmacro()
+
+macro(bta_unmark var)
+    string(REPLACE "<LB>" "[" ${var} "${${var}}")
+    string(REPLACE "<RB>" "]" ${var} "${${var}}")
+    string(REPLACE "<SC>" ";" ${var} "${${var}}")
+    string(REPLACE "<BS>" "\\" ${var} "${${var}}")
+endmacro()
+
 # Pass one: which class each member table belongs to. A registration wraps
 # over as many lines as it needs, so it is accumulated until it closes.
 foreach(_src IN LISTS SOURCES)
-    file(STRINGS "${_src}" _lines)
+    bta_read_lines("${_src}" _lines)
     set(_acc "")
     foreach(_line IN LISTS _lines)
         if(_acc STREQUAL "")
@@ -58,24 +104,50 @@ foreach(_src IN LISTS SOURCES)
     endforeach()
 endforeach()
 
-# Pass two: the signatures, in source order.
+# Pass two: the signatures, in source order, and where every variable goes.
 foreach(_src IN LISTS SOURCES)
-    file(STRINGS "${_src}" _lines)
+    bta_read_lines("${_src}" _lines)
+    get_filename_component(_fid "${_src}" NAME)
     set(_table "")
     set(_pending "")
+    set(_scope 0)
 
     foreach(_line IN LISTS _lines)
+        # A function body opens at column zero, and every variable name after
+        # it belongs to that body.
+        if(_line STREQUAL "{")
+            math(EXPR _scope "${_scope} + 1")
+            set(_table "")
+            set(_pending "")
+            continue()
+        endif()
+
         # A signature comment: one line, the whole of it.
         if(_line MATCHES "^[ \t]*/\\*[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*\\(([^)]*)\\)[ \t]*\\*/[ \t]*$")
-            list(APPEND _pending "${CMAKE_MATCH_1}|(${CMAKE_MATCH_2})")
+            set(_sigargs "${CMAKE_MATCH_2}")
+            bta_unmark(_sigargs)
+            list(APPEND _pending "${CMAKE_MATCH_1}|(${_sigargs})")
             continue()
         endif()
 
         # A table of members: what a following entry belongs to.
-        if(_line MATCHES "^[ \t]*static const JSCFunctionListEntry[ \t]+([A-Za-z_][A-Za-z0-9_]*)\\[\\][ \t]*=")
+        if(_line MATCHES "^[ \t]*static const JSCFunctionListEntry[ \t]+([A-Za-z_][A-Za-z0-9_]*)<LB><RB>[ \t]*=")
             set(_table "${CMAKE_MATCH_1}")
             set(_pending "")
             continue()
+        endif()
+
+        # Where a variable, a table or a prototype ends up. None of these is a
+        # member, so none of them consumes a pending comment -- and none ends
+        # the adjacency either, since they are never what a comment documents.
+        if(_line MATCHES "JS_SetPropertyFunctionList[ \t]*\\([ \t]*ctx[ \t]*,[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*,[ \t]*([A-Za-z_][A-Za-z0-9_]*)")
+            list(APPEND _tabvars "${CMAKE_MATCH_2}=${_fid}:${_scope}:${CMAKE_MATCH_1}")
+        endif()
+        if(_line MATCHES "JS_SetConstructor[ \t]*\\([ \t]*ctx[ \t]*,[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*,[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*\\)")
+            list(APPEND _protos "${_fid}:${_scope}:${CMAKE_MATCH_2}=${_fid}:${_scope}:${CMAKE_MATCH_1}")
+        endif()
+        if(_line MATCHES "JS_SetPropertyStr[ \t]*\\([ \t]*ctx[ \t]*,[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*,[ \t]*\"([A-Za-z_][A-Za-z0-9_]*)\"[ \t]*,[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*\\)")
+            list(APPEND _edges "${_fid}:${_scope}:${CMAKE_MATCH_3}=${CMAKE_MATCH_1}|${CMAKE_MATCH_2}")
         endif()
 
         # A class row: every comment still pending is one of its events.
@@ -91,8 +163,8 @@ foreach(_src IN LISTS SOURCES)
             continue()
         endif()
 
-        # A member: the comment directly above it, when it names it.
-        if(_line MATCHES "JS_CFUNC(_MAGIC)?_DEF[ \t]*\\([ \t]*\"([A-Za-z_][A-Za-z0-9_]*)\"")
+        # A member of a table: the comment directly above it, when it names it.
+        if(_line MATCHES "JS_CFUNC(_MAGIC)?_DEF2?[ \t]*\\([ \t]*\"([A-Za-z_][A-Za-z0-9_]*)\"")
             set(_member "${CMAKE_MATCH_2}")
             if(_pending)
                 list(GET _pending -1 _sig)
@@ -100,11 +172,51 @@ foreach(_src IN LISTS SOURCES)
                 list(GET _parts 0 _named)
                 list(GET _parts 1 _args)
                 if(_named STREQUAL _member AND NOT _table STREQUAL "")
+                    set(_found FALSE)
                     foreach(_owner IN LISTS _owners)
                         if(_owner MATCHES "^${_table}=(.*)$")
                             list(APPEND _entries "${CMAKE_MATCH_1}|${_member}|${_args}|false")
+                            set(_found TRUE)
                         endif()
                     endforeach()
+                    if(NOT _found)
+                        list(APPEND _rawtables "${_table}|${_member}|${_args}")
+                    endif()
+                endif()
+            endif()
+            set(_pending "")
+            continue()
+        endif()
+
+        # A member set on a variable: the same adjacency, and the variable is
+        # named once every installation in the tree has been read.
+        if(_line MATCHES "^[ \t]*JS_SetPropertyStr[ \t]*\\([ \t]*ctx[ \t]*,[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*,[ \t]*\"([A-Za-z_][A-Za-z0-9_]*)\"")
+            set(_var "${CMAKE_MATCH_1}")
+            set(_member "${CMAKE_MATCH_2}")
+            if(_pending)
+                list(GET _pending -1 _sig)
+                string(REPLACE "|" ";" _parts "${_sig}")
+                list(GET _parts 0 _named)
+                list(GET _parts 1 _args)
+                if(_named STREQUAL _member)
+                    list(APPEND _rawvars "${_fid}:${_scope}:${_var}|${_member}|${_args}")
+                endif()
+            endif()
+            set(_pending "")
+            continue()
+        endif()
+
+        # A database driver is installed by a helper that hangs it off
+        # `Database`, so the helper's own call is the member line.
+        if(_line MATCHES "^[ \t]*bta_database_driver[ \t]*\\([ \t]*ctx[ \t]*,[ \t]*\"([A-Za-z_][A-Za-z0-9_]*)\"")
+            set(_member "${CMAKE_MATCH_1}")
+            if(_pending)
+                list(GET _pending -1 _sig)
+                string(REPLACE "|" ";" _parts "${_sig}")
+                list(GET _parts 0 _named)
+                list(GET _parts 1 _args)
+                if(_named STREQUAL _member)
+                    list(APPEND _entries "Database|${_member}|${_args}|false")
                 endif()
             endif()
             set(_pending "")
@@ -119,6 +231,80 @@ foreach(_src IN LISTS SOURCES)
         endif()
     endforeach()
 endforeach()
+
+# Pass three: name every variable that holds members.
+#
+# `file:scope:var` is installed as `parent.Name`; a parent of `global` is the
+# top, a prototype takes its constructor's name, and the alias list names the
+# one constructor no line does. Recursive, and bounded, because a C file that
+# installed a variable on itself would otherwise loop here.
+function(bta_name_of key depth out)
+    set(${out} "" PARENT_SCOPE)
+    if(depth GREATER 8)
+        return()
+    endif()
+    math(EXPR _next "${depth} + 1")
+    string(REGEX REPLACE ":[^:]*:[^:]*$" "" _file "${key}")
+    string(REGEX REPLACE "^.*:" "" _var "${key}")
+    string(REGEX REPLACE ":[^:]*$" "" _fs "${key}")
+    foreach(_e IN LISTS _edges)
+        if(_e MATCHES "^([^=]*)=([^|]*)\\|(.*)$" AND CMAKE_MATCH_1 STREQUAL key)
+            set(_parent "${CMAKE_MATCH_2}")
+            set(_name "${CMAKE_MATCH_3}")
+            if(_parent STREQUAL "global")
+                set(${out} "${_name}" PARENT_SCOPE)
+                return()
+            endif()
+            bta_name_of("${_fs}:${_parent}" ${_next} _up)
+            if(NOT _up STREQUAL "")
+                set(${out} "${_up}.${_name}" PARENT_SCOPE)
+                return()
+            endif()
+        endif()
+    endforeach()
+    foreach(_p IN LISTS _protos)
+        if(_p MATCHES "^([^=]*)=(.*)$" AND CMAKE_MATCH_1 STREQUAL key)
+            bta_name_of("${CMAKE_MATCH_2}" ${_next} _up)
+            if(NOT _up STREQUAL "")
+                set(${out} "${_up}" PARENT_SCOPE)
+                return()
+            endif()
+        endif()
+    endforeach()
+    foreach(_a IN LISTS VAR_ALIASES)
+        if(_a MATCHES "^([^=]*)=(.*)$" AND CMAKE_MATCH_1 STREQUAL "${_file}:${_var}")
+            set(${out} "${CMAKE_MATCH_2}" PARENT_SCOPE)
+            return()
+        endif()
+    endforeach()
+endfunction()
+
+foreach(_r IN LISTS _rawvars)
+    string(REPLACE "|" ";" _parts "${_r}")
+    list(GET _parts 0 _key)
+    list(GET _parts 1 _member)
+    list(GET _parts 2 _args)
+    bta_name_of("${_key}" 0 _owner)
+    if(NOT _owner STREQUAL "")
+        list(APPEND _entries "${_owner}|${_member}|${_args}|false")
+    endif()
+endforeach()
+
+foreach(_r IN LISTS _rawtables)
+    string(REPLACE "|" ";" _parts "${_r}")
+    list(GET _parts 0 _tab)
+    list(GET _parts 1 _member)
+    list(GET _parts 2 _args)
+    foreach(_tv IN LISTS _tabvars)
+        if(_tv MATCHES "^${_tab}=(.*)$")
+            bta_name_of("${CMAKE_MATCH_1}" 0 _owner)
+            if(NOT _owner STREQUAL "")
+                list(APPEND _entries "${_owner}|${_member}|${_args}|false")
+            endif()
+        endif()
+    endforeach()
+endforeach()
+list(REMOVE_DUPLICATES _entries)
 
 set(_out "/* Generated from the C sources under runtime/src -- do not edit.\n")
 string(APPEND _out " *\n")

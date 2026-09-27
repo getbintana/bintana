@@ -2823,7 +2823,9 @@ static JSValue env_has_display(JSContext *ctx, JSValueConst this_val)
  * cannot offer.
  */
 static const JSCFunctionListEntry env_props[] = {
+    /* Get(name) */
     JS_CFUNC_DEF2("Get", 1, env_get, JS_PROP_C_W_E),
+    /* Set(name, value) */
     JS_CFUNC_DEF2("Set", 2, env_set, JS_PROP_C_W_E),
     JS_CGETSET_DEF2("Variables", env_variables, NULL,
                     JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE),
@@ -2964,6 +2966,7 @@ static const JSCFunctionListEntry screen_props[] = {
     JS_CGETSET_DEF("Width",  screen_get_width,  NULL),
     JS_CGETSET_DEF("Height", screen_get_height, NULL),
     JS_CGETSET_DEF("Scale",  screen_get_scale,  NULL),
+    /* Monitors() */
     JS_CFUNC_DEF("Monitors", 0, screen_list),
 };
 
@@ -3711,9 +3714,13 @@ static JSValue sys_hash_text(JSContext *ctx, JSValueConst this_val,
  * a surface nobody has to document.
  */
 static const JSCFunctionListEntry hash_props[] = {
+    /* Md5(v) */
     JS_CFUNC_MAGIC_DEF("Md5",    1, sys_hash_text, HASH_MD5),
+    /* Sha1(v) */
     JS_CFUNC_MAGIC_DEF("Sha1",   1, sys_hash_text, HASH_SHA1),
+    /* Sha256(v) */
     JS_CFUNC_MAGIC_DEF("Sha256", 1, sys_hash_text, HASH_SHA256),
+    /* Sha512(v) */
     JS_CFUNC_MAGIC_DEF("Sha512", 1, sys_hash_text, HASH_SHA512),
 };
 
@@ -3803,54 +3810,83 @@ static JSValue sys_file_hash(JSContext *ctx, JSValueConst this_val,
 void bta_sys_init(JSContext *ctx, JSValue global)
 {
     JSValue file = JS_NewObject(ctx);
+    /* Load(path) */
     JS_SetPropertyStr(ctx, file, "Load",   JS_NewCFunction(ctx, sys_file_load, "Load", 1));
+    /* Save(path, text) */
     JS_SetPropertyStr(ctx, file, "Save",   JS_NewCFunction(ctx, sys_file_save, "Save", 2));
+    /* Append(path, text) */
     JS_SetPropertyStr(ctx, file, "Append",
                       JS_NewCFunction(ctx, sys_file_append, "Append", 2));
+    /* Delete(path) */
     JS_SetPropertyStr(ctx, file, "Delete", JS_NewCFunction(ctx, sys_file_delete, "Delete", 1));
+    /* Open(path) */
     JS_SetPropertyStr(ctx, file, "Open",
                       JS_NewCFunction(ctx, sys_file_open, "Open", 1));
+    /* Info(path) */
     JS_SetPropertyStr(ctx, file, "Info",
                       JS_NewCFunction(ctx, sys_file_info, "Info", 1));
+    /* Watch(path, cb) */
     JS_SetPropertyStr(ctx, file, "Watch",
                       JS_NewCFunction(ctx, sys_file_watch, "Watch", 2));
+    /* Copy(from, to) */
     JS_SetPropertyStr(ctx, file, "Copy",
                       JS_NewCFunction(ctx, sys_file_copy, "Copy", 2));
+    /* Trash(path) */
     JS_SetPropertyStr(ctx, file, "Trash",
                       JS_NewCFunction(ctx, sys_file_trash, "Trash", 1));
+    /* Rename(from, to) */
     JS_SetPropertyStr(ctx, file, "Rename", JS_NewCFunction(ctx, sys_file_rename, "Rename", 2));
+    /* Hash(path, [algorithm]) */
     JS_SetPropertyStr(ctx, file, "Hash",
                       JS_NewCFunction(ctx, sys_file_hash, "Hash", 2));
+    /* LoadBytes(path) */
     JS_SetPropertyStr(ctx, file, "LoadBytes",
                       JS_NewCFunction(ctx, sys_file_load_bytes, "LoadBytes", 1));
+    /* SaveBytes(path, bytes) */
     JS_SetPropertyStr(ctx, file, "SaveBytes",
                       JS_NewCFunction(ctx, sys_file_save_bytes, "SaveBytes", 2));
+    /* Join(...parts) */
     JS_SetPropertyStr(ctx, file, "Join",   JS_NewCFunction(ctx, sys_file_join, "Join", 2));
+    /* Absolute(path) */
     JS_SetPropertyStr(ctx, file, "Absolute",
                       JS_NewCFunction(ctx, sys_file_absolute, "Absolute", 1));
+    /* Within(path, root) */
     JS_SetPropertyStr(ctx, file, "Within",
                       JS_NewCFunction(ctx, sys_file_within, "Within", 2));
+    /* Relative(path, root) */
     JS_SetPropertyStr(ctx, file, "Relative",
                       JS_NewCFunction(ctx, sys_file_relative, "Relative", 2));
+    /* IsExtension(path, ext) */
     JS_SetPropertyStr(ctx, file, "IsExtension",
                       JS_NewCFunction(ctx, sys_file_is_extension, "IsExtension", 2));
+    /* Exists(path) */
     JS_SetPropertyStr(ctx, file, "Exists",
                       JS_NewCFunctionMagic(ctx, sys_file_test, "Exists", 1,
                                            JS_CFUNC_generic_magic, FT_EXISTS));
+    /* IsDir(path) */
     JS_SetPropertyStr(ctx, file, "IsDir",
                       JS_NewCFunctionMagic(ctx, sys_file_test, "IsDir", 1,
                                            JS_CFUNC_generic_magic, FT_ISDIR));
 
-    static const struct { const char *name; int magic; } parts[] = {
-        { "Name",      BTA_PATH_NAME },
-        { "Directory", BTA_PATH_DIR },
-        { "Extension", BTA_PATH_EXT },
-        { "BaseName",  BTA_PATH_BASENAME },
-    };
-    for (size_t i = 0; i < G_N_ELEMENTS(parts); i++)
-        JS_SetPropertyStr(ctx, file, parts[i].name,
-                          JS_NewCFunctionMagic(ctx, sys_path_part, parts[i].name, 1,
-                                               JS_CFUNC_generic_magic, parts[i].magic));
+    /* One line each and not a loop over a table of names: the signature
+     * comment above a line is what the IDE's completion shows, and a loop has
+     * nowhere to write four of them. */
+    /* Name(path) */
+    JS_SetPropertyStr(ctx, file, "Name",
+                      JS_NewCFunctionMagic(ctx, sys_path_part, "Name", 1,
+                                           JS_CFUNC_generic_magic, BTA_PATH_NAME));
+    /* Directory(path) */
+    JS_SetPropertyStr(ctx, file, "Directory",
+                      JS_NewCFunctionMagic(ctx, sys_path_part, "Directory", 1,
+                                           JS_CFUNC_generic_magic, BTA_PATH_DIR));
+    /* Extension(path) */
+    JS_SetPropertyStr(ctx, file, "Extension",
+                      JS_NewCFunctionMagic(ctx, sys_path_part, "Extension", 1,
+                                           JS_CFUNC_generic_magic, BTA_PATH_EXT));
+    /* BaseName(path) */
+    JS_SetPropertyStr(ctx, file, "BaseName",
+                      JS_NewCFunctionMagic(ctx, sys_path_part, "BaseName", 1,
+                                           JS_CFUNC_generic_magic, BTA_PATH_BASENAME));
     JS_SetPropertyStr(ctx, global, "File", file);
 
     JSValue hash = JS_NewObject(ctx);
@@ -3862,17 +3898,24 @@ void bta_sys_init(JSContext *ctx, JSValue global)
     JS_SetPropertyStr(ctx, global, "Screen", screen);
 
     JSValue dir = JS_NewObject(ctx);
+    /* List(path, [pattern]) */
     JS_SetPropertyStr(ctx, dir, "List", JS_NewCFunction(ctx, sys_dir_list, "List", 2));
+    /* Files(path, [options]) */
     JS_SetPropertyStr(ctx, dir, "Files",
                       JS_NewCFunctionMagic(ctx, sys_dir_walk, "Files", 2,
                                            JS_CFUNC_generic_magic, 0));
+    /* Folders(path, [options]) */
     JS_SetPropertyStr(ctx, dir, "Folders",
                       JS_NewCFunctionMagic(ctx, sys_dir_walk, "Folders", 2,
                                            JS_CFUNC_generic_magic, 1));
+    /* Make(path) */
     JS_SetPropertyStr(ctx, dir, "Make", JS_NewCFunction(ctx, sys_dir_make, "Make", 1));
+    /* Copy(from, to) */
     JS_SetPropertyStr(ctx, dir, "Copy", JS_NewCFunction(ctx, sys_dir_copy, "Copy", 2));
+    /* Delete(path) */
     JS_SetPropertyStr(ctx, dir, "Delete",
                       JS_NewCFunction(ctx, sys_dir_delete, "Delete", 1));
+    /* DeleteTree(path) */
     JS_SetPropertyStr(ctx, dir, "DeleteTree",
                       JS_NewCFunction(ctx, sys_dir_delete_tree, "DeleteTree", 1));
     JS_SetPropertyStr(ctx, global, "Directory", dir);
@@ -3880,6 +3923,7 @@ void bta_sys_init(JSContext *ctx, JSValue global)
     /* Wait hangs off Exec the way After hangs off Timer: asynchronous is this
      * language's default, so the plain call keeps the plain name. */
     JSValue exec = JS_NewCFunction(ctx, sys_exec, "Exec", 4);
+    /* Wait(argv, [options]) */
     JS_SetPropertyStr(ctx, exec, "Wait",
                       JS_NewCFunction(ctx, sys_exec_wait, "Wait", 2));
     JS_SetPropertyStr(ctx, global, "Exec", exec);
@@ -3951,26 +3995,34 @@ void bta_sys_init(JSContext *ctx, JSValue global)
     JS_SetPropertyStr(ctx, global, "Environment", env);
 
     JSValue dialog = JS_NewObject(ctx);
+    /* SelectFolder(title, [options], cb) */
     JS_SetPropertyStr(ctx, dialog, "SelectFolder",
                       JS_NewCFunctionMagic(ctx, sys_dialog, "SelectFolder", 2,
                                            JS_CFUNC_generic_magic, DLG_FOLDER));
+    /* OpenFile(title, [options], cb) */
     JS_SetPropertyStr(ctx, dialog, "OpenFile",
                       JS_NewCFunctionMagic(ctx, sys_dialog, "OpenFile", 2,
                                            JS_CFUNC_generic_magic, DLG_FILE));
+    /* SaveFile(title, [options], cb) */
     JS_SetPropertyStr(ctx, dialog, "SaveFile",
                       JS_NewCFunctionMagic(ctx, sys_dialog, "SaveFile", 2,
                                            JS_CFUNC_generic_magic, DLG_SAVE));
+    /* Color(title, current, cb) */
     JS_SetPropertyStr(ctx, dialog, "Color",
                       JS_NewCFunction(ctx, sys_color_dialog, "Color", 3));
     JS_SetPropertyStr(ctx, global, "Dialog", dialog);
 
     JSValue clipboard = JS_NewObject(ctx);
+    /* Copy(text) */
     JS_SetPropertyStr(ctx, clipboard, "Copy",
                       JS_NewCFunction(ctx, sys_clip_copy, "Copy", 1));
+    /* Paste(cb) */
     JS_SetPropertyStr(ctx, clipboard, "Paste",
                       JS_NewCFunction(ctx, sys_clip_paste, "Paste", 1));
+    /* CopyImage(bytes) */
     JS_SetPropertyStr(ctx, clipboard, "CopyImage",
                       JS_NewCFunction(ctx, sys_clip_copy_image, "CopyImage", 1));
+    /* PasteImage(cb) */
     JS_SetPropertyStr(ctx, clipboard, "PasteImage",
                       JS_NewCFunction(ctx, sys_clip_paste_image, "PasteImage", 1));
     JS_SetPropertyStr(ctx, global, "Clipboard", clipboard);

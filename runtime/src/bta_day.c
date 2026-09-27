@@ -424,15 +424,21 @@ static JSValue js_time_seconds(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry time_props[] = {
+    /* Add(time, minutes) */
     JS_CFUNC_DEF("Add",     2, js_time_add),
+    /* Between(from, to) */
     JS_CFUNC_DEF("Between", 2, js_time_between),
+    /* Seconds(time) */
     JS_CFUNC_DEF("Seconds", 1, js_time_seconds),
     JS_CGETSET_DEF("Now", js_time_get_now, NULL),
 };
 
 static const JSCFunctionListEntry day_props[] = {
+    /* Add(date, days) */
     JS_CFUNC_DEF("Add",     2, js_day_add),
+    /* Between(from, to) */
     JS_CFUNC_DEF("Between", 2, js_day_between),
+    /* Weekday(date) */
     JS_CFUNC_DEF("Weekday", 1, js_day_weekday),
     JS_CGETSET_DEF("Today", js_day_get_today, NULL),
 };

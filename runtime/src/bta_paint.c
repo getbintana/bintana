@@ -1478,14 +1478,23 @@ static JSValue js_text_get_font(JSContext *ctx, JSValueConst this_val)
 }
 
 static const JSCFunctionListEntry text_props[] = {
+    /* Width(text, [font], [options]) */
     JS_CFUNC_MAGIC_DEF("Width",  3, js_text_measure, TEXT_WIDTH),
+    /* Height(text, [font], [options]) */
     JS_CFUNC_MAGIC_DEF("Height", 3, js_text_measure, TEXT_HEIGHT),
+    /* Size(text, [font], [options]) */
     JS_CFUNC_MAGIC_DEF("Size",   3, js_text_measure, TEXT_SIZE),
+    /* Lines(text, [font], [options]) */
     JS_CFUNC_MAGIC_DEF("Lines",  3, js_text_measure, TEXT_LINES),
+    /* Escape(text) */
     JS_CFUNC_DEF("Escape", 1, js_text_escape),
+    /* IndexAt(text, x, y, [font], [options]) */
     JS_CFUNC_DEF("IndexAt", 5, js_text_index_at),
+    /* Bounds(text, from, to, [font], [options]) */
     JS_CFUNC_DEF("Bounds",  5, js_text_bounds),
+    /* LineOf(text, index) */
     JS_CFUNC_DEF("LineOf",  2, js_text_line_of),
+    /* OffsetAt(text, line, [column]) */
     JS_CFUNC_DEF("OffsetAt", 3, js_text_offset_at),
     JS_CGETSET_DEF("Font", js_text_get_font, NULL),
 };
@@ -1788,27 +1797,49 @@ static const JSCFunctionListEntry painter_props[] = {
     JS_CGETSET_DEF("Dark",       painter_get_dark,       NULL),
     JS_CGETSET_MAGIC_DEF("LineWidth", painter_get_pen, painter_set_pen, PEN_WIDTH),
     JS_CGETSET_MAGIC_DEF("Antialias", painter_get_pen, painter_set_pen, PEN_ANTIALIAS),
+    /* MoveTo(x, y) */
     JS_CFUNC_MAGIC_DEF("MoveTo",    2, painter_path, PATH_MOVE),
+    /* LineTo(x, y) */
     JS_CFUNC_MAGIC_DEF("LineTo",    2, painter_path, PATH_LINE),
+    /* ClosePath() */
     JS_CFUNC_MAGIC_DEF("ClosePath", 0, painter_path, PATH_CLOSE),
+    /* Fill() */
     JS_CFUNC_MAGIC_DEF("Fill",      0, painter_path, PATH_FILL),
+    /* Stroke() */
     JS_CFUNC_MAGIC_DEF("Stroke",    0, painter_path, PATH_STROKE),
+    /* Clip() */
     JS_CFUNC_MAGIC_DEF("Clip",      0, painter_path, PATH_CLIP),
+    /* CurveTo(x1, y1, x2, y2, x, y) */
     JS_CFUNC_DEF("CurveTo", 6, painter_curve),
+    /* Rectangle(x, y, width, height) */
     JS_CFUNC_MAGIC_DEF("Rectangle",     4, painter_rectangle, RECT_PATH),
+    /* ClipRectangle(x, y, width, height) */
     JS_CFUNC_MAGIC_DEF("ClipRectangle", 4, painter_rectangle, RECT_CLIP),
+    /* Arc(x, y, radius, from, to) */
     JS_CFUNC_MAGIC_DEF("Arc",         5, painter_arc, 0),
+    /* ArcNegative(x, y, radius, from, to) */
     JS_CFUNC_MAGIC_DEF("ArcNegative", 5, painter_arc, 1),
+    /* Polyline(points) */
     JS_CFUNC_MAGIC_DEF("Polyline", 1, painter_polyline, POLY_OPEN),
+    /* Polygon(points) */
     JS_CFUNC_MAGIC_DEF("Polygon",  1, painter_polyline, POLY_CLOSED),
+    /* Text(text, x, y, [options]) */
     JS_CFUNC_DEF("Text", 4, painter_text),
+    /* Image(source, x, y, [width], [height]) */
     JS_CFUNC_DEF("Image", 5, painter_image),
+    /* TextWidth(text, [options]) */
     JS_CFUNC_MAGIC_DEF("TextWidth",  2, painter_measure_js, MEASURE_WIDTH),
+    /* TextHeight(text, [options]) */
     JS_CFUNC_MAGIC_DEF("TextHeight", 2, painter_measure_js, MEASURE_HEIGHT),
+    /* Push() */
     JS_CFUNC_MAGIC_DEF("Push", 0, painter_state, STATE_PUSH),
+    /* Pop() */
     JS_CFUNC_MAGIC_DEF("Pop",  0, painter_state, STATE_POP),
+    /* Translate(x, y) */
     JS_CFUNC_MAGIC_DEF("Translate", 2, painter_transform, XFORM_TRANSLATE),
+    /* Scale(x, [y]) */
     JS_CFUNC_MAGIC_DEF("Scale",     2, painter_transform, XFORM_SCALE),
+    /* Rotate(degrees) */
     JS_CFUNC_MAGIC_DEF("Rotate",    1, painter_transform, XFORM_ROTATE),
 };
 

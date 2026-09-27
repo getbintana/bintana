@@ -1,18 +1,12 @@
 # Completion: what was missing was a declaration, not an analyser
 
-**Stages 0 and 1 are built. Stage 2 is not, and this document still recommends
-not building it** -- which is the conclusion the measurements reached before any
-of it was written, and nothing in the building overturned. What is in the tree:
-
-```
-tests/typings.sh              writes the declarations
-tools/typings/bintana.d.ts    every class and global the runtime publishes
-ide/forms.d.ts                every .form of a project, as its controls
-ide/tsconfig.json             "lib": ["es2022"], and why it is not noLib
-```
-
-and, in the IDE, two more lookups and the closing of a hole three flatteners
-shared. What was built is in [`ide.md`](../ide.md#what-the-editor-proposes); this is
+**Stage 1 is built. Stage 0 was built and removed, and stage 2 is not built and
+this document still recommends not building it** -- which is the conclusion the
+measurements reached before any of it was written, and nothing in the building
+overturned. What is in the tree is in the IDE: two more lookups and the closing
+of a hole three flatteners shared. **The completion is the IDE's own**: the
+declarations for outside editors (stage 0) were generated, guarded, and then
+removed because nothing here consumed them -- see stage 0. What was built is in [`ide.md`](../ide.md#what-the-editor-proposes); this is
 the argument, the measurements, and **the seven things building it corrected**.
 
 Before: four completions, all table lookups --
@@ -123,107 +117,20 @@ That is the second thing the measurement overturned. A JSDoc line is a
 as TypeScript does** -- the analyser is not what unlocks that case; the
 annotation is.
 
-## Stage 0 -- the declarations, built
+## Stage 0 -- the declarations, built and removed
 
-1. **`bintana.d.ts`, generated from the runtime's own introspection**:
-   `tools/typings`, run by `tests/typings.sh`. 986 lines, 46 widget classes, the
-   globals, `MenuItem` and `Action`. Generated and regenerated, never maintained.
-2. **`tests/api.sh` guards it**, which is the check that makes a *generated* file
-   worth having rather than a stale one nobody notices. It found sixteen real
-   gaps the hour it was pointed at the file (below).
-3. **`"lib": ["es2022"]`** -- see the table above. Not `noLib`, which is the knob
-   that looks right and takes the language with it.
-4. **A `.d.ts` per project, generated from the `.form` files**: each form is a
-   class whose controls are typed fields, and **all three blocks that name
-   something** -- `children`, `menus`, `actions` -- because a menu item is bound
-   on the form like any control. `ide/forms.d.ts` is the one in the tree.
-5. **The JSDoc lines**, one per constructor that takes a parameter.
+A generator (`tools/typings`) wrote `bintana.d.ts` out of the runtime's own
+introspection, a `.d.ts` per project out of its `.form` files and a
+`tsconfig.json`, and `tests/api.sh` held the generated file to the runtime.
+It made VS Code work on a Bintana project with nothing installed.
 
-**Stage 0 is what makes VS Code work on a Bintana project** -- completion, go to
-definition and hover -- with no Bun, no Node and no change to this IDE.
-`bintana.d.ts` is installed at `<prefix>/share/bintana/`, beside the libraries
-rather than with the docs, because a `tsconfig.json` has to be able to name it:
-a project outside this tree points at it the way it names a library with `uses`.
-
-### Seven things building it corrected
-
-**The generator cannot be a console project**, which is what this document said
-it would be and what this tree's idiom for a desk tool is. Measured, on the first
-run:
-
-```
-TypeError: Panel: a project with a `main` has no display, so it cannot make widgets
-```
-
-The whole method is to ask a real control what it has, so it is a **form project
-run headless**, the way `tests/widgets` is: a window nobody sees, the work in
-`Form_Open`, and `Application.Quit`.
-
-**Introspection does not answer all of it**, which this document claimed it did
-(*"`Widget.Types()`, `PropertyNames()`, `EventNames()` and `Dictionary.Keys` over
-the globals already answer all of it"*). Measured, on a real `Button`:
-
-| | |
-|---|---|
-| `PropertyNames()` | 40 names, its own and inherited -- exact |
-| `EventNames()` | 14 -- exact |
-| `Dictionary.Keys(button)` | **`[]`** -- a C method is not enumerable |
-| `for (k in button)` | 9, and all nine are `rad.js`'s own |
-| `Dictionary.Keys(Locale)` | **`[]`** -- a table-built global is not either |
-
-So the generator reads **two** sources: introspection for the shape of every
-class, which knows about inheritance and cannot be wrong, and the C tables for
-the *names* of the methods -- with the same three patterns `tests/api` reads them
-with. Which class has which method is settled by asking the sample,
-`typeof control[name] === "function"`, so nothing in the generator knows that a
-`TreeView` has `ExpandNode` and a `Button` does not. `Widget` itself is abstract
-and cannot be asked: its surface is the **intersection** of every class that can
-be built, which comes to 36 properties and is exactly right.
-
-**`PropertyNames()` leaves out the read-only properties, and that is correct for
-what it is for and wrong for a declaration file.** It answers *what can a
-property grid set*. `tests/api.sh` found sixteen missing the hour it was written:
-`Children`, `Focused`, `Line`, `Column`, `CanUndo`, `CanRedo`, `SelectedText`,
-`Selection`, `ScrollMaxX`, `ScrollMaxY`, `SourceWidth`, `SourceHeight`,
-`MatchIndex`, `DefaultButton`, `CancelButton`, `Placement` -- every one real, and
-every one something an editor would have said does not exist. They come from the
-C, where a NULL setter is what says read-only, and land as `readonly`.
-
-**A `declare class` of a form is a duplicate, not a declaration.** The project's
-own `.js` already says `class MainForm extends Form`, so a second declaration is
-`Duplicate identifier` and TypeScript keeps the one **without** the controls:
-measured, 19 forms and 922 errors. An `interface` of the same name *merges* into
-the class instead, which is exactly what a `.form` is -- more members for a class
-declared elsewhere. With that, 0.
-
-**And `Record` is TypeScript's.** `Record<K, V>` is a type alias in
-`lib.es5.d.ts`, so `declare class Record` writes a type of that name too and both
-lose. A `const` with a construct signature declares the value alone: `new
-Record()` is Bintana's and `Record<string, number>` stays TypeScript's.
-
-**The two property lists overlap**, which the fix for the read-only ones
-introduced: the candidate names come from every widget table at once, so `Text`
-is read-only on a `TreeView` and settable on a `Label`, and a `Label` asked `in`
-about it says yes twice. `Label` came out with `Text` and `readonly Text` on the
-same class -- a duplicate identifier again. What the *class* can set wins.
-
-**And a name can be a property of one class and a method of another.** `Marks`
-is a read-only property on a `Calendar` and a method on a `SourceEditor`, so the
-editor came out with `readonly Marks: any` and `Marks(...)` on the same class --
-the same duplicate a third way. What the control really holds settles it, and
-what found both was running `tsc` over the generated file, which is the cheapest
-check this has and now the last step of writing it.
-
-### What `checkJs` costs, measured
-
-The generated `tsconfig.json` has it **off**, and the number is why: with it on,
-the IDE's own sources give **387 errors over 41 files**, and **359 of them are
-one thing** -- a field assigned to a form from outside its class body, which is
-ordinary JavaScript and what every dialog here does (`dlg.onAccept = …`). Most of
-the rest are `this[name]` indexing. With it off: **0**, and what is left is
-completion, go to definition and hover, which is the whole of what the file was
-generated for. Turning it on is one word, and worth it for a project that
-declares its fields.
+**It was removed** because nothing in this repository consumed it -- the IDE's
+completion asks the runtime (`Widget.Members`, `Application.Symbols`) and never
+read a declaration -- and the project does not aim at outside editors. What it
+left behind is worth keeping: the measurement above (a complete `.d.ts`
+resolves exactly what a table lookup resolves), the JSDoc lookup, and
+`Widget.Members`, which was written so that the generator and the IDE could ask
+one verb, and which the IDE still asks. Its history is in git.
 
 ## Stage 1 -- the lookups this IDE does without any of it, built
 
@@ -241,13 +148,13 @@ declares its fields.
    document measured 121–139 for the same idea under three narrower readings. The
    disagreement is about what counts as *the same class*, which is a reason to
    carry the reading with the number rather than the number alone.
-7. **The JSDoc line from stage 0**, read the same way: the 509 case, as a lookup.
+7. **A JSDoc line on a constructor parameter**, read the same way: the 509 case, as a lookup.
 8. **And the menu gap, which lived in three places and not one.** Each flattened
    a form's `children`, and a menu is not among them, so `this.MnuSave.` proposed
    nothing and neither check looked at a menu item: `Completion.js`, `Names.js`
    and `Check.js` -- `Ide.Check` does not go through `Completion` at all, it had
-   `Names.tableOf` *and* a walk of its own. Three, and the `.d.ts` of point 4 was
-   a fourth reader of the same table.
+   `Names.tableOf` *and* a walk of its own. Three, and the generated `.d.ts` of
+   stage 0 was a fourth reader of the same table.
 
    One walk now, `Ide.Names.tableOf`, over all three blocks; the other two read
    it. **And it took a runtime addition**: a `MenuItem` and an `Action` are not

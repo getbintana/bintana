@@ -3089,36 +3089,30 @@ function* p_completion(ide) {
           det("Width", "Container.") === "" && det("Tooltip", "Container.") === "",
           JSON.stringify([det("Width", "Container."),
                           det("Tooltip", "Container.")]));
-    /* **An instance method whose signature is declared, and a static's honest
-     * floor.** `Widget.New` is the case worth naming: the declaration file says
-     * `static New(type: string): Widget;` because the generator writes that by
-     * hand, and the popup says `static ()` because no signature is declared
-     * where the runtime reads one from.
-     *
-     * The gap is in the extractor: it only attaches a one-line signature comment
-     * to a `JSCFunctionListEntry` table, and every class static in this tree is
-     * registered with `JS_SetPropertyStr` instead. So the two consumers of the
-     * same verb disagree, and the popup is the one with nothing to read. Asserted
-     * as it is and not as it should be. */
+    /* **An instance method whose signature is declared.** 
     check("a declared signature is said, name and all",
           det("DesignValue", "Widget.") === "(name)",
           JSON.stringify(det("DesignValue", "Widget.")));
-    /* **And the count, where nothing was declared -- which is the half the user
-     * objected to having to write.** `Widget.New` has no signature comment and
-     * never had: the extractor only attaches one to a `JSCFunctionListEntry`
-     * table and every class static is registered with `JS_SetPropertyStr`. It
-     * takes one argument and now says so, because the function object knows. */
-    check("a static nobody declared says the kind and admits the gap",
-          det("New", "Widget.") === "static (...)",
+    /* **And a static, which used to be `static (...)`.** Every class static
+     * and every global's verb is registered with `JS_SetPropertyStr`, and the
+     * extractor only read comments above a table entry -- so the most used half
+     * of the language showed no parameter names at all. It reads the comment
+     * above a `JS_SetPropertyStr` now and names the owner by following where
+     * the variable is installed. */
+    check("a native static says its parameter names",
+          det("New", "Widget.") === "static (type)",
           JSON.stringify(det("New", "Widget.")));
+    /* **And a static written in JavaScript, which nobody declared at all.**
+     * `Timer` is a class in rad.js; the engine keeps its source, and the
+     * parser reads the parameters out of it. */
+    check("a static of rad.js says the names in its own source",
+          det("After", "Timer.") === "static (delay, tick)",
+          JSON.stringify(det("After", "Timer.")));
 
     /* **The count, and the point of asking for it at all: nobody wrote it
      * down.** `Container.Add` and `Widget.On` are two parameters because the
      * function says so, and `Widget.New` takes one for the same reason -- a
-     * signature nobody declared, and the answer `Function.length` gives. The
-     * declaration file says `static New(type: string): Widget;` because the
-     * generator writes that by hand; the popup now says the same number
-     * without anybody having written it. */
+     * signature nobody declared, and the answer `Function.length` gives. */
     /* **The names, for a class the IDE reads rather than runs.** `Dial`'s
      * `static Make(v)` is declared in a library this project `uses` and the IDE
      * never evaluates it, so the parameter name is only in the source -- and the
@@ -3138,8 +3132,8 @@ function* p_completion(ide) {
     check("a declared `()` is a fact and is kept",
           det("FocusNext", "Container.") === "()",
           JSON.stringify(det("FocusNext", "Container.")));
-    check("and nothing declared is a gap, not a fact",
-          det("Load", "        File.") === "(...)" &&
+    check("and a global's verb says its parameters, declared beside the C",
+          det("Load", "        File.") === "(path)" &&
           det("Add", "Container.") !== "()",
           JSON.stringify([det("Load", "        File."), det("Add", "Container.")]));
     check("a member of a class the runtime never ran keeps the honest floor",
@@ -3258,14 +3252,12 @@ function* p_completion(ide) {
      * signature declared* and a test that asserted the placeholder read as a
      * claim about the function. Asking the count instead is what noticed: the
      * answer is one argument and it was always one argument. */
-    /* **It says `(...)` and not `()`**, which is the correction.  `()` claims
-     * the member takes no arguments and `File.Load(path)` takes one; `(...)`
-     * says there are arguments and does not say which.  The count is real and
-     * the name is not there to be had -- the C function is registered with
-     * `JS_SetPropertyStr` and no comment mentions it -- so a name invented from
-     * the count would be a name that is not the parameter's. */
-    eq("and admits it does not know the parameters, which `()` did not",
-       ask("", "        File.").find((p) => p.Text === "Load").Detail, "(...)");
+    /* **Then it said `(...)`, and now it says the parameter.** `(...)` was
+     * the honest answer while nothing declared the name; the comment above the
+     * C entry declares it now, and `api.sh` fails on a global's native verb
+     * that has none. */
+    eq("and says its parameter, which neither `()` nor `(...)` did",
+       ask("", "        File.").find((p) => p.Text === "Load").Detail, "(path)");
 
     /* --- a namespace of this project ------------------------------------------
      *
@@ -3405,6 +3397,32 @@ function* p_completion(ide) {
           said.includes("Ok") && said.includes("Msg"), JSON.stringify(said));
     check("which is the 509-use case, and nothing else can say it",
           said.includes("Form_Open"), JSON.stringify(said));
+
+    /* **What is typed and not saved is what a person completes against.**
+     * The classes used to be read off the disk, so a class written in a tab
+     * and not saved did not exist -- not as a bare name, not after its dot --
+     * until the tab was saved. The open tabs are read live now, and the file
+     * on disk is asserted to lack the class, which is what makes this a test
+     * of the tab and not of the file. */
+    ide.Editor.Text = ide.Editor.Text +
+        "class Nueva {\n    static Crear(nombre) { }\n    Hacer(a, b) { }\n}\n";
+    yield* settled(ide);
+    check("the class is not on disk, only in the tab",
+          !File.Load(File.Join(TMP, "Usa.js")).includes("Nueva"), "");
+    check("a class typed into a tab and not saved is a bare name to offer",
+          answer("Nue", "        const x = ").includes("Nueva"),
+          JSON.stringify(answer("Nue", "        const x = ").slice(0, 5)));
+    const nueva = ask("", "        Nueva.");
+    check("...and its members are offered after the dot, with their parameters",
+          nueva.some((p) => p.Text === "Crear" && p.Detail === "static (nombre)"),
+          JSON.stringify(nueva));
+    /* And the answer follows the text, rather than keeping the first reading. */
+    ide.Editor.Text = ide.Editor.Text.replace("Crear(nombre)", "Crear(nombre, edad)");
+    yield* settled(ide);
+    check("an edit to the unsaved class is what the next popup says",
+          ask("", "        Nueva.").some((p) => p.Text === "Crear" &&
+                                             p.Detail === "static (nombre, edad)"),
+          JSON.stringify(ask("", "        Nueva.")));
 
     /* The tabs go before the files do: an open tab whose file disappears is a
      * question the IDE asks in a dialog, which is right for a person and a hung

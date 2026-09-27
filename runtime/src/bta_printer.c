@@ -887,7 +887,9 @@ static const JSCFunctionListEntry printer_props[] = {
     JS_CGETSET_DEF("Names",   printer_get_names,   NULL),
     JS_CGETSET_DEF("Papers",  printer_get_papers,  NULL),
     JS_CGETSET_DEF("Default", printer_get_default, NULL),
+    /* Send(area, [setup], cb) */
     JS_CFUNC_DEF("Send",   2, printer_send),
+    /* ToFile(area, path, [setup]) */
     JS_CFUNC_DEF("ToFile", 3, printer_to_file),
 };
 

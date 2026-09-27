@@ -1199,6 +1199,7 @@ void bta_sqlite_init(JSContext *ctx, JSValue global)
                                G_N_ELEMENTS(conn_props));
     JS_SetClassProto(ctx, bta_sqlite_class_id, proto);
 
+    /* Sqlite(path) */
     bta_database_driver(ctx, "Sqlite", database_sqlite, 1);
 }
 
@@ -1221,6 +1222,7 @@ static JSValue database_sqlite(JSContext *ctx, JSValueConst this_val,
  */
 void bta_sqlite_init(JSContext *ctx, JSValue global)
 {
+    /* Sqlite(path) */
     bta_database_driver(ctx, "Sqlite", database_sqlite, 1);
 }
 

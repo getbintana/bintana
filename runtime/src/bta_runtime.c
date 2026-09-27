@@ -437,6 +437,9 @@ static const char *symbol_kind_name(JSSymbolKind kind)
     case JS_SYMBOL_STATIC:  return "Static";
     case JS_SYMBOL_GETTER:  return "Getter";
     case JS_SYMBOL_SETTER:  return "Setter";
+    /* An accessor of the class itself: a property of the constructor. */
+    case JS_SYMBOL_STATIC_GETTER: return "StaticGetter";
+    case JS_SYMBOL_STATIC_SETTER: return "StaticSetter";
     }
     return "";
 }
@@ -869,9 +872,13 @@ static JSValue js_log_set_target(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry log_props[] = {
+    /* Debug(...values) */
     JS_CFUNC_MAGIC_DEF("Debug",   1, js_log, BTA_LOG_DEBUG),
+    /* Info(...values) */
     JS_CFUNC_MAGIC_DEF("Info",    1, js_log, BTA_LOG_INFO),
+    /* Warning(...values) */
     JS_CFUNC_MAGIC_DEF("Warning", 1, js_log, BTA_LOG_WARNING),
+    /* Error(...values) */
     JS_CFUNC_MAGIC_DEF("Error",   1, js_log, BTA_LOG_ERROR),
     JS_CGETSET_DEF("Level",  js_log_get_level,  js_log_set_level),
     JS_CGETSET_DEF("Target", js_log_get_target, js_log_set_target),
@@ -1179,6 +1186,7 @@ static bool install_globals(BtaApp *app)
      */
     JS_SetPropertyStr(ctx, application, "Id", JS_NewString(ctx, app->id));
     JS_SetPropertyStr(ctx, application, "Directory", JS_NewString(ctx, app->dir));
+    /* Quit(code) */
     JS_SetPropertyStr(ctx, application, "Quit",
                       JS_NewCFunction(ctx, js_quit, "Quit", 1));
 
@@ -1197,8 +1205,10 @@ static bool install_globals(BtaApp *app)
     /* Whether the desktop has an icon by that name.  Only whoever picks the
      * name can choose a fallback, and an icon the theme lacks is dropped
      * silently -- which on an icon-only button leaves nothing at all. */
+    /* HasIcon(name) */
     JS_SetPropertyStr(ctx, application, "HasIcon",
                       JS_NewCFunction(ctx, js_has_icon, "HasIcon", 1));
+    /* Icons([contains]) */
     JS_SetPropertyStr(ctx, application, "Icons",
                       JS_NewCFunction(ctx, js_icons, "Icons", 1));
 
@@ -1231,12 +1241,14 @@ static bool install_globals(BtaApp *app)
     /* And whether an external program is installed, which is the same question
      * about a different kind of name -- `Exec` throws when it is not, so this is
      * what lets a caller choose among the tools a desktop happens to have. */
+    /* HasCommand(name) */
     JS_SetPropertyStr(ctx, application, "HasCommand",
                       JS_NewCFunction(ctx, js_has_command, "HasCommand", 1));
 
     /* Would this text compile?  The one honest use of `Function` -- an IDE that
      * writes code wants to know before it saves -- published on its own so the
      * string-to-code hatch does not have to stay open for it. */
+    /* CheckSource(text) */
     JS_SetPropertyStr(ctx, application, "CheckSource",
                       JS_NewCFunction(ctx, js_check_source, "CheckSource", 1));
 
@@ -1248,6 +1260,7 @@ static bool install_globals(BtaApp *app)
      * pattern, and the answer belongs to the compiler and not to one
      * application.
      */
+    /* Symbols(text) */
     JS_SetPropertyStr(ctx, application, "Symbols",
                       JS_NewCFunction(ctx, js_application_symbols, "Symbols", 1));
 
@@ -1262,6 +1275,7 @@ static bool install_globals(BtaApp *app)
      * time one of them was fixed, and the one that drifted would be the one
      * nobody runs from a shell.
      */
+    /* LibraryPath(name, [project]) */
     JS_SetPropertyStr(ctx, application, "LibraryPath",
                       JS_NewCFunction(ctx, js_library_path, "LibraryPath", 2));
 
@@ -1279,6 +1293,7 @@ static bool install_globals(BtaApp *app)
      * exists to prevent, and it would be the copy that goes stale, because the
      * first one is the one every program runs.
      */
+    /* Libraries([project]) */
     JS_SetPropertyStr(ctx, application, "Libraries",
                       JS_NewCFunction(ctx, js_libraries, "Libraries", 1));
     /* Globals() */
@@ -1298,12 +1313,22 @@ static bool install_globals(BtaApp *app)
 
     JS_SetPropertyStr(ctx, global, "Application", application);
 
+    /* One line each and not a loop over the names, because the signature
+     * comment above a line is what `Widget.Members` answers with -- a loop
+     * leaves nowhere to write one. The magic is the index `js_message` reads. */
     JSValue message = JS_NewObject(ctx);
-    static const char *kinds[] = { "Info", "Warning", "Error" };
-    for (int i = 0; i < 3; i++)
-        JS_SetPropertyStr(ctx, message, kinds[i],
-                          JS_NewCFunctionMagic(ctx, js_message, kinds[i], 1,
-                                               JS_CFUNC_generic_magic, i));
+    /* Info(text, ...args) */
+    JS_SetPropertyStr(ctx, message, "Info",
+                      JS_NewCFunctionMagic(ctx, js_message, "Info", 1,
+                                           JS_CFUNC_generic_magic, 0));
+    /* Warning(text, ...args) */
+    JS_SetPropertyStr(ctx, message, "Warning",
+                      JS_NewCFunctionMagic(ctx, js_message, "Warning", 1,
+                                           JS_CFUNC_generic_magic, 1));
+    /* Error(text, ...args) */
+    JS_SetPropertyStr(ctx, message, "Error",
+                      JS_NewCFunctionMagic(ctx, js_message, "Error", 1,
+                                           JS_CFUNC_generic_magic, 2));
     JS_SetPropertyStr(ctx, global, "Message", message);
 
     /*

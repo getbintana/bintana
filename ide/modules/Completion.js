@@ -183,6 +183,8 @@ Ide.Completion = class Completion {
         this.declared.clear();
         this._globals = null;
         this._declared = null;
+        this._disk = null;
+        this._parsed = null;
     }
 
     /*
@@ -282,7 +284,7 @@ Ide.Completion = class Completion {
          * this file built**: `const btn = new Button(); btn.`
          */
         if (parts.length === 1) {
-            const members = this.membersOfClass2(parts[0]);
+            const members = this.membersOfName(parts[0]);
             if (members.length) return members;
 
             const ns = this.ide.classes.namespaceMembers(parts[0]);
@@ -319,15 +321,19 @@ Ide.Completion = class Completion {
      *   so `Globals()` cannot see `Confirm` however the library is loaded -- read
      *   and asked, which is the same road `Ide.Classes` already walks.
      *
-     * **Scanned once per project, not once per word.** The list cannot change
-     * while a word is being typed, and the walk is a project tree plus every
-     * library's sources -- so keying the cache on the word rebuilt it once per
-     * new word, on the path GTK runs on every keystroke. `forget()` is the hook
-     * a project change already goes through, which is the right lifetime for a
-     * question whose answer is a property of the project.
+     * **Not keyed on the word.** The first version rebuilt the list once per
+     * new word, on the path GTK runs on every keystroke. It is rebuilt when a
+     * file's classes move instead (`generation`, which `declaredClasses`
+     * advances), and the disk half of that is walked once per project.
      */
     globals(word) {
-        if (!this._globals) this._globals = this.collectGlobals();
+        /* Recomputed when a file's classes moved: a class typed into a tab and
+         * not saved is a bare name to offer like any other. */
+        this.declaredClasses();
+        if (!this._globals || this._globalsAt !== this.generation) {
+            this._globals   = this.collectGlobals();
+            this._globalsAt = this.generation;
+        }
         const out = [];
         for (const name of this._globals)
             if (name !== word) out.push({ Text: name, Detail: "global" });
@@ -350,96 +356,117 @@ Ide.Completion = class Completion {
 
     /*
      * Every class the project and its libraries declare, **with the source that
-     * declared it**, walked once and cached for the life of the project.
+     * declared it**, and the `.form` texts beside them.
      *
      * The source is kept because a bare name is only half of what a person
      * types: `Confirm` is a *lexical* binding in a file the IDE never runs, so
-     * the runtime cannot resolve it and `Widget.Members("Confirm")` refuses --
-     * which is why the members after the dot were empty for every library
-     * class, and why a runtime verb could not have fixed it on its own. The
-     * names in a `.js` are all the parser has to give, and it is the same
-     * `Application.Symbols` this module already asks for its outline, so the
-     * names are the compiler's and not a pattern's.
+     * the runtime cannot resolve it and `Widget.Members("Confirm")` refuses
+     * without the text -- and the names in a `.js` are all the parser has to
+     * give, through the same `Application.Symbols` the outline asks.
+     *
+     * **Two layers, because the disk is the slow half and not the true one.**
+     * The files are walked once per project (`diskFiles`) and kept; over them
+     * go the open tabs, read **live** every time -- the editor's text, or a
+     * designer's tree serialised -- because what is typed and not saved is what
+     * a person is completing against. Before this the answer was the disk's, so
+     * a class written in a tab and not saved did not exist, and a method added
+     * to a class in another tab was not offered until that tab was saved.
+     *
+     * Reading the tabs is cheap; parsing them is not, so each file's classes are
+     * kept beside the text they were read from and parsed again only when that
+     * text changed. `generation` moves whenever any file's text does, which is
+     * what the member cache below keys on.
      */
     declaredClasses() {
-        if (this._declared) return this._declared;
+        const disk = this.diskFiles();
+        const live = new Map(disk.sources);
+        const forms = new Map(disk.forms);
+        const tabs = this.ide.tabs ? this.ide.tabs.openTabs : null;
 
-        const out  = [];
-        const seen = new Map();
-        const forms = [];
-        const take = (src) => {
-            for (const sym of Application.Symbols(src))
-                if (sym.Kind === "Class" && !seen.has(sym.Name)) {
-                    seen.set(sym.Name, src);
-                    out.push(sym.Name);
-                }
-        };
-
-        const root = this.ide.project;
-        if (root) {
-            for (const name of Directory.List(root)) {
-                if (name.startsWith(".")) continue;
-                const path = File.Join(root, name);
-                if (File.IsDir(path)) {
-                    const walk = (dir) => {
-                        for (const f of Directory.List(dir)) {
-                            if (f.startsWith(".")) continue;
-                            const p = File.Join(dir, f);
-                            if (File.IsDir(p)) walk(p);
-                            else if (f.endsWith(".js")) take(File.Load(p));
-                        }
-                    };
-                    walk(path);
-                } else if (name.endsWith(".js")) {
-                    take(File.Load(path));
-                }
+        if (tabs) {
+            for (const name of tabs.keys()) {
+                let now = null;
+                try { now = this.ide.tabs.contentOf(name); } catch (e) { now = null; }
+                if (!now) continue;
+                if (now.mode === "edit" && name.endsWith(".js") &&
+                    typeof now.text === "string")
+                    live.set(name, now.text);
+                else if (now.mode === "design" && now.root)
+                    forms.set(name, typeof now.root === "string"
+                                    ? now.root : JSON.stringify(now.root));
             }
         }
 
-        /* **Only the libraries this project `uses`, and the walk is not written
-         * here.** The first version asked `Application.Libraries()` -- every
-         * library installed on the machine -- so a project that names one
-         * library was offered every class of all seven: `QrView` in a program
-         * that has no `qr` anywhere in it, which is not a completion list, it is
-         * a list of what someone else has on their disk.
-         *
-         * And the answer to *which* libraries is not a new walk either:
-         * `Ide.Classes.resolveLibraries()` already reads the manifest and
-         * resolves each name, and the rule this file keeps re-learning is that a
-         * second copy of a search in JavaScript is the copy that goes stale --
-         * the runtime's `LibraryPath` is what a program actually loads, and this
-         * would have been a third answer to "where is a library" beside it.
-         *
-         * **And it is `Ide.Classes`' own cache, not a call to
-         * `resolveLibraries()`.** That is a manifest read and a filesystem
-         * search per library, and the cache is already there, already invalidated
-         * when the project changes -- which is the same lifetime the answer has. */
-        for (const { dir } of this.ide.classes.libraries || []) {
-            for (const f of Directory.List(dir)) {
-                if (f.endsWith(".js")) take(File.Load(File.Join(dir, f)));
-            }
-        }
-        /* **And the `.form` files, for the same walk and the same reason.** A
-         * child of a form is an *own property of the instance* -- the loader
-         * assigns each node by name onto the form it builds -- so it is on no
-         * prototype chain, and neither the runtime's class-table walk nor the
-         * parser can see it. `Dial.Face` existed and the popup did not offer it.
-         *
-         * They are the project's and its libraries' `.form` files, read once and
-         * kept for the life of the project, because a popover is built on every
-         * keystroke. `Ide.Classes` already walks these files for the palette's
-         * library tab, so this reads the same walk a second time rather than
-         * having a second notion of what a `.form` is. */
-        const addForms = (dir) => {
-            for (const path of Directory.Files(dir, { Pattern: "*.form",
-                                                      Recursive: true }))
-                if (File.Exists(path)) forms.push(File.Load(path));
-        };
-        if (this.ide.project) addForms(this.ide.project);
-        for (const { dir } of this.ide.classes.libraries || []) addForms(dir);
+        /* The classes of each file, re-read only where the text moved. */
+        this._parsed = this._parsed || new Map();
+        let changed = !this._declared;
+        const names = [];
+        const sources = new Map();
 
-        this._declared = { names: out, sources: seen, forms };
+        for (const [path, text] of live) {
+            let cached = this._parsed.get(path);
+            if (!cached || cached.text !== text) {
+                const classes = [];
+                try {
+                    for (const sym of Application.Symbols(text))
+                        if (sym.Kind === "Class") classes.push(sym.Name);
+                } catch (e) { /* half a file is still a file */ }
+                cached = { text, classes };
+                this._parsed.set(path, cached);
+                changed = true;
+            }
+            for (const c of cached.classes)
+                if (!sources.has(c)) { sources.set(c, text); names.push(c); }
+        }
+
+        const formList = [...forms.values()];
+        if (!changed && this._declared &&
+            this._declared.forms.length === formList.length &&
+            this._declared.forms.every((f, i) => f === formList[i]))
+            return this._declared;
+
+        this.generation = (this.generation || 0) + 1;
+        this._declared = { names, sources, forms: formList };
         return this._declared;
+    }
+
+    /*
+     * The disk's half, walked once per project: every `.js` and `.form` of the
+     * project, and of the libraries it `uses`.
+     *
+     * **Only the libraries this project `uses`, and the walk is not written
+     * here.** The first version asked `Application.Libraries()` -- every library
+     * installed on the machine -- so a project that names one library was
+     * offered every class of all seven. `Ide.Classes`' own `libraries` cache
+     * already reads the manifest and resolves each name, and is invalidated when
+     * the project changes, which is the lifetime this answer has too.
+     *
+     * Keyed by the name a tab uses -- the project-relative path -- so a tab
+     * open on a file replaces exactly that file; a library's file is keyed by
+     * its absolute path and is never a tab.
+     */
+    diskFiles() {
+        if (this._disk) return this._disk;
+
+        const sources = new Map();
+        const forms   = new Map();
+        const root    = this.ide.project;
+        const rel     = (p) => root && p.startsWith(root + "/") ? p.slice(root.length + 1) : p;
+        const walk    = (dir, into) => {
+            for (const f of Directory.List(dir)) {
+                if (f.startsWith(".")) continue;
+                const p = File.Join(dir, f);
+                if (File.IsDir(p)) walk(p, into);
+                else if (f.endsWith(".js")) sources.set(rel(p), File.Load(p));
+                else if (f.endsWith(".form")) forms.set(rel(p), File.Load(p));
+            }
+        };
+
+        if (root) walk(root);
+        for (const { dir } of this.ide.classes.libraries || []) walk(dir);
+
+        this._disk = { sources, forms };
+        return this._disk;
     }
 
     /* --- what the file itself declares --------------------------------------- */
@@ -649,89 +676,30 @@ Ide.Completion = class Completion {
     }
 
     /*
-     * The members of a **class**, asked of the runtime.
+     * What the popup says after the name, and **the answer is the runtime's**.
      *
-     * `Widget.Members(type)` answers for any class a name resolves to -- a
-     * widget, a class of rad.js like `Timer`, a class of a library, a class of
-     * the project -- and gives each one a kind, which is what the popover shows
-     * in its right-hand column. `Widget.Methods` was the wrong verb here for a
-     * reason worth keeping: it walks the prototype, so it holds instance methods
-     * and **no static**, and every library verb of any consequence is a static.
+     * `Widget.Members` hands each member its `Signature`, from the first of
+     * three places that has one: the comment beside its C entry (for a control,
+     * a class static and a global's verb alike), a class's `static Signatures`,
+     * or the parser -- over the member's own source for a function written in
+     * JavaScript, and over a library's file for a class this process never ran.
+     * So this module asks nothing else; a second question here would be a
+     * second answer to disagree with the first.
      *
-     * Cached per name for the length of one popover, and reset by the same
-     * narrow-to-wider rule the method scan uses.
-     */
-
-    /*
-     * What the popup says after the name, and **the answer is asked rather than
-     * written**.
-     *
-     * The `()` that was here was the runtime's own placeholder for *no
-     * signature is declared* -- `() => any` in a declaration file and
-     * `Expected 0 arguments` in an editor are the same wrong answer pointed
-     * differently, so the generator already refuses to emit an empty pair. It is
-     * the honest floor and not a claim that a member takes no arguments. What
-     * was not honest was asking nobody: `Widget.Signature` answers for every
-     * method of the runtime from the comment beside its C entry, and the popup
-     * wrote `()` for all of them.
-     *
-     * **A property says nothing and a method says its parameters.** A member
-     * whose name is declared in a class the runtime does not have -- a library
-     * class, whose source the parser can name but not measure -- answers null and
-     * keeps the placeholder, which is the same floor the generator keeps. **A
-     * signature is a statement about arity and nothing else**: the declared text
-     * is a documentation's own spelling, so `[container]` and `(...values)` are
-     * what the reference says, and the popup does not invent a type for a
-     * parameter to look more precise than the source of the answer.
+     * **A property says nothing and a method says its parameters.** What is
+     * left with no signature is a native function registered in a shape the
+     * extractor does not read, and it says **`(...)`**, not `()`: `()` claims
+     * the member takes no arguments, which for a verb that takes one is a false
+     * claim a test once asserted, and `(...)` is a gap that reads as one. No
+     * name is made up from the count -- `Load(a1)` was tried, and reads as
+     * though `a1` were the parameter.
      */
     detailOf(className, member) {
         const kind = member.Kind;
         if (kind !== "Method" && kind !== "Static") return "";
 
-        /* **Three answers, in the order that keeps the most.** The member's own
-         * `Signature` first, which is what the parser wrote for a class in a file
-         * this process never runs -- `Ask(message, [options])` with the real
-         * names, because the parser had them. Then `Widget.Signature`, which has
-         * the names for a class the runtime knows. And then the count, which
-         * needs nothing written at all. */
-        let sig = (typeof member.Signature === "string" && member.Signature)
-                  ? member.Signature : null;
-        if (!sig) {
-            try { sig = Widget.Signature(className, member.Name); } catch (e) { sig = null; }
-        }
-
-        /* **The count, discovered, and that is what makes this work for a
-         * library.** A person writing one should not have to spell the arity of
-         * every method for a popup to say it: `Widget.Members` reads
-         * `Function.length` off the value, and for a class this process has
-         * *not* built the answer is -1 until the parser reports it.
-         *
-         * And a class the runtime refuses is not an error here: `Signature`
-         * refuses a class that is not a widget, which is right for its own
-         * question and is most of what a popup asks about. */
-        /* **And nothing invented, which is the correction.** The first version
-         * built `(a1, a2, a3)` out of the count, and `File.Load` came out
-         * `Load(a1)` -- a name that is not the parameter's, on a verb that reads
-         * as though it were. The count belongs in the *declaration file*, where
-         * a rest tuple checks it without claiming a name; in a popup it teaches
-         * the reader nothing at all.
-         *
-         * **`(...)` and not `()`**, and the difference is the whole point: `()`
-         * says the member takes no arguments, which for `File.Load(path)` is a
-         * false claim a test used to assert -- and `(...)` says there are
-         * arguments and does not say which. One is a lie, the other is a gap
-         * that reads as one. */
-        if (!sig) sig = "(...)";
-        /* **A blank answer is a property, not a method, and the difference is the
-         * whole point of asking.** `Widget.Member` is the verb that says which,
-         * and it answers for one name. */
-        if (typeof sig !== "string" || !sig) {
-            try {
-                if (Widget.Member(className, member.Name) === "Property" ||
-                    Widget.Member(className, member.Name) === "ReadOnly") return "";
-            } catch (e) { /* not a member the runtime knows */ }
-            sig = "()";
-        }
+        const sig = (typeof member.Signature === "string" && member.Signature)
+                    ? member.Signature : "(...)";
         return kind === "Static" ? "static " + sig : sig;
     }
 
@@ -756,17 +724,26 @@ Ide.Completion = class Completion {
      * the first base the sources do not declare -- which is `Form`, and a
      * hundred names this module had no way to produce at all.
      *
+     * `Widget.Methods` would be the wrong verb for the half it can answer: it
+     * walks the prototype, so it holds instance methods and **no static**, and
+     * every library verb of any consequence is a static.
+     *
      * **The sources are the project's and the libraries it `uses`**, read once
      * by `declaredClasses` and kept, because a popover is built on every
      * keystroke and a walk of every library is not something to do there.
      */
-    membersOfClass2(name) {
-        if (!this._members || this._membersFor !== name) {
+    membersOfName(name) {
+        const found = this.declaredClasses();
+        if (!this._members || this._membersFor !== name ||
+            this._membersAt !== this.generation) {
             this._membersFor = name;
+            this._membersAt  = this.generation;
             this._members    = [];
 
-            const found = this.declaredClasses();
-            const list  = [...found.sources.values()];
+            /* One text per *file*: `sources` maps each class to the file that
+             * declared it, so a file of three classes would be parsed three
+             * times on every name asked. */
+            const list  = [...new Set(found.sources.values())];
 
             /* **A refusal is caught and answered as nothing, always.** The verb
              * refuses with a name because a caller that wants to know should be
@@ -785,7 +762,6 @@ Ide.Completion = class Completion {
             }
 
             for (const m of got || []) {
-                const kind = m.Kind;
                 this._members.push({
                     Text: m.Name,
                     Detail: this.detailOf(name, m),

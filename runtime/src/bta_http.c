@@ -815,8 +815,11 @@ static JSValue http_multipart_part(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry multipart_props[] = {
+    /* Field(name, value) */
     JS_CFUNC_DEF("Field", 2, http_multipart_field),
+    /* File(name, filename, body, [contentType]) */
     JS_CFUNC_DEF("File",  4, http_multipart_file),
+    /* Part(index) */
     JS_CFUNC_DEF("Part",  1, http_multipart_part),
     JS_CGETSET_DEF("Length", http_multipart_get_length, NULL),
 };
@@ -2984,22 +2987,39 @@ static JSValue js_http_server(JSContext *ctx, JSValueConst this_val,
                                int argc, JSValueConst *argv);
 
 static const JSCFunctionListEntry http_props[] = {
+    /* Client([opts]) */
     JS_CFUNC_DEF("Client",      1, js_http_client),
+    /* Server([opts]) */
     JS_CFUNC_DEF("Server",      1, js_http_server),
+    /* Request(method, url, [body], [opts], onDone, [onError]) */
     JS_CFUNC_DEF("Request",     5, js_http_request),
+    /* Get(url, [opts], onDone, [onError]) */
     JS_CFUNC_DEF("Get",         4, js_http_get),
+    /* Post(url, body, [opts], onDone, [onError]) */
     JS_CFUNC_DEF("Post",        5, js_http_post),
+    /* Put(url, body, [opts], onDone, [onError]) */
     JS_CFUNC_DEF("Put",         5, js_http_put),
+    /* Patch(url, body, [opts], onDone, [onError]) */
     JS_CFUNC_DEF("Patch",       5, js_http_patch),
+    /* Delete(url, [opts], onDone, [onError]) */
     JS_CFUNC_DEF("Delete",      4, js_http_delete),
+    /* Head(url, [opts], onDone, [onError]) */
     JS_CFUNC_DEF("Head",        4, js_http_head),
+    /* Stream(method, url, [body], [opts], onLine, [onDone], [onError]) */
     JS_CFUNC_DEF("Stream",      6, js_http_stream),
+    /* RequestWait(method, url, [body], [opts]) */
     JS_CFUNC_DEF("RequestWait", 4, js_http_requestwait),
+    /* GetWait(url, [opts]) */
     JS_CFUNC_DEF("GetWait",     2, js_http_getwait),
+    /* PostWait(url, body, [opts]) */
     JS_CFUNC_DEF("PostWait",    3, js_http_postwait),
+    /* PutWait(url, body, [opts]) */
     JS_CFUNC_DEF("PutWait",     3, js_http_putwait),
+    /* PatchWait(url, body, [opts]) */
     JS_CFUNC_DEF("PatchWait",   3, js_http_patchwait),
+    /* DeleteWait(url, [opts]) */
     JS_CFUNC_DEF("DeleteWait",  2, js_http_deletewait),
+    /* HeadWait(url, [opts]) */
     JS_CFUNC_DEF("HeadWait",    2, js_http_headwait),
 };
 

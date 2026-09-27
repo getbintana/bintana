@@ -396,6 +396,23 @@ row. Until the line is there the new global's members are checked against
 telling you the truth in the wrong words. `Text` (in `bta_paint.c`, beside the
 painter whose measurements it matches) is the most recent one.
 
+**And a one-line signature above each native verb**, the way a control's method
+has one — above the `JS_SetPropertyStr` that installs it, or above its entry in
+the table the global is built from:
+
+```c
+/* Load(path) */
+JS_SetPropertyStr(ctx, file, "Load", JS_NewCFunction(ctx, sys_file_load, "Load", 1));
+```
+
+The extractor works out the owner itself, by following the variable to the
+`JS_SetPropertyStr(ctx, global, "File", file)` that installs it, so nothing else
+names it; the IDE's completion shows `Load(path)`, and `tests/api.sh` fails on a
+native verb of a global with no signature. Register one line per verb rather
+than looping over a table of names — a loop has nowhere to put the comment. A
+verb written in `rad.js` needs nothing: the parser reads its parameters out of
+its own source.
+
 ## The traps that have cost time
 
 Each of these was a real bug in this repository.

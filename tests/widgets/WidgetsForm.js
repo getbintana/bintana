@@ -10903,6 +10903,44 @@ function Main() {
         eq("the constructor of a class is not invented",
            sym.filter((x) => x.Name === "constructor").length, 0);
 
+        /* **A method's parameters are its own, whatever its body holds.** The
+         * list used to be one buffer for the whole parse, and a method is
+         * reported *after* its body: an arrow inside `Ask` made it `(x, y, z)`,
+         * and a top-level function was reported before its own list was read,
+         * so it carried the previous one's: `QrCode.Encode(text, opts)` came
+         * out `Encode(value, n)`. Every nested shape
+         * that has a list of its own is here: an arrow in the body, a function
+         * expression in a getter, an arrow in a default value. */
+        const nest = Application.Symbols(
+            "class N {\n" +
+            "    Ask(message, options) { return [1].map((x, y, z) => x); }\n" +
+            "    get Value() { const f = function (p, q) {}; return f; }\n" +
+            "    static Make(a, b = (u, w) => u, ...rest) {}\n" +
+            "    static get Fields() { return 1; }\n" +
+            "    static set Fields(v) {}\n" +
+            "}\n" +
+            "function First(one, two) { return (k) => k; }\n" +
+            "function Second(three) {}\n" +
+            "function Broken(a, b\n");
+        const nested = (n, k) => nest.find((x) => x.Name === n && (!k || x.Kind === k));
+        eq("a method's parameters are not an arrow's in its body",
+           nested("Ask").Params, "(message, options)");
+        eq("a getter's are not a function expression's inside it",
+           nested("Value").Params, "()");
+        eq("an arrow in a default value does not take the list over",
+           nested("Make").Params, "(a, [b], ...rest)");
+        eq("a top-level function reports its own list, not the method's before it",
+           nested("First").Params, "(one, two)");
+        eq("...and the next one its own, not the previous function's",
+           nested("Second").Params, "(three)");
+        eq("a function whose list breaks is still listed, with what was read",
+           nested("Broken").Params, "(a, b)");
+        /* **A static accessor is the class's, not the instance's.** It was a
+         * plain `Getter`, which put `static get Fields()` -- the one thing a
+         * `Record` subclass declares that way -- on the instance. */
+        eq("a static getter says so", nested("Fields", "StaticGetter").Kind, "StaticGetter");
+        eq("and a static setter", nested("Fields", "StaticSetter").Kind, "StaticSetter");
+
         eq("a namespaced class expression is named by its own name",
            named("Events").Kind, "Class");
         eq("and its method says which class it is in",
@@ -14614,8 +14652,7 @@ function Main() {
         /* **`Members` is the verb that answers where the three above refuse**, and
          * that is what it was added for. `Timer` is a class in rad.js and the old
          * verbs say *not a widget class* about it -- so an editor completing
-         * `Timer.` offered nothing while knowing the name, and the declaration
-         * generator was declaring `Timer` by hand. */
+         * `Timer.` offered nothing while knowing the name. */
         throws("a class that is not a widget is still refused by PropertyNames",
                () => Widget.PropertyNames("Timer"));
         throws("...and by Methods", () => Widget.Methods("Timer"));
@@ -14752,6 +14789,60 @@ function Main() {
         check("a refused call left the verb working",
               Widget.Members("Button").length > 40, Widget.Members("Button").length);
 
+        /* **And each verb says its parameters**, from wherever they are
+         * written: the comment above a global's C entry (`File.Load`), above a
+         * class static's (`Widget.New`), above a control's table entry
+         * (`Bounds`, found on `Button` under the class that declares it), and
+         * for a function written in JavaScript, the parser over its own source
+         * (`Timer.After`, `File.LoadJson`) -- which nobody wrote twice. */
+        const sigOf = (t, n) => (Widget.Members(t).find((m) => m.Name === n) || {}).Signature;
+        eq("a global's native verb says its parameters", sigOf("File", "Load"), "(path)");
+        eq("...and one with an optional", sigOf("Directory", "Files"), "(path, [options])");
+        eq("a native class static says its own", sigOf("Widget", "New"), "(type)");
+        eq("an inherited control method answers from the class that declares it",
+           sigOf("Button", "Bounds"), "([container])");
+        eq("a static written in rad.js is read out of its source",
+           sigOf("Timer", "After"), "(delay, tick)");
+        eq("...and so is a verb rad.js hung on a native global",
+           sigOf("File", "LoadJson"), "(path)");
+        eq("an instance method of a native class says its parameters",
+           sigOf("Bytes", "Slice"), "(from, [count])");
+
+        /* **One class, one vocabulary, whichever reader found it.** A getter
+         * with no setter is `ReadOnly` -- the word `Widget.Member` gives it --
+         * and the loaded walk used to call it `Property`. The source walk reads
+         * the parser's kinds into the same words: `get X` alone is `ReadOnly`,
+         * with a `set X` it is a `Property`, a static accessor is a `Static`,
+         * and a property carries no signature, since one would read as a
+         * method. And `Params` from a signature follows `Function.length`: the
+         * names before the first optional or rest. */
+        const kindOf = (list, n) => (list.find((m) => m.Name === n) || {}).Kind;
+        eq("a loaded class's read-only property is ReadOnly",
+           kindOf(Widget.Members("Panel"), "Children"), "ReadOnly");
+        eq("...which is what Widget.Member says of it",
+           Widget.Member("Panel", "Children"), "ReadOnly");
+        eq("and a settable one is still a Property",
+           kindOf(Widget.Members("Panel"), "Width"), "Property");
+        const acc = Widget.Members("Acc", { Sources: [
+            "class Acc {\n" +
+            "    get Only() { return 1; }\n" +
+            "    get Both() { return 1; }\n" +
+            "    set Both(v) {}\n" +
+            "    static get Fields() { return 1; }\n" +
+            "    static Make(a, b = 1, ...rest) {}\n" +
+            "    Run(a, b) {}\n" +
+            "}\n"] });
+        const accOf = (n) => acc.find((m) => m.Name === n) || {};
+        eq("a getter alone read out of a source is ReadOnly", accOf("Only").Kind, "ReadOnly");
+        eq("a getter and a setter are one Property", accOf("Both").Kind, "Property");
+        eq("...listed once", acc.filter((m) => m.Name === "Both").length, 1);
+        eq("a property carries no signature", accOf("Both").Signature, "");
+        eq("a static accessor is a Static", accOf("Fields").Kind, "Static");
+        eq("...with nothing known about arguments", accOf("Fields").Params, -1);
+        eq("a signature's count is Function.length's: before the first optional",
+           accOf("Make").Params, 1);
+        eq("...and all of a plain list", accOf("Run").Params, 2);
+
         /*
          * **The children of a `.form`, and the reason they were missing from
          * everywhere.** The loader assigns each node by name onto the form it
@@ -14794,9 +14885,8 @@ function Main() {
         /* **The other half, and it is the half that was broken silently.** A
          * class that is *loaded* has children the prototype walk cannot see
          * either, so the first version -- which read the forms only when
-         * `Sources` was also given -- answered the IDE and not the generator,
-         * because the generator runs with the libraries loaded and the IDE does
-         * not. One bug and not two, and the condition it sat under was the
+         * `Sources` was also given -- answered a class read from its source and
+         * not one that is loaded. One bug and not two, and the condition it sat under was the
          * clue. `Chip` is this project's own form and is loaded. */
         const chipForm = File.Load(File.Join(Application.Directory, "Chip.form"));
         const chipKids = Widget.Members("Chip", { Forms: [chipForm] })
