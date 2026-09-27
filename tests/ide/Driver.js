@@ -253,8 +253,10 @@ function makeChildProject() {
     File.Save(File.Join(TMP, "lib", "gadgets", "Dial.js"),
               'class Dial extends Component {\n' +
               '    static Events = ["Turn"];\n' +
+              '    static Make(v) { return new Dial().Value = v; }\n' +
               '    get Value() { return this._v || 0; }\n' +
               '    set Value(v) { this._v = Number(v) || 0; }\n' +
+              '    turn() { this.Emit("Turn"); }\n' +
               '}\n');
     File.Save(File.Join(TMP, "lib", "gadgets", "Dial.form"), JSON.stringify({
         format: "bintana-form/1", class: "Dial",
@@ -3011,6 +3013,34 @@ function* p_completion(ide) {
     check("a library class this project does not use is not offered",
           answer("A", "Confirm.").length === 0,
           JSON.stringify(answer("A", "Confirm.")));
+
+    /* **And the members of one it does.** `Dial` is a class in the `gadgets`
+     * library this project declares, and the IDE never runs that library -- a
+     * class is a lexical binding in a file this process does not evaluate, so
+     * `Widget.Members("Dial")` refuses and the list after the dot was empty.
+     * This is the half a runtime verb cannot reach on its own. */
+    const dial = answer("", "Dial.");
+    check("a library class offers its members, read out of the parser",
+          dial.includes("Value"), JSON.stringify(dial));
+    /* **An accessor reaches the parser as a method of the same name, and a
+     * `static` reaches it as one too** -- so both are offered, and the label
+     * says `()` for each. That is the honest limit: telling them apart would
+     * mean a pattern over the source, which is the copy that drifts, or a
+     * seventh change to the vendored engine. */
+    check("its accessor is offered, which the parser reports as a method",
+          dial.includes("Value"), JSON.stringify(dial));
+    check("and its static as well as its accessor",
+          dial.includes("Make"), JSON.stringify(dial));
+    check("and a lower-case member is not offered, as the runtime would not",
+          !dial.includes("turn"), JSON.stringify(dial));
+    check("and not a name that is one of its events, which is not a member",
+          !dial.includes("Turn"), JSON.stringify(dial));
+    check("and the typed-towards narrowing works on it",
+          answer("Val", "Dial.").includes("Value"),
+          JSON.stringify(answer("Val", "Dial.")));
+    check("a class of the runtime still comes from the runtime",
+          answer("Af", "Timer.").includes("After"),
+          JSON.stringify(answer("Af", "Timer.")));
 
     /* --- this. : the controls on the form beside this file ------------------ */
     const mine = answer("", "        this.");

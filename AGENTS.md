@@ -1280,7 +1280,22 @@ So there were two fixes, and **only one of them is in the IDE**:
 - **A class's members** are asked with `Widget.Members(type)`, which answers for
   anything a name resolves to: a widget, a class of rad.js, a class of a library.
   It reads statics off the constructor and instance members off the prototype
-  because that is where each of them lives.
+  because that is where each of them lives. **And for a library class that verb
+  cannot answer at all, which took a second pass to see.** The IDE never *runs* an
+  opened project's libraries -- it reads them -- so `Confirm` is a lexical binding
+  with no class behind it in that process, `Widget.Members("Confirm")` refuses, and
+  the list after the dot was empty for every library class. **No runtime verb fixes
+  that on its own**, because what is missing is a *class*, not a lookup: the answer
+  is the parser, through the same `Application.Symbols` the outline already asks,
+  filtered on `Parent` so a base class's methods are not offered as its own. **A
+  static and an accessor both reach `js_parse_class` as a method of the same name**,
+  so both come back as `Method` and are labelled `()`; telling them apart would mean a
+  pattern over the source -- a second parser, the copy that drifts -- or a seventh
+  change to the vendored engine, and the names are what a person is typing towards.
+  **The lower-case filter is not optional**: the first version omitted it, so
+  `Dial.turn` was offered by the source and hidden by the runtime for the same class
+  in the same popover, and the test that caught it had to be corrected from asserting
+  the inconsistency to asserting its absence.
 
 **And the hand-written table went, and that is the part worth keeping.** It held
 fourteen global names and was missing about eighteen -- `Printer.` and `Http.`

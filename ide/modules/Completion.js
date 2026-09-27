@@ -182,6 +182,7 @@ Ide.Completion = class Completion {
         this.forms.clear();
         this.declared.clear();
         this._globals = null;
+        this._declared = null;
     }
 
     /*
@@ -344,10 +345,33 @@ Ide.Completion = class Completion {
     /* Every class the project declares and every class of every library it
      * `uses`, read out of the sources with the parser. */
     classNames() {
-        const out = [];
+        return this.declaredClasses().names;
+    }
+
+    /*
+     * Every class the project and its libraries declare, **with the source that
+     * declared it**, walked once and cached for the life of the project.
+     *
+     * The source is kept because a bare name is only half of what a person
+     * types: `Confirm` is a *lexical* binding in a file the IDE never runs, so
+     * the runtime cannot resolve it and `Widget.Members("Confirm")` refuses --
+     * which is why the members after the dot were empty for every library
+     * class, and why a runtime verb could not have fixed it on its own. The
+     * names in a `.js` are all the parser has to give, and it is the same
+     * `Application.Symbols` this module already asks for its outline, so the
+     * names are the compiler's and not a pattern's.
+     */
+    declaredClasses() {
+        if (this._declared) return this._declared;
+
+        const out  = [];
+        const seen = new Map();
         const take = (src) => {
             for (const sym of Application.Symbols(src))
-                if (sym.Kind === "Class" && !out.includes(sym.Name)) out.push(sym.Name);
+                if (sym.Kind === "Class" && !seen.has(sym.Name)) {
+                    seen.set(sym.Name, src);
+                    out.push(sym.Name);
+                }
         };
 
         const root = this.ide.project;
@@ -394,7 +418,8 @@ Ide.Completion = class Completion {
                 if (f.endsWith(".js")) take(File.Load(File.Join(dir, f)));
             }
         }
-        return out;
+        this._declared = { names: out, sources: seen };
+        return this._declared;
     }
 
     /* --- what the file itself declares --------------------------------------- */
@@ -616,6 +641,27 @@ Ide.Completion = class Completion {
      * Cached per name for the length of one popover, and reset by the same
      * narrow-to-wider rule the method scan uses.
      */
+    /*
+     * The members of a class, asked in the order that keeps the most answer.
+     *
+     * **First the runtime**, which is the only one that can tell a property from
+     * a method and a static from an instance -- and it answers for a widget, a
+     * class of rad.js like `Timer`, and a global object like `File`.
+     *
+     * **Then the source**, and the reason it is here is that a library class is
+     * a lexical binding in a file the IDE never runs: `Confirm` is a name with
+     * no class behind it in this process, so the lookup refuses and the members
+     * after the dot were empty. The parser is what answers instead, through the
+     * same `Application.Symbols` this module already asks for its outline.
+     *
+     * **What the parser does not say, and what is therefore not shown:** a
+     * `static` and an accessor reach `js_parse_class` the same way a method
+     * does, so both come back as `Method` and the completion labels them all
+     * `()`. Telling them apart would mean a pattern over the source -- a second
+     * parser, which is the one thing that drifts -- or a seventh change to the
+     * vendored engine. The names are exact, which is what a person is typing
+     * towards, and the label does not claim to be more than it is.
+     */
     membersOfClass2(name) {
         if (!this._members || this._membersFor !== name) {
             this._membersFor = name;
@@ -623,12 +669,40 @@ Ide.Completion = class Completion {
 
             let found = null;
             try { found = Widget.Members(name); } catch (e) { found = null; }
+
             for (const m of found || []) {
                 const kind = m.Kind;
                 this._members.push({
-                    Text: kind === "Method" || kind === "Static" ? m.Name : m.Name,
+                    Text: m.Name,
                     Detail: kind === "Method" ? "()" : (kind === "Static" ? "static" : ""),
                 });
+            }
+
+            /* Not asked of the runtime: `Member` is about one name and `Members`
+             * refused, so there is nothing to ask. The source the walk kept is
+             * what is left, and only for a class the walk actually saw. */
+            if (!this._members.length) {
+                const src = this.declaredClasses().sources.get(name);
+                if (src) {
+                    const own = new Set();
+                    for (const sym of Application.Symbols(src)) {
+                        if (sym.Kind !== "Method") continue;
+                        /* `Parent` is the class a method was declared in, so a
+                         * base class's methods are not this class's to offer --
+                         * and the class itself is not one of its own members. */
+                        if (sym.Parent !== name || own.has(sym.Name)) continue;
+                        /* **The same convention `Widget.Members` applies, and the
+                         * first version here did not** -- so `Dial.turn` was
+                         * offered by the source and hidden by the runtime, for
+                         * the same class, in the same popover. A lower-case
+                         * member is the class talking to itself, and a completion
+                         * that offers it is offering something a caller cannot
+                         * write from outside. */
+                        if (!/^[A-Z]/.test(sym.Name)) continue;
+                        own.add(sym.Name);
+                        this._members.push({ Text: sym.Name, Detail: "()" });
+                    }
+                }
             }
         }
         return this._members;
