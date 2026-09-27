@@ -1403,9 +1403,9 @@ static const JSCFunctionListEntry source_props[] = {
     JS_CFUNC_DEF("FindNext",     0, ed_find_next),
     /* FindPrevious() */
     JS_CFUNC_DEF("FindPrevious", 0, ed_find_previous),
-    /* Replace(with) */
+    /* Replace(text) */
     JS_CFUNC_DEF("Replace",      1, ed_replace),
-    /* ReplaceAll(with) */
+    /* ReplaceAll(text) */
     JS_CFUNC_DEF("ReplaceAll",   1, ed_replace_all),
 };
 

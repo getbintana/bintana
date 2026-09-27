@@ -9,6 +9,7 @@ The running program: what it is called, where its files are, and how it ends.
 | `Arguments` | whatever followed the project directory on the command line | [the project](#the-project) |
 | `CheckSource(text)` | → `null` if the text is valid JavaScript, else `{ Message, Line, Column }` | [asking about the machine](#asking-about-the-machine) |
 | `Symbols(text)` | → what the text declares, with the line of each | [asking about the machine](#asking-about-the-machine) |
+| `Globals()` | → every name on the global object, sorted: the runtime's own, a library's, and the JavaScript builtins. **Not a project's or a library's classes** -- a top-level `class` is a lexical binding, not a property of the global | [asking about the machine](#asking-about-the-machine) |
 | `ConfigDirectory` | `~/.config/bintana/<name>`, created at startup | [where its files are](#where-its-files-are) |
 | `DecorationLayout` | how this desktop arranges a title bar | [asking about the machine](#asking-about-the-machine) |
 | `Directory` | the project directory, absolute | [where its files are](#where-its-files-are) |
@@ -60,6 +61,31 @@ declaration in a comment or a string is not one, and a method is a method at any
 indentation. Text that does not compile answers what the parser reached before
 the error: an editor reads this while somebody types, and the complaint is
 `CheckSource`'s to give. Nothing runs.
+
+## Globals
+
+| | |
+|---|---|
+| `Globals()` | every name on the global object, sorted: the runtime's own, whatever a loaded library installed, and the JavaScript builtins — `Math`, `JSON`, `Date`, `Map`, `Set`, `BigInt`. **A library's and a project's `class` are not in it**, and the next paragraph is why |
+
+`Application.Globals()` answers with **what is on the global object**: `File`,
+`Directory`, `Locale`, `Timer`, `Message`, `Widget` and the rest of the runtime's
+own, whatever a loaded library installed, and the JavaScript builtins — `Math`,
+`JSON`, `Date`, `Map`, `Set`, `BigInt`. That set is the point: a caller asking
+"what may a program write at the top level" wants all of it, and a curated subset
+would be a list to keep.
+
+**A top-level `class` is not in it**, and that is not a gap. `class Foo {}` at the
+top level of a file creates a *lexical binding*, not a property of the global
+object — so `Confirm`, `Chart` and a project's own classes are absent however the
+library is loaded. **A caller that wants those reads the sources**: the IDE's
+completion walks the project and every library its `uses` names, and parses the
+class declarations out with `Application.Symbols`. Two roads because the runtime
+publishes its own through one mechanism and a class through another.
+
+It exists for that reason and no other. The IDE's completion used to keep **a
+hand-written table of fourteen global names**, which was missing about eighteen —
+`Printer.` and `Http.` completed nothing, and nothing said so.
 
 ## Libraries
 

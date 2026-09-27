@@ -1250,7 +1250,71 @@ all is invisible to the check" has a companion worth remembering: a library whos
 members are all statics is *counted* and not *checked*, and the reference pages
 are what check it.
 
-## The declarations existed and nobody got them
+## The IDE completes a name, and it asked nobody
+
+**`Timer.` offered zero entries, and `Timer` was in the IDE's table of
+globals.** That is the whole bug in one line, and both halves of it are a design
+mistake the same repository had already written down twice.
+
+The engine was **dot-driven**: it answered `this.`, `X.` and `Btn1_`, and a
+**bare name not at all** -- which is the ordinary case, because the language is
+bare calls to `File`, `Locale` and `Message` beside the `Control_Event` methods.
+And what it *did* answer for `X.` was `Dictionary.Keys(X)`, which is **empty on
+a class**: a static is a property of the class and not of an object, so the one
+verb that could see a name could not see a single member of it.
+
+So there were two fixes, and **only one of them is in the IDE**:
+
+- **A bare name** is now answered by asking. `Application.Globals()` is what the
+  runtime installed and `Widget.Types()` is its classes -- and a **library's**
+  classes come out of that library's sources, because **a top-level `class` is a
+  lexical binding and not a property of the global object**, so no list of
+  globals could ever contain `Confirm`. **Only the libraries the project declares
+  in `uses`,** and the walk is `Ide.Classes`' own cached `libraries`: the first
+  version asked `Application.Libraries()` and offered the classes of all seven on
+  a project naming one -- `QrView` in a program with no `qr` anywhere in it, which
+  is not a completion list but a list of what somebody else has on their disk. A
+  completion entry is a claim that the name **resolves in this program**, so a
+  second copy of the library search in JavaScript was both wrong and the copy
+  that drifts.
+- **A class's members** are asked with `Widget.Members(type)`, which answers for
+  anything a name resolves to: a widget, a class of rad.js, a class of a library.
+  It reads statics off the constructor and instance members off the prototype
+  because that is where each of them lives.
+
+**And the hand-written table went, and that is the part worth keeping.** It held
+fourteen global names and was missing about eighteen -- `Printer.` and `Http.`
+completed nothing and nothing said so. `Widget.Members` **takes a global object as
+readily as a class**, because the runtime's own lookup does not tell them apart,
+so there is one verb for `File` and for `Confirm` and no third place where a name
+becomes something to walk. **A first version of this wrote a `switch` of twenty-
+seven global names** -- the hand-written list again, in a worse shape, since it
+could not answer a name it did not know out of a hundred and sixty-four.
+
+**And the test that said the bare name worked was calling the provider with an
+empty `before`, which is the mistake this file has now paid for twice in this
+one module.** `Editor_Complete` runs from inside GTK, and `before` is the line
+*up to where the word starts* -- so `const t = Tim` sends `"    const t = "`, and
+a guard that read `before` refused the most ordinary line in the language. **The
+suite was green the whole time**, because the test invented its arguments. The
+case is now asked four ways, and putting the old guard back makes three of them
+fail -- which is the only half of "this is a test" that is not a claim, and the
+rule generalises past completion: **a provider's arguments are the editor's, so a
+test that supplies its own is testing the test.** The correction also broke an
+assertion that had been true for years -- `my_thing` proposes nothing, and making
+the no-dot case answer everything offered it 287 globals -- so the two shapes are
+told apart on the one piece of evidence that separates them, an underscore in the
+word, which is what a half-typed handler looks like.
+
+**`Widget.Members` is a *fifth* verb and the other three keep refusing**, which is
+the load-bearing half: a property grid, a palette and the serialiser all need
+`Widget.PropertyNames("Util")` on an ordinary class to refuse, or the grid offers a
+shape it cannot read. What the refusal left with **no way to be asked** was a
+different question -- *what does this name have* -- and two consumers were asking
+it. One runtime answer unblocked both, which is the argument for it being in the
+runtime rather than in either of them: `tools/typings` was declaring `Timer` **by
+hand** and skipping four classes for exactly this reason.
+
 ## Flatpak, and the packaging step
 
 **One identity runs through the whole chain.** `project.json`'s `id` becomes

@@ -14541,6 +14541,56 @@ function Main() {
         eq("inherited from Object, as `in` was",
            Widget.Member("Button", "toString"), "Method");
 
+        /* **`Members` is the verb that answers where the three above refuse**, and
+         * that is what it was added for. `Timer` is a class in rad.js and the old
+         * verbs say *not a widget class* about it -- so an editor completing
+         * `Timer.` offered nothing while knowing the name, and the declaration
+         * generator was declaring `Timer` by hand. */
+        throws("a class that is not a widget is still refused by PropertyNames",
+               () => Widget.PropertyNames("Timer"));
+        throws("...and by Methods", () => Widget.Methods("Timer"));
+
+        const timer = Widget.Members("Timer");
+        const names = (kind) => timer.filter((m) => m.Kind === kind).map((m) => m.Name);
+        check("Members answers for it anyway",
+              names("Static").includes("After") && names("Static").includes("Every"),
+              JSON.stringify(names("Static")));
+        check("and for its instance members",
+              names("Method").includes("Start"), JSON.stringify(names("Method")));
+
+        /* **And a global that is a bag of functions, through the same verb** --
+         * because the runtime's lookup does not tell a class and an object
+         * apart, and a caller should not have to. */
+        const file = Widget.Members("File");
+        check("a global object is asked the same way",
+              file.some((m) => m.Name === "Save" && m.Kind === "Method"),
+              JSON.stringify(file.slice(0, 4).map((m) => m.Name)));
+        eq("and it refuses a name that is nothing at all",
+           (() => { try { Widget.Members("NoSuchThingHere"); return ""; }
+                    catch (e) { return e.message; } })(),
+           "Members: 'NoSuchThingHere' is not a class");
+        eq("and a number is not a class either",
+           (() => { try { Widget.Members(8); return ""; }
+                    catch (e) { return e.message; } })(),
+           "Members: '8' is not a class");
+
+        /* `Application.Globals()`: what is installed, asked rather than listed. */
+        const globals = Application.Globals();
+        check("the runtime's own globals are on it",
+              globals.includes("File") && globals.includes("Locale") &&
+              globals.includes("Timer") && globals.includes("Widget"),
+              JSON.stringify(globals.filter((g) => g === "File")));
+        check("and the language's builtins are, which is the point",
+              globals.includes("Math") && globals.includes("JSON") &&
+              globals.includes("Date"), JSON.stringify(globals.length));
+        check("and each one once", globals.length === [...new Set(globals)].length,
+              JSON.stringify(globals.length));
+        check("and not one of the hatches the language closed",
+              !globals.includes("globalThis") && !globals.includes("eval") &&
+              !globals.includes("Symbol") && !globals.includes("RegExp"),
+              JSON.stringify(globals.filter((g) =>
+                  ["globalThis","eval","Symbol","RegExp"].includes(g))));
+
         /* Abstract classes answer -- there is no control to make of one, which
          * is exactly what the old probes could not ask. */
         check("an abstract class answers",

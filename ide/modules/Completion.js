@@ -59,10 +59,25 @@ Namespace("Ide");
  * same bargain `EventNames()` made when it retired a hardcoded table of fifteen
  * widget types.
  */
-const COMPLETION_GLOBALS = {
-    Application, Environment, File, Directory, Dialog, Message, Locale,
-    Clipboard, Settings, Timer, Logger, Widget, Record, Field,
-};
+/*
+ * **There is no list here, and that is the whole change.**
+ *
+ * It used to be a table of fourteen global names written by hand, and it was
+ * wrong in the way a hand-written list is always wrong: it was missing about
+ * eighteen (`Printer`, `Hash`, `Text`, `Desktop`, `Exec`, `Http`, `Xml`,
+ * `Database`, `Bytes`, `Decimal`, `Day`, `Time`, `Regex`, `Task`, `Lock`,
+ * `Stopwatch`, `Dictionary`, `AudioPlayer`), so `Printer.` and `Http.` completed
+ * nothing, and nothing would have said so. Worse, **the names in it were not
+ * enough even when they were right**: `Timer` was listed, and `Timer.` still
+ * answered **zero entries**, because `Dictionary.Keys` on a class is empty -- a
+ * static is a property of the class and not of an object.
+ *
+ * Both halves are now asked of the runtime, which is where the answers live:
+ * `Application.Globals()` for what is installed, and `Widget.Members(type)` for
+ * what a class has, which is the verb that answers for a class that is not a
+ * widget. A global's own members still come from `Dictionary.Keys`, and that is
+ * not a second implementation: a global is an object and its keys are its keys.
+ */
 
 /* `this.Btn1.` and `File.` both end in a path; this is what it looks like. */
 const PATH_BEFORE_DOT = /([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\.$/;
@@ -77,6 +92,28 @@ const PATH_BEFORE_DOT = /([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\.$/;
  * keystroke and then stop.
  */
 const HANDLER_WORD = /^([A-Za-z_$][\w$]*)_[\w$]*$/;
+
+/*
+ * **The provider is called from inside GTK, so its arguments arrive the way GTK
+ * builds them and not the way a test would like them** -- and this module already
+ * said the half that matters: `before` is the line *up to where the word starts*.
+ * A bare name inside an ordinary line therefore arrives with that line's own
+ * punctuation on the end of it, and a test that passes `""` proves nothing about
+ * the editor.
+ *
+ * **This has now cost the same bug twice.** The first was `Btn1_`, a
+ * handler-shaped word matched against a line-start pattern, which answered for
+ * exactly one keystroke. The second was a guard that refused a bare name whose
+ * `before` ended in whitespace -- so `const t = Tim`, with `before` of
+ * `"    const t = "`, offered nothing, **and the suite was green throughout**
+ * because the test invented its arguments.
+ *
+ * The rule that covers both: **ask the arguments the way GTK builds them, or the
+ * assertion is a property of the test.** So every case added here is asked the
+ * way the editor asks it, and the correction was checked by putting the old code
+ * back and watching three of the four fail -- which is the only half of "this is
+ * a test" that is not a claim.
+ */
 
 /* A method of the class being edited: four spaces, a name, a bracket. The same
  * shape `FormFiles` writes and reads when it inserts a handler. */
@@ -144,6 +181,7 @@ Ide.Completion = class Completion {
     forget() {
         this.forms.clear();
         this.declared.clear();
+        this._globals = null;
     }
 
     /*
@@ -158,6 +196,14 @@ Ide.Completion = class Completion {
     answer(word, line, column, before) {
         if (!this.ide.project || !this.ide.activeFile) return [];
 
+        /* GTK can hand either of these as nothing: `before` is the text left of
+         * the word and is absent when the word is the first thing on the line,
+         * which is the ordinary case for a bare name. Guarded here rather than
+         * at the one call that noticed, because the next `before` is whatever
+         * GTK sends. */
+        word  = word  || "";
+        before = before || "";
+
         /* `Ok_`, `Ok_Cl`: a handler being written. A local called `my_thing`
          * matches the same shape, so it only answers when the name really is a
          * control -- and falls through to the paths below when it is not. */
@@ -168,7 +214,40 @@ Ide.Completion = class Completion {
         }
 
         const path = PATH_BEFORE_DOT.exec(before);
-        if (!path) return [];
+        if (!path) {
+            /* **No dot: the name itself, and the guard is only that it is a
+             * name.** A handler-shaped word was taken above, and a member
+             * access is the case that does not land here, so what is left is
+             * exactly the ordinary case: `Timer`, `File`, `Confirm` at the start
+             * of an expression, after a space, after `=`, inside a call.
+             *
+             * **Nothing is asked of `before`, and that is the correction.** The
+             * first version refused a word whose `before` ended in whitespace,
+             * on the theory that it was somebody's business -- and `before` is
+             * the line up to where the word *starts*, so `const t = Tim` sends
+             * `"    const t = "` and the most ordinary line in the language was
+             * the one that answered nothing. The test passed throughout,
+             * **because it called `Editor_Complete` with an empty `before`**,
+             * which is precisely the mistake this module's own comment warns
+             * about: made-up arguments are how the `Btn1_` case first passed and
+             * answered nothing in the editor. */
+            /* **One shape is still somebody else's business, and it is decided on
+             * the word rather than on `before`.** `HANDLER_WORD` is a name with
+             * an underscore in it, which is what a handler looks like halfway --
+             * `Btn1_`, `Ok_Cl`. Those fall through to here only when no control
+             * answers, and they must not come back as 287 globals: `my_thing` is
+             * a local being written, and offering every name in the language for
+             * it is noise where a person asked for nothing. So the underscore is
+             * the test, and `before` is not asked at all.
+             *
+             * **And that is an assertion the fix above broke**, which is the
+             * shape of it: making the no-dot case answer everything is what a
+             * name needs and is wrong for a handler, so the two have to be told
+             * apart on the one piece of evidence that distinguishes them. */
+            if (!/[\w$]/.test(word)) return [];
+            if (HANDLER_WORD.test(word)) return [];
+            return this.globals(word);
+        }
 
         const parts = path[1].split(".");
 
@@ -183,23 +262,139 @@ Ide.Completion = class Completion {
             return [];                  /* deeper than the .form can answer */
         }
 
-        if (parts.length === 1 && parts[0] in COMPLETION_GLOBALS)
-            return this.membersOf(COMPLETION_GLOBALS[parts[0]]);
-
-        /* A namespace of this project: `Ide.` in the IDE's own sources, and
-         * whatever the project declared in anybody else's. Read out of the code
-         * rather than from an object, because the project is not loaded here. */
+        /*
+         * One name, four things it can be, and the order is the order of how
+         * sure we are -- which is the whole of the design of this function.
+         *
+         * **A class or a global first, and both through one verb.**
+         * `Widget.Members` answers for a class that is not a widget (`Timer`,
+         * `Package`, `QrCode`) and for a global that is a bag of functions
+         * (`File`, `Locale`, `Printer`), so there is one road and not two, and a
+         * name that is neither falls through to the two below. It had to be that
+         * verb and not `Dictionary.Keys`: **`Dictionary.Keys` on a class is
+         * empty**, because a static is a property of the class and not of an
+         * object -- so `Timer.` offered nothing at all while `Timer` sat in the
+         * hand-written table of globals, known and useless.
+         *
+         * **Then a namespace of this project**, read out of the code rather than
+         * from an object, because the project is not loaded here. **Then a local
+         * this file built**: `const btn = new Button(); btn.`
+         */
         if (parts.length === 1) {
-            const members = this.ide.classes.namespaceMembers(parts[0]);
-            if (members.length) return members.map((m) => ({ Text: m, Detail: "" }));
+            const members = this.membersOfClass2(parts[0]);
+            if (members.length) return members;
 
-            /* A local this file built: `const btn = new Button(); btn.` */
+            const ns = this.ide.classes.namespaceMembers(parts[0]);
+            if (ns.length) return ns.map((m) => ({ Text: m, Detail: "" }));
+
             return this.membersOfDeclared(parts[0]);
         }
 
         /* A path this project says nothing about. The honest answer is nothing
          * at all, rather than a guess dressed as knowledge. */
         return [];
+    }
+
+    /*
+     * A bare name: what a program may write at the top level.
+     *
+     * **This is the case that was missing entirely**, and it is the ordinary
+     * one: a file whose first line is `const timer = Timer.After(300, ...);` got
+     * nothing for `Timer`, and the engine was dot-driven, so every name in a
+     * program was invisible until a `.` was typed. Nothing about a RAD suggests
+     * that -- the whole language is `Control_Event` methods and bare calls to
+     * `File`, `Locale` and `Message`.
+     *
+     * Four answers, and none of them a list kept here:
+     *
+     * - **What the runtime installed**, from `Application.Globals()`. That
+     *   includes the JavaScript builtins -- `Math`, `JSON`, `Date`, `Map` --
+     *   which is right: they are what a program may write, and a curated subset
+     *   would be the hand-written list this replaced.
+     * - **The widget classes**, from `Widget.Types()`.
+     * - **The classes of the libraries the project `uses`**, and of the project
+     *   itself, out of `Application.Symbols` over the sources. **A top-level
+     *   `class` is a lexical binding and not a property of the global object**,
+     *   so `Globals()` cannot see `Confirm` however the library is loaded -- read
+     *   and asked, which is the same road `Ide.Classes` already walks.
+     *
+     * **Scanned once per project, not once per word.** The list cannot change
+     * while a word is being typed, and the walk is a project tree plus every
+     * library's sources -- so keying the cache on the word rebuilt it once per
+     * new word, on the path GTK runs on every keystroke. `forget()` is the hook
+     * a project change already goes through, which is the right lifetime for a
+     * question whose answer is a property of the project.
+     */
+    globals(word) {
+        if (!this._globals) this._globals = this.collectGlobals();
+        const out = [];
+        for (const name of this._globals)
+            if (name !== word) out.push({ Text: name, Detail: "global" });
+        return out;
+    }
+
+    collectGlobals() {
+        const out = [];
+        for (const name of Application.Globals()) if (!out.includes(name)) out.push(name);
+        for (const name of Widget.Types())          if (!out.includes(name)) out.push(name);
+        for (const name of this.classNames())      if (!out.includes(name)) out.push(name);
+        return out.sort();
+    }
+
+    /* Every class the project declares and every class of every library it
+     * `uses`, read out of the sources with the parser. */
+    classNames() {
+        const out = [];
+        const take = (src) => {
+            for (const sym of Application.Symbols(src))
+                if (sym.Kind === "Class" && !out.includes(sym.Name)) out.push(sym.Name);
+        };
+
+        const root = this.ide.project;
+        if (root) {
+            for (const name of Directory.List(root)) {
+                if (name.startsWith(".")) continue;
+                const path = File.Join(root, name);
+                if (File.IsDir(path)) {
+                    const walk = (dir) => {
+                        for (const f of Directory.List(dir)) {
+                            if (f.startsWith(".")) continue;
+                            const p = File.Join(dir, f);
+                            if (File.IsDir(p)) walk(p);
+                            else if (f.endsWith(".js")) take(File.Load(p));
+                        }
+                    };
+                    walk(path);
+                } else if (name.endsWith(".js")) {
+                    take(File.Load(path));
+                }
+            }
+        }
+
+        /* **Only the libraries this project `uses`, and the walk is not written
+         * here.** The first version asked `Application.Libraries()` -- every
+         * library installed on the machine -- so a project that names one
+         * library was offered every class of all seven: `QrView` in a program
+         * that has no `qr` anywhere in it, which is not a completion list, it is
+         * a list of what someone else has on their disk.
+         *
+         * And the answer to *which* libraries is not a new walk either:
+         * `Ide.Classes.resolveLibraries()` already reads the manifest and
+         * resolves each name, and the rule this file keeps re-learning is that a
+         * second copy of a search in JavaScript is the copy that goes stale --
+         * the runtime's `LibraryPath` is what a program actually loads, and this
+         * would have been a third answer to "where is a library" beside it.
+         *
+         * **And it is `Ide.Classes`' own cache, not a call to
+         * `resolveLibraries()`.** That is a manifest read and a filesystem
+         * search per library, and the cache is already there, already invalidated
+         * when the project changes -- which is the same lifetime the answer has. */
+        for (const { dir } of this.ide.classes.libraries || []) {
+            for (const f of Directory.List(dir)) {
+                if (f.endsWith(".js")) take(File.Load(File.Join(dir, f)));
+            }
+        }
+        return out;
     }
 
     /* --- what the file itself declares --------------------------------------- */
@@ -408,10 +603,35 @@ Ide.Completion = class Completion {
         return events.map((e) => ({ Text: `${name}_${e}`, Detail: type }));
     }
 
-    membersOf(global) {
-        return Dictionary.Keys(global).sort().map((k) => ({
-            Text: k, Detail: typeof global[k] === "function" ? "()" : "",
-        }));
+    /*
+     * The members of a **class**, asked of the runtime.
+     *
+     * `Widget.Members(type)` answers for any class a name resolves to -- a
+     * widget, a class of rad.js like `Timer`, a class of a library, a class of
+     * the project -- and gives each one a kind, which is what the popover shows
+     * in its right-hand column. `Widget.Methods` was the wrong verb here for a
+     * reason worth keeping: it walks the prototype, so it holds instance methods
+     * and **no static**, and every library verb of any consequence is a static.
+     *
+     * Cached per name for the length of one popover, and reset by the same
+     * narrow-to-wider rule the method scan uses.
+     */
+    membersOfClass2(name) {
+        if (!this._members || this._membersFor !== name) {
+            this._membersFor = name;
+            this._members    = [];
+
+            let found = null;
+            try { found = Widget.Members(name); } catch (e) { found = null; }
+            for (const m of found || []) {
+                const kind = m.Kind;
+                this._members.push({
+                    Text: kind === "Method" || kind === "Static" ? m.Name : m.Name,
+                    Detail: kind === "Method" ? "()" : (kind === "Static" ? "static" : ""),
+                });
+            }
+        }
+        return this._members;
     }
 
     /*

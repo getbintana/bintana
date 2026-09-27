@@ -1054,6 +1054,47 @@ static JSValue js_library_path(JSContext *ctx, JSValueConst this_val,
 static JSValue js_libraries(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv);
 
+/* The global object, as a real property enumeration.
+ *
+ * **The point of it is that nothing else can answer.** The globals are installed
+ * one `JS_SetPropertyStr` at a time across this file and four others, and the
+ * very same shape builds half the runtime's *return values* -- `Exec`'s handle,
+ * `File.Info`'s answer, a table row -- so a list kept beside the installs would
+ * be a second list to drift, and the one that drifts is the one no program runs.
+ * `tests/api/Check.js` reads those same call sites out of the C to hold the
+ * documentation to the same surface; this is the same answer, asked at run time,
+ * for a program that wants to know rather than a check that wants to prove.
+ *
+ * It is deliberately **not** a curated list of the runtime's own names: the answer
+ * is what is on the global object, which is also `Math`, `JSON`, `Date`, `Map`,
+ * `Timer`, `Confirm` and whatever a library installed. A completion engine wants
+ * all of them, and a caller that wanted only the runtime's own can ask
+ * `Application.Libraries()` beside it.
+ */
+static JSValue js_globals(JSContext *ctx, JSValueConst this_val,
+                          int argc, JSValueConst *argv)
+{
+    JSValue     global = JS_GetGlobalObject(ctx);
+    JSPropertyEnum *tab = NULL;
+    uint32_t    len = 0;
+    JSValue     out  = JS_NewArray(ctx);
+    uint32_t    n    = 0;
+
+    if (JS_GetOwnPropertyNames(ctx, &tab, &len, global, JS_GPN_STRING_MASK) == 0) {
+        for (uint32_t i = 0; i < len; i++) {
+            const char *name = JS_AtomToCString(ctx, tab[i].atom);
+            /* `globalThis` went with the hatches, and so did every name they
+             * took: what is left here is what a program may actually write. */
+            if (name && *name)
+                JS_SetPropertyUint32(ctx, out, n++, JS_NewString(ctx, name));
+            if (name) JS_FreeCString(ctx, name);
+        }
+        JS_FreePropertyEnum(ctx, tab, len);
+    }
+    JS_FreeValue(ctx, global);
+    return out;
+}
+
 /* Answers false when a library carried a native plugin that cannot be used, in
  * which case the caller stops the program. See bta_plugins_load. */
 static bool install_globals(BtaApp *app)
@@ -1205,6 +1246,9 @@ static bool install_globals(BtaApp *app)
      */
     JS_SetPropertyStr(ctx, application, "Libraries",
                       JS_NewCFunction(ctx, js_libraries, "Libraries", 1));
+    /* Globals() */
+    JS_SetPropertyStr(ctx, application, "Globals",
+                      JS_NewCFunction(ctx, js_globals, "Globals", 0));
 
     /* Where the runtime binary lives, so a project can re-invoke it. */
     char *exe = bta_exe_path();

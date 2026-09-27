@@ -83,6 +83,7 @@ declare class Widget {
     static TextProperties(type: string): string[];
     static PropertyOptions(type: string, name: string): string[] | null;
     static Member(type: string, name: string): string;
+    static Members(type: string): { Name: string; Kind: string }[];
     static Signature(type: string, name: string): string | null;
     static EventSignature(type: string, name: string): string | null;
 }
@@ -706,8 +707,8 @@ declare class SourceEditor extends Widget {
     Marks(kind?: any): any;
     OffsetAt(line: any, column?: any): any;
     Redo(): any;
-    Replace(with: any): any;
-    ReplaceAll(with: any): any;
+    Replace(text: any): any;
+    ReplaceAll(text: any): any;
     Search(text: any, options?: { CaseSensitive?: any; WholeWord?: any; Regex?: any }): any;
     Select(line: any, column?: any, length?: any): any;
     ShowCompletion(): any;
@@ -827,6 +828,7 @@ declare const Application: {
     DecorationLayout: any;
     Directory: any;
     Executable: any;
+    Globals(...values: any[]): any;
     HasCommand(...values: any[]): any;
     HasIcon(...values: any[]): any;
     Icons(...values: any[]): any;
@@ -1242,57 +1244,1125 @@ declare class XmlNode {
     Text: any;
 }
 
-declare class Timer {
-    constructor(milliseconds?: number, repeat?: boolean);
-    Interval: number;
-    Repeat: boolean;
-    Enabled: boolean;
-    Tick: any;
-    Start(): void;
-    Stop(): void;
-}
-
-declare class Stopwatch {
-    constructor();
-    Elapsed: number;
-    Start(): void;
-    Stop(): void;
-    Reset(): void;
-}
-
-declare class Regex {
-    constructor(pattern: string, options?: { IgnoreCase?: boolean; Multiline?: boolean; DotAll?: boolean });
-    static Escape(text: string): string;
-    IsMatch(text: string): boolean;
-    Match(text: string): any;
-    Matches(text: string): any[];
-    Replace(text: string, by: string): string;
-    Split(text: string): string[];
-}
-
 /*
- * A value and not a class, which is the one declaration here that is shaped by
- * TypeScript rather than by Bintana: `Record<K, V>` is a type alias in
- * `lib.es5.d.ts`, so `declare class Record` writes a *type* of that name too
- * and both files lose -- "Duplicate identifier 'Record'", measured. A const
- * with a construct signature declares the value alone, so `new Record()` is
- * this one and `Record<string, number>` stays TypeScript's.
+ * **Empty, and it used not to be.** The Timer class was declared here by hand,
+ * because it lives in rad.js and nothing answered it: PropertyNames refuses a
+ * class that is not a widget, and there was no other road. It went stale the way
+ * a hand-written list does -- Timer.After was missing, so an editor reported that
+ * it did not exist, on the verb the whole language story leans on for having
+ * replaced setTimeout.
+ *
+ * The generator walks the libraries now, and Widget.Members answers for a class of
+ * rad.js the same as for anything else, so this has nothing left to hold. It
+ * stays as the place for a class that *still* cannot be reached -- two words is
+ * cheaper than the next stale row.
  */
+
+/* ------------------------------------------------------------------ *
+/* The libraries that ship with the runtime, by the same introspection. */
+/* A project reaches one through `uses` in its project.json.             */
+/* Parameters are not declared: no way to reach a library class's own   */
+/* signatures exists yet, and a name is worth more than a guess.        */
+/* ------------------------------------------------------------------ */
+
+/** runtime/js/Timer. Every member: docs/reference/globals/Timer.md */
+declare class Timer {
+    /**  */
+    Enabled: any | null;
+    Start(...values: any[]): void;
+    Stop(...values: any[]): void;
+    Once(...values: any[]): void;
+    static After(...values: any[]): any;
+    static Every(...values: any[]): any;
+}
+
+/** runtime/js/Stopwatch. Every member: docs/reference/globals/Stopwatch.md */
+declare class Stopwatch {
+    /**  */
+    Running: any | null;
+    /**  */
+    Elapsed: any | null;
+    Start(...values: any[]): void;
+    Stop(...values: any[]): void;
+    Reset(...values: any[]): void;
+}
+
+/** runtime/js/Match. Every member: docs/reference/globals/Match.md */
+declare class Match {
+    Group(...values: any[]): void;
+}
+
+/** runtime/js/Regex. Every member: docs/reference/globals/Regex.md */
+declare class Regex {
+    /**  */
+    Pattern: any | null;
+    IsMatch(...values: any[]): void;
+    Match(...values: any[]): void;
+    Matches(...values: any[]): void;
+    Replace(...values: any[]): void;
+    Split(...values: any[]): void;
+    static Escape(...values: any[]): any;
+}
+
+/** runtime/js/Record. Every member: docs/reference/globals/Record.md */
 declare const Record: {
-    new (fields?: any): any;
-    prototype: any;
+    new (...values: any[]): any;
+    Load(...values: any[]): any;
+    LoadXml(...values: any[]): any;
+    Apply(...values: any[]): any;
+    Serialize(...values: any[]): any;
+    Clone(...values: any[]): any;
+    Validate(...values: any[]): any;
+    PropertyNames(...values: any[]): any;
+    PropertyOptions(...values: any[]): any;
+    PropertyInfo(...values: any[]): any;
+    Dump(...values: any[]): any;
+    ToXml(...values: any[]): any;
+    SaveXml(...values: any[]): any;
 };
 
-declare const Field: any;
-declare const Database: any;
-declare const Exec: any;
-declare const Table: any;
-declare const BTA_VERSION: string;
+/** runtime/js/Table. Every member: docs/reference/globals/Table.md */
+declare class Table {
+    /**  */
+    Name: any | null;
+    /**  */
+    Connection: any | null;
+    /**  */
+    Shape: any | null;
+    Where(...values: any[]): void;
+    All(...values: any[]): void;
+    Find(...values: any[]): void;
+    Count(...values: any[]): void;
+    Insert(...values: any[]): void;
+    Update(...values: any[]): void;
+    Save(...values: any[]): void;
+    Delete(...values: any[]): void;
+}
 
-declare function Namespace(path: string): any;
-declare function print(...values: any[]): void;
-declare function monotonic(): number;
-declare function setTimeout(fn: () => void, ms?: number): number;
-declare function clearTimeout(id: number): void;
-declare function setInterval(fn: () => void, ms?: number): number;
-declare function clearInterval(id: number): void;
+/** charts/Chart. Every member: docs/reference/libraries/Chart.md */
+declare class Chart extends Component {
+    /** One of "Bar" | "Line" | "Area" | "Pie" | "Doughnut". `Bar` by default. */
+    Type: string | null;
+    /**  `` by default. */
+    Series: any[] | null;
+    /**  `` by default. */
+    Labels: any[] | null;
+    /**  `` by default. */
+    Marks: any[] | null;
+    /** One of "None" | "Top" | "Bottom". `Bottom` by default. */
+    Legend: string | null;
+    /**  `true` by default. */
+    Grid: boolean | null;
+    /**  `false` by default. */
+    Stacked: boolean | null;
+    /**  `false` by default. */
+    ShowValues: boolean | null;
+    /**  */
+    Title: string | null;
+    /**  */
+    YMin: string | null;
+    /**  */
+    YMax: string | null;
+    /**  `0` by default. */
+    Decimals: number | null;
+    /**  `true` by default. */
+    Antialias: boolean | null;
+    /**  `false` by default. */
+    Curved: boolean | null;
+    /**  `true` by default. */
+    Reduced: boolean | null;
+    /**  `0` by default. */
+    From: number | null;
+    /**  `0` by default. */
+    Count: number | null;
+    /**  `false` by default. */
+    Zoomable: boolean | null;
+    /** One of "Fixed" | "Horizontal" | "Vertical". `Vertical` by default. */
+    Arrangement: string | null;
+    /**  `Order` by default. */
+    Placement: string | null;
+    /**  `0` by default. */
+    Spacing: number | null;
+    /**  `false` by default. */
+    Homogeneous: boolean | null;
+    /**  `true` by default. */
+    Anchored: boolean | null;
+    /**  `[object Object]` by default. */
+    Children: any[] | null;
+    /**  `Form` by default. */
+    Name: string | null;
+    /**  `0` by default. */
+    X: number | null;
+    /**  `0` by default. */
+    Y: number | null;
+    /**  `320` by default. */
+    Width: number | null;
+    /**  `220` by default. */
+    Height: number | null;
+    /**  `0` by default. */
+    MinWidth: number | null;
+    /**  `0` by default. */
+    MinHeight: number | null;
+    /**  `true` by default. */
+    Visible: boolean | null;
+    /**  `true` by default. */
+    Enabled: boolean | null;
+    /**  */
+    Action: string | null;
+    /**  `false` by default. */
+    Focusable: boolean | null;
+    /**  `false` by default. */
+    Focused: boolean | null;
+    /**  `false` by default. */
+    Expand: boolean | null;
+    /**  `false` by default. */
+    HExpand: boolean | null;
+    /**  `false` by default. */
+    VExpand: boolean | null;
+    /** One of "Auto" | "Start" | "End" | "Center" | "Fill". `Auto` by default. */
+    HAlign: string | null;
+    /** One of "Auto" | "Start" | "End" | "Center" | "Fill". `Auto` by default. */
+    VAlign: string | null;
+    /**  `1` by default. */
+    ColumnSpan: number | null;
+    /**  `0` by default. */
+    TabIndex: number | null;
+    /**  `0` by default. */
+    Margin: number | null;
+    /**  */
+    Style: string | null;
+    /**  */
+    Background: string | null;
+    /**  */
+    Foreground: string | null;
+    /**  */
+    Font: string | null;
+    /**  */
+    Radius: string | null;
+    /**  */
+    Padding: string | null;
+    /**  */
+    Shortcut: string | null;
+    /**  */
+    Shadow: string | null;
+    /**  */
+    Border: string | null;
+    /**  `1` by default. */
+    FontScale: number | null;
+    /**  `1` by default. */
+    Opacity: number | null;
+    /**  `false` by default. */
+    Dark: boolean | null;
+    /**  */
+    Tooltip: string | null;
+    /** One of "Auto" | "Arrow" | "Hand" | "Grab" | "Grabbing" | "Text" | "VerticalText" | "Wait" | "Progress" | "Help" | "Crosshair" | "Cell" | "ContextMenu" | "Move" | "Scroll" | "Copy" | "Link" | "NoDrop" | "NotAllowed" | "ZoomIn" | "ZoomOut" | "None" | "ResizeHorizontal" | "ResizeVertical" | "ResizeTopLeft" | "ResizeTopRight" | "ResizeColumn" | "ResizeRow". `Auto` by default. */
+    Cursor: string | null;
+    /**  */
+    DragData: string | null;
+    /**  `false` by default. */
+    AcceptDrop: boolean | null;
+    /**  `false` by default. */
+    AcceptFiles: boolean | null;
+    /**  */
+    Menu: any | null;
+    /**  */
+    Item: any | null;
+    Refresh(...values: any[]): void;
+    Save(...values: any[]): void;
+    Canvas_Draw(...values: any[]): void;
+    Canvas_MouseWheel(...values: any[]): void;
+    Canvas_MouseMove(...values: any[]): void;
+    Canvas_MouseLeave(...values: any[]): void;
+    Canvas_MouseDown(...values: any[]): void;
+    Canvas_MouseUp(...values: any[]): void;
+    Canvas_DblClick(...values: any[]): void;
+    FocusNext(...values: any[]): void;
+    FocusPrevious(...values: any[]): void;
+    Reorder(...values: any[]): void;
+    PickAt(...values: any[]): void;
+    ContainerAt(...values: any[]): void;
+    LocalPoint(...values: any[]): void;
+    Add(...values: any[]): void;
+    Clear(...values: any[]): void;
+    AddNode(...values: any[]): void;
+    BuildChildren(...values: any[]): void;
+    PopupMenu(...values: any[]): void;
+    Show(...values: any[]): void;
+    Hide(...values: any[]): void;
+    Move(...values: any[]): void;
+    Resize(...values: any[]): void;
+    SizeRequest(...values: any[]): void;
+    SetFocus(...values: any[]): void;
+    Delete(...values: any[]): void;
+    Emit(...values: any[]): void;
+    On(...values: any[]): void;
+    OriginIn(...values: any[]): void;
+    Bounds(...values: any[]): void;
+    PropertyOptions(...values: any[]): void;
+    TextProperties(...values: any[]): void;
+    EventNames(...values: any[]): void;
+    StyleRule(...values: any[]): void;
+    CssNode(...values: any[]): void;
+    Remove(...values: any[]): void;
+    Raise(...values: any[]): void;
+    Lower(...values: any[]): void;
+    PropertyNames(...values: any[]): void;
+    Serialize(...values: any[]): void;
+    Dump(...values: any[]): void;
+    Apply(...values: any[]): void;
+    Declared(...values: any[]): void;
+    Fill(...values: any[]): void;
+    SetItem(...values: any[]): void;
+    SetDesign(...values: any[]): void;
+    DesignValue(...values: any[]): void;
+}
+
+/** dialog/AskText. Every member: docs/reference/libraries/AskText.md */
+declare class AskText extends Form {
+    /**  */
+    Text: string | null;
+    /**  */
+    Icon: string | null;
+    /**  `false` by default. */
+    Modal: boolean | null;
+    /**  */
+    DefaultButton: any | null;
+    /**  `[object Object]` by default. */
+    CancelButton: any | null;
+    /**  `false` by default. */
+    Resizable: boolean | null;
+    /**  `false` by default. */
+    Maximized: boolean | null;
+    /**  `false` by default. */
+    FullScreen: boolean | null;
+    /**  `false` by default. */
+    HideOnClose: boolean | null;
+    /**  */
+    Caption: string | null;
+    /**  `[object Object],[object Object],[object Object],[object Object],[object Object]` by default. */
+    Controls: any[] | null;
+    /**  `` by default. */
+    Menus: any[] | null;
+    /**  `` by default. */
+    Actions: any[] | null;
+    /** One of "Fixed" | "Horizontal" | "Vertical". `Fixed` by default. */
+    Arrangement: string | null;
+    /**  `Coordinates` by default. */
+    Placement: string | null;
+    /**  `0` by default. */
+    Spacing: number | null;
+    /**  `false` by default. */
+    Homogeneous: boolean | null;
+    /**  `true` by default. */
+    Anchored: boolean | null;
+    /**  `[object Object],[object Object],[object Object],[object Object],[object Object]` by default. */
+    Children: any[] | null;
+    /**  `Form` by default. */
+    Name: string | null;
+    /**  `0` by default. */
+    X: number | null;
+    /**  `0` by default. */
+    Y: number | null;
+    /**  `380` by default. */
+    Width: number | null;
+    /**  `140` by default. */
+    Height: number | null;
+    /**  `0` by default. */
+    MinWidth: number | null;
+    /**  `0` by default. */
+    MinHeight: number | null;
+    /**  `false` by default. */
+    Visible: boolean | null;
+    /**  `true` by default. */
+    Enabled: boolean | null;
+    /**  */
+    Action: string | null;
+    /**  `false` by default. */
+    Focusable: boolean | null;
+    /**  `false` by default. */
+    Focused: boolean | null;
+    /**  `false` by default. */
+    Expand: boolean | null;
+    /**  `false` by default. */
+    HExpand: boolean | null;
+    /**  `false` by default. */
+    VExpand: boolean | null;
+    /** One of "Auto" | "Start" | "End" | "Center" | "Fill". `Auto` by default. */
+    HAlign: string | null;
+    /** One of "Auto" | "Start" | "End" | "Center" | "Fill". `Auto` by default. */
+    VAlign: string | null;
+    /**  `1` by default. */
+    ColumnSpan: number | null;
+    /**  `0` by default. */
+    TabIndex: number | null;
+    /**  `0` by default. */
+    Margin: number | null;
+    /**  */
+    Style: string | null;
+    /**  */
+    Background: string | null;
+    /**  */
+    Foreground: string | null;
+    /**  */
+    Font: string | null;
+    /**  */
+    Radius: string | null;
+    /**  */
+    Padding: string | null;
+    /**  */
+    Shortcut: string | null;
+    /**  */
+    Shadow: string | null;
+    /**  */
+    Border: string | null;
+    /**  `1` by default. */
+    FontScale: number | null;
+    /**  `1` by default. */
+    Opacity: number | null;
+    /**  `false` by default. */
+    Dark: boolean | null;
+    /**  */
+    Tooltip: string | null;
+    /** One of "Auto" | "Arrow" | "Hand" | "Grab" | "Grabbing" | "Text" | "VerticalText" | "Wait" | "Progress" | "Help" | "Crosshair" | "Cell" | "ContextMenu" | "Move" | "Scroll" | "Copy" | "Link" | "NoDrop" | "NotAllowed" | "ZoomIn" | "ZoomOut" | "None" | "ResizeHorizontal" | "ResizeVertical" | "ResizeTopLeft" | "ResizeTopRight" | "ResizeColumn" | "ResizeRow". `Auto` by default. */
+    Cursor: string | null;
+    /**  */
+    DragData: string | null;
+    /**  `false` by default. */
+    AcceptDrop: boolean | null;
+    /**  `false` by default. */
+    AcceptFiles: boolean | null;
+    /**  */
+    Menu: any | null;
+    /**  */
+    Item: any | null;
+    BtnOk_Click(...values: any[]): void;
+    BtnCancel_Click(...values: any[]): void;
+    Show(...values: any[]): void;
+    Close(...values: any[]): void;
+    Center(...values: any[]): void;
+    Minimize(...values: any[]): void;
+    Serialize(...values: any[]): void;
+    SaveForm(...values: any[]): void;
+    FocusNext(...values: any[]): void;
+    FocusPrevious(...values: any[]): void;
+    Reorder(...values: any[]): void;
+    PickAt(...values: any[]): void;
+    ContainerAt(...values: any[]): void;
+    LocalPoint(...values: any[]): void;
+    Add(...values: any[]): void;
+    Clear(...values: any[]): void;
+    AddNode(...values: any[]): void;
+    BuildChildren(...values: any[]): void;
+    PopupMenu(...values: any[]): void;
+    Hide(...values: any[]): void;
+    Move(...values: any[]): void;
+    Resize(...values: any[]): void;
+    SizeRequest(...values: any[]): void;
+    SetFocus(...values: any[]): void;
+    Delete(...values: any[]): void;
+    Emit(...values: any[]): void;
+    On(...values: any[]): void;
+    OriginIn(...values: any[]): void;
+    Bounds(...values: any[]): void;
+    PropertyOptions(...values: any[]): void;
+    TextProperties(...values: any[]): void;
+    EventNames(...values: any[]): void;
+    StyleRule(...values: any[]): void;
+    CssNode(...values: any[]): void;
+    Remove(...values: any[]): void;
+    Raise(...values: any[]): void;
+    Lower(...values: any[]): void;
+    PropertyNames(...values: any[]): void;
+    Dump(...values: any[]): void;
+    Apply(...values: any[]): void;
+    Declared(...values: any[]): void;
+    Fill(...values: any[]): void;
+    SetItem(...values: any[]): void;
+    SetDesign(...values: any[]): void;
+    DesignValue(...values: any[]): void;
+    static Prompt(...values: any[]): any;
+}
+
+/** dialog/Confirm. Every member: docs/reference/libraries/Confirm.md */
+declare class Confirm extends Form {
+    /**  */
+    Text: string | null;
+    /**  */
+    Icon: string | null;
+    /**  `false` by default. */
+    Modal: boolean | null;
+    /**  */
+    DefaultButton: any | null;
+    /**  `[object Object]` by default. */
+    CancelButton: any | null;
+    /**  `false` by default. */
+    Resizable: boolean | null;
+    /**  `false` by default. */
+    Maximized: boolean | null;
+    /**  `false` by default. */
+    FullScreen: boolean | null;
+    /**  `false` by default. */
+    HideOnClose: boolean | null;
+    /**  */
+    Caption: string | null;
+    /**  `[object Object],[object Object],[object Object]` by default. */
+    Controls: any[] | null;
+    /**  `` by default. */
+    Menus: any[] | null;
+    /**  `` by default. */
+    Actions: any[] | null;
+    /** One of "Fixed" | "Horizontal" | "Vertical". `Fixed` by default. */
+    Arrangement: string | null;
+    /**  `Coordinates` by default. */
+    Placement: string | null;
+    /**  `0` by default. */
+    Spacing: number | null;
+    /**  `false` by default. */
+    Homogeneous: boolean | null;
+    /**  `true` by default. */
+    Anchored: boolean | null;
+    /**  `[object Object],[object Object],[object Object]` by default. */
+    Children: any[] | null;
+    /**  `Form` by default. */
+    Name: string | null;
+    /**  `0` by default. */
+    X: number | null;
+    /**  `0` by default. */
+    Y: number | null;
+    /**  `400` by default. */
+    Width: number | null;
+    /**  `150` by default. */
+    Height: number | null;
+    /**  `0` by default. */
+    MinWidth: number | null;
+    /**  `0` by default. */
+    MinHeight: number | null;
+    /**  `false` by default. */
+    Visible: boolean | null;
+    /**  `true` by default. */
+    Enabled: boolean | null;
+    /**  */
+    Action: string | null;
+    /**  `false` by default. */
+    Focusable: boolean | null;
+    /**  `false` by default. */
+    Focused: boolean | null;
+    /**  `false` by default. */
+    Expand: boolean | null;
+    /**  `false` by default. */
+    HExpand: boolean | null;
+    /**  `false` by default. */
+    VExpand: boolean | null;
+    /** One of "Auto" | "Start" | "End" | "Center" | "Fill". `Auto` by default. */
+    HAlign: string | null;
+    /** One of "Auto" | "Start" | "End" | "Center" | "Fill". `Auto` by default. */
+    VAlign: string | null;
+    /**  `1` by default. */
+    ColumnSpan: number | null;
+    /**  `0` by default. */
+    TabIndex: number | null;
+    /**  `0` by default. */
+    Margin: number | null;
+    /**  */
+    Style: string | null;
+    /**  */
+    Background: string | null;
+    /**  */
+    Foreground: string | null;
+    /**  */
+    Font: string | null;
+    /**  */
+    Radius: string | null;
+    /**  */
+    Padding: string | null;
+    /**  */
+    Shortcut: string | null;
+    /**  */
+    Shadow: string | null;
+    /**  */
+    Border: string | null;
+    /**  `1` by default. */
+    FontScale: number | null;
+    /**  `1` by default. */
+    Opacity: number | null;
+    /**  `false` by default. */
+    Dark: boolean | null;
+    /**  */
+    Tooltip: string | null;
+    /** One of "Auto" | "Arrow" | "Hand" | "Grab" | "Grabbing" | "Text" | "VerticalText" | "Wait" | "Progress" | "Help" | "Crosshair" | "Cell" | "ContextMenu" | "Move" | "Scroll" | "Copy" | "Link" | "NoDrop" | "NotAllowed" | "ZoomIn" | "ZoomOut" | "None" | "ResizeHorizontal" | "ResizeVertical" | "ResizeTopLeft" | "ResizeTopRight" | "ResizeColumn" | "ResizeRow". `Auto` by default. */
+    Cursor: string | null;
+    /**  */
+    DragData: string | null;
+    /**  `false` by default. */
+    AcceptDrop: boolean | null;
+    /**  `false` by default. */
+    AcceptFiles: boolean | null;
+    /**  */
+    Menu: any | null;
+    /**  */
+    Item: any | null;
+    BtnAccept_Click(...values: any[]): void;
+    BtnCancel_Click(...values: any[]): void;
+    Show(...values: any[]): void;
+    Close(...values: any[]): void;
+    Center(...values: any[]): void;
+    Minimize(...values: any[]): void;
+    Serialize(...values: any[]): void;
+    SaveForm(...values: any[]): void;
+    FocusNext(...values: any[]): void;
+    FocusPrevious(...values: any[]): void;
+    Reorder(...values: any[]): void;
+    PickAt(...values: any[]): void;
+    ContainerAt(...values: any[]): void;
+    LocalPoint(...values: any[]): void;
+    Add(...values: any[]): void;
+    Clear(...values: any[]): void;
+    AddNode(...values: any[]): void;
+    BuildChildren(...values: any[]): void;
+    PopupMenu(...values: any[]): void;
+    Hide(...values: any[]): void;
+    Move(...values: any[]): void;
+    Resize(...values: any[]): void;
+    SizeRequest(...values: any[]): void;
+    SetFocus(...values: any[]): void;
+    Delete(...values: any[]): void;
+    Emit(...values: any[]): void;
+    On(...values: any[]): void;
+    OriginIn(...values: any[]): void;
+    Bounds(...values: any[]): void;
+    PropertyOptions(...values: any[]): void;
+    TextProperties(...values: any[]): void;
+    EventNames(...values: any[]): void;
+    StyleRule(...values: any[]): void;
+    CssNode(...values: any[]): void;
+    Remove(...values: any[]): void;
+    Raise(...values: any[]): void;
+    Lower(...values: any[]): void;
+    PropertyNames(...values: any[]): void;
+    Dump(...values: any[]): void;
+    Apply(...values: any[]): void;
+    Declared(...values: any[]): void;
+    Fill(...values: any[]): void;
+    SetItem(...values: any[]): void;
+    SetDesign(...values: any[]): void;
+    DesignValue(...values: any[]): void;
+    static Ask(...values: any[]): any;
+}
+
+/** markdown/Markdown. Every member: docs/reference/libraries/Markdown.md */
+declare class Markdown extends Component {
+    /**  */
+    Text: string | null;
+    /**  */
+    Path: string | null;
+    /**  */
+    BaseFont: string | null;
+    /**  */
+    CodeFont: string | null;
+    /**  `0` by default. */
+    MaxWidth: number | null;
+    /**  `24` by default. */
+    Margins: number | null;
+    /** One of "A4" | "Letter" | "A5". `A4` by default. */
+    Paper: string | null;
+    /**  `0` by default. */
+    Scroll: number | null;
+    /**  `0` by default. */
+    ScrollMax: number | null;
+    /**  `48` by default. */
+    ContentHeight: number | null;
+    /**  `` by default. */
+    Headings: any[] | null;
+    /**  */
+    Selection: string | null;
+    /** One of "Fixed" | "Horizontal" | "Vertical". `Vertical` by default. */
+    Arrangement: string | null;
+    /**  `Order` by default. */
+    Placement: string | null;
+    /**  `0` by default. */
+    Spacing: number | null;
+    /**  `false` by default. */
+    Homogeneous: boolean | null;
+    /**  `true` by default. */
+    Anchored: boolean | null;
+    /**  `[object Object]` by default. */
+    Children: any[] | null;
+    /**  `Form` by default. */
+    Name: string | null;
+    /**  `0` by default. */
+    X: number | null;
+    /**  `0` by default. */
+    Y: number | null;
+    /**  `480` by default. */
+    Width: number | null;
+    /**  `640` by default. */
+    Height: number | null;
+    /**  `0` by default. */
+    MinWidth: number | null;
+    /**  `0` by default. */
+    MinHeight: number | null;
+    /**  `true` by default. */
+    Visible: boolean | null;
+    /**  `true` by default. */
+    Enabled: boolean | null;
+    /**  */
+    Action: string | null;
+    /**  `false` by default. */
+    Focusable: boolean | null;
+    /**  `false` by default. */
+    Focused: boolean | null;
+    /**  `false` by default. */
+    Expand: boolean | null;
+    /**  `false` by default. */
+    HExpand: boolean | null;
+    /**  `false` by default. */
+    VExpand: boolean | null;
+    /** One of "Auto" | "Start" | "End" | "Center" | "Fill". `Auto` by default. */
+    HAlign: string | null;
+    /** One of "Auto" | "Start" | "End" | "Center" | "Fill". `Auto` by default. */
+    VAlign: string | null;
+    /**  `1` by default. */
+    ColumnSpan: number | null;
+    /**  `0` by default. */
+    TabIndex: number | null;
+    /**  `0` by default. */
+    Margin: number | null;
+    /**  */
+    Style: string | null;
+    /**  */
+    Background: string | null;
+    /**  */
+    Foreground: string | null;
+    /**  */
+    Font: string | null;
+    /**  */
+    Radius: string | null;
+    /**  */
+    Padding: string | null;
+    /**  */
+    Shortcut: string | null;
+    /**  */
+    Shadow: string | null;
+    /**  */
+    Border: string | null;
+    /**  `1` by default. */
+    FontScale: number | null;
+    /**  `1` by default. */
+    Opacity: number | null;
+    /**  `false` by default. */
+    Dark: boolean | null;
+    /**  */
+    Tooltip: string | null;
+    /** One of "Auto" | "Arrow" | "Hand" | "Grab" | "Grabbing" | "Text" | "VerticalText" | "Wait" | "Progress" | "Help" | "Crosshair" | "Cell" | "ContextMenu" | "Move" | "Scroll" | "Copy" | "Link" | "NoDrop" | "NotAllowed" | "ZoomIn" | "ZoomOut" | "None" | "ResizeHorizontal" | "ResizeVertical" | "ResizeTopLeft" | "ResizeTopRight" | "ResizeColumn" | "ResizeRow". `Auto` by default. */
+    Cursor: string | null;
+    /**  */
+    DragData: string | null;
+    /**  `false` by default. */
+    AcceptDrop: boolean | null;
+    /**  `false` by default. */
+    AcceptFiles: boolean | null;
+    /**  */
+    Menu: any | null;
+    /**  */
+    Item: any | null;
+    Load(...values: any[]): void;
+    Refresh(...values: any[]): void;
+    ScrollTo(...values: any[]): void;
+    SelectAll(...values: any[]): void;
+    Deselect(...values: any[]): void;
+    Copy(...values: any[]): void;
+    Find(...values: any[]): void;
+    FindNext(...values: any[]): void;
+    Save(...values: any[]): void;
+    SavePdf(...values: any[]): void;
+    Send(...values: any[]): void;
+    Canvas_Paginate(...values: any[]): void;
+    Canvas_DrawPage(...values: any[]): void;
+    Canvas_Draw(...values: any[]): void;
+    Canvas_MouseWheel(...values: any[]): void;
+    Canvas_MouseDown(...values: any[]): void;
+    Canvas_MouseMove(...values: any[]): void;
+    Canvas_MouseUp(...values: any[]): void;
+    Canvas_DblClick(...values: any[]): void;
+    Canvas_KeyPress(...values: any[]): void;
+    FocusNext(...values: any[]): void;
+    FocusPrevious(...values: any[]): void;
+    Reorder(...values: any[]): void;
+    PickAt(...values: any[]): void;
+    ContainerAt(...values: any[]): void;
+    LocalPoint(...values: any[]): void;
+    Add(...values: any[]): void;
+    Clear(...values: any[]): void;
+    AddNode(...values: any[]): void;
+    BuildChildren(...values: any[]): void;
+    PopupMenu(...values: any[]): void;
+    Show(...values: any[]): void;
+    Hide(...values: any[]): void;
+    Move(...values: any[]): void;
+    Resize(...values: any[]): void;
+    SizeRequest(...values: any[]): void;
+    SetFocus(...values: any[]): void;
+    Delete(...values: any[]): void;
+    Emit(...values: any[]): void;
+    On(...values: any[]): void;
+    OriginIn(...values: any[]): void;
+    Bounds(...values: any[]): void;
+    PropertyOptions(...values: any[]): void;
+    TextProperties(...values: any[]): void;
+    EventNames(...values: any[]): void;
+    StyleRule(...values: any[]): void;
+    CssNode(...values: any[]): void;
+    Remove(...values: any[]): void;
+    Raise(...values: any[]): void;
+    Lower(...values: any[]): void;
+    PropertyNames(...values: any[]): void;
+    Serialize(...values: any[]): void;
+    Dump(...values: any[]): void;
+    Apply(...values: any[]): void;
+    Declared(...values: any[]): void;
+    Fill(...values: any[]): void;
+    SetItem(...values: any[]): void;
+    SetDesign(...values: any[]): void;
+    DesignValue(...values: any[]): void;
+}
+
+/** package/Metainfo. Every member: docs/reference/libraries/Metainfo.md */
+declare class Metainfo {
+}
+
+/** package/Nsis. Every member: docs/reference/libraries/Nsis.md */
+declare class Nsis {
+    static Script(...values: any[]): any;
+    static Stage(...values: any[]): any;
+    static Build(...values: any[]): any;
+    static Ico(...values: any[]): any;
+}
+
+/** package/Package. Every member: docs/reference/libraries/Package.md */
+declare class Package {
+    static Write(...values: any[]): any;
+}
+
+/** qr/QrCode. Every member: docs/reference/libraries/QrCode.md */
+declare class QrCode {
+    /**  */
+    Version: any | null;
+    /**  */
+    Ecc: any | null;
+    /**  */
+    Mask: any | null;
+    /**  */
+    Mode: any | null;
+    /**  */
+    Size: any | null;
+    Dark(...values: any[]): void;
+    Paint(...values: any[]): void;
+    ToSvg(...values: any[]): void;
+    ToText(...values: any[]): void;
+    static Encode(...values: any[]): any;
+}
+
+/** qr/QrView. Every member: docs/reference/libraries/QrView.md */
+declare class QrView extends Component {
+    /**  */
+    Text: string | null;
+    /** One of "L" | "M" | "Q" | "H". `M` by default. */
+    Ecc: string | null;
+    /**  `4` by default. */
+    QuietZone: number | null;
+    /**  `#000000` by default. */
+    Ink: string | null;
+    /**  `#ffffff` by default. */
+    Paper: string | null;
+    /**  */
+    Code: any | null;
+    /**  */
+    Problem: string | null;
+    /** One of "Fixed" | "Horizontal" | "Vertical". `Vertical` by default. */
+    Arrangement: string | null;
+    /**  `Order` by default. */
+    Placement: string | null;
+    /**  `0` by default. */
+    Spacing: number | null;
+    /**  `false` by default. */
+    Homogeneous: boolean | null;
+    /**  `true` by default. */
+    Anchored: boolean | null;
+    /**  `[object Object]` by default. */
+    Children: any[] | null;
+    /**  `Form` by default. */
+    Name: string | null;
+    /**  `0` by default. */
+    X: number | null;
+    /**  `0` by default. */
+    Y: number | null;
+    /**  `160` by default. */
+    Width: number | null;
+    /**  `160` by default. */
+    Height: number | null;
+    /**  `0` by default. */
+    MinWidth: number | null;
+    /**  `0` by default. */
+    MinHeight: number | null;
+    /**  `true` by default. */
+    Visible: boolean | null;
+    /**  `true` by default. */
+    Enabled: boolean | null;
+    /**  */
+    Action: string | null;
+    /**  `false` by default. */
+    Focusable: boolean | null;
+    /**  `false` by default. */
+    Focused: boolean | null;
+    /**  `false` by default. */
+    Expand: boolean | null;
+    /**  `false` by default. */
+    HExpand: boolean | null;
+    /**  `false` by default. */
+    VExpand: boolean | null;
+    /** One of "Auto" | "Start" | "End" | "Center" | "Fill". `Auto` by default. */
+    HAlign: string | null;
+    /** One of "Auto" | "Start" | "End" | "Center" | "Fill". `Auto` by default. */
+    VAlign: string | null;
+    /**  `1` by default. */
+    ColumnSpan: number | null;
+    /**  `0` by default. */
+    TabIndex: number | null;
+    /**  `0` by default. */
+    Margin: number | null;
+    /**  */
+    Style: string | null;
+    /**  */
+    Background: string | null;
+    /**  */
+    Foreground: string | null;
+    /**  */
+    Font: string | null;
+    /**  */
+    Radius: string | null;
+    /**  */
+    Padding: string | null;
+    /**  */
+    Shortcut: string | null;
+    /**  */
+    Shadow: string | null;
+    /**  */
+    Border: string | null;
+    /**  `1` by default. */
+    FontScale: number | null;
+    /**  `1` by default. */
+    Opacity: number | null;
+    /**  `false` by default. */
+    Dark: boolean | null;
+    /**  */
+    Tooltip: string | null;
+    /** One of "Auto" | "Arrow" | "Hand" | "Grab" | "Grabbing" | "Text" | "VerticalText" | "Wait" | "Progress" | "Help" | "Crosshair" | "Cell" | "ContextMenu" | "Move" | "Scroll" | "Copy" | "Link" | "NoDrop" | "NotAllowed" | "ZoomIn" | "ZoomOut" | "None" | "ResizeHorizontal" | "ResizeVertical" | "ResizeTopLeft" | "ResizeTopRight" | "ResizeColumn" | "ResizeRow". `Auto` by default. */
+    Cursor: string | null;
+    /**  */
+    DragData: string | null;
+    /**  `false` by default. */
+    AcceptDrop: boolean | null;
+    /**  `false` by default. */
+    AcceptFiles: boolean | null;
+    /**  */
+    Menu: any | null;
+    /**  */
+    Item: any | null;
+    Refresh(...values: any[]): void;
+    Save(...values: any[]): void;
+    ToPng(...values: any[]): void;
+    ToSvg(...values: any[]): void;
+    Canvas_Draw(...values: any[]): void;
+    FocusNext(...values: any[]): void;
+    FocusPrevious(...values: any[]): void;
+    Reorder(...values: any[]): void;
+    PickAt(...values: any[]): void;
+    ContainerAt(...values: any[]): void;
+    LocalPoint(...values: any[]): void;
+    Add(...values: any[]): void;
+    Clear(...values: any[]): void;
+    AddNode(...values: any[]): void;
+    BuildChildren(...values: any[]): void;
+    PopupMenu(...values: any[]): void;
+    Show(...values: any[]): void;
+    Hide(...values: any[]): void;
+    Move(...values: any[]): void;
+    Resize(...values: any[]): void;
+    SizeRequest(...values: any[]): void;
+    SetFocus(...values: any[]): void;
+    Delete(...values: any[]): void;
+    Emit(...values: any[]): void;
+    On(...values: any[]): void;
+    OriginIn(...values: any[]): void;
+    Bounds(...values: any[]): void;
+    PropertyOptions(...values: any[]): void;
+    TextProperties(...values: any[]): void;
+    EventNames(...values: any[]): void;
+    StyleRule(...values: any[]): void;
+    CssNode(...values: any[]): void;
+    Remove(...values: any[]): void;
+    Raise(...values: any[]): void;
+    Lower(...values: any[]): void;
+    PropertyNames(...values: any[]): void;
+    Serialize(...values: any[]): void;
+    Dump(...values: any[]): void;
+    Apply(...values: any[]): void;
+    Declared(...values: any[]): void;
+    Fill(...values: any[]): void;
+    SetItem(...values: any[]): void;
+    SetDesign(...values: any[]): void;
+    DesignValue(...values: any[]): void;
+}
+
+/** report/Report. Every member: docs/reference/libraries/Report.md */
+declare class Report extends Component {
+    /** One of "A4" | "Letter" | "A5". `A4` by default. */
+    Paper: string | null;
+    /** One of "Portrait" | "Landscape". `Portrait` by default. */
+    Orientation: string | null;
+    /**  `40` by default. */
+    Margins: number | null;
+    /**  `1` by default. */
+    Page: number | null;
+    /**  `` by default. */
+    Data: any[] | null;
+    /**  `[object Object]` by default. */
+    Sections: any | null;
+    /**  `1` by default. */
+    PageCount: number | null;
+    /** One of "Fixed" | "Horizontal" | "Vertical". `Vertical` by default. */
+    Arrangement: string | null;
+    /**  `Order` by default. */
+    Placement: string | null;
+    /**  `0` by default. */
+    Spacing: number | null;
+    /**  `false` by default. */
+    Homogeneous: boolean | null;
+    /**  `true` by default. */
+    Anchored: boolean | null;
+    /**  `[object Object]` by default. */
+    Children: any[] | null;
+    /**  `Form` by default. */
+    Name: string | null;
+    /**  `0` by default. */
+    X: number | null;
+    /**  `0` by default. */
+    Y: number | null;
+    /**  `480` by default. */
+    Width: number | null;
+    /**  `640` by default. */
+    Height: number | null;
+    /**  `0` by default. */
+    MinWidth: number | null;
+    /**  `0` by default. */
+    MinHeight: number | null;
+    /**  `true` by default. */
+    Visible: boolean | null;
+    /**  `true` by default. */
+    Enabled: boolean | null;
+    /**  */
+    Action: string | null;
+    /**  `false` by default. */
+    Focusable: boolean | null;
+    /**  `false` by default. */
+    Focused: boolean | null;
+    /**  `false` by default. */
+    Expand: boolean | null;
+    /**  `false` by default. */
+    HExpand: boolean | null;
+    /**  `false` by default. */
+    VExpand: boolean | null;
+    /** One of "Auto" | "Start" | "End" | "Center" | "Fill". `Auto` by default. */
+    HAlign: string | null;
+    /** One of "Auto" | "Start" | "End" | "Center" | "Fill". `Auto` by default. */
+    VAlign: string | null;
+    /**  `1` by default. */
+    ColumnSpan: number | null;
+    /**  `0` by default. */
+    TabIndex: number | null;
+    /**  `0` by default. */
+    Margin: number | null;
+    /**  */
+    Style: string | null;
+    /**  */
+    Background: string | null;
+    /**  */
+    Foreground: string | null;
+    /**  */
+    Font: string | null;
+    /**  */
+    Radius: string | null;
+    /**  */
+    Padding: string | null;
+    /**  */
+    Shortcut: string | null;
+    /**  */
+    Shadow: string | null;
+    /**  */
+    Border: string | null;
+    /**  `1` by default. */
+    FontScale: number | null;
+    /**  `1` by default. */
+    Opacity: number | null;
+    /**  `false` by default. */
+    Dark: boolean | null;
+    /**  */
+    Tooltip: string | null;
+    /** One of "Auto" | "Arrow" | "Hand" | "Grab" | "Grabbing" | "Text" | "VerticalText" | "Wait" | "Progress" | "Help" | "Crosshair" | "Cell" | "ContextMenu" | "Move" | "Scroll" | "Copy" | "Link" | "NoDrop" | "NotAllowed" | "ZoomIn" | "ZoomOut" | "None" | "ResizeHorizontal" | "ResizeVertical" | "ResizeTopLeft" | "ResizeTopRight" | "ResizeColumn" | "ResizeRow". `Auto` by default. */
+    Cursor: string | null;
+    /**  */
+    DragData: string | null;
+    /**  `false` by default. */
+    AcceptDrop: boolean | null;
+    /**  `false` by default. */
+    AcceptFiles: boolean | null;
+    /**  */
+    Menu: any | null;
+    /**  */
+    Item: any | null;
+    Refresh(...values: any[]): void;
+    Save(...values: any[]): void;
+    SavePdf(...values: any[]): void;
+    Send(...values: any[]): void;
+    Canvas_DrawPage(...values: any[]): void;
+    Canvas_Draw(...values: any[]): void;
+    FocusNext(...values: any[]): void;
+    FocusPrevious(...values: any[]): void;
+    Reorder(...values: any[]): void;
+    PickAt(...values: any[]): void;
+    ContainerAt(...values: any[]): void;
+    LocalPoint(...values: any[]): void;
+    Add(...values: any[]): void;
+    Clear(...values: any[]): void;
+    AddNode(...values: any[]): void;
+    BuildChildren(...values: any[]): void;
+    PopupMenu(...values: any[]): void;
+    Show(...values: any[]): void;
+    Hide(...values: any[]): void;
+    Move(...values: any[]): void;
+    Resize(...values: any[]): void;
+    SizeRequest(...values: any[]): void;
+    SetFocus(...values: any[]): void;
+    Delete(...values: any[]): void;
+    Emit(...values: any[]): void;
+    On(...values: any[]): void;
+    OriginIn(...values: any[]): void;
+    Bounds(...values: any[]): void;
+    PropertyOptions(...values: any[]): void;
+    TextProperties(...values: any[]): void;
+    EventNames(...values: any[]): void;
+    StyleRule(...values: any[]): void;
+    CssNode(...values: any[]): void;
+    Remove(...values: any[]): void;
+    Raise(...values: any[]): void;
+    Lower(...values: any[]): void;
+    PropertyNames(...values: any[]): void;
+    Serialize(...values: any[]): void;
+    Dump(...values: any[]): void;
+    Apply(...values: any[]): void;
+    Declared(...values: any[]): void;
+    Fill(...values: any[]): void;
+    SetItem(...values: any[]): void;
+    SetDesign(...values: any[]): void;
+    DesignValue(...values: any[]): void;
+}

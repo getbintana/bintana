@@ -20,6 +20,7 @@ Every name here is a global: ambient, always present, no import.
 | `CheckSource(text)` | `null` if the text is valid JavaScript, else `{ Message, Line, Column }` |
 | `Symbols(text)` | what the text declares — `[{ Name, Kind, Line, Parent }]`, out of the parser and with nothing run. `Kind` is `"Class"`, `"Method"` or `"Function"` |
 | `LibraryPath(name, [project])` | where a library by that name is, or `""` — the same six-place search the runtime does for `uses`. Published so a tool that opens *other* projects asks about theirs rather than keeping a second copy of the path |
+| `Globals()` | every name on the global object: the runtime's own, the ones a library installed, and the JavaScript builtins -- `Math`, `JSON`, `Date`, `Map`, `Timer`, `Confirm`. **A top-level `class` is a lexical binding and not a property of the global object**, so a library's and a project's classes are *not* in it -- read those out of the sources, which is what the IDE does. It exists because the alternative is a hand-written list of global names, and there are a hundred and sixty-four of them |
 | `Libraries([project])` | the names of every library those same six places offer, sorted, each one once. The other direction of the lookup: `LibraryPath` resolves a name you already know, this is what a dialog that offers a choice needs |
 | `OnError` | assign `(message, stack) => …` to take over uncaught errors |
 | `Quit(code)` | quit with that exit status. A `code` that is not a number is refused rather than read as `0`, which a runner would take for success; `Quit()` is `0` |

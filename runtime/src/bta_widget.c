@@ -3143,6 +3143,176 @@ static JSValue w_methods_by_type(JSContext *ctx, JSValueConst this_val,
     return names_to_array(ctx, names);
 }
 
+/* One `{ Name, Kind }` of `Members`, the shape the IDE's completion and
+ * `tools/typings` both want: a name, and what kind of thing it is. */
+static void take(JSContext *ctx, JSValue out, GPtrArray *names, uint32_t *n,
+                 const char *name, const char *kind)
+{
+    for (guint i = 0; i < names->len; i++)
+        if (g_str_equal(g_ptr_array_index(names, i), name)) return;
+
+    g_ptr_array_add(names, g_strdup(name));
+    JSValue item = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, item, "Name", JS_NewString(ctx, name));
+    JS_SetPropertyStr(ctx, item, "Kind", JS_NewString(ctx, kind));
+    JS_SetPropertyUint32(ctx, out, (*n)++, item);
+}
+
+/*
+ * `Widget.Members(type)`: the public members of **any** class a name resolves to,
+ * each with its kind -- `Property`, `ReadOnly`, `Method` or `Static`.
+ *
+ * **It exists because the three verbs above refuse, and that refusal is right.**
+ * `PropertyNames`, `Methods` and `EventNames` answer about a *widget*, and a
+ * property grid, a palette and a serialiser all need that boundary to hold:
+ * `Widget.PropertyNames("Util")` on an ordinary class has to say so, or the grid
+ * offers a shape it cannot read. Measured, and both halves of that are
+ * load-bearing.
+ *
+ * What the refusal left with **no way to be asked** is the question a completion
+ * engine and a declaration generator actually have, which is not *what does a
+ * control have* but *what does this name have*: `Timer.After` on a class in
+ * rad.js, `Package.Write` on a library class, `QrCode.Encode` on a value class --
+ * none of them a widget, all of them public, and none of them reachable. The
+ * IDE offered `Timer.` and got **zero** entries for it, and `tools/typings`
+ * declared `Timer` **by hand** and skipped four classes for the same reason.
+ * So one runtime answer unblocked both, which is the argument for putting it
+ * here rather than in either of them.
+ *
+ * The name resolves the way `Widget.New` resolves it -- `bta_lookup_global` --
+ * so a class of the project and a class of a loaded library both answer.
+ *
+ * **The walk, and why the boundary is where it is.** Along the prototype chain,
+ * stopping at `Object.prototype` as every other walk here does: a function-valued
+ * *data* property is a `Method`, an accessor is a `Property` and a getter with no
+ * setter a `ReadOnly` -- the name `Widget.Member` gives it and the one that
+ * makes a `.form` refuse to load rather than shadow. Up the **constructor** -- a
+ * static is a property of the class and not of its prototype -- a function or an
+ * accessor is a `Static`, and **only when the name begins with a capital**,
+ * because a lower-case one is the class talking to itself: this repository's own
+ * convention, and the one `Widget.Methods` already applies.
+ */
+static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
+                                 int argc, JSValueConst *argv)
+{
+    const char *type = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    if (!type)
+        return JS_ThrowTypeError(ctx, "Members(type) expects a type name");
+
+    /* The resolution without the guard: `class_proto_for` refuses a class that
+     * is not a widget, and this question does not care. */
+    JSValue klass = bta_lookup_global(ctx, type);
+    if (JS_IsException(klass)) {
+        JS_FreeCString(ctx, type);
+        return JS_ThrowTypeError(ctx, "Members: '%s' is not a class", type);
+    }
+
+    /*
+     * **A class or a global that is an object**, and both are the same lookup:
+     * `bta_lookup_global` does not tell them apart and neither does a caller.
+     * A class carries a `prototype` and its statics are the class's own
+     * properties; a global like `File` or `Locale` is a bag of functions and has
+     * neither, so the *same walk* runs over the object itself and the static
+     * half is simply not there.
+     *
+     * That is what removes the hand-written list this verb exists to replace: an
+     * editor asking `Widget.Members("Printer")` gets its members, and asking
+     * `Widget.Members("Timer")` gets those, and there is no third place where a
+     * name is turned into something to walk.
+     */
+    JSValue proto = JS_GetPropertyStr(ctx, klass, "prototype");
+    bool   is_class = JS_IsObject(proto);
+    JS_FreeCString(ctx, type);
+
+    /* The array is filled in place and the names kept beside it: a `JSValue` is
+     * a struct and not a pointer, so a `GPtrArray` of them would be storing a
+     * truncated value -- and the names are what the de-duplication needs, which
+     * is the one case that is easy to get wrong (a static whose name the
+     * instance already has). */
+    JSValue     out   = JS_NewArray(ctx);
+    GPtrArray  *names = g_ptr_array_new();
+    uint32_t    n     = 0;
+
+    /* The instance members -- the prototype's own chain for a class, and the
+     * object's own keys for a global that is a bag of functions. */
+    {
+        JSValue at = is_class ? JS_DupValue(ctx, proto) : JS_DupValue(ctx, klass);
+        while (JS_IsObject(at) &&
+               (is_class ? !JS_IsStrictEqual(ctx, at, bta_object_proto) : true)) {
+            JSPropertyEnum *tab = NULL;
+            uint32_t len = 0;
+            if (JS_GetOwnPropertyNames(ctx, &tab, &len, at,
+                                       JS_GPN_STRING_MASK) == 0) {
+                for (uint32_t i = 0; i < len; i++) {
+                    JSPropertyDescriptor d;
+                    if (JS_GetOwnProperty(ctx, &d, at, tab[i].atom) != 1)
+                        continue;
+                    const char *nm = JS_AtomToCString(ctx, tab[i].atom);
+                    /* The convention, and it is the same one the statics get:
+                     * a capital initial is public, a lower-case one is the class
+                     * talking to itself. It is what keeps rad.js's own helpers
+                     * (`fire`, `ticking`) and the runtime's bookkeeping
+                     * (`__children`, `__menus`) out of a list whose whole
+                     * purpose is what a caller may write. */
+                    if (nm && *nm && g_ascii_isupper(nm[0]) &&
+                        !g_str_equal(nm, "constructor")) {
+                        if (JS_IsFunction(ctx, d.value))
+                            take(ctx, out, names, &n, nm, "Method");
+                        else if (JS_IsFunction(ctx, d.getter) ||
+                                 JS_IsFunction(ctx, d.setter))
+                            take(ctx, out, names, &n, nm, "Property");
+                    }
+                    if (nm) JS_FreeCString(ctx, nm);
+                    JS_FreeValue(ctx, d.value);
+                    JS_FreeValue(ctx, d.getter);
+                    JS_FreeValue(ctx, d.setter);
+                }
+                JS_FreePropertyEnum(ctx, tab, len);
+            }
+            JSValue parent = JS_GetPrototype(ctx, at);
+            JS_FreeValue(ctx, at);
+            at = parent;
+        }
+        JS_FreeValue(ctx, at);
+    }
+
+    /* The statics, off the constructor, capitals only -- and there is no
+     * constructor on a global that is a bag of functions. */
+    if (is_class) {
+        JSPropertyEnum *tab = NULL;
+        uint32_t len = 0;
+        if (JS_GetOwnPropertyNames(ctx, &tab, &len, klass,
+                                   JS_GPN_STRING_MASK) == 0) {
+            for (uint32_t i = 0; i < len; i++) {
+                JSPropertyDescriptor d;
+                if (JS_GetOwnProperty(ctx, &d, klass, tab[i].atom) != 1)
+                    continue;
+                const char *nm = JS_AtomToCString(ctx, tab[i].atom);
+                if (nm && *nm && g_ascii_isupper(nm[0]) &&
+                    !g_str_equal(nm, "prototype") && !g_str_equal(nm, "name")) {
+                    if (JS_IsFunction(ctx, d.value) ||
+                        JS_IsFunction(ctx, d.getter) ||
+                        JS_IsFunction(ctx, d.setter))
+                        take(ctx, out, names, &n, nm, "Static");
+                }
+                if (nm) JS_FreeCString(ctx, nm);
+                JS_FreeValue(ctx, d.value);
+                JS_FreeValue(ctx, d.getter);
+                JS_FreeValue(ctx, d.setter);
+            }
+            JS_FreePropertyEnum(ctx, tab, len);
+        }
+    }
+
+    JS_FreeValue(ctx, proto);
+    JS_FreeValue(ctx, klass);
+
+    for (guint i = 0; i < names->len; i++)
+        g_free(g_ptr_array_index(names, i));
+    g_ptr_array_free(names, TRUE);
+    return out;
+}
+
 static JSValue w_event_names_by_type(JSContext *ctx, JSValueConst this_val,
                                      int argc, JSValueConst *argv)
 {
@@ -6352,6 +6522,10 @@ void bta_widgets_init(JSContext *ctx, JSValue global)
             JS_SetPropertyStr(ctx, ctor, "Methods",
                               JS_NewCFunction(ctx, w_methods_by_type,
                                               "Methods", 1));
+            /* Members(type) */
+            JS_SetPropertyStr(ctx, ctor, "Members",
+                              JS_NewCFunction(ctx, w_members_by_type,
+                                              "Members", 1));
             JS_SetPropertyStr(ctx, ctor, "EventNames",
                               JS_NewCFunction(ctx, w_event_names_by_type,
                                               "EventNames", 1));

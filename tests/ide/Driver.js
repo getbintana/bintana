@@ -2913,6 +2913,105 @@ function* p_completion(ide) {
     check("a code tab says what its completion is called",
           ide.Editor.CompletionTitle !== "", ide.Editor.CompletionTitle);
 
+    /*
+     * **A bare name, which is the ordinary case and used to answer nothing.**
+     * A file whose first line is `const t = Timer.After(300, ...);` got no
+     * completion for `Timer`, because the engine was dot-driven: every name in a
+     * program was invisible until a `.` was typed. Nothing about a RAD suggests
+     * that -- the language is bare calls to `File`, `Locale` and `Message` beside
+     * the `Control_Event` methods.
+     *
+     * And the sources are the runtime's own answers rather than a list kept
+     * here, which is the half that matters: a hand-written table of globals was
+     * missing about eighteen of them, so `Printer.` completed nothing and
+     * nothing would have said so.
+     */
+    /* **The `before` is the one the editor really sends, and that is the whole
+     * correction here.** `before` is the line *up to where the word starts*, so
+     * a bare name inside an ordinary line arrives with the line's own punctuation
+     * on the end of it -- and the first version of this test passed `""`, which is
+     * what made the feature look alive while the editor offered nothing. The same
+     * mistake the completion module's own comment warns about: made-up arguments
+     * are how the `Btn1_` case first passed and answered nothing.
+     *
+     * So the case is asked four ways, and **three of them failed on the code this
+     * replaces**: an empty `before`, a line ending in a space, one ending in `=`
+     * and one inside a call. The guard that refused them asked `before` about a
+     * question `before` cannot answer. */
+    check("a bare name is offered with nothing before it",
+          answer("Tim", "").includes("Timer"),
+          JSON.stringify(answer("Tim", "")));
+    check("...after a space, which is the ordinary line in this language",
+          answer("Tim", "    const t = ").includes("Timer"),
+          JSON.stringify(answer("Tim", "    const t = ")));
+    check("...after an assignment, which is where a name is first written",
+          answer("Tim", "    this.seconds = ").includes("Timer"),
+          JSON.stringify(answer("Tim", "    this.seconds = ")));
+    check("...inside a call's arguments",
+          answer("Tim", "    print(").includes("Timer"),
+          JSON.stringify(answer("Tim", "    print(")));
+    check("...and a handler-shaped word is still the handler's",
+          !answer("Btn1_", "        ").includes("Timer"),
+          JSON.stringify(answer("Btn1_", "        ")));
+
+    const bare = answer("Tim", "    const t = ");
+    check("a name typed on its own is offered", bare.includes("Timer"),
+          JSON.stringify(bare));
+    /* **And a library's class is only a library's class if this project uses
+     * that library.** The first version walked every library installed on the
+     * machine, so the answer was a list of what somebody else has on their disk:
+     * a project naming one library was offered all seven. That is the whole of
+     * the bug -- a completion list is a claim about *this* program, and a name
+     * that cannot resolve in it is noise with a sorting order.
+     *
+     * The project running this phase declares `uses: ["markdown", "package"]`,
+     * and the assertion is written out both ways so it cannot pass by the list
+     * happening to be empty: the two used libraries' classes are offered, and
+     * four from the five unused ones are not. */
+    const uses = ide.manifest.read().Uses;
+    check("this project names one library, which is what the next assertions rest on",
+          JSON.stringify(uses) === '["gadgets"]', JSON.stringify(uses));
+    check("a library this project uses offers its classes, read out of its source",
+          bare.includes("Dial"),
+          JSON.stringify(bare.filter((t) => ["Dial", "Gadget"].includes(t))));
+    check("and a library it does not use offers nothing at all, however many are installed",
+          !bare.includes("QrView") && !bare.includes("Chart") && !bare.includes("Confirm") &&
+          !bare.includes("Report") && !bare.includes("Markdown") && !bare.includes("Package"),
+          JSON.stringify(bare.filter((t) =>
+              ["QrView", "Chart", "Confirm", "Report", "Markdown", "Package"].includes(t))));
+    check("as is a global that is a bag of functions",
+          answer("Loc", "    const l = ").includes("Locale"),
+          JSON.stringify(answer("Loc", "    const l = ")));
+
+    /*
+     * **`Timer.` returned zero entries**, and it is the clearest thing this ever
+     * got wrong: `Timer` *was* in the hand-written table, and `Dictionary.Keys`
+     * on a class is empty, because a static is a property of the class and not of
+     * an object. So the name was known and the members were not.
+     */
+    const after = answer("Af", "Timer.");
+    check("a class offers its statics, which are the whole of a library's verbs",
+          after.includes("After") && after.includes("Every"),
+          JSON.stringify(after));
+    check("and its instance members too",
+          answer("St", "Timer.").includes("Start"),
+          JSON.stringify(answer("St", "Timer.")));
+
+    check("a global that is an object offers its own keys",
+          answer("Sav", "File.").includes("Save"),
+          JSON.stringify(answer("Sav", "File.")));
+    check("and one the old table never mentioned",
+          answer("Send", "Printer.").includes("Send"),
+          JSON.stringify(answer("Send", "Printer.")));
+    /* **A library class is not offered here, and it should not be**: this
+     * project does not `use` the library, so `Widget.Members("Confirm")` refuses
+     * and offering it would be a name the program cannot call. A project that
+     * does declare it is the one that gets it, and that is the road
+     * `collectGlobals` walks. */
+    check("a library class this project does not use is not offered",
+          answer("A", "Confirm.").length === 0,
+          JSON.stringify(answer("A", "Confirm.")));
+
     /* --- this. : the controls on the form beside this file ------------------ */
     const mine = answer("", "        this.");
     check("`this.` offers the form's own controls",

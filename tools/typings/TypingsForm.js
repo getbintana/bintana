@@ -116,60 +116,19 @@ const PLAIN_GLOBALS = {
  * reason this file exists.
  */
 const EXTRA = `
-declare class Timer {
-    constructor(milliseconds?: number, repeat?: boolean);
-    Interval: number;
-    Repeat: boolean;
-    Enabled: boolean;
-    Tick: any;
-    Start(): void;
-    Stop(): void;
-}
-
-declare class Stopwatch {
-    constructor();
-    Elapsed: number;
-    Start(): void;
-    Stop(): void;
-    Reset(): void;
-}
-
-declare class Regex {
-    constructor(pattern: string, options?: { IgnoreCase?: boolean; Multiline?: boolean; DotAll?: boolean });
-    static Escape(text: string): string;
-    IsMatch(text: string): boolean;
-    Match(text: string): any;
-    Matches(text: string): any[];
-    Replace(text: string, by: string): string;
-    Split(text: string): string[];
-}
-
 /*
- * A value and not a class, which is the one declaration here that is shaped by
- * TypeScript rather than by Bintana: \`Record<K, V>\` is a type alias in
- * \`lib.es5.d.ts\`, so \`declare class Record\` writes a *type* of that name too
- * and both files lose -- "Duplicate identifier 'Record'", measured. A const
- * with a construct signature declares the value alone, so \`new Record()\` is
- * this one and \`Record<string, number>\` stays TypeScript's.
+ * **Empty, and it used not to be.** The Timer class was declared here by hand,
+ * because it lives in rad.js and nothing answered it: PropertyNames refuses a
+ * class that is not a widget, and there was no other road. It went stale the way
+ * a hand-written list does -- Timer.After was missing, so an editor reported that
+ * it did not exist, on the verb the whole language story leans on for having
+ * replaced setTimeout.
+ *
+ * The generator walks the libraries now, and Widget.Members answers for a class of
+ * rad.js the same as for anything else, so this has nothing left to hold. It
+ * stays as the place for a class that *still* cannot be reached -- two words is
+ * cheaper than the next stale row.
  */
-declare const Record: {
-    new (fields?: any): any;
-    prototype: any;
-};
-
-declare const Field: any;
-declare const Database: any;
-declare const Exec: any;
-declare const Table: any;
-declare const BTA_VERSION: string;
-
-declare function Namespace(path: string): any;
-declare function print(...values: any[]): void;
-declare function monotonic(): number;
-declare function setTimeout(fn: () => void, ms?: number): number;
-declare function clearTimeout(id: number): void;
-declare function setInterval(fn: () => void, ms?: number): number;
-declare function clearInterval(id: number): void;
 `;
 
 class TypingsForm extends Form {
@@ -184,11 +143,21 @@ class TypingsForm extends Form {
         }
 
         const members = this.readC(root);
-        const runtime = this.runtimeTypes(members);
+        const own     = this.runtimeTypes(members);
+        const libs    = this.libraryTypes(root, own);
+        const runtime = own + libs;
         const path    = File.Join(root, "tools/typings/bintana.d.ts");
 
         File.Save(path, runtime);
         print(`typings: ${path}`);
+
+        /* A class that could not be declared is **said out loud**, once per
+         * run, with the reason. A declaration file is only useful while it is
+         * complete: `tsc` reports what it does not have as *missing*, which
+         * reads as authoritative and is worse than the `any` it replaces. So the
+         * floor here is a class declared whole or not at all, and the one
+         * library that is not gets named rather than quietly left out. */
+        for (const line of this.skipped) print(`typings: skipped ${line}`);
 
         /* A project is the second half: a `.form` is a class whose controls are
          * typed fields, and nothing but the file says so. */
@@ -255,6 +224,303 @@ class TypingsForm extends Form {
                 if (wanted(m) && !out.includes(m.name)) out.push(m.name);
         }
         return out.sort();
+    }
+
+    /* --- the shipped libraries, as TypeScript --------------------------------
+
+     * **They were not declared at all until now, and `knownType` below used to
+     * say so** -- *"a component out of a library does not: nothing here is going
+     * to declare them"*. That was true, and it cost a project using `dialog`
+     * the one thing this file exists for: an editor reporting `Property 'ask'
+     * does not exist` about a call that runs.
+     *
+     * Every question here is **asked**, never parsed, and each one is asked of
+     * the runtime's own introspection:
+     *
+     * - **Is it a widget class?** `Widget.PropertyNames(type)` refuses with
+     *   *"'X' is not a widget class"*, and that refusal **is** the test. A
+     *   `Component` or `Form` subclass resolves; a value class like `QrCode`
+     *   and a static-only class like `Package` do not.
+     * - **What does it have?** `PropertyNames`, `EventNames`,
+     *   `PropertyOptions(type, name)` and `Member(type, name, kind)` -- the
+     *   same four the runtime's own classes are declared from.
+     * - **Which methods are statics?** `Widget.Methods(type)` walks the
+     *   prototype, so it holds every **instance** method and no static, and the
+     *   difference between the two sets is the answer. Nothing here reads a
+     *   word of a `.js` to tell a static from a method.
+     * - **What are their names?** `Application.Symbols` on the library's own
+     *   source -- the parser, exact, and already the IDE's answer to this
+     *   question. A method added in a `.js` is a line here and no lines
+     *   anywhere else.
+     *
+     * **A lower-case name is the class talking to itself and is not declared.**
+     * This repository's own convention -- a capital initial is public, a
+     * lower-case one is not -- and the same one `Ide.Classes` applies to a
+     * project's own components for the same reason: `Package` publishes `Write`
+     * and does not publish `configOf`, and `Chart` publishes `Refresh` and does
+     * not publish `plot`. Both are the convention being *used*, not a rule
+     * written here; `Widget.Methods("Chart")` answers with 30 names of which
+     * four are the class's business.
+     *
+     * **A class is declared whole or not at all.** `QrCode` is the one that
+     * cannot be: it is not a widget, so nothing answers the properties it
+     * carries, and a declaration that published `Encode` while omitting those
+     * would report every *use* of the class as a missing property. A
+     * declaration file is only useful while it is complete, so it is named on
+     * the output and left out. The trigger that would bring it back is a class
+     * query that answers for a non-widget -- the same shape of gap
+     * `Widget.PropertyNames` itself was.
+     *
+     * **And no parameter list, because nothing can reach one.** `Widget` has no
+     * static that resolves a name to a class (`Widget.Class`, `Widget.Resolve`,
+     * `Widget.Lookup` are all `undefined`), and without the class there is no
+     * way to read the `static Signatures` a library would declare its own
+     * arity in -- the mechanism `completion-plan.md` describes and no shipped
+     * library uses yet. So a method is declared with its name and no
+     * parameters, which is the floor that plan measured for everything else
+     * ("a constructor parameter is `any` for it too") and is a **truthful**
+     * file where a guessed signature would not be. An editor still offers the
+     * member and does not say it does not exist, which is the whole of what
+     * was missing. The trigger to do better is a way to reach a class object. */
+
+    libraryTypes(root, runtimeText) {
+        this.root = root;
+        this.skipped  = [];
+        /* **Every name the runtime half already declared, read out of what it
+         * wrote.** `Record` is the one that matters and it is a real trap: it is
+         * a class in rad.js, so the prelude walk below would declare it a second
+         * time -- and the runtime half declares it as a `const` on purpose,
+         * because `declare class Record` writes a *type* of that name too and
+         * TypeScript has one of its own. Declaring a name twice is the whole
+         * error; reading the names off the text that already has them is exact
+         * and needs no second list. */
+        this.declared = [...(runtimeText.match(/^declare (?:class|const) (\w+)/gm) || [])]
+                            .map((l) => l.replace(/^declare (?:class|const) /, ""));
+
+        const out = [];
+        out.push("");
+        out.push("/* ------------------------------------------------------------------ *");
+        out.push("/* The libraries that ship with the runtime, by the same introspection. */");
+        out.push("/* A project reaches one through `uses` in its project.json.             */");
+        out.push("/* Parameters are not declared: no way to reach a library class's own   */");
+        out.push("/* signatures exists yet, and a name is worth more than a guess.        */");
+        out.push("/* ------------------------------------------------------------------ */");
+
+        /*
+         * **The classes the curated language adds**, and they come from the
+         * prelude's own text rather than from a list.
+         *
+         * The obvious source is `Application.Globals()`, and it is wrong: it
+         * reports **164** names, `Map` and `Set` and `Date` and `BigInt` among
+         * them, and declaring those puts a `Map` beside TypeScript's own -- four
+         * `TS2300 Duplicate identifier` the first time it was run, which is the
+         * failure mode `completion-plan.md` records finding in this file once
+         * already. A class the runtime *installed* and a class the language
+         * *declares* are different things, and the difference is exactly whether
+         * a `.js` in `runtime/js` says `class`.
+         *
+         * So the parser is asked over those two files, which is the same road
+         * the libraries below are asked over, and `Timer` -- the class that used
+         * to be written by hand in a block above, missing its own `After` --
+         * comes out of it. A class the prelude grows next is a line here and no
+         * lines anywhere else.
+         */
+        for (const file of ["rad.js", "forms.js"]) {
+            const path = File.Join(root, "runtime", "js", file);
+            if (!File.Exists(path)) continue;
+            for (const sym of Application.Symbols(File.Load(path))) {
+                if (sym.Kind !== "Class") continue;
+                if (this.declared.includes(sym.Name)) continue;
+                this.declared.push(sym.Name);
+                out.push(...this.libraryClass(sym.Name, "runtime/js", path));
+            }
+        }
+
+        for (const dir of Directory.Folders(File.Join(root, "lib"))) {
+            const lib = File.BaseName(dir);
+            if (!Application.LibraryPath(lib)) {
+                this.skipped.push(`lib/${lib}: not resolvable, so nothing in it is loaded`);
+                continue;
+            }
+
+            for (const file of Directory.Files(dir, "*.js")) {
+                for (const sym of Application.Symbols(File.Load(file))) {
+                    if (sym.Kind !== "Class") continue;
+                    this.declared.push(sym.Name);
+                    out.push(...this.libraryClass(sym.Name, lib, file));
+                }
+            }
+        }
+        return out.length > 7 ? out.join("\n") + "\n" : "";
+    }
+
+    /* One `declare class`, or nothing and a line on the output.
+     *
+     * **Everything here is one call.** `Widget.Members` returns the properties,
+     * the instance methods and the statics, each already filtered to the public
+     * ones, and the three older verbs refused a class that is not a widget --
+     * which is why this used to skip four of the ten and to declare a tenth by
+     * hand. The names no longer come from a second reading of the source: the
+     * verb's own capital-initial rule is the convention this repository
+     * documents, applied where it is written down.
+     */
+    libraryClass(name, lib, file) {
+        /* A class of the prelude is a **global**, and one of a library is a
+         * library class, and the reference has a page under each -- pointing a
+         * reader at the wrong one is a small mistake that costs a search. */
+        const page = lib === "runtime/js"
+            ? `docs/reference/globals/${name}.md`
+            : `docs/reference/libraries/${name}.md`;
+        const doc = File.Exists(File.Join(this.root, page)) ? page
+                                                           : `docs/reference/globals/${name}.md`;
+
+        let all;
+        try {
+            all = Widget.Members(name);
+        } catch (e) {
+            this.skipped.push(`${name} (lib/${lib}): ${e.message} -- see ${doc}`);
+            return [];
+        }
+
+        /* **A name TypeScript declares a *type* of cannot be a class here.**
+         * `declare class Record` writes a type called `Record` into the same file
+         * as `lib.es5.d.ts`'s own `Record<K, V>`, and both lose: "Duplicate
+         * identifier", measured. A `const` with a construct signature declares
+         * the *value* alone, so `new Plain()` is this one and
+         * `Record<string, number>` stays TypeScript's.
+         *
+         * **The list is one name long and it was measured, not remembered** --
+         * `tsc` over what this file produces, with everything else compiling:
+         *
+         *     npx --package typescript@5 tsc --noEmit --lib es2022 \
+         *          --target es2022 tools/typings/bintana.d.ts
+         *
+         * That is also what finds the *next* one, which is the whole argument for
+         * running it: a new class of the prelude lands beside whatever TypeScript
+         * has grown since, and the list is what makes it visible. */
+        const valueOnly = ["Record"];
+        const declared  = valueOnly.includes(name) ? "const" : "class";
+
+        const of = (kind) => all.filter((m) => m.Kind === kind).map((m) => m.Name);
+        const props   = of("Property");
+        const roProps = of("ReadOnly");
+        const methods = of("Method");
+        const statics = of("Static");
+
+        /* **A type is asked of a control that can be built**, which a class that
+         * is not a widget cannot produce -- so a non-widget's properties are
+         * declared without a type rather than not at all. They are half the
+         * answer: `QrCode`'s `Version` and `Size` are its whole public surface
+         * beside `Encode`, and a declaration that published the method and
+         * omitted them would report every *use* as a missing property. */
+        const isWidget = (() => { try { Widget.PropertyNames(name); return true; }
+                                  catch (e) { return false; } })();
+        const sample   = isWidget ? this.sampleOf(name) : null;
+
+        const out = [];
+        out.push("");
+        out.push(`/** ${lib}/${name}. Every member: ${doc} */`);
+        if (declared === "const") {
+            /* The value and not the shape: a construct signature, so `new` works
+             * and the members are not published as a type this file would then
+             * own. */
+            out.push(`declare const ${name}: {`);
+            out.push("    new (...values: any[]): any;");
+            for (const m of statics.concat(methods))
+                out.push(`    ${m}(...values: any[]): any;`);
+            out.push("};");
+            return out;
+        }
+        out.push(`declare class ${name}${isWidget ? ` extends ${this.baseOf(props)}` : ""} {`);
+
+        for (const p of props) {
+            if (p === "__declared") continue;
+            const values = this.valuesOf(name, p);
+            const fresh  = sample ? sample[p] : undefined;
+            let doc2 = values ? `One of ${values}.` : "";
+            if (fresh !== undefined && fresh !== "" && fresh !== null)
+                doc2 += ` \`${fresh}\` by default.`;
+            out.push(`    /** ${doc2} */`);
+            out.push(`    ${p}: ${this.typeOf(sample, p)} | null;`);
+        }
+        for (const p of roProps) {
+            if (p === "__declared") continue;
+            out.push(`    /** Read-only. */`);
+            out.push(`    readonly ${p}: ${isWidget ? this.typeOf(sample, p) : "any"};`);
+        }
+
+        for (const m of methods.concat(statics)) {
+            const when = statics.includes(m) ? "static " : "";
+            /* The rest form and not empty parentheses, and that is the whole
+             * difference between a declaration that is true and one that is
+             * wrong: `Ask(): any` says the member takes no arguments, so every
+             * correct call is `Expected 0 arguments, but got 3`. The same
+             * failure the file exists to prevent, pointed the other way. */
+            out.push(`    ${when}${m}(...values: any[]): ${when ? "any" : "void"};`);
+        }
+
+        out.push("}");
+        return out;
+    }
+
+    /*
+     * `Widget` and `Component` are declared in this same file, so a library
+     * class may name either. Which one it is **asked**: `Modal` and `Maximize`
+     * are on a `Form` and not on a `Component`, and `Text` is on both, so
+     * ownership of `Text` is not the test.
+     */
+    baseOf(properties) {
+        return (properties.includes("Modal") && properties.includes("Maximized"))
+             ? "Form" : "Component";
+    }
+
+    /* The convention, applied: a capital initial is public. */
+    publicMethods(file, name) {
+        const out = [];
+        for (const sym of Application.Symbols(File.Load(file))) {
+            if (sym.Kind !== "Method" || sym.Parent !== name) continue;
+            const first = sym.Name[0];
+            if (first !== first.toUpperCase() || first === first.toLowerCase()) continue;
+            if (!out.includes(sym.Name)) out.push(sym.Name);
+        }
+        return out;
+    }
+
+    kindOf(name, p) {
+        try { return Widget.Member(name, p, "property"); } catch (e) { return "Property"; }
+    }
+
+    valuesOf(name, p) {
+        try {
+            const o = Widget.PropertyOptions(name, p);
+            if (Array.isArray(o) && o.length) return o.map((v) => `"${v}"`).join(" | ");
+        } catch (e) { /* not an enum */ }
+        return "";
+    }
+
+    /*
+     * One control per class, built wearing nothing, which is what makes its
+     * values the *defaults* rather than values somebody chose: the serialiser
+     * compares against a freshly constructed one to decide a property was never
+     * set, so this is the same number by construction and not a second opinion.
+     *
+     * **It is one control for the class and not one per property**, and the
+     * reason is the `typeOf` below: that takes a *sample* and a name and reads
+     * the property off it, which is how the runtime's own classes are declared
+     * too. A first version of this called it with the value and a missing
+     * second argument, and every library property came out `any` -- while the
+     * runtime's were untouched, because a class body with two `typeOf` takes
+     * the *last* one and the last is the one that wanted two arguments. That is
+     * this repository's own `MainForm` trap, met in the generator.
+     */
+    sampleOf(name) {
+        if (!this._samples) this._samples = {};
+        if (name in this._samples) return this._samples[name];
+
+        let c = null;
+        try { c = Widget.New(name); } catch (e) { c = null; }
+        this._samples[name] = c;
+        return c;
     }
 
     /* --- the runtime, as TypeScript ------------------------------------------ */
@@ -343,6 +609,11 @@ class TypingsForm extends Form {
         out.push("    static TextProperties(type: string): string[];");
         out.push("    static PropertyOptions(type: string, name: string): string[] | null;");
         out.push("    static Member(type: string, name: string): string;");
+        /* The verb that answers for a class which is not a widget, and takes a
+         * global object too -- so this is the one an editor asks for `File.` and
+         * for `Timer.`, where `Methods` answers neither. */
+        out.push("    static Members(type: string): "
+                 + "{ Name: string; Kind: string }[];");
         out.push("    static Signature(type: string, name: string): string | null;");
         out.push("    static EventSignature(type: string, name: string): string | null;");
         out.push("}");
@@ -456,8 +727,57 @@ class TypingsForm extends Form {
                                     .map((m) => `${m}?: any`).join("; ");
                 return `options${optional ? "?" : ""}: { ${members} }`;
             }
-            return `${arg}${optional ? "?" : ""}: any`;
+            return `${this.argName(arg)}${optional ? "?" : ""}: any`;
         }).join(", ");
+    }
+
+    /*
+     * A parameter name that TypeScript will not accept.
+     *
+     * **A `.d.ts` is strict mode, and an identifier that is legal C is not
+     * always legal there.** `Editor.Replace`'s signature comment said
+     * `/* Replace(with) *\/` and that became a parameter called `with`, which is
+     * a reserved word -- so the file had **six syntax errors** and `tsc`
+     * answered nothing else at all, which is worse than looking wrong: a program
+     * that does not check is not a program whose types were read. The word is
+     * gone from the C now, because the runtime's own refusal already called it
+     * `text` ("`Replace(text) needs the replacement text`") and three documents
+     * disagreed with it.
+     *
+     * **The list is here anyway, because the next one is a comment somebody
+     * writes.** Renaming in the output is free -- a parameter's name only shows
+     * in a hover and in signature help -- and a trailing underscore is the
+     * convention for a word that cannot be spelled.
+     */
+    argName(name) {
+        /* **Exactly the words a strict-mode binding cannot carry, and no
+         * others.** A first version of this list was written by feel and
+         * included the contextual keywords -- `of` among them -- which renamed
+         * `Widget.SetItem(of, count)` to `of_` and made a *correct* declaration
+         * disagree with the runtime, which `api.sh` caught by name. `of` is
+         * legal as a parameter and so are `as`, `from`, `get`, `set`, `any`,
+         * `async`, `await` and `yield` in a non-generator position; the words
+         * below are the ones ECMAScript reserves in strict mode, which a
+         * `.d.ts` always is, plus `eval` and `arguments`.
+         *
+         * The shape of the mistake is the one this file keeps warning about: a
+         * list written from memory rather than measured is a list that is wrong
+         * in both directions, and the check that catches it is the one that
+         * compares the output against the source. */
+        const RESERVED = [
+            /* strict-mode reserved */
+            "implements", "interface", "let", "package", "private",
+            "protected", "public", "static", "yield",
+            /* and the always-reserved half */
+            "await_", "break", "case", "catch", "class", "const", "continue",
+            "debugger", "default", "delete", "do", "else", "enum", "export",
+            "extends", "false", "finally", "for", "function", "if", "import",
+            "in", "new", "null", "return", "super", "switch", "this", "throw",
+            "true", "try", "typeof", "var", "void", "while", "with",
+            /* and the two a binding may not be named */
+            "eval", "arguments",
+        ];
+        return RESERVED.includes(name) ? `${name}_` : name;
     }
 
     /* A parameter list split at its **top-level** commas, so `[{A, B}]` is one

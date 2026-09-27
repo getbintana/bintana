@@ -24,8 +24,8 @@ are made of.
 | `Unmark(line, [kind])` | takes marks off one line | [marks](#marks) |
 | `Mark(line, kind, [text])` | a gutter mark | [marks](#marks) |
 | `Marks([kind])` | → a record per mark: `{ Line, Kind, Text }` | [marks](#marks) |
-| `Replace(with)` | the match the cursor is on | [search](#search) |
-| `ReplaceAll(with)` | every match | [search](#search) |
+| `Replace(text)` | the match the cursor is on | [search](#search) |
+| `ReplaceAll(text)` | every match | [search](#search) |
 | `Search(text, [{CaseSensitive, WholeWord, Regex}])` | → how many, highlighting every one | [search](#search) |
 | `ShowCompletion()` | opens the completion popup from code | [completion](#completion) |
 | **event** `Complete(word, line, column, text)` | a completion was asked for | [completion](#completion) |
@@ -50,8 +50,8 @@ catalogue must never rewrite code.
 | `MatchIndex` (ro) | which one the cursor is standing on — the `3` in *3/12* |
 | `FindNext()` | moves to the next match, wrapping around |
 | `FindPrevious()` | and backwards |
-| `Replace(with)` | the match the cursor is standing on |
-| `ReplaceAll(with)` | every match |
+| `Replace(text)` | the match the cursor is standing on |
+| `ReplaceAll(text)` | every match |
 
 **`Regex: true` is not the language's [`Regex`](../../llm/library.md#regex), and
 the differences are the kind a pattern notices.** The search is GtkSourceView's

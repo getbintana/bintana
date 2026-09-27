@@ -105,6 +105,7 @@ disagree.
 | `Widget.EventNames(type)` → array | the events it raises, most derived first; `[0]` is the one a double click writes |
 | `Widget.TextProperties(type)` → array | which of its properties hold prose, accumulated along the chain |
 | `Widget.PropertyOptions(type, name)` → array | the values that property accepts, or `null` |
+| `Widget.Members(type)` → array | **every** public member of anything the name resolves to, each `{ Name, Kind }`, `Kind` one of `Property`, `ReadOnly`, `Method`, `Static`. **It is the one that answers for a class that is not a widget** — `Timer`, `QrCode`, `Package` — where the three above refuse, and it takes a global that is a bag of functions (`File`, `Locale`, `Printer`) as readily as a class. A lower-case name is the class talking to itself and is not listed. See *why there is a fifth verb* |
 | `Widget.Member(type, name)` → string | what the name is on that class: `Property`, `ReadOnly`, `Method`, or `""` for one it has not got. The question `in` answers about a control, with the kind the loader needs — a **`ReadOnly`** name makes a `.form` refuse to load |
 | `Widget.Signature(type, name)` → string | the parameters a **method** declares: `"([container])"`, `"(event, fn)"`, `"()"`. `null` where the class declares none, or where the name is no method |
 | `Widget.EventSignature(type, name)` → string | the same for an **event**: `"(x, y, button, ctrl, shift)"`. A name that is both — `ListBox.Select` — is answered by each |
@@ -131,6 +132,29 @@ that declares none.
 **Controls:** [`Label`](#label) · [`Button`](#button) · [`ToggleButton`](#togglebutton) · [`CheckButton`](#checkbutton) · [`Switch`](#switch) · [`Spinner`](#spinner) · [`Separator`](#separator) · [`LinkButton`](#linkbutton) · [`Image`](#image) · [`Picture`](#picture) · [`Video`](#video) · [`TextBox`](#textbox) · [`SpinBox`](#spinbox) · [`DecimalBox`](#decimalbox) · [`Slider`](#slider) · [`ProgressBar`](#progressbar) · [`LevelBar`](#levelbar) · [`DatePicker`](#datepicker) · [`Calendar`](#calendar) · [`ColorButton`](#colorbutton) · [`FontButton`](#fontbutton) · [`ListBox`](#listbox) · [`ComboBox`](#combobox) · [`TreeView`](#treeview) · [`TableView`](#tableview) · [`TextEditor`](#texteditor) · [`SourceEditor`](#sourceeditor) · [`Terminal`](#terminal) · [`DrawingArea`](#drawingarea)
 
 **Containers:** [`Panel`](#panel) · [`Frame`](#frame) · [`Expander`](#expander) · [`Grid`](#grid) · [`Flow`](#flow) · [`Scroller`](#scroller) · [`RowList`](#rowlist) · [`Overlay`](#overlay) · [`AspectFrame`](#aspectframe) · [`Split`](#split) · [`Notebook`](#notebook) · [`Switcher`](#switcher) · [`Popover`](#popover) · [`Form`](#form) · [`Component`](#component)
+
+### Why there is a fifth verb
+
+**`PropertyNames`, `Methods` and `EventNames` answer about a *widget*, and that
+boundary is load-bearing**: a property grid, a palette and the serialiser all need
+`Widget.PropertyNames("Util")` on an ordinary class to *refuse*, or the grid offers
+a shape it cannot read. So they keep refusing.
+
+What the refusal left with **no way to be asked** was a different question, and two
+consumers were asking it: *what does this name have?* An editor completing
+`Timer.` or `Printer.`, and a declaration generator writing `bintana.d.ts`. The
+first found that `Timer.` answered **zero entries** -- `Timer` was known and its
+members were not, because `Dictionary.Keys` on a class is empty: a static is a
+property of the class and not of an object, so the obvious verb cannot see it. The
+second was declaring `Timer` **by hand** and skipping four classes for the same
+reason. One runtime answer unblocked both, which is the argument for it being here
+rather than in either of them.
+
+**`Widget.Members` takes a class and a global object alike**, so a caller asks one
+verb for `File` and for `Confirm` and there is no third place where a name becomes
+something to walk. **Statics are read off the constructor** and instance members
+off the prototype, because that is where each of them lives, and a name that
+answers on both is one member.
 
 ## Widget — inherited by everything
 
@@ -942,8 +966,8 @@ own. It is [`Editor`](#editor--inherited-by-both-editors) plus everything below.
 | `FindPrevious()` | and backwards |
 | `Mark(line, kind, [text])` | a gutter mark. `kind` is `Error` `Warning` `Info` `Bookmark`, or `Added` `Removed` `Gap`, which tint the line — a diff |
 | `Marks([kind])` | → a record per mark, in line order: `{ Line, Kind, Text }` |
-| `Replace(with)` | the match the cursor is standing on |
-| `ReplaceAll(with)` | every match |
+| `Replace(text)` | the match the cursor is standing on |
+| `ReplaceAll(text)` | every match |
 | `Search(text, [{CaseSensitive, WholeWord, Regex}])` | → how many there are, highlighting every one. **It does not move the cursor**: typing in a find field and jumping to a match happen at different moments. `Regex: true` is **PCRE2** — GtkSourceView's own engine and not the language's [`Regex`](library.md#regex): always multiline, and `\d` `\w` `\b` are Unicode-aware |
 | `ShowCompletion()` | opens the completion popup from code |
 | `Unmark(line, [kind])` | takes marks off that line |
