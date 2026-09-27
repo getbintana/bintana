@@ -52,13 +52,25 @@ The running program: what it is called, where its files are, and how it ends.
 | `HasCommand(name)` | whether that program is on the PATH. **The question that does not need an exception**, since [`Exec`](Exec.md) throws when the program is not there |
 | `DecorationLayout` | how this desktop arranges a title bar — which buttons, and on which side. What a drawn title bar reads to look like the real one |
 | `CheckSource(text)` | `null` when the text is valid JavaScript, else `{ Message, Line, Column }`. What an editor checks a file with before saving it, and the answer `new Function(src)` is not allowed to give |
-| `Symbols(text)` | `[{ Name, Kind, Line, Parent }]`: the classes, methods and top-level functions the text declares, with the line of each. What an editor lists a file with, and the answer a pattern is not allowed to guess at |
+| `Symbols(text)` | `[{ Name, Kind, Line, Parent, Super }]`: the classes, methods and top-level functions the text declares, with the line of each. What an editor lists a file with, and the answer a pattern is not allowed to guess at |
 
 **`Symbols` is `CheckSource`'s compile asked a different question.** `Kind` is
 `"Class"`, `"Method"` or `"Function"`, `Parent` is the class a method is in and
 `""` otherwise, and the parser is the one that would run the file — so a
 declaration in a comment or a string is not one, and a method is a method at any
-indentation. Text that does not compile answers what the parser reached before
+indentation.
+
+**`Super` is what makes the answer a shape and not a list of names.** It is the
+name in a class's `extends` clause, and `""` for a class that declares none,
+for a method, and — deliberately — for an `extends` that is not a bare
+identifier, which reports no name rather than a wrong one. It matters because a
+class declared in a file the process never runs is a lexical binding and not a
+class, so nothing can ask the runtime what it has: an editor reading a library's
+source was offered the 2 members a class declares and none of the 66 it
+inherits. A class that breaks in its own body still reports the supertype it
+read before the break, and one that breaks *in the heritage* is listed with none.
+
+Text that does not compile answers what the parser reached before
 the error: an editor reads this while somebody types, and the complaint is
 `CheckSource`'s to give. Nothing runs.
 

@@ -434,7 +434,7 @@ static const char *symbol_kind_name(JSSymbolKind kind)
 }
 
 static void symbol_report(void *opaque, JSSymbolKind kind, const char *name,
-                          const char *parent, int line)
+                          const char *parent, const char *supertype, int line)
 {
     SymbolSink *sink = opaque;
     JSContext  *ctx  = sink->ctx;
@@ -449,6 +449,13 @@ static void symbol_report(void *opaque, JSSymbolKind kind, const char *name,
     JS_SetPropertyStr(ctx, obj, "Kind", JS_NewString(ctx, symbol_kind_name(kind)));
     JS_SetPropertyStr(ctx, obj, "Line", JS_NewInt32(ctx, line));
     JS_SetPropertyStr(ctx, obj, "Parent", JS_NewString(ctx, parent ? parent : ""));
+    /* The base class, and the one field that makes the answer a *shape* rather
+     * than a list of names: without it a class declared in a file this process
+     * never runs has no way to say what it inherits, and an inherited surface
+     * is most of what a control has. Empty for everything that is not a class,
+     * and for a class whose `extends` is not a plain identifier -- see
+     * JSSymbolHandler in quickjs.h for why that is the limit. */
+    JS_SetPropertyStr(ctx, obj, "Super", JS_NewString(ctx, supertype ? supertype : ""));
 
     /* The value is taken either way; the count only moves when it landed, so
      * an array this hands back never has a hole for a caller to trip on. */

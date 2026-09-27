@@ -216,9 +216,12 @@ a permission or a package, ask the person at the machine; do not retry
 alternatives.** Their one sentence costs less than your half hour, and an
 improvised substitute is what turns a question into a false result.
 
-**And a commit says who wrote it, by its own name.** Every commit an agent makes
-carries a trailer — `Co-Authored-By: opencode (deepseek-v4.1-flash)
-<noreply@opencode.ai>` for this one — and it never names another tool. The
+**And a commit says who wrote it, by its own name.** The machine owner is the
+author — `git commit` under their own `user.name`, which is the repository's
+config and not an override — and the agent is the trailer:
+`Co-Authored-By: opencode (<modelo>) <noreply@opencode.ai>`. The model in
+parentheses is the one that actually wrote it, so an agent that does not know
+its own name asks rather than copying the last trailer it saw. The
 history had ninety-two commits signed `Co-Authored-By: Claude` while the agent
 writing them was not Claude, because each one copied the trailer of the commit
 before it; a false statement in the permanent record is precisely what a trailer
@@ -440,13 +443,41 @@ used to read as no id at all; a project that declares none keeps the old answer,
 program's own name. `GtkApplication` also takes the id as the default window
 icon when the theme has one by that name (`gtkapplication.c`).
 
-## The six patches in vendor/
+## The seven patches in vendor/
 
 `vendor/quickjs` is a **submodule** of
 [`getbintana/quickjs`](https://github.com/getbintana/quickjs), branch `bintana`:
-upstream **v0.17.0** plus the six patches below, one commit each. The fork's
+upstream **v0.17.0** plus the seven patches below, one commit each. The fork's
 `BINTANA.md` is the recipe; what follows is what each patch does and what
 dropping it costs.
+
+**A stale `origin/bintana` in the submodule looks exactly like a diverged pin,
+and it is not one.** Working on the seventh patch, `vendor/quickjs` sat detached
+at a commit whose history had the same seven subjects as `origin/bintana` and
+whose trees differed by one hunk -- the `free` a value `JS_DebugSetLocal` returns
+early without, on a frame with no locals, which is the `JS_FreeRuntime` abort
+patch 4's own note records. That reads as **"the published branch lost a fix"**,
+which is what I concluded, wrote into this file, and put in a commit message.
+
+It had not. The fork checkout has its own `.git`, its `origin/bintana` was
+already the pinned commit, and nothing was missing anywhere: the submodule's
+remote-tracking ref simply had never been fetched since the push. **A
+remote-tracking ref is a cached belief about a remote, and the only way to know
+is to fetch** -- so
+
+```sh
+git -C vendor/quickjs fetch && git -C vendor/quickjs log --oneline origin/bintana..HEAD
+```
+
+before concluding anything from `git branch -vv` in a submodule. Two clones of
+one repository, one of which is a **working directory of the application rather
+than the fork itself**: the fix was where it had always been.
+
+**And a false finding in a commit message is worse than none**, because this
+file then repeats it: both were corrected in the amend, and the hunk is what
+made me look for the fork checkout at all -- which is where the actual work
+belongs. **The patch goes in `/home/matias/Proyectos/bintana-quickjs`**, on the
+`bintana` branch, and the submodule moves to the commit that comes out of it.
 
 An upgrade happens in two repositories:
 
@@ -459,10 +490,11 @@ git push --force-with-lease origin bintana
 git submodule update --remote vendor/quickjs              # and commit the pin
 ```
 
-Then the suite. All six are marked `Bintana patch` in the source, and
+Then the suite. All seven are marked `Bintana patch` in the source, and
 **dropping one does not fail to build** -- that is the property they share and
 the reason `tests/widgets` asserts each of them (`Decimal`, `JsonFiles`,
-`strictChecks`, `testDebugger`, `testCuratedLanguage`). Grep the fork for the
+`strictChecks`, `testDebugger`, `testCuratedLanguage`) -- the last of which now carries
+the seventh. Grep the fork for the
 marker after a rebase; there is no build-time check that they survived.
 
 ### 1. Operators on a Decimal
@@ -672,6 +704,58 @@ and answers `[]` for every source, so the IDE's outline, its handler marks and
 its go-to-symbol all go empty together -- with the suite red in `tests/widgets`
 (`testCuratedLanguage` asserts the classes, methods and lines) and in `tests/ide`
 (`goto` asserts a method typed and not saved is still found).
+
+### 7. The parser reports a class's base class
+
+`JSSymbolHandler` gains a `supertype`, which is the name in an `extends` clause.
+
+**It is the smallest change in this list and the one that was missing for
+longer than it looks like it is.** The sixth patch answers *what a file
+declares*: a class, its methods, the class a method is in. It does not answer
+*what a class has*, and the difference is everything above the class's own
+body — `Widget` alone is 66 names, so an editor asking about a library class
+was being offered **2 of the 68** it has. Nothing could be done about it in the
+IDE: a class in a file the IDE never runs is a lexical binding with no class
+behind it, so the runtime's own lookup refuses it too, and **the missing thing
+was a class, not a lookup.**
+
+**Three things are load-bearing, and the first is a wrong answer the first
+version gave.** The heritage is parsed *after* the class is named, so the report
+cannot happen where it did:
+
+- **A class with an `extends` is reported after the heritage is read**, and one
+  with none is reported exactly where it was. The property the early report
+  existed for — *a half-typed file still lists what it declared* — is kept by a
+  third report in the `fail` path, with no supertype, since the heritage is
+  either what failed or what was never reached.
+- **A `supertype` is captured as a bare identifier and then checked against the
+  opcode the heritage compiled to.** `extends mixin(Base)` and
+  `extends Base.field` both *start* with an identifier, and trusting the token
+  reported `mixin` as the base class — a wrong answer where the comment
+  promised none, and the reason the header says "a bare identifier". Four
+  opcodes are a name and nothing done to it (`OP_scope_get_var`, `OP_get_var`,
+  `OP_get_loc`, `OP_get_loc_check`); everything else reports nothing. No
+  lookahead, no backtracking, no reading the bytecode back for a name.
+- **Every one of the 207 classes in this tree extends a bare identifier** —
+  `Form` 125, `Record` 45, `Component` 30, and six more. That is what makes the
+  limit cost nothing here, and it is a measurement rather than an assumption:
+  `grep -rhoE "class \w+ extends [\w.]+" --include="*.js"` over `ide/ lib/
+  examples/ tests/ runtime/js/`.
+
+**And the parser cannot tell a `static` from an accessor**, which is the eighth
+patch and not this one: all three reach `js_parse_class` as a method of the same
+name, so `Application.Symbols` reports `static Make()`, `get Value()` and
+`turn()` identically. Separating them is three more `JSSymbolKind` values and no
+signature change — which is why it is a patch of its own and could be applied
+without this one.
+
+**Dropping this patch does not fail to build** and nothing stops working: the
+symbol report is the sixth patch's, unchanged in everything but one more
+argument. `tests/widgets` asserts it (`testCuratedLanguage`: a class that
+extends one, a chain, one that extends nothing, an `extends` that is a call, a
+method, and **a class that breaks in its body still carrying the supertype it
+read before the break**), and without it the editor's completion of a library
+class is the 2 of 68 again.
 
 ## Memory rules
 

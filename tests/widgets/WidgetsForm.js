@@ -10907,6 +10907,52 @@ function Main() {
         eq("...and the one the error is in", part[2].Name, "Bad");
 
         /*
+         * **The seventh vendor patch: a class's base class.**
+         *
+         * Without it a class declared in a file this process never runs cannot
+         * say what it inherits, and an inherited surface is most of what a
+         * control has -- an editor asking `Widget.Members("Confirm")` was
+         * offered 2 of the 68 names the class has, because the parser reported
+         * the methods it declares and nothing above them.
+         */
+        const shape = Application.Symbols(
+            "class Base {}\n" +                    /* 1 */
+            "class Plain extends Base {}\n" +       /* 2 */
+            "class Chain extends Plain {}\n" +      /* 3 */
+            "class Mixin extends make(Base) {}\n" + /* 4 */
+            "class Member extends Base { A() {} }\n" + /* 5 */
+            "class Body extends Base { oops\n");    /* 6 */
+        const cls = (n) => shape.find((x) => x.Name === n);
+
+        eq("a class that extends one reports it by name",
+           cls("Plain").Super, "Base");
+        eq("...and the whole chain is readable, one answer at a time",
+           cls("Chain").Super, "Plain");
+        eq("a class that extends nothing says so rather than guessing",
+           cls("Base").Super, "");
+        /* **A heritage that is an expression is not a name**, and the first
+         * version of this patch reported `make` -- a wrong answer where the
+         * comment promised none. Four opcodes are a name and nothing done to
+         * it; everything else is nothing. */
+        eq("an extends that is a call reports no supertype",
+           cls("Mixin").Super, "");
+        /* The class above does carry `Base` -- the point is that the *method*
+         * inside it does not, and that a method's `parent` is what says which
+         * class it belongs to. */
+        eq("the class of the last line does have its base class",
+           cls("Member").Super, "Base");
+        eq("and a method inside it is not itself a subclass",
+           shape.find((x) => x.Name === "A").Super, "");
+        /* **The property the report moving could have cost.** A class with an
+         * `extends` is now reported *after* the heritage is parsed, so a class
+         * that breaks in its own body is the case worth holding: it must still
+         * be listed, and with the supertype it had read before the break. */
+        eq("a class that breaks in its body is still listed with its base class",
+           cls("Body") !== undefined && cls("Body").Super, "Base");
+        eq("...and it is the last thing reported, as it is the one that broke",
+           shape[shape.length - 1].Name, "Body");
+
+        /*
          * **`async` is refused where it is written, in every form it has.**
          *
          * This is the guard on the fifth vendor patch, and it is worth knowing
