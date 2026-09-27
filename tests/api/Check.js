@@ -1055,6 +1055,97 @@ function checkTypings(root, members, problems) {
     }
 
     /*
+     * **Every member of every shipped library, class by class.**
+     *
+     * This is the check whose absence cost the most, and it is worth saying what
+     * the absence looked like: four library classes were skipped by the
+     * generator **and nothing failed**, because the loop above asks about the
+     * runtime's own classes and a library's class is not one -- `Widget.Types()`
+     * is the widget table and `lib/charts` is not in it. So "a member that
+     * exists, that an editor is asked about, and that is declared nowhere" was
+     * the ordinary state for as long as nobody asked, and the fix was seven lines
+     * of runtime while the problem stayed invisible -- which makes it a property
+     * of the *check* and not of the generator.
+     *
+     * **And the answer used is the complete one**: the sources and the forms,
+     * because a form's children are own properties of the instance and the last
+     * name to be missing everywhere was `Confirm.BtnAccept`, which the library's
+     * own code uses.
+     */
+    const asked        = [];
+    const source_texts = [];
+    const form_texts   = [];
+
+    for (const lib of Application.Libraries()) {
+        const dir = Application.LibraryPath(lib);
+        if (!dir) continue;
+
+        for (const form of Directory.Files(dir, "*.form"))
+            form_texts.push(File.Load(form));
+        for (const file of Directory.Files(dir, "*.js")) {
+            const source = File.Load(file);
+            source_texts.push(source);
+            for (const sym of Application.Symbols(source))
+                if (sym.Kind === "Class") asked.push(sym.Name);
+        }
+    }
+
+    const blocks2 = declarationBlocks(text);
+
+    for (const name of asked) {
+        const block = blocks2[name];
+        if (!block) {
+            problems.push(`${name} is not declared in bintana.d.ts -- ` +
+                          `run tests/typings.sh`);
+            continue;
+        }
+
+        let all = null;
+        try {
+            all = Widget.Members(name, { Sources: source_texts,
+                                         Forms: form_texts });
+        } catch (e) {
+            problems.push(`${name}: Widget.Members refused -- ${e.message}`);
+            continue;
+        }
+
+        for (const m of all) {
+            count++;
+            const line = new Regex("^ {4}(?:readonly )?(?:static )?" +
+                                   Regex.Escape(m.Name) + "\\s*[:(]",
+                                   { Multiline: true });
+            if (!line.IsMatch(block.join("\n")))
+                problems.push(`${name}.${m.Name} is in the runtime and not in ` +
+                              `bintana.d.ts -- run tests/typings.sh`);
+        }
+    }
+
+    /*
+     * **And no line carries a name nobody wrote.** `a1: any` is what a
+     * generated file full of placeholders looks like, and the first version of
+     * the parameter work wrote fifty-nine of them into this file across thirteen
+     * classes -- every one of which had its parameter names in a source the
+     * generator had just read. A test over the whole file rather than over one
+     * member, so it holds for a class nobody thought to test.
+     */
+    for (const line of text.split("\n")) {
+        if (!line.startsWith("    ") || line.startsWith("    /**")) continue;
+
+        /* **Inside the parameter list, and that is where they are.** The first
+         * version of this matched a line whose *name* was a placeholder, which
+         * is a declaration of `a1` and not what the generator writes: it wrote
+         * `Ask(a1: any, a2: any, a3: any)`, fifty-nine of them, with the
+         * placeholder as a parameter of a real method. The check went green on
+         * the exact thing it was added for. */
+        const fake = new Regex("[\\s,(]([a-z]\\d+)\\??\\s*:")
+                        .Match(line.slice(4));
+        if (fake)
+            problems.push(`bintana.d.ts: ${line.trim()} names a parameter ` +
+                          "nobody wrote -- run tests/typings.sh");
+        count++;
+    }
+
+    /*
      * ...and with the **parameters the runtime declares**, class by class: a
      * name means different parameters in different classes -- `Serialize` is
      * `(parentIsFixed)` on `Widget` and `()` on `Form` -- so a line has to be

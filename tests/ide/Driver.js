@@ -3146,6 +3146,32 @@ function* p_completion(ide) {
           ask("", "Dial.").every((e) => typeof e.Detail === "string"),
           JSON.stringify(ask("", "Dial.").slice(0, 3)));
 
+    /* **The popup and the runtime must agree, for every member of every class
+     * the project can declare.** This is the third consumer, and it is the one
+     * the two `api.sh` checks cannot reach: they read the generated file and the
+     * runtime, and nothing compares the list the editor actually offers against
+     * either. So a name the runtime has and the popup does not is invisible --
+     * which is how `Face` and `BtnAccept` were missing, and how `Confirm.` was
+     * empty.
+     *
+     * **Asked of the runtime, not of a list written here**, for the reason the
+     * whole module is held to. */
+    const widgetNames = Widget.Types();
+    let mismatched = [];
+    for (const name of [...widgetNames, "Dial", "Gadget", "Face"]) {
+        let want = [];
+        try { want = Widget.Members(name).map((m) => m.Name); } catch (e) { continue; }
+        if (!want.length) continue;
+        const got = ask("", `        ${name}.`).map((e) => e.Text);
+        const missing = want.filter((n) => !got.includes(n));
+        if (missing.length) mismatched.push(`${name}: ${missing.join(",")}`);
+    }
+    check("every class the runtime describes is offered whole by the popup",
+          mismatched.length === 0, JSON.stringify(mismatched).slice(0, 220));
+    check("and the check asked about a real number of classes, not one",
+          widgetNames.length > 40 && Widget.Types().length > 40,
+          JSON.stringify(widgetNames.length));
+
     /* **No name is invented, anywhere.** The count is real and a name built from
      * it is not the parameter's, so `a1` in a popup is a claim nobody made. This
      * is a property of the whole list rather than of one member, which is what
