@@ -1478,24 +1478,54 @@ static JSValue js_text_get_font(JSContext *ctx, JSValueConst this_val)
 }
 
 static const JSCFunctionListEntry text_props[] = {
-    /* Width(text, [font], [options]) -> number */
+    /* Width(text, [font], [options]) -> number
+     *   how wide it lays out, in pixels
+     */
     JS_CFUNC_MAGIC_DEF("Width",  3, js_text_measure, TEXT_WIDTH),
-    /* Height(text, [font], [options]) -> number */
+    /* Height(text, [font], [options]) -> number
+     *   how tall — one line's height, or the whole block's when it wraps
+     */
     JS_CFUNC_MAGIC_DEF("Height", 3, js_text_measure, TEXT_HEIGHT),
-    /* Size(text, [font], [options]) -> { Width, Height } */
+    /* Size(text, [font], [options]) -> { Width, Height }
+     *   `{ Width, Height, Lines }` in **one** measurement, which is one
+     *   layout instead of three
+     */
     JS_CFUNC_MAGIC_DEF("Size",   3, js_text_measure, TEXT_SIZE),
-    /* Lines(text, [font], [options]) */
+    /* Lines(text, [font], [options])
+     *   the lines it breaks into, as an array — for a caller that will draw
+     *   them one by one. **Refused with `Markup`** — see below
+     */
     JS_CFUNC_MAGIC_DEF("Lines",  3, js_text_measure, TEXT_LINES),
-    /* Escape(text) -> string */
+    /* Escape(text) -> string
+     *   the text as markup that says exactly it: `&`, `<` and `>` escaped
+     */
     JS_CFUNC_DEF("Escape", 1, js_text_escape),
-    /* IndexAt(text, x, y, [font], [options]) -> number */
+    /* IndexAt(text, x, y, [font], [options]) -> number
+     *   which character is at that point, as an index into the text **as it
+     *   was laid out** — a markup run's tags already consumed. Above the text
+     *   is `0` and below it is the end
+     */
     JS_CFUNC_DEF("IndexAt", 5, js_text_index_at),
-    /* Bounds(text, from, to, [font], [options]) */
+    /* Bounds(text, from, to, [font], [options])
+     *   the rectangles covering those characters: `{ X, Y, Width, Height }`,
+     *   one per line the range crosses and more than one on a line that
+     *   changes direction
+     */
     JS_CFUNC_DEF("Bounds",  5, js_text_bounds),
-    /* LineOf(text, index) -> number */
+    /* LineOf(text, index) -> number
+     *   the line an index falls on, 1-based and clamped — `index` is the
+     *   number a **search** gave, so it is counted in UTF-16 units
+     */
     JS_CFUNC_DEF("LineOf",  2, js_text_line_of),
-    /* OffsetAt(text, line, [column]) -> number */
+    /* OffsetAt(text, line, [column]) -> number
+     *   the **character** offset of that line and column, clamped the way an
+     *   editor's `Select` clamps
+     */
     JS_CFUNC_DEF("OffsetAt", 3, js_text_offset_at),
+    /* Font
+     *   the desktop's UI font, which is what a control draws with unless CSS
+     *   says otherwise. `""` where there is no display to ask
+     */
     JS_CGETSET_DEF("Font", js_text_get_font, NULL),
 };
 
@@ -1788,58 +1818,161 @@ static JSValue painter_transform(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry painter_props[] = {
+    /* Color
+     *   any CSS colour, the same spelling `Background` takes
+     *   (`"rgba(53,132,228,0.2)"`). Reads back the string it was given;
+     *   before anything is set, the theme's ink
+     */
     JS_CGETSET_DEF("Color",      painter_get_color,      painter_set_color),
+    /* LineDash
+     *   an array of lengths, `[]` for solid
+     */
     JS_CGETSET_DEF("LineDash",   painter_get_dash,       painter_set_dash),
+    /* LineCap
+     *   `Butt` `Round` `Square`
+     */
     JS_CGETSET_DEF("LineCap",    painter_get_cap,        painter_set_cap),
+    /* LineJoin
+     *   `Miter` `Round` `Bevel`
+     */
     JS_CGETSET_DEF("LineJoin",   painter_get_join,       painter_set_join),
+    /* Font
+     *   a Pango description (`"Cantarell Bold 10"`). Defaults to the
+     *   widget's, so a drawing follows the desktop's font and text scale
+     */
     JS_CGETSET_DEF("Font",       painter_get_font,       painter_set_font),
+    /* Foreground
+     *   the colour this widget's text is drawn in, resolved — the theme's, or
+     *   the control's own `Foreground` if a form set one. The one fact a
+     *   drawing cannot work out for itself. A *change* to it reaches the
+     *   painter a turn later
+     */
     JS_CGETSET_DEF("Foreground", painter_get_foreground, NULL),
+    /* Dark
+     *   whether the ground is dark, derived from the ink's luminance. What a
+     *   palette is chosen by
+     */
     JS_CGETSET_DEF("Dark",       painter_get_dark,       NULL),
+    /* LineWidth
+     *   in pixels. Default `1`
+     */
     JS_CGETSET_MAGIC_DEF("LineWidth", painter_get_pen, painter_set_pen, PEN_WIDTH),
+    /* Antialias
+     *   smooth edges. Default `true`. **The one performance knob**: a line
+     *   that crosses its own height on every segment costs 109 ms antialiased
+     *   and 7.8 ms without, measured — the cost is in pixels covered, not in
+     *   points
+     */
     JS_CGETSET_MAGIC_DEF("Antialias", painter_get_pen, painter_set_pen, PEN_ANTIALIAS),
-    /* MoveTo(x, y) */
+    /* MoveTo(x, y)
+     *   start somewhere
+     */
     JS_CFUNC_MAGIC_DEF("MoveTo",    2, painter_path, PATH_MOVE),
-    /* LineTo(x, y) */
+    /* LineTo(x, y)
+     *   a segment
+     */
     JS_CFUNC_MAGIC_DEF("LineTo",    2, painter_path, PATH_LINE),
-    /* ClosePath() */
+    /* ClosePath()
+     *   back to where the path started
+     */
     JS_CFUNC_MAGIC_DEF("ClosePath", 0, painter_path, PATH_CLOSE),
-    /* Fill() */
+    /* Fill()
+     *   fill the path, and clear it
+     */
     JS_CFUNC_MAGIC_DEF("Fill",      0, painter_path, PATH_FILL),
-    /* Stroke() */
+    /* Stroke()
+     *   stroke the path, and clear it
+     */
     JS_CFUNC_MAGIC_DEF("Stroke",    0, painter_path, PATH_STROKE),
-    /* Clip() */
+    /* Clip()
+     *   clip to the current path
+     */
     JS_CFUNC_MAGIC_DEF("Clip",      0, painter_path, PATH_CLIP),
-    /* CurveTo(x1, y1, x2, y2, x, y) */
+    /* CurveTo(x1, y1, x2, y2, x, y)
+     *   a cubic Bézier: two control points and the end
+     */
     JS_CFUNC_DEF("CurveTo", 6, painter_curve),
-    /* Rectangle(x, y, width, height) */
+    /* Rectangle(x, y, width, height)
+     *   into the path
+     */
     JS_CFUNC_MAGIC_DEF("Rectangle",     4, painter_rectangle, RECT_PATH),
-    /* ClipRectangle(x, y, width, height) */
+    /* ClipRectangle(x, y, width, height)
+     *   the common case of it
+     */
     JS_CFUNC_MAGIC_DEF("ClipRectangle", 4, painter_rectangle, RECT_CLIP),
-    /* Arc(x, y, radius, from, to) */
+    /* Arc(x, y, radius, from, to)
+     *   **angles in degrees**, clockwise, zero at three o'clock. Appends to
+     *   the path, so a pie slice is `MoveTo` the centre, `Arc`, `ClosePath`,
+     *   `Fill`
+     */
     JS_CFUNC_MAGIC_DEF("Arc",         5, painter_arc, 0),
-    /* ArcNegative(x, y, radius, from, to) */
+    /* ArcNegative(x, y, radius, from, to)
+     *   the same arc counter-clockwise. **A ring needs it**: a doughnut
+     *   segment is the inner start, `Arc` out and round, then `ArcNegative`
+     *   back along the inner radius — one path. Going back with a `MoveTo`
+     *   makes a second subpath, and filling two subpaths cuts wedges through
+     *   the shape
+     */
     JS_CFUNC_MAGIC_DEF("ArcNegative", 5, painter_arc, 1),
-    /* Polyline(points) */
+    /* Polyline(points)
+     *   a flat array — `[x, y, x, y, …]` — as one call. Worth about 2× over a
+     *   loop of `LineTo`, measured, because filling the array costs what the
+     *   calls would
+     */
     JS_CFUNC_MAGIC_DEF("Polyline", 1, painter_polyline, POLY_OPEN),
-    /* Polygon(points) */
+    /* Polygon(points)
+     *   the same, closed
+     */
     JS_CFUNC_MAGIC_DEF("Polygon",  1, painter_polyline, POLY_CLOSED),
-    /* Text(text, x, y, [options]) */
+    /* Text(text, x, y, [options])
+     *   the text with its top-left corner there, in `Font`. Leaves no path
+     *   behind. `options` is `{ Width, Markup, Align }` — see below
+     */
     JS_CFUNC_DEF("Text", 4, painter_text),
-    /* Image(source, x, y, [width], [height]) */
+    /* Image(source, x, y, [width], [height])
+     *   a picture, put down with its top-left corner there. **One of
+     *   `width`/`height` is enough** — the other follows the image's own
+     *   proportions. With neither it is drawn at its natural size, one image
+     *   pixel to one. A **string** is a file, absolute or relative to the
+     *   working directory; **`Bytes`** are the image itself, which is what
+     *   `Http` answers with. Missing, or not an image, **throws** and ends
+     *   the frame. A path is decoded once and cached, so a drawing may paint
+     *   the same logo every frame; **bytes are decoded on every call** — the
+     *   cache is keyed on the path, and bytes have no key that stays true.
+     *   Measured: 2.7 ms a call for a 640×480 PNG against 0.045 ms for the
+     *   same file cached. A handler painting the same bytes every frame wants
+     *   a `Picture` with `LoadBytes` instead
+     */
     JS_CFUNC_DEF("Image", 5, painter_image),
-    /* TextWidth(text, [options]) */
+    /* TextWidth(text, [options])
+     *   how wide it would be, which is how a label is right-aligned
+     */
     JS_CFUNC_MAGIC_DEF("TextWidth",  2, painter_measure_js, MEASURE_WIDTH),
-    /* TextHeight(text, [options]) */
+    /* TextHeight(text, [options])
+     *   how tall it would be. A chart asking for a line's height passes
+     *   `"0"`; the same options, so a wrapped or styled run measures as what
+     *   it will be
+     */
     JS_CFUNC_MAGIC_DEF("TextHeight", 2, painter_measure_js, MEASURE_HEIGHT),
-    /* Push() */
+    /* Push()
+     *   remember the colour, the pen, the transform and the clip
+     */
     JS_CFUNC_MAGIC_DEF("Push", 0, painter_state, STATE_PUSH),
-    /* Pop() */
+    /* Pop()
+     *   back to the last `Push`
+     */
     JS_CFUNC_MAGIC_DEF("Pop",  0, painter_state, STATE_POP),
-    /* Translate(x, y) */
+    /* Translate(x, y)
+     *   move the origin
+     */
     JS_CFUNC_MAGIC_DEF("Translate", 2, painter_transform, XFORM_TRANSLATE),
-    /* Scale(x, [y]) */
+    /* Scale(x, [y])
+     *   one argument scales both
+     */
     JS_CFUNC_MAGIC_DEF("Scale",     2, painter_transform, XFORM_SCALE),
-    /* Rotate(degrees) */
+    /* Rotate(degrees)
+     *   degrees, like `Arc`
+     */
     JS_CFUNC_MAGIC_DEF("Rotate",    1, painter_transform, XFORM_ROTATE),
 };
 
@@ -2395,15 +2528,39 @@ static JSValue area_save_pdf(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry area_props[] = {
-    /* Redraw() */
+    /* Redraw()
+     *   the drawing may have changed: ask again
+     */
     JS_CFUNC_DEF("Redraw", 0, area_redraw),
-    /* Dump() */
+    /* Dump()
+     *   the last frame as text, one call per line — empty until something has
+     *   been drawn
+     */
     JS_CFUNC_DEF("Dump",   0, area_dump),
-    /* Save(path, [width], [height]) */
+    /* Save(path, [width], [height])
+     *   run the same `Draw` against an image surface and write it as a PNG.
+     *   Without a size it uses the widget's own, and a surface that has never
+     *   been allocated has none — so pass one. Refused from inside a `Draw`
+     *   (one painter, one frame at a time) and above 16384 a side. **A `Draw`
+     *   that throws writes no file** and the throw reaches the caller
+     */
     JS_CFUNC_DEF("Save",    3, area_save),
-    /* ToPng([width], [height]) */
+    /* ToPng([width], [height])
+     *   the same frame as `Save`, answered as `Bytes` instead of written: a
+     *   chart to be posted, attached or put in a reply, with nothing on disk.
+     *   Same sizes, same refusals, same rule that a `Draw` which throws
+     *   answers nothing
+     */
     JS_CFUNC_DEF("ToPng",   2, area_to_png),
-    /* SavePdf(path, width, height, [pages], [before]) */
+    /* SavePdf(path, width, height, [pages], [before])
+     *   the same `Draw`, once per page, into one **PDF**. The size is in
+     *   **points**, 72 to the inch (A4 is 595×842, Letter 612×792) and is
+     *   what the handler is given as its frame size; the surface is vector,
+     *   so text stays text. `pages` defaults to 1. `before(page)` is called
+     *   before each page — that is how the handler knows which one it is
+     *   drawing, since `Draw`'s own arguments do not say. A page that throws
+     *   leaves **no file**
+     */
     JS_CFUNC_DEF("SavePdf", 5, area_save_pdf),
 };
 
@@ -2415,9 +2572,31 @@ void bta_paint_register(void)
          * screen came from the handler, and whatever prose that handler drew was
          * already translated where it was written.
          */
-        /* Draw(painter, width, height) */
-        /* DrawPage(painter, page, width, height) */
-        /* Paginate(width, height) */
+        /* Draw(painter, width, height)
+         *   paint it. The size is the frame's, in logical pixels
+         */
+        /* DrawPage(painter, page, width, height)
+         *   paint one **sheet of paper**, raised by
+         *   [`Printer`](docs/llm/library.md#printer) and by `SavePdf` in
+         *   place of `Draw`. `page` is 1-based and the size is the printable
+         *   area in **points**, 72 to the inch. A form that declares no
+         *   `DrawPage` gets `Draw`, which is right for a drawing that is one
+         *   page — and is why nothing had to change when this arrived
+         */
+        /* Paginate(width, height)
+         *   **how many sheets this document is at that size**, answered back.
+         *   Raised by [`Printer`](docs/llm/library.md#printer) once the
+         *   dialog has settled the paper — the only moment it can be known,
+         *   and the moment the count that was declared may be wrong.
+         *   `width`/`height` are the printable area in points, which is the
+         *   sheet **less the printer's own margins**. A control that declares
+         *   none keeps the `Pages` it was given, and one whose layout does
+         *   not move with the paper should declare none: `lib/report` scales
+         *   to fit and does not, `lib/markdown` re-flows and does. It runs
+         *   inside the print operation, so measure freely but **raise no
+         *   events of your own** — one that re-entered the drawing hung the
+         *   suite
+         */
         BTA_CLASS("DrawingArea", "Control", build_drawing_area, area_props, false,
                   "Draw,DrawPage,Paginate"),
     };

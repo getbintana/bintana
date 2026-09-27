@@ -533,20 +533,41 @@ static JSValue bytes_from_hex(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry bytes_proto_funcs[] = {
+    /* Length
+     *   how many bytes
+     */
     JS_CGETSET_DEF("Length", bytes_get_length, NULL),
-    /* At(index) -> number */
+    /* At(index) -> number
+     *   one byte as a number, `0`–`255`. **Throws** past the end rather than
+     *   answering `undefined`
+     */
     JS_CFUNC_DEF("At",       1, bytes_at),
-    /* Slice(from, [count]) -> Bytes */
+    /* Slice(from, [count]) -> Bytes
+     *   a new `Bytes`; **clamped** like a string's, and a negative `from`
+     *   counts from the end
+     */
     JS_CFUNC_DEF("Slice",    2, bytes_slice),
-    /* Concat(...others) -> Bytes */
+    /* Concat(...others) -> Bytes
+     *   a new one, end to end
+     */
     JS_CFUNC_DEF("Concat",   1, bytes_concat),
-    /* Equals(other) -> boolean */
+    /* Equals(other) -> boolean
+     *   byte for byte. `==` compares two objects by identity, so **this is
+     *   the only comparison there is**
+     */
     JS_CFUNC_DEF("Equals",   1, bytes_equals),
-    /* ToText() -> string */
+    /* ToText() -> string
+     *   the text it is, or a **throw** when it is not valid UTF-8 — never the
+     *   replacement character, which is a corruption that travels
+     */
     JS_CFUNC_DEF("ToText",   0, bytes_to_text),
-    /* ToBase64() -> string */
+    /* ToBase64() -> string
+     *   as text; hex is lower-case, the way a digest is written
+     */
     JS_CFUNC_DEF("ToBase64", 0, bytes_to_base64),
-    /* ToHex() -> string */
+    /* ToHex() -> string
+     *   as hex, lower-case, the way a digest is written
+     */
     JS_CFUNC_DEF("ToHex",    0, bytes_to_hex),
     JS_CFUNC_DEF("toString", 0, bytes_to_string),
     JS_CFUNC_DEF("toJSON",   0, bytes_to_json),
@@ -566,10 +587,17 @@ void bta_bytes_init(JSContext *ctx, JSValue global)
 
     JSValue ctor = JS_NewCFunction2(ctx, bytes_construct, "Bytes", 1,
                                     JS_CFUNC_constructor, 0);
-    /* FromBase64(text) -> Bytes */
+    /* FromBase64(text) -> Bytes
+     *   **refused, not guessed**, when the text is not that — a base64 string
+     *   with a space in it is a mistake somebody should hear about
+     */
     JS_SetPropertyStr(ctx, ctor, "FromBase64",
                       JS_NewCFunction(ctx, bytes_from_base64, "FromBase64", 1));
-    /* FromHex(text) -> Bytes */
+    /* FromHex(text) -> Bytes
+     *   from hex, **refused, not guessed**, when the text is not that -- an
+     *   odd number of digits or a character that is not one is a mistake
+     *   somebody should hear about
+     */
     JS_SetPropertyStr(ctx, ctor, "FromHex",
                       JS_NewCFunction(ctx, bytes_from_hex, "FromHex", 1));
     JS_SetConstructor(ctx, ctor, proto);

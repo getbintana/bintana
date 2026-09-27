@@ -13,15 +13,15 @@ It is a `Widget` and a control like any other, so everything on
 
 | | | |
 |---|---|---|
-| `Value` | a CSS colour, `""` for none | [the colour](#the-colour) |
-| **event** `Change()` | the value changed, **including from code** | [the colour](#the-colour) |
+| `Value` | what was chosen, as an `rgb(…)` or `rgba(…)` string — **what `Background`, `Foreground` and `Painter.Color` take**, so a colour goes from this control to whatever is drawn with it and nothing has to parse anything | [the colour](#the-colour) |
+| **event** `Change()` | the value changed, including from an assignment in code — the round trip goes out to GTK and back | [the colour](#the-colour) |
 
 ## The colour
 
 | | |
 |---|---|
-| `Value` | what was chosen, as an `rgb(…)` or `rgba(…)` string — **what `Background`, `Foreground` and `Painter.Color` take**, so a colour goes from this control to whatever is drawn with it and nothing has to parse anything. `""` is no colour, and the button shows the cleared state |
-| **event** `Change()` | the colour changed — chosen, cleared, or **assigned from code** |
+| `Value` | what was chosen, as an `rgb(…)` or `rgba(…)` string — **what `Background`, `Foreground` and `Painter.Color` take**, so a colour goes from this control to whatever is drawn with it and nothing has to parse anything. `""` is no colour, and the button shows the cleared state. What comes back is what `Background` takes |
+| **event** `Change()` | the value changed, including from an assignment in code — the round trip goes out to GTK and back |
 
 The chooser itself is the desktop's, with its palette, its custom colours and its
 eyedropper if it has one; nothing about it is this control's to configure.

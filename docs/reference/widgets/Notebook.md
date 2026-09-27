@@ -12,16 +12,16 @@ follows is what is its own.
 
 | | | |
 |---|---|---|
-| `Count` (ro) | how many pages | [the pages](#the-pages) |
-| `Current` | the page showing, `-1` when there are none. Default `-1` | [the page showing](#the-page-showing) |
-| `Strip` | `Top` `Bottom` `Start` `End` `None`. Default `"Top"` | [the strip](#the-strip) |
-| `Tabs` | the strip, as an array of strings. **Translated** | [the strip](#the-strip) |
-| `Append(child, [label])` | one more page | [the pages](#the-pages) |
-| `GetAction(where)` | → the widget in that end of the strip, or `null` | [a widget in the strip](#a-widget-in-the-strip) |
-| `RemovePage(index)` | takes a page out | [the pages](#the-pages) |
-| `SetAction(control, [where])` | puts a widget **in the strip** instead of making it a page | [a widget in the strip](#a-widget-in-the-strip) |
-| `SetTabLabel(index, label)` | renames one tab | [the strip](#the-strip) |
-| **event** `Switch(index)` | a different page is showing | [the page showing](#the-page-showing) |
+| `Count` (ro) | how many pages there are | [the pages](#the-pages) |
+| `Current` | which page is showing, `-1` when there are none | [the page showing](#the-page-showing) |
+| `Strip` | where the tabs are | [the strip](#the-strip) |
+| `Tabs` | the labels, as an array of strings | [the strip](#the-strip) |
+| `Append(child, [label])` | one more page, at the end | [the pages](#the-pages) |
+| `GetAction(where)` | the widget in that end of the strip, or `null` | [a widget in the strip](#a-widget-in-the-strip) |
+| `RemovePage(index)` | takes that page out, and the control in it goes with it | [the pages](#the-pages) |
+| `SetAction(control, [where])` | puts a widget **in the tab strip** instead of making it a page | [a widget in the strip](#a-widget-in-the-strip) |
+| `SetTabLabel(index, label)` | renames one, and **`label` is a widget** like `Append`'s — what a tab showing a file name and an asterisk needs | [the strip](#the-strip) |
+| **event** `Switch(index)` | a different page is showing — chosen by the user or assigned | [the page showing](#the-page-showing) |
 
 ## The pages
 
@@ -38,7 +38,7 @@ A page declared in a `.form` is an ordinary child; `Tabs` names them.
 
 | | |
 |---|---|
-| `Current` | which page is showing, `-1` when there are none. Assigning it switches, and **raises `Switch`** |
+| `Current` | which page is showing, `-1` when there are none. Assigning it switches, and **raises `Switch`**. Default `-1` |
 | **event** `Switch(index)` | a different page is showing — chosen by the user or assigned |
 
 **A notebook with no pages is not nothing**: it is an expanding widget with an
@@ -49,7 +49,7 @@ than leaving a blank band. That is what the IDE does when every file is closed.
 
 | | |
 |---|---|
-| `Strip` | where the tabs are: `Top` `Bottom` `Start` `End`, or `None` for no strip at all — which is a notebook only code switches, and a [`Switcher`](Switcher.md) is usually the better answer |
+| `Strip` | where the tabs are: `Top` `Bottom` `Start` `End`, or `None` for no strip at all — which is a notebook only code switches, and a [`Switcher`](Switcher.md) is usually the better answer. Default `"Top"` |
 | `Tabs` | the labels, as an array of strings. **Translated** |
 | `SetTabLabel(index, label)` | renames one, and **`label` is a widget** like `Append`'s — what a tab showing a file name and an asterisk needs |
 
@@ -57,8 +57,8 @@ than leaving a blank band. That is what the IDE does when every file is closed.
 
 | | |
 |---|---|
-| `SetAction(control, [where])` | puts a widget in the tab strip instead of making it a page. `where` is `Start` or `End`; `null` takes it out |
-| `GetAction(where)` | → the widget in that end, or `null` |
+| `SetAction(control, [where])` | puts a widget **in the tab strip** instead of making it a page. `where` is `Start` or `End`; `null` takes it out. In a `.form` this is a child carrying `"strip": "End"` |
+| `GetAction(where)` | the widget in that end of the strip, or `null` |
 
 The button at the end of a strip of tabs — *close all*, *new tab*, a menu — which
 is a place a window has and a page is not. In a `.form` it is a child carrying

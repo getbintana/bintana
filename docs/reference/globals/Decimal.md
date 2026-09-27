@@ -16,13 +16,13 @@ holds the digits somebody wrote and does arithmetic on them.
 | | | |
 |---|---|---|
 | `new Decimal(value, [decimals])` | from text, a number or another decimal | [making one](#making-one) |
-| `Abs()` | → its magnitude | [asking about one](#asking-about-one) |
-| `IsExact` | whether it is what it says it is | [asking about one](#asking-about-one) |
-| `Number()` | → the nearest double, **by name** | [leaving the type](#leaving-the-type) |
-| `Round(decimals, [how])` | `"Away"` (default) `"Even"` `"Zero"` `"Up"` `"Down"` | [rounding](#rounding) |
-| `Scale` | how many decimal places it carries | [asking about one](#asking-about-one) |
+| `Abs()` | its magnitude | [asking about one](#asking-about-one) |
+| `IsExact` | whether the value is exactly what its digits say, which a division may make false | [asking about one](#asking-about-one) |
+| `Number()` | the nearest double, asked for **by name**: for a chart, a width, a percentage — anywhere the value stops being money | [leaving the type](#leaving-the-type) |
+| `Round(decimals, [how])` | `"Away"` (the default — the half goes away from zero, which is what an invoice does), `"Even"` (banker's), `"Zero"`, `"Up"`, `"Down"` | [rounding](#rounding) |
+| `Scale` | how many decimal places it carries — `2` for money that came from `"19.99"` | [asking about one](#asking-about-one) |
 | `Sign` | `-1`, `0` or `1` | [asking about one](#asking-about-one) |
-| `Trim()` | `2.50` → `2.5` | [rounding](#rounding) |
+| `Trim()` | drops trailing zeros | [rounding](#rounding) |
 | `toJSON()` | its own text, so a file reads back as itself | [leaving the type](#leaving-the-type) |
 | `toString()` | its own text, so `${d}` is exact | [leaving the type](#leaving-the-type) |
 | `Decimal.Split(total, parts)` | pieces that add back up to the total, **exactly** | [splitting](#splitting) |

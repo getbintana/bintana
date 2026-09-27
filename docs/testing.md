@@ -1,7 +1,7 @@
 # Testing
 
 ```sh
-./tests/run.sh                          # all six projects, 7382 assertions
+./tests/run.sh                          # all six projects, 7390 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -374,7 +374,12 @@ every global the C installs and fails on a `Method` or `Static` with no
 `Signature` -- proved by deleting
 `/* Load(path) */` and watching it name `File.Load`. A verb written in
 JavaScript passes without a comment, because the parser reads its parameters
-out of its own source. **The names in scope**: `testCuratedLanguage` holds
+out of its own source. **What a member is for**: `tests/api.sh` fails on a
+native member or event with no description beside its C entry, and on a page of
+`docs/llm` or `docs/reference` whose member rows are not what `./tools/docs.sh`
+would write from those descriptions; `tests/widgets` asserts `Doc`, `Native` and
+`EventDoc`, and `tests/ide`'s `completion` the popup's plain first sentence.
+**The names in scope**: `testCuratedLanguage` holds
 the ninth patch's report (each declared name at its line, every function as a
 span with its parameters, an arrow, one that broke), and `tests/ide`'s
 `completion` holds what a bare name offers from it -- a parameter and a local of

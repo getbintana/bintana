@@ -14,10 +14,10 @@ It is a `Widget` and a control like any other, so everything on
 | | | |
 |---|---|---|
 | `Active` | whether it is in | [in or out](#in-or-out) |
-| `Icon` | an icon name from the theme, as a `Button`'s | [what it says](#what-it-says) |
-| `Text` | the caption. **Translated** | [what it says](#what-it-says) |
-| `Click()` | presses it from code, which toggles `Active` | [in or out](#in-or-out) |
-| **event** `Click()` | it was pressed | [in or out](#in-or-out) |
+| `Icon` | an icon from the theme | [what it says](#what-it-says) |
+| `Text` | the caption | [what it says](#what-it-says) |
+| `Click()` | presses it from code: toggles `Active` and runs the handler | [in or out](#in-or-out) |
+| **event** `Click()` | it was pressed — or assigned | [in or out](#in-or-out) |
 
 ## Which of the three is this one
 

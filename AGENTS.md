@@ -55,7 +55,7 @@ reference:
 
 | A change to | goes in |
 |---|---|
-| a widget's properties, methods or events | [`docs/llm/controls.md`](docs/llm/controls.md) — and `tests/api.sh` **fails** until it does — plus [`docs/widgets.md`](docs/widgets.md) for the behaviour a table cannot state (`README.md` is presentation only since it was cut to ~60 lines, and takes no API) |
+| a widget's properties, methods or events | **its description in the comment above its C entry** (the lines after the signature, see *what a member is for* below) and `./tools/docs.sh`, which writes it into the member rows; a new member also needs its row in [`docs/llm/controls.md`](docs/llm/controls.md) — and `tests/api.sh` **fails** until both are there — plus [`docs/widgets.md`](docs/widgets.md) for the behaviour a table cannot state (`README.md` is presentation only since it was cut to ~60 lines, and takes no API) |
 | a component in `lib/` (the shipped libraries) | [`docs/llm/<library>.md`](docs/llm/charts.md) — and `tests/api.sh` **fails** until it does, the same rule the runtime's own surface is held to |
 | a global (`File`, `Exec`, `Locale`, `Record` …) | [`docs/runtime-api.md`](docs/runtime-api.md) and [`docs/llm/library.md`](docs/llm/library.md) — **and a line in `GLOBAL_TABLES`/`GLOBAL_VARS` in `tests/api/Check.js`**, or the check cannot see it — **and `docs/reference/globals/<Name>.md` with a line in `GLOBAL_PAGES`**, the long page a global is held to member by member. The page is the one part nothing asks about by name: a global with no page at all is invisible to the check, which is how a whole family was added without one |
 | the `.form`, `project.json` or the serialiser | [`docs/formats.md`](docs/formats.md) and [`docs/llm/forms.md`](docs/llm/forms.md) |
@@ -105,6 +105,7 @@ TIMEOUT=300 ./tests/run.sh                        # a slower machine than this o
 ./tests/asan.sh                                   # suite under AddressSanitizer
 tests/try.sh <project> [args...]                  # run any project, on a virtual display
 ./tests/api.sh                                    # is docs/llm/ still the whole public surface, and do the links land?
+./tools/docs.sh                                   # write the member rows of docs/ from the descriptions in the C
 ./tests/icons.sh                                  # which declared icons this desktop has, and which draw
 ./tests/styles.sh                                 # which style classes its theme defines
 ./tests/install.sh                                # what `make install` produces, run out of a staging prefix
@@ -143,6 +144,39 @@ number of arguments. Both of those were real: `MouseWheel` was written
 `(dx, dy, ctrl, shift)` in three documents and passes two, and
 `Application.LibraryPath` had been public and called by the IDE with no row
 anywhere.
+
+**What a member is for is written once, beside it, and the documentation's
+rows are written from there.** The comment above a member's C entry is its
+signature on the first line and its description on the lines after:
+
+```c
+/* Load(path) -> string
+ *   the whole file as a string. **Throws if it cannot be read**, and the
+ *   message names the file
+ */
+```
+
+`tools/extract_signatures.cmake` keeps the text beside the signature,
+`Widget.Members` hands it out as `Doc` (and `Native`, which says a member is
+written in C), `Widget.EventDoc` answers for an event, the IDE's popup shows the
+first sentence under the list, and **`./tools/docs.sh` writes it into every
+table row of `docs/llm` and `docs/reference` that names the member** -- the
+whole text in a two-column table, the first sentence in an index row. The
+tables, their order and headings, and all the prose around them stay written
+by hand; **a member row's text is not**, and `tests/api.sh` fails while a page
+is not what `tools/docs.sh` would write (and on a native member with no
+description at all). So: change the comment, run `./tools/docs.sh`, commit
+both. Before this each member was described up to three times -- the compact
+row, the reference's index row and its section row -- and nothing compared
+them. The migration took the texts that were there: the longest in visible
+characters (a link's target does not count, or a link made a shorter text win),
+plus the sentences after the first of the others that said something it did
+not (a default, *read-only while …*) -- appending their *first* sentences
+produced two descriptions of one thing glued together. The links in a
+description are written from the root (`docs/llm/library.md#bytes`), since one
+text lands in pages in different directories; `tools/docs` makes each one
+relative to its page. A member written in JavaScript is the next stage: a
+JSDoc comment the parser reads.
 
 **There is no declaration file for outside editors, and that is a decision.**
 A generator (`tools/typings`) wrote `bintana.d.ts` for VS Code, and `api.sh`
@@ -2061,6 +2095,12 @@ entry below is something that cost somebody a debugging session and now costs a
 paragraph. Add to it when you are surprised; nothing here was obvious to the
 person who wrote it either.
 
+- **`git checkout <file>` throws away every uncommitted change in that file**,
+  not the one line a probe just made. It was used to undo a one-word `sed`
+  test on `bta_widget.c` and took a whole stage of work with it -- recovered
+  only because every edit had been scripted in the conversation. Undo a probe
+  with the inverse edit, or `git stash` first; never check a file out that
+  holds work.
 - **A CMake script that reads C with `file(STRINGS)` is reading a CMake list,
   and a list is not lines.** `[` ... `]` groups and `;` separates, so one
   unbalanced bracket (`*q == '['`) merged every following line of

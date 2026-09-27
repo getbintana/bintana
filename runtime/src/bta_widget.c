@@ -2995,16 +2995,23 @@ static const char *signature_for(const char *owner, const char *member,
 /* What a member declares it answers -- `-> Bytes`, `-> string[]`, a shape in
  * braces -- or NULL. The same table as its parameters, so a claim about a
  * call and its arguments are written on one line and cannot come apart. */
-static const char *returns_for(const char *owner, const char *member,
-                               BtaSigKind kind)
+/* The declaration of one member. A member installed in two places -- the
+ * two branches of an optional dependency, the main thread and a worker --
+ * has two entries, and the one that says more is the one that answers. */
+static const BtaSignature *entry_for(const char *owner, const char *member,
+                                     BtaSigKind kind)
 {
+    const BtaSignature *found = NULL;
+
     for (size_t i = 0; i < G_N_ELEMENTS(bta_signatures); i++) {
-        if (bta_signatures[i].kind == kind &&
-            g_str_equal(bta_signatures[i].owner, owner) &&
-            g_str_equal(bta_signatures[i].member, member))
-            return *bta_signatures[i].returns ? bta_signatures[i].returns : NULL;
+        const BtaSignature *e = &bta_signatures[i];
+        if (e->kind != kind || !g_str_equal(e->owner, owner) ||
+            !g_str_equal(e->member, member))
+            continue;
+        if (!found || (!*found->doc && *e->doc))
+            found = e;
     }
-    return NULL;
+    return found;
 }
 
 /*
@@ -3408,8 +3415,13 @@ static void take_params_sig(JSContext *ctx, JSValue out, GPtrArray *names,
      * completion for one can say `Ask(message, [options])` rather than a count. */
     JS_SetPropertyStr(ctx, item, "Signature",
                       JS_NewString(ctx, sig ? sig : ""));
-    /* What it answers, when that is declared; `mark_returns` fills it in. */
+    /* What it answers and what it is for, when those are declared;
+     * `mark_decl` fills them in. */
     JS_SetPropertyStr(ctx, item, "Returns", JS_NewString(ctx, ""));
+    JS_SetPropertyStr(ctx, item, "Doc", JS_NewString(ctx, ""));
+    /* Whether it is written in C, which decides where its description lives:
+     * beside the C entry, or in a JSDoc comment the parser reads. */
+    JS_SetPropertyStr(ctx, item, "Native", JS_FALSE);
     JS_SetPropertyUint32(ctx, out, (*n)++, item);
 }
 
@@ -3420,32 +3432,61 @@ static void take_params(JSContext *ctx, JSValue out, GPtrArray *names,
     take_params_sig(ctx, out, names, n, name, kind, params, NULL);
 }
 
-/* The `Returns` of the member just taken, when one was taken -- a name already
- * listed is skipped by `take`, and must not have its answer overwritten. */
-static void mark_returns(JSContext *ctx, JSValue out, uint32_t was, uint32_t now,
-                         const char *returns)
+/* Whether a function value is one of the runtime's own: its source is
+ * `[native code]`, which is the engine's own answer for a C function. */
+static bool fn_is_native(JSContext *ctx, JSValueConst fn)
 {
-    if (now <= was || !returns)
+    if (!JS_IsFunction(ctx, fn))
+        return false;
+    JSValue     t = JS_ToString(ctx, fn);
+    const char *c = JS_IsException(t) ? NULL : JS_ToCString(ctx, t);
+    bool        native = c && strstr(c, "[native code]");
+    if (c) JS_FreeCString(ctx, c);
+    else JS_FreeValue(ctx, JS_GetException(ctx));
+    JS_FreeValue(ctx, t);
+    return native;
+}
+
+static void mark_native(JSContext *ctx, JSValue out, uint32_t was, uint32_t now,
+                        bool native)
+{
+    if (now <= was || !native)
         return;
     JSValue item = JS_GetPropertyUint32(ctx, out, now - 1);
-    JS_SetPropertyStr(ctx, item, "Returns", JS_NewString(ctx, returns));
+    JS_SetPropertyStr(ctx, item, "Native", JS_TRUE);
     JS_FreeValue(ctx, item);
 }
 
-/* What a member found on `at` answers, asked the way `declared_signature` asks:
- * under its own class's name when `at` is in the class table, else under the
- * name that was asked about. */
-static const char *declared_returns(JSContext *ctx, JSValueConst at,
-                                    const char *type, const char *member,
-                                    BtaSigKind kind)
+/* The `Returns` and the `Doc` of the member just taken, when one was taken -- a
+ * name already listed is skipped by `take`, and must not have its declaration
+ * overwritten by a later class's. */
+static void mark_decl(JSContext *ctx, JSValue out, uint32_t was, uint32_t now,
+                      const BtaSignature *e)
+{
+    if (now <= was || !e)
+        return;
+    JSValue item = JS_GetPropertyUint32(ctx, out, now - 1);
+    if (*e->returns)
+        JS_SetPropertyStr(ctx, item, "Returns", JS_NewString(ctx, e->returns));
+    if (*e->doc)
+        JS_SetPropertyStr(ctx, item, "Doc", JS_NewString(ctx, e->doc));
+    JS_FreeValue(ctx, item);
+}
+
+/* What a member found on `at` declares, asked the way `declared_signature`
+ * asks: under its own class's name when `at` is in the class table, else under
+ * the name that was asked about. */
+static const BtaSignature *declared_entry(JSContext *ctx, JSValueConst at,
+                                          const char *type, const char *member,
+                                          BtaSigKind kind)
 {
     int       n;
     BtaClass *table = bta_class_table(&n);
 
     for (int i = 0; i < n; i++)
         if (JS_IsStrictEqual(ctx, table[i].proto, at))
-            return returns_for(table[i].name, member, kind);
-    return type ? returns_for(type, member, kind) : NULL;
+            return entry_for(table[i].name, member, kind);
+    return type ? entry_for(type, member, kind) : NULL;
 }
 
 /* **A type no global holds**, answered from the generated table alone: a
@@ -3468,7 +3509,8 @@ static uint32_t take_catalog(JSContext *ctx, const char *type, JSValue out,
         else
             take_sig(ctx, out, names, n, e->member, "Method",
                      *e->signature ? e->signature : NULL);
-        mark_returns(ctx, out, was, *n, *e->returns ? e->returns : NULL);
+        mark_decl(ctx, out, was, *n, e);
+        mark_native(ctx, out, was, *n, true);
         found++;
     }
     return found;
@@ -3558,9 +3600,11 @@ static void take_members_of_resolved(JSContext *ctx, JSValueConst klass,
                             take_fn_sig(ctx, out, names, n, nm, "Method",
                                         d.value, sig);
                             g_free(sig);
-                            mark_returns(ctx, out, was, *n,
-                                         declared_returns(ctx, at, type, nm,
-                                                          BTA_SIG_METHOD));
+                            mark_decl(ctx, out, was, *n,
+                                      declared_entry(ctx, at, type, nm,
+                                                     BTA_SIG_METHOD));
+                            mark_native(ctx, out, was, *n,
+                                        fn_is_native(ctx, d.value));
                         }
                         /* A getter with no setter is `ReadOnly`, the word
                          * `Widget.Member` gives the same name -- one class, one
@@ -3571,9 +3615,13 @@ static void take_members_of_resolved(JSContext *ctx, JSValueConst klass,
                         else if (JS_IsFunction(ctx, d.setter))
                             take(ctx, out, names, n, nm, "Property");
                         if (!JS_IsFunction(ctx, d.value))
-                            mark_returns(ctx, out, was, *n,
-                                         declared_returns(ctx, at, type, nm,
-                                                          BTA_SIG_PROPERTY));
+                            mark_decl(ctx, out, was, *n,
+                                      declared_entry(ctx, at, type, nm,
+                                                     BTA_SIG_PROPERTY));
+                        if (!JS_IsFunction(ctx, d.value))
+                            mark_native(ctx, out, was, *n,
+                                        fn_is_native(ctx, d.getter) ||
+                                        fn_is_native(ctx, d.setter));
                     }
                     if (nm) JS_FreeCString(ctx, nm);
                     JS_FreeValue(ctx, d.value);
@@ -3618,8 +3666,14 @@ static void take_members_of_resolved(JSContext *ctx, JSValueConst klass,
                     else if (JS_IsFunction(ctx, d.getter) ||
                              JS_IsFunction(ctx, d.setter))
                         take(ctx, out, names, n, nm, "Static");
-                    mark_returns(ctx, out, was, *n,
-                                 type ? returns_for(type, nm, BTA_SIG_METHOD) : NULL);
+                    mark_decl(ctx, out, was, *n,
+                              type ? entry_for(type, nm,
+                                               JS_IsFunction(ctx, d.value)
+                                               ? BTA_SIG_METHOD : BTA_SIG_PROPERTY)
+                                   : NULL);
+                    mark_native(ctx, out, was, *n,
+                                fn_is_native(ctx, d.value) ||
+                                fn_is_native(ctx, d.getter));
                 }
                 if (nm) JS_FreeCString(ctx, nm);
                 JS_FreeValue(ctx, d.value);
@@ -4261,6 +4315,50 @@ static JSValue w_event_signature_by_type(JSContext *ctx, JSValueConst this_val,
     }
 
     JSValue out = event_signature_of_proto(ctx, proto, name);
+    JS_FreeValue(ctx, proto);
+    JS_FreeCString(ctx, name);
+    return out;
+}
+
+/*
+ * EventDoc(type, name): what an event is for, or null -- the description
+ * written in the comment above the class row that declares it, walked up the
+ * chain like `EventSignature`, since an event is emitted and not defined. The
+ * members' own descriptions come with `Widget.Members`; an event is not a
+ * member, so it is asked here.
+ */
+static JSValue w_event_doc_by_type(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv)
+{
+    const char *name = argc > 1 ? JS_ToCString(ctx, argv[1]) : NULL;
+    if (!name)
+        return JS_ThrowTypeError(ctx, "EventDoc(type, name) expects an event name");
+
+    JSValue proto = class_proto_arg(ctx, argc, argv, "EventDoc");
+    if (JS_IsException(proto)) {
+        JS_FreeCString(ctx, name);
+        return proto;
+    }
+
+    int       n;
+    BtaClass *table = bta_class_table(&n);
+    JSValue   at    = JS_DupValue(ctx, proto);
+    JSValue   out   = JS_NULL;
+
+    while (JS_IsObject(at) && JS_IsNull(out)) {
+        for (int i = 0; i < n; i++) {
+            if (!JS_IsStrictEqual(ctx, table[i].proto, at))
+                continue;
+            const BtaSignature *e = entry_for(table[i].name, name, BTA_SIG_EVENT);
+            if (e && *e->doc)
+                out = JS_NewString(ctx, e->doc);
+            break;
+        }
+        JSValue parent = JS_GetPrototype(ctx, at);
+        JS_FreeValue(ctx, at);
+        at = parent;
+    }
+    JS_FreeValue(ctx, at);
     JS_FreeValue(ctx, proto);
     JS_FreeCString(ctx, name);
     return out;
@@ -5687,91 +5785,329 @@ void bta_strict_seal(JSContext *ctx, JSValueConst obj)
 }
 
 static const JSCFunctionListEntry widget_props[] = {
+    /* Name
+     *   how the form reaches it — `this.BtnSave` — and the prefix its
+     *   handlers carry: `BtnSave_Click`. A valid JavaScript identifier,
+     *   unique on the form
+     */
     JS_CGETSET_DEF("Name",    w_get_name, w_set_name),
+    /* X
+     *   the left edge, in the parent's coordinates. **It means something only
+     *   inside a container laying out by coordinate**; in a row or a column
+     *   the parent decides and this reports where it ended up.
+     *   `-32767`..`32767`, like `Y` and `Move`
+     */
     JS_CGETSET_MAGIC_DEF("X",       w_get_geom, w_set_geom, GEOM_X),
+    /* Y
+     *   the top edge, likewise
+     */
     JS_CGETSET_MAGIC_DEF("Y",       w_get_geom, w_set_geom, GEOM_Y),
+    /* Width
+     *   width **requested**: a minimum, not an exact size. Reads the
+     *   allocation when nothing was declared. `0`..`32767` (or `-1`, *not
+     *   asked*) — a display holds no more, and more was a `BadAlloc` that
+     *   killed the process; the same for `Height`, `MinWidth`, `MinHeight`
+     *   and `Resize`. Reading it gives what was asked for, falling back to
+     *   what GTK allocated when nothing was
+     */
     JS_CGETSET_MAGIC_DEF("Width",   w_get_geom, w_set_geom, GEOM_W),
+    /* Height
+     *   the height, likewise
+     */
     JS_CGETSET_MAGIC_DEF("Height",  w_get_geom, w_set_geom, GEOM_H),
     /* The floor a stretched control may not be squeezed below. Only means
      * something on an axis whose HAlign/VAlign is "Fill" -- on any other the
      * drawn size is already the minimum. */
+    /* MinWidth
+     *   the floor a stretched control may not be squeezed below. Only means
+     *   something on an axis whose `HAlign` is `Fill`
+     */
     JS_CGETSET_MAGIC_DEF("MinWidth",  w_get_geom, w_set_geom, GEOM_MIN_W),
+    /* MinHeight
+     *   the same for `VAlign`
+     */
     JS_CGETSET_MAGIC_DEF("MinHeight", w_get_geom, w_set_geom, GEOM_MIN_H),
+    /* Visible
+     *   shown or not. `true` by default; a `Form` starts `false` and `Show()`
+     *   is what presents it
+     */
     JS_CGETSET_MAGIC_DEF("Visible", w_get_flag, w_set_flag, FLAG_VISIBLE),
+    /* Enabled
+     *   answers the mouse and the keyboard. `true` by default, and
+     *   **read-only in effect while `Action` is set**: a control that points
+     *   at a command takes the command's answer
+     */
     JS_CGETSET_MAGIC_DEF("Enabled", w_get_flag, w_set_flag, FLAG_ENABLED),
+    /* Action
+     *   the **command** this control points at, or `""`. A control that has
+     *   one takes its `Enabled` — and its `Text` and `Icon`, when it declared
+     *   neither — from the command, and **refuses** to be told an `Enabled`
+     *   of its own. Only a control that is pressed can have one; a name that
+     *   is not one of the form's `actions` is refused. See
+     *   [forms.md](docs/llm/forms.md#actions-one-command-in-several-places)
+     */
     JS_CGETSET_DEF("Action", w_get_action, w_set_action),
+    /* Focusable
+     *   can take the keyboard focus. Turn it on for a container that wants
+     *   keys — a drawing surface, a board. The answer is the **control's**
+     *   and not the outside widget's: a `TextBox` reads `true` while the
+     *   entry GTK lays out is not focusable at all, its inner `GtkText` being
+     *   where the focus really sits
+     */
     JS_CGETSET_MAGIC_DEF("Focusable", w_get_flag, w_set_flag, FLAG_FOCUSABLE),
+    /* Focused
+     *   whether the focus is **within** it, which is why a `TextBox` answers
+     *   `true` while the focus really sits on the entry inside it
+     */
     JS_CGETSET_DEF("Focused", w_get_focused, NULL),
+    /* Expand
+     *   absorbs the slack on both axes — the one word that makes a control
+     *   fill the room left over in a row or a column
+     */
     JS_CGETSET_MAGIC_DEF("Expand",  w_get_expand, w_set_expand, EXPAND_BOTH),
+    /* HExpand
+     *   the horizontal half of it, when the two answers differ
+     */
     JS_CGETSET_MAGIC_DEF("HExpand", w_get_expand, w_set_expand, EXPAND_H),
+    /* VExpand
+     *   absorbs vertical slack
+     */
     JS_CGETSET_MAGIC_DEF("VExpand", w_get_expand, w_set_expand, EXPAND_V),
+    /* HAlign
+     *   `Auto` `Start` `End` `Center` `Fill` — what becomes of it when the
+     *   container is not the size the coordinates were drawn for
+     */
     JS_CGETSET_MAGIC_DEF("HAlign",  w_get_align,  w_set_align,  ALIGN_H),
+    /* VAlign
+     *   the same, vertically
+     */
     JS_CGETSET_MAGIC_DEF("VAlign",  w_get_align,  w_set_align,  ALIGN_V),
+    /* ColumnSpan
+     *   how many columns of a `Grid` it runs under. `1`
+     */
     JS_CGETSET_DEF("ColumnSpan", w_get_span, w_set_span),
+    /* TabIndex
+     *   where Tab reaches it on a surface laid out by coordinate. Sparse,
+     *   never renumbered; `0` means *in drawn order*. The IDE edits it as a
+     *   list — *Form > Tab order...* — which is the shape a relation needs
+     */
     JS_CGETSET_DEF("TabIndex", w_get_tab_index, w_set_tab_index),
+    /* Margin
+     *   room **around** it: one number for all four sides, never a list. On a
+     *   `Form` it insets the contents, a window having no outside. Not a
+     *   list.
+     */
     JS_CGETSET_DEF("Margin", w_get_margin, w_set_margin),
+    /* Style
+     *   the CSS classes it wears, space separated: `"card title-3"`. **The
+     *   first thing to reach for**: the theme draws `suggested-action`,
+     *   `destructive-action`, `dim-label`, `title-1`…`title-4`, `heading`,
+     *   `card`, `frame`, `boxed-list`, `toolbar`, `flat`, `linked`, `pill`,
+     *   `monospace`. A name that could not be a class is refused
+     */
     JS_CGETSET_DEF("Style", w_get_style, w_set_style),
+    /* Background
+     *   any CSS colour; `""` restores the theme's. The **exception** to
+     *   `Style`, for when the colour is data — a status, a category, a swatch
+     */
     JS_CGETSET_MAGIC_DEF("Background", w_get_color, w_set_color, COLOR_BG),
+    /* Foreground
+     *   likewise, for the text
+     */
     JS_CGETSET_MAGIC_DEF("Foreground", w_get_color, w_set_color, COLOR_FG),
+    /* Font
+     *   a Pango description — `"Cantarell Bold 12"` — or a partial one:
+     *   `"Bold"`, `"12"`. `""` restores the theme
+     */
     JS_CGETSET_DEF("Font", w_get_font, w_set_font),
+    /* Radius
+     *   rounded corners, one to four sizes in CSS order: `"8"`, `"8 8 0 0"`.
+     *   `""` or all zeroes is square
+     */
     JS_CGETSET_DEF("Radius", w_get_radius, w_set_radius),
+    /* Padding
+     *   room **inside** it, one to four sizes. `"0"` asks for none, `""`
+     *   takes the theme's
+     */
     JS_CGETSET_DEF("Padding", w_get_padding, w_set_padding),
+    /* Shortcut
+     *   the key that activates it: `"F5"`, `"<Control>s"`, or a list `["7",
+     *   "KP_7"]`. **`Return` never fires**, the window claiming it for its
+     *   default button
+     */
     JS_CGETSET_DEF("Shortcut", w_get_shortcut, w_set_shortcut),
+    /* Shadow
+     *   `"x y blur [spread] [colour]"`. One shadow, never inset. A colour
+     *   alone or a bare number is refused
+     */
     JS_CGETSET_DEF("Shadow", w_get_shadow, w_set_shadow),
+    /* Border
+     *   width, style and colour in one string: `"2 dashed #3584e4"`
+     */
     JS_CGETSET_DEF("Border", w_get_border, w_set_border),
+    /* FontScale
+     *   a multiplier on whatever size is in force: `1.1` is 110%. `1` is
+     *   "nothing said"; `0` is refused
+     */
     JS_CGETSET_DEF("FontScale", w_get_scale, w_set_scale),
+    /* Opacity
+     *   `0`…`1`, where `1` is *nothing said*
+     */
     JS_CGETSET_DEF("Opacity", w_get_opacity, w_set_opacity),
     /* Read-only, so the serialiser skips it: it is the desktop's answer and
      * never a form's declaration. */
+    /* Dark
+     *   whether it is drawn on a dark ground, derived from the ink its text
+     *   uses. The same answer `Painter.Dark` gives, and a `Form` raises
+     *   `ThemeChange` when the desktop moves it. What a drawing chooses its
+     *   palette by
+     */
     JS_CGETSET_DEF("Dark", w_get_dark, NULL),
+    /* Tooltip
+     *   plain text, and `""` is none rather than an empty balloon.
+     *   **Translated**
+     */
     JS_CGETSET_DEF("Tooltip",    w_get_tooltip,     w_set_tooltip),
+    /* Cursor
+     *   what the pointer looks like over it: `Auto` (nothing said) `Arrow`
+     *   `Hand` `Grab` `Grabbing` `Text` `VerticalText` `Wait` `Progress`
+     *   `Help` `Crosshair` `Cell` `ContextMenu` `Move` `Scroll` `Copy` `Link`
+     *   `NoDrop` `NotAllowed` `ZoomIn` `ZoomOut` `None` `ResizeHorizontal`
+     *   `ResizeVertical` `ResizeTopLeft` `ResizeTopRight` `ResizeColumn`
+     *   `ResizeRow`. Reaches the parts a control is made of, so it is seen
+     *   over an entry's text too — but a *child* control with one of its own
+     *   wins, which is why `Form.Cursor = "Wait"` is not a busy pointer for
+     *   the whole window
+     */
     JS_CGETSET_DEF("Cursor",     w_get_cursor,      w_set_cursor),
+    /* DragData
+     *   the string that travels when this control is dragged. Empty turns
+     *   dragging off
+     */
     JS_CGETSET_DEF("DragData",   w_get_drag_data,   w_set_drag_data),
+    /* AcceptDrop
+     *   receives a drop from **this application**, which arrives as
+     *   `Drop(data, x, y)`
+     */
     JS_CGETSET_DEF("AcceptDrop", w_get_accept_drop, w_set_accept_drop),
+    /* AcceptFiles
+     *   receives files dragged in from **the desktop**, which arrive as
+     *   `FileDrop(paths, x, y)`. Independent of `AcceptDrop`: a control may
+     *   take one, the other, or both
+     */
     JS_CGETSET_DEF("AcceptFiles", w_get_accept_files, w_set_accept_files),
+    /* Menu
+     *   a context menu, as the same array of items a form's `menus` uses.
+     *   Reassigning replaces it. The items name handlers on the form, so a
+     *   control built in code is **added before** its `Menu` is assigned —
+     *   before that it is refused with a sentence. **An item's name belongs
+     *   to one menu**: a second menu declaring it, or a name already taken by
+     *   a control or a member of the form, is refused — one command in
+     *   several menus is a form `action` with an `{ "action": … }` item in
+     *   each. Rebuilding the same menu is fine
+     */
     JS_CGETSET_DEF("Menu",       w_get_menu,        w_set_menu),
-    /* PopupMenu(x, y) */
+    /* PopupMenu(x, y)
+     *   opens that menu at a point in this control's own coordinates — how a
+     *   button that drops a menu is built
+     */
     JS_CFUNC_DEF("PopupMenu", 2, w_popup_menu),
-    /* Show() */
+    /* Show()
+     *   makes it visible
+     */
     JS_CFUNC_DEF("Show",     0, w_show),
-    /* Hide() */
+    /* Hide()
+     *   makes it invisible. A hidden control **keeps its place in the tree**
+     *   and its position in a box
+     */
     JS_CFUNC_DEF("Hide",     0, w_hide),
-    /* Move(x, y) */
+    /* Move(x, y)
+     *   `X` and `Y` together, because that reads better in a loop
+     */
     JS_CFUNC_DEF("Move",     2, w_move),
-    /* Resize(width, height) */
+    /* Resize(width, height)
+     *   sets `Width` and `Height` together
+     */
     JS_CFUNC_DEF("Resize",   2, w_resize),
-    /* SizeRequest() */
+    /* SizeRequest()
+     *   `[width, height]` as requested, with `-1` on an axis nobody declared.
+     *   What the serialiser asks, so that a measurement never becomes a floor
+     */
     JS_CFUNC_DEF("SizeRequest", 0, w_size_request),
-    /* SetFocus() */
+    /* SetFocus()
+     *   gives it the keyboard focus
+     */
     JS_CFUNC_DEF("SetFocus", 0, w_set_focus),
-    /* Delete() */
+    /* Delete()
+     *   removes it **and destroys it**. What is in it goes too
+     */
     JS_CFUNC_DEF("Delete",   0, w_delete),
-    /* Emit(event, ...args) */
+    /* Emit(event, ...args)
+     *   raises an event that arrives by name on the host form. **What a
+     *   component announces itself with**
+     */
     JS_CFUNC_DEF("Emit",     1, w_emit),
-    /* On(event, fn) */
+    /* On(event, fn)
+     *   installs **this control's own** handler for an event, for a control
+     *   built in code: no name, and nothing left on the form to delete.
+     *   Installing again replaces; `On(event, null)` removes; it answers with
+     *   the control, so it chains. The handler is called with `this`
+     *   undefined; an event name that is not in `EventNames()` throws, and so
+     *   does installing one the form already answers by name — a control has
+     *   one handler for one event, refused at `On`, at a rename, and at the
+     *   `Add` that brings the control to that form. It is also how a
+     *   `Component` added from code is heard: its `Emit` finds this before
+     *   the `<name>_<event>` road
+     */
     JS_CFUNC_DEF("On",       2, w_on),
-    /* OriginIn(container) */
+    /* OriginIn(container)
+     *   `[x, y]`: where this widget's corner is in that container's space
+     */
     JS_CFUNC_DEF("OriginIn", 1, w_origin_in),
-    /* Bounds([container]) -> { X, Y, Width, Height } */
+    /* Bounds([container]) -> { X, Y, Width, Height }
+     *   `{ X, Y, Width, Height }`: what GTK really allocated, in window
+     *   coordinates or in the coordinates of the container you pass
+     */
     JS_CFUNC_DEF("Bounds",   1, w_bounds),
-    /* PropertyOptions(name) */
+    /* PropertyOptions(name)
+     *   the exact strings that property accepts, or an empty list. What fills
+     *   a drop-down in the property grid, and the reason a list of values is
+     *   never typed twice
+     */
     JS_CFUNC_DEF("PropertyOptions", 1, w_property_options),
-    /* TextProperties() */
+    /* TextProperties()
+     *   which of this control's properties hold prose, which is what the
+     *   catalogue collects and what a designer offers to translate
+     */
     JS_CFUNC_DEF("TextProperties", 0, w_text_properties),
-    /* EventNames() */
+    /* EventNames()
+     *   the events it raises, **most derived first**: `[0]` is the one a
+     *   double click in the designer writes a handler for
+     */
     JS_CFUNC_DEF("EventNames",     0, w_event_names),
-    /* StyleRule() */
+    /* StyleRule()
+     *   the CSS rule this widget's own class currently carries
+     */
     JS_CFUNC_DEF("StyleRule",      0, w_style_rule),
-    /* CssNode() */
+    /* CssNode()
+     *   the GTK node name it is styled as (`"button"`, `"entry"`)
+     */
     JS_CFUNC_DEF("CssNode",        0, w_css_node),
     /* Detach from the current parent without destroying the widget. Needed
      * for re-parenting in GTK 4, where a container refuses
      * a widget that already has a parent. */
-    /* Remove() */
+    /* Remove()
+     *   detaches it from its parent **without destroying it**, so it can be
+     *   put somewhere else
+     */
     JS_CFUNC_DEF("Remove",   0, w_remove),
-    /* Raise() */
+    /* Raise()
+     *   to the top of the painting order, among its siblings on a surface
+     */
     JS_CFUNC_MAGIC_DEF("Raise", 0, w_restack, STACK_RAISE),
-    /* Lower() */
+    /* Lower()
+     *   and to the bottom
+     */
     JS_CFUNC_MAGIC_DEF("Lower", 0, w_restack, STACK_LOWER),
 };
 
@@ -7351,15 +7687,25 @@ void bta_widgets_init(JSContext *ctx, JSValue global)
          * usable from a .form because both agree on it.
          */
         if (!cls->parent) {
-            /* New(type) -> Widget */
+            /* New(type) -> Widget
+             *   makes one. The runtime's classes first, then the project's
+             *   own and its libraries' — which is how a component appears in
+             *   a `.form` as an ordinary `"type"`. Throws on a name that is
+             *   neither
+             */
             JS_SetPropertyStr(ctx, ctor, "New",
                               JS_NewCFunction(ctx, w_new_by_type, "New", 1));
             /* ...and what there is to make one of. */
-            /* Types() -> string[] */
+            /* Types() -> string[]
+             *   every class the runtime has, in registration order
+             */
             JS_SetPropertyStr(ctx, ctor, "Types",
                               JS_NewCFunction(ctx, w_types, "Types", 0));
             /* ...and which of those this build can actually run. */
-            /* Available(type) */
+            /* Available(type)
+             *   whether **this machine** can run one. `false` for a name that
+             *   is no class at all, so it answers rather than throwing
+             */
             JS_SetPropertyStr(ctx, ctor, "Available",
                               JS_NewCFunction(ctx, w_available, "Available", 1));
 
@@ -7372,33 +7718,121 @@ void bta_widgets_init(JSContext *ctx, JSValue global)
             JS_SetPropertyStr(ctx, ctor, "PropertyNames",
                               JS_NewCFunction(ctx, w_property_names_by_type,
                                               "PropertyNames", 1));
-            /* Methods(type) */
+            /* Methods(type)
+             *   its methods, **most derived first**, and not its
+             *   `constructor`
+             */
             JS_SetPropertyStr(ctx, ctor, "Methods",
                               JS_NewCFunction(ctx, w_methods_by_type,
                                               "Methods", 1));
-            /* Members(type, [options]) -> { Name, Kind, Params, Signature, Returns }[] */
+            /* Members(type, [options]) -> { Name, Kind, Params, Signature, Returns, Doc, Native }[]
+             *   **every** public member of anything the name resolves to,
+             *   each `{ Name, Kind, Params, Signature, Returns, Doc, Native }`,
+             *   **`Doc` what the member is for** — the description written
+             *   beside it in the C, the text these rows are written from — and
+             *   **`Native` whether it is written in C**, `Kind` one
+             *   of `Property`, `ReadOnly`, `Method`, `Static`, **`Returns`
+             *   what a method or property declares it answers** — the text
+             *   after the arrow in its signature comment (`Bytes`,
+             *   `string[]`, `{ X, Y, Width, Height }`), `""` when nothing is
+             *   declared —, and **`Params` the number of arguments it takes,
+             *   plus `Signature` — the parameter list with the real names:
+             *   the comment beside a native member's C entry (a control's
+             *   method, a class static, a global's verb), a class's `static
+             *   Signatures`, or the parser — over a library's source for a
+             *   class this process never ran, and over the member's own
+             *   source for a function written in JavaScript (`Timer.After` is
+             *   `(delay, tick)`)** — — read off the function value, so a
+             *   library is checked without anybody writing its arity down.
+             *   `Widget.Signature` is the better answer where it exists,
+             *   because it has the names; `-1` means nobody knows, which is
+             *   every property and every static accessor. **A getter with no
+             *   setter is `ReadOnly`**, the word `Widget.Member` gives the
+             *   same name, and a property carries no `Signature`. For a
+             *   member read out of a source, `Params` is counted from the
+             *   parser's list by `Function.length`'s rule — the names before
+             *   the first `[x]` or `...x` — so the same method answers the
+             *   same count read or built. **It is the one that answers for a
+             *   class that is not a widget** — `Timer`, `QrCode`, `Package` —
+             *   where the three above refuse, and it takes a global that is a
+             *   bag of functions (`File`, `Locale`, `Printer`) as readily as
+             *   a class. A lower-case name is the class talking to itself and
+             *   is not listed. **A type no global holds** — `HttpClient`,
+             *   `HttpServer`, `HttpRequest`, `Connection`, `XmlDocument`,
+             *   `XmlNode`, the prototypes of what a verb hands back — is
+             *   answered from its table in the runtime, properties included,
+             *   and a global class (`Connection`) gains what its driver adds.
+             *   `options` takes **`All: true`**, which lists the lower-case
+             *   names too — what a builtin like `String` or `Array` is made
+             *   of — and **`Sources`, an array of source texts**, and
+             *   **`Forms`, an array of `.form` texts**, for a class that is a
+             *   lexical binding in a file this process never runs — a
+             *   library's class, read by an editor that must not execute the
+             *   project it is editing. The sources are read with the same
+             *   parser `Application.Symbols` uses, the `extends` chain is
+             *   followed, and the walk goes back to the class table at the
+             *   first base the sources do not declare — which is `Form`, and
+             *   a hundred names. **A class the sources declare wins over a
+             *   class of the same name in the runtime**, because in a program
+             *   that uses that library the library's is the class being
+             *   written. A form's children are members too, and reading one
+             *   needs no display: `JS_ParseJSON` and a walk of `children`,
+             *   paired to the class by the form's own `class` key and not by
+             *   the file's name. **They are offered for a class that is
+             *   loaded as well as one only declared**, because a child is an
+             *   *own property of the instance* and no prototype walk sees one
+             *   either way. A lower-case child is not a member, a `.form`
+             *   that does not parse is the loader's complaint rather than
+             *   this verb's, and an entry that is not a string is refused; a
+             *   name neither declared nor resolvable names both facts. **The
+             *   source half answers in the loaded half's words**: a `static`
+             *   is `Static`, a `get X` alone is `ReadOnly`, a getter with a
+             *   setter is one `Property`, and a `static get` is a `Static`
+             *   with `Params` `-1` — what the same class says once it is
+             *   loaded. See *why there is a fifth verb*
+             */
             JS_SetPropertyStr(ctx, ctor, "Members",
                               JS_NewCFunction(ctx, w_members_by_type,
                                               "Members", 2));
             JS_SetPropertyStr(ctx, ctor, "EventNames",
                               JS_NewCFunction(ctx, w_event_names_by_type,
                                               "EventNames", 1));
+            /* EventDoc(type, name) -> string
+             *   what an event is for, or `null`: the description written above
+             *   the class row that declares it, walked up the chain like
+             *   `EventSignature`, since an event is emitted and not defined
+             */
+            JS_SetPropertyStr(ctx, ctor, "EventDoc",
+                              JS_NewCFunction(ctx, w_event_doc_by_type,
+                                              "EventDoc", 2));
             JS_SetPropertyStr(ctx, ctor, "TextProperties",
                               JS_NewCFunction(ctx, w_text_properties_by_type,
                                               "TextProperties", 1));
             JS_SetPropertyStr(ctx, ctor, "PropertyOptions",
                               JS_NewCFunction(ctx, w_property_options_by_type,
                                               "PropertyOptions", 2));
-            /* Member(type, name) */
+            /* Member(type, name)
+             *   what the name is on that class: `Property`, `ReadOnly`,
+             *   `Method`, or `""` for one it has not got. The question `in`
+             *   answers about a control, with the kind the loader needs — a
+             *   **`ReadOnly`** name makes a `.form` refuse to load
+             */
             JS_SetPropertyStr(ctx, ctor, "Member",
                               JS_NewCFunction(ctx, w_member_by_type,
                                               "Member", 2));
             /* ...and the parameters each of them declares beside itself. */
-            /* Signature(type, name) */
+            /* Signature(type, name)
+             *   the parameters a **method** declares: `"([container])"`,
+             *   `"(event, fn)"`, `"()"`. `null` where the class declares
+             *   none, or where the name is no method
+             */
             JS_SetPropertyStr(ctx, ctor, "Signature",
                               JS_NewCFunction(ctx, w_signature_by_type,
                                               "Signature", 2));
-            /* EventSignature(type, name) */
+            /* EventSignature(type, name)
+             *   the same for an **event**: `"(x, y, button, ctrl, shift)"`. A
+             *   name that is both — `ListBox.Select` — is answered by each
+             */
             JS_SetPropertyStr(ctx, ctor, "EventSignature",
                               JS_NewCFunction(ctx, w_event_signature_by_type,
                                               "EventSignature", 2));

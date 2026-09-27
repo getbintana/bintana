@@ -13,22 +13,22 @@ It is a `Widget` and a control like any other, so everything on
 
 | | | |
 |---|---|---|
-| `Marks` (ro) | the dates marked, earliest first | [marking days](#marking-days) |
-| `ShowDayNames` | the row of weekday names. Default `true` | [how it is drawn](#how-it-is-drawn) |
-| `ShowHeading` | the month and year above the grid. Default `true` | [how it is drawn](#how-it-is-drawn) |
-| `ShowWeekNumbers` | the week number down the side. Default `false` | [how it is drawn](#how-it-is-drawn) |
-| `Value` | `"YYYY-MM-DD"`. Default is today | [the date](#the-date) |
-| `ClearMarks()` | takes every mark off | [marking days](#marking-days) |
+| `Marks` (ro) | the dates marked, as `"YYYY-MM-DD"` strings, earliest first | [marking days](#marking-days) |
+| `ShowDayNames` | the row of weekday names | [how it is drawn](#how-it-is-drawn) |
+| `ShowHeading` | the month and year above the grid | [how it is drawn](#how-it-is-drawn) |
+| `ShowWeekNumbers` | the week number down the side | [how it is drawn](#how-it-is-drawn) |
+| `Value` | the chosen day as `"YYYY-MM-DD"` — the same text a [`Day`](../../llm/library.md#day) works in | [the date](#the-date) |
+| `ClearMarks()` | takes them all off | [marking days](#marking-days) |
 | `Mark(date)` | marks that date | [marking days](#marking-days) |
 | `Unmark(date)` | takes that one off | [marking days](#marking-days) |
-| **event** `Change()` | the value changed, **including from code** | [the date](#the-date) |
+| **event** `Change()` | the value changed, including from an assignment in code — the round trip goes out to GTK and back | [the date](#the-date) |
 
 ## The date
 
 | | |
 |---|---|
-| `Value` | the chosen day as `"YYYY-MM-DD"` — the same text a [`Day`](../../llm/library.md#day) works in |
-| **event** `Change()` | the day changed — chosen, or **assigned from code** |
+| `Value` | the chosen day as `"YYYY-MM-DD"` — the same text a [`Day`](../../llm/library.md#day) works in. Default is today |
+| **event** `Change()` | the value changed, including from an assignment in code — the round trip goes out to GTK and back |
 
 **A `Calendar` refuses `""`.** A month is drawn with a day on it and there is no
 way to draw one without; the empty date belongs to
@@ -58,8 +58,8 @@ drawing of the answer.
 
 | | |
 |---|---|
-| `ShowHeading` | the month and year above the grid |
-| `ShowDayNames` | the row of weekday names |
+| `ShowHeading` | the month and year above the grid. Default `true` |
+| `ShowDayNames` | the row of weekday names. Default `true` |
 | `ShowWeekNumbers` | the week number down the side. Default `false`, and worth turning on where people plan in weeks |
 
 The first day of the week, the names of the months and the order of the columns

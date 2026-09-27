@@ -13,8 +13,8 @@ It is a `Widget` and a control like any other, so everything on
 
 | | | |
 |---|---|---|
-| `Text` | what it reads. **Translated** | [the words and the address](#the-words-and-the-address) |
-| `Uri` | the address, handed to the desktop on click | [the words and the address](#the-words-and-the-address) |
+| `Text` | what the user reads | [the words and the address](#the-words-and-the-address) |
+| `Uri` | `https://…`, `mailto:…`, `file:///…` — whatever the desktop knows how to open | [the words and the address](#the-words-and-the-address) |
 | **event** `Click()` | it was pressed | [the words and the address](#the-words-and-the-address) |
 
 ## The words and the address

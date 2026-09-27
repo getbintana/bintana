@@ -815,12 +815,24 @@ static JSValue http_multipart_part(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry multipart_props[] = {
-    /* Field(name, value) -> Multipart */
+    /* Field(name, value) -> Multipart
+     *   one text part; answers the upload, for chaining
+     */
     JS_CFUNC_DEF("Field", 2, http_multipart_field),
-    /* File(name, filename, body, [contentType]) -> Multipart */
+    /* File(name, filename, body, [contentType]) -> Multipart
+     *   one file part; `body` is text or
+     *   [`Bytes`](docs/reference/globals/Bytes.md),
+     *   `application/octet-stream` unless told
+     */
     JS_CFUNC_DEF("File",  4, http_multipart_file),
-    /* Part(index) -> { Name, Filename, Type, Data } */
+    /* Part(index) -> { Name, Filename, Type, Data }
+     *   one part read back: `{ Name, Filename, Type, Data }`, `Data` as
+     *   `Bytes`. Past the end is refused
+     */
     JS_CFUNC_DEF("Part",  1, http_multipart_part),
+    /* Length
+     *   how many parts
+     */
     JS_CGETSET_DEF("Length", http_multipart_get_length, NULL),
 };
 
@@ -2612,50 +2624,138 @@ static JSValue http_client_requestwait(JSContext *ctx, JSValueConst this_val,
 
 /* type HttpClient */
 static const JSCFunctionListEntry http_client_props[] = {
+    /* BaseUrl
+     *   what a relative path in a call is relative to, so the program's
+     *   requests are one-liners
+     */
     JS_CGETSET_DEF("BaseUrl",         http_client_get_baseurl, http_client_set_baseurl),
+    /* Headers
+     *   sent with every request this client makes — an API key, an `Accept`
+     */
     JS_CGETSET_DEF("Headers",         http_client_get_headers, http_client_set_headers),
+    /* Timeout
+     *   ms before a request is given up on; `0` waits forever
+     */
     JS_CGETSET_DEF("Timeout",         http_client_get_timeout, http_client_set_timeout),
+    /* FollowRedirects
+     *   follow a `3xx`. Default `true`
+     */
     JS_CGETSET_DEF("FollowRedirects", http_client_get_follow,  http_client_set_follow),
+    /* Language
+     *   the `Accept-Language` it asks with
+     */
     JS_CGETSET_DEF("Language",        http_client_get_language, http_client_set_language),
+    /* Proxy
+     *   what to go through
+     */
     JS_CGETSET_DEF("Proxy",           http_client_get_proxy, http_client_set_proxy),
+    /* Auth
+     *   `{ User, Password }`, Basic and preemptive; reads back `null` when
+     *   none is set. An explicit `Authorization` header wins over it, and an
+     *   explicit `Content-Type` header wins over the one the body's shape
+     *   implies
+     */
     JS_CGETSET_DEF("Auth",            http_client_get_auth, http_client_set_auth),
+    /* Cookies
+     *   `false` unless told: `true` keeps a jar of the session's own, so a
+     *   login answers the next request
+     */
     JS_CGETSET_DEF("Cookies",         http_client_get_cookies, http_client_set_cookies),
+    /* UserAgent
+     *   sent as-is; `""` sends none — and some servers answer the nameless
+     *   with an error
+     */
     JS_CGETSET_DEF("UserAgent",       http_client_get_user_agent, http_client_set_user_agent),
+    /* Log
+     *   `"none"` unless told: `"minimal"`, `"headers"` or `"body"` sends the
+     *   traffic through `Logger` at `Debug` — so `Logger.Level = "Debug"`
+     *   shows it and a `Handler` takes it; a `Wait`'s never reaches a
+     *   `Handler`, since its context is private and its caller is blocked
+     */
     JS_CGETSET_DEF("Log",             http_client_get_log, http_client_set_log),
+    /* IdleTimeout
+     *   ms a pooled connection idles before soup closes it (`0` is soup's own
+     *   60 s); soup counts seconds, so anything under one becomes one
+     */
     JS_CGETSET_DEF("IdleTimeout",     http_client_get_idle, http_client_set_idle),
+    /* MaxConns
+     *   how many connections at once, `10` unless told. **Constructor-only**:
+     *   soup takes it once, so assigning later throws
+     */
     JS_CGETSET_DEF("MaxConns",        http_client_get_maxconns, http_client_set_const),
+    /* MaxPerHost
+     *   how many of those to one host, `2` unless told. Likewise
+     */
     JS_CGETSET_DEF("MaxPerHost",      http_client_get_maxperhost, http_client_set_const),
     /* Arities match the shorthands on `Http` for the same verbs: the same
      * call written two ways reports the same `length`. */
-    /* Request(method, url, [body], [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
+    /* Request(method, url, [body], [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop }
+     *   any verb: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`; anything
+     *   else is refused, in the blocking spelling too
+     */
     JS_CFUNC_DEF("Request",     5, http_client_request),
-    /* Get(url, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
+    /* Get(url, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop }
+     *   the ordinary read
+     */
     JS_CFUNC_DEF("Get",         4, http_client_get),
-    /* Post(url, body, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
+    /* Post(url, body, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop }
+     *   `body` is text, [`Bytes`](docs/reference/globals/Bytes.md), an object
+     *   (canonical JSON, `application/json`) or a
+     *   [`Multipart`](docs/reference/globals/Http.md#uploads)
+     */
     JS_CFUNC_DEF("Post",        5, http_client_post),
-    /* Put(url, body, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
+    /* Put(url, body, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop }
+     *   the same, for a replacement
+     */
     JS_CFUNC_DEF("Put",         5, http_client_put),
-    /* Patch(url, body, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
+    /* Patch(url, body, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop }
+     *   the same, for part of one
+     */
     JS_CFUNC_DEF("Patch",       5, http_client_patch),
-    /* Delete(url, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
+    /* Delete(url, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop }
+     *   no body, like `Get`
+     */
     JS_CFUNC_DEF("Delete",      4, http_client_delete),
-    /* Head(url, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
+    /* Head(url, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop }
+     *   the headers and no body, for *is it there* and *has it changed*
+     */
     JS_CFUNC_DEF("Head",        4, http_client_head),
-    /* Stream(method, url, [body], [opts], onLine, [onDone], [onError]) -> { Running, TimedOut, Url, Method, Stop } */
+    /* Stream(method, url, [body], [opts], onLine, [onDone], [onError]) -> { Running, TimedOut, Url, Method, Stop }
+     *   the answer **as it arrives**: `onLine(line, handle)` once per text
+     *   line, the newline stripped, blank lines included. Method-first like
+     *   `Request`, so a `POST` whose answer comes in pieces needs no second
+     *   name
+     */
     JS_CFUNC_DEF("Stream",      6, http_client_stream),
-    /* RequestWait(method, url, [body], [opts]) -> { Status, Reason, Headers, Body, Url } */
+    /* RequestWait(method, url, [body], [opts]) -> { Status, Reason, Headers, Body, Url }
+     *   the blocking spelling: answers with the record, **throws** on
+     *   transport failure — and what it throws carries the same `Kind` and
+     *   `Status` the callback would have been handed
+     */
     JS_CFUNC_DEF("RequestWait", 4, http_client_requestwait),
-    /* GetWait(url, [opts]) -> { Status, Reason, Headers, Body, Url } */
+    /* GetWait(url, [opts]) -> { Status, Reason, Headers, Body, Url }
+     *   the blocking `Get`
+     */
     JS_CFUNC_DEF("GetWait",     2, http_client_getwait),
-    /* PostWait(url, body, [opts]) -> { Status, Reason, Headers, Body, Url } */
+    /* PostWait(url, body, [opts]) -> { Status, Reason, Headers, Body, Url }
+     *   the blocking `Post`
+     */
     JS_CFUNC_DEF("PostWait",    3, http_client_postwait),
-    /* PutWait(url, body, [opts]) -> { Status, Reason, Headers, Body, Url } */
+    /* PutWait(url, body, [opts]) -> { Status, Reason, Headers, Body, Url }
+     *   the blocking `Put`
+     */
     JS_CFUNC_DEF("PutWait",     3, http_client_putwait),
-    /* PatchWait(url, body, [opts]) -> { Status, Reason, Headers, Body, Url } */
+    /* PatchWait(url, body, [opts]) -> { Status, Reason, Headers, Body, Url }
+     *   the blocking `Patch`
+     */
     JS_CFUNC_DEF("PatchWait",   3, http_client_patchwait),
-    /* DeleteWait(url, [opts]) -> { Status, Reason, Headers, Body, Url } */
+    /* DeleteWait(url, [opts]) -> { Status, Reason, Headers, Body, Url }
+     *   the blocking `Delete`
+     */
     JS_CFUNC_DEF("DeleteWait",  2, http_client_deletewait),
-    /* HeadWait(url, [opts]) -> { Status, Reason, Headers, Body, Url } */
+    /* HeadWait(url, [opts]) -> { Status, Reason, Headers, Body, Url }
+     *   the blocking `Head`
+     */
     JS_CFUNC_DEF("HeadWait",    2, http_client_headwait),
 };
 
@@ -3003,39 +3103,86 @@ static JSValue js_http_server(JSContext *ctx, JSValueConst this_val,
                                int argc, JSValueConst *argv);
 
 static const JSCFunctionListEntry http_props[] = {
-    /* Client([opts]) -> HttpClient */
+    /* Client([opts]) -> HttpClient
+     *   a client with its own session: `BaseUrl`, `Headers`, `Timeout` (ms,
+     *   `0` waits forever), `FollowRedirects` (default `true`), `Language`,
+     *   `UserAgent`, `Proxy`, `Auth`, `Cookies`, `IdleTimeout`, `MaxConns`,
+     *   `MaxPerHost`. The options are an object — a bare URL is refused
+     */
     JS_CFUNC_DEF("Client",      1, js_http_client),
-    /* Server([opts]) -> HttpServer */
+    /* Server([opts]) -> HttpServer
+     *   a listener of its own, for a static file server, a local API, a
+     *   callback endpoint. Everything about it is on
+     *   [`HttpServer`](docs/reference/globals/HttpServer.md)
+     */
     JS_CFUNC_DEF("Server",      1, js_http_server),
-    /* Request(method, url, [body], [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
+    /* Request(method, url, [body], [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop }
+     *   any verb: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`; anything
+     *   else is refused, in the blocking spelling too
+     */
     JS_CFUNC_DEF("Request",     5, js_http_request),
-    /* Get(url, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
+    /* Get(url, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop }
+     *   the ordinary read
+     */
     JS_CFUNC_DEF("Get",         4, js_http_get),
-    /* Post(url, body, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
+    /* Post(url, body, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop }
+     *   `body` is text, [`Bytes`](docs/reference/globals/Bytes.md), an object
+     *   (canonical JSON, `application/json`) or a
+     *   [`Multipart`](docs/reference/globals/Http.md#uploads)
+     */
     JS_CFUNC_DEF("Post",        5, js_http_post),
-    /* Put(url, body, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
+    /* Put(url, body, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop }
+     *   the same, for a replacement
+     */
     JS_CFUNC_DEF("Put",         5, js_http_put),
-    /* Patch(url, body, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
+    /* Patch(url, body, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop }
+     *   the same, for part of one
+     */
     JS_CFUNC_DEF("Patch",       5, js_http_patch),
-    /* Delete(url, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
+    /* Delete(url, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop }
+     *   no body, like `Get`
+     */
     JS_CFUNC_DEF("Delete",      4, js_http_delete),
-    /* Head(url, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
+    /* Head(url, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop }
+     *   the headers and no body, for *is it there* and *has it changed*
+     */
     JS_CFUNC_DEF("Head",        4, js_http_head),
-    /* Stream(method, url, [body], [opts], onLine, [onDone], [onError]) -> { Running, TimedOut, Url, Method, Stop } */
+    /* Stream(method, url, [body], [opts], onLine, [onDone], [onError]) -> { Running, TimedOut, Url, Method, Stop }
+     *   the answer **as it arrives**: `onLine(line, handle)` once per text
+     *   line, the newline stripped, blank lines included. Method-first like
+     *   `Request`, so a `POST` whose answer comes in pieces needs no second
+     *   name
+     */
     JS_CFUNC_DEF("Stream",      6, js_http_stream),
-    /* RequestWait(method, url, [body], [opts]) -> { Status, Reason, Headers, Body, Url } */
+    /* RequestWait(method, url, [body], [opts]) -> { Status, Reason, Headers, Body, Url }
+     *   the blocking spelling: answers with the record, **throws** on
+     *   transport failure — and what it throws carries the same `Kind` and
+     *   `Status` the callback would have been handed
+     */
     JS_CFUNC_DEF("RequestWait", 4, js_http_requestwait),
-    /* GetWait(url, [opts]) -> { Status, Reason, Headers, Body, Url } */
+    /* GetWait(url, [opts]) -> { Status, Reason, Headers, Body, Url }
+     *   the blocking `Get`
+     */
     JS_CFUNC_DEF("GetWait",     2, js_http_getwait),
-    /* PostWait(url, body, [opts]) -> { Status, Reason, Headers, Body, Url } */
+    /* PostWait(url, body, [opts]) -> { Status, Reason, Headers, Body, Url }
+     *   the blocking `Post`
+     */
     JS_CFUNC_DEF("PostWait",    3, js_http_postwait),
-    /* PutWait(url, body, [opts]) -> { Status, Reason, Headers, Body, Url } */
+    /* PutWait(url, body, [opts]) -> { Status, Reason, Headers, Body, Url }
+     *   the blocking `Put`
+     */
     JS_CFUNC_DEF("PutWait",     3, js_http_putwait),
-    /* PatchWait(url, body, [opts]) -> { Status, Reason, Headers, Body, Url } */
+    /* PatchWait(url, body, [opts]) -> { Status, Reason, Headers, Body, Url }
+     *   the blocking `Patch`
+     */
     JS_CFUNC_DEF("PatchWait",   3, js_http_patchwait),
-    /* DeleteWait(url, [opts]) -> { Status, Reason, Headers, Body, Url } */
+    /* DeleteWait(url, [opts]) -> { Status, Reason, Headers, Body, Url }
+     *   the blocking `Delete`
+     */
     JS_CFUNC_DEF("DeleteWait",  2, js_http_deletewait),
-    /* HeadWait(url, [opts]) -> { Status, Reason, Headers, Body, Url } */
+    /* HeadWait(url, [opts]) -> { Status, Reason, Headers, Body, Url }
+     *   the blocking `Head`
+     */
     JS_CFUNC_DEF("HeadWait",    2, js_http_headwait),
 };
 
@@ -3455,9 +3602,16 @@ static JSValue http_request_multipart(JSContext *ctx, JSValueConst this_val,
 
 /* type HttpRequest */
 static const JSCFunctionListEntry http_request_props[] = {
-    /* Answer(status, [body], [opts]) */
+    /* Answer(status, [body], [opts])
+     *   `body` follows the client's rules — an object serialises as canonical
+     *   JSON — and `opts` carries `Headers` and `ContentType`. **The second
+     *   argument is always the body and the third always the options**
+     */
     JS_CFUNC_DEF("Answer", 3, http_request_answer),
-    /* Multipart() -> Multipart */
+    /* Multipart() -> Multipart
+     *   the upload parsed: a `Multipart` to read with `Part(index)`, or to
+     *   re-post. **Refused on a plain body**
+     */
     JS_CFUNC_DEF("Multipart", 0, http_request_multipart),
 };
 
@@ -4108,19 +4262,67 @@ static JSValue http_server_stop(JSContext *ctx, JSValueConst this_val,
 
 /* type HttpServer */
 static const JSCFunctionListEntry http_server_props[] = {
+    /* Request
+     *   assign `(req) => …`. **Required before `Start`**, and replaceable
+     *   while running — even from inside the handler: the running one
+     *   finishes its request and the next goes to the new one
+     */
     JS_CGETSET_DEF("Request",    http_server_get_request, http_server_set_request),
+    /* Port
+     *   `8080` unless told; **`0` is ephemeral** — read it back after `Start`
+     *   to learn which one it got, which is how a test or a one-off tool
+     *   avoids fighting for a number
+     */
     JS_CGETSET_DEF("Port",       http_server_get_port, http_server_set_port),
+    /* Host
+     *   `"local"` is loopback only and the default; **`"any"` is an explicit
+     *   word**, because opening a port to the network should be something
+     *   somebody typed
+     */
     JS_CGETSET_DEF("Host",       http_server_get_host, http_server_set_host),
+    /* ServerName
+     *   the `Server:` header; `""` for soup's own
+     */
     JS_CGETSET_DEF("ServerName", http_server_get_name, http_server_set_name),
+    /* Tls
+     *   `{ Cert, Key }` files, or nothing: `https` when set, `null` when not.
+     *   **Missing files fail at `Start`, naming them**
+     */
     JS_CGETSET_DEF("Tls",        http_server_get_tls, http_server_set_tls),
+    /* Allow
+     *   a list of **exact** IPs, or nothing (open). A refused remote gets
+     *   `403` before the handler runs. Exact means exact: on a dual-stack
+     *   `"any"` server, `::1` is not `127.0.0.1`
+     */
     JS_CGETSET_DEF("Allow",      http_server_get_allow, http_server_set_allow),
+    /* Auth
+     *   `{ Realm, Users }`: Basic over the whole server, `401` with the realm
+     *   until the right password. Nothing set is open, and it reads back
+     *   `null`. Like `Allow`, it takes effect at once
+     */
     JS_CGETSET_DEF("Auth",       http_server_get_auth, http_server_set_auth),
+    /* Running
+     *   `Port` is declared until `Start`, actual after; `Url` is `""` until
+     *   then, and empty again after `Stop`
+     */
     JS_CGETSET_DEF("Running",    http_server_get_running, NULL),
-    /* Url -> string */
+    /* Url -> string
+     *   `""` until `Start`, the real one after, and empty again after `Stop`
+     */
     JS_CGETSET_DEF("Url",        http_server_get_url, NULL),
-    /* Start() */
+    /* Start()
+     *   listens; throws naming the reason (a busy port says which one). A
+     *   second `Start` is refused
+     */
     JS_CFUNC_DEF("Start", 0, http_server_start),
-    /* Stop() -> boolean */
+    /* Stop() -> boolean
+     *   `true` while something was listening, `false` after — like signalling
+     *   a reaped child. **From inside a handler it waits for the handler**:
+     *   `Answer` fills the message in and soup sends it when the handler
+     *   returns, so `req.Answer(200, "bye"); srv.Stop();` answers first and
+     *   disconnects after. `Running` stays true until the deferred disconnect
+     *   runs
+     */
     JS_CFUNC_DEF("Stop",  0, http_server_stop),
 };
 

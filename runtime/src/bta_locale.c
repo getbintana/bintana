@@ -2367,30 +2367,85 @@ static JSValue js_locale_matches(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry locale_props[] = {
-    /* Text(msgid, ...args) -> string */
+    /* Text(msgid, ...args) -> string
+     *   the catalogue's version of a string, with `{0}`, `{1}` filled in from
+     *   the arguments. **The msgid itself when there is no entry**, so an
+     *   application with no catalogue at all still reads correctly
+     */
     JS_CFUNC_DEF("Text",    1, js_locale_text),
-    /* Plural(one, many, n, ...args) -> string */
+    /* Plural(one, many, n, ...args) -> string
+     *   the form `n` takes **by the catalogue's own rule** — which is not
+     *   *one or many* in every language, and is why this is not an `if` you
+     *   write yourself. `n` also fills `{0}`
+     */
     JS_CFUNC_DEF("Plural",  3, js_locale_plural),
-    /* Context(ctxt, msgid, ...args) -> string */
+    /* Context(ctxt, msgid, ...args) -> string
+     *   gettext's `msgctxt`, for the word that is not translated the same way
+     *   twice — *Open* the verb on a button and *Open* the state of a file.
+     *   The context is part of the key and is never shown
+     */
     JS_CFUNC_DEF("Context", 2, js_locale_context),
-    /* Read(path) */
+    /* Read(path)
+     *   a catalogue as data, losing nothing: entries, contexts, plurals,
+     *   comments and the fuzzy flags. What a translation editor reads
+     */
     JS_CFUNC_DEF("Read",    1, js_locale_read),
-    /* Write(path, entries) */
+    /* Write(path, entries)
+     *   those entries back as a `.po` — the same shape `Read` answers with,
+     *   so the two are one pair. **Nothing is lost in either direction**,
+     *   which is what makes an editor built on them safe on a file it only
+     *   half understands. The two are one pair: what the reader kept, the
+     *   writer writes
+     */
     JS_CFUNC_DEF("Write",   2, js_locale_write),
-    /* Number(value, [options]) -> string */
+    /* Number(value, [options]) -> string
+     *   grouped, with this desktop's separators. As many decimals as the
+     *   value has, unless told
+     */
     JS_CFUNC_DEF("Number",  2, js_locale_number),
-    /* Date(when, [format]) -> string */
+    /* Date(when, [format]) -> string
+     *   `"Date"` `"Time"` `"DateTime"` `"ISO"` `"Weekday"` `"Month"`. `when`
+     *   is a `Date` **or** a `"YYYY-MM-DD"` string
+     */
     JS_CFUNC_DEF("Date",    2, js_locale_date),
-    /* Currency(value, [options]) -> string */
+    /* Currency(value, [options]) -> string
+     *   money, with the symbol where this desktop puts it — which is before
+     *   the number in some places and after it in others
+     */
     JS_CFUNC_DEF("Currency", 2, js_locale_currency),
-    /* Parse(text, [options]) */
+    /* Parse(text, [options])
+     *   a [`Decimal`](docs/reference/globals/Decimal.md), or `null` when the
+     *   text is not a number. **`null` and not a throw**: a field being typed
+     *   into is not an error. The same format read backwards
+     */
     JS_CFUNC_DEF("Parse",   2, js_locale_parse),
-    /* Compare(a, b) -> number */
+    /* Compare(a, b) -> number
+     *   `-1`, `0` or `1`, in the order this desktop puts names in.
+     *   `localeCompare` is **refused** and its message points here: it
+     *   compares code units and puts `Álvarez` after `Zapata`
+     */
     JS_CFUNC_DEF("Compare", 2, js_locale_compare),
-    /* Matches(text, needle) -> boolean */
+    /* Matches(text, needle) -> boolean
+     *   whether a search for `needle` should find `text`, **accents folded**:
+     *   `cordoba` finds `Córdoba` and `ver` finds `Echeverría`.
+     *   `toLowerCase().includes()` does neither
+     */
     JS_CFUNC_DEF("Matches", 2, js_locale_matches),
+    /* DecimalPoint
+     *   the character a decimal is written with here, for the rare case that
+     *   has to parse one back
+     */
     JS_CGETSET_DEF("DecimalPoint", js_locale_get_point, NULL),
+    /* Current
+     *   which catalogue is in use, `""` for none. **Assigning reloads it, and
+     *   affects only what is built afterwards** — a form already on screen
+     *   keeps the words it was built with
+     */
     JS_CGETSET_DEF("Current",   js_locale_get_current, js_locale_set_current),
+    /* Available
+     *   the catalogue names this project ships, sorted — what a language menu
+     *   is built from
+     */
     JS_CGETSET_DEF("Available", js_locale_get_available, NULL),
 };
 

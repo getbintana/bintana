@@ -405,6 +405,24 @@ the table the global is built from:
 JS_SetPropertyStr(ctx, file, "Load", JS_NewCFunction(ctx, sys_file_load, "Load", 1));
 ```
 
+**And what it is for, on the lines after**, indented -- the one description the
+member has, which the IDE's popup shows and `./tools/docs.sh` writes into the
+rows of `docs/llm` and `docs/reference`:
+
+```c
+/* Load(path) -> string
+ *   the whole file as a string. **Throws if it cannot be read**, and the
+ *   message names the file
+ */
+```
+
+A property's first line is its name alone (`/* Enabled`), or its name and an
+arrow; an event's goes above the class row, as its signature does. Write links
+from the root of the tree (`[Bytes](docs/llm/library.md#bytes)`): the text lands
+in pages in different directories. Then run `./tools/docs.sh` -- `tests/api.sh`
+fails on a member with no description and on a row that does not say what the
+code says.
+
 **What a verb answers goes on the same line**, after an arrow — a type the
 runtime can be asked about by name, `string`/`number`/`boolean`, a list (`[]`),
 or a shape in braces:

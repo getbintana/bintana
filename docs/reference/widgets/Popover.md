@@ -10,14 +10,14 @@ everything there is here too; what follows is what is its own.
 
 | | |
 |---|---|
-| `Position` | which side of the anchor it prefers: `Top` `Bottom` `Left` `Right` | [opening](#opening) |
+| `Position` | `Top`, `Bottom`, `Left` or `Right`: the side of the anchor it **prefers**, and GTK moves it when there is no room there | [opening](#opening) |
 | `Arrow` | draw the tail pointing back at the control | [opening](#opening) |
-| `Autohide` | close on a click outside or Escape | [opening](#opening) |
-| `Visible` (ro) | whether it is open — **read-only** | [closing](#closing) |
-| `Popup(anchor, [rect])` | opens it over that control, or pointed at a rectangle inside it | [opening](#opening) |
-| `Close()` | closes it, and is safe at any time | [closing](#closing) |
-| `Show()` | refuses, and names `Popup(anchor)` | [opening](#opening) |
-| **event** `Open()` | it came up, however it was asked | [the two events](#the-two-events) |
+| `Autohide` | `true` by default: a click outside or Escape closes it, and `Close` is raised | [opening](#opening) |
+| `Visible` (ro) | the answer to *is it open* — and **read-only**, because it is a state and not a declaration | [closing](#closing) |
+| `Popup(anchor, [rect])` | opens it over that control — or, with `rect` (`{ X, Y, Width, Height }` in the anchor's own coordinates), pointed at that rectangle inside it, which is how a hint sits beside an editor's cursor (`Editor.CursorBounds()`) | [opening](#opening) |
+| `Close()` | closes it, and does nothing when it is already closed | [closing](#closing) |
+| `Show()` | refuses and names `Popup(anchor)`; the inherited one would build a popup surface before the window exists | [opening](#opening) |
+| **event** `Open()` | it came up — `Popup()`, or anything else that showed it | [the two events](#the-two-events) |
 | **event** `Close()` | it went down | [the two events](#the-two-events) |
 
 ## Which one is this
@@ -70,11 +70,11 @@ arrows, Enter, Escape and a click outside do the work.
 
 | | |
 |---|---|
-| `Popup(anchor, [rect])` | opens it over that control. The anchor must have been laid out and the window must be up, because the popup is positioned against the anchor's rectangle. With `rect` — `{ X, Y, Width, Height }` in the anchor's own coordinates — it points at that rectangle inside the anchor instead of at the whole of it: `Popup(editor, editor.CursorBounds())` is a hint beside the cursor, with `Autohide` off so typing goes on underneath |
+| `Popup(anchor, [rect])` | opens it over that control — or, with `rect` (`{ X, Y, Width, Height }` in the anchor's own coordinates), pointed at that rectangle inside it, which is how a hint sits beside an editor's cursor (`Editor.CursorBounds()`). A field that is not a number is refused. The anchor **and the container the popover is in** must be on screen — a hidden panel, a collapsed `Expander` or a page not shown is refused with a sentence. The point is taken once: an anchor that moves, scrolls or is deleted afterwards leaves the popover where it opened. The anchor must have been laid out and the window must be up, because the popup is positioned against the anchor's rectangle. |
 | `Position` | `Top`, `Bottom`, `Left` or `Right`: the side of the anchor it **prefers**, and GTK moves it when there is no room there. Default `"Bottom"` |
-| `Arrow` | the tail. `false` by default, unlike GTK's own popover: a menu wants the tail and a list of suggestions flush against a field does not |
+| `Arrow` | draw the tail pointing back at the control. Default `false`, unlike GTK's own — a menu wants the tail and a list of suggestions flush against a field does not |
 | `Autohide` | `true` by default: a click outside or Escape closes it, and `Close` is raised |
-| `Show()` | refuses. The inherited verb would show a surface with nothing to point at |
+| `Show()` | refuses and names `Popup(anchor)`; the inherited one would build a popup surface before the window exists. The inherited verb would show a surface with nothing to point at |
 
 **Opening gives the window a focus if it had none**, the anchor first — GTK's
 own focus walk for an autohide popover reads the window's focused widget and
@@ -87,8 +87,8 @@ where it was.
 | | |
 |---|---|
 | `Close()` | closes it, and does nothing when it is already closed |
-| `Visible` (ro) | the answer to *is it open* — and **read-only**, because it is a state and not a declaration |
-| `Autohide` | closes it from the outside, and raises `Close` the same way |
+| `Visible` (ro) | the answer to *is it open* — and **read-only**, because it is a state and not a declaration. **Read-only**: opening has a verb, and this is the question half |
+| `Autohide` | `true` by default: a click outside or Escape closes it, and `Close` is raised |
 
 **`Visible` is the one property a class takes away from `Widget`.** A `.form`
 would assign it while the window is still being built, and
@@ -102,7 +102,7 @@ offer it, and the serialiser never writes it.
 | | |
 |---|---|
 | **event** `Open()` | it came up — `Popup()`, or anything else that showed it |
-| **event** `Close()` | it went down: `Close()`, a click outside, Escape, or the window going with it |
+| **event** `Close()` | it went down: `Close()`, autohide, or the window going with it. **Not** when the popover itself is deleted or taken out while open — its handlers are unhooked before GTK takes it down |
 
 A `Close` handler is where a program puts back what opening changed: the
 highlight on the field, the arrow's direction, or the focus. It arrives whether

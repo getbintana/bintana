@@ -878,15 +878,33 @@ static JSValue js_log_set_target(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry log_props[] = {
-    /* Debug(...values) */
+    /* Debug(...values)
+     *   the detail that is only interesting when something is wrong
+     */
     JS_CFUNC_MAGIC_DEF("Debug",   1, js_log, BTA_LOG_DEBUG),
-    /* Info(...values) */
+    /* Info(...values)
+     *   what the program did
+     */
     JS_CFUNC_MAGIC_DEF("Info",    1, js_log, BTA_LOG_INFO),
-    /* Warning(...values) */
+    /* Warning(...values)
+     *   what it did not like but carried on through
+     */
     JS_CFUNC_MAGIC_DEF("Warning", 1, js_log, BTA_LOG_WARNING),
-    /* Error(...values) */
+    /* Error(...values)
+     *   what failed
+     */
     JS_CFUNC_MAGIC_DEF("Error",   1, js_log, BTA_LOG_ERROR),
+    /* Level
+     *   the floor — lines below it are dropped, which is how a program ships
+     *   with its `Debug` lines still in it
+     */
     JS_CGETSET_DEF("Level",  js_log_get_level,  js_log_set_level),
+    /* Target
+     *   where the lines are written: `"Terminal"` (the default, and
+     *   stdout/stderr under it), `"Journal"` where the build has one, or **a
+     *   file path** — opened in append mode and flushed per line, and it
+     *   reads back as the path
+     */
     JS_CGETSET_DEF("Target", js_log_get_target, js_log_set_target),
 };
 
@@ -1175,6 +1193,9 @@ static bool install_globals(BtaApp *app)
 
     /* Application: the Gambas-ish ambient singleton. */
     JSValue application = JS_NewObject(ctx);
+    /* Name
+     *   from `project.json`
+     */
     JS_SetPropertyStr(ctx, application, "Name", JS_NewString(ctx, app->name));
     /*
      * What the *application* calls its release, out of its own project.json --
@@ -1183,6 +1204,11 @@ static bool install_globals(BtaApp *app)
      * time in its own source, which is the copy that goes stale. "" when the
      * project declares none: a version is optional, and absent is not an error.
      */
+    /* Version
+     *   what the **project** calls its release; `""` when it declares none.
+     *   **`BTA_VERSION` is the runtime's** and is not this — showing the
+     *   wrong one is what an About box does until it knows the difference
+     */
     JS_SetPropertyStr(ctx, application, "Version", JS_NewString(ctx, app->version));
     /*
      * The application's own identity, in reverse DNS -- the name its window is
@@ -1190,9 +1216,32 @@ static bool install_globals(BtaApp *app)
      * a project that declares none, which is an ordinary project and not a
      * fault: the window then keeps the program's name, as it always did.
      */
+    /* Id
+     *   from `project.json`: the application's identity in reverse DNS —
+     *   `io.github.you.App`. It is **one name in three places**: the window's
+     *   own class (the runtime hands it to `GtkApplication` for Wayland and
+     *   to the program name for X11's `WM_CLASS`), the `<id>` of the
+     *   project's metainfo, and the Flatpak app id. `""` when the project
+     *   declares none, which is an ordinary project classed by the program's
+     *   name; a value that is not an application id **stops the program when
+     *   the project loads**, because every one of those three is something
+     *   nobody looks at until a dock shows the wrong icon
+     */
     JS_SetPropertyStr(ctx, application, "Id", JS_NewString(ctx, app->id));
+    /* Directory
+     *   the project directory, absolute. What a relative path in a project
+     *   resolves against — an image a report draws, a document a viewer
+     *   opens, a data file that ships with the application
+     */
     JS_SetPropertyStr(ctx, application, "Directory", JS_NewString(ctx, app->dir));
-    /* Quit(code) */
+    /* Quit(code)
+     *   quit with that exit status. `0` is *it worked*, and a console tool
+     *   that answers a question answers with this. A `code` that is not a
+     *   number is **refused** — `Quit("fail")` used to exit `0`, which a
+     *   runner reads as success. A `code` that is not a number is refused
+     *   rather than read as `0`, which a runner would take for success;
+     *   `Quit()` is `0`
+     */
     JS_SetPropertyStr(ctx, application, "Quit",
                       JS_NewCFunction(ctx, js_quit, "Quit", 1));
 
@@ -1204,6 +1253,13 @@ static bool install_globals(BtaApp *app)
     g_strdelimit(slug, G_DIR_SEPARATOR_S, '-');
     char *config = g_build_filename(g_get_user_config_dir(), "bintana", slug, NULL);
     g_mkdir_with_parents(config, 0755);
+    /* ConfigDirectory
+     *   `~/.config/bintana/<name>`, **created at startup**, which is where
+     *   anything the application remembers belongs.
+     *   [`Settings`](docs/reference/globals/Settings.md) writes there;
+     *   nothing of yours should go in the project directory, which is a thing
+     *   people hand to each other
+     */
     JS_SetPropertyStr(ctx, application, "ConfigDirectory", JS_NewString(ctx, config));
     g_free(config);
     g_free(slug);
@@ -1211,10 +1267,17 @@ static bool install_globals(BtaApp *app)
     /* Whether the desktop has an icon by that name.  Only whoever picks the
      * name can choose a fallback, and an icon the theme lacks is dropped
      * silently -- which on an icon-only button leaves nothing at all. */
-    /* HasIcon(name) -> string */
+    /* HasIcon(name) -> string
+     *   whether that icon will actually **draw** something. Not whether the
+     *   theme claims it: an icon that cannot be rasterised here is the same
+     *   nothing as one that is missing
+     */
     JS_SetPropertyStr(ctx, application, "HasIcon",
                       JS_NewCFunction(ctx, js_has_icon, "HasIcon", 1));
-    /* Icons([contains]) -> string[] */
+    /* Icons([contains]) -> string[]
+     *   every icon name available, sorted, narrowed by substring — what an
+     *   icon picker is built from
+     */
     JS_SetPropertyStr(ctx, application, "Icons",
                       JS_NewCFunction(ctx, js_icons, "Icons", 1));
 
@@ -1239,6 +1302,11 @@ static bool install_globals(BtaApp *app)
 
         if (settings)
             g_object_get(settings, "gtk-decoration-layout", &layout, NULL);
+        /* DecorationLayout
+         *   how this desktop arranges a title bar — which buttons, and on
+         *   which side. What a drawn title bar reads to look like the real
+         *   one
+         */
         JS_SetPropertyStr(ctx, application, "DecorationLayout",
                           JS_NewString(ctx, layout ? layout : ""));
         g_free(layout);
@@ -1247,14 +1315,22 @@ static bool install_globals(BtaApp *app)
     /* And whether an external program is installed, which is the same question
      * about a different kind of name -- `Exec` throws when it is not, so this is
      * what lets a caller choose among the tools a desktop happens to have. */
-    /* HasCommand(name) */
+    /* HasCommand(name)
+     *   whether that program is on the PATH. **The question that does not
+     *   need an exception**, since [`Exec`](docs/reference/globals/Exec.md)
+     *   throws when the program is not there
+     */
     JS_SetPropertyStr(ctx, application, "HasCommand",
                       JS_NewCFunction(ctx, js_has_command, "HasCommand", 1));
 
     /* Would this text compile?  The one honest use of `Function` -- an IDE that
      * writes code wants to know before it saves -- published on its own so the
      * string-to-code hatch does not have to stay open for it. */
-    /* CheckSource(text) -> { Message, Line, Column } */
+    /* CheckSource(text) -> { Message, Line, Column }
+     *   `null` when the text is valid JavaScript, else `{ Message, Line,
+     *   Column }`. What an editor checks a file with before saving it, and
+     *   the answer `new Function(src)` is not allowed to give
+     */
     JS_SetPropertyStr(ctx, application, "CheckSource",
                       JS_NewCFunction(ctx, js_check_source, "CheckSource", 1));
 
@@ -1266,7 +1342,30 @@ static bool install_globals(BtaApp *app)
      * pattern, and the answer belongs to the compiler and not to one
      * application.
      */
-    /* Symbols(text) -> { Name, Kind, Line, Parent, Super, Params }[] */
+    /* Symbols(text) -> { Name, Kind, Line, Parent, Super, Params }[]
+     *   what the text declares — `[{ Name, Kind, Line, Parent, Super, Params,
+     *   End }]`, out of the parser and with nothing run. **`Kind` is
+     *   `"Class"`, `"Function"`, `"Method"`, `"Static"`, `"Getter"`,
+     *   `"Setter"`, `"StaticGetter"` or `"StaticSetter"`**, or
+     *   **`"Variable"`** (each `let`/`const`/`var`, destructured name,
+     *   `for...of` variable and `catch` binding, at its line) and
+     *   **`"Scope"`** (every function, anonymous ones included, with its
+     *   `Params` and the lines it spans, `Line` to **`End`**; one that fails
+     *   to parse spans up to where it broke) — together, what a name can mean
+     *   where the cursor is — the member kinds are what separates `Value: T`
+     *   from `Value(): T`, and a property of the class from one of the
+     *   instance. **`Params` is the parameter list in the spelling a
+     *   declaration uses** — `(message, [options], ...rest)`, `()` for a
+     *   member that takes none, `""` for a class — for members and top-level
+     *   functions, and **it is the function's own**: an arrow in its body or
+     *   in a default value does not replace it. It is the one answer a host
+     *   cannot get elsewhere, because ECMAScript discards a parameter's name
+     *   at parse time and `Function.length` is a lower bound the moment one
+     *   has a default. **`Super` is the name in a class's `extends`** and
+     *   `""` for everything else, including an `extends` that is not a bare
+     *   identifier. What an editor lists a file with, and the answer a
+     *   pattern is not allowed to guess at
+     */
     JS_SetPropertyStr(ctx, application, "Symbols",
                       JS_NewCFunction(ctx, js_application_symbols, "Symbols", 1));
 
@@ -1281,7 +1380,12 @@ static bool install_globals(BtaApp *app)
      * time one of them was fixed, and the one that drifted would be the one
      * nobody runs from a shell.
      */
-    /* LibraryPath(name, [project]) -> string */
+    /* LibraryPath(name, [project]) -> string
+     *   where a library by that name is, or `""` — **the same six-place
+     *   search the runtime does for `uses`**. Published so that a tool which
+     *   opens *other* projects asks about theirs rather than keeping a second
+     *   copy of the path
+     */
     JS_SetPropertyStr(ctx, application, "LibraryPath",
                       JS_NewCFunction(ctx, js_library_path, "LibraryPath", 2));
 
@@ -1299,15 +1403,34 @@ static bool install_globals(BtaApp *app)
      * exists to prevent, and it would be the copy that goes stale, because the
      * first one is the one every program runs.
      */
-    /* Libraries([project]) -> string[] */
+    /* Libraries([project]) -> string[]
+     *   the names of every library those same six places offer, sorted, each
+     *   one once. The other direction of the lookup: `LibraryPath` resolves a
+     *   name you already know, this is what a dialog that offers a choice
+     *   needs
+     */
     JS_SetPropertyStr(ctx, application, "Libraries",
                       JS_NewCFunction(ctx, js_libraries, "Libraries", 1));
-    /* Globals() -> string[] */
+    /* Globals() -> string[]
+     *   every name on the global object: the runtime's own, the ones a
+     *   library installed, and the JavaScript builtins -- `Math`, `JSON`,
+     *   `Date`, `Map`, `Timer`, `Confirm`. **A top-level `class` is a lexical
+     *   binding and not a property of the global object**, so a library's and
+     *   a project's classes are *not* in it -- read those out of the sources,
+     *   which is what the IDE does. It exists because the alternative is a
+     *   hand-written list of global names, and there are a hundred and
+     *   sixty-four of them
+     */
     JS_SetPropertyStr(ctx, application, "Globals",
                       JS_NewCFunction(ctx, js_globals, "Globals", 0));
 
     /* Where the runtime binary lives, so a project can re-invoke it. */
     char *exe = bta_exe_path();
+    /* Executable
+     *   the `bintana` binary that is running this, so a project can re-invoke
+     *   it — which is how the IDE runs a project and how the test runner runs
+     *   the suites
+     */
     JS_SetPropertyStr(ctx, application, "Executable",
                       JS_NewString(ctx, exe ? exe : "bintana"));
     g_free(exe);
@@ -1315,6 +1438,10 @@ static bool install_globals(BtaApp *app)
     JSValue args = JS_NewArray(ctx);
     for (uint32_t i = 0; app->args && app->args[i]; i++)
         JS_SetPropertyUint32(ctx, args, i, JS_NewString(ctx, app->args[i]));
+    /* Arguments
+     *   whatever followed the project directory on the command line, as an
+     *   array
+     */
     JS_SetPropertyStr(ctx, application, "Arguments", args);
 
     JS_SetPropertyStr(ctx, global, "Application", application);
@@ -1323,15 +1450,24 @@ static bool install_globals(BtaApp *app)
      * comment above a line is what `Widget.Members` answers with -- a loop
      * leaves nowhere to write one. The magic is the index `js_message` reads. */
     JSValue message = JS_NewObject(ctx);
-    /* Info(text, ...args) */
+    /* Info(text, ...args)
+     *   something happened. **It shows and returns**: it does not block and
+     *   there is no answer. The text goes through the catalogue with `{0}`
+     *   holes filled from the arguments -- never a template literal -- and
+     *   with no display it prints to stderr
+     */
     JS_SetPropertyStr(ctx, message, "Info",
                       JS_NewCFunctionMagic(ctx, js_message, "Info", 1,
                                            JS_CFUNC_generic_magic, 0));
-    /* Warning(text, ...args) */
+    /* Warning(text, ...args)
+     *   something is not right; the same as `Info` in every other respect
+     */
     JS_SetPropertyStr(ctx, message, "Warning",
                       JS_NewCFunctionMagic(ctx, js_message, "Warning", 1,
                                            JS_CFUNC_generic_magic, 1));
-    /* Error(text, ...args) */
+    /* Error(text, ...args)
+     *   something failed; the same as `Info` in every other respect
+     */
     JS_SetPropertyStr(ctx, message, "Error",
                       JS_NewCFunctionMagic(ctx, js_message, "Error", 1,
                                            JS_CFUNC_generic_magic, 2));

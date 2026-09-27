@@ -21,35 +21,35 @@ matters is in the section.
 
 | | | |
 |---|---|---|
-| `AutoExpand` | a node opens when it gains children | [opening and closing](#opening-and-closing) |
-| `Count` (ro) | how many nodes, at every level | [the nodes](#the-nodes) |
-| `Key` | the selected node's key; assigning selects | [the selection](#the-selection) |
-| `Text` (ro) | the selected node's words | [the selection](#the-selection) |
+| `AutoExpand` | open a node as it arrives, and again when it gains a child after being closed by hand | [opening and closing](#opening-and-closing) |
+| `Count` (ro) | how many nodes there are, **at every level**, open or closed | [the nodes](#the-nodes) |
+| `Key` | the selected node's key, `""` for none | [the selection](#the-selection) |
+| `Text` (ro) | the words of the selected node, `""` when nothing is selected | [the selection](#the-selection) |
 
 **Methods**
 
 | | | |
 |---|---|---|
-| `Add(key, text, [parentKey], [icon])` | a node, under another or at the root | [the nodes](#the-nodes) |
+| `Add(key, text, [parentKey], [icon])` | a node | [the nodes](#the-nodes) |
 | `Clear()` | empties the whole tree | [the nodes](#the-nodes) |
-| `Activate([index])` | raises `Activate` for that visible position, as a double click would; the selected node with no argument | [the selection](#the-selection) |
-| `ActivateOnSingleClick` | raise `Activate` on one click instead of two. Default `false` | [the selection](#the-selection) |
+| `Activate([index])` | raises `Activate` for that visible position, as a double click would; the selected row with no argument | [the selection](#the-selection) |
+| `ActivateOnSingleClick` | raise `Activate` on one click instead of two | [the selection](#the-selection) |
 | `CollapseAll()` | closes every node | [opening and closing](#opening-and-closing) |
-| `CollapseNode(key)` | closes one | [opening and closing](#opening-and-closing) |
-| `Exists(key)` | → whether that node is there | [the nodes](#the-nodes) |
+| `CollapseNode(key)` | closes it | [opening and closing](#opening-and-closing) |
+| `Exists(key)` | whether that node is there | [the nodes](#the-nodes) |
 | `ExpandAll()` | opens every node | [opening and closing](#opening-and-closing) |
-| `ExpandNode(key)` | opens one, and the way to it | [opening and closing](#opening-and-closing) |
-| `Expanded(key)` | → whether it is open | [opening and closing](#opening-and-closing) |
-| `RemoveNode(key)` | takes a node out, **and its subtree** | [the nodes](#the-nodes) |
-| `Reveal(index)` | brings that visible row into view | [the nodes](#the-nodes) |
-| `SetIcon(key, name)` | its picture, `""` for none | [the nodes](#the-nodes) |
-| `SetText(key, text)` | renames it | [the nodes](#the-nodes) |
+| `ExpandNode(key)` | opens it, **and the way to it**: a node only exists on screen once its ancestors are open | [opening and closing](#opening-and-closing) |
+| `Expanded(key)` | whether it is open | [opening and closing](#opening-and-closing) |
+| `RemoveNode(key)` | takes that node out **and the subtree with it** — a node whose parent is gone is not something this control can show | [the nodes](#the-nodes) |
+| `Reveal(index)` | brings that visible row into view with the least scrolling it takes, and answers whether there was one | [the nodes](#the-nodes) |
+| `SetIcon(key, name)` | its icon, or `""` for none | [the nodes](#the-nodes) |
+| `SetText(key, text)` | renames a node, keeping it where it is — and keeping the selection on it | [the nodes](#the-nodes) |
 
 **Events**
 
 | | | |
 |---|---|---|
-| `Activate()` | a node was double clicked, or Enter | [the selection](#the-selection) |
+| `Activate()` | raises `Activate` for that visible position, as a double click would; the selected row with no argument | [the selection](#the-selection) |
 | `Select()` | the selection moved | [the selection](#the-selection) |
 
 ## Which list is this one
@@ -120,10 +120,10 @@ nothing has added yet is not there to go under.
 |---|---|
 | `Add(key, text, [parentKey], [icon])` | a node. `key` is yours to choose and must be unique in this tree; an empty `parentKey` is a root; `icon` is a name from the theme, and one the theme lacks is dropped rather than drawn as a hole |
 | `SetText(key, text)` | renames a node, keeping it where it is — and keeping the selection on it. **Translated** |
-| `SetIcon(key, name)` | its picture, or `""` for none. One column, so no column argument |
+| `SetIcon(key, name)` | its icon, or `""` for none. One column, so no column argument — otherwise it is `TableView`'s |
 | `RemoveNode(key)` | takes that node out **and the subtree with it** — a node whose parent is gone is not something this control can show |
 | `Reveal(index)` | brings that visible row into view with the least scrolling it takes, and answers whether there was one. The index is a visible position, like `Activate`'s |
-| `Exists(key)` | → whether that node is there. The question you ask *before* you know, so it answers rather than throwing |
+| `Exists(key)` | whether that node is there. The question you ask *before* you know, so it answers rather than throwing |
 | `Clear()` | empties the whole tree |
 | `Count` (ro) | how many nodes there are, **at every level**, open or closed |
 
@@ -140,11 +140,11 @@ key space; if the same tree holds files and categories, `cat:forms` and
 
 | | |
 |---|---|
-| `Key` | the selected node's key, `""` for none. Assigning selects that node, **opening the way to it**, and raises `Select` |
+| `Key` | the selected node's key, `""` for none. Assigning selects that node, **opening the way to it**, and raises `Select`. Keys are yours to choose — a path, an id |
 | `Text` (ro) | the words of the selected node, `""` when nothing is selected |
-| `Activate([index])` | the double click from code; the selected node with no argument. Answers whether there was one |
+| `Activate([index])` | raises `Activate` for that visible position, as a double click would; the selected row with no argument. Answers whether there was one |
 | `ActivateOnSingleClick` | raise `Activate` on one click instead of two. Default `false` |
-| **event** `Select()` | the selection moved — by the user, by an assignment, or because what was selected is no longer visible |
+| **event** `Select()` | the selection moved — by the user, by an assignment, or because what was selected is no longer visible. Ask `Key` or `Text` for what it is now |
 | **event** `Activate()` | a double click on a node, or Enter on it: the gesture for *open this one* |
 
 **There is no `MultiSelect` and no `Index`.** A hierarchy is selected one node at
@@ -166,12 +166,12 @@ somebody pressed the down arrow would be unusable.
 
 | | |
 |---|---|
-| `ExpandNode(key)` | opens it, **and the way to it**: a node only exists on screen once its ancestors are open |
+| `ExpandNode(key)` | opens it, **and the way to it**: a node only exists on screen once its ancestors are open. Not `Expand`, which is `Widget`'s layout property |
 | `CollapseNode(key)` | closes it |
 | `ExpandAll()` | opens every node |
 | `CollapseAll()` | closes every node |
-| `Expanded(key)` | → whether it is open |
-| `AutoExpand` | a node opens as it arrives, and again when it gains a child after being closed by hand. Default `true` |
+| `Expanded(key)` | whether it is open |
+| `AutoExpand` | open a node as it arrives, and again when it gains a child after being closed by hand. Default `true`. A node with nothing under it reads as open too, which hides nothing and is what turns the arrow off. `TableView`'s is the same mechanism and answers the same |
 
 `ExpandNode` and not `Expand`: [`Expand`](Widget.md) is `Widget`'s layout
 property, on every control, and means *absorb the slack in the box*. A method of

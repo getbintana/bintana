@@ -933,6 +933,9 @@ keystroke:
 - **The file's own methods are scanned from the text**, since the IDE edits the
   project's code rather than loading it, and the scan is redone only when the
   text is not the one it was taken from.
+- **The chosen row says what the member is for**, under the list: the first
+  sentence of the description written beside the member in the C -- the same
+  text the documentation's rows are written from -- in plain text.
 - **A bare name offers what is in scope first.** The parameters of every
   function around the cursor and the variables declared in them above it, then
   what the file declares at its top level, then the globals -- among them every

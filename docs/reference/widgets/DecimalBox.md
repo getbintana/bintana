@@ -16,20 +16,20 @@ It is a `Widget` and a control like any other, so everything on
 
 | | | |
 |---|---|---|
-| `Currency` | the symbol when `Format` is `"Currency"` | [money, and units](#money-and-units) |
-| `Decimals` | places shown **and held**. Default `2` | [the value](#the-value) |
-| `Format` | `Number` or `Currency`. Default `"Number"` | [money, and units](#money-and-units) |
-| `Group` | thousands separators, this desktop's rule. Default `false` | [the value](#the-value) |
+| `Currency` | the symbol | [money, and units](#money-and-units) |
+| `Decimals` | with `Currency` and no `Decimals`, the currency's own places: two nearly everywhere, zero for yen | [the value](#the-value) |
+| `Format` | `Number` `Currency` | [money, and units](#money-and-units) |
+| `Group` | thousands separators | [the value](#the-value) |
 | `Max` | the ceiling, a `Decimal` | [the range](#the-range) |
-| `Min` | the floor, likewise | [the range](#the-range) |
-| `Prefix` | text outside the number | [money, and units](#money-and-units) |
-| `Step` | what one press of an arrow moves, a `Decimal`. Default `1` | [the range](#the-range) |
-| `Suffix` | text outside it | [money, and units](#money-and-units) |
-| `Text` (ro) | what the field says, formatted | [the value](#the-value) |
+| `Min` | the floor, as a `Decimal` | [the range](#the-range) |
+| `Prefix` | text outside the number — `"aprox | [money, and units](#money-and-units) |
+| `Step` | what one press of an arrow moves, a `Decimal` | [the range](#the-range) |
+| `Suffix` | text outside it — `" kg"`, `" h"`, `" km/h"` | [money, and units](#money-and-units) |
+| `Text` (ro) | what the field says, with the separators, the grouping and the unit | [the value](#the-value) |
 | `Value` | the number, a `Decimal` | [the value](#the-value) |
-| `Wrap` | past `Max` it comes back to `Min` | [the range](#the-range) |
+| `Wrap` | past `Max` comes back to `Min` | [the range](#the-range) |
 | **event** `Activate()` | Enter in the field | [the value](#the-value) |
-| **event** `Change()` | the value changed, **including from code** | [the value](#the-value) |
+| **event** `Change()` | the value changed — stepped, typed, or **assigned from code** | [the value](#the-value) |
 
 ## When it is not a `DecimalBox`
 
@@ -48,8 +48,8 @@ It is a `Widget` and a control like any other, so everything on
 |---|---|
 | `Value` | the number, a `Decimal`. Assigning a `Decimal`, a number or text; **machine text first** (`"1234.567"`, which is what a `.form` and `Decimal.toJSON()` carry) and this desktop's spelling second (`"1.234,56"`) |
 | `Text` (ro) | what the field says, with the separators, the grouping and the unit |
-| `Decimals` | the scale: places shown **and held**. `0` is whole numbers, up to `9` |
-| `Group` | thousands separators. **Off by default**, because a separator appearing while a number is typed is in the way |
+| `Decimals` | with `Currency` and no `Decimals`, the currency's own places: two nearly everywhere, zero for yen. Default `2`, up to `9`. `0` is whole numbers, up to `9` |
+| `Group` | thousands separators. **Off by default**, because a separator appearing while a number is typed is in the way. Default `false` |
 | **event** `Change()` | the value changed — stepped, typed, or **assigned from code** |
 | **event** `Activate()` | Enter in the field |
 
@@ -66,11 +66,11 @@ way every setter here does.
 
 | | |
 |---|---|
-| `Format` | `"Number"` or `"Currency"` |
+| `Format` | `Number` `Currency`. Default `"Number"` |
 | `Currency` | the symbol. `""` is **this desktop's** currency, with the side and the places `localeconv` says; `"US$"` is another one, and where it goes is still this desktop's rule — `US$ 1.234,56` here, `$1,234.56` there, and the program says neither |
-| `Prefix` | text before the number: `"aprox. "` |
-| `Suffix` | text after it: `" kg"`, `" h"`, `" km/h"` |
-| `Decimals` | with `Currency` and no `Decimals`, the currency's own places: two nearly everywhere, zero for yen |
+| `Prefix` | text outside the number — `"aprox. "` |
+| `Suffix` | text outside it — `" kg"`, `" h"`, `" km/h"` |
+| `Decimals` | with `Currency` and no `Decimals`, the currency's own places: two nearly everywhere, zero for yen. Default `2`, up to `9`. `0` is whole numbers, up to `9` |
 
 ```js
 Total.Format   = "Currency";            // the desktop's money
@@ -123,8 +123,8 @@ set from `Change` is the plural case with neither, and a value that is only ever
 | | |
 |---|---|
 | `Min` | the floor, as a `Decimal`. Default `-1000000000000000` |
-| `Max` | the ceiling, likewise. Default `1000000000000000` |
-| `Step` | what one press of an arrow moves. Default `1` |
+| `Max` | the ceiling, a `Decimal`. Default `1000000000000000` |
+| `Step` | what one press of an arrow moves, a `Decimal`. Default `1` |
 | `Wrap` | past `Max` comes back to `Min` |
 
 **The order matters, as it does on a `SpinBox`**: a `.form` applies properties in

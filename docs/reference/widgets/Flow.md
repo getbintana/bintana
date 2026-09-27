@@ -13,9 +13,9 @@ follows is what is its own.
 | | | |
 |---|---|---|
 | `ColumnSpacing` | pixels between children on a line | [spacing](#spacing) |
-| `Homogeneous` | every child the same size | [spacing](#spacing) |
-| `MaxPerLine` | at most this many. Default `100` | [how many fit](#how-many-fit) |
-| `MinPerLine` | at least this many children per line | [how many fit](#how-many-fit) |
+| `Homogeneous` | every child the same size, which is what a grid of thumbnails wants | [spacing](#spacing) |
+| `MaxPerLine` | at most this many, even when there is room for more | [how many fit](#how-many-fit) |
+| `MinPerLine` | at least this many, even when they have to be squeezed | [how many fit](#how-many-fit) |
 | `RowSpacing` | pixels between lines | [spacing](#spacing) |
 
 ## How many fit

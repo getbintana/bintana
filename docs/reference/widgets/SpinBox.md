@@ -13,15 +13,15 @@ It is a `Widget` and a control like any other, so everything on
 
 | | | |
 |---|---|---|
-| `Decimals` | places shown and accepted. Default `0` | [the number](#the-number) |
-| `Max` | the ceiling. Default `1000000` | [the range](#the-range) |
-| `Min` | the floor. Default `-1000000` | [the range](#the-range) |
-| `Numeric` | refuse anything that is not a number. Default `true` | [the number](#the-number) |
-| `Step` | what one press of an arrow moves. Default `1` | [the range](#the-range) |
-| `Value` | the number | [the number](#the-number) |
-| `Wrap` | past `Max` it comes back to `Min` | [the range](#the-range) |
-| **event** `Activate()` | Enter in the field | [the number](#the-number) |
-| **event** `Change()` | the value changed, **including from code** | [the number](#the-number) |
+| `Decimals` | places shown and accepted: a whole number from `0` to `20`, refused otherwise | [the number](#the-number) |
+| `Max` | the ceiling, likewise | [the range](#the-range) |
+| `Min` | the floor | [the range](#the-range) |
+| `Numeric` | refuse anything that is not a number | [the number](#the-number) |
+| `Step` | what one press of an arrow, or one notch of the wheel, moves | [the range](#the-range) |
+| `Value` | the number in it | [the number](#the-number) |
+| `Wrap` | past `Max` comes back to `Min` — for the things that are circular, like an hour or a degree | [the range](#the-range) |
+| **event** `Activate()` | Enter in the field, or a double click on a row | [the number](#the-number) |
+| **event** `Change()` | the value changed — stepped, typed, or **assigned from code**: the round trip goes out to GTK and back | [the number](#the-number) |
 
 ## When it is not a `SpinBox`
 
@@ -39,10 +39,10 @@ It is a `Widget` and a control like any other, so everything on
 | | |
 |---|---|
 | `Value` | the number in it |
-| `Decimals` | how many places are shown **and accepted**. `0` is whole numbers |
+| `Decimals` | places shown and accepted: a whole number from `0` to `20`, refused otherwise. `0` is whole numbers |
 | `Numeric` | refuse anything that is not a number. Default `true`, and there is rarely a reason to turn it off |
 | **event** `Change()` | the value changed — stepped, typed, or **assigned from code**: the round trip goes out to GTK and back |
-| **event** `Activate()` | Enter in the field |
+| **event** `Activate()` | Enter in the field, or a double click on a row |
 
 **`Change` fires for an assignment**, the same as a [`TextBox`](TextBox.md)'s: a
 form that fills its fields in raises its own handlers, which is what the
@@ -52,9 +52,9 @@ form that fills its fields in raises its own handlers, which is what the
 
 | | |
 |---|---|
-| `Min` | the floor. **Declare it before `Value`**, or the value is clamped to the factory range first and the number you set is not the number you get |
-| `Max` | the ceiling, likewise |
-| `Step` | what one press of an arrow, or one notch of the wheel, moves |
+| `Min` | the floor. **Declare it before `Value`**, or the value is clamped to the factory range first and the number you set is not the number you get. Default `-1000000` |
+| `Max` | the ceiling, likewise. Default `1000000` |
+| `Step` | what one press of an arrow, or one notch of the wheel, moves. Default `1` |
 | `Wrap` | past `Max` comes back to `Min` — for the things that are circular, like an hour or a degree |
 
 **The order matters and it is the one thing that bites**: in a `.form` the

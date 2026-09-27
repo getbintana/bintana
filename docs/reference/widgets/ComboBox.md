@@ -13,16 +13,16 @@ It is a `Widget` and a control like any other, so everything on
 
 | | | |
 |---|---|---|
-| `Count` (ro) | how many rows | [the list](#the-list) |
-| `Index` | which is chosen; `-1` when the list is empty. Default `-1` | [what is chosen](#what-is-chosen) |
-| `Items` | the contents, as an array of strings. **Translated** | [the list](#the-list) |
-| `Text` | the chosen text | [what is chosen](#what-is-chosen) |
-| `Add(text, [key])` | one more row, with the application's own name for it | [the list](#the-list) |
-| `Key` | the selected row's key; assigning selects | [what is chosen](#what-is-chosen) |
-| `KeyAt(index)` | → that row's key, without selecting it | [the list](#the-list) |
-| `RemoveRow(index)` | takes a row out | [the list](#the-list) |
-| `SetText(index, text)` | renames one in place | [the list](#the-list) |
-| `Clear()` | empties it | [the list](#the-list) |
+| `Count` (ro) | how many rows there are | [the list](#the-list) |
+| `Index` | which is chosen | [what is chosen](#what-is-chosen) |
+| `Items` | the contents, as an array of strings | [the list](#the-list) |
+| `Text` | the chosen row's words | [what is chosen](#what-is-chosen) |
+| `Add(text, [key])` | one more, at the end | [the list](#the-list) |
+| `Key` | the selected row's application key; assigning selects the row it belongs to, and a key nothing has is a `RangeError` | [what is chosen](#what-is-chosen) |
+| `KeyAt(index)` | that row's key, without selecting it | [the list](#the-list) |
+| `RemoveRow(index)` | takes that row out | [the list](#the-list) |
+| `SetText(index, text)` | renames one in place, leaving the selection where it is | [the list](#the-list) |
+| `Clear()` | empties it, and nothing is chosen afterwards | [the list](#the-list) |
 | **event** `Select()` | the selection moved | [what is chosen](#what-is-chosen) |
 
 ## When it is not a `ComboBox`
@@ -42,8 +42,8 @@ It is a `Widget` and a control like any other, so everything on
 |---|---|
 | `Items` | the contents, as an array of strings. Assigning replaces every row at once **and chooses the first one** — a non-empty drop-down always has something chosen. **Translated**: a list declared in a `.form` goes through the catalogue |
 | `Add(text, [key])` | one more, at the end. `key` is the application's own name for it |
-| `KeyAt(index)` | → that row's key, without selecting it. **`RangeError`** when there is no such row |
-| `RemoveRow(index)` | takes one out. **`RangeError`** when there is no such row |
+| `KeyAt(index)` | that row's key, without selecting it. **`RangeError`** when there is no such row |
+| `RemoveRow(index)` | takes that row out. **`RangeError`** when there is no such row |
 | `SetText(index, text)` | renames one in place, leaving the selection where it is. **Translated**; **`RangeError`** when there is no such row |
 | `Clear()` | empties it, and nothing is chosen afterwards |
 | `Count` (ro) | how many rows there are |
@@ -60,10 +60,10 @@ drop-down of the project's files is filled from code and must not be.
 
 | | |
 |---|---|
-| `Index` | which row is chosen; `-1` when the list is empty. Assigning chooses the row and raises `Select`; **assigning `-1` moves nothing**, because a drop-down with items always has one chosen |
-| `Key` | the chosen row's key, `""` for none; assigning chooses the row it belongs to, and a key nothing has is a `RangeError`. `""` moves nothing, as `Index = -1` does |
+| `Index` | which is chosen; `-1` when the list is empty. Assigning chooses the row; **assigning `-1` moves nothing**, because a drop-down with items always has one chosen (the first, until told otherwise) |
+| `Key` | the selected row's application key; assigning selects the row it belongs to, and a key nothing has is a `RangeError`. `""` moves nothing, as `Index = -1` does — a drop-down with items always has one chosen |
 | `Text` | the chosen row's words. Reading it is reading the *translated* text |
-| **event** `Select()` | the selection moved — by the user or by an assignment |
+| **event** `Select()` | the selection moved. Ask `Index` or `Text` for what it is now |
 
 **Compare `Index`, never `Text`.** The words are prose and a translated build
 answers in another language; the position is the same in every language. This is

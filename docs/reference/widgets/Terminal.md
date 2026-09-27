@@ -17,19 +17,19 @@ It is a `Widget` and a control like any other, so everything on
 
 | | | |
 |---|---|---|
-| `Available` (ro) | whether this build can run a child in one | [when this build has no VTE](#when-this-build-has-no-vte) |
-| `FontScale` | a multiplier on the terminal's own font. Default `1` | [how it looks](#how-it-looks) |
-| `LinkPattern` | a regex; clicking text that matches raises `Link` | [links](#links) |
+| `Available` (ro) | whether this build can run a child | [when this build has no VTE](#when-this-build-has-no-vte) |
+| `FontScale` | a multiplier on the terminal's own font | [how it looks](#how-it-looks) |
+| `LinkPattern` | a regex; clicking text that matches raises `Link(text)` | [links](#links) |
 | `Running` (ro) | whether a child is alive | [running a child](#running-a-child) |
-| `ScrollbackLines` | how much history it keeps. Default `10000` | [how it looks](#how-it-looks) |
-| `Text` (ro) | everything on screen and in the scrollback | [what is in it](#what-is-in-it) |
+| `ScrollbackLines` | how much history it keeps | [how it looks](#how-it-looks) |
+| `Text` (ro) | everything on screen and in the scrollback — what a *copy all* or a bug report wants | [what is in it](#what-is-in-it) |
 | `Clear()` | resets it | [what is in it](#what-is-in-it) |
-| `Feed(text)` | writes to the display without a child | [what is in it](#what-is-in-it) |
-| `Kill()` | SIGKILL | [running a child](#running-a-child) |
-| `Run(argv, [workdir])` | starts a child on a real pty | [running a child](#running-a-child) |
-| `Stop()` | SIGTERM to the child's process group | [running a child](#running-a-child) |
-| **event** `Exit(code)` | the child ended | [running a child](#running-a-child) |
-| **event** `Link(text)` | text matching `LinkPattern` was clicked | [links](#links) |
+| `Feed(text)` | writes to the display **without a child**: a banner, a note about what is about to run, the reason something was refused | [what is in it](#what-is-in-it) |
+| `Kill()` | SIGKILL, for the one that did not answer | [running a child](#running-a-child) |
+| `Run(argv, [workdir])` | starts a child on a real pty, so colours, prompts and input all work | [running a child](#running-a-child) |
+| `Stop()` | SIGTERM to the child's **process group**, which is what reaches a shell's own children | [running a child](#running-a-child) |
+| **event** `Exit(code)` | the child ended, with the status a shell would report | [running a child](#running-a-child) |
+| **event** `Link(text)` | that text was clicked | [links](#links) |
 
 ## Running a child
 
@@ -53,7 +53,7 @@ It is a `Widget` and a control like any other, so everything on
 
 | | |
 |---|---|
-| `LinkPattern` | a regular expression; text matching it is drawn as a link and clicking it raises `Link` |
+| `LinkPattern` | a regex; clicking text that matches raises `Link(text)`. What the text *means* is yours |
 | **event** `Link(text)` | that text was clicked. **What it means is yours** |
 
 The IDE's own terminal matches `file.js:120` and opens that file at that line,
@@ -71,7 +71,7 @@ stands for.
 
 | | |
 |---|---|
-| `Available` (ro) | whether this build can run a child. `Widget.Available("Terminal")` is [the same question asked of the class](../../llm/controls.md#what-there-is-and-what-this-build-can-run), which is what a palette wants |
+| `Available` (ro) | whether this build can run a child. `Widget.Available("Terminal")` is [the same question asked of the class](../../llm/controls.md#what-there-is-and-what-this-build-can-run), which is what a palette wants. `false` on a runtime built without VTE, where the three verbs refuse |
 
 Where it is false **the class is still all here**: one constructs, a `.form`
 naming one loads, every property answers, and `Feed`, `Text` and `Clear` work.

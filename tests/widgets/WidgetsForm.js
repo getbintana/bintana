@@ -14916,6 +14916,28 @@ function Main() {
          * made the process abort at exit. `Members("Array")` read it. */
         eq("Array.fromAsync is not in this language", typeof Array.fromAsync, "undefined");
 
+        /* **What a member is for, written once, beside it.** The lines after a
+         * signature comment in the C are the description, and the runtime hands
+         * it out: `Doc` on each member, `EventDoc` for an event. `tools/docs`
+         * writes the same text into the documentation's rows, so the three
+         * readers -- a person, a model and the completion popup -- read one
+         * sentence. `Native` says which members are written in C, whose
+         * description lives there, against those a JSDoc comment describes. */
+        const member = (t, n) => Widget.Members(t).find((m) => m.Name === n) || {};
+        check("a global's verb says what it is for",
+              (member("File", "Load").Doc || "").startsWith("the whole file as a string"),
+              member("File", "Load").Doc);
+        check("...and a control's property, inherited from the class that declares it",
+              (member("Button", "Enabled").Doc || "").includes("`true` by default"),
+              member("Button", "Enabled").Doc);
+        check("an event says what it is for, asked of the class that raises it",
+              (Widget.EventDoc("Button", "Click") || "").includes("pressed"),
+              Widget.EventDoc("Button", "Click"));
+        eq("and an event nothing declares answers null",
+           Widget.EventDoc("Button", "NoSuchEvent"), null);
+        eq("a verb written in C is Native", member("File", "Load").Native, true);
+        eq("...one written in JavaScript is not", member("Timer", "After").Native, false);
+
         /* **One class, one vocabulary, whichever reader found it.** A getter
          * with no setter is `ReadOnly` -- the word `Widget.Member` gives it --
          * and the loaded walk used to call it `Property`. The source walk reads

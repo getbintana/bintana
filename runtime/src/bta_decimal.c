@@ -918,16 +918,37 @@ static JSValue dec_to_json(JSContext *ctx, JSValueConst this_val,
 static const JSCFunctionListEntry dec_proto_funcs[] = {
     JS_CFUNC_DEF("toString", 0, dec_to_string),
     JS_CFUNC_DEF("toJSON",   0, dec_to_json),
-    /* Round(decimals, [how]) -> Decimal */
+    /* Round(decimals, [how]) -> Decimal
+     *   `"Away"` (the default — the half goes away from zero, which is what
+     *   an invoice does), `"Even"` (banker's), `"Zero"`, `"Up"`, `"Down"`
+     */
     JS_CFUNC_DEF("Round",    2, dec_round),
-    /* Trim() -> Decimal */
+    /* Trim() -> Decimal
+     *   drops trailing zeros: `2.50` → `2.5`
+     */
     JS_CFUNC_DEF("Trim",     0, dec_trim),
-    /* Abs() -> Decimal */
+    /* Abs() -> Decimal
+     *   its magnitude
+     */
     JS_CFUNC_DEF("Abs",      0, dec_abs),
-    /* Number() -> number */
+    /* Number() -> number
+     *   the nearest double, asked for **by name**: for a chart, a width, a
+     *   percentage — anywhere the value stops being money
+     */
     JS_CFUNC_DEF("Number",   0, dec_number),
+    /* Scale
+     *   how many decimal places it carries — `2` for money that came from
+     *   `"19.99"`
+     */
     JS_CGETSET_DEF("Scale",   dec_get_scale, NULL),
+    /* Sign
+     *   `-1`, `0` or `1`
+     */
     JS_CGETSET_DEF("Sign",    dec_sign, NULL),
+    /* IsExact
+     *   whether the value is exactly what its digits say, which a division
+     *   may make false
+     */
     JS_CGETSET_DEF("IsExact", dec_is_exact, NULL),
 };
 
@@ -985,7 +1006,9 @@ void bta_decimal_init(JSContext *ctx, JSValue global)
 
     JSValue ctor = JS_NewCFunction2(ctx, dec_construct, "Decimal", 2,
                                     JS_CFUNC_constructor, 0);
-    /* Split(total, parts) -> Decimal[] */
+    /* Split(total, parts) -> Decimal[]
+     *   pieces that add back up to the total, **exactly**
+     */
     JS_SetPropertyStr(ctx, ctor, "Split",
                       JS_NewCFunction(ctx, dec_split, "Split", 2));
     JS_SetConstructor(ctx, ctor, proto);

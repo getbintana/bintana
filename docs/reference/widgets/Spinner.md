@@ -19,7 +19,7 @@ It is a `Widget` and a control like any other, so everything on
 
 | | |
 |---|---|
-| `Active` | whether it spins. A spinner that is not spinning is invisible in most themes, so this is the whole of turning it on and off |
+| `Active` | whether it spins. A spinner that is not spinning is invisible in most themes, so this is the whole of turning it on and off. Work with no end in sight |
 
 ```js
 BtnFetch_Click() { this.Spin.Active = true;  Http.Get(url, (answer) => this.done(answer)); }

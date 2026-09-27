@@ -675,6 +675,7 @@ struct _BtaProposal {
     GObject parent_instance;
     char   *text;      /* what gets typed */
     char   *detail;    /* what the row says about it, greyed */
+    char   *comment;   /* what it is for, under the list for the chosen row */
     guint   priority;  /* how well it matched what is being typed */
 };
 
@@ -696,6 +697,7 @@ static void bta_proposal_finalize(GObject *object)
     BtaProposal *self = BTA_PROPOSAL(object);
     g_clear_pointer(&self->text, g_free);
     g_clear_pointer(&self->detail, g_free);
+    g_clear_pointer(&self->comment, g_free);
     G_OBJECT_CLASS(bta_proposal_parent_class)->finalize(object);
 }
 
@@ -826,6 +828,8 @@ static GListModel *provider_proposals(BtaProvider *self,
                                                  : JS_DupValue(ctx, item);
             JSValue detail_v = JS_IsObject(item) ? JS_GetPropertyStr(ctx, item, "Detail")
                                                  : JS_UNDEFINED;
+            JSValue doc_v    = JS_IsObject(item) ? JS_GetPropertyStr(ctx, item, "Doc")
+                                                 : JS_UNDEFINED;
 
             const char *text = JS_IsUndefined(text_v) || JS_IsNull(text_v)
                                ? NULL : JS_ToCString(ctx, text_v);
@@ -838,11 +842,16 @@ static GListModel *provider_proposals(BtaProvider *self,
             if (keep) {
                 const char *detail = JS_IsString(detail_v)
                                      ? JS_ToCString(ctx, detail_v) : NULL;
+                const char *doc    = JS_IsString(doc_v)
+                                     ? JS_ToCString(ctx, doc_v) : NULL;
 
                 BtaProposal *proposal = g_object_new(BTA_TYPE_PROPOSAL, NULL);
                 proposal->text     = g_strdup(text);
                 proposal->detail   = detail ? g_strdup(detail) : NULL;
+                proposal->comment  = doc && *doc ? g_strdup(doc) : NULL;
                 proposal->priority = priority;
+                if (doc)
+                    JS_FreeCString(ctx, doc);
 
                 g_list_store_append(store, proposal);
                 g_object_unref(proposal);
@@ -854,6 +863,7 @@ static GListModel *provider_proposals(BtaProvider *self,
                 JS_FreeCString(ctx, text);
 
             JS_FreeValue(ctx, detail_v);
+            JS_FreeValue(ctx, doc_v);
             JS_FreeValue(ctx, text_v);
             JS_FreeValue(ctx, item);
         }
@@ -947,6 +957,12 @@ static void bta_provider_display(GtkSourceCompletionProvider *provider,
     }
     case GTK_SOURCE_COMPLETION_COLUMN_AFTER:
         gtk_source_completion_cell_set_text(cell, p->detail);
+        break;
+    /* What the chosen row is for, under the list -- GtkSourceView shows this
+     * column for the selected proposal only, so a long description costs the
+     * list nothing. */
+    case GTK_SOURCE_COMPLETION_COLUMN_COMMENT:
+        gtk_source_completion_cell_set_text(cell, p->comment);
         break;
     default:
         gtk_source_completion_cell_set_text(cell, NULL);
@@ -1379,33 +1395,94 @@ static JSValue ed_marks(JSContext *ctx, JSValueConst this_val,
  * -- is inherited from `Editor` and must not be repeated here: a second row for
  * the same name would shadow the parent's with a copy that then drifts. */
 static const JSCFunctionListEntry source_props[] = {
+    /* Language
+     *   a GtkSourceView id — `js` `json` `c` `python3` `markdown` `css` `sh`
+     *   `xml` `sql` `yaml` `diff`… `""` for none.
+     *   **`PropertyOptions("Language")` asks this machine what it has**,
+     *   which is the honest list rather than one written down here
+     */
     JS_CGETSET_DEF("Language", ed_get_language, ed_set_language),
+    /* Theme
+     *   `Adwaita` `Adwaita-dark` `classic` `classic-dark` `cobalt`
+     *   `cobalt-light` `kate` `kate-dark` `oblivion` `solarized-light`
+     *   `solarized-dark` `tango`. Default `"classic"`
+     */
     JS_CGETSET_DEF("Theme",    ed_get_theme,    ed_set_theme),
+    /* CompletionTitle
+     *   the heading of the popup your own provider fills. **Translated**
+     */
     JS_CGETSET_DEF("CompletionTitle", ed_get_completion_title, ed_set_completion_title),
+    /* Matches
+     *   how many the last `Search` found
+     */
     JS_CGETSET_DEF("Matches",    ed_get_matches,     NULL),
+    /* MatchIndex
+     *   which one the cursor is standing on — the `3` in *3/12*
+     */
     JS_CGETSET_DEF("MatchIndex", ed_get_match_index, NULL),
+    /* ShowLineNumbers
+     *   the gutter's numbers. Default `true`
+     */
     JS_CGETSET_MAGIC_DEF("ShowLineNumbers", ed_get_flag, ed_set_flag, ED_LINENUMBERS),
+    /* ShowMarks
+     *   the gutter's marks — see `Mark`
+     */
     JS_CGETSET_MAGIC_DEF("ShowMarks",       ed_get_flag, ed_set_flag, ED_MARKS),
+    /* Completion
+     *   offer the buffer's own words while typing — the floor of what an
+     *   editor owes, and the whole of what can be known without being told
+     */
     JS_CGETSET_MAGIC_DEF("Completion",      ed_get_flag, ed_set_flag, ED_COMPLETION),
-    /* ShowCompletion() */
+    /* ShowCompletion()
+     *   opens the completion popup from code
+     */
     JS_CFUNC_DEF("ShowCompletion", 0, ed_show_completion),
-    /* Mark(line, kind, [text]) */
+    /* Mark(line, kind, [text])
+     *   a gutter mark. `kind` is `Error` `Warning` `Info` `Bookmark` — or
+     *   `Added` `Removed` `Gap`, which **paint the line** — and `text` is its
+     *   tooltip
+     */
     JS_CFUNC_DEF("Mark",       3, ed_mark),
-    /* Unmark(line, [kind]) */
+    /* Unmark(line, [kind])
+     *   takes marks off that line
+     */
     JS_CFUNC_DEF("Unmark",     2, ed_unmark),
-    /* ClearMarks([kind]) */
+    /* ClearMarks([kind])
+     *   takes them off every line
+     */
     JS_CFUNC_DEF("ClearMarks", 1, ed_clear_marks),
-    /* Marks([kind]) */
+    /* Marks([kind])
+     *   **a record per mark**, in line order: `{ Line, Kind, Text }` — not a
+     *   list of line numbers, which is what "the lines that carry one" was
+     *   read as by the first thing that used it
+     */
     JS_CFUNC_DEF("Marks",      1, ed_marks),
-    /* Search(text, [{CaseSensitive, WholeWord, Regex}]) */
+    /* Search(text, [{CaseSensitive, WholeWord, Regex}])
+     *   how many there are, highlighting every one. **It does not move the
+     *   cursor**: typing in a find field and jumping to a match happen at
+     *   different moments. `Regex: true` is **PCRE2** — GtkSourceView's own
+     *   engine and not the language's [`Regex`](docs/llm/library.md#regex):
+     *   always multiline, and `\d` `\w` `\b` are Unicode-aware. **It does not
+     *   move the cursor**: typing in a find field and jumping to a match
+     *   happen at different moments, and a find bar that jumped on every
+     *   keystroke would drag the view about while somebody is still typing
+     */
     JS_CFUNC_DEF("Search",       2, ed_search),
-    /* FindNext() */
+    /* FindNext()
+     *   moves to the next match, wrapping around
+     */
     JS_CFUNC_DEF("FindNext",     0, ed_find_next),
-    /* FindPrevious() */
+    /* FindPrevious()
+     *   and backwards
+     */
     JS_CFUNC_DEF("FindPrevious", 0, ed_find_previous),
-    /* Replace(text) */
+    /* Replace(text)
+     *   the match the cursor is standing on
+     */
     JS_CFUNC_DEF("Replace",      1, ed_replace),
-    /* ReplaceAll(text) */
+    /* ReplaceAll(text)
+     *   every match
+     */
     JS_CFUNC_DEF("ReplaceAll",   1, ed_replace_all),
 };
 
@@ -1468,7 +1545,12 @@ void bta_editor_register(void)
     const BtaClass rows[] = {
         /* Change() */
         /* Cursor() */
-        /* Complete(word, line, column, text) */
+        /* Complete(word, line, column, text)
+         *   a completion was asked for. Answer with a list, or nothing. An
+         *   entry is a **word**, or `{ Text, Detail }` for one that says what
+         *   it is beside itself — a type, a one-line description. An entry
+         *   that is neither is skipped, not refused
+         */
         BTA_CLASS_ENUM_TEXT("SourceEditor", "Editor", build_source_editor,
                             source_props, false, editor_options,
                             "CompletionTitle", "Change,Cursor,Complete"),

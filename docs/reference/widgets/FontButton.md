@@ -13,15 +13,15 @@ It is a `Widget` and a control like any other, so everything on
 
 | | | |
 |---|---|---|
-| `Value` | a Pango description, `""` for none | [the font](#the-font) |
-| **event** `Change()` | the value changed, **including from code** | [the font](#the-font) |
+| `Value` | a Pango description — `"Cantarell Bold 12"` — which is **what [`Font`](Widget.md#how-it-looks) takes on every control**, what `Painter.Font` takes, and what [`Text`](../../llm/library.md#text) measures with | [the font](#the-font) |
+| **event** `Change()` | the value changed, including from an assignment in code — the round trip goes out to GTK and back | [the font](#the-font) |
 
 ## The font
 
 | | |
 |---|---|
 | `Value` | a Pango description — `"Cantarell Bold 12"` — which is **what [`Font`](Widget.md#how-it-looks) takes on every control**, what `Painter.Font` takes, and what [`Text`](../../llm/library.md#text) measures with. `""` is no font, meaning *the theme's* |
-| **event** `Change()` | the font changed — chosen or **assigned from code** |
+| **event** `Change()` | the value changed, including from an assignment in code — the round trip goes out to GTK and back |
 
 ```js
 FntBody_Change() { this.Doc.BaseFont = this.FntBody.Value; }

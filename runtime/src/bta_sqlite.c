@@ -1168,25 +1168,51 @@ static JSValue database_sqlite(JSContext *ctx, JSValueConst this_val,
 
 /* type Connection */
 static const JSCFunctionListEntry conn_props[] = {
-    /* Dialect -> string */
+    /* Dialect -> string
+     *   `{ Placeholder, Quote, NewKey }` — **what differs per engine**, so
+     *   the portable half above can build SQL without knowing which engine it
+     *   is talking to
+     */
     JS_CGETSET_DEF("Dialect", conn_get_dialect, NULL),
-    /* Path -> string */
+    /* Path -> string
+     *   the file this connection is
+     */
     JS_CGETSET_DEF("Path",    conn_get_path,    NULL),
-    /* Open -> boolean */
+    /* Open -> boolean
+     *   whether it still is
+     */
     JS_CGETSET_DEF("Open",    conn_get_open,    NULL),
-    /* Tables -> string[] */
+    /* Tables -> string[]
+     *   the tables and views, ordered
+     */
     JS_CGETSET_DEF("Tables",  conn_get_tables,  NULL),
-    /* Query(sql, [params]) -> any[] */
+    /* Query(sql, [params]) -> any[]
+     *   the rows a statement answers, as **plain objects** — for the report,
+     *   the `GROUP BY`, the join that is not one shape
+     */
     JS_CFUNC_DEF("Query",       2, conn_query),
-    /* Execute(sql, [params]) -> { Changes, LastId } */
+    /* Execute(sql, [params]) -> { Changes, LastId }
+     *   **one** statement, answering `{ Changes, LastId }`
+     */
     JS_CFUNC_DEF("Execute",     2, conn_execute),
-    /* Script(sql) */
+    /* Script(sql)
+     *   several statements and **no parameters**: a schema, a migration
+     */
     JS_CFUNC_DEF("Script",      1, conn_script),
-    /* Transaction(fn) */
+    /* Transaction(fn)
+     *   everything in `fn` or nothing. **Nests**, through savepoints, so a
+     *   function that wraps its own work in one is safe to call from inside
+     *   another
+     */
     JS_CFUNC_DEF("Transaction", 1, conn_transaction),
-    /* Columns(table) -> { Name, Type, Required, Key }[] */
+    /* Columns(table) -> { Name, Type, Required, Key }[]
+     *   `[{ Name, Type, Required, Key }]` — what is really in the table,
+     *   which is how a program checks that a record's shape still fits
+     */
     JS_CFUNC_DEF("Columns",     1, conn_columns),
-    /* Close() */
+    /* Close()
+     *   let it go
+     */
     JS_CFUNC_DEF("Close",       0, conn_close),
 };
 
@@ -1210,7 +1236,11 @@ void bta_sqlite_init(JSContext *ctx, JSValue global)
                                G_N_ELEMENTS(conn_props));
     JS_SetClassProto(ctx, bta_sqlite_class_id, proto);
 
-    /* Sqlite(path) -> Connection */
+    /* Sqlite(path) -> Connection
+     *   opens a sqlite file -- created when it is not there -- or `":memory:"`,
+     *   and answers the connection: `Query`, `Execute`, `Table` and the rest.
+     *   A build without sqlite has the name and refuses, naming the package
+     */
     bta_database_driver(ctx, "Sqlite", database_sqlite, 1);
 }
 
@@ -1233,7 +1263,11 @@ static JSValue database_sqlite(JSContext *ctx, JSValueConst this_val,
  */
 void bta_sqlite_init(JSContext *ctx, JSValue global)
 {
-    /* Sqlite(path) */
+    /* Sqlite(path) -> Connection
+     *   opens a sqlite file -- created when it is not there -- or `":memory:"`,
+     *   and answers the connection: `Query`, `Execute`, `Table` and the rest.
+     *   A build without sqlite has the name and refuses, naming the package
+     */
     bta_database_driver(ctx, "Sqlite", database_sqlite, 1);
 }
 

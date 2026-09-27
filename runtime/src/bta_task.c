@@ -319,12 +319,28 @@ static gboolean task_deliver(gpointer data);
  * runtime is nothing at all.  It is also what tests/api.sh reads, so a member
  * here without a row in docs/llm/library.md fails the build. */
 static const JSCFunctionListEntry task_props[] = {
-    /* Start(data, [options]) */
+    /* Start(data, [options])
+     *   serialises the message, loads the class's file in a fresh runtime on
+     *   a fresh thread, builds the class, and calls `Run(msg)`. **Once** — a
+     *   second `Start` is refused; work that repeats is a new `Task`
+     */
     JS_CFUNC_DEF("Start",  2, task_start),
-    /* Stop([options]) */
+    /* Stop([options])
+     *   **asks** it to end, and enforces `KillAfter` ms later (5000 by
+     *   default, 0 = at once). Two stages like `Exec`'s guard. Answers
+     *   whether there was a live job to ask
+     */
     JS_CFUNC_DEF("Stop",   1, task_stop),
-    /* Report(value) */
+    /* Report(value)
+     *   the worker's voice, called from `Run`; arrives as `Progress`.
+     *   `this.Report` on a proxy is refused
+     */
     JS_CFUNC_DEF("Report", 1, task_report),
+    /* Stopping
+     *   inside `Run`: `true` once `Stop()` has asked, so the job can `Report`
+     *   what it has and return. Delphi's `Terminated`, BackgroundWorker's
+     *   `CancellationPending`
+     */
     JS_CGETSET_DEF("Stopping", task_get_stopping, NULL),
 };
 
@@ -1082,19 +1098,48 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
      * that render (the icon ones, DecorationLayout) do not cross threads, and
      * the lookups that walk the library path are the main thread's to answer. */
     JSValue application = JS_NewObject(ctx);
+    /* Name
+     *   from `project.json`
+     */
     JS_SetPropertyStr(ctx, application, "Name", JS_NewString(ctx, job->app_name));
+    /* Version
+     *   what the **project** calls its release; `""` when it declares none.
+     *   **`BTA_VERSION` is the runtime's** and is not this — showing the
+     *   wrong one is what an About box does until it knows the difference
+     */
     JS_SetPropertyStr(ctx, application, "Version",
                       JS_NewString(ctx, job->app_version));
+    /* Directory
+     *   the project directory, absolute. What a relative path in a project
+     *   resolves against — an image a report draws, a document a viewer
+     *   opens, a data file that ships with the application
+     */
     JS_SetPropertyStr(ctx, application, "Directory",
                       JS_NewString(ctx, job->app_dir));
+    /* ConfigDirectory
+     *   `~/.config/bintana/<name>`, **created at startup**, which is where
+     *   anything the application remembers belongs.
+     *   [`Settings`](docs/reference/globals/Settings.md) writes there;
+     *   nothing of yours should go in the project directory, which is a thing
+     *   people hand to each other
+     */
     JS_SetPropertyStr(ctx, application, "ConfigDirectory",
                       JS_NewString(ctx, job->app_config));
+    /* Executable
+     *   the `bintana` binary that is running this, so a project can re-invoke
+     *   it — which is how the IDE runs a project and how the test runner runs
+     *   the suites
+     */
     JS_SetPropertyStr(ctx, application, "Executable",
                       JS_NewString(ctx, job->app_exe));
     JSValue args = JS_NewArray(ctx);
     for (int i = 0; job->app_args && job->app_args[i]; i++)
         JS_SetPropertyUint32(ctx, args, (uint32_t)i,
                              JS_NewString(ctx, job->app_args[i]));
+    /* Arguments
+     *   whatever followed the project directory on the command line, as an
+     *   array
+     */
     JS_SetPropertyStr(ctx, application, "Arguments", args);
     JS_SetPropertyStr(ctx, global, "Application", application);
 

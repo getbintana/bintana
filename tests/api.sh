@@ -13,6 +13,9 @@
 #   globals   the same tables and the `JS_SetPropertyStr` runs that build
 #             `File`, `Dialog`, `Application` and the rest, against library.md
 #   lib/      what a shipped library publishes, against llm/<library>.md
+#   docs      every native member and event has a description beside its C
+#             entry, and every member row of docs/llm and docs/reference says
+#             what that description says -- tools/docs.sh writes them
 #   links     every relative link and picture in `docs/` and the Markdown at
 #             the root, against the files they name -- the other way round from
 #             the three above, and the failure a reorganisation leaves behind:

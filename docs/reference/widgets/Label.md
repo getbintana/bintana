@@ -13,13 +13,13 @@ It is a `Widget` and a control like any other, so everything on
 
 | | | |
 |---|---|---|
-| `Alignment` | `Left` `Center` `Right`, default `"Left"` | [fitting the room](#fitting-the-room) |
-| `Ellipsize` | end a line that does not fit with `…` | [fitting the room](#fitting-the-room) |
-| `Lines` | at most this many lines, `0` for no limit | [fitting the room](#fitting-the-room) |
-| `Markup` | read `Text` as Pango markup | [markup](#markup) |
-| `Selectable` | the user may select and copy it | [selectable](#selectable) |
-| `Text` | the words. **Translated** | [the words](#the-words) |
-| `Wrap` | wrap long text over several lines | [fitting the room](#fitting-the-room) |
+| `Alignment` | `Left` `Center` `Right` — where the text sits **within the label**, which is only visible once the label is wider than its words | [fitting the room](#fitting-the-room) |
+| `Ellipsize` | keep one line and end it with `…` when it does not fit | [fitting the room](#fitting-the-room) |
+| `Lines` | at most this many lines while wrapping | [fitting the room](#fitting-the-room) |
+| `Markup` | read `Text` as **Pango markup** — `<b>`, `<i>`, `<tt>`, `<s>`, `<span foreground="…">` — instead of as plain words | [markup](#markup) |
+| `Selectable` | the user may select the text with the pointer and copy it | [selectable](#selectable) |
+| `Text` | what it says | [the words](#the-words) |
+| `Wrap` | wrap long text over as many lines as it takes | [fitting the room](#fitting-the-room) |
 
 No methods and no events of its own: a label says something and that is all it
 does. `Caption` is an alias of `Text`, so a form may declare either.

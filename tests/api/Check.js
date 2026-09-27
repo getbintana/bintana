@@ -1129,6 +1129,61 @@ function checkGlobalSignatures(root, problems) {
     return checked;
 }
 
+/*
+ * ------------------------------------------------ what a member is for
+ *
+ * **Every native member says what it is for, beside itself.** The description
+ * is written once, in the comment above the member's C entry -- the lines after
+ * its signature -- and everything else reads it: `Widget.Members` hands it to
+ * the IDE's completion, and `tools/docs` writes it into the rows of `docs/llm`
+ * and `docs/reference`. So a member with none is a hole in all three at once,
+ * and this names it.
+ *
+ * Asked of the runtime, the way the IDE asks: the members of every widget
+ * class, of every global the C installs and of every prototype a `type X`
+ * comment names, and every event of every widget class. A member written in
+ * JavaScript is not asked here -- its description is a JSDoc comment the
+ * parser reads, which is another check.
+ */
+function checkDocs(root, problems) {
+    const owners = new Set(["Widget", ...Widget.Types()]);
+    for (const c of sources(root)) {
+        const src = File.Load(c);
+        for (const m of GLOBAL_INSTALL.Matches(src)) owners.add(m.Group(1));
+        for (const m of NAMED_TYPE.Matches(src)) owners.add(m.Group(1));
+    }
+    /* Counted once per description and not once per class: a control
+     * inherits a hundred members, and each is one thing written once. */
+    const written = new Set();
+    const seen = new Set();
+    for (const name of [...owners].sort()) {
+        let members;
+        try { members = Widget.Members(name); } catch (e) { continue; }
+        for (const m of members) {
+            /* Only what is written in C: a member written in JavaScript says
+             * what it is for in a JSDoc comment, which is another check. */
+            if (!m.Native) continue;
+            const key = `${name}.${m.Name}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            if (!m.Doc)
+                problems.push(`${key} says nothing about what it is for -- the ` +
+                              `lines after its signature comment`);
+            else written.add(`${m.Name}\u0000${m.Doc}`);
+        }
+    }
+    for (const type of Widget.Types()) {
+        for (const ev of Widget.EventNames(type)) {
+            const doc = Widget.EventDoc(type, ev);
+            if (!doc)
+                problems.push(`${type}.${ev} (event) says nothing about what it is ` +
+                              `for -- the lines after its comment above the class row`);
+            else written.add(`event ${ev}\u0000${doc}`);
+        }
+    }
+    return written.size;
+}
+
 /* ------------------------------------------------------------------- links
  *
  * **Does every relative link in the documentation still land on a file?**
@@ -1272,6 +1327,11 @@ function Main() {
     const lib     = checkLibraries(root, problems);
     const statics = checkWidgetStatics(root, problems);
     const verbs   = checkGlobalSignatures(root, problems);
+    const docs    = checkDocs(root, problems);
+    /* And the rows of the documentation say what the code says: the same
+     * `docRows` that `tools/docs` writes with, from `tools/docs/Rows.js`. */
+    for (const page of Dictionary.Keys(docRows(root)))
+        problems.push(`${page}: a row does not say what the code says -- run tools/docs.sh`);
     const globals = checkGlobals(root, problems);
     const named   = checkGlobalsListed(root, problems);
     const ref     = checkReference(root, members, events, problems);
@@ -1289,6 +1349,7 @@ function Main() {
         : `api: ${seen.size} widget members and ${Dictionary.Count(events)} events, ` +
           `plus ${statics} class statics, ${globals} on the globals and ${lib} ` +
           `published by lib/, ${verbs} global verbs with their parameters named, ` +
+          `${docs} native members and events saying what they are for, ` +
           `${shadows} member${shadows === 1 ? "" : "s"} checked ` +
           `for shadowing a base one, ` +
           `all documented -- and ${ref.checked} again in the ${ref.pages} ` +

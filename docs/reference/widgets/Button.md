@@ -17,9 +17,9 @@ It is a `Widget` and a control like any other, so everything on
 | `Cancel` | Escape on this form presses it | [Enter and Escape](#enter-and-escape) |
 | `Default` | Enter on this form presses it | [Enter and Escape](#enter-and-escape) |
 | `Icon` | an icon name from the theme | [what it says](#what-it-says) |
-| `Text` | the caption. **Translated** | [what it says](#what-it-says) |
-| `Click()` | presses it from code, handler and all | [pressing it](#pressing-it) |
-| **event** `Click()` | it was pressed | [pressing it](#pressing-it) |
+| `Text` | the caption | [what it says](#what-it-says) |
+| `Click()` | presses it from code: the handler runs exactly as if the user had, once per call | [pressing it](#pressing-it) |
+| **event** `Click()` | it was pressed — by the mouse, by the keyboard, by its `Shortcut`, by an `Action`, or by `Click()` | [pressing it](#pressing-it) |
 
 `Caption` is an alias of `Text`, so a form may declare either.
 
@@ -76,7 +76,7 @@ also have to make.
 
 | | |
 |---|---|
-| `Default` | Enter anywhere on this form presses it — the keyboard only, with no effect on how it looks |
+| `Default` | Enter on this form presses it. The keyboard only — `Style: "suggested-action"` is the looks |
 | `Cancel` | Escape on this form presses it. **Without one, Escape does nothing at all**: a dialog that cannot be dismissed with Escape is a dialog somebody will complain about |
 
 A form has one of each. **Declaring two is one claim**: the form settles on a

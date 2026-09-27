@@ -201,9 +201,29 @@ static JSValue split_set_wide(JSContext *ctx, JSValueConst this_val,
 
 static const JSCFunctionListEntry split_props[] = {
     /* Shadows Container's, which offers a Fixed a Split cannot be. */
+    /* Arrangement
+     *   `Horizontal` puts them side by side, `Vertical` one over the other.
+     *   **There is no `Fixed`**: two halves have an axis and nowhere to put a
+     *   coordinate, which is why this property shadows
+     *   [`Container`](docs/reference/widgets/Container.md#the-two-layout-models)'s.
+     *   Default `"Horizontal"`
+     */
     JS_CGETSET_DEF("Arrangement", split_get_arrangement, split_set_arrangement),
+    /* Position
+     *   where it sits, in pixels from the start of the axis. Assigning moves
+     *   it; reading gives where it is now, including after the user has
+     *   dragged it
+     */
     JS_CGETSET_DEF("Position",    split_get_position,    split_set_position),
+    /* Grows
+     *   `Both` (the default), `Start`, `End` or `Neither` — which half takes
+     *   the room when the split itself grows or shrinks
+     */
     JS_CGETSET_DEF("Grows",       split_get_grows,       split_set_grows),
+    /* WideHandle
+     *   a fat divider. Easier to grab, and the right answer when the two
+     *   halves have no visible edge of their own
+     */
     JS_CGETSET_DEF("WideHandle",  split_get_wide,        split_set_wide),
 };
 
@@ -301,7 +321,15 @@ static JSValue expander_set_open(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry expander_props[] = {
+    /* Text
+     *   the caption beside the arrow. **Translated**
+     */
     JS_CGETSET_DEF("Text",     expander_get_text, expander_set_text),
+    /* Expanded
+     *   open or folded. Folding it takes its height back, which is why the
+     *   window has to know. Assigning it opens or folds it, and **raises
+     *   `Toggle`**
+     */
     JS_CGETSET_DEF("Expanded", expander_get_open, expander_set_open),
 };
 
@@ -341,6 +369,10 @@ static JSValue frame_set_text(JSContext *ctx, JSValueConst this_val, JSValueCons
 }
 
 static const JSCFunctionListEntry frame_props[] = {
+    /* Text
+     *   the caption drawn in the frame's own border. **Translated** — a
+     *   group's name is prose
+     */
     JS_CGETSET_DEF("Text", frame_get_text, frame_set_text),
 };
 
@@ -520,6 +552,13 @@ static JSValue aspect_set_ratio(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry aspect_props[] = {
+    /* Ratio
+     *   the proportion to keep, as `"16:9"` (or `"16/9"`, or a number). **`0`
+     *   or `""` is the child's own**, which is the default. Kept as written,
+     *   so the `.form` and the grid answer with `"16:9"` and not with
+     *   `1.7778`. Settable while the program runs, which is when a stream's
+     *   shape arrives
+     */
     JS_CGETSET_DEF("Ratio", aspect_get_ratio, aspect_set_ratio),
 };
 
@@ -665,12 +704,28 @@ static JSValue flow_set_spacing(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry flow_props[] = {
+    /* MinPerLine
+     *   at least this many, even when they have to be squeezed
+     */
     JS_CGETSET_MAGIC_DEF("MinPerLine", flow_get_per_line, flow_set_per_line, FLOW_MIN),
+    /* MaxPerLine
+     *   at most this many, even when there is room for more. Default `100`,
+     *   which is *as many as fit* in practice
+     */
     JS_CGETSET_MAGIC_DEF("MaxPerLine", flow_get_per_line, flow_set_per_line, FLOW_MAX),
+    /* RowSpacing
+     *   pixels between lines
+     */
     JS_CGETSET_MAGIC_DEF("RowSpacing",    flow_get_spacing, flow_set_spacing,
                          FLOW_ROW_SPACING),
+    /* ColumnSpacing
+     *   pixels between children on a line
+     */
     JS_CGETSET_MAGIC_DEF("ColumnSpacing", flow_get_spacing, flow_set_spacing,
                          FLOW_COL_SPACING),
+    /* Homogeneous
+     *   every child the same size, which is what a grid of thumbnails wants
+     */
     JS_CGETSET_MAGIC_DEF("Homogeneous",   flow_get_spacing, flow_set_spacing,
                          FLOW_HOMOGENEOUS),
 };
@@ -1014,10 +1069,27 @@ static void on_scroller_moved(GtkAdjustment *a, gpointer user_data)
 }
 
 static const JSCFunctionListEntry scroller_props[] = {
+    /* Scrollbars
+     *   `Both` `Horizontal` `Vertical` `None`. Default `"Both"`
+     */
     JS_CGETSET_DEF("Scrollbars", scroller_get_bars, scroller_set_bars),
+    /* ScrollX
+     *   how far across it is scrolled, in pixels. Assigning **clamps** to
+     *   `[0, ScrollMaxX]`, so a number past the end means the end
+     */
     JS_CGETSET_MAGIC_DEF("ScrollX", bta_scroll_get, bta_scroll_set, BTA_SCROLL_X),
+    /* ScrollY
+     *   the same downwards
+     */
     JS_CGETSET_MAGIC_DEF("ScrollY", bta_scroll_get, bta_scroll_set, BTA_SCROLL_Y),
+    /* ScrollMaxX
+     *   the largest `ScrollX` that still shows content: the content's width
+     *   minus one view. `0` when there is nothing to scroll
+     */
     JS_CGETSET_MAGIC_DEF("ScrollMaxX", bta_scroll_get, NULL, BTA_SCROLL_MAX_X),
+    /* ScrollMaxY
+     *   the same downwards
+     */
     JS_CGETSET_MAGIC_DEF("ScrollMaxY", bta_scroll_get, NULL, BTA_SCROLL_MAX_Y),
 };
 
@@ -1297,27 +1369,65 @@ static JSValue rowlist_reveal(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry rowlist_props[] = {
+    /* Index
+     *   the selected row, `-1` for none. Assigning selects it and **raises
+     *   `Select`**. **A hidden row is still a row**: `Filter` changes what is
+     *   on screen, not what the list holds. Default `-1`
+     */
     JS_CGETSET_DEF("Index", rowlist_get_index, rowlist_set_index),
+    /* Count
+     *   how many rows there are, **hidden ones included**
+     */
     JS_CGETSET_DEF("Count", rowlist_get_count, NULL),
+    /* MultiSelect
+     *   more than one row at a time
+     */
     JS_CGETSET_DEF("MultiSelect", rowlist_get_multi,     rowlist_set_multi),
+    /* Selection
+     *   every selected row, as an array of indices in order
+     */
     JS_CGETSET_DEF("Selection",   rowlist_get_selection, NULL),
+    /* ActivateOnSingleClick
+     *   raise `Activate` on one click instead of two. Default `false`
+     */
     JS_CGETSET_DEF("ActivateOnSingleClick",
                    rowlist_get_single, rowlist_set_single),
-    /* Refilter() */
+    /* Refilter()
+     *   says the answer to `Filter` may have changed. The whole of the API on
+     *   this side — what a handler answers *from* is yours
+     */
     JS_CFUNC_DEF("Refilter", 0, rowlist_refilter),
-    /* RemoveRow(index) */
+    /* RemoveRow(index)
+     *   takes that row out — **and the control in it goes with it**: the row
+     *   is the widget's wrapper, so this is the same as deleting the child.
+     *   **`RangeError`** when there is no such row
+     */
     JS_CFUNC_DEF("RemoveRow", 1, rowlist_remove),
-    /* Reveal(index) */
+    /* Reveal(index)
+     *   brings that row into view with the least scrolling it takes, and
+     *   answers whether there was one
+     */
     JS_CFUNC_DEF("Reveal",   1, rowlist_reveal),
-    /* Activate([index]) */
+    /* Activate([index])
+     *   raises `Activate` for that row, as a double click would; the selected
+     *   one with no argument. Answers whether there was one
+     */
     JS_CFUNC_DEF("Activate", 1, rowlist_activate),
-    /* Select(index) */
+    /* Select(index)
+     *   selects that row, leaving the others where several are allowed
+     */
     JS_CFUNC_MAGIC_DEF("Select",      1, rowlist_select_one,   RL_SELECT),
-    /* Deselect(index) */
+    /* Deselect(index)
+     *   unselects it
+     */
     JS_CFUNC_MAGIC_DEF("Deselect",    1, rowlist_select_one,   RL_DESELECT),
-    /* SelectAll() */
+    /* SelectAll()
+     *   with `MultiSelect`
+     */
     JS_CFUNC_MAGIC_DEF("SelectAll",   0, rowlist_select_every, RL_ALL),
-    /* DeselectAll() */
+    /* DeselectAll()
+     *   selects nothing
+     */
     JS_CFUNC_MAGIC_DEF("DeselectAll", 0, rowlist_select_every, RL_NONE),
 };
 
@@ -1503,11 +1613,25 @@ static JSValue grid_set_spacing(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry grid_props[] = {
+    /* Columns
+     *   how many columns children wrap at; a column is as wide as its widest
+     *   child. Default `2`. Default `2`, which is a grid of labels and fields
+     */
     JS_CGETSET_DEF("Columns", grid_get_columns, grid_set_columns),
+    /* RowSpacing
+     *   pixels between the rows
+     */
     JS_CGETSET_MAGIC_DEF("RowSpacing",    grid_get_spacing, grid_set_spacing,
                          GRID_ROW_SPACING),
+    /* ColumnSpacing
+     *   pixels between the columns
+     */
     JS_CGETSET_MAGIC_DEF("ColumnSpacing", grid_get_spacing, grid_set_spacing,
                          GRID_COL_SPACING),
+    /* Homogeneous
+     *   every cell the same size, which is what a keypad wants and a form of
+     *   fields does not
+     */
     JS_CGETSET_MAGIC_DEF("Homogeneous",   grid_get_spacing, grid_set_spacing,
                          GRID_HOMOGENEOUS),
 };
@@ -1519,18 +1643,32 @@ void bta_layout_register(void)
         /* A frame's Text is the caption drawn into its border. */
         BTA_CLASS_TEXT("Frame",  "Container", build_frame,  frame_props, false, "Text", NULL),
         /* And an expander's is the caption one presses to fold it. */
-        /* Toggle() */
+        /* Toggle()
+         *   it was opened or folded — by the user or by an assignment
+         */
         BTA_CLASS_TEXT("Expander", "Container", build_expander, expander_props,
                        false, "Text", "Toggle"),
         BTA_CLASS_BARE("Overlay", "Container", build_overlay,            false, NULL),
         /* `Select` first: it is the default event, the one a double click in the
          * designer writes. `Filter` is asked of the form, never raised by it. */
-        /* Select() */
-        /* Activate() */
-        /* Filter(control, index) */
+        /* Select()
+         *   the selection moved. Ask `Index` or `Selection` for which rows;
+         *   what is *in* them is the widgets you put there
+         */
+        /* Activate()
+         *   Enter in the field, or a double click on a row
+         */
+        /* Filter(control, index)
+         *   asked while the list is laid out. **Returning `false` hides the
+         *   row**; no handler shows every one. A lookup and nothing else
+         */
         BTA_CLASS     ("RowList", "Container", build_rowlist, rowlist_props, false,
                        "Select,Activate,Filter"),
-        /* Scroll(x, y) */
+        /* Scroll(x, y)
+         *   the position moved — by the user, the wheel, the keyboard, or an
+         *   assignment. **Both axes are reported together**, so a diagonal
+         *   move is one event
+         */
         BTA_CLASS_ENUM("Scroller", "Container", build_scroller, scroller_props,
                        false, scroller_options, "Scroll"),
         /* A proportion to keep, and a rectangle for whatever rides on it. */

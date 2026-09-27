@@ -7,10 +7,10 @@ choosers.
 
 | | | |
 |---|---|---|
-| `Color(title, current, cb)` | the colour chooser | [a colour](#a-colour) |
-| `OpenFile(title, [options], cb)` | choose an existing file | [a file or a folder](#a-file-or-a-folder) |
-| `SaveFile(title, [options], cb)` | choose where to write one | [a file or a folder](#a-file-or-a-folder) |
-| `SelectFolder(title, [options], cb)` | choose a directory | [a file or a folder](#a-file-or-a-folder) |
+| `Color(title, current, cb)` | the desktop's colour chooser, opening on `current` | [a colour](#a-colour) |
+| `OpenFile(title, [options], cb)` | the file chooser, for something that exists | [a file or a folder](#a-file-or-a-folder) |
+| `SaveFile(title, [options], cb)` | the same, for somewhere to write | [a file or a folder](#a-file-or-a-folder) |
+| `SelectFolder(title, [options], cb)` | for a directory | [a file or a folder](#a-file-or-a-folder) |
 
 ## A file or a folder
 

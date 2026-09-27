@@ -9,19 +9,19 @@ facts about the machine and the person running it.
 
 | | | |
 |---|---|---|
-| `CurrentDirectory` | where the process is; **assigning enters** | [where it is running](#where-it-is-running) |
-| `Get(name)` | → a variable, or `null` | [the variables](#the-variables) |
-| `HasDisplay` | → whether there is a screen at all | [the machine](#the-machine) |
+| `CurrentDirectory` | where the process is | [where it is running](#where-it-is-running) |
+| `Get(name)` | the variable, or `null` — which is the difference between *empty* and *not set*, and both happen | [the variables](#the-variables) |
+| `HasDisplay` | whether there is a screen at all — what a tool that may run over ssh asks before opening a window | [the machine](#the-machine) |
 | `HomeDirectory` | the user's home | [where it is running](#where-it-is-running) |
-| `HostName` | this machine's name | [the machine](#the-machine) |
+| `HostName` | and on which machine | [the machine](#the-machine) |
 | `OS` | which operating system | [the machine](#the-machine) |
 | `OSVersion` | and which version of it | [the machine](#the-machine) |
-| `ProcessId` | this process's id | [the machine](#the-machine) |
-| `ProcessorCount` | how many cores | [the machine](#the-machine) |
-| `Set(name, value)` | sets one; `null` removes it | [the variables](#the-variables) |
-| `TempDirectory` | where temporary files belong | [where it is running](#where-it-is-running) |
+| `ProcessId` | this process's id, for a scratch name that two runs will not share | [the machine](#the-machine) |
+| `ProcessorCount` | how many cores — for the `-j` of a build, and little else | [the machine](#the-machine) |
+| `Set(name, value)` | sets one | [the variables](#the-variables) |
+| `TempDirectory` | where a temporary file belongs | [where it is running](#where-it-is-running) |
 | `UserName` | who is running it | [the machine](#the-machine) |
-| `Variables` | all of them | [the variables](#the-variables) |
+| `Variables` | all of them at once, as an object | [the variables](#the-variables) |
 
 ## The variables
 
@@ -53,7 +53,7 @@ application's.
 
 | | |
 |---|---|
-| `HasDisplay` | whether there is a screen at all — what a tool that may run over ssh asks before opening a window |
+| `HasDisplay` | whether there is a screen at all — what a tool that may run over ssh asks before opening a window. It asks the environment (`DISPLAY`, `WAYLAND_DISPLAY`), not this process |
 | `UserName` | who is running it |
 | `HostName` | and on which machine |
 | `OS` | which operating system |

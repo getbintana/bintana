@@ -20,13 +20,13 @@ with `[object Object]`, and is now a refusal that says so.
 
 | | | |
 |---|---|---|
-| `Load(path)` | → the whole file as a string | [text](#text) |
-| `LoadBytes(path)` | → the whole file as [`Bytes`](Bytes.md) | [bytes](#bytes) |
+| `Load(path)` | the whole file as a string | [text](#text) |
+| `LoadBytes(path)` | the whole file as [`Bytes`](../../llm/library.md#bytes), untouched — what `Load` cannot do, since it answers text | [bytes](#bytes) |
 | `LoadJson(path)` | → it, parsed | [json](#json) |
 | `LoadXml(path)` | → it, as an XML document | [xml](#xml) |
-| `Save(path, text)` | writes it **atomically** | [text](#text) |
-| `Append(path, text)` | adds to the end, creating it if needed | [text](#text) |
-| `SaveBytes(path, bytes)` | those bytes, exactly | [bytes](#bytes) |
+| `Save(path, text)` | writes it **atomically** — a temporary beside it, renamed over — so a failed write leaves the old file intact and a reader never sees half a file | [text](#text) |
+| `Append(path, text)` | adds `text` to the end, and creates the file when it is not there | [text](#text) |
+| `SaveBytes(path, bytes)` | those bytes, exactly; the pair of `LoadBytes` | [bytes](#bytes) |
 | `SaveJson(path, value)` | one canonical shape | [json](#json) |
 | `SaveXml(path, node)` | the canonical XML shape, atomically | [xml](#xml) |
 
@@ -34,30 +34,30 @@ with `[object Object]`, and is now a refusal that says so.
 
 | | | |
 |---|---|---|
-| `Copy(from, to)` | **byte for byte**; refuses to clobber | [moving and removing](#moving-and-removing) |
+| `Copy(from, to)` | **byte for byte**, so it works on images; refuses to clobber | [moving and removing](#moving-and-removing) |
 | `Delete(path)` | a file, or an **empty** directory | [moving and removing](#moving-and-removing) |
-| `Exists(path)` | → whether there is something there | [asking about one](#asking-about-one) |
-| `Hash(path, [algorithm])` | → the file's checksum as hex | [asking about one](#asking-about-one) |
-| `Info(path)` | → `{ Size, Modified, Type, Icon, IsDir }`, or `null` | [asking about one](#asking-about-one) |
-| `IsDir(path)` | → whether it is a directory | [asking about one](#asking-about-one) |
-| `Open(path)` | hands it to the desktop | [the desktop](#the-desktop) |
+| `Exists(path)` | `false` for anything that is not a string, rather than asking about a file called `undefined` | [asking about one](#asking-about-one) |
+| `Hash(path, [algorithm])` | the checksum as hex, `"Sha256"` unless told — see [`Hash`](Hash.md) | [asking about one](#asking-about-one) |
+| `Info(path)` | `{ Size, Modified, Type, Icon, IsDir }`, or `null` | [asking about one](#asking-about-one) |
+| `IsDir(path)` | whether it is a directory — the question to ask before [`Directory`](Directory.md)'s three verbs, which throw on anything else | [asking about one](#asking-about-one) |
+| `Open(path)` | hands the file to whatever the desktop opens that kind with | [the desktop](#the-desktop) |
 | `Rename(from, to)` | also moves; refuses to clobber | [moving and removing](#moving-and-removing) |
 | `Trash(path)` | to the desktop's trash, whole for a folder | [moving and removing](#moving-and-removing) |
-| `Watch(path, cb)` | tells you when it changes | [watching](#watching) |
+| `Watch(path, cb)` | `cb(event, path)` — `"Changed"`, `"Created"`, `"Deleted"` — and answers something with a `Stop()` | [watching](#watching) |
 
 **Paths, as text**
 
 | | | |
 |---|---|---|
-| `Absolute(path)` | → the path, resolved | [paths](#paths) |
+| `Absolute(path)` | the path resolved against the working directory | [paths](#paths) |
 | `BaseName(path)` | `/a/b/c.js` → `c` | [paths](#paths) |
 | `Directory(path)` | `/a/b/c.js` → `/a/b` | [paths](#paths) |
-| `Extension(path)` | → `js`, no dot, `""` if none | [paths](#paths) |
-| `IsExtension(path, ext)` | → whether it ends in that extension, case-insensitively | [paths](#paths) |
-| `Join(a, b, …)` | → one path out of pieces | [paths](#paths) |
+| `Extension(path)` | `js` — no dot, `""` when there is none | [paths](#paths) |
+| `IsExtension(path, ext)` | whether the name ends in that extension, **case-insensitively** | [paths](#paths) |
+| `Join(a, b, …)` | one path out of pieces, with the separator the platform uses | [paths](#paths) |
 | `Name(path)` | `/a/b/c.js` → `c.js` | [paths](#paths) |
-| `Relative(path, root)` | → `path` with `root` taken off | [paths](#paths) |
-| `Within(path, root)` | → whether `path` is `root` or under it | [paths](#paths) |
+| `Relative(path, root)` | `path` with `root` taken off; the path unchanged when there is no relative spelling, and `""` for the root itself | [paths](#paths) |
+| `Within(path, root)` | whether `path` is `root` or under it, by whole path components — `/a/proj2` is **not** inside `/a/proj` | [paths](#paths) |
 
 ## Text
 
@@ -92,8 +92,8 @@ thing, and [`Xml`](Xml.md) is where that is argued.
 
 | | |
 |---|---|
-| `LoadBytes(path)` | the whole file as [`Bytes`](Bytes.md), untouched — what `Load` cannot do, since it answers text |
-| `SaveBytes(path, bytes)` | those bytes, exactly |
+| `LoadBytes(path)` | the whole file as [`Bytes`](../../llm/library.md#bytes), untouched — what `Load` cannot do, since it answers text |
+| `SaveBytes(path, bytes)` | those bytes, exactly; the pair of `LoadBytes` |
 
 For a picture, an archive, anything downloaded: what
 [`Http`](Http.md) answers with and what
@@ -103,7 +103,7 @@ For a picture, an archive, anything downloaded: what
 
 | | |
 |---|---|
-| `Exists(path)` | whether there is anything there |
+| `Exists(path)` | `false` for anything that is not a string, rather than asking about a file called `undefined` |
 | `IsDir(path)` | whether it is a directory — the question to ask before [`Directory`](Directory.md)'s three verbs, which throw on anything else |
 | `Info(path)` | `{ Size, Modified, Type, Icon, IsDir }`, or `null`. `.Type` is a content type you can test (`"image/png"`), `.Icon` is the name the desktop draws for that kind of file, and `.Modified` is a real `Date`, to the millisecond |
 | `Hash(path, [algorithm])` | the checksum as hex, `"Sha256"` unless told — see [`Hash`](Hash.md). **Read in blocks**, so a video costs 64 KB of memory and not the video |
@@ -155,7 +155,7 @@ and giving a file verb two meanings would be the wrong place to put it.
 |---|---|
 | `Join(a, b, …)` | one path out of pieces, with the separator the platform uses |
 | `Absolute(path)` | the path resolved against the working directory |
-| `Within(path, root)` | whether `path` is `root` or under it |
+| `Within(path, root)` | whether `path` is `root` or under it, by whole path components — `/a/proj2` is **not** inside `/a/proj` |
 | `Relative(path, root)` | `path` with `root` taken off; the path unchanged when there is no relative spelling, and `""` for the root itself |
 | `Name(path)` | `/a/b/c.js` → `c.js` |
 | `BaseName(path)` | `/a/b/c.js` → `c` |

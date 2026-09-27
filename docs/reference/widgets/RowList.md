@@ -25,32 +25,32 @@ rows](#the-rows).
 
 | | | |
 |---|---|---|
-| `ActivateOnSingleClick` | one click activates instead of two | [the selection](#the-selection) |
-| `Count` (ro) | how many rows, hidden ones included | [the rows](#the-rows) |
+| `ActivateOnSingleClick` | raise `Activate` on one click instead of two | [the selection](#the-selection) |
+| `Count` (ro) | how many rows there are, **hidden ones included** | [the rows](#the-rows) |
 | `Index` | the selected row, `-1` for none | [the selection](#the-selection) |
 | `MultiSelect` | more than one row at a time | [the selection](#the-selection) |
-| `Selection` (ro) | every selected row | [the selection](#the-selection) |
+| `Selection` (ro) | every selected row, as an array of indices in order | [the selection](#the-selection) |
 
 **Methods**
 
 | | | |
 |---|---|---|
-| `Activate([index])` | raises `Activate` for that row | [the selection](#the-selection) |
-| `Deselect(index)` | unselects a row | [the selection](#the-selection) |
+| `Activate([index])` | raises `Activate` for that row, as a double click would; the selected one with no argument | [the selection](#the-selection) |
+| `Deselect(index)` | unselects it | [the selection](#the-selection) |
 | `DeselectAll()` | selects nothing | [the selection](#the-selection) |
-| `Refilter()` | the answer to `Filter` may have changed | [filtering](#filtering) |
-| `RemoveRow(index)` | takes a row out, **and its control with it** | [the rows](#the-rows) |
-| `Reveal(index)` | brings that row into view | [the rows](#the-rows) |
-| `Select(index)` | selects a row | [the selection](#the-selection) |
-| `SelectAll()` | every row, with `MultiSelect` | [the selection](#the-selection) |
+| `Refilter()` | says the answer to `Filter` may have changed | [filtering](#filtering) |
+| `RemoveRow(index)` | takes that row out — **and the control in it goes with it**: the row is the widget's wrapper, so this is the same as deleting the child | [the rows](#the-rows) |
+| `Reveal(index)` | brings that row into view with the least scrolling it takes, and answers whether there was one | [the rows](#the-rows) |
+| `Select(index)` | selects that row, leaving the others where several are allowed | [the selection](#the-selection) |
+| `SelectAll()` | with `MultiSelect` | [the selection](#the-selection) |
 
 **Events**
 
 | | | |
 |---|---|---|
-| `Activate()` | a row was double clicked, or Enter | [the selection](#the-selection) |
+| `Activate()` | raises `Activate` for that row, as a double click would; the selected one with no argument | [the selection](#the-selection) |
 | `Filter(control, index)` | should this row be shown? | [filtering](#filtering) |
-| `Select()` | the selection moved | [the selection](#the-selection) |
+| `Select()` | selects that row, leaving the others where several are allowed | [the selection](#the-selection) |
 
 ## Which list is this one
 
@@ -105,9 +105,9 @@ built row from being measured.
 
 | | |
 |---|---|
-| `Add(control)` | `Container`'s: one control, one row, at the end |
-| `Clear()` | `Container`'s: empties it, destroying every row's control |
-| `Children` (ro) | `Container`'s: the controls, one per row, in order |
+| `Add(control)` | puts a widget in. A control already in another container is **moved** out of it; one that contains this container is refused, as is the container itself. A `Split` refuses a third |
+| `Clear()` | removes **and destroys** every child, and the container can be refilled afterwards |
+| `Children` (ro) | its real children, one level deep, in the order they are in |
 | `RemoveRow(index)` | takes that row out — **and the control in it goes with it**: the row is the widget's wrapper, so this is the same as deleting the child. **`RangeError`** when there is no such row |
 | `Reveal(index)` | brings that row into view with the least scrolling it takes, and answers whether there was one |
 | `Count` (ro) | how many rows there are, **hidden ones included** |
@@ -126,17 +126,17 @@ is being designed* (`item` in [formats.md](../../formats.md#item-what-a-list-hol
 
 | | |
 |---|---|
-| `Index` | the selected row, `-1` for none. Assigning selects it and **raises `Select`**. **A hidden row is still a row**: `Filter` changes what is on screen, not what the list holds |
+| `Index` | the selected row, `-1` for none. Assigning selects it and **raises `Select`**. **A hidden row is still a row**: `Filter` changes what is on screen, not what the list holds. Default `-1` |
 | `Selection` (ro) | every selected row, as an array of indices in order |
 | `MultiSelect` | more than one row at a time |
 | `Select(index)` | selects that row, leaving the others where several are allowed |
 | `Deselect(index)` | unselects it |
 | `SelectAll()` | with `MultiSelect` |
 | `DeselectAll()` | selects nothing |
-| `Activate([index])` | raises `Activate` for that row from code; the selected one with no argument. Answers whether there was one |
+| `Activate([index])` | raises `Activate` for that row, as a double click would; the selected one with no argument. Answers whether there was one |
 | `ActivateOnSingleClick` | raise `Activate` on one click instead of two. Default `false` |
 | **event** `Select()` | the selection moved. Ask `Index` or `Selection` for which rows; what is *in* them is the widgets you put there |
-| **event** `Activate()` | a double click on a row, or Enter on it |
+| **event** `Activate()` | Enter in the field, or a double click on a row |
 
 **The indices count every row, shown or hidden.** That is the one thing to hold
 on to when a list filters: `Count` is what was added, `Index` is a position in
@@ -146,8 +146,8 @@ that, and the array beside the list lines up with both.
 
 | | |
 |---|---|
-| **event** `Filter(control, index)` | asked while the list is laid out, once per row. **Returning `false` hides the row**; no handler at all shows every one |
-| `Refilter()` | says the answer may have changed, so ask again |
+| **event** `Filter(control, index)` | asked while the list is laid out. **Returning `false` hides the row**; no handler shows every one. A lookup and nothing else |
+| `Refilter()` | says the answer to `Filter` may have changed. The whole of the API on this side — what a handler answers *from* is yours |
 
 ```js
 List_Filter(row, index) { return this.shows(this.files[index]); }

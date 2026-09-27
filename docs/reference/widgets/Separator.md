@@ -12,13 +12,13 @@ It is a `Widget` and a control like any other, so everything on
 
 | | | |
 |---|---|---|
-| `Orientation` | `Horizontal` `Vertical`. Default `"Horizontal"` | [the line](#the-line) |
+| `Orientation` | `Horizontal` `Vertical` | [the line](#the-line) |
 
 ## The line
 
 | | |
 |---|---|
-| `Orientation` | which way it runs. A `Horizontal` separator is a line across, between two rows of things; a `Vertical` one divides a toolbar |
+| `Orientation` | `Horizontal` `Vertical`. **The thickness is the line**: it paints its whole allocation, so one 12 high is a line 12 thick. Room around it goes on `Margin`. Default `"Horizontal"`. A `Horizontal` separator is a line across, between two rows of things; a `Vertical` one divides a toolbar |
 
 **The thickness is the line**: a separator paints its whole allocation, so one
 given a `Height` of 12 is a line twelve pixels thick and not a hairline with room

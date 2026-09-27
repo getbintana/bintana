@@ -13,12 +13,12 @@ follows is what is its own.
 
 | | | |
 |---|---|---|
-| `Count` (ro) | how many pages | [the pages](#the-pages) |
-| `Current` | the page showing. Default `-1` | [the page showing](#the-page-showing) |
-| `Strip` | `Top` `Bottom` `Start` `End` `None`. Default `"Top"` | [the strip](#the-strip) |
-| `Tabs` | the strip, as strings. **Translated** | [the strip](#the-strip) |
+| `Count` (ro) | how many there are | [the pages](#the-pages) |
+| `Current` | which page is showing | [the page showing](#the-page-showing) |
+| `Strip` | `Top` `Bottom` `Start` `End` `None` — `None` is a bare stack only code switches | [the strip](#the-strip) |
+| `Tabs` | the labels, as strings | [the strip](#the-strip) |
 | `Append(child, [name])` | one more page | [the pages](#the-pages) |
-| `RemovePage(index)` | takes one out | [the pages](#the-pages) |
+| `RemovePage(index)` | takes it out, with the control in it | [the pages](#the-pages) |
 | **event** `Switch(index)` | a different page is showing | [the page showing](#the-page-showing) |
 
 ## Which of the two is this one
@@ -40,7 +40,7 @@ follows is what is its own.
 
 | | |
 |---|---|
-| `Current` | which page is showing. Assigning it switches, and **raises `Switch`** |
+| `Current` | which page is showing. Assigning it switches, and **raises `Switch`**. Default `-1` |
 | **event** `Switch(index)` | a different page is showing |
 
 **`Strip: "None"` plus `Current` from code is the whole of a wizard**, and of the
@@ -51,7 +51,7 @@ workspace — with nothing to click between them.
 
 | | |
 |---|---|
-| `Strip` | `Top` `Bottom` `Start` `End`, or `None` |
+| `Strip` | `Top` `Bottom` `Start` `End` `None` — `None` is a bare stack only code switches. Default `"Top"` |
 | `Tabs` | the labels, as strings. **Translated**. A segmented control has nowhere to put a widget, so this is the whole of it |
 
 ## What goes wrong

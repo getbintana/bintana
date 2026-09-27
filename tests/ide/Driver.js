@@ -3258,6 +3258,15 @@ function* p_completion(ide) {
      * that has none. */
     eq("and says its parameter, which neither `()` nor `(...)` did",
        ask("", "        File.").find((p) => p.Text === "Load").Detail, "(path)");
+    /* **And what it is for**, under the list for the chosen row: the first
+     * sentence of the description written beside the member in the C, in
+     * plain text -- the backticks and the bold of the documentation's Markdown
+     * taken off. */
+    eq("the chosen row says what the member is for",
+       ask("", "        File.").find((p) => p.Text === "Load").Doc, "the whole file as a string");
+    check("...in plain text",
+          !/[`*]/.test(ask("", "        File.").find((p) => p.Text === "LoadBytes").Doc || "x`"),
+          ask("", "        File.").find((p) => p.Text === "LoadBytes").Doc);
 
     /* --- a namespace of this project ------------------------------------------
      *

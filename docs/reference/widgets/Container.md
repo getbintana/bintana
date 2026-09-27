@@ -17,24 +17,24 @@ between [`Widget`](Widget.md) and the containers themselves. Everything on
 
 | | | |
 |---|---|---|
-| `Anchored` | children follow the container when it grows | [the two layout models](#the-two-layout-models) |
-| `Arrangement` | `Fixed` `Horizontal` `Vertical` — coordinates, a row, a column | [the two layout models](#the-two-layout-models) |
-| `Children` (ro) | its real children, one level deep, in order | [putting children in](#putting-children-in) |
-| `Homogeneous` | every child the same size along the axis | [rows and columns](#rows-and-columns) |
-| `Placement` (ro) | how **this** container places a child | [not every container arranges](#not-every-container-arranges) |
+| `Anchored` | with it off, children stay exactly where they were drawn however big the container gets — a drawing board rather than a window | [the two layout models](#the-two-layout-models) |
+| `Arrangement` | `Fixed` (the default) lays children out by `X`/`Y` and `Width`/`Height` | [the two layout models](#the-two-layout-models) |
+| `Children` (ro) | its real children, one level deep, in the order they are in | [putting children in](#putting-children-in) |
+| `Homogeneous` | every child the same size along the axis — what a row of buttons that must all match wants | [rows and columns](#rows-and-columns) |
+| `Placement` (ro) | how this one places a child, which is the question an editor asks | [not every container arranges](#not-every-container-arranges) |
 | `Spacing` | pixels between children, in a row or a column | [rows and columns](#rows-and-columns) |
 
 **Methods**
 
 | | | |
 |---|---|---|
-| `Add(widget)` | puts a widget in, at the end | [putting children in](#putting-children-in) |
-| `Clear()` | removes and destroys every child | [putting children in](#putting-children-in) |
-| `ContainerAt(x, y, [ignore])` | → the innermost container that could take a drop there | [finding what is where](#finding-what-is-where) |
-| `FocusNext()` | → whether the focus moved: Tab, kept inside this container | [the focus](#the-focus) |
-| `FocusPrevious()` | → the same, backwards | [the focus](#the-focus) |
-| `LocalPoint(x, y, from)` | → `[x, y]`: a point of another widget's, in this one's | [finding what is where](#finding-what-is-where) |
-| `PickAt(x, y)` | → the topmost child at that point, or `null` | [finding what is where](#finding-what-is-where) |
+| `Add(widget)` | puts a widget in | [putting children in](#putting-children-in) |
+| `Clear()` | removes **and destroys** every child, and the container can be refilled afterwards | [putting children in](#putting-children-in) |
+| `ContainerAt(x, y, [ignore])` | the innermost container that could take a drop there | [finding what is where](#finding-what-is-where) |
+| `FocusNext()` | whether the focus moved: what Tab does, kept **inside this container** | [the focus](#the-focus) |
+| `FocusPrevious()` | the same, backwards | [the focus](#the-focus) |
+| `LocalPoint(x, y, from)` | `[x, y]`: a point in another widget's coordinates, expressed in this container's | [finding what is where](#finding-what-is-where) |
+| `PickAt(x, y)` | the topmost child at that point, or `null` | [finding what is where](#finding-what-is-where) |
 | `Reorder(child, index)` | moves a child among its siblings | [the order they are in](#the-order-they-are-in) |
 
 **And what `rad.js` adds** — `AddNode(node)`, which builds a live widget from a
@@ -46,7 +46,7 @@ part of one at run time from a file.
 
 | | |
 |---|---|
-| `Arrangement` | `Fixed` (the default) lays children out by `X`/`Y` and `Width`/`Height`; `Horizontal` is a row and `Vertical` a column, where coordinates mean nothing and `Spacing` and `Homogeneous` do |
+| `Arrangement` | `Fixed` (the default) lays children out by `X`/`Y` and `Width`/`Height`; `Horizontal` is a row and `Vertical` a column, where coordinates mean nothing and `Spacing` and `Homogeneous` do. **Not on every container**; see the table above |
 | `Anchored` | with it off, children stay exactly where they were drawn however big the container gets — a drawing board rather than a window. Default `true` |
 
 **There is no box class.** A container arranged as a row *is* one, and the
@@ -92,7 +92,7 @@ is a size and not a position, and that is the distinction that matters.
 
 | | |
 |---|---|
-| `Add(widget)` | puts a widget in, at the end. A control already somewhere is **moved** here; one that contains this container is refused. A [`Split`](Split.md) refuses a third |
+| `Add(widget)` | puts a widget in. A control already in another container is **moved** out of it; one that contains this container is refused, as is the container itself. A `Split` refuses a third |
 | `Clear()` | removes **and destroys** every child, and the container can be refilled afterwards |
 | `Children` (ro) | its real children, one level deep, in the order they are in |
 
@@ -137,7 +137,7 @@ and what it does with the room it gets is its `HAlign`/`VAlign` — both on
 
 | | |
 |---|---|
-| `Reorder(child, index)` | moves a child among its siblings. **The index counts them without the one being moved** |
+| `Reorder(child, index)` | moves a child among its siblings. The index counts them *without* the one being moved. **Every container with an order answers it**: a box, a `Grid`, a `Flow`, a `RowList`, a `Notebook`, a `Switcher`, a `Split` (the index names the half) and an `Overlay` (index `0` is the base layer, the one that fills). A `Fixed` refuses — there the order is the painting order, which is `Raise`/`Lower` |
 
 Every container with an order answers it: a box, a [`Grid`](Grid.md), a `Flow`, a
 [`RowList`](RowList.md), a [`Notebook`](Notebook.md), a `Switcher`, a
@@ -153,7 +153,7 @@ the column; in a `Notebook` it moves a page along the strip.
 
 | | |
 |---|---|
-| `Placement` (ro) | how this container places a child: `Coordinates` `Order` `Layers` `Pages` `Halves`. **Every container answers**, including the ones that refuse `Arrangement` |
+| `Placement` (ro) | how this one places a child, which is the question an editor asks: `Coordinates` `Order` `Layers` `Pages` `Halves`. Every container answers, including the ones that refuse `Arrangement` |
 
 A [`Grid`](Grid.md), a `Flow`, a [`RowList`](RowList.md), an `Overlay`, a
 [`Notebook`](Notebook.md), a `Switcher` and an `AspectFrame` arrange by their own
@@ -165,8 +165,8 @@ what an editor asks, and it is why the IDE needs no table of container kinds.
 
 | | |
 |---|---|
-| `FocusNext()` | → whether the focus moved: what Tab does, kept **inside this container** |
-| `FocusPrevious()` | → the same, backwards |
+| `FocusNext()` | whether the focus moved: what Tab does, kept **inside this container** |
+| `FocusPrevious()` | the same, backwards |
 
 Tab already walks a form; these are for the case where a region has to keep it —
 a dialog inside a page, a panel that traps the keyboard while it is open.
@@ -179,9 +179,9 @@ is one of the things boxes give you for nothing.
 
 | | |
 |---|---|
-| `PickAt(x, y)` | → the topmost child at that point, or `null`. **At any depth**: what comes back may be a label inside a panel inside a row |
-| `ContainerAt(x, y, [ignore])` | → the innermost container that could take a drop there. `ignore` excludes the widget being dragged, which would otherwise always answer |
-| `LocalPoint(x, y, from)` | → `[x, y]`: a point in another widget's coordinates, expressed in this container's |
+| `PickAt(x, y)` | the topmost child at that point, or `null`. **At any depth**: what comes back may be a label inside a panel inside a row |
+| `ContainerAt(x, y, [ignore])` | the innermost container that could take a drop there. `ignore` excludes the widget being dragged, which would otherwise always answer |
+| `LocalPoint(x, y, from)` | `[x, y]`: a point in another widget's coordinates, expressed in this container's |
 
 These three are what a designer, a drag and drop and a context menu are built
 from, and they are in the runtime rather than in the IDE because every one of

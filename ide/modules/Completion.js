@@ -182,6 +182,24 @@ function completionScopeNames(symbols, line) {
 }
 
 /*
+ * A member's description as the popup shows it: its first sentence, in plain
+ * text. The description is written once, beside the member, in the Markdown
+ * the documentation is made of -- so the backticks, the bold and a link's
+ * target come off here, and the rest is the documentation's own words.
+ */
+function completionSummary(doc) {
+    if (!doc) return "";
+    let t = doc.split("\n")[0]
+               .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+               .replace(/\*\*|`/g, "");
+    const end = /[.:;](?=\s+[A-Z(`"*]|\s*$)/.exec(t);
+    /* The same cut `tools/docs` makes for an index row, so the popup and the
+     * reference say the same first sentence. */
+    if (end) t = t.slice(0, end.index);
+    return t.trim();
+}
+
+/*
  * What a declared answer means as a thing to complete after: the text after the
  * arrow in a signature comment (`-> Bytes`, `-> string[]`, `-> { X, Y }`).
  * `null` is "nothing to offer" -- a boolean, `any`, or nothing declared.
@@ -614,7 +632,8 @@ Ide.Completion = class Completion {
 
     listFor(t) {
         if (t.k === "static") return this.membersOfName(t.name);
-        return this.membersOfTypeRaw(t).map((m) => ({ Text: m.Name, Detail: this.detailOf(t.name || "", m) }));
+        return this.membersOfTypeRaw(t).map((m) => ({ Text: m.Name, Detail: this.detailOf(t.name || "", m),
+                                                      Doc: completionSummary(m.Doc) }));
     }
 
     /* `Widget.Members` for a name, with the project's sources and forms, kept
@@ -1140,6 +1159,7 @@ Ide.Completion = class Completion {
                 this._members.push({
                     Text: m.Name,
                     Detail: this.detailOf(name, m),
+                    Doc: completionSummary(m.Doc),
                 });
             }
         }

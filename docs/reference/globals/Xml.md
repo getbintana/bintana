@@ -15,32 +15,32 @@ is where that design is argued.
 
 | | | |
 |---|---|---|
-| `Parse(text)` | → a document, or a `SyntaxError` with `línea:columna` | [reading](#reading) |
-| `ParseBytes(bytes)` | the same, honouring the declared encoding | [reading](#reading) |
-| `Element(name)` | → a **detached** element, for building | [building](#building) |
-| `Stringify(node)` | → the canonical text | [writing](#writing) |
-| `Available` (ro) | whether this build has libxml2 | [availability](#availability) |
-| `Root` (ro) | the root element, or `null` | [reading](#reading) |
-| `Name` (ro) | the element's local name | [names and namespaces](#names-and-namespaces) |
-| `Prefix` (ro) | its prefix, `""` when there is none | [names and namespaces](#names-and-namespaces) |
-| `Namespace` (ro) | its namespace URI, `""` when there is none | [names and namespaces](#names-and-namespaces) |
-| `SetNamespace(uri, [prefix])` | puts the element in that namespace | [names and namespaces](#names-and-namespaces) |
-| `Text` | all the character data under it; assigning replaces the children | [reading](#reading) |
-| `Attr(name)` | the value of an attribute **with no namespace**, `""`, or `null` | [attributes](#attributes) |
+| `Parse(text)` | the document, or a `SyntaxError` naming línea and columna | [reading](#reading) |
+| `ParseBytes(bytes)` | the same, and the declaration's encoding is honoured — what `File.LoadXml` uses | [reading](#reading) |
+| `Element(name)` | a detached element; its own tree, not in any document | [building](#building) |
+| `Stringify(node)` | the canonical text: declaration, indented by two, one trailing newline | [writing](#writing) |
+| `Available` (ro) | whether this build has libxml2; the verbs refuse with a sentence when it does not | [availability](#availability) |
+| `Root` (ro) | the root element of a document, or `null` | [reading](#reading) |
+| `Name` (ro) | the local name, the prefix, the URI — `""` when there is none | [names and namespaces](#names-and-namespaces) |
+| `Prefix` (ro) | the prefix, `""` when there is none | [names and namespaces](#names-and-namespaces) |
+| `Namespace` (ro) | the URI, `""` when there is none | [names and namespaces](#names-and-namespaces) |
+| `SetNamespace(uri, [prefix])` | puts the element in that namespace, reusing a declaration already in reach | [names and namespaces](#names-and-namespaces) |
+| `Text` | all the character data under an element; assigning replaces the children | [reading](#reading) |
+| `Attr(name)` | the value of an attribute **with no namespace**, `""` for one that is present and empty, `null` for one that is not | [attributes](#attributes) |
 | `SetAttr(name, value)` | both as text; creates or replaces | [attributes](#attributes) |
-| `RemoveAttr(name)` | takes it away | [attributes](#attributes) |
-| `AttrNS(uri, name)` | the same for an attribute in that namespace | [attributes](#attributes) |
-| `SetAttrNS(uri, name, value)` | writes one, which is how `xml:lang` is spelled | [attributes](#attributes) |
-| `RemoveAttrNS(uri, name)` | takes it away | [attributes](#attributes) |
-| `AttributeNames()` | the local names | [attributes](#attributes) |
-| `Children` (ro) | its element children, in file order | [children](#children) |
-| `Find(name)` | the first direct child called that, or `null` | [children](#children) |
-| `FindAll(name)` | every direct child called that | [children](#children) |
-| `Add(child)` | a node or an element name; answers the node **in this tree** | [building](#building) |
+| `RemoveAttr(name)` | takes the attribute with no namespace away; one that is not there is not an error | [attributes](#attributes) |
+| `AttrNS(uri, name)` | the same for an attribute in a namespace — `xml:lang` is `AttrNS("http://www.w3.org/XML/1998/namespace", "lang")`, since an unprefixed name means no namespace at all | [attributes](#attributes) |
+| `SetAttrNS(uri, name, value)` | writes one | [attributes](#attributes) |
+| `RemoveAttrNS(uri, name)` | takes away the attribute in that namespace; one that is not there -- or only a DTD's default -- is not an error | [attributes](#attributes) |
+| `AttributeNames()` | the local names, sorted as the file had them | [attributes](#attributes) |
+| `Children` (ro) | its element children, in order | [children](#children) |
+| `Find(name)` | the first direct child element with that local name, or `null` | [children](#children) |
+| `FindAll(name)` | every direct child element with it | [children](#children) |
+| `Add(child)` | a node or an element name | [building](#building) |
 | `Insert(index, child)` | before the element child at `index`, or at the end | [building](#building) |
-| `Remove()` | out of the tree, and the wrapper stops answering | [building](#building) |
-| `Parent` (ro) | the parent element, or `null` for a root | [children](#children) |
-| `Copy()` | → a detached subtree of its own | [building](#building) |
+| `Remove()` | takes the node out for good | [building](#building) |
+| `Parent` (ro) | the parent element, or `null` for a root or a detached node | [children](#children) |
+| `Copy()` | a detached subtree of its own | [building](#building) |
 
 `File.LoadXml` and `File.SaveXml` are the file roads; see [`File`](File.md).
 
@@ -48,7 +48,7 @@ is where that design is argued.
 
 | | |
 |---|---|
-| `Parse(text)` | a string, already decoded, to a document |
+| `Parse(text)` | the document, or a `SyntaxError` naming línea and columna |
 | `ParseBytes(bytes)` | the same, and the declaration's encoding is honoured — what `File.LoadXml` uses |
 | `Root` (ro) | the root element of a document, or `null` |
 | `Text` | all the character data under an element; assigning replaces the children |
@@ -73,7 +73,7 @@ sentence; there is no partial answer to check for.
 
 | | |
 |---|---|
-| `Children` (ro) | the element children, in order |
+| `Children` (ro) | its element children, in order |
 | `Find(name)` | the first direct child element with that local name, or `null` |
 | `FindAll(name)` | every direct child element with it |
 | `Parent` (ro) | the parent element, or `null` for a root or a detached node |
@@ -89,13 +89,13 @@ walk is a loop, not a path language.
 
 | | |
 |---|---|
-| `Attr(name)` | the value; `""` for one that is present and empty, `null` for one that is not |
+| `Attr(name)` | the value of an attribute **with no namespace**, `""` for one that is present and empty, `null` for one that is not |
 | `SetAttr(name, value)` | both as text; creates or replaces |
-| `RemoveAttr(name)` | |
-| `AttrNS(uri, name)` | the value of an attribute that belongs to a namespace |
+| `RemoveAttr(name)` | takes the attribute with no namespace away; one that is not there is not an error |
+| `AttrNS(uri, name)` | the same for an attribute in a namespace — `xml:lang` is `AttrNS("http://www.w3.org/XML/1998/namespace", "lang")`, since an unprefixed name means no namespace at all. `SetAttrNS` refuses a namespace not declared in scope |
 | `SetAttrNS(uri, name, value)` | writes one |
-| `RemoveAttrNS(uri, name)` | |
-| `AttributeNames()` | the local names |
+| `RemoveAttrNS(uri, name)` | takes away the attribute in that namespace; one that is not there -- or only a DTD's default -- is not an error |
+| `AttributeNames()` | the local names, sorted as the file had them |
 
 **`Attr` and `AttrNS` are two different questions, and `xml:lang` is why.** In
 XML an unprefixed name is an attribute with *no* namespace, so `xml:lang` and
@@ -130,7 +130,7 @@ An `xmlns` declaration is not in `AttributeNames()` and cannot be read with
 
 | | |
 |---|---|
-| `Name` (ro) | the local name |
+| `Name` (ro) | the local name, the prefix, the URI — `""` when there is none |
 | `Prefix` (ro) | the prefix, `""` when there is none |
 | `Namespace` (ro) | the URI, `""` when there is none |
 | `SetNamespace(uri, [prefix])` | puts the element in that namespace, reusing a declaration already in reach |
@@ -177,7 +177,7 @@ assignment, which detaches the children without silencing anybody.
 
 | | |
 |---|---|
-| `Stringify(node)` | the canonical text: a declaration, indentation of two, one trailing newline |
+| `Stringify(node)` | the canonical text: declaration, indented by two, one trailing newline. A detached element is written with a document of its own |
 
 `File.SaveXml` writes exactly that, by the atomic [`File.Save`](File.md). So a
 parsed document comes back with different whitespace and attribute order — both
@@ -190,7 +190,7 @@ into a document of its own so the declaration is written with it.
 
 | | |
 |---|---|
-| `Available` (ro) | whether this build has libxml2 |
+| `Available` (ro) | whether this build has libxml2; the verbs refuse with a sentence when it does not |
 
 XML is optional at build time, like `Database.Sqlite`: without libxml2,
 `Available` is `false` and every verb refuses with a sentence naming the

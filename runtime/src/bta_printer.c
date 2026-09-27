@@ -884,12 +884,32 @@ static JSValue printer_get_papers(JSContext *ctx, JSValueConst this_val)
 }
 
 static const JSCFunctionListEntry printer_props[] = {
+    /* Names
+     *   the printers this session can reach. `[]` for a machine with none,
+     *   **`null`** for a session that cannot ask
+     */
     JS_CGETSET_DEF("Names",   printer_get_names,   NULL),
+    /* Papers
+     *   `{ A4: { Width, Height }, Letter: …, A5: … }`, in **points**. Read
+     *   off GTK, so a size that reads 595 here is the 595 the print context
+     *   hands the handler
+     */
     JS_CGETSET_DEF("Papers",  printer_get_papers,  NULL),
+    /* Default
+     *   the one it would use. `""` when none is marked, **`null`** when it
+     *   cannot ask
+     */
     JS_CGETSET_DEF("Default", printer_get_default, NULL),
-    /* Send(area, [setup], cb) */
+    /* Send(area, [setup], cb)
+     *   the print dialog, then a printer. **Async**: it returns at once and
+     *   `cb({ Copies, From, To })` arrives when something was printed. The
+     *   setup is what the dialog **opens on**
+     */
     JS_CFUNC_DEF("Send",   2, printer_send),
-    /* ToFile(area, path, [setup]) */
+    /* ToFile(area, path, [setup])
+     *   the same sheets as one PDF, with **no dialog**; → how many pages it
+     *   wrote. `Copies` is refused here, because a file has none
+     */
     JS_CFUNC_DEF("ToFile", 3, printer_to_file),
 };
 

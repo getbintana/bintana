@@ -9,13 +9,13 @@ three verbs. Like [`File`](File.md), all of it is synchronous.
 
 | | | |
 |---|---|---|
-| `Copy(from, to)` | a whole tree, into a new place | [making and removing](#making-and-removing) |
-| `Delete(path)` | an **empty** directory | [making and removing](#making-and-removing) |
-| `DeleteTree(path)` | it and everything in it | [making and removing](#making-and-removing) |
-| `Files(path, [pattern-or-options])` | → the **full paths** of the files, sorted | [what is in it](#what-is-in-it) |
-| `Folders(path, [pattern-or-options])` | → the same for directories | [what is in it](#what-is-in-it) |
-| `List(path, [pattern])` | → the **names** in one directory, sorted | [what is in it](#what-is-in-it) |
-| `Make(path)` | creates it and any missing parent | [making and removing](#making-and-removing) |
+| `Copy(from, to)` | a whole tree | [making and removing](#making-and-removing) |
+| `Delete(path)` | an **empty** directory, as [`File.Delete`](File.md) is | [making and removing](#making-and-removing) |
+| `DeleteTree(path)` | it and everything under it — the one to be careful with, and the reason it has a name of its own rather than a flag | [making and removing](#making-and-removing) |
+| `Files(path, [pattern-or-options])` | the **full paths** of the files, sorted | [what is in it](#what-is-in-it) |
+| `Folders(path, [pattern-or-options])` | the same for the directories | [what is in it](#what-is-in-it) |
+| `List(path, [pattern])` | the **names**, sorted, with no `.` or `..` — what a tree of one folder shows | [what is in it](#what-is-in-it) |
+| `Make(path)` | creates it **and any missing parent**, so there is no loop to write | [making and removing](#making-and-removing) |
 
 ## What is in it
 

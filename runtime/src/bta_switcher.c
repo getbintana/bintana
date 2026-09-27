@@ -524,13 +524,34 @@ bool bta_switcher_reorder(BtaWidget *w, GtkWidget *child, int index)
 }
 
 static const JSCFunctionListEntry switcher_props[] = {
+    /* Strip
+     *   `Top` `Bottom` `Start` `End` `None` — `None` is a bare stack only
+     *   code switches. Default `"Top"`
+     */
     JS_CGETSET_DEF("Strip",   switcher_get_strip,   switcher_set_strip),
+    /* Tabs
+     *   the labels, as strings. **Translated**. A segmented control has
+     *   nowhere to put a widget, so this is the whole of it
+     */
     JS_CGETSET_DEF("Tabs",    switcher_get_tabs,    switcher_set_tabs),
+    /* Count
+     *   how many there are
+     */
     JS_CGETSET_DEF("Count",   switcher_get_count,   NULL),
+    /* Current
+     *   which page is showing. Assigning it switches, and **raises
+     *   `Switch`**. Default `-1`
+     */
     JS_CGETSET_DEF("Current", switcher_get_current, switcher_set_current),
-    /* Append(child, [name]) */
+    /* Append(child, [name])
+     *   one more page. The child is the page, and `name` is a **string** — a
+     *   segmented control has nowhere for a widget, where a
+     *   [`Notebook`](docs/reference/widgets/Notebook.md)'s tab label is one
+     */
     JS_CFUNC_DEF("Append", 2, switcher_append),
-    /* RemovePage(index) */
+    /* RemovePage(index)
+     *   takes it out, with the control in it
+     */
     JS_CFUNC_DEF("RemovePage", 1, switcher_remove),
 };
 
@@ -545,7 +566,9 @@ void bta_switcher_register(void)
     const BtaClass rows[] = {
         /* Its strip is a segmented control and `Tabs` is the whole of what can
          * be in it: a list of strings a person reads. */
-        /* Switch(index) */
+        /* Switch(index)
+         *   a different page is showing
+         */
         BTA_CLASS_ENUM_TEXT("Switcher", "Container", build_switcher, switcher_props,
                        false, switcher_options, "Tabs", "Switch"),
     };

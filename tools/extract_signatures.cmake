@@ -56,14 +56,28 @@
 # and properties included -- `Widget.Members("HttpClient")` has no object to
 # walk, so this table is the whole answer about it.
 #
+# **And what the member is for, in the same comment**, on the lines after the
+# first, indented:
+#
+#     /* Load(path) -> string
+#      *   The file's text. A file that is not UTF-8 answers U+FFFD rather than
+#      *   refusing; `LoadBytes` is how to tell.
+#      */
+#
+# and for a property the first line is its name alone, or its name and an
+# arrow. That text is the one description a member has: `Widget.Members` hands
+# it to the IDE's completion as `Doc`, and `tools/docs` writes it into the rows
+# of `docs/llm` and `docs/reference`, so the documentation of a member lives
+# where the member is and nowhere else. A blank line (` *`) is a paragraph.
+#
 # The output is a C table and not a JS one so the runtime can publish it with
 # no control built and no display: `Widget.Signature(type, name)`, and the
 # `Signature` of each member `Widget.Members` lists.
 
 set(_owners "")     # table name -> class name
-set(_entries "")    # "owner|member|signature|returns|kind" in source order
-set(_rawtables "")  # "table|member|signature|returns|kind" no class row owns
-set(_rawvars "")    # "file:scope:var|member|signature|returns" on a variable
+set(_entries "")    # "owner|member|signature|returns|kind|doc" in source order
+set(_rawtables "")  # "table|member|signature|returns|kind|doc" no class row owns
+set(_rawvars "")    # "file:scope:var|member|signature|returns|kind|doc"
 set(_typetables "") # "table=Name" -- a table named by a `/* type Name */`
 set(_edges "")      # "file:scope:var=parent|Name" -- var installed as parent.Name
 set(_tabvars "")    # "table=file:scope:var" -- a table installed on a var
@@ -79,14 +93,17 @@ file(GLOB SOURCES "${SRC_DIR}/*.c")
 # list treats `[` ... `]` as grouping and `;` as a separator -- so one unbalanced
 # bracket in a C file (`*q == '['`) merged every line after it into one item,
 # and the signatures below it vanished with the build green. The text is read
-# whole with the three characters swapped for markers first, split on newlines,
-# and the markers put back only where an argument list is kept.
+# whole with the characters a list or a record would misread swapped for
+# markers first, split on newlines, and the markers put back only in what is
+# written out. `|` is the separator of the records below, so a description
+# that says `a | b` is marked too.
 macro(bta_read_lines path out)
     file(READ "${path}" _text)
     string(REPLACE "[" "<LB>" _text "${_text}")
     string(REPLACE "]" "<RB>" _text "${_text}")
     string(REPLACE ";" "<SC>" _text "${_text}")
     string(REPLACE "\\" "<BS>" _text "${_text}")
+    string(REPLACE "|" "<PI>" _text "${_text}")
     string(REPLACE "\n" ";" ${out} "${_text}")
 endmacro()
 
@@ -95,6 +112,15 @@ macro(bta_unmark var)
     string(REPLACE "<RB>" "]" ${var} "${${var}}")
     string(REPLACE "<SC>" ";" ${var} "${${var}}")
     string(REPLACE "<BS>" "\\" ${var} "${${var}}")
+    string(REPLACE "<PI>" "|" ${var} "${${var}}")
+endmacro()
+
+# `-` stands for an empty field: a list element that is empty is one CMake
+# does not reliably keep.
+macro(bta_dash var)
+    if("${${var}}" STREQUAL "")
+        set(${var} "-")
+    endif()
 endmacro()
 
 # Pass one: which class each member table belongs to. A registration wraps
@@ -126,15 +152,56 @@ foreach(_src IN LISTS SOURCES)
     endforeach()
 endforeach()
 
-# Pass two: the signatures, in source order, and where every variable goes.
+# Pass two: the declarations, in source order, and where every variable goes.
+#
+# A pending declaration is "name|args|returns|doc": `args` is `(…)` for a call
+# and `@` for a property, and whatever is `-` was not written.
 foreach(_src IN LISTS SOURCES)
     bta_read_lines("${_src}" _lines)
     get_filename_component(_fid "${_src}" NAME)
     set(_table "")
     set(_pending "")
     set(_scope 0)
+    set(_block "")      # the declaration a multi-line comment opened, if any
+    set(_doc "")
 
     foreach(_line IN LISTS _lines)
+        # Inside a declaration's comment: its lines are the description, and
+        # its closing line makes it pending like a one-line one.
+        if(NOT _block STREQUAL "")
+            if(_line MATCHES "^[ \t]*\\*/[ \t]*$")
+                string(STRIP "${_doc}" _doc)
+                bta_dash(_doc)
+                list(APPEND _pending "${_block}|${_doc}")
+                set(_block "")
+                continue()
+            endif()
+            if(_line MATCHES "^[ \t]*\\*[ \t]?(.*)$")
+                string(STRIP "${CMAKE_MATCH_1}" _t)
+                set(_closes FALSE)
+                if(_t MATCHES "^(.*)\\*/$")
+                    string(STRIP "${CMAKE_MATCH_1}" _t)
+                    set(_closes TRUE)
+                endif()
+                if(_t STREQUAL "")
+                    string(APPEND _doc "<NL>")
+                elseif(_doc STREQUAL "" OR _doc MATCHES "<NL>$")
+                    string(APPEND _doc "${_t}")
+                else()
+                    string(APPEND _doc " ${_t}")
+                endif()
+                if(_closes)
+                    string(STRIP "${_doc}" _doc)
+                    bta_dash(_doc)
+                    list(APPEND _pending "${_block}|${_doc}")
+                    set(_block "")
+                endif()
+                continue()
+            endif()
+            # Anything else was not a declaration's comment after all.
+            set(_block "")
+        endif()
+
         # A function body opens at column zero, and every variable name after
         # it belongs to that body.
         if(_line STREQUAL "{")
@@ -144,27 +211,36 @@ foreach(_src IN LISTS SOURCES)
             continue()
         endif()
 
-        # A signature comment: one line, the whole of it, and what the call
-        # answers after an arrow. `-` stands for no answer declared, because a
-        # list element that is empty is one CMake will not keep.
+        # A declaration's comment, one line: the signature, and what the call
+        # answers after an arrow.
         if(_line MATCHES "^[ \t]*/\\*[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*\\(([^)]*)\\)[ \t]*(->[ \t]*(.*[^ \t]))?[ \t]*\\*/[ \t]*$")
             set(_sigargs "${CMAKE_MATCH_2}")
             set(_sigret "${CMAKE_MATCH_4}")
-            bta_unmark(_sigargs)
-            bta_unmark(_sigret)
-            if(_sigret STREQUAL "")
-                set(_sigret "-")
-            endif()
-            list(APPEND _pending "${CMAKE_MATCH_1}|(${_sigargs})|${_sigret}")
+            bta_dash(_sigret)
+            list(APPEND _pending "${CMAKE_MATCH_1}|(${_sigargs})|${_sigret}|-")
             continue()
         endif()
-
-        # A property's type: a name, an arrow, and no brackets.
+        # ...a property's, one line: a name, an arrow, and no brackets.
         if(_line MATCHES "^[ \t]*/\\*[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*->[ \t]*(.*[^ \t])[ \t]*\\*/[ \t]*$")
-            set(_sigret "${CMAKE_MATCH_2}")
-            bta_unmark(_sigret)
-            list(APPEND _pending "${CMAKE_MATCH_1}|@|${_sigret}")
+            list(APPEND _pending "${CMAKE_MATCH_1}|@|${CMAKE_MATCH_2}|-")
             continue()
+        endif()
+        # ...and the first line of one that goes on, with a description after.
+        if(NOT _line MATCHES "\\*/")
+            if(_line MATCHES "^[ \t]*/\\*[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*\\(([^)]*)\\)[ \t]*(->[ \t]*(.*[^ \t]))?[ \t]*$")
+                set(_sigret "${CMAKE_MATCH_4}")
+                bta_dash(_sigret)
+                set(_block "${CMAKE_MATCH_1}|(${CMAKE_MATCH_2})|${_sigret}")
+                set(_doc "")
+                continue()
+            endif()
+            if(_line MATCHES "^[ \t]*/\\*[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*(->[ \t]*(.*[^ \t]))?[ \t]*$")
+                set(_sigret "${CMAKE_MATCH_3}")
+                bta_dash(_sigret)
+                set(_block "${CMAKE_MATCH_1}|@|${_sigret}")
+                set(_doc "")
+                continue()
+            endif()
         endif()
 
         # A name for the table below: a prototype no global installs.
@@ -207,7 +283,10 @@ foreach(_src IN LISTS SOURCES)
                 string(REPLACE "|" ";" _parts "${_sig}")
                 list(GET _parts 0 _member)
                 list(GET _parts 1 _args)
-                list(APPEND _entries "${_class}|${_member}|${_args}|-|event")
+                list(GET _parts 3 _sdoc)
+                if(NOT _args STREQUAL "@")
+                    list(APPEND _entries "${_class}|${_member}|${_args}|-|event|${_sdoc}")
+                endif()
             endforeach()
             set(_pending "")
             continue()
@@ -220,13 +299,14 @@ foreach(_src IN LISTS SOURCES)
         if(_line MATCHES "JS_CFUNC(_MAGIC)?_DEF2?[ \t]*\\([ \t]*\"([A-Za-z_][A-Za-z0-9_]*)\"")
             set(_member "${CMAKE_MATCH_2}")
             set(_kind "method")
-        elseif(_line MATCHES "JS_CGETSET(_MAGIC)?_DEF[ \t]*\\([ \t]*\"([A-Za-z_][A-Za-z0-9_]*)\"")
+        elseif(_line MATCHES "JS_CGETSET(_MAGIC)?_DEF2?[ \t]*\\([ \t]*\"([A-Za-z_][A-Za-z0-9_]*)\"")
             set(_member "${CMAKE_MATCH_2}")
             set(_kind "property")
         endif()
         if(NOT _kind STREQUAL "" AND NOT _table STREQUAL "")
             set(_args "-")
             set(_ret "-")
+            set(_mdoc "-")
             set(_said FALSE)
             if(_pending)
                 list(GET _pending -1 _sig)
@@ -234,14 +314,17 @@ foreach(_src IN LISTS SOURCES)
                 list(GET _parts 0 _named)
                 list(GET _parts 1 _sargs)
                 list(GET _parts 2 _sret)
+                list(GET _parts 3 _sdoc)
                 if(_named STREQUAL _member)
                     if(_kind STREQUAL "method" AND NOT _sargs STREQUAL "@")
                         set(_args "${_sargs}")
-                        set(_ret "${_sret}")
                         set(_said TRUE)
                     elseif(_kind STREQUAL "property" AND _sargs STREQUAL "@")
-                        set(_ret "${_sret}")
                         set(_said TRUE)
+                    endif()
+                    if(_said)
+                        set(_ret "${_sret}")
+                        set(_mdoc "${_sdoc}")
                     endif()
                 endif()
             endif()
@@ -254,17 +337,17 @@ foreach(_src IN LISTS SOURCES)
             endforeach()
 
             if(NOT _typed STREQUAL "")
-                list(APPEND _entries "${_typed}|${_member}|${_args}|${_ret}|${_kind}")
+                list(APPEND _entries "${_typed}|${_member}|${_args}|${_ret}|${_kind}|${_mdoc}")
             elseif(_said)
                 set(_found FALSE)
                 foreach(_owner IN LISTS _owners)
                     if(_owner MATCHES "^${_table}=(.*)$")
-                        list(APPEND _entries "${CMAKE_MATCH_1}|${_member}|${_args}|${_ret}|${_kind}")
+                        list(APPEND _entries "${CMAKE_MATCH_1}|${_member}|${_args}|${_ret}|${_kind}|${_mdoc}")
                         set(_found TRUE)
                     endif()
                 endforeach()
                 if(NOT _found)
-                    list(APPEND _rawtables "${_table}|${_member}|${_args}|${_ret}|${_kind}")
+                    list(APPEND _rawtables "${_table}|${_member}|${_args}|${_ret}|${_kind}|${_mdoc}")
                 endif()
             endif()
             set(_pending "")
@@ -272,7 +355,9 @@ foreach(_src IN LISTS SOURCES)
         endif()
 
         # A member set on a variable: the same adjacency, and the variable is
-        # named once every installation in the tree has been read.
+        # named once every installation in the tree has been read. A
+        # property's comment makes it a property -- `Application.Directory`
+        # is a value and not a call.
         if(_line MATCHES "^[ \t]*JS_SetPropertyStr[ \t]*\\([ \t]*ctx[ \t]*,[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*,[ \t]*\"([A-Za-z_][A-Za-z0-9_]*)\"")
             set(_var "${CMAKE_MATCH_1}")
             set(_member "${CMAKE_MATCH_2}")
@@ -282,8 +367,13 @@ foreach(_src IN LISTS SOURCES)
                 list(GET _parts 0 _named)
                 list(GET _parts 1 _args)
                 list(GET _parts 2 _ret)
-                if(_named STREQUAL _member AND NOT _args STREQUAL "@")
-                    list(APPEND _rawvars "${_fid}:${_scope}:${_var}|${_member}|${_args}|${_ret}")
+                list(GET _parts 3 _sdoc)
+                if(_named STREQUAL _member)
+                    if(_args STREQUAL "@")
+                        list(APPEND _rawvars "${_fid}:${_scope}:${_var}|${_member}|-|${_ret}|property|${_sdoc}")
+                    else()
+                        list(APPEND _rawvars "${_fid}:${_scope}:${_var}|${_member}|${_args}|${_ret}|method|${_sdoc}")
+                    endif()
                 endif()
             endif()
             set(_pending "")
@@ -300,8 +390,9 @@ foreach(_src IN LISTS SOURCES)
                 list(GET _parts 0 _named)
                 list(GET _parts 1 _args)
                 list(GET _parts 2 _ret)
+                list(GET _parts 3 _sdoc)
                 if(_named STREQUAL _member)
-                    list(APPEND _entries "Database|${_member}|${_args}|${_ret}|method")
+                    list(APPEND _entries "Database|${_member}|${_args}|${_ret}|method|${_sdoc}")
                 endif()
             endif()
             set(_pending "")
@@ -370,9 +461,11 @@ foreach(_r IN LISTS _rawvars)
     list(GET _parts 1 _member)
     list(GET _parts 2 _args)
     list(GET _parts 3 _ret)
+    list(GET _parts 4 _kind)
+    list(GET _parts 5 _rdoc)
     bta_name_of("${_key}" 0 _owner)
     if(NOT _owner STREQUAL "")
-        list(APPEND _entries "${_owner}|${_member}|${_args}|${_ret}|method")
+        list(APPEND _entries "${_owner}|${_member}|${_args}|${_ret}|${_kind}|${_rdoc}")
     endif()
 endforeach()
 
@@ -383,11 +476,12 @@ foreach(_r IN LISTS _rawtables)
     list(GET _parts 2 _args)
     list(GET _parts 3 _ret)
     list(GET _parts 4 _kind)
+    list(GET _parts 5 _rdoc)
     foreach(_tv IN LISTS _tabvars)
         if(_tv MATCHES "^${_tab}=(.*)$")
             bta_name_of("${CMAKE_MATCH_1}" 0 _owner)
             if(NOT _owner STREQUAL "")
-                list(APPEND _entries "${_owner}|${_member}|${_args}|${_ret}|${_kind}")
+                list(APPEND _entries "${_owner}|${_member}|${_args}|${_ret}|${_kind}|${_rdoc}")
             endif()
         endif()
     endforeach()
@@ -396,9 +490,9 @@ list(REMOVE_DUPLICATES _entries)
 
 set(_out "/* Generated from the C sources under runtime/src -- do not edit.\n")
 string(APPEND _out " *\n")
-string(APPEND _out " * What every method, event and typed property declares beside itself:\n")
-string(APPEND _out " * its parameters and what it answers. `Widget.Signature` and\n")
-string(APPEND _out " * `Widget.Members` publish it; a type named by a `type X` comment is\n")
+string(APPEND _out " * What every method, event and property declares beside itself: its\n")
+string(APPEND _out " * parameters, what it answers and what it is for. `Widget.Signature` and\n")
+string(APPEND _out " * `Widget.Members` publish it, and a type named by a `type X` comment is\n")
 string(APPEND _out " * answered from here alone, since no global holds it.\n")
 string(APPEND _out " */\n")
 string(APPEND _out "typedef enum { BTA_SIG_METHOD, BTA_SIG_EVENT, BTA_SIG_PROPERTY } BtaSigKind;\n\n")
@@ -408,8 +502,18 @@ string(APPEND _out "    const char *member;\n")
 string(APPEND _out "    const char *signature;\n")
 string(APPEND _out "    const char *returns;\n")
 string(APPEND _out "    BtaSigKind  kind;\n")
+string(APPEND _out "    const char *doc;\n")
 string(APPEND _out "} BtaSignature;\n\n")
 string(APPEND _out "static const BtaSignature bta_signatures[] = {\n")
+
+# Written as a C string: the markers go back, a backslash and a quote are
+# escaped, and a paragraph break is a newline.
+macro(bta_c_string var)
+    bta_unmark(${var})
+    string(REPLACE "\\" "\\\\" ${var} "${${var}}")
+    string(REPLACE "\"" "\\\"" ${var} "${${var}}")
+    string(REPLACE "<NL>" "\\n" ${var} "${${var}}")
+endmacro()
 
 foreach(_entry IN LISTS _entries)
     string(REPLACE "|" ";" _parts "${_entry}")
@@ -418,15 +522,17 @@ foreach(_entry IN LISTS _entries)
     list(GET _parts 2 _args)
     list(GET _parts 3 _ret)
     list(GET _parts 4 _kind)
-    if(_ret STREQUAL "-")
-        set(_ret "")
-    endif()
-    if(_args STREQUAL "-")
-        set(_args "")
-    endif()
-    string(REPLACE "\"" "\\\"" _ret "${_ret}")
+    list(GET _parts 5 _edoc)
+    foreach(_v _args _ret _edoc)
+        if("${${_v}}" STREQUAL "-")
+            set(${_v} "")
+        endif()
+    endforeach()
+    bta_c_string(_args)
+    bta_c_string(_ret)
+    bta_c_string(_edoc)
     string(TOUPPER "${_kind}" _k)
-    string(APPEND _out "    { \"${_owner}\", \"${_member}\", \"${_args}\", \"${_ret}\", BTA_SIG_${_k} },\n")
+    string(APPEND _out "    { \"${_owner}\", \"${_member}\", \"${_args}\", \"${_ret}\", BTA_SIG_${_k}, \"${_edoc}\" },\n")
 endforeach()
 
 string(APPEND _out "};\n")

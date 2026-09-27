@@ -2,5 +2,9 @@
   "name": "api",
   "main": "Main",
   "version": "1.0",
-  "description": "Every member the runtime publishes, against what docs/llm/controls.md documents"
+  "description": "Every member the runtime publishes, against what docs/llm/controls.md documents",
+  "sources": [
+    "../../tools/docs/Rows.js",
+    "Check.js"
+  ]
 }

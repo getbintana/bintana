@@ -13,33 +13,33 @@ everything here works the same in both.
 
 | | | |
 |---|---|---|
-| `CanRedo` (ro) | whether there is anything to redo | [undo](#undo) |
-| `CanUndo` (ro) | whether there is anything to undo | [undo](#undo) |
+| `CanRedo` (ro) | the same, forwards | [undo](#undo) |
+| `CanUndo` (ro) | whether there is anything to go back to — what an *Undo* item's `Enabled` is read from | [undo](#undo) |
 | `Column` (ro) | the cursor's column | [the cursor](#the-cursor) |
-| `Line` (ro) | the cursor's line, counting from 1 | [the cursor](#the-cursor) |
+| `Line` (ro) | the line the cursor is on, **counting from 1** | [the cursor](#the-cursor) |
 | `Modified` | the editing flag | [what is in it](#what-is-in-it) |
-| `Offset` (ro) | the cursor's position, as a character offset | [the cursor](#the-cursor) |
+| `Offset` (ro) | the cursor's position as a **character** offset — the same unit `Column` counts in, so an emoji is one | [the cursor](#the-cursor) |
 | `ReadOnly` | shown but not editable | [what is in it](#what-is-in-it) |
-| `ScrollMaxX` (ro) | the furthest it can scroll sideways | [where it is scrolled to](#where-it-is-scrolled-to) |
-| `ScrollMaxY` (ro) | and downwards | [where it is scrolled to](#where-it-is-scrolled-to) |
-| `ScrollX` | how far it is scrolled sideways, in pixels | [where it is scrolled to](#where-it-is-scrolled-to) |
-| `ScrollY` | and downwards | [where it is scrolled to](#where-it-is-scrolled-to) |
-| `Selection` (ro) | the selected text | [the cursor](#the-cursor) |
+| `ScrollMaxX` (ro) | the furthest `ScrollX` can go — the content's width less the part on screen, and `0` when it all fits | [where it is scrolled to](#where-it-is-scrolled-to) |
+| `ScrollMaxY` (ro) | the same for `ScrollY`, which is how a program tells a long file from one that fits | [where it is scrolled to](#where-it-is-scrolled-to) |
+| `ScrollX` | how far it is scrolled, in pixels, and assignable — clamped to what there is to scroll | [where it is scrolled to](#where-it-is-scrolled-to) |
+| `ScrollY` | the same downwards, which is the one a diff view keeps in step | [where it is scrolled to](#where-it-is-scrolled-to) |
+| `Selection` (ro) | the selected text, `""` for none | [the cursor](#the-cursor) |
 | `Text` | everything in the buffer | [what is in it](#what-is-in-it) |
 | `Wrap` | wrap long lines | [what is in it](#what-is-in-it) |
-| `Append(text)` | at the end, scrolling there | [what is in it](#what-is-in-it) |
+| `Append(text)` | at the end, **scrolling there**, whatever the cursor was doing — which is what a log pane wants and what makes a read-only editor the right control for one | [what is in it](#what-is-in-it) |
 | `Clear()` | empties it | [what is in it](#what-is-in-it) |
-| `CursorBounds()` | → where the cursor is drawn, `{ X, Y, Width, Height }` | [the cursor](#the-cursor) |
+| `CursorBounds()` | where the insertion cursor is drawn, in the control's own coordinates — what `Popover.Popup(editor, rect)` points at for a hint beside the cursor | [the cursor](#the-cursor) |
 | `GotoLine(line)` | puts the cursor there and scrolls to it | [the cursor](#the-cursor) |
 | `Insert(text)` | at the cursor | [what is in it](#what-is-in-it) |
-| `LineOf(index)` | the line a search's index falls on | [the cursor](#the-cursor) |
-| `OffsetAt(line, [column])` | the character offset of that position | [the cursor](#the-cursor) |
+| `LineOf(index)` | the line a **search's index** falls on, 1-based and clamped — `index` is the number `Regex.Index` gives, and it counts UTF-16 units | [the cursor](#the-cursor) |
+| `OffsetAt(line, [column])` | the character offset of that position, clamped as `Select` clamps — the inverse read of `Offset` | [the cursor](#the-cursor) |
 | `Redo()` | one step forward | [undo](#undo) |
 | `Select(line, [column], [length])` | selects from there | [the cursor](#the-cursor) |
 | `Undo()` | one step back | [undo](#undo) |
-| **event** `Change()` | the value changed, **including from code** | [what is in it](#what-is-in-it) |
+| **event** `Change()` | the value changed, including from an assignment in code — the round trip goes out to GTK and back | [what is in it](#what-is-in-it) |
 | **event** `Cursor()` | the cursor moved | [the cursor](#the-cursor) |
-| **event** `Scroll(x, y)` | it was scrolled | [where it is scrolled to](#where-it-is-scrolled-to) |
+| **event** `Scroll(x, y)` | it was scrolled — by the wheel, a scrollbar, the keyboard or an assignment | [where it is scrolled to](#where-it-is-scrolled-to) |
 
 ## What is in it
 
@@ -52,21 +52,21 @@ everything here works the same in both.
 | `Wrap` | wrap long lines. Default `true` on a [`TextEditor`](TextEditor.md), `false` on a [`SourceEditor`](SourceEditor.md), which is the right default for each |
 | `ReadOnly` | shown but not editable. **The program can still write to it**, which is what a log pane needs |
 | `Modified` | the editing flag. **Clear it after saving**: nothing else does, and it is what a window title's asterisk and a *save before closing?* are read from |
-| **event** `Change()` | the text changed — typed, pasted, or assigned |
+| **event** `Change()` | the value changed, including from an assignment in code — the round trip goes out to GTK and back |
 
 ## The cursor
 
 | | |
 |---|---|
 | `Line` (ro) | the line the cursor is on, **counting from 1** |
-| `Column` (ro) | the column it is at |
-| `Offset` (ro) | the cursor's position as an absolute **character** offset — the same unit `Column` counts in |
+| `Column` (ro) | the cursor's column |
+| `Offset` (ro) | the cursor's position as a **character** offset — the same unit `Column` counts in, so an emoji is one |
 | `Selection` (ro) | the selected text, `""` for none |
 | `GotoLine(line)` | puts the cursor there and scrolls to it |
-| `CursorBounds()` | `{ X, Y, Width, Height }`: where the insertion cursor is drawn, in the control's own coordinates. It is what a hint beside the cursor points at — `Popover.Popup(editor, editor.CursorBounds())`. Read it once the control has a rectangle; before the window is up there is nothing to be drawn in |
-| `LineOf(index)` | the line a search's index falls on, 1-based and clamped — the number `Regex.Index` gives, counted in UTF-16 units |
+| `CursorBounds()` | where the insertion cursor is drawn, in the control's own coordinates — what `Popover.Popup(editor, rect)` points at for a hint beside the cursor. Only once the control has been laid out; a cursor scrolled out of view answers a rectangle outside the control, which is the truth and the caller's to test. Read it once the control has a rectangle; before the window is up there is nothing to be drawn in |
+| `LineOf(index)` | the line a **search's index** falls on, 1-based and clamped — `index` is the number `Regex.Index` gives, and it counts UTF-16 units |
 | `Select(line, [column], [length])` | selects from there. A column past the end of the line is the end of the line |
-| `OffsetAt(line, [column])` | the character offset of that position — the inverse read of `Offset`, clamped as `Select` clamps |
+| `OffsetAt(line, [column])` | the character offset of that position, clamped as `Select` clamps — the inverse read of `Offset` |
 | **event** `Cursor()` | the cursor moved. `Line` and `Column` say where |
 
 `Line`/`Column` in a status bar is `Cursor` plus two reads — and it is the one
@@ -105,11 +105,11 @@ is what that avoids.
 
 | | |
 |---|---|
-| `ScrollX` | how far it is scrolled sideways, **in pixels**, and assignable. Clamped to what there is to scroll |
+| `ScrollX` | how far it is scrolled, in pixels, and assignable — clamped to what there is to scroll. **Not** the cursor: `Line` and `GotoLine` are about that, with the scroll following as a side effect |
 | `ScrollY` | the same downwards, which is the one a diff view keeps in step |
 | `ScrollMaxX` (ro) | the furthest `ScrollX` can go — the content's width less the part on screen, and `0` when it all fits |
 | `ScrollMaxY` (ro) | the same for `ScrollY`, which is how a program tells a long file from one that fits |
-| **event** `Scroll(x, y)` | it was scrolled, by the wheel, a scrollbar, the keyboard or an assignment. **One event for a diagonal move**, not two |
+| **event** `Scroll(x, y)` | it was scrolled — by the wheel, a scrollbar, the keyboard or an assignment. One event for a diagonal move. Two panes locked together is `Before_Scroll(x, y) { this.After.ScrollY = y; }`, and it does not loop: assigning a value it already has emits nothing |
 
 **This is not the cursor.** `Line`, `Column`, `GotoLine` and `Select` are all
 about where the *cursor* is, with the scroll following as a side effect — so a

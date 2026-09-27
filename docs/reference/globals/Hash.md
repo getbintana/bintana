@@ -11,10 +11,10 @@ File.Hash(path)                          // the same digest, over the file
 
 | | | |
 |---|---|---|
-| `Md5(v)` | the digest as lower-case hex | [the four](#the-four) |
-| `Sha1(v)` | likewise | [the four](#the-four) |
-| `Sha256(v)` | likewise — the one to reach for | [the four](#the-four) |
-| `Sha512(v)` | likewise | [the four](#the-four) |
+| `Md5(v)` | the MD5 digest | [the four](#the-four) |
+| `Sha1(v)` | likewise, and likewise | [the four](#the-four) |
+| `Sha256(v)` | **the one to reach for** unless something else decided | [the four](#the-four) |
+| `Sha512(v)` | when what you are comparing against used it | [the four](#the-four) |
 
 [`File.Hash(path, [algorithm])`](File.md#asking-about-one) is the file's digest
 and lives there, with the rest of what a file answers.
@@ -23,7 +23,7 @@ and lives there, with the rest of what a file answers.
 
 | | |
 |---|---|
-| `Md5(v)` | the MD5 digest. Old and broken for anything adversarial; fine for a cache key or an etag somebody else chose |
+| `Md5(v)` | the MD5 digest. Old and broken for anything adversarial; fine for a cache key or an etag somebody else chose. `v` is text (hashed as its UTF-8) or a [`Bytes`](../../llm/library.md#bytes) (hashed as the bytes it is) |
 | `Sha1(v)` | likewise, and likewise |
 | `Sha256(v)` | **the one to reach for** unless something else decided |
 | `Sha512(v)` | when what you are comparing against used it |

@@ -10,23 +10,23 @@ are made of.
 
 | | | |
 |---|---|---|
-| `Completion` | offer completions while typing | [completion](#completion) |
-| `CompletionTitle` | the heading of that popup. **Translated** | [completion](#completion) |
-| `Language` | a GtkSourceView id: `js` `json` `c` `markdown`… | [highlighting](#highlighting) |
-| `MatchIndex` (ro) | which match the cursor is standing on | [search](#search) |
-| `Matches` (ro) | how many `Search` found | [search](#search) |
-| `ShowLineNumbers` | the gutter's numbers. Default `true` | [highlighting](#highlighting) |
-| `ShowMarks` | the gutter's marks | [marks](#marks) |
-| `Theme` | the colour scheme | [highlighting](#highlighting) |
+| `Completion` | offer the buffer's own words while typing — the floor of what an editor owes, and the whole of what can be known without being told | [completion](#completion) |
+| `CompletionTitle` | the heading of the popup your own provider fills | [completion](#completion) |
+| `Language` | a GtkSourceView id — `js` `json` `c` `python3` `markdown` `css` `sh` `xml` `sql` `yaml` `diff`… `""` for none | [highlighting](#highlighting) |
+| `MatchIndex` (ro) | which one the cursor is standing on — the `3` in *3/12* | [search](#search) |
+| `Matches` (ro) | how many the last `Search` found | [search](#search) |
+| `ShowLineNumbers` | the gutter's numbers | [highlighting](#highlighting) |
+| `ShowMarks` | the gutter's marks — see `Mark` | [marks](#marks) |
+| `Theme` | `Adwaita` `Adwaita-dark` `classic` `classic-dark` `cobalt` `cobalt-light` `kate` `kate-dark` `oblivion` `solarized-light` `solarized-dark` `tango` | [highlighting](#highlighting) |
 | `ClearMarks([kind])` | takes them off every line | [marks](#marks) |
-| `FindNext()` | moves to the next match, wrapping | [search](#search) |
+| `FindNext()` | moves to the next match, wrapping around | [search](#search) |
 | `FindPrevious()` | and backwards | [search](#search) |
-| `Unmark(line, [kind])` | takes marks off one line | [marks](#marks) |
+| `Unmark(line, [kind])` | takes marks off that line | [marks](#marks) |
 | `Mark(line, kind, [text])` | a gutter mark | [marks](#marks) |
-| `Marks([kind])` | → a record per mark: `{ Line, Kind, Text }` | [marks](#marks) |
-| `Replace(text)` | the match the cursor is on | [search](#search) |
+| `Marks([kind])` | **a record per mark**, in line order | [marks](#marks) |
+| `Replace(text)` | the match the cursor is standing on | [search](#search) |
 | `ReplaceAll(text)` | every match | [search](#search) |
-| `Search(text, [{CaseSensitive, WholeWord, Regex}])` | → how many, highlighting every one | [search](#search) |
+| `Search(text, [{CaseSensitive, WholeWord, Regex}])` | how many there are, highlighting every one | [search](#search) |
 | `ShowCompletion()` | opens the completion popup from code | [completion](#completion) |
 | **event** `Complete(word, line, column, text)` | a completion was asked for | [completion](#completion) |
 
@@ -45,7 +45,7 @@ catalogue must never rewrite code.
 
 | | |
 |---|---|
-| `Search(text, [{CaseSensitive, WholeWord, Regex}])` | → how many there are, highlighting every one. **It does not move the cursor**: typing in a find field and jumping to a match happen at different moments, and a find bar that jumped on every keystroke would drag the view about while somebody is still typing |
+| `Search(text, [{CaseSensitive, WholeWord, Regex}])` | how many there are, highlighting every one. **It does not move the cursor**: typing in a find field and jumping to a match happen at different moments. `Regex: true` is **PCRE2** — GtkSourceView's own engine and not the language's [`Regex`](../../llm/library.md#regex): always multiline, and `\d` `\w` `\b` are Unicode-aware. **It does not move the cursor**: typing in a find field and jumping to a match happen at different moments, and a find bar that jumped on every keystroke would drag the view about while somebody is still typing |
 | `Matches` (ro) | how many the last `Search` found |
 | `MatchIndex` (ro) | which one the cursor is standing on — the `3` in *3/12* |
 | `FindNext()` | moves to the next match, wrapping around |
@@ -71,9 +71,9 @@ the language's way.
 |---|---|
 | `Mark(line, kind, [text])` | a gutter mark. `kind` is `Error` `Warning` `Info` `Bookmark` — or `Added` `Removed` `Gap`, which **paint the line** — and `text` is its tooltip |
 | `Unmark(line, [kind])` | takes marks off that line |
-| `Marks([kind])` | → **a record per mark**, in line order: `{ Line, Kind, Text }` — not a list of line numbers, which is what "the lines that carry one" was read as by the first thing that used it |
+| `Marks([kind])` | **a record per mark**, in line order: `{ Line, Kind, Text }` — not a list of line numbers, which is what "the lines that carry one" was read as by the first thing that used it |
 | `ClearMarks([kind])` | takes them off every line |
-| `ShowMarks` | whether the gutter draws them |
+| `ShowMarks` | the gutter's marks — see `Mark` |
 
 ### The three that paint the line
 
@@ -106,8 +106,8 @@ three.
 |---|---|
 | `Completion` | offer the buffer's own words while typing — the floor of what an editor owes, and the whole of what can be known without being told |
 | `CompletionTitle` | the heading of the popup your own provider fills. **Translated** |
-| `ShowCompletion()` | opens it from code |
-| **event** `Complete(word, line, column, text)` | a completion was asked for. **Answer with a list, or nothing.** An entry is a word, or `{ Text, Detail }` for one that says what it is beside itself |
+| `ShowCompletion()` | opens the completion popup from code |
+| **event** `Complete(word, line, column, text)` | a completion was asked for. Answer with a list, or nothing. An entry is a **word**, or `{ Text, Detail }` for one that says what it is beside itself — a type, a one-line description. An entry that is neither is skipped, not refused |
 
 ```js
 Editor_Complete(word, line, column, before) {
