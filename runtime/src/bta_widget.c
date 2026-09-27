@@ -3203,8 +3203,29 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
      * is not a widget, and this question does not care. */
     JSValue klass = bta_lookup_global(ctx, type);
     if (JS_IsException(klass)) {
+        /* **Two things were wrong on one line, and the first is the one that
+         * reads as a crash.** The message was built from `type` *after* the
+         * `JS_FreeCString` that freed it -- a use-after-free on exactly the path
+         * a mistyped name takes, since that is the only path that throws -- and
+         * the exception `bta_lookup_global` had already set was left pending
+         * underneath the one thrown here.
+         *
+         * **The order is the fix and both halves of it are load-bearing.** The
+         * lookup throws its own complaint -- an unusable class name, a property
+         * get that failed, a `JS_Eval` of a name that is not there -- and this
+         * verb answers a *different* question, so that one is consumed with the
+         * idiom `JS_ToCString` failures use elsewhere in this file
+         * (`JS_GetException` takes the pending value off the context, and
+         * `JS_FreeValue` releases it) rather than dropped: dropping it is what
+         * leaves a second error for whoever reaches the context next, half a
+         * program away from the call that caused it.
+         *
+         * Then the message, which formats `type` **while it is alive**, and only
+         * then the free. */
+        JS_FreeValue(ctx, JS_GetException(ctx));
+        JS_ThrowTypeError(ctx, "Members: '%s' is not a class", type);
         JS_FreeCString(ctx, type);
-        return JS_ThrowTypeError(ctx, "Members: '%s' is not a class", type);
+        return JS_EXCEPTION;
     }
 
     /*

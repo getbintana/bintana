@@ -1315,6 +1315,33 @@ it. One runtime answer unblocked both, which is the argument for it being in the
 runtime rather than in either of them: `tools/typings` was declaring `Timer` **by
 hand** and skipping four classes for exactly this reason.
 
+- **A `JSValue` string is not `malloc`'d, so `tests/asan.sh` cannot see you free
+  it and use it.** QuickJS here has its own **arena allocator**:
+  `js_malloc_rt` -> `js_arena_malloc`, and `js_arena_free` does **not** call
+  `free()` for a small block -- it pushes the block back onto
+  `rt->arena_state.free_arena_list` and hands it to the next allocation of the
+  same size class. Only a *large* block goes to `rt->mf.js_free`, which is the
+  system one. AddressSanitizer poisons what went through the interposed
+  `malloc`/`free`, so **every small `JS_FreeCString` is invisible to it**: the
+  memory is free and the sanitizer has no idea, and the next `JS_NewString` in
+  the same class has usually already overwritten the bytes.
+  Measured, deliberately, on the use-after-free this verb had on its own refusal
+  path -- `JS_FreeCString(ctx, type)` and then `JS_ThrowTypeError(ctx, "Members:
+  '%s' is not a class", type)`, which is the **only** line in the function that
+  throws and therefore the only one anybody ever reaches by mistyping a name.
+  `tests/asan.sh` over `widgets` reported **nothing**, and neither did it with
+  `quarantine_size_mb=256:thread_local_quarantine_size_kb=8192`, which is the
+  setting that exists exactly to stop a recycled block from looking live. The
+  test was green in both runs, so the only way that bug was ever going to be
+  found was by reading it.
+  **So the oracle this file leans on is narrower than the file says.** "Both
+  memory bugs this codebase has had were use-after-free... the sanitizer says so
+  on every machine" is true of the *GTK* ones, where glib's allocator is the
+  system's, and **false of anything that is a `JSValue`, a `GBytes`, or a glib
+  slice**: read the C, and do not treat a clean `asan.sh` as evidence. A
+  *large* `JSValue` string -- past the arena's threshold -- does reach `free()`
+  and is caught, so the family is invisible exactly where a short name puts you.
+
 ## Flatpak, and the packaging step
 
 **One identity runs through the whole chain.** `project.json`'s `id` becomes
