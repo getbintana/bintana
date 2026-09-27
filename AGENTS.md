@@ -1408,6 +1408,31 @@ So there were two fixes, and **only one of them is in the IDE**:
   **not the file's name**, because a component declared in `Widgets.js` has
   `Widgets.form`.
 
+  **And the popup asks for the signature rather than writing one.** `Detail` used
+  to be a `()` typed here, which is the runtime's own placeholder for *no
+  signature is declared* -- `() => any` in a declaration file and `Expected 0
+  arguments` in an editor are the same wrong answer pointed differently, so the
+  generator already refuses to emit an empty pair. It is the honest floor and not
+  a claim that a member takes nothing. What was not honest was asking nobody:
+  `Widget.Signature` answers for every method of the runtime from the comment
+  beside its C entry, and `Container.Add` was shown the same as a member that
+  takes nothing. A property says nothing, which is what separates it from a
+  method, and that is a question worth asking rather than a blank to leave.
+
+  **Which left a gap worth naming, because two consumers of one verb now
+  disagree.** `Widget.New` is the case: `bintana.d.ts` says
+  `static New(type: string): Widget;` because the generator **writes that by
+  hand**, and the popup says `static ()` because there is no signature declared
+  where the runtime reads one from. The reason is in
+  `tools/extract_signatures.cmake`: a one-line signature comment is only attached
+  to a following `JSCFunctionListEntry` table, and **every class static in this
+  tree is registered with `JS_SetPropertyStr` instead** -- so no static has a
+  declared signature at all, and `Widget.Member` cannot even classify one (it
+  walks the prototype, and a static is the constructor's). Teaching the extractor
+  the `JS_SetPropertyStr` shape would declare dozens of statics at once and change
+  the declaration file substantially, which is a piece of work of its own rather
+  than a line. Asserted as it is, in `tests/ide`'s `completion`.
+
   **What it still does not say:** a `static` and an accessor both reach
   `js_parse_class` as a method of the same name, so both come back as `Method` and
   are labelled `()`. Telling them apart is the **eighth** vendor patch, and it needs

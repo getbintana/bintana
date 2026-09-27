@@ -3065,6 +3065,47 @@ function* p_completion(ide) {
      * missing.** `Dial`'s form declares a `Face` label; it is an own property
      * of the instance, so no prototype walk sees it, and the popup after
      * `Dial.` did not offer it. */
+    /* **What the popup says after the name, which used to be a string written
+     * here.** `()` was the runtime's placeholder for *no signature declared*, so
+     * asking nobody for the real one meant `Add` and `Bounds` were shown the same
+     * as a member that takes nothing. */
+    /* **The raw entries, not `answer`**, which maps to the name: the annotation
+     * is the thing under test and `answer` throws it away. */
+    const det = (word, before) => {
+        const hit = ask(word, before).find((e) => e.Text === word);
+        return hit ? hit.Detail : "(not offered)";
+    };
+    check("a method's parameters are said, and they were not",
+          det("Add", "Container.").length > 2 && det("Add", "Container.") !== "()",
+          JSON.stringify(det("Add", "Container.")));
+    check("an optional one keeps its brackets, as the reference spells it",
+          det("Bounds", "Container.").includes("container"),
+          JSON.stringify(det("Bounds", "Container.")));
+    check("a property says nothing, which is what separates it from a method",
+          det("Width", "Container.") === "" && det("Tooltip", "Container.") === "",
+          JSON.stringify([det("Width", "Container."),
+                          det("Tooltip", "Container.")]));
+    /* **An instance method whose signature is declared, and a static's honest
+     * floor.** `Widget.New` is the case worth naming: the declaration file says
+     * `static New(type: string): Widget;` because the generator writes that by
+     * hand, and the popup says `static ()` because no signature is declared
+     * where the runtime reads one from.
+     *
+     * The gap is in the extractor: it only attaches a one-line signature comment
+     * to a `JSCFunctionListEntry` table, and every class static in this tree is
+     * registered with `JS_SetPropertyStr` instead. So the two consumers of the
+     * same verb disagree, and the popup is the one with nothing to read. Asserted
+     * as it is and not as it should be. */
+    check("a declared signature is said, name and all",
+          det("DesignValue", "Widget.") === "(name)",
+          JSON.stringify(det("DesignValue", "Widget.")));
+    check("a static with no declared signature says the kind and the floor",
+          det("New", "Widget.") === "static ()",
+          JSON.stringify(det("New", "Widget.")));
+    check("a member of a class the runtime never ran keeps the honest floor",
+          ask("", "Dial.").every((e) => typeof e.Detail === "string"),
+          JSON.stringify(ask("", "Dial.").slice(0, 3)));
+
     check("a form's own child is offered, which no prototype walk can see",
           answer("Fac", "Dial.").includes("Face"),
           JSON.stringify(answer("Fac", "Dial.")));

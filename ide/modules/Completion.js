@@ -661,6 +661,48 @@ Ide.Completion = class Completion {
      * Cached per name for the length of one popover, and reset by the same
      * narrow-to-wider rule the method scan uses.
      */
+
+    /*
+     * What the popup says after the name, and **the answer is asked rather than
+     * written**.
+     *
+     * The `()` that was here was the runtime's own placeholder for *no
+     * signature is declared* -- `() => any` in a declaration file and
+     * `Expected 0 arguments` in an editor are the same wrong answer pointed
+     * differently, so the generator already refuses to emit an empty pair. It is
+     * the honest floor and not a claim that a member takes no arguments. What
+     * was not honest was asking nobody: `Widget.Signature` answers for every
+     * method of the runtime from the comment beside its C entry, and the popup
+     * wrote `()` for all of them.
+     *
+     * **A property says nothing and a method says its parameters.** A member
+     * whose name is declared in a class the runtime does not have -- a library
+     * class, whose source the parser can name but not measure -- answers null and
+     * keeps the placeholder, which is the same floor the generator keeps. **A
+     * signature is a statement about arity and nothing else**: the declared text
+     * is a documentation's own spelling, so `[container]` and `(...values)` are
+     * what the reference says, and the popup does not invent a type for a
+     * parameter to look more precise than the source of the answer.
+     */
+    detailOf(className, member) {
+        const kind = member.Kind;
+        if (kind !== "Method" && kind !== "Static") return "";
+
+        let sig = null;
+        try { sig = Widget.Signature(className, member.Name); } catch (e) { sig = null; }
+        /* **A blank answer is a property, not a method, and the difference is the
+         * whole point of asking.** `Widget.Member` is the verb that says which,
+         * and it answers for one name. */
+        if (typeof sig !== "string" || !sig) {
+            try {
+                if (Widget.Member(className, member.Name) === "Property" ||
+                    Widget.Member(className, member.Name) === "ReadOnly") return "";
+            } catch (e) { /* not a member the runtime knows */ }
+            sig = "()";
+        }
+        return kind === "Static" ? "static " + sig : sig;
+    }
+
     /*
      * The members of a class, and **one question asked once**.
      *
@@ -714,7 +756,7 @@ Ide.Completion = class Completion {
                 const kind = m.Kind;
                 this._members.push({
                     Text: m.Name,
-                    Detail: kind === "Method" ? "()" : (kind === "Static" ? "static" : ""),
+                    Detail: this.detailOf(name, m),
                 });
             }
         }
