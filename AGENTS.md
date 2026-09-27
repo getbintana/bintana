@@ -1507,6 +1507,21 @@ So there were two fixes, and **only one of them is in the IDE**:
   required" -- and `(...values: [])` turns a correct call into an error. Both
   measured rather than argued; the empty tuple is the one that looked right.
 
+  **The count belongs in the declaration file and not in the popup**, and the
+  first version had it in both. It built `(a1, a2, a3)` from the count, so
+  `File.Load` came out `Load(a1)` -- a name that is not the parameter's, on a verb
+  that reads as though it were, and the same placeholder smell as the generated
+  file. What a popup can honestly say is **`(...)`**: there are arguments and this
+  does not say which. **`()` claims the member takes none**, which for
+  `File.Load(path)` is false and was once *asserted*; `(...)` is a gap that reads
+  as one. The two are told apart by whether a signature was **declared**, not by
+  the count: `FocusNext` carries a declared `()` in the table beside its C entry
+  and that is a fact, and `File.Load` is registered with `JS_SetPropertyStr` with
+  no comment anywhere, so its parameter name exists nowhere at all. `tests/ide`
+  asserts that **no** member of either list is annotated with an invented name,
+  which is a property of the whole list and so holds for a class nobody thought to
+  test.
+
   **Which left a gap worth naming, because two consumers of one verb now
   disagree.** `Widget.New` is the case: `bintana.d.ts` says
   `static New(type: string): Widget;` because the generator **writes that by

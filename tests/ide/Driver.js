@@ -3108,8 +3108,8 @@ function* p_completion(ide) {
      * never had: the extractor only attaches one to a `JSCFunctionListEntry`
      * table and every class static is registered with `JS_SetPropertyStr`. It
      * takes one argument and now says so, because the function object knows. */
-    check("a static nobody declared says the kind and the discovered count",
-          det("New", "Widget.") === "static (a1)",
+    check("a static nobody declared says the kind and admits the gap",
+          det("New", "Widget.") === "static (...)",
           JSON.stringify(det("New", "Widget.")));
 
     /* **The count, and the point of asking for it at all: nobody wrote it
@@ -3131,12 +3131,32 @@ function* p_completion(ide) {
           ask("", "Dial.").find((e) => e.Text === "Value").Detail === "",
           JSON.stringify(ask("", "Dial.").find((e) => e.Text === "Value")));
 
-    check("a method that takes nothing says so, and that is now a fact",
+    /* **A method that takes nothing still says `()`**, because here it is a
+     * fact: `FocusNext` carries a declared signature in the table beside its C
+     * entry, and that declaration is `()`.  The two cases are told apart by
+     * whether a signature was declared, not by the count. */
+    check("a declared `()` is a fact and is kept",
           det("FocusNext", "Container.") === "()",
           JSON.stringify(det("FocusNext", "Container.")));
+    check("and nothing declared is a gap, not a fact",
+          det("Load", "        File.") === "(...)" &&
+          det("Add", "Container.") !== "()",
+          JSON.stringify([det("Load", "        File."), det("Add", "Container.")]));
     check("a member of a class the runtime never ran keeps the honest floor",
           ask("", "Dial.").every((e) => typeof e.Detail === "string"),
           JSON.stringify(ask("", "Dial.").slice(0, 3)));
+
+    /* **No name is invented, anywhere.** The count is real and a name built from
+     * it is not the parameter's, so `a1` in a popup is a claim nobody made. This
+     * is a property of the whole list rather than of one member, which is what
+     * makes it hold for a class nobody thought to test. */
+    const invented = ask("", "        File.").filter((e) => /a\d/.test(e.Detail))
+                        .map((e) => e.Text + "=" + e.Detail);
+    check("no member of a global's list is annotated with an invented name",
+          invented.length === 0, JSON.stringify(invented));
+    check("and the same for a library class the process never ran",
+          ask("", "Dial.").filter((e) => /a\d/.test(e.Detail)).length === 0,
+          JSON.stringify(ask("", "Dial.").map((e) => e.Detail).slice(0, 4)));
 
     check("a form's own child is offered, which no prototype walk can see",
           answer("Fac", "Dial.").includes("Face"),
@@ -3212,8 +3232,14 @@ function* p_completion(ide) {
      * signature declared* and a test that asserted the placeholder read as a
      * claim about the function. Asking the count instead is what noticed: the
      * answer is one argument and it was always one argument. */
-    eq("and says how many arguments, which `()` never did",
-       ask("", "        File.").find((p) => p.Text === "Load").Detail, "(a1)");
+    /* **It says `(...)` and not `()`**, which is the correction.  `()` claims
+     * the member takes no arguments and `File.Load(path)` takes one; `(...)`
+     * says there are arguments and does not say which.  The count is real and
+     * the name is not there to be had -- the C function is registered with
+     * `JS_SetPropertyStr` and no comment mentions it -- so a name invented from
+     * the count would be a name that is not the parameter's. */
+    eq("and admits it does not know the parameters, which `()` did not",
+       ask("", "        File.").find((p) => p.Text === "Load").Detail, "(...)");
 
     /* --- a namespace of this project ------------------------------------------
      *

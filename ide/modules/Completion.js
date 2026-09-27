@@ -709,12 +709,19 @@ Ide.Completion = class Completion {
          * And a class the runtime refuses is not an error here: `Signature`
          * refuses a class that is not a widget, which is right for its own
          * question and is most of what a popup asks about. */
-        if ((!sig || typeof sig !== "string") && typeof member.Params === "number"
-            && member.Params >= 0) {
-            const args = [];
-            for (let i = 0; i < member.Params; i++) args.push("a" + (i + 1));
-            sig = "(" + args.join(", ") + ")";
-        }
+        /* **And nothing invented, which is the correction.** The first version
+         * built `(a1, a2, a3)` out of the count, and `File.Load` came out
+         * `Load(a1)` -- a name that is not the parameter's, on a verb that reads
+         * as though it were. The count belongs in the *declaration file*, where
+         * a rest tuple checks it without claiming a name; in a popup it teaches
+         * the reader nothing at all.
+         *
+         * **`(...)` and not `()`**, and the difference is the whole point: `()`
+         * says the member takes no arguments, which for `File.Load(path)` is a
+         * false claim a test used to assert -- and `(...)` says there are
+         * arguments and does not say which. One is a lie, the other is a gap
+         * that reads as one. */
+        if (!sig) sig = "(...)";
         /* **A blank answer is a property, not a method, and the difference is the
          * whole point of asking.** `Widget.Member` is the verb that says which,
          * and it answers for one name. */
