@@ -1166,16 +1166,27 @@ static JSValue database_sqlite(JSContext *ctx, JSValueConst this_val,
     return obj;
 }
 
+/* type Connection */
 static const JSCFunctionListEntry conn_props[] = {
+    /* Dialect -> string */
     JS_CGETSET_DEF("Dialect", conn_get_dialect, NULL),
+    /* Path -> string */
     JS_CGETSET_DEF("Path",    conn_get_path,    NULL),
+    /* Open -> boolean */
     JS_CGETSET_DEF("Open",    conn_get_open,    NULL),
+    /* Tables -> string[] */
     JS_CGETSET_DEF("Tables",  conn_get_tables,  NULL),
+    /* Query(sql, [params]) -> any[] */
     JS_CFUNC_DEF("Query",       2, conn_query),
+    /* Execute(sql, [params]) -> { Changes, LastId } */
     JS_CFUNC_DEF("Execute",     2, conn_execute),
+    /* Script(sql) */
     JS_CFUNC_DEF("Script",      1, conn_script),
+    /* Transaction(fn) */
     JS_CFUNC_DEF("Transaction", 1, conn_transaction),
+    /* Columns(table) -> { Name, Type, Required, Key }[] */
     JS_CFUNC_DEF("Columns",     1, conn_columns),
+    /* Close() */
     JS_CFUNC_DEF("Close",       0, conn_close),
 };
 
@@ -1199,7 +1210,7 @@ void bta_sqlite_init(JSContext *ctx, JSValue global)
                                G_N_ELEMENTS(conn_props));
     JS_SetClassProto(ctx, bta_sqlite_class_id, proto);
 
-    /* Sqlite(path) */
+    /* Sqlite(path) -> Connection */
     bta_database_driver(ctx, "Sqlite", database_sqlite, 1);
 }
 

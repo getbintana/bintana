@@ -83,6 +83,82 @@ Namespace("Ide");
 const PATH_BEFORE_DOT = /([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\.$/;
 
 /*
+ * `File.Info(p).`, `db.Query(sql)[0].`, `this.Btn.Bounds().`: the expression a
+ * dot follows, read **backwards** from the dot over names, dots, and calls and
+ * indexes whose brackets balance -- and nothing else, so `x = File.Info(p).`
+ * answers `File.Info(p)` and a space outside a bracket is where it starts.
+ * What is inside a bracket is skipped and not understood: the arguments of a
+ * call do not change what the call answers.
+ */
+function completionChain(before) {
+    const text = before.endsWith(".") ? before.slice(0, -1) : before;
+    let i = text.length, depth = 0;
+    while (i > 0) {
+        const c = text[i - 1];
+        if (c === ")" || c === "]") { depth++; i--; continue; }
+        if (c === "(" || c === "[") { if (depth === 0) break; depth--; i--; continue; }
+        if (depth > 0 || /[\w$.]/.test(c)) { i--; continue; }
+        break;
+    }
+    return depth === 0 ? text.slice(i) : "";
+}
+
+/* ...and the same expression as steps: a name, whether it was called, and an
+ * index. `null` for anything that is not one of those three in a row. */
+function completionSteps(expr) {
+    const steps = [];
+    let i = 0;
+    const skip = (open, close) => {
+        let depth = 0;
+        for (; i < expr.length; i++) {
+            if (expr[i] === open) depth++;
+            else if (expr[i] === close && --depth === 0) { i++; return true; }
+        }
+        return false;
+    };
+    while (i < expr.length) {
+        if (expr[i] === ".") { i++; continue; }
+        const name = /^[A-Za-z_$][\w$]*/.exec(expr.slice(i));
+        if (name) { steps.push({ name: name[0], call: false }); i += name[0].length; continue; }
+        if (expr[i] === "(" && steps.length) {
+            if (!skip("(", ")")) return null;
+            steps[steps.length - 1].call = true;
+            continue;
+        }
+        if (expr[i] === "[" && steps.length) {
+            if (!skip("[", "]")) return null;
+            steps.push({ index: true });
+            continue;
+        }
+        return null;
+    }
+    return steps.length ? steps : null;
+}
+
+/*
+ * What a declared answer means as a thing to complete after: the text after the
+ * arrow in a signature comment (`-> Bytes`, `-> string[]`, `-> { X, Y }`).
+ * `null` is "nothing to offer" -- a boolean, `any`, or nothing declared.
+ */
+function completionType(ret) {
+    const t = (ret || "").trim();
+    if (!t) return null;
+    if (t.endsWith("[]")) {
+        const of = completionType(t.slice(0, -2));
+        return { k: "array", of };
+    }
+    if (t.startsWith("{")) {
+        const fields = t.replace(/^\{|\}$/g, "").split(",")
+                        .map((f) => f.trim()).filter((f) => /^[A-Za-z_$][\w$]*$/.test(f));
+        return { k: "shape", fields };
+    }
+    if (t === "string") return { k: "builtin", name: "String" };
+    if (t === "number") return { k: "builtin", name: "Number" };
+    if (t === "boolean" || t === "any" || t === "void") return null;
+    return { k: "inst", name: t };
+}
+
+/*
  * `Btn1_` -- a handler being written.
  *
  * Matched against the **word** and not against the line before it: `_` is a word
@@ -216,6 +292,12 @@ Ide.Completion = class Completion {
             if (events.length) return events;
         }
 
+        /* After a call or an index -- `File.Info(p).` -- the path pattern sees
+         * nothing, and before this the line fell through to the bare-name case
+         * and offered every global after a dot. */
+        if (/[)\]]\.$/.test(before))
+            return this.chainAnswer(completionChain(before));
+
         const path = PATH_BEFORE_DOT.exec(before);
         if (!path) {
             /* **No dot: the name itself, and the guard is only that it is a
@@ -260,9 +342,11 @@ Ide.Completion = class Completion {
                 /* A control of the form beside this file, which is the answer
                  * that costs nothing; a field this file *declares* otherwise. */
                 const own = this.propertiesOf(parts[1]);
-                return own.length ? own : this.membersOfDeclared(parts[1]);
+                if (own.length) return own;
+                const declared = this.membersOfDeclared(parts[1]);
+                return declared.length ? declared : this.chainAnswer(path[1]);
             }
-            return [];                  /* deeper than the .form can answer */
+            return this.chainAnswer(path[1]);  /* deeper: follow what each step answers */
         }
 
         /*
@@ -290,12 +374,139 @@ Ide.Completion = class Completion {
             const ns = this.ide.classes.namespaceMembers(parts[0]);
             if (ns.length) return ns.map((m) => ({ Text: m, Detail: "" }));
 
-            return this.membersOfDeclared(parts[0]);
+            const declared = this.membersOfDeclared(parts[0]);
+            return declared.length ? declared : this.chainAnswer(path[1]);
         }
 
-        /* A path this project says nothing about. The honest answer is nothing
-         * at all, rather than a guess dressed as knowledge. */
+        /* Deeper than one name: follow what each step declares it answers, and
+         * a path nothing declares answers nothing -- no guess dressed as
+         * knowledge. */
+        return this.chainAnswer(path[1]);
+    }
+
+    /* --- following a chain -------------------------------------------------- */
+
+    /*
+     * `File.Info(p).`, `this.Btn.Bounds().`, `db.Query(sql)[0].`, and a local
+     * assigned from one of those: **each step asks what the previous one
+     * answers**, and the answer is what the runtime publishes -- the `Returns`
+     * of a member, read off the arrow in its signature comment -- so nothing
+     * here is inferred and nothing is a table of this module's own.
+     */
+    chainAnswer(expr) {
+        const t = this.resolveChain(expr, 0);
+        return t ? this.listFor(t) : [];
+    }
+
+    resolveChain(expr, depth) {
+        if (depth > 4) return null;             /* a local assigned from itself */
+        const steps = completionSteps(expr);
+        if (!steps || steps[0].index) return null;
+
+        let t = null, at = 1;
+        const first = steps[0];
+        if (first.name === "this") {
+            /* `this.X`: a control of the form beside this file, or a field
+             * this file declares. */
+            const second = steps[1];
+            if (!second || second.index || second.call) return null;
+            const control = this.typeOf(second.name);
+            const type = control || this.declaredType(second.name);
+            t = type ? { k: "inst", name: type } : this.typeOfLocal(second.name, depth);
+            at = 2;
+        } else {
+            t = this.startType(first, depth);
+        }
+
+        for (; t && at < steps.length; at++) t = this.stepType(t, steps[at]);
+        return t;
+    }
+
+    /* The first name: a local, a class or a global. A class **called** is an
+     * instance of it (`Button()` after a `new`, which the chain reader leaves
+     * out); a global called is a function, and nothing declares what one
+     * answers. */
+    startType(step, depth) {
+        const local = this.typeOfLocal(step.name, depth);
+        if (local) return step.call ? null : local;
+
+        const known = this.widgets.has(step.name) ||
+                      this.declaredClasses().sources.has(step.name) ||
+                      this.rawMembers(step.name).length > 0;
+        if (!known) return null;
+        return step.call ? { k: "inst", name: step.name } : { k: "static", name: step.name };
+    }
+
+    /* A local, or a field of `this`, and what it holds: a `new`, a JSDoc line,
+     * or -- what the arrow made possible -- a call whose answer is declared:
+     * `const info = File.Info(p);`. The right-hand side has to be a chain and
+     * nothing else, or it says nothing about the type. */
+    typeOfLocal(name, depth) {
+        const built = this.declaredType(name);
+        if (built) return { k: "inst", name: built };
+
+        const editor = this.ide.Editor;
+        if (!editor) return null;
+        const m = new Regex(`(?:\\b(?:const|let|var)\\s+|\\bthis\\.)${name}\\s*=\\s*([^;\\n]+)`)
+                      .Match(editor.Text);
+        if (!m) return null;
+        const rhs = m.Group(1).trim();
+        if (completionChain(rhs + ".") !== rhs) return null;
+        return this.resolveChain(rhs, depth + 1);
+    }
+
+    /* One step along: a member called, a member read, or an index into a list. */
+    stepType(t, step) {
+        if (step.index) return t.k === "array" ? t.of : null;
+
+        const m = this.membersOfTypeRaw(t).find((x) => x.Name === step.name);
+        if (!m) return null;
+        const method = m.Kind === "Method" || m.Kind === "Static";
+        if (method !== step.call) return null;
+        return completionType(m.Returns);
+    }
+
+    /* What a type has, raw -- `{ Name, Kind, Signature, Returns }` each. An
+     * instance leaves out its class's statics; a shape is its fields; a
+     * builtin and a list are asked with `All`, because what a string has is
+     * `split` and `includes`, which the capital convention would hide. */
+    membersOfTypeRaw(t) {
+        const field = (f) => ({ Name: f, Kind: "Property", Signature: "", Returns: "" });
+        switch (t.k) {
+        case "static":  return this.rawMembers(t.name);
+        case "inst":    return this.rawMembers(t.name).filter((m) => m.Kind !== "Static");
+        case "shape":   return t.fields.map(field);
+        case "builtin": return [field("length")].concat(
+                            this.rawMembers(t.name, true).filter((m) => m.Kind !== "Static"));
+        case "array":   return [field("length")].concat(
+                            this.rawMembers("Array", true).filter((m) => m.Kind !== "Static"));
+        }
         return [];
+    }
+
+    listFor(t) {
+        if (t.k === "static") return this.membersOfName(t.name);
+        return this.membersOfTypeRaw(t).map((m) => ({ Text: m.Name, Detail: this.detailOf(t.name || "", m) }));
+    }
+
+    /* `Widget.Members` for a name, with the project's sources and forms, kept
+     * for as long as nothing moved (`generation`). */
+    rawMembers(name, all) {
+        const found = this.declaredClasses();
+        this._raw = this._raw && this._rawAt === this.generation ? this._raw : new Map();
+        this._rawAt = this.generation;
+        const key = (all ? "*" : "") + name;
+        if (this._raw.has(key)) return this._raw.get(key);
+
+        const list = [...new Set(found.sources.values())];
+        let got = [];
+        try {
+            got = Widget.Members(name, { Sources: list, Forms: found.forms, All: !!all });
+        } catch (e) {
+            got = [];
+        }
+        this._raw.set(key, got);
+        return got;
     }
 
     /*

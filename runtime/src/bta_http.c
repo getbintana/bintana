@@ -815,11 +815,11 @@ static JSValue http_multipart_part(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry multipart_props[] = {
-    /* Field(name, value) */
+    /* Field(name, value) -> Multipart */
     JS_CFUNC_DEF("Field", 2, http_multipart_field),
-    /* File(name, filename, body, [contentType]) */
+    /* File(name, filename, body, [contentType]) -> Multipart */
     JS_CFUNC_DEF("File",  4, http_multipart_file),
-    /* Part(index) */
+    /* Part(index) -> { Name, Filename, Type, Data } */
     JS_CFUNC_DEF("Part",  1, http_multipart_part),
     JS_CGETSET_DEF("Length", http_multipart_get_length, NULL),
 };
@@ -2610,6 +2610,7 @@ static JSValue http_client_requestwait(JSContext *ctx, JSValueConst this_val,
     return r;
 }
 
+/* type HttpClient */
 static const JSCFunctionListEntry http_client_props[] = {
     JS_CGETSET_DEF("BaseUrl",         http_client_get_baseurl, http_client_set_baseurl),
     JS_CGETSET_DEF("Headers",         http_client_get_headers, http_client_set_headers),
@@ -2626,20 +2627,35 @@ static const JSCFunctionListEntry http_client_props[] = {
     JS_CGETSET_DEF("MaxPerHost",      http_client_get_maxperhost, http_client_set_const),
     /* Arities match the shorthands on `Http` for the same verbs: the same
      * call written two ways reports the same `length`. */
+    /* Request(method, url, [body], [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
     JS_CFUNC_DEF("Request",     5, http_client_request),
+    /* Get(url, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
     JS_CFUNC_DEF("Get",         4, http_client_get),
+    /* Post(url, body, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
     JS_CFUNC_DEF("Post",        5, http_client_post),
+    /* Put(url, body, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
     JS_CFUNC_DEF("Put",         5, http_client_put),
+    /* Patch(url, body, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
     JS_CFUNC_DEF("Patch",       5, http_client_patch),
+    /* Delete(url, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
     JS_CFUNC_DEF("Delete",      4, http_client_delete),
+    /* Head(url, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
     JS_CFUNC_DEF("Head",        4, http_client_head),
+    /* Stream(method, url, [body], [opts], onLine, [onDone], [onError]) -> { Running, TimedOut, Url, Method, Stop } */
     JS_CFUNC_DEF("Stream",      6, http_client_stream),
+    /* RequestWait(method, url, [body], [opts]) -> { Status, Reason, Headers, Body, Url } */
     JS_CFUNC_DEF("RequestWait", 4, http_client_requestwait),
+    /* GetWait(url, [opts]) -> { Status, Reason, Headers, Body, Url } */
     JS_CFUNC_DEF("GetWait",     2, http_client_getwait),
+    /* PostWait(url, body, [opts]) -> { Status, Reason, Headers, Body, Url } */
     JS_CFUNC_DEF("PostWait",    3, http_client_postwait),
+    /* PutWait(url, body, [opts]) -> { Status, Reason, Headers, Body, Url } */
     JS_CFUNC_DEF("PutWait",     3, http_client_putwait),
+    /* PatchWait(url, body, [opts]) -> { Status, Reason, Headers, Body, Url } */
     JS_CFUNC_DEF("PatchWait",   3, http_client_patchwait),
+    /* DeleteWait(url, [opts]) -> { Status, Reason, Headers, Body, Url } */
     JS_CFUNC_DEF("DeleteWait",  2, http_client_deletewait),
+    /* HeadWait(url, [opts]) -> { Status, Reason, Headers, Body, Url } */
     JS_CFUNC_DEF("HeadWait",    2, http_client_headwait),
 };
 
@@ -2987,39 +3003,39 @@ static JSValue js_http_server(JSContext *ctx, JSValueConst this_val,
                                int argc, JSValueConst *argv);
 
 static const JSCFunctionListEntry http_props[] = {
-    /* Client([opts]) */
+    /* Client([opts]) -> HttpClient */
     JS_CFUNC_DEF("Client",      1, js_http_client),
-    /* Server([opts]) */
+    /* Server([opts]) -> HttpServer */
     JS_CFUNC_DEF("Server",      1, js_http_server),
-    /* Request(method, url, [body], [opts], onDone, [onError]) */
+    /* Request(method, url, [body], [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
     JS_CFUNC_DEF("Request",     5, js_http_request),
-    /* Get(url, [opts], onDone, [onError]) */
+    /* Get(url, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
     JS_CFUNC_DEF("Get",         4, js_http_get),
-    /* Post(url, body, [opts], onDone, [onError]) */
+    /* Post(url, body, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
     JS_CFUNC_DEF("Post",        5, js_http_post),
-    /* Put(url, body, [opts], onDone, [onError]) */
+    /* Put(url, body, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
     JS_CFUNC_DEF("Put",         5, js_http_put),
-    /* Patch(url, body, [opts], onDone, [onError]) */
+    /* Patch(url, body, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
     JS_CFUNC_DEF("Patch",       5, js_http_patch),
-    /* Delete(url, [opts], onDone, [onError]) */
+    /* Delete(url, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
     JS_CFUNC_DEF("Delete",      4, js_http_delete),
-    /* Head(url, [opts], onDone, [onError]) */
+    /* Head(url, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop } */
     JS_CFUNC_DEF("Head",        4, js_http_head),
-    /* Stream(method, url, [body], [opts], onLine, [onDone], [onError]) */
+    /* Stream(method, url, [body], [opts], onLine, [onDone], [onError]) -> { Running, TimedOut, Url, Method, Stop } */
     JS_CFUNC_DEF("Stream",      6, js_http_stream),
-    /* RequestWait(method, url, [body], [opts]) */
+    /* RequestWait(method, url, [body], [opts]) -> { Status, Reason, Headers, Body, Url } */
     JS_CFUNC_DEF("RequestWait", 4, js_http_requestwait),
-    /* GetWait(url, [opts]) */
+    /* GetWait(url, [opts]) -> { Status, Reason, Headers, Body, Url } */
     JS_CFUNC_DEF("GetWait",     2, js_http_getwait),
-    /* PostWait(url, body, [opts]) */
+    /* PostWait(url, body, [opts]) -> { Status, Reason, Headers, Body, Url } */
     JS_CFUNC_DEF("PostWait",    3, js_http_postwait),
-    /* PutWait(url, body, [opts]) */
+    /* PutWait(url, body, [opts]) -> { Status, Reason, Headers, Body, Url } */
     JS_CFUNC_DEF("PutWait",     3, js_http_putwait),
-    /* PatchWait(url, body, [opts]) */
+    /* PatchWait(url, body, [opts]) -> { Status, Reason, Headers, Body, Url } */
     JS_CFUNC_DEF("PatchWait",   3, js_http_patchwait),
-    /* DeleteWait(url, [opts]) */
+    /* DeleteWait(url, [opts]) -> { Status, Reason, Headers, Body, Url } */
     JS_CFUNC_DEF("DeleteWait",  2, js_http_deletewait),
-    /* HeadWait(url, [opts]) */
+    /* HeadWait(url, [opts]) -> { Status, Reason, Headers, Body, Url } */
     JS_CFUNC_DEF("HeadWait",    2, js_http_headwait),
 };
 
@@ -3437,8 +3453,11 @@ static JSValue http_request_multipart(JSContext *ctx, JSValueConst this_val,
     return obj;
 }
 
+/* type HttpRequest */
 static const JSCFunctionListEntry http_request_props[] = {
+    /* Answer(status, [body], [opts]) */
     JS_CFUNC_DEF("Answer", 3, http_request_answer),
+    /* Multipart() -> Multipart */
     JS_CFUNC_DEF("Multipart", 0, http_request_multipart),
 };
 
@@ -4087,6 +4106,7 @@ static JSValue http_server_stop(JSContext *ctx, JSValueConst this_val,
     return JS_TRUE;
 }
 
+/* type HttpServer */
 static const JSCFunctionListEntry http_server_props[] = {
     JS_CGETSET_DEF("Request",    http_server_get_request, http_server_set_request),
     JS_CGETSET_DEF("Port",       http_server_get_port, http_server_set_port),
@@ -4096,8 +4116,11 @@ static const JSCFunctionListEntry http_server_props[] = {
     JS_CGETSET_DEF("Allow",      http_server_get_allow, http_server_set_allow),
     JS_CGETSET_DEF("Auth",       http_server_get_auth, http_server_set_auth),
     JS_CGETSET_DEF("Running",    http_server_get_running, NULL),
+    /* Url -> string */
     JS_CGETSET_DEF("Url",        http_server_get_url, NULL),
+    /* Start() */
     JS_CFUNC_DEF("Start", 0, http_server_start),
+    /* Stop() -> boolean */
     JS_CFUNC_DEF("Stop",  0, http_server_stop),
 };
 

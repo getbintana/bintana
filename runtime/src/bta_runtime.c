@@ -1205,10 +1205,10 @@ static bool install_globals(BtaApp *app)
     /* Whether the desktop has an icon by that name.  Only whoever picks the
      * name can choose a fallback, and an icon the theme lacks is dropped
      * silently -- which on an icon-only button leaves nothing at all. */
-    /* HasIcon(name) */
+    /* HasIcon(name) -> string */
     JS_SetPropertyStr(ctx, application, "HasIcon",
                       JS_NewCFunction(ctx, js_has_icon, "HasIcon", 1));
-    /* Icons([contains]) */
+    /* Icons([contains]) -> string[] */
     JS_SetPropertyStr(ctx, application, "Icons",
                       JS_NewCFunction(ctx, js_icons, "Icons", 1));
 
@@ -1248,7 +1248,7 @@ static bool install_globals(BtaApp *app)
     /* Would this text compile?  The one honest use of `Function` -- an IDE that
      * writes code wants to know before it saves -- published on its own so the
      * string-to-code hatch does not have to stay open for it. */
-    /* CheckSource(text) */
+    /* CheckSource(text) -> { Message, Line, Column } */
     JS_SetPropertyStr(ctx, application, "CheckSource",
                       JS_NewCFunction(ctx, js_check_source, "CheckSource", 1));
 
@@ -1260,7 +1260,7 @@ static bool install_globals(BtaApp *app)
      * pattern, and the answer belongs to the compiler and not to one
      * application.
      */
-    /* Symbols(text) */
+    /* Symbols(text) -> { Name, Kind, Line, Parent, Super, Params }[] */
     JS_SetPropertyStr(ctx, application, "Symbols",
                       JS_NewCFunction(ctx, js_application_symbols, "Symbols", 1));
 
@@ -1275,7 +1275,7 @@ static bool install_globals(BtaApp *app)
      * time one of them was fixed, and the one that drifted would be the one
      * nobody runs from a shell.
      */
-    /* LibraryPath(name, [project]) */
+    /* LibraryPath(name, [project]) -> string */
     JS_SetPropertyStr(ctx, application, "LibraryPath",
                       JS_NewCFunction(ctx, js_library_path, "LibraryPath", 2));
 
@@ -1293,10 +1293,10 @@ static bool install_globals(BtaApp *app)
      * exists to prevent, and it would be the copy that goes stale, because the
      * first one is the one every program runs.
      */
-    /* Libraries([project]) */
+    /* Libraries([project]) -> string[] */
     JS_SetPropertyStr(ctx, application, "Libraries",
                       JS_NewCFunction(ctx, js_libraries, "Libraries", 1));
-    /* Globals() */
+    /* Globals() -> string[] */
     JS_SetPropertyStr(ctx, application, "Globals",
                       JS_NewCFunction(ctx, js_globals, "Globals", 0));
 
@@ -1549,6 +1549,21 @@ void bta_close_hatches(JSContext *ctx)
         delete_named(ctx, object_proto, proto_hatches[i]);
     JS_FreeValue(ctx, object_proto);
     JS_FreeValue(ctx, object);
+
+    /*
+     * `Array.fromAsync`, which is an async function the engine builds lazily on
+     * first read -- and patch 5's reason, arriving by a door the parser cannot
+     * guard. Without `JS_AddIntrinsicPromise` the async classes are never
+     * registered, so the object that read builds can never be collected: one
+     * `typeof Array.fromAsync` (which answered "object") was enough to make
+     * `JS_FreeRuntime` abort at exit, 134, after the program had done its work.
+     * Found through `Widget.Members("Array")`, which reads every own property
+     * of the constructor. It cannot work without promises anyway, so it goes.
+     */
+    JSValue array = JS_GetPropertyStr(ctx, global, "Array");
+    if (JS_IsObject(array))
+        delete_named(ctx, array, "fromAsync");
+    JS_FreeValue(ctx, array);
 
     /*
      * RegExp, whose name goes the way Function's did -- and this is the half of

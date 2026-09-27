@@ -534,19 +534,19 @@ static JSValue bytes_from_hex(JSContext *ctx, JSValueConst this_val,
 
 static const JSCFunctionListEntry bytes_proto_funcs[] = {
     JS_CGETSET_DEF("Length", bytes_get_length, NULL),
-    /* At(index) */
+    /* At(index) -> number */
     JS_CFUNC_DEF("At",       1, bytes_at),
-    /* Slice(from, [count]) */
+    /* Slice(from, [count]) -> Bytes */
     JS_CFUNC_DEF("Slice",    2, bytes_slice),
-    /* Concat(...others) */
+    /* Concat(...others) -> Bytes */
     JS_CFUNC_DEF("Concat",   1, bytes_concat),
-    /* Equals(other) */
+    /* Equals(other) -> boolean */
     JS_CFUNC_DEF("Equals",   1, bytes_equals),
-    /* ToText() */
+    /* ToText() -> string */
     JS_CFUNC_DEF("ToText",   0, bytes_to_text),
-    /* ToBase64() */
+    /* ToBase64() -> string */
     JS_CFUNC_DEF("ToBase64", 0, bytes_to_base64),
-    /* ToHex() */
+    /* ToHex() -> string */
     JS_CFUNC_DEF("ToHex",    0, bytes_to_hex),
     JS_CFUNC_DEF("toString", 0, bytes_to_string),
     JS_CFUNC_DEF("toJSON",   0, bytes_to_json),
@@ -566,10 +566,10 @@ void bta_bytes_init(JSContext *ctx, JSValue global)
 
     JSValue ctor = JS_NewCFunction2(ctx, bytes_construct, "Bytes", 1,
                                     JS_CFUNC_constructor, 0);
-    /* FromBase64(text) */
+    /* FromBase64(text) -> Bytes */
     JS_SetPropertyStr(ctx, ctor, "FromBase64",
                       JS_NewCFunction(ctx, bytes_from_base64, "FromBase64", 1));
-    /* FromHex(text) */
+    /* FromHex(text) -> Bytes */
     JS_SetPropertyStr(ctx, ctor, "FromHex",
                       JS_NewCFunction(ctx, bytes_from_hex, "FromHex", 1));
     JS_SetConstructor(ctx, ctor, proto);

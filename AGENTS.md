@@ -1471,6 +1471,44 @@ So there were two fixes, and **only one of them is in the IDE**:
   from a signature follows `Function.length`'s rule -- the names before the first
   `[x]` or `...x` -- or `(a, [b], ...c)` answered 3 read and 1 built.
 
+**And past a call, what the call declares it answers.** `File.Info(p).`
+offered nothing -- and worse, a dot after a bracket fell through to the
+bare-name case and offered every global. The signature comment carries the
+answer now, after an arrow (`/* Info(path) -> { Size, Modified, Type, Icon,
+IsDir } */`, `-> Bytes`, `-> string[]`, and `/* Children -> XmlNode[] */` for a
+property), the extractor keeps it beside the parameters, and `Widget.Members`
+publishes it as `Returns`. The IDE reads the expression before the dot
+backwards over names and balanced calls and indexes (`completionChain`), and
+each step asks the `Returns` of the member before it -- a local assigned from a
+call is that call's answer, `this.X` is the control's class or the field's
+`new`. Four things the building of it settled:
+- **What a verb hands back is usually a prototype no global holds** -- a client,
+  a connection, a node -- so nothing could be asked about it and its verbs had
+  no signatures either (39 of them). `/* type HttpClient */` above the
+  prototype's table names it, the extractor lists *every* entry of a named
+  table, properties included, and `Widget.Members("HttpClient")` answers from
+  the generated table alone (`take_catalog`); a global class (`Connection`)
+  gains what its driver's table adds. `api.sh` holds a named type's methods to
+  the signature rule like a global's.
+- **A builtin is lower case**, so the capital convention hid everything a string
+  or an array has. `Widget.Members(name, { All: true })` lists the lower-case
+  names; the IDE asks it only for `string`, `number` and a list.
+- **A shape in braces is its field names and nothing more** -- no types inside,
+  because nothing here would read them, and a list of names is what a popup
+  offers.
+- **`Widget.Members("Array")` aborted the process at exit, and it was the
+  language's fault.** Reading the constructor's own properties read
+  `Array.fromAsync`, an async function the engine builds on first read -- and
+  with no async classes registered (patch 5) that object is never collected.
+  `typeof Array.fromAsync` alone was enough: it answered `"object"` and the
+  program died with 134 after `Application.Quit(0)`. `close_hatches` deletes it
+  now. **A walk that reads every own property of a builtin reads the lazy
+  ones**, so `take_members_of_resolved` also consumes an exception from
+  `JS_GetOwnProperty` instead of `continue`-ing past it with one pending.
+`tests/ide`'s `completion` chains past a call, into a string, through an index,
+from a field and from a local, and through a named type; with `stepType`
+returning nothing six of those go red.
+
 **And the classes are the open tabs' before they are the disk's.**
 `declaredClasses` used to walk the project once and keep what the files said,
 so a class written in a tab and not saved was no class at all -- no bare name,

@@ -14808,6 +14808,36 @@ function Main() {
         eq("an instance method of a native class says its parameters",
            sigOf("Bytes", "Slice"), "(from, [count])");
 
+        /* **And what each one answers**, read off the arrow on the same
+         * comment: a type the runtime can be asked about, a builtin, a list,
+         * or a shape in braces. It is what lets an editor complete past a
+         * call. And **a type no global holds** -- a client, a connection, an
+         * XML node -- answers from the table a `type X` comment names, since
+         * there is no object to walk. */
+        const retOf = (t, n, o) => (Widget.Members(t, o).find((m) => m.Name === n) || {}).Returns;
+        eq("a call's answer is declared beside it", retOf("File", "LoadBytes"), "Bytes");
+        eq("...a shape in braces", retOf("File", "Info"), "{ Size, Modified, Type, Icon, IsDir }");
+        eq("...a list", retOf("Directory", "Files"), "string[]");
+        eq("...inherited through the class that declares it", retOf("Button", "Bounds"),
+           "{ X, Y, Width, Height }");
+        eq("...and a static's", retOf("Widget", "New"), "Widget");
+        eq("a property can declare its type too", retOf("XmlNode", "Children"), "XmlNode[]");
+        eq("a type no global holds is answered from its table",
+           retOf("HttpClient", "GetWait"), "{ Status, Reason, Headers, Body, Url }");
+        check("...with its properties listed too",
+              Widget.Members("HttpClient").some((m) => m.Name === "BaseUrl" && m.Kind === "Property"), "");
+        check("a global class gains what its driver's table adds",
+              Widget.Members("Connection").some((m) => m.Name === "Query") &&
+              Widget.Members("Connection").some((m) => m.Name === "Table"), "");
+        /* `All` is the lower-case names too, which a builtin is made of. */
+        check("All includes the lower-case names a builtin has",
+              Widget.Members("String", { All: true }).some((m) => m.Name === "split") &&
+              !Widget.Members("String").some((m) => m.Name === "split"), "");
+        /* And `Array.fromAsync` is gone: an async function the engine built on
+         * first read, never collectable without promises, so reading it once
+         * made the process abort at exit. `Members("Array")` read it. */
+        eq("Array.fromAsync is not in this language", typeof Array.fromAsync, "undefined");
+
         /* **One class, one vocabulary, whichever reader found it.** A getter
          * with no setter is `ReadOnly` -- the word `Widget.Member` gives it --
          * and the loaded walk used to call it `Property`. The source walk reads

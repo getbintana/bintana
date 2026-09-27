@@ -918,13 +918,13 @@ static JSValue dec_to_json(JSContext *ctx, JSValueConst this_val,
 static const JSCFunctionListEntry dec_proto_funcs[] = {
     JS_CFUNC_DEF("toString", 0, dec_to_string),
     JS_CFUNC_DEF("toJSON",   0, dec_to_json),
-    /* Round(decimals, [how]) */
+    /* Round(decimals, [how]) -> Decimal */
     JS_CFUNC_DEF("Round",    2, dec_round),
-    /* Trim() */
+    /* Trim() -> Decimal */
     JS_CFUNC_DEF("Trim",     0, dec_trim),
-    /* Abs() */
+    /* Abs() -> Decimal */
     JS_CFUNC_DEF("Abs",      0, dec_abs),
-    /* Number() */
+    /* Number() -> number */
     JS_CFUNC_DEF("Number",   0, dec_number),
     JS_CGETSET_DEF("Scale",   dec_get_scale, NULL),
     JS_CGETSET_DEF("Sign",    dec_sign, NULL),
@@ -985,7 +985,7 @@ void bta_decimal_init(JSContext *ctx, JSValue global)
 
     JSValue ctor = JS_NewCFunction2(ctx, dec_construct, "Decimal", 2,
                                     JS_CFUNC_constructor, 0);
-    /* Split(total, parts) */
+    /* Split(total, parts) -> Decimal[] */
     JS_SetPropertyStr(ctx, ctor, "Split",
                       JS_NewCFunction(ctx, dec_split, "Split", 2));
     JS_SetConstructor(ctx, ctor, proto);

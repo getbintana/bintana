@@ -35,14 +35,36 @@
 # installation names is the root widget class's constructor, which the class
 # table loop hands to `Widget` by computing its name; `VAR_ALIASES` is that line.
 #
+# **What a call answers is declared on the same line**, after an arrow:
+#
+#     /* Info(path) -> { Size, Modified, Type, Icon, IsDir } */
+#     /* LoadBytes(path) -> Bytes */
+#     /* Files(path, [options]) -> string[] */
+#
+# a type the runtime can be asked about by name, `string`/`number`/`boolean`,
+# any of those followed by `[]`, or a shape in braces. A property can declare
+# the same with no brackets -- `/* Children -> Widget[] */` above its
+# `JS_CGETSET_DEF`. It is what lets the IDE complete past a call
+# (`File.Info(p).`), and it is a claim, so it is written where the function is.
+#
+# **A prototype no global names is named where its table is**:
+#
+#     /* type HttpClient */
+#     static const JSCFunctionListEntry http_client_props[] = {
+#
+# and then every entry of that table is listed under the name, commented or not
+# and properties included -- `Widget.Members("HttpClient")` has no object to
+# walk, so this table is the whole answer about it.
+#
 # The output is a C table and not a JS one so the runtime can publish it with
 # no control built and no display: `Widget.Signature(type, name)`, and the
 # `Signature` of each member `Widget.Members` lists.
 
 set(_owners "")     # table name -> class name
-set(_entries "")    # "owner|member|signature|event" in source order
-set(_rawtables "")  # "table|member|signature" whose table no class row owns
-set(_rawvars "")    # "file:scope:var|member|signature" set on a variable
+set(_entries "")    # "owner|member|signature|returns|kind" in source order
+set(_rawtables "")  # "table|member|signature|returns|kind" no class row owns
+set(_rawvars "")    # "file:scope:var|member|signature|returns" on a variable
+set(_typetables "") # "table=Name" -- a table named by a `/* type Name */`
 set(_edges "")      # "file:scope:var=parent|Name" -- var installed as parent.Name
 set(_tabvars "")    # "table=file:scope:var" -- a table installed on a var
 set(_protos "")     # "file:scope:proto=file:scope:ctor" -- JS_SetConstructor
@@ -122,19 +144,47 @@ foreach(_src IN LISTS SOURCES)
             continue()
         endif()
 
-        # A signature comment: one line, the whole of it.
-        if(_line MATCHES "^[ \t]*/\\*[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*\\(([^)]*)\\)[ \t]*\\*/[ \t]*$")
+        # A signature comment: one line, the whole of it, and what the call
+        # answers after an arrow. `-` stands for no answer declared, because a
+        # list element that is empty is one CMake will not keep.
+        if(_line MATCHES "^[ \t]*/\\*[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*\\(([^)]*)\\)[ \t]*(->[ \t]*(.*[^ \t]))?[ \t]*\\*/[ \t]*$")
             set(_sigargs "${CMAKE_MATCH_2}")
+            set(_sigret "${CMAKE_MATCH_4}")
             bta_unmark(_sigargs)
-            list(APPEND _pending "${CMAKE_MATCH_1}|(${_sigargs})")
+            bta_unmark(_sigret)
+            if(_sigret STREQUAL "")
+                set(_sigret "-")
+            endif()
+            list(APPEND _pending "${CMAKE_MATCH_1}|(${_sigargs})|${_sigret}")
+            continue()
+        endif()
+
+        # A property's type: a name, an arrow, and no brackets.
+        if(_line MATCHES "^[ \t]*/\\*[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*->[ \t]*(.*[^ \t])[ \t]*\\*/[ \t]*$")
+            set(_sigret "${CMAKE_MATCH_2}")
+            bta_unmark(_sigret)
+            list(APPEND _pending "${CMAKE_MATCH_1}|@|${_sigret}")
+            continue()
+        endif()
+
+        # A name for the table below: a prototype no global installs.
+        if(_line MATCHES "^[ \t]*/\\*[ \t]*type[ \t]+([A-Za-z_][A-Za-z0-9_.]*)[ \t]*\\*/[ \t]*$")
+            set(_nexttype "${CMAKE_MATCH_1}")
             continue()
         endif()
 
         # A table of members: what a following entry belongs to.
         if(_line MATCHES "^[ \t]*static const JSCFunctionListEntry[ \t]+([A-Za-z_][A-Za-z0-9_]*)<LB><RB>[ \t]*=")
             set(_table "${CMAKE_MATCH_1}")
+            if(NOT "${_nexttype}" STREQUAL "")
+                list(APPEND _typetables "${_table}=${_nexttype}")
+            endif()
+            set(_nexttype "")
             set(_pending "")
             continue()
+        endif()
+        if(NOT _line STREQUAL "" AND NOT _line MATCHES "^[ \t]*/\\*")
+            set(_nexttype "")
         endif()
 
         # Where a variable, a table or a prototype ends up. None of these is a
@@ -157,31 +207,64 @@ foreach(_src IN LISTS SOURCES)
                 string(REPLACE "|" ";" _parts "${_sig}")
                 list(GET _parts 0 _member)
                 list(GET _parts 1 _args)
-                list(APPEND _entries "${_class}|${_member}|${_args}|true")
+                list(APPEND _entries "${_class}|${_member}|${_args}|-|event")
             endforeach()
             set(_pending "")
             continue()
         endif()
 
-        # A member of a table: the comment directly above it, when it names it.
+        # A member of a table: the comment directly above it, when it names it
+        # -- and every member of a table a `/* type */` named, with or without
+        # one, since that table is the whole of what the type can be asked.
+        set(_kind "")
         if(_line MATCHES "JS_CFUNC(_MAGIC)?_DEF2?[ \t]*\\([ \t]*\"([A-Za-z_][A-Za-z0-9_]*)\"")
             set(_member "${CMAKE_MATCH_2}")
+            set(_kind "method")
+        elseif(_line MATCHES "JS_CGETSET(_MAGIC)?_DEF[ \t]*\\([ \t]*\"([A-Za-z_][A-Za-z0-9_]*)\"")
+            set(_member "${CMAKE_MATCH_2}")
+            set(_kind "property")
+        endif()
+        if(NOT _kind STREQUAL "" AND NOT _table STREQUAL "")
+            set(_args "-")
+            set(_ret "-")
+            set(_said FALSE)
             if(_pending)
                 list(GET _pending -1 _sig)
                 string(REPLACE "|" ";" _parts "${_sig}")
                 list(GET _parts 0 _named)
-                list(GET _parts 1 _args)
-                if(_named STREQUAL _member AND NOT _table STREQUAL "")
-                    set(_found FALSE)
-                    foreach(_owner IN LISTS _owners)
-                        if(_owner MATCHES "^${_table}=(.*)$")
-                            list(APPEND _entries "${CMAKE_MATCH_1}|${_member}|${_args}|false")
-                            set(_found TRUE)
-                        endif()
-                    endforeach()
-                    if(NOT _found)
-                        list(APPEND _rawtables "${_table}|${_member}|${_args}")
+                list(GET _parts 1 _sargs)
+                list(GET _parts 2 _sret)
+                if(_named STREQUAL _member)
+                    if(_kind STREQUAL "method" AND NOT _sargs STREQUAL "@")
+                        set(_args "${_sargs}")
+                        set(_ret "${_sret}")
+                        set(_said TRUE)
+                    elseif(_kind STREQUAL "property" AND _sargs STREQUAL "@")
+                        set(_ret "${_sret}")
+                        set(_said TRUE)
                     endif()
+                endif()
+            endif()
+
+            set(_typed "")
+            foreach(_tt IN LISTS _typetables)
+                if(_tt MATCHES "^${_table}=(.*)$")
+                    set(_typed "${CMAKE_MATCH_1}")
+                endif()
+            endforeach()
+
+            if(NOT _typed STREQUAL "")
+                list(APPEND _entries "${_typed}|${_member}|${_args}|${_ret}|${_kind}")
+            elseif(_said)
+                set(_found FALSE)
+                foreach(_owner IN LISTS _owners)
+                    if(_owner MATCHES "^${_table}=(.*)$")
+                        list(APPEND _entries "${CMAKE_MATCH_1}|${_member}|${_args}|${_ret}|${_kind}")
+                        set(_found TRUE)
+                    endif()
+                endforeach()
+                if(NOT _found)
+                    list(APPEND _rawtables "${_table}|${_member}|${_args}|${_ret}|${_kind}")
                 endif()
             endif()
             set(_pending "")
@@ -198,8 +281,9 @@ foreach(_src IN LISTS SOURCES)
                 string(REPLACE "|" ";" _parts "${_sig}")
                 list(GET _parts 0 _named)
                 list(GET _parts 1 _args)
-                if(_named STREQUAL _member)
-                    list(APPEND _rawvars "${_fid}:${_scope}:${_var}|${_member}|${_args}")
+                list(GET _parts 2 _ret)
+                if(_named STREQUAL _member AND NOT _args STREQUAL "@")
+                    list(APPEND _rawvars "${_fid}:${_scope}:${_var}|${_member}|${_args}|${_ret}")
                 endif()
             endif()
             set(_pending "")
@@ -215,8 +299,9 @@ foreach(_src IN LISTS SOURCES)
                 string(REPLACE "|" ";" _parts "${_sig}")
                 list(GET _parts 0 _named)
                 list(GET _parts 1 _args)
+                list(GET _parts 2 _ret)
                 if(_named STREQUAL _member)
-                    list(APPEND _entries "Database|${_member}|${_args}|false")
+                    list(APPEND _entries "Database|${_member}|${_args}|${_ret}|method")
                 endif()
             endif()
             set(_pending "")
@@ -284,9 +369,10 @@ foreach(_r IN LISTS _rawvars)
     list(GET _parts 0 _key)
     list(GET _parts 1 _member)
     list(GET _parts 2 _args)
+    list(GET _parts 3 _ret)
     bta_name_of("${_key}" 0 _owner)
     if(NOT _owner STREQUAL "")
-        list(APPEND _entries "${_owner}|${_member}|${_args}|false")
+        list(APPEND _entries "${_owner}|${_member}|${_args}|${_ret}|method")
     endif()
 endforeach()
 
@@ -295,11 +381,13 @@ foreach(_r IN LISTS _rawtables)
     list(GET _parts 0 _tab)
     list(GET _parts 1 _member)
     list(GET _parts 2 _args)
+    list(GET _parts 3 _ret)
+    list(GET _parts 4 _kind)
     foreach(_tv IN LISTS _tabvars)
         if(_tv MATCHES "^${_tab}=(.*)$")
             bta_name_of("${CMAKE_MATCH_1}" 0 _owner)
             if(NOT _owner STREQUAL "")
-                list(APPEND _entries "${_owner}|${_member}|${_args}|false")
+                list(APPEND _entries "${_owner}|${_member}|${_args}|${_ret}|${_kind}")
             endif()
         endif()
     endforeach()
@@ -308,15 +396,18 @@ list(REMOVE_DUPLICATES _entries)
 
 set(_out "/* Generated from the C sources under runtime/src -- do not edit.\n")
 string(APPEND _out " *\n")
-string(APPEND _out " * The parameters every method and event declares beside itself, as\n")
-string(APPEND _out " * `Widget.Signature(type, name)` answers them. `event` tells the two\n")
-string(APPEND _out " * apart where a name is both, which `Button.Click` is.\n")
+string(APPEND _out " * What every method, event and typed property declares beside itself:\n")
+string(APPEND _out " * its parameters and what it answers. `Widget.Signature` and\n")
+string(APPEND _out " * `Widget.Members` publish it; a type named by a `type X` comment is\n")
+string(APPEND _out " * answered from here alone, since no global holds it.\n")
 string(APPEND _out " */\n")
+string(APPEND _out "typedef enum { BTA_SIG_METHOD, BTA_SIG_EVENT, BTA_SIG_PROPERTY } BtaSigKind;\n\n")
 string(APPEND _out "typedef struct {\n")
 string(APPEND _out "    const char *owner;\n")
 string(APPEND _out "    const char *member;\n")
 string(APPEND _out "    const char *signature;\n")
-string(APPEND _out "    bool        event;\n")
+string(APPEND _out "    const char *returns;\n")
+string(APPEND _out "    BtaSigKind  kind;\n")
 string(APPEND _out "} BtaSignature;\n\n")
 string(APPEND _out "static const BtaSignature bta_signatures[] = {\n")
 
@@ -325,8 +416,17 @@ foreach(_entry IN LISTS _entries)
     list(GET _parts 0 _owner)
     list(GET _parts 1 _member)
     list(GET _parts 2 _args)
-    list(GET _parts 3 _event)
-    string(APPEND _out "    { \"${_owner}\", \"${_member}\", \"${_args}\", ${_event} },\n")
+    list(GET _parts 3 _ret)
+    list(GET _parts 4 _kind)
+    if(_ret STREQUAL "-")
+        set(_ret "")
+    endif()
+    if(_args STREQUAL "-")
+        set(_args "")
+    endif()
+    string(REPLACE "\"" "\\\"" _ret "${_ret}")
+    string(TOUPPER "${_kind}" _k)
+    string(APPEND _out "    { \"${_owner}\", \"${_member}\", \"${_args}\", \"${_ret}\", BTA_SIG_${_k} },\n")
 endforeach()
 
 string(APPEND _out "};\n")

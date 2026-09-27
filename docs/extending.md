@@ -405,6 +405,23 @@ the table the global is built from:
 JS_SetPropertyStr(ctx, file, "Load", JS_NewCFunction(ctx, sys_file_load, "Load", 1));
 ```
 
+**What a verb answers goes on the same line**, after an arrow — a type the
+runtime can be asked about by name, `string`/`number`/`boolean`, a list (`[]`),
+or a shape in braces:
+
+```c
+/* Info(path) -> { Size, Modified, Type, Icon, IsDir } */
+/* LoadBytes(path) -> Bytes */
+/* Files(path, [options]) -> string[] */
+```
+
+and a property states its type the same way with no brackets
+(`/* Children -> XmlNode[] */`). It is what the IDE follows to complete past a
+call. A prototype no global installs — the object a verb hands back — is named
+where its table is, with `/* type HttpClient */` on the line above the
+`JSCFunctionListEntry`, and `Widget.Members("HttpClient")` then answers from that
+table alone.
+
 The extractor works out the owner itself, by following the variable to the
 `JS_SetPropertyStr(ctx, global, "File", file)` that installs it, so nothing else
 names it; the IDE's completion shows `Load(path)`, and `tests/api.sh` fails on a

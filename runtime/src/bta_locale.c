@@ -2367,27 +2367,27 @@ static JSValue js_locale_matches(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry locale_props[] = {
-    /* Text(msgid, ...args) */
+    /* Text(msgid, ...args) -> string */
     JS_CFUNC_DEF("Text",    1, js_locale_text),
-    /* Plural(one, many, n, ...args) */
+    /* Plural(one, many, n, ...args) -> string */
     JS_CFUNC_DEF("Plural",  3, js_locale_plural),
-    /* Context(ctxt, msgid, ...args) */
+    /* Context(ctxt, msgid, ...args) -> string */
     JS_CFUNC_DEF("Context", 2, js_locale_context),
     /* Read(path) */
     JS_CFUNC_DEF("Read",    1, js_locale_read),
     /* Write(path, entries) */
     JS_CFUNC_DEF("Write",   2, js_locale_write),
-    /* Number(value, [options]) */
+    /* Number(value, [options]) -> string */
     JS_CFUNC_DEF("Number",  2, js_locale_number),
-    /* Date(when, [format]) */
+    /* Date(when, [format]) -> string */
     JS_CFUNC_DEF("Date",    2, js_locale_date),
-    /* Currency(value, [options]) */
+    /* Currency(value, [options]) -> string */
     JS_CFUNC_DEF("Currency", 2, js_locale_currency),
     /* Parse(text, [options]) */
     JS_CFUNC_DEF("Parse",   2, js_locale_parse),
-    /* Compare(a, b) */
+    /* Compare(a, b) -> number */
     JS_CFUNC_DEF("Compare", 2, js_locale_compare),
-    /* Matches(text, needle) */
+    /* Matches(text, needle) -> boolean */
     JS_CFUNC_DEF("Matches", 2, js_locale_matches),
     JS_CGETSET_DEF("DecimalPoint", js_locale_get_point, NULL),
     JS_CGETSET_DEF("Current",   js_locale_get_current, js_locale_set_current),

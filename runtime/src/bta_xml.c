@@ -571,7 +571,9 @@ static JSValue xml_doc_get_root(JSContext *ctx, JSValueConst this_val)
     return xml_node_new(ctx, t, root, false);
 }
 
+/* type XmlDocument */
 static const JSCFunctionListEntry xml_doc_props[] = {
+    /* Root -> XmlNode */
     JS_CGETSET_DEF("Root", xml_doc_get_root, NULL),
 };
 
@@ -1142,26 +1144,47 @@ static JSValue xml_node_set_namespace(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
+/* type XmlNode */
 static const JSCFunctionListEntry xml_node_props[] = {
+    /* Name -> string */
     JS_CGETSET_DEF("Name",      xml_node_get_name,      NULL),
+    /* Prefix -> string */
     JS_CGETSET_DEF("Prefix",    xml_node_get_prefix,    NULL),
+    /* Namespace -> string */
     JS_CGETSET_DEF("Namespace", xml_node_get_namespace, NULL),
+    /* Text -> string */
     JS_CGETSET_DEF("Text",      xml_node_get_text,      xml_node_set_text),
+    /* Parent -> XmlNode */
     JS_CGETSET_DEF("Parent",    xml_node_get_parent,    NULL),
+    /* Children -> XmlNode[] */
     JS_CGETSET_DEF("Children",  xml_node_children,      NULL),
+    /* Attr(name) -> string */
     JS_CFUNC_DEF("Attr",           1, xml_node_attr),
+    /* SetAttr(name, value) */
     JS_CFUNC_DEF("SetAttr",        2, xml_node_set_attr),
+    /* RemoveAttr(name) */
     JS_CFUNC_DEF("RemoveAttr",     1, xml_node_remove_attr),
+    /* AttrNS(uri, name) -> string */
     JS_CFUNC_DEF("AttrNS",         2, xml_node_attr_ns),
+    /* SetAttrNS(uri, name, value) */
     JS_CFUNC_DEF("SetAttrNS",      3, xml_node_set_attr_ns),
+    /* RemoveAttrNS(uri, name) */
     JS_CFUNC_DEF("RemoveAttrNS",   2, xml_node_remove_attr_ns),
+    /* AttributeNames() -> string[] */
     JS_CFUNC_DEF("AttributeNames", 0, xml_node_attribute_names),
+    /* Find(name) -> XmlNode */
     JS_CFUNC_DEF("Find",           1, xml_node_find),
+    /* FindAll(name) -> XmlNode[] */
     JS_CFUNC_DEF("FindAll",        1, xml_node_find_all),
+    /* Add(child) -> XmlNode */
     JS_CFUNC_DEF("Add",            1, xml_node_add),
+    /* Insert(index, child) -> XmlNode */
     JS_CFUNC_DEF("Insert",         2, xml_node_insert),
+    /* Remove() */
     JS_CFUNC_DEF("Remove",         0, xml_node_remove),
+    /* Copy() -> XmlNode */
     JS_CFUNC_DEF("Copy",           0, xml_node_copy),
+    /* SetNamespace(uri, [prefix]) */
     JS_CFUNC_DEF("SetNamespace",   2, xml_node_set_namespace),
 };
 
@@ -1234,16 +1257,16 @@ void bta_xml_init(JSContext *ctx, JSValue global)
 
     JSValue xml = JS_NewObject(ctx);
 
-    /* Parse(text) */
+    /* Parse(text) -> XmlDocument */
     JS_SetPropertyStr(ctx, xml, "Parse",
                       JS_NewCFunction(ctx, xml_parse, "Parse", 1));
-    /* ParseBytes(bytes) */
+    /* ParseBytes(bytes) -> XmlDocument */
     JS_SetPropertyStr(ctx, xml, "ParseBytes",
                       JS_NewCFunction(ctx, xml_parse_bytes, "ParseBytes", 1));
-    /* Stringify(node) */
+    /* Stringify(node) -> string */
     JS_SetPropertyStr(ctx, xml, "Stringify",
                       JS_NewCFunction(ctx, xml_stringify, "Stringify", 1));
-    /* Element(name) */
+    /* Element(name) -> XmlNode */
     JS_SetPropertyStr(ctx, xml, "Element",
                       JS_NewCFunction(ctx, xml_element, "Element", 1));
 #ifdef BTA_HAVE_LIBXML

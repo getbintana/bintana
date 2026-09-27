@@ -2984,10 +2984,25 @@ static const char *signature_for(const char *owner, const char *member,
                                  bool event)
 {
     for (size_t i = 0; i < G_N_ELEMENTS(bta_signatures); i++) {
-        if (bta_signatures[i].event == event &&
+        if (bta_signatures[i].kind == (event ? BTA_SIG_EVENT : BTA_SIG_METHOD) &&
             g_str_equal(bta_signatures[i].owner, owner) &&
             g_str_equal(bta_signatures[i].member, member))
             return bta_signatures[i].signature;
+    }
+    return NULL;
+}
+
+/* What a member declares it answers -- `-> Bytes`, `-> string[]`, a shape in
+ * braces -- or NULL. The same table as its parameters, so a claim about a
+ * call and its arguments are written on one line and cannot come apart. */
+static const char *returns_for(const char *owner, const char *member,
+                               BtaSigKind kind)
+{
+    for (size_t i = 0; i < G_N_ELEMENTS(bta_signatures); i++) {
+        if (bta_signatures[i].kind == kind &&
+            g_str_equal(bta_signatures[i].owner, owner) &&
+            g_str_equal(bta_signatures[i].member, member))
+            return *bta_signatures[i].returns ? bta_signatures[i].returns : NULL;
     }
     return NULL;
 }
@@ -3393,6 +3408,8 @@ static void take_params_sig(JSContext *ctx, JSValue out, GPtrArray *names,
      * completion for one can say `Ask(message, [options])` rather than a count. */
     JS_SetPropertyStr(ctx, item, "Signature",
                       JS_NewString(ctx, sig ? sig : ""));
+    /* What it answers, when that is declared; `mark_returns` fills it in. */
+    JS_SetPropertyStr(ctx, item, "Returns", JS_NewString(ctx, ""));
     JS_SetPropertyUint32(ctx, out, (*n)++, item);
 }
 
@@ -3401,6 +3418,60 @@ static void take_params(JSContext *ctx, JSValue out, GPtrArray *names,
                         int params)
 {
     take_params_sig(ctx, out, names, n, name, kind, params, NULL);
+}
+
+/* The `Returns` of the member just taken, when one was taken -- a name already
+ * listed is skipped by `take`, and must not have its answer overwritten. */
+static void mark_returns(JSContext *ctx, JSValue out, uint32_t was, uint32_t now,
+                         const char *returns)
+{
+    if (now <= was || !returns)
+        return;
+    JSValue item = JS_GetPropertyUint32(ctx, out, now - 1);
+    JS_SetPropertyStr(ctx, item, "Returns", JS_NewString(ctx, returns));
+    JS_FreeValue(ctx, item);
+}
+
+/* What a member found on `at` answers, asked the way `declared_signature` asks:
+ * under its own class's name when `at` is in the class table, else under the
+ * name that was asked about. */
+static const char *declared_returns(JSContext *ctx, JSValueConst at,
+                                    const char *type, const char *member,
+                                    BtaSigKind kind)
+{
+    int       n;
+    BtaClass *table = bta_class_table(&n);
+
+    for (int i = 0; i < n; i++)
+        if (JS_IsStrictEqual(ctx, table[i].proto, at))
+            return returns_for(table[i].name, member, kind);
+    return type ? returns_for(type, member, kind) : NULL;
+}
+
+/* **A type no global holds**, answered from the generated table alone: a
+ * `type HttpClient` comment above a prototype's table lists every entry of it,
+ * so a connection, a client or an XML node can be asked what it has without an
+ * object to walk. Merged after a live walk too, so a class that *is* global
+ * (`Connection`) also gains the members its drivers add. Answers how many. */
+static uint32_t take_catalog(JSContext *ctx, const char *type, JSValue out,
+                             GPtrArray *names, uint32_t *n)
+{
+    uint32_t found = 0;
+
+    for (size_t i = 0; i < G_N_ELEMENTS(bta_signatures); i++) {
+        const BtaSignature *e = &bta_signatures[i];
+        if (e->kind == BTA_SIG_EVENT || !g_str_equal(e->owner, type))
+            continue;
+        uint32_t was = *n;
+        if (e->kind == BTA_SIG_PROPERTY)
+            take(ctx, out, names, n, e->member, "Property");
+        else
+            take_sig(ctx, out, names, n, e->member, "Method",
+                     *e->signature ? e->signature : NULL);
+        mark_returns(ctx, out, was, *n, *e->returns ? e->returns : NULL);
+        found++;
+    }
+    return found;
 }
 
 /*
@@ -3442,7 +3513,7 @@ static void take_params(JSContext *ctx, JSValue out, GPtrArray *names,
  * convention, and the one `Widget.Methods` already applies.
  */
 static void take_members_of_resolved(JSContext *ctx, JSValueConst klass,
-                                     const char *type, JSValue out,
+                                     const char *type, bool all, JSValue out,
                                      GPtrArray *names, uint32_t *n)
 {
     JSValue proto    = JS_GetPropertyStr(ctx, klass, "prototype");
@@ -3466,8 +3537,12 @@ static void take_members_of_resolved(JSContext *ctx, JSValueConst klass,
                                        JS_GPN_STRING_MASK) == 0) {
                 for (uint32_t i = 0; i < len; i++) {
                     JSPropertyDescriptor d;
-                    if (JS_GetOwnProperty(ctx, &d, at, tab[i].atom) != 1)
-                        continue;
+                    /* A property whose read throws -- a lazily built builtin -- is
+                     * skipped with its exception consumed, not left for whoever asks
+                     * next. */
+                    int got = JS_GetOwnProperty(ctx, &d, at, tab[i].atom);
+                    if (got < 0) JS_FreeValue(ctx, JS_GetException(ctx));
+                    if (got != 1) continue;
                     const char *nm = JS_AtomToCString(ctx, tab[i].atom);
                     /* The convention, and it is the same one the statics get:
                      * a capital initial is public, a lower-case one is the class
@@ -3475,13 +3550,17 @@ static void take_members_of_resolved(JSContext *ctx, JSValueConst klass,
                      * (`fire`, `ticking`) and the runtime's bookkeeping
                      * (`__children`, `__menus`) out of a list whose whole
                      * purpose is what a caller may write. */
-                    if (nm && *nm && g_ascii_isupper(nm[0]) &&
+                    if (nm && *nm && (all || g_ascii_isupper(nm[0])) &&
                         !g_str_equal(nm, "constructor")) {
+                        uint32_t was = *n;
                         if (JS_IsFunction(ctx, d.value)) {
                             char *sig = declared_signature(ctx, at, type, nm);
                             take_fn_sig(ctx, out, names, n, nm, "Method",
                                         d.value, sig);
                             g_free(sig);
+                            mark_returns(ctx, out, was, *n,
+                                         declared_returns(ctx, at, type, nm,
+                                                          BTA_SIG_METHOD));
                         }
                         /* A getter with no setter is `ReadOnly`, the word
                          * `Widget.Member` gives the same name -- one class, one
@@ -3491,6 +3570,10 @@ static void take_members_of_resolved(JSContext *ctx, JSValueConst klass,
                             take(ctx, out, names, n, nm, "ReadOnly");
                         else if (JS_IsFunction(ctx, d.setter))
                             take(ctx, out, names, n, nm, "Property");
+                        if (!JS_IsFunction(ctx, d.value))
+                            mark_returns(ctx, out, was, *n,
+                                         declared_returns(ctx, at, type, nm,
+                                                          BTA_SIG_PROPERTY));
                     }
                     if (nm) JS_FreeCString(ctx, nm);
                     JS_FreeValue(ctx, d.value);
@@ -3515,20 +3598,28 @@ static void take_members_of_resolved(JSContext *ctx, JSValueConst klass,
                                    JS_GPN_STRING_MASK) == 0) {
             for (uint32_t i = 0; i < len; i++) {
                 JSPropertyDescriptor d;
-                if (JS_GetOwnProperty(ctx, &d, klass, tab[i].atom) != 1)
-                    continue;
+                /* A property whose read throws -- a lazily built builtin -- is
+                 * skipped with its exception consumed, not left for whoever asks
+                 * next. */
+                int got = JS_GetOwnProperty(ctx, &d, klass, tab[i].atom);
+                if (got < 0) JS_FreeValue(ctx, JS_GetException(ctx));
+                if (got != 1) continue;
                 const char *nm = JS_AtomToCString(ctx, tab[i].atom);
-                if (nm && *nm && g_ascii_isupper(nm[0]) &&
-                    !g_str_equal(nm, "prototype") && !g_str_equal(nm, "name")) {
+                if (nm && *nm && (all || g_ascii_isupper(nm[0])) &&
+                    !g_str_equal(nm, "prototype") && !g_str_equal(nm, "name") &&
+                    !g_str_equal(nm, "length")) {
                     /* A static answers under the class's own name: the
                      * extractor names `Widget.New` after the constructor the
                      * statics are set on. */
+                    uint32_t was = *n;
                     if (JS_IsFunction(ctx, d.value))
                         take_fn_sig(ctx, out, names, n, nm, "Static", d.value,
                                     type ? signature_for(type, nm, false) : NULL);
                     else if (JS_IsFunction(ctx, d.getter) ||
                              JS_IsFunction(ctx, d.setter))
                         take(ctx, out, names, n, nm, "Static");
+                    mark_returns(ctx, out, was, *n,
+                                 type ? returns_for(type, nm, BTA_SIG_METHOD) : NULL);
                 }
                 if (nm) JS_FreeCString(ctx, nm);
                 JS_FreeValue(ctx, d.value);
@@ -3960,9 +4051,19 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
      * than half of one.  `Forms` after `Sources` for the same reason and not
      * because it does not matter: a bad `Sources` must not have built an index
      * by the time the bad `Forms` is noticed. */
+    /* `All`: the lower-case names too. The convention that hides them is
+     * this repository's, and a builtin does not follow it -- what a string or
+     * an array has is `split` and `includes`, which a completion after
+     * `File.Load(p).` wants to offer. */
+    bool all = false;
     if (argc > 1) {
         sources = texts_arg(ctx, argv[1], "Sources", &refused);
         if (!refused) forms = texts_arg(ctx, argv[1], "Forms", &refused);
+        if (!refused && JS_IsObject(argv[1])) {
+            JSValue a = JS_GetPropertyStr(ctx, argv[1], "All");
+            all = JS_ToBool(ctx, a) > 0;
+            JS_FreeValue(ctx, a);
+        }
     }
     if (refused) {
         JS_FreeCString(ctx, type);
@@ -3997,7 +4098,7 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
                 /* The end of the sources is not the end of the answer. */
                 JSValue up = bta_lookup_global(ctx, d->base);
                 if (!JS_IsException(up)) {
-                    take_members_of_resolved(ctx, up, d->base, out, names, &n);
+                    take_members_of_resolved(ctx, up, d->base, all, out, names, &n);
                     JS_FreeValue(ctx, up);
                 } else {
                     /* **Consumed, not dropped.** An exception left pending under
@@ -4016,7 +4117,7 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
     if (!sources || !g_hash_table_contains(index, type)) {
         JSValue klass = bta_lookup_global(ctx, type);
         if (!JS_IsException(klass)) {
-            take_members_of_resolved(ctx, klass, type, out, names, &n);
+            take_members_of_resolved(ctx, klass, type, all, out, names, &n);
             /* **And here too, and the first version did not**: a loaded form
              * class has children the prototype walk cannot see either, so
              * asking for a library's class with the libraries loaded got the
@@ -4026,9 +4127,12 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
              * given, and nothing about them needs it. */
             if (forms)
                 take_form_children(ctx, forms, type, out, names, &n);
+            take_catalog(ctx, type, out, names, &n);
             JS_FreeValue(ctx, klass);
+        } else if (JS_FreeValue(ctx, JS_GetException(ctx)),
+                   take_catalog(ctx, type, out, names, &n) > 0) {
+            /* A type no global holds, answered from its table. */
         } else {
-            JS_FreeValue(ctx, JS_GetException(ctx));
             if (sources)
                 JS_ThrowTypeError(ctx, "Members: '%s' is not a class, and no "
                                   "source among Sources declares it", type);
@@ -5648,7 +5752,7 @@ static const JSCFunctionListEntry widget_props[] = {
     JS_CFUNC_DEF("On",       2, w_on),
     /* OriginIn(container) */
     JS_CFUNC_DEF("OriginIn", 1, w_origin_in),
-    /* Bounds([container]) */
+    /* Bounds([container]) -> { X, Y, Width, Height } */
     JS_CFUNC_DEF("Bounds",   1, w_bounds),
     /* PropertyOptions(name) */
     JS_CFUNC_DEF("PropertyOptions", 1, w_property_options),
@@ -7247,11 +7351,11 @@ void bta_widgets_init(JSContext *ctx, JSValue global)
          * usable from a .form because both agree on it.
          */
         if (!cls->parent) {
-            /* New(type) */
+            /* New(type) -> Widget */
             JS_SetPropertyStr(ctx, ctor, "New",
                               JS_NewCFunction(ctx, w_new_by_type, "New", 1));
             /* ...and what there is to make one of. */
-            /* Types() */
+            /* Types() -> string[] */
             JS_SetPropertyStr(ctx, ctor, "Types",
                               JS_NewCFunction(ctx, w_types, "Types", 0));
             /* ...and which of those this build can actually run. */
@@ -7272,7 +7376,7 @@ void bta_widgets_init(JSContext *ctx, JSValue global)
             JS_SetPropertyStr(ctx, ctor, "Methods",
                               JS_NewCFunction(ctx, w_methods_by_type,
                                               "Methods", 1));
-            /* Members(type, [options]) */
+            /* Members(type, [options]) -> { Name, Kind, Params, Signature, Returns }[] */
             JS_SetPropertyStr(ctx, ctor, "Members",
                               JS_NewCFunction(ctx, w_members_by_type,
                                               "Members", 2));

@@ -1,7 +1,7 @@
 # Testing
 
 ```sh
-./tests/run.sh                          # all six projects, 7332 assertions
+./tests/run.sh                          # all six projects, 7350 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -371,10 +371,12 @@ had borrowed a same-named method's parameters: `ListBox.Select` is a method
 `Locale.Text`, `Widget.New` and 160 more were registered outside a class table
 and the IDE's popup said `(...)` for each. The check asks `Widget.Members` of
 every global the C installs and fails on a `Method` or `Static` with no
-`Signature` -- 199 of them as this is written, proved by deleting
+`Signature` -- proved by deleting
 `/* Load(path) */` and watching it name `File.Load`. A verb written in
 JavaScript passes without a comment, because the parser reads its parameters
-out of its own source.
+out of its own source. **And the prototypes no global holds** — the ones named
+with a `type X` comment — are asked the same question (238 verbs in all as this
+is written), since their table is the whole of what an editor knows about them.
 
 **The globals are held to the same rule**, against `docs/llm/library.md`, and
 they were not until it was written: a table that was not a widget's was exempted

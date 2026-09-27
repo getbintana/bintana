@@ -1478,23 +1478,23 @@ static JSValue js_text_get_font(JSContext *ctx, JSValueConst this_val)
 }
 
 static const JSCFunctionListEntry text_props[] = {
-    /* Width(text, [font], [options]) */
+    /* Width(text, [font], [options]) -> number */
     JS_CFUNC_MAGIC_DEF("Width",  3, js_text_measure, TEXT_WIDTH),
-    /* Height(text, [font], [options]) */
+    /* Height(text, [font], [options]) -> number */
     JS_CFUNC_MAGIC_DEF("Height", 3, js_text_measure, TEXT_HEIGHT),
-    /* Size(text, [font], [options]) */
+    /* Size(text, [font], [options]) -> { Width, Height } */
     JS_CFUNC_MAGIC_DEF("Size",   3, js_text_measure, TEXT_SIZE),
     /* Lines(text, [font], [options]) */
     JS_CFUNC_MAGIC_DEF("Lines",  3, js_text_measure, TEXT_LINES),
-    /* Escape(text) */
+    /* Escape(text) -> string */
     JS_CFUNC_DEF("Escape", 1, js_text_escape),
-    /* IndexAt(text, x, y, [font], [options]) */
+    /* IndexAt(text, x, y, [font], [options]) -> number */
     JS_CFUNC_DEF("IndexAt", 5, js_text_index_at),
     /* Bounds(text, from, to, [font], [options]) */
     JS_CFUNC_DEF("Bounds",  5, js_text_bounds),
-    /* LineOf(text, index) */
+    /* LineOf(text, index) -> number */
     JS_CFUNC_DEF("LineOf",  2, js_text_line_of),
-    /* OffsetAt(text, line, [column]) */
+    /* OffsetAt(text, line, [column]) -> number */
     JS_CFUNC_DEF("OffsetAt", 3, js_text_offset_at),
     JS_CGETSET_DEF("Font", js_text_get_font, NULL),
 };

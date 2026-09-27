@@ -3424,6 +3424,39 @@ function* p_completion(ide) {
                                              p.Detail === "static (nombre, edad)"),
           JSON.stringify(ask("", "        Nueva.")));
 
+    /* **Past a call, what the call answers.** The arrow in a signature comment
+     * (`/* Info(path) -> { Size, ... } *\/`) is what the runtime publishes as
+     * `Returns`, and each step of a chain asks it of the step before -- so
+     * `File.Info(p).` offers the fields, a string's methods follow
+     * `File.Load(p).`, an index into a list reaches its element, and a local
+     * assigned from a call is that call's answer. Before this, a dot after a
+     * bracket fell through to the bare-name case. */
+    const infoAt = answer("", "        const i = File.Info(p).");
+    check("a call's declared answer is what the dot after it offers",
+          infoAt.includes("Size") && infoAt.includes("IsDir"), JSON.stringify(infoAt));
+    const loaded = answer("", "        File.Load(p).");
+    check("a string answer offers what a string has, lower case and all",
+          loaded.includes("split") && loaded.includes("length"),
+          JSON.stringify(loaded.slice(0, 8)));
+    const first = answer("", "        Directory.Files(d)[0].");
+    check("an index into a declared list reaches its element",
+          first.includes("includes"), JSON.stringify(first.slice(0, 8)));
+    const bounds = answer("", "        this.lbl.Bounds().");
+    check("a field's method answers through the class that declares it",
+          bounds.includes("Width") && bounds.includes("X"), JSON.stringify(bounds));
+    ide.Editor.Text = ide.Editor.Text +
+        "function Later() {\n    const info = File.Info(\"x\");\n" +
+        "    const web = Http.Client({});\n}\n";
+    yield* settled(ide);
+    check("a local assigned from a call is that call's answer",
+          answer("", "        info.").includes("Modified"),
+          JSON.stringify(answer("", "        info.")));
+    const reply = answer("", "        web.GetWait(u).");
+    check("...and a type no global holds answers through its own table",
+          reply.includes("Status") && reply.includes("Body"), JSON.stringify(reply));
+    eq("a call nothing declares an answer for still offers nothing",
+       answer("", "        makeThing().").length, 0);
+
     /* The tabs go before the files do: an open tab whose file disappears is a
      * question the IDE asks in a dialog, which is right for a person and a hung
      * test. */

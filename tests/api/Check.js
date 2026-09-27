@@ -1101,10 +1101,17 @@ function checkWidgetStatics(root, problems) {
  * the C installs are asked, because those are the ones whose parameters exist
  * nowhere else.
  */
+const NAMED_TYPE = new Regex("^\\s*/\\*\\s*type\\s+([A-Za-z_][\\w.]*)\\s*\\*/", { Multiline: true });
+
 function checkGlobalSignatures(root, problems) {
     const names = new Set(["Widget"]);
-    for (const c of sources(root))
-        for (const m of GLOBAL_INSTALL.Matches(File.Load(c))) names.add(m.Group(1));
+    for (const c of sources(root)) {
+        const src = File.Load(c);
+        for (const m of GLOBAL_INSTALL.Matches(src)) names.add(m.Group(1));
+        /* A prototype no global holds, named where its table is, is asked the
+         * same question: its table is the whole of what an editor knows. */
+        for (const m of NAMED_TYPE.Matches(src)) names.add(m.Group(1));
+    }
 
     let checked = 0;
     for (const name of [...names].sort()) {

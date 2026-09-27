@@ -933,6 +933,12 @@ keystroke:
 - **The file's own methods are scanned from the text**, since the IDE edits the
   project's code rather than loading it, and the scan is redone only when the
   text is not the one it was taken from.
+- **Past a call, what the call declares it answers.** `File.Info(p).` offers
+  `Size` and `IsDir`, `File.Load(p).` a string's methods, `Directory.Files(d)[0].`
+  the element's, `this.Btn.Bounds().` the rectangle, and a local assigned from a
+  call (`const info = File.Info(p);`) is that call's answer. Each step asks the
+  `Returns` of the member before it -- the arrow in its signature comment -- and
+  a step nothing declares ends the chain with nothing offered, not a guess.
 - **The classes a name can be are the open tabs' first, then the disk's.** The
   project's and its libraries' `.js` and `.form` files are walked once per
   project; every open tab is read live over them -- the editor's text, or a

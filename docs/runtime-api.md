@@ -34,7 +34,12 @@ recommends, with no caller here. And with
 them the roads that need no name: `Function.prototype.constructor` and the
 generator function constructor both compiled strings, so both are unhooked. What
 is left in their place is `Application.CheckSource`, which answers the one honest
-question — *would this text compile?* — without running it.
+question — *would this text compile?* — without running it. **`Array.fromAsync`
+goes as well**, for `async`'s reason arriving by a door the parser cannot
+guard: it is an async function the engine builds the first time the property is
+read, and with no async classes registered that object could never be
+collected — one `typeof Array.fromAsync` was enough for the process to abort on
+its way out.
 
 **`Object` is empty.** Every static it carries in JavaScript is gone —
 `create`, `getPrototypeOf`, `setPrototypeOf`, `defineProperty`,
