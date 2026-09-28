@@ -13,9 +13,9 @@ AskText.Prompt("Name for the note", (name) => { this.rename(name); },
 
 | Member | What it is | More |
 |---|---|---|
-| `Prompt(label, onAccept, [options])` | the whole dialog. The callback takes the trimmed text and, when a checkbox was asked for, whether it was ticked | [asking](#asking) |
-| `Text` | the window's title, a string. `""` from `prompt` unless `Title` says otherwise | [asking](#asking) |
-| `Modal` | `true` while the dialog is up | [asking](#asking) |
+| `Prompt(label, onAccept, [options])` | the whole dialog | [asking](#asking) |
+| `Text` | the window title | [asking](#asking) |
+| `Modal` | blocks its parent | [asking](#asking) |
 
 Everything on `Widget` and on `Form` is on it too.
 
@@ -23,9 +23,9 @@ Everything on `Widget` and on `Form` is on it too.
 
 | Member | |
 |---|---|
-| `Prompt(label, onAccept, [options])` | builds the dialog, shows it, focuses the field and selects what is in it, and answers the shown window |
-| `Text` | the window's title. **`""` from `prompt` when no `Title` is given** |
-| `Modal` | `true` from `Show()` |
+| `Prompt(label, onAccept, [options])` | the whole dialog. The callback takes the trimmed text and, when a checkbox was asked for, whether it was ticked |
+| `Text` | the window title. **Translated**. `Caption` is an alias |
+| `Modal` | blocks its parent. Made transient for the active window on `Show()` |
 
 `prompt`'s options:
 

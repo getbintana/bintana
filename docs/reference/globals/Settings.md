@@ -10,13 +10,13 @@ there is nothing to flush and nothing lost when a program ends badly.
 
 | | | |
 |---|---|---|
-| `Clear()` | forgets everything | [reading and writing](#reading-and-writing) |
-| `Delete(key)` | forgets one | [reading and writing](#reading-and-writing) |
-| `Get(key, fallback)` | → what was remembered, or the fallback | [reading and writing](#reading-and-writing) |
-| `Has(key)` | → whether there is anything under that name | [reading and writing](#reading-and-writing) |
-| `Keys()` | → every name | [reading and writing](#reading-and-writing) |
-| `Path` | the file it is kept in | [where it lives](#where-it-lives) |
-| `Set(key, value)` | remembers it | [reading and writing](#reading-and-writing) |
+| `Clear()` | forgets every value, and writes the file | [reading and writing](#reading-and-writing) |
+| `Delete(key)` | forgets the value under `key`, and writes the file | [reading and writing](#reading-and-writing) |
+| `Get(key, fallback)` | the value under `key`, or `fallback` when there is none — which is what tells a missing setting from one that is `false` | [reading and writing](#reading-and-writing) |
+| `Has(key)` | whether there is a value under `key` | [reading and writing](#reading-and-writing) |
+| `Keys()` | every key there is a value under | [reading and writing](#reading-and-writing) |
+| `Path` | where the settings are kept | [where it lives](#where-it-lives) |
+| `Set(key, value)` | stores `value` under `key`, anything JSON carries, and writes the file at once | [reading and writing](#reading-and-writing) |
 
 ## Reading and writing
 
@@ -37,7 +37,7 @@ prefix is how the entries of one subject stay together.
 
 | | |
 |---|---|
-| `Path` | the file, for an application that wants to show it or open its folder |
+| `Path` | where the settings are kept: `Application.ConfigDirectory/settings.json` |
 
 Named after the project, so **two projects never read each other's**, and in the
 config directory rather than beside the project — a project is a thing people

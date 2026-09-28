@@ -423,6 +423,27 @@ in pages in different directories. Then run `./tools/docs.sh` -- `tests/api.sh`
 fails on a member with no description and on a row that does not say what the
 code says.
 
+**A member written in JavaScript says it in a JSDoc comment** -- in rad.js,
+forms.js or a library under `lib/` -- touching the declaration: ending on the
+line above it, or on the same line. The text before the first `@tag` is the
+description and `@returns {T}` is what it answers; a plain `/* … */` is never
+read, so notes about the implementation stay plain and the JSDoc goes directly
+above the declaration, under them:
+
+```js
+/** runs `tick` once after `delay` milliseconds, and answers the `Timer` */
+static After(delay, tick) { … }
+```
+
+The parser sees declarations, not calls: a class member, a function assigned
+at the top level (`File.LoadJson = function`), and each function an object
+literal holds when the literal is assigned at the top level
+(`GLOBAL.Settings = { Get() {} }`). An accessor added with `defineProperty` is
+invisible to it, which is why forms.js writes those as a small class copied
+across with `mixIn`. The same `./tools/docs.sh` writes these rows, and the same
+check fails on a public member with no comment. rad.js and forms.js are baked
+into the binary, so a new comment there needs a rebuild before anything sees it.
+
 **What a verb answers goes on the same line**, after an arrow — a type the
 runtime can be asked about by name, `string`/`number`/`boolean`, a list (`[]`),
 or a shape in braces:

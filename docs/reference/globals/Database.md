@@ -39,7 +39,7 @@ clients.Save(c);                                      // UPDATE, by the key
 | `Path` | the file this connection is |
 | `Query(sql, [params])` | the rows a statement answers, as **plain objects** — for the report, the `GROUP BY`, the join that is not one shape |
 | `Script(sql)` | several statements and **no parameters**: a schema, a migration |
-| `Table(name, RecordClass)` | → the typed half, below |
+| `Table(name, RecordClass)` | a [`Table`](Database.md): the rows of `name` as records of `Shape` |
 | `Tables` (ro) | the tables and views, ordered |
 | `Transaction(fn)` | everything in `fn` or nothing. **Nests**, through savepoints, so a function that wraps its own work in one is safe to call from inside another |
 
@@ -100,7 +100,7 @@ something a mapper should make silently.
 | `Path` | the file this connection is |
 | `Open` (ro) | whether it still is |
 | `Close()` | let it go |
-| `Table(name, RecordClass)` | the typed half, above |
+| `Table(name, RecordClass)` | a [`Table`](Database.md): the rows of `name` as records of `Shape` |
 
 ## Transactions
 

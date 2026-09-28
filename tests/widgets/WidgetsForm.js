@@ -14938,6 +14938,77 @@ function Main() {
         eq("a verb written in C is Native", member("File", "Load").Native, true);
         eq("...one written in JavaScript is not", member("Timer", "After").Native, false);
 
+        /* **And a member written in JavaScript says it the same way**, in the
+         * JSDoc comment above its declaration: the parser reads the comment
+         * (the tenth fork patch), `Application.Symbols` hands it out as `Doc`
+         * and the type after `@returns` as `Returns`, and `Widget.Members`
+         * answers with it -- for rad.js and forms.js, read out of the binary,
+         * and for a class read out of a source. */
+        check("a static of rad.js says what it is for",
+              (member("Timer", "After").Doc || "").includes("once after `delay`"),
+              member("Timer", "After").Doc);
+        check("...and a member of a bag written as an object literal",
+              (member("Settings", "Get").Doc || "").includes("`fallback`"),
+              member("Settings", "Get").Doc);
+        check("...and a getter in one",
+              (member("Settings", "Path").Doc || "").includes("settings.json"),
+              member("Settings", "Path").Doc);
+        check("...and a method forms.js puts on a prototype, inherited",
+              (member("Button", "Dump").Doc || "").includes("screenshot"),
+              member("Button", "Dump").Doc);
+        check("...and an accessor written as a mixin and copied onto a class the C made",
+              (member("Label", "Caption").Doc || "").includes("alias of `Text`") &&
+              (member("Form", "Controls").Doc || "").includes("creation order"),
+              member("Label", "Caption").Doc);
+        const jsdoc = [
+            "/** A thing that counts. */",                   /* 1 */
+            "class Counter {",                               /* 2 */
+            "    /**",                                        /* 3 */
+            "     * Adds one.",                               /* 4 */
+            "     * @param {number} by how many",             /* 5 */
+            "     * @returns {number} the new count",         /* 6 */
+            "     */",                                        /* 7 */
+            "    Bump(by) { /** not a doc */ return 1; }",    /* 8 */
+            "    Plain() {}",                                 /* 9 */
+            "}",                                              /* 10 */
+            "/** Makes one. @returns {Counter} */",           /* 11 */
+            "Counter.Parse = function (text) {};",           /* 12 */
+            "/** Resets it. */",                              /* 13 */
+            "Counter.prototype.Reset = function () {};",     /* 14 */
+            "GLOBAL.Bag = {",                                 /* 15 */
+            "    /** Reads one. */",                          /* 16 */
+            "    Get(key) { const inner = { Nope() {} }; },", /* 17 */
+            "    /** Where. */",                              /* 18 */
+            "    get Where() { return 1; },",                 /* 19 */
+            "};"].join("\n");
+        const syms = Application.Symbols(jsdoc);
+        const sym = (n) => syms.find((x) => x.Name === n) || {};
+        eq("a class's JSDoc is its Doc", sym("Counter").Doc, "A thing that counts.");
+        eq("a method's is the text before its first tag", sym("Bump").Doc, "Adds one.");
+        eq("...and @returns is its Returns", sym("Bump").Returns, "number");
+        eq("a comment inside a body documents nothing", sym("Plain").Doc, "");
+        eq("a function assigned at the top level is Assigned, by its target",
+           sym("Counter.Parse").Kind, "Assigned");
+        eq("...with its parameters, its doc and an inline @returns",
+           `${sym("Counter.Parse").Params} ${sym("Counter.Parse").Doc} ${sym("Counter.Parse").Returns}`,
+           "(text) Makes one. Counter");
+        eq("a function an object literal holds is assigned to the literal's target",
+           `${sym("GLOBAL.Bag.Get").Kind} ${sym("GLOBAL.Bag.Get").Params} ${sym("GLOBAL.Bag.Get").Doc}`,
+           "Assigned (key) Reads one.");
+        eq("...a getter in it has no parameters", sym("GLOBAL.Bag.Where").Params, "");
+        check("...and a literal nested in one owns nothing",
+              !syms.some((x) => x.Name.endsWith(".Nope")), JSON.stringify(syms.map((x) => x.Name)));
+        const read = Widget.Members("Counter", { Sources: [jsdoc] });
+        const got = (n) => read.find((m) => m.Name === n) || {};
+        eq("a class read from a source answers its JSDoc", got("Bump").Doc, "Adds one.");
+        eq("...and its Returns", got("Bump").Returns, "number");
+        eq("a static assigned outside the body is the class's",
+           `${got("Parse").Kind} ${got("Parse").Returns}`, "Static Counter");
+        eq("...and a method assigned onto its prototype", got("Reset").Doc, "Resets it.");
+        eq("a bag written as a literal answers too",
+           (Widget.Members("Bag", { Sources: [jsdoc] }).find((m) => m.Name === "Get") || {}).Doc,
+           "Reads one.");
+
         /* **One class, one vocabulary, whichever reader found it.** A getter
          * with no setter is `ReadOnly` -- the word `Widget.Member` gives it --
          * and the loaded walk used to call it `Property`. The source walk reads

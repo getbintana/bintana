@@ -1,7 +1,7 @@
 # Testing
 
 ```sh
-./tests/run.sh                          # all six projects, 7390 assertions
+./tests/run.sh                          # all six projects, 7410 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -180,7 +180,7 @@ or a discarded project leaves behind.
 stale; the one above is here to be read.
 
 The saving is the point of it: `welcome files` is **105** assertions and
-`designer` **368**, against **2645** for the whole project — measured at 3.7 s,
+`designer` **368**, against **2681** for the whole project — measured at 3.7 s,
 9.0 s and 346 s on the machine this was last run on, where what carries over to
 another machine is the proportion and not the seconds. Iterating on an early
 phase stops being minutes a time.

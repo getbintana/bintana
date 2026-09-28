@@ -444,13 +444,90 @@ static const char *symbol_kind_name(JSSymbolKind kind)
      * together they say what a name can mean where the cursor is. */
     case JS_SYMBOL_VARIABLE:      return "Variable";
     case JS_SYMBOL_SCOPE:         return "Scope";
+    /* A function assigned at the top level, named by its target. */
+    case JS_SYMBOL_ASSIGNED:      return "Assigned";
     }
     return "";
 }
 
+/*
+ * A JSDoc comment as two answers: the description -- every line before the
+ * first `@tag`, the leading `*` of each taken off, a blank line a paragraph --
+ * and the type of `@returns {T}` (or `@return`), which is what lets a chain
+ * complete past a call to a function written in JavaScript the way it does
+ * past a native one. The other tags are left where they are: nothing here
+ * reads them, and the parser already names the parameters.
+ */
+/* The two JavaScript sources baked into the binary, for whoever reads what
+ * they declare (the JSDoc index `Widget.Members` answers from). */
+void bta_prelude_sources(const char **rad, const char **forms)
+{
+    *rad   = bta_prelude_js;
+    *forms = bta_forms_js;
+}
+
+void bta_split_doc(const char *doc, char **text, char **returns)
+{
+    *text = NULL;
+    *returns = NULL;
+    if (!doc || !*doc)
+        return;
+
+    GString *out  = g_string_new(NULL);
+    char   **rows = g_strsplit(doc, "\n", -1);
+    bool     tags = false;
+
+    for (char **r = rows; *r; r++) {
+        char *line = g_strstrip(*r);
+        if (*line == '*') line = g_strstrip(line + 1);
+        /* A tag after the text on the same line -- `How far. @returns {n}` --
+         * ends the description where it starts. */
+        if (*line != '@') {
+            for (char *at = strchr(line, '@'); at; at = strchr(at + 1, '@')) {
+                if (at > line && g_ascii_isspace(at[-1]) && g_ascii_isalpha(at[1])) {
+                    char *tag = at;
+                    at[-1] = '\0';
+                    g_strchomp(line);
+                    if (out->len && !g_str_has_suffix(out->str, "\n") && *line)
+                        g_string_append_c(out, ' ');
+                    if (!tags) g_string_append(out, line);
+                    line = tag;
+                    break;
+                }
+            }
+        }
+        if (*line == '@') {
+            tags = true;
+            if (!*returns &&
+                (g_str_has_prefix(line, "@returns") || g_str_has_prefix(line, "@return"))) {
+                const char *open  = strchr(line, '{');
+                const char *close = open ? strrchr(line, '}') : NULL;
+                if (open && close && close > open)
+                    *returns = g_strstrip(g_strndup(open + 1, close - open - 1));
+            }
+            continue;
+        }
+        if (tags)
+            continue;
+        if (!*line) {
+            if (out->len && !g_str_has_suffix(out->str, "\n"))
+                g_string_append_c(out, '\n');
+            continue;
+        }
+        if (out->len && !g_str_has_suffix(out->str, "\n"))
+            g_string_append_c(out, ' ');
+        g_string_append(out, line);
+    }
+    g_strfreev(rows);
+    while (out->len && out->str[out->len - 1] == '\n')
+        g_string_truncate(out, out->len - 1);
+    *text = g_string_free(out, out->len == 0);
+}
+
 static void symbol_report(void *opaque, JSSymbolKind kind, const char *name,
                           const char *parent, const char *supertype,
-                          const char *params, int line, int end_line)
+                          const char *params, int line, int end_line,
+                          const char *doc)
 {
     SymbolSink *sink = opaque;
     JSContext  *ctx  = sink->ctx;
@@ -478,6 +555,16 @@ static void symbol_report(void *opaque, JSSymbolKind kind, const char *name,
     JS_SetPropertyStr(ctx, obj, "Params", JS_NewString(ctx, params ? params : ""));
     /* The last line of a `Scope`, and 0 for everything else. */
     JS_SetPropertyStr(ctx, obj, "End", JS_NewInt32(ctx, end_line));
+    /* What a JSDoc (a comment opening with two stars) comment right above the declaration says: its
+     * description, and the type after `@returns {…}`. */
+    {
+        char *text = NULL, *ret = NULL;
+        bta_split_doc(doc, &text, &ret);
+        JS_SetPropertyStr(ctx, obj, "Doc", JS_NewString(ctx, text ? text : ""));
+        JS_SetPropertyStr(ctx, obj, "Returns", JS_NewString(ctx, ret ? ret : ""));
+        g_free(text);
+        g_free(ret);
+    }
 
     /* The value is taken either way; the count only moves when it landed, so
      * an array this hands back never has a hole for a caller to trip on. */
@@ -1342,11 +1429,15 @@ static bool install_globals(BtaApp *app)
      * pattern, and the answer belongs to the compiler and not to one
      * application.
      */
-    /* Symbols(text) -> { Name, Kind, Line, Parent, Super, Params }[]
+    /* Symbols(text) -> { Name, Kind, Line, Parent, Super, Params, End, Doc, Returns }[]
      *   what the text declares — `[{ Name, Kind, Line, Parent, Super, Params,
-     *   End }]`, out of the parser and with nothing run. **`Kind` is
-     *   `"Class"`, `"Function"`, `"Method"`, `"Static"`, `"Getter"`,
-     *   `"Setter"`, `"StaticGetter"` or `"StaticSetter"`**, or
+     *   End, Doc, Returns }]`, out of the parser and with nothing run.
+     *   **`Kind` is `"Class"`, `"Function"`, `"Method"`, `"Static"`,
+     *   `"Getter"`, `"Setter"`, `"StaticGetter"` or `"StaticSetter"`**, or
+     *   **`"Assigned"`** (a function assigned at the top level, named by its
+     *   target as written — `File.LoadJson`, `Widget.prototype.Dump` — and
+     *   each function an object literal holds when the literal is assigned
+     *   there, as `Target.Name`), or
      *   **`"Variable"`** (each `let`/`const`/`var`, destructured name,
      *   `for...of` variable and `catch` binding, at its line) and
      *   **`"Scope"`** (every function, anonymous ones included, with its
@@ -1363,8 +1454,12 @@ static bool install_globals(BtaApp *app)
      *   at parse time and `Function.length` is a lower bound the moment one
      *   has a default. **`Super` is the name in a class's `extends`** and
      *   `""` for everything else, including an `extends` that is not a bare
-     *   identifier. What an editor lists a file with, and the answer a
-     *   pattern is not allowed to guess at
+     *   identifier. **`Doc` is the JSDoc comment touching the declaration**
+     *   — the text before its first `@tag` — and **`Returns` the type in its
+     *   `@returns {T}`**, both `""` when there is none; a comment that does
+     *   not end on the line above or the same line documents nothing. What
+     *   an editor lists a file with, and the answer a pattern is not allowed
+     *   to guess at
      */
     JS_SetPropertyStr(ctx, application, "Symbols",
                       JS_NewCFunction(ctx, js_application_symbols, "Symbols", 1));

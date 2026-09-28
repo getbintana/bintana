@@ -125,6 +125,11 @@ defineProperty(String.prototype, "localeCompare", {
  * here.
  * ---------------------------------------------------------------------- */
 
+/**
+ * the file, parsed. **The error names the file**, which is the whole reason to
+ * use it over `JSON.parse(File.Load(p))` — a syntax error in *something* is not
+ * an answer
+ */
 File.LoadJson = function (path) {
     const text = File.Load(path);
     try {
@@ -135,6 +140,11 @@ File.LoadJson = function (path) {
     }
 };
 
+/**
+ * one canonical shape: indented by two, one trailing newline. Every `.form` and
+ * every `project.json` in this tree is written by it, which is why a file saved
+ * by the IDE and one written by hand look the same
+ */
 File.SaveJson = function (path, value) {
     File.Save(path, `${JSON.stringify(value, null, 2)}\n`);
 };
@@ -155,6 +165,11 @@ File.SaveJson = function (path, value) {
  * forms.js, and `Xml` is installed there too; see docs/plans/xml-plan.md.
  * ---------------------------------------------------------------------- */
 
+/**
+ * the file as a [`Xml`](docs/reference/globals/Xml.md) document. **The error
+ * names the file**, and the document's own declaration says what encoding it is
+ * in: this reads bytes, unlike `Load`
+ */
 File.LoadXml = function (path) {
     try {
         return Xml.ParseBytes(File.LoadBytes(path));
@@ -164,6 +179,10 @@ File.LoadXml = function (path) {
     }
 };
 
+/**
+ * the canonical XML shape, atomically, honouring neither locale nor encoding
+ * guesses
+ */
 File.SaveXml = function (path, node) {
     File.Save(path, Xml.Stringify(node));
 };
@@ -208,13 +227,19 @@ function settingsFlush() {
 }
 
 GLOBAL.Settings = {
-    /* The value, or `fallback` when there is none -- so a caller never has to
-     * tell "missing" from "false". */
+    /**
+     * the value under `key`, or `fallback` when there is none — which is what
+     * tells a missing setting from one that is `false`
+     */
     Get(key, fallback) {
         const all = settingsAll();
         return hasOwn.call(all, key) ? all[key] : fallback;
     },
 
+    /**
+     * stores `value` under `key`, anything JSON carries, and writes the file at
+     * once
+     */
     Set(key, value) {
         settingsAll()[key] = value;
         return settingsFlush();
@@ -223,12 +248,16 @@ GLOBAL.Settings = {
     /* Own keys only, the same rule and for the same reason as Dictionary.Has:
      * `"toString" in {}` is true, and a settings file nobody wrote a toString
      * into must not answer about Object.prototype. */
+    /** whether there is a value under `key` */
     Has(key)    { return hasOwn.call(settingsAll(), key); },
+    /** every key there is a value under */
     Keys()      { return ownKeys(settingsAll()); },
+    /** forgets the value under `key`, and writes the file */
     Delete(key) { delete settingsAll()[key]; return settingsFlush(); },
+    /** forgets every value, and writes the file */
     Clear()     { settingsCache = {}; return settingsFlush(); },
 
-    /* Where they live, for an application that wants to say so. */
+    /** where the settings are kept: `Application.ConfigDirectory/settings.json` */
     get Path()  { return SETTINGS_FILE; },
 };
 
@@ -252,6 +281,7 @@ GLOBAL.Timer = class Timer {
         this._id   = null;
     }
 
+    /** whether it is running; assigning starts or stops it */
     get Enabled() { return this._id !== null; }
 
     set Enabled(on) {
@@ -259,6 +289,10 @@ GLOBAL.Timer = class Timer {
         else    this.Stop();
     }
 
+    /**
+     * starts it, after `delay` when one is given, else after its own `Delay`;
+     * answers the timer
+     */
     Start(delay) {
         if (delay !== undefined) this.Delay = delay;
         this.Stop();
@@ -266,6 +300,7 @@ GLOBAL.Timer = class Timer {
         return this;
     }
 
+    /** stops it; answers the timer */
     Stop() {
         if (this._id !== null) clearTimer(this._id);
         this._id = null;
@@ -273,6 +308,7 @@ GLOBAL.Timer = class Timer {
     }
 
     /* Fires once and does not repeat: the other half of what timers are for. */
+    /** fire one more time and stop */
     Once(delay) {
         if (delay !== undefined) this.Delay = delay;
         this.Stop();
@@ -294,7 +330,16 @@ GLOBAL.Timer = class Timer {
      * Both hand back the Timer, so what was started can still be stopped --
      * which a bare id never let you do without keeping it somewhere.
      */
+    /**
+     * runs `tick` once after `delay` milliseconds, and answers the `Timer`, so
+     * what was started can be stopped. `Timer.After(0, fn)` is how GTK is given
+     * a frame
+     */
     static After(delay, tick) { return new Timer(delay, Timer.ticking(tick, "After")).Once(); }
+    /**
+     * runs `tick` every `delay` milliseconds until it is stopped, and answers
+     * the `Timer`
+     */
     static Every(delay, tick) { return new Timer(delay, Timer.ticking(tick, "Every")).Start(); }
 
     /* A timer started with nothing to call is a mistake nothing reports:
@@ -345,16 +390,19 @@ GLOBAL.Stopwatch = class Stopwatch {
     #from = 0;
     #on   = false;
 
+    /** whether it is going */
     get Running() { return this.#on; }
 
     /* Running or stopped, the same question and the same answer -- so nothing
      * has to stop the watch in order to read it. */
+    /** milliseconds, **with the fraction**, running or not */
     get Elapsed() {
         return this.#on ? this.#held + (monotonicNow() - this.#from) : this.#held;
     }
 
     /* Starting one that is already running is not an error and must not restart
      * it: a Start button pressed twice is one intention said twice. */
+    /** starts measuring, or goes on from where it stopped; answers the watch */
     Start() {
         if (!this.#on) {
             this.#from = monotonicNow();
@@ -363,6 +411,7 @@ GLOBAL.Stopwatch = class Stopwatch {
         return this;
     }
 
+    /** stops measuring and keeps `Elapsed`; answers the watch */
     Stop() {
         if (this.#on) {
             this.#held += monotonicNow() - this.#from;
@@ -372,6 +421,7 @@ GLOBAL.Stopwatch = class Stopwatch {
     }
 
     /* Back to zero, and stopped -- what the button next to Start means. */
+    /** back to zero, running or not; answers the watch */
     Reset() {
         this.#held = 0;
         this.#from = 0;
@@ -447,11 +497,13 @@ function dictionaryBag(bag, verb) {
 
 GLOBAL.Dictionary = {
 
+    /** the keys */
     Keys(bag) {
         const held = dictionaryBag(bag, "Keys");
         return held ? ownKeys(held) : [];
     },
 
+    /** the values */
     Values(bag) {
         const held = dictionaryBag(bag, "Values");
         return held ? ownKeys(held).map((key) => held[key]) : [];
@@ -467,12 +519,14 @@ GLOBAL.Dictionary = {
      * The cost is that it does not destructure, and it is paid in exactly one
      * place in this repository.
      */
+    /** `[{ Key, Value }, …]` */
     Entries(bag) {
         const held = dictionaryBag(bag, "Entries");
         if (!held) return [];
         return ownKeys(held).map((key) => ({ Key: key, Value: held[key] }));
     },
 
+    /** how many keys */
     Count(bag) {
         const held = dictionaryBag(bag, "Count");
         return held ? ownKeys(held).length : 0;
@@ -483,6 +537,7 @@ GLOBAL.Dictionary = {
      * a dictionary that answered that about a bag nobody put a `toString` in
      * would be answering about the prototype instead of about the data.
      */
+    /** whether that key is there */
     Has(bag, key) {
         const held = dictionaryBag(bag, "Has");
         return held ? hasOwn.call(held, key) : false;
@@ -716,6 +771,9 @@ class Match {
 
     /* By number or by name -- `(?<name>...)` -- since both are groups and a
      * caller should not need a different door for each. */
+    /**
+     * a group's text, by number or by name; `""` for one that did not take part
+     */
     Group(which) {
         if (typeof which === "number") {
             return which >= 0 && which < this.Groups.length ? this.Groups[which] : "";
@@ -749,20 +807,24 @@ GLOBAL.Regex = class Regex {
     }
 
     /* What it was built from, for whoever has to report it. */
+    /** the pattern, as it was written */
     get Pattern() { return this.#pattern; }
 
+    /** whether it matches at all */
     IsMatch(text) {
         this.#re.lastIndex = 0;
         return this.#re.test(String(text));
     }
 
     /* The first match at or after `start`, or `null`. */
+    /** the first match at or after `start`, or `null` */
     Match(text, start = 0) {
         this.#re.lastIndex = Math.max(0, start);
         const found = this.#re.exec(String(text));
         return found ? new Match(found) : null;
     }
 
+    /** every match, for a `for…of` */
     Matches(text) {
         const subject = String(text);
         const out     = [];
@@ -802,6 +864,10 @@ GLOBAL.Regex = class Regex {
      * arguments, whose shape depends on how many groups the pattern happens to
      * have.
      */
+    /**
+     * the text with the matches replaced. **All of them** unless a count says
+     * how many
+     */
     Replace(text, replacement, count) {
         const subject = String(text);
         let   matches = this.Matches(subject);
@@ -827,6 +893,7 @@ GLOBAL.Regex = class Regex {
     /* What the matches separate.  Captured groups land in the result too, which
      * is .NET's answer and the useful one: it is how a split keeps what it split
      * on. */
+    /** the pieces between the matches */
     Split(text) {
         const subject = String(text);
         const out     = [];
@@ -849,6 +916,7 @@ GLOBAL.Regex = class Regex {
      * `\bButton1\b` in its source, and a control called `a.b` is a pattern that
      * matches something else, while one called `Btn(` does not compile at all.
      */
+    /** the text as a **literal** inside a pattern */
     static Escape(text) {
         let out = "";
         for (const c of String(text)) {
@@ -881,6 +949,10 @@ const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
  * construction -- one entry per namespace, not per class. */
 const namespaces = [];
 
+/**
+ * the object at that dotted path, created level by level when it is not there:
+ * `Namespace("A.B")` makes both
+ */
 GLOBAL.Namespace = function (path) {
     const parts = String(path).split(".");
     if (!parts.length || !parts.every((p) => IDENTIFIER.test(p))) {
@@ -1393,20 +1465,36 @@ function fieldValue(field, name, v, mayBeEmpty) {
 }
 
 GLOBAL.Field = {
+    /** a string. Options: `required`, `max` (characters) */
     Text:     (opts) => makeField("text",     opts),
+    /** a whole number. Options: `required`, `min`, `max` */
     Int:      (opts) => makeField("int",      opts),
+    /** a number. Options: `required`, `min`, `max`, `decimals` */
     Number:   (opts) => makeField("number",   opts),
+    /** `"YYYY-MM-DD"`, checked against the calendar. Options: `required` */
     Date:     (opts) => makeField("date",     opts),
+    /** `"HH:MM"` or `"HH:MM:SS"`. Options: `required`, `min`, `max` */
     Time:     (opts) => makeField("time",     opts),
+    /**
+     * `"YYYY-MM-DDTHH:MM"` or `"...:SS"` — a date and a time — with `Z` or
+     * `+HH:MM` when the moment has a zone, kept as written. Options:
+     * `required`, `min`, `max` (local time only)
+     */
     DateTime: (opts) => makeField("datetime", opts),
+    /**
+     * a [`Bytes`](docs/reference/globals/Bytes.md) — a file in a record.
+     * Options: `required`, `max` (bytes)
+     */
     Bytes:    (opts) => makeField("bytes",    opts),
 
     /* The default first, because it is the whole of what a boolean field says. */
+    /** `true`/`false`, and SQL's `0`/`1`; `def` is where it starts */
     Bool: (def, opts) => makeField("bool", opts, { def: def === true }),
 
     /* The values it accepts, which is also what PropertyOptions hands to
      * whoever is editing it -- the same thing BTA_CLASS_ENUM does in C, and for
      * the same reason: the list cannot drift from what the setter takes. */
+    /** one of `values`, starting at `def`. Options: `required` */
     Enum: (values, def, opts) => {
         if (!Array.isArray(values) || values.length === 0)
             throw new TypeError("Field.Enum: expected a list of values");
@@ -1432,6 +1520,10 @@ GLOBAL.Field = {
      * show two, so `19.9` arriving from anywhere becomes `19.90` and a total is
      * not a ragged column.  It is what `NUMERIC(12,2)` means in a database and
      * what the `decimals` of a `.form` will mean when a control is bound to one.
+     */
+    /**
+     * a [`Decimal`](docs/reference/globals/Decimal.md) at a fixed scale.
+     * Options: `required`, `min`, `max`, `decimals` (2 by default)
      */
     Decimal: (opts) => {
         const places = opts && opts.decimals !== undefined ? opts.decimals : 2;
@@ -1465,6 +1557,10 @@ GLOBAL.Field = {
      * The class, or a thunk for the recursive case; see recordClass for why the
      * thunk cannot be avoided.
      */
+    /**
+     * another record: the class, or `() => the class` for a shape that contains
+     * itself. Starts at `null`. Options: `required`
+     */
     Record: (of, opts) => {
         const field = makeField("record", opts);
 
@@ -1476,6 +1572,10 @@ GLOBAL.Field = {
         return field;
     },
 
+    /**
+     * an array, each entry through `item` — a `Field` or a `Record` class.
+     * Options: `required`, `max`
+     */
     List: (item, opts) => {
         /*
          * A Record class is accepted where a field is expected, so a detail is
@@ -1625,6 +1725,10 @@ GLOBAL.Record = class Record {
      * checked.  Keyed by **property** name; `Load` is the one that reads a file's
      * names.
      */
+    /**
+     * assigns each property of a plain object to the field of the same name,
+     * through the fields' own checks
+     */
     Apply(values) {
         for (const key in values) this[key] = values[key];
         return this;
@@ -1646,6 +1750,10 @@ GLOBAL.Record = class Record {
      * bookkeeping argument would be part of it. */
     static #open = null;
 
+    /**
+     * a plain object — **what differs from the start**, or everything with
+     * `true`
+     */
     Serialize(all) {
         const fields = this.#fields();
         const out    = {};
@@ -1726,6 +1834,7 @@ GLOBAL.Record = class Record {
      * is exactly what saving and loading the file would have produced -- keys this
      * record does not describe included.
      */
+    /** a copy, which is what a dialog edits so that Cancel costs nothing */
     Clone() { return this.constructor.Load(this.Serialize(true)); }
 
     /*
@@ -1733,6 +1842,10 @@ GLOBAL.Record = class Record {
      * throwing.  Assigning is checked one field at a time and stops at the first
      * bad one; a file wants all of them at once, and so does anything showing a
      * form's worth of errors.
+     */
+    /**
+     * what is wrong with what the record holds **now** — a different question,
+     * and the one a form asks before saving
      */
     Validate() { return Record.#complaints(this, ""); }
 
@@ -1814,6 +1927,9 @@ GLOBAL.Record = class Record {
      * A caller that wants both says so: `rec.Problems.concat(rec.Validate())`.
      * Two of the three in this tree do, and being able to see which is the point.
      */
+    /**
+     * **the report of one `Load`**: what the file said that could not be taken
+     */
     get Problems() { return Record.#fileProblems(this, ""); }
 
     /*
@@ -1846,10 +1962,14 @@ GLOBAL.Record = class Record {
         return out;
     }
 
+    /** the fields, as a widget answers its properties */
     PropertyNames() { return ownKeys(this.#fields()); }
 
     /* The values a field accepts, or none -- the same answer a widget gives, so
      * a property grid can edit a record without being told it is one. */
+    /**
+     * the values a field accepts, as a widget answers them — an `Enum`'s list
+     */
     PropertyOptions(name) {
         const field = this.#fields()[name];
         return field && field.options ? field.options.slice() : [];
@@ -1872,6 +1992,10 @@ GLOBAL.Record = class Record {
      * answer for a hand-written accessor: it is a field a program can read and
      * not one this class knows the shape of.
      */
+    /**
+     * `{ Kind, Column, Key }`: what a field *is*, for whoever maps it onto
+     * something else
+     */
     PropertyInfo(name) {
         const field = this.#fields()[name];
 
@@ -1885,6 +2009,7 @@ GLOBAL.Record = class Record {
     }
 
     /* One line per field, for reading with eyes rather than with a parser. */
+    /** prints what it holds */
     Dump() {
         const fields = this.#fields();
         const lines  = [`${this.constructor.name}`];
@@ -1904,6 +2029,10 @@ GLOBAL.Record = class Record {
      *
      * This is the only door past the setters, and it is in here: an application
      * holds no key to the bag.
+     */
+    /**
+     * a record from a file's object, read **leniently**: what fits is taken and
+     * what does not is reported in `Problems`
      */
     static Load(json) {
         const rec = new this();
@@ -2251,6 +2380,10 @@ GLOBAL.Record = class Record {
      * shape does not model is reported, and nothing throws: an element read
      * from somebody else's file is a file.
      */
+    /**
+     * the same as `Load`, from an XML document or element, by the shape's
+     * `static Xml`
+     */
     static LoadXml(source) {
         const el    = Record.#xmlSource(source, "LoadXml");
         const ctor  = this;
@@ -2281,6 +2414,7 @@ GLOBAL.Record = class Record {
      * with elements that are not `minOccurs="0"` needs.  A `key` is written
      * either way: identity is not a value the file may drop.
      */
+    /** a new element: what differs from the start, or every field */
     ToXml(all) {
         const shape = Record.#xmlOf(this.constructor);
 
@@ -2359,6 +2493,7 @@ GLOBAL.Record = class Record {
      * elements are taken out, new ones are added, and the order of the list is
      * the order of the elements afterwards.
      */
+    /** writes into that element, touching **only** what the shape models */
     SaveXml(source) {
         const el    = Record.#xmlSource(source, "SaveXml");
         const ctor  = this.constructor;
@@ -2697,10 +2832,13 @@ GLOBAL.Table = class Table {
         this.#of   = of;
     }
 
+    /** the table's name */
     get Name()       { return this.#name; }
+    /** the connection it came from */
     get Connection() { return this.#conn; }
     /* The class, so `table.Shape` is what a program constructs a fresh row
      * from without having to have imported the name a second time. */
+    /** the record class it maps */
     get Shape()      { return this.#of; }
 
     /* --- the dialect, applied ------------------------------------------- */
@@ -2873,6 +3011,9 @@ GLOBAL.Table = class Table {
      * Anything that follows the filter follows it into the statement, so
      * ordering and a limit need no words of their own.
      */
+    /**
+     * the filter is **SQL**; anything after it (`ORDER BY`, `LIMIT`) goes too
+     */
     Where(sql, ...params) {
         this.#fit();
 
@@ -2883,6 +3024,7 @@ GLOBAL.Table = class Table {
         return rows.map((row) => this.#of.Load(row));
     }
 
+    /** every row, as records */
     All() { return this.Where(null); }
 
     /*
@@ -2892,6 +3034,7 @@ GLOBAL.Table = class Table {
      * declared -- which is the order `#keys` answers in, so the two cannot
      * disagree.
      */
+    /** one record or `null`; one value per key field, in declaration order */
     Find(...key) {
         this.#fit();
 
@@ -2914,6 +3057,7 @@ GLOBAL.Table = class Table {
 
     /* How many, which is a number and not a list of records nobody asked to
      * build. The same filter `Where` takes. */
+    /** a number, building no records */
     Count(sql, ...params) {
         this.#fit();
 
@@ -2934,6 +3078,7 @@ GLOBAL.Table = class Table {
      * field starts from, so the engine assigns one; a key the program chose is
      * written like any other column.
      */
+    /** INSERT, and tells the record its new key */
     Insert(rec) {
         this.#fit();
         this.#mine(rec);
@@ -2981,6 +3126,7 @@ GLOBAL.Table = class Table {
      * save that saved nothing and said so is the shape of bug that is found
      * days later by somebody looking for the value they typed.
      */
+    /** UPDATE by key; **throws** when it matched no row */
     Update(rec) {
         this.#fit();
         this.#mine(rec);
@@ -3019,6 +3165,7 @@ GLOBAL.Table = class Table {
      * its starting value once it is filled, so `Save` will try to update a row
      * that is not there and say so. Insert that one with `Insert`.
      */
+    /** `Insert` when the key is at its starting value, else `Update` */
     Save(rec) {
         this.#fit();
         this.#mine(rec);
@@ -3031,6 +3178,7 @@ GLOBAL.Table = class Table {
 
     /* By key, and a row that was not there is a throw for the same reason an
      * Update that changed nothing is. */
+    /** DELETE by key; **throws** when it matched no row */
     Delete(rec) {
         this.#fit();
         this.#mine(rec);
@@ -3084,6 +3232,10 @@ GLOBAL.Table = class Table {
  * nothing.
  */
 if (GLOBAL.Connection) {
+    /**
+     * a [`Table`](docs/reference/globals/Database.md): the rows of `name` as
+     * records of `Shape`
+     */
     GLOBAL.Connection.prototype.Table = function (name, of) {
         return new GLOBAL.Table(this, name, of);
     };

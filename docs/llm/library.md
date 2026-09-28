@@ -18,7 +18,7 @@ Every name here is a global: ambient, always present, no import.
 | `Icons([contains])` | every icon name available, sorted, narrowed by substring — what an icon picker is built from |
 | `DecorationLayout` | how this desktop arranges a title bar — which buttons, and on which side. What a drawn title bar reads to look like the real one |
 | `CheckSource(text)` | `null` when the text is valid JavaScript, else `{ Message, Line, Column }`. What an editor checks a file with before saving it, and the answer `new Function(src)` is not allowed to give |
-| `Symbols(text)` | what the text declares — `[{ Name, Kind, Line, Parent, Super, Params, End }]`, out of the parser and with nothing run. **`Kind` is `"Class"`, `"Function"`, `"Method"`, `"Static"`, `"Getter"`, `"Setter"`, `"StaticGetter"` or `"StaticSetter"`**, or **`"Variable"`** (each `let`/`const`/`var`, destructured name, `for...of` variable and `catch` binding, at its line) and **`"Scope"`** (every function, anonymous ones included, with its `Params` and the lines it spans, `Line` to **`End`**; one that fails to parse spans up to where it broke) — together, what a name can mean where the cursor is — the member kinds are what separates `Value: T` from `Value(): T`, and a property of the class from one of the instance. **`Params` is the parameter list in the spelling a declaration uses** — `(message, [options], ...rest)`, `()` for a member that takes none, `""` for a class — for members and top-level functions, and **it is the function's own**: an arrow in its body or in a default value does not replace it. It is the one answer a host cannot get elsewhere, because ECMAScript discards a parameter's name at parse time and `Function.length` is a lower bound the moment one has a default. **`Super` is the name in a class's `extends`** and `""` for everything else, including an `extends` that is not a bare identifier. What an editor lists a file with, and the answer a pattern is not allowed to guess at |
+| `Symbols(text)` | what the text declares — `[{ Name, Kind, Line, Parent, Super, Params, End, Doc, Returns }]`, out of the parser and with nothing run. **`Kind` is `"Class"`, `"Function"`, `"Method"`, `"Static"`, `"Getter"`, `"Setter"`, `"StaticGetter"` or `"StaticSetter"`**, or **`"Assigned"`** (a function assigned at the top level, named by its target as written — `File.LoadJson`, `Widget.prototype.Dump` — and each function an object literal holds when the literal is assigned there, as `Target.Name`), or **`"Variable"`** (each `let`/`const`/`var`, destructured name, `for...of` variable and `catch` binding, at its line) and **`"Scope"`** (every function, anonymous ones included, with its `Params` and the lines it spans, `Line` to **`End`**; one that fails to parse spans up to where it broke) — together, what a name can mean where the cursor is — the member kinds are what separates `Value: T` from `Value(): T`, and a property of the class from one of the instance. **`Params` is the parameter list in the spelling a declaration uses** — `(message, [options], ...rest)`, `()` for a member that takes none, `""` for a class — for members and top-level functions, and **it is the function's own**: an arrow in its body or in a default value does not replace it. It is the one answer a host cannot get elsewhere, because ECMAScript discards a parameter's name at parse time and `Function.length` is a lower bound the moment one has a default. **`Super` is the name in a class's `extends`** and `""` for everything else, including an `extends` that is not a bare identifier. **`Doc` is the JSDoc comment touching the declaration** — the text before its first `@tag` — and **`Returns` the type in its `@returns {T}`**, both `""` when there is none; a comment that does not end on the line above or the same line documents nothing. What an editor lists a file with, and the answer a pattern is not allowed to guess at |
 | `LibraryPath(name, [project])` | where a library by that name is, or `""` — **the same six-place search the runtime does for `uses`**. Published so that a tool which opens *other* projects asks about theirs rather than keeping a second copy of the path |
 | `Globals()` | every name on the global object: the runtime's own, the ones a library installed, and the JavaScript builtins -- `Math`, `JSON`, `Date`, `Map`, `Timer`, `Confirm`. **A top-level `class` is a lexical binding and not a property of the global object**, so a library's and a project's classes are *not* in it -- read those out of the sources, which is what the IDE does. It exists because the alternative is a hand-written list of global names, and there are a hundred and sixty-four of them |
 | `Libraries([project])` | the names of every library those same six places offer, sorted, each one once. The other direction of the lookup: `LibraryPath` resolves a name you already know, this is what a dialog that offers a choice needs |
@@ -214,9 +214,9 @@ made a folder called `undefined`. The one exception is the question:
 | `Load(path)` | the whole file as a string. **Throws if it cannot be read**, and the message names the file: there is no `null` to test for and no silent empty string |
 | `Save(path, text)` | writes it **atomically** — a temporary beside it, renamed over — so a failed write leaves the old file intact and a reader never sees half a file |
 | `Append(path, text)` | adds `text` to the end, and creates the file when it is not there. A log or a CSV written line by line wants this: `Save(path, Load(path) + line)` is the whole file through memory for every line, and a window in which another writer's line is overwritten |
-| `LoadJson(path)` | parsed, and the error names the file |
-| `SaveJson(path, value)` | one canonical shape: indented by two, one trailing newline |
-| `LoadXml(path)` | as an XML document — see [Xml](#xml) — and the error names the file |
+| `LoadJson(path)` | the file, parsed. **The error names the file**, which is the whole reason to use it over `JSON.parse(File.Load(p))` — a syntax error in *something* is not an answer |
+| `SaveJson(path, value)` | one canonical shape: indented by two, one trailing newline. Every `.form` and every `project.json` in this tree is written by it, which is why a file saved by the IDE and one written by hand look the same |
+| `LoadXml(path)` | the file as a [`Xml`](../reference/globals/Xml.md) document. **The error names the file**, and the document's own declaration says what encoding it is in: this reads bytes, unlike `Load` |
 | `SaveXml(path, node)` | the canonical XML shape, atomically, honouring neither locale nor encoding guesses |
 | `Exists(path)`, `IsDir(path)` | `false` for anything that is not a string, rather than asking about a file called `undefined` |
 | `Delete(path)` | a file, or an **empty** directory. Throws on failure |
@@ -1073,28 +1073,28 @@ class Customer extends Record {
 | `Field.Number(o)` | a number | `required`, `min`, `max`, `decimals` |
 | `Field.Bool(def, o)` | `true`/`false`, and SQL's `0`/`1` | |
 | `Field.Date(o)` | `"YYYY-MM-DD"`, checked against the calendar | `required` |
-| `Field.Time(o)` | `"HH:MM"` or `"HH:MM:SS"` — see [Time](#time) | `required`, `min`, `max` (compared as text, which is what the fixed shape is for) |
-| `Field.DateTime(o)` | `"YYYY-MM-DDTHH:MM"` or `"…:SS"`, with `Z`/`±HH:MM` kept as written — a date and a time, which neither of the two above can say | `required`; `min`/`max` over local time only |
-| `Field.Bytes(o)` | a [`Bytes`](#bytes) — a file in a record. Base64 in JSON, a BLOB in sqlite | `required`, `max` (bytes) |
-| `Field.Enum(values, def, o)` | one of `values` | `required` |
-| `Field.List(item, o)` | an array, each entry through `item` — a `Field`, or a `Record` class | `required`, `max` |
+| `Field.Time(o)` | `"HH:MM"` or `"HH:MM:SS"` | `required`, `min`, `max` (compared as text, which is what the fixed shape is for) |
+| `Field.DateTime(o)` | `"YYYY-MM-DDTHH:MM"` or `"...:SS"` — a date and a time — with `Z` or `+HH:MM` when the moment has a zone, kept as written | `required`; `min`/`max` over local time only |
+| `Field.Bytes(o)` | a [`Bytes`](../reference/globals/Bytes.md) — a file in a record | `required`, `max` (bytes) |
+| `Field.Enum(values, def, o)` | one of `values`, starting at `def` | `required` |
+| `Field.List(item, o)` | an array, each entry through `item` — a `Field` or a `Record` class | `required`, `max` |
 | `Field.Record(of, o)` | another record: the class, or `() => the class` for a shape that contains itself | `required` |
-| `Field.Decimal(o)` | a `Decimal` at a fixed scale | `required`, `min`, `max`, `decimals` (2 by default) |
+| `Field.Decimal(o)` | a [`Decimal`](../reference/globals/Decimal.md) at a fixed scale | `required`, `min`, `max`, `decimals` (2 by default) |
 
 | On a record | |
 |---|---|
 | `new C({ Name: "Ana" })` | through the setters, so every value is checked |
-| `Apply(values)` | the same, by property name |
-| `Serialize([all])` | a plain object: what differs from the start, or everything |
+| `Apply(values)` | assigns each property of a plain object to the field of the same name, through the fields' own checks |
+| `Serialize([all])` | a plain object — **what differs from the start**, or everything with `true` |
 | `toJSON()` | so `JSON.stringify` and `File.SaveJson` are the record |
-| `Clone()` | a copy, for the dialog that edits one |
-| `Validate()` | **the state**: what is wrong with what it holds now |
+| `Clone()` | a copy, which is what a dialog edits so that Cancel costs nothing |
+| `Validate()` | what is wrong with what the record holds **now** — a different question, and the one a form asks before saving |
 | `Problems` (ro) | **the report of one `Load`**: what the file said that could not be taken |
 | `PropertyNames()`, `PropertyOptions(name)`, `Dump()` | as a widget answers them |
-| `PropertyInfo(name)` | → `{ Kind, Column, Key }`: what a field *is*, for whoever maps it onto something else |
+| `PropertyInfo(name)` | `{ Kind, Column, Key }`: what a field *is*, for whoever maps it onto something else |
 | `C.Load(json)` | a file, read **leniently** |
 | `C.LoadXml(node)` | the same, from an XML document or element — see [a record over XML](#a-record-over-xml) |
-| `ToXml([all])` | → a new element: what differs from the start, or every field |
+| `ToXml([all])` | a new element: what differs from the start, or every field |
 | `SaveXml(node)` | writes into that element, touching **only** what the shape models |
 
 ```js

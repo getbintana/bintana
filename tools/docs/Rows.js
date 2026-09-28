@@ -16,17 +16,39 @@
  * fails when a page is not what this would write -- so a description changed
  * in the C and not regenerated is caught the way an undocumented member is.
  *
- * Only members written in C are answered here (`Native`); a member written in
- * JavaScript documents itself in a JSDoc comment, and its rows are left alone.
+ * A member written in JavaScript -- rad.js, forms.js, a library under `lib/`
+ * -- says it the same way, in the JSDoc comment above its declaration, and
+ * the same `Doc` carries it: the parser reads the comment, the runtime answers
+ * with it. A library is asked about through its sources (`Sources`), since no
+ * library is loaded in the process that writes the pages.
  */
 
 /* The pages whose rows are written. */
 function docPages(root) {
     const pages = ["docs/llm/controls.md", "docs/llm/library.md", "docs/llm/forms.md"];
+    for (const lib of docLibraries(root))
+        if (File.Exists(File.Join(root, `docs/llm/${lib}.md`)))
+            pages.push(`docs/llm/${lib}.md`);
     for (const p of Directory.Files(File.Join(root, "docs/reference"),
                                     { Pattern: "*.md", Recursive: true }).sort())
         pages.push(p.slice(root.length + 1));
     return pages;
+}
+
+/* The libraries shipped under `lib/`, by directory name. */
+function docLibraries(root) {
+    return Directory.List(File.Join(root, "lib"))
+        .filter((d) => File.IsDir(File.Join(root, "lib", d))).sort();
+}
+
+/* Every source a library is written in, which is how its classes are asked
+ * about. */
+function docLibrarySources(root) {
+    const out = [];
+    for (const lib of docLibraries(root))
+        for (const f of Directory.Files(File.Join(root, "lib", lib), { Pattern: "*.js" }).sort())
+            out.push(File.Load(f));
+    return out;
 }
 
 /* Which classes or globals a row under this heading of this page can be about:
@@ -47,6 +69,9 @@ function docOwners(page, section) {
     }
     if (page.endsWith("llm/forms.md"))
         return sec === "Menus" ? ["MenuItem"] : sec === "Actions" ? ["Action"] : [];
+    /* A library's page is headed by its classes. */
+    if (page.startsWith("docs/llm/"))
+        return sec ? [sec.split(" ")[0].replace(/`/g, "")] : [];
     const many = { Http: ["Http", "HttpClient", "Multipart"],
                    HttpServer: ["HttpServer", "HttpRequest"],
                    Xml: ["Xml", "XmlDocument", "XmlNode"],
@@ -100,13 +125,21 @@ const DOC_ROW = /^(\|\s*(\*\*event\*\*\s*)?`([^`]+)`[^|]*\|)(.*)\|\s*$/;
  */
 function docRows(root) {
     const members = new Map();
-    const memberDoc = (owner, name) => {
+    const sources = docLibrarySources(root);
+    const memberDoc = (owner, name, qualified) => {
         if (!members.has(owner)) {
             let got = [];
-            try { got = Widget.Members(owner); } catch (e) { got = []; }
+            try { got = Widget.Members(owner, { Sources: sources }); } catch (e) { got = []; }
             members.set(owner, got);
         }
-        const m = members.get(owner).find((x) => x.Name === name && x.Native && x.Doc);
+        const m = members.get(owner).find((x) => x.Name === name && x.Doc);
+        /* `Widget.PropertyNames(type)` is a static and `PropertyNames()` the
+         * method of the same name, and a class lists a name once: a row
+         * written with the class in front of it is about the static, and the
+         * method's description is not its own. */
+        if (m && qualified && m.Kind !== "Static" &&
+            members.get(owner).some((x) => x.Kind === "Static"))
+            return null;
         return m ? m.Doc : null;
     };
     const eventDoc = (owner, name) => {
@@ -141,7 +174,7 @@ function docRows(root) {
 
             let doc = null;
             for (const o of owners) {
-                doc = m[2] ? eventDoc(o, name) : memberDoc(o, name);
+                doc = m[2] ? eventDoc(o, name) : memberDoc(o, name, !!q);
                 if (doc) break;
             }
             if (!doc) continue;

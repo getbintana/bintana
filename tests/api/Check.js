@@ -1141,9 +1141,14 @@ function checkGlobalSignatures(root, problems) {
  *
  * Asked of the runtime, the way the IDE asks: the members of every widget
  * class, of every global the C installs and of every prototype a `type X`
- * comment names, and every event of every widget class. A member written in
- * JavaScript is not asked here -- its description is a JSDoc comment the
- * parser reads, which is another check.
+ * comment names, and every event of every widget class -- and the members
+ * written in JavaScript the same way: rad.js's and forms.js's, asked of the
+ * same classes, and every class a library under `lib/` declares, asked through
+ * its sources. Those say what they are for in the JSDoc comment above the
+ * declaration, which the parser reads and `Doc` carries.
+ *
+ * A `<control>_<event>` method is a handler the class wrote for itself and
+ * not something a caller writes, so it is not asked about.
  */
 function checkDocs(root, problems) {
     const owners = new Set(["Widget", ...Widget.Types()]);
@@ -1154,21 +1159,24 @@ function checkDocs(root, problems) {
     }
     /* Counted once per description and not once per class: a control
      * inherits a hundred members, and each is one thing written once. */
+    const libSources = docLibrarySources(root);
+    for (const src of libSources)
+        for (const s of Application.Symbols(src))
+            if (s.Kind === "Class") owners.add(s.Name);
     const written = new Set();
     const seen = new Set();
     for (const name of [...owners].sort()) {
         let members;
-        try { members = Widget.Members(name); } catch (e) { continue; }
+        try { members = Widget.Members(name, { Sources: libSources }); } catch (e) { continue; }
         for (const m of members) {
-            /* Only what is written in C: a member written in JavaScript says
-             * what it is for in a JSDoc comment, which is another check. */
-            if (!m.Native) continue;
+            if (m.Name.includes("_")) continue;
             const key = `${name}.${m.Name}`;
             if (seen.has(key)) continue;
             seen.add(key);
             if (!m.Doc)
-                problems.push(`${key} says nothing about what it is for -- the ` +
-                              `lines after its signature comment`);
+                problems.push(`${key} says nothing about what it is for -- ` +
+                              (m.Native ? `the lines after its signature comment`
+                                        : `a JSDoc comment above its declaration`));
             else written.add(`${m.Name}\u0000${m.Doc}`);
         }
     }
@@ -1349,7 +1357,7 @@ function Main() {
         : `api: ${seen.size} widget members and ${Dictionary.Count(events)} events, ` +
           `plus ${statics} class statics, ${globals} on the globals and ${lib} ` +
           `published by lib/, ${verbs} global verbs with their parameters named, ` +
-          `${docs} native members and events saying what they are for, ` +
+          `${docs} members and events saying what they are for, in C and in JavaScript, ` +
           `${shadows} member${shadows === 1 ? "" : "s"} checked ` +
           `for shadowing a base one, ` +
           `all documented -- and ${ref.checked} again in the ${ref.pages} ` +

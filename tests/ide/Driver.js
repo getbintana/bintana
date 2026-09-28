@@ -257,7 +257,7 @@ function makeChildProject() {
               '}\n' +
               'class Dial extends Component {\n' +
               '    static Events = ["Turn"];\n' +
-              '    static Make(v) { return new Dial().Value = v; }\n' +
+              '    /** a dial already turned to v */ static Make(v) { return new Dial().Value = v; }\n' +
               '    get Value() { return this._v || 0; }\n' +
               '    set Value(v) { this._v = Number(v) || 0; }\n' +
               '    turn() { this.Emit("Turn"); }\n' +
@@ -3026,6 +3026,12 @@ function* p_completion(ide) {
     const dial = answer("", "Dial.");
     check("a library class offers its members, read out of the parser",
           dial.includes("Value"), JSON.stringify(dial));
+    /* **And what a member of it is for**, from the JSDoc comment above its
+     * declaration: the parser reads it out of a file this process never ran,
+     * exactly as a native member's comes out of the C. */
+    eq("a library member's popup row says what its JSDoc says",
+       (ask("", "Dial.").find((p) => p.Text === "Make") || {}).Doc,
+       "a dial already turned to v");
 
     /* **And the surface it inherits, which is the other 66 of the 68.** `Dial`
      * is a `Component`, and before the supertype reached the parser there was

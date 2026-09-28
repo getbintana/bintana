@@ -167,7 +167,7 @@ boundary is the process: the IDE already runs a project as a child.
 | `Icons([contains])` | every icon name the search path offers, sorted; narrowed by substring |
 | `DecorationLayout` | how this desktop arranges a window's title bar — `"icon,menu:minimize,maximize,close"` |
 | `CheckSource(text)` | `null` if the text is valid JavaScript, otherwise `{ Message, Line, Column }` |
-| `Symbols(text)` | `[{ Name, Kind, Line, Parent }]` — the classes, methods and top-level functions the text declares, each with its line, out of the parser that would run it |
+| `Symbols(text)` | `[{ Name, Kind, Line, Parent, Super, Params, End, Doc, Returns }]` — the classes, methods, top-level functions, functions assigned at the top level, variables and scopes the text declares, each with its line and its JSDoc comment, out of the parser that would run it |
 | `LibraryPath(name, [project])` | where a library by that name is, or `""`. The same six-place search `uses` does — published so a tool that opens *other* projects asks about theirs instead of keeping a second copy of the path, since two implementations of one lookup drift and the one that drifts is the one nobody runs from a shell |
 | `Libraries([project])` | the names of every library those six places offer, sorted and deduplicated — a name found twice is the one nearest the project, which is the one `uses` would load. The other direction of the same lookup: one resolves a name, the other says which names there are, which is what an IDE offering them to tick had no way to ask |
 | `OnError` | assign `(message, stack) => …` to take over uncaught errors — **two strings, not the `Error`**: see below |
@@ -233,8 +233,12 @@ editor should list a file with. A pattern that looks for declarations finds them
 in comments and in strings, needs a rule about indentation to tell a method from
 a call, and disagrees with the next pattern that needs the same answer -- this
 tree had four of them, and the IDE's outline, its handler marks and its
-go-to-symbol read this now. `Kind` is `"Class"`, `"Method"` or `"Function"`,
+go-to-symbol read this now. `Kind` is `"Class"`, `"Method"` or `"Function"`
+among others (the full list is in [llm/library.md](llm/library.md#application)),
 `Parent` is the class a method is in and `""` otherwise, and `Line` is 1-based.
+**`Doc` is the JSDoc comment touching a declaration** and `Returns` the type in
+its `@returns`, which is how a member written in JavaScript says what it is for
+the way a native one does beside its C entry.
 
 ```js
 Application.Symbols("class Cart {\n    Total() {}\n}\nfunction Main() {}")

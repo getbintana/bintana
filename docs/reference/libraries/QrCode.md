@@ -32,36 +32,36 @@ levels, and the numeric, alphanumeric and byte modes.
 
 | | | |
 |---|---|---|
-| `Encode(text, [options])` | text in, a `QrCode` out. The whole encoder | [encoding](#encoding) |
-| `Version` | 1 to 40, the smallest that holds the text. `1`…`40` | [the version](#the-version) |
-| `Ecc` | `L` `M` `Q` `H`, as asked. `"M"` | [the level](#the-level) |
-| `Mode` | `Numeric` `Alphanumeric` `Byte`, what the text was encoded as | [the modes](#the-modes) |
-| `Mask` | 0-7, the one the penalty rules chose | [the mask](#the-mask) |
+| `Encode(text, [options])` | the whole encoder | [encoding](#encoding) |
+| `Version` | 1 to 40, the smallest that held the text at the level asked | [the version](#the-version) |
+| `Ecc` | error correction | [the level](#the-level) |
+| `Mode` | `Numeric`, `Alphanumeric` or `Byte`: what the text was encoded as | [the modes](#the-modes) |
+| `Mask` | 0-7 forces that mask instead of scoring all eight | [the mask](#the-mask) |
 
 **The symbol**
 
 | | | |
 |---|---|---|
-| `Size` | modules a side, **without** the quiet zone | [the grid](#the-grid) |
-| `Dark(x, y)` | one module, `true` for dark; outside the symbol is light | [the grid](#the-grid) |
+| `Size` | modules a side, without the quiet zone | [the grid](#the-grid) |
+| `Dark(x, y)` | one module, `true` for dark, `(0, 0)` being the top left | [the grid](#the-grid) |
 
 **Drawing it**
 
 | | | |
 |---|---|---|
-| `Paint(p, x, y, side, [options])` | onto any `Painter`, quiet zone included | [painting](#painting) |
-| `ToSvg([options])` | an SVG document, one module to a unit | [off the screen](#off-the-screen) |
-| `ToText([options])` | block characters, two rows a line | [off the screen](#off-the-screen) |
+| `Paint(p, x, y, side, [options])` | the symbol onto any [`Painter`](../../llm/controls.md#painter) — a `DrawingArea`'s frame, a PNG through `Save`, a PDF page | [painting](#painting) |
+| `ToSvg([options])` | the symbol as an SVG document, one module to a unit of the view box, `shape-rendering="crispEdges"` so no viewer blurs it | [off the screen](#off-the-screen) |
+| `ToText([options])` | two rows of modules per line in `█ ▀ ▄` — a console program, and what `tests/qr` reads | [off the screen](#off-the-screen) |
 
 ## Encoding
 
 | | |
 |---|---|
-| `Encode(text, [options])` | the whole encoder. `text` is a string or `Bytes`; a string is encoded in the narrowest mode that holds all of it, as UTF-8 when that is byte mode, and `Bytes` is byte mode as it stands |
+| `Encode(text, [options])` | the whole encoder. `text` is a string or `Bytes`; a string is encoded in the narrowest mode that holds all of it, as UTF-8 when that is byte mode, and `Bytes` is byte mode as it stands. Answers a `QrCode` |
 
 | Option | |
 |---|---|
-| `Ecc` | error correction: `L` (7 % recoverable), `M` (15 %), `Q` (25 %) or `H` (30 %). `"M"` |
+| `Ecc` | error correction: `L` (7 % recoverable), `M` (15 %), `Q` (25 %) or `H` (30 %). `"M"`. A code at `H` survives more damage and holds less. Defaults to `"M"`. |
 | `MinVersion` | the smallest version that may be used, 1 to 40. `1` |
 | `MaxVersion` | the largest. `40`. The version chosen is the **smallest in range that holds the text**; text that fits none is refused, and the sentence says at which version and level and how many bits of room there were |
 | `Mask` | 0-7 forces that mask instead of scoring all eight. For a test, or a scanner that likes one particular pattern |
@@ -166,9 +166,9 @@ tolerates and a person sees.
 | Symptom | |
 |---|---|
 | `text ... do not fit version 40 at level H (2334 bits of data)` | the text is past what the level can hold at the largest version. Lower `Ecc`, shorten the text, or `MinVersion` cannot help — the ceiling is the version |
-| `Ecc 'X' is not one of L, M, Q, H` | a level that is not one of the four |
+| `Ecc 'X' is not one of L, M, Q, H` | error correction: `L` (7 % recoverable), `M` (15 %), `Q` (25 %) or `H` (30 %). `"M"`. A code at `H` survives more damage and holds less. Defaults to `"M"`. |
 | `versions 5 to 4 are not a range within 1-40` | `MinVersion` above `MaxVersion`, or either outside 1-40 |
-| `Mask 8 is not 0-7` | a forced mask outside the eight |
+| `Mask 8 is not 0-7` | 0-7 forces that mask instead of scoring all eight. For a test, or a scanner that likes one particular pattern |
 | `expected text or Bytes, got number` | something that is not a string and not `Bytes` |
 
 A `TypeError` is a bad argument and a `RangeError` is a value out of range; both

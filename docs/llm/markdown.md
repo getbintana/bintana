@@ -35,21 +35,21 @@ designable and serialised.
 
 | Member | |
 |---|---|
-| `Text` | the document, as Markdown. **Not translated** — a whole document does not belong in a `.po` file, the same line [`SourceEditor`](controls.md#sourceeditor) draws. `""` |
-| `Path` | the file it came from, `""` for text set by hand. What a relative image resolves against; without one they resolve against the project |
-| `BaseFont` | the body font, a Pango description. Everything else is this in proportion — a heading is it scaled and emboldened. `""` is the desktop's |
-| `CodeFont` | what a code span and a code block are set in. `""` is the monospace at the body's size |
+| `Text` | the document, as Markdown. **Not a translated property** — a whole document in a `.po` file is not a caption somebody will translate, the same line [`SourceEditor`](../reference/widgets/SourceEditor.md) draws. Defaults to `""`. |
+| `Path` | where it came from, which is what a relative image resolves against. Setting `Text` by hand leaves it empty and pictures then resolve against the project |
+| `BaseFont` | the body font. Everything else is it in proportion — a heading is it scaled and emboldened — so a document set larger is *entirely* larger. `""` is the desktop's |
+| `CodeFont` | what a code span and a code block are set in. `""` is the desktop's monospace at the body's size |
 | `MaxWidth` | the measure of the text column, in pixels. Past that the column keeps this width and is **centred**: a document pinned to the left of a maximised window is a line of ninety words. `0` is the whole width |
-| `Margins` | the gutter around the document, in pixels: one number for all four edges, or `{ Top, Right, Bottom, Left }`. `24`. Every side is a finite number or the assignment throws; margins that leave no printable height on the sheet make `SavePdf`/`Send` throw |
-| `Paper` | `A4` `Letter` `A5` — what `SavePdf` uses when it is not told one. `"A4"` |
+| `Margins` | the gutter around the document, in pixels: one number for all four edges, or `{ Top, Right, Bottom, Left }`. `24`. Every side is a finite number or the assignment throws; margins that leave no printable height on the sheet make `SavePdf`/`Send` throw. Margins that leave no printable height on the paper are refused by `SavePdf` and `Send` — the pagination could never advance past them |
+| `Paper` | `A4` `Letter` `A5` — what `SavePdf` uses when it is not told one. Defaults to `"A4"`. |
 | `Scroll` | how far down it is scrolled, in pixels. Assigning **clamps** to `[0, ScrollMax]`, so a number past the end is the end |
 | `ScrollMax` (ro) | the largest `Scroll` that still shows text: the document's height minus one view. `0` when it all fits |
-| `ContentHeight` (ro) | how tall the whole document is. Measures lazily, so it is answerable in `Form_Open` before anything has drawn |
+| `ContentHeight` (ro) | how tall the whole document is. **Measures lazily**, so it is answerable in `Form_Open` before anything has drawn |
 | `Headings` (ro) | every heading in order: `{ Level, Text, Id, Y }`. What a table of contents is built from. `Text` is the words without their emphasis, `Id` the anchor GitHub would give them — letters and digits of any script kept, lower-cased, and a repeated heading numbered (`setup`, `setup-1`, `setup-2`) |
 | `Selection` (ro) | what the reader has selected, as text. Runs are joined with a newline, so three paragraphs paste as three paragraphs. `""` when nothing is |
 | `SelectAll()` | every word in the document — what Ctrl+A does; → whether there was anything |
 | `Deselect()` | nothing selected — what Escape does; → whether there had been something |
-| `Find(text)` | the first run holding that text: selects it and scrolls it into view; → whether there was one. Case folded, nothing else |
+| `Find(text)` | the first run holding that text: **selects it and scrolls it into view**; → whether there was one. Case is folded and nothing else is |
 | `FindNext()` | the next one after the selection, wrapping; → whether there was one |
 | `Copy()` | `Selection` onto the clipboard — what Ctrl+C does; → whether there was anything to copy |
 | `Load(path)` | the file into `Text`, remembering `Path` so its pictures resolve |

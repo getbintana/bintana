@@ -64,9 +64,9 @@ handler to forget. Three dialogs in this tree used to check for `"Escape"` in
 
 | Member | |
 |---|---|
-| `Ask(message, onConfirm, [options])` | the whole dialog. `message` is the question; the callback takes no argument, because the only thing it can mean is yes |
-| `Text` | the window's title. `""` from `ask` unless `Title` says otherwise |
-| `Modal` | `true` while the dialog is up |
+| `Ask(message, onConfirm, [options])` | builds the dialog, shows it, focuses the cancel button, and answers the shown window. **Returning it is what lets a caller keep a handle** — to move it, or to close it from somewhere else — and almost no caller needs to. `message` is the question; the callback takes no argument, because the only thing it can mean is yes |
+| `Text` | the window title. **Translated**. `Caption` is an alias |
+| `Modal` | blocks its parent. Made transient for the active window on `Show()` |
 
 | Option | |
 |---|---|
@@ -84,8 +84,8 @@ handler to forget. Three dialogs in this tree used to check for `"Escape"` in
 | Member | |
 |---|---|
 | `Prompt(label, onAccept, [options])` | the whole dialog. The callback takes the trimmed text and, when a checkbox was asked for, whether it was ticked |
-| `Text` | the window's title. `""` from `prompt` unless `Title` says otherwise |
-| `Modal` | `true` while the dialog is up |
+| `Text` | the window title. **Translated**. `Caption` is an alias |
+| `Modal` | blocks its parent. Made transient for the active window on `Show()` |
 
 | Option | |
 |---|---|

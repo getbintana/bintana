@@ -22,13 +22,13 @@ with `[object Object]`, and is now a refusal that says so.
 |---|---|---|
 | `Load(path)` | the whole file as a string | [text](#text) |
 | `LoadBytes(path)` | the whole file as [`Bytes`](../../llm/library.md#bytes), untouched — what `Load` cannot do, since it answers text | [bytes](#bytes) |
-| `LoadJson(path)` | → it, parsed | [json](#json) |
-| `LoadXml(path)` | → it, as an XML document | [xml](#xml) |
+| `LoadJson(path)` | the file, parsed | [json](#json) |
+| `LoadXml(path)` | the file as a [`Xml`](Xml.md) document | [xml](#xml) |
 | `Save(path, text)` | writes it **atomically** — a temporary beside it, renamed over — so a failed write leaves the old file intact and a reader never sees half a file | [text](#text) |
 | `Append(path, text)` | adds `text` to the end, and creates the file when it is not there | [text](#text) |
 | `SaveBytes(path, bytes)` | those bytes, exactly; the pair of `LoadBytes` | [bytes](#bytes) |
-| `SaveJson(path, value)` | one canonical shape | [json](#json) |
-| `SaveXml(path, node)` | the canonical XML shape, atomically | [xml](#xml) |
+| `SaveJson(path, value)` | one canonical shape: indented by two, one trailing newline | [json](#json) |
+| `SaveXml(path, node)` | the canonical XML shape, atomically, honouring neither locale nor encoding guesses | [xml](#xml) |
 
 **Files themselves**
 
@@ -83,7 +83,7 @@ and destroys a PNG.
 | | |
 |---|---|
 | `LoadXml(path)` | the file as a [`Xml`](Xml.md) document. **The error names the file**, and the document's own declaration says what encoding it is in: this reads bytes, unlike `Load` |
-| `SaveXml(path, node)` | the canonical shape [`Xml.Stringify`](Xml.md) defines, written by the atomic `Save` |
+| `SaveXml(path, node)` | the canonical XML shape, atomically, honouring neither locale nor encoding guesses |
 
 XML is a **document** and JSON is a value; the two pairs are not the same
 thing, and [`Xml`](Xml.md) is where that is argued.

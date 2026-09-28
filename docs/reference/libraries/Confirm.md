@@ -13,9 +13,9 @@ Confirm.Ask("Delete this client?", () => { this.remove(); },
 
 | Member | What it is | More |
 |---|---|---|
-| `Ask(message, onConfirm, [options])` | the whole dialog. `message` is the question; `onConfirm` takes no argument, because the only thing it can mean is yes | [asking](#asking) |
-| `Text` | the window's title, a string. `""` from `ask` unless `Title` says otherwise | [asking](#asking) |
-| `Modal` | `true` while the dialog is up, and it never answers otherwise | [asking](#asking) |
+| `Ask(message, onConfirm, [options])` | builds the dialog, shows it, focuses the cancel button, and answers the shown window | [asking](#asking) |
+| `Text` | the window title | [asking](#asking) |
+| `Modal` | blocks its parent | [asking](#asking) |
 
 Everything on `Widget` and on `Form` is on it too, and the rest of this page is
 about the three above.
@@ -24,9 +24,9 @@ about the three above.
 
 | Member | |
 |---|---|
-| `Ask(message, onConfirm, [options])` | builds the dialog, shows it, focuses the cancel button, and answers the shown window. **Returning it is what lets a caller keep a handle** — to move it, or to close it from somewhere else — and almost no caller needs to |
-| `Text` | the window's title. **`""` from `ask` when no `Title` is given**, because a modal with an empty title bar looks like a bug and there is no design-time default to fall back on |
-| `Modal` | `true` from `Show()`. A question asked over a window somebody is still typing in is a question about the wrong thing |
+| `Ask(message, onConfirm, [options])` | builds the dialog, shows it, focuses the cancel button, and answers the shown window. **Returning it is what lets a caller keep a handle** — to move it, or to close it from somewhere else — and almost no caller needs to. `message` is the question; the callback takes no argument, because the only thing it can mean is yes |
+| `Text` | the window title. **Translated**. `Caption` is an alias |
+| `Modal` | blocks its parent. Made transient for the active window on `Show()` |
 
 `ask`'s options:
 

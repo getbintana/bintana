@@ -175,8 +175,44 @@ not (a default, *read-only while …*) -- appending their *first* sentences
 produced two descriptions of one thing glued together. The links in a
 description are written from the root (`docs/llm/library.md#bytes`), since one
 text lands in pages in different directories; `tools/docs` makes each one
-relative to its page. A member written in JavaScript is the next stage: a
-JSDoc comment the parser reads.
+relative to its page.
+
+**A member written in JavaScript says it in a JSDoc comment** -- rad.js,
+forms.js and every library under `lib/` -- and nothing else changes: the
+parser reads the comment (the tenth fork patch), `Application.Symbols` hands it
+out as `Doc` with the type after `@returns` as `Returns`, and `Widget.Members`
+answers with it, so `tools/docs.sh` writes those rows from the same field and
+`tests/api.sh` fails on a public JavaScript member with no comment the same way
+it fails on a native one.
+
+```js
+/** runs `tick` once after `delay` milliseconds, and answers the `Timer` */
+static After(delay, tick) { … }
+```
+
+Four things are worth knowing before writing one. **The comment has to touch
+the declaration** -- ending on the line above it or on the same line -- or it
+documents nothing: a `/** … */` inside a body is not the next method's. **A
+plain `/* … */` is never read**, so the implementation notes above a member
+stay where they are and the JSDoc goes directly above the declaration, under
+them. **The parser sees declarations and not calls**: a class member, a
+top-level function, a function assigned at the top level (`File.LoadJson =
+function`, `Widget.prototype.Dump = function`), and each function an object
+literal holds when that literal is the right side of a top-level assignment
+(`GLOBAL.Settings = { Get() {} }`). A `defineProperty` call is none of those,
+which is why forms.js writes the accessors it adds to classes the C made
+(`Caption`, `Controls`, `Menus`, `Actions`, `Item`) as small classes copied
+across by `mixIn` -- **a class the prelude declares and never installs is read
+as a mixin**, and what it declares documents that name wherever it went
+(`prelude_mark` in `bta_widget.c`). And **the prelude is read once, lazily**:
+rad.js and forms.js are baked into the binary, so the index `Widget.Members`
+answers them from is built on the first question and kept -- which also means
+editing one needs a rebuild before the new comment is seen, the rule that file
+already has. The 169 JavaScript descriptions were migrated from the rows the
+way the C ones were; the forty the documentation only had as prose or in a
+three-column table (`Field.Text` and its kind, `Settings`, `Nsis`) were
+written by hand. A `<control>_<event>` method is a handler the class wrote for
+itself and is not asked about.
 
 **There is no declaration file for outside editors, and that is a decision.**
 A generator (`tools/typings`) wrote `bintana.d.ts` for VS Code, and `api.sh`
@@ -468,11 +504,11 @@ used to read as no id at all; a project that declares none keeps the old answer,
 program's own name. `GtkApplication` also takes the id as the default window
 icon when the theme has one by that name (`gtkapplication.c`).
 
-## The nine patches in vendor/
+## The ten patches in vendor/
 
 `vendor/quickjs` is a **submodule** of
 [`getbintana/quickjs`](https://github.com/getbintana/quickjs), branch `bintana`:
-upstream **v0.17.0** plus the nine patches below, one commit each (the eighth
+upstream **v0.17.0** plus the ten patches below, one commit each (the eighth
 carries a fix as a second commit, `1493dc7`, until it is squashed into it). The fork's
 `BINTANA.md` is the recipe; what follows is what each patch does and what
 dropping it costs.
@@ -867,6 +903,44 @@ two kinds fewer, and the IDE's bare names go back to the globals alone.
 `tests/widgets` asserts it (`testCuratedLanguage`: each declared name at its
 line, a scope with its parameters and span, an arrow, and one that broke) and
 `tests/ide`'s `completion` asserts what the IDE makes of it.
+
+### 10. The parser reports each declaration's JSDoc comment
+
+The handler gains a `doc`, and there is one more kind, `JS_SYMBOL_ASSIGNED`.
+It is what makes a member written in JavaScript document itself the way a
+native one does beside its C entry (see *what a member is for is written once*).
+
+**The lexer keeps the last comment that opens with two stars**, as a span of
+the source and the line it ended on, and a declaration takes it
+(`js_take_doc`) only when it is adjacent (`js_doc_adjacent`): ending on the
+line before or on the same line, with nothing between it and the token but an
+identifier, a dot, an `=`, a `*` or whitespace. Without the adjacency the first
+version documented a plain method with the last `/** … */` written inside the
+body of the one above it. A class's comment is taken at its line, a member's at
+its line, a top-level function's before its parameters -- and an anonymous
+class held in `pending_class_doc` until the assignment that names it reports it.
+
+**`JS_SYMBOL_ASSIGNED` is a function assigned at the top level, named by its
+target as written**: `File.LoadJson`, `Widget.prototype.Dump`. The
+assignment's left side and its documentation are *looked at* before the right
+side is parsed and taken only if what was parsed made a closure
+(`OP_fclosure`/`OP_set_name`), because by the time a function on the right is
+read the last comment is one inside its body. **An object literal on the right
+reports each function it holds** as assigned to `<target>.<name>` --
+`GLOBAL.Settings.Get` -- through `literal_owner`, which the literal takes so a
+literal nested inside it owns nothing; a getter is reported with no
+parameters and a setter not at all, since it is the same name. The host reads
+the target's segment before the member as the owner, and `prototype` before
+that as *an instance member*, so whatever the target was reached through does
+not matter.
+
+**Dropping it does not fail to build**: every `Doc` is empty, `tests/api.sh`
+reports every JavaScript member as undocumented and `tools/docs.sh` stops
+writing their rows. `tests/widgets` asserts it (a class, a method with tags, a
+comment inside a body documenting nothing, an assigned function with an inline
+`@returns`, a literal's method and getter, a nested literal owning nothing, and
+the same through `Widget.Members` with `Sources`), and `tests/ide`'s
+`completion` asserts a library member's popup row.
 
 ## Memory rules
 

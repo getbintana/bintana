@@ -19,12 +19,12 @@ Regex.Escape(name)                    // a name as a literal inside a pattern
 | | |
 |---|---|
 | `new Regex(pattern, [options])` | a pattern. `options` is `{ IgnoreCase, Multiline, Singleline, Unicode, IgnorePatternWhitespace }` |
-| `IsMatch(text)` | → whether it matches at all |
-| `Match(text, [start])` | → the first match at or after `start`, or `null` |
-| `Matches(text)` | → every match, for a `for…of` |
-| `Replace(text, with, [count])` | → the text with the matches replaced. **All of them** unless a count says how many |
-| `Split(text)` | → the pieces between the matches |
-| `Regex.Escape(text)` | → the text as a **literal** inside a pattern |
+| `IsMatch(text)` | whether it matches at all |
+| `Match(text, [start])` | the first match at or after `start`, or `null` |
+| `Matches(text)` | every match, for a `for…of` |
+| `Replace(text, with, [count])` | the text with the matches replaced. **All of them** unless a count says how many |
+| `Split(text)` | the pieces between the matches |
+| `Regex.Escape(text)` | the text as a **literal** inside a pattern |
 
 **On a match**: `Value`, `Index`, `Length`, `Groups`, and `Group(n)` or
 `Group("name")`.

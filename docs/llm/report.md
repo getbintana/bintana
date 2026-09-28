@@ -29,13 +29,13 @@ designable and serialised.
 
 | Member | |
 |---|---|
-| `Paper` | `A4` `Letter` `A5`, the sheet in points (72 to the inch). `"A4"` |
-| `Orientation` | `Portrait` `Landscape`. `"Portrait"` |
+| `Paper` | `A4` `Letter` `A5`, the sheet in points (72 to the inch). Defaults to `"A4"`. |
+| `Orientation` | `Portrait` `Landscape`. Defaults to `"Portrait"`. |
 | `Margins` | the gutter around the content, in points: one number for all four edges, or `{ Top, Right, Bottom, Left }`. `40`. Every side is a finite number or the assignment throws |
-| `Page` | the current page, **one-based**. Assigning clamps to `[1, PageCount]`, so a page past the end is the last one, not a blank. Turning a page **redraws and does not re-measure**. `1` |
+| `Page` | the current page, **one-based**. Assigning clamps to `[1, PageCount]`, so a page past the end is the last one, not a blank. Turning a page **redraws and does not re-measure**. Defaults to `1`. |
 | `PageCount` (ro) | how many pages the data and the sections make. Measures lazily, so it is answerable in `Form_Open` before anything has drawn. An empty report is one blank page, not none |
-| `Data` | the rows: an array of plain objects. `Field` elements read a key off the current row; the group bands read the keys named by each group's `.On`. `[]` |
-| `Sections` | the band definitions — the whole of what a report is besides the numbers. See below. `{}` |
+| `Data` | the rows: an array of plain objects. `Field` elements read a key off the current row; the group bands read the keys named by each group's `.On`. Defaults to `[]`. |
+| `Sections` | the band definitions — the whole of what a report is besides the numbers. See below. Defaults to `{}`. |
 | `Refresh()` | re-measures, redraws and emits `Prepared`. Call it when you changed the rows **in place**; assigning `Data` or `Sections` already does |
 | `SavePdf(path)` | **every page, one file**. Vector, at the paper's exact size, so the text in it is text; the pages are the ones the last measure worked out. This is what a report is for — `Save` is for when one page is going into something else |
 | `Send([setup], cb)` | **every page, to paper**, through [`Printer`](library.md#printer): this fills in how many pages there are and the paper and orientation the report was laid out for, and `{ Copies, From, To }` say the job. **A paper chosen in the dialog scales the page rather than re-flowing it**, and the page count does not move — a report's bands are declared in its own points, so it declares no `Paginate` (a `Markdown` does). **Async**, like every dialog here: `cb({ Copies, From, To })` is what was actually sent, and is **not called** when the dialog was cancelled. **To a file it is `SavePdf`**: a PDF is not a printer with a `Copies` of 3 |

@@ -3473,6 +3473,20 @@ static void mark_decl(JSContext *ctx, JSValue out, uint32_t was, uint32_t now,
     JS_FreeValue(ctx, item);
 }
 
+/* The same for a member written in JavaScript: what its JSDoc comment says. */
+static void mark_jsdoc(JSContext *ctx, JSValue out, uint32_t was, uint32_t now,
+                       const char *doc, const char *returns)
+{
+    if (now <= was || ((!doc || !*doc) && (!returns || !*returns)))
+        return;
+    JSValue item = JS_GetPropertyUint32(ctx, out, now - 1);
+    if (returns && *returns)
+        JS_SetPropertyStr(ctx, item, "Returns", JS_NewString(ctx, returns));
+    if (doc && *doc)
+        JS_SetPropertyStr(ctx, item, "Doc", JS_NewString(ctx, doc));
+    JS_FreeValue(ctx, item);
+}
+
 /* What a member found on `at` declares, asked the way `declared_signature`
  * asks: under its own class's name when `at` is in the class table, else under
  * the name that was asked about. */
@@ -3554,6 +3568,30 @@ static uint32_t take_catalog(JSContext *ctx, const char *type, JSValue out,
  * because a lower-case one is the class talking to itself: this repository's own
  * convention, and the one `Widget.Methods` already applies.
  */
+static void prelude_mark(JSContext *ctx, JSValue out, uint32_t was,
+                         uint32_t now, const char *owner, const char *member,
+                         bool is_static);
+
+/* The name of the class whose prototype `at` is, or NULL: what a member found
+ * there is looked up under in the prelude's index. */
+static char *proto_owner(JSContext *ctx, JSValueConst at)
+{
+    JSValue ctor = JS_GetPropertyStr(ctx, at, "constructor");
+    JSValue nm   = JS_IsFunction(ctx, ctor) ? JS_GetPropertyStr(ctx, ctor, "name")
+                                            : JS_UNDEFINED;
+    char   *out  = NULL;
+    if (JS_IsException(ctor) || JS_IsException(nm))
+        JS_FreeValue(ctx, JS_GetException(ctx));
+    else if (JS_IsString(nm)) {
+        const char *c = JS_ToCString(ctx, nm);
+        if (c && *c) out = g_strdup(c);
+        if (c) JS_FreeCString(ctx, c);
+    }
+    JS_FreeValue(ctx, nm);
+    JS_FreeValue(ctx, ctor);
+    return out;
+}
+
 static void take_members_of_resolved(JSContext *ctx, JSValueConst klass,
                                      const char *type, bool all, JSValue out,
                                      GPtrArray *names, uint32_t *n)
@@ -3573,6 +3611,7 @@ static void take_members_of_resolved(JSContext *ctx, JSValueConst klass,
         JSValue at = is_class ? JS_DupValue(ctx, proto) : JS_DupValue(ctx, klass);
         while (JS_IsObject(at) &&
                (is_class ? !JS_IsStrictEqual(ctx, at, bta_object_proto) : true)) {
+            char *owner = is_class ? proto_owner(ctx, at) : NULL;
             JSPropertyEnum *tab = NULL;
             uint32_t len = 0;
             if (JS_GetOwnPropertyNames(ctx, &tab, &len, at,
@@ -3605,6 +3644,9 @@ static void take_members_of_resolved(JSContext *ctx, JSValueConst klass,
                                                      BTA_SIG_METHOD));
                             mark_native(ctx, out, was, *n,
                                         fn_is_native(ctx, d.value));
+                            if (!fn_is_native(ctx, d.value))
+                                prelude_mark(ctx, out, was, *n,
+                                             is_class ? owner : type, nm, !is_class);
                         }
                         /* A getter with no setter is `ReadOnly`, the word
                          * `Widget.Member` gives the same name -- one class, one
@@ -3622,6 +3664,11 @@ static void take_members_of_resolved(JSContext *ctx, JSValueConst klass,
                             mark_native(ctx, out, was, *n,
                                         fn_is_native(ctx, d.getter) ||
                                         fn_is_native(ctx, d.setter));
+                        if (!JS_IsFunction(ctx, d.value) &&
+                            !fn_is_native(ctx, d.getter) &&
+                            !fn_is_native(ctx, d.setter))
+                            prelude_mark(ctx, out, was, *n,
+                                         is_class ? owner : type, nm, !is_class);
                     }
                     if (nm) JS_FreeCString(ctx, nm);
                     JS_FreeValue(ctx, d.value);
@@ -3630,6 +3677,7 @@ static void take_members_of_resolved(JSContext *ctx, JSValueConst klass,
                 }
                 JS_FreePropertyEnum(ctx, tab, len);
             }
+            g_free(owner);
             JSValue parent = JS_GetPrototype(ctx, at);
             JS_FreeValue(ctx, at);
             at = parent;
@@ -3674,6 +3722,9 @@ static void take_members_of_resolved(JSContext *ctx, JSValueConst klass,
                     mark_native(ctx, out, was, *n,
                                 fn_is_native(ctx, d.value) ||
                                 fn_is_native(ctx, d.getter));
+                    if (type && !fn_is_native(ctx, d.value) &&
+                        !fn_is_native(ctx, d.getter))
+                        prelude_mark(ctx, out, was, *n, type, nm, true);
                 }
                 if (nm) JS_FreeCString(ctx, nm);
                 JS_FreeValue(ctx, d.value);
@@ -3717,6 +3768,8 @@ typedef struct {
     char *name;
     char *kind;
     char *params;
+    char *doc;       /* what its JSDoc comment says, or NULL */
+    char *returns;   /* the type after its `@returns`, or NULL */
 } DeclMember;
 
 static void decl_member_free(gpointer data)
@@ -3725,6 +3778,8 @@ static void decl_member_free(gpointer data)
     g_free(m->name);
     g_free(m->kind);
     g_free(m->params);
+    g_free(m->doc);
+    g_free(m->returns);
     g_free(m);
 }
 
@@ -3919,7 +3974,8 @@ static GPtrArray *form_children_of(JSContext *ctx, const char *form_text,
  * itself is a `Static` with nothing known about arguments, the answer the
  * loaded walk gives a static accessor. */
 static void decl_add_member(DeclClass *d, const char *name, const char *kind,
-                            const char *params)
+                            const char *params, const char *doc,
+                            const char *returns)
 {
     bool getter = g_str_equal(kind, "Getter");
     bool setter = g_str_equal(kind, "Setter");
@@ -3931,12 +3987,15 @@ static void decl_add_member(DeclClass *d, const char *name, const char *kind,
         DeclMember *m = g_ptr_array_index(d->members, i);
         if (!g_str_equal(m->name, name))
             continue;
-        /* The other half of an accessor already listed. */
+        /* The other half of an accessor already listed -- and its
+         * documentation, when the half that came first had none. */
         if (accessor && (g_str_equal(m->kind, "ReadOnly") ||
                          g_str_equal(m->kind, "Property"))) {
             g_free(m->kind);
             m->kind = g_strdup("Property");
         }
+        if (!m->doc && doc && *doc) m->doc = g_strdup(doc);
+        if (!m->returns && returns && *returns) m->returns = g_strdup(returns);
         return;
     }
 
@@ -3947,6 +4006,8 @@ static void decl_add_member(DeclClass *d, const char *name, const char *kind,
                          : (static_accessor || g_str_equal(kind, "Static"))
                            ? "Static" : "Method");
     m->params = g_strdup((accessor || static_accessor || !params) ? "" : params);
+    m->doc     = doc && *doc ? g_strdup(doc) : NULL;
+    m->returns = returns && *returns ? g_strdup(returns) : NULL;
     g_ptr_array_add(d->members, m);
 }
 
@@ -4004,6 +4065,12 @@ static GHashTable *decl_index_build(JSContext *ctx, char **sources, int count)
                 JSValue  qv = JS_GetPropertyStr(ctx, sym, "Params");
                 const char *params = JS_ToCString(ctx, qv);
                 JS_FreeValue(ctx, qv);
+                JSValue  dv = JS_GetPropertyStr(ctx, sym, "Doc");
+                const char *doc = JS_ToCString(ctx, dv);
+                JS_FreeValue(ctx, dv);
+                JSValue  rv = JS_GetPropertyStr(ctx, sym, "Returns");
+                const char *ret = JS_ToCString(ctx, rv);
+                JS_FreeValue(ctx, rv);
                 if (parent && *parent) {
                     /* **The runtime's own convention, and the source walk is
                      * bound by it like the class-table one is.** A lower-case
@@ -4013,10 +4080,43 @@ static GHashTable *decl_index_build(JSContext *ctx, char **sources, int count)
                      * different surface depending on which reader found it. */
                     if (g_ascii_isupper(name[0]))
                         decl_add_member(decl_class_get(index, parent),
-                                        name, kind, params);
+                                        name, kind, params, doc, ret);
                 }
+                if (doc) JS_FreeCString(ctx, doc);
+                if (ret) JS_FreeCString(ctx, ret);
                 if (params) JS_FreeCString(ctx, params);
                 if (parent) JS_FreeCString(ctx, parent);
+            } else if (g_str_equal(kind, "Assigned")) {
+                /* `Cls.prototype.Name = function` is a method of `Cls`, and
+                 * `Cls.Name = function` one of its statics: how a class is
+                 * added to from outside its body -- and `GLOBAL.Bag = { Name()
+                 * {} }` reports `GLOBAL.Bag.Name`, a static of `Bag`. The
+                 * owner is the segment before the member, so whatever the
+                 * target was reached through does not matter. */
+                JSValue  qv = JS_GetPropertyStr(ctx, sym, "Params");
+                const char *params = JS_ToCString(ctx, qv);
+                JS_FreeValue(ctx, qv);
+                JSValue  dv = JS_GetPropertyStr(ctx, sym, "Doc");
+                const char *doc = JS_ToCString(ctx, dv);
+                JS_FreeValue(ctx, dv);
+                JSValue  rv = JS_GetPropertyStr(ctx, sym, "Returns");
+                const char *ret = JS_ToCString(ctx, rv);
+                JS_FreeValue(ctx, rv);
+                char **parts = g_strsplit(name, ".", -1);
+                guint  np    = g_strv_length(parts);
+                const char *last = np ? parts[np - 1] : "";
+                if (np >= 3 && g_str_equal(parts[np - 2], "prototype") &&
+                    g_ascii_isupper(last[0]))
+                    decl_add_member(decl_class_get(index, parts[np - 3]), last,
+                                    "Method", params, doc, ret);
+                else if (np >= 2 && g_ascii_isupper(last[0]) &&
+                         !g_str_equal(parts[np - 2], "prototype"))
+                    decl_add_member(decl_class_get(index, parts[np - 2]), last,
+                                    "Static", params, doc, ret);
+                g_strfreev(parts);
+                if (doc) JS_FreeCString(ctx, doc);
+                if (ret) JS_FreeCString(ctx, ret);
+                if (params) JS_FreeCString(ctx, params);
             }
             JS_FreeCString(ctx, kind);
             JS_FreeCString(ctx, name);
@@ -4025,6 +4125,64 @@ static GHashTable *decl_index_build(JSContext *ctx, char **sources, int count)
         JS_FreeValue(ctx, list);
     }
     return index;
+}
+
+/* **The prelude documents itself the way a project does**: rad.js and
+ * forms.js are JavaScript, so what `Timer.After`, `Settings.Get` or
+ * `Widget.prototype.Dump` is for is the JSDoc comment above it, read by the
+ * same parser and the same index a class in a project's file is read with.
+ * Built on the first question and kept, since the two sources are baked into
+ * the binary and cannot change while it runs. */
+static GHashTable *prelude_index;
+
+static DeclMember *decl_find(DeclClass *d, const char *member, bool is_static)
+{
+    for (guint i = 0; i < d->members->len; i++) {
+        DeclMember *m = g_ptr_array_index(d->members, i);
+        if (g_str_equal(m->name, member) &&
+            g_str_equal(m->kind, "Static") == is_static)
+            return m;
+    }
+    return NULL;
+}
+
+static void prelude_mark(JSContext *ctx, JSValue out, uint32_t was,
+                         uint32_t now, const char *owner, const char *member,
+                         bool is_static)
+{
+    if (now <= was || !owner || !member)
+        return;
+    if (!prelude_index) {
+        const char *rad, *forms;
+        bta_prelude_sources(&rad, &forms);
+        char *srcs[] = { (char *)rad, (char *)forms };
+        prelude_index = decl_index_build(ctx, srcs, 2);
+    }
+    DeclClass *d = g_hash_table_lookup(prelude_index, owner);
+    DeclMember *m = d ? decl_find(d, member, is_static) : NULL;
+
+    /* **A class the prelude declares and never installs is a mixin**: forms.js
+     * writes the accessors it adds to a class the C made (`Caption`,
+     * `Controls`, `Item`) as a class of their own and copies them across, so
+     * that each is a declaration with a comment above it. What such a class
+     * declares documents that name wherever it was copied to. */
+    if (!m && !is_static) {
+        GHashTableIter it;
+        gpointer       key, val;
+        JSValue        global = JS_GetGlobalObject(ctx);
+        g_hash_table_iter_init(&it, prelude_index);
+        while (!m && g_hash_table_iter_next(&it, &key, &val)) {
+            JSValue g = JS_GetPropertyStr(ctx, global, key);
+            if (JS_IsUndefined(g))
+                m = decl_find(val, member, false);
+            else if (JS_IsException(g))
+                JS_FreeValue(ctx, JS_GetException(ctx));
+            JS_FreeValue(ctx, g);
+        }
+        JS_FreeValue(ctx, global);
+    }
+    if (m)
+        mark_jsdoc(ctx, out, was, now, m->doc, m->returns);
 }
 
 
@@ -4134,7 +4292,9 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
             for (DeclClass *d = own; d && guard < 64; guard++) {
                 for (guint i = 0; i < d->members->len; i++) {
                     DeclMember *m = g_ptr_array_index(d->members, i);
+                    uint32_t was = n;
                     take_sig(ctx, out, names, &n, m->name, m->kind, m->params);
+                    mark_jsdoc(ctx, out, was, n, m->doc, m->returns);
                 }
 
                 /* A form class's own children, ahead of the base chain: they
@@ -7729,11 +7889,14 @@ void bta_widgets_init(JSContext *ctx, JSValue global)
              *   **every** public member of anything the name resolves to,
              *   each `{ Name, Kind, Params, Signature, Returns, Doc, Native }`,
              *   **`Doc` what the member is for** — the description written
-             *   beside it in the C, the text these rows are written from — and
+             *   beside it in the C, or the JSDoc comment above it in
+             *   JavaScript (rad.js, forms.js, a library read through
+             *   `Sources`), the text these rows are written from — and
              *   **`Native` whether it is written in C**, `Kind` one
              *   of `Property`, `ReadOnly`, `Method`, `Static`, **`Returns`
              *   what a method or property declares it answers** — the text
-             *   after the arrow in its signature comment (`Bytes`,
+             *   after the arrow in its signature comment, or in a JSDoc
+             *   comment's `@returns {T}` (`Bytes`,
              *   `string[]`, `{ X, Y, Width, Height }`), `""` when nothing is
              *   declared —, and **`Params` the number of arguments it takes,
              *   plus `Signature` — the parameter list with the real names:
@@ -7849,6 +8012,7 @@ void bta_widgets_init(JSContext *ctx, JSValue global)
 
 void bta_widgets_cleanup(JSContext *ctx)
 {
+    g_clear_pointer(&prelude_index, g_hash_table_destroy);
     int       n;
     BtaClass *table = bta_class_table(&n);
 

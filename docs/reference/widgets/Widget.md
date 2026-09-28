@@ -255,7 +255,7 @@ property does is say which classes the control wears.
 | `Tooltip` | plain text, and `""` is none rather than an empty balloon. **Translated** |
 | `TextProperties()` | which of this control's properties hold prose, which is what the catalogue collects and what a designer offers to translate |
 | `Fill(…args)` | fills the **declared** text as a template: a `Label` declared `"{0} files"` and filled with `12` reads *12 files*, and the number stays out of the catalogue |
-| `Declared(name)` | → what the `.form` said, whatever has been assigned since — which is what makes `Fill` possible on a control that has already been filled once |
+| `Declared(name)` | what the `.form` said, whatever has been assigned since — which is what makes `Fill` possible on a control that has already been filled once |
 
 Prose belongs in the `.form` and reaches the user through the catalogue; values
 are filled in from code. `Fill` is the join between the two, and the reason a
@@ -383,11 +383,11 @@ them being privileged:
 
 | | |
 |---|---|
-| `PropertyNames()` | → every settable property, found along the prototype chain — including the ones a component of your own declares |
+| `PropertyNames()` | every settable property, found along the prototype chain — including the ones a component of your own declares |
 | `PropertyOptions(name)` | the exact strings that property accepts, or an empty list. What fills a drop-down in the property grid, and the reason a list of values is never typed twice |
 | `EventNames()` | the events it raises, **most derived first**: `[0]` is the one a double click in the designer writes a handler for |
-| `Serialize()` | → this widget as a `.form` node |
-| `Apply(properties)` | → the widget: the inverse of `Serialize`. A missing dictionary applies nothing, so `Apply(maybe)` is safe |
+| `Serialize()` | this widget as a `.form` node |
+| `Apply(properties)` | the widget: the inverse of `Serialize`. A missing dictionary applies nothing, so `Apply(maybe)` is safe |
 | `Dump()` | prints the whole subtree with the geometry GTK really allocated. **Reach for this instead of a screenshot**, in a test and while working |
 | `StyleRule()` | the CSS rule this widget's own class currently carries |
 | `CssNode()` | the GTK node name it is styled as (`"button"`, `"entry"`) |

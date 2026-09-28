@@ -638,6 +638,10 @@ JSValue bta_lookup_global(JSContext *ctx, const char *name);
  * what `Widget.Members` reads a class's own shape out of.  Takes the text and
  * owns the result. */
 JSValue bta_symbols(JSContext *ctx, const char *src);
+/* A JSDoc comment's description and its `@returns {T}` type, each NULL when
+ * absent; the caller frees both. */
+void    bta_prelude_sources(const char **rad, const char **forms);
+void    bta_split_doc(const char *doc, char **text, char **returns);
 
 /* --- widgets ------------------------------------------------------------ */
 void       bta_widgets_init(JSContext *ctx, JSValue global);

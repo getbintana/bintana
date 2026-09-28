@@ -87,6 +87,10 @@ function declaredNotes(widget) {
  * gives a ctor whose .name is "Stepper", because the class expression is what
  * was named and the assignment came after.  So it is looked up, once.
  */
+/**
+ * the name a class is written under in a `.form` — qualified by its namespace,
+ * which a constructor does not know by itself
+ */
 Widget.TypeName = function (ctor) {
     if (!ctor || !ctor.name) return "";
 
@@ -109,59 +113,82 @@ Widget.TypeName = function (ctor) {
 };
 
 /*
+ * The accessors forms.js adds to classes the C made are written as classes of
+ * their own and copied across, rather than as `defineProperty` calls: a class
+ * is a declaration the parser reads, so each one says what it is for in the
+ * JSDoc comment above it the way any member does, and `Widget.Members` finds
+ * it there.  A class the prelude declares and never installs is read as that
+ * kind of mixin -- see `prelude_mark` in bta_widget.c.  The copy keeps what
+ * `defineProperty` gave them: configurable, not enumerable.
+ */
+function mixIn(from, ...into) {
+    for (const key of ownNames(from.prototype)) {
+        if (key === "constructor") continue;
+        for (const cls of into)
+            defineProperty(cls.prototype, key, ownDescriptor(from.prototype, key));
+    }
+}
+
+/*
  * Caption is the VB/Gambas spelling of Text.  Aliasing on the prototypes keeps
  * both names working on every control that has a caption, including in .form
  * files, since the loader just assigns properties.
  */
-for (const cls of [Form, Label, Button, TextBox, CheckButton]) {
-    defineProperty(cls.prototype, "Caption", {
-        configurable: true,
-        get() { return this.Text; },
-        set(v) { this.Text = v; },
-    });
+class Captioned {
+    /** an alias of `Text` on `Form`, `Label`, `Button`, `TextBox` and `CheckButton` */
+    get Caption() { return this.Text; }
+    set Caption(v) { this.Text = v; }
 }
+mixIn(Captioned, Form, Label, Button, TextBox, CheckButton);
 
-/*
- * Controls: every child bound to this form, in creation order.  The .form
- * loader assigns each named control onto the form, so this is a view over the
- * form's own widget-valued properties.  (Children, by contrast, is the real
- * containment tree, one level at a time.)
- */
-defineProperty(Form.prototype, "Controls", {
-    configurable: true,
-    get() {
+class FormMembers {
+    /*
+     * Controls: every child bound to this form, in creation order.  The .form
+     * loader assigns each named control onto the form, so this is a view over
+     * the form's own widget-valued properties.  (Children, by contrast, is the
+     * real containment tree, one level at a time.)
+     */
+    /**
+     * every child bound to the form by name, in creation order. `Children` is
+     * the containment tree instead, one level deep
+     */
+    get Controls() {
         const out = [];
         for (const key in this) {
             const v = this[key];
             if (v instanceof Widget && v !== this) out.push(v);
         }
         return out;
-    },
-});
+    }
 
-/*
- * Menus, as the .form declared them.  Read-only on purpose: it is the spec the
- * loader was given, not the live GMenu, and a getter with no setter is also how
- * the serialiser knows to leave it out of `properties` -- it belongs at the top
- * level of the file, next to `children`.
- *
- * Empty for a form with no menus, so callers never have to check for undefined.
- */
-defineProperty(Form.prototype, "Menus", {
-    configurable: true,
-    get() { return Array.isArray(this.__menus) ? this.__menus : []; },
-});
+    /*
+     * Menus, as the .form declared them.  Read-only on purpose: it is the spec
+     * the loader was given, not the live GMenu, and a getter with no setter is
+     * also how the serialiser knows to leave it out of `properties` -- it
+     * belongs at the top level of the file, next to `children`.
+     *
+     * Empty for a form with no menus, so callers never have to check for
+     * undefined.
+     */
+    /**
+     * the menu spec as declared. It cannot be read back from GTK, which is why
+     * the spec is kept; `[]` when there are none
+     */
+    get Menus() { return Array.isArray(this.__menus) ? this.__menus : []; }
 
-/*
- * Commands, as the .form declared them, and read-only for every reason `Menus`
- * is: it is the spec and not the live `GSimpleAction`, and a getter with no
- * setter is how the serialiser knows this belongs at the top level of the file
- * beside `children` rather than in `properties`.
- */
-defineProperty(Form.prototype, "Actions", {
-    configurable: true,
-    get() { return Array.isArray(this.__actions) ? this.__actions : []; },
-});
+    /*
+     * Commands, as the .form declared them, and read-only for every reason
+     * `Menus` is: it is the spec and not the live `GSimpleAction`, and a getter
+     * with no setter is how the serialiser knows this belongs at the top level
+     * of the file beside `children` rather than in `properties`.
+     */
+    /**
+     * the commands as the `.form` declared them — the spec, not the live
+     * actions; `[]` when there are none
+     */
+    get Actions() { return Array.isArray(this.__actions) ? this.__actions : []; }
+}
+mixIn(FormMembers, Form);
 
 /* ------------------------------------------------------------------------
  * .form serialisation -- the inverse of the loader.
@@ -366,6 +393,10 @@ function serializeChildren(container) {
  * discovered the same way the serialiser discovers it, so a property grid and
  * a .form file can never disagree about what exists.
  */
+/**
+ * every settable property, found along the prototype chain — including the ones
+ * a component of your own declares
+ */
 Widget.prototype.PropertyNames = function () {
     return settableProperties(this).filter((key) => key !== "Caption");
 };
@@ -397,6 +428,7 @@ Form.Signatures     = { Serialize: "()", SaveForm: "(path)" };
 Notebook.Signatures = { Serialize: "(parentIsFixed)" };
 Container.Signatures = { AddNode: "(node)", BuildChildren: "(node)" };
 
+/** this widget as a `.form` node */
 Widget.prototype.Serialize = function (parentIsFixed = true) {
     const node = { type: Widget.TypeName(this.constructor) };
     if (this.Name) node.name = this.Name;
@@ -425,6 +457,7 @@ Widget.prototype.Serialize = function (parentIsFixed = true) {
  * form that had one would lose it the first time it was saved.  The same reason
  * `Tabs` exists, and the same reason a Form writes its `menus` by hand.
  */
+/** this notebook as a `.form` node, its pages' captions included */
 Notebook.prototype.Serialize = function (parentIsFixed = true) {
     const node = Widget.prototype.Serialize.call(this, parentIsFixed);
 
@@ -441,6 +474,7 @@ Notebook.prototype.Serialize = function (parentIsFixed = true) {
 };
 
 /* A form serialises to the whole file, keyed by class rather than type. */
+/** the whole file, keyed by class */
 Form.prototype.Serialize = function () {
     const out = {
         format: "bintana-form/1",
@@ -468,6 +502,7 @@ Form.prototype.Serialize = function () {
     return out;
 };
 
+/** `Serialize()` plus `File.Save`, pretty-printed */
 Form.prototype.SaveForm = function (path) {
     File.SaveJson(path, this.Serialize());
 };
@@ -483,6 +518,10 @@ Form.prototype.SaveForm = function (path) {
  *   Panel1        160x120 @(16,16)
  *     Button1     110x34  @(20,20)  "Save"
  *     Label1  hidden
+ */
+/**
+ * prints the whole subtree with the geometry GTK really allocated. **Reach for
+ * this instead of a screenshot**, in a test and while working
  */
 Widget.prototype.Dump = function (indent = "") {
     const at   = this.Bounds();
@@ -521,6 +560,10 @@ Widget.prototype.Dump = function (indent = "") {
  * an application restoring its own state does.  A missing dictionary applies
  * nothing, so the caller never has to check.
  */
+/**
+ * the widget: the inverse of `Serialize`. A missing dictionary applies nothing,
+ * so `Apply(maybe)` is safe
+ */
 Widget.prototype.Apply = function (properties) {
     for (const key in properties) this[key] = properties[key];
     return this;
@@ -531,6 +574,10 @@ Widget.prototype.Apply = function (properties) {
  *
  * For anything the loader did not substitute this is just the current value,
  * which is the honest answer: nothing has been standing in for it.
+ */
+/**
+ * what the `.form` said, whatever has been assigned since — which is what makes
+ * `Fill` possible on a control that has already been filled once
  */
 Widget.prototype.Declared = function (name) {
     const note = this.__declared && this.__declared[name];
@@ -557,6 +604,11 @@ Widget.prototype.Declared = function (name) {
  * Named Fill and not Format because `Format` is already a DatePicker property,
  * and a method that shadows a property breaks silently the moment a `.form`
  * assigns it (see TreeView.ExpandNode for the same collision).
+ */
+/**
+ * fills the **declared** text as a template: a `Label` declared `"{0} files"`
+ * and filled with `12` reads *12 files*, and the number stays out of the
+ * catalogue
  */
 Widget.prototype.Fill = function (...args) {
     const declared = String(this.Declared("Text"));
@@ -605,6 +657,11 @@ Widget.prototype.Fill = function (...args) {
  * `PropertyNames()`. `Item` hands back exactly what the node will hold, so there
  * is one spelling of it and not two.
  */
+/**
+ * a container: the component the **designer** draws in it while a form is being
+ * laid out, and how many. `of: ""` removes it. Unreachable from a running
+ * application, which builds the real rows itself
+ */
 Widget.prototype.SetItem = function (of, count) {
     const name = String(of || "").trim();
 
@@ -622,16 +679,25 @@ Widget.prototype.SetItem = function (of, count) {
     return this;
 };
 
-defineProperty(Widget.prototype, "Item", {
-    get() {
+class ItemMembers {
+    /**
+     * `{ of, count }`, or `null`. While it is set the serialiser writes that
+     * key and **no children**: what is in the container is a drawing and not
+     * the form's
+     */
+    get Item() {
         const bag = itemNotes.get(this);
         if (!bag || !bag.of) return null;
         return bag.count === undefined ? { of: bag.of }
                                        : { of: bag.of, count: bag.count };
-    },
-    configurable: true,
-});
+    }
+}
+mixIn(ItemMembers, Widget);
 
+/**
+ * what the *designer* shows instead; `""` removes it. Unreachable from a
+ * running application
+ */
 Widget.prototype.SetDesign = function (name, value) {
     const declared = this.Declared(name);
 
@@ -650,6 +716,7 @@ Widget.prototype.SetDesign = function (name, value) {
 };
 
 /* What the designer is showing instead of the declared value, or undefined. */
+/** the value `SetDesign` gave that property, or `undefined` */
 Widget.prototype.DesignValue = function (name) {
     const bag = designNotes.get(this);
     return bag ? bag[name] : undefined;
@@ -731,6 +798,7 @@ function applyNode(widget, node, designing) {
  * the whole subtree being built and a container's children change parents; the
  * designer already turns `Anchored` off by hand for the same kind of reason.
  */
+/** builds a live widget from a `.form` node and adds it */
 Container.prototype.AddNode = function (node, designing = false) {
     /* Widget.New and not a global by name: a project's own classes -- a
      * component's above all -- live in the global lexical scope and never land
@@ -759,6 +827,7 @@ Container.prototype.AddNode = function (node, designing = false) {
 };
 
 /* Replaces this container's contents with the node's children. */
+/** replaces the contents with that node's children */
 Container.prototype.BuildChildren = function (node, designing = false) {
     this.Clear();
     for (const child of node.children || []) this.AddNode(child, designing);
