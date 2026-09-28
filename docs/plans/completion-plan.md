@@ -1,10 +1,11 @@
 # Completion: what was missing was a declaration, not an analyser
 
-**Stage 1 is built. Stage 0 was built and removed, and stage 2 is not built and
-this document still recommends not building it** -- which is the conclusion the
-measurements reached before any of it was written, and nothing in the building
-overturned. What is in the tree is in the IDE: two more lookups and the closing
-of a hole three flatteners shared. **The completion is the IDE's own**: the
+**Stage 1 is built, and so is what came after it (below: *declared answers*).
+Stage 0 was built and removed, and stage 2 is not built and this document still
+recommends not building it** -- which is the conclusion the measurements reached
+before any of it was written, and nothing in the building overturned: the row a
+lookup could not answer, the return of a call, turned out to be answerable by
+*declaring* it, which is this document's own thesis applied one step further. **The completion is the IDE's own**: the
 declarations for outside editors (stage 0) were generated, guarded, and then
 removed because nothing here consumed them -- see stage 0. What was built is in [`ide.md`](../ide.md#what-the-editor-proposes); this is
 the argument, the measurements, and **the seven things building it corrected**.
@@ -174,6 +175,49 @@ one verb, and which the IDE still asks. Its history is in git.
 None of this stops being *a lookup and nothing else*, which is the rule that path
 is held to.
 
+## Declared answers -- the next lookups, built
+
+The 38 % row was called *the one a lookup can never answer*, and that was true
+only while nothing declared a return. Each of these is still a lookup; what
+changed is what is written down, and all of it is described where it lives
+([`ide.md`](../ide.md#what-the-editor-proposes), and AGENTS.md's *The IDE
+completes a name*):
+
+- **What a member answers** is the arrow in its signature comment in the C
+  (`-> Bytes`, `-> { Size, IsDir }`, `-> string[]`) or `@returns {T}` in a JSDoc
+  comment, published by `Widget.Members` as `Returns`; the IDE follows it step by
+  step through `a.b().c[0].` and through a local assigned from a call.
+- **Every global and class answers through one verb**, `Widget.Members`, with
+  signatures named by the parser or the C comment -- the table of fourteen globals
+  is gone.
+- **A bare name offers what is in scope**, out of the parser's `Scope` and
+  `Variable` report (fork patch 9); **a call shows its parameters** as the
+  cursor moves through them (`Ide.CallTip`); **the classes are the open tabs'**
+  before the disk's.
+- **What a member is for** is written once beside it -- the C comment or a JSDoc
+  comment (fork patch 10) -- and the popup, `docs/llm` and `docs/reference` all
+  read it.
+
+**What is left**, in the order it would be felt, and none of it needs an
+analyser either -- each is one more thing a declaration can say:
+
+1. **The parameters of an event handler** -- `Canvas_Draw(p)` does not know `p`
+   is a `Painter`. The event's signature is published (`EventSignature`); it
+   would have to name each parameter's type.
+2. **The parameters of a callback** -- `File.Watch(path, (ev) => ev.)`: the
+   verb's signature would have to say what the callback receives.
+3. **The element of a list** -- `for (const r of table.All()) r.`; `Returns`
+   already says `T[]`, and `Table.All()` would need *records of the shape*.
+4. **`@param {T}`** in a JSDoc comment, read like `@returns` already is.
+5. **A property's values** -- `this.Lbl.Alignment = "` from `PropertyOptions`.
+6. **The keys of an options object** -- `Exec(cmd, { | })`, where signatures
+   declare them only sometimes.
+7. **An event declared by a JavaScript class** (`static Events`) has no
+   description from the code yet; a native one does.
+
+The first three are one piece: a signature that can say the type of each
+parameter, in the C comment and in `@param`.
+
 ## Stage 2 -- the analyser, and this is still only a plan
 
 This is **LSP**, the Language Server Protocol: editing -- completion, go to
@@ -186,11 +230,13 @@ whole reason this document recommends what it does:
   must be written. DAP is a build.
 - **For editing, VS Code already has a JavaScript language server running** --
   it is the same TypeScript measured above. It is not missing the server. It is
-  missing the declarations, which is stage 0, and stage 0 is done.
+  missing the declarations, which was stage 0 -- built, and removed because
+  nothing here consumed it.
 
-**What it would buy** that stage 1 does not: the return type of a call (38 % of
-declarations) and arbitrary expressions (28 %). Nothing else. Those are the two
-rows a lookup can never answer.
+**What it would buy** that the lookups do not: the return type of a call that
+declares none -- a project function with no `@returns` -- and arbitrary
+expressions (28 %). Nothing else; a call that declares its answer is a lookup
+now.
 
 **What it would cost**, measured: Bun is a single 76 MB binary and **does not
 typecheck at all** -- `const n: number = "text"` runs under it and `bun build`
@@ -229,11 +275,11 @@ contract changes.
 
 Not this document's argument; a caller -- the same test every other deferral in
 this tree is held to. And the caller LSP would have is *somebody who wants to
-edit a Bintana project in an editor that is not this one* -- who is served by
-stage 0, which is now in the tree. That is the honest position, and building
-stage 0 did not weaken it: **the foundations for the analyser were the
-declarations, the declarations have paid for themselves elsewhere, and the
-analyser waits for somebody who needs the two rows a lookup cannot answer.**
+edit a Bintana project in an editor that is not this one* -- who would be
+served by stage 0, which was removed for having no such caller. That is the
+honest position: **the foundations for the analyser were the declarations, the
+declarations paid for themselves in the IDE's own completion, and the analyser
+waits for somebody who needs what no declaration can say.**
 
 ## Considered and rejected
 

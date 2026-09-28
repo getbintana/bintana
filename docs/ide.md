@@ -847,7 +847,7 @@ nothing more is claimed. `ide/modules/Completion.js` answers the other half, thr
 | `this.Btn1.` | `PropertyNames()` on a real `Button` -- the class's own, not a list kept here |
 | `this.MnuSave.` | the same, on a real `MenuItem`: `Enabled`, `Items`, `Value` |
 | `Btn1_` | `EventNames()`, most derived first, so `Ok_Click` comes before the mouse events |
-| `File.` | `Dictionary.Keys(File)` -- so a global that gains a member in C gains it here. **Not for the ones that are classes**: a `class`'s statics are not enumerable, so `Timer.` and `Widget.` answer nothing. Whatever fixes that is not a different way of reading the object -- it is asking somewhere else, the way `PropertyNames()` answers for a control |
+| `File.`, `Timer.`, `Confirm.` | `Widget.Members(name)` -- a global, a class of the runtime or a class of a library this project `uses`, statics included, each with its signature, what it answers and what it is for. A global that gains a member in C gains it here |
 | `Ide.` | what the project's own sources assign into that namespace |
 | `btn.`, `this.lbl.` | what a `new Foo()` **written in this file** says the name is: a widget class answers from the runtime, one of the project's from its own two files |
 | `this.ide.` | what a `/** @param {MainForm} ide */` line says. Nothing else can say it -- a constructor parameter has no `new` |
@@ -887,7 +887,7 @@ project writes that down.
 The JSDoc one is why it is worth having. `this.<field>.` is written 1410 times
 here and `this.ide.` is **509 of them** -- a constructor parameter, so no `new`
 names it, and TypeScript infers `any` for it too. One line fixes it for both, and
-32 lines cover the tree. They are in now, one per constructor that takes a
+30 lines cover the tree. They are in now, one per constructor that takes a
 parameter, and an editor outside this one reads the same lines.
 
 The last one is the one the project cannot be *asked*. A namespace is an
@@ -906,8 +906,11 @@ the language says what `x` is; here the runtime publishes what it knows about
 itself and the `.form` says what every control is.
 
 **And where it stops is stated rather than papered over.** `const x =
-makeThing(); x.` proposes nothing, because nothing in the project says what
-`makeThing` returns. The words provider still offers the *spelling* of anything
+makeThing(); x.` proposes something only when what is called declares what it
+answers -- the arrow in a native member's signature comment, or `@returns {T}`
+in a JSDoc comment -- and nothing when it does not; nothing is inferred from a
+function's body. A parameter has no type either: `(ev) => ev.` inside a callback
+and `p.` inside `Canvas_Draw(p)` propose nothing yet. The words provider still offers the *spelling* of anything
 in the file, which is most of what one wants from a local. Going further needs a
 *resolver* rather than an evaluator, and what shape that may take -- and may not
 -- is in
@@ -934,8 +937,10 @@ keystroke:
   project's code rather than loading it, and the scan is redone only when the
   text is not the one it was taken from.
 - **The chosen row says what the member is for**, under the list: the first
-  sentence of the description written beside the member in the C -- the same
-  text the documentation's rows are written from -- in plain text.
+  sentence of the description written beside the member -- in the C, or in the
+  JSDoc comment above a member written in JavaScript, a library's or the
+  project's own -- the same text the documentation's rows are written from, in
+  plain text.
 - **A bare name offers what is in scope first.** The parameters of every
   function around the cursor and the variables declared in them above it, then
   what the file declares at its top level, then the globals -- among them every
