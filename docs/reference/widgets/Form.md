@@ -11,23 +11,23 @@ dispatches every event to a method. A form is also a
 
 | | | |
 |---|---|---|
-| `CancelButton` (ro) | the button Escape presses | [the keyboard](#the-keyboard) |
-| `DefaultButton` (ro) | the button Enter presses | [the keyboard](#the-keyboard) |
-| `FullScreen` | the window fills the screen | [how it appears](#how-it-appears) |
+| `CancelButton` (ro) | the button Escape presses, likewise | [the keyboard](#the-keyboard) |
+| `DefaultButton` (ro) | the button Enter presses, resolved from whichever declared `Default` | [the keyboard](#the-keyboard) |
+| `FullScreen` | the same, for the whole screen | [how it appears](#how-it-appears) |
 | `HideOnClose` | put away instead of taken apart | [showing and closing](#showing-and-closing) |
 | `Icon` | the window's icon, for a task list or a dock | [how it appears](#how-it-appears) |
-| `Maximized` | a **state**: reads `false` until there is a window | [how it appears](#how-it-appears) |
+| `Maximized` | a **state**: reads `false` until there is a window; set before `Show()` it applies when the window appears | [how it appears](#how-it-appears) |
 | `Modal` | blocks its parent | [showing and closing](#showing-and-closing) |
-| `Resizable` | bounds the **user**, not the layout. Default `true` | [how it appears](#how-it-appears) |
-| `Text` | the window title. **Translated** | [how it appears](#how-it-appears) |
-| `Center()` | a no-op on Wayland: the compositor places windows | [how it appears](#how-it-appears) |
+| `Resizable` | bounds the **user**, not the layout: the contents still drive the size, so a longer translation still opens it wider | [how it appears](#how-it-appears) |
+| `Text` | the window title | [how it appears](#how-it-appears) |
+| `Center()` | **a no-op on Wayland**: the compositor places windows. [`Screen`](../../llm/library.md#screen) answers how big the desktop is, which is a different question from where a window goes | [how it appears](#how-it-appears) |
 | `Close()` | closes it, through `Form_Close`, which may refuse | [showing and closing](#showing-and-closing) |
-| `Minimize()` | a verb, because there is nothing to read back | [how it appears](#how-it-appears) |
-| `Show()` | presents the window | [showing and closing](#showing-and-closing) |
-| **event** `Close()` | it is closing. **Returning `true` keeps it open** | [showing and closing](#showing-and-closing) |
-| **event** `Open()` | the first time it is shown | [showing and closing](#showing-and-closing) |
-| **event** `Resize(width, height)` | the size GTK settled on | [how it appears](#how-it-appears) |
-| **event** `ThemeChange()` | the desktop changed the theme | [how it appears](#how-it-appears) |
+| `Minimize()` | a verb because there is nothing to read back — GTK reports nothing about a minimised window | [how it appears](#how-it-appears) |
+| `Show()` | presents the window, and fires `Open` **before returning** the first time | [showing and closing](#showing-and-closing) |
+| **event** `Close()` | it is closing | [showing and closing](#showing-and-closing) |
+| **event** `Open()` | the first time it is shown, **before `Show()` returns** | [showing and closing](#showing-and-closing) |
+| **event** `Resize(width, height)` | the size GTK settled on — the same numbers `Bounds()` gives | [how it appears](#how-it-appears) |
+| **event** `ThemeChange()` | the desktop changed the theme. [`Dark`](Widget.md#how-it-looks) read inside the handler is already the new answer | [how it appears](#how-it-appears) |
 
 **And on a form**, from `rad.js`: `Controls` (ro) — every child bound to the form
 by name, in creation order — `Menus` (ro), `Serialize()` for the whole file, and
@@ -37,12 +37,12 @@ by name, in creation order — `Menus` (ro), `Serialize()` for the whole file, a
 
 | | |
 |---|---|
-| `Show()` | presents the window, and fires `Open` **before returning** the first time |
-| `Close()` | closes it, through `Form_Close`, which may refuse |
+| `Show()` | presents the window, and fires `Open` **before returning** the first time. **The runtime holds the form while its window is open**, so `new AskForm().Show()` needs no reference kept anywhere |
+| `Close()` | closes it, through `Form_Close`, which may refuse. The runtime's claim on the form ends here, and on `HideOnClose` when it is put away |
 | `Modal` | blocks its parent. Made transient for the active window on `Show()` |
 | `HideOnClose` | put away instead of taken apart. **A closed form's window is destroyed**, so `Show()` on it is not a window either — it stays 0×0. Declare this, or construct the form again |
 | **event** `Open()` | the first time it is shown, **before `Show()` returns**. Where a form fills itself in |
-| **event** `Close()` | it is closing. **Returning `true` keeps it open** — which is where *save before closing?* lives |
+| **event** `Close()` | it is closing. **Returning `true` keeps it open** — which is where *save before closing?* lives. **Returning `true` keeps it open**; returning nothing lets it go |
 
 **A dialog is an ordinary form.** `AskForm`, `ConfirmForm` and the IDE's other
 dialogs are Bintana forms with `Modal` set, not runtime primitives — which is the
@@ -64,7 +64,7 @@ for the same reason.
 
 | | |
 |---|---|
-| `DefaultButton` (ro) | the button Enter presses, resolved from whichever declared [`Default`](Button.md#enter-and-escape). **`null` inside `Form_Open`** |
+| `DefaultButton` (ro) | the button Enter presses, resolved from whichever declared `Default`. **`null` inside `Form_Open`** — it is settled after that handler |
 | `CancelButton` (ro) | the button Escape presses, likewise |
 
 A field that should press the default button on Enter says so itself with
@@ -79,7 +79,7 @@ A field that should press the default button on Enter says so itself with
 | `Resizable` | bounds the **user**, not the layout: the contents still drive the size, so a longer translation still opens it wider. Default `true` |
 | `Maximized` | a **state**: reads `false` until there is a window; set before `Show()` it applies when the window appears. **Keep it out of the `.form`** |
 | `FullScreen` | the same, for the whole screen |
-| `Minimize()` | a verb, because GTK reports nothing about a minimised window |
+| `Minimize()` | a verb because there is nothing to read back — GTK reports nothing about a minimised window |
 | `Center()` | **a no-op on Wayland**: the compositor places windows. [`Screen`](../../llm/library.md#screen) answers how big the desktop is, which is a different question from where a window goes |
 | **event** `Resize(width, height)` | the size GTK settled on — the same numbers `Bounds()` gives. Fires when the window is first given a size too |
 | **event** `ThemeChange()` | the desktop changed the theme. [`Dark`](Widget.md#how-it-looks) read inside the handler is already the new answer; **it may fire twice for one change**, so a handler re-reads and restyles rather than counting |

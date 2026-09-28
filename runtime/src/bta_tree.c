@@ -912,49 +912,113 @@ static JSValue tree_set_autoexpand(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry tree_props[] = {
+    /* Key
+     *   the selected node's key, `""` for none. Assigning selects that node,
+     *   **opening the way to it**, and raises `Select`. Keys are yours to
+     *   choose — a path, an id
+     */
     JS_CGETSET_DEF("Key",   tree_get_key,   tree_set_key),
+    /* Text
+     *   the words of the selected node, `""` when nothing is selected
+     */
     JS_CGETSET_DEF("Text",  tree_get_text,  NULL),
+    /* Count
+     *   how many nodes there are, **at every level**, open or closed
+     */
     JS_CGETSET_DEF("Count", tree_get_count, NULL),
-    /* Add(key, text, [parentKey], [icon]) */
+    /* Add(key, text, [parentKey], [icon])
+     *   a node. `key` is yours to choose and must be unique in this tree; an
+     *   empty `parentKey` is a root; `icon` is a name from the theme, and one
+     *   the theme lacks is dropped rather than drawn as a hole
+     */
     JS_CFUNC_DEF("Add",    4, tree_add),
-    /* Clear() */
+    /* Clear()
+     *   empties the whole tree
+     */
     JS_CFUNC_DEF("Clear",  0, tree_clear),
-    /* RemoveNode(key) */
+    /* RemoveNode(key)
+     *   takes that node out **and the subtree with it** — a node whose parent
+     *   is gone is not something this control can show
+     */
     JS_CFUNC_DEF("RemoveNode", 1, tree_remove),
-    /* SetText(key, text) */
+    /* SetText(key, text)
+     *   renames a node, keeping it where it is — and keeping the selection on
+     *   it. **Translated**
+     */
     JS_CFUNC_MAGIC_DEF("SetText", 2, tree_set_one, NODE_TEXT),
-    /* SetIcon(key, name) */
+    /* SetIcon(key, name)
+     *   its icon, or `""` for none. One column, so no column argument —
+     *   otherwise it is `TableView`'s
+     */
     JS_CFUNC_MAGIC_DEF("SetIcon", 2, tree_set_one, NODE_ICON),
-    /* Exists(key) */
+    /* Exists(key)
+     *   whether that node is there. The question you ask *before* you know,
+     *   so it answers rather than throwing
+     */
     JS_CFUNC_DEF("Exists", 1, tree_exists),
+    /* AutoExpand
+     *   open a node as it arrives, and again when it gains a child after
+     *   being closed by hand. Default `true`. A node with nothing under it
+     *   reads as open too, which hides nothing and is what turns the arrow
+     *   off. `TableView`'s is the same mechanism and answers the same
+     */
     JS_CGETSET_DEF("AutoExpand", tree_get_autoexpand, tree_set_autoexpand),
+    /* ActivateOnSingleClick
+     *   raise `Activate` on one click instead of two. Default `false`
+     */
     JS_CGETSET_DEF("ActivateOnSingleClick",
                    tree_get_single_click, tree_set_single_click),
-    /* Activate([index]) */
+    /* Activate([index])
+     *   raises `Activate` for that visible position, as a double click would;
+     *   the selected row with no argument. Answers whether there was one
+     */
     JS_CFUNC_DEF("Activate", 1, tree_activate),
-    /* Reveal(index) */
+    /* Reveal(index)
+     *   brings that visible row into view with the least scrolling it takes,
+     *   and answers whether there was one. The index is a visible position,
+     *   like `Activate`'s
+     */
     JS_CFUNC_DEF("Reveal",   1, tree_reveal_row),
     /* Not "Expand": Widget already has one, the boolean that decides who
      * absorbs slack in a box.  A method of that name would shadow it on the
      * prototype and then be shadowed right back the moment a .form set the
      * layout property on the instance -- which is how this was found. */
-    /* ExpandNode(key) */
+    /* ExpandNode(key)
+     *   opens it, **and the way to it**: a node only exists on screen once
+     *   its ancestors are open. Not `Expand`, which is `Widget`'s layout
+     *   property
+     */
     JS_CFUNC_MAGIC_DEF("ExpandNode",   1, tree_expand,     1),
-    /* CollapseNode(key) */
+    /* CollapseNode(key)
+     *   closes it
+     */
     JS_CFUNC_MAGIC_DEF("CollapseNode", 1, tree_expand,     0),
-    /* Expanded(key) */
+    /* Expanded(key)
+     *   whether it is open
+     */
     JS_CFUNC_DEF("Expanded",          1, tree_expanded),
-    /* ExpandAll() */
+    /* ExpandAll()
+     *   opens every node
+     */
     JS_CFUNC_MAGIC_DEF("ExpandAll",   0, tree_expand_all, 1),
-    /* CollapseAll() */
+    /* CollapseAll()
+     *   closes every node
+     */
     JS_CFUNC_MAGIC_DEF("CollapseAll", 0, tree_expand_all, 0),
 };
 
 void bta_tree_register(void)
 {
     const BtaClass rows[] = {
-        /* Select() */
-        /* Activate() */
+        /* Select()
+         *   the selection moved — by the user, by an assignment, or because
+         *   what was selected is no longer visible. Ask `Key` or `Text` for
+         *   what it is now
+         */
+        /* Activate()
+         *   a double click on a node, or Enter on it: the gesture for *open
+         *   this one*
+         */
         BTA_CLASS("TreeView", "Control", build_tree, tree_props, false, "Select,Activate"),
     };
     bta_register_classes(rows, (int)G_N_ELEMENTS(rows));

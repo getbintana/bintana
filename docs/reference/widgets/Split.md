@@ -13,10 +13,10 @@ follows is what is its own.
 
 | | | |
 |---|---|---|
-| `Arrangement` | `Horizontal` `Vertical` **only**. Default `"Horizontal"` | [the two halves](#the-two-halves) |
-| `Grows` | `Both` `Start` `End` `Neither` — which half takes the slack | [what happens when it is resized](#what-happens-when-it-is-resized) |
-| `Position` | where the divider sits, in pixels from the start | [the divider](#the-divider) |
-| `WideHandle` | a fat divider, easier to grab | [the divider](#the-divider) |
+| `Arrangement` | `Horizontal` puts them side by side, `Vertical` one over the other | [the two halves](#the-two-halves) |
+| `Grows` | `Both` (the default), `Start`, `End` or `Neither` — which half takes the room when the split itself grows or shrinks | [what happens when it is resized](#what-happens-when-it-is-resized) |
+| `Position` | where it sits, in pixels from the start of the axis | [the divider](#the-divider) |
+| `WideHandle` | a fat divider | [the divider](#the-divider) |
 
 No methods and no events of its own. The halves go in with
 [`Add`](Container.md#putting-children-in), in order.
@@ -25,7 +25,7 @@ No methods and no events of its own. The halves go in with
 
 | | |
 |---|---|
-| `Arrangement` | `Horizontal` puts them side by side, `Vertical` one over the other. **There is no `Fixed`**: two halves have an axis and nowhere to put a coordinate, which is why this property shadows [`Container`](Container.md#the-two-layout-models)'s |
+| `Arrangement` | `Horizontal` puts them side by side, `Vertical` one over the other. **There is no `Fixed`**: two halves have an axis and nowhere to put a coordinate, which is why this property shadows [`Container`](Container.md#the-two-layout-models)'s. Default `"Horizontal"` |
 
 The first child added is the start half — left or top — and the second is the
 end. A third `Add` throws; to change what is in a split, `Clear()` it and add

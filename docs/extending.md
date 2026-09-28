@@ -396,6 +396,79 @@ row. Until the line is there the new global's members are checked against
 telling you the truth in the wrong words. `Text` (in `bta_paint.c`, beside the
 painter whose measurements it matches) is the most recent one.
 
+**And a one-line signature above each native verb**, the way a control's method
+has one — above the `JS_SetPropertyStr` that installs it, or above its entry in
+the table the global is built from:
+
+```c
+/* Load(path) */
+JS_SetPropertyStr(ctx, file, "Load", JS_NewCFunction(ctx, sys_file_load, "Load", 1));
+```
+
+**And what it is for, on the lines after**, indented -- the one description the
+member has, which the IDE's popup shows and `./tools/docs.sh` writes into the
+rows of `docs/llm` and `docs/reference`:
+
+```c
+/* Load(path) -> string
+ *   the whole file as a string. **Throws if it cannot be read**, and the
+ *   message names the file
+ */
+```
+
+A property's first line is its name alone (`/* Enabled`), or its name and an
+arrow; an event's goes above the class row, as its signature does. Write links
+from the root of the tree (`[Bytes](docs/llm/library.md#bytes)`): the text lands
+in pages in different directories. Then run `./tools/docs.sh` -- `tests/api.sh`
+fails on a member with no description and on a row that does not say what the
+code says.
+
+**A member written in JavaScript says it in a JSDoc comment** -- in rad.js,
+forms.js or a library under `lib/` -- touching the declaration: ending on the
+line above it, or on the same line. The text before the first `@tag` is the
+description and `@returns {T}` is what it answers; a plain `/* … */` is never
+read, so notes about the implementation stay plain and the JSDoc goes directly
+above the declaration, under them:
+
+```js
+/** runs `tick` once after `delay` milliseconds, and answers the `Timer` */
+static After(delay, tick) { … }
+```
+
+The parser sees declarations, not calls: a class member, a function assigned
+at the top level (`File.LoadJson = function`), and each function an object
+literal holds when the literal is assigned at the top level
+(`GLOBAL.Settings = { Get() {} }`). An accessor added with `defineProperty` is
+invisible to it, which is why forms.js writes those as a small class copied
+across with `mixIn`. The same `./tools/docs.sh` writes these rows, and the same
+check fails on a public member with no comment. rad.js and forms.js are baked
+into the binary, so a new comment there needs a rebuild before anything sees it.
+
+**What a verb answers goes on the same line**, after an arrow — a type the
+runtime can be asked about by name, `string`/`number`/`boolean`, a list (`[]`),
+or a shape in braces:
+
+```c
+/* Info(path) -> { Size, Modified, Type, Icon, IsDir } */
+/* LoadBytes(path) -> Bytes */
+/* Files(path, [options]) -> string[] */
+```
+
+and a property states its type the same way with no brackets
+(`/* Children -> XmlNode[] */`). It is what the IDE follows to complete past a
+call. A prototype no global installs — the object a verb hands back — is named
+where its table is, with `/* type HttpClient */` on the line above the
+`JSCFunctionListEntry`, and `Widget.Members("HttpClient")` then answers from that
+table alone.
+
+The extractor works out the owner itself, by following the variable to the
+`JS_SetPropertyStr(ctx, global, "File", file)` that installs it, so nothing else
+names it; the IDE's completion shows `Load(path)`, and `tests/api.sh` fails on a
+native verb of a global with no signature. Register one line per verb rather
+than looping over a table of names — a loop has nowhere to put the comment. A
+verb written in `rad.js` needs nothing: the parser reads its parameters out of
+its own source.
+
 ## The traps that have cost time
 
 Each of these was a real bug in this repository.

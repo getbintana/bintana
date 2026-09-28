@@ -10,11 +10,11 @@ are not part of this language.
 
 | | |
 |---|---|
-| `Count(bag)` | → how many keys |
-| `Entries(bag)` | → `[{ Key, Value }, …]` |
-| `Has(bag, key)` | → whether that key is there |
-| `Keys(bag)` | → the keys |
-| `Values(bag)` | → the values |
+| `Count(bag)` | how many keys |
+| `Entries(bag)` | `[{ Key, Value }, …]` |
+| `Has(bag, key)` | whether that key is there |
+| `Keys(bag)` | the keys |
+| `Values(bag)` | the values |
 
 ## When to reach for it
 

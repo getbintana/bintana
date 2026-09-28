@@ -31,19 +31,19 @@ class Customer extends Record {
 | | |
 |---|---|
 | `new C({ … })` | built through the setters, so every value is checked |
-| `Apply(values)` | the same, by property name |
-| `Clone()` | a copy — for the dialog that edits one |
+| `Apply(values)` | assigns each property of a plain object to the field of the same name, through the fields' own checks |
+| `Clone()` | a copy, which is what a dialog edits so that Cancel costs nothing |
 | `Dump()` | prints what it holds |
 | `Problems` (ro) | **the report of one `Load`**: what the file said that could not be taken |
-| `PropertyInfo(name)` | → `{ Kind, Column, Key }`: what a field *is*, for whoever maps it onto something else |
+| `PropertyInfo(name)` | `{ Kind, Column, Key }`: what a field *is*, for whoever maps it onto something else |
 | `PropertyNames()`, `PropertyOptions(name)` | as a widget answers them |
-| `Serialize([all])` | a plain object: what differs from the start, or everything |
-| `Validate()` | **the state**: what is wrong with what it holds now |
+| `Serialize([all])` | a plain object — **what differs from the start**, or everything with `true` |
+| `Validate()` | what is wrong with what the record holds **now** — a different question, and the one a form asks before saving |
 | `toJSON()` | so `JSON.stringify` and `File.SaveJson` are the record |
 | `C.Load(json)` | a file, read **leniently** |
 | `C.LoadXml(node)` | the same, from an XML document or element — see [XML](#xml) |
-| `ToXml([all])` | → a new element, the `Serialize` of XML |
-| `SaveXml(node)` | writes **into** that element, touching only what it models |
+| `ToXml([all])` | a new element: what differs from the start, or every field |
+| `SaveXml(node)` | writes into that element, touching **only** what the shape models |
 
 **On the class**
 
@@ -64,9 +64,9 @@ class Customer extends Record {
 | `Field.Bool(def, o)` | `true`/`false`, and SQL's `0`/`1` | |
 | `Field.Date(o)` | `"YYYY-MM-DD"`, checked against the calendar | `required` |
 | `Field.Time(o)` | `"HH:MM"` or `"HH:MM:SS"` | `required`, `min`, `max` |
-| `Field.DateTime(o)` | `"YYYY-MM-DDTHH:MM"` or `"…:SS"` — a date and a time — with `Z` or `±HH:MM` when the moment has a zone, kept as written | `required`, `min`, `max` (local time only: a zoned value and a range are refused together, because a text order over moments is a wrong answer) |
+| `Field.DateTime(o)` | `"YYYY-MM-DDTHH:MM"` or `"...:SS"` — a date and a time — with `Z` or `+HH:MM` when the moment has a zone, kept as written | `required`, `min`, `max` (local time only: a zoned value and a range are refused together, because a text order over moments is a wrong answer) |
 | `Field.Bytes(o)` | a [`Bytes`](Bytes.md) — a file in a record | `required`, `max` (bytes) |
-| `Field.Enum(values, def, o)` | one of `values` | `required` |
+| `Field.Enum(values, def, o)` | one of `values`, starting at `def` | `required` |
 | `Field.List(item, o)` | an array, each entry through `item` — a `Field` or a `Record` class | `required`, `max` |
 | `Field.Record(of, o)` | another record: the class, or `() => the class` for a shape that contains itself | `required` |
 
@@ -94,7 +94,7 @@ through all of it — see [`Decimal`](Decimal.md).
 | | |
 |---|---|
 | `C.Load(json)` | a file, read **leniently**: what fits is taken and what does not is reported |
-| `Problems` (ro) | what that `Load` could not take, as a list |
+| `Problems` (ro) | **the report of one `Load`**: what the file said that could not be taken |
 | `Validate()` | what is wrong with what the record holds **now** — a different question, and the one a form asks before saving |
 
 ```js

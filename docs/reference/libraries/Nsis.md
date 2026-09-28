@@ -27,10 +27,10 @@ is pointed at. What cannot happen anywhere else is running a Windows
 
 | | | |
 |---|---|---|
-| `Script(project, out)` | → the script from the metainfo, answering where everything went | [the script](#the-script) |
-| `Stage(project, out, [options])` | → the payload the script installs | [the payload](#the-payload) |
-| `Build(script, exe, [options])` | → the setup executable, compiled on Windows | [compiling it](#compiling-it) |
-| `Ico(pngPath)` | → the PNG as a `.ico`, as `Bytes` | [the icon](#the-icon) |
+| `Script(project, out)` | writes the installer script from the metainfo, and answers where everything went | [the script](#the-script) |
+| `Stage(project, out, [options])` | copies the payload the script installs into `<out>/payload` | [the payload](#the-payload) |
+| `Build(script, exe, [options])` | compiles the script into the setup executable | [compiling it](#compiling-it) |
+| `Ico(pngPath)` | the PNG as a `.ico`, as `Bytes` | [the icon](#the-icon) |
 
 ## The script
 

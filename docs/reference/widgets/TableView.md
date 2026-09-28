@@ -22,54 +22,54 @@ not repeated here.
 
 | | | |
 |---|---|---|
-| `AutoExpand` | a node opens when it gains children | [a tree](#a-tree) |
+| `AutoExpand` | opens a node as it arrives, and again when it gains a child after being closed by hand | [a tree](#a-tree) |
 | `ColumnLines` | rules between the columns | [the columns](#the-columns) |
-| `Columns` | the headings and their widths | [the columns](#the-columns) |
-| `Count` | how many rows — **settable** | [the rows](#the-rows-it-holds), [on demand](#on-demand-a-table-that-holds-nothing) |
-| `HeaderMenu` | the menu a column heading offers | [the heading's menu](#the-headings-menu) |
-| `Index` | the selected row | [the selection](#the-selection) |
-| `Key` | the selected node's key | [a tree](#a-tree) |
+| `Columns` | an array of `{ Text, Width, Alignment, Editable }` | [the columns](#the-columns) |
+| `Count` | how many rows — **settable**, which is the on-demand mode: the table then asks `Data(row, column)` for each cell it draws | [the rows](#the-rows-it-holds), [on demand](#on-demand-a-table-that-holds-nothing) |
+| `HeaderMenu` | the menu a column heading offers on a secondary click, as the same array of items `Menu` takes | [the heading's menu](#the-headings-menu) |
+| `Index` | the selected row, `-1` for none | [the selection](#the-selection) |
+| `Key` | the selected node's key; assigning selects, opening the way to it | [a tree](#a-tree) |
 | `MultiSelect` | more than one row at a time | [the selection](#the-selection) |
 | `RowLines` | rules between the rows | [the columns](#the-columns) |
-| `Selection` (ro) | every selected row | [the selection](#the-selection) |
-| `Sortable` | clickable headings | [sorting](#sorting) |
+| `Selection` (ro) | every selected row, as an array of indices in order | [the selection](#the-selection) |
+| `Sortable` | makes the headers clickable | [sorting](#sorting) |
 
 **Methods**
 
 | | | |
 |---|---|---|
-| `Add(values, [options])` | one row, or one node | [the rows](#the-rows-it-holds), [a tree](#a-tree) |
-| `Cell(row, column)` | → one value | [the rows](#the-rows-it-holds) |
-| `Clear()` | empties it | [the rows](#the-rows-it-holds) |
+| `Add(values, [options])` | one row, as an array of strings | [the rows](#the-rows-it-holds), [a tree](#a-tree) |
+| `Cell(row, column)` | one value | [the rows](#the-rows-it-holds) |
+| `Clear()` | empties it — **and forgets which of the three shapes this table was** | [the rows](#the-rows-it-holds) |
 | `CollapseAll()` | closes every node | [a tree](#a-tree) |
-| `CollapseNode(key)` | closes one | [a tree](#a-tree) |
-| `Deselect(index)` | unselects a row | [the selection](#the-selection) |
+| `CollapseNode(key)` | closes it | [a tree](#a-tree) |
+| `Deselect(index)` | unselects it | [the selection](#the-selection) |
 | `DeselectAll()` | selects nothing | [the selection](#the-selection) |
 | `Activate([index])` | raises `Activate` for that visible position, as a double click would; the selected row with no argument | [the selection](#the-selection) |
-| `ActivateOnSingleClick` | raise `Activate` on one click instead of two. Default `false` | [the selection](#the-selection) |
-| `Exists(key)` | → whether that node is there | [a tree](#a-tree) |
+| `ActivateOnSingleClick` | raise `Activate` on one click instead of two | [the selection](#the-selection) |
+| `Exists(key)` | whether that node is there | [a tree](#a-tree) |
 | `ExpandAll()` | opens every node | [a tree](#a-tree) |
-| `ExpandNode(key)` | opens one, and the way to it | [a tree](#a-tree) |
-| `Expanded(key)` | → whether it is open | [a tree](#a-tree) |
-| `RemoveRow(index)` | takes a row out. Flat only | [the rows](#the-rows-it-holds) |
-| `RemoveNode(key)` | takes a node out, and its subtree. Tree only | [a tree](#a-tree) |
-| `Reveal(index)` | brings that visible row into view | [the rows](#the-rows-it-holds) |
-| `Row(index)` | → that row's values | [the rows](#the-rows-it-holds) |
-| `Select(index)` | selects a row | [the selection](#the-selection) |
-| `SelectAll()` | every row, with `MultiSelect` | [the selection](#the-selection) |
+| `ExpandNode(key)` | opens or closes it | [a tree](#a-tree) |
+| `Expanded(key)` | whether it is open | [a tree](#a-tree) |
+| `RemoveRow(index)` | takes that row out | [the rows](#the-rows-it-holds) |
+| `RemoveNode(key)` | takes that node out, **and the subtree with it** | [a tree](#a-tree) |
+| `Reveal(index)` | brings that visible row into view with the least scrolling it takes, and answers whether there was one | [the rows](#the-rows-it-holds) |
+| `Row(index)` | that row's values, as the array it was given — including any it was given beyond the columns declared | [the rows](#the-rows-it-holds) |
+| `Select(index)` | move the selection from code | [the selection](#the-selection) |
+| `SelectAll()` | with `MultiSelect` | [the selection](#the-selection) |
 | `SetCell(row, column, value)` | one cell, in place | [the rows](#the-rows-it-holds) |
-| `SetIcon(row, column, name)` | an icon beside a cell | [the rows](#the-rows-it-holds) |
-| `SortBy(column, [ascending], [compare])` | reorders the rows it holds | [sorting](#sorting) |
-| `SortColumn(column, [ascending])` | clicks a heading from code | [sorting](#sorting) |
+| `SetIcon(row, column, name)` | an icon from the theme beside a cell's text | [the rows](#the-rows-it-holds) |
+| `SortBy(column, [ascending], [compare])` | actually reorders the rows it holds, **by the text the cells show**: natural order by default (`9` before `10`, the locale's collation otherwise), or `compare(a, b)` — the two cells' text, answering a number as `Array.sort`'s does — for what natural order reads wrongly: a minus sign, grouped thousands, a `d/m/Y` date | [sorting](#sorting) |
+| `SortColumn(column, [ascending])` | the same as clicking that heading from code: the arrow moves and `Sort` is raised | [sorting](#sorting) |
 
 **Events**
 
 | | | |
 |---|---|---|
-| `Activate()` | a row was double clicked | [the selection](#the-selection) |
+| `Activate()` | raises `Activate` for that visible position, as a double click would; the selected row with no argument | [the selection](#the-selection) |
 | `Data(row, column)` | a cell is needed — **the answer is the return value** | [on demand](#on-demand-a-table-that-holds-nothing) |
 | `HeaderClick(column, button, ctrl, shift)` | a heading was pressed — **the answer is the menu** | [the heading's menu](#the-headings-menu) |
-| `Select()` | the selection moved | [the selection](#the-selection) |
+| `Select()` | move the selection from code | [the selection](#the-selection) |
 | `Sort(column, ascending)` | a heading was clicked — **the handler decides** | [sorting](#sorting) |
 
 ## Which list is this one
@@ -166,7 +166,7 @@ scrollbar away from the rows, which is the opposite of what was wanted.
 
 | | |
 |---|---|
-| `Columns` | the headings: an array of `{ Text, Width, Alignment, Editable }`. `Text` is **translated**; `Width` is a request in pixels and `0` means the column sizes itself; `Alignment` is `Left` `Center` `Right`; `Editable: true` makes each cell a field that is clicked, typed and committed |
+| `Columns` | an array of `{ Text, Width, Alignment, Editable }`. `Text` is **translated**; `Width: 0` sizes itself and the last column takes the slack; `Editable: true` makes a cell a field — clicked, typed and committed — and an editable column reads left-aligned, because a `GtkEditableLabel` is not a label |
 | `ColumnLines` | rules between the columns. Default `false` |
 | `RowLines` | rules between the rows. Default `true` |
 
@@ -191,12 +191,12 @@ row shorter than there are columns simply reads blank in the rest.
 
 | | |
 |---|---|
-| `Add(values, [options])` | one row, as an array of strings, in column order. `options` is `{ Key, Parent, Icon }` — see [a tree](#a-tree) |
-| `Count` | how many rows. **Settable**, and setting it is the on-demand shape |
-| `Cell(row, column)` | → one value. Refused on an on-demand table, which has no cells to answer about |
-| `Row(index)` | → that row's values, as the array it was given — including any it was given beyond the columns declared |
+| `Add(values, [options])` | one row, as an array of strings. A row shorter than there are columns reads `""` for the rest. Clears an on-demand `Count`. **`options` is `{ Key, Parent, Icon }`, and a row with a `Key` is a node**: the first one makes this table a tree, `Parent` is the key of the node it goes under (absent is a root), and `Icon` is the picture for its first column — the same one `TreeView.Add` takes, so a node need not be added and then decorated |
+| `Count` | how many rows — **settable**, which is the on-demand mode: the table then asks `Data(row, column)` for each cell it draws. **Settable**, and setting it is the on-demand shape. Assigning it puts the table in this shape and clears any rows it held |
+| `Cell(row, column)` | one value. Refused on an on-demand table, which has no cells to answer about |
+| `Row(index)` | that row's values, as the array it was given — including any it was given beyond the columns declared. Refused on an on-demand table |
 | `SetCell(row, column, value)` | one cell, in place. The selection stays where it is |
-| `SetIcon(row, column, name)` | an icon from the theme beside a cell's text. `""` takes it off |
+| `SetIcon(row, column, name)` | an icon from the theme beside a cell's text. `""` takes it off. Refused on an on-demand table |
 | `RemoveRow(index)` | takes that row out. **Flat only** — a tree says `RemoveNode(key)`, and this one refuses with that sentence |
 | `RemoveNode(key)` | takes that node out, **and the subtree with it**. **Tree only** — a flat table says `RemoveRow(index)` |
 | `Reveal(index)` | brings that visible row into view with the least scrolling it takes, and answers whether there was one |
@@ -225,11 +225,11 @@ perfectly until somebody selects two.
 | `Index` | the selected row, `-1` for none. Assigning selects it. Default `-1` |
 | `Selection` (ro) | every selected row, as an array of indices in order |
 | `MultiSelect` | more than one row at a time. Refused on a tree |
-| `Select(index)` | selects that row, leaving the others where several are allowed |
+| `Select(index)` | move the selection from code. `Select` leaves the others alone where several are allowed |
 | `Deselect(index)` | unselects it |
 | `SelectAll()` | with `MultiSelect` |
 | `DeselectAll()` | selects nothing |
-| `Activate([index])` | the double click from code; the selected row with no argument. Answers whether there was one |
+| `Activate([index])` | raises `Activate` for that visible position, as a double click would; the selected row with no argument. Answers whether there was one. In both the flat and the tree shape, because a click lands on a position |
 | `ActivateOnSingleClick` | raise `Activate` on one click instead of two. Default `false` |
 | **event** `Select()` | the selection moved — by the user or by an assignment. Ask `Index` for where it is and `Cell`/`Row` for what is there; `Key` when the table is a tree |
 | **event** `Activate()` | a double click on a row, or Enter on it. The gesture for *open this one* |
@@ -254,9 +254,9 @@ Ask `Selection` whenever `MultiSelect` is on.
 
 | | |
 |---|---|
-| `Sortable` | the headings become clickable. Default `false` |
-| **event** `Sort(column, ascending)` | one was clicked. **The handler decides what happens** |
-| `SortBy(column, [ascending], [compare])` | actually reorders the rows the table holds — natural order, or `compare(a, b)` over the two cells' text |
+| `Sortable` | makes the headers clickable. **The table does not reorder itself** — it raises `Sort`. Default `false` |
+| **event** `Sort(column, ascending)` | a sortable header was clicked. **The handler decides** — `SortBy` is what actually reorders |
+| `SortBy(column, [ascending], [compare])` | actually reorders the rows it holds, **by the text the cells show**: natural order by default (`9` before `10`, the locale's collation otherwise), or `compare(a, b)` — the two cells' text, answering a number as `Array.sort`'s does — for what natural order reads wrongly: a minus sign, grouped thousands, a `d/m/Y` date. **Stable**: equal cells keep the order they had, so sorting by one column and then another nests them. A comparator that throws leaves the rows as they were |
 | `SortColumn(column, [ascending])` | the same as clicking that heading from code: the arrow moves and `Sort` is raised |
 
 **A sortable table does not sort itself**, and this is the one thing about it
@@ -312,8 +312,8 @@ menu builder translates; one that lives only in code is wrapped in
 
 | | |
 |---|---|
-| `HeaderMenu` | the menu, as the same array of items `Menu` takes |
-| **event** `HeaderClick(column, button, ctrl, shift)` | a heading was pressed. `button` is `1` primary, `2` middle, `3` secondary. **The return value is the menu of the secondary click** |
+| `HeaderMenu` | the menu a column heading offers on a secondary click, as the same array of items `Menu` takes. Built for each click, and every item's handler is told the column, last: `MnuHide_Click(column)`. Like `Menu`, refused on a table that is not in a form yet |
+| **event** `HeaderClick(column, button, ctrl, shift)` | a column heading was pressed — the one pointer event a heading raises, because GTK claims its press before the bubble phase. `button` is `1` primary, `2` middle, `3` secondary. **The return value is the menu of the secondary click**: an array replaces `HeaderMenu` for that click, anything else falls back to it. A primary click also raises `Sort` when `Sortable`, on the release |
 
 **Every item is told which column it was opened over**, last and after whatever
 its kind already carries: `MnuHide_Click(column)`, a `check` item's
@@ -349,7 +349,7 @@ Set `Count` and answer `Data`:
 
 | | |
 |---|---|
-| `Count` | how many rows there are. Assigning it puts the table in this shape and clears any rows it held |
+| `Count` | how many rows — **settable**, which is the on-demand mode: the table then asks `Data(row, column)` for each cell it draws. **Settable**, and setting it is the on-demand shape. Assigning it puts the table in this shape and clears any rows it held |
 | **event** `Data(row, column)` | the table needs a cell. **The return value is the answer**: a string, or `{ Text, Icon }` for a cell with a picture |
 | **event** `CellEdit(row, column, text)` | an editable cell's edit ended — Enter, or the focus moving away. `row` is an index in a flat table and a key in a tree, as every verb here addresses one. **Returning `false` refuses it** and the cell goes back to what it said; anything else is taken and the text is written into the row. An on-demand table holds no cells, so there the handler stores it |
 
@@ -399,16 +399,16 @@ Give a row a `Key` and the table becomes a hierarchy with headings over it.
 
 | | |
 |---|---|
-| `Add(values, { Key, Parent, Icon })` | a node. `Key` is its name — any string, unique in this table; `Parent` is the key of the node it goes under, and no parent is a root; `Icon` decorates its first column |
-| `Key` | the selected node's key; assigning selects it, opening the way to it. `""` selects nothing |
-| `Exists(key)` | → whether that node is there. `false` on a flat table rather than a refusal: it is the question you ask *before* you know |
-| `AutoExpand` | a node opens as it arrives, and again when it gains a child after being closed by hand. Default `true` |
-| `ExpandNode(key)` | opens it, and the way to it |
+| `Add(values, { Key, Parent, Icon })` | one row, as an array of strings. A row shorter than there are columns reads `""` for the rest. Clears an on-demand `Count`. **`options` is `{ Key, Parent, Icon }`, and a row with a `Key` is a node**: the first one makes this table a tree, `Parent` is the key of the node it goes under (absent is a root), and `Icon` is the picture for its first column — the same one `TreeView.Add` takes, so a node need not be added and then decorated |
+| `Key` | the selected node's key; assigning selects, opening the way to it. `""` selects nothing. A tree only |
+| `Exists(key)` | whether that node is there. `false` on a flat table rather than a refusal: it is the question you ask *before* you know |
+| `AutoExpand` | opens a node as it arrives, and again when it gains a child after being closed by hand. Default `true`. A tree only. The same mechanism `TreeView` uses, answering the same |
+| `ExpandNode(key)` | opens or closes it. Opening opens the way to it too, since a row only exists once its ancestors are open. Not `Expand`, which is `Widget`'s layout property |
 | `CollapseNode(key)` | closes it |
 | `ExpandAll()` | opens every node |
 | `CollapseAll()` | closes every node |
-| `Expanded(key)` | → whether it is open |
-| `Count` (ro here) | how many nodes there are, **at every level** |
+| `Expanded(key)` | whether it is open |
+| `Count` (ro here) | how many rows — **settable**, which is the on-demand mode: the table then asks `Data(row, column)` for each cell it draws. **Settable**, and setting it is the on-demand shape. Assigning it puts the table in this shape and clears any rows it held |
 
 **A parent goes in before its children**: `Parent` names a key, and a key that
 nothing has added yet is not there to go under.

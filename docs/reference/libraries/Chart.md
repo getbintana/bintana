@@ -37,46 +37,46 @@ It is a [`Component`](../widgets/Component.md), so everything on
 
 | | | |
 |---|---|---|
-| `Type` | `Bar` `Line` `Area` `Pie` `Doughnut`. `"Bar"` | [the kinds](#the-kinds) |
-| `Curved` | rounded lines, **monotone**. `false` | [the kinds](#the-kinds) |
-| `Stacked` | series piled instead of side by side. `false` | [the kinds](#the-kinds) |
+| `Type` | `Bar` `Line` `Area` `Pie` `Doughnut` | [the kinds](#the-kinds) |
+| `Curved` | rounded lines for `Line` and `Area`, **monotone**: between two samples the curve stays between their values and flattens at a peak instead of inventing a taller one | [the kinds](#the-kinds) |
+| `Stacked` | series piled instead of side by side | [the kinds](#the-kinds) |
 
 **The data**
 
 | | | |
 |---|---|---|
-| `Series` | the numbers: `[{ Name, Values, Color, Axis }]`. `[]` | [the data](#the-data) |
-| `Labels` | the category axis, as strings. `[]` | [the axes](#the-axes) |
-| `Marks` | `[{ At, Text }]` — a **real** time axis. `[]` | [the axes](#the-axes) |
+| `Series` | the data | [the data](#the-data) |
+| `Labels` | the category axis, as strings | [the axes](#the-axes) |
+| `Marks` | `[{ At, Text }]`, `At` being an index into the values — a **real** time axis, where the caller says where each label goes | [the axes](#the-axes) |
 
 **The axes and what is written on them**
 
 | | | |
 |---|---|---|
-| `Decimals` | how the numbers are written, `0` to `6`. `0` | [the axes](#the-axes) |
-| `Grid` | the horizontal rules behind the data. `true` | [the axes](#the-axes) |
-| `Legend` | `None` `Top` `Bottom`. `"Bottom"` | [the axes](#the-axes) |
-| `ShowValues` | the number on the bar or the percentage in the slice. `false` | [the axes](#the-axes) |
-| `Title` | above the plot. **Translated**. `""` | [the axes](#the-axes) |
-| `YMax` | pins the top; `""` works it out from the data. `""` | [the axes](#the-axes) |
-| `YMin` | likewise the bottom. `""` | [the axes](#the-axes) |
+| `Decimals` | how the numbers are written, `0` to `6`; goes through `Locale.Number`, so the separators are the user's | [the axes](#the-axes) |
+| `Grid` | the horizontal rules behind the data | [the axes](#the-axes) |
+| `Legend` | `None` `Top` `Bottom` | [the axes](#the-axes) |
+| `ShowValues` | the number on the bar or the percentage in the slice, drawn only where it measures as fitting | [the axes](#the-axes) |
+| `Title` | above the plot | [the axes](#the-axes) |
+| `YMax` | likewise the top | [the axes](#the-axes) |
+| `YMin` | pins the bottom of the y axis | [the axes](#the-axes) |
 
 **A long series**
 
 | | | |
 |---|---|---|
-| `Antialias` | smooth edges. `true` | [a long series](#a-long-series) |
-| `Count` | how many values are on screen; `0` is all. `0` | [a long series](#a-long-series) |
-| `From` | the first value on screen. `0` | [a long series](#a-long-series) |
-| `Reduced` | decimate to a min and a max per pixel column. `true` | [a long series](#a-long-series) |
-| `Zoomable` | the wheel zooms and a drag pans. `false` | [what the pointer does](#what-the-pointer-does) |
+| `Antialias` | smooth edges | [a long series](#a-long-series) |
+| `Count` | how many are on screen | [a long series](#a-long-series) |
+| `From` | the first value on screen | [a long series](#a-long-series) |
+| `Reduced` | more points than pixel columns are decimated to a min and a max per column, which keeps the envelope — a one-sample spike survives it | [a long series](#a-long-series) |
+| `Zoomable` | lets the wheel zoom and a drag pan — see [what the pointer does](#what-the-pointer-does) | [what the pointer does](#what-the-pointer-does) |
 
 **Verbs and events**
 
 | | | |
 |---|---|---|
 | `Refresh()` | redraws now | [the data](#the-data) |
-| `Save(path, width, height)` | the same drawing to a PNG of any size | [off the screen](#off-the-screen) |
+| `Save(path, width, height)` | the same drawing to a PNG of any size — a chart in a report, or in a bug report | [off the screen](#off-the-screen) |
 | **event** `Select(series, at, value)` | a click on a bar, a point or a slice | [what the pointer does](#what-the-pointer-does) |
 | **event** `Hover(series, at, value)` | the pointer passing over one | [what the pointer does](#what-the-pointer-does) |
 | **event** `Range(from, count)` | the window changed | [what the pointer does](#what-the-pointer-does) |
@@ -85,20 +85,20 @@ It is a [`Component`](../widgets/Component.md), so everything on
 
 | | |
 |---|---|
-| `Type` | `Bar`, `Line`, `Area`, `Pie` or `Doughnut` |
-| `Stacked` | series piled instead of side by side. Applies to `Bar` and `Area`; a line and a pie **ignore** it rather than refusing, so the order of two lines in a `.form` never matters |
-| `Curved` | rounded lines for `Line` and `Area`, and **monotone**: between two samples the curve stays between their values and flattens at a peak instead of inventing a taller one. Off by default, because a curve says something about values nobody measured |
+| `Type` | `Bar` `Line` `Area` `Pie` `Doughnut`. Defaults to `"Bar"`. |
+| `Stacked` | series piled instead of side by side. Applies to `Bar` and `Area`; a line and a pie **ignore** it rather than refusing, so the order of two lines in a `.form` never matters. Defaults to `false`. |
+| `Curved` | rounded lines for `Line` and `Area`, **monotone**: between two samples the curve stays between their values and flattens at a peak instead of inventing a taller one. Off by default because a curve says something about values nobody measured. Defaults to `false`. |
 
 ## The data
 
 | | |
 |---|---|
-| `Series` | `[{ Name, Values, Color, Axis }]` — see below. Assigning it redraws |
+| `Series` | the data: `[{ Name, Values, Color, Axis }]` — see below. Defaults to `[]`. Assigning it redraws |
 | `Refresh()` | redraws now. **Assigning any property already does**, so this is for the case where the numbers changed **in place** |
 
 | On a series | |
 |---|---|
-| `Name` | what the legend says. **Translated** (`Series.Name`). Defaults to `Series 1`, `Series 2`, … |
+| `Name` | how the form reaches it — `this.BtnSave` — and the prefix its handlers carry: `BtnSave_Click`. A valid JavaScript identifier, unique on the form |
 | `Values` | the numbers. A number or numeric text is a value; **anything else — `null`, `undefined`, `NaN`, `""`, a word — is a gap**: a line or an area stops there and starts again at the next value, a bar is not drawn, and the pointer over it reports nothing. A gap is never a zero |
 | `Color` | any CSS colour; omitted, it takes the next of the library's eight, chosen to hold up on a light theme and a dark one |
 | `Axis` | `"Left"` or `"Right"`. **`"Right"` gives that series its own range, ticks and margin** — two series in different units on one scale is the classic chart that lies |
@@ -107,25 +107,25 @@ It is a [`Component`](../widgets/Component.md), so everything on
 
 | | |
 |---|---|
-| `Labels` | the category axis, as strings. As many as there are values is a label per bar; **fewer** is marks spread evenly across the plot; a pie names its slices from them |
-| `Marks` | `[{ At, Text }]`, `At` being an index into the values — a **real** time axis, where the caller says where each label goes. Replaces `Labels` on the x axis while it is set |
-| `YMin` | pins the bottom of the y axis; `""` (or `null`) works it out from the data, on *nice* numbers rather than on the data's own extremes. A value that is not a finite number is refused where it is assigned — stored, it left the axis with no ticks and every frame threw |
-| `YMax` | likewise the top |
-| `Grid` | the horizontal rules behind the data |
-| `Legend` | `None`, `Top` or `Bottom`. It wraps to at most **three** rows and whatever did not fit is not drawn: a legend of thirty series is the wrong control, and eating the plot to hold one is worse |
-| `Title` | above the plot. **Translated** |
-| `ShowValues` | the number on the bar or the percentage in the slice, **drawn only where it measures as fitting** |
-| `Decimals` | how those numbers are written, `0` to `6`. It goes through [`Locale.Number`](../globals/Locale.md), so the separators are the user's |
+| `Labels` | the category axis, as strings. As many as there are values is a label per bar; **fewer** is marks spread evenly across the plot; a pie names its slices from them. Defaults to `[]`. |
+| `Marks` | `[{ At, Text }]`, `At` being an index into the values — a **real** time axis, where the caller says where each label goes. Replaces `Labels` on the x axis while it is set. Defaults to `[]`. |
+| `YMin` | pins the bottom of the y axis; `""` (or `null`) works it out from the data, on *nice* numbers rather than on the data's own extremes. A value that is not a finite number is refused where it is assigned — stored, it left the axis with no ticks and every frame threw. Defaults to `""`. |
+| `YMax` | likewise the top. Defaults to `""`. |
+| `Grid` | the horizontal rules behind the data. Defaults to `true`. |
+| `Legend` | `None` `Top` `Bottom`. It wraps to at most **three** rows and whatever did not fit is not drawn: a legend of thirty series is the wrong control, and eating the plot to hold one is worse. Defaults to `"Bottom"`. |
+| `Title` | above the plot. **Translated**. Defaults to `""`. |
+| `ShowValues` | the number on the bar or the percentage in the slice, drawn only where it measures as fitting. Defaults to `false`. |
+| `Decimals` | how the numbers are written, `0` to `6`; goes through `Locale.Number`, so the separators are the user's. Defaults to `0`. |
 
 ## A long series
 
 | | |
 |---|---|
-| `Reduced` | more points than pixel columns are decimated to a min and a max per column, which keeps the envelope — **a one-sample spike survives it**. On by default |
-| `From` | the first value on screen |
-| `Count` | how many are on screen; `0` is all of them |
-| `Antialias` | smooth edges. Off is faster and looks it |
-| `Zoomable` | lets the wheel zoom and a drag pan — see [what the pointer does](#what-the-pointer-does). Off by default, so a chart of four bars never steals a scroll from the `Scroller` around it |
+| `Reduced` | more points than pixel columns are decimated to a min and a max per column, which keeps the envelope — a one-sample spike survives it. Defaults to `true`. On by default |
+| `From` | the first value on screen. Defaults to `0`. |
+| `Count` | how many are on screen; `0` is all of them. Defaults to `0`. |
+| `Antialias` | smooth edges. Off is faster and looks it; `Reduced` is the knob that actually matters. Defaults to `true`. |
+| `Zoomable` | lets the wheel zoom and a drag pan — see [what the pointer does](#what-the-pointer-does). Off by default, so a chart of four bars never steals a scroll from the `Scroller` around it. Defaults to `false`. |
 
 **The cost of a frame is in pixels covered, not in points**, and in an
 interpreter the passes over the data cost more than the drawing. Measured on

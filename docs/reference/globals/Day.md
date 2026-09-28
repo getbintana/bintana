@@ -11,10 +11,10 @@ already orders correctly. `Day` is the handful of operations on that text.
 
 | | | |
 |---|---|---|
-| `Add(date, days)` | → the date `days` later; `days` may be negative | [arithmetic](#arithmetic) |
-| `Between(from, to)` | → whole days, signed | [arithmetic](#arithmetic) |
-| `Today` | today's date, at local midnight | [today](#today) |
-| `Weekday(date)` | → `"Monday"` … `"Sunday"` | [which day it is](#which-day-it-is) |
+| `Add(date, days)` | the date `days` later | [arithmetic](#arithmetic) |
+| `Between(from, to)` | whole days from one to the other, signed | [arithmetic](#arithmetic) |
+| `Today` | today's date as `"YYYY-MM-DD"`, at **local** midnight | [today](#today) |
+| `Weekday(date)` | `"Monday"` … `"Sunday"` — **a key to test against, never text to show** | [which day it is](#which-day-it-is) |
 
 ## Today
 

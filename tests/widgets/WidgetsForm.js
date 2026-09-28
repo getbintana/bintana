@@ -453,7 +453,7 @@ const TESTS = [
      * the note below. */
     "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableTree", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
-    "Expand", "Spacing", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
+    "Expand", "Spacing", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "CursorBounds", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
     "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "Record", "Nested", "Database", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "Metrics", "Library", "Plugin", "ListMulti", "MenuState",
@@ -463,7 +463,7 @@ const TESTS = [
     "CuratedLanguage", "Dictionary", "Regex", "Bytes", "Hash", "Screen", "JsonFiles", "XmlFiles", "XmlRecord", "Log", "Apply", "TimerShorthand", "Terminal",
     "Settings", "Timer", "ArgumentRefusals", "Icons", "Font", "Style", "Radius", "Padding", "Shadow", "StyleRule",
     "ColorButton",
-    "ColorDialog", "FileDialog", "IconList", "FormIcon", "ButtonClick",
+    "ColorDialog", "FileDialog", "Dialog", "IconList", "FormIcon", "ButtonClick",
     "Available", "TextProperties", "ClassIntrospection", "Signatures", "Locale", "LocaleRead", "TranslatedForm", "Fill", "DesignValues",
     "Grid",
     "File", "Dir", "Trash", "Environment",
@@ -1454,6 +1454,42 @@ class WidgetsForm extends Form {
      * *builds* a GtkScrolledWindow around its view: it is the same thing
      * underneath and the same number has to come out of both.
      */
+    testCursorBounds() {
+        /* Its own editor, and not `testEditorScroll`'s: that one is deleted
+         * when its own chain of waits is done, and a wait here that had not
+         * come true by then never would -- one run in several. */
+        const ed = new TextEditor();
+        this.Fixed1.Add(ed);
+        ed.Wrap = false;
+        ed.Resize(200, 120);
+        let text = "";
+        for (let i = 1; i <= 20; i++) text += `line ${i}\n`;
+        ed.Text = text;
+
+        /* **Where the cursor is drawn**, in the control's coordinates --
+         * what a hint beside it points `Popup(editor, rect)` at. It moves down
+         * with the line and right with the column, and at the top of the file
+         * it is inside the control. **Only once the control has a rectangle**:
+         * before that there is nothing to be drawn in, and a first version of
+         * this read garbage in a full run -- where it runs before the window
+         * is up -- and passed or failed on the timing. */
+        until("the editor is laid out", () => ed.Bounds().Width > 0, () => {
+            ed.Select(1, 1, 0);
+            const c1 = ed.CursorBounds();
+            ed.Select(3, 1, 0);
+            const c3 = ed.CursorBounds();
+            ed.Select(1, 5, 0);
+            const c15 = ed.CursorBounds();
+            check("the cursor's rectangle is inside the control at the top",
+                  c1.X >= 0 && c1.Y >= 0 && c1.X < 200 && c1.Y < 120 && c1.Height > 0,
+                  JSON.stringify(c1));
+            check("...lower two lines down", c3.Y > c1.Y, JSON.stringify([c1, c3]));
+            check("...and further right four columns along", c15.X > c1.X,
+                  JSON.stringify([c1, c15]));
+            ed.Delete();
+        });
+    }
+
     testEditorScroll() {
         /*
          * Its own editor on the surface, and not the `.form`'s.
@@ -1483,6 +1519,7 @@ class WidgetsForm extends Form {
         until("a long file is measured", () => ed.ScrollMaxY > 0, () => {
             check("and then it has somewhere to go", ed.ScrollMaxY > 0,
                   String(ed.ScrollMaxY));
+
 
             /*
              * **Nothing here is a fixed number of pixels**, and that is the
@@ -10850,10 +10887,11 @@ function Main() {
             "    function inner() {}\n" +       /* 2 */
             "}\n" +                             /* 3 */
             "class One {\n" +                   /* 4 */
-            "    Plain() {}\n" +                /* 5 */
+            "    Plain(a) {}\n" +               /* 5 */
             "    static Make() {}\n" +          /* 6 */
             "    get Value() { return 1; }\n" + /* 7 */
             "    set Value(v) {}\n" +           /* 8 */
+            "    set Value2(w) {}\n" +          /* 8 */
             "}\n" +                             /* 9 */
             "Ide.Events = class Events {\n" +   /* 10 */
             "    Click() {}\n" +                /* 11 */
@@ -10864,20 +10902,110 @@ function Main() {
             "// class Ghost { Gone() {} }\n" +
             'const s = "class Fake { Nope() {} }";\n');
 
-        const named = (n) => sym.find((x) => x.Name === n);
+        /* What a file *declares*: the scopes and variables the ninth patch
+         * added are another question, asked below. */
+        const declared = (x) => x.Kind !== "Variable" && x.Kind !== "Scope";
+        const named = (n) => sym.find((x) => x.Name === n && declared(x));
 
         eq("a top-level function is a declaration", named("Top").Kind, "Function");
         eq("...on the line it is written", named("Top").Line, 1);
         eq("and one nested inside is not reported",
-           sym.filter((x) => x.Name === "inner").length, 0);
+           sym.filter((x) => x.Name === "inner" && declared(x)).length, 0);
 
         eq("a class is a declaration", named("One").Kind, "Class");
         eq("...on its own line", named("One").Line, 4);
         eq("and its methods belong to it", named("Plain").Parent, "One");
-        eq("...including a static one", named("Make").Kind, "Method");
+        /* **A static and an accessor are told apart, and this assertion used to
+         * say the opposite.** It was written when the parser reported all three
+         * as `Method` -- so it recorded the limitation as though it were the
+         * answer, and nothing failed while a `get Value()` and a
+         * `static Make()` were the same thing to a reader. The eighth patch is
+         * what makes the three distinguishable. */
+        eq("...and a static says so, which it did not used to",
+           named("Make").Kind, "Static");
+        eq("and an accessor is a Getter, not a Method",
+           named("Value").Kind, "Getter");
+        eq("and a setter is a Setter, so the pair is two declarations",
+           named("Value2").Kind, "Setter");
+        eq("a plain one is still a Method", named("Plain").Kind, "Method");
+        /* **And the parameters, in the spelling a declaration uses.** This is
+         * the information ECMAScript throws away: the function object keeps the
+         * count and not the names, so a class in a file the host never runs has
+         * nothing else to ask. */
+        eq("a method's parameters come out with the names",
+           named("Plain").Params, "(a)");
+        eq("a method that takes nothing says so, as a pair",
+           named("Value").Params, "()");
+        eq("a static's come out too", named("Make").Params, "()");
+        eq("and a class is not a member, so it has no parameters at all",
+           named("One").Params, "");
         eq("a getter and a setter are two", sym.filter((x) => x.Name === "Value").length, 2);
         eq("the constructor of a class is not invented",
            sym.filter((x) => x.Name === "constructor").length, 0);
+
+        /* **A method's parameters are its own, whatever its body holds.** The
+         * list used to be one buffer for the whole parse, and a method is
+         * reported *after* its body: an arrow inside `Ask` made it `(x, y, z)`,
+         * and a top-level function was reported before its own list was read,
+         * so it carried the previous one's: `QrCode.Encode(text, opts)` came
+         * out `Encode(value, n)`. Every nested shape
+         * that has a list of its own is here: an arrow in the body, a function
+         * expression in a getter, an arrow in a default value. */
+        const nest = Application.Symbols(
+            "class N {\n" +
+            "    Ask(message, options) { return [1].map((x, y, z) => x); }\n" +
+            "    get Value() { const f = function (p, q) {}; return f; }\n" +
+            "    static Make(a, b = (u, w) => u, ...rest) {}\n" +
+            "    static get Fields() { return 1; }\n" +
+            "    static set Fields(v) {}\n" +
+            "}\n" +
+            "function First(one, two) { return (k) => k; }\n" +
+            "function Second(three) {}\n" +
+            "function Broken(a, b\n");
+        const nested = (n, k) => nest.find((x) => x.Name === n && (!k || x.Kind === k));
+        eq("a method's parameters are not an arrow's in its body",
+           nested("Ask").Params, "(message, options)");
+        eq("a getter's are not a function expression's inside it",
+           nested("Value").Params, "()");
+        eq("an arrow in a default value does not take the list over",
+           nested("Make").Params, "(a, [b], ...rest)");
+        eq("a top-level function reports its own list, not the method's before it",
+           nested("First").Params, "(one, two)");
+        eq("...and the next one its own, not the previous function's",
+           nested("Second").Params, "(three)");
+        eq("a function whose list breaks is still listed, with what was read",
+           nested("Broken").Params, "(a, b)");
+        /* **A static accessor is the class's, not the instance's.** It was a
+         * plain `Getter`, which put `static get Fields()` -- the one thing a
+         * `Record` subclass declares that way -- on the instance. */
+        /* **Every scope and every declared name**, which is what lets an
+         * editor say what a name can mean where the cursor is: each function
+         * as the lines it spans with its parameters -- an arrow too, and one
+         * that broke, up to where it broke -- and each `let`/`const`/`var`,
+         * destructured name, `for...of` variable and `catch` binding at its
+         * line. */
+        const scoped = Application.Symbols(
+            "const TOP = 1;\n" +                              /* 1 */
+            "function go(a, b = 2) {\n" +                     /* 2 */
+            "    const { p, q } = a;\n" +                     /* 3 */
+            "    for (const item of b) [1].map((v) => v);\n" + /* 4 */
+            "    try { } catch (err) { }\n" +                 /* 5 */
+            "}\n" +                                           /* 6 */
+            "function half(n) {\n" +                          /* 7 */
+            "    const z = File.Load(\n");                    /* 8, broken */
+        const vars = scoped.filter((x) => x.Kind === "Variable").map((x) => `${x.Name}@${x.Line}`);
+        eq("every declared name is reported at its line",
+           vars.join(" "), "TOP@1 p@3 q@3 item@4 err@5 z@8");
+        const spans = scoped.filter((x) => x.Kind === "Scope").map((x) => `${x.Params}${x.Line}-${x.End}`);
+        check("every function is a scope with its parameters and its lines",
+              spans.includes("(a, [b])2-6") && spans.includes("(v)4-4"), JSON.stringify(spans));
+        check("...and one that broke is a scope up to where it broke",
+              spans.includes("(n)7-9"), JSON.stringify(spans));
+        eq("a declaration is not a scope, so End is 0",
+           scoped.find((x) => x.Name === "TOP").End, 0);
+
+        eq("a static getter says so", nested("Fields", "StaticGetter").Kind, "StaticGetter");
+        eq("and a static setter", nested("Fields", "StaticSetter").Kind, "StaticSetter");
 
         eq("a namespaced class expression is named by its own name",
            named("Events").Kind, "Class");
@@ -10888,7 +11016,7 @@ function Main() {
          * name arrives after the body, so it is reported after its methods. */
         eq("an anonymous class takes the assignment's name",
            named("Anon").Kind, "Class");
-        eq("...on the line the class starts", named("Anon").Line, 13);
+        eq("...on the line the class starts", named("Anon").Line, 14);
         eq("...with its methods belonging to nobody yet", named("Only").Parent, "");
 
         eq("a class in a comment is not a class", named("Ghost"), undefined);
@@ -10900,11 +11028,57 @@ function Main() {
          * is typing in: the declarations reached are the answer, and the
          * complaint is `CheckSource`'s. */
         const part = Application.Symbols(
-            "class Ok {\n    A() {}\n}\nclass Bad extnds X {\n");
+            "class Ok {\n    A() {}\n}\nclass Bad extnds X {\n").filter(declared);
         eq("broken source answers what it reached", part.length, 3);
         eq("...the class that was complete", part[0].Name, "Ok");
         eq("...its method", part[1].Name, "A");
         eq("...and the one the error is in", part[2].Name, "Bad");
+
+        /*
+         * **The seventh vendor patch: a class's base class.**
+         *
+         * Without it a class declared in a file this process never runs cannot
+         * say what it inherits, and an inherited surface is most of what a
+         * control has -- an editor asking `Widget.Members("Confirm")` was
+         * offered 2 of the 68 names the class has, because the parser reported
+         * the methods it declares and nothing above them.
+         */
+        const shape = Application.Symbols(
+            "class Base {}\n" +                    /* 1 */
+            "class Plain extends Base {}\n" +       /* 2 */
+            "class Chain extends Plain {}\n" +      /* 3 */
+            "class Mixin extends make(Base) {}\n" + /* 4 */
+            "class Member extends Base { A() {} }\n" + /* 5 */
+            "class Body extends Base { oops\n");    /* 6 */
+        const cls = (n) => shape.find((x) => x.Name === n);
+
+        eq("a class that extends one reports it by name",
+           cls("Plain").Super, "Base");
+        eq("...and the whole chain is readable, one answer at a time",
+           cls("Chain").Super, "Plain");
+        eq("a class that extends nothing says so rather than guessing",
+           cls("Base").Super, "");
+        /* **A heritage that is an expression is not a name**, and the first
+         * version of this patch reported `make` -- a wrong answer where the
+         * comment promised none. Four opcodes are a name and nothing done to
+         * it; everything else is nothing. */
+        eq("an extends that is a call reports no supertype",
+           cls("Mixin").Super, "");
+        /* The class above does carry `Base` -- the point is that the *method*
+         * inside it does not, and that a method's `parent` is what says which
+         * class it belongs to. */
+        eq("the class of the last line does have its base class",
+           cls("Member").Super, "Base");
+        eq("and a method inside it is not itself a subclass",
+           shape.find((x) => x.Name === "A").Super, "");
+        /* **The property the report moving could have cost.** A class with an
+         * `extends` is now reported *after* the heritage is parsed, so a class
+         * that breaks in its own body is the case worth holding: it must still
+         * be listed, and with the supertype it had read before the break. */
+        eq("a class that breaks in its body is still listed with its base class",
+           cls("Body") !== undefined && cls("Body").Super, "Base");
+        eq("...and it is the last thing reported, as it is the one that broke",
+           shape[shape.length - 1].Name, "Body");
 
         /*
          * **`async` is refused where it is written, in every form it has.**
@@ -12123,6 +12297,136 @@ function Main() {
          * AGENTS.md, next to whether a popover appeared, and every refusal is
          * here, where a refusal shows nothing by construction.
          */
+    }
+
+    /*
+     * `lib/dialog`, and the one test here that **shows a window of its own
+     * twice** and closes both before it ends.
+     *
+     * That is the thing `testFileDialog` above deliberately does not do, and
+     * the reason is in its own comment: a modal nothing in JS can close sits on
+     * top of the form the next test measures. These are different -- every one
+     * of them is closed by calling the handler a click would call, which is an
+     * ordinary road and leaves nothing behind -- so they can be driven, and the
+     * promise they make is the one that matters and cannot be read off the
+     * state: **a callback runs on the answer and on nothing else.**
+     */
+    testDialog() {
+        let answered = 0;
+
+        /* --- the yes/no, and cancelling answering nothing ------------------ */
+        const dlg = Confirm.Ask("Delete this one?", () => { answered++; },
+                                { Title: "The title", Accept: "Delete" });
+        eq("the question is modal, so it is a question",
+           dlg.Modal, true);
+        eq("and it says what it was asked",
+           dlg.LblMessage.Text, "Delete this one?");
+        eq("with the title the caller gave it", dlg.Text, "The title");
+        eq("and the accepting button wearing the verb",
+           dlg.BtnAccept.Text, "Delete");
+        /* **The design decision, and the reason `ask` exists rather than
+         * `new Confirm()`.** Nothing here is `Default` -- *neither* button --
+         * because `Default` is what Enter means when the focus is somewhere
+         * else, and making the destructive one the default is exactly the
+         * reflex to avoid. Enter destroys nothing because the *focus* is on the
+         * button that says no, and Escape because `Cancel: true` is on that same
+         * button. Asserting `Default` is `false` on both is the assertion that
+         * would catch an implementation that took the other road. */
+        eq("neither button is Default, so Enter has no destructive default to find",
+           dlg.BtnCancel.Default || dlg.BtnAccept.Default, false);
+        eq("and Escape means no through the same button, declared in the .form",
+           dlg.BtnCancel.Cancel, true);
+        /* **The one claim here that needs a frame**, so it is the one that
+         * waits: `Focused` is about *within*, and the focus a `SetFocus` moved
+         * is only settled once the window is presented. `SetFocus` is called
+         * after `Show()` in the class and that order is not tidiness -- before
+         * the window is on screen there is no root to hand focus to, which is
+         * the `Form_Open` trap again. */
+        until("the question takes the focus", () => dlg.BtnCancel.Focused, () => {
+            eq("and it is the cancel button, which is what makes Enter mean no",
+               dlg.BtnCancel.Focused, true);
+        });
+
+        dlg.BtnCancel_Click();
+        eq("cancelling answers nothing at all", answered, 0);
+        eq("and the window is gone", dlg.Visible, false);
+
+        /* The same dialog, accepted. */
+        const yes = Confirm.Ask("Delete this one?", () => { answered++; },
+                                { Title: "The title", Accept: "Delete" });
+        yes.BtnAccept_Click();
+        eq("accepting answers, once", answered, 1);
+
+        /* --- the prompt, and an empty field not being an answer ------------ */
+        let got = null;
+        const ask = AskText.Prompt("What is it called?",
+                                   (value, checked) => { got = [value, checked]; },
+                                   { Title: "Name it", Initial: "the old name" });
+        eq("the prompt is modal too", ask.Modal, true);
+        eq("and asks what it says it asks",
+           ask.LblPrompt.Text, "What is it called?");
+        eq("offering the value to be replaced",
+           ask.TxtValue.Text, "the old name");
+        eq("and Enter in the field is the answer, which is the other half of "
+           + "the split from the dialog above",
+           ask.TxtValue.ActivatesDefault, true);
+        eq("while the yes/no had no field to activate it",
+           dlg.TxtValue, undefined);
+        eq("no checkbox unless one was asked for",
+           ask.ChkOption.Visible, false);
+
+        /* Nothing typed: the window stays up and the callback never runs. A
+         * dialog that closed itself on an empty field is one a mistyped Enter
+         * throws the work away with. */
+        ask.TxtValue.Text = "   ";
+        ask.BtnOk_Click();
+        eq("an empty field answers nothing", got, null);
+        eq("and the window is still up", ask.Visible, true);
+
+        ask.TxtValue.Text = "  the new name  ";
+        ask.BtnOk_Click();
+        eq("a name answers, trimmed", got[0], "the new name");
+        eq("and with no checkbox the second argument is false", got[1], false);
+        eq("and the window closed", ask.Visible, false);
+
+        /* --- the checkbox, and the window growing to hold it --------------- */
+        const before = ask.Height;
+        let withBox = null;
+        const both = AskText.Prompt("What is it called?",
+                                    (value, checked) => { withBox = checked; },
+                                    { Title: "Name it",
+                                      Option: { Text: "Also rename the file",
+                                                Checked: true } });
+        eq("a checkbox asked for is shown",
+           both.ChkOption.Visible, true);
+        eq("carrying the caller's label",
+           both.ChkOption.Text, "Also rename the file");
+        eq("and its state", both.ChkOption.Active, true);
+        /* **The window grew by exactly what the checkbox takes**, and that is
+         * the claim worth holding: the dialog is laid out by coordinates, so a
+         * checkbox with no room makes the buttons sit on top of it. The value
+         * is the one the source moves them by. */
+        eq("and the window made room for it",
+           both.Height - before, 34);
+        both.BtnCancel_Click();
+        eq("and cancelling it answers nothing either", withBox, null);
+
+        /* A checkbox that is offered and left alone answers `false`, which is
+         * what makes `Option` usable without the caller testing for its
+         * presence. */
+        const unchecked = AskText.Prompt("What is it called?",
+                                         (value, checked) => { withBox = checked; },
+                                         { Option: { Text: "Also" } });
+        /* With a value, because without one the field is empty and an empty
+         * field answers nothing -- which is the claim three assertions above
+         * and not a thing to route around here. */
+        unchecked.TxtValue.Text = "typed";
+        unchecked.BtnOk_Click();
+        eq("a checkbox nobody ticked answers false, not undefined", withBox, false);
+
+        /* Both windows are closed now, so nothing is left on screen for the
+         * next test to measure -- which is the whole of why the file-dialog
+         * test above asserts refusals only. */
     }
 
     /*
@@ -13660,6 +13964,18 @@ function Main() {
                     eq("and it is not open", buried.Visible, false);
                     hidden.Delete();
 
+                    /* **A rectangle inside the anchor**, which is what a hint
+                     * beside an editor's cursor points at: opened with one, and
+                     * refused for something that is not one. */
+                    pop.Add(content);
+                    throws("a rect that is not an object is refused",
+                           () => pop.Popup(anchor, 5));
+                    throws("a rect field that is not a number is refused",
+                           () => pop.Popup(anchor, { X: "left" }));
+                    pop.Popup(anchor, { X: 2, Y: 2, Width: 1, Height: 1 });
+                    eq("it opens pointed at a rectangle inside the anchor", pop.Visible, true);
+                    pop.Close();
+
                     panel.Delete();
                 });
             });
@@ -14411,6 +14727,386 @@ function Main() {
         eq("inherited from Object, as `in` was",
            Widget.Member("Button", "toString"), "Method");
 
+        /* **`Members` is the verb that answers where the three above refuse**, and
+         * that is what it was added for. `Timer` is a class in rad.js and the old
+         * verbs say *not a widget class* about it -- so an editor completing
+         * `Timer.` offered nothing while knowing the name. */
+        throws("a class that is not a widget is still refused by PropertyNames",
+               () => Widget.PropertyNames("Timer"));
+        throws("...and by Methods", () => Widget.Methods("Timer"));
+
+        const timer = Widget.Members("Timer");
+        const names = (kind) => timer.filter((m) => m.Kind === kind).map((m) => m.Name);
+        check("Members answers for it anyway",
+              names("Static").includes("After") && names("Static").includes("Every"),
+              JSON.stringify(names("Static")));
+        check("and for its instance members",
+              names("Method").includes("Start"), JSON.stringify(names("Method")));
+
+        /* **And a global that is a bag of functions, through the same verb** --
+         * because the runtime's lookup does not tell a class and an object
+         * apart, and a caller should not have to. */
+        const file = Widget.Members("File");
+        check("a global object is asked the same way",
+              file.some((m) => m.Name === "Save" && m.Kind === "Method"),
+              JSON.stringify(file.slice(0, 4).map((m) => m.Name)));
+        eq("and it refuses a name that is nothing at all",
+           (() => { try { Widget.Members("NoSuchThingHere"); return ""; }
+                    catch (e) { return e.message; } })(),
+           "Members: 'NoSuchThingHere' is not a class");
+        eq("and a number is not a class either",
+           (() => { try { Widget.Members(8); return ""; }
+                    catch (e) { return e.message; } })(),
+           "Members: '8' is not a class");
+
+        /* `Application.Globals()`: what is installed, asked rather than listed. */
+        const globals = Application.Globals();
+        check("the runtime's own globals are on it",
+              globals.includes("File") && globals.includes("Locale") &&
+              globals.includes("Timer") && globals.includes("Widget"),
+              JSON.stringify(globals.filter((g) => g === "File")));
+        check("and the language's builtins are, which is the point",
+              globals.includes("Math") && globals.includes("JSON") &&
+              globals.includes("Date"), JSON.stringify(globals.length));
+        check("and each one once", globals.length === [...new Set(globals)].length,
+              JSON.stringify(globals.length));
+        check("and not one of the hatches the language closed",
+              !globals.includes("globalThis") && !globals.includes("eval") &&
+              !globals.includes("Symbol") && !globals.includes("RegExp"),
+              JSON.stringify(globals.filter((g) =>
+                  ["globalThis","eval","Symbol","RegExp"].includes(g))));
+
+        /*
+         * **`Widget.Members` with `Sources`: a class this process never loaded,
+         * and the chain above it.**  A library's class is a lexical binding in a
+         * file the host does not run, so there was nothing to ask and an editor
+         * was offered 2 of the 68 names the class has.  The sources are read
+         * with the same parser, the `extends` chain is followed, and the walk
+         * goes back to the class table at the first base the sources do not
+         * declare -- which is `Form`.
+         */
+        /* **Two shapes, because the chain ends two ways.** `Leaf` is declared
+         * entirely among the sources, so the walk is parser from end to end; a
+         * base that is *not* among them ends the walk in the class table, which
+         * is the ordinary case for a form class and the one an editor needed. */
+        const askSrc = "class AskText extends Form { static Prompt() {} }\n";
+        const lib = "class Base { BaseOnly() {} }\n" +
+                    "class Mid extends Base { Mid() {} }\n" +
+                    "class Leaf extends Mid { Leaf() {} lower() {} }\n" +
+                    "class Formish extends Form { Formish() {} }\n" +
+                    "class Alone extends Widget { Alone() {} }\n" +
+                    "class Orphan extends NotHere { Lonely() {} }\n" +
+                    "class Ring1 extends Ring2 {}\n" +
+                    "class Ring2 extends Ring1 {}\n" +
+                    "class Called extends make(Base) {}\n";
+        const srcs = { Sources: [lib] };
+        const has  = (n) => Widget.Members(n, srcs).map((m) => m.Name);
+
+        check("a class declared only in a source answers, and so does its base",
+              has("Leaf").includes("Leaf") && has("Leaf").includes("Mid") &&
+              has("Leaf").includes("BaseOnly"),
+              JSON.stringify(has("Leaf")));
+        eq("...and the parser's answer is only what the sources declared",
+           JSON.stringify(has("Leaf")), '["Leaf","Mid","BaseOnly"]');
+        check("a base the sources do not declare ends the walk in the class table",
+              has("Formish").includes("Formish") && has("Formish").includes("Width") &&
+              has("Formish").includes("Bounds") && has("Formish").includes("Show"),
+              JSON.stringify(has("Formish").slice(0, 6)));
+        check("...which is most of the class and not a fragment of one",
+              has("Formish").length > 40, has("Formish").length);
+        check("a class extending Widget is answered the same way",
+              has("Alone").includes("Alone") && has("Alone").includes("Width"),
+              JSON.stringify(has("Alone").slice(0, 4)));
+        check("a lower-case member is not offered here either",
+              !has("Leaf").includes("lower"), JSON.stringify(has("Leaf").slice(0, 8)));
+        check("a base that is nowhere gives what the class has and stops",
+              JSON.stringify(has("Orphan")) === '["Lonely"]',
+              JSON.stringify(has("Orphan")));
+        check("an extends that is a call contributes nothing and does not throw",
+              has("Called").length === 0, JSON.stringify(has("Called")));
+        /* **A cycle is not a hang.** Two classes extending each other is
+         * something a person writes by accident and a merge produces, and the
+         * walk is a loop over a chain. */
+        check("a cycle in the chain terminates rather than hanging",
+              has("Ring1").length === 0, JSON.stringify(has("Ring1").length));
+
+        /* **A library class may shadow a runtime global, and the project's own
+         * declaration is the one that answers** -- `Dialog` is a real global
+         * full of static functions, so asking the class table first described a
+         * different class than the one being written. */
+        const shadow = "class Dialog extends Form { Ask() {} }\n";
+        check("a class whose name the runtime also has takes the source's answer",
+              Widget.Members("Dialog", { Sources: [shadow] }).length > 40 &&
+              Widget.Members("Dialog", { Sources: [shadow] })[0].Name === "Ask",
+              JSON.stringify(Widget.Members("Dialog", { Sources: [shadow] })
+                  .slice(0, 3).map((m) => m.Name)));
+        check("and without the source the global's own answer is unchanged",
+              Widget.Members("Dialog").length > 0 &&
+              Widget.Members("Dialog").length < 40,
+              Widget.Members("Dialog").length);
+
+        /* **The refusals, named.** A source is text: `JS_ToCString` converts
+         * anything, so a number would have become the source `"5"` and answered
+         * "this class declares nothing" as though the caller had said so. */
+        eq("a Sources that is not an array is refused",
+           (() => { try { Widget.Members("Leaf", { Sources: 1 }); return ""; }
+                    catch (e) { return e.message; } })(),
+           "Members: Sources must be an array of source texts");
+        eq("a Sources entry that is not a string is refused",
+           (() => { try { Widget.Members("Leaf", { Sources: [5] }); return ""; }
+                    catch (e) { return e.message; } })(),
+           "Members: Sources[0] is not a source text");
+        eq("and a name neither here nor declared says so, naming both",
+           (() => { try { Widget.Members("NoSuchClass", srcs); return ""; }
+                    catch (e) { return e.message; } })(),
+           "Members: 'NoSuchClass' is not a class, and no source among Sources declares it");
+        eq("and without Sources the refusal is the original one",
+           (() => { try { Widget.Members("NoSuchClass"); return ""; }
+                    catch (e) { return e.message; } })(),
+           "Members: 'NoSuchClass' is not a class");
+        check("a refused call left the verb working",
+              Widget.Members("Button").length > 40, Widget.Members("Button").length);
+
+        /* **And each verb says its parameters**, from wherever they are
+         * written: the comment above a global's C entry (`File.Load`), above a
+         * class static's (`Widget.New`), above a control's table entry
+         * (`Bounds`, found on `Button` under the class that declares it), and
+         * for a function written in JavaScript, the parser over its own source
+         * (`Timer.After`, `File.LoadJson`) -- which nobody wrote twice. */
+        const sigOf = (t, n) => (Widget.Members(t).find((m) => m.Name === n) || {}).Signature;
+        eq("a global's native verb says its parameters", sigOf("File", "Load"), "(path)");
+        eq("...and one with an optional", sigOf("Directory", "Files"), "(path, [options])");
+        eq("a native class static says its own", sigOf("Widget", "New"), "(type)");
+        eq("an inherited control method answers from the class that declares it",
+           sigOf("Button", "Bounds"), "([container])");
+        eq("a static written in rad.js is read out of its source",
+           sigOf("Timer", "After"), "(delay, tick)");
+        eq("...and so is a verb rad.js hung on a native global",
+           sigOf("File", "LoadJson"), "(path)");
+        eq("an instance method of a native class says its parameters",
+           sigOf("Bytes", "Slice"), "(from, [count])");
+
+        /* **And what each one answers**, read off the arrow on the same
+         * comment: a type the runtime can be asked about, a builtin, a list,
+         * or a shape in braces. It is what lets an editor complete past a
+         * call. And **a type no global holds** -- a client, a connection, an
+         * XML node -- answers from the table a `type X` comment names, since
+         * there is no object to walk. */
+        const retOf = (t, n, o) => (Widget.Members(t, o).find((m) => m.Name === n) || {}).Returns;
+        eq("a call's answer is declared beside it", retOf("File", "LoadBytes"), "Bytes");
+        eq("...a shape in braces", retOf("File", "Info"), "{ Size, Modified, Type, Icon, IsDir }");
+        eq("...a list", retOf("Directory", "Files"), "string[]");
+        eq("...inherited through the class that declares it", retOf("Button", "Bounds"),
+           "{ X, Y, Width, Height }");
+        eq("...and a static's", retOf("Widget", "New"), "Widget");
+        eq("a property can declare its type too", retOf("XmlNode", "Children"), "XmlNode[]");
+        eq("a type no global holds is answered from its table",
+           retOf("HttpClient", "GetWait"), "{ Status, Reason, Headers, Body, Url }");
+        check("...with its properties listed too",
+              Widget.Members("HttpClient").some((m) => m.Name === "BaseUrl" && m.Kind === "Property"), "");
+        check("a global class gains what its driver's table adds",
+              Widget.Members("Connection").some((m) => m.Name === "Query") &&
+              Widget.Members("Connection").some((m) => m.Name === "Table"), "");
+        /* `All` is the lower-case names too, which a builtin is made of. */
+        check("All includes the lower-case names a builtin has",
+              Widget.Members("String", { All: true }).some((m) => m.Name === "split") &&
+              !Widget.Members("String").some((m) => m.Name === "split"), "");
+        /* And `Array.fromAsync` is gone: an async function the engine built on
+         * first read, never collectable without promises, so reading it once
+         * made the process abort at exit. `Members("Array")` read it. */
+        eq("Array.fromAsync is not in this language", typeof Array.fromAsync, "undefined");
+
+        /* **What a member is for, written once, beside it.** The lines after a
+         * signature comment in the C are the description, and the runtime hands
+         * it out: `Doc` on each member, `EventDoc` for an event. `tools/docs`
+         * writes the same text into the documentation's rows, so the three
+         * readers -- a person, a model and the completion popup -- read one
+         * sentence. `Native` says which members are written in C, whose
+         * description lives there, against those a JSDoc comment describes. */
+        const member = (t, n) => Widget.Members(t).find((m) => m.Name === n) || {};
+        check("a global's verb says what it is for",
+              (member("File", "Load").Doc || "").startsWith("the whole file as a string"),
+              member("File", "Load").Doc);
+        check("...and a control's property, inherited from the class that declares it",
+              (member("Button", "Enabled").Doc || "").includes("`true` by default"),
+              member("Button", "Enabled").Doc);
+        check("an event says what it is for, asked of the class that raises it",
+              (Widget.EventDoc("Button", "Click") || "").includes("pressed"),
+              Widget.EventDoc("Button", "Click"));
+        eq("and an event nothing declares answers null",
+           Widget.EventDoc("Button", "NoSuchEvent"), null);
+        eq("a verb written in C is Native", member("File", "Load").Native, true);
+        eq("...one written in JavaScript is not", member("Timer", "After").Native, false);
+
+        /* **And a member written in JavaScript says it the same way**, in the
+         * JSDoc comment above its declaration: the parser reads the comment
+         * (the tenth fork patch), `Application.Symbols` hands it out as `Doc`
+         * and the type after `@returns` as `Returns`, and `Widget.Members`
+         * answers with it -- for rad.js and forms.js, read out of the binary,
+         * and for a class read out of a source. */
+        check("a static of rad.js says what it is for",
+              (member("Timer", "After").Doc || "").includes("once after `delay`"),
+              member("Timer", "After").Doc);
+        check("...and a member of a bag written as an object literal",
+              (member("Settings", "Get").Doc || "").includes("`fallback`"),
+              member("Settings", "Get").Doc);
+        check("...and a getter in one",
+              (member("Settings", "Path").Doc || "").includes("settings.json"),
+              member("Settings", "Path").Doc);
+        check("...and a method forms.js puts on a prototype, inherited",
+              (member("Button", "Dump").Doc || "").includes("screenshot"),
+              member("Button", "Dump").Doc);
+        check("...and an accessor written as a mixin and copied onto a class the C made",
+              (member("Label", "Caption").Doc || "").includes("alias of `Text`") &&
+              (member("Form", "Controls").Doc || "").includes("creation order"),
+              member("Label", "Caption").Doc);
+        const jsdoc = [
+            "/** A thing that counts. */",                   /* 1 */
+            "class Counter {",                               /* 2 */
+            "    /**",                                        /* 3 */
+            "     * Adds one.",                               /* 4 */
+            "     * @param {number} by how many",             /* 5 */
+            "     * @returns {number} the new count",         /* 6 */
+            "     */",                                        /* 7 */
+            "    Bump(by) { /** not a doc */ return 1; }",    /* 8 */
+            "    Plain() {}",                                 /* 9 */
+            "}",                                              /* 10 */
+            "/** Makes one. @returns {Counter} */",           /* 11 */
+            "Counter.Parse = function (text) {};",           /* 12 */
+            "/** Resets it. */",                              /* 13 */
+            "Counter.prototype.Reset = function () {};",     /* 14 */
+            "GLOBAL.Bag = {",                                 /* 15 */
+            "    /** Reads one. */",                          /* 16 */
+            "    Get(key) { const inner = { Nope() {} }; },", /* 17 */
+            "    /** Where. */",                              /* 18 */
+            "    get Where() { return 1; },",                 /* 19 */
+            "};"].join("\n");
+        const syms = Application.Symbols(jsdoc);
+        const sym = (n) => syms.find((x) => x.Name === n) || {};
+        eq("a class's JSDoc is its Doc", sym("Counter").Doc, "A thing that counts.");
+        eq("a method's is the text before its first tag", sym("Bump").Doc, "Adds one.");
+        eq("...and @returns is its Returns", sym("Bump").Returns, "number");
+        eq("a comment inside a body documents nothing", sym("Plain").Doc, "");
+        eq("a function assigned at the top level is Assigned, by its target",
+           sym("Counter.Parse").Kind, "Assigned");
+        eq("...with its parameters, its doc and an inline @returns",
+           `${sym("Counter.Parse").Params} ${sym("Counter.Parse").Doc} ${sym("Counter.Parse").Returns}`,
+           "(text) Makes one. Counter");
+        eq("a function an object literal holds is assigned to the literal's target",
+           `${sym("GLOBAL.Bag.Get").Kind} ${sym("GLOBAL.Bag.Get").Params} ${sym("GLOBAL.Bag.Get").Doc}`,
+           "Assigned (key) Reads one.");
+        eq("...a getter in it has no parameters", sym("GLOBAL.Bag.Where").Params, "");
+        check("...and a literal nested in one owns nothing",
+              !syms.some((x) => x.Name.endsWith(".Nope")), JSON.stringify(syms.map((x) => x.Name)));
+        const read = Widget.Members("Counter", { Sources: [jsdoc] });
+        const got = (n) => read.find((m) => m.Name === n) || {};
+        eq("a class read from a source answers its JSDoc", got("Bump").Doc, "Adds one.");
+        eq("...and its Returns", got("Bump").Returns, "number");
+        eq("a static assigned outside the body is the class's",
+           `${got("Parse").Kind} ${got("Parse").Returns}`, "Static Counter");
+        eq("...and a method assigned onto its prototype", got("Reset").Doc, "Resets it.");
+        eq("a bag written as a literal answers too",
+           (Widget.Members("Bag", { Sources: [jsdoc] }).find((m) => m.Name === "Get") || {}).Doc,
+           "Reads one.");
+
+        /* **One class, one vocabulary, whichever reader found it.** A getter
+         * with no setter is `ReadOnly` -- the word `Widget.Member` gives it --
+         * and the loaded walk used to call it `Property`. The source walk reads
+         * the parser's kinds into the same words: `get X` alone is `ReadOnly`,
+         * with a `set X` it is a `Property`, a static accessor is a `Static`,
+         * and a property carries no signature, since one would read as a
+         * method. And `Params` from a signature follows `Function.length`: the
+         * names before the first optional or rest. */
+        const kindOf = (list, n) => (list.find((m) => m.Name === n) || {}).Kind;
+        eq("a loaded class's read-only property is ReadOnly",
+           kindOf(Widget.Members("Panel"), "Children"), "ReadOnly");
+        eq("...which is what Widget.Member says of it",
+           Widget.Member("Panel", "Children"), "ReadOnly");
+        eq("and a settable one is still a Property",
+           kindOf(Widget.Members("Panel"), "Width"), "Property");
+        const acc = Widget.Members("Acc", { Sources: [
+            "class Acc {\n" +
+            "    get Only() { return 1; }\n" +
+            "    get Both() { return 1; }\n" +
+            "    set Both(v) {}\n" +
+            "    static get Fields() { return 1; }\n" +
+            "    static Make(a, b = 1, ...rest) {}\n" +
+            "    Run(a, b) {}\n" +
+            "}\n"] });
+        const accOf = (n) => acc.find((m) => m.Name === n) || {};
+        eq("a getter alone read out of a source is ReadOnly", accOf("Only").Kind, "ReadOnly");
+        eq("a getter and a setter are one Property", accOf("Both").Kind, "Property");
+        eq("...listed once", acc.filter((m) => m.Name === "Both").length, 1);
+        eq("a property carries no signature", accOf("Both").Signature, "");
+        eq("a static accessor is a Static", accOf("Fields").Kind, "Static");
+        eq("...with nothing known about arguments", accOf("Fields").Params, -1);
+        eq("a signature's count is Function.length's: before the first optional",
+           accOf("Make").Params, 1);
+        eq("...and all of a plain list", accOf("Run").Params, 2);
+
+        /*
+         * **The children of a `.form`, and the reason they were missing from
+         * everywhere.** The loader assigns each node by name onto the form it
+         * builds, so `Confirm.BtnAccept` is an *own property of the instance* --
+         * the library's own code does `dlg.BtnAccept.Text = ...` -- and every
+         * member walk here is over the **prototype chain**, where an own
+         * property is not. The `.form` is the only thing that knows the names.
+         */
+        const form = JSON.stringify({
+            format: "bintana-form/1", class: "AskText",
+            properties: { Width: 400 },
+            children: [{ type: "Label", name: "LblPrompt" },
+                       { type: "TextEditor", name: "EdAnswer" },
+                       { type: "Button", name: "BtnAccept" },
+                       { type: "Button", name: "BtnCancel" },
+                       { type: "Panel", name: "helper" }] });
+        const kids = Widget.Members("AskText", { Sources: [askSrc], Forms: [form] });
+        const kidNames = kids.map((m) => m.Name);
+
+        check("a form's children are members, and they were not before",
+              kidNames.includes("BtnAccept") && kidNames.includes("EdAnswer") &&
+              kidNames.includes("LblPrompt"),
+              JSON.stringify(kidNames.slice(0, 8)));
+        check("and they are properties, which is what they are",
+              kids.find((m) => m.Name === "BtnAccept").Kind === "Property",
+              JSON.stringify(kids.find((m) => m.Name === "BtnAccept")));
+        /* **The same capital-initial rule, for the third time in this file.** A
+         * child called `helper` is the form talking to itself, and offering it
+         * would be offering something a caller cannot write. */
+        check("a lower-case child is not a member",
+              !kidNames.includes("helper"), JSON.stringify(kidNames.slice(-4)));
+        check("and a form of another class is not this class's answer",
+              !Widget.Members("AskText", { Sources: [askSrc],
+                Forms: [JSON.stringify({ class: "Other",
+                                          children: [{ name: "Nope" }] })] })
+                  .map((m) => m.Name).includes("Nope"), "");
+        check("a .form that does not parse is the loader's complaint, not this verb's",
+              Widget.Members("AskText", { Sources: [askSrc],
+                                          Forms: ["{ not json"] }).length > 0, "");
+        /* **The other half, and it is the half that was broken silently.** A
+         * class that is *loaded* has children the prototype walk cannot see
+         * either, so the first version -- which read the forms only when
+         * `Sources` was also given -- answered a class read from its source and
+         * not one that is loaded. One bug and not two, and the condition it sat under was the
+         * clue. `Chip` is this project's own form and is loaded. */
+        const chipForm = File.Load(File.Join(Application.Directory, "Chip.form"));
+        const chipKids = Widget.Members("Chip", { Forms: [chipForm] })
+                             .map((m) => m.Name);
+        check("a loaded form class gets its children too, which is the same bug",
+              chipKids.includes("Shown"),
+              JSON.stringify(chipKids.filter((n) => ["Shown", "Name"].includes(n))));
+        check("and they are not there without the form, which is the point",
+              !Widget.Members("Chip").map((m) => m.Name).includes("Shown"),
+              JSON.stringify(Widget.Members("Chip").length));
+
+        eq("a Forms that is not an array is refused",
+           (() => { try { Widget.Members("AskText", { Forms: 1 }); return ""; }
+                    catch (e) { return e.message; } })(),
+           "Members: Forms must be an array of source texts");
+        eq("a Forms entry that is not a string is refused",
+           (() => { try { Widget.Members("AskText", { Forms: [7] }); return ""; }
+                    catch (e) { return e.message; } })(),
+           "Members: Forms[0] is not a source text");
         /* Abstract classes answer -- there is no control to make of one, which
          * is exactly what the old probes could not ask. */
         check("an abstract class answers",

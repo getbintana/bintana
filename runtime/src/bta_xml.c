@@ -571,7 +571,11 @@ static JSValue xml_doc_get_root(JSContext *ctx, JSValueConst this_val)
     return xml_node_new(ctx, t, root, false);
 }
 
+/* type XmlDocument */
 static const JSCFunctionListEntry xml_doc_props[] = {
+    /* Root -> XmlNode
+     *   the root element of a document, or `null`
+     */
     JS_CGETSET_DEF("Root", xml_doc_get_root, NULL),
 };
 
@@ -1142,26 +1146,95 @@ static JSValue xml_node_set_namespace(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
+/* type XmlNode */
 static const JSCFunctionListEntry xml_node_props[] = {
+    /* Name -> string
+     *   the local name, the prefix, the URI — `""` when there is none
+     */
     JS_CGETSET_DEF("Name",      xml_node_get_name,      NULL),
+    /* Prefix -> string
+     *   the prefix, `""` when there is none
+     */
     JS_CGETSET_DEF("Prefix",    xml_node_get_prefix,    NULL),
+    /* Namespace -> string
+     *   the URI, `""` when there is none
+     */
     JS_CGETSET_DEF("Namespace", xml_node_get_namespace, NULL),
+    /* Text -> string
+     *   all the character data under an element; assigning replaces the
+     *   children
+     */
     JS_CGETSET_DEF("Text",      xml_node_get_text,      xml_node_set_text),
+    /* Parent -> XmlNode
+     *   the parent element, or `null` for a root or a detached node
+     */
     JS_CGETSET_DEF("Parent",    xml_node_get_parent,    NULL),
+    /* Children -> XmlNode[]
+     *   its element children, in order
+     */
     JS_CGETSET_DEF("Children",  xml_node_children,      NULL),
+    /* Attr(name) -> string
+     *   the value of an attribute **with no namespace**, `""` for one that is
+     *   present and empty, `null` for one that is not
+     */
     JS_CFUNC_DEF("Attr",           1, xml_node_attr),
+    /* SetAttr(name, value)
+     *   both as text; creates or replaces
+     */
     JS_CFUNC_DEF("SetAttr",        2, xml_node_set_attr),
+    /* RemoveAttr(name)
+     *   takes the attribute with no namespace away; one that is not there is
+     *   not an error
+     */
     JS_CFUNC_DEF("RemoveAttr",     1, xml_node_remove_attr),
+    /* AttrNS(uri, name) -> string
+     *   the same for an attribute in a namespace — `xml:lang` is
+     *   `AttrNS("http://www.w3.org/XML/1998/namespace", "lang")`, since an
+     *   unprefixed name means no namespace at all. `SetAttrNS` refuses a
+     *   namespace not declared in scope
+     */
     JS_CFUNC_DEF("AttrNS",         2, xml_node_attr_ns),
+    /* SetAttrNS(uri, name, value)
+     *   writes one
+     */
     JS_CFUNC_DEF("SetAttrNS",      3, xml_node_set_attr_ns),
+    /* RemoveAttrNS(uri, name)
+     *   takes away the attribute in that namespace; one that is not there --
+     *   or only a DTD's default -- is not an error
+     */
     JS_CFUNC_DEF("RemoveAttrNS",   2, xml_node_remove_attr_ns),
+    /* AttributeNames() -> string[]
+     *   the local names, sorted as the file had them
+     */
     JS_CFUNC_DEF("AttributeNames", 0, xml_node_attribute_names),
+    /* Find(name) -> XmlNode
+     *   the first direct child element with that local name, or `null`
+     */
     JS_CFUNC_DEF("Find",           1, xml_node_find),
+    /* FindAll(name) -> XmlNode[]
+     *   every direct child element with it
+     */
     JS_CFUNC_DEF("FindAll",        1, xml_node_find_all),
+    /* Add(child) -> XmlNode
+     *   a node or an element name
+     */
     JS_CFUNC_DEF("Add",            1, xml_node_add),
+    /* Insert(index, child) -> XmlNode
+     *   before the element child at `index`, or at the end
+     */
     JS_CFUNC_DEF("Insert",         2, xml_node_insert),
+    /* Remove()
+     *   takes the node out for good
+     */
     JS_CFUNC_DEF("Remove",         0, xml_node_remove),
+    /* Copy() -> XmlNode
+     *   a detached subtree of its own
+     */
     JS_CFUNC_DEF("Copy",           0, xml_node_copy),
+    /* SetNamespace(uri, [prefix])
+     *   puts the element in that namespace, reusing a declaration already in
+     *   reach
+     */
     JS_CFUNC_DEF("SetNamespace",   2, xml_node_set_namespace),
 };
 
@@ -1234,17 +1307,39 @@ void bta_xml_init(JSContext *ctx, JSValue global)
 
     JSValue xml = JS_NewObject(ctx);
 
+    /* Parse(text) -> XmlDocument
+     *   the document, or a `SyntaxError` naming línea and columna
+     */
     JS_SetPropertyStr(ctx, xml, "Parse",
                       JS_NewCFunction(ctx, xml_parse, "Parse", 1));
+    /* ParseBytes(bytes) -> XmlDocument
+     *   the same, and the declaration's encoding is honoured — what
+     *   `File.LoadXml` uses
+     */
     JS_SetPropertyStr(ctx, xml, "ParseBytes",
                       JS_NewCFunction(ctx, xml_parse_bytes, "ParseBytes", 1));
+    /* Stringify(node) -> string
+     *   the canonical text: declaration, indented by two, one trailing
+     *   newline. A detached element is written with a document of its own
+     */
     JS_SetPropertyStr(ctx, xml, "Stringify",
                       JS_NewCFunction(ctx, xml_stringify, "Stringify", 1));
+    /* Element(name) -> XmlNode
+     *   a detached element; its own tree, not in any document
+     */
     JS_SetPropertyStr(ctx, xml, "Element",
                       JS_NewCFunction(ctx, xml_element, "Element", 1));
 #ifdef BTA_HAVE_LIBXML
+    /* Available
+     *   whether this build has libxml2; the verbs refuse with a sentence when
+     *   it does not
+     */
     JS_SetPropertyStr(ctx, xml, "Available", JS_NewBool(ctx, true));
 #else
+    /* Available
+     *   whether this build has libxml2; the verbs refuse with a sentence when
+     *   it does not
+     */
     JS_SetPropertyStr(ctx, xml, "Available", JS_NewBool(ctx, false));
 #endif
     JS_SetPropertyStr(ctx, global, "Xml", xml);

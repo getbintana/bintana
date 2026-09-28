@@ -33,7 +33,7 @@ the files must say.
 
 | | | |
 |---|---|---|
-| `Write(project, out, [options])` | → where each artefact went | [writing](#writing) |
+| `Write(project, out, [options])` | writes `<id>.metainfo.xml`, `<id>.desktop`, the icon as `<id>.svg\\|png`, a copy of the project and `<id>.json`; answers where each went | [writing](#writing) |
 | `defaults` | what the manifest carries when the caller says nothing | [the manifest](#the-manifest) |
 | `configOf(project)` | `project.json` as `{ Id, Name, Version, Dir }` | [the manifest](#the-manifest) |
 | `commandName(id)` | `bintana-notes` for `io.github.you.Notes` | [the command](#the-command) |

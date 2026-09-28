@@ -13,10 +13,10 @@ None of its own. What matters is what these mean **here**:
 
 | | |
 |---|---|
-| `Children[0]` | **the base layer**: the one child the stack hands its whole size to. There is exactly one whenever an overlay holds anything, and if it leaves, the layer above takes over |
-| `Reorder(child, 0)` | make that child the base. Any other index is a place in the paint order |
-| `Raise()` / `Lower()` | one layer up, one layer down — and the bottom of a stack is the layer that fills, so `Lower()` on a floater makes it the base |
-| `HAlign` / `VAlign` | **where a floating layer sits**. A layer that says nothing fills the stack like the base does; `Center`/`Center` is a spinner over a picture, `Center`/`Start` a banner at the top. With `Margin`, that is the whole placement vocabulary a stack has |
+| `Children[0]` | its real children, one level deep, in the order they are in |
+| `Reorder(child, 0)` | moves a child among its siblings. The index counts them *without* the one being moved. **Every container with an order answers it**: a box, a `Grid`, a `Flow`, a `RowList`, a `Notebook`, a `Switcher`, a `Split` (the index names the half) and an `Overlay` (index `0` is the base layer, the one that fills). A `Fixed` refuses — there the order is the painting order, which is `Raise`/`Lower` |
+| `Raise()` / `Lower()` | to the top of the painting order, among its siblings on a surface |
+| `HAlign` / `VAlign` | `Auto` `Start` `End` `Center` `Fill` — what becomes of it when the container is not the size the coordinates were drawn for |
 
 **`X`/`Y` mean nothing in an overlay and are not saved.** A stack is not a drawing
 surface: there is no coordinate to give a layer, so a hand-written `.form`

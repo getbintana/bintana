@@ -32,16 +32,16 @@ clients.Save(c);                                      // UPDATE, by the key
 | | |
 |---|---|
 | `Close()` | let it go |
-| `Columns(table)` | → `[{ Name, Type, Required, Key }]` |
-| `Dialect` (ro) | → `{ Placeholder, Quote, NewKey }` — what differs per engine |
-| `Execute(sql, [params])` | → `{ Changes, LastId }`. **One** statement |
-| `Open` (ro) | whether it is |
-| `Path` | the file it is |
-| `Query(sql, [params])` | → rows, as plain objects |
-| `Script(sql)` | several statements, no parameters: a schema |
-| `Table(name, RecordClass)` | → the typed half, below |
-| `Tables` (ro) | → tables and views, ordered |
-| `Transaction(fn)` | all of it or none; nests through savepoints |
+| `Columns(table)` | `[{ Name, Type, Required, Key }]` — what is really in the table, which is how a program checks that a record's shape still fits |
+| `Dialect` (ro) | `{ Placeholder, Quote, NewKey }` — **what differs per engine**, so the portable half above can build SQL without knowing which engine it is talking to |
+| `Execute(sql, [params])` | **one** statement, answering `{ Changes, LastId }` |
+| `Open` (ro) | whether it still is |
+| `Path` | the file this connection is |
+| `Query(sql, [params])` | the rows a statement answers, as **plain objects** — for the report, the `GROUP BY`, the join that is not one shape |
+| `Script(sql)` | several statements and **no parameters**: a schema, a migration |
+| `Table(name, RecordClass)` | a [`Table`](Database.md): the rows of `name` as records of `Shape` |
+| `Tables` (ro) | the tables and views, ordered |
+| `Transaction(fn)` | everything in `fn` or nothing. **Nests**, through savepoints, so a function that wraps its own work in one is safe to call from inside another |
 
 **On a table**
 
@@ -100,7 +100,7 @@ something a mapper should make silently.
 | `Path` | the file this connection is |
 | `Open` (ro) | whether it still is |
 | `Close()` | let it go |
-| `Table(name, RecordClass)` | the typed half, above |
+| `Table(name, RecordClass)` | a [`Table`](Database.md): the rows of `name` as records of `Shape` |
 
 ## Transactions
 

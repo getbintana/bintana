@@ -251,10 +251,16 @@ function makeChildProject() {
      */
     Directory.Make(File.Join(TMP, "lib", "gadgets"));
     File.Save(File.Join(TMP, "lib", "gadgets", "Dial.js"),
+              'class Gadget extends Widget {\n' +
+              '    static Make() { return new Gadget(); }\n' +
+              '    face() {}\n' +
+              '}\n' +
               'class Dial extends Component {\n' +
               '    static Events = ["Turn"];\n' +
+              '    /** a dial already turned to v */ static Make(v) { return new Dial().Value = v; }\n' +
               '    get Value() { return this._v || 0; }\n' +
               '    set Value(v) { this._v = Number(v) || 0; }\n' +
+              '    turn() { this.Emit("Turn"); }\n' +
               '}\n');
     File.Save(File.Join(TMP, "lib", "gadgets", "Dial.form"), JSON.stringify({
         format: "bintana-form/1", class: "Dial",
@@ -2913,6 +2919,278 @@ function* p_completion(ide) {
     check("a code tab says what its completion is called",
           ide.Editor.CompletionTitle !== "", ide.Editor.CompletionTitle);
 
+    /*
+     * **A bare name, which is the ordinary case and used to answer nothing.**
+     * A file whose first line is `const t = Timer.After(300, ...);` got no
+     * completion for `Timer`, because the engine was dot-driven: every name in a
+     * program was invisible until a `.` was typed. Nothing about a RAD suggests
+     * that -- the language is bare calls to `File`, `Locale` and `Message` beside
+     * the `Control_Event` methods.
+     *
+     * And the sources are the runtime's own answers rather than a list kept
+     * here, which is the half that matters: a hand-written table of globals was
+     * missing about eighteen of them, so `Printer.` completed nothing and
+     * nothing would have said so.
+     */
+    /* **The `before` is the one the editor really sends, and that is the whole
+     * correction here.** `before` is the line *up to where the word starts*, so
+     * a bare name inside an ordinary line arrives with the line's own punctuation
+     * on the end of it -- and the first version of this test passed `""`, which is
+     * what made the feature look alive while the editor offered nothing. The same
+     * mistake the completion module's own comment warns about: made-up arguments
+     * are how the `Btn1_` case first passed and answered nothing.
+     *
+     * So the case is asked four ways, and **three of them failed on the code this
+     * replaces**: an empty `before`, a line ending in a space, one ending in `=`
+     * and one inside a call. The guard that refused them asked `before` about a
+     * question `before` cannot answer. */
+    check("a bare name is offered with nothing before it",
+          answer("Tim", "").includes("Timer"),
+          JSON.stringify(answer("Tim", "")));
+    check("...after a space, which is the ordinary line in this language",
+          answer("Tim", "    const t = ").includes("Timer"),
+          JSON.stringify(answer("Tim", "    const t = ")));
+    check("...after an assignment, which is where a name is first written",
+          answer("Tim", "    this.seconds = ").includes("Timer"),
+          JSON.stringify(answer("Tim", "    this.seconds = ")));
+    check("...inside a call's arguments",
+          answer("Tim", "    print(").includes("Timer"),
+          JSON.stringify(answer("Tim", "    print(")));
+    check("...and a handler-shaped word is still the handler's",
+          !answer("Btn1_", "        ").includes("Timer"),
+          JSON.stringify(answer("Btn1_", "        ")));
+
+    const bare = answer("Tim", "    const t = ");
+    check("a name typed on its own is offered", bare.includes("Timer"),
+          JSON.stringify(bare));
+    /* **And a library's class is only a library's class if this project uses
+     * that library.** The first version walked every library installed on the
+     * machine, so the answer was a list of what somebody else has on their disk:
+     * a project naming one library was offered all seven. That is the whole of
+     * the bug -- a completion list is a claim about *this* program, and a name
+     * that cannot resolve in it is noise with a sorting order.
+     *
+     * The project running this phase declares `uses: ["markdown", "package"]`,
+     * and the assertion is written out both ways so it cannot pass by the list
+     * happening to be empty: the two used libraries' classes are offered, and
+     * four from the five unused ones are not. */
+    const uses = ide.manifest.read().Uses;
+    check("this project names one library, which is what the next assertions rest on",
+          JSON.stringify(uses) === '["gadgets"]', JSON.stringify(uses));
+    check("a library this project uses offers its classes, read out of its source",
+          bare.includes("Dial"),
+          JSON.stringify(bare.filter((t) => ["Dial", "Gadget"].includes(t))));
+    check("and a library it does not use offers nothing at all, however many are installed",
+          !bare.includes("QrView") && !bare.includes("Chart") && !bare.includes("Confirm") &&
+          !bare.includes("Report") && !bare.includes("Markdown") && !bare.includes("Package"),
+          JSON.stringify(bare.filter((t) =>
+              ["QrView", "Chart", "Confirm", "Report", "Markdown", "Package"].includes(t))));
+    check("as is a global that is a bag of functions",
+          answer("Loc", "    const l = ").includes("Locale"),
+          JSON.stringify(answer("Loc", "    const l = ")));
+
+    /*
+     * **`Timer.` returned zero entries**, and it is the clearest thing this ever
+     * got wrong: `Timer` *was* in the hand-written table, and `Dictionary.Keys`
+     * on a class is empty, because a static is a property of the class and not of
+     * an object. So the name was known and the members were not.
+     */
+    const after = answer("Af", "Timer.");
+    check("a class offers its statics, which are the whole of a library's verbs",
+          after.includes("After") && after.includes("Every"),
+          JSON.stringify(after));
+    check("and its instance members too",
+          answer("St", "Timer.").includes("Start"),
+          JSON.stringify(answer("St", "Timer.")));
+
+    check("a global that is an object offers its own keys",
+          answer("Sav", "File.").includes("Save"),
+          JSON.stringify(answer("Sav", "File.")));
+    check("and one the old table never mentioned",
+          answer("Send", "Printer.").includes("Send"),
+          JSON.stringify(answer("Send", "Printer.")));
+    /* **A library class is not offered here, and it should not be**: this
+     * project does not `use` the library, so `Widget.Members("Confirm")` refuses
+     * and offering it would be a name the program cannot call. A project that
+     * does declare it is the one that gets it, and that is the road
+     * `collectGlobals` walks. */
+    check("a library class this project does not use is not offered",
+          answer("A", "Confirm.").length === 0,
+          JSON.stringify(answer("A", "Confirm.")));
+
+    /* **And the members of one it does.** `Dial` is a class in the `gadgets`
+     * library this project declares, and the IDE never runs that library -- a
+     * class is a lexical binding in a file this process does not evaluate, so
+     * `Widget.Members("Dial")` refuses and the list after the dot was empty.
+     * This is the half a runtime verb cannot reach on its own. */
+    const dial = answer("", "Dial.");
+    check("a library class offers its members, read out of the parser",
+          dial.includes("Value"), JSON.stringify(dial));
+    /* **And what a member of it is for**, from the JSDoc comment above its
+     * declaration: the parser reads it out of a file this process never ran,
+     * exactly as a native member's comes out of the C. */
+    eq("a library member's popup row says what its JSDoc says",
+       (ask("", "Dial.").find((p) => p.Text === "Make") || {}).Doc,
+       "a dial already turned to v");
+
+    /* **And the surface it inherits, which is the other 66 of the 68.** `Dial`
+     * is a `Component`, and before the supertype reached the parser there was
+     * no way to ask for anything above the class's own body: the list after the
+     * dot was 2 names long and a class of 68 was being described as a class of
+     * 2. A completion list that is a fraction of the truth *lies* -- somebody
+     * types `Dial.W`, sees no `Width`, and concludes the class has none. */
+    check("and what it inherits, which is most of it",
+          dial.includes("Width") && dial.includes("Add") && dial.includes("Bounds") &&
+          dial.includes("On") && dial.includes("Delete"),
+          JSON.stringify(dial.length) + " " + JSON.stringify(dial.slice(0, 10)));
+    check("so the list is a whole class and not a fragment of one",
+          dial.length > 40, JSON.stringify(dial.length));
+    check("and it is the runtime answering, not a second reader in the IDE",
+          typeof Widget.Members === "function", "");
+    /* **An accessor reaches the parser as a method of the same name, and a
+     * `static` reaches it as one too** -- so both are offered, and the label
+     * says `()` for each. That is the honest limit: telling them apart would
+     * mean a pattern over the source, which is the copy that drifts, or a
+     * seventh change to the vendored engine. */
+    check("its accessor is offered, which the parser reports as a method",
+          dial.includes("Value"), JSON.stringify(dial));
+    check("and its static as well as its accessor",
+          dial.includes("Make"), JSON.stringify(dial));
+    check("and a lower-case member is not offered, as the runtime would not",
+          !dial.includes("turn"), JSON.stringify(dial));
+    check("and not a name that is one of its events, which is not a member",
+          !dial.includes("Turn"), JSON.stringify(dial));
+    check("and the typed-towards narrowing works on it",
+          answer("Val", "Dial.").includes("Value"),
+          JSON.stringify(answer("Val", "Dial.")));
+    check("a class of the runtime still comes from the runtime",
+          answer("Af", "Timer.").includes("After"),
+          JSON.stringify(answer("Af", "Timer.")));
+
+    /* **A child of the library's own `.form`, which is the last thing that was
+     * missing.** `Dial`'s form declares a `Face` label; it is an own property
+     * of the instance, so no prototype walk sees it, and the popup after
+     * `Dial.` did not offer it. */
+    /* **What the popup says after the name, which used to be a string written
+     * here.** `()` was the runtime's placeholder for *no signature declared*, so
+     * asking nobody for the real one meant `Add` and `Bounds` were shown the same
+     * as a member that takes nothing. */
+    /* **The raw entries, not `answer`**, which maps to the name: the annotation
+     * is the thing under test and `answer` throws it away. */
+    const det = (word, before) => {
+        const hit = ask(word, before).find((e) => e.Text === word);
+        return hit ? hit.Detail : "(not offered)";
+    };
+    /* **The names, where they were declared.** The runtime's own methods carry a
+     * signature beside their C entry, and that is better than a count: a person
+     * reading `Bounds([container])` learns it takes the container it is
+     * relative to and that the container is optional. */
+    check("a declared signature says the names, and the brackets",
+          det("Add", "Container.") === "(widget)" &&
+          det("Bounds", "Container.") === "([container])" &&
+          det("On", "Widget.") === "(event, fn)",
+          JSON.stringify([det("Add", "Container."), det("Bounds", "Container."),
+                          det("On", "Widget.")]));
+    check("a property says nothing, which is what separates it from a method",
+          det("Width", "Container.") === "" && det("Tooltip", "Container.") === "",
+          JSON.stringify([det("Width", "Container."),
+                          det("Tooltip", "Container.")]));
+    /* **An instance method whose signature is declared.** 
+    check("a declared signature is said, name and all",
+          det("DesignValue", "Widget.") === "(name)",
+          JSON.stringify(det("DesignValue", "Widget.")));
+    /* **And a static, which used to be `static (...)`.** Every class static
+     * and every global's verb is registered with `JS_SetPropertyStr`, and the
+     * extractor only read comments above a table entry -- so the most used half
+     * of the language showed no parameter names at all. It reads the comment
+     * above a `JS_SetPropertyStr` now and names the owner by following where
+     * the variable is installed. */
+    check("a native static says its parameter names",
+          det("New", "Widget.") === "static (type)",
+          JSON.stringify(det("New", "Widget.")));
+    /* **And a static written in JavaScript, which nobody declared at all.**
+     * `Timer` is a class in rad.js; the engine keeps its source, and the
+     * parser reads the parameters out of it. */
+    check("a static of rad.js says the names in its own source",
+          det("After", "Timer.") === "static (delay, tick)",
+          JSON.stringify(det("After", "Timer.")));
+
+    /* **The count, and the point of asking for it at all: nobody wrote it
+     * down.** `Container.Add` and `Widget.On` are two parameters because the
+     * function says so, and `Widget.New` takes one for the same reason -- a
+     * signature nobody declared, and the answer `Function.length` gives. */
+    /* **The names, for a class the IDE reads rather than runs.** `Dial`'s
+     * `static Make(v)` is declared in a library this project `uses` and the IDE
+     * never evaluates it, so the parameter name is only in the source -- and the
+     * parser had it all along. This is the tier the runtime half cannot reach
+     * and the reason the eighth patch was worth writing. */
+    check("a library class's method says its parameter names",
+          det("Make", "Dial.") === "static (v)",
+          JSON.stringify(det("Make", "Dial.")));
+    check("and a getter of one is a property, not a method",
+          ask("", "Dial.").find((e) => e.Text === "Value").Detail === "",
+          JSON.stringify(ask("", "Dial.").find((e) => e.Text === "Value")));
+
+    /* **A method that takes nothing still says `()`**, because here it is a
+     * fact: `FocusNext` carries a declared signature in the table beside its C
+     * entry, and that declaration is `()`.  The two cases are told apart by
+     * whether a signature was declared, not by the count. */
+    check("a declared `()` is a fact and is kept",
+          det("FocusNext", "Container.") === "()",
+          JSON.stringify(det("FocusNext", "Container.")));
+    check("and a global's verb says its parameters, declared beside the C",
+          det("Load", "        File.") === "(path)" &&
+          det("Add", "Container.") !== "()",
+          JSON.stringify([det("Load", "        File."), det("Add", "Container.")]));
+    check("a member of a class the runtime never ran keeps the honest floor",
+          ask("", "Dial.").every((e) => typeof e.Detail === "string"),
+          JSON.stringify(ask("", "Dial.").slice(0, 3)));
+
+    /* **The popup and the runtime must agree, for every member of every class
+     * the project can declare.** This is the third consumer, and it is the one
+     * the two `api.sh` checks cannot reach: they read the generated file and the
+     * runtime, and nothing compares the list the editor actually offers against
+     * either. So a name the runtime has and the popup does not is invisible --
+     * which is how `Face` and `BtnAccept` were missing, and how `Confirm.` was
+     * empty.
+     *
+     * **Asked of the runtime, not of a list written here**, for the reason the
+     * whole module is held to. */
+    const widgetNames = Widget.Types();
+    let mismatched = [];
+    for (const name of [...widgetNames, "Dial", "Gadget", "Face"]) {
+        let want = [];
+        try { want = Widget.Members(name).map((m) => m.Name); } catch (e) { continue; }
+        if (!want.length) continue;
+        const got = ask("", `        ${name}.`).map((e) => e.Text);
+        const missing = want.filter((n) => !got.includes(n));
+        if (missing.length) mismatched.push(`${name}: ${missing.join(",")}`);
+    }
+    check("every class the runtime describes is offered whole by the popup",
+          mismatched.length === 0, JSON.stringify(mismatched).slice(0, 220));
+    check("and the check asked about a real number of classes, not one",
+          widgetNames.length > 40 && Widget.Types().length > 40,
+          JSON.stringify(widgetNames.length));
+
+    /* **No name is invented, anywhere.** The count is real and a name built from
+     * it is not the parameter's, so `a1` in a popup is a claim nobody made. This
+     * is a property of the whole list rather than of one member, which is what
+     * makes it hold for a class nobody thought to test. */
+    const invented = ask("", "        File.").filter((e) => /a\d/.test(e.Detail))
+                        .map((e) => e.Text + "=" + e.Detail);
+    check("no member of a global's list is annotated with an invented name",
+          invented.length === 0, JSON.stringify(invented));
+    check("and the same for a library class the process never ran",
+          ask("", "Dial.").filter((e) => /a\d/.test(e.Detail)).length === 0,
+          JSON.stringify(ask("", "Dial.").map((e) => e.Detail).slice(0, 4)));
+
+    check("a form's own child is offered, which no prototype walk can see",
+          answer("Fac", "Dial.").includes("Face"),
+          JSON.stringify(answer("Fac", "Dial.")));
+    check("and it is offered next to the class's own members",
+          answer("", "Dial.").includes("Face"),
+          JSON.stringify(answer("", "Dial.").slice(0, 6)));
+
     /* --- this. : the controls on the form beside this file ------------------ */
     const mine = answer("", "        this.");
     check("`this.` offers the form's own controls",
@@ -2975,8 +3253,26 @@ function* p_completion(ide) {
     const file = answer("", "        File.");
     check("a global offers what it really holds",
           file.includes("Load") && file.includes("Save"), JSON.stringify(file));
-    eq("and says which of them are called",
-       ask("", "        File.").find((p) => p.Text === "Load").Detail, "()");
+    /* **This said `()` and was wrong.** `File.Load(path)` takes a path, and the
+     * popup said it takes nothing -- because `()` was the placeholder for *no
+     * signature declared* and a test that asserted the placeholder read as a
+     * claim about the function. Asking the count instead is what noticed: the
+     * answer is one argument and it was always one argument. */
+    /* **Then it said `(...)`, and now it says the parameter.** `(...)` was
+     * the honest answer while nothing declared the name; the comment above the
+     * C entry declares it now, and `api.sh` fails on a global's native verb
+     * that has none. */
+    eq("and says its parameter, which neither `()` nor `(...)` did",
+       ask("", "        File.").find((p) => p.Text === "Load").Detail, "(path)");
+    /* **And what it is for**, under the list for the chosen row: the first
+     * sentence of the description written beside the member in the C, in
+     * plain text -- the backticks and the bold of the documentation's Markdown
+     * taken off. */
+    eq("the chosen row says what the member is for",
+       ask("", "        File.").find((p) => p.Text === "Load").Doc, "the whole file as a string");
+    check("...in plain text",
+          !/[`*]/.test(ask("", "        File.").find((p) => p.Text === "LoadBytes").Doc || "x`"),
+          ask("", "        File.").find((p) => p.Text === "LoadBytes").Doc);
 
     /* --- a namespace of this project ------------------------------------------
      *
@@ -3116,6 +3412,167 @@ function* p_completion(ide) {
           said.includes("Ok") && said.includes("Msg"), JSON.stringify(said));
     check("which is the 509-use case, and nothing else can say it",
           said.includes("Form_Open"), JSON.stringify(said));
+
+    /* **What is typed and not saved is what a person completes against.**
+     * The classes used to be read off the disk, so a class written in a tab
+     * and not saved did not exist -- not as a bare name, not after its dot --
+     * until the tab was saved. The open tabs are read live now, and the file
+     * on disk is asserted to lack the class, which is what makes this a test
+     * of the tab and not of the file. */
+    ide.Editor.Text = ide.Editor.Text +
+        "class Nueva {\n    static Crear(nombre) { }\n    Hacer(a, b) { }\n}\n";
+    yield* settled(ide);
+    check("the class is not on disk, only in the tab",
+          !File.Load(File.Join(TMP, "Usa.js")).includes("Nueva"), "");
+    check("a class typed into a tab and not saved is a bare name to offer",
+          answer("Nue", "        const x = ").includes("Nueva"),
+          JSON.stringify(answer("Nue", "        const x = ").slice(0, 5)));
+    const nueva = ask("", "        Nueva.");
+    check("...and its members are offered after the dot, with their parameters",
+          nueva.some((p) => p.Text === "Crear" && p.Detail === "static (nombre)"),
+          JSON.stringify(nueva));
+    /* And the answer follows the text, rather than keeping the first reading. */
+    ide.Editor.Text = ide.Editor.Text.replace("Crear(nombre)", "Crear(nombre, edad)");
+    yield* settled(ide);
+    check("an edit to the unsaved class is what the next popup says",
+          ask("", "        Nueva.").some((p) => p.Text === "Crear" &&
+                                             p.Detail === "static (nombre, edad)"),
+          JSON.stringify(ask("", "        Nueva.")));
+
+    /* **Past a call, what the call answers.** The arrow in a signature comment
+     * (`/* Info(path) -> { Size, ... } *\/`) is what the runtime publishes as
+     * `Returns`, and each step of a chain asks it of the step before -- so
+     * `File.Info(p).` offers the fields, a string's methods follow
+     * `File.Load(p).`, an index into a list reaches its element, and a local
+     * assigned from a call is that call's answer. Before this, a dot after a
+     * bracket fell through to the bare-name case. */
+    const infoAt = answer("", "        const i = File.Info(p).");
+    check("a call's declared answer is what the dot after it offers",
+          infoAt.includes("Size") && infoAt.includes("IsDir"), JSON.stringify(infoAt));
+    const loaded = answer("", "        File.Load(p).");
+    check("a string answer offers what a string has, lower case and all",
+          loaded.includes("split") && loaded.includes("length"),
+          JSON.stringify(loaded.slice(0, 8)));
+    const first = answer("", "        Directory.Files(d)[0].");
+    check("an index into a declared list reaches its element",
+          first.includes("includes"), JSON.stringify(first.slice(0, 8)));
+    const bounds = answer("", "        this.lbl.Bounds().");
+    check("a field's method answers through the class that declares it",
+          bounds.includes("Width") && bounds.includes("X"), JSON.stringify(bounds));
+    ide.Editor.Text = ide.Editor.Text +
+        "function Later() {\n    const info = File.Info(\"x\");\n" +
+        "    const web = Http.Client({});\n}\n";
+    yield* settled(ide);
+    check("a local assigned from a call is that call's answer",
+          answer("", "        info.").includes("Modified"),
+          JSON.stringify(answer("", "        info.")));
+    const reply = answer("", "        web.GetWait(u).");
+    check("...and a type no global holds answers through its own table",
+          reply.includes("Status") && reply.includes("Body"), JSON.stringify(reply));
+    eq("a call nothing declares an answer for still offers nothing",
+       answer("", "        makeThing().").length, 0);
+
+    /* --- the names in scope at the cursor --------------------------------------
+     *
+     * A bare name offers the parameters of every function around the cursor
+     * and the variables declared in them above it, before the globals -- out
+     * of the parser's report of scopes and variables, so a word in a comment
+     * is not a local and a local of another function is not in scope. And
+     * what a project file declares at its top level is a global to every
+     * other file, since they share one scope. */
+    ide.Editor.Text = ide.Editor.Text +
+        "function Scoped(alpha, beta = 2) {\n" +
+        "    const gamma = 1;\n" +
+        "    // here\n" +
+        "}\n" +
+        "function Other(delta) {\n    const epsilon = 1;\n}\n" +
+        "const TOPLEVEL = 5;\n";
+    yield* settled(ide);
+    const srcLines = ide.Editor.Text.split("\n");
+    const here = srcLines.indexOf("    // here") + 1;
+    const scoped = ide.Editor_Complete("x", here, 5, "    ");
+    const names = scoped.map((p) => p.Text);
+    check("a parameter of the function around the cursor is offered",
+          scoped.some((p) => p.Text === "alpha" && p.Detail === "parameter") &&
+          names.includes("beta"), JSON.stringify(scoped.slice(0, 6)));
+    check("...and a local declared above it",
+          scoped.some((p) => p.Text === "gamma" && p.Detail === "local"),
+          JSON.stringify(scoped.slice(0, 6)));
+    check("...and a top-level name of the file",
+          names.includes("TOPLEVEL"), JSON.stringify(scoped.slice(0, 8)));
+    check("...before the globals",
+          names.indexOf("alpha") >= 0 && names.indexOf("alpha") < names.indexOf("File"),
+          `${names.indexOf("alpha")} / ${names.indexOf("File")}`);
+    check("a local of another function is not in scope",
+          !names.includes("epsilon") && !names.includes("delta"), "");
+    const outside = ide.Editor_Complete("x", srcLines.length, 1, "").map((p) => p.Text);
+    check("outside the function its local and its parameters are not offered",
+          !outside.includes("gamma") && !outside.includes("alpha") &&
+          outside.includes("TOPLEVEL"), "");
+    File.Save(File.Join(TMP, "Shared.js"), "const SHARED_THING = 1;\nfunction sharedHelper(x) { }\n");
+    ide.listFiles();
+    yield* settled(ide);
+    const shared = answer("SHA", "        const s = ");
+    check("another project file's top-level names are globals here",
+          shared.includes("SHARED_THING") && shared.includes("sharedHelper"),
+          JSON.stringify(shared.filter((n) => n.startsWith("S")).slice(0, 8)));
+    File.Delete(File.Join(TMP, "Shared.js"));
+    ide.listFiles();
+    yield* settled(ide);
+
+    /* --- the call being written ----------------------------------------------
+     *
+     * Which call the cursor is inside and which argument, asked of the text
+     * before it: a comma is only a separator outside a string, a comment and a
+     * nested bracket, and the callee is resolved the way a dot is. */
+    const at = (t) => ide.completion.callAt(t);
+    const save = at("        File.Save(p, ");
+    check("the call the cursor is in, and which argument",
+          save && save.Name === "Save" && save.Signature === "(path, text)" && save.Index === 1,
+          JSON.stringify(save));
+    eq("a comma inside a string is not a separator",
+       (at('        File.Load("a, b') || {}).Index, 0);
+    const walk = at("        Directory.Files(d, { Recursive: true, Pat");
+    check("an object being written is still that call's argument",
+          walk && walk.Name === "Files" && walk.Index === 1, JSON.stringify(walk));
+    const inner = at("        File.Save(File.Join(a, ");
+    check("the innermost call is the one that answers",
+          inner && inner.Name === "Join" && inner.Index === 1, JSON.stringify(inner));
+    eq("a closed call is not the one the cursor is in",
+       (at("        File.Save(File.Join(a, b), ") || {}).Name, "Save");
+    eq("a bracket that is not a call shows nothing", at("        if (x, "), null);
+    eq("a comment is not code", at("        // File.Save(p, "), null);
+    const own = at("        this.go(");
+    check("a method of the file being edited is read by the parser",
+          own && own.Name === "go" && own.Signature === "()", JSON.stringify(own));
+
+    /* **And on screen, pointed at the cursor.** A popover that does not hide
+     * itself, so typing goes on underneath it; Escape puts it away for this
+     * call and it stays away until the cursor is in another. */
+    const ed = ide.Editor;
+    ed.Text = ed.Text + "function Tip() {\n    File.Save(p, ";
+    const lines = ed.Text.split("\n");
+    ed.Select(lines.length, Array.from(lines[lines.length - 1]).length + 1, 0);
+    ed.SetFocus();
+    yield* settled(ide);
+    const hadFocus = ed.Focused;
+    ide.callTip.update();
+    yield* settled(ide);
+    check("the hint is up beside a call being written", ide.callTip.visible, "");
+    check("...with the argument the cursor is in made bold",
+          ide.callTip.label && ide.callTip.label.Text === "Save(path, <b>text</b>)",
+          ide.callTip.label ? ide.callTip.label.Text : "no label");
+    check("...and the keyboard is still the editor's", hadFocus && ed.Focused,
+          `before ${hadFocus}, after ${ed.Focused}`);
+    eq("Escape puts it away", ide.Editor_KeyPress("Escape", false, false), true);
+    yield* settled(ide);
+    check("...and it is away", !ide.callTip.visible, "");
+    ide.callTip.update();
+    check("...and stays away for the same call", !ide.callTip.visible, "");
+    ed.Text = ed.Text + "x);\n";
+    ide.callTip.update();
+    yield* settled(ide);
+    check("leaving the call takes the hint away", !ide.callTip.visible, "");
 
     /* The tabs go before the files do: an open tab whose file disappears is a
      * question the IDE asks in a dialog, which is right for a person and a hung

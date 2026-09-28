@@ -424,16 +424,44 @@ static JSValue js_time_seconds(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry time_props[] = {
+    /* Add(time, minutes) -> string
+     *   `minutes` may be negative, and it **wraps at midnight**, because a
+     *   time of day has no day to fall off
+     */
     JS_CFUNC_DEF("Add",     2, js_time_add),
+    /* Between(from, to) -> number
+     *   whole minutes from one to the other, signed
+     */
     JS_CFUNC_DEF("Between", 2, js_time_between),
+    /* Seconds(time) -> number
+     *   seconds since midnight — the exact number, for anything finer than a
+     *   minute
+     */
     JS_CFUNC_DEF("Seconds", 1, js_time_seconds),
+    /* Now
+     *   the time of day now, with seconds (`"21:03:58"`)
+     */
     JS_CGETSET_DEF("Now", js_time_get_now, NULL),
 };
 
 static const JSCFunctionListEntry day_props[] = {
+    /* Add(date, days) -> string
+     *   the date `days` later. `days` may be negative, and it **refuses to
+     *   leave the calendar** rather than answering something impossible
+     */
     JS_CFUNC_DEF("Add",     2, js_day_add),
+    /* Between(from, to) -> number
+     *   whole days from one to the other, signed
+     */
     JS_CFUNC_DEF("Between", 2, js_day_between),
+    /* Weekday(date) -> number
+     *   `"Monday"` … `"Sunday"` — **a key to test against, never text to
+     *   show**
+     */
     JS_CFUNC_DEF("Weekday", 1, js_day_weekday),
+    /* Today
+     *   today's date as `"YYYY-MM-DD"`, at **local** midnight
+     */
     JS_CGETSET_DEF("Today", js_day_get_today, NULL),
 };
 

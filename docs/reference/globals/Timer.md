@@ -15,14 +15,14 @@ language, and a timer that can be stopped by name is why.
 
 | | | |
 |---|---|---|
-| `Timer.After(delay, tick)` | once, after that many milliseconds | [the two shapes](#the-two-shapes) |
-| `Timer.Every(delay, tick)` | again and again | [the two shapes](#the-two-shapes) |
+| `Timer.After(delay, tick)` | runs `tick` once after `delay` milliseconds, and answers the `Timer`, so what was started can be stopped | [the two shapes](#the-two-shapes) |
+| `Timer.Every(delay, tick)` | runs `tick` every `delay` milliseconds until it is stopped, and answers the `Timer` | [the two shapes](#the-two-shapes) |
 | `new Timer(delay, tick)` | one that is not started yet | [the object](#the-object) |
 | `Delay` | the milliseconds | [the object](#the-object) |
-| `Enabled` | whether it is running | [the object](#the-object) |
-| `Once([delay])` | fire once more | [the object](#the-object) |
-| `Start([delay])` | start it | [the object](#the-object) |
-| `Stop()` | stop it | [the object](#the-object) |
+| `Enabled` | whether it is running; assigning starts or stops it | [the object](#the-object) |
+| `Once([delay])` | fire one more time and stop | [the object](#the-object) |
+| `Start([delay])` | starts it, after `delay` when one is given, else after its own `Delay`; answers the timer | [the object](#the-object) |
+| `Stop()` | stops it; answers the timer | [the object](#the-object) |
 | `Tick` | the function it calls | [the object](#the-object) |
 
 ## The two shapes

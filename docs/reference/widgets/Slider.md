@@ -12,18 +12,18 @@ It is a `Widget` and a control like any other, so everything on
 
 | | | |
 |---|---|---|
-| `Decimals` | places in the number it shows | [the number](#the-number) |
-| `Inverted` | the high end at the other side | [how it is drawn](#how-it-is-drawn) |
-| `Max` | the ceiling. Default `100` | [the range](#the-range) |
-| `Min` | the floor; declare it before `Value` | [the range](#the-range) |
-| `Orientation` | `Horizontal` `Vertical`. Default `"Horizontal"` | [how it is drawn](#how-it-is-drawn) |
-| `ShowValue` | draw the number beside the rail | [how it is drawn](#how-it-is-drawn) |
-| `Step` | what an arrow key moves; Page moves ten. Default `1` | [the range](#the-range) |
-| `Value` | the number | [the number](#the-number) |
-| `ValuePosition` | `Top` `Bottom` `Left` `Right`. Default `"Top"` | [how it is drawn](#how-it-is-drawn) |
-| `ClearMarks()` | takes every mark off | [marks](#marks) |
-| `Mark(value, [text])` | a tick at that value, with an optional label | [marks](#marks) |
-| **event** `Change()` | the value changed, **including from code** | [the number](#the-number) |
+| `Decimals` | how many places the number it draws has — it does not change what `Value` holds | [the number](#the-number) |
+| `Inverted` | put the high end where the low one was | [how it is drawn](#how-it-is-drawn) |
+| `Max` | the ceiling | [the range](#the-range) |
+| `Min` | the floor | [the range](#the-range) |
+| `Orientation` | `Horizontal` or `Vertical` | [how it is drawn](#how-it-is-drawn) |
+| `ShowValue` | draw the number beside the rail — worth it when the number means something to the user, and noise when it does not | [how it is drawn](#how-it-is-drawn) |
+| `Step` | what an arrow key moves | [the range](#the-range) |
+| `Value` | where it sits | [the number](#the-number) |
+| `ValuePosition` | which side that number sits on | [how it is drawn](#how-it-is-drawn) |
+| `ClearMarks()` | takes them all off | [marks](#marks) |
+| `Mark(value, [text])` | a tick at that value, with an optional label under it | [marks](#marks) |
+| **event** `Change()` | the value changed — dragged, keyed, or **assigned from code** | [the number](#the-number) |
 
 ## The number
 
@@ -44,15 +44,15 @@ restarts.
 |---|---|
 | `Min` | the floor. **Declare it before `Value`**, as in a `SpinBox` |
 | `Max` | the ceiling. Default `100`, which is what a percentage wants |
-| `Step` | what an arrow key moves; Page moves ten of them |
+| `Step` | what an arrow key moves; Page moves ten of them. Default `1` |
 
 ## How it is drawn
 
 | | |
 |---|---|
-| `Orientation` | `Horizontal` or `Vertical`. A vertical slider reads bottom to top |
+| `Orientation` | `Horizontal` or `Vertical`. A vertical slider reads bottom to top. Default `"Horizontal"` |
 | `ShowValue` | draw the number beside the rail — worth it when the number means something to the user, and noise when it does not |
-| `ValuePosition` | which side that number sits on: `Top` `Bottom` `Left` `Right` |
+| `ValuePosition` | which side that number sits on: `Top` `Bottom` `Left` `Right`. Default `"Top"` |
 | `Inverted` | put the high end where the low one was |
 
 ## Marks

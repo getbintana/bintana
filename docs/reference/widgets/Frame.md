@@ -12,7 +12,7 @@ It is a [`Container`](Container.md), so everything there is here too.
 
 | | | |
 |---|---|---|
-| `Text` | the title drawn in its border. **Translated** | [the title](#the-title) |
+| `Text` | the caption drawn in the frame's own border | [the title](#the-title) |
 
 ## The title
 

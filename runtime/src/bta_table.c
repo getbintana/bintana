@@ -2940,62 +2940,182 @@ static JSValue table_reveal_row(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry table_props[] = {
+    /* Columns
+     *   an array of `{ Text, Width, Alignment, Editable }`. `Text` is
+     *   **translated**; `Width: 0` sizes itself and the last column takes the
+     *   slack; `Editable: true` makes a cell a field — clicked, typed and
+     *   committed — and an editable column reads left-aligned, because a
+     *   `GtkEditableLabel` is not a label
+     */
     JS_CGETSET_DEF("Columns",     table_get_columns,   table_set_columns),
+    /* Count
+     *   how many rows — **settable**, which is the on-demand mode: the table
+     *   then asks `Data(row, column)` for each cell it draws. **Settable**,
+     *   and setting it is the on-demand shape. Assigning it puts the table in
+     *   this shape and clears any rows it held
+     */
     JS_CGETSET_DEF("Count",       table_get_count,     table_set_count),
+    /* Index
+     *   the selected row, `-1` for none. Assigning selects it. Default `-1`
+     */
     JS_CGETSET_DEF("Index",       table_get_index,     table_set_index),
+    /* Selection
+     *   every selected row, as an array of indices in order
+     */
     JS_CGETSET_DEF("Selection",   table_get_selection, NULL),
+    /* MultiSelect
+     *   more than one row at a time. Refused on a tree
+     */
     JS_CGETSET_DEF("MultiSelect", table_get_multi,     table_set_multi),
+    /* RowLines
+     *   rules between the rows. Default `true`
+     */
     JS_CGETSET_MAGIC_DEF("RowLines",    table_get_flag, table_set_flag, TAB_SEPARATORS),
+    /* ColumnLines
+     *   rules between the columns. Default `false`
+     */
     JS_CGETSET_MAGIC_DEF("ColumnLines", table_get_flag, table_set_flag, TAB_HEADERS),
+    /* Key
+     *   the selected node's key; assigning selects, opening the way to it.
+     *   `""` selects nothing. A tree only
+     */
     JS_CGETSET_DEF("Key",        table_get_key,        table_set_key),
+    /* AutoExpand
+     *   opens a node as it arrives, and again when it gains a child after
+     *   being closed by hand. Default `true`. A tree only. The same mechanism
+     *   `TreeView` uses, answering the same
+     */
     JS_CGETSET_DEF("AutoExpand", table_get_autoexpand, table_set_autoexpand),
+    /* ActivateOnSingleClick
+     *   raise `Activate` on one click instead of two. Default `false`
+     */
     JS_CGETSET_DEF("ActivateOnSingleClick",
                    table_get_single_click, table_set_single_click),
-    /* Activate([index]) */
+    /* Activate([index])
+     *   raises `Activate` for that visible position, as a double click would;
+     *   the selected row with no argument. Answers whether there was one. In
+     *   both the flat and the tree shape, because a click lands on a position
+     */
     JS_CFUNC_DEF("Activate", 1, table_activate),
-    /* Reveal(index) */
+    /* Reveal(index)
+     *   brings that visible row into view with the least scrolling it takes,
+     *   and answers whether there was one
+     */
     JS_CFUNC_DEF("Reveal",   1, table_reveal_row),
-    /* Add(values, [options]) */
+    /* Add(values, [options])
+     *   one row, as an array of strings. A row shorter than there are columns
+     *   reads `""` for the rest. Clears an on-demand `Count`. **`options` is
+     *   `{ Key, Parent, Icon }`, and a row with a `Key` is a node**: the
+     *   first one makes this table a tree, `Parent` is the key of the node it
+     *   goes under (absent is a root), and `Icon` is the picture for its
+     *   first column — the same one `TreeView.Add` takes, so a node need not
+     *   be added and then decorated
+     */
     JS_CFUNC_DEF("Add",     2, table_add),
-    /* ExpandNode(key) */
+    /* ExpandNode(key)
+     *   opens or closes it. Opening opens the way to it too, since a row only
+     *   exists once its ancestors are open. Not `Expand`, which is `Widget`'s
+     *   layout property
+     */
     JS_CFUNC_MAGIC_DEF("ExpandNode",   1, table_expand_node,  NODE_EXPAND),
-    /* CollapseNode(key) */
+    /* CollapseNode(key)
+     *   closes it
+     */
     JS_CFUNC_MAGIC_DEF("CollapseNode", 1, table_expand_node,  NODE_COLLAPSE),
-    /* ExpandAll() */
+    /* ExpandAll()
+     *   opens every node
+     */
     JS_CFUNC_MAGIC_DEF("ExpandAll",    0, table_expand_every, NODE_EXPAND),
-    /* CollapseAll() */
+    /* CollapseAll()
+     *   closes every node
+     */
     JS_CFUNC_MAGIC_DEF("CollapseAll",  0, table_expand_every, NODE_COLLAPSE),
-    /* Expanded(key) */
+    /* Expanded(key)
+     *   whether it is open
+     */
     JS_CFUNC_DEF("Expanded", 1, table_expanded),
-    /* Exists(key) */
+    /* Exists(key)
+     *   whether that node is there. `false` on a flat table rather than a
+     *   refusal: it is the question you ask *before* you know
+     */
     JS_CFUNC_DEF("Exists",   1, table_exists),
-    /* Clear() */
+    /* Clear()
+     *   empties it — **and forgets which of the three shapes this table was**
+     */
     JS_CFUNC_DEF("Clear",   0, table_clear),
-    /* RemoveRow(index) */
+    /* RemoveRow(index)
+     *   takes that row out. **Flat only** — a tree says `RemoveNode(key)`,
+     *   and this one refuses with that sentence
+     */
     JS_CFUNC_DEF("RemoveRow",  1, table_remove_row),
-    /* RemoveNode(key) */
+    /* RemoveNode(key)
+     *   takes that node out, **and the subtree with it**. **Tree only** — a
+     *   flat table says `RemoveRow(index)`
+     */
     JS_CFUNC_DEF("RemoveNode", 1, table_remove_node),
-    /* Row(index) */
+    /* Row(index)
+     *   that row's values, as the array it was given — including any it was
+     *   given beyond the columns declared. Refused on an on-demand table
+     */
     JS_CFUNC_DEF("Row",     1, table_row),
-    /* Cell(row, column) */
+    /* Cell(row, column)
+     *   one value. Refused on an on-demand table, which has no cells to
+     *   answer about
+     */
     JS_CFUNC_DEF("Cell",    2, table_cell),
-    /* SetCell(row, column, value) */
+    /* SetCell(row, column, value)
+     *   one cell, in place. The selection stays where it is
+     */
     JS_CFUNC_DEF("SetCell", 3, table_set_cell),
-    /* SetIcon(row, column, name) */
+    /* SetIcon(row, column, name)
+     *   an icon from the theme beside a cell's text. `""` takes it off.
+     *   Refused on an on-demand table
+     */
     JS_CFUNC_DEF("SetIcon", 3, table_set_icon),
+    /* HeaderMenu
+     *   the menu a column heading offers on a secondary click, as the same
+     *   array of items `Menu` takes. Built for each click, and every item's
+     *   handler is told the column, last: `MnuHide_Click(column)`. Like
+     *   `Menu`, refused on a table that is not in a form yet
+     */
     JS_CGETSET_DEF("HeaderMenu", table_get_header_menu, table_set_header_menu),
+    /* Sortable
+     *   makes the headers clickable. **The table does not reorder itself** —
+     *   it raises `Sort`. Default `false`
+     */
     JS_CGETSET_DEF("Sortable", table_get_sortable, table_set_sortable),
-    /* Select(index) */
+    /* Select(index)
+     *   move the selection from code. `Select` leaves the others alone where
+     *   several are allowed
+     */
     JS_CFUNC_MAGIC_DEF("Select",      1, table_select_one,   TB_SELECT),
-    /* Deselect(index) */
+    /* Deselect(index)
+     *   unselects it
+     */
     JS_CFUNC_MAGIC_DEF("Deselect",    1, table_select_one,   TB_DESELECT),
-    /* SelectAll() */
+    /* SelectAll()
+     *   with `MultiSelect`
+     */
     JS_CFUNC_MAGIC_DEF("SelectAll",   0, table_select_every, TB_ALL),
-    /* DeselectAll() */
+    /* DeselectAll()
+     *   selects nothing
+     */
     JS_CFUNC_MAGIC_DEF("DeselectAll", 0, table_select_every, TB_NONE),
-    /* SortBy(column, [ascending], [compare]) */
+    /* SortBy(column, [ascending], [compare])
+     *   actually reorders the rows it holds, **by the text the cells show**:
+     *   natural order by default (`9` before `10`, the locale's collation
+     *   otherwise), or `compare(a, b)` — the two cells' text, answering a
+     *   number as `Array.sort`'s does — for what natural order reads wrongly:
+     *   a minus sign, grouped thousands, a `d/m/Y` date. **Stable**: equal
+     *   cells keep the order they had, so sorting by one column and then
+     *   another nests them. A comparator that throws leaves the rows as they
+     *   were
+     */
     JS_CFUNC_DEF("SortBy",  3, table_sort_by),
-    /* SortColumn(column, [ascending]) */
+    /* SortColumn(column, [ascending])
+     *   the same as clicking that heading from code: the arrow moves and
+     *   `Sort` is raised
+     */
     JS_CFUNC_DEF("SortColumn", 2, table_sort_column),
 };
 
@@ -3007,12 +3127,39 @@ void bta_table_register(void)
          * and an alignment, and only the first is prose. Translating `Right`
          * would be the permissive mistake this declaration exists to prevent.
          */
-        /* Select() */
-        /* Activate() */
-        /* Data(row, column) */
-        /* Sort(column, ascending) */
-        /* CellEdit(row, column, text) */
-        /* HeaderClick(column, button, ctrl, shift) */
+        /* Select()
+         *   the selection moved — by the user or by an assignment. Ask
+         *   `Index` for where it is and `Cell`/`Row` for what is there; `Key`
+         *   when the table is a tree
+         */
+        /* Activate()
+         *   a double click on a row, or Enter on it. The gesture for *open
+         *   this one*
+         */
+        /* Data(row, column)
+         *   the table needs a cell. **The return value is the answer**: a
+         *   string, or `{ Text, Icon }` for a cell with a picture
+         */
+        /* Sort(column, ascending)
+         *   a sortable header was clicked. **The handler decides** — `SortBy`
+         *   is what actually reorders
+         */
+        /* CellEdit(row, column, text)
+         *   an editable cell's edit ended — Enter, or the focus moving away.
+         *   `row` is an index in a flat table and a key in a tree, as every
+         *   verb here addresses one. **Returning `false` refuses it** and the
+         *   cell goes back to what it said; anything else is taken and the
+         *   text is written into the row. An on-demand table holds no cells,
+         *   so there the handler stores it
+         */
+        /* HeaderClick(column, button, ctrl, shift)
+         *   a column heading was pressed — the one pointer event a heading
+         *   raises, because GTK claims its press before the bubble phase.
+         *   `button` is `1` primary, `2` middle, `3` secondary. **The return
+         *   value is the menu of the secondary click**: an array replaces
+         *   `HeaderMenu` for that click, anything else falls back to it. A
+         *   primary click also raises `Sort` when `Sortable`, on the release
+         */
         BTA_CLASS_ENUM_TEXT("TableView", "Control", build_table, table_props, false,
                             table_options, "Columns.Text",
                             "Select,Activate,Data,Sort,CellEdit,HeaderClick"),

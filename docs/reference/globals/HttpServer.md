@@ -20,27 +20,27 @@ srv.Start();
 
 | | | |
 |---|---|---|
-| `Allow` | a list of exact IPs, or nothing | [who may reach it](#who-may-reach-it) |
-| `Auth` | `{ Realm, Users }`: Basic over the whole server | [who may reach it](#who-may-reach-it) |
-| `Host` | `"local"` or `"any"` | [listening](#listening) |
-| `Port` | declared until `Start`, actual after | [listening](#listening) |
-| `Request` | assign `(req) => …`; **required before `Start`** | [answering](#answering) |
-| `Running` | whether it is listening | [listening](#listening) |
+| `Allow` | a list of **exact** IPs, or nothing (open) | [who may reach it](#who-may-reach-it) |
+| `Auth` | `{ Realm, Users }` | [who may reach it](#who-may-reach-it) |
+| `Host` | `"local"` is loopback only and the default | [listening](#listening) |
+| `Port` | `8080` unless told | [listening](#listening) |
+| `Request` | assign `(req) => …` | [answering](#answering) |
+| `Running` | `Port` is declared until `Start`, actual after | [listening](#listening) |
 | `ServerName` | the `Server:` header | [listening](#listening) |
-| `Start()` | listens | [listening](#listening) |
-| `Stop()` | stops | [listening](#listening) |
+| `Start()` | listens; throws naming the reason (a busy port says which one) | [listening](#listening) |
+| `Stop()` | `true` while something was listening, `false` after — like signalling a reaped child | [listening](#listening) |
 | `Tls` | `{ Cert, Key }` files, or nothing | [listening](#listening) |
-| `Url` | `""` until `Start`, and empty again after `Stop` | [listening](#listening) |
+| `Url` | `""` until `Start`, the real one after, and empty again after `Stop` | [listening](#listening) |
 
 **The request**
 
 | | | |
 |---|---|---|
-| `Answer(status, [body], [opts])` | the answer, **before the handler returns** | [answering](#answering) |
+| `Answer(status, [body], [opts])` | `body` follows the client's rules — an object serialises as canonical JSON — and `opts` carries `Headers` and `ContentType` | [answering](#answering) |
 | `Body` | always [`Bytes`](Bytes.md) | [what arrived](#what-arrived) |
 | `Headers` | lower-cased | [what arrived](#what-arrived) |
 | `Method` | `GET`, `POST`, … | [what arrived](#what-arrived) |
-| `Multipart()` | → the upload parsed | [what arrived](#what-arrived) |
+| `Multipart()` | the upload parsed: a `Multipart` to read with `Part(index)`, or to re-post | [what arrived](#what-arrived) |
 | `Path` | the path, dot-segments already normalised | [what arrived](#what-arrived) |
 | `Query` | the query string as an object | [what arrived](#what-arrived) |
 | `Remote` | the caller's IP | [what arrived](#what-arrived) |
@@ -53,9 +53,9 @@ srv.Start();
 | `Host` | `"local"` is loopback only and the default; **`"any"` is an explicit word**, because opening a port to the network should be something somebody typed |
 | `ServerName` | the `Server:` header; `""` for soup's own |
 | `Tls` | `{ Cert, Key }` files, or nothing: `https` when set, `null` when not. **Missing files fail at `Start`, naming them** |
-| `Start()` | listens; throws naming the reason — a busy port says which one. A second `Start` is refused |
-| `Stop()` | `true` while something was listening, `false` after — like signalling a reaped child |
-| `Running` | whether it is |
+| `Start()` | listens; throws naming the reason (a busy port says which one). A second `Start` is refused |
+| `Stop()` | `true` while something was listening, `false` after — like signalling a reaped child. **From inside a handler it waits for the handler**: `Answer` fills the message in and soup sends it when the handler returns, so `req.Answer(200, "bye"); srv.Stop();` answers first and disconnects after. `Running` stays true until the deferred disconnect runs |
+| `Running` | `Port` is declared until `Start`, actual after; `Url` is `""` until then, and empty again after `Stop` |
 | `Url` | `""` until `Start`, the real one after, and empty again after `Stop` |
 
 A listening server **counts like a watch**: a console project that returned from

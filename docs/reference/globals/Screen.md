@@ -11,10 +11,10 @@ Screen.Monitors()               // [{ X, Y, Width, Height, Scale, Name }, …]
 
 | | | |
 |---|---|---|
-| `Height` (ro) | the monitor's height | [the monitor in front of you](#the-monitor-in-front-of-you) |
-| `Monitors()` (ro) | → every monitor | [all of them](#all-of-them) |
-| `Scale` (ro) | that monitor's scale factor | [the monitor in front of you](#the-monitor-in-front-of-you) |
-| `Width` (ro) | the monitor's width | [the monitor in front of you](#the-monitor-in-front-of-you) |
+| `Height` (ro) | its height, likewise | [the monitor in front of you](#the-monitor-in-front-of-you) |
+| `Monitors()` (ro) | every monitor | [all of them](#all-of-them) |
+| `Scale` (ro) | that monitor's scale factor, `1` unless the panel is HiDPI | [the monitor in front of you](#the-monitor-in-front-of-you) |
+| `Width` (ro) | the width of the monitor the application's **active window** is on — the first one the display lists before any window is shown, and `0` with no display at all | [the monitor in front of you](#the-monitor-in-front-of-you) |
 
 ## The monitor in front of you
 

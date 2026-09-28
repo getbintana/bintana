@@ -17,8 +17,8 @@ follows is what is its own.
 | | | |
 |---|---|---|
 | `ColumnSpacing` | pixels between the columns | [spacing](#spacing) |
-| `Columns` | how many columns children wrap at. Default `2` | [how children fall into it](#how-children-fall-into-it) |
-| `Homogeneous` | every cell the same size | [spacing](#spacing) |
+| `Columns` | how many columns children wrap at; a column is as wide as its widest child | [how children fall into it](#how-children-fall-into-it) |
+| `Homogeneous` | every cell the same size, which is what a keypad wants and a form of fields does not | [spacing](#spacing) |
 | `RowSpacing` | pixels between the rows | [spacing](#spacing) |
 
 No methods and no events of its own. Children go in with
@@ -42,7 +42,7 @@ forty rows in it is forty times as many controls as a table with forty rows.
 
 | | |
 |---|---|
-| `Columns` | how many columns children wrap at. Default `2`, which is a grid of labels and fields |
+| `Columns` | how many columns children wrap at; a column is as wide as its widest child. Default `2`. Default `2`, which is a grid of labels and fields |
 
 **Children flow in order**, left to right, wrapping at `Columns`: with `Columns:
 2`, the first child is the caption of the first row and the second is its field.

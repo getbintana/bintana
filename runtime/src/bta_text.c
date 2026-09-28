@@ -418,6 +418,50 @@ static JSValue ed_line_of(JSContext *ctx, JSValueConst this_val,
     return out;
 }
 
+/*
+ * CursorBounds(): where the insertion cursor is drawn, `{ X, Y, Width, Height }`
+ * in the control's own coordinates -- the space `Popover.Popup(editor, rect)`
+ * reads, which is what a hint beside the cursor is made of.
+ *
+ * `get_iter_location` answers in buffer coordinates, which scroll; the view
+ * turns those into its window's, and `compute_point` carries them from the
+ * view to the control, which is the scroller around it. A cursor scrolled out
+ * of sight answers a rectangle outside the control's own, which is the truth
+ * and is the caller's to test.
+ */
+static JSValue ed_cursor_bounds(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    GtkTextView   *view = GTK_TEXT_VIEW(w->inner);
+    GtkTextBuffer *buf  = buffer_of(w);
+    GtkTextIter    it;
+    GdkRectangle   r;
+    int            x, y;
+
+    gtk_text_buffer_get_iter_at_mark(buf, &it, gtk_text_buffer_get_insert(buf));
+    gtk_text_view_get_iter_location(view, &it, &r);
+    gtk_text_view_buffer_to_window_coords(view, GTK_TEXT_WINDOW_WIDGET,
+                                          r.x, r.y, &x, &y);
+
+    graphene_point_t from = GRAPHENE_POINT_INIT((float)x, (float)y), to;
+    if (w->gtk != w->inner &&
+        gtk_widget_compute_point(w->inner, w->gtk, &from, &to)) {
+        x = (int)to.x;
+        y = (int)to.y;
+    }
+
+    JSValue out = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, out, "X",      JS_NewInt32(ctx, x));
+    JS_SetPropertyStr(ctx, out, "Y",      JS_NewInt32(ctx, y));
+    JS_SetPropertyStr(ctx, out, "Width",  JS_NewInt32(ctx, MAX(1, r.width)));
+    JS_SetPropertyStr(ctx, out, "Height", JS_NewInt32(ctx, MAX(1, r.height)));
+    return out;
+}
+
 static JSValue ed_goto_line(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv)
 {
@@ -639,37 +683,125 @@ static JSValue ed_select(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry editor_props[] = {
+    /* Text
+     *   everything in the buffer. Assigning replaces it all and **raises
+     *   `Change`**
+     */
     JS_CGETSET_DEF("Text",      ed_get_text,      ed_set_text),
+    /* ScrollX
+     *   how far it is scrolled, in pixels, and assignable — clamped to what
+     *   there is to scroll. **Not** the cursor: `Line` and `GotoLine` are
+     *   about that, with the scroll following as a side effect
+     */
     JS_CGETSET_MAGIC_DEF("ScrollX",    bta_scroll_get, bta_scroll_set, BTA_SCROLL_X),
+    /* ScrollY
+     *   the same downwards, which is the one a diff view keeps in step
+     */
     JS_CGETSET_MAGIC_DEF("ScrollY",    bta_scroll_get, bta_scroll_set, BTA_SCROLL_Y),
+    /* ScrollMaxX
+     *   the furthest `ScrollX` can go — the content's width less the part on
+     *   screen, and `0` when it all fits
+     */
     JS_CGETSET_MAGIC_DEF("ScrollMaxX", bta_scroll_get, NULL, BTA_SCROLL_MAX_X),
+    /* ScrollMaxY
+     *   the same for `ScrollY`, which is how a program tells a long file from
+     *   one that fits
+     */
     JS_CGETSET_MAGIC_DEF("ScrollMaxY", bta_scroll_get, NULL, BTA_SCROLL_MAX_Y),
+    /* Line
+     *   the line the cursor is on, **counting from 1**
+     */
     JS_CGETSET_DEF("Line",      ed_get_line,      NULL),
+    /* Column
+     *   the cursor's column
+     */
     JS_CGETSET_DEF("Column",    ed_get_column,    NULL),
+    /* Offset
+     *   the cursor's position as a **character** offset — the same unit
+     *   `Column` counts in, so an emoji is one
+     */
     JS_CGETSET_DEF("Offset",    ed_get_offset,    NULL),
+    /* Selection
+     *   the selected text, `""` for none
+     */
     JS_CGETSET_DEF("Selection", ed_get_selection, NULL),
+    /* Modified
+     *   the editing flag. **Clear it after saving**: nothing else does, and
+     *   it is what a window title's asterisk and a *save before closing?* are
+     *   read from
+     */
     JS_CGETSET_MAGIC_DEF("Modified", ed_get_flag, ed_set_flag, ED_MODIFIED),
+    /* ReadOnly
+     *   shown but not editable. **The program can still write to it**, which
+     *   is what a log pane needs
+     */
     JS_CGETSET_MAGIC_DEF("ReadOnly", ed_get_flag, ed_set_flag, ED_READONLY),
+    /* Wrap
+     *   wrap long lines. Default `true` on a
+     *   [`TextEditor`](docs/reference/widgets/TextEditor.md), `false` on a
+     *   [`SourceEditor`](docs/reference/widgets/SourceEditor.md), which is
+     *   the right default for each
+     */
     JS_CGETSET_MAGIC_DEF("Wrap",     ed_get_flag, ed_set_flag, ED_WRAP),
+    /* CanUndo
+     *   whether there is anything to go back to — what an *Undo* item's
+     *   `Enabled` is read from
+     */
     JS_CGETSET_MAGIC_DEF("CanUndo",  ed_get_flag, NULL,        ED_CANUNDO),
+    /* CanRedo
+     *   the same, forwards
+     */
     JS_CGETSET_MAGIC_DEF("CanRedo",  ed_get_flag, NULL,        ED_CANREDO),
-    /* GotoLine(line) */
+    /* GotoLine(line)
+     *   puts the cursor there and scrolls to it
+     */
     JS_CFUNC_DEF("GotoLine", 1, ed_goto_line),
-    /* Select(line, [column], [length]) */
+    /* CursorBounds() -> { X, Y, Width, Height }
+     *   where the insertion cursor is drawn, in the control's own coordinates
+     *   — what `Popover.Popup(editor, rect)` points at for a hint beside the
+     *   cursor. Only once the control has been laid out; a cursor scrolled
+     *   out of view answers a rectangle outside the control, which is the
+     *   truth and the caller's to test. Read it once the control has a
+     *   rectangle; before the window is up there is nothing to be drawn in
+     */
+    JS_CFUNC_DEF("CursorBounds", 0, ed_cursor_bounds),
+    /* Select(line, [column], [length])
+     *   selects from there. A column past the end of the line is the end of
+     *   the line
+     */
     JS_CFUNC_DEF("Select",   3, ed_select),
-    /* LineOf(index) */
+    /* LineOf(index)
+     *   the line a **search's index** falls on, 1-based and clamped — `index`
+     *   is the number `Regex.Index` gives, and it counts UTF-16 units
+     */
     JS_CFUNC_DEF("LineOf",   1, ed_line_of),
-    /* OffsetAt(line, [column]) */
+    /* OffsetAt(line, [column])
+     *   the character offset of that position, clamped as `Select` clamps —
+     *   the inverse read of `Offset`
+     */
     JS_CFUNC_DEF("OffsetAt", 2, ed_offset_at),
-    /* Insert(text) */
+    /* Insert(text)
+     *   at the cursor. The selection is left alone, so on a selected word
+     *   this lands after it rather than replacing it
+     */
     JS_CFUNC_DEF("Insert",   1, ed_insert),
-    /* Append(text) */
+    /* Append(text)
+     *   at the end, **scrolling there**, whatever the cursor was doing —
+     *   which is what a log pane wants and what makes a read-only editor the
+     *   right control for one
+     */
     JS_CFUNC_DEF("Append",   1, ed_append),
-    /* Clear() */
+    /* Clear()
+     *   empties it
+     */
     JS_CFUNC_DEF("Clear",    0, ed_clear),
-    /* Undo() */
+    /* Undo()
+     *   one step back
+     */
     JS_CFUNC_DEF("Undo",     0, ed_undo),
-    /* Redo() */
+    /* Redo()
+     *   one step forward
+     */
     JS_CFUNC_DEF("Redo",     0, ed_redo),
 };
 
@@ -684,9 +816,20 @@ void bta_text_register(void)
          * once, and `EventNames()[0]` is what the designer's double click
          * writes, so `Change` has to stay at the head.
          */
-        /* Change() */
-        /* Cursor() */
-        /* Scroll(x, y) */
+        /* Change()
+         *   the value changed, including from an assignment in code — the
+         *   round trip goes out to GTK and back
+         */
+        /* Cursor()
+         *   the cursor moved. `Line` and `Column` say where
+         */
+        /* Scroll(x, y)
+         *   it was scrolled — by the wheel, a scrollbar, the keyboard or an
+         *   assignment. One event for a diagonal move. Two panes locked
+         *   together is `Before_Scroll(x, y) { this.After.ScrollY = y; }`,
+         *   and it does not loop: assigning a value it already has emits
+         *   nothing
+         */
         BTA_CLASS("Editor", "Control", NULL, editor_props, false,
                   "Change,Cursor,Scroll"),
         /*

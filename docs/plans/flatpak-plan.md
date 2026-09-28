@@ -166,7 +166,7 @@ sobre `~/.local/share/flatpak`): son 837 MB por corrida.
   NS de `Xml`; `Desktop.Entries.Write`.
 - `tests/ide`: el alta de un proyecto pide id; `ProjectForm` lo edita; `Apps`
   lo usa; el editor de metainfo abre, valida y guarda.
-- `tests/api.sh` y `tests/typings.sh` al día en cada fase, como manda la regla.
+- `tests/api.sh` al día en cada fase, como manda la regla.
 - El CI del repo de pruebas corre el smoke de Flatpak; `tests/install.sh` sigue
   siendo el del install común.
 

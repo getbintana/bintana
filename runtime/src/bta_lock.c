@@ -140,6 +140,10 @@ static JSValue lock_hold(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry lock_props[] = {
+    /* Hold(name, fn)
+     *   runs `fn` with the named lock held and releases it — whether `fn`
+     *   returned, threw, or was interrupted. Answers nothing
+     */
     JS_CFUNC_DEF("Hold", 2, lock_hold),
 };
 

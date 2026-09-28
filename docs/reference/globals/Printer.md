@@ -19,11 +19,11 @@ Printer.ToFile(this.Sheet, path, { Pages: 12 })  // a PDF, and no dialog
 
 | | | |
 |---|---|---|
-| `Default` | the printer this machine would use | [what the machine has](#what-the-machine-has) |
-| `Names` | the printers it can reach | [what the machine has](#what-the-machine-has) |
-| `Papers` | the paper sizes, in points | [the paper sizes](#the-paper-sizes) |
-| `Send(area, [setup], cb)` | the dialog, then paper. **Async** | [sending](#sending) |
-| `ToFile(area, path, [setup])` | a PDF, with no dialog | [to a file](#to-a-file) |
+| `Default` | the one it would use | [what the machine has](#what-the-machine-has) |
+| `Names` | the printers this session can reach | [what the machine has](#what-the-machine-has) |
+| `Papers` | `{ A4: { Width, Height }, Letter: …, A5: … }`, in **points** | [the paper sizes](#the-paper-sizes) |
+| `Send(area, [setup], cb)` | the print dialog, then a printer | [sending](#sending) |
+| `ToFile(area, path, [setup])` | the same sheets as one PDF, with **no dialog**; → how many pages it wrote | [to a file](#to-a-file) |
 
 ## What draws
 

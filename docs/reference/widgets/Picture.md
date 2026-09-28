@@ -15,19 +15,19 @@ It is a `Widget` and a control like any other, so everything on
 
 | | | |
 |---|---|---|
-| `File` | the photograph's path | [what it shows](#what-it-shows) |
-| `Fit` | `Fill` `Contain` `Cover` `ScaleDown`. Default `"Contain"` | [fit and zoom](#fit-and-zoom) |
+| `File` | the path | [what it shows](#what-it-shows) |
+| `Fit` | what to do with the room there is | [fit and zoom](#fit-and-zoom) |
 | `SourceHeight` (ro) | the file's own height | [fit and zoom](#fit-and-zoom) |
-| `SourceWidth` (ro) | the file's own width, `0` with no file | [fit and zoom](#fit-and-zoom) |
-| `Zoom` | a factor, for when `Fit` is not what is wanted | [fit and zoom](#fit-and-zoom) |
-| `LoadBytes(bytes)` | the photograph out of memory instead | [what it shows](#what-it-shows) |
+| `SourceWidth` (ro) | what is really in the file, which is the number a zoom is computed from and the one a title bar shows | [fit and zoom](#fit-and-zoom) |
+| `Zoom` | how big to be, whatever the room is: a factor, where `1` is one image pixel to one screen pixel | [fit and zoom](#fit-and-zoom) |
+| `LoadBytes(bytes)` | the photograph out of memory instead — a download shown without a temporary file | [what it shows](#what-it-shows) |
 
 ## What it shows
 
 | | |
 |---|---|
 | `File` | the path. What `GdkTexture` reads: PNG, JPEG, WebP, TIFF, BMP. **SVG is not among them** — a scalable icon is the pixbuf loaders' business, which is why an [`Image`](Image.md) draws one and this does not |
-| `LoadBytes(bytes)` | the photograph out of memory — a download shown without a temporary file. Clears `File`, and `SourceWidth`/`SourceHeight` measure it the same way |
+| `LoadBytes(bytes)` | the photograph out of memory instead — a download shown without a temporary file. Clears `File`; `SourceWidth`/`SourceHeight` measure it the same way |
 
 ## Fit and zoom
 
@@ -36,7 +36,7 @@ It is a `Widget` and a control like any other, so everything on
 | `Fit` | what to do with the room there is: `Contain` (the whole picture, letterboxed), `Cover` (fill the room, cropping), `Fill` (stretch, distorting) or `ScaleDown` (never enlarge). Default `"Contain"` |
 | `Zoom` | how big to be, whatever the room is: a factor, where `1` is one image pixel to one screen pixel. `0` means *let `Fit` decide* |
 | `SourceWidth` (ro) | what is really in the file, which is the number a zoom is computed from and the one a title bar shows. `0` when nothing is loaded |
-| `SourceHeight` (ro) | the same, downwards |
+| `SourceHeight` (ro) | the file's own height |
 
 **`Fit` and `Zoom` answer two different questions**, and which one a program wants
 says what kind of program it is:

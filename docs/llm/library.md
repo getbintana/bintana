@@ -7,22 +7,23 @@ Every name here is a global: ambient, always present, no import.
 | | |
 |---|---|
 | `Name` | from `project.json` |
-| `Id` | from `project.json`: the reverse-DNS identity the window is classed by, the metainfo declares and a package installs under; `""` when it declares none. A bad one stops the program when the project loads |
-| `Version` | what the *project* calls its release; `""` when it declares none |
-| `Directory` | the project directory, absolute |
-| `ConfigDirectory` | `~/.config/bintana/<name>`, created at startup |
-| `Executable` | the `bintana` binary, so a project can re-invoke it |
-| `Arguments` | whatever followed the project directory on the command line |
-| `HasIcon(name)` | whether that icon will actually **draw** something |
-| `HasCommand(name)` | whether that program is on the PATH |
-| `Icons([contains])` | every icon name available, sorted; narrowed by substring |
-| `DecorationLayout` | how this desktop arranges a title bar |
-| `CheckSource(text)` | `null` if the text is valid JavaScript, else `{ Message, Line, Column }` |
-| `Symbols(text)` | what the text declares — `[{ Name, Kind, Line, Parent }]`, out of the parser and with nothing run. `Kind` is `"Class"`, `"Method"` or `"Function"` |
-| `LibraryPath(name, [project])` | where a library by that name is, or `""` — the same six-place search the runtime does for `uses`. Published so a tool that opens *other* projects asks about theirs rather than keeping a second copy of the path |
+| `Id` | from `project.json`: the application's identity in reverse DNS — `io.github.you.App`. It is **one name in three places**: the window's own class (the runtime hands it to `GtkApplication` for Wayland and to the program name for X11's `WM_CLASS`), the `<id>` of the project's metainfo, and the Flatpak app id. `""` when the project declares none, which is an ordinary project classed by the program's name; a value that is not an application id **stops the program when the project loads**, because every one of those three is something nobody looks at until a dock shows the wrong icon |
+| `Version` | what the **project** calls its release; `""` when it declares none. **`BTA_VERSION` is the runtime's** and is not this — showing the wrong one is what an About box does until it knows the difference |
+| `Directory` | the project directory, absolute. What a relative path in a project resolves against — an image a report draws, a document a viewer opens, a data file that ships with the application |
+| `ConfigDirectory` | `~/.config/bintana/<name>`, **created at startup**, which is where anything the application remembers belongs. [`Settings`](../reference/globals/Settings.md) writes there; nothing of yours should go in the project directory, which is a thing people hand to each other |
+| `Executable` | the `bintana` binary that is running this, so a project can re-invoke it — which is how the IDE runs a project and how the test runner runs the suites |
+| `Arguments` | whatever followed the project directory on the command line, as an array |
+| `HasIcon(name)` | whether that icon will actually **draw** something. Not whether the theme claims it: an icon that cannot be rasterised here is the same nothing as one that is missing |
+| `HasCommand(name)` | whether that program is on the PATH. **The question that does not need an exception**, since [`Exec`](../reference/globals/Exec.md) throws when the program is not there |
+| `Icons([contains])` | every icon name available, sorted, narrowed by substring — what an icon picker is built from |
+| `DecorationLayout` | how this desktop arranges a title bar — which buttons, and on which side. What a drawn title bar reads to look like the real one |
+| `CheckSource(text)` | `null` when the text is valid JavaScript, else `{ Message, Line, Column }`. What an editor checks a file with before saving it, and the answer `new Function(src)` is not allowed to give |
+| `Symbols(text)` | what the text declares — `[{ Name, Kind, Line, Parent, Super, Params, End, Doc, Returns }]`, out of the parser and with nothing run. **`Kind` is `"Class"`, `"Function"`, `"Method"`, `"Static"`, `"Getter"`, `"Setter"`, `"StaticGetter"` or `"StaticSetter"`**, or **`"Assigned"`** (a function assigned at the top level, named by its target as written — `File.LoadJson`, `Widget.prototype.Dump` — and each function an object literal holds when the literal is assigned there, as `Target.Name`), or **`"Variable"`** (each `let`/`const`/`var`, destructured name, `for...of` variable and `catch` binding, at its line) and **`"Scope"`** (every function, anonymous ones included, with its `Params` and the lines it spans, `Line` to **`End`**; one that fails to parse spans up to where it broke) — together, what a name can mean where the cursor is — the member kinds are what separates `Value: T` from `Value(): T`, and a property of the class from one of the instance. **`Params` is the parameter list in the spelling a declaration uses** — `(message, [options], ...rest)`, `()` for a member that takes none, `""` for a class — for members and top-level functions, and **it is the function's own**: an arrow in its body or in a default value does not replace it. It is the one answer a host cannot get elsewhere, because ECMAScript discards a parameter's name at parse time and `Function.length` is a lower bound the moment one has a default. **`Super` is the name in a class's `extends`** and `""` for everything else, including an `extends` that is not a bare identifier. **`Doc` is the JSDoc comment touching the declaration** — the text before its first `@tag` — and **`Returns` the type in its `@returns {T}`**, both `""` when there is none; a comment that does not end on the line above or the same line documents nothing. What an editor lists a file with, and the answer a pattern is not allowed to guess at |
+| `LibraryPath(name, [project])` | where a library by that name is, or `""` — **the same six-place search the runtime does for `uses`**. Published so that a tool which opens *other* projects asks about theirs rather than keeping a second copy of the path |
+| `Globals()` | every name on the global object: the runtime's own, the ones a library installed, and the JavaScript builtins -- `Math`, `JSON`, `Date`, `Map`, `Timer`, `Confirm`. **A top-level `class` is a lexical binding and not a property of the global object**, so a library's and a project's classes are *not* in it -- read those out of the sources, which is what the IDE does. It exists because the alternative is a hand-written list of global names, and there are a hundred and sixty-four of them |
 | `Libraries([project])` | the names of every library those same six places offer, sorted, each one once. The other direction of the lookup: `LibraryPath` resolves a name you already know, this is what a dialog that offers a choice needs |
 | `OnError` | assign `(message, stack) => …` to take over uncaught errors |
-| `Quit(code)` | quit with that exit status. A `code` that is not a number is refused rather than read as `0`, which a runner would take for success; `Quit()` is `0` |
+| `Quit(code)` | quit with that exit status. `0` is *it worked*, and a console tool that answers a question answers with this. A `code` that is not a number is **refused** — `Quit("fail")` used to exit `0`, which a runner reads as success. A `code` that is not a number is refused rather than read as `0`, which a runner would take for success; `Quit()` is `0` |
 
 `BTA_VERSION` is the **runtime's** version, and is not
 `Application.Version`. Showing the wrong one is what an About box does until it
@@ -57,9 +58,9 @@ freedesktop conventions every Linux desktop follows. `DataDirectory`,
 
 | | |
 |---|---|
-| `DataDirectory` | `$XDG_DATA_HOME` — `~/.local/share` unless the desktop moved it |
-| `ConfigDirectory` | `$XDG_CONFIG_HOME` — `~/.config` |
-| `CacheDirectory` | `$XDG_CACHE_HOME` — `~/.cache` |
+| `DataDirectory` | `$XDG_DATA_HOME`, or `~/.local/share` when the desktop has not moved it. Application data that belongs to this user: a database, a saved document, an installed menu entry |
+| `ConfigDirectory` | `$XDG_CONFIG_HOME`, or `~/.config`. Settings, kept apart from data because a backup or a sync usually wants one and not the other |
+| `CacheDirectory` | `$XDG_CACHE_HOME`, or `~/.cache`. Anything that can be thrown away and rebuilt |
 | `Entries` | the module below |
 
 `ConfigDirectory` is the root and **not** `Application.ConfigDirectory`, which is
@@ -135,20 +136,20 @@ A question that needs an answer is a form: [forms.md](forms.md#a-dialog-that-ask
 
 | | |
 |---|---|
-| `Text(msgid, ...args)` | the catalogue's version, `{0}` filled in; the msgid itself when there is no entry |
-| `Plural(one, many, n, ...args)` | the form `n` takes by the catalogue's own rule; `n` also fills `{0}` |
-| `Context(ctxt, msgid, ...args)` | gettext's `msgctxt`: part of the key, never shown |
-| `Current` | the catalogue in use, `""` for none. Assigning reloads, and affects only what is built afterwards |
-| `Available` | the catalogue names this project ships, sorted |
-| `Read(path)` | a catalogue as data, losing nothing |
-| `Write(path, entries)` | that data back as a `.po`, losing nothing either. The two are one pair: what the reader kept, the writer writes |
-| `Number(value, [decimals \| options])` | grouped, with the desktop's separators. As many decimals as it has unless told |
-| `Currency(value, [decimals \| options])` | money, with the symbol where this desktop puts it |
-| `Parse(text, [options])` | → the `Decimal` the text says, or `null`. The same format read backwards |
+| `Text(msgid, ...args)` | the catalogue's version of a string, with `{0}`, `{1}` filled in from the arguments. **The msgid itself when there is no entry**, so an application with no catalogue at all still reads correctly |
+| `Plural(one, many, n, ...args)` | the form `n` takes **by the catalogue's own rule** — which is not *one or many* in every language, and is why this is not an `if` you write yourself. `n` also fills `{0}` |
+| `Context(ctxt, msgid, ...args)` | gettext's `msgctxt`, for the word that is not translated the same way twice — *Open* the verb on a button and *Open* the state of a file. The context is part of the key and is never shown |
+| `Current` | which catalogue is in use, `""` for none. **Assigning reloads it, and affects only what is built afterwards** — a form already on screen keeps the words it was built with |
+| `Available` | the catalogue names this project ships, sorted — what a language menu is built from |
+| `Read(path)` | a catalogue as data, losing nothing: entries, contexts, plurals, comments and the fuzzy flags. What a translation editor reads |
+| `Write(path, entries)` | those entries back as a `.po` — the same shape `Read` answers with, so the two are one pair. **Nothing is lost in either direction**, which is what makes an editor built on them safe on a file it only half understands. The two are one pair: what the reader kept, the writer writes |
+| `Number(value, [decimals \| options])` | grouped, with this desktop's separators. As many decimals as the value has, unless told |
+| `Currency(value, [decimals \| options])` | money, with the symbol where this desktop puts it — which is before the number in some places and after it in others |
+| `Parse(text, [options])` | a [`Decimal`](../reference/globals/Decimal.md), or `null` when the text is not a number. **`null` and not a throw**: a field being typed into is not an error. The same format read backwards |
 | `Date(when, [format])` | `"Date"` `"Time"` `"DateTime"` `"ISO"` `"Weekday"` `"Month"`. `when` is a `Date` **or** a `"YYYY-MM-DD"` string |
-| `Compare(a, b)` | `-1`/`0`/`1`, in the order this desktop puts names in |
-| `Matches(text, needle)` | whether a search for `needle` should find `text`, accents folded |
-| `DecimalPoint` | the character this desktop writes a decimal with |
+| `Compare(a, b)` | `-1`, `0` or `1`, in the order this desktop puts names in. `localeCompare` is **refused** and its message points here: it compares code units and puts `Álvarez` after `Zapata` |
+| `Matches(text, needle)` | whether a search for `needle` should find `text`, **accents folded**: `cordoba` finds `Córdoba` and `ver` finds `Echeverría`. `toLowerCase().includes()` does neither |
+| `DecimalPoint` | the character a decimal is written with here, for the rare case that has to parse one back |
 
 ```js
 Locale.Number(1234567.891)        // 1.234.567,891
@@ -210,12 +211,12 @@ made a folder called `undefined`. The one exception is the question:
 
 | | |
 |---|---|
-| `Load(path)` | the whole file as a string; throws if unreadable |
-| `Save(path, text)` | **atomically** — a temporary beside it, renamed over, so a failed write leaves the old file intact |
-| `Append(path, text)` | onto the end, creating the file if it is not there — a log or a CSV line at a time, without reading the whole file back for each one |
-| `LoadJson(path)` | parsed, and the error names the file |
-| `SaveJson(path, value)` | one canonical shape: indented by two, one trailing newline |
-| `LoadXml(path)` | as an XML document — see [Xml](#xml) — and the error names the file |
+| `Load(path)` | the whole file as a string. **Throws if it cannot be read**, and the message names the file: there is no `null` to test for and no silent empty string |
+| `Save(path, text)` | writes it **atomically** — a temporary beside it, renamed over — so a failed write leaves the old file intact and a reader never sees half a file |
+| `Append(path, text)` | adds `text` to the end, and creates the file when it is not there. A log or a CSV written line by line wants this: `Save(path, Load(path) + line)` is the whole file through memory for every line, and a window in which another writer's line is overwritten |
+| `LoadJson(path)` | the file, parsed. **The error names the file**, which is the whole reason to use it over `JSON.parse(File.Load(p))` — a syntax error in *something* is not an answer |
+| `SaveJson(path, value)` | one canonical shape: indented by two, one trailing newline. Every `.form` and every `project.json` in this tree is written by it, which is why a file saved by the IDE and one written by hand look the same |
+| `LoadXml(path)` | the file as a [`Xml`](../reference/globals/Xml.md) document. **The error names the file**, and the document's own declaration says what encoding it is in: this reads bytes, unlike `Load` |
 | `SaveXml(path, node)` | the canonical XML shape, atomically, honouring neither locale nor encoding guesses |
 | `Exists(path)`, `IsDir(path)` | `false` for anything that is not a string, rather than asking about a file called `undefined` |
 | `Delete(path)` | a file, or an **empty** directory. Throws on failure |
@@ -223,19 +224,19 @@ made a folder called `undefined`. The one exception is the question:
 | `Rename(from, to)` | also moves; refuses to clobber |
 | `LoadBytes(path)` | the whole file as [`Bytes`](#bytes), untouched — what `Load` cannot do, since it answers text |
 | `SaveBytes(path, bytes)` | those bytes, exactly; the pair of `LoadBytes` |
-| `Hash(path, [algorithm])` | the file's checksum as hex, `"Sha256"` unless told — see [Hash](#hash). Read in blocks, so a video costs 64 KB and not the video |
+| `Hash(path, [algorithm])` | the checksum as hex, `"Sha256"` unless told — see [`Hash`](../reference/globals/Hash.md). **Read in blocks**, so a video costs 64 KB of memory and not the video |
 | `Copy(from, to)` | **byte for byte**, so it works on images; refuses to clobber |
-| `Info(path)` | `{ Size, Modified, Type, Icon, IsDir }`, or `null` |
-| `Watch(path, cb)` | `cb(event, path)` — `"Changed"` `"Created"` `"Deleted"`; answers something with `Stop()` |
-| `Open(path)` | hands it to whatever the desktop opens that kind of file with |
+| `Info(path)` | `{ Size, Modified, Type, Icon, IsDir }`, or `null`. `.Type` is a content type you can test (`"image/png"`), `.Icon` is the name the desktop draws for that kind of file, and `.Modified` is a real `Date`, to the millisecond |
+| `Watch(path, cb)` | `cb(event, path)` — `"Changed"`, `"Created"`, `"Deleted"` — and answers something with a `Stop()` |
+| `Open(path)` | hands the file to whatever the desktop opens that kind with. **It answers before the file is open**: launching is asynchronous and the program that opens it is somebody else's, so what this promises is that the request was made. A file that is not there is refused *here*, which is the failure a caller can do something about |
 | `Join(a, b, …)`, `Absolute(path)` | |
 | `Within(path, root)` | whether `path` is `root` or under it, by whole path components — `/a/proj2` is **not** inside `/a/proj` |
 | `Relative(path, root)` | `path` with `root` taken off; the path unchanged when there is no relative spelling, and `""` for the root itself |
 | `Name(path)` | `/a/b/c.js` → `c.js` |
 | `Directory(path)` | `/a/b/c.js` → `/a/b` |
-| `Extension(path)` | `js`, no dot, `""` if none |
-| `IsExtension(path, ext)` | whether the name ends in that extension, **case-insensitively**; `"js"` and `".js"` are both taken |
-| `BaseName(path)` | `c` |
+| `Extension(path)` | `js` — no dot, `""` when there is none |
+| `IsExtension(path, ext)` | whether the name ends in that extension, **case-insensitively**. `"js"` and `".js"` are both taken, and a suffix like `"tar.gz"` is refused: the extension is what [`Extension`](../reference/globals/File.md#paths) answers, which stops at the last dot |
+| `BaseName(path)` | `/a/b/c.js` → `c` |
 
 `Within` and `Relative` are **lexical** and touch no disk, and they are the pair
 `HasCommand`/`Exec` are: the question, and the spelling. The one thing they get
@@ -282,10 +283,10 @@ go in a plain object. So `Xml.Parse` answers a tree, and a
 
 | | |
 |---|---|
-| `Xml.Parse(text)` | → the document, or a `SyntaxError` naming línea and columna |
-| `Xml.ParseBytes(bytes)` | the same, letting the declaration pick the encoding — what [`File.LoadXml`](#file) uses |
+| `Xml.Parse(text)` | the document, or a `SyntaxError` naming línea and columna |
+| `Xml.ParseBytes(bytes)` | the same, and the declaration's encoding is honoured — what `File.LoadXml` uses |
 | `Xml.Stringify(node)` | the canonical text: declaration, indented by two, one trailing newline. A detached element is written with a document of its own |
-| `Xml.Element(name)` | → a detached element, for building |
+| `Xml.Element(name)` | a detached element; its own tree, not in any document |
 | `Xml.Available` | whether this build has libxml2; the verbs refuse with a sentence when it does not |
 
 A **document** answers `Root` (→ element, or `null`). An **element** answers:
@@ -293,7 +294,7 @@ A **document** answers `Root` (→ element, or `null`). An **element** answers:
 | | |
 |---|---|
 | `Name`, `Prefix`, `Namespace` | the local name, the prefix, the URI — `""` when there is none |
-| `Text` | all the character data under it; assigning replaces the children |
+| `Text` | all the character data under an element; assigning replaces the children |
 | `Attr(name)` | the value of an attribute **with no namespace**, `""` for one that is present and empty, `null` for one that is not |
 | `SetAttr(name, value)`, `RemoveAttr(name)` | both as text |
 | `AttrNS(uri, name)`, `SetAttrNS(uri, name, value)`, `RemoveAttrNS(uri, name)` | the same for an attribute in a namespace — `xml:lang` is `AttrNS("http://www.w3.org/XML/1998/namespace", "lang")`, since an unprefixed name means no namespace at all. `SetAttrNS` refuses a namespace not declared in scope |
@@ -301,9 +302,9 @@ A **document** answers `Root` (→ element, or `null`). An **element** answers:
 | `Children` | its element children, in order |
 | `Find(name)`, `FindAll(name)` | direct children by local name — `Find` answers `null` |
 | `Add(child)`, `Insert(index, child)`, `Remove()` | see below |
-| `Parent` | `null` for a root |
-| `Copy()` | a detached subtree |
-| `SetNamespace(uri, [prefix])` | puts the element in a namespace, reusing a declaration already in reach |
+| `Parent` | the parent element, or `null` for a root or a detached node |
+| `Copy()` | a detached subtree of its own |
+| `SetNamespace(uri, [prefix])` | puts the element in that namespace, reusing a declaration already in reach |
 
 **A node from another tree is copied in, and `Add` answers the node that is in
 *this* tree.** Within one tree `Add` moves, as a DOM does; across trees it
@@ -343,10 +344,10 @@ is installed in a worker too, so a big file can be parsed off the main thread.
 
 | | |
 |---|---|
-| `List(path, [pattern])` | the **names** in one directory, sorted, no `.` or `..` |
+| `List(path, [pattern])` | the **names**, sorted, with no `.` or `..` — what a tree of one folder shows |
 | `Files(path, [pattern-or-options])` | the **full paths** of the files, sorted |
-| `Folders(path, [pattern-or-options])` | the same for directories |
-| `Make(path)` | creates it and any missing parent |
+| `Folders(path, [pattern-or-options])` | the same for the directories |
+| `Make(path)` | creates it **and any missing parent**, so there is no loop to write |
 
 Every path is a string, refused otherwise — see [File](#file).
 | `Copy(from, to)`, `Delete(path)`, `DeleteTree(path)` | |
@@ -467,7 +468,7 @@ t.Start({ roots: subs });
 
 | | |
 |---|---|
-| `Start(data, [options])` | sends the message and starts the thread. **Once** — a second `Start` is refused; work that repeats is a new `Task` |
+| `Start(data, [options])` | serialises the message, loads the class's file in a fresh runtime on a fresh thread, builds the class, and calls `Run(msg)`. **Once** — a second `Start` is refused; work that repeats is a new `Task` |
 | `Stop([{ KillAfter }])` | **asks** it to end, and enforces `KillAfter` ms later (5000 by default, 0 = at once). Two stages like `Exec`'s guard. Answers whether there was a live job to ask |
 | `Report(value)` | the worker's voice, called from `Run`; arrives as `Progress`. `this.Report` on a proxy is refused |
 | `Stopping` | inside `Run`: `true` once `Stop()` has asked, so the job can `Report` what it has and return. Delphi's `Terminated`, BackgroundWorker's `CancellationPending` |
@@ -722,7 +723,7 @@ File.Hash(path, "md5")
 | | |
 |---|---|
 | `Md5(v)`, `Sha1(v)`, `Sha256(v)`, `Sha512(v)` | the digest as lower-case hex. `v` is text (hashed as its UTF-8) or a [`Bytes`](#bytes) (hashed as the bytes it is) |
-| `File.Hash(path, [algorithm])` | the **file's** digest, `"Sha256"` unless told; the name is any of the four, and case does not matter |
+| `File.Hash(path, [algorithm])` | the checksum as hex, `"Sha256"` unless told — see [`Hash`](../reference/globals/Hash.md). **Read in blocks**, so a video costs 64 KB of memory and not the video |
 
 **What is hashed is the text's UTF-8 bytes**, which is what every other tool
 means by the hash of a string: `Hash.Sha256("abc")` is what `sha256sum` says
@@ -760,11 +761,11 @@ Hash.Sha256(b)                            // the file's digest
 | `new Bytes([value])` | nothing (empty), text (its **UTF-8**), a list of numbers `0`–`255`, or another `Bytes` (a copy) |
 | `Bytes.FromBase64(text)`, `Bytes.FromHex(text)` | refused, not guessed, when the text is not that |
 | `Length` (ro) | how many bytes |
-| `At(index)` | one byte, `0`–`255`. **Throws** past the end |
+| `At(index)` | one byte as a number, `0`–`255`. **Throws** past the end rather than answering `undefined` |
 | `Slice(from, [count])` | a new `Bytes`; **clamped** like a string's, and a negative `from` counts from the end |
 | `Concat(other, …)` | a new one, end to end |
-| `Equals(other)` | byte for byte — `==` compares two objects by identity, so this is the only comparison there is |
-| `ToText()` | the text it is, or a **throw** when it is not valid UTF-8 |
+| `Equals(other)` | byte for byte. `==` compares two objects by identity, so **this is the only comparison there is** |
+| `ToText()` | the text it is, or a **throw** when it is not valid UTF-8 — never the replacement character, which is a corruption that travels |
 | `ToBase64()`, `ToHex()` | as text; hex is lower-case, the way a digest is written |
 | `toString()` | `"Bytes(763)"` — a description, **not** the content |
 | `toJSON()` | base64, so a record carrying a file survives `File.SaveJson` |
@@ -796,11 +797,11 @@ const total = price * qty + tax;             // exact, to the cent
 | | |
 |---|---|
 | `new Decimal(value, [decimals])` | from text, a number or another decimal; `decimals` fixes the scale |
-| `Round(decimals, [how])` | `"Away"` (default) `"Even"` `"Zero"` `"Up"` `"Down"` |
-| `Trim()` | `2.50` → `2.5` |
+| `Round(decimals, [how])` | `"Away"` (the default — the half goes away from zero, which is what an invoice does), `"Even"` (banker's), `"Zero"`, `"Up"`, `"Down"` |
+| `Trim()` | drops trailing zeros: `2.50` → `2.5` |
 | `Abs()`, `Scale`, `Sign`, `IsExact` | |
-| `Number()` | the nearest double, asked for **by name** — for a chart, a width, a percentage |
-| `Decimal.Split(total, parts)` | pieces that add back up to the total, exactly |
+| `Number()` | the nearest double, asked for **by name**: for a chart, a width, a percentage — anywhere the value stops being money |
+| `Decimal.Split(total, parts)` | pieces that add back up to the total, **exactly** |
 | `toString()`, `toJSON()` | its own text. Which is why `${d}` and `JSON.stringify(d)` are both exact, and why a decimal in a file reads back as itself |
 
 `+ - * /`, `< > <= >=` and unary `-` all work, and mix with ordinary numbers and
@@ -819,10 +820,10 @@ already orders.
 
 | | |
 |---|---|
-| `Today` | today's date, at local midnight |
-| `Add(date, days)` | `days` may be negative; refuses to leave the calendar |
-| `Between(from, to)` | whole days, signed |
-| `Weekday(date)` | `"Monday"` … `"Sunday"` — a key to test against, never text to show |
+| `Today` | today's date as `"YYYY-MM-DD"`, at **local** midnight |
+| `Add(date, days)` | the date `days` later. `days` may be negative, and it **refuses to leave the calendar** rather than answering something impossible |
+| `Between(from, to)` | whole days from one to the other, signed |
+| `Weekday(date)` | `"Monday"` … `"Sunday"` — **a key to test against, never text to show** |
 
 Never borrow a `Date` for this. `new Date("2026-03-08").getDate()` is 7 in
 Buenos Aires and 8 in Berlin; `new Date().toISOString().slice(0,10)` is
@@ -848,13 +849,13 @@ Text.Font                                            // "Cantarell 11"
 |---|---|
 | `Width(text, [font], [options])` | how wide it lays out, in pixels |
 | `Height(text, [font], [options])` | how tall — one line's height, or the whole block's when it wraps |
-| `Size(text, [font], [options])` | `{ Width, Height, Lines }` in one measurement, which is one layout instead of three |
-| `Lines(text, [font], [options])` | the lines it breaks into, as an array. **Refused with `Markup`** — see below |
+| `Size(text, [font], [options])` | `{ Width, Height, Lines }` in **one** measurement, which is one layout instead of three |
+| `Lines(text, [font], [options])` | the lines it breaks into, as an array — for a caller that will draw them one by one. **Refused with `Markup`** — see below |
 | `Escape(text)` | the text as markup that says exactly it: `&`, `<` and `>` escaped |
-| `IndexAt(text, x, y, [font], [options])` | → which character is at that point, as an index into the text **as it was laid out** — a markup run's tags already consumed. Above it is `0` and below it is the end |
-| `Bounds(text, from, to, [font], [options])` | → the rectangles covering those characters: `{ X, Y, Width, Height }`, one per line the range crosses and more than one on a line that changes direction |
-| `LineOf(text, index)` | → the line a **search's** index falls on — the number `Regex.Index` gives, counted in UTF-16 units |
-| `OffsetAt(text, line, [column])` | → the **character** offset of that position, clamped the way an editor's `Select` clamps |
+| `IndexAt(text, x, y, [font], [options])` | which character is at that point, as an index into the text **as it was laid out** — a markup run's tags already consumed. Above the text is `0` and below it is the end |
+| `Bounds(text, from, to, [font], [options])` | the rectangles covering those characters: `{ X, Y, Width, Height }`, one per line the range crosses and more than one on a line that changes direction |
+| `LineOf(text, index)` | the line an index falls on, 1-based and clamped — `index` is the number a **search** gave, so it is counted in UTF-16 units |
+| `OffsetAt(text, line, [column])` | the **character** offset of that line and column, clamped the way an editor's `Select` clamps |
 | `Font` (ro) | the desktop's UI font, which is what a control draws with unless CSS says otherwise. `""` where there is no display to ask |
 
 `font` is a Pango description (`"Cantarell Bold 10"`); `""` or nothing means
@@ -929,7 +930,7 @@ Screen.Monitors()               // [{ X, Y, Width, Height, Scale, Name }, …]
 |---|---|
 | `Width`, `Height` (ro) | the monitor the application's active window is on; the first one the display lists before any window is shown, and `0` with no display at all |
 | `Scale` (ro) | that monitor's scale factor, `1` unless the panel is HiDPI |
-| `Monitors()` (ro) | every monitor: `X`/`Y` are where it sits in the desktop's coordinates, `Name` is the connector (`"HDMI-1"`, `"eDP-1"`) — a key to remember a choice by, not prose to show |
+| `Monitors()` (ro) | every monitor: `X`/`Y` are where it sits in the desktop's coordinates, `Width`/`Height`/`Scale` are its own, and `Name` is the connector — `"HDMI-1"`, `"eDP-1"` — **a key to remember a choice by, not prose to show** |
 
 **The numbers are the same pixels a form's `Width` is** — logical ones, with the
 scale answered separately — so `Screen.Width / 2` is a window width and not a
@@ -958,8 +959,8 @@ text `"HH:MM"`** — or `"HH:MM:SS"` — and nothing else.
 | | |
 |---|---|
 | `Now` | the time of day now, with seconds (`"21:03:58"`) |
-| `Add(time, minutes)` | `minutes` may be negative; **wraps at midnight**, because a time of day has no day to fall off |
-| `Between(from, to)` | whole minutes, signed |
+| `Add(time, minutes)` | `minutes` may be negative, and it **wraps at midnight**, because a time of day has no day to fall off |
+| `Between(from, to)` | whole minutes from one to the other, signed |
 | `Seconds(time)` | seconds since midnight — the exact number, for anything finer than a minute |
 
 ```js
@@ -1072,28 +1073,28 @@ class Customer extends Record {
 | `Field.Number(o)` | a number | `required`, `min`, `max`, `decimals` |
 | `Field.Bool(def, o)` | `true`/`false`, and SQL's `0`/`1` | |
 | `Field.Date(o)` | `"YYYY-MM-DD"`, checked against the calendar | `required` |
-| `Field.Time(o)` | `"HH:MM"` or `"HH:MM:SS"` — see [Time](#time) | `required`, `min`, `max` (compared as text, which is what the fixed shape is for) |
-| `Field.DateTime(o)` | `"YYYY-MM-DDTHH:MM"` or `"…:SS"`, with `Z`/`±HH:MM` kept as written — a date and a time, which neither of the two above can say | `required`; `min`/`max` over local time only |
-| `Field.Bytes(o)` | a [`Bytes`](#bytes) — a file in a record. Base64 in JSON, a BLOB in sqlite | `required`, `max` (bytes) |
-| `Field.Enum(values, def, o)` | one of `values` | `required` |
-| `Field.List(item, o)` | an array, each entry through `item` — a `Field`, or a `Record` class | `required`, `max` |
+| `Field.Time(o)` | `"HH:MM"` or `"HH:MM:SS"` | `required`, `min`, `max` (compared as text, which is what the fixed shape is for) |
+| `Field.DateTime(o)` | `"YYYY-MM-DDTHH:MM"` or `"...:SS"` — a date and a time — with `Z` or `+HH:MM` when the moment has a zone, kept as written | `required`; `min`/`max` over local time only |
+| `Field.Bytes(o)` | a [`Bytes`](../reference/globals/Bytes.md) — a file in a record | `required`, `max` (bytes) |
+| `Field.Enum(values, def, o)` | one of `values`, starting at `def` | `required` |
+| `Field.List(item, o)` | an array, each entry through `item` — a `Field` or a `Record` class | `required`, `max` |
 | `Field.Record(of, o)` | another record: the class, or `() => the class` for a shape that contains itself | `required` |
-| `Field.Decimal(o)` | a `Decimal` at a fixed scale | `required`, `min`, `max`, `decimals` (2 by default) |
+| `Field.Decimal(o)` | a [`Decimal`](../reference/globals/Decimal.md) at a fixed scale | `required`, `min`, `max`, `decimals` (2 by default) |
 
 | On a record | |
 |---|---|
 | `new C({ Name: "Ana" })` | through the setters, so every value is checked |
-| `Apply(values)` | the same, by property name |
-| `Serialize([all])` | a plain object: what differs from the start, or everything |
+| `Apply(values)` | assigns each property of a plain object to the field of the same name, through the fields' own checks |
+| `Serialize([all])` | a plain object — **what differs from the start**, or everything with `true` |
 | `toJSON()` | so `JSON.stringify` and `File.SaveJson` are the record |
-| `Clone()` | a copy, for the dialog that edits one |
-| `Validate()` | **the state**: what is wrong with what it holds now |
+| `Clone()` | a copy, which is what a dialog edits so that Cancel costs nothing |
+| `Validate()` | what is wrong with what the record holds **now** — a different question, and the one a form asks before saving |
 | `Problems` (ro) | **the report of one `Load`**: what the file said that could not be taken |
 | `PropertyNames()`, `PropertyOptions(name)`, `Dump()` | as a widget answers them |
-| `PropertyInfo(name)` | → `{ Kind, Column, Key }`: what a field *is*, for whoever maps it onto something else |
+| `PropertyInfo(name)` | `{ Kind, Column, Key }`: what a field *is*, for whoever maps it onto something else |
 | `C.Load(json)` | a file, read **leniently** |
 | `C.LoadXml(node)` | the same, from an XML document or element — see [a record over XML](#a-record-over-xml) |
-| `ToXml([all])` | → a new element: what differs from the start, or every field |
+| `ToXml([all])` | a new element: what differs from the start, or every field |
 | `SaveXml(node)` | writes into that element, touching **only** what the shape models |
 
 ```js
@@ -1269,13 +1270,13 @@ clients.Save(c);                                      // UPDATE, by the key
 
 | On a connection | |
 |---|---|
-| `Query(sql, [params])` | rows, as plain objects |
-| `Execute(sql, [params])` | `{ Changes, LastId }` — **one** statement |
-| `Script(sql)` | several statements, no parameters: a schema |
-| `Transaction(fn)` | all of it or none; nests through savepoints |
-| `Columns(table)` | `[{ Name, Type, Required, Key }]` |
-| `Tables` (ro) | tables and views, ordered |
-| `Dialect` (ro) | `{ Placeholder, Quote, NewKey }` — what differs per engine |
+| `Query(sql, [params])` | the rows a statement answers, as **plain objects** — for the report, the `GROUP BY`, the join that is not one shape |
+| `Execute(sql, [params])` | **one** statement, answering `{ Changes, LastId }` |
+| `Script(sql)` | several statements and **no parameters**: a schema, a migration |
+| `Transaction(fn)` | everything in `fn` or nothing. **Nests**, through savepoints, so a function that wraps its own work in one is safe to call from inside another |
+| `Columns(table)` | `[{ Name, Type, Required, Key }]` — what is really in the table, which is how a program checks that a record's shape still fits |
+| `Tables` (ro) | the tables and views, ordered |
+| `Dialect` (ro) | `{ Placeholder, Quote, NewKey }` — **what differs per engine**, so the portable half above can build SQL without knowing which engine it is talking to |
 | `Path`, `Open` (ro), `Close()` | this driver's own |
 
 - **All five of sqlite's storage classes**: TEXT (`Field.Text`, `Enum`, `Date`,
@@ -1360,8 +1361,8 @@ const r = Http.GetWait("https://example.com/", { Timeout: 5000 });
 | `MaxConns`, `MaxPerHost` | constructor-only (`10`/`2` unless told): soup takes them once, so assigning later throws |
 | `Request(method, url, [body], [opts], onDone, [onError])` | any verb: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`; anything else is refused, in the blocking spelling too |
 | `Auth` | `{ User, Password }`, Basic and preemptive; reads back `null` when none is set. An explicit `Authorization` header wins over it, and an explicit `Content-Type` header wins over the one the body's shape implies |
-| `Get(url, [opts], onDone, [onError])` | no body |
-| `Post(url, body, [opts], onDone, [onError])` | `body` is text, `Bytes` or an object (canonical JSON, `application/json`) |
+| `Get(url, [opts], onDone, [onError])` | the ordinary read |
+| `Post(url, body, [opts], onDone, [onError])` | `body` is text, [`Bytes`](../reference/globals/Bytes.md), an object (canonical JSON, `application/json`) or a [`Multipart`](../reference/globals/Http.md#uploads) |
 | `Put(url, body, [opts], onDone, [onError])`, `Patch(…)` | with body, like `Post` |
 | `Delete(url, [opts], onDone, [onError])`, `Head(…)` | no body, like `Get` |
 | `Stream(method, url, [body], [opts], onLine, [onDone], [onError])` | the answer **as it arrives**: `onLine(line, handle)` once per text line, the newline stripped, blank lines included. Method-first like `Request`, so a `POST` whose answer comes in pieces needs no second name |
@@ -1374,7 +1375,7 @@ const r = Http.GetWait("https://example.com/", { Timeout: 5000 });
 | `Cookies` | `false` unless told: `true` keeps a jar of the session's own, so a login answers the next request |
 | `new Multipart()` | a file upload as a value: `Field(name, value)` and `File(name, filename, body, [contentType])` (body is text or `Bytes`, `application/octet-stream` unless told), both answering the upload for chaining; `Length` counts the parts. Sent as the body of a `Post`/`Put`/`Patch`, which sets its own `Content-Type` with soup's boundary — an explicit one beside it is refused |
 | `Part(index)` | one part read back: `{ Name, Filename, Type, Data }`, `Data` as `Bytes`. Past the end is refused |
-| `Server([opts])` | a listener of its own — see `Http Server` below |
+| `Server([opts])` | a listener of its own, for a static file server, a local API, a callback endpoint. Everything about it is on [`HttpServer`](../reference/globals/HttpServer.md) |
 
 `onDone({ Status, Reason, Headers, Body, Url })` — `4xx/5xx` come here, it is an
 answer. `Headers` keys are lower-cased. `Body` is always `Bytes` (`ToText()` is
@@ -1440,15 +1441,15 @@ srv.Start();
 | | |
 |---|---|
 | `Server([opts])` | `Port` (`8080` unless told, `0` ephemeral), `Host` (`"local"` loopback only, `"any"` is an explicit word), `ServerName` (the `Server:` header, `""` for soup's own), `Tls`, `Allow`, `Auth`. The options are an object — a bare port is refused |
-| `Tls` | `{ Cert, Key }` files, or nothing: `https` when set, `null` when not. Missing files fail at `Start`, naming them |
-| `Allow` | a list of exact IPs, or nothing (open). Refused remotes get `403` before the handler runs. Exact means exact: on a dual-stack `"any"` server, `::1` is not `127.0.0.1` |
-| `Auth` | `{ Realm, Users }`: Basic over the whole server, `401` with the realm until the right password. Nothing set is open, and reads back `null`. Like `Allow`, takes effect at once |
+| `Tls` | `{ Cert, Key }` files, or nothing: `https` when set, `null` when not. **Missing files fail at `Start`, naming them** |
+| `Allow` | a list of **exact** IPs, or nothing (open). A refused remote gets `403` before the handler runs. Exact means exact: on a dual-stack `"any"` server, `::1` is not `127.0.0.1` |
+| `Auth` | `{ Realm, Users }`: Basic over the whole server, `401` with the realm until the right password. Nothing set is open, and it reads back `null`. Like `Allow`, it takes effect at once |
 | `req.Multipart()` | the upload parsed: a `Multipart` to read with `Part(index)` (or re-post). Refused on a plain body |
-| `Request` | assign `(req) => …`; required before `Start`, replaceable while running -- including from inside the handler, which finishes the request it was running |
+| `Request` | assign `(req) => …`. **Required before `Start`**, and replaceable while running — even from inside the handler: the running one finishes its request and the next goes to the new one |
 | `Start()` | listens; throws naming the reason (a busy port says which one). A second `Start` is refused |
 | `Stop()` | `true` while something was listening, `false` after — like signalling a reaped child. **From inside a handler it waits for the handler**: `Answer` fills the message in and soup sends it when the handler returns, so `req.Answer(200, "bye"); srv.Stop();` answers first and disconnects after. `Running` stays true until the deferred disconnect runs |
 | `Running`, `Port`, `Url` | `Port` is declared until `Start`, actual after; `Url` is `""` until then, and empty again after `Stop` |
-| `Answer(status, [body], [opts])` | on the request: `body` follows the client's rules (object serialises canonical), `opts` carries `Headers` and `ContentType`. The second argument is always the body, the third always the options |
+| `Answer(status, [body], [opts])` | `body` follows the client's rules — an object serialises as canonical JSON — and `opts` carries `Headers` and `ContentType`. **The second argument is always the body and the third always the options** |
 | `req.Method`, `req.Path`, `req.Query`, `req.Headers`, `req.Body`, `req.Remote` | `Headers` lower-cased and `Body` always `Bytes`, like the client's answers; `Query` repeats keep one; `Remote` is the IP |
 | second `Answer`, late `Answer` | refused: the request was already answered / already ended. A handler that returns without answering gets a `500` |
 

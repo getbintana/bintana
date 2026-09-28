@@ -13,25 +13,25 @@ are written where they live.
 
 | | | |
 |---|---|---|
-| `Available` | the catalogue names this project ships, sorted | [the catalogue](#the-catalogue) |
-| `Context(ctxt, msgid, …args)` | gettext's `msgctxt`: part of the key, never shown | [the catalogue](#the-catalogue) |
-| `Current` | the catalogue in use, `""` for none | [the catalogue](#the-catalogue) |
-| `Plural(one, many, n, …args)` | the form `n` takes by the catalogue's own rule | [the catalogue](#the-catalogue) |
-| `Read(path)` | a catalogue as data, losing nothing | [the catalogue](#the-catalogue) |
-| `Text(msgid, …args)` | the catalogue's version, `{0}` filled in | [the catalogue](#the-catalogue) |
-| `Write(path, entries)` | those entries back as a `.po` | [the catalogue](#the-catalogue) |
+| `Available` | the catalogue names this project ships, sorted — what a language menu is built from | [the catalogue](#the-catalogue) |
+| `Context(ctxt, msgid, …args)` | gettext's `msgctxt`, for the word that is not translated the same way twice — *Open* the verb on a button and *Open* the state of a file | [the catalogue](#the-catalogue) |
+| `Current` | which catalogue is in use, `""` for none | [the catalogue](#the-catalogue) |
+| `Plural(one, many, n, …args)` | the form `n` takes **by the catalogue's own rule** — which is not *one or many* in every language, and is why this is not an `if` you write yourself | [the catalogue](#the-catalogue) |
+| `Read(path)` | a catalogue as data, losing nothing: entries, contexts, plurals, comments and the fuzzy flags | [the catalogue](#the-catalogue) |
+| `Text(msgid, …args)` | the catalogue's version of a string, with `{0}`, `{1}` filled in from the arguments | [the catalogue](#the-catalogue) |
+| `Write(path, entries)` | those entries back as a `.po` — the same shape `Read` answers with, so the two are one pair | [the catalogue](#the-catalogue) |
 
 **The conventions**
 
 | | | |
 |---|---|---|
-| `Compare(a, b)` | `-1`/`0`/`1`, in this desktop's order for names | [order and search](#order-and-search) |
-| `Currency(value, [decimals \| options])` | money, with the symbol where this desktop puts it | [numbers and money](#numbers-and-money) |
-| `Date(when, [format])` | a date or a time, written the way it is written here | [dates](#dates) |
-| `DecimalPoint` | the character this desktop writes a decimal with | [numbers and money](#numbers-and-money) |
-| `Matches(text, needle)` | whether a search for `needle` should find `text` | [order and search](#order-and-search) |
-| `Number(value, [decimals \| options])` | grouped, with the desktop's separators | [numbers and money](#numbers-and-money) |
-| `Parse(text, [options])` | → the `Decimal` the text says, or `null` | [numbers and money](#numbers-and-money) |
+| `Compare(a, b)` | `-1`, `0` or `1`, in the order this desktop puts names in | [order and search](#order-and-search) |
+| `Currency(value, [decimals \| options])` | money, with the symbol where this desktop puts it — which is before the number in some places and after it in others | [numbers and money](#numbers-and-money) |
+| `Date(when, [format])` | `"Date"` `"Time"` `"DateTime"` `"ISO"` `"Weekday"` `"Month"` | [dates](#dates) |
+| `DecimalPoint` | the character a decimal is written with here, for the rare case that has to parse one back | [numbers and money](#numbers-and-money) |
+| `Matches(text, needle)` | whether a search for `needle` should find `text`, **accents folded** | [order and search](#order-and-search) |
+| `Number(value, [decimals \| options])` | grouped, with this desktop's separators | [numbers and money](#numbers-and-money) |
+| `Parse(text, [options])` | a [`Decimal`](Decimal.md), or `null` when the text is not a number | [numbers and money](#numbers-and-money) |
 
 ## The catalogue
 
@@ -43,7 +43,7 @@ are written where they live.
 | `Current` | which catalogue is in use, `""` for none. **Assigning reloads it, and affects only what is built afterwards** — a form already on screen keeps the words it was built with |
 | `Available` | the catalogue names this project ships, sorted — what a language menu is built from |
 | `Read(path)` | a catalogue as data, losing nothing: entries, contexts, plurals, comments and the fuzzy flags. What a translation editor reads |
-| `Write(path, entries)` | those entries back as a `.po` — the same shape `Read` answers with, so the two are one pair. **Nothing is lost in either direction**, which is what makes an editor built on them safe on a file it only half understands |
+| `Write(path, entries)` | those entries back as a `.po` — the same shape `Read` answers with, so the two are one pair. **Nothing is lost in either direction**, which is what makes an editor built on them safe on a file it only half understands. The two are one pair: what the reader kept, the writer writes |
 
 **Most text needs none of these calls.** What a `.form` declares — a caption, a
 tooltip, a placeholder, the items of a list — goes through the catalogue by
@@ -58,7 +58,7 @@ number in it.
 |---|---|
 | `Number(value, [decimals \| options])` | grouped, with this desktop's separators. As many decimals as the value has, unless told |
 | `Currency(value, [decimals \| options])` | money, with the symbol where this desktop puts it — which is before the number in some places and after it in others |
-| `Parse(text, [options])` | → a [`Decimal`](Decimal.md), or `null` when the text is not a number. **`null` and not a throw**: a field being typed into is not an error |
+| `Parse(text, [options])` | a [`Decimal`](Decimal.md), or `null` when the text is not a number. **`null` and not a throw**: a field being typed into is not an error. The same format read backwards |
 | `DecimalPoint` | the character a decimal is written with here, for the rare case that has to parse one back |
 
 ```js

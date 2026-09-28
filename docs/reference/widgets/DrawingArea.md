@@ -16,22 +16,22 @@ It is a `Widget` and a control like any other, so everything on
 
 | | | |
 |---|---|---|
-| `Dump()` | → the last frame as text, one call per line | [testing a drawing](#testing-a-drawing) |
+| `Dump()` | the last frame as text, one call per line — empty until something has been drawn | [testing a drawing](#testing-a-drawing) |
 | `Redraw()` | the drawing may have changed: ask again | [when it draws](#when-it-draws) |
-| `Save(path, [width], [height])` | the same `Draw` into a PNG | [off the screen](#off-the-screen) |
-| `SavePdf(path, width, height, [pages], [before])` | the same `Draw`, once per page, into one PDF | [off the screen](#off-the-screen) |
-| `ToPng([width], [height])` | the same frame as `Bytes` | [off the screen](#off-the-screen) |
+| `Save(path, [width], [height])` | run the same `Draw` against an image surface and write it as a PNG | [off the screen](#off-the-screen) |
+| `SavePdf(path, width, height, [pages], [before])` | the same `Draw`, once per page, into one **PDF** | [off the screen](#off-the-screen) |
+| `ToPng([width], [height])` | the same frame as `Save`, answered as `Bytes` instead of written: a chart to be posted, attached or put in a reply, with nothing on disk | [off the screen](#off-the-screen) |
 | **event** `Draw(painter, width, height)` | paint it | [the Draw handler](#the-draw-handler) |
-| **event** `DrawPage(painter, page, width, height)` | paint one sheet of paper | [the Draw handler](#the-draw-handler) |
-| **event** `Paginate(width, height)` | how many sheets it is at that size | [the Draw handler](#the-draw-handler) |
+| **event** `DrawPage(painter, page, width, height)` | paint one **sheet of paper**, raised by [`Printer`](../../llm/library.md#printer) and by `SavePdf` in place of `Draw` | [the Draw handler](#the-draw-handler) |
+| **event** `Paginate(width, height)` | **how many sheets this document is at that size**, answered back | [the Draw handler](#the-draw-handler) |
 
 ## The `Draw` handler
 
 | | |
 |---|---|
 | **event** `Draw(painter, width, height)` | paint it. The size is the frame's, in logical pixels |
-| **event** `Paginate(width, height)` | **how many sheets this document is at that size**, answered back. [`Printer`](../globals/Printer.md) asks it once the dialog has settled the paper, and prints that many instead of the `Pages` it was given. The size is the printable area in points — the sheet less the printer's own margins. Declare none and the given count stands, which is right for a drawing whose layout does not move with the paper. It runs inside the print operation: measuring is fine, raising events of your own is not |
-| **event** `DrawPage(painter, page, width, height)` | paint one **sheet of paper**: raised by [`Printer`](../globals/Printer.md) and by `SavePdf` instead of `Draw`, with the page said out loud. 1-based, and the size is the printable area in **points**. A form that declares none gets `Draw`, which is right for a drawing that is one page |
+| **event** `Paginate(width, height)` | **how many sheets this document is at that size**, answered back. Raised by [`Printer`](../../llm/library.md#printer) once the dialog has settled the paper — the only moment it can be known, and the moment the count that was declared may be wrong. `width`/`height` are the printable area in points, which is the sheet **less the printer's own margins**. A control that declares none keeps the `Pages` it was given, and one whose layout does not move with the paper should declare none: `lib/report` scales to fit and does not, `lib/markdown` re-flows and does. It runs inside the print operation, so measure freely but **raise no events of your own** — one that re-entered the drawing hung the suite |
+| **event** `DrawPage(painter, page, width, height)` | paint one **sheet of paper**, raised by [`Printer`](../../llm/library.md#printer) and by `SavePdf` in place of `Draw`. `page` is 1-based and the size is the printable area in **points**, 72 to the inch. A form that declares no `DrawPage` gets `Draw`, which is right for a drawing that is one page — and is why nothing had to change when this arrived |
 
 ```js
 Plot_Draw(p, width, height) {
@@ -63,7 +63,7 @@ it a size, or put it in a box and let it expand.
 
 | | |
 |---|---|
-| `Redraw()` | the data changed: ask for another frame |
+| `Redraw()` | the drawing may have changed: ask again |
 
 **Nothing is drawn twice unless you ask.** GTK paints when it needs to — the
 window appearing, a resize, another window moving away — and `Redraw()` is how a
@@ -74,9 +74,9 @@ change in *your* data becomes a frame. A drawing that animates is
 
 | | |
 |---|---|
-| `Save(path, [width], [height])` | runs the same `Draw` against an image surface and writes a PNG. Without a size it uses the widget's own — and a surface that has never been allocated has none, so pass one. Refused from inside a `Draw` (one painter, one frame at a time) and above 16384 a side. **A `Draw` that throws writes no file**, and the throw reaches the caller |
-| `ToPng([width], [height])` | the same frame as [`Bytes`](../../llm/library.md#bytes) instead of a file: a chart to be posted, attached or put in a reply, with nothing on disk |
-| `SavePdf(path, width, height, [pages], [before])` | the same `Draw`, once per page, into one **PDF**. The size is in **points** (72 to the inch; A4 is 595×842), the surface is vector, so text stays text. `before(page)` is called before each page — that is how the handler knows which one it is drawing. A page that throws leaves **no file** |
+| `Save(path, [width], [height])` | run the same `Draw` against an image surface and write it as a PNG. Without a size it uses the widget's own, and a surface that has never been allocated has none — so pass one. Refused from inside a `Draw` (one painter, one frame at a time) and above 16384 a side. **A `Draw` that throws writes no file** and the throw reaches the caller |
+| `ToPng([width], [height])` | the same frame as `Save`, answered as `Bytes` instead of written: a chart to be posted, attached or put in a reply, with nothing on disk. Same sizes, same refusals, same rule that a `Draw` which throws answers nothing |
+| `SavePdf(path, width, height, [pages], [before])` | the same `Draw`, once per page, into one **PDF**. The size is in **points**, 72 to the inch (A4 is 595×842, Letter 612×792) and is what the handler is given as its frame size; the surface is vector, so text stays text. `pages` defaults to 1. `before(page)` is called before each page — that is how the handler knows which one it is drawing, since `Draw`'s own arguments do not say. A page that throws leaves **no file** |
 
 `Save()` is the same `Draw`, synchronously, which is both how a chart reaches a
 report and how a drawing is tested without a screen. `SavePdf()` is what makes a
@@ -91,7 +91,7 @@ paints is the same either way, and on paper it is `DrawPage` that paints it.
 
 | | |
 |---|---|
-| `Dump()` | → the last frame as text, one call per line. Empty until something has been drawn |
+| `Dump()` | the last frame as text, one call per line — empty until something has been drawn |
 
 **This is how a drawing is asserted**, and it is why every drawing in this tree
 has tests at all: `Save()` runs the handler synchronously, so `Dump()` on the

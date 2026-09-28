@@ -14,10 +14,10 @@ It is a `Widget` and a control like any other, so everything on
 
 | | | |
 |---|---|---|
-| `Orientation` | `Horizontal` `Vertical`. Default `"Horizontal"` | [how it is drawn](#how-it-is-drawn) |
+| `Orientation` | `Horizontal` `Vertical` | [how it is drawn](#how-it-is-drawn) |
 | `ShowText` | draw `Text` inside the bar | [how it is drawn](#how-it-is-drawn) |
-| `Text` | what it reads, if `ShowText`. **Translated** | [how it is drawn](#how-it-is-drawn) |
-| `Value` | `0` to `100` | [the reading](#the-reading) |
+| `Text` | what it reads | [how it is drawn](#how-it-is-drawn) |
+| `Value` | `0` to `100`, **clamped rather than refused**: a number outside it lands on the nearest end instead of throwing, because a progress that is 103% is an arithmetic slip and not a reason to stop the work | [the reading](#the-reading) |
 | `Pulse()` | one step of the indeterminate animation | [when the end is not known](#when-the-end-is-not-known) |
 
 ## The reading
@@ -36,13 +36,13 @@ onCopied(done, total) { this.Bar.Value = 100 * done / total; }
 |---|---|
 | `ShowText` | draw `Text` inside the bar |
 | `Text` | what it reads. **Translated** — and `Fill` is how the numbers stay out of the catalogue: declare `"{0} of {1} files"` and fill it |
-| `Orientation` | `Horizontal` or `Vertical` |
+| `Orientation` | `Horizontal` `Vertical`. Default `"Horizontal"` |
 
 ## When the end is not known
 
 | | |
 |---|---|
-| `Pulse()` | one step of the indeterminate animation — the block that slides back and forth |
+| `Pulse()` | one step of the indeterminate animation. For work with no measurable end, a `Spinner` says it better |
 
 **A [`Spinner`](Spinner.md) says it better.** `Pulse` exists because GTK has it,
 and it needs a timer of your own to look like anything; a spinner says *working*

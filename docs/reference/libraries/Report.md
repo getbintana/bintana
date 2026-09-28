@@ -34,17 +34,17 @@ It is a [`Component`](../widgets/Component.md), so everything on
 
 | | | |
 |---|---|---|
-| `Data` | the rows: an array of plain objects. `[]` | [the data](#the-data) |
-| `Margins` | the gutter around the content, in points. `40` | [the paper](#the-paper) |
-| `Orientation` | `Portrait` `Landscape`. `"Portrait"` | [the paper](#the-paper) |
+| `Data` | the rows: an array of plain objects | [the data](#the-data) |
+| `Margins` | the gutter around the content, in points: one number for all four edges, or `{ Top, Right, Bottom, Left }` | [the paper](#the-paper) |
+| `Orientation` | `Portrait` `Landscape` | [the paper](#the-paper) |
 | `Page` | the current page, **one-based** | [turning the pages](#turning-the-pages) |
 | `PageCount` (ro) | how many pages the data and the sections make | [turning the pages](#turning-the-pages) |
-| `Paper` | `A4` `Letter` `A5`, in points. `"A4"` | [the paper](#the-paper) |
-| `Sections` | the band definitions | [the bands](#the-bands) |
+| `Paper` | `A4` `Letter` `A5`, the sheet in points (72 to the inch) | [the paper](#the-paper) |
+| `Sections` | the band definitions — the whole of what a report is besides the numbers | [the bands](#the-bands) |
 | `Refresh()` | re-measures, redraws and emits `Prepared` | [the data](#the-data) |
 | `Save(path, [page], [scale])` | one page to a PNG | [off the screen](#off-the-screen) |
 | `SavePdf(path)` | **every page, one file** | [off the screen](#off-the-screen) |
-| `Send([setup], cb)` | **every page, to paper** | [off the screen](#off-the-screen) |
+| `Send([setup], cb)` | **every page, to paper**, through [`Printer`](../../llm/library.md#printer): this fills in how many pages there are and the paper and orientation the report was laid out for, and `{ Copies, From, To }` say the job | [off the screen](#off-the-screen) |
 | **event** `Page(page)` | the data moved the current page (an assignment raises nothing) | [turning the pages](#turning-the-pages) |
 | **event** `Prepared(count)` | the pages were computed | [the data](#the-data) |
 
@@ -52,9 +52,9 @@ It is a [`Component`](../widgets/Component.md), so everything on
 
 | | |
 |---|---|
-| `Paper` | `A4`, `Letter` or `A5`, in **points** — 72 to the inch, so A4 is 595×842 |
-| `Orientation` | `Portrait` or `Landscape` |
-| `Margins` | the gutter, in points: one number for all four edges, or `{ Top, Right, Bottom, Left }`, each side a finite number or refused |
+| `Paper` | `A4` `Letter` `A5`, the sheet in points (72 to the inch). Defaults to `"A4"`. |
+| `Orientation` | `Portrait` `Landscape`. Defaults to `"Portrait"`. |
+| `Margins` | the gutter around the content, in points: one number for all four edges, or `{ Top, Right, Bottom, Left }`. `40`. Every side is a finite number or the assignment throws |
 
 Changing any of these **re-measures silently** — read `PageCount` back on the
 next line — because they can be written in a `.form`, and an event raised while a
@@ -64,8 +64,8 @@ form is loading arrives before the form's other controls exist.
 
 | | |
 |---|---|
-| `Data` | the rows, as plain objects. `Field` elements read a key off the current row, and the group bands read the keys each group's `.On` names |
-| `Refresh()` | re-measures, redraws and emits `Prepared`. For when the rows changed **in place**; assigning `Data` or `Sections` already does it |
+| `Data` | the rows: an array of plain objects. `Field` elements read a key off the current row; the group bands read the keys named by each group's `.On`. Defaults to `[]`. |
+| `Refresh()` | re-measures, redraws and emits `Prepared`. Call it when you changed the rows **in place**; assigning `Data` or `Sections` already does |
 | **event** `Prepared(count)` | the pages were computed, and `count` is the new `PageCount` |
 
 **Sort before handing the rows over.** Grouping is *consecutive equal values* —
@@ -77,7 +77,7 @@ the comparison that puts `Ñanculeo` between `Núñez` and `Ortiz`.
 
 | | |
 |---|---|
-| `Sections` | an object keyed by band name; each band is `{ Height, Elements }` |
+| `Sections` | the band definitions — the whole of what a report is besides the numbers. See below. Defaults to `{}`. |
 
 The five fixed bands are `ReportHeader` (once, at the top), `PageHeader` (the top
 of every page), `Detail` (once per row), `PageFooter` and `ReportFooter`. The page
@@ -110,8 +110,8 @@ is in [llm/report.md](../../llm/report.md).
 
 | | |
 |---|---|
-| `Page` | the current page, **one-based**. Assigning **clamps** to `[1, PageCount]`, so a page past the end is the last one and not a blank |
-| `PageCount` (ro) | how many pages there are. **Measures lazily**, so it is answerable in `Form_Open` before anything has drawn. An empty report is one blank page, not none |
+| `Page` | the current page, **one-based**. Assigning clamps to `[1, PageCount]`, so a page past the end is the last one, not a blank. Turning a page **redraws and does not re-measure**. Defaults to `1`. |
+| `PageCount` (ro) | how many pages the data and the sections make. Measures lazily, so it is answerable in `Form_Open` before anything has drawn. An empty report is one blank page, not none |
 | **event** `Page(page)` | the current page was moved **by the data** — `Data`, `Sections` or `Refresh()` left fewer pages, and it was pulled back inside the new count. **Assigning `Page` raises nothing**, because a property setter must not raise an event: the code that turns a page updates its own display |
 
 **Turning a page redraws and does not re-measure.** That is what the two passes
@@ -122,9 +122,9 @@ which of them to paint.
 
 | | |
 |---|---|
-| `SavePdf(path)` | **every page, one file.** Vector, at the paper's exact size, so the text in it is text. This is what a report is for |
-| `Send([setup], cb)` | **every page, to paper** through [`Printer`](../globals/Printer.md). How many pages and what paper are the report's; `{ Copies, From, To }` say the job. A paper chosen in the dialog **scales** the page and the count does not move, so this declares no `Paginate` — the bands are declared in the report's own points. **Async**: `cb({ Copies, From, To })` is what was actually sent, and is not called when the dialog was cancelled. To a file it is `SavePdf` |
-| `Save(path, [page], [scale])` | one page to a PNG. `page` defaults to the current one and `scale` to `2` — 144 dpi, so an A4 page is a 1190px-wide PNG. It **does not move the report** |
+| `SavePdf(path)` | **every page, one file**. Vector, at the paper's exact size, so the text in it is text; the pages are the ones the last measure worked out. This is what a report is for — `Save` is for when one page is going into something else |
+| `Send([setup], cb)` | **every page, to paper**, through [`Printer`](../../llm/library.md#printer): this fills in how many pages there are and the paper and orientation the report was laid out for, and `{ Copies, From, To }` say the job. **A paper chosen in the dialog scales the page rather than re-flowing it**, and the page count does not move — a report's bands are declared in its own points, so it declares no `Paginate` (a `Markdown` does). **Async**, like every dialog here: `cb({ Copies, From, To })` is what was actually sent, and is **not called** when the dialog was cancelled. **To a file it is `SavePdf`**: a PDF is not a printer with a `Copies` of 3 |
+| `Save(path, [page], [scale])` | one page to a PNG. `page` defaults to the current one, `scale` to `2` (144 dpi — an A4 page is a 1190px-wide PNG). The export runs the same `Draw` at the exact paper size, clamps the page the way `Page` does, and **does not move the report** |
 
 The canvas always shows the **whole page, scaled to fit, centred**, on white
 paper with a thin outline that the export does not carry. There is no `Zoom` and

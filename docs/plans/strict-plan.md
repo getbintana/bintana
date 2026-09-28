@@ -149,9 +149,8 @@ moved is where the value sits, not how anybody asks for it.
 Those accessors are in a `JSCFunctionListEntry` table of their own,
 `widget_notes`, and **it is the one table in the tree that is not published
 surface**. `tests/api.sh` reads every such table and demands a documented row for
-each entry; `tools/typings` writes every entry into `bintana.d.ts`. Both skip
-this one by name and say so where they do -- an exception written down twice
-rather than a table hidden from a scanner.
+each entry, and it skips this one by name and says so where it does -- an
+exception written down rather than a table hidden from a scanner.
 
 ## What it bought beyond the check
 

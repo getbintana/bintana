@@ -13,15 +13,15 @@ follows is what is its own.
 | | | |
 |---|---|---|
 | `Expanded` | open or folded | [open and folded](#open-and-folded) |
-| `Text` | the caption one presses. **Translated** | [open and folded](#open-and-folded) |
-| **event** `Toggle()` | it was opened or folded | [open and folded](#open-and-folded) |
+| `Text` | the caption beside the arrow | [open and folded](#open-and-folded) |
+| **event** `Toggle()` | it was opened or folded — by the user or by an assignment | [open and folded](#open-and-folded) |
 
 ## Open and folded
 
 | | |
 |---|---|
 | `Text` | the caption beside the arrow. **Translated** |
-| `Expanded` | whether it is open. Assigning it opens or folds it, and **raises `Toggle`** |
+| `Expanded` | open or folded. Folding it takes its height back, which is why the window has to know. Assigning it opens or folds it, and **raises `Toggle`** |
 | **event** `Toggle()` | it was opened or folded — by the user or by an assignment |
 
 **Folding takes its height back, which is why the window has to know.** An

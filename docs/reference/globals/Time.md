@@ -9,16 +9,16 @@ sorts as a string, survives JSON as itself, and carries no day to be wrong about
 
 | | | |
 |---|---|---|
-| `Add(time, minutes)` | → the time `minutes` later; **wraps at midnight** | [arithmetic](#arithmetic) |
-| `Between(from, to)` | → whole minutes, signed | [arithmetic](#arithmetic) |
-| `Now` | the time of day now, with seconds | [now](#now) |
-| `Seconds(time)` | → seconds since midnight | [arithmetic](#arithmetic) |
+| `Add(time, minutes)` | `minutes` may be negative, and it **wraps at midnight**, because a time of day has no day to fall off | [arithmetic](#arithmetic) |
+| `Between(from, to)` | whole minutes from one to the other, signed | [arithmetic](#arithmetic) |
+| `Now` | the time of day now, with seconds (`"21:03:58"`) | [now](#now) |
+| `Seconds(time)` | seconds since midnight — the exact number, for anything finer than a minute | [arithmetic](#arithmetic) |
 
 ## Now
 
 | | |
 |---|---|
-| `Now` | the time of day now, with seconds — `"21:03:58"` |
+| `Now` | the time of day now, with seconds (`"21:03:58"`) |
 
 ## Arithmetic
 

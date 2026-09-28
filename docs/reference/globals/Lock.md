@@ -15,7 +15,7 @@ One member, because a critical section is one idea.
 
 | | | |
 |---|---|---|
-| `Hold(name, fn)` | runs `fn` with the named lock held. Answers nothing | [holding](#holding) |
+| `Hold(name, fn)` | runs `fn` with the named lock held and releases it — whether `fn` returned, threw, or was interrupted | [holding](#holding) |
 
 ## What it is for
 
@@ -41,7 +41,7 @@ to choose and why no lock the runtime could put on a call would reach this.
 
 | | |
 |---|---|
-| `Hold(name, fn)` | takes the lock called `name`, runs `fn`, releases it — whether `fn` returned, threw, or was interrupted |
+| `Hold(name, fn)` | runs `fn` with the named lock held and releases it — whether `fn` returned, threw, or was interrupted. Answers nothing |
 
 **A name and not an object.** A `Task` runs in a runtime of its own and the two
 share no heap, so no object can cross in a message — only text can. That is the

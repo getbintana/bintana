@@ -17,12 +17,12 @@ follows is what is its own.
 
 | | | |
 |---|---|---|
-| `Scrollbars` | `Both` `Horizontal` `Vertical` `None`. Default `"Both"` | [which way it scrolls](#which-way-it-scrolls) |
-| `ScrollMaxX` (ro) | the largest `ScrollX` that still shows content | [where it is scrolled to](#where-it-is-scrolled-to) |
+| `Scrollbars` | `Both` `Horizontal` `Vertical` `None` | [which way it scrolls](#which-way-it-scrolls) |
+| `ScrollMaxX` (ro) | the largest `ScrollX` that still shows content: the content's width minus one view | [where it is scrolled to](#where-it-is-scrolled-to) |
 | `ScrollMaxY` (ro) | the same downwards | [where it is scrolled to](#where-it-is-scrolled-to) |
 | `ScrollX` | how far across it is scrolled, in pixels | [where it is scrolled to](#where-it-is-scrolled-to) |
 | `ScrollY` | the same downwards | [where it is scrolled to](#where-it-is-scrolled-to) |
-| **event** `Scroll(x, y)` | the position moved | [where it is scrolled to](#where-it-is-scrolled-to) |
+| **event** `Scroll(x, y)` | the position moved — by the user, the wheel, the keyboard, or an assignment | [where it is scrolled to](#where-it-is-scrolled-to) |
 
 ## What does not need one
 
@@ -41,7 +41,7 @@ small screen.
 
 | | |
 |---|---|
-| `Scrollbars` | `Both` `Horizontal` `Vertical` `None` |
+| `Scrollbars` | `Both` `Horizontal` `Vertical` `None`. Default `"Both"` |
 
 **An axis that may not scroll is not a hidden scrollbar**: GTK gives the child the
 width of the *view* instead of the width it asked for, which is what makes a
@@ -60,7 +60,7 @@ see [`DrawingArea`](DrawingArea.md).
 
 | | |
 |---|---|
-| `Arrangement` | `Fixed` (default) `Horizontal` `Vertical` — a [`Container`](Container.md) property, and here it decides which of two containers this is |
+| `Arrangement` | `Fixed` (the default) lays children out by `X`/`Y` and `Width`/`Height`; `Horizontal` is a row and `Vertical` a column, where coordinates mean nothing and `Spacing` and `Homogeneous` do. **Not on every container**; see the table above |
 
 **Arranged, the slot is a box, and a box stretches an expanding child across
 itself.** That is the whole of it: `Arrangement: "Vertical"` plus `HExpand` and

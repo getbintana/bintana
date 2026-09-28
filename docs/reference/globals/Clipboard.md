@@ -6,10 +6,10 @@ Copy and paste, which are not symmetrical.
 
 | | | |
 |---|---|---|
-| `Copy(text)` | put it on the clipboard, now | [copying](#copying) |
-| `Paste(cb)` | ask for what is on it | [pasting](#pasting) |
-| `CopyImage(bytes)` | put a picture on it, now | [pictures](#pictures) |
-| `PasteImage(cb)` | ask for the picture on it | [pictures](#pictures) |
+| `Copy(text)` | **immediate**: the text is on the clipboard when the call returns | [copying](#copying) |
+| `Paste(cb)` | `cb(text)` — **a callback, and it has to be** | [pasting](#pasting) |
+| `CopyImage(bytes)` | **immediate**: the image is on the clipboard when the call returns | [pictures](#pictures) |
+| `PasteImage(cb)` | `cb(bytes)` with a PNG as [`Bytes`](Bytes.md), or `null` when the clipboard holds no image | [pictures](#pictures) |
 
 ## Copying
 

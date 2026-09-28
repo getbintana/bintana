@@ -2,10 +2,10 @@
   "format": "bintana-form/1",
   "class": "Confirm",
   "properties": {
-    "Text": "Clients",
-    "Width": 400,
     "Height": 150,
-    "Resizable": false
+    "Resizable": false,
+    "Text": "",
+    "Width": 400
   },
   "children": [
     {
@@ -37,7 +37,7 @@
     },
     {
       "type": "Button",
-      "name": "BtnYes",
+      "name": "BtnAccept",
       "properties": {
         "HAlign": "End",
         "Height": 32,

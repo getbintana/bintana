@@ -634,6 +634,15 @@ void    bta_log_debug_plain(const char *text);
  * live in the global lexical scope rather than on globalThis. */
 JSValue bta_lookup_global(JSContext *ctx, const char *name);
 
+/* What a compile declares -- the array `Application.Symbols` hands back, and
+ * what `Widget.Members` reads a class's own shape out of.  Takes the text and
+ * owns the result. */
+JSValue bta_symbols(JSContext *ctx, const char *src);
+/* A JSDoc comment's description and its `@returns {T}` type, each NULL when
+ * absent; the caller frees both. */
+void    bta_prelude_sources(const char **rad, const char **forms);
+void    bta_split_doc(const char *doc, char **text, char **returns);
+
 /* --- widgets ------------------------------------------------------------ */
 void       bta_widgets_init(JSContext *ctx, JSValue global);
 /* Releases the class table's prototypes/constructors before the context dies. */

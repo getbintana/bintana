@@ -33,27 +33,27 @@ symbol out as a PNG or an SVG document.
 
 | | | |
 |---|---|---|
-| `Text` | what is encoded. **Data, not prose** — no catalogue ever translates it. `""` | [what it shows](#what-it-shows) |
-| `Code` | the encoded symbol, or `null`. Read-only | [what it shows](#what-it-shows) |
-| `Problem` | why there is no symbol, or `""`. Read-only | [what it shows](#what-it-shows) |
+| `Text` | what is encoded, a string | [what it shows](#what-it-shows) |
+| `Code` | the encoded [`QrCode`](QrCode.md), or `null` when there is nothing to show | [what it shows](#what-it-shows) |
+| `Problem` | why there is no symbol, or `""`: text too long for version 40 at this level is the one way an assignment can fail | [what it shows](#what-it-shows) |
 
 **How it looks**
 
 | | | |
 |---|---|---|
-| `Ecc` | `L` `M` `Q` `H`. `"M"` | [how it looks](#how-it-looks) |
-| `QuietZone` | light modules around the symbol, 0 to 16. `4` | [how it looks](#how-it-looks) |
-| `Ink` | the dark modules. `"#000000"` | [how it looks](#how-it-looks) |
-| `Paper` | the ground. `"#ffffff"` | [how it looks](#how-it-looks) |
-| `Refresh()` | redraws now. Assigning any property already does | [how it looks](#how-it-looks) |
+| `Ecc` | `L` `M` `Q` `H`, an error correction level | [how it looks](#how-it-looks) |
+| `QuietZone` | the light margin around the symbol, in modules, 0 to 16 | [how it looks](#how-it-looks) |
+| `Ink` | the colour of the dark modules | [how it looks](#how-it-looks) |
+| `Paper` | the colour of the ground | [how it looks](#how-it-looks) |
+| `Refresh()` | redraws | [how it looks](#how-it-looks) |
 
 **Off the form**
 
 | | | |
 |---|---|---|
-| `Save(path, [side])` | a PNG, `side` pixels square or the view's own size | [off the form](#off-the-form) |
-| `ToPng([side])` | the same, answered as [`Bytes`](../globals/Bytes.md) | [off the form](#off-the-form) |
-| `ToSvg()` | an SVG document, in this view's colours and quiet zone | [off the form](#off-the-form) |
+| `Save(path, [side])` | a PNG of `side` pixels square, or of the view's own allocation | [off the form](#off-the-form) |
+| `ToPng([side])` | the same PNG answered as [`Bytes`](../globals/Bytes.md), for an upload or a database column, with no file in between | [off the form](#off-the-form) |
+| `ToSvg()` | the symbol as an SVG document, in this view's `Ink`, `Paper` and `QuietZone` | [off the form](#off-the-form) |
 
 ## Which one is this
 
@@ -68,9 +68,9 @@ symbol out as a PNG or an SVG document.
 
 | | |
 |---|---|
-| `Text` | what is encoded. Set it and the symbol is made on the spot, so `Code` answers on the next line. `null` and `undefined` are `""` |
+| `Text` | what is encoded, a string. **Data, not prose**: the class declares no text property, so no catalogue ever translates a URL into something else. Defaults to `""`. Set it and the symbol is made on the spot, so `Code` answers on the next line. `null` and `undefined` are `""` |
 | `Code` | the encoded [`QrCode`](QrCode.md), or `null` when there is nothing to show. Read-only |
-| `Problem` | why there is no symbol, or `""` when there is one. Read-only |
+| `Problem` | why there is no symbol, or `""`: text too long for version 40 at this level is the one way an assignment can fail. Read-only |
 
 **`Text` is data and not prose.** The class declares no text property on
 purpose: a URL, a code, an identifier — the things a QR holds — must never go
@@ -93,11 +93,11 @@ this.LblInfo.Text = this.Card.Code ? "Ready" : this.Card.Problem;
 
 | | |
 |---|---|
-| `Ecc` | `L` `M` `Q` `H`, an error correction level. `"M"`. Higher survives more damage and holds less: the same text can need a higher version, and past the text's limit it stops fitting at all |
-| `QuietZone` | the light margin around the symbol, in modules, 0 to 16. `4`, which is the standard's minimum. A code on a form that already has white around it can take fewer; a code printed on a coloured ticket wants more |
-| `Ink` | the colour of the dark modules. `"#000000"` |
-| `Paper` | the colour behind them. `"#ffffff"` |
-| `Refresh()` | redraws. It exists for a property changed **in place**, which is not possible here — assigning anything already redraws |
+| `Ecc` | `L` `M` `Q` `H`, an error correction level. `"M"`. Higher survives more damage and holds less: the same text can need a higher version, and past the text's limit it stops fitting at all. Defaults to `"M"`. |
+| `QuietZone` | the light margin around the symbol, in modules, 0 to 16. `4`, which is the standard's minimum. A code on a form that already has white around it can take fewer; a code printed on a coloured ticket wants more. Defaults to `4`. |
+| `Ink` | the colour of the dark modules. Defaults to `"#000000"`. |
+| `Paper` | the colour of the ground. Defaults to `"#ffffff"`. |
+| `Refresh()` | redraws. It exists for a property changed **in place**, which is not possible here — assigning anything already redraws. Assigning any property already does |
 
 **Black on white by default, and not the theme's colours.** A QR drawn light on
 a dark ground is an inverted code, which plenty of readers refuse, and a code
@@ -127,7 +127,7 @@ version — the inner view expanded, the panel holding it did not.
 |---|---|
 | `Save(path, [side])` | a PNG of `side` pixels square, or of the view's own allocation. The file goes through [`DrawingArea.Save`](../widgets/DrawingArea.md), so the same `Canvas_Draw` runs against an image surface, synchronously |
 | `ToPng([side])` | the same PNG answered as [`Bytes`](../globals/Bytes.md), for an upload or a database column, with no file in between |
-| `ToSvg()` | the symbol as an SVG document, in this view's `Ink`, `Paper` and `QuietZone`. It **refuses** when there is no symbol rather than writing an empty file |
+| `ToSvg()` | the symbol as an SVG document, in this view's `Ink`, `Paper` and `QuietZone`. It **refuses** when there is no symbol rather than writing an empty file. Ask `Code` first, as the example does |
 
 An SVG is usually the better one for print: it is resolution independent, it is
 text and it is small. A PNG is for wherever a picture is expected — an e-mail, a
@@ -145,9 +145,9 @@ out — `Bounds()` is the allocation and nothing else.
 | Symptom | |
 |---|---|
 | The code is blank and `Code` is `null` | `Text` is empty, or it does not fit. `Problem` says which |
-| `Text` set and the symbol is the old one | Assignment re-encodes; if the view is not on screen yet there is no frame to redraw, and the symbol appears when it is shown |
+| `Text` set and the symbol is the old one | what is encoded, a string. **Data, not prose**: the class declares no text property, so no catalogue ever translates a URL into something else. Defaults to `""`. Set it and the symbol is made on the spot, so `Code` answers on the next line. `null` and `undefined` are `""` |
 | The code does not scan off a screenshot | The screen draws whole pixels per module, but a scaled screenshot may not. Save the PNG and try that |
-| `ToSvg` throws *there is no symbol* | Nothing to write. Ask `Code` first, as the example does |
+| `ToSvg` throws *there is no symbol* | the symbol as an SVG document, in this view's `Ink`, `Paper` and `QuietZone`. It **refuses** when there is no symbol rather than writing an empty file. Ask `Code` first, as the example does |
 
 ## What it does not do
 

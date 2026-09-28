@@ -10,9 +10,9 @@ Message.Error("Cannot open {0}: {1}", path, e.message);
 
 | | | |
 |---|---|---|
-| `Error(text, …args)` | something failed | [the three of them](#the-three-of-them) |
+| `Error(text, …args)` | something failed; the same as `Info` in every other respect | [the three of them](#the-three-of-them) |
 | `Info(text, …args)` | something happened | [the three of them](#the-three-of-them) |
-| `Warning(text, …args)` | something is not right | [the three of them](#the-three-of-them) |
+| `Warning(text, …args)` | something is not right; the same as `Info` in every other respect | [the three of them](#the-three-of-them) |
 
 ## The three of them
 

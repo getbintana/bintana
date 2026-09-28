@@ -3,8 +3,10 @@
   "startup": "ClientsForm",
   "sources": [
     "Client.js",
-    "Confirm.js",
     "ClientsForm.js"
+  ],
+  "uses": [
+    "dialog"
   ],
   "version": "1.0",
   "description": "A screen over a sqlite table, written by hand to measure what a declared binding would be worth"

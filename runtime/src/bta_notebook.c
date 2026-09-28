@@ -493,19 +493,55 @@ static JSValue notebook_set_strip(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry notebook_props[] = {
+    /* Strip
+     *   where the tabs are: `Top` `Bottom` `Start` `End`, or `None` for no
+     *   strip at all — which is a notebook only code switches, and a
+     *   [`Switcher`](docs/reference/widgets/Switcher.md) is usually the
+     *   better answer. Default `"Top"`
+     */
     JS_CGETSET_DEF("Strip", notebook_get_strip, notebook_set_strip),
+    /* Tabs
+     *   the labels, as an array of strings. **Translated**
+     */
     JS_CGETSET_DEF("Tabs",    notebook_get_tabs,    notebook_set_tabs),
+    /* Count
+     *   how many pages there are. **An action widget in the strip is not
+     *   one**
+     */
     JS_CGETSET_DEF("Count",   notebook_get_count,   NULL),
+    /* Current
+     *   which page is showing, `-1` when there are none. Assigning it
+     *   switches, and **raises `Switch`**. Default `-1`
+     */
     JS_CGETSET_DEF("Current", notebook_get_current, notebook_set_current),
-    /* Append(child, [label]) */
+    /* Append(child, [label])
+     *   one more page, at the end. The child **is** the page — usually a
+     *   [`Panel`](docs/reference/widgets/Panel.md), which is then an ordinary
+     *   container. **`label` is a widget too** (a
+     *   [`Label`](docs/reference/widgets/Label.md)), not text: a tab has room
+     *   for one, where a [`Switcher`](docs/reference/widgets/Switcher.md)'s
+     *   page name is a string. A tab label that has to change is a `Label`
+     *   you keep and mutate
+     */
     JS_CFUNC_DEF ("Append",     2, notebook_append),
-    /* RemovePage(index) */
+    /* RemovePage(index)
+     *   takes that page out, and the control in it goes with it
+     */
     JS_CFUNC_DEF ("RemovePage", 1, notebook_remove),
-    /* SetTabLabel(index, label) */
+    /* SetTabLabel(index, label)
+     *   renames one, and **`label` is a widget** like `Append`'s — what a tab
+     *   showing a file name and an asterisk needs
+     */
     JS_CFUNC_DEF ("SetTabLabel", 2, notebook_set_tab_label),
-    /* SetAction(control, [where]) */
+    /* SetAction(control, [where])
+     *   puts a widget **in the tab strip** instead of making it a page.
+     *   `where` is `Start` or `End`; `null` takes it out. In a `.form` this
+     *   is a child carrying `"strip": "End"`
+     */
     JS_CFUNC_DEF ("SetAction",   2, notebook_set_action),
-    /* GetAction(where) */
+    /* GetAction(where)
+     *   the widget in that end of the strip, or `null`
+     */
     JS_CFUNC_DEF ("GetAction",   1, notebook_get_action),
 };
 
@@ -519,7 +555,9 @@ void bta_notebook_register(void)
 {
     const BtaClass rows[] = {
         /* The tab labels: a list of strings a person reads. */
-        /* Switch(index) */
+        /* Switch(index)
+         *   a different page is showing — chosen by the user or assigned
+         */
         BTA_CLASS_ENUM_TEXT("Notebook", "Container", build_notebook, notebook_props,
                        false, notebook_options, "Tabs", "Switch"),
     };

@@ -15,9 +15,9 @@ It is a `Widget` and a control like any other, so everything on
 | | | |
 |---|---|---|
 | `Active` | whether it is ticked | [on or off](#on-or-off) |
-| `Group` | empty is a check box; a name makes it a radio | [one of a set](#one-of-a-set) |
-| `Text` | the caption. **Translated** | [on or off](#on-or-off) |
-| **event** `Click()` | it was pressed | [on or off](#on-or-off) |
+| `Group` | empty is a check box | [one of a set](#one-of-a-set) |
+| `Text` | the caption beside the box | [on or off](#on-or-off) |
+| **event** `Click()` | it was pressed — or assigned | [on or off](#on-or-off) |
 
 ## Which of the three is this one
 

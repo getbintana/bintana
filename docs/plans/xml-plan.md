@@ -240,7 +240,7 @@ bag because it never rebuilds the document.
 |---|---|
 | GMarkup (GLib) | No namespaces at all, no DOM, and no serializer — writing one by hand is "build another parser", the mistake this tree's notes keep naming |
 | GXml | Not packaged here (checked), and it is a GObject wrapper over libxml2 anyway: a dependency that buys indirection |
-| A native plugin in `lib/xml` | It cannot be part of `rad.js`/`Record`, does not appear in `bintana.d.ts` or in `tests/api`, and makes every user compile. It is the right mould for a format parser, not for a standard syntax the runtime should speak like JSON |
+| A native plugin in `lib/xml` | It cannot be part of `rad.js`/`Record`, does not appear in `tests/api`, and makes every user compile. It is the right mould for a format parser, not for a standard syntax the runtime should speak like JSON |
 | A JSON-shaped value mapping | Attributes, order, namespaces and mixed content have nowhere to go; any mapping has to be a declaration with a medium |
 | Strict namespace equality | The official schema and the files disagree (measured); a list is the honest spelling |
 | An unknown-node bag for `ToXml` | Re-emitting an unknown node at the end of a sequence is silently wrong; `Problems` plus `SaveXml` answers both halves |

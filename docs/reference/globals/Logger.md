@@ -10,13 +10,13 @@ language.
 
 | | | |
 |---|---|---|
-| `Debug(…)` | the detail nobody reads until something is wrong | [the four levels](#the-four-levels) |
-| `Error(…)` | something failed | [the four levels](#the-four-levels) |
+| `Debug(…)` | the detail that is only interesting when something is wrong | [the four levels](#the-four-levels) |
+| `Error(…)` | what failed | [the four levels](#the-four-levels) |
 | `Handler` | assign a function and every line goes there instead | [where it goes](#where-it-goes) |
-| `Info(…)` | what happened | [the four levels](#the-four-levels) |
-| `Level` | the floor: anything below it is dropped | [the four levels](#the-four-levels) |
+| `Info(…)` | what the program did | [the four levels](#the-four-levels) |
+| `Level` | the floor — lines below it are dropped, which is how a program ships with its `Debug` lines still in it | [the four levels](#the-four-levels) |
 | `Target` | where the lines are written | [where it goes](#where-it-goes) |
-| `Warning(…)` | something is not right | [the four levels](#the-four-levels) |
+| `Warning(…)` | what it did not like but carried on through | [the four levels](#the-four-levels) |
 
 ## The four levels
 

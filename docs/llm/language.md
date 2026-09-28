@@ -68,7 +68,12 @@ Removed once the runtime has booted, so they are gone before your code runs:
 `eval`, `Function` (and `Function.prototype.constructor`, and the generator
 function constructor), `globalThis`, `Symbol`, `RegExp` (and
 `RegExp.prototype.constructor`), `setTimeout`, `setInterval`, `clearTimeout`,
-`clearInterval`, `queueMicrotask`, `escape`, `unescape`, `monotonic`.
+`clearInterval`, `queueMicrotask`, `escape`, `unescape`, `monotonic`, and
+`Array.fromAsync`.
+
+`Array.fromAsync` is an async function, and there are no promises here: the
+engine built it the first time it was read, never collected it, and a program
+that only asked `typeof Array.fromAsync` aborted when it exited.
 
 `queueMicrotask` goes with the timer pair and for the same sentence — it is
 scheduling with no name of ours, no switch and no handle. It worked; that is

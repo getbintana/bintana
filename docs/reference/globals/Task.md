@@ -26,10 +26,10 @@ and work that repeats is a new `Task`.
 
 | | | |
 |---|---|---|
-| `Start(data, [options])` | sends the message, starts the thread. Once | [starting](#starting) |
-| `Stop([options])` | asks it to end; answers whether there was one to ask | [ending](#ending) |
-| `Report(value)` | the worker's voice, from inside `Run` | [reporting](#reporting) |
-| `Stopping` | inside `Run`: whether it has been asked to end | [ending](#ending) |
+| `Start(data, [options])` | serialises the message, loads the class's file in a fresh runtime on a fresh thread, builds the class, and calls `Run(msg)` | [starting](#starting) |
+| `Stop([options])` | **asks** it to end, and enforces `KillAfter` ms later (5000 by default, 0 = at once) | [ending](#ending) |
+| `Report(value)` | the worker's voice, called from `Run`; arrives as `Progress` | [reporting](#reporting) |
+| `Stopping` | inside `Run` | [ending](#ending) |
 | `Done` | assign `(result) => …` | [answering](#answering) |
 | `Error` | assign `(message, stack) => …` | [answering](#answering) |
 | `Progress` | assign `(partial) => …` | [reporting](#reporting) |
@@ -45,7 +45,7 @@ second `Start` on the same task.
 
 | | |
 |---|---|
-| `Start(data, [options])` | serialises the message, loads the class's file in a fresh runtime on a fresh thread, builds the class, and calls `Run(msg)` |
+| `Start(data, [options])` | serialises the message, loads the class's file in a fresh runtime on a fresh thread, builds the class, and calls `Run(msg)`. **Once** — a second `Start` is refused; work that repeats is a new `Task` |
 The file is found the way a form is: `<ClassName>.js` anywhere in the project
 or its libraries, the project shadowing a library. Two files claiming one
 name is refused naming the name; the class must be self-contained in its file.
@@ -98,8 +98,8 @@ nobody wrote. `Report` on the proxy (outside `Run`) is refused.
 
 | | |
 |---|---|
-| `Stop([{ KillAfter }])` | asks the run to end; answers whether there was a live one to ask |
-| `Stopping` | read as `this.Stopping` inside `Run`: `true` once it has been asked |
+| `Stop([{ KillAfter }])` | **asks** it to end, and enforces `KillAfter` ms later (5000 by default, 0 = at once). Two stages like `Exec`'s guard. Answers whether there was a live job to ask |
+| `Stopping` | inside `Run`: `true` once `Stop()` has asked, so the job can `Report` what it has and return. Delphi's `Terminated`, BackgroundWorker's `CancellationPending` |
 
 **Asked first, and only then enforced.** `Stop()` raises a flag and lets the
 run keep going, so a `Run` that watches `this.Stopping` can hand back what it

@@ -27,7 +27,8 @@
  *     Saving often is only safe because of that, and it is the runtime's doing
  *     rather than this file's.
  *   - **Deleting goes to the desktop's trash**, so the one irreversible thing is
- *     reversible. `Confirm.js` is only shown where there is no trash to use.
+ *     reversible. `Confirm` (from `lib/dialog`) is only shown where there is
+ *     no trash to use.
  *
  * What is left of the careful version is `Form_Close`, which still writes before
  * it lets go — and now needs no veto, because writing does not have to ask
@@ -312,8 +313,9 @@ class NotesForm extends Form {
     /* --- making, renaming, removing ------------------------------------------ */
 
     BtnNew_Click() {
-        AskName.ask(Locale.Text("What is the note called?"), "",
-                    (name) => this.make(name));
+        AskText.Prompt(Locale.Text("What is the note called?"),
+                       (name) => this.make(name),
+                       { Title: Locale.Text("Notes") });
     }
 
     make(name) {
@@ -360,8 +362,10 @@ class NotesForm extends Form {
         const one = this.notes[this.Notes.Index];
         if (!one) return;
 
-        AskName.ask(Locale.Text("What should it be called?"), one.title,
-                    (name) => this.rename(one, name));
+        AskText.Prompt(Locale.Text("What should it be called?"),
+                       (name) => this.rename(one, name),
+                       { Title: Locale.Text("Rename note"),
+                         Initial: one.title });
     }
 
     rename(one, name) {
@@ -408,9 +412,11 @@ class NotesForm extends Form {
         try {
             File.Trash(one.path);
         } catch (e) {
-            Confirm.ask(Locale.Text(
+            Confirm.Ask(Locale.Text(
                 "There is no trash on that disk, so {0} would be gone for good.",
-                one.title), Locale.Text("Delete for good"), () => this.erase(one));
+                one.title), () => this.erase(one),
+                { Title: Locale.Text("Notes"),
+                  Accept: Locale.Text("Delete for good") });
             return;
         }
 

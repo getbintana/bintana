@@ -14,11 +14,11 @@ It is a `Widget` and a control like any other, so everything on
 
 | | | |
 |---|---|---|
-| `Max` | the top. Default `1` | [the scale](#the-scale) |
+| `Max` | the top | [the scale](#the-scale) |
 | `Min` | the bottom of the scale | [the scale](#the-scale) |
-| `Mode` | `Continuous` `Discrete` — a bar, or blocks. Default `"Continuous"` | [how it is drawn](#how-it-is-drawn) |
-| `Orientation` | `Horizontal` `Vertical`. Default `"Horizontal"` | [how it is drawn](#how-it-is-drawn) |
-| `Value` | the reading | [the scale](#the-scale) |
+| `Mode` | `Continuous` is a bar that fills | [how it is drawn](#how-it-is-drawn) |
+| `Orientation` | `Horizontal` `Vertical` | [how it is drawn](#how-it-is-drawn) |
+| `Value` | where the reading sits | [the scale](#the-scale) |
 
 ## The scale
 
@@ -32,8 +32,8 @@ It is a `Widget` and a control like any other, so everything on
 
 | | |
 |---|---|
-| `Mode` | `Continuous` is a bar that fills; `Discrete` is blocks — five bars of signal, four blocks of battery — which is what to use when the underlying reading has steps |
-| `Orientation` | `Horizontal` or `Vertical` |
+| `Mode` | `Continuous` is a bar that fills; `Discrete` is blocks — five bars of signal, four blocks of battery — which is what to use when the underlying reading has steps. Default `"Continuous"` |
+| `Orientation` | `Horizontal` `Vertical`. Default `"Horizontal"` |
 
 The theme may colour a level bar by how full it is; that is the theme's business
 and not a property here.

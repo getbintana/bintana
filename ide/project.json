@@ -53,6 +53,7 @@
     "modules/Document.js",
     "modules/TabSet.js",
     "modules/Completion.js",
+    "modules/CallTip.js",
     "modules/Finder.js",
     "forms/SearchForm.js",
     "forms/SymbolForm.js",

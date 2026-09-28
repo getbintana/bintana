@@ -13,10 +13,10 @@ It is a `Widget` and a control like any other, so everything on
 
 | | | |
 |---|---|---|
-| `File` | a path. Setting it clears `Icon` | [what it draws](#what-it-draws) |
-| `Icon` | a theme icon name. Setting it clears `File` | [what it draws](#what-it-draws) |
-| `Size` | pixels; `-1` is the icon's natural size. Default `-1` | [how big](#how-big) |
-| `LoadBytes(bytes)` | an image already in memory | [what it draws](#what-it-draws) |
+| `File` | a path to an image, which is what a project's own artwork is | [what it draws](#what-it-draws) |
+| `Icon` | a name from the desktop's icon theme — `"document-save-symbolic"`, `"folder"` | [what it draws](#what-it-draws) |
+| `Size` | the pixels it is drawn at | [how big](#how-big) |
+| `LoadBytes(bytes)` | an image already in memory — what [`Http`](../../llm/library.md#http) answers with and `File.LoadBytes` reads | [what it draws](#what-it-draws) |
 
 ## When it is not an `Image`
 
@@ -30,7 +30,7 @@ It is a `Widget` and a control like any other, so everything on
 
 | | |
 |---|---|
-| `Icon` | a name from the desktop's icon theme — `"document-save-symbolic"`, `"folder"`. **A name the theme lacks is not drawn and is kept**, so a form round-trips; `Application.HasIcon(name)` is how to ask first, and a list of candidates with a shipped one last is the pattern this tree uses |
+| `Icon` | a name from the desktop's icon theme — `"document-save-symbolic"`, `"folder"`. **A name the theme lacks is not drawn and is kept**, so a form round-trips; `Application.HasIcon(name)` is how to ask first, and a list of candidates with a shipped one last is the pattern this tree uses. Setting it clears `File` |
 | `File` | a path to an image, which is what a project's own artwork is. Setting it clears `Icon`, and setting `Icon` clears it: the control draws one thing |
 | `LoadBytes(bytes)` | an image already in memory — what [`Http`](../../llm/library.md#http) answers with and `File.LoadBytes` reads. Clears both names, since neither is what is drawn any more. **A verb and not a property**: a `.form` could not carry a megabyte of JPEG |
 

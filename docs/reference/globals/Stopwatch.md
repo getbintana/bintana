@@ -16,11 +16,11 @@ print(`${w.Elapsed} ms`);
 | | | |
 |---|---|---|
 | `new Stopwatch()` | one, not started | [the watch](#the-watch) |
-| `Elapsed` | milliseconds, with the fraction, running or not | [the watch](#the-watch) |
-| `Reset()` | back to zero | [the watch](#the-watch) |
+| `Elapsed` | milliseconds, **with the fraction**, running or not | [the watch](#the-watch) |
+| `Reset()` | back to zero, running or not; answers the watch | [the watch](#the-watch) |
 | `Running` | whether it is going | [the watch](#the-watch) |
-| `Start()` | start it | [the watch](#the-watch) |
-| `Stop()` | stop it | [the watch](#the-watch) |
+| `Start()` | starts measuring, or goes on from where it stopped; answers the watch | [the watch](#the-watch) |
+| `Stop()` | stops measuring and keeps `Elapsed`; answers the watch | [the watch](#the-watch) |
 
 ## The watch
 

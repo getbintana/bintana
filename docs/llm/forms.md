@@ -21,7 +21,7 @@
 | `startup` | the class instantiated and shown at launch. A `Form` subclass |
 | `main` | a **function** to call instead, for a tool with no window. Excludes `startup` |
 | `sources` | the `.js` files to evaluate, **in this order**, as paths relative to the project |
-| `uses` | libraries of shared classes, by name (`["charts"]`). Their `.js` loads before yours and their forms are found like yours, so a `.form` may use their classes. A library may also carry native code (`<name>/<name>.so`), which is loaded before its `.js` — see `docs/plugins.md` in the runtime's own documentation. A name that is not installed stops the program and says where it looked |
+| `uses` | libraries of shared classes, by name (`["charts"]`). **A new form project created in the IDE starts with `["dialog"]`**, the two questions every program asks (see [`dialog.md`](dialog.md)) — a default and not a requirement, and a project with a `main` does not get one because it has no display to put a window on. Their `.js` loads before yours and their forms are found like yours, so a `.form` may use their classes. A library may also carry native code (`<name>/<name>.so`), which is loaded before its `.js` — see `docs/plugins.md` in the runtime's own documentation. A name that is not installed stops the program and says where it looked |
 | `description` | free text; the runtime ignores it |
 
 Without `sources`, every `.js` under the project is loaded, subdirectories
@@ -144,8 +144,8 @@ class MainForm extends Form {
     /* Returning true keeps the window open. Returning nothing lets it close. */
     Form_Close() {
         if (!this.dirty) return;
-        Confirm.ask("There are unsaved changes.", "Quit",
-                    () => Application.Quit(0));
+        Confirm.Ask("There are unsaved changes.", () => Application.Quit(0),
+                    { Accept: "Quit" });
         return true;
     }
 
@@ -342,18 +342,38 @@ Events: `Open`, `Close`, `Resize(width, height)`.
 ## A dialog that asks something
 
 `Message.Info`/`Warning`/`Error` **show and return**; they do not block and they
-have no answer. A question that needs an answer is a form you write, with a
-static `ask` and a callback. This is the idiom — copy it:
+have no answer. A question that needs an answer is a window — and **the two
+questions every program asks are already windows**, in `lib/dialog`, which a new
+form project already declares in `uses` (see [`dialog.md`](dialog.md)):
+
+```js
+/* A yes/no, and the focus goes to Cancel so Enter cannot destroy anything. */
+Confirm.Ask("Delete {0}?", () => this.remove(),
+            { Title: "Notes", Accept: "Delete" });
+
+/* One line of text, offered selected so typing replaces it. */
+AskText.Prompt("Name for the note", (name) => this.rename(name),
+               { Title: "Notes", Initial: this.old });
+```
+
+**The callback runs only on the answer** — cancelling and closing the window with
+the X both answer nothing, so no caller has to tell *cancelled* from *chose
+nothing*, and neither class needs a flag of its own. Both are `Modal`.
+
+**For a question that is neither of those two**, write the form. The idiom is a
+static verb and a callback, and the whole of it:
 
 ```js
 class AskName extends Form {
 
-    static ask(prompt, current, onName) {
+    static Ask(prompt, current, onName) {
         const dlg = new AskName();
+
         dlg.LblPrompt.Text = prompt;
         dlg.TxtName.Text   = current || "";
         dlg.onName         = onName;
         dlg.Modal          = true;
+
         dlg.Show();
         dlg.TxtName.SetFocus();
         dlg.TxtName.SelectAll();          /* so typing replaces what is offered */
@@ -367,24 +387,30 @@ class AskName extends Form {
         if (this.onName) this.onName(name);
     }
 
-    TxtName_Activate() { this.BtnOk_Click(); }
     BtnCancel_Click()  { this.Close(); }
 }
 ```
 
 ```js
-AskName.ask("Name for the note", "", (name) => this.create(name));
+AskName.Ask("Name for the note", "", (name) => this.create(name));
 ```
 
-**The callback runs only when there is an answer**, so no caller has to tell
-*cancelled* from *chose nothing*. Its `.form` declares `Resizable: false` and
-puts `Default` on OK.
+What makes it a copy of `AskText.Prompt` and not a new thing: **nothing, and that
+is the point of counting them.** A dialog with a validation error beside the
+field (`examples/kanban/ColumnDialog.js`, which refuses a name already in use) is
+the shape the two shipped ones do not have, and it is the reason to write a form.
+Adding an error line, a colour, or a second field is a new question; a plain
+prompt with a different word on the button is not.
+
+**Two things the `.form` carries that the code does not.** `Default` on the
+accepting button and `Cancel: true` on the other are what make Enter and Escape
+mean what they mean, and `ActivatesDefault` on the field is what makes Enter
+*in the field* press the button rather than raise `Activate` — which is why the
+class above has no `TxtName_Activate` handler. `Resizable: false` and a fixed
+size go with them: a question is not a window to arrange.
 
 **Nothing keeps the dialog alive on the side**: the runtime holds a shown form
 until it closes.
-
-For a confirmation, the same shape with nothing `Default` and the focus on
-Cancel — Enter must not be able to delete anything.
 
 ## Menus
 

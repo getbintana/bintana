@@ -642,19 +642,59 @@ static void on_form_realized(GtkWidget *win, gpointer user_data)
 }
 
 static const JSCFunctionListEntry form_props[] = {
+    /* Text
+     *   the window title. **Translated**. `Caption` is an alias
+     */
     JS_CGETSET_DEF("Text",  form_get_text,  form_set_text),
+    /* Icon
+     *   the window's icon, for a task list or a dock. A name the theme lacks
+     *   is not shown but **is kept**, so a `.form` round-trips
+     */
     JS_CGETSET_DEF("Icon",  form_get_icon,  form_set_icon),
+    /* Modal
+     *   blocks its parent. Made transient for the active window on `Show()`
+     */
     JS_CGETSET_DEF("Modal", form_get_modal, form_set_modal),
+    /* DefaultButton
+     *   the button Enter presses, resolved from whichever declared `Default`.
+     *   **`null` inside `Form_Open`** — it is settled after that handler
+     */
     JS_CGETSET_DEF("DefaultButton", form_get_default_button, NULL),
+    /* CancelButton
+     *   the button Escape presses, likewise
+     */
     JS_CGETSET_DEF("CancelButton",  form_get_cancel_button,  NULL),
-    /* Show() */
+    /* Show()
+     *   presents the window, and fires `Open` **before returning** the first
+     *   time. **The runtime holds the form while its window is open**, so
+     *   `new AskForm().Show()` needs no reference kept anywhere
+     */
     JS_CFUNC_DEF("Show",   0, form_show),
-    /* Close() */
+    /* Close()
+     *   closes it, through `Form_Close`, which may refuse. The runtime's
+     *   claim on the form ends here, and on `HideOnClose` when it is put away
+     */
     JS_CFUNC_DEF("Close",  0, form_close),
-    /* Center() */
+    /* Center()
+     *   **a no-op on Wayland**: the compositor places windows.
+     *   [`Screen`](docs/llm/library.md#screen) answers how big the desktop
+     *   is, which is a different question from where a window goes
+     */
     JS_CFUNC_DEF("Center", 0, form_center),
+    /* Resizable
+     *   bounds the **user**, not the layout: the contents still drive the
+     *   size, so a longer translation still opens it wider. Default `true`
+     */
     JS_CGETSET_MAGIC_DEF("Resizable",  form_get_state, form_set_state, WIN_RESIZABLE),
+    /* Maximized
+     *   a **state**: reads `false` until there is a window; set before
+     *   `Show()` it applies when the window appears. **Keep it out of the
+     *   `.form`**
+     */
     JS_CGETSET_MAGIC_DEF("Maximized",  form_get_state, form_set_state, WIN_MAXIMIZED),
+    /* FullScreen
+     *   the same, for the whole screen
+     */
     JS_CGETSET_MAGIC_DEF("FullScreen", form_get_state, form_set_state, WIN_FULLSCREEN),
     /*
      * Closed, or put away?
@@ -674,8 +714,16 @@ static const JSCFunctionListEntry form_props[] = {
      * `Form_Close` still runs and can still veto: what is being chosen here is
      * what happens once the close is allowed, not whether it is.
      */
+    /* HideOnClose
+     *   put away instead of taken apart. **A closed form's window is
+     *   destroyed**, so `Show()` on it is not a window either — it stays 0×0.
+     *   Declare this, or construct the form again
+     */
     JS_CGETSET_MAGIC_DEF("HideOnClose", form_get_state, form_set_state, WIN_HIDEONCLOSE),
-    /* Minimize() */
+    /* Minimize()
+     *   a verb because there is nothing to read back — GTK reports nothing
+     *   about a minimised window
+     */
     JS_CFUNC_DEF("Minimize", 0, form_minimize),
 };
 
@@ -1353,27 +1401,82 @@ static JSValue cont_focus_step(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry container_props[] = {
-    /* FocusNext() */
+    /* FocusNext()
+     *   whether the focus moved: what Tab does, kept **inside this
+     *   container**
+     */
     JS_CFUNC_MAGIC_DEF("FocusNext",     0, cont_focus_step, 0),
-    /* FocusPrevious() */
+    /* FocusPrevious()
+     *   the same, backwards
+     */
     JS_CFUNC_MAGIC_DEF("FocusPrevious", 0, cont_focus_step, 1),
+    /* Arrangement
+     *   `Fixed` (the default) lays children out by `X`/`Y` and
+     *   `Width`/`Height`; `Horizontal` is a row and `Vertical` a column,
+     *   where coordinates mean nothing and `Spacing` and `Homogeneous` do.
+     *   **Not on every container**; see the table above
+     */
     JS_CGETSET_DEF("Arrangement", cont_get_arrangement, cont_set_arrangement),
+    /* Placement
+     *   how this one places a child, which is the question an editor asks:
+     *   `Coordinates` `Order` `Layers` `Pages` `Halves`. Every container
+     *   answers, including the ones that refuse `Arrangement`
+     */
     JS_CGETSET_DEF("Placement",   cont_get_placement,   NULL),
+    /* Spacing
+     *   pixels between children, in a row or a column
+     */
     JS_CGETSET_DEF("Spacing",     cont_get_spacing,     cont_set_spacing),
+    /* Homogeneous
+     *   every child the same size along the axis — what a row of buttons that
+     *   must all match wants
+     */
     JS_CGETSET_DEF("Homogeneous", cont_get_homogeneous, cont_set_homogeneous),
+    /* Anchored
+     *   with it off, children stay exactly where they were drawn however big
+     *   the container gets — a drawing board rather than a window. Default
+     *   `true`
+     */
     JS_CGETSET_DEF("Anchored",    cont_get_anchored,    cont_set_anchored),
+    /* Children
+     *   its real children, one level deep, in the order they are in
+     */
     JS_CGETSET_DEF("Children",    cont_get_children,    NULL),
-    /* Reorder(child, index) */
+    /* Reorder(child, index)
+     *   moves a child among its siblings. The index counts them *without* the
+     *   one being moved. **Every container with an order answers it**: a box,
+     *   a `Grid`, a `Flow`, a `RowList`, a `Notebook`, a `Switcher`, a
+     *   `Split` (the index names the half) and an `Overlay` (index `0` is the
+     *   base layer, the one that fills). A `Fixed` refuses — there the order
+     *   is the painting order, which is `Raise`/`Lower`
+     */
     JS_CFUNC_DEF("Reorder",     2, cont_reorder),
-    /* PickAt(x, y) */
+    /* PickAt(x, y)
+     *   the topmost child at that point, or `null`. **At any depth**: what
+     *   comes back may be a label inside a panel inside a row
+     */
     JS_CFUNC_DEF("PickAt",      2, cont_pick_at),
-    /* ContainerAt(x, y, [ignore]) */
+    /* ContainerAt(x, y, [ignore])
+     *   the innermost container that could take a drop there. `ignore`
+     *   excludes the widget being dragged, which would otherwise always
+     *   answer
+     */
     JS_CFUNC_DEF("ContainerAt", 3, cont_container_at),
-    /* LocalPoint(x, y, from) */
+    /* LocalPoint(x, y, from)
+     *   `[x, y]`: a point in another widget's coordinates, expressed in this
+     *   container's
+     */
     JS_CFUNC_DEF("LocalPoint",  3, cont_local_point),
-    /* Add(widget) */
+    /* Add(widget)
+     *   puts a widget in. A control already in another container is **moved**
+     *   out of it; one that contains this container is refused, as is the
+     *   container itself. A `Split` refuses a third
+     */
     JS_CFUNC_DEF("Add",   1, container_add),
-    /* Clear() */
+    /* Clear()
+     *   removes **and destroys** every child, and the container can be
+     *   refilled afterwards
+     */
     JS_CFUNC_DEF("Clear", 0, container_clear),
 };
 
@@ -1714,12 +1817,40 @@ static JSValue label_set_ellipsize(JSContext *ctx, JSValueConst this_val, JSValu
 }
 
 static const JSCFunctionListEntry label_props[] = {
+    /* Text
+     *   what it says. **Translated**: a label declared in a `.form` goes
+     *   through the catalogue, and what is filled in from code does not
+     */
     JS_CGETSET_DEF("Text",      label_get_text,  label_set_text),
+    /* Alignment
+     *   `Left` `Center` `Right` — where the text sits **within the label**,
+     *   which is only visible once the label is wider than its words. Default
+     *   `"Left"`
+     */
     JS_CGETSET_DEF("Alignment", label_get_align, label_set_align),
+    /* Wrap
+     *   wrap long text over as many lines as it takes. The label then wants a
+     *   width to wrap *at* — in a box, that is what `HExpand` gives it
+     */
     JS_CGETSET_DEF("Wrap",      label_get_wrap,  label_set_wrap),
+    /* Ellipsize
+     *   keep one line and end it with `…` when it does not fit. What a file
+     *   name in a row wants: it gives up its tail rather than the row's shape
+     */
     JS_CGETSET_DEF("Ellipsize", label_get_ellipsize, label_set_ellipsize),
+    /* Lines
+     *   at most this many lines while wrapping; `0` is no limit. Beyond it
+     *   the text is cut
+     */
     JS_CGETSET_DEF("Lines",      label_get_lines,      label_set_lines),
+    /* Markup
+     *   read `Text` as **Pango markup** — `<b>`, `<i>`, `<tt>`, `<s>`, `<span
+     *   foreground="…">` — instead of as plain words
+     */
     JS_CGETSET_DEF("Markup",     label_get_markup,     label_set_markup),
+    /* Selectable
+     *   the user may select the text with the pointer and copy it
+     */
     JS_CGETSET_DEF("Selectable", label_get_selectable, label_set_selectable),
 };
 
@@ -2063,11 +2194,34 @@ static JSValue button_set_flag(JSContext *ctx, JSValueConst this_val,
  * by the serialiser and the designer's grid, so a method would be invisible to
  * both -- and the .form files already write it as one. */
 static const JSCFunctionListEntry button_props[] = {
+    /* Text
+     *   the caption. **Translated** — a button declared in a `.form` goes
+     *   through the catalogue
+     */
     JS_CGETSET_DEF("Text", button_get_text, button_set_text),
+    /* Icon
+     *   an icon name from the theme. With `Text` it builds the box itself —
+     *   icon, then caption; alone it gets the icon-button treatment, which is
+     *   the square toolbar shape. **A name the theme cannot draw is dropped
+     *   in silence**, so a button that came out bare is usually a misspelt
+     *   icon
+     */
     JS_CGETSET_DEF("Icon", button_get_icon, button_set_icon),
+    /* Default
+     *   Enter on this form presses it. The keyboard only — `Style:
+     *   "suggested-action"` is the looks
+     */
     JS_CGETSET_MAGIC_DEF("Default", button_get_flag, button_set_flag, BTN_DEFAULT),
+    /* Cancel
+     *   Escape on this form presses it. **Without one, Escape does nothing at
+     *   all**: a dialog that cannot be dismissed with Escape is a dialog
+     *   somebody will complain about
+     */
     JS_CGETSET_MAGIC_DEF("Cancel",  button_get_flag, button_set_flag, BTN_CANCEL),
-    /* Click() */
+    /* Click()
+     *   presses it from code: the handler runs exactly as if the user had,
+     *   once per call
+     */
     JS_CFUNC_DEF("Click", 0, button_click),
 };
 
@@ -2484,24 +2638,79 @@ static JSValue textbox_insert(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry textbox_props[] = {
+    /* Text
+     *   what is in the field. **Translated**, so a starting value declared in
+     *   a `.form` goes through the catalogue — which is why a value that is
+     *   *data* is assigned from code
+     */
     JS_CGETSET_DEF("Text", textbox_get_text, textbox_set_text),
+    /* MaxLength
+     *   how many characters may be typed; `0` is no limit
+     */
     JS_CGETSET_DEF("MaxLength", textbox_get_maxlength, textbox_set_maxlength),
+    /* Purpose
+     *   `Text` `Digits` `Number` `Phone` `Url` `Email` `Name` — what the
+     *   keyboard and the input method should expect. Default `"Text"`. On a
+     *   phone it is which keyboard appears; on a desktop it is what the input
+     *   method does. **It does not validate**: a field of `Purpose: "Number"`
+     *   still takes letters, and what refuses them is a
+     *   [`SpinBox`](docs/reference/widgets/SpinBox.md) or your own check
+     */
     JS_CGETSET_DEF("Purpose",   textbox_get_purpose,   textbox_set_purpose),
+    /* Alignment
+     *   `Left` `Center` `Right`, default `"Left"`. Numbers read
+     *   right-aligned, which is the one case worth changing it for
+     */
     JS_CGETSET_DEF("Alignment", textbox_get_alignment, textbox_set_alignment),
     /* The name `Editor` uses, and not a second one: a `TextBox` and a
      * `TextEditor` answer the same question. */
+    /* Selection
+     *   what is selected, `""` when nothing is. The same name, and the same
+     *   question, as `Editor.Selection`
+     */
     JS_CGETSET_DEF("Selection", textbox_get_selected, NULL),
+    /* Offset
+     *   the caret's position in characters, counting from `0` — `SelStart`
+     */
     JS_CGETSET_DEF("Offset",    textbox_get_offset,   NULL),
-    /* Insert(text) */
+    /* Insert(text)
+     *   writes it at the caret and leaves the caret after it. Not `Text =
+     *   ...`, which rebuilds the field and puts the caret at the end
+     */
     JS_CFUNC_DEF("Insert", 1, textbox_insert),
-    /* Select(start, length) */
+    /* Select(start, length)
+     *   selects that run, counting from `0`
+     */
     JS_CFUNC_DEF("Select",    2, textbox_select),
-    /* SelectAll() */
+    /* SelectAll()
+     *   selects everything, so **the next keystroke replaces it**
+     */
     JS_CFUNC_DEF("SelectAll", 0, textbox_select_all),
+    /* Placeholder
+     *   the grey words shown while it is empty. **Translated**. It is a hint,
+     *   never a label: a field whose only label is its placeholder has no
+     *   label once somebody types in it
+     */
     JS_CGETSET_DEF("Placeholder", textbox_get_placeholder, textbox_set_placeholder),
+    /* Icon
+     *   an icon **inside** the field, at the end. Clicking it raises
+     *   `IconClick`
+     */
     JS_CGETSET_DEF("Icon", textbox_get_icon, textbox_set_icon),
+    /* ReadOnly
+     *   shown but not editable. **The program can still write to it** — which
+     *   is what a field that reports something wants
+     */
     JS_CGETSET_MAGIC_DEF("ReadOnly", textbox_get_flag, textbox_set_flag, TB_READONLY),
+    /* Password
+     *   the characters are drawn as dots. `Text` still answers with the real
+     *   thing, because the program is the one asking
+     */
     JS_CGETSET_MAGIC_DEF("Password", textbox_get_flag, textbox_set_flag, TB_PASSWORD),
+    /* ActivatesDefault
+     *   Enter presses the form's **default button** *instead of* raising
+     *   `Activate`
+     */
     JS_CGETSET_MAGIC_DEF("ActivatesDefault", textbox_get_flag, textbox_set_flag,
                          TB_ACTIVATES),
 };
@@ -2786,8 +2995,20 @@ static JSValue check_set_active(JSContext *ctx, JSValueConst this_val, JSValueCo
 }
 
 static const JSCFunctionListEntry checkbutton_props[] = {
+    /* Text
+     *   the caption beside the box. **Translated**
+     */
     JS_CGETSET_DEF("Text",  check_get_text,  check_set_text),
+    /* Active
+     *   whether it is ticked. Assigning it **raises `Click`**, the same as
+     *   the user ticking it
+     */
     JS_CGETSET_DEF("Active", check_get_active, check_set_active),
+    /* Group
+     *   empty is a check box. A name makes it one of that exclusive set:
+     *   ticking one unticks the rest. **The container scopes the name**, so
+     *   two groups called `kind` in two panels are two sets
+     */
     JS_CGETSET_DEF("Group", radio_get_group, radio_set_group),
 };
 
@@ -2841,6 +3062,10 @@ static JSValue switch_set_active(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry switch_props[] = {
+    /* Active
+     *   whether it is on. Assigning it **raises `Click`**, the same as the
+     *   user moving it. No caption: the words beside it are a `Label`
+     */
     JS_CGETSET_DEF("Active", switch_get_active, switch_set_active),
 };
 
@@ -3474,36 +3699,93 @@ static JSValue listbox_activate(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry listbox_props[] = {
+    /* Items
+     *   the whole list, as an array of strings. Assigning replaces every row
+     *   at once; reading gives the rows as they are now. **Translated** — a
+     *   list declared in a `.form` goes through the catalogue
+     */
     JS_CGETSET_DEF("Items", listbox_get_items, listbox_set_items),
+    /* Index
+     *   the selected row, `-1` for none. Assigning selects it — and **raises
+     *   `Select`**. Default `-1`
+     */
     JS_CGETSET_DEF("Index", listbox_get_index, listbox_set_index),
+    /* Text
+     *   the words of the selected row, `""` when there is no selection
+     */
     JS_CGETSET_DEF("Text",  listbox_get_text,  NULL),
+    /* Count
+     *   how many rows there are
+     */
     JS_CGETSET_DEF("Count", listbox_get_count, NULL),
+    /* MultiSelect
+     *   more than one row at a time
+     */
     JS_CGETSET_DEF("MultiSelect", listbox_get_multi,     listbox_set_multi),
+    /* Selection
+     *   every selected row, as an array of indices in order
+     */
     JS_CGETSET_DEF("Selection",   listbox_get_selection, NULL),
+    /* Key
+     *   the selected row's key, `""` for none; assigning selects the row it
+     *   belongs to, `""` clears the selection, and a key nothing has is a
+     *   `RangeError`. **Compare `Key`, never `Text`** — the words are prose
+     *   and a translated build answers in another language
+     */
     JS_CGETSET_DEF("Key",         listbox_get_key,       listbox_set_key),
+    /* ActivateOnSingleClick
+     *   raise `Activate` on one click instead of two. Default `false`
+     */
     JS_CGETSET_DEF("ActivateOnSingleClick",
                    listbox_get_single, listbox_set_single),
-    /* Add(text, [key]) */
+    /* Add(text, [key])
+     *   one row at the end, which is what a list being filled a row at a time
+     *   wants. `key` is the application's own name for it
+     */
     JS_CFUNC_DEF("Add",    2, listbox_add),
-    /* KeyAt(index) */
+    /* KeyAt(index)
+     *   that row's key, without selecting it. **`RangeError`** when there is
+     *   no such row
+     */
     JS_CFUNC_DEF("KeyAt",  1, listbox_key_at),
-    /* Clear() */
+    /* Clear()
+     *   empties it
+     */
     JS_CFUNC_DEF("Clear",  0, listbox_clear_js),
-    /* RemoveRow(index) */
+    /* RemoveRow(index)
+     *   takes that row out. **`RangeError`** when there is no such row
+     */
     JS_CFUNC_DEF("RemoveRow", 1, listbox_remove),
-    /* SetText(index, text) */
+    /* SetText(index, text)
+     *   renames one in place, leaving the selection and the scroll where they
+     *   are. **Translated**; **`RangeError`** when there is no such row
+     */
     JS_CFUNC_DEF("SetText",   2, listbox_set_text),
-    /* Reveal(index) */
+    /* Reveal(index)
+     *   brings that row into view with the least scrolling it takes, and
+     *   answers whether there was one
+     */
     JS_CFUNC_DEF("Reveal",    1, listbox_reveal),
-    /* Select(index) */
+    /* Select(index)
+     *   selects that row, leaving the others where several are allowed
+     */
     JS_CFUNC_MAGIC_DEF("Select",   1, listbox_select_one, LB_SELECT),
-    /* Deselect(index) */
+    /* Deselect(index)
+     *   unselects it
+     */
     JS_CFUNC_MAGIC_DEF("Deselect", 1, listbox_select_one, LB_DESELECT),
-    /* Activate(index) */
+    /* Activate(index)
+     *   raises `Activate` for that row, as a double click would; answers
+     *   whether there was one
+     */
     JS_CFUNC_DEF("Activate", 1, listbox_activate),
-    /* SelectAll() */
+    /* SelectAll()
+     *   with `MultiSelect`
+     */
     JS_CFUNC_DEF("SelectAll",   0, listbox_select_all),
-    /* DeselectAll() */
+    /* DeselectAll()
+     *   selects nothing
+     */
     JS_CFUNC_DEF("DeselectAll", 0, listbox_deselect_all),
 };
 
@@ -3888,20 +4170,55 @@ static JSValue combo_clear(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry combobox_props[] = {
+    /* Items
+     *   the contents, as an array of strings. Assigning replaces every row at
+     *   once **and chooses the first one** — a non-empty drop-down always has
+     *   something chosen. **Translated**: a list declared in a `.form` goes
+     *   through the catalogue
+     */
     JS_CGETSET_DEF("Items", combo_get_items, combo_set_items),
+    /* Key
+     *   the selected row's application key; assigning selects the row it
+     *   belongs to, and a key nothing has is a `RangeError`. `""` moves
+     *   nothing, as `Index = -1` does — a drop-down with items always has one
+     *   chosen
+     */
     JS_CGETSET_DEF("Key",   combo_get_key,   combo_set_key),
+    /* Index
+     *   which is chosen; `-1` when the list is empty. Assigning chooses the
+     *   row; **assigning `-1` moves nothing**, because a drop-down with items
+     *   always has one chosen (the first, until told otherwise)
+     */
     JS_CGETSET_DEF("Index", combo_get_index, combo_set_index),
+    /* Text
+     *   the chosen row's words. Reading it is reading the *translated* text
+     */
     JS_CGETSET_DEF("Text",  combo_get_text,  combo_set_text),
+    /* Count
+     *   how many rows there are
+     */
     JS_CGETSET_DEF("Count", combo_get_count, NULL),
-    /* Add(text, [key]) */
+    /* Add(text, [key])
+     *   one more, at the end. `key` is the application's own name for it
+     */
     JS_CFUNC_DEF("Add",   2, combo_add),
-    /* KeyAt(index) */
+    /* KeyAt(index)
+     *   that row's key, without selecting it. **`RangeError`** when there is
+     *   no such row
+     */
     JS_CFUNC_DEF("KeyAt", 1, combo_key_at),
-    /* RemoveRow(index) */
+    /* RemoveRow(index)
+     *   takes that row out. **`RangeError`** when there is no such row
+     */
     JS_CFUNC_DEF("RemoveRow", 1, combo_remove),
-    /* SetText(index, text) */
+    /* SetText(index, text)
+     *   renames one in place, leaving the selection where it is.
+     *   **Translated**; **`RangeError`** when there is no such row
+     */
     JS_CFUNC_DEF("SetText",   2, combo_set_row_text),
-    /* Clear() */
+    /* Clear()
+     *   empties it, and nothing is chosen afterwards
+     */
     JS_CFUNC_DEF("Clear", 0, combo_clear),
 };
 
@@ -4097,12 +4414,39 @@ static JSValue spin_set_flag(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry spinbox_props[] = {
+    /* Value
+     *   the number in it
+     */
     JS_CGETSET_MAGIC_DEF("Value",    spin_get, spin_set, SPIN_VALUE),
+    /* Min
+     *   the floor. **Declare it before `Value`**, or the value is clamped to
+     *   the factory range first and the number you set is not the number you
+     *   get. Default `-1000000`
+     */
     JS_CGETSET_MAGIC_DEF("Min",      spin_get, spin_set, SPIN_MIN),
+    /* Max
+     *   the ceiling, likewise. Default `1000000`
+     */
     JS_CGETSET_MAGIC_DEF("Max",      spin_get, spin_set, SPIN_MAX),
+    /* Step
+     *   what one press of an arrow, or one notch of the wheel, moves. Default
+     *   `1`
+     */
     JS_CGETSET_MAGIC_DEF("Step",     spin_get, spin_set, SPIN_STEP),
+    /* Decimals
+     *   places shown and accepted: a whole number from `0` to `20`, refused
+     *   otherwise. `0` is whole numbers
+     */
     JS_CGETSET_MAGIC_DEF("Decimals", spin_get, spin_set, SPIN_DECIMALS),
+    /* Wrap
+     *   past `Max` comes back to `Min` — for the things that are circular,
+     *   like an hour or a degree
+     */
     JS_CGETSET_MAGIC_DEF("Wrap",     spin_get_flag, spin_set_flag, SPIN_WRAP),
+    /* Numeric
+     *   refuse anything that is not a number. Default `true`, and there is
+     *   rarely a reason to turn it off
+     */
     JS_CGETSET_MAGIC_DEF("Numeric",  spin_get_flag, spin_set_flag, SPIN_NUMERIC),
 };
 
@@ -4763,18 +5107,63 @@ static JSValue decimalbox_get_text(JSContext *ctx, JSValueConst this_val)
 }
 
 static const JSCFunctionListEntry decimalbox_props[] = {
+    /* Value
+     *   the number, a `Decimal`. Assigning a `Decimal`, a number or text;
+     *   **machine text first** (`"1234.567"`, which is what a `.form` and
+     *   `Decimal.toJSON()` carry) and this desktop's spelling second
+     *   (`"1.234,56"`)
+     */
     JS_CGETSET_DEF("Value", decimalbox_get_value, decimalbox_set_value),
+    /* Text
+     *   what the field says, with the separators, the grouping and the unit
+     */
     JS_CGETSET_DEF("Text",  decimalbox_get_text,  NULL),
+    /* Min
+     *   the floor, as a `Decimal`. Default `-1000000000000000`
+     */
     JS_CGETSET_MAGIC_DEF("Min",   decimalbox_get_limit, decimalbox_set_limit, DBX_MIN),
+    /* Max
+     *   the ceiling, a `Decimal`. Default `1000000000000000`
+     */
     JS_CGETSET_MAGIC_DEF("Max",   decimalbox_get_limit, decimalbox_set_limit, DBX_MAX),
+    /* Step
+     *   what one press of an arrow moves, a `Decimal`. Default `1`
+     */
     JS_CGETSET_MAGIC_DEF("Step",  decimalbox_get_limit, decimalbox_set_limit, DBX_STEP),
+    /* Decimals
+     *   with `Currency` and no `Decimals`, the currency's own places: two
+     *   nearly everywhere, zero for yen. Default `2`, up to `9`. `0` is whole
+     *   numbers, up to `9`
+     */
     JS_CGETSET_DEF("Decimals", decimalbox_get_decimals, decimalbox_set_decimals),
+    /* Group
+     *   thousands separators. **Off by default**, because a separator
+     *   appearing while a number is typed is in the way. Default `false`
+     */
     JS_CGETSET_MAGIC_DEF("Group",   decimalbox_get_setting, decimalbox_set_setting, DBX_GROUP),
+    /* Wrap
+     *   past `Max` comes back to `Min`
+     */
     JS_CGETSET_MAGIC_DEF("Wrap",    decimalbox_get_setting, decimalbox_set_setting, DBX_WRAP),
+    /* Prefix
+     *   text outside the number — `"aprox. "`
+     */
     JS_CGETSET_MAGIC_DEF("Prefix",  decimalbox_get_setting, decimalbox_set_setting, DBX_PREFIX),
+    /* Suffix
+     *   text outside it — `" kg"`, `" h"`, `" km/h"`
+     */
     JS_CGETSET_MAGIC_DEF("Suffix",  decimalbox_get_setting, decimalbox_set_setting, DBX_SUFFIX),
+    /* Currency
+     *   the symbol. `""` is **this desktop's** currency, with the side and
+     *   the places `localeconv` says; `"US$"` is another one, and where it
+     *   goes is still this desktop's rule — `US$ 1.234,56` here, `$1,234.56`
+     *   there, and the program says neither
+     */
     JS_CGETSET_MAGIC_DEF("Currency", decimalbox_get_setting, decimalbox_set_setting,
                          DBX_CURRENCY_SYMBOL),
+    /* Format
+     *   `Number` `Currency`. Default `"Number"`
+     */
     JS_CGETSET_DEF("Format", decimalbox_get_format, decimalbox_set_format),
 };
 
@@ -4819,10 +5208,23 @@ static JSValue toggle_set_active(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry togglebutton_props[] = {
+    /* Text
+     *   the caption. **Translated**
+     */
     JS_CGETSET_DEF("Text",  button_get_text, button_set_text),
+    /* Icon
+     *   an icon from the theme. Alone it gets the icon-button treatment,
+     *   which is the square toolbar shape; a name the theme cannot draw is
+     *   dropped in silence
+     */
     JS_CGETSET_DEF("Icon",  button_get_icon, button_set_icon),
+    /* Active
+     *   whether it is in. Assigning it **raises `Click`**
+     */
     JS_CGETSET_DEF("Active", toggle_get_active, toggle_set_active),
-    /* Click() */
+    /* Click()
+     *   presses it from code: toggles `Active` and runs the handler
+     */
     JS_CFUNC_DEF("Click", 0, button_click),
 };
 
@@ -5291,12 +5693,38 @@ static JSValue picture_set_zoom(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry picture_props[] = {
+    /* File
+     *   the path. What `GdkTexture` reads: PNG, JPEG, WebP, TIFF, BMP. **SVG
+     *   is not among them** — a scalable icon is the pixbuf loaders'
+     *   business, which is why an [`Image`](docs/reference/widgets/Image.md)
+     *   draws one and this does not
+     */
     JS_CGETSET_DEF("File", picture_get_file, picture_set_file),
-    /* LoadBytes(bytes) */
+    /* LoadBytes(bytes)
+     *   the photograph out of memory instead — a download shown without a
+     *   temporary file. Clears `File`; `SourceWidth`/`SourceHeight` measure
+     *   it the same way
+     */
     JS_CFUNC_DEF("LoadBytes", 1, picture_load_bytes),
+    /* Fit
+     *   what to do with the room there is: `Contain` (the whole picture,
+     *   letterboxed), `Cover` (fill the room, cropping), `Fill` (stretch,
+     *   distorting) or `ScaleDown` (never enlarge). Default `"Contain"`
+     */
     JS_CGETSET_DEF("Fit",  picture_get_fit,  picture_set_fit),
+    /* Zoom
+     *   how big to be, whatever the room is: a factor, where `1` is one image
+     *   pixel to one screen pixel. `0` means *let `Fit` decide*
+     */
     JS_CGETSET_DEF("Zoom", picture_get_zoom, picture_set_zoom),
+    /* SourceWidth
+     *   what is really in the file, which is the number a zoom is computed
+     *   from and the one a title bar shows. `0` when nothing is loaded
+     */
     JS_CGETSET_MAGIC_DEF("SourceWidth",  picture_get_source, NULL, PIC_SOURCE_W),
+    /* SourceHeight
+     *   the file's own height
+     */
     JS_CGETSET_MAGIC_DEF("SourceHeight", picture_get_source, NULL, PIC_SOURCE_H),
 };
 
@@ -5344,6 +5772,11 @@ static JSValue spinner_set_active(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry spinner_props[] = {
+    /* Active
+     *   whether it spins. A spinner that is not spinning is invisible in most
+     *   themes, so this is the whole of turning it on and off. Work with no
+     *   end in sight
+     */
     JS_CGETSET_DEF("Active", spinner_get_active, spinner_set_active),
 };
 
@@ -5398,7 +5831,16 @@ static JSValue link_set(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry linkbutton_props[] = {
+    /* Text
+     *   what the user reads. **Translated**. With no `Text` the address
+     *   itself is shown, which is right for a home page and wrong for
+     *   everything else
+     */
     JS_CGETSET_MAGIC_DEF("Text", link_get, link_set, LINK_TEXT),
+    /* Uri
+     *   `https://…`, `mailto:…`, `file:///…` — whatever the desktop knows how
+     *   to open
+     */
     JS_CGETSET_MAGIC_DEF("Uri",  link_get, link_set, LINK_URI),
 };
 
@@ -5498,10 +5940,29 @@ static JSValue level_set_mode(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry levelbar_props[] = {
+    /* Value
+     *   where the reading sits
+     */
     JS_CGETSET_MAGIC_DEF("Value", level_get, level_set, LEVEL_VALUE),
+    /* Min
+     *   the bottom of the scale
+     */
     JS_CGETSET_MAGIC_DEF("Min",   level_get, level_set, LEVEL_MIN),
+    /* Max
+     *   the top. **Default `1`**, which is GTK's own convention for this
+     *   control: a fraction, where `0.75` is three quarters. Give it `100` if
+     *   a percentage reads better in your arithmetic
+     */
     JS_CGETSET_MAGIC_DEF("Max",   level_get, level_set, LEVEL_MAX),
+    /* Mode
+     *   `Continuous` is a bar that fills; `Discrete` is blocks — five bars of
+     *   signal, four blocks of battery — which is what to use when the
+     *   underlying reading has steps. Default `"Continuous"`
+     */
     JS_CGETSET_DEF("Mode",        level_get_mode, level_set_mode),
+    /* Orientation
+     *   `Horizontal` `Vertical`. Default `"Horizontal"`
+     */
     JS_CGETSET_DEF("Orientation", orient_get, orient_set),
 };
 
@@ -5541,6 +6002,13 @@ static void build_separator(BtaWidget *w)
 }
 
 static const JSCFunctionListEntry separator_props[] = {
+    /* Orientation
+     *   `Horizontal` `Vertical`. **The thickness is the line**: it paints its
+     *   whole allocation, so one 12 high is a line 12 thick. Room around it
+     *   goes on `Margin`. Default `"Horizontal"`. A `Horizontal` separator is
+     *   a line across, between two rows of things; a `Vertical` one divides a
+     *   toolbar
+     */
     JS_CGETSET_DEF("Orientation", orient_get, orient_set),
 };
 
@@ -5647,11 +6115,29 @@ static JSValue prog_pulse(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry progressbar_props[] = {
+    /* Value
+     *   `0` to `100`, **clamped rather than refused**: a number outside it
+     *   lands on the nearest end instead of throwing, because a progress that
+     *   is 103% is an arithmetic slip and not a reason to stop the work
+     */
     JS_CGETSET_MAGIC_DEF("Value",    prog_get, prog_set, PROG_VALUE),
+    /* ShowText
+     *   draw `Text` inside the bar
+     */
     JS_CGETSET_MAGIC_DEF("ShowText", prog_get, prog_set, PROG_SHOWTEXT),
+    /* Text
+     *   what it reads. **Translated** — and `Fill` is how the numbers stay
+     *   out of the catalogue: declare `"{0} of {1} files"` and fill it
+     */
     JS_CGETSET_DEF("Text", prog_get_text, prog_set_text),
+    /* Orientation
+     *   `Horizontal` `Vertical`. Default `"Horizontal"`
+     */
     JS_CGETSET_DEF("Orientation", orient_get, orient_set),
-    /* Pulse() */
+    /* Pulse()
+     *   one step of the indeterminate animation. For work with no measurable
+     *   end, a `Spinner` says it better
+     */
     JS_CFUNC_DEF("Pulse", 0, prog_pulse),
 };
 
@@ -5906,18 +6392,53 @@ static JSValue slider_clear_marks(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry slider_props[] = {
+    /* Value
+     *   where it sits
+     */
     JS_CGETSET_MAGIC_DEF("Value",     slider_get, slider_set, SLIDE_VALUE),
+    /* Min
+     *   the floor. **Declare it before `Value`**, as in a `SpinBox`
+     */
     JS_CGETSET_MAGIC_DEF("Min",       slider_get, slider_set, SLIDE_MIN),
+    /* Max
+     *   the ceiling. Default `100`, which is what a percentage wants
+     */
     JS_CGETSET_MAGIC_DEF("Max",       slider_get, slider_set, SLIDE_MAX),
+    /* Step
+     *   what an arrow key moves; Page moves ten of them. Default `1`
+     */
     JS_CGETSET_MAGIC_DEF("Step",      slider_get, slider_set, SLIDE_STEP),
+    /* ShowValue
+     *   draw the number beside the rail — worth it when the number means
+     *   something to the user, and noise when it does not
+     */
     JS_CGETSET_MAGIC_DEF("ShowValue", slider_get, slider_set, SLIDE_SHOWVALUE),
+    /* Decimals
+     *   how many places the number it draws has — it does not change what
+     *   `Value` holds
+     */
     JS_CGETSET_DEF("Decimals",      slider_get_decimals, slider_set_decimals),
+    /* Inverted
+     *   put the high end where the low one was
+     */
     JS_CGETSET_DEF("Inverted",      slider_get_inverted, slider_set_inverted),
+    /* ValuePosition
+     *   which side that number sits on: `Top` `Bottom` `Left` `Right`.
+     *   Default `"Top"`
+     */
     JS_CGETSET_DEF("ValuePosition", slider_get_valuepos, slider_set_valuepos),
+    /* Orientation
+     *   `Horizontal` or `Vertical`. A vertical slider reads bottom to top.
+     *   Default `"Horizontal"`
+     */
     JS_CGETSET_DEF("Orientation", orient_get, orient_set),
-    /* Mark(value, [text]) */
+    /* Mark(value, [text])
+     *   a tick at that value, with an optional label under it
+     */
     JS_CFUNC_DEF("Mark",       2, slider_mark),
-    /* ClearMarks() */
+    /* ClearMarks()
+     *   takes them all off
+     */
     JS_CFUNC_DEF("ClearMarks", 0, slider_clear_marks),
 };
 
@@ -6336,8 +6857,22 @@ static JSValue date_set_placeholder(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry datepicker_props[] = {
+    /* Value
+     *   the date as `"YYYY-MM-DD"` — the same text a
+     *   [`Day`](docs/llm/library.md#day) works in, which is what makes a date
+     *   in this runtime comparable, sortable and storable without a timezone
+     *   ever entering it. Default is today
+     */
     JS_CGETSET_DEF("Value",  date_get_value,  date_set_value),
+    /* Format
+     *   a strftime pattern — `"%d/%m/%Y"`, `"%e %B %Y"` — for what the
+     *   **button** shows. It does not change `Value`, which is always ISO
+     */
     JS_CGETSET_DEF("Format", date_get_format, date_set_format),
+    /* Placeholder
+     *   what the button reads while `Value` is `""`. Default `"—"`; `""`
+     *   restores the dash. **Translated**
+     */
     JS_CGETSET_DEF("Placeholder", date_get_placeholder, date_set_placeholder),
 };
 
@@ -6516,16 +7051,39 @@ static JSValue cal_clear_marks(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry calendar_props[] = {
+    /* Value
+     *   the chosen day as `"YYYY-MM-DD"` — the same text a
+     *   [`Day`](docs/llm/library.md#day) works in. Default is today
+     */
     JS_CGETSET_DEF("Value", date_get_value, date_set_value),
+    /* ShowHeading
+     *   the month and year above the grid. Default `true`
+     */
     JS_CGETSET_MAGIC_DEF("ShowHeading",     cal_get_shows, cal_set_shows, CAL_HEADING),
+    /* ShowDayNames
+     *   the row of weekday names. Default `true`
+     */
     JS_CGETSET_MAGIC_DEF("ShowDayNames",    cal_get_shows, cal_set_shows, CAL_DAYNAMES),
+    /* ShowWeekNumbers
+     *   the week number down the side. Default `false`, and worth turning on
+     *   where people plan in weeks
+     */
     JS_CGETSET_MAGIC_DEF("ShowWeekNumbers", cal_get_shows, cal_set_shows, CAL_WEEKS),
+    /* Marks
+     *   the dates marked, as `"YYYY-MM-DD"` strings, earliest first
+     */
     JS_CGETSET_DEF("Marks", cal_get_marks, NULL),
-    /* Mark(date) */
+    /* Mark(date)
+     *   marks that date. Marking one twice marks it once
+     */
     JS_CFUNC_DEF("Mark",       1, cal_mark),
-    /* Unmark(date) */
+    /* Unmark(date)
+     *   takes that one off. One that was not marked is not an error
+     */
     JS_CFUNC_DEF("Unmark",     1, cal_unmark),
-    /* ClearMarks() */
+    /* ClearMarks()
+     *   takes them all off
+     */
     JS_CFUNC_DEF("ClearMarks", 0, cal_clear_marks),
 };
 
@@ -6648,6 +7206,13 @@ static JSValue colorbtn_set_value(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry colorbutton_props[] = {
+    /* Value
+     *   what was chosen, as an `rgb(…)` or `rgba(…)` string — **what
+     *   `Background`, `Foreground` and `Painter.Color` take**, so a colour
+     *   goes from this control to whatever is drawn with it and nothing has
+     *   to parse anything. `""` is no colour, and the button shows the
+     *   cleared state. What comes back is what `Background` takes
+     */
     JS_CGETSET_DEF("Value", colorbtn_get_value, colorbtn_set_value),
 };
 
@@ -6804,6 +7369,13 @@ static JSValue fontbtn_set_value(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry fontbutton_props[] = {
+    /* Value
+     *   a Pango description — `"Cantarell Bold 12"` — which is **what
+     *   [`Font`](docs/reference/widgets/Widget.md#how-it-looks) takes on
+     *   every control**, what `Painter.Font` takes, and what
+     *   [`Text`](docs/llm/library.md#text) measures with. `""` is no font,
+     *   meaning *the theme's*
+     */
     JS_CGETSET_DEF("Value", fontbtn_get_value, fontbtn_set_value),
 };
 
@@ -6969,7 +7541,7 @@ static JSValue popover_show(JSContext *ctx, JSValueConst this_val,
         w->name ? w->name : "a popover");
 }
 
-/* Popup(anchor) */
+/* Popup(anchor, [rect]) */
 static JSValue popover_popup(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
@@ -7054,6 +7626,40 @@ static JSValue popover_popup(JSContext *ctx, JSValueConst this_val,
         MAX(1, (int)r.size.width), MAX(1, (int)r.size.height)
     };
 
+    /*
+     * **A rectangle inside the anchor**, when one is given -- `{ X, Y, Width,
+     * Height }` in the anchor's own coordinates, which is what
+     * `Editor.CursorBounds()` answers. It is what a hint beside the cursor
+     * needs: the popover points at a place in a control and not at the whole
+     * of it. Read as numbers and refused as anything else, like every
+     * geometry here; a missing field is the anchor's own.
+     */
+    if (argc > 1 && !JS_IsUndefined(argv[1]) && !JS_IsNull(argv[1])) {
+        if (!JS_IsObject(argv[1]))
+            return JS_ThrowTypeError(ctx,
+                "Popup(anchor, rect): rect is { X, Y, Width, Height }");
+        static const char *keys[] = { "X", "Y", "Width", "Height" };
+        int32_t v[4] = { 0, 0, at.width, at.height };
+        for (int k = 0; k < 4; k++) {
+            JSValue f = JS_GetPropertyStr(ctx, argv[1], keys[k]);
+            if (JS_IsException(f))
+                return JS_EXCEPTION;
+            if (!JS_IsUndefined(f) && !bta_to_int(ctx, f, "Popup", &v[k])) {
+                JS_FreeValue(ctx, f);
+                return JS_EXCEPTION;
+            }
+            JS_FreeValue(ctx, f);
+        }
+        graphene_point_t from = GRAPHENE_POINT_INIT((float)v[0], (float)v[1]), to;
+        if (!gtk_widget_compute_point(anchor->gtk, parent, &from, &to))
+            return JS_ThrowTypeError(ctx, "Popup: %s is not in this window",
+                                     anchor->name ? anchor->name : "the anchor");
+        at.x      = (int)to.x;
+        at.y      = (int)to.y;
+        at.width  = MAX(1, v[2]);
+        at.height = MAX(1, v[3]);
+    }
+
     gtk_popover_set_pointing_to(GTK_POPOVER(w->gtk), &at);
     gtk_popover_popup(GTK_POPOVER(w->gtk));
     return JS_UNDEFINED;
@@ -7077,16 +7683,52 @@ static const char *popover_options(const char *prop)
 }
 
 static const JSCFunctionListEntry popover_props[] = {
+    /* Position
+     *   `Top`, `Bottom`, `Left` or `Right`: the side of the anchor it
+     *   **prefers**, and GTK moves it when there is no room there. Default
+     *   `"Bottom"`
+     */
     JS_CGETSET_DEF("Position", popover_get_position, popover_set_position),
+    /* Arrow
+     *   draw the tail pointing back at the control. Default `false`, unlike
+     *   GTK's own — a menu wants the tail and a list of suggestions flush
+     *   against a field does not
+     */
     JS_CGETSET_DEF("Arrow",    popover_get_arrow,    popover_set_arrow),
+    /* Autohide
+     *   `true` by default: a click outside or Escape closes it, and `Close`
+     *   is raised
+     */
     JS_CGETSET_DEF("Autohide", popover_get_autohide, popover_set_autohide),
     /* Read-only: the open state, not a design property. See above. */
+    /* Visible
+     *   the answer to *is it open* — and **read-only**, because it is a state
+     *   and not a declaration. **Read-only**: opening has a verb, and this is
+     *   the question half
+     */
     JS_CGETSET_DEF("Visible",  popover_get_visible,  NULL),
-    /* Popup(anchor) */
-    JS_CFUNC_DEF("Popup", 1, popover_popup),
-    /* Close() */
+    /* Popup(anchor, [rect])
+     *   opens it over that control — or, with `rect` (`{ X, Y, Width, Height
+     *   }` in the anchor's own coordinates), pointed at that rectangle inside
+     *   it, which is how a hint sits beside an editor's cursor
+     *   (`Editor.CursorBounds()`). A field that is not a number is refused.
+     *   The anchor **and the container the popover is in** must be on screen
+     *   — a hidden panel, a collapsed `Expander` or a page not shown is
+     *   refused with a sentence. The point is taken once: an anchor that
+     *   moves, scrolls or is deleted afterwards leaves the popover where it
+     *   opened. The anchor must have been laid out and the window must be up,
+     *   because the popup is positioned against the anchor's rectangle.
+     */
+    JS_CFUNC_DEF("Popup", 2, popover_popup),
+    /* Close()
+     *   closes it, and does nothing when it is already closed
+     */
     JS_CFUNC_DEF("Close", 0, popover_close),
-    /* Show() */
+    /* Show()
+     *   refuses and names `Popup(anchor)`; the inherited one would build a
+     *   popup surface before the window exists. The inherited verb would show
+     *   a surface with nothing to point at
+     */
     JS_CFUNC_DEF("Show",  0, popover_show),
 };
 
@@ -7282,10 +7924,31 @@ static JSValue image_load_bytes(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry image_props[] = {
+    /* Icon
+     *   a name from the desktop's icon theme — `"document-save-symbolic"`,
+     *   `"folder"`. **A name the theme lacks is not drawn and is kept**, so a
+     *   form round-trips; `Application.HasIcon(name)` is how to ask first,
+     *   and a list of candidates with a shipped one last is the pattern this
+     *   tree uses. Setting it clears `File`
+     */
     JS_CGETSET_DEF("Icon", image_get_icon, image_set_icon),
+    /* File
+     *   a path to an image, which is what a project's own artwork is. Setting
+     *   it clears `Icon`, and setting `Icon` clears it: the control draws one
+     *   thing
+     */
     JS_CGETSET_DEF("File", image_get_file, image_set_file),
-    /* LoadBytes(bytes) */
+    /* LoadBytes(bytes)
+     *   an image already in memory — what [`Http`](docs/llm/library.md#http)
+     *   answers with and `File.LoadBytes` reads. Clears both names, since
+     *   neither is what is drawn any more. **A verb and not a property**: a
+     *   `.form` could not carry a megabyte of JPEG
+     */
     JS_CFUNC_DEF("LoadBytes", 1, image_load_bytes),
+    /* Size
+     *   the pixels it is drawn at; `-1` is the icon's natural size. Default
+     *   `-1`
+     */
     JS_CGETSET_DEF("Size", image_get_size, image_set_size),
 };
 
@@ -7302,41 +7965,143 @@ void bta_core_register(void)
          * inherited by all of them, which is what makes the accumulating walk
          * in text_props_of() necessary rather than convenient.
          */
-        /* MouseDown(x, y, button, ctrl, shift) */
-        /* MouseUp(x, y, button, ctrl, shift) */
-        /* MouseMove(x, y, button, ctrl, shift) */
-        /* MouseEnter(x, y) */
-        /* MouseLeave() */
-        /* MouseWheel(dx, dy) */
-        /* DblClick(x, y, button, ctrl, shift) */
-        /* KeyPress(key, ctrl, shift, alt) */
-        /* KeyRelease(key, ctrl, shift, alt) */
-        /* GotFocus() */
-        /* LostFocus() */
-        /* Drop(data, x, y) */
-        /* FileDrop(paths, x, y) */
-        /* DragEnter(data, x, y) */
-        /* DragOver(data, x, y) */
-        /* DragLeave() */
-        /* DragBegin() */
-        /* DragEnd() */
-        /* Allocated(box) */
+        /* MouseDown(x, y, button, ctrl, shift)
+         *   coordinates are relative to the widget
+         */
+        /* MouseUp(x, y, button, ctrl, shift)
+         *   and came up
+         */
+        /* MouseMove(x, y, button, ctrl, shift)
+         *   the pointer moved over it. `button` is `0` here
+         */
+        /* MouseEnter(x, y)
+         *   the question motion cannot answer: there is no `MouseMove` for
+         *   having left
+         */
+        /* MouseLeave()
+         *   and left — the question motion cannot answer, since there is no
+         *   `MouseMove` for having gone
+         */
+        /* MouseWheel(dx, dy)
+         *   how far the wheel turned, in GTK's units: one notch is `1.0` on a
+         *   wheel and a fraction on a touchpad. **Returning `true` consumes
+         *   it**, which stops the scroller around it from also moving
+         */
+        /* DblClick(x, y, button, ctrl, shift)
+         *   two clicks
+         */
+        /* KeyPress(key, ctrl, shift, alt)
+         *   a key went down. **Returning `true` consumes it.** A control that
+         *   edits text claims a printable key, so on a `TextBox` `b` arrives
+         *   only as `KeyRelease`
+         */
+        /* KeyRelease(key, ctrl, shift, alt)
+         *   and came up. Nothing here is consumable
+         */
+        /* GotFocus()
+         *   answers for the **control**, so it fires for the focus arriving
+         *   anywhere within it
+         */
+        /* LostFocus()
+         *   where *the user is done with this box* is said — validation,
+         *   formatting, saving a field
+         */
+        /* Drop(data, x, y)
+         *   something with `DragData` was dropped on a widget with
+         *   `AcceptDrop`. The point is in **this widget's** coordinates, and
+         *   so is `Bounds(this widget)` asked of a child — so *which row a
+         *   drop is over* is a comparison and not arithmetic, and on a
+         *   scroller both numbers already carry the scroll (a child above the
+         *   view reads a negative `Y`). A hidden child measures 0x0, so skip
+         *   what is not `Visible`. Only arrives when the drop was not refused
+         *   (see `DragOver`). **Undo here whatever `DragEnter` lit up**: no
+         *   `DragLeave` follows a drop (see its row). Refused drops never
+         *   arrive (see `DragOver`).
+         */
+        /* FileDrop(paths, x, y)
+         *   files were dropped from the file manager or the desktop on a
+         *   widget with `AcceptFiles`. `paths` is an array of full paths —
+         *   **only files that have one**: a file on a remote share has no
+         *   local path and does not arrive, and a drop of nothing but those
+         *   is refused rather than delivered empty
+         */
+        /* DragEnter(data, x, y)
+         *   the drag came over a widget with `AcceptDrop`, carrying the same
+         *   point `Drop` will. What the target lights up with — a column, a
+         *   highlight — goes here. **The refusal does not live here**: a
+         *   `false` from this one is overwritten by the very next `DragOver`,
+         *   which in any real drag is immediately, so a target that refuses
+         *   says so in `DragOver`
+         */
+        /* DragOver(data, x, y)
+         *   the drag moved over it, point after point. Where an insertion
+         *   line sits is recomputed here. **Returning `false` refuses the
+         *   drop at that point**: the cursor shows it and `Drop` never fires.
+         *   Anything else — including answering nothing — accepts it, and
+         *   with no handler everything is accepted. Strictly `false`: a
+         *   handler that answers nothing returns `undefined`, which must not
+         *   refuse every drag anywhere
+         */
+        /* DragLeave()
+         *   the drag left without dropping. Undoes what `DragEnter` did —
+         *   **and a drop is not a leave**: measured, nothing arrives after a
+         *   `Drop`, and the leave for that target is delivered at the *next*
+         *   drag instead, right after its `DragBegin` and for a target that
+         *   drag never touched. So a target undoes its own feedback in `Drop`
+         *   as well, and anything counting enters against leaves has to
+         *   expect the late one
+         */
+        /* DragBegin()
+         *   on the widget being dragged: the drag started. Grey the card here
+         */
+        /* DragEnd()
+         *   on the widget being dragged: the drag finished — dropped or
+         *   refused. Puts back whatever `DragBegin` changed
+         */
+        /* Allocated(box)
+         *   the first time GTK has given it a real rectangle — the moment
+         *   `Form_Open` is reliably too early for. `box` is `Bounds()`
+         *   exactly (`{X, Y, Width, Height}`, window coordinates). **Once**:
+         *   a control that was already on screen has missed it, so ask
+         *   `Bounds()` first when it may have. A control on a hidden page
+         *   hears it when the page is shown. Nothing polls — the hook is the
+         *   window's own layout pass
+         */
         BTA_CLASS_FULL("Widget", NULL, NULL, base, nbase, false,
                        widget_options, "Tooltip", "MouseDown,MouseUp,MouseMove,MouseEnter,MouseLeave,MouseWheel,DblClick,KeyPress,KeyRelease,GotFocus,LostFocus,Drop,FileDrop,DragEnter,DragOver,DragLeave,DragBegin,DragEnd,Allocated"),
         BTA_CLASS_ENUM("Container", "Widget",  NULL, container_props, false, container_options, NULL),
         BTA_CLASS_BARE("Control",   "Widget",    NULL,                            false, NULL),
         /* A window's title is prose; so is the caption of everything below. */
-        /* Open() */
-        /* Close() */
-        /* Resize(width, height) */
-        /* ThemeChange() */
+        /* Open()
+         *   the first time it is shown, **before `Show()` returns**. Where a
+         *   form fills itself in
+         */
+        /* Close()
+         *   it is closing. **Returning `true` keeps it open** — which is
+         *   where *save before closing?* lives. **Returning `true` keeps it
+         *   open**; returning nothing lets it go
+         */
+        /* Resize(width, height)
+         *   the size GTK settled on — the same numbers `Bounds()` gives.
+         *   Fires when the window is first given a size too
+         */
+        /* ThemeChange()
+         *   the desktop changed the theme.
+         *   [`Dark`](docs/reference/widgets/Widget.md#how-it-looks) read
+         *   inside the handler is already the new answer; **it may fire twice
+         *   for one change**, so a handler re-reads and restyles rather than
+         *   counting
+         */
         BTA_CLASS_TEXT("Form",      "Container", build_form,     form_props,      true, "Text",
                        "Open,Close,Resize,ThemeChange"),
         BTA_CLASS_BARE("Panel",     "Container", build_panel,                     false, NULL),
         BTA_CLASS_BARE("Component", "Container", build_component,                 false, NULL),
         BTA_CLASS_ENUM_TEXT("Label", "Control",  build_label,    label_props, false,
                        label_options, "Text", NULL),
-        /* Click() */
+        /* Click()
+         *   it was pressed — by the mouse, by the keyboard, by its
+         *   `Shortcut`, by an `Action`, or by `Click()`
+         */
         BTA_CLASS_TEXT("Button",    "Control",   build_button,   button_props,    false, "Text", "Click"),
         BTA_CLASS     ("Image",     "Control",   build_image,    image_props,     false, NULL),
         /* No `texts`: a rule has nothing to read. No events of its own either --
@@ -7346,35 +8111,63 @@ void bta_core_register(void)
                        orient_options, NULL),
         /* A TextBox's Text is what it starts with -- prose -- and Placeholder is
          * the hint behind it, which is prose that is only ever read. */
-        /* Change() */
-        /* Activate() */
-        /* IconClick() */
+        /* Change()
+         *   the value changed — typed, pasted, cleared, **or assigned from
+         *   code**: the round trip goes out to GTK and back, so a form that
+         *   fills a field in raises its own handler
+         */
+        /* Activate()
+         *   Enter in the field, when `ActivatesDefault` is off
+         */
+        /* IconClick()
+         *   the icon inside the field was clicked
+         */
         BTA_CLASS_ENUM_TEXT("TextBox", "Control", build_textbox, textbox_props, false,
                        textbox_options, "Text,Placeholder", "Change,Activate,IconClick"),
         /* One control, and `Group` says which of the two it is: see
          * build_checkbutton for why there is no RadioButton beside it. */
-        /* Click() */
+        /* Click()
+         *   it was pressed — or assigned
+         */
         BTA_CLASS_TEXT("CheckButton", "Control", build_checkbutton,
                        checkbutton_props, false, "Text", "Click"),
         /* No `texts`: a switch has no caption to translate.  The Label beside
          * it is where the prose is, and that one is already a Label. */
-        /* Click() */
+        /* Click()
+         *   it was moved — or assigned
+         */
         BTA_CLASS     ("Switch",    "Control",   build_switch,   switch_props,    false, "Click"),
         /* `Items` is a list of strings a person reads, so each entry goes
          * through the catalogue.  ListBox.Text is read-only (it reports the
          * selection) and so is not one of these. */
-        /* Select() */
-        /* Activate() */
+        /* Select()
+         *   the selection moved. Ask `Index` or `Text` for what it is now
+         */
+        /* Activate()
+         *   a double click on a row, or Enter on it: the gesture for *use
+         *   this one*
+         */
         BTA_CLASS_TEXT("ListBox",   "Control",   build_listbox,  listbox_props,   false, "Items",
                        "Select,Activate"),
-        /* Select() */
+        /* Select()
+         *   the selection moved. Ask `Index` or `Text` for what it is now
+         */
         BTA_CLASS_TEXT("ComboBox",  "Control",   build_combobox, combobox_props,  false,
                        "Items,Text", "Select"),
-        /* Change() */
-        /* Activate() */
+        /* Change()
+         *   the value changed — stepped, typed, or **assigned from code**:
+         *   the round trip goes out to GTK and back
+         */
+        /* Activate()
+         *   Enter in the field, or a double click on a row
+         */
         BTA_CLASS     ("SpinBox",   "Control",   build_spinbox,  spinbox_props,   false, "Change,Activate"),
-        /* Change() */
-        /* Activate() */
+        /* Change()
+         *   the value changed — stepped, typed, or **assigned from code**
+         */
+        /* Activate()
+         *   Enter in the field
+         */
         BTA_CLASS_ENUM_TEXT("DecimalBox", "Control", build_decimalbox,
                             decimalbox_props, false, decimalbox_options, NULL,
                             "Change,Activate"),
@@ -7384,36 +8177,65 @@ void bta_core_register(void)
                        false, picture_options, NULL),
         BTA_CLASS     ("Spinner",    "Control", build_spinner,    spinner_props,
                        false, NULL),
-        /* Click() */
+        /* Click()
+         *   it was pressed. The address is handed over **as well**: this
+         *   event is for the application that wants to know, not for one that
+         *   wants to decide
+         */
         BTA_CLASS_TEXT("LinkButton", "Control", build_linkbutton, linkbutton_props,
                        false, "Text", "Click"),
         BTA_CLASS_ENUM("LevelBar",   "Control", build_levelbar,   levelbar_props,
                        false, level_options, NULL),
-        /* Click() */
+        /* Click()
+         *   it was pressed — or assigned
+         */
         BTA_CLASS_TEXT("ToggleButton", "Control", build_togglebutton,
                        togglebutton_props, false, "Text", "Click"),
         BTA_CLASS_ENUM_TEXT("ProgressBar", "Control", build_progressbar,
                        progressbar_props, false, orient_options, "Text", NULL),
-        /* Change() */
+        /* Change()
+         *   the value changed — dragged, keyed, or **assigned from code**. It
+         *   fires **while dragging**, once per step, which is what makes a
+         *   live preview possible and what makes an expensive handler feel
+         *   heavy
+         */
         BTA_CLASS_ENUM("Slider",       "Control", build_slider,
                        slider_props, false, slider_options, "Change"),
         /* `Placeholder` is prose and `Format` is not, which is the same line
          * `TextBox` draws: one is read by a person, the other is a strftime
          * pattern that a catalogue would turn into a different date. */
-        /* Change() */
+        /* Change()
+         *   the value changed, including from an assignment in code — the
+         *   round trip goes out to GTK and back
+         */
         BTA_CLASS_TEXT("DatePicker",   "Control", build_datepicker,
                        datepicker_props, false, "Placeholder", "Change"),
-        /* Change() */
+        /* Change()
+         *   the value changed, including from an assignment in code — the
+         *   round trip goes out to GTK and back
+         */
         BTA_CLASS     ("Calendar",     "Control", build_calendar,
                        calendar_props, false, "Change"),
-        /* Change() */
+        /* Change()
+         *   the value changed, including from an assignment in code — the
+         *   round trip goes out to GTK and back
+         */
         BTA_CLASS     ("ColorButton", "Control",  build_colorbutton,
                        colorbutton_props, false, "Change"),
-        /* Change() */
+        /* Change()
+         *   the value changed, including from an assignment in code — the
+         *   round trip goes out to GTK and back
+         */
         BTA_CLASS     ("FontButton",  "Control",  build_fontbutton,
                        fontbutton_props, false, "Change"),
-        /* Open() */
-        /* Close() */
+        /* Open()
+         *   it came up — `Popup()`, or anything else that showed it
+         */
+        /* Close()
+         *   it went down: `Close()`, autohide, or the window going with it.
+         *   **Not** when the popover itself is deleted or taken out while
+         *   open — its handlers are unhooked before GTK takes it down
+         */
         BTA_CLASS_ENUM("Popover", "Container", build_popover, popover_props,
                        false, popover_options, "Open,Close"),
     };

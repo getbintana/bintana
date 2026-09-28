@@ -9,7 +9,7 @@ to extend either side.
 |---|---|
 | [first-app.md](first-app.md) | **Start here to write an application in the IDE**: the shape of a project and a five-minute tutorial ending in a greeting |
 | **[reference/](reference/README.md)** | **One page per class and per global, for the person writing an application**: what it is, which neighbour to use instead, an example off the tree, every member explained, and what goes wrong. The long form of `llm/controls.md` and `llm/library.md`, and what the IDE shows as help |
-| **[llm/](llm/README.md)** | **The public contract**: everything needed to write an application, and nothing about the runtime. Nine files, addressed to whoever writes one — a person or a language model. Start here if you are writing an application rather than the runtime |
+| **[llm/](llm/README.md)** | **The public contract**: everything needed to write an application, and nothing about the runtime. Ten files, addressed to whoever writes one — a person or a language model. Start here if you are writing an application rather than the runtime |
 | [architecture.md](architecture.md) | Boot sequence, the C/JS split, the class table, event dispatch, the object model, lifetimes and teardown |
 | [installing.md](installing.md) | Building and installing it on Fedora and Debian/Ubuntu: dependencies per distribution, the optional ones and what each turns on, staging an install, and what the test suites need |
 | [formats.md](formats.md) | `project.json`, the `.form` grammar, serialisation rules, the icon directory |

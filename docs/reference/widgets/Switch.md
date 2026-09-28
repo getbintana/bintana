@@ -14,7 +14,7 @@ It is a `Widget` and a control like any other, so everything on
 | | | |
 |---|---|---|
 | `Active` | whether it is on | [on or off](#on-or-off) |
-| **event** `Click()` | it was moved | [on or off](#on-or-off) |
+| **event** `Click()` | it was moved — or assigned | [on or off](#on-or-off) |
 
 ## When it is not a `Switch`
 
@@ -28,7 +28,7 @@ It is a `Widget` and a control like any other, so everything on
 
 | | |
 |---|---|
-| `Active` | whether it is on. Assigning it **raises `Click`**, the same as the user moving it |
+| `Active` | whether it is on. Assigning it **raises `Click`**, the same as the user moving it. No caption: the words beside it are a `Label` |
 | **event** `Click()` | it was moved — or assigned |
 
 ```json

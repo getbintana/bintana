@@ -14,7 +14,7 @@ nothing highlighted.
 
 | | | |
 |---|---|---|
-| `Text` | the text. **Translated** | [the one thing that is its own](#the-one-thing-that-is-its-own) |
+| `Text` | everything in the buffer | [the one thing that is its own](#the-one-thing-that-is-its-own) |
 
 Everything else is [`Editor`](Editor.md)'s — `Append`, `Insert`, `Clear`,
 `Modified`, `ReadOnly`, `Wrap`, `Line`, `Column`, `Selection`, `GotoLine`,

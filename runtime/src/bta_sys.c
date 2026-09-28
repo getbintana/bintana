@@ -2823,12 +2823,33 @@ static JSValue env_has_display(JSContext *ctx, JSValueConst this_val)
  * cannot offer.
  */
 static const JSCFunctionListEntry env_props[] = {
+    /* Get(name) -> string
+     *   the variable, or `null` — which is the difference between *empty* and
+     *   *not set*, and both happen
+     */
     JS_CFUNC_DEF2("Get", 1, env_get, JS_PROP_C_W_E),
+    /* Set(name, value)
+     *   sets one; `null` **removes** it. It is `export`, so it affects
+     *   everything started **afterwards** and nothing already running
+     */
     JS_CFUNC_DEF2("Set", 2, env_set, JS_PROP_C_W_E),
+    /* Variables -> { }
+     *   all of them at once, as an object
+     */
     JS_CGETSET_DEF2("Variables", env_variables, NULL,
                     JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE),
+    /* CurrentDirectory -> string
+     *   where the process is. **Assigning enters it, and throws if there is
+     *   no such directory** — a failure worth hearing about, since everything
+     *   relative afterwards would otherwise be wrong
+     */
     JS_CGETSET_DEF2("CurrentDirectory", env_cwd_get, env_cwd_set,
                     JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE),
+    /* HasDisplay -> boolean
+     *   whether there is a screen at all — what a tool that may run over ssh
+     *   asks before opening a window. It asks the environment (`DISPLAY`,
+     *   `WAYLAND_DISPLAY`), not this process
+     */
     JS_CGETSET_DEF2("HasDisplay", env_has_display, NULL,
                     JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE),
 };
@@ -2961,9 +2982,26 @@ static JSValue screen_get_scale(JSContext *ctx, JSValueConst t)
 { return screen_geometry(ctx, t, SCREEN_SCALE); }
 
 static const JSCFunctionListEntry screen_props[] = {
+    /* Width
+     *   the width of the monitor the application's **active window** is on —
+     *   the first one the display lists before any window is shown, and `0`
+     *   with no display at all
+     */
     JS_CGETSET_DEF("Width",  screen_get_width,  NULL),
+    /* Height
+     *   its height, likewise
+     */
     JS_CGETSET_DEF("Height", screen_get_height, NULL),
+    /* Scale
+     *   that monitor's scale factor, `1` unless the panel is HiDPI
+     */
     JS_CGETSET_DEF("Scale",  screen_get_scale,  NULL),
+    /* Monitors()
+     *   every monitor: `X`/`Y` are where it sits in the desktop's
+     *   coordinates, `Width`/`Height`/`Scale` are its own, and `Name` is the
+     *   connector — `"HDMI-1"`, `"eDP-1"` — **a key to remember a choice by,
+     *   not prose to show**
+     */
     JS_CFUNC_DEF("Monitors", 0, screen_list),
 };
 
@@ -3711,9 +3749,24 @@ static JSValue sys_hash_text(JSContext *ctx, JSValueConst this_val,
  * a surface nobody has to document.
  */
 static const JSCFunctionListEntry hash_props[] = {
+    /* Md5(v) -> string
+     *   the MD5 digest. Old and broken for anything adversarial; fine for a
+     *   cache key or an etag somebody else chose. `v` is text (hashed as its
+     *   UTF-8) or a [`Bytes`](docs/llm/library.md#bytes) (hashed as the bytes
+     *   it is)
+     */
     JS_CFUNC_MAGIC_DEF("Md5",    1, sys_hash_text, HASH_MD5),
+    /* Sha1(v) -> string
+     *   likewise, and likewise
+     */
     JS_CFUNC_MAGIC_DEF("Sha1",   1, sys_hash_text, HASH_SHA1),
+    /* Sha256(v) -> string
+     *   **the one to reach for** unless something else decided
+     */
     JS_CFUNC_MAGIC_DEF("Sha256", 1, sys_hash_text, HASH_SHA256),
+    /* Sha512(v) -> string
+     *   when what you are comparing against used it
+     */
     JS_CFUNC_MAGIC_DEF("Sha512", 1, sys_hash_text, HASH_SHA512),
 };
 
@@ -3803,54 +3856,159 @@ static JSValue sys_file_hash(JSContext *ctx, JSValueConst this_val,
 void bta_sys_init(JSContext *ctx, JSValue global)
 {
     JSValue file = JS_NewObject(ctx);
+    /* Load(path) -> string
+     *   the whole file as a string. **Throws if it cannot be read**, and the
+     *   message names the file: there is no `null` to test for and no silent
+     *   empty string
+     */
     JS_SetPropertyStr(ctx, file, "Load",   JS_NewCFunction(ctx, sys_file_load, "Load", 1));
+    /* Save(path, text)
+     *   writes it **atomically** — a temporary beside it, renamed over — so a
+     *   failed write leaves the old file intact and a reader never sees half
+     *   a file
+     */
     JS_SetPropertyStr(ctx, file, "Save",   JS_NewCFunction(ctx, sys_file_save, "Save", 2));
+    /* Append(path, text)
+     *   adds `text` to the end, and creates the file when it is not there. A
+     *   log or a CSV written line by line wants this: `Save(path, Load(path)
+     *   + line)` is the whole file through memory for every line, and a
+     *   window in which another writer's line is overwritten
+     */
     JS_SetPropertyStr(ctx, file, "Append",
                       JS_NewCFunction(ctx, sys_file_append, "Append", 2));
+    /* Delete(path)
+     *   a file, or an **empty** directory. Throws on failure
+     */
     JS_SetPropertyStr(ctx, file, "Delete", JS_NewCFunction(ctx, sys_file_delete, "Delete", 1));
+    /* Open(path)
+     *   hands the file to whatever the desktop opens that kind with. **It
+     *   answers before the file is open**: launching is asynchronous and the
+     *   program that opens it is somebody else's, so what this promises is
+     *   that the request was made. A file that is not there is refused
+     *   *here*, which is the failure a caller can do something about
+     */
     JS_SetPropertyStr(ctx, file, "Open",
                       JS_NewCFunction(ctx, sys_file_open, "Open", 1));
+    /* Info(path) -> { Size, Modified, Type, Icon, IsDir }
+     *   `{ Size, Modified, Type, Icon, IsDir }`, or `null`. `.Type` is a
+     *   content type you can test (`"image/png"`), `.Icon` is the name the
+     *   desktop draws for that kind of file, and `.Modified` is a real
+     *   `Date`, to the millisecond
+     */
     JS_SetPropertyStr(ctx, file, "Info",
                       JS_NewCFunction(ctx, sys_file_info, "Info", 1));
+    /* Watch(path, cb) -> { Stop }
+     *   `cb(event, path)` — `"Changed"`, `"Created"`, `"Deleted"` — and
+     *   answers something with a `Stop()`
+     */
     JS_SetPropertyStr(ctx, file, "Watch",
                       JS_NewCFunction(ctx, sys_file_watch, "Watch", 2));
+    /* Copy(from, to)
+     *   **byte for byte**, so it works on images; refuses to clobber
+     */
     JS_SetPropertyStr(ctx, file, "Copy",
                       JS_NewCFunction(ctx, sys_file_copy, "Copy", 2));
+    /* Trash(path)
+     *   to the desktop's trash, whole for a folder. Throws where there is no
+     *   trash
+     */
     JS_SetPropertyStr(ctx, file, "Trash",
                       JS_NewCFunction(ctx, sys_file_trash, "Trash", 1));
+    /* Rename(from, to)
+     *   also moves; refuses to clobber
+     */
     JS_SetPropertyStr(ctx, file, "Rename", JS_NewCFunction(ctx, sys_file_rename, "Rename", 2));
+    /* Hash(path, [algorithm]) -> string
+     *   the checksum as hex, `"Sha256"` unless told — see
+     *   [`Hash`](docs/reference/globals/Hash.md). **Read in blocks**, so a
+     *   video costs 64 KB of memory and not the video
+     */
     JS_SetPropertyStr(ctx, file, "Hash",
                       JS_NewCFunction(ctx, sys_file_hash, "Hash", 2));
+    /* LoadBytes(path) -> Bytes
+     *   the whole file as [`Bytes`](docs/llm/library.md#bytes), untouched —
+     *   what `Load` cannot do, since it answers text
+     */
     JS_SetPropertyStr(ctx, file, "LoadBytes",
                       JS_NewCFunction(ctx, sys_file_load_bytes, "LoadBytes", 1));
+    /* SaveBytes(path, bytes)
+     *   those bytes, exactly; the pair of `LoadBytes`
+     */
     JS_SetPropertyStr(ctx, file, "SaveBytes",
                       JS_NewCFunction(ctx, sys_file_save_bytes, "SaveBytes", 2));
+    /* Join(...parts) -> string
+     *   one path out of pieces, with the separator the platform uses
+     */
     JS_SetPropertyStr(ctx, file, "Join",   JS_NewCFunction(ctx, sys_file_join, "Join", 2));
+    /* Absolute(path) -> string
+     *   the path resolved against the working directory
+     */
     JS_SetPropertyStr(ctx, file, "Absolute",
                       JS_NewCFunction(ctx, sys_file_absolute, "Absolute", 1));
+    /* Within(path, root) -> boolean
+     *   whether `path` is `root` or under it, by whole path components —
+     *   `/a/proj2` is **not** inside `/a/proj`
+     */
     JS_SetPropertyStr(ctx, file, "Within",
                       JS_NewCFunction(ctx, sys_file_within, "Within", 2));
+    /* Relative(path, root) -> string
+     *   `path` with `root` taken off; the path unchanged when there is no
+     *   relative spelling, and `""` for the root itself
+     */
     JS_SetPropertyStr(ctx, file, "Relative",
                       JS_NewCFunction(ctx, sys_file_relative, "Relative", 2));
+    /* IsExtension(path, ext) -> boolean
+     *   whether the name ends in that extension, **case-insensitively**.
+     *   `"js"` and `".js"` are both taken, and a suffix like `"tar.gz"` is
+     *   refused: the extension is what
+     *   [`Extension`](docs/reference/globals/File.md#paths) answers, which
+     *   stops at the last dot
+     */
     JS_SetPropertyStr(ctx, file, "IsExtension",
                       JS_NewCFunction(ctx, sys_file_is_extension, "IsExtension", 2));
+    /* Exists(path) -> boolean
+     *   `false` for anything that is not a string, rather than asking about a
+     *   file called `undefined`
+     */
     JS_SetPropertyStr(ctx, file, "Exists",
                       JS_NewCFunctionMagic(ctx, sys_file_test, "Exists", 1,
                                            JS_CFUNC_generic_magic, FT_EXISTS));
+    /* IsDir(path) -> boolean
+     *   whether it is a directory — the question to ask before
+     *   [`Directory`](docs/reference/globals/Directory.md)'s three verbs,
+     *   which throw on anything else
+     */
     JS_SetPropertyStr(ctx, file, "IsDir",
                       JS_NewCFunctionMagic(ctx, sys_file_test, "IsDir", 1,
                                            JS_CFUNC_generic_magic, FT_ISDIR));
 
-    static const struct { const char *name; int magic; } parts[] = {
-        { "Name",      BTA_PATH_NAME },
-        { "Directory", BTA_PATH_DIR },
-        { "Extension", BTA_PATH_EXT },
-        { "BaseName",  BTA_PATH_BASENAME },
-    };
-    for (size_t i = 0; i < G_N_ELEMENTS(parts); i++)
-        JS_SetPropertyStr(ctx, file, parts[i].name,
-                          JS_NewCFunctionMagic(ctx, sys_path_part, parts[i].name, 1,
-                                               JS_CFUNC_generic_magic, parts[i].magic));
+    /* One line each and not a loop over a table of names: the signature
+     * comment above a line is what the IDE's completion shows, and a loop has
+     * nowhere to write four of them. */
+    /* Name(path) -> string
+     *   `/a/b/c.js` → `c.js`
+     */
+    JS_SetPropertyStr(ctx, file, "Name",
+                      JS_NewCFunctionMagic(ctx, sys_path_part, "Name", 1,
+                                           JS_CFUNC_generic_magic, BTA_PATH_NAME));
+    /* Directory(path) -> string
+     *   `/a/b/c.js` → `/a/b`
+     */
+    JS_SetPropertyStr(ctx, file, "Directory",
+                      JS_NewCFunctionMagic(ctx, sys_path_part, "Directory", 1,
+                                           JS_CFUNC_generic_magic, BTA_PATH_DIR));
+    /* Extension(path) -> string
+     *   `js` — no dot, `""` when there is none
+     */
+    JS_SetPropertyStr(ctx, file, "Extension",
+                      JS_NewCFunctionMagic(ctx, sys_path_part, "Extension", 1,
+                                           JS_CFUNC_generic_magic, BTA_PATH_EXT));
+    /* BaseName(path) -> string
+     *   `/a/b/c.js` → `c`
+     */
+    JS_SetPropertyStr(ctx, file, "BaseName",
+                      JS_NewCFunctionMagic(ctx, sys_path_part, "BaseName", 1,
+                                           JS_CFUNC_generic_magic, BTA_PATH_BASENAME));
     JS_SetPropertyStr(ctx, global, "File", file);
 
     JSValue hash = JS_NewObject(ctx);
@@ -3862,17 +4020,41 @@ void bta_sys_init(JSContext *ctx, JSValue global)
     JS_SetPropertyStr(ctx, global, "Screen", screen);
 
     JSValue dir = JS_NewObject(ctx);
+    /* List(path, [pattern]) -> string[]
+     *   the **names**, sorted, with no `.` or `..` — what a tree of one
+     *   folder shows
+     */
     JS_SetPropertyStr(ctx, dir, "List", JS_NewCFunction(ctx, sys_dir_list, "List", 2));
+    /* Files(path, [options]) -> string[]
+     *   the **full paths** of the files, sorted
+     */
     JS_SetPropertyStr(ctx, dir, "Files",
                       JS_NewCFunctionMagic(ctx, sys_dir_walk, "Files", 2,
                                            JS_CFUNC_generic_magic, 0));
+    /* Folders(path, [options]) -> string[]
+     *   the same for the directories
+     */
     JS_SetPropertyStr(ctx, dir, "Folders",
                       JS_NewCFunctionMagic(ctx, sys_dir_walk, "Folders", 2,
                                            JS_CFUNC_generic_magic, 1));
+    /* Make(path)
+     *   creates it **and any missing parent**, so there is no loop to write
+     */
     JS_SetPropertyStr(ctx, dir, "Make", JS_NewCFunction(ctx, sys_dir_make, "Make", 1));
+    /* Copy(from, to)
+     *   a whole tree
+     */
     JS_SetPropertyStr(ctx, dir, "Copy", JS_NewCFunction(ctx, sys_dir_copy, "Copy", 2));
+    /* Delete(path)
+     *   an **empty** directory, as
+     *   [`File.Delete`](docs/reference/globals/File.md) is
+     */
     JS_SetPropertyStr(ctx, dir, "Delete",
                       JS_NewCFunction(ctx, sys_dir_delete, "Delete", 1));
+    /* DeleteTree(path)
+     *   it and everything under it — the one to be careful with, and the
+     *   reason it has a name of its own rather than a flag
+     */
     JS_SetPropertyStr(ctx, dir, "DeleteTree",
                       JS_NewCFunction(ctx, sys_dir_delete_tree, "DeleteTree", 1));
     JS_SetPropertyStr(ctx, global, "Directory", dir);
@@ -3880,6 +4062,14 @@ void bta_sys_init(JSContext *ctx, JSValue global)
     /* Wait hangs off Exec the way After hangs off Timer: asynchronous is this
      * language's default, so the plain call keeps the plain name. */
     JSValue exec = JS_NewCFunction(ctx, sys_exec, "Exec", 4);
+    /* Wait(argv, [options]) -> { ExitCode, Output }
+     *   runs it and **waits**, answering what it printed: `{ ExitCode, Output
+     *   }`. It blocks the main loop, so it is for programs that answer in
+     *   milliseconds -- `msgfmt`, `git rev-parse`, `which` -- and never for
+     *   one that might sit there; `Input` is the text or `Bytes` the child
+     *   reads, which is what makes `Exec.Wait(["sort"], { Input: text })` a
+     *   filter
+     */
     JS_SetPropertyStr(ctx, exec, "Wait",
                       JS_NewCFunction(ctx, sys_exec_wait, "Wait", 2));
     JS_SetPropertyStr(ctx, global, "Exec", exec);
@@ -3911,15 +4101,33 @@ void bta_sys_init(JSContext *ctx, JSValue global)
      * The three directories are named alike on purpose -- `CurrentDirectory` is
      * the one that moves, and it looks like the two that do not.
      */
+    /* HomeDirectory
+     *   the user's home
+     */
     JS_SetPropertyStr(ctx, env, "HomeDirectory", JS_NewString(ctx, g_get_home_dir()));
+    /* TempDirectory
+     *   where a temporary file belongs
+     */
     JS_SetPropertyStr(ctx, env, "TempDirectory", JS_NewString(ctx, g_get_tmp_dir()));
+    /* UserName
+     *   who is running it
+     */
     JS_SetPropertyStr(ctx, env, "UserName", JS_NewString(ctx, g_get_user_name()));
+    /* HostName
+     *   and on which machine
+     */
     JS_SetPropertyStr(ctx, env, "HostName", JS_NewString(ctx, g_get_host_name()));
     /* The pid: what names a scratch directory so two runs of the same tool do
      * not edit each other's files -- which the test suite passes by hand today,
      * because there was nothing to read it from. */
+    /* ProcessId
+     *   this process's id, for a scratch name that two runs will not share
+     */
     JS_SetPropertyStr(ctx, env, "ProcessId", JS_NewInt32(ctx, (int32_t)getpid()));
     /* How wide to build, which is the one number `-j` wants. */
+    /* ProcessorCount
+     *   how many cores — for the `-j` of a build, and little else
+     */
     JS_SetPropertyStr(ctx, env, "ProcessorCount",
                       JS_NewInt32(ctx, (int32_t)g_get_num_processors()));
 
@@ -3930,8 +4138,14 @@ void bta_sys_init(JSContext *ctx, JSValue global)
         char *name    = g_get_os_info(G_OS_INFO_KEY_NAME);
         char *version = g_get_os_info(G_OS_INFO_KEY_VERSION);
 
+        /* OS
+         *   which operating system
+         */
         JS_SetPropertyStr(ctx, env, "OS",
                           JS_NewString(ctx, name ? name : "Windows"));
+        /* OSVersion
+         *   and which version of it
+         */
         JS_SetPropertyStr(ctx, env, "OSVersion",
                           JS_NewString(ctx, version ? version : ""));
         g_free(name);
@@ -3940,10 +4154,22 @@ void bta_sys_init(JSContext *ctx, JSValue global)
 #else
     struct utsname sys;
     if (uname(&sys) == 0) {
+        /* OS
+         *   which operating system
+         */
         JS_SetPropertyStr(ctx, env, "OS", JS_NewString(ctx, sys.sysname));
+        /* OSVersion
+         *   and which version of it
+         */
         JS_SetPropertyStr(ctx, env, "OSVersion", JS_NewString(ctx, sys.release));
     } else {
+        /* OS
+         *   which operating system
+         */
         JS_SetPropertyStr(ctx, env, "OS", JS_NewString(ctx, ""));
+        /* OSVersion
+         *   and which version of it
+         */
         JS_SetPropertyStr(ctx, env, "OSVersion", JS_NewString(ctx, ""));
     }
 #endif
@@ -3951,26 +4177,56 @@ void bta_sys_init(JSContext *ctx, JSValue global)
     JS_SetPropertyStr(ctx, global, "Environment", env);
 
     JSValue dialog = JS_NewObject(ctx);
+    /* SelectFolder(title, [options], cb)
+     *   for a directory
+     */
     JS_SetPropertyStr(ctx, dialog, "SelectFolder",
                       JS_NewCFunctionMagic(ctx, sys_dialog, "SelectFolder", 2,
                                            JS_CFUNC_generic_magic, DLG_FOLDER));
+    /* OpenFile(title, [options], cb)
+     *   the file chooser, for something that exists
+     */
     JS_SetPropertyStr(ctx, dialog, "OpenFile",
                       JS_NewCFunctionMagic(ctx, sys_dialog, "OpenFile", 2,
                                            JS_CFUNC_generic_magic, DLG_FILE));
+    /* SaveFile(title, [options], cb)
+     *   the same, for somewhere to write
+     */
     JS_SetPropertyStr(ctx, dialog, "SaveFile",
                       JS_NewCFunctionMagic(ctx, sys_dialog, "SaveFile", 2,
                                            JS_CFUNC_generic_magic, DLG_SAVE));
+    /* Color(title, current, cb)
+     *   the desktop's colour chooser, opening on `current`. Answers an
+     *   `rgb(…)`/`rgba(…)` string — **exactly what
+     *   [`Background`](docs/reference/widgets/Widget.md#how-it-looks) and
+     *   `Painter.Color` take**
+     */
     JS_SetPropertyStr(ctx, dialog, "Color",
                       JS_NewCFunction(ctx, sys_color_dialog, "Color", 3));
     JS_SetPropertyStr(ctx, global, "Dialog", dialog);
 
     JSValue clipboard = JS_NewObject(ctx);
+    /* Copy(text)
+     *   **immediate**: the text is on the clipboard when the call returns
+     */
     JS_SetPropertyStr(ctx, clipboard, "Copy",
                       JS_NewCFunction(ctx, sys_clip_copy, "Copy", 1));
+    /* Paste(cb)
+     *   `cb(text)` — **a callback, and it has to be**
+     */
     JS_SetPropertyStr(ctx, clipboard, "Paste",
                       JS_NewCFunction(ctx, sys_clip_paste, "Paste", 1));
+    /* CopyImage(bytes)
+     *   **immediate**: the image is on the clipboard when the call returns.
+     *   `bytes` is an image GDK decodes — a PNG, a JPEG — and
+     *   `QrView.ToPng()` and `DrawingArea.ToPng()` answer with exactly that
+     */
     JS_SetPropertyStr(ctx, clipboard, "CopyImage",
                       JS_NewCFunction(ctx, sys_clip_copy_image, "CopyImage", 1));
+    /* PasteImage(cb)
+     *   `cb(bytes)` with a PNG as [`Bytes`](docs/reference/globals/Bytes.md),
+     *   or `null` when the clipboard holds no image
+     */
     JS_SetPropertyStr(ctx, clipboard, "PasteImage",
                       JS_NewCFunction(ctx, sys_clip_paste_image, "PasteImage", 1));
     JS_SetPropertyStr(ctx, global, "Clipboard", clipboard);

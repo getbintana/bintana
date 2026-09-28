@@ -17,16 +17,16 @@ File.SaveBytes("copy.png", b);
 | | | |
 |---|---|---|
 | `new Bytes([value])` | nothing, text, a list of numbers, or another `Bytes` | [making one](#making-one) |
-| `Bytes.FromBase64(text)` | from base64, **refused** when the text is not that | [making one](#making-one) |
-| `Bytes.FromHex(text)` | from hex, likewise | [making one](#making-one) |
-| `At(index)` | → one byte, `0`–`255`. **Throws** past the end | [looking inside](#looking-inside) |
-| `Concat(other, …)` | → a new one, end to end | [looking inside](#looking-inside) |
-| `Equals(other)` | → byte for byte | [looking inside](#looking-inside) |
-| `Length` (ro) | → how many bytes | [looking inside](#looking-inside) |
-| `Slice(from, [count])` | → a new `Bytes`, clamped like a string's | [looking inside](#looking-inside) |
-| `ToBase64()` | → as text | [leaving the type](#leaving-the-type) |
-| `ToHex()` | → as text, lower-case | [leaving the type](#leaving-the-type) |
-| `ToText()` | → the text it is, or a **throw** | [leaving the type](#leaving-the-type) |
+| `Bytes.FromBase64(text)` | **refused, not guessed**, when the text is not that — a base64 string with a space in it is a mistake somebody should hear about | [making one](#making-one) |
+| `Bytes.FromHex(text)` | from hex, **refused, not guessed**, when the text is not that -- an odd number of digits or a character that is not one is a mistake somebody should hear about | [making one](#making-one) |
+| `At(index)` | one byte as a number, `0`–`255` | [looking inside](#looking-inside) |
+| `Concat(other, …)` | a new one, end to end | [looking inside](#looking-inside) |
+| `Equals(other)` | byte for byte | [looking inside](#looking-inside) |
+| `Length` (ro) | how many bytes | [looking inside](#looking-inside) |
+| `Slice(from, [count])` | a new `Bytes` | [looking inside](#looking-inside) |
+| `ToBase64()` | as text; hex is lower-case, the way a digest is written | [leaving the type](#leaving-the-type) |
+| `ToHex()` | as hex, lower-case, the way a digest is written | [leaving the type](#leaving-the-type) |
+| `ToText()` | the text it is, or a **throw** when it is not valid UTF-8 — never the replacement character, which is a corruption that travels | [leaving the type](#leaving-the-type) |
 | `toJSON()` | → base64, so a record carrying a file survives a save | [leaving the type](#leaving-the-type) |
 | `toString()` | → `"Bytes(763)"` — a description, **not** the content | [leaving the type](#leaving-the-type) |
 
@@ -61,7 +61,7 @@ reason a thumbnail in a record cannot change under the record's feet.
 | | |
 |---|---|
 | `ToText()` | the text it is, or a **throw** when it is not valid UTF-8 — never the replacement character, which is a corruption that travels |
-| `ToBase64()` | as base64 text |
+| `ToBase64()` | as text; hex is lower-case, the way a digest is written |
 | `ToHex()` | as hex, lower-case, the way a digest is written |
 | `toJSON()` | base64, so a record carrying a file survives `File.SaveJson` |
 | `toString()` | `"Bytes(763)"` — **a description and not the content**, deliberately: a JPEG interpolated into a log line by accident is a megabyte of noise that reads as if it had worked |

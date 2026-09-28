@@ -13,13 +13,13 @@ follows is what is its own.
 
 | | | |
 |---|---|---|
-| `Ratio` | the proportion to keep, as `"16:9"`. `0` or `""` is the child's own | [the proportion](#the-proportion) |
+| `Ratio` | the proportion to keep, as `"16:9"` (or `"16/9"`, or a number) | [the proportion](#the-proportion) |
 
 ## The proportion
 
 | | |
 |---|---|
-| `Ratio` | `"16:9"`, `"16/9"` or a number. **`0` or `""` is the child's own**, which is the default. It is **kept as written**, so the `.form` and the property grid answer `"16:9"` and not `1.7778`, and it is settable while the program runs — which is when a stream's real shape arrives |
+| `Ratio` | the proportion to keep, as `"16:9"` (or `"16/9"`, or a number). **`0` or `""` is the child's own**, which is the default. Kept as written, so the `.form` and the grid answer with `"16:9"` and not with `1.7778`. Settable while the program runs, which is when a stream's shape arrives |
 
 **What it is for is not the picture but the rectangle the picture occupies.**
 [`Picture`](Picture.md) and [`Video`](Video.md) already letterbox inside

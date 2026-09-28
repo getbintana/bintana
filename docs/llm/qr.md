@@ -32,24 +32,24 @@ One static verb builds it; everything else is reading what it built.
 
 | Member | |
 |---|---|
-| `Encode(text, [options])` | the whole encoder. `text` is a string or `Bytes`; a string is encoded in the narrowest of the numeric, alphanumeric and byte modes that holds all of it. Answers a `QrCode` |
-| `Version` | 1 to 40, the smallest that holds the text |
-| `Ecc` | `L` `M` `Q` `H`, as asked. A code at `H` survives more damage and holds less |
-| `Mode` | `Numeric` `Alphanumeric` `Byte`, what the text was encoded as |
-| `Mask` | 0-7, the one the standard's penalty rules chose |
-| `Size` | modules a side, **without** the quiet zone: `17 + 4 × Version` |
-| `Dark(x, y)` | one module, `true` for dark. Outside the symbol is light, so a border needs no edge test |
-| `Paint(p, x, y, side, [options])` | onto any `Painter` — a frame, a PNG through `Save`, a PDF page. `side` is the whole square including the quiet zone |
-| `ToSvg([options])` | the symbol as an SVG document, one module to a unit of the view box |
-| `ToText([options])` | the symbol in block characters, two rows to a line — a console program, and what the tests read |
+| `Encode(text, [options])` | the whole encoder. `text` is a string or `Bytes`; a string is encoded in the narrowest mode that holds all of it, as UTF-8 when that is byte mode, and `Bytes` is byte mode as it stands. Answers a `QrCode` |
+| `Version` | 1 to 40, the smallest that held the text at the level asked. Read-only |
+| `Ecc` | error correction: `L` (7 % recoverable), `M` (15 %), `Q` (25 %) or `H` (30 %). `"M"`. A code at `H` survives more damage and holds less. Defaults to `"M"`. |
+| `Mode` | `Numeric`, `Alphanumeric` or `Byte`: what the text was encoded as |
+| `Mask` | 0-7 forces that mask instead of scoring all eight. For a test, or a scanner that likes one particular pattern |
+| `Size` | modules a side, without the quiet zone. A version 1 code is 21, a version 40 code is 177 |
+| `Dark(x, y)` | one module, `true` for dark, `(0, 0)` being the top left. **Outside the symbol is light**, so drawing a border needs no edge test first |
+| `Paint(p, x, y, side, [options])` | the symbol onto any [`Painter`](controls.md#painter) — a `DrawingArea`'s frame, a PNG through `Save`, a PDF page. `side` is the whole square **including the quiet zone**, and the modules are laid out inside it |
+| `ToSvg([options])` | the symbol as an SVG document, one module to a unit of the view box, `shape-rendering="crispEdges"` so no viewer blurs it. Same `QuietZone`, `Ink` and `Paper` options as `Paint` |
+| `ToText([options])` | two rows of modules per line in `█ ▀ ▄` — a console program, and what `tests/qr` reads. `QuietZone`, and `Invert` (`true` draws dark as ink, which is the spelling that scans on a terminal with a dark ground) |
 
 `Encode`'s options:
 
 | Option | |
 |---|---|
-| `Ecc` | `L` `M` `Q` `H`. `"M"` |
+| `Ecc` | error correction: `L` (7 % recoverable), `M` (15 %), `Q` (25 %) or `H` (30 %). `"M"`. A code at `H` survives more damage and holds less. Defaults to `"M"`. |
 | `MinVersion` / `MaxVersion` | 1 to 40. `1` / `40`. The version is the smallest in range that holds the text; text that fits none is refused, saying how much room there was |
-| `Mask` | 0-7 forces that mask instead of scoring all eight. For a test, or a scanner that likes one |
+| `Mask` | 0-7 forces that mask instead of scoring all eight. For a test, or a scanner that likes one particular pattern |
 
 `Paint`'s and `ToSvg`'s options: `QuietZone` (light modules around the symbol,
 `4`, the standard's minimum), `Ink` and `Paper` (`"#000000"` on `"#ffffff"`).
@@ -78,17 +78,17 @@ A `Component` around a `DrawingArea`, so everything on `Widget` is on it too.
 
 | Member | |
 |---|---|
-| `Text` | what is encoded, a string. **Data, not prose**: the class declares no text property, so no catalogue ever translates a URL into something else. `""` |
-| `Ecc` | `L` `M` `Q` `H`. `"M"` |
-| `QuietZone` | light modules around the symbol, 0 to 16. `4` |
-| `Ink` | the colour of the dark modules. `"#000000"` |
-| `Paper` | the colour of the ground. `"#ffffff"` |
-| `Code` | the encoded symbol, or `null` when there is nothing to show |
-| `Problem` | why there is no symbol, or `""`: text too long for version 40 at this level is the one way an assignment can fail |
-| `Refresh()` | redraws. Assigning any property already does |
-| `Save(path, [side])` | a PNG, `side` pixels square or the view's own size |
-| `ToPng([side])` | the same, answered as `Bytes` |
-| `ToSvg()` | the symbol as an SVG document, in this view's colours and quiet zone |
+| `Text` | what is encoded, a string. **Data, not prose**: the class declares no text property, so no catalogue ever translates a URL into something else. Defaults to `""`. Set it and the symbol is made on the spot, so `Code` answers on the next line. `null` and `undefined` are `""` |
+| `Ecc` | `L` `M` `Q` `H`, an error correction level. `"M"`. Higher survives more damage and holds less: the same text can need a higher version, and past the text's limit it stops fitting at all. Defaults to `"M"`. |
+| `QuietZone` | the light margin around the symbol, in modules, 0 to 16. `4`, which is the standard's minimum. A code on a form that already has white around it can take fewer; a code printed on a coloured ticket wants more. Defaults to `4`. |
+| `Ink` | the colour of the dark modules. Defaults to `"#000000"`. |
+| `Paper` | the colour of the ground. Defaults to `"#ffffff"`. |
+| `Code` | the encoded [`QrCode`](../reference/libraries/QrCode.md), or `null` when there is nothing to show. Read-only |
+| `Problem` | why there is no symbol, or `""`: text too long for version 40 at this level is the one way an assignment can fail. Read-only |
+| `Refresh()` | redraws. It exists for a property changed **in place**, which is not possible here — assigning anything already redraws. Assigning any property already does |
+| `Save(path, [side])` | a PNG of `side` pixels square, or of the view's own allocation. The file goes through [`DrawingArea.Save`](../reference/widgets/DrawingArea.md), so the same `Canvas_Draw` runs against an image surface, synchronously |
+| `ToPng([side])` | the same PNG answered as [`Bytes`](../reference/globals/Bytes.md), for an upload or a database column, with no file in between |
+| `ToSvg()` | the symbol as an SVG document, in this view's `Ink`, `Paper` and `QuietZone`. It **refuses** when there is no symbol rather than writing an empty file. Ask `Code` first, as the example does |
 
 Three decisions that are easy to get the other way round:
 

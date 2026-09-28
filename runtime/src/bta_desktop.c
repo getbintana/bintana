@@ -585,12 +585,28 @@ void bta_desktop_init(JSContext *ctx, JSValue global)
     g_free(dir);
 
     JSValue desktop = JS_NewObject(ctx);
+    /* DataDirectory
+     *   `$XDG_DATA_HOME`, or `~/.local/share` when the desktop has not moved
+     *   it. Application data that belongs to this user: a database, a saved
+     *   document, an installed menu entry
+     */
     JS_SetPropertyStr(ctx, desktop, "DataDirectory",
                       JS_NewString(ctx, g_get_user_data_dir()));
+    /* ConfigDirectory
+     *   `$XDG_CONFIG_HOME`, or `~/.config`. Settings, kept apart from data
+     *   because a backup or a sync usually wants one and not the other
+     */
     JS_SetPropertyStr(ctx, desktop, "ConfigDirectory",
                       JS_NewString(ctx, g_get_user_config_dir()));
+    /* CacheDirectory
+     *   `$XDG_CACHE_HOME`, or `~/.cache`. Anything that can be thrown away
+     *   and rebuilt
+     */
     JS_SetPropertyStr(ctx, desktop, "CacheDirectory",
                       JS_NewString(ctx, g_get_user_cache_dir()));
+    /* Entries
+     *   the module below
+     */
     JS_SetPropertyStr(ctx, desktop, "Entries", entries);
     JS_SetPropertyStr(ctx, global, "Desktop", desktop);
 }

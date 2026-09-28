@@ -355,29 +355,72 @@ static JSValue term_set_link_pattern(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry terminal_props[] = {
+    /* Available
+     *   whether this build can run a child. `Widget.Available("Terminal")` is
+     *   [the same question asked of the
+     *   class](docs/llm/controls.md#what-there-is-and-what-this-build-can-run),
+     *   which is what a palette wants. `false` on a runtime built without
+     *   VTE, where the three verbs refuse
+     */
     JS_CGETSET_DEF("Available",       term_get_available,  NULL),
+    /* LinkPattern
+     *   a regex; clicking text that matches raises `Link(text)`. What the
+     *   text *means* is yours
+     */
     JS_CGETSET_DEF("LinkPattern",     term_get_link_pattern, term_set_link_pattern),
+    /* Text
+     *   everything on screen and in the scrollback — what a *copy all* or a
+     *   bug report wants
+     */
     JS_CGETSET_DEF("Text",            term_get_text,       NULL),
+    /* Running
+     *   whether a child is alive
+     */
     JS_CGETSET_DEF("Running",         term_get_running,    NULL),
+    /* ScrollbackLines
+     *   how much history it keeps. Default `10000`
+     */
     JS_CGETSET_DEF("ScrollbackLines", term_get_scrollback, term_set_scrollback),
+    /* FontScale
+     *   a multiplier on the terminal's own font. Default `1` — the Ctrl+`+`
+     *   of a terminal, which is a property here rather than a gesture
+     */
     JS_CGETSET_DEF("FontScale",       term_get_font_scale, term_set_font_scale),
-    /* Run(argv, [workdir]) */
+    /* Run(argv, [workdir])
+     *   starts a child on a real pty, so colours, prompts and input all work.
+     *   `argv` is the program and its arguments as an array — no shell, so
+     *   nothing is word-split or globbed behind your back
+     */
     JS_CFUNC_DEF("Run",   2, term_run),
-    /* Stop() */
+    /* Stop()
+     *   SIGTERM to the child's **process group**, which is what reaches a
+     *   shell's own children
+     */
     JS_CFUNC_MAGIC_DEF("Stop", 0, term_signal, 0),
-    /* Kill() */
+    /* Kill()
+     *   SIGKILL, for the one that did not answer
+     */
     JS_CFUNC_MAGIC_DEF("Kill", 0, term_signal, 1),
-    /* Feed(text) */
+    /* Feed(text)
+     *   writes to the display **without a child**: a banner, a note about
+     *   what is about to run, the reason something was refused
+     */
     JS_CFUNC_DEF("Feed",  1, term_feed),
-    /* Clear() */
+    /* Clear()
+     *   resets it
+     */
     JS_CFUNC_DEF("Clear", 0, term_clear),
 };
 
 void bta_terminal_register(void)
 {
     const BtaClass rows[] = {
-        /* Exit(code) */
-        /* Link(text) */
+        /* Exit(code)
+         *   the child ended, with the status a shell would report
+         */
+        /* Link(text)
+         *   that text was clicked. **What it means is yours**
+         */
         BTA_CLASS_OPTIONAL("Terminal", "Control", term_build, terminal_props,
                            false, TERM_AVAILABLE, "Exit,Link"),
     };

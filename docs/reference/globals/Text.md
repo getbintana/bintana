@@ -12,16 +12,16 @@ the answer available when the layout is being worked out.
 
 | | | |
 |---|---|---|
-| `Bounds(text, from, to, [font], [options])` | → the rectangles covering those characters | [where a character is](#where-a-character-is) |
-| `Escape(text)` | → the text as markup that says exactly it | [markup](#markup) |
-| `Font` (ro) | the desktop's UI font | [the font](#the-font) |
-| `Height(text, [font], [options])` | → how tall it lays out | [measuring](#measuring) |
-| `IndexAt(text, x, y, [font], [options])` | → which character is at that point | [where a character is](#where-a-character-is) |
-| `LineOf(text, index)` | → the line a search's index falls on | [where a character is](#where-a-character-is) |
-| `Lines(text, [font], [options])` | → the lines it breaks into | [measuring](#measuring) |
-| `OffsetAt(text, line, [column])` | → the character offset of that position | [where a character is](#where-a-character-is) |
-| `Size(text, [font], [options])` | → `{ Width, Height, Lines }` in one measurement | [measuring](#measuring) |
-| `Width(text, [font], [options])` | → how wide it lays out, in pixels | [measuring](#measuring) |
+| `Bounds(text, from, to, [font], [options])` | the rectangles covering those characters | [where a character is](#where-a-character-is) |
+| `Escape(text)` | the text as markup that says exactly it | [markup](#markup) |
+| `Font` (ro) | the desktop's UI font, which is what a control draws with unless CSS says otherwise | [the font](#the-font) |
+| `Height(text, [font], [options])` | how tall — one line's height, or the whole block's when it wraps | [measuring](#measuring) |
+| `IndexAt(text, x, y, [font], [options])` | which character is at that point, as an index into the text **as it was laid out** — a markup run's tags already consumed | [where a character is](#where-a-character-is) |
+| `LineOf(text, index)` | the line an index falls on, 1-based and clamped — `index` is the number a **search** gave, so it is counted in UTF-16 units | [where a character is](#where-a-character-is) |
+| `Lines(text, [font], [options])` | the lines it breaks into, as an array — for a caller that will draw them one by one | [measuring](#measuring) |
+| `OffsetAt(text, line, [column])` | the **character** offset of that line and column, clamped the way an editor's `Select` clamps | [where a character is](#where-a-character-is) |
+| `Size(text, [font], [options])` | `{ Width, Height, Lines }` in **one** measurement, which is one layout instead of three | [measuring](#measuring) |
+| `Width(text, [font], [options])` | how wide it lays out, in pixels | [measuring](#measuring) |
 
 `font` is a Pango description (`"Cantarell Bold 10"`); `""` or nothing means
 `Font`. `options` is `{ Width, Markup, Align }` — the same three
@@ -32,9 +32,9 @@ the answer available when the layout is being worked out.
 | | |
 |---|---|
 | `Width(text, [font], [options])` | how wide it lays out, in pixels |
-| `Height(text, [font], [options])` | how tall: one line's height, or the whole block's when it wraps |
+| `Height(text, [font], [options])` | how tall — one line's height, or the whole block's when it wraps |
 | `Size(text, [font], [options])` | `{ Width, Height, Lines }` in **one** measurement, which is one layout instead of three |
-| `Lines(text, [font], [options])` | the lines it breaks into, as an array — for a caller that will draw them one by one |
+| `Lines(text, [font], [options])` | the lines it breaks into, as an array — for a caller that will draw them one by one. **Refused with `Markup`** — see below |
 
 ```js
 Text.Width("Statement of account", "Bold 18")     // 178
@@ -82,7 +82,7 @@ out nothing and warning on the console — which is what a
 | | |
 |---|---|
 | `IndexAt(text, x, y, [font], [options])` | which character is at that point, as an index into the text **as it was laid out** — a markup run's tags already consumed. Above the text is `0` and below it is the end |
-| `Bounds(text, from, to, [font], [options])` | the rectangles covering those characters: one per line the range crosses, and more than one on a line that changes direction |
+| `Bounds(text, from, to, [font], [options])` | the rectangles covering those characters: `{ X, Y, Width, Height }`, one per line the range crosses and more than one on a line that changes direction |
 | `LineOf(text, index)` | the line an index falls on, 1-based and clamped — `index` is the number a **search** gave, so it is counted in UTF-16 units |
 | `OffsetAt(text, line, [column])` | the **character** offset of that line and column, clamped the way an editor's `Select` clamps |
 

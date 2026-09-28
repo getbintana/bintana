@@ -24,69 +24,69 @@ in the section.
 
 | | | |
 |---|---|---|
-| `AcceptDrop` | takes a drop from this application | [drag and drop](#drag-and-drop) |
-| `AcceptFiles` | takes files dropped from the desktop | [drag and drop](#drag-and-drop) |
-| `Action` | the command this control points at | [commands, menus and keys](#commands-menus-and-keys) |
-| `Background` | any CSS colour, `""` for the theme's | [how it looks](#how-it-looks) |
-| `Border` | `"2 dashed #3584e4"` | [how it looks](#how-it-looks) |
-| `ColumnSpan` | how many columns of a `Grid` it covers | [how it is placed](#how-it-is-placed) |
+| `AcceptDrop` | receives a drop from **this application**, which arrives as `Drop(data, x, y)` | [drag and drop](#drag-and-drop) |
+| `AcceptFiles` | receives files dragged in from **the desktop**, which arrive as `FileDrop(paths, x, y)` | [drag and drop](#drag-and-drop) |
+| `Action` | the **command** this control points at, or `""` | [commands, menus and keys](#commands-menus-and-keys) |
+| `Background` | any CSS colour | [how it looks](#how-it-looks) |
+| `Border` | width, style and colour in one string | [how it looks](#how-it-looks) |
+| `ColumnSpan` | how many columns of a `Grid` it runs under | [how it is placed](#how-it-is-placed) |
 | `Cursor` | what the pointer looks like over it | [how it looks](#how-it-looks) |
-| `Dark` (ro) | whether it is drawn on a dark ground | [how it looks](#how-it-looks) |
-| `DragData` | the string that travels when it is dragged | [drag and drop](#drag-and-drop) |
+| `Dark` (ro) | whether it is drawn on a dark ground, derived from the ink its text uses | [how it looks](#how-it-looks) |
+| `DragData` | the string that travels when this control is dragged | [drag and drop](#drag-and-drop) |
 | `Enabled` | answers the mouse and the keyboard | [shown, enabled, focused](#shown-enabled-focused) |
-| `Expand` | absorbs slack on both axes | [how it is placed](#how-it-is-placed) |
+| `Expand` | absorbs the slack on both axes — the one word that makes a control fill the room left over in a row or a column | [how it is placed](#how-it-is-placed) |
 | `Focusable` | can take the keyboard focus | [shown, enabled, focused](#shown-enabled-focused) |
-| `Focused` (ro) | whether the focus is **within** it | [shown, enabled, focused](#shown-enabled-focused) |
-| `Font` | a Pango description, or part of one | [how it looks](#how-it-looks) |
-| `FontScale` | a multiplier on the size in force | [how it looks](#how-it-looks) |
-| `Foreground` | the colour of its text | [how it looks](#how-it-looks) |
-| `HAlign` | what becomes of it across its room | [how it is placed](#how-it-is-placed) |
-| `HExpand` | absorbs horizontal slack | [how it is placed](#how-it-is-placed) |
-| `Height` | height **requested**: a minimum | [where it is and how big](#where-it-is-and-how-big) |
-| `Margin` | room around it, one number | [how it is placed](#how-it-is-placed) |
-| `Menu` | a context menu | [commands, menus and keys](#commands-menus-and-keys) |
-| `MinWidth` | the floor a stretched control keeps | [how it is placed](#how-it-is-placed) |
-| `MinHeight` | the same downwards | [how it is placed](#how-it-is-placed) |
-| `Name` | how the form reaches it, and its handlers' prefix | [name and identity](#name-and-identity) |
-| `Opacity` | `0`…`1` | [how it looks](#how-it-looks) |
-| `Padding` | room inside it | [how it looks](#how-it-looks) |
-| `Radius` | rounded corners | [how it looks](#how-it-looks) |
+| `Focused` (ro) | whether the focus is **within** it, which is why a `TextBox` answers `true` while the focus really sits on the entry inside it | [shown, enabled, focused](#shown-enabled-focused) |
+| `Font` | a Pango description — `"Cantarell Bold 12"` — or a partial one | [how it looks](#how-it-looks) |
+| `FontScale` | a multiplier on whatever size is in force | [how it looks](#how-it-looks) |
+| `Foreground` | likewise, for the text | [how it looks](#how-it-looks) |
+| `HAlign` | `Auto` `Start` `End` `Center` `Fill` — what becomes of it when the container is not the size the coordinates were drawn for | [how it is placed](#how-it-is-placed) |
+| `HExpand` | the horizontal half of it, when the two answers differ | [how it is placed](#how-it-is-placed) |
+| `Height` | the height, likewise | [where it is and how big](#where-it-is-and-how-big) |
+| `Margin` | room **around** it: one number for all four sides, never a list | [how it is placed](#how-it-is-placed) |
+| `Menu` | a context menu, as the same array of items a form's `menus` uses | [commands, menus and keys](#commands-menus-and-keys) |
+| `MinWidth` | the floor a stretched control may not be squeezed below | [how it is placed](#how-it-is-placed) |
+| `MinHeight` | the same for `VAlign` | [how it is placed](#how-it-is-placed) |
+| `Name` | how the form reaches it — `this.BtnSave` — and the prefix its handlers carry | [name and identity](#name-and-identity) |
+| `Opacity` | `0`…`1`, where `1` is *nothing said* | [how it looks](#how-it-looks) |
+| `Padding` | room **inside** it, one to four sizes | [how it looks](#how-it-looks) |
+| `Radius` | rounded corners, one to four sizes in CSS order | [how it looks](#how-it-looks) |
 | `Shadow` | `"x y blur [spread] [colour]"` | [how it looks](#how-it-looks) |
 | `Shortcut` | the key that activates it | [commands, menus and keys](#commands-menus-and-keys) |
-| `Style` | the CSS classes it wears | [how it looks](#how-it-looks) |
-| `TabIndex` | where Tab reaches it | [how it is placed](#how-it-is-placed) |
-| `Tooltip` | plain text, **translated** | [words on it](#words-on-it) |
+| `Style` | the CSS classes it wears, space separated | [how it looks](#how-it-looks) |
+| `TabIndex` | where Tab reaches it on a surface laid out by coordinate | [how it is placed](#how-it-is-placed) |
+| `Tooltip` | plain text, and `""` is none rather than an empty balloon | [words on it](#words-on-it) |
 | `VAlign` | the same, vertically | [how it is placed](#how-it-is-placed) |
 | `VExpand` | absorbs vertical slack | [how it is placed](#how-it-is-placed) |
 | `Visible` | shown or not | [shown, enabled, focused](#shown-enabled-focused) |
-| `Width` | width **requested**: a minimum, not a size | [where it is and how big](#where-it-is-and-how-big) |
-| `X` | left edge, in the parent's coordinates | [where it is and how big](#where-it-is-and-how-big) |
-| `Y` | top edge, likewise | [where it is and how big](#where-it-is-and-how-big) |
+| `Width` | width **requested**: a minimum, not an exact size | [where it is and how big](#where-it-is-and-how-big) |
+| `X` | the left edge, in the parent's coordinates | [where it is and how big](#where-it-is-and-how-big) |
+| `Y` | the top edge, likewise | [where it is and how big](#where-it-is-and-how-big) |
 
 **Methods**
 
 | | | |
 |---|---|---|
-| `Bounds([container])` | → what GTK really allocated | [where it is and how big](#where-it-is-and-how-big) |
-| `CssNode()` | → the node name it is styled as | [what it answers about itself](#what-it-answers-about-itself) |
+| `Bounds([container])` | `{ X, Y, Width, Height }`: what GTK really allocated, in window coordinates or in the coordinates of the container you pass | [where it is and how big](#where-it-is-and-how-big) |
+| `CssNode()` | the GTK node name it is styled as (`"button"`, `"entry"`) | [what it answers about itself](#what-it-answers-about-itself) |
 | `Delete()` | removes it **and destroys it** | [shown, enabled, focused](#shown-enabled-focused) |
-| `Emit(event, ...args)` | raises an event on the form | [commands, menus and keys](#commands-menus-and-keys) |
-| `EventNames()` | → the events it raises, most derived first | [what it answers about itself](#what-it-answers-about-itself) |
-| `Hide()` | makes it invisible, keeping its place | [shown, enabled, focused](#shown-enabled-focused) |
-| `Lower()` | to the bottom of the painting order | [how it is placed](#how-it-is-placed) |
-| `Move(x, y)` | sets `X` and `Y` together | [where it is and how big](#where-it-is-and-how-big) |
-| `On(event, fn)` | installs **this control's own** handler | [commands, menus and keys](#commands-menus-and-keys) |
-| `OriginIn(container)` | → where it sits in that container | [where it is and how big](#where-it-is-and-how-big) |
-| `PopupMenu(x, y)` | opens its `Menu` at a point | [commands, menus and keys](#commands-menus-and-keys) |
-| `PropertyOptions(name)` | → the exact strings that property takes | [what it answers about itself](#what-it-answers-about-itself) |
-| `Raise()` | to the top | [how it is placed](#how-it-is-placed) |
-| `Remove()` | detaches it **without** destroying it | [shown, enabled, focused](#shown-enabled-focused) |
+| `Emit(event, ...args)` | raises an event that arrives by name on the host form | [commands, menus and keys](#commands-menus-and-keys) |
+| `EventNames()` | the events it raises, **most derived first** | [what it answers about itself](#what-it-answers-about-itself) |
+| `Hide()` | makes it invisible | [shown, enabled, focused](#shown-enabled-focused) |
+| `Lower()` | and to the bottom | [how it is placed](#how-it-is-placed) |
+| `Move(x, y)` | `X` and `Y` together, because that reads better in a loop | [where it is and how big](#where-it-is-and-how-big) |
+| `On(event, fn)` | installs **this control's own** handler for an event, for a control built in code: no name, and nothing left on the form to delete | [commands, menus and keys](#commands-menus-and-keys) |
+| `OriginIn(container)` | `[x, y]`: where this widget's corner is in that container's space | [where it is and how big](#where-it-is-and-how-big) |
+| `PopupMenu(x, y)` | opens that menu at a point in this control's own coordinates — how a button that drops a menu is built | [commands, menus and keys](#commands-menus-and-keys) |
+| `PropertyOptions(name)` | the exact strings that property accepts, or an empty list | [what it answers about itself](#what-it-answers-about-itself) |
+| `Raise()` | to the top of the painting order, among its siblings on a surface | [how it is placed](#how-it-is-placed) |
+| `Remove()` | detaches it from its parent **without destroying it**, so it can be put somewhere else | [shown, enabled, focused](#shown-enabled-focused) |
 | `Resize(width, height)` | sets `Width` and `Height` together | [where it is and how big](#where-it-is-and-how-big) |
 | `SetFocus()` | gives it the keyboard focus | [shown, enabled, focused](#shown-enabled-focused) |
 | `Show()` | makes it visible | [shown, enabled, focused](#shown-enabled-focused) |
-| `SizeRequest()` | → `[width, height]` as requested, `-1` for unasked | [where it is and how big](#where-it-is-and-how-big) |
-| `StyleRule()` | → the CSS rule its own class carries | [what it answers about itself](#what-it-answers-about-itself) |
-| `TextProperties()` | → which of its properties hold prose | [words on it](#words-on-it) |
+| `SizeRequest()` | `[width, height]` as requested, with `-1` on an axis nobody declared | [where it is and how big](#where-it-is-and-how-big) |
+| `StyleRule()` | the CSS rule this widget's own class currently carries | [what it answers about itself](#what-it-answers-about-itself) |
+| `TextProperties()` | which of this control's properties hold prose, which is what the catalogue collects and what a designer offers to translate | [words on it](#words-on-it) |
 
 **Events**
 
@@ -136,17 +136,17 @@ if you want events from it, and why two controls on one form may not share one.
 
 | | |
 |---|---|
-| `X` | the left edge, in the parent's coordinates. **It means something only inside a container laying out by coordinate**; in a row or a column the parent decides and this reports where it ended up |
+| `X` | the left edge, in the parent's coordinates. **It means something only inside a container laying out by coordinate**; in a row or a column the parent decides and this reports where it ended up. `-32767`..`32767`, like `Y` and `Move` |
 | `Y` | the top edge, likewise |
-| `Width` | the width **requested**, which is a *minimum* and not an exact size: a control whose contents need more renders larger. Reading it gives what was asked for, falling back to what GTK allocated when nothing was |
+| `Width` | width **requested**: a minimum, not an exact size. Reads the allocation when nothing was declared. `0`..`32767` (or `-1`, *not asked*) — a display holds no more, and more was a `BadAlloc` that killed the process; the same for `Height`, `MinWidth`, `MinHeight` and `Resize`. Reading it gives what was asked for, falling back to what GTK allocated when nothing was |
 | `Height` | the height, likewise |
-| `MinWidth` | the floor a **stretched** control may not be squeezed below — see [how it is placed](#how-it-is-placed) |
-| `MinHeight` | the same downwards |
+| `MinWidth` | the floor a stretched control may not be squeezed below. Only means something on an axis whose `HAlign` is `Fill` |
+| `MinHeight` | the same for `VAlign` |
 | `Move(x, y)` | `X` and `Y` together, because that reads better in a loop |
-| `Resize(width, height)` | `Width` and `Height` together |
-| `SizeRequest()` | → `[width, height]` as requested, with `-1` on an axis nobody declared. What the serialiser asks, so that a measurement never becomes a floor |
-| `Bounds([container])` | → `{ X, Y, Width, Height }`: what GTK really allocated, in window coordinates or in the coordinates of the container you pass |
-| `OriginIn(container)` | → `[x, y]`: where this widget's corner is in that container's space |
+| `Resize(width, height)` | sets `Width` and `Height` together |
+| `SizeRequest()` | `[width, height]` as requested, with `-1` on an axis nobody declared. What the serialiser asks, so that a measurement never becomes a floor |
+| `Bounds([container])` | `{ X, Y, Width, Height }`: what GTK really allocated, in window coordinates or in the coordinates of the container you pass |
+| `OriginIn(container)` | `[x, y]`: where this widget's corner is in that container's space |
 
 **A declared size is a floor, not a promise.** `Width: 80` on a `Label` with a
 long sentence in it is a label wider than 80, and that is GTK doing what it was
@@ -183,11 +183,11 @@ else               this.Pic.On("Allocated", (b) => this.fitTo(b));
 |---|---|
 | `Expand` | absorbs the slack on both axes — the one word that makes a control fill the room left over in a row or a column |
 | `HExpand` | the horizontal half of it, when the two answers differ |
-| `VExpand` | and the vertical |
-| `HAlign` | `Auto` `Start` `End` `Center` `Fill` — what becomes of it across its room when that room is not the size it was drawn for |
-| `VAlign` | the same, down it |
-| `Margin` | room **around** it: one number for all four sides, never a list. On a `Form` it insets the contents, a window having no outside |
-| `ColumnSpan` | how many columns of a [`Grid`](Grid.md) it runs under |
+| `VExpand` | absorbs vertical slack |
+| `HAlign` | `Auto` `Start` `End` `Center` `Fill` — what becomes of it when the container is not the size the coordinates were drawn for |
+| `VAlign` | the same, vertically |
+| `Margin` | room **around** it: one number for all four sides, never a list. On a `Form` it insets the contents, a window having no outside. Not a list. |
+| `ColumnSpan` | how many columns of a `Grid` it runs under. `1` |
 | `TabIndex` | where Tab reaches it on a surface laid out by coordinate. Sparse, never renumbered; `0` means *in drawn order*. The IDE edits it as a list — *Form > Tab order...* — which is the shape a relation needs |
 | `Raise()` | to the top of the painting order, among its siblings on a surface |
 | `Lower()` | and to the bottom |
@@ -211,10 +211,10 @@ component with a drawn size of its own is put into a small pane: `HAlign` and
 | `Enabled` | answers the mouse and the keyboard. `true` by default, and **read-only in effect while `Action` is set**: a control that points at a command takes the command's answer |
 | `Focusable` | can take the keyboard focus. Turn it on for a container that wants keys — a drawing surface, a board. The answer is the **control's** and not the outside widget's: a `TextBox` reads `true` while the entry GTK lays out is not focusable at all, its inner `GtkText` being where the focus really sits |
 | `Focused` (ro) | whether the focus is **within** it, which is why a `TextBox` answers `true` while the focus really sits on the entry inside it |
-| `SetFocus()` | puts the focus here |
+| `SetFocus()` | gives it the keyboard focus |
 | `Remove()` | detaches it from its parent **without destroying it**, so it can be put somewhere else |
 | `Delete()` | removes it **and destroys it**. What is in it goes too |
-| **event** `GotFocus()` | the focus arrived anywhere within it |
+| **event** `GotFocus()` | answers for the **control**, so it fires for the focus arriving anywhere within it |
 | **event** `LostFocus()` | where *the user is done with this box* is said — validation, formatting, saving a field |
 
 **`Remove()` and `Delete()` are the pair worth keeping straight**: one hands the
@@ -225,18 +225,18 @@ because a container refuses a widget that already has a parent.
 
 | | |
 |---|---|
-| `Style` | the CSS classes it wears, space separated: `"card title-3"`. **The first thing to reach for**: the theme draws `suggested-action`, `destructive-action`, `dim-label`, `title-1`…`title-4`, `heading`, `card`, `frame`, `boxed-list`, `toolbar`, `flat`, `linked`, `pill`, `monospace` |
+| `Style` | the CSS classes it wears, space separated: `"card title-3"`. **The first thing to reach for**: the theme draws `suggested-action`, `destructive-action`, `dim-label`, `title-1`…`title-4`, `heading`, `card`, `frame`, `boxed-list`, `toolbar`, `flat`, `linked`, `pill`, `monospace`. A name that could not be a class is refused |
 | `Background` | any CSS colour; `""` restores the theme's. The **exception** to `Style`, for when the colour is data — a status, a category, a swatch |
-| `Foreground` | the same, for the text |
-| `Font` | a Pango description (`"Cantarell Bold 12"`) or part of one (`"Bold"`, `"12"`). `""` restores the theme's |
-| `FontScale` | a multiplier on whatever size is in force: `1.1` is 110%. `1` is *nothing said*; `0` is refused |
+| `Foreground` | likewise, for the text |
+| `Font` | a Pango description — `"Cantarell Bold 12"` — or a partial one: `"Bold"`, `"12"`. `""` restores the theme |
+| `FontScale` | a multiplier on whatever size is in force: `1.1` is 110%. `1` is "nothing said"; `0` is refused |
 | `Opacity` | `0`…`1`, where `1` is *nothing said* |
 | `Padding` | room **inside** it, one to four sizes. `"0"` asks for none, `""` takes the theme's |
-| `Radius` | rounded corners, one to four sizes in CSS order: `"8"`, `"8 8 0 0"` |
+| `Radius` | rounded corners, one to four sizes in CSS order: `"8"`, `"8 8 0 0"`. `""` or all zeroes is square |
 | `Border` | width, style and colour in one string: `"2 dashed #3584e4"` |
-| `Shadow` | `"x y blur [spread] [colour]"`. One shadow, never inset |
-| `Cursor` | what the pointer looks like over it: `Auto` `Arrow` `Hand` `Text` `Wait` `Crosshair` `Move` `NotAllowed` `ZoomIn`… A **child** with one of its own wins, which is why `Form.Cursor = "Wait"` is not a busy pointer for the whole window |
-| `Dark` (ro) | whether it is drawn on a dark ground, derived from the ink its text uses. What a drawing chooses its palette by |
+| `Shadow` | `"x y blur [spread] [colour]"`. One shadow, never inset. A colour alone or a bare number is refused |
+| `Cursor` | what the pointer looks like over it: `Auto` (nothing said) `Arrow` `Hand` `Grab` `Grabbing` `Text` `VerticalText` `Wait` `Progress` `Help` `Crosshair` `Cell` `ContextMenu` `Move` `Scroll` `Copy` `Link` `NoDrop` `NotAllowed` `ZoomIn` `ZoomOut` `None` `ResizeHorizontal` `ResizeVertical` `ResizeTopLeft` `ResizeTopRight` `ResizeColumn` `ResizeRow`. Reaches the parts a control is made of, so it is seen over an entry's text too — but a *child* control with one of its own wins, which is why `Form.Cursor = "Wait"` is not a busy pointer for the whole window |
+| `Dark` (ro) | whether it is drawn on a dark ground, derived from the ink its text uses. The same answer `Painter.Dark` gives, and a `Form` raises `ThemeChange` when the desktop moves it. What a drawing chooses its palette by |
 
 **Reach for `Style` before the colour properties.** A class is a name the theme
 paints, and it follows the desktop into dark mode, into a high-contrast theme and
@@ -253,9 +253,9 @@ property does is say which classes the control wears.
 | | |
 |---|---|
 | `Tooltip` | plain text, and `""` is none rather than an empty balloon. **Translated** |
-| `TextProperties()` | → which of this control's properties hold prose, which is what the catalogue collects and what a designer offers to translate |
+| `TextProperties()` | which of this control's properties hold prose, which is what the catalogue collects and what a designer offers to translate |
 | `Fill(…args)` | fills the **declared** text as a template: a `Label` declared `"{0} files"` and filled with `12` reads *12 files*, and the number stays out of the catalogue |
-| `Declared(name)` | → what the `.form` said, whatever has been assigned since — which is what makes `Fill` possible on a control that has already been filled once |
+| `Declared(name)` | what the `.form` said, whatever has been assigned since — which is what makes `Fill` possible on a control that has already been filled once |
 
 Prose belongs in the `.form` and reaches the user through the catalogue; values
 are filled in from code. `Fill` is the join between the two, and the reason a
@@ -265,12 +265,12 @@ translated string can carry `{0}` at all.
 
 | | |
 |---|---|
-| `Action` | the **command** this control points at, or `""`. A control that has one takes its `Enabled` — and its `Text` and `Icon` when it declared neither — and refuses an `Enabled` of its own. Only a control that can be pressed may have one |
+| `Action` | the **command** this control points at, or `""`. A control that has one takes its `Enabled` — and its `Text` and `Icon`, when it declared neither — from the command, and **refuses** to be told an `Enabled` of its own. Only a control that is pressed can have one; a name that is not one of the form's `actions` is refused. See [forms.md](../../llm/forms.md#actions-one-command-in-several-places) |
 | `Shortcut` | the key that activates it: `"F5"`, `"<Control>s"`, or a list `["7", "KP_7"]`. **`Return` never fires**, the window claiming it for its default button |
-| `Menu` | a context menu, as the same array of items a form's `menus` uses. Reassigning replaces it |
+| `Menu` | a context menu, as the same array of items a form's `menus` uses. Reassigning replaces it. The items name handlers on the form, so a control built in code is **added before** its `Menu` is assigned — before that it is refused with a sentence. **An item's name belongs to one menu**: a second menu declaring it, or a name already taken by a control or a member of the form, is refused — one command in several menus is a form `action` with an `{ "action": … }` item in each. Rebuilding the same menu is fine |
 | `PopupMenu(x, y)` | opens that menu at a point in this control's own coordinates — how a button that drops a menu is built |
 | `Emit(event, ...args)` | raises an event that arrives by name on the host form. **What a component announces itself with** |
-| `On(event, fn)` | installs **this control's own** handler, for a control built in code. Installing again replaces, `On(event, null)` removes, and it answers with the control so it chains. Refused when the form already answers that event by name -- at `On`, at a rename, and at the `Add` that brings the control to that form |
+| `On(event, fn)` | installs **this control's own** handler for an event, for a control built in code: no name, and nothing left on the form to delete. Installing again replaces; `On(event, null)` removes; it answers with the control, so it chains. The handler is called with `this` undefined; an event name that is not in `EventNames()` throws, and so does installing one the form already answers by name — a control has one handler for one event, refused at `On`, at a rename, and at the `Add` that brings the control to that form. It is also how a `Component` added from code is heard: its `Emit` finds this before the `<name>_<event>` road |
 
 **A control a designer drew, and a control built in code.** A designer names a
 control and the handler is `<Name>_<Event>` on the form — which is the whole of
@@ -319,15 +319,15 @@ availability is computed once and every one of them follows. Three copies of
 | | |
 |---|---|
 | `DragData` | the string that travels when this control is dragged. Empty turns dragging off |
-| `AcceptDrop` | receives a drop from **this application**, which arrives as `Drop` |
-| `AcceptFiles` | receives files dragged in from **the desktop**, which arrive as `FileDrop`. Independent of `AcceptDrop`: a control may take one, the other or both |
-| **event** `Drop(data, x, y)` | something with a `DragData` was dropped here. Refused drops never arrive (see `DragOver`). **Undo here whatever `DragEnter` lit up**, because no `DragLeave` follows a drop |
-| **event** `FileDrop(paths, x, y)` | files were dropped here. `paths` is an array of full paths — **only files that have one**: something on a remote share has no local path and does not arrive, and a drop of nothing but those is refused rather than delivered empty |
-| **event** `DragEnter(data, x, y)` | a drag came over this control, carrying the same point `Drop` will. Light the column up here. **Refusing is `DragOver`'s**, not this one's: a `false` here is overwritten by the next motion |
-| **event** `DragOver(data, x, y)` | the drag moved over it, point after point. Recompute the insertion line here. **Returning `false` refuses the drop at that point**: the cursor shows it and `Drop` never fires. Anything else — including answering nothing — accepts, and with no handler everything is accepted. Strictly `false`: a handler that answers nothing returns `undefined`, which must not refuse every drag anywhere |
-| **event** `DragLeave()` | the drag left **without dropping**. Undoes what `DragEnter` did — and a drop is not a leave: see below |
-| **event** `DragBegin()` | this control started being dragged. Grey the card here |
-| **event** `DragEnd()` | the drag finished — dropped or refused. Puts back whatever `DragBegin` changed |
+| `AcceptDrop` | receives a drop from **this application**, which arrives as `Drop(data, x, y)` |
+| `AcceptFiles` | receives files dragged in from **the desktop**, which arrive as `FileDrop(paths, x, y)`. Independent of `AcceptDrop`: a control may take one, the other, or both |
+| **event** `Drop(data, x, y)` | something with `DragData` was dropped on a widget with `AcceptDrop`. The point is in **this widget's** coordinates, and so is `Bounds(this widget)` asked of a child — so *which row a drop is over* is a comparison and not arithmetic, and on a scroller both numbers already carry the scroll (a child above the view reads a negative `Y`). A hidden child measures 0x0, so skip what is not `Visible`. Only arrives when the drop was not refused (see `DragOver`). **Undo here whatever `DragEnter` lit up**: no `DragLeave` follows a drop (see its row). Refused drops never arrive (see `DragOver`). |
+| **event** `FileDrop(paths, x, y)` | files were dropped from the file manager or the desktop on a widget with `AcceptFiles`. `paths` is an array of full paths — **only files that have one**: a file on a remote share has no local path and does not arrive, and a drop of nothing but those is refused rather than delivered empty |
+| **event** `DragEnter(data, x, y)` | the drag came over a widget with `AcceptDrop`, carrying the same point `Drop` will. What the target lights up with — a column, a highlight — goes here. **The refusal does not live here**: a `false` from this one is overwritten by the very next `DragOver`, which in any real drag is immediately, so a target that refuses says so in `DragOver` |
+| **event** `DragOver(data, x, y)` | the drag moved over it, point after point. Where an insertion line sits is recomputed here. **Returning `false` refuses the drop at that point**: the cursor shows it and `Drop` never fires. Anything else — including answering nothing — accepts it, and with no handler everything is accepted. Strictly `false`: a handler that answers nothing returns `undefined`, which must not refuse every drag anywhere |
+| **event** `DragLeave()` | the drag left without dropping. Undoes what `DragEnter` did — **and a drop is not a leave**: measured, nothing arrives after a `Drop`, and the leave for that target is delivered at the *next* drag instead, right after its `DragBegin` and for a target that drag never touched. So a target undoes its own feedback in `Drop` as well, and anything counting enters against leaves has to expect the late one |
+| **event** `DragBegin()` | on the widget being dragged: the drag started. Grey the card here |
+| **event** `DragEnd()` | on the widget being dragged: the drag finished — dropped or refused. Puts back whatever `DragBegin` changed |
 
 `data` in `DragEnter`/`DragOver` is the dragged string, preloaded on hover: without preload the value would only exist at drop. Still loading on a very early `enter` answers `""` rather than holding the event back. There is no feedback half for `FileDrop`: files from the desktop have no travelling string to preload.
 
@@ -359,10 +359,10 @@ Every widget raises these, with coordinates **relative to itself**:
 
 | | |
 |---|---|
-| **event** `MouseDown(x, y, button, ctrl, shift)` | a button went down |
+| **event** `MouseDown(x, y, button, ctrl, shift)` | coordinates are relative to the widget |
 | **event** `MouseUp(x, y, button, ctrl, shift)` | and came up |
 | **event** `MouseMove(x, y, button, ctrl, shift)` | the pointer moved over it. `button` is `0` here |
-| **event** `MouseEnter(x, y)` | the pointer came in |
+| **event** `MouseEnter(x, y)` | the question motion cannot answer: there is no `MouseMove` for having left |
 | **event** `MouseLeave()` | and left — the question motion cannot answer, since there is no `MouseMove` for having gone |
 | **event** `MouseWheel(dx, dy)` | how far the wheel turned, in GTK's units: one notch is `1.0` on a wheel and a fraction on a touchpad. **Returning `true` consumes it**, which stops the scroller around it from also moving |
 | **event** `DblClick(x, y, button, ctrl, shift)` | two clicks |
@@ -383,14 +383,14 @@ them being privileged:
 
 | | |
 |---|---|
-| `PropertyNames()` | → every settable property, found along the prototype chain — including the ones a component of your own declares |
-| `PropertyOptions(name)` | → the exact strings that property accepts, or an empty list. What fills a drop-down in the property grid, and the reason a list of values is never typed twice |
-| `EventNames()` | → the events it raises, **most derived first**: `[0]` is the one a double click in the designer writes a handler for |
-| `Serialize()` | → this widget as a `.form` node |
-| `Apply(properties)` | → the widget: the inverse of `Serialize`. A missing dictionary applies nothing, so `Apply(maybe)` is safe |
+| `PropertyNames()` | every settable property, found along the prototype chain — including the ones a component of your own declares |
+| `PropertyOptions(name)` | the exact strings that property accepts, or an empty list. What fills a drop-down in the property grid, and the reason a list of values is never typed twice |
+| `EventNames()` | the events it raises, **most derived first**: `[0]` is the one a double click in the designer writes a handler for |
+| `Serialize()` | this widget as a `.form` node |
+| `Apply(properties)` | the widget: the inverse of `Serialize`. A missing dictionary applies nothing, so `Apply(maybe)` is safe |
 | `Dump()` | prints the whole subtree with the geometry GTK really allocated. **Reach for this instead of a screenshot**, in a test and while working |
-| `StyleRule()` | → the CSS rule this widget's own class currently carries |
-| `CssNode()` | → the GTK node name it is styled as (`"button"`, `"entry"`) |
+| `StyleRule()` | the CSS rule this widget's own class currently carries |
+| `CssNode()` | the GTK node name it is styled as (`"button"`, `"entry"`) |
 | `SetDesign(name, value)`, `DesignValue(name)` | what the **designer** shows instead of what the code will fill in. Unreachable from a running application |
 | `SetItem(of, count)`, `Item` (ro) | a container: the component the **designer** draws in it while the form is laid out, and how many. See [`item`](../../formats.md#item-what-a-list-holds-while-it-is-being-designed) |
 

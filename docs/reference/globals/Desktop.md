@@ -18,11 +18,11 @@ Desktop.Entries.Installed()            // ["hello", "world"]
 
 | | | |
 |---|---|---|
-| `CacheDirectory` | where throwaway data belongs | [the directories](#the-directories) |
-| `ConfigDirectory` | where settings belong, all of them | [the directories](#the-directories) |
-| `DataDirectory` | where this user's data belongs | [the directories](#the-directories) |
+| `CacheDirectory` | `$XDG_CACHE_HOME`, or `~/.cache` | [the directories](#the-directories) |
+| `ConfigDirectory` | `$XDG_CONFIG_HOME`, or `~/.config` | [the directories](#the-directories) |
+| `DataDirectory` | `$XDG_DATA_HOME`, or `~/.local/share` when the desktop has not moved it | [the directories](#the-directories) |
 | `Directory` | the user's applications directory | [where an entry lives](#where-an-entry-lives) |
-| `Entries` | the desktop entries module | [desktop entries](#desktop-entries) |
+| `Entries` | the module below | [desktop entries](#desktop-entries) |
 | `Exec(argv)` | the `Exec=` value for a command | [the command line](#the-command-line) |
 | `Install(id, entry)` | writes one, atomically | [installing](#installing) |
 | `Write(path, entry)` | writes one at a path you name | [installing](#installing) |

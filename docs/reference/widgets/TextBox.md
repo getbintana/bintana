@@ -15,25 +15,25 @@ It is a `Widget` and a control like any other, so everything on
 
 | | | |
 |---|---|---|
-| `ActivatesDefault` | Enter presses the form's default button | [Enter](#enter) |
+| `ActivatesDefault` | Enter presses the form's **default button** *instead of* raising `Activate` | [Enter](#enter) |
 | `Alignment` | `Left` `Center` `Right`, default `"Left"` | [what the field expects](#what-the-field-expects) |
-| `Icon` | an icon inside the field, clickable | [what the field expects](#what-the-field-expects) |
-| `MaxLength` | characters, `0` for no limit | [what is in it](#what-is-in-it) |
-| `Password` | the characters are hidden | [what is in it](#what-is-in-it) |
-| `Placeholder` | shown while it is empty. **Translated** | [what is in it](#what-is-in-it) |
-| `Purpose` | what the keyboard should expect | [what the field expects](#what-the-field-expects) |
+| `Icon` | an icon **inside** the field, at the end | [what the field expects](#what-the-field-expects) |
+| `MaxLength` | how many characters may be typed | [what is in it](#what-is-in-it) |
+| `Password` | the characters are drawn as dots | [what is in it](#what-is-in-it) |
+| `Placeholder` | the grey words shown while it is empty | [what is in it](#what-is-in-it) |
+| `Purpose` | `Text` `Digits` `Number` `Phone` `Url` `Email` `Name` — what the keyboard and the input method should expect | [what the field expects](#what-the-field-expects) |
 | `ReadOnly` | shown but not editable | [what is in it](#what-is-in-it) |
-| `Selection` (ro) | what is selected, `""` for nothing | [the selection](#the-selection) |
-| `Offset` (ro) | the caret's position in characters | [the selection](#the-selection) |
-| `Insert(text)` | writes it at the caret | [what is in it](#what-is-in-it) |
-| `Text` | what is in it. **Translated** | [what is in it](#what-is-in-it) |
+| `Selection` (ro) | what is selected, `""` when nothing is | [the selection](#the-selection) |
+| `Offset` (ro) | the caret's position in characters, counting from `0` — `SelStart` | [the selection](#the-selection) |
+| `Insert(text)` | writes it at the caret and leaves the caret after it | [what is in it](#what-is-in-it) |
+| `Text` | what is in the field | [what is in it](#what-is-in-it) |
 
 **Methods**
 
 | | | |
 |---|---|---|
-| `Select(start, length)` | selects that run | [the selection](#the-selection) |
-| `SelectAll()` | selects everything, so typing replaces it | [the selection](#the-selection) |
+| `Select(start, length)` | selects that run, counting from `0` | [the selection](#the-selection) |
+| `SelectAll()` | selects everything, so **the next keystroke replaces it** | [the selection](#the-selection) |
 
 **Events**
 
@@ -118,7 +118,7 @@ being re-run. `SetFocus()` alone leaves the caret where it was.
 | `Purpose` | `Text` `Digits` `Number` `Phone` `Url` `Email` `Name` — what the keyboard and the input method should expect. Default `"Text"`. On a phone it is which keyboard appears; on a desktop it is what the input method does. **It does not validate**: a field of `Purpose: "Number"` still takes letters, and what refuses them is a [`SpinBox`](SpinBox.md) or your own check |
 | `Alignment` | `Left` `Center` `Right`, default `"Left"`. Numbers read right-aligned, which is the one case worth changing it for |
 | `Icon` | an icon **inside** the field, at the end. Clicking it raises `IconClick` |
-| **event** `IconClick()` | that icon was clicked |
+| **event** `IconClick()` | the icon inside the field was clicked |
 
 The icon is the field's own verb: a magnifier that clears the search, an eye that
 shows the password, a calendar that opens a picker. It costs no room on the form,

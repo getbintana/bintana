@@ -37,43 +37,43 @@ It is a [`Component`](../widgets/Component.md), so everything on
 | | | |
 |---|---|---|
 | `ContentHeight` (ro) | how tall the whole document is | [the document](#the-document) |
-| `Headings` (ro) | every heading: `{ Level, Text, Id, Y }` | [finding your way](#finding-your-way) |
-| `Path` | the file it came from | [the document](#the-document) |
-| `Text` | the document, as Markdown. **Not translated** | [the document](#the-document) |
-| `Load(path)` | the file into `Text`, remembering `Path` | [the document](#the-document) |
+| `Headings` (ro) | every heading in order | [finding your way](#finding-your-way) |
+| `Path` | where it came from, which is what a relative image resolves against | [the document](#the-document) |
+| `Text` | the document, as Markdown | [the document](#the-document) |
+| `Load(path)` | the file into `Text`, remembering `Path` so its pictures resolve | [the document](#the-document) |
 | `Refresh()` | measure again and repaint | [the document](#the-document) |
 
 **How it is laid out**
 
 | | | |
 |---|---|---|
-| `BaseFont` | the body font; everything else is this in proportion | [how it is laid out](#how-it-is-laid-out) |
+| `BaseFont` | the body font | [how it is laid out](#how-it-is-laid-out) |
 | `CodeFont` | what a code span and a code block are set in | [how it is laid out](#how-it-is-laid-out) |
-| `Margins` | the gutter, in pixels. `24` | [how it is laid out](#how-it-is-laid-out) |
-| `MaxWidth` | the measure of the text column; `0` is the whole width | [how it is laid out](#how-it-is-laid-out) |
+| `Margins` | the gutter around the document, in pixels: one number for all four edges, or `{ Top, Right, Bottom, Left }` | [how it is laid out](#how-it-is-laid-out) |
+| `MaxWidth` | the measure of the text column, in pixels | [how it is laid out](#how-it-is-laid-out) |
 
 **Reading it**
 
 | | | |
 |---|---|---|
 | `Scroll` | how far down it is scrolled, in pixels | [scrolling](#scrolling) |
-| `ScrollMax` (ro) | the largest `Scroll` that still shows text | [scrolling](#scrolling) |
-| `Find(text)` | the first run holding that text: select it and show it | [finding your way](#finding-your-way) |
-| `FindNext()` | the next one, wrapping | [finding your way](#finding-your-way) |
+| `ScrollMax` (ro) | the largest `Scroll` that still shows text: the document's height minus one view | [scrolling](#scrolling) |
+| `Find(text)` | the first run holding that text | [finding your way](#finding-your-way) |
+| `FindNext()` | the next one after the selection, wrapping; → whether there was one | [finding your way](#finding-your-way) |
 | `ScrollTo(id)` | put a heading at the top of the view | [finding your way](#finding-your-way) |
 | `Selection` (ro) | what the reader has selected, as text | [selecting](#selecting) |
-| `SelectAll()` | every word — what Ctrl+A does | [selecting](#selecting) |
-| `Deselect()` | nothing selected — what Escape does | [selecting](#selecting) |
-| `Copy()` | `Selection` onto the clipboard — what Ctrl+C does | [selecting](#selecting) |
+| `SelectAll()` | every word in the document — what Ctrl+A does; → whether there was anything | [selecting](#selecting) |
+| `Deselect()` | nothing selected — what Escape does; → whether there had been something | [selecting](#selecting) |
+| `Copy()` | `Selection` onto the clipboard — what Ctrl+C does; → whether there was anything to copy | [selecting](#selecting) |
 
 **Out of the window**
 
 | | | |
 |---|---|---|
-| `Paper` | `A4` `Letter` `A5` — what `SavePdf` uses. `"A4"` | [off the screen](#off-the-screen) |
-| `Save(path, [width], [scale])` | the **whole document** as one PNG | [off the screen](#off-the-screen) |
+| `Paper` | `A4` `Letter` `A5` — what `SavePdf` uses when it is not told one | [off the screen](#off-the-screen) |
+| `Save(path, [width], [scale])` | the **whole document** as one PNG — not the view | [off the screen](#off-the-screen) |
 | `SavePdf(path, [paper])` | every page, one file; → how many | [off the screen](#off-the-screen) |
-| `Send([setup], cb)` | **every page, to paper** | [off the screen](#off-the-screen) |
+| `Send([setup], cb)` | **every page, to paper**, through [`Printer`](../../llm/library.md#printer) | [off the screen](#off-the-screen) |
 
 **Events**
 
@@ -87,11 +87,11 @@ It is a [`Component`](../widgets/Component.md), so everything on
 
 | | |
 |---|---|
-| `Text` | the document, as Markdown. **Not a translated property** — a whole document in a `.po` file is not a caption somebody will translate, the same line [`SourceEditor`](../widgets/SourceEditor.md) draws |
+| `Text` | the document, as Markdown. **Not a translated property** — a whole document in a `.po` file is not a caption somebody will translate, the same line [`SourceEditor`](../widgets/SourceEditor.md) draws. Defaults to `""`. |
 | `Path` | where it came from, which is what a relative image resolves against. Setting `Text` by hand leaves it empty and pictures then resolve against the project |
-| `Load(path)` | the file into `Text`, remembering `Path` |
+| `Load(path)` | the file into `Text`, remembering `Path` so its pictures resolve |
 | `ContentHeight` (ro) | how tall the whole document is. **Measures lazily**, so it is answerable in `Form_Open` before anything has drawn |
-| `Refresh()` | measure again and repaint. Nothing needs it — every property does it already — **except a document whose pictures changed on disk** |
+| `Refresh()` | measure again and repaint. Nothing needs it — every property does it already — except a document whose **pictures** changed on disk |
 
 What it reads is CommonMark in the useful subset; what is in and what is not is
 listed in [llm/markdown.md](../../llm/markdown.md).
@@ -100,17 +100,17 @@ listed in [llm/markdown.md](../../llm/markdown.md).
 
 | | |
 |---|---|
-| `MaxWidth` | the measure of the text column, in pixels. Past that the column keeps this width and is **centred**: a document pinned to the left of a maximised window is a line of ninety words |
-| `Margins` | the gutter around it: one number, or `{ Top, Right, Bottom, Left }`, each side a finite number or refused. Margins that leave no printable height on the paper are refused by `SavePdf` and `Send` -- the pagination could never advance past them |
-| `BaseFont` | the body font. Everything else is it in proportion — a heading is it scaled and emboldened — so a document set larger is *entirely* larger |
+| `MaxWidth` | the measure of the text column, in pixels. Past that the column keeps this width and is **centred**: a document pinned to the left of a maximised window is a line of ninety words. `0` is the whole width |
+| `Margins` | the gutter around the document, in pixels: one number for all four edges, or `{ Top, Right, Bottom, Left }`. `24`. Every side is a finite number or the assignment throws; margins that leave no printable height on the sheet make `SavePdf`/`Send` throw. Margins that leave no printable height on the paper are refused by `SavePdf` and `Send` — the pagination could never advance past them |
+| `BaseFont` | the body font. Everything else is it in proportion — a heading is it scaled and emboldened — so a document set larger is *entirely* larger. `""` is the desktop's |
 | `CodeFont` | what a code span and a code block are set in. `""` is the desktop's monospace at the body's size |
 
 ## Scrolling
 
 | | |
 |---|---|
-| `Scroll` | the offset in pixels. Assigning **clamps** to `[0, ScrollMax]` |
-| `ScrollMax` (ro) | the document's height minus one view |
+| `Scroll` | how far down it is scrolled, in pixels. Assigning **clamps** to `[0, ScrollMax]`, so a number past the end is the end |
+| `ScrollMax` (ro) | the largest `Scroll` that still shows text: the document's height minus one view. `0` when it all fits |
 | **event** `Scroll(y)` | the reader moved the view — the wheel, a key, the indicator — or `ScrollTo`/`Find` did. **An assignment to `Scroll` raises nothing**, because a property setter must not raise an event |
 
 The component scrolls itself: the wheel, `Up` `Down` `Page_Up` `Page_Down`
@@ -123,10 +123,10 @@ drawing has no size of its own to ask with.
 
 | | |
 |---|---|
-| `Headings` (ro) | every heading in order: `{ Level, Text, Id, Y }`. `Text` is the words without their emphasis and `Id` the anchor GitHub would give them — letters and digits of any script kept, lower-cased, and a repeated heading numbered (`setup`, `setup-1`, `setup-2`) |
+| `Headings` (ro) | every heading in order: `{ Level, Text, Id, Y }`. What a table of contents is built from. `Text` is the words without their emphasis, `Id` the anchor GitHub would give them — letters and digits of any script kept, lower-cased, and a repeated heading numbered (`setup`, `setup-1`, `setup-2`) |
 | `ScrollTo(id)` | put a heading at the top of the view. Takes an `Id`, a `#anchor` or the heading's own words; → whether one was found |
 | `Find(text)` | the first run holding that text: **selects it and scrolls it into view**; → whether there was one. Case is folded and nothing else is |
-| `FindNext()` | the next one after the selection, **wrapping** round to the top |
+| `FindNext()` | the next one after the selection, wrapping; → whether there was one |
 
 Those first two are a table of contents: fill a [`ListBox`](../widgets/ListBox.md) from
 the first and call the second on `Select`.
@@ -135,10 +135,10 @@ the first and call the second on `Select`.
 
 | | |
 |---|---|
-| `Selection` (ro) | what is selected, as text. Runs are joined with a newline, so three paragraphs paste as three paragraphs |
-| `SelectAll()` | every word; → whether there was anything |
-| `Deselect()` | nothing; → whether there had been something |
-| `Copy()` | `Selection` onto the clipboard; → whether there was anything to copy |
+| `Selection` (ro) | what the reader has selected, as text. Runs are joined with a newline, so three paragraphs paste as three paragraphs. `""` when nothing is |
+| `SelectAll()` | every word in the document — what Ctrl+A does; → whether there was anything |
+| `Deselect()` | nothing selected — what Escape does; → whether there had been something |
+| `Copy()` | `Selection` onto the clipboard — what Ctrl+C does; → whether there was anything to copy |
 | **event** `Select(text)` | the selection settled. **Not raised while the pointer is still moving** — a host enabling a *Copy* button does not want sixty a second |
 
 **`Find` is a search with a selection on the end of it**, which is what the IDE
@@ -168,10 +168,10 @@ its words.
 
 | | |
 |---|---|
-| `SavePdf(path, [paper])` | every page, one file; → how many. Vector, so the text in it is text. **The cut is pulled up to the top of whatever block straddles it**, so a heading, a row or a picture is never sliced across a page |
-| `Send([setup], cb)` | **every page, to paper** through [`Printer`](../globals/Printer.md). `setup` is `{ Paper, Copies, From, To }`; `Paper` is what the dialog opens on, and the pagination is `SavePdf`'s. A paper chosen in the dialog **re-flows** the document — this declares `Paginate`, so the sheet count follows the paper that really comes out, which is more sheets on a smaller one. **Async**: `cb({ Copies, From, To })` is what was actually sent, and is not called when the dialog was cancelled. To a file it is `SavePdf` |
-| `Save(path, [width], [scale])` | the **whole document** as one PNG — not the view. `width` is the column it is laid out at; `scale` is `2` |
-| `Paper` | `A4`, `Letter` or `A5` — what `SavePdf` uses when it is not told one |
+| `SavePdf(path, [paper])` | every page, one file; → how many. Vector, so the text in it is text. The cut is **pulled up to the top of whatever block straddles it**, so a heading, a row or a picture is never sliced across a page |
+| `Send([setup], cb)` | **every page, to paper**, through [`Printer`](../../llm/library.md#printer). `setup` is `{ Paper, Copies, From, To }`; `Paper` is what the dialog **opens on** and the pagination is `SavePdf`'s. **A paper chosen in the dialog re-flows the document rather than scaling it**: this declares `Paginate`, so the sheet count follows the paper that is really coming out. **Async**, like every dialog here: `cb({ Copies, From, To })` is what was actually sent, and is **not called** when the dialog was cancelled. **To a file it is `SavePdf`** |
+| `Save(path, [width], [scale])` | the **whole document** as one PNG — not the view. `width` is the column it is laid out at and defaults to the one on screen; `scale` is `2`, so the text is sharp |
+| `Paper` | `A4` `Letter` `A5` — what `SavePdf` uses when it is not told one. Defaults to `"A4"`. |
 
 An export carries **no selection**: a PDF with three words highlighted in it is a
 picture of somebody's pointer.

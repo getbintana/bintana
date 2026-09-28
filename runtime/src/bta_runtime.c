@@ -429,12 +429,105 @@ static const char *symbol_kind_name(JSSymbolKind kind)
     case JS_SYMBOL_CLASS:    return "Class";
     case JS_SYMBOL_METHOD:   return "Method";
     case JS_SYMBOL_FUNCTION: return "Function";
+    /* **A member of a class, and the three ways of not being a plain method.**
+     * They all reach the parser as a method of the same name, so before this
+     * `get Value()`, `static Make()` and `turn()` were one answer and an editor
+     * could not tell a property from a function -- which is the difference
+     * between `Value: number` and `Value(): number` in a declaration. */
+    case JS_SYMBOL_STATIC:  return "Static";
+    case JS_SYMBOL_GETTER:  return "Getter";
+    case JS_SYMBOL_SETTER:  return "Setter";
+    /* An accessor of the class itself: a property of the constructor. */
+    case JS_SYMBOL_STATIC_GETTER: return "StaticGetter";
+    case JS_SYMBOL_STATIC_SETTER: return "StaticSetter";
+    /* A declared name at its line, and a function as the span it covers:
+     * together they say what a name can mean where the cursor is. */
+    case JS_SYMBOL_VARIABLE:      return "Variable";
+    case JS_SYMBOL_SCOPE:         return "Scope";
+    /* A function assigned at the top level, named by its target. */
+    case JS_SYMBOL_ASSIGNED:      return "Assigned";
     }
     return "";
 }
 
+/*
+ * A JSDoc comment as two answers: the description -- every line before the
+ * first `@tag`, the leading `*` of each taken off, a blank line a paragraph --
+ * and the type of `@returns {T}` (or `@return`), which is what lets a chain
+ * complete past a call to a function written in JavaScript the way it does
+ * past a native one. The other tags are left where they are: nothing here
+ * reads them, and the parser already names the parameters.
+ */
+/* The two JavaScript sources baked into the binary, for whoever reads what
+ * they declare (the JSDoc index `Widget.Members` answers from). */
+void bta_prelude_sources(const char **rad, const char **forms)
+{
+    *rad   = bta_prelude_js;
+    *forms = bta_forms_js;
+}
+
+void bta_split_doc(const char *doc, char **text, char **returns)
+{
+    *text = NULL;
+    *returns = NULL;
+    if (!doc || !*doc)
+        return;
+
+    GString *out  = g_string_new(NULL);
+    char   **rows = g_strsplit(doc, "\n", -1);
+    bool     tags = false;
+
+    for (char **r = rows; *r; r++) {
+        char *line = g_strstrip(*r);
+        if (*line == '*') line = g_strstrip(line + 1);
+        /* A tag after the text on the same line -- `How far. @returns {n}` --
+         * ends the description where it starts. */
+        if (*line != '@') {
+            for (char *at = strchr(line, '@'); at; at = strchr(at + 1, '@')) {
+                if (at > line && g_ascii_isspace(at[-1]) && g_ascii_isalpha(at[1])) {
+                    char *tag = at;
+                    at[-1] = '\0';
+                    g_strchomp(line);
+                    if (out->len && !g_str_has_suffix(out->str, "\n") && *line)
+                        g_string_append_c(out, ' ');
+                    if (!tags) g_string_append(out, line);
+                    line = tag;
+                    break;
+                }
+            }
+        }
+        if (*line == '@') {
+            tags = true;
+            if (!*returns &&
+                (g_str_has_prefix(line, "@returns") || g_str_has_prefix(line, "@return"))) {
+                const char *open  = strchr(line, '{');
+                const char *close = open ? strrchr(line, '}') : NULL;
+                if (open && close && close > open)
+                    *returns = g_strstrip(g_strndup(open + 1, close - open - 1));
+            }
+            continue;
+        }
+        if (tags)
+            continue;
+        if (!*line) {
+            if (out->len && !g_str_has_suffix(out->str, "\n"))
+                g_string_append_c(out, '\n');
+            continue;
+        }
+        if (out->len && !g_str_has_suffix(out->str, "\n"))
+            g_string_append_c(out, ' ');
+        g_string_append(out, line);
+    }
+    g_strfreev(rows);
+    while (out->len && out->str[out->len - 1] == '\n')
+        g_string_truncate(out, out->len - 1);
+    *text = g_string_free(out, out->len == 0);
+}
+
 static void symbol_report(void *opaque, JSSymbolKind kind, const char *name,
-                          const char *parent, int line)
+                          const char *parent, const char *supertype,
+                          const char *params, int line, int end_line,
+                          const char *doc)
 {
     SymbolSink *sink = opaque;
     JSContext  *ctx  = sink->ctx;
@@ -449,6 +542,29 @@ static void symbol_report(void *opaque, JSSymbolKind kind, const char *name,
     JS_SetPropertyStr(ctx, obj, "Kind", JS_NewString(ctx, symbol_kind_name(kind)));
     JS_SetPropertyStr(ctx, obj, "Line", JS_NewInt32(ctx, line));
     JS_SetPropertyStr(ctx, obj, "Parent", JS_NewString(ctx, parent ? parent : ""));
+    /* The base class, and the one field that makes the answer a *shape* rather
+     * than a list of names: without it a class declared in a file this process
+     * never runs has no way to say what it inherits, and an inherited surface
+     * is most of what a control has. Empty for everything that is not a class,
+     * and for a class whose `extends` is not a plain identifier -- see
+     * JSSymbolHandler in quickjs.h for why that is the limit. */
+    JS_SetPropertyStr(ctx, obj, "Super", JS_NewString(ctx, supertype ? supertype : ""));
+    /* The parameter list, in the spelling a declaration uses -- `(message,
+     * [options], ...rest)`.  Empty for anything that is not a member, and for a
+     * method that takes none. */
+    JS_SetPropertyStr(ctx, obj, "Params", JS_NewString(ctx, params ? params : ""));
+    /* The last line of a `Scope`, and 0 for everything else. */
+    JS_SetPropertyStr(ctx, obj, "End", JS_NewInt32(ctx, end_line));
+    /* What a JSDoc (a comment opening with two stars) comment right above the declaration says: its
+     * description, and the type after `@returns {…}`. */
+    {
+        char *text = NULL, *ret = NULL;
+        bta_split_doc(doc, &text, &ret);
+        JS_SetPropertyStr(ctx, obj, "Doc", JS_NewString(ctx, text ? text : ""));
+        JS_SetPropertyStr(ctx, obj, "Returns", JS_NewString(ctx, ret ? ret : ""));
+        g_free(text);
+        g_free(ret);
+    }
 
     /* The value is taken either way; the count only moves when it landed, so
      * an array this hands back never has a hole for a caller to trip on. */
@@ -479,13 +595,17 @@ static void symbol_report(void *opaque, JSSymbolKind kind, const char *name,
  * after it, so nothing else in the program pays for the feature and the code
  * the runtime itself compiles -- `rad.js`, every `.form` -- is not walked.
  */
-static JSValue js_application_symbols(JSContext *ctx, JSValueConst this_val,
-                                      int argc, JSValueConst *argv)
+/*
+ * `bta_symbols(ctx, text)`: what a compile declares, as the array
+ * `Application.Symbols` hands back.  **Exported because there are now two
+ * consumers and not one** -- the editor's outline, and `Widget.Members`'s answer
+ * for a class in a file this process never runs, which is the same parser for
+ * the same reason: an object's members cannot be had from the source, only its
+ * declarations can, and reading them twice with two different readers is the
+ * shape that drifts.
+ */
+JSValue bta_symbols(JSContext *ctx, const char *src)
 {
-    const char *src = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
-    if (!src)
-        return JS_ThrowTypeError(ctx, "Application.Symbols(text) needs text");
-
     SymbolSink sink = { ctx, JS_NewArray(ctx), 0 };
     JSRuntime *rt   = JS_GetRuntime(ctx);
 
@@ -496,7 +616,6 @@ static JSValue js_application_symbols(JSContext *ctx, JSValueConst this_val,
                         JS_EVAL_FLAG_COMPILE_ONLY);
 
     JS_SetSymbolHandler(rt, NULL, NULL);
-    JS_FreeCString(ctx, src);
 
     /* Compiled and not run, so the only thing it can hand back is an error --
      * and the symbols collected before it are the answer, not the error. */
@@ -506,6 +625,18 @@ static JSValue js_application_symbols(JSContext *ctx, JSValueConst this_val,
         JS_FreeValue(ctx, r);
 
     return sink.list;
+}
+
+static JSValue js_application_symbols(JSContext *ctx, JSValueConst this_val,
+                                      int argc, JSValueConst *argv)
+{
+    const char *src = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    if (!src)
+        return JS_ThrowTypeError(ctx, "Application.Symbols(text) needs text");
+
+    JSValue out = bta_symbols(ctx, src);
+    JS_FreeCString(ctx, src);
+    return out;
 }
 
 static bool is_identifier(const char *s)
@@ -834,11 +965,33 @@ static JSValue js_log_set_target(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry log_props[] = {
+    /* Debug(...values)
+     *   the detail that is only interesting when something is wrong
+     */
     JS_CFUNC_MAGIC_DEF("Debug",   1, js_log, BTA_LOG_DEBUG),
+    /* Info(...values)
+     *   what the program did
+     */
     JS_CFUNC_MAGIC_DEF("Info",    1, js_log, BTA_LOG_INFO),
+    /* Warning(...values)
+     *   what it did not like but carried on through
+     */
     JS_CFUNC_MAGIC_DEF("Warning", 1, js_log, BTA_LOG_WARNING),
+    /* Error(...values)
+     *   what failed
+     */
     JS_CFUNC_MAGIC_DEF("Error",   1, js_log, BTA_LOG_ERROR),
+    /* Level
+     *   the floor — lines below it are dropped, which is how a program ships
+     *   with its `Debug` lines still in it
+     */
     JS_CGETSET_DEF("Level",  js_log_get_level,  js_log_set_level),
+    /* Target
+     *   where the lines are written: `"Terminal"` (the default, and
+     *   stdout/stderr under it), `"Journal"` where the build has one, or **a
+     *   file path** — opened in append mode and flushed per line, and it
+     *   reads back as the path
+     */
     JS_CGETSET_DEF("Target", js_log_get_target, js_log_set_target),
 };
 
@@ -1054,6 +1207,47 @@ static JSValue js_library_path(JSContext *ctx, JSValueConst this_val,
 static JSValue js_libraries(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv);
 
+/* The global object, as a real property enumeration.
+ *
+ * **The point of it is that nothing else can answer.** The globals are installed
+ * one `JS_SetPropertyStr` at a time across this file and four others, and the
+ * very same shape builds half the runtime's *return values* -- `Exec`'s handle,
+ * `File.Info`'s answer, a table row -- so a list kept beside the installs would
+ * be a second list to drift, and the one that drifts is the one no program runs.
+ * `tests/api/Check.js` reads those same call sites out of the C to hold the
+ * documentation to the same surface; this is the same answer, asked at run time,
+ * for a program that wants to know rather than a check that wants to prove.
+ *
+ * It is deliberately **not** a curated list of the runtime's own names: the answer
+ * is what is on the global object, which is also `Math`, `JSON`, `Date`, `Map`,
+ * `Timer`, `Confirm` and whatever a library installed. A completion engine wants
+ * all of them, and a caller that wanted only the runtime's own can ask
+ * `Application.Libraries()` beside it.
+ */
+static JSValue js_globals(JSContext *ctx, JSValueConst this_val,
+                          int argc, JSValueConst *argv)
+{
+    JSValue     global = JS_GetGlobalObject(ctx);
+    JSPropertyEnum *tab = NULL;
+    uint32_t    len = 0;
+    JSValue     out  = JS_NewArray(ctx);
+    uint32_t    n    = 0;
+
+    if (JS_GetOwnPropertyNames(ctx, &tab, &len, global, JS_GPN_STRING_MASK) == 0) {
+        for (uint32_t i = 0; i < len; i++) {
+            const char *name = JS_AtomToCString(ctx, tab[i].atom);
+            /* `globalThis` went with the hatches, and so did every name they
+             * took: what is left here is what a program may actually write. */
+            if (name && *name)
+                JS_SetPropertyUint32(ctx, out, n++, JS_NewString(ctx, name));
+            if (name) JS_FreeCString(ctx, name);
+        }
+        JS_FreePropertyEnum(ctx, tab, len);
+    }
+    JS_FreeValue(ctx, global);
+    return out;
+}
+
 /* Answers false when a library carried a native plugin that cannot be used, in
  * which case the caller stops the program. See bta_plugins_load. */
 static bool install_globals(BtaApp *app)
@@ -1086,6 +1280,9 @@ static bool install_globals(BtaApp *app)
 
     /* Application: the Gambas-ish ambient singleton. */
     JSValue application = JS_NewObject(ctx);
+    /* Name
+     *   from `project.json`
+     */
     JS_SetPropertyStr(ctx, application, "Name", JS_NewString(ctx, app->name));
     /*
      * What the *application* calls its release, out of its own project.json --
@@ -1094,6 +1291,11 @@ static bool install_globals(BtaApp *app)
      * time in its own source, which is the copy that goes stale. "" when the
      * project declares none: a version is optional, and absent is not an error.
      */
+    /* Version
+     *   what the **project** calls its release; `""` when it declares none.
+     *   **`BTA_VERSION` is the runtime's** and is not this — showing the
+     *   wrong one is what an About box does until it knows the difference
+     */
     JS_SetPropertyStr(ctx, application, "Version", JS_NewString(ctx, app->version));
     /*
      * The application's own identity, in reverse DNS -- the name its window is
@@ -1101,8 +1303,32 @@ static bool install_globals(BtaApp *app)
      * a project that declares none, which is an ordinary project and not a
      * fault: the window then keeps the program's name, as it always did.
      */
+    /* Id
+     *   from `project.json`: the application's identity in reverse DNS —
+     *   `io.github.you.App`. It is **one name in three places**: the window's
+     *   own class (the runtime hands it to `GtkApplication` for Wayland and
+     *   to the program name for X11's `WM_CLASS`), the `<id>` of the
+     *   project's metainfo, and the Flatpak app id. `""` when the project
+     *   declares none, which is an ordinary project classed by the program's
+     *   name; a value that is not an application id **stops the program when
+     *   the project loads**, because every one of those three is something
+     *   nobody looks at until a dock shows the wrong icon
+     */
     JS_SetPropertyStr(ctx, application, "Id", JS_NewString(ctx, app->id));
+    /* Directory
+     *   the project directory, absolute. What a relative path in a project
+     *   resolves against — an image a report draws, a document a viewer
+     *   opens, a data file that ships with the application
+     */
     JS_SetPropertyStr(ctx, application, "Directory", JS_NewString(ctx, app->dir));
+    /* Quit(code)
+     *   quit with that exit status. `0` is *it worked*, and a console tool
+     *   that answers a question answers with this. A `code` that is not a
+     *   number is **refused** — `Quit("fail")` used to exit `0`, which a
+     *   runner reads as success. A `code` that is not a number is refused
+     *   rather than read as `0`, which a runner would take for success;
+     *   `Quit()` is `0`
+     */
     JS_SetPropertyStr(ctx, application, "Quit",
                       JS_NewCFunction(ctx, js_quit, "Quit", 1));
 
@@ -1114,6 +1340,13 @@ static bool install_globals(BtaApp *app)
     g_strdelimit(slug, G_DIR_SEPARATOR_S, '-');
     char *config = g_build_filename(g_get_user_config_dir(), "bintana", slug, NULL);
     g_mkdir_with_parents(config, 0755);
+    /* ConfigDirectory
+     *   `~/.config/bintana/<name>`, **created at startup**, which is where
+     *   anything the application remembers belongs.
+     *   [`Settings`](docs/reference/globals/Settings.md) writes there;
+     *   nothing of yours should go in the project directory, which is a thing
+     *   people hand to each other
+     */
     JS_SetPropertyStr(ctx, application, "ConfigDirectory", JS_NewString(ctx, config));
     g_free(config);
     g_free(slug);
@@ -1121,8 +1354,17 @@ static bool install_globals(BtaApp *app)
     /* Whether the desktop has an icon by that name.  Only whoever picks the
      * name can choose a fallback, and an icon the theme lacks is dropped
      * silently -- which on an icon-only button leaves nothing at all. */
+    /* HasIcon(name) -> string
+     *   whether that icon will actually **draw** something. Not whether the
+     *   theme claims it: an icon that cannot be rasterised here is the same
+     *   nothing as one that is missing
+     */
     JS_SetPropertyStr(ctx, application, "HasIcon",
                       JS_NewCFunction(ctx, js_has_icon, "HasIcon", 1));
+    /* Icons([contains]) -> string[]
+     *   every icon name available, sorted, narrowed by substring — what an
+     *   icon picker is built from
+     */
     JS_SetPropertyStr(ctx, application, "Icons",
                       JS_NewCFunction(ctx, js_icons, "Icons", 1));
 
@@ -1147,6 +1389,11 @@ static bool install_globals(BtaApp *app)
 
         if (settings)
             g_object_get(settings, "gtk-decoration-layout", &layout, NULL);
+        /* DecorationLayout
+         *   how this desktop arranges a title bar — which buttons, and on
+         *   which side. What a drawn title bar reads to look like the real
+         *   one
+         */
         JS_SetPropertyStr(ctx, application, "DecorationLayout",
                           JS_NewString(ctx, layout ? layout : ""));
         g_free(layout);
@@ -1155,12 +1402,22 @@ static bool install_globals(BtaApp *app)
     /* And whether an external program is installed, which is the same question
      * about a different kind of name -- `Exec` throws when it is not, so this is
      * what lets a caller choose among the tools a desktop happens to have. */
+    /* HasCommand(name)
+     *   whether that program is on the PATH. **The question that does not
+     *   need an exception**, since [`Exec`](docs/reference/globals/Exec.md)
+     *   throws when the program is not there
+     */
     JS_SetPropertyStr(ctx, application, "HasCommand",
                       JS_NewCFunction(ctx, js_has_command, "HasCommand", 1));
 
     /* Would this text compile?  The one honest use of `Function` -- an IDE that
      * writes code wants to know before it saves -- published on its own so the
      * string-to-code hatch does not have to stay open for it. */
+    /* CheckSource(text) -> { Message, Line, Column }
+     *   `null` when the text is valid JavaScript, else `{ Message, Line,
+     *   Column }`. What an editor checks a file with before saving it, and
+     *   the answer `new Function(src)` is not allowed to give
+     */
     JS_SetPropertyStr(ctx, application, "CheckSource",
                       JS_NewCFunction(ctx, js_check_source, "CheckSource", 1));
 
@@ -1171,6 +1428,38 @@ static bool install_globals(BtaApp *app)
      * lists a file's declarations should not have to guess at them with a
      * pattern, and the answer belongs to the compiler and not to one
      * application.
+     */
+    /* Symbols(text) -> { Name, Kind, Line, Parent, Super, Params, End, Doc, Returns }[]
+     *   what the text declares — `[{ Name, Kind, Line, Parent, Super, Params,
+     *   End, Doc, Returns }]`, out of the parser and with nothing run.
+     *   **`Kind` is `"Class"`, `"Function"`, `"Method"`, `"Static"`,
+     *   `"Getter"`, `"Setter"`, `"StaticGetter"` or `"StaticSetter"`**, or
+     *   **`"Assigned"`** (a function assigned at the top level, named by its
+     *   target as written — `File.LoadJson`, `Widget.prototype.Dump` — and
+     *   each function an object literal holds when the literal is assigned
+     *   there, as `Target.Name`), or
+     *   **`"Variable"`** (each `let`/`const`/`var`, destructured name,
+     *   `for...of` variable and `catch` binding, at its line) and
+     *   **`"Scope"`** (every function, anonymous ones included, with its
+     *   `Params` and the lines it spans, `Line` to **`End`**; one that fails
+     *   to parse spans up to where it broke) — together, what a name can mean
+     *   where the cursor is — the member kinds are what separates `Value: T`
+     *   from `Value(): T`, and a property of the class from one of the
+     *   instance. **`Params` is the parameter list in the spelling a
+     *   declaration uses** — `(message, [options], ...rest)`, `()` for a
+     *   member that takes none, `""` for a class — for members and top-level
+     *   functions, and **it is the function's own**: an arrow in its body or
+     *   in a default value does not replace it. It is the one answer a host
+     *   cannot get elsewhere, because ECMAScript discards a parameter's name
+     *   at parse time and `Function.length` is a lower bound the moment one
+     *   has a default. **`Super` is the name in a class's `extends`** and
+     *   `""` for everything else, including an `extends` that is not a bare
+     *   identifier. **`Doc` is the JSDoc comment touching the declaration**
+     *   — the text before its first `@tag` — and **`Returns` the type in its
+     *   `@returns {T}`**, both `""` when there is none; a comment that does
+     *   not end on the line above or the same line documents nothing. What
+     *   an editor lists a file with, and the answer a pattern is not allowed
+     *   to guess at
      */
     JS_SetPropertyStr(ctx, application, "Symbols",
                       JS_NewCFunction(ctx, js_application_symbols, "Symbols", 1));
@@ -1185,6 +1474,12 @@ static bool install_globals(BtaApp *app)
      * is for. Two implementations of a six-entry lookup would drift the first
      * time one of them was fixed, and the one that drifted would be the one
      * nobody runs from a shell.
+     */
+    /* LibraryPath(name, [project]) -> string
+     *   where a library by that name is, or `""` — **the same six-place
+     *   search the runtime does for `uses`**. Published so that a tool which
+     *   opens *other* projects asks about theirs rather than keeping a second
+     *   copy of the path
      */
     JS_SetPropertyStr(ctx, application, "LibraryPath",
                       JS_NewCFunction(ctx, js_library_path, "LibraryPath", 2));
@@ -1203,11 +1498,34 @@ static bool install_globals(BtaApp *app)
      * exists to prevent, and it would be the copy that goes stale, because the
      * first one is the one every program runs.
      */
+    /* Libraries([project]) -> string[]
+     *   the names of every library those same six places offer, sorted, each
+     *   one once. The other direction of the lookup: `LibraryPath` resolves a
+     *   name you already know, this is what a dialog that offers a choice
+     *   needs
+     */
     JS_SetPropertyStr(ctx, application, "Libraries",
                       JS_NewCFunction(ctx, js_libraries, "Libraries", 1));
+    /* Globals() -> string[]
+     *   every name on the global object: the runtime's own, the ones a
+     *   library installed, and the JavaScript builtins -- `Math`, `JSON`,
+     *   `Date`, `Map`, `Timer`, `Confirm`. **A top-level `class` is a lexical
+     *   binding and not a property of the global object**, so a library's and
+     *   a project's classes are *not* in it -- read those out of the sources,
+     *   which is what the IDE does. It exists because the alternative is a
+     *   hand-written list of global names, and there are a hundred and
+     *   sixty-four of them
+     */
+    JS_SetPropertyStr(ctx, application, "Globals",
+                      JS_NewCFunction(ctx, js_globals, "Globals", 0));
 
     /* Where the runtime binary lives, so a project can re-invoke it. */
     char *exe = bta_exe_path();
+    /* Executable
+     *   the `bintana` binary that is running this, so a project can re-invoke
+     *   it — which is how the IDE runs a project and how the test runner runs
+     *   the suites
+     */
     JS_SetPropertyStr(ctx, application, "Executable",
                       JS_NewString(ctx, exe ? exe : "bintana"));
     g_free(exe);
@@ -1215,16 +1533,39 @@ static bool install_globals(BtaApp *app)
     JSValue args = JS_NewArray(ctx);
     for (uint32_t i = 0; app->args && app->args[i]; i++)
         JS_SetPropertyUint32(ctx, args, i, JS_NewString(ctx, app->args[i]));
+    /* Arguments
+     *   whatever followed the project directory on the command line, as an
+     *   array
+     */
     JS_SetPropertyStr(ctx, application, "Arguments", args);
 
     JS_SetPropertyStr(ctx, global, "Application", application);
 
+    /* One line each and not a loop over the names, because the signature
+     * comment above a line is what `Widget.Members` answers with -- a loop
+     * leaves nowhere to write one. The magic is the index `js_message` reads. */
     JSValue message = JS_NewObject(ctx);
-    static const char *kinds[] = { "Info", "Warning", "Error" };
-    for (int i = 0; i < 3; i++)
-        JS_SetPropertyStr(ctx, message, kinds[i],
-                          JS_NewCFunctionMagic(ctx, js_message, kinds[i], 1,
-                                               JS_CFUNC_generic_magic, i));
+    /* Info(text, ...args)
+     *   something happened. **It shows and returns**: it does not block and
+     *   there is no answer. The text goes through the catalogue with `{0}`
+     *   holes filled from the arguments -- never a template literal -- and
+     *   with no display it prints to stderr
+     */
+    JS_SetPropertyStr(ctx, message, "Info",
+                      JS_NewCFunctionMagic(ctx, js_message, "Info", 1,
+                                           JS_CFUNC_generic_magic, 0));
+    /* Warning(text, ...args)
+     *   something is not right; the same as `Info` in every other respect
+     */
+    JS_SetPropertyStr(ctx, message, "Warning",
+                      JS_NewCFunctionMagic(ctx, js_message, "Warning", 1,
+                                           JS_CFUNC_generic_magic, 1));
+    /* Error(text, ...args)
+     *   something failed; the same as `Info` in every other respect
+     */
+    JS_SetPropertyStr(ctx, message, "Error",
+                      JS_NewCFunctionMagic(ctx, js_message, "Error", 1,
+                                           JS_CFUNC_generic_magic, 2));
     JS_SetPropertyStr(ctx, global, "Message", message);
 
     /*
@@ -1445,6 +1786,21 @@ void bta_close_hatches(JSContext *ctx)
         delete_named(ctx, object_proto, proto_hatches[i]);
     JS_FreeValue(ctx, object_proto);
     JS_FreeValue(ctx, object);
+
+    /*
+     * `Array.fromAsync`, which is an async function the engine builds lazily on
+     * first read -- and patch 5's reason, arriving by a door the parser cannot
+     * guard. Without `JS_AddIntrinsicPromise` the async classes are never
+     * registered, so the object that read builds can never be collected: one
+     * `typeof Array.fromAsync` (which answered "object") was enough to make
+     * `JS_FreeRuntime` abort at exit, 134, after the program had done its work.
+     * Found through `Widget.Members("Array")`, which reads every own property
+     * of the constructor. It cannot work without promises anyway, so it goes.
+     */
+    JSValue array = JS_GetPropertyStr(ctx, global, "Array");
+    if (JS_IsObject(array))
+        delete_named(ctx, array, "fromAsync");
+    JS_FreeValue(ctx, array);
 
     /*
      * RegExp, whose name goes the way Function's did -- and this is the half of

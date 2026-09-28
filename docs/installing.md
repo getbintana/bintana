@@ -107,7 +107,6 @@ PKG_CONFIG_PATH=<bintana>/build/pkgconfig cmake -S some-plugin -B some-plugin/bu
 | `<prefix>/share/bintana/ide/` | the IDE as the project directory it is |
 | `<prefix>/share/bintana/examples/` | the examples, to open and copy |
 | `<prefix>/share/bintana/lib/` | the three shipped libraries |
-| `<prefix>/share/bintana/bintana.d.ts` | the declarations an editor that is not the IDE reads |
 | `<prefix>/include/bintana/bta_plugin.h` | the only header a native plugin compiles against |
 | `<prefix>/lib*/pkgconfig/bintana.pc` | what points a compiler at that header |
 | `<prefix>/share/applications/` + `share/icons/` | the menu entry and its icon |
