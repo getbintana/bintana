@@ -431,6 +431,40 @@ Ide.TabSet = class TabSet {
             this.switching = false;
         }
 
+        /*
+         * **The notebook is put back where the names say it is, and this is a
+         * precaution rather than a repair.**
+         *
+         * The veto above is right and is not going anywhere: a page change the
+         * notebook made *by itself* is cut off, because acting on it sent the IDE
+         * straight back to the tab it was leaving. What the veto cannot do is
+         * undo it — GTK has already made its page current — so while a switch is
+         * in flight there is a window in which the page on screen and
+         * `ide.activeFile` are two different answers. `ide.designer`,
+         * `ide.Editor` and the side panel are all read off the second, and
+         * `ide.Glass` off the notebook, so a disagreement puts the canvas on
+         * screen with nothing behind it.
+         *
+         * **`switchNow` already ends by pointing `Tabs.Current` at the tab it
+         * chose**, and this re-asserts it once the veto has been lifted, which
+         * is the only moment the disagreement can be undone. In the ordinary case
+         * the two are already equal and this costs one comparison.
+         *
+         * **And it has not been seen to matter.** It is here because the window
+         * the veto opens is real and this closes it, not because the bug was
+         * reproduced: every tab switch, every strip click, every close of either
+         * tab and the tree road between a `.js` and a `.form` were driven with a
+         * real pointer and the panel and canvas came back pixel-identical to a
+         * healthy reference every time. The test in `tests/ide` asserts the
+         * invariant and does **not** go red without this line, which is said
+         * here rather than left for the next reader to assume. What it is worth
+         * is that the next state that opens the window does not also open a
+         * silent one.
+         */
+        const where = this.tabOrder.indexOf(this.ide.activeFile);
+        if (where >= 0 && this.ide.Tabs.Current !== where)
+            this.ide.Tabs.Current = where;
+
         /* And the file arriving is checked without waiting for a keystroke:
          * opening a file is exactly when one wants to know. */
         this.ide.live.typed();
@@ -822,14 +856,26 @@ Ide.TabSet = class TabSet {
         this.ide.designer = state ? state.designer || null : null;
         this.ide.document = state ? state.document || null : null;
 
-        if (state && state.canvas) {
-            this.ide.CanvasScroll = state.canvas.scroll;
-            this.ide.Canvas       = state.canvas.canvas;
-            this.ide.Surface      = state.canvas.surface;
-            this.ide.Glass        = state.canvas.glass;
-            /* This tab's canvas carries the menu; see CANVAS_MENU. */
-            this.ide.Glass.Menu   = CANVAS_MENU;
-        }
+        /*
+         * **The canvas names go down with the designer, not only up with one.**
+         * This block used to be an `if` with no `else`, so on a code tab
+         * `ide.Glass` kept naming the glass of the last form -- a name nothing
+         * reads (the events arrive by the glass's own `Name`, not through here)
+         * and so nothing could be found wrong with it, which is what makes it a
+         * trap rather than a bug: it is a name that says there is a designer on
+         * screen when there is not. One question, asked once, and all four
+         * answers move together.
+         */
+        const canvas = state && state.canvas ? state.canvas : null;
+
+        this.ide.CanvasScroll = canvas ? canvas.scroll : null;
+        this.ide.Canvas       = canvas ? canvas.canvas : null;
+        this.ide.Surface      = canvas ? canvas.surface : null;
+        this.ide.Glass        = canvas ? canvas.glass   : null;
+
+        /* This tab's canvas carries the menu; see CANVAS_MENU. */
+        if (this.ide.Glass)
+            this.ide.Glass.Menu = CANVAS_MENU;
 
         /* The panel used to speak about a selection alone, and so was hidden
          * on every code tab -- 280 pixels of nothing beside the one kind of file

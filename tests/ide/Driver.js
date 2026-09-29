@@ -1794,6 +1794,91 @@ function* p_designer(ide) {
     check("and says when one is hidden", wide.Dump().includes("hidden"), wide.Dump());
     wide.Delete();
 
+    /*
+     * **A pointer event with no designer on the other end of it.**
+     *
+     * `ide.designer` is repointed at the active tab and is `null` whenever that
+     * tab is not a form, and five of the canvas handlers dereferenced it without
+     * asking -- so moving the mouse over the form's editor raised
+     * `TypeError: cannot read property 'mouseMove' of null`, again on every
+     * motion, because a handler's throw is reported and the program carries on.
+     *
+     * The handlers are called directly rather than through `Emit`, which is what
+     * this file already does with `Glass_MouseDown` and `Glass_MouseUp`, and it
+     * is the better shape here: the state being tested is "there is no
+     * designer", which a `MouseMove` needs a mapped widget and a real pointer
+     * to deliver and no test has. The glass itself is reached through the tab's
+     * own state, because `ide.Glass` is null on a code tab -- which is the other
+     * half of the fix and is asserted in the same breath.
+     *
+     * A form tab and a code tab are both open by now, so this switches and comes
+     * back: a phase that leaves the world different is a phase that owns the
+     * ones after it.
+     */
+    const glassOf = (file) => ide.tabs.openTabs.get(file).canvas.glass;
+    const formTab = ide.activeFile;
+
+    ide.tabs.switchTo("Child.js");
+    yield;
+
+    eq("a code tab has no designer", ide.designer, null);
+    eq("...and the canvas names go down with it, not left naming the last form",
+       ide.Glass, null);
+
+    for (const [what, fire] of [
+        ["MouseMove", () => ide.Glass_MouseMove(30, 40, 1, false, false)],
+        ["MouseDown", () => ide.Glass_MouseDown(30, 40, 1, false)],
+        ["MouseUp",   () => ide.Glass_MouseUp(30, 40, 1, false)],
+        ["DblClick",  () => ide.Glass_DblClick(30, 40)],
+        ["Drop",      () => ide.Glass_Drop("Label", 30, 40)],
+        ["KeyPress",  () => ide.Glass_KeyPress("j", false, false)],
+    ]) {
+        let threw = null;
+        try { fire(); } catch (e) { threw = e; }
+        check(`${what} with no designer is a no-op and not a TypeError`, !threw,
+              threw ? String(threw.message || threw) : "");
+    }
+
+    /* **The window's own keys still answer, and that is the half worth having.**
+     * `Glass_KeyPress` handles Ctrl+W and Ctrl+Tab before it asks the designer
+     * anything, and a code tab is exactly the tab somebody cycles and closes from
+     * -- so the guard cannot be "ignore keys when there is no designer". What is
+     * answered is the *return*, and not whether the tab is gone: closing one is
+     * asynchronous and asks its question, and an assertion about that would be a
+     * bet on the scheduler wearing a test's clothes. */
+    eq("Ctrl+Tab is the window's, and answers without a designer",
+       ide.Glass_KeyPress("Tab", true, false), true);
+
+    /* Back to the form, and the names all arrive with it. */
+    ide.tabs.switchTo(formTab);
+    yield;
+    check("and the designer comes back with the tab", !!ide.designer,
+          String(ide.designer));
+    eq("...and so does the glass that belongs to it", ide.Glass, glassOf(formTab));
+
+    /*
+     * **The consequence, which is the bug this was reported as.** The page the
+     * notebook is showing and the tab the names speak for are two answers, and
+     * `Ide.TabSet.switchTo` vetoes a page change the notebook made by itself --
+     * which is right, and which left the two disagreeing: the canvas on screen
+     * with no designer behind it. Moving the mouse over it threw; once the
+     * handler learned to ask, clicking a control selected nothing, and a loud bug
+     * had become a quiet one. So the state is asserted, and so is the click.
+     */
+    eq("the page on screen and the tab the names speak for are one answer",
+       ide.Tabs.Current, ide.tabs.tabOrder.indexOf(ide.activeFile));
+
+    const target = ide.Surface.Children.find((c) => c.Name === "Ok");
+    const where2 = target ? target.Bounds(ide.Glass) : null;
+    if (where2) {
+        const cx = Math.round(where2.X + where2.Width / 2);
+        const cy = Math.round(where2.Y + where2.Height / 2);
+        ide.Glass_MouseDown(cx, cy);
+        ide.Glass_MouseUp(cx, cy);
+        check("and a control can be selected with a click after all of that",
+              ide.designer.selected !== null, String(ide.designer.selected));
+        ide.designer.select(null);
+    }
 }
 
 function* p_palette(ide) {

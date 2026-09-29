@@ -1941,24 +1941,54 @@ class MainForm extends Form {
 
     /* --- disenador -------------------------------------------------------
      * Events go to the form that owns the control, so the handlers live here and
-     * delegate to Designer. */
+     * delegate to Designer.
+     *
+     * **And every one of them asks whether there is a designer first**, which
+     * five of them did not. `ide.designer` is a name repointed at the active tab
+     * and is `null` whenever that tab is not a form -- a code tab, a catalogue,
+     * a document, or nothing open at all (`Ide.TabSet.placeContent`, whose own
+     * comment says it: *"words for 'the active one', and `null` when there is
+     * none"*). It reached the pointer anyway: moving the mouse over the form's
+     * editor raised `TypeError: cannot read property 'mouseMove' of null` on
+     * every motion, because `bta_emit` reports a handler's throw and the
+     * program carries on, so nothing stopped it repeating.
+     *
+     * The question is asked of **`this.designer` and not of `this.designing`**,
+     * and the difference is the whole of it: `designing` says the *mode*, and the
+     * mode is what the pointer is delivered against, so a glass that is still
+     * mapped on a tab that is no longer designing raises this with `designing`
+     * false and a designer null. Asking the thing being dereferenced cannot be
+     * wrong. `TitleBar_MouseDown` below asked the mode and had the same shape
+     * waiting for it; `Ide.TabSet` nulls the canvas names with the designer now,
+     * which is the other half. */
 
-    Glass_MouseDown(x, y, button, ctrl) { this.designer.mouseDown(x, y, button, ctrl); }
+    Glass_MouseDown(x, y, button, ctrl) {
+        if (this.designer) this.designer.mouseDown(x, y, button, ctrl);
+    }
 
     /* The title bar is the form's, so clicking it selects the form -- which is
      * what the control tree's root does, and what a user who clicks the title bar
      * of a window is pointing at.  It is the only thing on the decoration that
      * answers: the buttons on it are a picture of the window's, and a preview
      * that could be minimised would be lying about what it is. */
-    TitleBar_MouseDown() { if (this.designing) this.designer.select(null); }
+    TitleBar_MouseDown() { if (this.designer) this.designer.select(null); }
     /* Shift suspends snapping to the guides, to nudge by a single pixel. */
     Glass_MouseMove(x, y, button, ctrl, shift) {
-        this.designer.mouseMove(x, y, shift);
+        if (this.designer) this.designer.mouseMove(x, y, shift);
     }
-    Glass_MouseUp(x, y, button, ctrl) { this.designer.mouseUp(x, y, button, ctrl); }
+    Glass_MouseUp(x, y, button, ctrl) {
+        if (this.designer) this.designer.mouseUp(x, y, button, ctrl);
+    }
 
-    Glass_DblClick(x, y) { this.designer.dblClick(x, y); }
+    Glass_DblClick(x, y) {
+        if (this.designer) this.designer.dblClick(x, y);
+    }
 
+    /*
+     * The two keys above are the window's and not the designer's, and they are
+     * answered **before** the designer is asked about -- so they keep working on
+     * a code tab, which is where they matter most.
+     */
     Glass_KeyPress(key, ctrl, shift) {
         if (key === "w" && ctrl && !shift) {
             this.closeActiveTab();
@@ -1968,18 +1998,19 @@ class MainForm extends Form {
             this.cycleTab(shift ? -1 : 1);
             return true;
         }
+        if (!this.designer) return false;
         return this.designer.keyPress(key, ctrl, shift);
     }
 
     /* Adds another of the last type used: that is what Ctrl+Insert does, since
      * the palette already adds its own when pressed. */
     addFromPalette() {
-        this.designer.addControl(this.designer.tool);
+        if (this.designer) this.designer.addControl(this.designer.tool);
     }
 
     /* A type dragged from the palette and dropped on the form. */
     Glass_Drop(type, x, y) {
-        this.designer.dropControl(type, x, y);
+        if (this.designer) this.designer.dropControl(type, x, y);
     }
 
     /*
