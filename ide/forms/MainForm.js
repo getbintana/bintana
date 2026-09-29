@@ -1730,14 +1730,17 @@ class MainForm extends Form {
         this.refresh();
     }
 
-    /* "The pointer is here" -- the point decides which name it is about, and
-     * the dwell is `Ide.Tooltip`'s. */
+    /*
+     * "The pointer is here" -- the point decides which name it is about, and
+     * the dwell is `Ide.Tooltip`'s. The leave is its too, and it is not the
+     * obvious handler: see the note over `Tooltip.left`.
+     */
     Editor_MouseMove(x, y) {
         this.tooltip.hovered(this.Editor, x, y);
     }
 
     Editor_MouseLeave() {
-        this.tooltip.close();
+        this.tooltip.left();
     }
 
     Editor_Cursor() {

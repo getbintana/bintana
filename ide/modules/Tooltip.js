@@ -31,15 +31,37 @@ Ide.Tooltip = class Tooltip {
 
     get visible() { return !!(this.pop && this.pop.Visible); }
 
-    /* The pointer moved over `ed`: the dwell starts over. */
+    /* The pointer moved over `ed`: what was open goes away and the dwell
+     * starts over. */
     hovered(ed, x, y) {
-        this.stop();
+        this.close();
         if (!ed)
             return;
         this.timer = Timer.After(400, () => {
             this.timer = null;
             this.show(ed, x, y);
         });
+    }
+
+    /*
+     * The pointer left the editor, and there are two of these.
+     *
+     * **The one that matters is the real one**: hover a word, walk out
+     * quickly, and the dwell is still armed with the last point it saw --
+     * without this it fires a moment later and a tooltip appears at the edge
+     * for a pointer that is somewhere else. `close` stops the timer.
+     *
+     * **The other one is the popover's own opening.** It maps under the
+     * pointer for an instant while GTK places it, the editor is sent a
+     * `leave` for that instant, and a handler that closed on it killed the
+     * tooltip in its own frame -- `Visible` true, 168 characters of label,
+     * and nothing on screen. A real leave never arrives with the popover up:
+     * any movement back over the editor closes it through `hovered` first.
+     */
+    left() {
+        if (this.pop && this.pop.Visible)
+            return;
+        this.close();
     }
 
     stop() {

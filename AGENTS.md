@@ -1706,6 +1706,25 @@ Placement was checked by eye once, on an `Xvfb` with a root capture (a
 popover is its own surface and does not show in a window capture): the hint
 sits directly above the cursor with the argument in bold.
 
+**And the pointer resting on a name is `Ide.Tooltip`**, which answers the same
+`Ide.Completion.topic` F1 does, with `Editor.PositionAt` saying which character
+is under the point. **`MouseLeave` is not what closes it, and finding that out
+cost a real pointer.** A popover maps under the pointer for the instant GTK
+places it, the editor is sent a `leave` for that instant, and a handler that
+closed on it killed the tooltip in its own frame: `Popover.Visible` true, 168
+characters of label, **nothing on screen** -- and every assertion green, because
+the suite calls `Editor_MouseMove` by name and never produces a surface.
+`Tooltip.left()` ignores a leave while the popover is up (the mapping one) and
+closes on the real one, which is what cancels the dwell a quick exit leaves
+armed; without that half, hovering a word, walking out and waiting made a
+tooltip appear at the edge for a pointer that was somewhere else. Measured with
+a real pointer on an `Xvfb`: resting over `File.Load` shows the popover, and
+crossing a word and leaving inside the 400 ms leaves nothing. **A test that
+calls a handler instead of producing the event it is about cannot see this
+class of bug** -- and **`Popover.Bounds()` is not how to ask whether one is on
+screen**: it answers `{Width: 0, Height: 0}` for a popover that is drawn, so
+`Visible` and a root capture are the two that answer.
+
 **And the classes are the open tabs' before they are the disk's.**
 `declaredClasses` used to walk the project once and keep what the files said,
 so a class written in a tab and not saved was no class at all -- no bare name,
