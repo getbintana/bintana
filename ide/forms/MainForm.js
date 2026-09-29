@@ -2199,6 +2199,41 @@ class MainForm extends Form {
     }
 
     /*
+     * Shift+F6, and the same question asked to write.
+     *
+     * The prompt comes first and the list second, which is the opposite of
+     * `RefsForm`'s button: here one has decided to rename and wants the field,
+     * and what the window shows afterwards is what moved. `renameSymbolPrompt`
+     * is kept the way `renamePrompt` is -- so a test can drive the field and
+     * the button rather than the callback behind them.
+     */
+    MnuRenameSymbol_Click() { this.renameSymbol(); }
+
+    renameSymbol() {
+        const word = this.wordAtCursor();
+        const name = word.includes(".") ? word.slice(word.lastIndexOf(".") + 1)
+                                        : word;
+        if (!name) {
+            this.log(`${Locale.Text("Put the cursor on a name first.")}\n`);
+            return null;
+        }
+
+        this.renameSymbolPrompt = AskForm.prompt(
+            Locale.Text("Rename symbol"), Locale.Text("New name:"), name,
+            (newName) => {
+                const done = this.refactor.rename(name, newName);
+                if (done.Refused) {
+                    Message.Error(done.Refused);
+                    return;
+                }
+                this.log(`${name} -> ${newName}: ${done.Moved} references in ` +
+                         `${done.Files.length} files\n`);
+                RefsForm.show(this, newName);
+            });
+        return this.renameSymbolPrompt;
+    }
+
+    /*
      * --- debugging ----------------------------------------------------------
      *
      * Everything about *what* happens is `Ide.Debugger`'s; these are the keys.

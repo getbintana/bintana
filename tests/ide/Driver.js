@@ -11101,6 +11101,37 @@ function* p_refs(ide) {
         "    use(refStop) { return refStop; }",
         "}",
     ]);
+    save("RefV.js", [
+        "class RefV {",
+        "    get refAmount() { return this._v || 0; }",
+        "    set refAmount(v) { this._v = Number(v) || 0; }",
+        "    show() { return this.refAmount + this.refAmount; }",
+        "}",
+    ]);
+
+    /* A form, its handler, and a class it places as a control: the three shapes
+     * that are declared somewhere other than a line of code. The names carry
+     * the phase's prefix because the project already holds a `Tabs.js` with an
+     * `Ok_Click` of its own, and a name two classes declare is a different
+     * refusal. */
+    save("RefF.js", [
+        "class RefF extends Form {",
+        "    RefOk_Click() { return 1; }",
+        "}",
+    ]);
+    File.SaveJson(File.Join(TMP, "RefF.form"), {
+        format: "bintana-form/1",
+        class: "RefF",
+        children: [
+            { type: "Button", name: "RefOk", properties: {} },
+            { type: "RefP", name: "Widget1", properties: {} },
+        ],
+    });
+    save("RefP.js", [
+        "class RefP {",
+        "    static Make() { return new RefP(); }",
+        "}",
+    ]);
     ide.listFiles();
 
     const refs = ide.refactor.references("RefA");
@@ -11163,6 +11194,31 @@ function* p_refs(ide) {
     check("a word that is not a name refuses",
           invalid.includes("is not a name"), invalid);
 
+    const formClass = refused("RefF", "RefG");
+    check("a form class refuses, and points at F2",
+          formClass.includes("is a form"), formClass);
+
+    const control = refused("RefOk", "RefAccept");
+    check("a control refuses, and points at the designer",
+          control.includes("is a control"), control);
+
+    const handler = refused("RefOk_Click", "RefOk_Press");
+    check("a control's handler refuses", handler.includes("handler"), handler);
+
+    /* The project this phase runs in declares no `uses` -- the `tabs` fixture
+     * rewrote its manifest -- so the library list is put where the question
+     * needs it and taken back out. `lib/gadgets` is there and is a library when
+     * `uses` says so, which is exactly the asymmetry `Classes.inLibrary`
+     * answers. */
+    const keptLibs = ide.classes.libraries;
+    ide.classes.libraries = [{ name: "gadgets",
+                               dir: File.Join(TMP, "lib", "gadgets") }];
+    const collide = refused("refTurn", "Dial");
+    ide.classes.libraries = keptLibs;
+
+    check("a name a library declares refuses",
+          collide.includes("library this project uses"), collide);
+
     /* --- the method rename, which is the one that writes --------------------- */
 
     const spun = ide.refactor.rename("refTurn", "refSpin");
@@ -11172,6 +11228,32 @@ function* p_refs(ide) {
     check("...the declaration", m.includes("refSpin() { return 1; }"));
     check("...and both this. uses",
           !m.includes("this.refTurn()") && m.includes("this.refSpin()"));
+
+    /* --- a property, which is one name and two declarations ------------------ */
+
+    const property = ide.refactor.rename("refAmount", "refTotal");
+    eq("a get/set pair is renamed as one", property.Moved, 4);
+
+    const v = File.Load(File.Join(TMP, "RefV.js"));
+    check("...both declarations",
+          v.includes("get refTotal()") && v.includes("set refTotal("));
+    check("...and the uses", v.includes("this.refTotal + this.refTotal"));
+
+    /* --- a class a form places ----------------------------------------------- */
+
+    const placed = ide.refactor.rename("RefP", "RefR");
+    eq("a class a form places is renamed", placed.Moved, 2);
+    check("...the file moves with it",
+          placed.Files.includes("RefR.js"), JSON.stringify(placed.Files));
+    check("...and the form that places it is rewritten",
+          placed.Files.includes("RefF.form"), JSON.stringify(placed.Files));
+
+    const retyped = File.LoadJson(File.Join(TMP, "RefF.form"));
+    eq("...with the new type",
+       retyped.children.find((c) => c.name === "Widget1").type, "RefR");
+
+    /* The move opens a tab, as it does for F2. */
+    ide.tabs.closeByName("RefR.js", true);
 
     /* --- the window ---------------------------------------------------------- */
 
@@ -11199,9 +11281,29 @@ function* p_refs(ide) {
     eq("with no name under the cursor there is nothing to find",
        ide.findReferences(), null);
 
-    /* Nothing planted outlives its phase, tab included. */
+    /* --- the menu item, which asks and then shows what moved ----------------- */
+
+    ide.Editor.Select(3, 26, 0);       /* on `this.refSpin` again */
+    const prompt = ide.renameSymbol();
+
+    check("Shift+F6 asks for the new name", !!prompt, String(prompt));
+    eq("...starting from the one under the cursor", prompt.TxtValue.Text, "refSpin");
+
+    prompt.TxtValue.Text = "refTwist";
+    prompt.BtnOk.Click();
+
+    const twisted = File.Load(File.Join(TMP, "RefM.js"));
+    check("...and the rename is written",
+          twisted.includes("refTwist() { return 1; }"));
+    check("...with the list showing the new name",
+          !!RefsForm.open && RefsForm.open.word === "refTwist",
+          String(RefsForm.open && RefsForm.open.word));
+    if (RefsForm.open) RefsForm.open.Close();
+
+    /* Nothing planted outlives its phase, tabs included. */
     ide.tabs.closeByName("RefM.js", true);
-    for (const f of ["RefB.js", "RefM.js", "RefN.js", "RefS.js"])
+    for (const f of ["RefB.js", "RefM.js", "RefN.js", "RefS.js", "RefV.js",
+                     "RefF.js", "RefF.form", "RefR.js"])
         File.Delete(File.Join(TMP, f));
     ide.listFiles();
 }

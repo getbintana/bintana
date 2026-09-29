@@ -857,16 +857,17 @@ is worse than one that refused:
 
 | Written | What the rename does |
 |---|---|
-| `this.greet()` | renamed — in any file, since `this` is the receiver it can attribute |
+| `this.greet()` | renamed — a method, or the two halves of a `get`/`set` property, in any file, since `this` is the receiver it can attribute |
 | `greet()`, bare, in the file that declares it | renamed; **refused** from another file, where the name resolves somewhere else |
 | `other.greet()` | **refused**: without a resolver this cannot tell whose member it is |
+| `Class.Make()`, a `static` | **refused**: a member of its class, and the receiver is not something this attributes |
 | `{ greet: 1 }`, `greet:` as a label, `cond ? greet : other` | **refused**: a key, a label or a ternary, and not a use this can attribute |
 | a name already declared, or a class of a library the project `uses` | **refused**: the two would collide at load |
-| a local of the same name in a file with a bare use | **refused**: the use could be that binding |
+| a local variable or a parameter of the same name | **refused**: a scope is not something this can see |
 | `<control>_<event>` | **refused**: rename the control, which carries its handlers along |
 | a form class | **refused**: F2 renames it, and moves its `.form` and `project.json` with it |
 | a control | **refused**: the designer's rename is the one that carries its handlers |
-| a class a `.form` places as a control | **refused**: this does not rewrite `.form` files |
+| a class a `.form` places as a control | renamed too: the form's `type` is rewritten through the same `retypeForms` F2 uses |
 
 A class whose file is named after it **moves with it**, because the file is where
 a project's class is looked for; one that shares its file with others stays where

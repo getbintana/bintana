@@ -213,6 +213,11 @@
           "shortcut": "<Shift>F12"
         },
         {
+          "name": "MnuRenameSymbol",
+          "text": "Rename symbol...",
+          "shortcut": "<Shift>F6"
+        },
+        {
           "name": "MnuGotoSymbol",
           "text": "Go to...",
           "shortcut": [

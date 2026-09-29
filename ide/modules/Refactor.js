@@ -37,10 +37,23 @@ Namespace("Ide");
 const REFACTOR_WORD = /^[A-Za-z_$][\w$]*$/;
 
 /* The kinds `Application.Symbols` reports that name something a rename can
- * move. `Variable` is not one: a local belongs to a scope this cannot see, and
- * `Static`/`Getter`/`Setter` are reached as members of their class, which is
- * the shape a method rename refuses. */
-const REFACTOR_DECLS = ["Class", "Function", "Method"];
+ * move. `Variable` is not one: a local belongs to a scope this cannot see. A
+ * `Static` is not either: it is reached as a member of its class, and the
+ * receiver of `Class.Make` is not something this can attribute -- the same
+ * shape a method rename refuses, one level up. */
+const REFACTOR_DECLS = ["Class", "Function", "Method", "Getter", "Setter",
+                        "Static", "StaticGetter", "StaticSetter"];
+
+/* And the ones that are members of their class rather than of an instance:
+ * found as declarations, so the refusal can name what it is, and never
+ * rewritten -- `Class.Make` is a member access whose receiver is not something
+ * this can attribute. */
+const REFACTOR_STATICS = ["Static", "StaticGetter", "StaticSetter"];
+
+/* And of those, the ones that are reached through `this.` -- a method, and the
+ * two halves of a property declared with `get`/`set`, which are one name and
+ * two declarations. */
+const REFACTOR_MEMBERS = ["Method", "Getter", "Setter"];
 
 Ide.Refactor = class Refactor {
 
@@ -122,8 +135,15 @@ Ide.Refactor = class Refactor {
         return out;
     }
 
-    /* The line each declaration of the word sits on, by kind, for one file.
-     * Only asked of a file that already holds an occurrence. */
+    /*
+     * The line each declaration of the word sits on, by kind and by the class
+     * it is in, for one file. Only asked of a file that already holds an
+     * occurrence.
+     *
+     * The class is `Parent`, which is what tells a method and its get/set pair
+     * apart from a same-named method of another class -- the question the
+     * rename has to answer before it may touch `this.` anywhere.
+     */
     declarationsIn(name, word) {
         const source = this.sourceOf(name);
         if (source === null) return new Map();
@@ -131,7 +151,7 @@ Ide.Refactor = class Refactor {
         const out = new Map();
         for (const s of Application.Symbols(source))
             if (s.Name === word && REFACTOR_DECLS.includes(s.Kind))
-                out.set(s.Line, s.Kind);
+                out.set(s.Line, { kind: s.Kind, parent: s.Parent || "" });
 
         return out;
     }
@@ -161,7 +181,7 @@ Ide.Refactor = class Refactor {
                     out.push({ File: file, Line: 0, At: -1, Decl: "Control",
                                Text: `${node.type} ${node.name}` });
                 else if (node.type === word)
-                    out.push({ File: file, Line: 0, At: -1,
+                    out.push({ File: file, Line: 0, At: -1, Type: node.type,
                                Text: `placed as ${node.name}` });
             }
         }
@@ -188,8 +208,8 @@ Ide.Refactor = class Refactor {
 
             const decl = this.declarationsIn(name, word);
             for (const row of found) {
-                const kind = decl.get(row.Line);
-                if (kind) row.Decl = kind;
+                const at = decl.get(row.Line);
+                if (at) { row.Decl = at.kind; row.Parent = at.parent; }
             }
             rows.push(...found);
         }
@@ -244,16 +264,16 @@ Ide.Refactor = class Refactor {
             return { Refused: `Nothing in this project declares ${word} -- only a class, a function or a method can be renamed.` };
         if (decl.Decl === "Control")
             return { Refused: `${word} is a control: rename it from the designer, which carries its handlers along.` };
+        if (REFACTOR_STATICS.includes(decl.Decl))
+            return { Refused: `${word} is a static of ${decl.Parent || "a class"} -- this cannot tell which class a member access belongs to.` };
         if (decl.Decl === "Class" && this.ide.classes.formOf(decl.File))
             return { Refused: `${word} is a form -- F2 renames it, and moves its .form, its tab and project.json with it.` };
 
-        /* A class a form places as a control is a use in a `.form`, and this
-         * rename does not rewrite those: refused and named rather than half
-         * done, since the form would go looking for a class that is gone. */
+        /* A class a form places as a control is a use in a `.form`, and the
+         * forms are rewritten rather than reported: they are JSON the IDE owns
+         * the shape of, and `retypeForms` is the same road F2 already takes. */
         const placed = rows.find((r) => !r.Decl && r.At < 0 &&
                                         r.Text.startsWith("placed as"));
-        if (decl.Decl === "Class" && placed)
-            return { Refused: `${word} is placed as a control in ${placed.File} -- a rename would leave that form looking for a class that is gone.` };
 
         /* What is already called that. A declaration anywhere, or a control --
          * either one makes the new name mean two things. */
@@ -268,14 +288,18 @@ Ide.Refactor = class Refactor {
         if (this.libraryDeclares(to))
             return { Refused: `${to} is a class of a library this project uses -- the two would collide at load.` };
 
-        const isMethod = decl.Decl === "Method";
+        const isMethod = REFACTOR_MEMBERS.includes(decl.Decl);
 
-        /* A method declared in two classes is two methods that share a name,
-         * and `this.greet` in a third file would not say which one it means. */
+        /* A member declared in two classes is two members that share a name,
+         * and `this.greet` in a third file would not say which one it means.
+         * Counted by class and not by row, because a property declared with
+         * `get` and `set` is one name and two declarations. */
         if (isMethod) {
-            const methods = rows.filter((r) => r.Decl === "Method");
-            if (methods.length > 1)
-                return { Refused: `${word} is declared in ${methods.length} classes -- this rename cannot tell which one a use means.` };
+            const classes = new Set(
+                rows.filter((r) => REFACTOR_MEMBERS.includes(r.Decl))
+                    .map((r) => r.Parent || r.File));
+            if (classes.size > 1)
+                return { Refused: `${word} is declared in ${classes.size} classes -- this rename cannot tell which one a use means.` };
             if (rows.some((r) => r.Decl === "Control"))
                 return { Refused: `A control is called ${word} too, so this.${word} would name two things.` };
 
@@ -342,6 +366,23 @@ Ide.Refactor = class Refactor {
 
         if (movesFile && this.ide.renameFile(decl.File, movedTo))
             files[files.indexOf(decl.File)] = movedTo;
+
+        /*
+         * And the forms that place the class as a control. They are rewritten
+         * through `FormFiles.retypeForms` -- the same road F2 takes, which
+         * already follows an open designer and a tab with unsaved work -- and
+         * not by a second implementation here, which would be the one to get
+         * the dirty tab wrong. `newFull` keeps the namespace the form spelled:
+         * a class in `Widgets/Stepper.js` is placed as `Widgets.Stepper`.
+         */
+        if (decl.Decl === "Class" && placed) {
+            const oldFull = placed.Type || word;
+            const cut     = oldFull.lastIndexOf(".");
+            const newFull = cut >= 0 ? oldFull.slice(0, cut + 1) + to : to;
+
+            for (const file of this.ide.formFiles.retypeForms(oldFull, newFull, ""))
+                if (!files.includes(file)) files.push(file);
+        }
 
         return { Moved: moved, Files: files };
     }
