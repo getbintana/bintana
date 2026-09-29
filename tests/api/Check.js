@@ -643,6 +643,34 @@ function checkApiJson(root, problems, members, events) {
         if (v.indexOf(".") >= 0 && !namedGlobals.has(v))
             problems.push(`api.json: the nested global ${v} is not in it`);
 
+    /* And the two objects a table describes and nothing owns -- a menu item
+     * and a command, which the manifest carries so `forms.md`'s prose can be
+     * held to the code. Their tables are read here and not by `members`
+     * above, since `GLOBAL_TABLES` is what says they are not globals. */
+    const forms   = { menuitem_props: "MenuItem", action_props: "Action" };
+    const ofType  = {};
+    for (const t of catalog.Types)
+        ofType[t.Name] = new Set(t.Members.map((m) => m.Name));
+
+    for (const c of sources(root)) {
+        const src = File.Load(c);
+
+        for (const t of TABLE.Matches(src)) {
+            const type = forms[t.Group(1)];
+            if (!type)
+                continue;
+            checked++;
+            for (const g of GETSET.Matches(t.Group(2)))
+                if (!ofType[type] || !ofType[type].has(g.Group(1)))
+                    problems.push(`api.json: ${type}.${g.Group(1)} is in the C ` +
+                                  `and not in it`);
+            for (const f of CFUNC.Matches(t.Group(2)))
+                if (!ofType[type] || !ofType[type].has(f.Group(1)))
+                    problems.push(`api.json: ${type}.${f.Group(1)} is in the C ` +
+                                  `and not in it`);
+        }
+    }
+
     return { catalog: catalog, checked: checked, ok: true };
 }
 

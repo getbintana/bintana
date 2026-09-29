@@ -14783,6 +14783,74 @@
   ],
   "Types": [
     {
+      "Name": "Action",
+      "Members": [
+        {
+          "Name": "Click",
+          "Kind": "Method",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "Enabled",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "EventNames",
+          "Kind": "Method",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "Icon",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "Name",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "PropertyNames",
+          "Kind": "Method",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "Text",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        }
+      ]
+    },
+    {
       "Name": "Connection",
       "Members": [
         {
@@ -15266,6 +15334,74 @@
           "Signature": "",
           "Returns": "string",
           "Doc": "`\"\"` until `Start`, the real one after, and empty again after `Stop`",
+          "Native": true
+        }
+      ]
+    },
+    {
+      "Name": "MenuItem",
+      "Members": [
+        {
+          "Name": "Click",
+          "Kind": "Method",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "Enabled",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "EventNames",
+          "Kind": "Method",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "Items",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "Name",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "PropertyNames",
+          "Kind": "Method",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "Value",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
           "Native": true
         }
       ]

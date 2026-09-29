@@ -44,6 +44,21 @@ const NESTED_OWNERS = ["Desktop.Entries"];
 const API_NAMED_TYPE = new Regex("^\\s*/\\*\\s*type\\s+([A-Za-z_][\\w.]*)\\s*\\*/",
                                  { Multiline: true });
 
+/*
+ * The two objects a C table describes and neither a global nor a `type X`
+ * name holds: a menu item and a command.  Their tables are installed on
+ * objects made per item, so `Widget.Members("MenuItem")` refuses, and the
+ * documentation has been writing them down by hand -- `docs/llm/forms.md`
+ * documents every one of these names in prose.  The manifest carries the
+ * names, so the docs check can hold that prose to the code; there are no
+ * signatures and no descriptions, because there is no entry to hang one on.
+ */
+const API_TABLE_TYPES = { menuitem_props: "MenuItem", action_props: "Action" };
+const API_TABLE_BODY  = new Regex(
+    "static const JSCFunctionListEntry (\\w+)\\[\\]\\s*=\\s*\\{([\\s\\S]*?)\\n\\};");
+const API_TABLE_ENTRY = new Regex(
+    "JS_C(GETSET|FUNC)(?:_MAGIC)?_DEF\\(\\s*\"(\\w+)\"");
+
 /* One member, in the shape everything downstream reads.  Sorted by name: the
  * runtime's order is the chain's, and a file that changes with the order of a
  * walk is a file that cannot be diffed. */
@@ -173,7 +188,24 @@ function apiTypes(root) {
         try { members = Widget.Members(name); } catch (e) { continue; }
         out.push({ Name: name, Members: apiMemberList(members) });
     }
-    return out;
+
+    /* And the two a table describes with no name anywhere else. */
+    for (const file of Directory.Files(File.Join(root, "runtime/src"), "*.c").sort()) {
+        for (const t of API_TABLE_BODY.Matches(File.Load(file))) {
+            const type = API_TABLE_TYPES[t.Group(1)];
+            if (!type)
+                continue;
+            const members = [];
+            for (const e of API_TABLE_ENTRY.Matches(t.Group(2)))
+                members.push({ Name: e.Group(2),
+                               Kind: e.Group(1) === "FUNC" ? "Method" : "Property",
+                               Params: -1, Signature: "", Returns: "",
+                               Doc: "", Native: true });
+            out.push({ Name: type, Members: apiMemberList(members) });
+        }
+    }
+
+    return out.sort((a, b) => a.Name < b.Name ? -1 : a.Name > b.Name ? 1 : 0);
 }
 
 /* Every library the repository ships, and what each of its classes publishes.
