@@ -3704,6 +3704,33 @@ person who wrote it either.
   an arrow. The table in `bta_widget.c` is the single place the CSS spelling
   appears, and `bta_widget_cursor_options()` builds the drop-down out of it so
   the two cannot drift.
+- **A feature whose cost is measured on the road it opens is not a line, and the
+  measurement is the feature.** Tab drag-to-reorder is the case: GTK 4 spells it
+  *per page*, so it is asked for every page as it arrives, and there are two
+  roads in (`bta_notebook_page_added` for the loader/`Add`/the designer, and
+  `notebook_append` which bypasses both) -- and then the notebook can change its
+  own order, which means every list kept beside it is a cache, and
+  `Ide.TabSet.tabOrder` is one. It was built, the docs written, `Reordered`
+  published, `tabs reordered` asserted -- and with the feature in, moving between
+  a form tab and a code tab left **the page on screen and the tab the names
+  speak for as two different answers**: the side panel stuck on the form's, a
+  click on a control selecting nothing, and (before the handlers learned to ask)
+  a `TypeError` on every mouse motion over the canvas. **None of that was
+  reproducible from a fresh session** -- twelve driven tab switches, strip
+  clicks, closes of either tab, a sweep of every file-tree row, each compared
+  pixel-for-pixel against a healthy reference -- and it still followed a user
+  around, so it was reverted rather than explained. Three things, and they are
+  the ones to remember: **a second copy of an answer is where the bugs live**
+  (`tabOrder` beside the notebook's own order is exactly that, and the drag is
+  what makes them disagree), **an un-reproducible symptom following a user is
+  still the feature's**, and **the guard that stops a crash can also stop a bug
+  being heard** -- the same state went from a loud `TypeError` to a silently
+  wrong panel, which is a regression the fix caused. What stayed is the two
+  halves that are *proved*: the five canvas handlers ask whether there is a
+  designer before dereferencing it (`tests/ide` goes red without them, and
+  reproduces the reported `TypeError` by name), and
+  `Ide.TabSet.placeContent` brings the canvas names down with the designer
+  instead of leaving them naming the last form.
 - **Tab order cannot ride the child list, because paint order already does.**
   GTK4 walks the focus in child-list order and removed `GtkContainer`'s focus
   chain, so on a `BtaFixed` the drawn order is the tab order -- and that same list

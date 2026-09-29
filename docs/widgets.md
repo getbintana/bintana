@@ -3152,18 +3152,30 @@ to nothing and lost on every load.
 
 `Reorder(page, index)` moves a page, and the tab goes with it.
 
-`SetAction(control, "Start" | "End")` puts a control in the **tab strip**, in the
-room at either end that GTK reserves for one (`gtk_notebook_set_action_widget`) —
-a "new tab" button, a menu for the whole set. What makes it worth a method of its
-own is that it is emphatically **not a page**: `Count` and `Children` go on
-counting pages, which is what they mean.
+**A tab cannot be dragged along the strip**, and the header in
+`bta_notebook.c` said otherwise for as long as the claim stood. It is worth
+recording what the capability costs, because the answer is not the line it looks
+like. **GTK 4 spells reordering per page** (`gtk_notebook_set_tab_reorderable`),
+not per notebook as GTK 3 did, so it has to be asked for every page as it
+arrives -- and there are **two roads in**: `bta_notebook_page_added`, which the
+`.form` loader, `Add` and the designer all go through, and `notebook_append`,
+which reaches `gtk_notebook_append_page` directly and never gets there. A
+notebook whose first page could be moved and whose second could not is the kind
+of thing nobody reports. And the notebook has to be **passed in** rather than
+asked of the page: a notebook's GTK children are its header and its internal
+`GtkStack`, not its pages, so `gtk_widget_get_parent` of a page is that stack
+and `GTK_NOTEBOOK` on it is a `CRITICAL` and a silent no-op.
 
-It is *adopted* like a page, though, and has to be: the JS wrapper owns the
-`BtaWidget`, so a control only GTK holds is collected while GTK still shows it
-and the next motion over it reads freed memory. Passing `null` takes it out.
-Two ordering rules follow from the adoption — set the control's `Name` **before**,
-since that is what its events are looked up by, and its `Menu` **after**, since
-the items are named on the form the adoption binds it to.
+The third piece is the one that decided it. `page-reordered` is the only report
+the notebook gives that its order changed, and publishing it is not enough on
+its own: **a list kept in step with the strip that is not moved on that event
+answers with the wrong page from the next one on, and nothing says so.** The
+IDE has such a list (`Ide.TabSet.tabOrder`, "the order the strip shows them in"),
+so the work was to carry the event, correct the list, and then find that the
+page on screen and the tab the names speak for had started to come apart --
+which is a different bug, on a path this feature runs through every time a tab
+changes. The feature was reverted with the names still disagreeing unexplained.
+**It is not a line, and the line is the cheap third of it.**
 
 ### Switcher
 

@@ -2025,14 +2025,20 @@ runs, and opens what lands as a project. A clone of something that is not a
 Bintana project opens too, and says it has no `project.json`, which is a sentence
 the IDE already had.
 
-### What is not built
+### What git does not do
 
-The plan is [plans/git-plan.md](plans/git-plan.md), and all five of its stages are here:
-status, the viewer, staging and committing, branches and the history, and the
-remotes. `git init` is here because a project without a repository is the one
-case where a menu full of disabled items is a dead end. What is deliberately not
-here is merging and rebasing: both are conversations with conflicts, and the
-Terminal tab is a real shell in the project's directory.
+The plan is [plans/git-plan.md](plans/git-plan.md), and all seven of its stages
+are here: status, the viewer, staging and committing, branches and the history,
+and the remotes. `git init` is here because a project without a repository is the
+one case where a menu full of disabled items is a dead end. What is deliberately
+not here is merging and rebasing: both are conversations with conflicts, and the
+Terminal tab is a real shell in the project's directory. A pull that cannot
+fast-forward therefore stops with a line in the log and a job for the shell —
+which is the cost of that decision, said rather than left to be found out.
+
+**Staging is per file**, and says so in the viewer: per hunk needs a hunk parser
+and `git apply --cached`, and a file with one line you do not want is edited
+before it is staged.
 
 ## Debugging
 

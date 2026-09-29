@@ -175,8 +175,8 @@ needed and what it did instead.
 | Gap | Where it is written down |
 |---|---|
 | A **form** bound to a table — a control that names a field and fills itself | [`docs/plans/data-plan.md`](../plans/data-plan.md). The records-over-a-table half exists: [`Database.Sqlite` and `Table`](library.md#database-and-table) |
-| No watch, no immediate window, and no changing a value while stopped — the debugger stops, steps and **shows** what a frame holds, and that is where it ends | [`docs/plans/debug-plan.md`](../plans/debug-plan.md), stages 3 to 6. A loop written entirely on one line also stops only once |
-| No git in the IDE — no status, no diff before committing, no stage or push | [`docs/plans/git-plan.md`](../plans/git-plan.md). What there is instead: the `Terminal` tab, a real shell in the project directory. The plan's core is a side-by-side diff viewer; its one open gap is below |
+| The debugger stops in the program's own runtime and **not in a `Task`** — a background computation is unbreakpointable and unsteppable, and `Error` with its stack is the whole of what its failure says | [library.md](library.md#task). The other ten of the eleven are built: [`docs/plans/debug-plan.md`](../plans/debug-plan.md). A loop written entirely on one line also stops only once |
+| Git in the IDE stops at a fast-forward — a pull that cannot merge, a rebase and a conflict are the `Terminal` tab, and staging is per file rather than per hunk | [`docs/plans/git-plan.md`](../plans/git-plan.md) (all seven stages built, this is what is not in it) and [ide.md](../ide.md#what-git-does-not-do) |
 | A word for *do this, then that* | [`docs/plans/async-plan.md`](../plans/async-plan.md) |
 | No editable / autocompleting combo | [ISSUE-editable-combo](../issues/ISSUE-editable-combo.md) |
 | A control laid onto a page — `Print` sends what a `Draw` paints, so a form with real widgets on it still has no path to paper except drawing it by hand | [controls.md](controls.md#drawingarea) |

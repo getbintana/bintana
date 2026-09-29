@@ -6,8 +6,13 @@
  * clicks on.  In the IDE the children are 0x0 dummies (the editor and
  * designer live below the strip) and the labels are the visible tabs.
  *
- * GtkNotebook already handles scrolling, drag-to-reorder, and Ctrl+Tab
- * for switching, so the widget exposes just the operations the IDE needs.
+ * GtkNotebook handles scrolling and Ctrl+Tab for switching, and both are turned
+ * on here; **drag-to-reorder is not**, and saying so is the point -- an earlier
+ * version of this header claimed it was, for as long as the claim stood.  It
+ * takes three pieces to be safe rather than merely present (GTK 4 spells it
+ * *per page*, `page-reordered` is the only report that the order changed, and
+ * the IDE keeps a list of tab names parallel to it), and the third was what made
+ * it a question worth answering rather than a line worth adding.
  */
 #include "bta.h"
 
