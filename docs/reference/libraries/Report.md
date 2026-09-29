@@ -45,7 +45,7 @@ It is a [`Component`](../widgets/Component.md), so everything on
 | `Save(path, [page], [scale])` | one page to a PNG | [off the screen](#off-the-screen) |
 | `SavePdf(path)` | **every page, one file** | [off the screen](#off-the-screen) |
 | `Send([setup], cb)` | **every page, to paper**, through [`Printer`](../../llm/library.md#printer): this fills in how many pages there are and the paper and orientation the report was laid out for, and `{ Copies, From, To }` say the job | [off the screen](#off-the-screen) |
-| **event** `Page(page)` | the data moved the current page (an assignment raises nothing) | [turning the pages](#turning-the-pages) |
+| **event** `Page(page)` | the data moved the current page | [turning the pages](#turning-the-pages) |
 | **event** `Prepared(count)` | the pages were computed | [the data](#the-data) |
 
 ## The paper
@@ -66,7 +66,7 @@ form is loading arrives before the form's other controls exist.
 |---|---|
 | `Data` | the rows: an array of plain objects. `Field` elements read a key off the current row; the group bands read the keys named by each group's `.On`. Defaults to `[]`. |
 | `Refresh()` | re-measures, redraws and emits `Prepared`. Call it when you changed the rows **in place**; assigning `Data` or `Sections` already does |
-| **event** `Prepared(count)` | the pages were computed, and `count` is the new `PageCount` |
+| **event** `Prepared(count)` | the pages were computed: `Data`, `Sections` or `Refresh()`. `count` is the new `PageCount`. Changing the paper, the orientation or the margins re-measures **silently** — read `PageCount` back on the next line — because those can be written in a `.form`, and an event raised while a form is loading arrives before the form's other controls exist |
 
 **Sort before handing the rows over.** Grouping is *consecutive equal values* —
 Crystal's model, which never reorders the data, because reordering is a second
@@ -112,7 +112,7 @@ is in [llm/report.md](../../llm/report.md).
 |---|---|
 | `Page` | the current page, **one-based**. Assigning clamps to `[1, PageCount]`, so a page past the end is the last one, not a blank. Turning a page **redraws and does not re-measure**. Defaults to `1`. |
 | `PageCount` (ro) | how many pages the data and the sections make. Measures lazily, so it is answerable in `Form_Open` before anything has drawn. An empty report is one blank page, not none |
-| **event** `Page(page)` | the current page was moved **by the data** — `Data`, `Sections` or `Refresh()` left fewer pages, and it was pulled back inside the new count. **Assigning `Page` raises nothing**, because a property setter must not raise an event: the code that turns a page updates its own display |
+| **event** `Page(page)` | the data moved the current page: `Data`, `Sections` or `Refresh()` left fewer pages than `Page`, and it was pulled back inside the new count. `page` is one-based. **Assigning `Page` raises nothing** — a property setter must not, since a `.form` declaring it would raise it before the host's other controls exist — so the code that turns a page updates its own display. The paper, the orientation and the margins pull the page back silently too |
 
 **Turning a page redraws and does not re-measure.** That is what the two passes
 buy: the pages were worked out when the data arrived, and `Page` only chooses

@@ -347,8 +347,20 @@ different number of arguments than the runtime passes.
 It parses rather than links, so it answers when the runtime does not build, which
 is the same bargain `tests/icons` and `tests/styles` make. 280 widget members and
 46 events as this is written, plus 13 class statics, 260 on the globals and 80
-published by `lib/` -- the numbers `./tests/api.sh` prints, and every one of them
-has been stale at some point in this repository.
+published by `lib/`, and 8 library events read from the code -- the numbers
+`./tests/api.sh` prints, and every one of them has been stale at some point in
+this repository.
+
+**And a library's events are read from the code that raises them**, which is
+the one thing no class can answer about itself: `Widget.EventNames`,
+`EventSignature` and `EventDoc` take `{ Sources: [...] }` and answer for a class
+this process never ran out of its own `Emit(...)` calls, with the signature
+comment above the `static Events` line that declares them -- `static Events`
+gives the order and is not what makes an event exist. The check parses the same
+files with its own regexes and fails when a raise is missing from either side,
+when a library event has no comment beside its declared list, or when the
+declared arity and the emitted one disagree. Two readers, held to one answer,
+because a scanner that misses a raise is otherwise silent.
 
 **The class statics are read from where they are installed**, which is the hole
 this had: `Widget.New`, `Types` and `Available` are built by

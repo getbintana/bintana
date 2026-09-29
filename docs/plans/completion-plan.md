@@ -213,7 +213,11 @@ analyser either -- each is one more thing a declaration can say:
 6. **The keys of an options object** -- `Exec(cmd, { | })`, where signatures
    declare them only sometimes.
 7. **An event declared by a JavaScript class** (`static Events`) has no
-   description from the code yet; a native one does.
+   description from the code yet; a native one does. **Built since**: the
+   comment above the `static Events` line is the description, read out of the
+   class's sources — `Widget.EventDoc(type, name, { Sources: [...] })` — and
+   held to the `Emit(...)` calls by `tests/api`; see *the events of a library*
+   in [`docs/extending.md`](../extending.md).
 
 The first three are one piece: a signature that can say the type of each
 parameter, in the C comment and in `@param`.

@@ -32,11 +32,20 @@ written back by the serialiser. No declaration, no registration.
 
 ```js
 class Stepper extends Component {
+    /* Change(value)
+     *   the value it now holds
+     */
     static Events         = ["Change"];
     static Options        = { Step: ["1", "5", "10"] };
     static TextProperties = ["Caption"];
 }
 ```
+
+**What an event is for goes in the comment above that list**, in the same
+spelling the runtime's own classes use — a signature line, then the prose — and
+the check holds it to the `Emit(...)` calls: the comment names the parameters and
+the call gives the arity. An event exists because it is raised, so `static
+Events` is not required for one to be found.
 
 `Emit(event, …args)` — [`Widget`](Widget.md#commands-menus-and-keys)'s — is how
 it announces one: the host form receives it by the component's `Name`, exactly as

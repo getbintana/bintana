@@ -59,6 +59,14 @@
 
 class Suggest extends Component {
 
+    /* Change(text)
+     *   the text in the field changed — typed in it, or the needle of
+     *   `Show(text)` — with the free text when nothing in the list was taken
+     */
+    /* Select(text, at)
+     *   one of the list's entries was taken: `text` is what it says and `at`
+     *   its index in `Items`
+     */
     static Events         = ["Change", "Select"];
     static TextProperties = ["Placeholder"];
 

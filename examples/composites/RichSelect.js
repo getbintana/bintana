@@ -24,6 +24,10 @@
 
 class RichSelect extends Component {
 
+    /* Select(title, at)
+     *   one entry was ticked: `title` is the `Title` it holds and `at` its
+     *   index in `Items`
+     */
     static Events = ["Select"];
 
     items  = [];

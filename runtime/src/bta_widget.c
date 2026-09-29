@@ -3783,10 +3783,31 @@ static void decl_member_free(gpointer data)
     g_free(m);
 }
 
+/*
+ * One event a source declares.  There is no `static` field behind it: an event
+ * is raised and not defined, so the raise is the declaration -- see the scan
+ * below -- and `static Events` is read only for the order.
+ */
+typedef struct {
+    char *name;
+    char *params;   /* `"(series, at, value)"`, from the comment, or NULL */
+    char *doc;      /* the description after the signature line, or NULL */
+} DeclEvent;
+
+static void decl_event_free(gpointer data)
+{
+    DeclEvent *e = data;
+    g_free(e->name);
+    g_free(e->params);
+    g_free(e->doc);
+    g_free(e);
+}
+
 typedef struct {
     char      *name;      /* its own, so a walk can ask what this entry is *for* */
     char      *base;
     GPtrArray *members;   /* DeclMember *, capitals only, the runtime's convention */
+    GPtrArray *events;    /* DeclEvent *, own events in the order they are offered */
 } DeclClass;
 
 static void decl_class_free(gpointer data)
@@ -3795,6 +3816,7 @@ static void decl_class_free(gpointer data)
     g_free(d->name);
     g_free(d->base);
     g_ptr_array_free(d->members, TRUE);
+    g_ptr_array_free(d->events, TRUE);
     g_free(d);
 }
 
@@ -3806,6 +3828,7 @@ static DeclClass *decl_class_get(GHashTable *index, const char *name)
     d = g_new0(DeclClass, 1);
     d->name    = g_strdup(name);
     d->members = g_ptr_array_new_with_free_func(decl_member_free);
+    d->events  = g_ptr_array_new_with_free_func(decl_event_free);
     g_hash_table_insert(index, g_strdup(name), d);
     return d;
 }
@@ -3814,8 +3837,8 @@ static DeclClass *decl_class_get(GHashTable *index, const char *name)
  * converted before any of it is parsed**, which is the rule every other verb
  * that fills something follows: a refusal leaves the answer not built rather
  * than half of it. */
-static char **texts_arg(JSContext *ctx, JSValueConst options, const char *key,
-                        bool *refused)
+static char **texts_arg(JSContext *ctx, JSValueConst options, const char *who,
+                        const char *key, bool *refused)
 {
     JSValue   arr;
     uint32_t  len, i, n = 0;
@@ -3836,7 +3859,7 @@ static char **texts_arg(JSContext *ctx, JSValueConst options, const char *key,
     }
     if (!JS_IsArray(arr)) {
         JS_FreeValue(ctx, arr);
-        JS_ThrowTypeError(ctx, "Members: %s must be an array of source texts", key);
+        JS_ThrowTypeError(ctx, "%s: %s must be an array of source texts", who, key);
         *refused = true;
         return NULL;
     }
@@ -3858,7 +3881,7 @@ static char **texts_arg(JSContext *ctx, JSValueConst options, const char *key,
          * nothing" as though the caller had said so. */
         const char *text = NULL;
         if (!JS_IsString(item))
-            JS_ThrowTypeError(ctx, "Members: %s[%u] is not a source text", key, i);
+            JS_ThrowTypeError(ctx, "%s: %s[%u] is not a source text", who, key, i);
         else
             text = JS_ToCString(ctx, item);
         JS_FreeValue(ctx, item);
@@ -4011,15 +4034,578 @@ static void decl_add_member(DeclClass *d, const char *name, const char *kind,
     g_ptr_array_add(d->members, m);
 }
 
+/* ------------------------------------------------------------------------
+ * The events a source declares.
+ *
+ * An event is raised and not defined, so the raise is the declaration that
+ * cannot be forgotten: `this.Emit("Select", ...)`.  A class this process never
+ * runs is read from its sources, and this is where `Widget.EventNames`,
+ * `EventSignature` and `EventDoc` get their answer for it -- the same bargain
+ * `extract_signatures.cmake` makes with the C side: a signature comment, in
+ * the same spelling, on the line above the call:
+ *
+ *     Name(params)
+ *       what it is for
+ *     this.Emit("Name", ...)
+ *
+ * **`static Events` is not required and is not what names are read from**: an
+ * event exists because something emits it.  The static keeps its own job --
+ * the order, and which event a double click writes -- and where it is there,
+ * its order is the one offered, with anything else the class raises appended
+ * in source order.
+ * ---------------------------------------------------------------------- */
+
+typedef struct {
+    int   line;      /* 1-based, as the parser reports lines */
+    char *name;
+} DeclPos;
+
+static void decl_pos_free(gpointer data)
+{
+    DeclPos *p = data;
+    g_free(p->name);
+    g_free(p);
+}
+
+/* A block comment the scan walked past, kept whole so the comments directly
+ * above a declaration can be read back when it arrives. */
+typedef struct {
+    char *text;      /* what was between the delimiters */
+    int   begin;
+    int   end;       /* one past the closing delimiter */
+} DeclComment;
+
+static void decl_comment_free(gpointer data)
+{
+    DeclComment *c = data;
+    g_free(c->text);
+    g_free(c);
+}
+
+/* Which class a line is inside: the last one declared at or above it.  A class
+ * body is contiguous, so this is exact -- and it is why the scan is given the
+ * classes the same source was parsed for. */
+static const char *decl_owner_at(GPtrArray *classes, int line)
+{
+    const char *found = NULL;
+
+    for (guint i = 0; i < classes->len; i++) {
+        DeclPos *p = g_ptr_array_index(classes, i);
+        if (p->line > line)
+            break;
+        found = p->name;
+    }
+    return found;
+}
+
+/* Whether a comment is the one over a call: nothing between them but
+ * whitespace, and no blank line.  A `//` in the gap is not whitespace and ends
+ * the adjacency, which is what keeps a comment about something else from
+ * silently becoming the event's description. */
+static bool decl_gap_adjacent(const char *text, int from, int to)
+{
+    int newlines = 0;
+
+    for (int i = from; i < to; i++) {
+        if (text[i] == '\n') {
+            if (++newlines > 1)
+                return false;
+        } else if (!g_ascii_isspace(text[i])) {
+            return false;
+        }
+    }
+    return from <= to;
+}
+
+/* The run of comments a declaration carries: each one adjacent to the next and
+ * the last adjacent to the declaration.  A blank line ends the run, which is
+ * what lets an unrelated note sit above without being read as a signature. */
+static GPtrArray *decl_comment_run(GPtrArray *comments, const char *text,
+                                   int at)
+{
+    GPtrArray *run = g_ptr_array_new();
+    int        to  = at;
+
+    for (int i = (int) comments->len - 1; i >= 0; i--) {
+        DeclComment *c = g_ptr_array_index(comments, i);
+        if (!decl_gap_adjacent(text, c->end, to))
+            break;
+        g_ptr_array_add(run, c);
+        to = c->begin;
+    }
+    /* Back into source order. */
+    for (guint i = 0, j = run->len ? run->len - 1 : 0; i < j; i++, j--) {
+        gpointer a = g_ptr_array_index(run, i);
+        g_ptr_array_index(run, i) = g_ptr_array_index(run, j);
+        g_ptr_array_index(run, j) = a;
+    }
+    return run;
+}
+
+static bool decl_names_has(GPtrArray *names, const char *name)
+{
+    for (guint i = 0; names && i < names->len; i++)
+        if (g_str_equal(g_ptr_array_index(names, i), name))
+            return true;
+    return false;
+}
+
+/*
+ * Whether a `/` opens a regular expression rather than dividing.
+ *
+ * **This scanner has to know, and the reason is a pattern holding a quote.** A
+ * markdown table's fence pattern is `/^ {0,3}(```+|~~~+)...\s*([^`]*)$/`, and
+ * reading its first backtick as a template literal puts the rest of the file
+ * inside a string: `Scroll` was not raised, the declared order was not read,
+ * and the file's own events came back in the wrong order with no descriptions.
+ * The test is the one every lexer uses -- an expression cannot end where the
+ * previous significant character is, so a `=` or a `(` before the slash means
+ * a pattern and a letter means division.
+ */
+static bool decl_regex_starts(const char *text, int at)
+{
+    static const char *const words[] = {
+        "return", "typeof", "case", "in", "of", "new", "delete", "void",
+        "do", "else", "instanceof", "yield", "throw", NULL
+    };
+    int j = at - 1;
+
+    while (j >= 0 && g_ascii_isspace(text[j])) j--;
+    if (j < 0)
+        return true;
+    if (strchr("(,=:[!&|?{};+-*%<>^~", text[j]))
+        return true;
+
+    for (int i = 0; words[i]; i++) {
+        int wl = (int) strlen(words[i]);
+        if (j + 1 < wl || strncmp(text + j + 1 - wl, words[i], wl))
+            continue;
+        int p = j - wl;
+        if (p < 0 || (!g_ascii_isalnum(text[p]) && text[p] != '_' &&
+                      text[p] != '$'))
+            return true;
+    }
+    return false;
+}
+
+/* Past a regular expression, or `at + 1` when this is not one after all -- an
+ * unterminated one on its line is a division. */
+static int decl_skip_regex(const char *text, int len, int at)
+{
+    int  i        = at + 1;
+    bool in_class = false;
+
+    while (i < len) {
+        char c = text[i];
+
+        if (c == '\n')
+            return at + 1;
+        if (c == '\\' && i + 1 < len) {
+            i += 2;
+            continue;
+        }
+        if (c == '[')
+            in_class = true;
+        else if (c == ']')
+            in_class = false;
+        else if (c == '/' && !in_class) {
+            i++;
+            while (i < len && g_ascii_isalpha(text[i])) i++;
+            return i;
+        }
+        i++;
+    }
+    return at + 1;
+}
+
+/* The name of an `Emit("...")` whose word ends at `at`, or NULL when what
+ * follows is not a literal: a name built at run time is not a declaration this
+ * can see, and a call inside a comment or a string never reaches here (the
+ * scan skips both). */
+static char *decl_emit_name(const char *text, int len, int at)
+{
+    int i = at;
+
+    while (i < len && g_ascii_isspace(text[i])) i++;
+    if (i >= len || text[i] != '(') return NULL;
+    i++;
+    while (i < len && g_ascii_isspace(text[i])) i++;
+    if (i >= len || (text[i] != '"' && text[i] != '\'')) return NULL;
+
+    char quote = text[i++];
+    int  start = i;
+    while (i < len && text[i] != quote && text[i] != '\n') i++;
+    if (i >= len || text[i] != quote || i == start) return NULL;
+    return g_strndup(text + start, i - start);
+}
+
+/*
+ * A signature comment, as the C side spells it: `Name(params)` on its first
+ * non-blank line, the description after it.  Wrapped lines are one paragraph
+ * and a blank line is a paragraph break -- the shape the extractor keeps, so a
+ * description reads the same on either side of the line.
+ *
+ * **A comment that does not open with a name and a parameter list yields
+ * nothing**, and it is the list of declared events that decides whether the
+ * name is one -- so a note about anything else can sit beside the block
+ * without being read as a signature.  The `*` a JSDoc comment opens with, and
+ * the one each continuation line carries, is dropped before a line is looked
+ * at.
+ */
+static void decl_comment_parse(const char *comment, char **name,
+                               char **params, char **doc)
+{
+    char    **lines = g_strsplit(comment, "\n", -1);
+    GString  *text  = g_string_new(NULL);
+    char     *found = NULL;
+
+    *name   = NULL;
+    *params = NULL;
+    *doc    = NULL;
+
+    for (int i = 0; lines[i]; i++) {
+        char *line = lines[i];
+
+        while (g_ascii_isspace(*line)) line++;
+        if (*line == '*') {
+            line++;
+            while (g_ascii_isspace(*line)) line++;
+        }
+        g_strchomp(line);
+
+        if (!found) {
+            const char *open = strchr(line, '(');
+            if (!*line)
+                continue;                    /* `/ **` and the blank lines */
+            if (!open || open == line) {
+                g_string_free(text, TRUE);
+                g_strfreev(lines);
+                return;                      /* not a signature comment */
+            }
+            const char *close = strrchr(open, ')');
+            if (!close) {
+                g_string_free(text, TRUE);
+                g_strfreev(lines);
+                return;
+            }
+            found   = g_strndup(line, open - line);
+            *params = g_strndup(open, close - open + 1);
+            continue;
+        }
+
+        if (!*line)
+            g_string_append_c(text, '\n');
+        else if (text->len == 0 || text->str[text->len - 1] == '\n')
+            g_string_append(text, line);
+        else {
+            g_string_append_c(text, ' ');
+            g_string_append(text, line);
+        }
+    }
+
+    if (found) {
+        *name = found;
+        g_strchomp(text->str);       /* the blank line before the closing mark */
+        if (text->len)
+            *doc = g_strdup(text->str);
+    } else {
+        g_free(*params);
+        *params = NULL;
+    }
+    g_string_free(text, TRUE);
+    g_strfreev(lines);
+}
+
+/* The names `static Events = [...]` lists, in that order, or NULL.  Only
+ * string entries: an array built some other way has no order to offer, and the
+ * raises name the events anyway. */
+static GPtrArray *decl_static_events(const char *text, int len, int at)
+{
+    int i = at;
+
+    while (i < len && g_ascii_isspace(text[i])) i++;
+    if (i + 6 > len || strncmp(text + i, "Events", 6)) return NULL;
+    i += 6;
+    while (i < len && g_ascii_isspace(text[i])) i++;
+    if (i >= len || text[i] != '=') return NULL;
+    i++;
+    while (i < len && g_ascii_isspace(text[i])) i++;
+    if (i >= len || text[i] != '[') return NULL;
+    i++;
+
+    GPtrArray *out = g_ptr_array_new_with_free_func(g_free);
+
+    while (i < len) {
+        while (i < len && g_ascii_isspace(text[i])) i++;
+        if (i < len && text[i] == ']')
+            break;
+        if (i >= len || (text[i] != '"' && text[i] != '\'')) {
+            g_ptr_array_free(out, TRUE);
+            return NULL;
+        }
+        char quote = text[i++];
+        int  start = i;
+        while (i < len && text[i] != quote && text[i] != '\n') i++;
+        if (i >= len || text[i] != quote) {
+            g_ptr_array_free(out, TRUE);
+            return NULL;
+        }
+        g_ptr_array_add(out, g_strndup(text + start, i - start));
+        i++;
+        while (i < len && (g_ascii_isspace(text[i]) || text[i] == ',')) i++;
+    }
+    return out;
+}
+
+static void decl_event_array_free(gpointer data)
+{
+    g_ptr_array_free(data, TRUE);
+}
+
+/* One class's raises, in source order: a hash by name would lose the order,
+ * and the order is half of what `EventNames` answers. */
+static GPtrArray *decl_events_for(GHashTable *found, const char *owner)
+{
+    GPtrArray *arr = g_hash_table_lookup(found, owner);
+
+    if (arr)
+        return arr;
+    arr = g_ptr_array_new_with_free_func(decl_event_free);
+    g_hash_table_insert(found, g_strdup(owner), arr);
+    return arr;
+}
+
+static DeclEvent *decl_event_named(GPtrArray *arr, const char *name)
+{
+    for (guint i = 0; arr && i < arr->len; i++) {
+        DeclEvent *e = g_ptr_array_index(arr, i);
+        if (g_str_equal(e->name, name))
+            return e;
+    }
+    return NULL;
+}
+
+/* **The first raise that carries a comment is the description**, so one
+ * documented raise is enough however many there are; a later comment fills
+ * what an earlier raise left unsaid, and never overwrites it. */
+static void decl_event_take(GHashTable *found, const char *owner,
+                            const char *name, const char *params,
+                            const char *doc)
+{
+    GPtrArray *arr = decl_events_for(found, owner);
+    DeclEvent *e   = decl_event_named(arr, name);
+
+    if (!e) {
+        e = g_new0(DeclEvent, 1);
+        e->name = g_strdup(name);
+        g_ptr_array_add(arr, e);
+    }
+    if (!e->params && params && *params) e->params = g_strdup(params);
+    if (!e->doc && doc && *doc)          e->doc    = g_strdup(doc);
+}
+
+/* The order one class offers its events in: what `static Events` lists, then
+ * whatever else it raises, in source order.  Every element of `emits` ends up
+ * in `d->events`, so the caller may free the array without its elements. */
+static void decl_events_apply(DeclClass *d, GPtrArray *emits, GPtrArray *names)
+{
+    GPtrArray *taken = g_ptr_array_new();
+
+    for (guint i = 0; names && i < names->len; i++) {
+        const char *name = g_ptr_array_index(names, i);
+        DeclEvent  *e    = decl_event_named(emits, name);
+        if (e)
+            g_ptr_array_add(taken, e);
+        else {
+            e = g_new0(DeclEvent, 1);
+            e->name = g_strdup(name);
+        }
+        g_ptr_array_add(d->events, e);
+    }
+    for (guint i = 0; emits && i < emits->len; i++) {
+        DeclEvent *e = g_ptr_array_index(emits, i);
+        if (!g_ptr_array_find(taken, e, NULL))
+            g_ptr_array_add(d->events, e);
+    }
+    g_ptr_array_free(taken, TRUE);
+}
+
+/*
+ * One source, read for what its classes raise.
+ *
+ * `classes` are the class name and line the parser reported for this same
+ * text, so an `Emit` can be attributed to the body it sits in.  Every `Emit`
+ * and every `static Events` is read outside comments and strings, which is why
+ * this is a walk rather than a regular expression: a string holding the word
+ * `Emit(` is not an event.
+ */
+static void decl_events_scan(GHashTable *index, const char *text,
+                             GPtrArray *classes)
+{
+    GHashTable *found    = g_hash_table_new_full(g_str_hash, g_str_equal,
+                                                 g_free, NULL);
+    GHashTable *declared = g_hash_table_new_full(g_str_hash, g_str_equal,
+                                                 g_free, decl_event_array_free);
+    GPtrArray  *comments = g_ptr_array_new_with_free_func(decl_comment_free);
+    int         line     = 1;
+    int         len      = (int) strlen(text);
+
+    for (int i = 0; i < len; ) {
+        char c = text[i];
+
+        if (c == '\n') {
+            line++;
+            i++;
+            continue;
+        }
+        if (c == '/' && i + 1 < len && text[i + 1] == '/') {
+            while (i < len && text[i] != '\n') i++;
+            continue;
+        }
+        if (c == '/' && i + 1 < len && text[i + 1] == '*') {
+            DeclComment *cm = g_new0(DeclComment, 1);
+            GString     *s  = g_string_new(NULL);
+
+            cm->begin = i;
+            i += 2;
+            while (i < len && !(text[i] == '*' && i + 1 < len &&
+                                text[i + 1] == '/')) {
+                if (text[i] == '\n') line++;
+                g_string_append_c(s, text[i++]);
+            }
+            if (i < len) i += 2;
+            cm->text = g_string_free(s, FALSE);
+            cm->end  = i;
+            g_ptr_array_add(comments, cm);
+            continue;
+        }
+        if (c == '/' && decl_regex_starts(text, i)) {
+            int after = decl_skip_regex(text, len, i);
+            if (after > i + 1) {
+                i = after;
+                continue;
+            }
+        }
+        if (c == '"' || c == '\'' || c == '`') {
+            char quote = c;
+            i++;
+            while (i < len && text[i] != quote) {
+                if (text[i] == '\\' && i + 1 < len) {
+                    if (text[i + 1] == '\n') line++;
+                    i += 2;
+                    continue;
+                }
+                if (text[i] == '\n') line++;
+                i++;
+            }
+            if (i < len) i++;
+            continue;
+        }
+        if (g_ascii_isalpha(c) || c == '_' || c == '$') {
+            int  w      = i;
+            bool prev   = w > 0 && (g_ascii_isalnum(text[w - 1]) ||
+                                    text[w - 1] == '_' || text[w - 1] == '$');
+            while (i < len && (g_ascii_isalnum(text[i]) || text[i] == '_' ||
+                               text[i] == '$'))
+                i++;
+            int wl = i - w;
+
+            if (!prev && wl == 4 && !memcmp(text + w, "Emit", 4)) {
+                char *name = decl_emit_name(text, len, i);
+                if (name) {
+                    const char *owner = decl_owner_at(classes, line);
+                    if (owner)
+                        decl_event_take(found, owner, name, NULL, NULL);
+                    g_free(name);
+                }
+            } else if (!prev && wl == 6 && !memcmp(text + w, "static", 6)) {
+                GPtrArray *names = decl_static_events(text, len, i);
+                if (names) {
+                    const char *owner = decl_owner_at(classes, line);
+                    if (owner) {
+                        /* **The comments directly above the list are the
+                         * events' signatures**, which is where the C side
+                         * writes them too -- above the row that declares the
+                         * events, and not above a call that raises one: a
+                         * raise sits inside a method, three tokens after the
+                         * comment's end. */
+                        GPtrArray *run = decl_comment_run(comments, text, w);
+
+                        for (guint j = 0; j < run->len; j++) {
+                            DeclComment *cm     = g_ptr_array_index(run, j);
+                            char        *cname  = NULL;
+                            char        *params = NULL;
+                            char        *doc    = NULL;
+
+                            decl_comment_parse(cm->text, &cname, &params, &doc);
+                            if (cname && decl_names_has(names, cname))
+                                decl_event_take(found, owner, cname, params, doc);
+                            g_free(cname);
+                            g_free(params);
+                            g_free(doc);
+                        }
+                        g_ptr_array_free(run, TRUE);
+
+                        if (!g_hash_table_contains(declared, owner))
+                            g_hash_table_insert(declared, g_strdup(owner), names);
+                        else
+                            g_ptr_array_free(names, TRUE);
+                    } else {
+                        g_ptr_array_free(names, TRUE);
+                    }
+                }
+            }
+            continue;
+        }
+        i++;
+    }
+    g_ptr_array_free(comments, TRUE);
+
+    /* The classes that raised something. */
+    GHashTableIter it;
+    gpointer       key, val;
+
+    g_hash_table_iter_init(&it, found);
+    while (g_hash_table_iter_next(&it, &key, &val)) {
+        GPtrArray *emits = val;
+        DeclClass *d     = g_hash_table_lookup(index, key);
+        GPtrArray *names = g_hash_table_lookup(declared, key);
+
+        if (d) {
+            /* The elements moved to the class, so the array it came in is
+             * emptied of its ownership and freed with the table. */
+            decl_events_apply(d, emits, names);
+            g_ptr_array_set_free_func(emits, NULL);
+        }
+    }
+
+    /* And the classes that only listed theirs. */
+    g_hash_table_iter_init(&it, declared);
+    while (g_hash_table_iter_next(&it, &key, &val)) {
+        if (g_hash_table_contains(found, key))
+            continue;
+        DeclClass *d = g_hash_table_lookup(index, key);
+        if (d)
+            decl_events_apply(d, NULL, val);
+    }
+
+    g_hash_table_destroy(found);
+    g_hash_table_destroy(declared);
+}
+
 static GHashTable *decl_index_build(JSContext *ctx, char **sources, int count)
 {
     GHashTable *index = g_hash_table_new_full(g_str_hash, g_str_equal,
                                               g_free, decl_class_free);
 
     for (int i = 0; i < count; i++) {
-        JSValue list = bta_symbols(ctx, sources[i]);
-        uint32_t len  = array_length(ctx, list);
-        uint32_t k;
+        JSValue   list      = bta_symbols(ctx, sources[i]);
+        uint32_t  len       = array_length(ctx, list);
+        uint32_t  k;
+        /* Where each class starts, so the event scan can attribute a raise to
+         * the body it is in.  It is the parser's own answer and not a second
+         * reading of the text. */
+        GPtrArray *positions = g_ptr_array_new_with_free_func(decl_pos_free);
 
         for (k = 0; k < len; k++) {
             JSValue  sym = JS_GetPropertyUint32(ctx, list, k);
@@ -4044,6 +4630,16 @@ static GHashTable *decl_index_build(JSContext *ctx, char **sources, int count)
                 } else {
                     JS_FreeValue(ctx, JS_GetException(ctx));
                 }
+
+                JSValue  lv = JS_GetPropertyStr(ctx, sym, "Line");
+                int32_t  ln = 0;
+                if (JS_ToInt32(ctx, &ln, lv))
+                    ln = 0;
+                JS_FreeValue(ctx, lv);
+                DeclPos *p = g_new0(DeclPos, 1);
+                p->line = ln;
+                p->name = g_strdup(name);
+                g_ptr_array_add(positions, p);
             } else if (g_str_equal(kind, "Method") ||
                        g_str_equal(kind, "Static") ||
                        g_str_equal(kind, "Getter") ||
@@ -4123,6 +4719,9 @@ static GHashTable *decl_index_build(JSContext *ctx, char **sources, int count)
             JS_FreeValue(ctx, sym);
         }
         JS_FreeValue(ctx, list);
+
+        decl_events_scan(index, sources[i], positions);
+        g_ptr_array_free(positions, TRUE);
     }
     return index;
 }
@@ -4269,8 +4868,8 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
      * `File.Load(p).` wants to offer. */
     bool all = false;
     if (argc > 1) {
-        sources = texts_arg(ctx, argv[1], "Sources", &refused);
-        if (!refused) forms = texts_arg(ctx, argv[1], "Forms", &refused);
+        sources = texts_arg(ctx, argv[1], "Members", "Sources", &refused);
+        if (!refused) forms = texts_arg(ctx, argv[1], "Members", "Forms", &refused);
         if (!refused && JS_IsObject(argv[1])) {
             JSValue a = JS_GetPropertyStr(ctx, argv[1], "All");
             all = JS_ToBool(ctx, a) > 0;
@@ -4377,16 +4976,80 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
     return out;
 }
 
+/*
+ * `{ Sources }` on a class-level verb, and the class they declare.
+ *
+ * **The three event verbs resolve a name the way `Widget.Members` does**: a
+ * class among the sources is the one being written and answers first, and a
+ * name the sources do not declare falls back to the runtime's own lookup --
+ * so `EventNames("Chart", {Sources})` describes the class in the file while
+ * `EventNames("Button")` is the control.  The index outlives the answer, so
+ * the caller owns it.
+ */
+static DeclClass *decl_class_from_options(JSContext *ctx, JSValueConst options,
+                                          const char *type, const char *who,
+                                          GHashTable **index_out,
+                                          char ***sources_out, bool *refused)
+{
+    *index_out   = NULL;
+    *sources_out = NULL;
+    *refused     = false;
+
+    if (!JS_IsObject(options))
+        return NULL;
+
+    char **sources = texts_arg(ctx, options, who, "Sources", refused);
+    if (*refused || !sources)
+        return NULL;
+
+    GHashTable *index = decl_index_build(ctx, sources, g_strv_length(sources));
+    *index_out   = index;
+    *sources_out = sources;
+    return g_hash_table_lookup(index, type);
+}
+
 static JSValue w_event_names_by_type(JSContext *ctx, JSValueConst this_val,
                                      int argc, JSValueConst *argv)
 {
-    JSValue proto = class_proto_arg(ctx, argc, argv, "EventNames");
-    if (JS_IsException(proto))
-        return proto;
+    const char *type = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    if (!type)
+        return JS_ThrowTypeError(ctx, "EventNames(type) expects a type name");
 
-    char **names = class_list_of_proto(ctx, proto, CLASS_LIST_EVENTS);
-    JS_FreeValue(ctx, proto);
-    return names_to_array(ctx, names);
+    GHashTable *index   = NULL;
+    char      **sources = NULL;
+    bool        refused = false;
+    DeclClass  *d       = decl_class_from_options(ctx, argc > 1 ? argv[1]
+                                                                 : JS_UNDEFINED,
+                                                  type, "EventNames",
+                                                  &index, &sources, &refused);
+    JSValue out;
+
+    if (refused)
+        out = JS_EXCEPTION;
+    else if (d) {
+        /* A class read out of its sources answers with **its own** events:
+         * what it declares and raises is its surface, and the events it
+         * inherits are declared where they are emitted. */
+        out = JS_NewArray(ctx);
+        for (guint i = 0; i < d->events->len; i++)
+            JS_SetPropertyUint32(ctx, out, i,
+                JS_NewString(ctx,
+                    ((DeclEvent *) g_ptr_array_index(d->events, i))->name));
+    } else {
+        JSValue proto = class_proto_arg(ctx, argc, argv, "EventNames");
+        if (JS_IsException(proto))
+            out = proto;
+        else {
+            char **names = class_list_of_proto(ctx, proto, CLASS_LIST_EVENTS);
+            JS_FreeValue(ctx, proto);
+            out = names_to_array(ctx, names);
+        }
+    }
+
+    if (index) g_hash_table_destroy(index);
+    g_strfreev(sources);
+    JS_FreeCString(ctx, type);
+    return out;
 }
 
 static JSValue w_text_properties_by_type(JSContext *ctx, JSValueConst this_val,
@@ -4468,14 +5131,40 @@ static JSValue w_event_signature_by_type(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx,
                                  "EventSignature(type, name) expects an event name");
 
-    JSValue proto = class_proto_arg(ctx, argc, argv, "EventSignature");
-    if (JS_IsException(proto)) {
+    const char *type = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    if (!type) {
         JS_FreeCString(ctx, name);
-        return proto;
+        return JS_ThrowTypeError(ctx,
+                                 "EventSignature(type, name) expects an event name");
     }
 
-    JSValue out = event_signature_of_proto(ctx, proto, name);
-    JS_FreeValue(ctx, proto);
+    GHashTable *index   = NULL;
+    char      **sources = NULL;
+    bool        refused = false;
+    DeclClass  *d       = decl_class_from_options(ctx, argc > 2 ? argv[2]
+                                                                 : JS_UNDEFINED,
+                                                  type, "EventSignature",
+                                                  &index, &sources, &refused);
+    JSValue out = JS_EXCEPTION;
+
+    if (!refused) {
+        if (d) {
+            DeclEvent *e = decl_event_named(d->events, name);
+            out = (e && e->params) ? JS_NewString(ctx, e->params) : JS_NULL;
+        } else {
+            JSValue proto = class_proto_arg(ctx, argc, argv, "EventSignature");
+            if (JS_IsException(proto))
+                out = proto;
+            else {
+                out = event_signature_of_proto(ctx, proto, name);
+                JS_FreeValue(ctx, proto);
+            }
+        }
+    }
+
+    if (index) g_hash_table_destroy(index);
+    g_strfreev(sources);
+    JS_FreeCString(ctx, type);
     JS_FreeCString(ctx, name);
     return out;
 }
@@ -4494,32 +5183,58 @@ static JSValue w_event_doc_by_type(JSContext *ctx, JSValueConst this_val,
     if (!name)
         return JS_ThrowTypeError(ctx, "EventDoc(type, name) expects an event name");
 
-    JSValue proto = class_proto_arg(ctx, argc, argv, "EventDoc");
-    if (JS_IsException(proto)) {
+    const char *type = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    if (!type) {
         JS_FreeCString(ctx, name);
-        return proto;
+        return JS_ThrowTypeError(ctx, "EventDoc(type, name) expects an event name");
     }
 
-    int       n;
-    BtaClass *table = bta_class_table(&n);
-    JSValue   at    = JS_DupValue(ctx, proto);
-    JSValue   out   = JS_NULL;
+    GHashTable *index   = NULL;
+    char      **sources = NULL;
+    bool        refused = false;
+    DeclClass  *d       = decl_class_from_options(ctx, argc > 2 ? argv[2]
+                                                                : JS_UNDEFINED,
+                                                  type, "EventDoc",
+                                                  &index, &sources, &refused);
+    JSValue out = JS_EXCEPTION;
 
-    while (JS_IsObject(at) && JS_IsNull(out)) {
-        for (int i = 0; i < n; i++) {
-            if (!JS_IsStrictEqual(ctx, table[i].proto, at))
-                continue;
-            const BtaSignature *e = entry_for(table[i].name, name, BTA_SIG_EVENT);
-            if (e && *e->doc)
-                out = JS_NewString(ctx, e->doc);
-            break;
+    if (!refused) {
+        if (d) {
+            DeclEvent *e = decl_event_named(d->events, name);
+            out = (e && e->doc) ? JS_NewString(ctx, e->doc) : JS_NULL;
+        } else {
+            JSValue proto = class_proto_arg(ctx, argc, argv, "EventDoc");
+            if (JS_IsException(proto))
+                out = proto;
+            else {
+                int       n;
+                BtaClass *table = bta_class_table(&n);
+                JSValue   at    = JS_DupValue(ctx, proto);
+
+                out = JS_NULL;
+                while (JS_IsObject(at) && JS_IsNull(out)) {
+                    for (int i = 0; i < n; i++) {
+                        if (!JS_IsStrictEqual(ctx, table[i].proto, at))
+                            continue;
+                        const BtaSignature *e =
+                            entry_for(table[i].name, name, BTA_SIG_EVENT);
+                        if (e && *e->doc)
+                            out = JS_NewString(ctx, e->doc);
+                        break;
+                    }
+                    JSValue parent = JS_GetPrototype(ctx, at);
+                    JS_FreeValue(ctx, at);
+                    at = parent;
+                }
+                JS_FreeValue(ctx, at);
+                JS_FreeValue(ctx, proto);
+            }
         }
-        JSValue parent = JS_GetPrototype(ctx, at);
-        JS_FreeValue(ctx, at);
-        at = parent;
     }
-    JS_FreeValue(ctx, at);
-    JS_FreeValue(ctx, proto);
+
+    if (index) g_hash_table_destroy(index);
+    g_strfreev(sources);
+    JS_FreeCString(ctx, type);
     JS_FreeCString(ctx, name);
     return out;
 }
@@ -7957,17 +8672,25 @@ void bta_widgets_init(JSContext *ctx, JSValue global)
             JS_SetPropertyStr(ctx, ctor, "Members",
                               JS_NewCFunction(ctx, w_members_by_type,
                                               "Members", 2));
+            /* EventNames(type, [options]) -> string[]
+             *   the events that class raises, **most derived first**: `[0]` is
+             *   the one a double click in the designer writes a handler for.
+             *   `{ Sources: [...] }` answers for a class of a project this
+             *   process never ran, and then it is the class's own events --
+             *   what it declares and raises
+             */
             JS_SetPropertyStr(ctx, ctor, "EventNames",
                               JS_NewCFunction(ctx, w_event_names_by_type,
-                                              "EventNames", 1));
-            /* EventDoc(type, name) -> string
+                                              "EventNames", 2));
+            /* EventDoc(type, name, [options]) -> string
              *   what an event is for, or `null`: the description written above
              *   the class row that declares it, walked up the chain like
-             *   `EventSignature`, since an event is emitted and not defined
+             *   `EventSignature`, since an event is emitted and not defined.
+             *   `{ Sources: [...] }` reads it from the comment above the raise
              */
             JS_SetPropertyStr(ctx, ctor, "EventDoc",
                               JS_NewCFunction(ctx, w_event_doc_by_type,
-                                              "EventDoc", 2));
+                                              "EventDoc", 3));
             JS_SetPropertyStr(ctx, ctor, "TextProperties",
                               JS_NewCFunction(ctx, w_text_properties_by_type,
                                               "TextProperties", 1));
@@ -7992,13 +8715,14 @@ void bta_widgets_init(JSContext *ctx, JSValue global)
             JS_SetPropertyStr(ctx, ctor, "Signature",
                               JS_NewCFunction(ctx, w_signature_by_type,
                                               "Signature", 2));
-            /* EventSignature(type, name)
+            /* EventSignature(type, name, [options])
              *   the same for an **event**: `"(x, y, button, ctrl, shift)"`. A
-             *   name that is both — `ListBox.Select` — is answered by each
+             *   name that is both — `ListBox.Select` — is answered by each.
+             *   `{ Sources: [...] }` reads it from the comment above the raise
              */
             JS_SetPropertyStr(ctx, ctor, "EventSignature",
                               JS_NewCFunction(ctx, w_event_signature_by_type,
-                                              "EventSignature", 2));
+                                              "EventSignature", 3));
 
             /* The runtime's own notes, reachable by the names they had when
              * they were own properties. */

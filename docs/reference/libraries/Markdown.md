@@ -80,8 +80,8 @@ It is a [`Component`](../widgets/Component.md), so everything on
 | | | |
 |---|---|---|
 | **event** `Link(href, text)` | a link was clicked | [links](#links) |
-| **event** `Scroll(y)` | the view moved | [scrolling](#scrolling) |
-| **event** `Select(text)` | the selection settled | [selecting](#selecting) |
+| **event** `Scroll(y)` | the reader moved the view — the wheel, a key, the indicator — or `ScrollTo`/`Find` did | [scrolling](#scrolling) |
+| **event** `Select(text)` | the selection settled: a drag that ended, a double click, `SelectAll()`, `Deselect()` | [selecting](#selecting) |
 
 ## The document
 
@@ -111,7 +111,7 @@ listed in [llm/markdown.md](../../llm/markdown.md).
 |---|---|
 | `Scroll` | how far down it is scrolled, in pixels. Assigning **clamps** to `[0, ScrollMax]`, so a number past the end is the end |
 | `ScrollMax` (ro) | the largest `Scroll` that still shows text: the document's height minus one view. `0` when it all fits |
-| **event** `Scroll(y)` | the reader moved the view — the wheel, a key, the indicator — or `ScrollTo`/`Find` did. **An assignment to `Scroll` raises nothing**, because a property setter must not raise an event |
+| **event** `Scroll(y)` | the reader moved the view — the wheel, a key, the indicator — or `ScrollTo`/`Find` did. **An assignment to `Scroll` raises nothing**: a property setter must not, since a `.form` declaring it would raise it before the host's other controls exist. `y` is the new offset |
 
 The component scrolls itself: the wheel, `Up` `Down` `Page_Up` `Page_Down`
 `Home` `End` and the space bar, and a drawn overlay indicator that can be
@@ -139,7 +139,7 @@ the first and call the second on `Select`.
 | `SelectAll()` | every word in the document — what Ctrl+A does; → whether there was anything |
 | `Deselect()` | nothing selected — what Escape does; → whether there had been something |
 | `Copy()` | `Selection` onto the clipboard — what Ctrl+C does; → whether there was anything to copy |
-| **event** `Select(text)` | the selection settled. **Not raised while the pointer is still moving** — a host enabling a *Copy* button does not want sixty a second |
+| **event** `Select(text)` | the selection settled: a drag that ended, a double click, `SelectAll()`, `Deselect()`. `text` is `Selection`, `""` when it was cleared. **Not raised while the pointer is still moving** — a host enabling a *Copy* button does not want sixty of these a second |
 
 **`Find` is a search with a selection on the end of it**, which is what the IDE
 opens a page *at a member* with: an anchor is no use there, since the finest one a
@@ -154,7 +154,7 @@ are not.
 
 | | |
 |---|---|
-| **event** `Link(href, text)` | a link was clicked, with the address **as the document wrote it**. **Answer `true` and it is dealt with**; otherwise a `#anchor` scrolls the document and anything else is left alone |
+| **event** `Link(href, text)` | a link was clicked. `href` is the address exactly as the document wrote it and `text` the words that were clicked. **Answer `true` and it is dealt with**; otherwise a `#anchor` scrolls the document and anything else is left alone |
 
 **The host gets first refusal**, the way a key does. A `#anchor` nobody claims
 scrolls, so cross-references in a README work with no handler at all; where a web

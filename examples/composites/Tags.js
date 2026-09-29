@@ -27,6 +27,10 @@
 
 class Tags extends Component {
 
+    /* Change(items)
+     *   the tag list changed — one added, one removed — with the whole list
+     *   as it now stands
+     */
     static Events = ["Change"];
 
     tags = [];

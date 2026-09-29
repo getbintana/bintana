@@ -78,8 +78,8 @@ It is a [`Component`](../widgets/Component.md), so everything on
 | `Refresh()` | redraws now | [the data](#the-data) |
 | `Save(path, width, height)` | the same drawing to a PNG of any size — a chart in a report, or in a bug report | [off the screen](#off-the-screen) |
 | **event** `Select(series, at, value)` | a click on a bar, a point or a slice | [what the pointer does](#what-the-pointer-does) |
-| **event** `Hover(series, at, value)` | the pointer passing over one | [what the pointer does](#what-the-pointer-does) |
-| **event** `Range(from, count)` | the window changed | [what the pointer does](#what-the-pointer-does) |
+| **event** `Hover(series, at, value)` | the pointer passing over one, **which is not a selection**: a chart that reported a click as a hover could not have a tooltip | [what the pointer does](#what-the-pointer-does) |
+| **event** `Range(from, count)` | the window changed — the wheel, a drag, or the double click that resets it | [what the pointer does](#what-the-pointer-does) |
 
 ## The kinds
 
@@ -154,7 +154,7 @@ chart inside a [`Scroller`](../widgets/Scroller.md) still scrolls it at the ends
 |---|---|
 | **event** `Select(series, at, value)` | a click on a bar, a point or a slice. `at` is the index into that series' `Values` |
 | **event** `Hover(series, at, value)` | the pointer passing over one, **which is not a selection**: a chart that reported a click as a hover could not have a tooltip. On a line or an area it is the first series; on a **stacked** `Area` it is the band the pointer is inside (the top one above them all), `value` is that series' own value, and the mark is drawn at the top of its band |
-| **event** `Range(from, count)` | the window changed |
+| **event** `Range(from, count)` | the window changed — the wheel, a drag, or the double click that resets it |
 
 `Select` and `Hover` are raised whether or not the chart is zoomable, and both
 carry the index into the **whole** series — never the position on screen.

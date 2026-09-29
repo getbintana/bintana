@@ -464,7 +464,7 @@ const TESTS = [
     "Settings", "Timer", "ArgumentRefusals", "Icons", "Font", "Style", "Radius", "Padding", "Shadow", "StyleRule",
     "ColorButton",
     "ColorDialog", "FileDialog", "Dialog", "IconList", "FormIcon", "ButtonClick",
-    "Available", "TextProperties", "ClassIntrospection", "Signatures", "Locale", "LocaleRead", "TranslatedForm", "Fill", "DesignValues",
+    "Available", "TextProperties", "ClassIntrospection", "LibraryEvents", "Signatures", "Locale", "LocaleRead", "TranslatedForm", "Fill", "DesignValues",
     "Grid",
     "File", "Dir", "Trash", "Environment",
     /* Async too: its answers land on later turns of the loop, like Exec's,
@@ -15185,6 +15185,115 @@ function Main() {
                () => Widget.PropertyNames("Nonsense"));
         throws("...for every one of the questions",
                () => Widget.Member("Nonsense", "Text"));
+    }
+
+    /* --- the events of a library, read from its sources -------------------
+     *
+     * A library's class is a lexical binding in a file this process never ran,
+     * so an event cannot be asked about the way a widget's is. It is read
+     * where it is raised -- `this.Emit("Name", ...)` -- and the comment above
+     * the `static Events` line that declares it is its signature and its
+     * description: the same bargain the C side makes, one comment above the
+     * row that declares the events. `static Events` names and orders, and is
+     * not what makes an event exist.
+     */
+    testLibraryEvents() {
+        const src = [
+            'class Card extends Component {',
+            '    /* Changed(value)',
+            '     *   the value it now holds, wrapped',
+            '     *   across two lines.',
+            '     *',
+            '     *   And a second paragraph.',
+            '     */',
+            '    /* Removed()',
+            '     *   it was taken out of its list.',
+            '     */',
+            '    static Events = ["Changed", "Removed"];',
+            '    set(v) { this.Emit("Changed", v); }',
+            '    drop() { this.Emit("Removed"); }',
+            '    spare() { this.Emit("Spare"); }',
+            '}',
+            ''
+        ].join("\n");
+        const opts = { Sources: [src] };
+
+        eq("the declared order is the one offered",
+           JSON.stringify(Widget.EventNames("Card", opts)),
+           '["Changed","Removed","Spare"]');
+        eq("a comment above the list is the signature",
+           Widget.EventSignature("Card", "Changed", opts), "(value)");
+        eq("...and the description, with wrapped lines joined and a blank " +
+           "line a paragraph break",
+           Widget.EventDoc("Card", "Changed", opts),
+           "the value it now holds, wrapped across two lines." +
+           "\nAnd a second paragraph.");
+        eq("a raise the list does not name is still an event",
+           Widget.EventNames("Card", opts).includes("Spare"), true);
+        eq("...with no description, since nothing wrote one",
+           Widget.EventDoc("Card", "Spare", opts), null);
+        eq("and an event that is nothing has none either",
+           Widget.EventDoc("Card", "Nonesuch", opts), null);
+        eq("...and no signature",
+           Widget.EventSignature("Card", "Nonesuch", opts), null);
+
+        /* **A pattern holding a backtick is why the reader is a walk.** The
+         * markdown fence pattern is `/^ {0,3}(```+|~~~+).../`, and reading its
+         * first backtick as a template literal put the rest of a 2369-line
+         * file inside a string: `Scroll` was not raised and the declared order
+         * was not read. This is that regression, small. */
+        const tricky = [
+            'const FENCE = /^ {0,3}(```+|~~~+)\\s*([^`]*)$/;',
+            'class T {',
+            '    /* Ping(x)',
+            '     *   survives a pattern that holds a backtick.',
+            '     */',
+            '    static Events = ["Ping"];',
+            '    raise() { this.Emit("Ping", 1); }',
+            '}',
+            ''
+        ].join("\n");
+        const t = { Sources: [tricky] };
+        eq("a regular expression holding a backtick does not swallow the file",
+           JSON.stringify(Widget.EventNames("T", t)), '["Ping"]');
+        eq("...and its event keeps its description",
+           Widget.EventDoc("T", "Ping", t),
+           "survives a pattern that holds a backtick.");
+
+        const quiet = [
+            'class Q {',
+            '    static Events = ["Real"];',
+            '    // Emit("Line")',
+            '    /* Emit("Block") */',
+            '    m() { const s = "Emit(\\"Str\\")"; this.Emit("Real"); }',
+            '}',
+            ''
+        ].join("\n");
+        eq("an Emit in a comment or a string is not an event",
+           JSON.stringify(Widget.EventNames("Q", { Sources: [quiet] })),
+           '["Real"]');
+
+        const two = [
+            'class One { static Events = ["A"]; a() { this.Emit("A"); } }',
+            'class Two { static Events = ["B"]; b() { this.Emit("B"); } }',
+            ''
+        ].join("\n");
+        eq("a raise belongs to the class it is in",
+           JSON.stringify(Widget.EventNames("One", { Sources: [two] })), '["A"]');
+        eq("...and the other class answers its own",
+           JSON.stringify(Widget.EventNames("Two", { Sources: [two] })), '["B"]');
+
+        eq("a class the sources do not declare still answers from the runtime",
+           Widget.EventNames("Button", opts)[0], "Click");
+        eq("a Sources that is not an array is refused, naming the verb",
+           (() => { try { Widget.EventNames("Card", { Sources: 1 }); return ""; }
+                    catch (e) { return e.message; } })(),
+           "EventNames: Sources must be an array of source texts");
+        eq("a non-string entry is refused too",
+           (() => { try { Widget.EventDoc("Card", "Changed", { Sources: [5] });
+                          return ""; }
+                    catch (e) { return e.message; } })(),
+           "EventDoc: Sources[0] is not a source text");
     }
 
     /* --- the parameters a member declares beside itself ------------------

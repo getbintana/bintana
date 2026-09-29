@@ -309,6 +309,78 @@ function checkLibraries(root, problems) {
 }
 
 /*
+ * **A library's events, against the code that raises them.**
+ *
+ * The runtime reads a class this process never ran out of its sources: what it
+ * raises, and the signature comment above the `static Events` line that
+ * declares them. This is the other reader -- the same regexes this file has
+ * always used -- and the two are held to one answer, which is the only way a
+ * reader that misses a raise is noticed. Page rows cannot catch that on their
+ * own: a row is written from whichever answer exists.
+ */
+function checkLibraryEventSources(root, problems) {
+    const sources = docLibrarySources(root);
+    let   counted = 0;
+
+    for (const dir of Directory.Folders(File.Join(root, "lib"))) {
+        const name  = File.Name(dir);
+        const texts = Directory.Files(dir, "*.js").sort().map((f) => File.Load(f));
+
+        /* What the code raises, and how many arguments each call passes. */
+        const raises = {};
+        for (const text of texts) {
+            for (const m of LIB_EVENTS.Matches(text))
+                for (const q of m.Group(1).split(","))
+                    if (q.trim()) {
+                        const n = q.trim().replace(/["' ]/g, "");
+                        if (!(n in raises)) raises[n] = 0;
+                    }
+            for (const m of LIB_EMIT.Matches(text))
+                raises[m.Group(1)] = Math.max(raises[m.Group(1)] || 0,
+                                              emitArity(m.Group(2)));
+        }
+
+        const classes = new Set();
+        for (const text of texts)
+            for (const s of Application.Symbols(text))
+                if (s.Kind === "Class") classes.add(s.Name);
+
+        const read = {};       /* event -> the class the runtime names it on */
+        for (const c of classes)
+            for (const e of Widget.EventNames(c, { Sources: sources }))
+                read[e] = c;
+
+        for (const e in raises)
+            if (!(e in read))
+                problems.push(`${name}: ${e} is emitted and the runtime reads ` +
+                              `no such event`);
+        for (const e in read) {
+            if (!(e in raises)) {
+                problems.push(`${name}: the runtime reads ${e} and no file ` +
+                              `emits or declares it`);
+                continue;
+            }
+            const sig = Widget.EventSignature(read[e], e, { Sources: sources });
+            const doc = Widget.EventDoc(read[e], e, { Sources: sources });
+
+            if (!sig || !doc) {
+                problems.push(`${name}: event ${e} has no signature comment ` +
+                              `above the static Events line that declares it`);
+                continue;
+            }
+            const args = sig.slice(1, -1).trim();
+            const n    = args === "" ? 0 : args.split(",").length;
+
+            if (n !== raises[e])
+                problems.push(`${name}: event ${e} is declared with ${n} ` +
+                              `argument(s), the code emits ${raises[e]}`);
+            counted++;
+        }
+    }
+    return counted;
+}
+
+/*
  * Every global's members, against `docs/llm/library.md`.
  *
  * A member counts as documented when its name appears **inside its own global's
@@ -1347,6 +1419,7 @@ function Main() {
     }
 
     const lib     = checkLibraries(root, problems);
+    const libEvs  = checkLibraryEventSources(root, problems);
     const statics = checkWidgetStatics(root, problems);
     const verbs   = checkGlobalSignatures(root, problems);
     const docs    = checkDocs(root, problems);
@@ -1370,7 +1443,8 @@ function Main() {
           `${globals} on globals and ${lib} in lib/`
         : `api: ${seen.size} widget members and ${Dictionary.Count(events)} events, ` +
           `plus ${statics} class statics, ${globals} on the globals and ${lib} ` +
-          `published by lib/, ${verbs} global verbs with their parameters named, ` +
+          `published by lib/ (${libEvs} library events read from the code), ` +
+          `${verbs} global verbs with their parameters named, ` +
           `${docs} members and events saying what they are for, in C and in JavaScript, ` +
           `${shadows} member${shadows === 1 ? "" : "s"} checked ` +
           `for shadowing a base one, ` +

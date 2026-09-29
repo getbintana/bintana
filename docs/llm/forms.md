@@ -582,10 +582,12 @@ it were a control.
 
 ```js
 class Stepper extends Component {
+    /* Change(value)
+     *   the value it now holds
+     */
     static Events         = ["Change"];
     static Options        = { Step: ["1", "5", "10"] };
     static TextProperties = ["Caption"];
-    static Signatures     = { Change: "(value)", Up: "(delta)" };
 
     get Value()  { return this._value || 0; }
     set Value(v) {

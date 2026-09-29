@@ -292,6 +292,9 @@ class of the project is not in it:
 
 ```js
 class Stepper extends Component {
+    /* Change(value)
+     *   the value it now holds
+     */
     static Events         = ["Change"];
     static Options        = { Step: ["1", "5", "10"] };
     static TextProperties = ["Caption"];
@@ -303,6 +306,17 @@ accumulate-versus-first-match difference are the same ones described here, and a
 component extending a component works out whole. It was the exact failure the
 table of fifteen was: a Stepper emitting `Change` on every keystroke published
 `MouseDown` as its first event, and the IDE offered it.
+
+**And an event's description is the comment above that list, in the spelling
+the C side uses above the class row** — a signature line, then the prose.  The
+raise is what makes the event exist: `Widget.EventNames`, `EventSignature` and
+`EventDoc` read a class of the project through `{ Sources: [...] }`, name every
+`Emit("X", …)` it makes, and take the parameters from the comment and the arity
+from the call.  So a component's event needs no `static Events` to be found —
+the list gives the order and which one a double click writes — and the docs and
+the IDE's popup describe it without anybody running the class.  A comment not
+above the list is not read: a raise sits inside a method, tokens away from
+where the comment can be adjacent.
 
 Four requirements:
 

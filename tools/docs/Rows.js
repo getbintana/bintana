@@ -148,8 +148,12 @@ function docRows(root) {
             return null;
         return m ? m.Doc : null;
     };
+    /* A library's event is asked about through the same sources its members
+     * are: the comment above the `static Events` line that declares it, which
+     * is where a library writes what an event is for. */
     const eventDoc = (owner, name) => {
-        try { return Widget.EventDoc(owner, name); } catch (e) { return null; }
+        try { return Widget.EventDoc(owner, name, { Sources: sources }); }
+        catch (e) { return null; }
     };
 
     const out = {};
