@@ -12,7 +12,7 @@ repo de pruebas, y **existe**: `getbintana/flatpak` publica el BaseApp, el IDE,
 el ejemplo y una app de otro repositorio, corre el smoke antes de cada publish,
 y el issue que este plan contestaba (`ISSUE-packaging.md`) está borrado. Lo que
 queda de ella está al final de su sección. Este plan es el diseño; lo que el
-runtime puede hacer está en [`llm/`](../llm/README.md).
+runtime puede hacer está en [`llm/`](https://github.com/getbintana/bintana-llm/blob/main/docs/llm/README.md).
 
 ## What the application needed
 

@@ -79,7 +79,7 @@ The hang guard is `Timer.After` and `Kill`, which is where the shell's `timeout`
 went. It sends SIGTERM and then SIGKILL five seconds later, to the child's whole
 **process group**: killing `xvfb-run` alone left its X server orphaned to init
 once per timeout, and the survivor held the output pipe open so the last of the
-project's output was never read. See [`runtime-api.md`](runtime-api.md#exec). That timeout is a guard against a
+project's output was never read. See [`runtime-api.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/runtime-api.md#exec). That timeout is a guard against a
 hang -- an uncaught throw in `Form_Open` aborts before `Application.Quit` and the
 project would sit there forever -- so it has to stay well clear of how long a
 project legitimately takes: `tests/ide` drives the whole IDE and takes **4m45
@@ -337,41 +337,54 @@ allocated the window).
 tests/api.sh
 ```
 
-`docs/llm/controls.md` is meant to be the **whole** public surface: an application
-author should never have to open `runtime/src` to learn whether a property exists.
-`tests/api` is what makes that a claim rather than a hope — a console project that
-parses the `JSCFunctionListEntry` tables and every `bta_emit` call, and fails when
-a member has no row in the reference, or when an event is documented with a
-different number of arguments than the runtime passes.
+The public surface is meant to be **written down completely** — an application
+author should never have to open `runtime/src` to learn whether a property
+exists. Two checks make that a claim rather than a hope, and they are split by
+what each of them can see:
 
-It parses rather than links, so it answers when the runtime does not build, which
-is the same bargain `tests/icons` and `tests/styles` make. 281 widget members and
-46 events as this is written, plus 13 class statics, 260 on the globals and 80
-published by `lib/`, 8 library events read from the code and 404 native members
-held to `api.json` -- the numbers `./tests/api.sh` prints, and every one of them
-has been stale at some point in this repository.
+- **`tests/api.sh` is here**, where the C, the prelude and a display-less
+  runtime are. It parses the `JSCFunctionListEntry` tables and every `bta_emit`
+  call, and fails when a member has no signature or no description beside it,
+  when an event's comment disagrees with the arity it is raised with, when a
+  library's events do not match the code that raises them, or when a link in
+  the Markdown that stayed points at a file that is gone.
+- **`api.json` is the contract between the two halves**: every widget class
+  with what it declares and from which class, every global with public members,
+  the types no global holds, and the libraries' classes with their events. It
+  is built by `tools/apijson/Catalog.js` out of the runtime's own verbs, and
+  `tests/api` sources the same builder — so the file is compared with a second
+  answer built here, and that answer is then held to the C: every member of a
+  registration table, every event a `bta_emit` raises, every `type X` name and
+  every nested global must be in it or the check names what is missing. **That
+  is the half a repository with only the file cannot ask** — from `api.json` a
+  page can be verified, and the file cannot be verified from itself. A
+  description edited in the C and not regenerated is red here, which is what
+  `./tools/apijson.sh` is for.
+- **The pages are the other repository's.** `bintana-docs` checks every page
+  against the same manifest: a member with no row, an event documented with the
+  wrong number of arguments, a long page that lists a member and never explains
+  it, a page the row writer would change, a link that does not land. Its CI
+  builds the runtime at the ref in `bintana-ref.txt`, regenerates the manifest
+  and compares it with the one it fetched, which is where the two halves meet.
 
-**And the whole surface is a file as well.** `api.json` is the contract the
-documentation repositories read, and it is built by `tools/apijson/Catalog.js`
-out of the runtime's own verbs: what each class declares and from which class,
-every global with public members, the types no global holds, and the libraries'
-classes with their events. `tests/api` sources the same builder, so it compares
-the file with a second answer built here, and then holds that answer to the C:
-every member of a registration table, every event a `bta_emit` raises, every
-`type X` name and every nested global must be in it or the check says which one
-is missing. **That is the half a repository with only the file cannot ask** --
-from `api.json` a page can be verified, and the file cannot be verified from
-itself. A description edited in the C and not regenerated is red here naming
-the file, which is what `tools/apijson.sh` is for.
+It parses rather than links, so it answers when the runtime does not build,
+which is the same bargain `tests/icons` and `tests/styles` make. The numbers
+`./tests/api.sh` prints as this is written: 13 class statics, 240 global verbs
+with their parameters named, 828 members and events saying what they are for,
+in C and in JavaScript, 6 members checked for shadowing a base one, 406 members
+held to `api.json`, 78 top-level names in `lib/` with no two libraries claiming
+one, all 36 globals the runtime installs accounted for, and 104 links over the
+30 pages that stayed. Every one of them has been stale at some point in this
+repository.
 
-**And a library's events are read from the code that raises them**, which is
-the one thing no class can answer about itself: `Widget.EventNames`,
+**A library's events are read from the code that raises them**, which is the
+one thing no class can answer about itself: `Widget.EventNames`,
 `EventSignature` and `EventDoc` take `{ Sources: [...] }` and answer for a class
 this process never ran out of its own `Emit(...)` calls, with the signature
-comment above the `static Events` line that declares them -- `static Events`
-gives the order and is not what makes an event exist. The check parses the same
-files with its own regexes and fails when a raise is missing from either side,
-when a library event has no comment beside its declared list, or when the
+comment above the `static Events` line that declares them — `static Events`
+gives the order and is not what makes an event exist. `tests/api` parses the
+same files with its own regexes and fails when a raise is missing from either
+side, when a library event has no comment beside its declared list, or when the
 declared arity and the emitted one disagree. Two readers, held to one answer,
 because a scanner that misses a raise is otherwise silent.
 
@@ -379,104 +392,35 @@ because a scanner that misses a raise is otherwise silent.
 this had: `Widget.New`, `Types` and `Available` are built by
 `JS_SetPropertyStr(ctx, ctor, …)` and are in no `JSCFunctionListEntry` table, so
 the member scan could not see them. They are public, the IDE calls them, and
-nothing would have failed had any of them lost its row. Every one of them now
-needs a `` `Widget.Name(` `` row in `controls.md`.
+nothing would have failed had any of them lost its row — which `bintana-docs`'
+check now demands, native statics only, out of the manifest.
 
 **And every method and event declares its parameters**, which is what makes a
 signature a fact instead of a sentence: a one-line comment above the C entry (or
 above the class row for an event) is turned by the build into the table
 `Widget.Signature` and `Widget.EventSignature` answer with, and the check fails
-on a method or event with none. It also compares the parameters in
-`controls.md`'s long pages against what the runtime answers — the same rule the
-event arity has always had, one step further — and the first run found five events whose comment
+on a method or event with none. The first run found five events whose comment
 had borrowed a same-named method's parameters: `ListBox.Select` is a method
 *and* an event, and the two are asked about separately.
 
 **And every native verb of a global does too**, which it did not: `File.Load`,
 `Locale.Text`, `Widget.New` and 160 more were registered outside a class table
 and the IDE's popup said `(...)` for each. The check asks `Widget.Members` of
-every global the C installs and fails on a `Method` or `Static` with no
-`Signature` -- proved by deleting
-`/* Load(path) */` and watching it name `File.Load`. A verb written in
-JavaScript passes without a comment, because the parser reads its parameters
-out of its own source. **What a member is for**: `tests/api.sh` fails on a
-native member or event with no description beside its C entry, and on a page of
-`docs/llm` or `docs/reference` whose member rows are not what `./tools/docs.sh`
-would write from those descriptions; `tests/widgets` asserts `Doc`, `Native` and
-`EventDoc`, and `tests/ide`'s `completion` the popup's plain first sentence.
-**The names in scope**: `testCuratedLanguage` holds
-the ninth patch's report (each declared name at its line, every function as a
-span with its parameters, an arrow, one that broke), and `tests/ide`'s
-`completion` holds what a bare name offers from it -- a parameter and a local of
-the function around the cursor ahead of the globals, a top-level name of the
-file, another function's local absent, and another project file's top-level
-names as globals. **The call hint's two runtime verbs** are asserted in
-`tests/widgets` -- `CursorBounds()` moving down with the line and right with the
-column once the editor is laid out, and `Popup(anchor, rect)` opening and
-refusing a rect that is not one -- and `tests/ide`'s `completion` holds `callAt`
-(the argument index, a comma inside a string, an object inside a call, nested
-calls, `if (`, a comment, `this.go(`) and the hint itself: up, bold on the
-right argument, the focus still the editor's, Escape putting it away for that
-call. **And the prototypes no global holds** — the ones named
-with a `type X` comment — are asked the same question (238 verbs in all as this
-is written), since their table is the whole of what an editor knows about them.
+every global the runtime installs and fails on a `Method` or `Static` with no
+`Signature` — proved by deleting `/* Load(path) */` and watching it name
+`File.Load`. A verb written in JavaScript passes without a comment, because the
+parser reads its parameters out of its own source. **What a member is for**:
+`tests/api.sh` fails on a native member or event with no description beside its
+C entry, and `tests/widgets` asserts `Doc`, `Native` and `EventDoc`, while
+`tests/ide`'s `completion` holds the popup's plain first sentence.
 
-**The globals are held to the same rule**, against `docs/llm/library.md`, and
-they were not until it was written: a table that was not a widget's was exempted
-from the `controls.md` check and *nothing asked anything else*, so 46 members of
-`Locale`, `Decimal`, `Connection`, `Log` and `Day` were documented by hand or not
-at all. It reads both shapes the runtime builds a global with — a
-`JSCFunctionListEntry` table and a run of `JS_SetPropertyStr` — and it found
-three real gaps the day it was written: `Application.LibraryPath`, which the IDE
-calls, and `Decimal`'s `toString` and `toJSON`. It has gone on earning it:
-`Application.Libraries` was added to the runtime for the project dialog and the
-check named it as undocumented before any test of it had been run. Which globals those are is an
-explicit list in `tests/api/Check.js`, because the same C shape builds half the
-runtime's *return values* and a scan that guessed would demand a heading for
-every one of them.
-
-**Which globals are *installed* is asked of the runtime now**, not parsed out
-of the C and the prelude: `Application.Globals()` is what is on the global
-object -- so a name added anywhere is in it by construction -- and
-`Widget.Members` says whether anything public hangs off it. A global with
-members must be in `api.json`, and a name with none -- the language's builtins,
-the prelude's helpers, `BTA_VERSION` -- is not part of the surface and is not
-demanded anywhere. That is what moved the count from 39 to 36, and it is why
-the six globals this was written for are all in the manifest with nothing
-listed twice.
-
-**And `docs/reference/widgets/` is held to a stricter one.** A long page
-documents the same members as `llm/controls.md` with a real explanation of each,
-so the check asks for every member **twice**: once in the page's `## Every
-member` summary — the index somebody scans — and once outside it, where it is
-explained. A member listed and never explained is a long page quietly turning
-back into a short one; a member the summary forgot is a reader concluding the
-control cannot do it. Which members belong to which class is read out of the
-class registration in the C (`BTA_CLASS_ENUM_TEXT("TableView", …, table_props,
-…)`), so there is no list here to fall behind. A class with no page at all is
-**counted, not failed**, and the run ends with how many are left.
-
-`docs/reference/libraries/` is held the same way against the Bintana source of
-each shipped library — a page is found by its class's file name, so a library
-that adds a class is a page the check asks for with no list to update — and
-`docs/reference/globals/` against the C tables and the
-object-building runs `checkGlobals` already reads — one line per page in
-`GLOBAL_PAGES` saying which of them make it up, which is the same discipline
-`GLOBAL_TABLES` has and for the same reason. The eight globals built in ways this
-does not parse (`Message`, `Exec`, `Settings`, `Timer`, `Stopwatch`,
-`Dictionary`, `Regex`, `Clipboard`) have pages held to nothing but existing, and
-the check says so in its own comment rather than leaving it to be discovered.
-
-**The libraries in `lib/` are held to the same rule**, against
-`docs/llm/<library>.md`. They ship with the runtime, so a project reaching one
-with `uses` is using a public API and not reading somebody's example: the check
-reads what a library publishes out of the Bintana -- accessors and methods with
-a capital initial, `static Events`, and the arity of each `Emit` -- and reports a
-library with no reference page at all before anything else. Five ship --
-`lib/charts`, `lib/markdown`, `lib/package`, `lib/qr` and `lib/report` -- and
-[`llm/charts.md`](llm/charts.md), [`llm/markdown.md`](llm/markdown.md),
-[`llm/package.md`](llm/package.md), [`llm/qr.md`](llm/qr.md) and
-[`llm/report.md`](llm/report.md) are their pages.
+**Which globals are *installed* is asked of the runtime**, not parsed out of the
+C and the prelude: `Application.Globals()` is what is on the global object — so
+a name added anywhere is in it by construction — and `Widget.Members` says
+whether anything public hangs off it. A global with members must be in
+`api.json`, and a name with none — the language's builtins, the prelude's
+helpers, `BTA_VERSION` — is not part of the surface and is not demanded
+anywhere. That is what moved the count from 39 to 36.
 
 **The event arity is the half worth having.** A missing row is obvious the first
 time somebody looks for it; a signature that is confidently wrong is not.
@@ -491,12 +435,11 @@ the kind that rots without looking rotten.
 what exists is written down, and the link check asks whether what is written
 down still exists. `docs/issues/ISSUE-printing.md` was deleted the day printing
 arrived and two pages went on pointing at it, still saying there was no printer
-in prose that read as current -- while the bookkeeping in
-`docs/issues/README.md` was updated by hand. Code spans are taken out first, so
-`` `[text](href)` `` in a table of Markdown syntax is prose about the format and
-not a link; a `.md` under `examples/` is that project's own data and outside the
-scope, which is what lets `examples/markdown/Guide.md` point at a picture that
-is deliberately not there.
+in prose that read as current. Code spans are taken out first, so an inline
+example of Markdown syntax is prose about the format and not a link; a `.md`
+under `examples/` is that project's own data and outside the scope, which is
+what lets `examples/markdown/Guide.md` point at a picture that is deliberately
+not there.
 
 ## Two reproductions kept by hand
 
@@ -505,7 +448,7 @@ both earned their place by settling a question the suite could not:
 
 | | |
 |---|---|
-| `cairo-cost.c` | what a frame of drawing costs, per figure and per point, straight against cairo. It was written before there was any binding to measure through, and it is what says the cost is in **covered pixels** -- 5,000 points as a readable curve 2.15 ms, the same 5,000 as a zigzag 109 ms. The numbers are in [widgets.md](widgets.md#drawingarea-and-painter) |
+| `cairo-cost.c` | what a frame of drawing costs, per figure and per point, straight against cairo. It was written before there was any binding to measure through, and it is what says the cost is in **covered pixels** -- 5,000 points as a readable curve 2.15 ms, the same 5,000 as a zigzag 109 ms. The numbers are in [widgets.md](https://github.com/getbintana/bintana-docs/blob/main/docs/widgets.md#drawingarea-and-painter) |
 | `completion-popover.c` | sixty lines of plain GTK, with `gtk_source_init()` on one line that can be commented out, which is the shortest demonstration that the completion popover's collapse is a **missing initialisation** and not a bug in whatever provider is loaded. Being plain GTK with no `GApplication` of its own, it also shows that *where* the call goes matters |
 
 Both are compiled by the comment at the top of each file. They are kept rather
@@ -590,7 +533,7 @@ stayed green: for the stylesheet of anyone using the runtime, each of those is a
 rule that stops matching.
 
 The vocabulary it prints, and the node table to read it against, are in
-[widgets.md](widgets.md#styling-the-vocabulary).
+[widgets.md](https://github.com/getbintana/bintana-docs/blob/main/docs/widgets.md#styling-the-vocabulary).
 
 ## The install, which the suite cannot see either
 

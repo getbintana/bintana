@@ -1,7 +1,7 @@
 # Task: a class that runs in a thread of its own
 
 **Status: phases 1, 2 and 3 built.** What is left is named at the end with its trigger. The surface is
-[`docs/reference/globals/Task.md`](../reference/globals/Task.md), which was
+[`docs/reference/globals/Task.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/reference/globals/Task.md), which was
 written first and is the specification this follows. What is *not* built is
 named at the end, with the trigger that builds it — because the one limitation
 this ships with is a deferral and not a doctrine, and the difference has to be

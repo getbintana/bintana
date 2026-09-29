@@ -73,7 +73,7 @@ One thing it does *not* do on its own: `testCssNode` in `tests/widgets` will fai
 until the new class's CSS node is written into its table. That is deliberate.
 `Style` puts a class on `w->gtk`, so that node is what a stylesheet has to name,
 and the choice of outer widget is an API decision rather than an implementation
-detail — see [widgets.md](widgets.md#styling-the-vocabulary).
+detail — see [widgets.md](https://github.com/getbintana/bintana-docs/blob/main/docs/widgets.md#styling-the-vocabulary).
 
 Registration order is load-bearing: the loop that builds the prototype chain looks
 each parent up by name, so a parent must be registered first.
@@ -420,8 +420,9 @@ JS_SetPropertyStr(ctx, file, "Load", JS_NewCFunction(ctx, sys_file_load, "Load",
 ```
 
 **And what it is for, on the lines after**, indented -- the one description the
-member has, which the IDE's popup shows and `./tools/docs.sh` writes into the
-rows of `docs/llm` and `docs/reference`:
+member has, which the IDE's popup shows, which `api.json` carries, and which
+`bintana-docs`' `tools/docs.sh` writes into the rows of `docs/llm` and
+`docs/reference`:
 
 ```c
 /* Load(path) -> string
@@ -432,10 +433,11 @@ rows of `docs/llm` and `docs/reference`:
 
 A property's first line is its name alone (`/* Enabled`), or its name and an
 arrow; an event's goes above the class row, as its signature does. Write links
-from the root of the tree (`[Bytes](docs/llm/library.md#bytes)`): the text lands
-in pages in different directories. Then run `./tools/docs.sh` -- `tests/api.sh`
-fails on a member with no description and on a row that does not say what the
-code says.
+from the root of the tree (`` `[Bytes](docs/llm/library.md#bytes)` ``): the text
+lands in pages in different directories. Then run `./tools/apijson.sh`, which
+`tests/api.sh` fails without -- and the row itself is written by `tools/docs.sh`
+in `bintana-docs`, whose check fails on a row that does not say what the
+manifest says.
 
 **A member written in JavaScript says it in a JSDoc comment** -- in rad.js,
 forms.js or a library under `lib/` -- touching the declaration: ending on the
@@ -454,8 +456,8 @@ at the top level (`File.LoadJson = function`), and each function an object
 literal holds when the literal is assigned at the top level
 (`GLOBAL.Settings = { Get() {} }`). An accessor added with `defineProperty` is
 invisible to it, which is why forms.js writes those as a small class copied
-across with `mixIn`. The same `./tools/docs.sh` writes these rows, and the same
-check fails on a public member with no comment. rad.js and forms.js are baked
+across with `mixIn`. The same `tools/docs.sh` -- in `bintana-docs` -- writes
+these rows, and the same check fails on a public member with no comment. rad.js and forms.js are baked
 into the binary, so a new comment there needs a rebuild before anything sees it.
 
 **What a verb answers goes on the same line**, after an arrow — a type the

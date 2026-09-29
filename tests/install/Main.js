@@ -155,7 +155,10 @@ function contents(prefix) {
                        "share/applications/bintana-ide.desktop",
                        "share/icons/hicolor/scalable/apps/bintana-ide.svg",
                        "share/doc/bintana/README.md",
-                       "share/doc/bintana/docs/ide.md"])
+                       /* The runtime's own documentation, which is what the
+                        * install carries; the reference pages are the
+                        * `bintana-docs` package. */
+                       "share/doc/bintana/docs/ide-internals.md"])
         check(`installed ${rel}`, File.Exists(File.Join(prefix, rel)));
 
     for (const tree of ["ide", "examples", "lib"])

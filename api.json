@@ -14851,6 +14851,173 @@
       ]
     },
     {
+      "Name": "AudioPlayer",
+      "Members": [
+        {
+          "Name": "Buffering",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "Duration",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "Latency",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "Loop",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "Muted",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "OnEnded",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "OnError",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "Password",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "Pause",
+          "Kind": "Method",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "Play",
+          "Kind": "Method",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "Playing",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "Position",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "Seek",
+          "Kind": "Method",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "Seekable",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "Stop",
+          "Kind": "Method",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "Uri",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "User",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        },
+        {
+          "Name": "Volume",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "",
+          "Native": true
+        }
+      ]
+    },
+    {
       "Name": "Connection",
       "Members": [
         {
@@ -15624,69 +15791,6 @@
               "Native": false
             },
             {
-              "Name": "Canvas_DblClick",
-              "Kind": "Method",
-              "Params": 2,
-              "Signature": "(x, y)",
-              "Returns": "",
-              "Doc": "",
-              "Native": false
-            },
-            {
-              "Name": "Canvas_Draw",
-              "Kind": "Method",
-              "Params": 3,
-              "Signature": "(p, width, height)",
-              "Returns": "",
-              "Doc": "",
-              "Native": false
-            },
-            {
-              "Name": "Canvas_MouseDown",
-              "Kind": "Method",
-              "Params": 2,
-              "Signature": "(x, y)",
-              "Returns": "",
-              "Doc": "",
-              "Native": false
-            },
-            {
-              "Name": "Canvas_MouseLeave",
-              "Kind": "Method",
-              "Params": 0,
-              "Signature": "()",
-              "Returns": "",
-              "Doc": "",
-              "Native": false
-            },
-            {
-              "Name": "Canvas_MouseMove",
-              "Kind": "Method",
-              "Params": 2,
-              "Signature": "(x, y)",
-              "Returns": "",
-              "Doc": "",
-              "Native": false
-            },
-            {
-              "Name": "Canvas_MouseUp",
-              "Kind": "Method",
-              "Params": 2,
-              "Signature": "(x, y)",
-              "Returns": "",
-              "Doc": "",
-              "Native": false
-            },
-            {
-              "Name": "Canvas_MouseWheel",
-              "Kind": "Method",
-              "Params": 2,
-              "Signature": "(dx, dy)",
-              "Returns": "",
-              "Doc": "",
-              "Native": false
-            },
-            {
               "Name": "Count",
               "Kind": "Property",
               "Params": -1,
@@ -15886,24 +15990,6 @@
           "Parent": "Form",
           "Members": [
             {
-              "Name": "BtnCancel_Click",
-              "Kind": "Method",
-              "Params": 0,
-              "Signature": "()",
-              "Returns": "",
-              "Doc": "",
-              "Native": false
-            },
-            {
-              "Name": "BtnOk_Click",
-              "Kind": "Method",
-              "Params": 0,
-              "Signature": "()",
-              "Returns": "",
-              "Doc": "",
-              "Native": false
-            },
-            {
               "Name": "Prompt",
               "Kind": "Static",
               "Params": 3,
@@ -15927,24 +16013,6 @@
               "Returns": "",
               "Doc": "builds the dialog, shows it, focuses the cancel button, and answers the shown window. **Returning it is what lets a caller keep a handle** — to move it, or to close it from somewhere else — and almost no caller needs to. `message` is the question; the callback takes no argument, because the only thing it can mean is yes",
               "Native": false
-            },
-            {
-              "Name": "BtnAccept_Click",
-              "Kind": "Method",
-              "Params": 0,
-              "Signature": "()",
-              "Returns": "",
-              "Doc": "",
-              "Native": false
-            },
-            {
-              "Name": "BtnCancel_Click",
-              "Kind": "Method",
-              "Params": 0,
-              "Signature": "()",
-              "Returns": "",
-              "Doc": "",
-              "Native": false
             }
           ],
           "Events": []
@@ -15965,87 +16033,6 @@
               "Signature": "",
               "Returns": "",
               "Doc": "the body font. Everything else is it in proportion — a heading is it scaled and emboldened — so a document set larger is *entirely* larger. `\"\"` is the desktop's",
-              "Native": false
-            },
-            {
-              "Name": "Canvas_DblClick",
-              "Kind": "Method",
-              "Params": 3,
-              "Signature": "(x, y, button)",
-              "Returns": "",
-              "Doc": "",
-              "Native": false
-            },
-            {
-              "Name": "Canvas_Draw",
-              "Kind": "Method",
-              "Params": 3,
-              "Signature": "(p, width, height)",
-              "Returns": "",
-              "Doc": "",
-              "Native": false
-            },
-            {
-              "Name": "Canvas_DrawPage",
-              "Kind": "Method",
-              "Params": 4,
-              "Signature": "(p, page, width, height)",
-              "Returns": "",
-              "Doc": "",
-              "Native": false
-            },
-            {
-              "Name": "Canvas_KeyPress",
-              "Kind": "Method",
-              "Params": 2,
-              "Signature": "(key, ctrl)",
-              "Returns": "",
-              "Doc": "",
-              "Native": false
-            },
-            {
-              "Name": "Canvas_MouseDown",
-              "Kind": "Method",
-              "Params": 3,
-              "Signature": "(x, y, button)",
-              "Returns": "",
-              "Doc": "",
-              "Native": false
-            },
-            {
-              "Name": "Canvas_MouseMove",
-              "Kind": "Method",
-              "Params": 2,
-              "Signature": "(x, y)",
-              "Returns": "",
-              "Doc": "",
-              "Native": false
-            },
-            {
-              "Name": "Canvas_MouseUp",
-              "Kind": "Method",
-              "Params": 3,
-              "Signature": "(x, y, button)",
-              "Returns": "",
-              "Doc": "",
-              "Native": false
-            },
-            {
-              "Name": "Canvas_MouseWheel",
-              "Kind": "Method",
-              "Params": 2,
-              "Signature": "(dx, dy)",
-              "Returns": "",
-              "Doc": "",
-              "Native": false
-            },
-            {
-              "Name": "Canvas_Paginate",
-              "Kind": "Method",
-              "Params": 2,
-              "Signature": "(width, height)",
-              "Returns": "",
-              "Doc": "",
               "Native": false
             },
             {
@@ -16442,15 +16429,6 @@
           "Parent": "Component",
           "Members": [
             {
-              "Name": "Canvas_Draw",
-              "Kind": "Method",
-              "Params": 3,
-              "Signature": "(p, width, height)",
-              "Returns": "",
-              "Doc": "",
-              "Native": false
-            },
-            {
               "Name": "Code",
               "Kind": "ReadOnly",
               "Params": -1,
@@ -16561,24 +16539,6 @@
           "Name": "Report",
           "Parent": "Component",
           "Members": [
-            {
-              "Name": "Canvas_Draw",
-              "Kind": "Method",
-              "Params": 3,
-              "Signature": "(p, width, height)",
-              "Returns": "",
-              "Doc": "",
-              "Native": false
-            },
-            {
-              "Name": "Canvas_DrawPage",
-              "Kind": "Method",
-              "Params": 4,
-              "Signature": "(p, page, width, height)",
-              "Returns": "",
-              "Doc": "",
-              "Native": false
-            },
             {
               "Name": "Data",
               "Kind": "Property",

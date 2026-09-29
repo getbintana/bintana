@@ -340,9 +340,9 @@ having the feature at all.
 Documentation is part of the change here, not after it. A third entry in
 *The two patches in vendor/* in `AGENTS.md` — which becomes *three* — saying what
 breaks if an upgrade drops it. A row for `Write` and for `Control` in
-[`runtime-api.md`](../runtime-api.md), [`llm/library.md`](../llm/library.md) and
-[`reference/globals/Exec.md`](../reference/globals/Exec.md), which `tests/api.sh`
-demands. A *Debugging* section in [`ide.md`](../ide.md), and a paragraph in the
+[`runtime-api.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/runtime-api.md), [`llm/library.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/library.md) and
+[`reference/globals/Exec.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/reference/globals/Exec.md), which `tests/api.sh`
+demands. A *Debugging* section in [`ide.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md), and a paragraph in the
 README. And an assertion in `tests/widgets` that fails when the patch is gone,
 alongside the two that already do.
 

@@ -1,7 +1,0 @@
-{
-  "name": "docs",
-  "main": "Main",
-  "version": "1.0",
-  "description": "Writes the member rows of docs/llm and docs/reference from the descriptions beside each member in the code",
-  "sources": ["Rows.js", "Main.js"]
-}

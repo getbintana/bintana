@@ -6,7 +6,7 @@ so that picking it up does not mean having the argument again.
 
 What was **built** along the way -- `Exec.Wait` and the `Timeout` guard, and
 later `Task` -- is described where it lives
-([runtime-api.md](../runtime-api.md#exec), [Task.md](../reference/globals/Task.md),
+([runtime-api.md](https://github.com/getbintana/bintana-docs/blob/main/docs/runtime-api.md#exec), [Task.md](https://github.com/getbintana/bintana-docs/blob/main/docs/reference/globals/Task.md),
 [task-plan.md](task-plan.md)) and named here only where it changed the
 argument. This document used to carry that reference half as well, and it was
 a second description of a built feature sitting in the directory for things
@@ -27,9 +27,9 @@ chaining trigger below, where it counts for more than this example does.
 Events dispatched by name, and a callback where an answer arrives later:
 `Exec`'s line and exit callbacks, `Dialog`'s answer, `Clipboard.Paste`,
 `File.Watch`, `Timer`, `Http`'s replies, and a
-[`Task`](../reference/globals/Task.md)'s `Progress`/`Done`/`Error`. No
+[`Task`](https://github.com/getbintana/bintana-docs/blob/main/docs/reference/globals/Task.md)'s `Progress`/`Done`/`Error`. No
 `Promise`, no `async` / `await` — never installed, and
-[runtime-api.md](../runtime-api.md#the-language-underneath) says why.
+[runtime-api.md](https://github.com/getbintana/bintana-docs/blob/main/docs/runtime-api.md#the-language-underneath) says why.
 
 ## What the problem actually measures
 

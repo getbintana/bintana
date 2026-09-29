@@ -1,0 +1,7 @@
+{
+  "name": "llms",
+  "main": "Main",
+  "version": "1.0",
+  "description": "Concatenates the runtime's own documentation into llms-full.txt, one file an agent can read whole",
+  "sources": ["Main.js"]
+}

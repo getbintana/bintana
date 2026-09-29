@@ -7,7 +7,7 @@ before any of it was written, and nothing in the building overturned: the row a
 lookup could not answer, the return of a call, turned out to be answerable by
 *declaring* it, which is this document's own thesis applied one step further. **The completion is the IDE's own**: the
 declarations for outside editors (stage 0) were generated, guarded, and then
-removed because nothing here consumed them -- see stage 0. What was built is in [`ide.md`](../ide.md#what-the-editor-proposes); this is
+removed because nothing here consumed them -- see stage 0. What was built is in [`ide.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#what-the-editor-proposes); this is
 the argument, the measurements, and **the seven things building it corrected**.
 
 Before: four completions, all table lookups --
@@ -180,7 +180,7 @@ is held to.
 The 38 % row was called *the one a lookup can never answer*, and that was true
 only while nothing declared a return. Each of these is still a lookup; what
 changed is what is written down, and all of it is described where it lives
-([`ide.md`](../ide.md#what-the-editor-proposes), and AGENTS.md's *The IDE
+([`ide.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#what-the-editor-proposes), and AGENTS.md's *The IDE
 completes a name*):
 
 - **What a member answers** is the arrow in its signature comment in the C
@@ -267,7 +267,7 @@ today:
 
 ### The way in that avoids the third one entirely
 
-**Let the analyser feed [Problems](../ide.md#problems-in-one-list) and never the
+**Let the analyser feed [Problems](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#problems-in-one-list) and never the
 completion.** It runs on the pause `Ide.Live` already times, it answers when it
 answers -- which a docked panel tolerates and a popup does not -- and what it
 delivers is exactly what no lookup will ever give: real type errors over the
@@ -298,7 +298,7 @@ waits for somebody who needs what no declaration can say.**
   reads 40 files and 20 000 lines per keypress to avoid keeping an index for.
   Completion runs on the keystroke, so it would need that index cached, with an
   invalidation story this tree refuses elsewhere
-  ([`ide.md`](../ide.md#f12-and-where-a-name-is-declared)). The JSDoc lines are
+  ([`ide.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#f12-and-where-a-name-is-declared)). The JSDoc lines are
   the same answer written down once, and they work in every editor.
 - **An index signature on a generated form interface.** It would silence the
   `this[name]` errors `checkJs` reports, and it would make `this.Anything` valid

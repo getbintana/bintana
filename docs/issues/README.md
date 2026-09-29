@@ -19,7 +19,7 @@ in the same form.
 | [ISSUE-worker-locale-order.md](ISSUE-worker-locale-order.md) | A `Task` has no `Locale`, so a worker cannot order names |
 
 **A gap that is filled is deleted, not archived.** What the runtime can do is in
-[`llm/`](../llm/README.md), which is where anybody looks for it; an issue kept
+[`llm/`](https://github.com/getbintana/bintana-llm/blob/main/docs/llm/README.md), which is where anybody looks for it; an issue kept
 past its answer is a second description of the same feature, written by somebody
 who did not have it yet, in the directory of things that are missing.
 
@@ -69,8 +69,8 @@ at run time, and it is what a `Scroller` with an `Arrangement` has always done �
 the slot is a box then, so an expanding child is stretched across the view and
 free to outgrow it along the view. Nothing said so anywhere, which is the part
 that was real: the reference now does, in
-[`llm/controls.md`](../llm/controls.md#scroller) and
-[`reference/widgets/Scroller.md`](../reference/widgets/Scroller.md), with the
+[`llm/controls.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/controls.md#scroller) and
+[`reference/widgets/Scroller.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/reference/widgets/Scroller.md), with the
 measurements, and `tests/widgets`' `FillScroll` is what keeps it true.
 **An issue answered by words that already existed is deleted like any other** —
 what it leaves behind is the documentation that would have prevented it, not a
@@ -79,7 +79,7 @@ file describing a feature the runtime has.
 Refused: a list of check boxes. A tick the *list* keeps is state in the view,
 which is the wrong place for it — the argument is with the other things that are
 not coming, in
-[`llm/controls.md`](../llm/controls.md#what-is-deliberately-not-here). **A
+[`llm/controls.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/controls.md#what-is-deliberately-not-here). **A
 refusal is deleted too**: an issue whose answer is *no* is not a gap either, and
 leaving it here would have it re-argued.
 

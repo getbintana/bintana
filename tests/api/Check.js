@@ -65,61 +65,6 @@ const TABLE  = new Regex("static const JSCFunctionListEntry (\\w+)\\[\\]\\s*=\\s
 const EMIT   = new Regex("bta_emit\\w*\\s*\\(\\s*[^;\"]*\"([A-Z][A-Za-z]*)\"\\s*,\\s*(\\d+)");
 
 /*
- * The C surfaces that are a **global** rather than a widget class, and the
- * heading each is documented under in `llm/library.md`.
- *
- * Two shapes, because the runtime builds globals two ways: a
- * `JSCFunctionListEntry` table (`Locale`, `Decimal`, `Day`, ...) and a run of
- * `JS_SetPropertyStr` calls on a local (`File`, `Directory`, `Application`,
- * ...). Both are read; which is which is an implementation detail of the module
- * and not of the contract.
- *
- * **Explicit and not inferred**, which matters: the same
- * `JS_SetPropertyStr(ctx, x, "Name", JS_New…)` shape builds the *return values*
- * of half the runtime -- `Exec`'s handle, `File.Info`'s answer, a row, a
- * `Dialect` -- and a scan that guessed would demand a heading for every one of
- * them. Adding a global means adding a line here, and that is the point: the
- * line is what makes the reference's completeness checkable at all.
- */
-const GLOBAL_TABLES = {
-    dec_proto_funcs: "Decimal",
-    bytes_proto_funcs: "Bytes",
-    locale_props:    "Locale",
-    log_props:       "Logger",
-    day_props:       "Day",
-    time_props:      "Time",
-    text_props:      "Text",
-    hash_props:      "Hash",
-    screen_props:    "Screen",
-    env_props:       "Environment",
-    conn_props:      "Database and Table",
-    xml_doc_props:   "Xml",
-    xml_node_props:  "Xml",
-    http_props:      "Http",
-    http_client_props: "Http",
-    multipart_props: "Http",
-    http_server_props: "Http Server",
-    http_request_props: "Http Server",
-    audioplayer_props: "AudioPlayer",
-    printer_props:   "Printer",
-    task_props:      "Task",
-    lock_props:      "Lock",
-    /* The worker's own Decimal: instances live in worker runtimes, so its
-     * members are documented with Task rather than with the class. */
-    task_dec_proto:  "Task",
-    /*
-     * These two are documented with the **forms** and not with the globals,
-     * which is where they belong: a menu item and a command are parts of a
-     * `.form` and not things a program reaches for on its own. So they name
-     * their file and their heading, because the heading is prose there rather
-     * than a class name.
-     */
-    menuitem_props:  { file: "docs/llm/forms.md", heading: "Menus" },
-    action_props:    { file: "docs/llm/forms.md",
-                       heading: "Actions: one command in several places" },
-};
-
-/*
  * The one table that is not surface at all.
  *
  * `widget_notes` is what the runtime keeps *about* a widget -- `__declared`,
@@ -132,63 +77,9 @@ const GLOBAL_TABLES = {
  */
 const NOT_PUBLISHED = ["widget_notes"];
 
-const GLOBAL_VARS = {
-    file:        "File",
-    dir:         "Directory",
-    xml:         "Xml",
-    application: "Application",
-    env:         "Environment",
-    dialog:      "Dialog",
-    desktop:     "Desktop",
-    /*
-     * The module inside `Desktop`, and a heading of its own because that is
-     * where it is explained.  The check qualifies a member by its heading's
-     * first word, so `entries` under `Desktop.Entries` is written
-     * `Desktop.Entries.Read(id)` and is found -- where one heading for both
-     * would have demanded the member be spelled bare and left the module
-     * unexplained.
-     */
-    entries:     "Desktop.Entries",
-};
-
-/* `JS_SetPropertyStr(ctx, <var>, "Name", JS_New…)` -- a member of a global built
- * without a table. `JS_New` and not `JS_NewCFunction` alone, because a global
- * carries plain values too. */
-function setPropOn(varName) {
-    return new Regex("JS_SetPropertyStr\\(\\s*ctx,\\s*" + varName +
-                     ",\\s*\"([A-Za-z_]\\w*)\"\\s*,\\s*JS_New");
-}
-
 /* Events built through a helper rather than a literal emit, and the arity the
  * helper passes. `emit_mouse` hands five to each of them. */
 const HELPER_EVENTS = { MouseDown: 5, MouseUp: 5, MouseMove: 5, DblClick: 5 };
-
-/*
- * A component's public surface, from its source. The convention this tree
- * already follows is the whole parser: what an application may touch has a
- * capital initial, what the class does to itself does not -- `get Type()` and
- * `Refresh()` against `view()`, `plot()` and `reduce()`. Handlers are named
- * `<Control>_<Event>` and are nobody's business but the component's, so an
- * underscore is a name to skip.
- */
-const LIB_GET    = new Regex("^ {4}(get|set) ([A-Z]\\w*)\\s*\\(", { Multiline: true });
-const LIB_METHOD = new Regex("^ {4}([A-Z][A-Za-z0-9]*)\\s*\\(", { Multiline: true });
-const LIB_EVENTS = new Regex("static\\s+Events\\s*=\\s*\\[([^\\]]*)\\]");
-const LIB_EMIT   = new Regex("Emit\\(\\s*\"([A-Z][A-Za-z]*)\"([^;]*)\\)");
-
-/* How many arguments an `Emit` passes: the commas at depth zero of what follows
- * the event name. `Emit("Range", 0, this.slots())` passes two, and counting the
- * commas without minding the brackets would say three. */
-function emitArity(rest) {
-    let depth = 0, n = 0;
-
-    for (const ch of rest) {
-        if (ch === "(" || ch === "[" || ch === "{") depth++;
-        else if (ch === ")" || ch === "]" || ch === "}") depth--;
-        else if (ch === "," && depth === 0) n++;
-    }
-    return n;
-}
 
 /*
  * Every library in `lib/`, against its page. A library with no page at all is a
@@ -248,252 +139,6 @@ function checkLibraryScopes(root, problems) {
     return { names, clashes };
 }
 
-function checkLibraries(root, problems) {
-    let counted = 0;
-
-    for (const dir of Directory.Folders(File.Join(root, "lib"))) {
-        const name = File.Name(dir);
-        const doc  = File.Join(root, `docs/llm/${name}.md`);
-
-        if (!File.Exists(doc)) {
-            problems.push(`library ${name} has no reference at docs/llm/${name}.md`);
-            continue;
-        }
-        const text = File.Load(doc);
-
-        for (const src of Directory.Files(dir, "*.js")) {
-            const code   = File.Load(src);
-            const seen   = new Set();
-            const events = {};
-
-            for (const m of LIB_GET.Matches(code))    seen.add(m.Group(2));
-            for (const m of LIB_METHOD.Matches(code)) {
-                const w = m.Group(1);
-                if (w !== "get" && w !== "set" && w !== "static") seen.add(w + "()");
-            }
-            for (const m of LIB_EVENTS.Matches(code)) {
-                for (const q of m.Group(1).split(","))
-                    if (q.trim()) events[q.trim().replace(/["' ]/g, "")] = 0;
-            }
-            for (const m of LIB_EMIT.Matches(code)) {
-                const n = emitArity(m.Group(2));
-                if (m.Group(1) in events)
-                    events[m.Group(1)] = Math.max(events[m.Group(1)], n);
-            }
-
-            for (const member of seen) {
-                if (member in events) continue;
-                const row = member.endsWith("()")
-                    ? new Regex("^\\|\\s*`" + Regex.Escape(member.slice(0, -2)) + "\\(",
-                                { Multiline: true })
-                    : new Regex("^\\|\\s*`" + Regex.Escape(member) + "`", { Multiline: true });
-
-                if (!row.IsMatch(text))
-                    problems.push(`${name}: ${File.Name(src)} publishes ${member} ` +
-                                  `and ${name}.md has no row for it`);
-                counted++;
-            }
-            for (const e in events) {
-                const sig = new Regex("\\*\\*event\\*\\* `" + Regex.Escape(e) + "\\(([^)]*)\\)`");
-                const m   = sig.Match(text);
-
-                if (!m) {
-                    problems.push(`${name}: event ${e} has no signature in ${name}.md`);
-                    continue;
-                }
-                const args = m.Group(1).trim();
-                const n    = args === "" ? 0 : args.split(",").length;
-
-                if (n !== events[e])
-                    problems.push(`${name}: event ${e} is documented with ${n} ` +
-                                  `argument(s), the component emits ${events[e]}`);
-                counted++;
-            }
-        }
-    }
-    return counted;
-}
-
-/*
- * **A library's events, against the code that raises them.**
- *
- * The runtime reads a class this process never ran out of its sources: what it
- * raises, and the signature comment above the `static Events` line that
- * declares them. This is the other reader -- the same regexes this file has
- * always used -- and the two are held to one answer, which is the only way a
- * reader that misses a raise is noticed. Page rows cannot catch that on their
- * own: a row is written from whichever answer exists.
- */
-function checkLibraryEventSources(root, problems) {
-    const sources = docLibrarySources(root);
-    let   counted = 0;
-
-    for (const dir of Directory.Folders(File.Join(root, "lib"))) {
-        const name  = File.Name(dir);
-        const texts = Directory.Files(dir, "*.js").sort().map((f) => File.Load(f));
-
-        /* What the code raises, and how many arguments each call passes. */
-        const raises = {};
-        for (const text of texts) {
-            for (const m of LIB_EVENTS.Matches(text))
-                for (const q of m.Group(1).split(","))
-                    if (q.trim()) {
-                        const n = q.trim().replace(/["' ]/g, "");
-                        if (!(n in raises)) raises[n] = 0;
-                    }
-            for (const m of LIB_EMIT.Matches(text))
-                raises[m.Group(1)] = Math.max(raises[m.Group(1)] || 0,
-                                              emitArity(m.Group(2)));
-        }
-
-        const classes = new Set();
-        for (const text of texts)
-            for (const s of Application.Symbols(text))
-                if (s.Kind === "Class") classes.add(s.Name);
-
-        const read = {};       /* event -> the class the runtime names it on */
-        for (const c of classes)
-            for (const e of Widget.EventNames(c, { Sources: sources }))
-                read[e] = c;
-
-        for (const e in raises)
-            if (!(e in read))
-                problems.push(`${name}: ${e} is emitted and the runtime reads ` +
-                              `no such event`);
-        for (const e in read) {
-            if (!(e in raises)) {
-                problems.push(`${name}: the runtime reads ${e} and no file ` +
-                              `emits or declares it`);
-                continue;
-            }
-            const sig = Widget.EventSignature(read[e], e, { Sources: sources });
-            const doc = Widget.EventDoc(read[e], e, { Sources: sources });
-
-            if (!sig || !doc) {
-                problems.push(`${name}: event ${e} has no signature comment ` +
-                              `above the static Events line that declares it`);
-                continue;
-            }
-            const args = sig.slice(1, -1).trim();
-            const n    = args === "" ? 0 : args.split(",").length;
-
-            if (n !== raises[e])
-                problems.push(`${name}: event ${e} is declared with ${n} ` +
-                              `argument(s), the code emits ${raises[e]}`);
-            counted++;
-        }
-    }
-    return counted;
-}
-
-/*
- * Every global's members, against `docs/llm/library.md`.
- *
- * A member counts as documented when its name appears **inside its own global's
- * section** -- `## File` up to the next `## ` -- in backticks, bare or qualified:
- * `` `Load( ``, `` `Load` ``, `` `Dialog.OpenFile( ``, `` `Logger.Debug` ``. Its
- * own section and not the whole file, because `Load` belongs to `File` and to
- * `Locale` and a file-wide search would let either one cover the other.
- *
- * **Looser than the widget check on purpose**, which demands a table row: these
- * sections are not all tables. `File` is one, `Dialog` is a bullet list and
- * `Logger` is a sentence, and each is the right shape for what it describes. The
- * claim being checked is the one that matters either way -- a member that exists
- * and is not written down anywhere near its own heading.
- */
-function checkGlobals(root, problems) {
-    /*
-     * The sections of one reference, by heading. Plain bags, which is what
-     * `Dictionary` counts: it is a set of statics over an ordinary object and
-     * not a class.
-     */
-    const sectionsOf = (file) => {
-        const path = File.Join(root, file);
-
-        if (!File.Exists(path)) {
-            problems.push(`no reference at ${file}`);
-            return null;
-        }
-        const text  = File.Load(path);
-        const out   = {};
-        const heads = new Regex("^## (.+)$", { Multiline: true }).Matches(text);
-
-        for (let i = 0; i < heads.length; i++) {
-            const from = heads[i].Index + heads[i].Length;
-            const to   = i + 1 < heads.length ? heads[i + 1].Index : text.length;
-            out[heads[i].Group(1).trim()] = text.slice(from, to);
-        }
-        return out;
-    };
-
-    const sections = { "docs/llm/library.md": sectionsOf("docs/llm/library.md") };
-    const section  = (file, heading) => {
-        if (!(file in sections)) sections[file] = sectionsOf(file);
-        return sections[file] ? sections[file][heading] : undefined;
-    };
-
-    /*
-     * What the runtime publishes, by global -- and where each is written down.
-     * A `where` is either a heading in `library.md` or a file and a heading of
-     * its own; both end up as the same pair here.
-     */
-    const members = {};
-    const add = (where, name) => {
-        if (!where) return;
-        const file    = typeof where === "string" ? "docs/llm/library.md" : where.file;
-        const heading = typeof where === "string" ? where : where.heading;
-        const at      = `${file}#${heading}`;
-
-        if (!members[at]) members[at] = { file, heading, names: [] };
-        members[at].names.push(name);
-    };
-
-    for (const c of sources(root)) {
-        const src = File.Load(c);
-
-        for (const t of TABLE.Matches(src)) {
-            const where = GLOBAL_TABLES[t.Group(1)];
-            if (where === undefined) continue;
-            for (const g of GETSET.Matches(t.Group(2))) add(where, g.Group(1));
-            for (const f of CFUNC.Matches(t.Group(2)))  add(where, f.Group(1));
-        }
-        for (const v in GLOBAL_VARS)
-            for (const m of setPropOn(v).Matches(src))
-                add(GLOBAL_VARS[v], m.Group(1));
-    }
-
-    let counted = 0;
-    for (const at of Dictionary.Keys(members)) {
-        const { file, heading, names } = members[at];
-        const where = section(file, heading);
-
-        if (where === undefined) {
-            problems.push(`${file} has no "## ${heading}" section`);
-            continue;
-        }
-        const seen = new Set();
-
-        for (const name of names) {
-            if (seen.has(name)) continue;
-            seen.add(name);
-            counted++;
-
-            /* Bare or qualified, since a section may spell either -- `Debug`
-             * inside `Logger.Debug`, or `Load(path)` on its own. Qualified by
-             * the heading's first word, which is the object's name where the
-             * heading is prose. */
-            const object = heading.split(/[ :]/)[0];
-            const spelt  = [`\`${name}(`, `\`${name}\``,
-                            `\`${object}.${name}(`, `\`${object}.${name}\``];
-
-            if (!spelt.some((form) => where.includes(form)))
-                problems.push(`${object}.${name} is not written down under ` +
-                              `"## ${heading}" in ${file}`);
-        }
-    }
-    return counted;
-}
-
 /*
  * The C this reads.
  *
@@ -506,6 +151,19 @@ function checkGlobals(root, problems) {
 function sources(root) {
     return Directory.Files(File.Join(root, "runtime/src"), "*.c")
                     .filter((path) => !File.Name(path).startsWith("."));
+}
+
+/* Every source the repositories' libraries are written in. The pages that
+ * document them live in `bintana-docs` now and are checked there against
+ * `api.json`; what is still here is their descriptions, which are JavaScript
+ * and have nobody to be checked against but `checkDocs`. */
+function librarySources(root) {
+    const out = [];
+
+    for (const lib of Directory.Folders(File.Join(root, "lib")))
+        for (const f of Directory.Files(lib, "*.js").sort())
+            out.push(File.Load(f));
+    return out;
 }
 
 /* The names the C puts on the global object -- `JS_SetPropertyStr(ctx,
@@ -639,14 +297,16 @@ function checkApiJson(root, problems, members, events) {
             problems.push(`api.json: the type ${n} is declared and not in it`);
 
     const namedGlobals = new Set(catalog.Globals.map((g) => g.Name));
-    for (const v of Dictionary.Values(GLOBAL_VARS))
-        if (v.indexOf(".") >= 0 && !namedGlobals.has(v))
+    for (const v of NESTED_OWNERS)
+        if (!namedGlobals.has(v))
             problems.push(`api.json: the nested global ${v} is not in it`);
 
     /* And the two objects a table describes and nothing owns -- a menu item
      * and a command, which the manifest carries so `forms.md`'s prose can be
-     * held to the code. Their tables are read here and not by `members`
-     * above, since `GLOBAL_TABLES` is what says they are not globals. */
+     * held to the code -- and `AudioPlayer`, whose accessors are handed to
+     * each instance and not hung on a prototype. None of them is a widget, so
+     * `tableClasses` says nothing about them and this is the one reader that
+     * does. */
     const forms   = { menuitem_props: "MenuItem", action_props: "Action" };
     const ofType  = {};
     for (const t of catalog.Types)
@@ -813,326 +473,6 @@ function checkShadows(root, members, problems) {
     return checked;
 }
 
-function checkReference(root, members, events, problems) {
-    const dir = File.Join(root, "docs/reference/widgets");
-    if (!File.IsDir(dir)) return { checked: 0, pages: 0, missing: 0 };
-
-    const owner = tableClasses(root);
-    const known = {};
-
-    for (const c of sources(root)) {
-        const src = File.Load(c);
-
-        /* Every registered class, whatever it publishes. **A class with no
-         * members of its own is still a class somebody places** -- `Panel` is
-         * the commonest container in this tree and declares nothing beyond what
-         * it inherits -- so its page is about which container to reach for, and
-         * it has nothing to be held to but the heading. */
-        for (const m of CLASS_NAME.Matches(src))
-            known[m.Group(1)] = true;
-    }
-
-    /* class -> its own members, which is what its page has to document: what it
-     * inherits is on the page of the class it inherits from. */
-    const mine = {};
-    for (const m of members) {
-        const cls = owner[m.table];
-        if (!cls) continue;
-        if (!mine[cls]) mine[cls] = [];
-        if (!mine[cls].some((one) => one.name === m.name && one.kind === m.kind))
-            mine[cls].push(m);
-    }
-
-    let checked = 0, pages = 0, counted = 0;
-
-    for (const path of Directory.Files(dir, "*.md")) {
-        const name = File.BaseName(path);
-        if (name === "README") continue;
-        pages++;
-
-        if (!known[name]) {
-            problems.push(`docs/reference/widgets/${name}.md documents ` +
-                          `${name}, which the runtime does not register`);
-            continue;
-        }
-        if (mine[name]) counted++;      /* a page whose class has members to check */
-
-        const text = File.Load(path);
-
-        /*
-         * **Twice, and that is the point.** A page opens with `## Every member`
-         * -- the whole surface at a glance, so a name can be found by eye -- and
-         * explains each of them further down under the task it belongs to. A
-         * member listed in the summary and explained nowhere is the failure this
-         * split catches; without it, the summary alone would satisfy the check
-         * and the long page would quietly become a short one.
-         */
-        const at   = text.indexOf("\n## Every member");
-        const ends = at < 0 ? -1 : text.indexOf("\n## ", at + 4);
-
-        if (at < 0) {
-            problems.push(`${name}.md has no "## Every member" section`);
-            continue;
-        }
-        const summary = text.slice(at, ends < 0 ? text.length : ends);
-        const body    = text.slice(0, at) + (ends < 0 ? "" : text.slice(ends));
-
-        for (const m of mine[name] || []) {
-            const row = m.kind === "method"
-                ? new Regex("^\\|\\s*`" + Regex.Escape(m.name) + "\\(([^)]*)\\)", { Multiline: true })
-                : new Regex("^\\|\\s*`" + Regex.Escape(m.name) + "`", { Multiline: true });
-
-            if (!row.IsMatch(summary))
-                problems.push(`${name}.md: ${m.kind} ${m.name} is not in "Every member"`);
-            else if (!row.IsMatch(body))
-                problems.push(`${name}.md: ${m.kind} ${m.name} is listed and never explained`);
-            else if (m.kind === "method") {
-                /* ...and with the parameters the runtime declares for it, which
-                 * is the half a row could get confidently wrong: a signature
-                 * that is wrong reads as authoritative. */
-                const sig = Widget.Signature(name, m.name);
-                const got = row.Match(summary).Group(1);
-
-                if (sig === null || got !== sig.slice(1, -1))
-                    problems.push(`${name}.md: ${m.name} is documented as ` +
-                                  `(${got}), the runtime declares ${sig}`);
-            }
-            checked++;
-        }
-
-        /* And an event documented here is documented with its arguments, the
-         * same rule `controls.md` is held to -- a signature that is confidently
-         * wrong reads as authoritative. */
-        for (const m of new Regex("\\*\\*event\\*\\* `(\\w+)\\(([^)]*)\\)`").Matches(text)) {
-            const event = m.Group(1);
-            if (!(event in events)) {
-                problems.push(`${name}.md: event ${event} is not one the runtime raises`);
-                continue;
-            }
-            const args = m.Group(2).trim();
-            const n    = args === "" ? 0 : args.split(",").length;
-
-            if (n !== events[event])
-                problems.push(`${name}.md: event ${event} is documented with ${n} ` +
-                              `argument(s), the runtime passes ${events[event]}`);
-
-            const sig = Widget.EventSignature(name, event);
-            if (sig !== null && args !== sig.slice(1, -1))
-                problems.push(`${name}.md: event ${event} is documented as ` +
-                              `(${args}), the runtime declares ${sig}`);
-            checked++;
-        }
-    }
-    return { checked, pages, missing: Dictionary.Count(mine) - counted };
-}
-
-/*
- * ------------------------------------------------------- the globals, at length
- *
- * `docs/reference/globals/<Name>.md` is to [`llm/library.md`](../llm/library.md)
- * what a widget page is to `llm/controls.md`: the same members, each explained.
- * Which members those are comes from the same two places the completeness check
- * already reads -- a C table, or the run of `JS_SetPropertyStr` calls that builds
- * an object -- and **the list below is what says which of them make up a page**.
- *
- * A line per page, on purpose, exactly as `GLOBAL_TABLES` is: the same shape
- * builds half the runtime's return values, so a scan that guessed would demand a
- * page for every one of them.
- *
- * **Not every global has a source to read.** `Message`, `Exec`, `Settings`,
- * `Timer`, `Stopwatch`, `Dictionary`, `Regex` and `Clipboard` are built in ways
- * this file does not parse, so their pages are written by hand and held to
- * nothing but existing -- the same bargain a widget with no members of its own
- * gets.
- */
-const GLOBAL_PAGES = {
-    AudioPlayer: ["audioplayer_props"],
-    Application: ["application"],
-    Bytes:       ["bytes_proto_funcs"],
-    Database:    ["conn_props"],
-    Day:         ["day_props"],
-    Decimal:     ["dec_proto_funcs"],
-    Desktop:     ["desktop", "entries"],
-    Dialog:      ["dialog"],
-    Directory:   ["dir"],
-    Environment: ["env_props", "env"],
-    File:        ["file"],
-    Hash:        ["hash_props"],
-    Http:        ["http_props", "http_client_props", "multipart_props"],
-    HttpServer:  ["http_server_props", "http_request_props"],
-    Locale:      ["locale_props"],
-    Logger:      ["log_props"],
-    Printer:     ["printer_props"],
-    Screen:      ["screen_props"],
-    Task:        ["task_props"],
-    Lock:        ["lock_props"],
-    Text:        ["text_props"],
-    Time:        ["time_props"],
-    Xml:         ["xml_doc_props", "xml_node_props", "xml"],
-};
-
-function checkGlobalPages(root, problems) {
-    const dir = File.Join(root, "docs/reference/globals");
-    if (!File.IsDir(dir)) return { checked: 0, pages: 0 };
-
-    /* name -> its members, from the tables and from the object-building runs. */
-    const mine = {};
-    const put = (page, name) => {
-        if (!mine[page]) mine[page] = [];
-        if (!mine[page].includes(name)) mine[page].push(name);
-    };
-
-    for (const c of sources(root)) {
-        const src = File.Load(c);
-
-        for (const page in GLOBAL_PAGES) {
-            for (const from of GLOBAL_PAGES[page]) {
-                for (const t of TABLE.Matches(src)) {
-                    if (t.Group(1) !== from) continue;
-                    for (const g of GETSET.Matches(t.Group(2))) put(page, g.Group(1));
-                    for (const f of CFUNC.Matches(t.Group(2)))  put(page, f.Group(1) + "()");
-                }
-                for (const m of setPropOn(from).Matches(src)) put(page, m.Group(1));
-            }
-        }
-    }
-
-    let checked = 0, pages = 0;
-
-    for (const path of Directory.Files(dir, "*.md")) {
-        const name = File.BaseName(path);
-        if (name === "README") continue;
-        pages++;
-
-        const text = File.Load(path);
-        const at   = text.indexOf("\n## Every member");
-        const ends = at < 0 ? -1 : text.indexOf("\n## ", at + 4);
-
-        if (at < 0) {
-            problems.push(`${name}.md has no "## Every member" section`);
-            continue;
-        }
-        const summary = text.slice(at, ends < 0 ? text.length : ends);
-        const body    = text.slice(0, at) + (ends < 0 ? "" : text.slice(ends));
-
-        for (const member of mine[name] || []) {
-            /* A row may spell a verb either way -- `` `Load` `` or
-             * `` `Load(path)` `` -- because the two sources these names come from
-             * do not agree: a C table says `Load` and the object-building run
-             * says `Load` too, while the page that explains it wants the
-             * arguments in the cell. Both are the same member. */
-            const bare = member.endsWith("()") ? member.slice(0, -2) : member;
-            const row  = new Regex("^\\|\\s*`" + Regex.Escape(bare) + "(?:`|\\()",
-                                   { Multiline: true });
-
-            if (!row.IsMatch(summary))
-                problems.push(`${name}.md: ${member} is not in "Every member"`);
-            else if (!row.IsMatch(body))
-                problems.push(`${name}.md: ${member} is listed and never explained`);
-            checked++;
-        }
-    }
-    return { checked, pages };
-}
-
-/*
- * ------------------------------------------------ the libraries, at length
- *
- * `docs/reference/libraries/<Class>.md` is to `llm/<library>.md` what a widget
- * page is to `llm/controls.md`. **A library that ships with the runtime is part
- * of the contract** -- a project says `uses: ["charts"]` and gets its classes --
- * so its long page is held to the same rule as a control's, from the same place
- * `checkLibraries` already reads the surface: the Bintana source itself.
- *
- * The page is found by the class's **file name**, so a library that adds a class
- * is a page this asks for without a list here to update.
- */
-function checkLibraryPages(root, problems) {
-    const dir = File.Join(root, "docs/reference/libraries");
-    if (!File.IsDir(dir)) return { checked: 0, pages: 0, missing: 0 };
-
-    /* class -> { members, events }, out of lib/<name>/<Class>.js. */
-    const mine = {};
-
-    for (const lib of Directory.Folders(File.Join(root, "lib")))
-        for (const src of Directory.Files(lib, "*.js")) {
-            const code   = File.Load(src);
-            const seen   = new Set();
-            const events = {};
-
-            for (const m of LIB_GET.Matches(code))    seen.add(m.Group(2));
-            for (const m of LIB_METHOD.Matches(code)) {
-                const w = m.Group(1);
-                if (w !== "get" && w !== "set" && w !== "static") seen.add(w + "()");
-            }
-            for (const m of LIB_EVENTS.Matches(code))
-                for (const q of m.Group(1).split(","))
-                    if (q.trim()) events[q.trim().replace(/["' ]/g, "")] = 0;
-            for (const m of LIB_EMIT.Matches(code))
-                if (m.Group(1) in events)
-                    events[m.Group(1)] = Math.max(events[m.Group(1)], emitArity(m.Group(2)));
-
-            mine[File.BaseName(src)] = { members: [...seen], events };
-        }
-
-    let checked = 0, pages = 0;
-
-    for (const path of Directory.Files(dir, "*.md")) {
-        const name = File.BaseName(path);
-        if (name === "README") continue;
-        pages++;
-
-        if (!mine[name]) {
-            problems.push(`docs/reference/libraries/${name}.md documents ` +
-                          `${name}, which no library in lib/ publishes`);
-            continue;
-        }
-        const text = File.Load(path);
-        const at   = text.indexOf("\n## Every member");
-        const ends = at < 0 ? -1 : text.indexOf("\n## ", at + 4);
-
-        if (at < 0) {
-            problems.push(`${name}.md has no "## Every member" section`);
-            continue;
-        }
-        const summary = text.slice(at, ends < 0 ? text.length : ends);
-        const body    = text.slice(0, at) + (ends < 0 ? "" : text.slice(ends));
-
-        for (const member of mine[name].members) {
-            if (member in mine[name].events) continue;
-
-            const bare = member.endsWith("()") ? member.slice(0, -2) : member;
-            const row  = new Regex("^\\|\\s*`" + Regex.Escape(bare) + "(?:`|\\()",
-                                   { Multiline: true });
-
-            if (!row.IsMatch(summary))
-                problems.push(`${name}.md: ${member} is not in "Every member"`);
-            else if (!row.IsMatch(body))
-                problems.push(`${name}.md: ${member} is listed and never explained`);
-            checked++;
-        }
-
-        for (const event in mine[name].events) {
-            const sig = new Regex("\\*\\*event\\*\\* `" + Regex.Escape(event) +
-                                  "\\(([^)]*)\\)`");
-            const m = sig.Match(text);
-
-            if (!m) {
-                problems.push(`${name}.md: event ${event} has no signature`);
-                continue;
-            }
-            const args = m.Group(1).trim();
-            const n    = args === "" ? 0 : args.split(",").length;
-
-            if (n !== mine[name].events[event])
-                problems.push(`${name}.md: event ${event} is documented with ${n} ` +
-                              `argument(s), the component emits ${mine[name].events[event]}`);
-            checked++;
-        }
-    }
-    return { checked, pages, missing: Dictionary.Count(mine) - pages };
-}
-
 /* A parameter list split at its **top-level** commas, so `[{A, B}]` is one
  * argument and not three. */
 function splitTop(text) {
@@ -1185,16 +525,14 @@ const WIDGET_STATIC = new Regex(
 
 function checkWidgetStatics(root, problems) {
     const src = File.Load(File.Join(root, "runtime/src/bta_widget.c"));
-    const doc = File.Load(File.Join(root, "docs/llm/controls.md"));
     let   count = 0;
 
-    for (const m of WIDGET_STATIC.Matches(src)) {
-        const name = m.Group(1);
+    /* **The row is the documentation repository's now.** `bintana-docs`'
+     * `check/` holds every native static of every class to one, out of
+     * `api.json`; what stays here is that they answer without a display and
+     * that every method and event declares its parameters. */
+    for (const m of WIDGET_STATIC.Matches(src))
         count++;
-
-        if (!doc.includes("`Widget." + name + "("))
-            problems.push(`Widget.${name} is installed and has no row in controls.md`);
-    }
 
     /*
      * And it has to answer **here**, where there is no display at all: the
@@ -1307,7 +645,7 @@ function checkDocs(root, problems) {
     }
     /* Counted once per description and not once per class: a control
      * inherits a hundred members, and each is one thing written once. */
-    const libSources = docLibrarySources(root);
+    const libSources = librarySources(root);
     for (const src of libSources)
         for (const s of Application.Symbols(src))
             if (s.Kind === "Class") owners.add(s.Name);
@@ -1409,23 +747,24 @@ function checkLinks(root, problems) {
 
 function Main() {
     const root = Application.Arguments[0] || File.Directory(Application.Directory);
-    const doc  = File.Join(root, "docs/llm/controls.md");
+    const problems = [];
+    const members  = [];          /* { name, kind, table } */
+    const events   = {};          /* name -> arity */
 
-    if (!File.Exists(doc)) {
-        print(`api: no reference at ${doc}`);
-        Application.Quit(2);
-        return;
-    }
-    const text = File.Load(doc);
-
-    const members = [];          /* { name, kind, table } */
-    const events  = {};          /* name -> arity */
-
+    /*
+     * The runtime's half of the surface check.
+     *
+     * The documentation's half -- pages against `api.json`, the rows, the
+     * links between them -- lives in `bintana-docs`, where the pages are. What
+     * is left here is what only the C and the prelude can answer: that every
+     * member has a signature and a description beside it, that `api.json` is
+     * what the runtime says and what the C declares, and that the pages which
+     * stayed do not point at a file that is gone.
+     */
     for (const c of sources(root)) {
         const src = File.Load(c);
 
         for (const t of TABLE.Matches(src)) {
-            if (t.Group(1) in GLOBAL_TABLES) continue;
             if (NOT_PUBLISHED.includes(t.Group(1))) continue;
             const body = t.Group(2);
 
@@ -1443,84 +782,27 @@ function Main() {
     for (const name in HELPER_EVENTS)
         events[name] = Math.max(events[name] || 0, HELPER_EVENTS[name]);
 
-    /* A member counts as documented when its name appears in a table row of the
-     * reference: `Name` for a property, `Name(` for a method. Prose mentioning it
-     * is not enough -- what this is checking is that the row is there. */
-    const problems = [];
-    const seen     = new Set();
-
-    for (const m of members) {
-        if (seen.has(m.kind + " " + m.name)) continue;
-        seen.add(m.kind + " " + m.name);
-
-        const row = m.kind === "method"
-            ? new Regex("^\\|\\s*`" + Regex.Escape(m.name) + "\\(", { Multiline: true })
-            : new Regex("^\\|\\s*`" + Regex.Escape(m.name) + "`", { Multiline: true });
-
-        if (!row.IsMatch(text))
-            problems.push(`${m.kind} ${m.name} (${m.table}) has no row in controls.md`);
-    }
-
-    /* An event has to be documented **with its arguments**: a signature with the
-     * wrong count is worse than none, because it reads as authoritative. The
-     * count the runtime passes is the count the handler receives. */
-    for (const name in events) {
-        const sig = new Regex("\\*\\*event\\*\\* `" + Regex.Escape(name) + "\\(([^)]*)\\)`");
-        const m   = sig.Match(text);
-
-        if (!m) {
-            problems.push(`event ${name} has no signature in controls.md`);
-            continue;
-        }
-        const args = m.Group(1).trim();
-        const n    = args === "" ? 0 : args.split(",").length;
-
-        if (n !== events[name])
-            problems.push(`event ${name} is documented with ${n} argument(s), ` +
-                          `the runtime passes ${events[name]}`);
-    }
-
-    const lib     = checkLibraries(root, problems);
-    const libEvs  = checkLibraryEventSources(root, problems);
     const statics = checkWidgetStatics(root, problems);
     const verbs   = checkGlobalSignatures(root, problems);
     const docs    = checkDocs(root, problems);
-    /* And the rows of the documentation say what the code says: the same
-     * `docRows` that `tools/docs` writes with, from `tools/docs/Rows.js`. */
-    for (const page of Dictionary.Keys(docRows(root)))
-        problems.push(`${page}: a row does not say what the code says -- run tools/docs.sh`);
-    const globals = checkGlobals(root, problems);
+    const libs    = checkLibraryScopes(root, problems);
+    const shadows = checkShadows(root, members, problems);
     const api     = checkApiJson(root, problems, members, events);
     const named   = api.ok ? checkGlobalsListed(problems, api.catalog) : 0;
-    const ref     = checkReference(root, members, events, problems);
-    const glob    = checkGlobalPages(root, problems);
-    const libs    = checkLibraryPages(root, problems);
     const links   = checkLinks(root, problems);
-    const scopes  = checkLibraryScopes(root, problems);
-    const shadows = checkShadows(root, members, problems);
 
     for (const p of problems) print(`  ${p}`);
     print(problems.length
-        ? `api: ${problems.length} undocumented or wrong, of ${seen.size} widget ` +
-          `members, ${statics} class statics, ${Dictionary.Count(events)} events, ` +
-          `${globals} on globals and ${lib} in lib/`
-        : `api: ${seen.size} widget members and ${Dictionary.Count(events)} events, ` +
-          `plus ${statics} class statics, ${globals} on the globals and ${lib} ` +
-          `published by lib/ (${libEvs} library events read from the code), ` +
-          `${verbs} global verbs with their parameters named, ` +
-          `${docs} members and events saying what they are for, in C and in JavaScript, ` +
-          `${shadows} member${shadows === 1 ? "" : "s"} checked ` +
-          `for shadowing a base one, ` +
-          `${api.checked} of them held to api.json, ` +
-          `all documented -- and ${ref.checked} again in the ${ref.pages} ` +
-          `long page${ref.pages === 1 ? "" : "s"} of docs/reference/widgets, ` +
-          `${ref.missing} more with members of their own still to write, ` +
-          `${glob.checked} in the ${glob.pages} of docs/reference/globals, ` +
-          `and ${libs.checked} in the ${libs.pages} of docs/reference/libraries ` +
-          `(${libs.missing} still to write) -- and ${links.links} links over the ` +
-          `${links.pages} pages of docs/ all land somewhere, with ` +
-          `${scopes.names} top-level names in lib/ and no two libraries ` +
-          `claiming one, and all ${named} globals the runtime installs ` +
-          `accounted for`);
+        ? `api: ${problems.length} wrong, of ${statics} class statics, ` +
+          `${Dictionary.Count(events)} events, ${verbs} global verbs and ` +
+          `${libs.names} names in lib/`
+        : `api: ${statics} class statics, ${verbs} global verbs with their ` +
+          `parameters named, ${docs} members and events saying what they are for, ` +
+          `in C and in JavaScript, ${shadows} member${shadows === 1 ? "" : "s"} ` +
+          `checked for shadowing a base one, ${api.checked} members held to ` +
+          `api.json, ${libs.names} top-level names in lib/ with no two ` +
+          `libraries claiming one, and all ${named} globals the runtime ` +
+          `installs accounted for -- and ${links.links} link${links.links === 1 ? "" : "s"} ` +
+          `over the ${links.pages} pages of docs/ that stayed land somewhere`);
     Application.Quit(problems.length ? 1 : 0);
 }

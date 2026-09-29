@@ -137,8 +137,8 @@ put *itself* in the user's menu from the IDE — *Project → Install as user
 application…* — which writes one `.desktop` file under
 `~/.local/share/applications` pointing at the runtime and the project. No root,
 no prefix, and nothing here (`Desktop.Entries` is the runtime's own door to
-those files, in [`llm/library.md`](llm/library.md#desktopentries); the IDE's
-half is in [`ide.md`](ide.md#installing-it-in-the-menu)).
+those files, in [`llm/library.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/library.md#desktopentries); the IDE's
+half is in [`ide.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#installing-it-in-the-menu)).
 
 `./tests/install.sh` does all of the above into a staging prefix under `/tmp`
 and starts the *installed* IDE through the installed launcher on a display of
@@ -169,8 +169,10 @@ tar xzf bintana-0.2.1-linux-x86_64.tar.gz
 ```
 
 **The IDE is in there because the IDE is data.** The runtime, the `ide/`
-project directory, the shipped libraries, the examples and the reference under
-`share/doc/` all resolve from the binary by *relative* hops, which is why
+project directory, the shipped libraries, the examples and the documentation
+under `share/doc/` all resolve from the binary by *relative* hops — and the
+reference pages `F1` reads are a package of their own,
+[`bintana-docs`](https://github.com/getbintana/bintana-docs), which is why
 moving the tree after the fact changes nothing. On Windows the same is true and
 the launcher is `bin\bintana-ide.cmd` — the IDE, from wherever the zip was
 unzipped to. What Windows needs that Linux does not is GTK's runtime data
@@ -239,7 +241,7 @@ flatpak install --user bintana io.github.getbintana.BaseApp//0.2
 The project must declare an `id`, have an `icons/` drawing and carry a
 `<id>.metainfo.xml` -- *Project → Application info…* in the IDE writes one. What
 each file has to say, and what the packaging step refuses, is
-[`lib/package`](llm/package.md); the Flatpak manifest is JSON and the output
+[`lib/package`](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/package.md); the Flatpak manifest is JSON and the output
 directory is a build context, so it can be copied to a build machine and built
 there.
 
@@ -328,7 +330,7 @@ sudo apt install xvfb xdotool python3 openssl
 ```sh
 ./tests/run.sh            # every project, on a virtual display
 ./tests/run.sh widgets    # one project
-./tests/api.sh            # is docs/llm/ still the whole public surface?
+./tests/api.sh            # does the runtime still say what it publishes?
 ./tests/install.sh        # what `make install` produces
 ./tests/asan.sh           # the suite under AddressSanitizer
 ```

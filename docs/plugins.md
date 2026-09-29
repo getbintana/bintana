@@ -1,7 +1,7 @@
 # Native plugins
 
 **A library may carry native code.**  `uses: ["taglib"]` resolves to a directory
-over the six places in [formats.md](formats.md#libraries-uses); if that
+over the six places in [formats.md](https://github.com/getbintana/bintana-docs/blob/main/docs/formats.md#libraries-uses); if that
 directory also holds `taglib.so` -- the suffix is GModule's, so `.dll` on
 Windows -- the runtime loads it before the library's `.js` and lets it install
 globals with the table in `runtime/include/bta_plugin.h`.  The JavaScript half

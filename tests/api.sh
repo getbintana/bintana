@@ -1,33 +1,30 @@
 #!/usr/bin/env bash
-# Does docs/llm/ still document the whole runtime surface?
+# Does the runtime still say what it publishes?
 #
 #   tests/api.sh
 #
-# The tool is `tests/api`, a Bintana console project -- no display and no window.
-# It reads `runtime/src/*.c`, `lib/*`, `api.json` and the four references, and
-# fails when something exists that is not written down:
+# The tool is `tests/api`, a Bintana console project -- no display and no
+# window. It reads `runtime/src/*.c`, `runtime/js/*.js`, `lib/*` and
+# `api.json`, and fails when something exists that is not written down:
 #
-#   widgets   the accessor tables and the `bta_emit` calls, against controls.md --
-#             a property, method or event with no row, or an event documented
-#             with the wrong number of arguments
-#   api.json  the manifest built by `tools/apijson/Catalog.js` -- the contract
-#             the documentation repositories read -- against the same tables,
-#             the same events and the same types, and against the file itself,
-#             so one that is stale or was edited fails here
-#   globals   the same tables and the `JS_SetPropertyStr` runs that build
-#             `File`, `Dialog`, `Application` and the rest, against library.md
-#   lib/      what a shipped library publishes, against llm/<library>.md
-#   docs      every native member and event has a description beside its C
-#             entry, and every member row of docs/llm and docs/reference says
-#             what that description says -- tools/docs.sh writes them
-#   links     every relative link and picture in `docs/` and the Markdown at
-#             the root, against the files they name -- the other way round from
-#             the three above, and the failure a reorganisation leaves behind:
-#             a page deleted while two others go on pointing at it, still
-#             saying what it said
+#   signatures  every method and event of every widget, and every native verb
+#               of every global, declares its parameters beside itself
+#   docs        every public member and event has a description beside its C
+#               entry or in its JSDoc
+#   api.json    the manifest built by `tools/apijson/Catalog.js` -- the contract
+#               the documentation repositories read -- against the same tables,
+#               the same events and the same types, and against the file
+#               itself, so one that is stale or was edited fails here
+#   globals     every global the runtime installs with public members is in
+#               that manifest
+#   lib/        two libraries may not declare the same top-level name
+#   links       every relative link and picture in the Markdown that stayed,
+#               against the files they name -- the failure a reorganisation
+#               leaves behind
 #
-# The reference claims to be complete rather than a selection, and this is what
-# makes that claim cost something.
+# **The pages are not here any more.** They live in `bintana-docs`, which
+# checks them against this manifest; what cannot be asked from there -- the C,
+# the prelude, and a runtime that answers with no display at all -- is here.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 

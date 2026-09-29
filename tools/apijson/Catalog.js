@@ -53,7 +53,12 @@ const API_NAMED_TYPE = new Regex("^\\s*/\\*\\s*type\\s+([A-Za-z_][\\w.]*)\\s*\\*
  * names, so the docs check can hold that prose to the code; there are no
  * signatures and no descriptions, because there is no entry to hang one on.
  */
-const API_TABLE_TYPES = { menuitem_props: "MenuItem", action_props: "Action" };
+const API_TABLE_TYPES = { menuitem_props: "MenuItem", action_props: "Action",
+                          /* And the player, whose accessors are handed to each
+                           * instance rather than hung on a prototype: the
+                           * class answers with no members, and the table is
+                           * what the page documents. */
+                          audioplayer_props: "AudioPlayer" };
 const API_TABLE_BODY  = new Regex(
     "static const JSCFunctionListEntry (\\w+)\\[\\]\\s*=\\s*\\{([\\s\\S]*?)\\n\\};");
 const API_TABLE_ENTRY = new Regex(
@@ -61,8 +66,16 @@ const API_TABLE_ENTRY = new Regex(
 
 /* One member, in the shape everything downstream reads.  Sorted by name: the
  * runtime's order is the chain's, and a file that changes with the order of a
- * walk is a file that cannot be diffed. */
+ * walk is a file that cannot be diffed.
+ *
+ * **A name with an underscore in it is a handler** -- `BtnOk_Click`,
+ * `Canvas_Draw` -- and nobody's business but the class's own; the runtime's
+ * own checks skip them and the documentation never wrote one down.  They are
+ * in what `Widget.Members` answers for a class read out of its source, since
+ * that walk filters on the capital and not on the underscore, so they are
+ * dropped here rather than demanded of a page. */
 function apiMemberList(members) {
+    members = members.filter((m) => m.Name.indexOf("_") < 0);
     return members.map((m) => ({
         Name:      m.Name,
         Kind:      m.Kind,

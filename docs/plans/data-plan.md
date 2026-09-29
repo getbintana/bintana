@@ -12,12 +12,12 @@ not mistaken for loose ends.
 account rather than as a first step of it: a record **holds a list of records**, so
 master–detail is a shape a program can declare; and `Database.Sqlite` + `Table`
 read and write a table, with `snake` finally in use and `key: true` as the
-identity ([reference](../runtime-api.md#database-and-table)). What is left, and where
+identity ([reference](https://github.com/getbintana/bintana-docs/blob/main/docs/runtime-api.md#database-and-table)). What is left, and where
 it stands, is [at the end](#where-it-stands).
 
 What exists today is the bottom half: [`Record` and
-`Field`](../runtime-api.md#record-and-field), and three consumers of them —
-[`project.json`](../ide.md#projectjson-as-a-record) and **two forms over data
+`Field`](https://github.com/getbintana/bintana-docs/blob/main/docs/runtime-api.md#record-and-field), and three consumers of them —
+[`project.json`](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#projectjson-as-a-record) and **two forms over data
 written by hand**, on purpose, to find out what that costs.
 [`examples/quote`](../../examples/quote) is one over a JSON file and
 [`examples/clients`](../../examples/clients) is one over a sqlite table. What they
@@ -95,7 +95,7 @@ validating and the `Problems` reporting all reach through it with the path in
 front of each complaint (`Lines[2].Price: 0 at least`). `examples/quote` is one
 object now, and the assertion in `tests/widgets` that used to hold the wall in
 place holds the opposite. The reference is
-[runtime-api.md](../runtime-api.md#a-record-inside-a-record).
+[runtime-api.md](https://github.com/getbintana/bintana-docs/blob/main/docs/runtime-api.md#a-record-inside-a-record).
 
 Three things fell out of building it that the plan had not predicted, and the
 first is the one that matters:
@@ -171,7 +171,7 @@ first — 27 controls, 117 numbers, 54 of them an X or a Y — and it broke on a
 resize, because on a drawing surface `HAlign`/`VAlign` are what a control does
 with the slack and the default is *stay where you were drawn*. As boxes it is 17
 numbers and no coordinates. That belongs to
-[widgets.md](../widgets.md#which-of-the-two-models-a-form-should-use), which had
+[widgets.md](https://github.com/getbintana/bintana-docs/blob/main/docs/widgets.md#which-of-the-two-models-a-form-should-use), which had
 explained both models and not said when to use which.
 
 **The first thing that was not CRUD needed nothing new.** Executing an order
@@ -220,7 +220,7 @@ because of the domain**.
 
 **The date half is fixed**: `DatePicker.Value = ""` is no date, spelled the way
 `Field.Date` already spelled it, with a `Placeholder` for what the button reads
-while it is empty (see [widgets.md](../widgets.md#datepicker)). The `ComboBox` half
+while it is empty (see [widgets.md](https://github.com/getbintana/bintana-docs/blob/main/docs/widgets.md#datepicker)). The `ComboBox` half
 stands. A binding that writes a value into a control still has to have an answer
 for what it does with a field that is empty and a control that cannot be — there
 is just one control fewer in that set.

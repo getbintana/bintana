@@ -12,7 +12,7 @@ the one `docs/issues/` runs on and `AGENTS.md` states: `docs/http-plan.md` went
 that way when its staging landed, with its one live leftover (`Done` sequencing)
 already living in `async-plan.md`. A plan kept past its building is a second
 description of a feature, written by somebody who did not have it yet. What the
-runtime can do is in [`llm/`](../llm/README.md); git holds what the asking
+runtime can do is in [`llm/`](https://github.com/getbintana/bintana-llm/blob/main/docs/llm/README.md); git holds what the asking
 looked like.
 
 | Plan | What is in it |

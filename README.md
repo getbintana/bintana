@@ -31,22 +31,32 @@ package names, the optional dependencies, installing and uninstalling are in
 
 ## Writing an application
 
-- [docs/first-app.md](docs/first-app.md): your first app in five minutes, in the IDE.
-- [docs/llm/](docs/llm/README.md): the whole public surface said briefly — for a language model, or for writing every file by hand.
-- [docs/reference/](docs/reference/README.md): one page per control and per global, each member explained — what the IDE shows as help (F1).
+The documentation an application author reads is two repositories of its own,
+and neither needs this tree:
 
-## Documentation
+- **[bintana-docs](https://github.com/getbintana/bintana-docs)** — one page per
+  control and per global, each member explained (what the IDE shows as help,
+  F1), the compact `llm/` contract, the `.form` format and the designer.
+- **[bintana-llm](https://github.com/getbintana/bintana-llm)** — `llm.txt` and
+  the step-by-step guide for writing every file by hand, without the IDE.
 
-[docs/](docs/README.md) is the index: the runtime ([architecture](docs/architecture.md)),
-the formats ([formats](docs/formats.md)), per-widget behaviour ([widgets](docs/widgets.md)),
-the IDE ([ide](docs/ide.md)), text as a resource ([resources](docs/resources.md)),
-extending either side ([extending](docs/extending.md)), native plugins
-([plugins](docs/plugins.md)) and testing ([testing](docs/testing.md)).
+Both are checked against [`api.json`](api.json), the public surface as data,
+which `./tools/apijson.sh` builds out of the descriptions written beside each
+member here.
+
+## Documentation for this tree
+
+[docs/](docs/README.md) is the index of what is about *working on the runtime*:
+the runtime ([architecture](docs/architecture.md)), extending it
+([extending](docs/extending.md)), native plugins ([plugins](docs/plugins.md)),
+installing ([installing](docs/installing.md)), the IDE's own machinery
+([ide-internals](docs/ide-internals.md)) and testing ([testing](docs/testing.md)).
 
 What is missing, already decided, or still planned lives with the gaps:
 [docs/issues/](docs/issues/README.md), [docs/llm/issues.md](docs/llm/issues.md)
 and [docs/plans/](docs/plans/README.md), which is where every `*-plan.md` now
-lives.
+lives. [`AGENTS.md`](AGENTS.md) is the working notes: commands, conventions and
+the trap list.
 
 ## Licence
 

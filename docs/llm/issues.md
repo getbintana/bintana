@@ -26,8 +26,8 @@ Three checks, in this order. Most candidate issues die here.
 small and words are reused. A row is a `Panel` with `Arrangement: "Horizontal"`.
 A radio is a `CheckButton` with a `Group`. A toolbar is a `Style`. A menu button
 is `PopupMenu`. A modal question is a form. Check
-[controls.md](controls.md#what-is-deliberately-not-here) and
-[language.md](language.md#instead-of-write).
+[controls.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/controls.md#what-is-deliberately-not-here) and
+[language.md](https://github.com/getbintana/bintana-llm/blob/main/docs/llm/language.md#instead-of-write).
 
 **2. Is it already decided?** See [below](#already-decided). Those arguments are
 written down so they are not had twice.
@@ -77,7 +77,7 @@ noticeably worse; it works and this would only have been tidier.
 
 **This one was written, filed, and granted** — a record holds a list of records
 now, and the declaration under *the code I wish I could have written* is the API
-that exists ([`Field.List(Line)`](library.md#a-record-inside-a-record)). It is
+that exists ([`Field.List(Line)`](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/library.md#a-record-inside-a-record)). It is
 quoted here because it is what a good issue looks like, and because what it asked
 for is what arrived: **do not file this one again.**
 
@@ -85,8 +85,8 @@ for is what arrived: **do not file this one again.**
 do is documented where every other capability is, and a gap kept past its answer
 is a second description of the same feature written by somebody who did not have
 it yet. This one survives as an example inside this page and not as an issue.
-Before filing anything, check [controls.md](controls.md),
-[library.md](library.md) and [report.md](report.md) for what is *there*: several
+Before filing anything, check [controls.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/controls.md),
+[library.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/library.md) and [report.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/report.md) for what is *there*: several
 of the gaps this page used to list are ordinary API now, and an issue against one
 of them is an afternoon of somebody's time answering a question that has an
 answer.
@@ -149,8 +149,8 @@ implementation, and the implementation is not what it got right.
 ## Already decided
 
 These have been argued and answered. Do not file them again; the reasoning is in
-[widgets.md](../widgets.md#three-things-that-were-considered-and-are-not-coming)
-and in [controls.md](controls.md#what-is-deliberately-not-here).
+[widgets.md](https://github.com/getbintana/bintana-docs/blob/main/docs/widgets.md#three-things-that-were-considered-and-are-not-coming)
+and in [controls.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/controls.md#what-is-deliberately-not-here).
 
 | Not coming | Because |
 |---|---|
@@ -174,12 +174,12 @@ needed and what it did instead.
 
 | Gap | Where it is written down |
 |---|---|
-| A **form** bound to a table — a control that names a field and fills itself | [`docs/plans/data-plan.md`](../plans/data-plan.md). The records-over-a-table half exists: [`Database.Sqlite` and `Table`](library.md#database-and-table) |
-| The debugger stops in the program's own runtime and **not in a `Task`** — a background computation is unbreakpointable and unsteppable, and `Error` with its stack is the whole of what its failure says | [library.md](library.md#task). The other ten of the eleven are built: [`docs/plans/debug-plan.md`](../plans/debug-plan.md). A loop written entirely on one line also stops only once |
-| Git in the IDE stops at a fast-forward — a pull that cannot merge, a rebase and a conflict are the `Terminal` tab, and staging is per file rather than per hunk | [`docs/plans/git-plan.md`](../plans/git-plan.md) (all seven stages built, this is what is not in it) and [ide.md](../ide.md#what-git-does-not-do) |
+| A **form** bound to a table — a control that names a field and fills itself | [`docs/plans/data-plan.md`](../plans/data-plan.md). The records-over-a-table half exists: [`Database.Sqlite` and `Table`](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/library.md#database-and-table) |
+| The debugger stops in the program's own runtime and **not in a `Task`** — a background computation is unbreakpointable and unsteppable, and `Error` with its stack is the whole of what its failure says | [library.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/library.md#task). The other ten of the eleven are built: [`docs/plans/debug-plan.md`](../plans/debug-plan.md). A loop written entirely on one line also stops only once |
+| Git in the IDE stops at a fast-forward — a pull that cannot merge, a rebase and a conflict are the `Terminal` tab, and staging is per file rather than per hunk | [`docs/plans/git-plan.md`](../plans/git-plan.md) (all seven stages built, this is what is not in it) and [ide.md](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#what-git-does-not-do) |
 | A word for *do this, then that* | [`docs/plans/async-plan.md`](../plans/async-plan.md) |
 | No editable / autocompleting combo | [ISSUE-editable-combo](../issues/ISSUE-editable-combo.md) |
-| A control laid onto a page — `Print` sends what a `Draw` paints, so a form with real widgets on it still has no path to paper except drawing it by hand | [controls.md](controls.md#drawingarea) |
+| A control laid onto a page — `Print` sends what a `Draw` paints, so a form with real widgets on it still has no path to paper except drawing it by hand | [controls.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/controls.md#drawingarea) |
 | A `Fixed` container that does not stretch a `Fill` child when it itself grows — a reusable component that wants to fill its cell has to change its `Arrangement` | [ISSUE-fixed-fill-child](../issues/ISSUE-fixed-fill-child.md) |
 | No `Locale` inside a `Task`, so a worker cannot order names — the sort has to come back to the main thread, which is what the worker was for | [ISSUE-worker-locale-order](../issues/ISSUE-worker-locale-order.md) |
 | A `Popover` dropped on the design canvas cannot be seen, clicked or dropped into — the control tree is the only road to it, and its content goes in by editing the `.form` | [ISSUE-popover-designer](../issues/ISSUE-popover-designer.md) |
