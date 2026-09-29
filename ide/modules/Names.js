@@ -113,14 +113,13 @@ Ide.Names = class Names {
      * `setTimeout(fn, 100)` and `Object.assign(a, b)`: a name this language
      * has taken, said with the word to write instead.
      *
-     * **It is asked of call targets and of nothing else, which is the whole
+     * **It is asked of call targets and of nothing else, which is half of the
      * safety of it.** A bare-identifier scan would report a property
      * (`x.setTimeout`), a key (`{ setTimeout: 1 }`), a declaration
      * (`function setTimeout()`) and every mention inside a string or a comment --
      * and a check that says so is a check somebody switches off, which is what
      * `handlers()`'s paragraph is about. A call is the shape every one of these
-     * takes when a person reaches for one, and the two guards below cannot be
-     * tricked by prose:
+     * takes when a person reaches for one:
      *
      *     NAMES_CALL  the guard refuses a `.` in front, so a method on somebody
      *             else's object is not ours to complain about -- and a dotted
@@ -131,12 +130,27 @@ Ide.Names = class Names {
      *             instead: a project is allowed to define its own `setTimeout`,
      *             and the table knows nothing about that
      *
+     * **And the other half is that the scan is run over `Ide.Lex.blank`ed
+     * text.** The two guards above read the text, and text is where prose
+     * lives: it reported `setTimeout(fn, 1)` out of a comment *and* out of a
+     * string, out of the fixture written to prove it would not -- and the
+     * assertion that said so was passing because the pass never looked at that
+     * file, which is the `p_names` note there. Blanking costs one walk, keeps
+     * every offset, and gives the two guards something they can be right about.
+     *
      * An `""` replacement is reported too, and differently: there is no word for
      * that thing here, which is worth saying out loud rather than leaving as a
      * bare `ReferenceError` at the next run.
      */
     *curated(text, file, caret) {
-        for (const m of NAMES_CALL.Matches(text)) {
+        /* Blanked once and read twice: the match list and the word in front of
+         * a name both come from the same text, and a `function` in a comment
+         * must not be the one that saves a declaration. Offsets are the
+         * original's, so `caret`, `m.Index` and `Text.LineOf` need no
+         * translation -- that is the bargain `Ide.Lex.blank` makes. */
+        const code = Ide.Lex.blank(text);
+
+        for (const m of NAMES_CALL.Matches(code)) {
             if (underCaret(m, caret)) continue;
 
             const name = m.Group(1);
@@ -147,9 +161,11 @@ Ide.Names = class Names {
              * on its guard character, and at the start of a line that character
              * is the line break -- so asking the text before the match would read
              * `function` on the line above and miss the declaration, which is the
-             * one shape that must not be reported.
+             * one shape that must not be reported. Both sides of that question
+             * come from the blanked text: a `function` in a comment must not be
+             * the one that saves a declaration.
              */
-            if (DECLARING.test(wordBefore(text, m.Index + m.Value.indexOf(name))))
+            if (DECLARING.test(wordBefore(code, m.Index + m.Value.indexOf(name))))
                 continue;
 
             const use = this.replaced[name];
@@ -346,8 +362,15 @@ function underCaret(m, caret) {
 }
 
 /* The word ending where a match begins, or `""` -- which is how a declaration is
- * told from a call without re-running a pattern over the file. */
+ * told from a call without re-running a pattern over the file.
+ *
+ * **Trimmed**, because the pattern takes the space between a word and its
+ * subject and `DECLARING` is anchored at both ends: `function setTimeout(fn)`
+ * answered `"function "`, which is not one of the five words and left the
+ * declaration reported as a call. The bug was older than the check that found
+ * it -- the assertion that should have caught it was passing against a file the
+ * pass never read. */
 function wordBefore(text, index) {
-    return (text.slice(0, index).match(WORD_BEFORE) || [""])[0];
+    return (text.slice(0, index).match(WORD_BEFORE) || [""])[0].trim();
 }
 

@@ -41,6 +41,7 @@
     "../../ide/modules/Changes.js",
     "../../ide/modules/Problems.js",
     "../../ide/modules/Names.js",
+    "../../ide/modules/Lex.js",
     "../../ide/modules/Live.js",
     "../../ide/modules/Check.js",
     "../../ide/modules/Outline.js",

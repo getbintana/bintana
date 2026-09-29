@@ -10862,6 +10862,81 @@ function* p_problems(ide) {
 }
 
 /*
+ * Which parts of a file are code.
+ *
+ * A pure function over a string, so it needs no window and no project: what it
+ * has to be is **the same length and the same line breaks**, because that is
+ * what lets a caller find a line in the result and report it in the original
+ * with no translation. Every assertion here is one of those two promises, plus
+ * the cases a first version got wrong -- a template's `${ }` is code again, and
+ * a `/` is a division as often as it is a regex.
+ */
+function* p_lex(ide) {
+    /* The promise that makes the rest possible. */
+    const src = [
+        "class Safe {",
+        "    /* setTimeout(fn, 1) */",
+        "    call(host) {",
+        "        const name = \"setTimeout(fn, 100)\";",
+        "        return host.setTimeout(0) + name.length;",
+        "    }",
+        "}",
+    ].join("\n");
+    const out = Ide.Lex.blank(src);
+
+    eq("the answer has the same length", out.length, src.length);
+    eq("...and the same number of lines", out.split("\n").length, src.split("\n").length);
+    eq("...and the same lines where they are",
+       out.split("\n").map((l) => l.length).join(","),
+       src.split("\n").map((l) => l.length).join(","));
+
+    const has = (text, needle) => text.includes(needle);
+    check("a mention in a comment is not code", !has(out, "setTimeout(fn, 1)"));
+    check("a mention in a string is not code", !has(out, "setTimeout(fn, 100)"));
+    check("a real call is still code", has(out, "host.setTimeout(0)"));
+    check("and the words around it are untouched", has(out, "const name ="),
+          out.split("\n")[3]);
+    check("and the name being read is untouched", has(out, "name.length"));
+
+    /* Every case a first version got wrong, in one file. */
+    const cases = [
+        ["a backslash escape", "const a = \"x\\\"setTimeout(fn)\";",
+         (o) => !has(o, "setTimeout")],
+        ["a template with a hole", "const a = `setTimeout ${setTimeout(1)}`;",
+         (o) => has(o, "${setTimeout(1)}") && !has(o, "setTimeout ${")],
+        ["a nested template in a hole", "const a = `${`x ${setTimeout(1)}`}`;",
+         (o) => has(o, "${setTimeout(1)}") && !has(o, "x ${")],
+        ["a regex literal", "const r = /setTimeout\\(fn\\)/g;",
+         (o) => !has(o, "setTimeout")],
+        ["a division", "const q = a / setTimeout(1);",
+         (o) => has(o, "a / setTimeout(1)")],
+        ["a regex after a return", "function f() { return /a\\/b/; }",
+         (o) => !has(o, "a\\/b")],
+        ["a regex after an open paren", "const r = (/x\\/y/);",
+         (o) => !has(o, "x\\/y")],
+        ["a character class with a slash", "const r = /[/]/;",
+         (o) => !has(o, "[/]")],
+        ["an unterminated string", "const a = \"oops\nconst b = 1;",
+         (o) => has(o, "const b = 1;")],
+        ["a block comment over lines", "/* one\n   two */\nconst c = 1;",
+         (o) => has(o, "const c = 1;") && !has(o, "two")],
+    ];
+    for (const [what, code, holds] of cases) {
+        const got = Ide.Lex.blank(code);
+        check(what, holds(got), JSON.stringify(got));
+    }
+
+    /* **A `/` it cannot place is left alone**, and the cost of that is named
+     * here rather than discovered: the scan then sees a `//` that is not there
+     * and blanks the rest of the line, so the answer is *fewer* names rather
+     * than invented ones. This is the same bargain as a wrong jump being worse
+     * than no jump, and it is why the division case above has to be asked for
+     * by the text before the sign. */
+    eq("a lone slash keeps the line readable",
+       Ide.Lex.blank("const q = a / b;"), "const q = a / b;");
+}
+
+/*
  * The names a file uses, checked while it is being written.
  *
  * The *timer* is not driven -- four hundred milliseconds of a run waiting for
@@ -11254,11 +11329,24 @@ function* p_check(ide) {
           JSON.stringify(said2));
 
     /*
-     * **And the four shapes it must not report**, which is the whole safety of
+     * **And the shapes it must not report**, which is the whole safety of
      * asking of call targets alone. A method on somebody else's object, a
-     * declaration, a key, and a mention inside a string are all things a bare
+     * declaration, a key, and a mention in prose are all things a bare
      * identifier scan would report, and a check that reports those is a check
      * somebody switches off.
+     *
+     * Three mechanisms cover the five lines, and they are worth telling apart:
+     * `NAMES_CALL`'s guard and the table's dotted keys keep another object's
+     * member out, `DECLARING` keeps a project's own declaration out -- **and it
+     * did not**, because the space between `function` and the name made the
+     * answer `"function "`, so the trim in `wordBefore` is that half of this --
+     * and `Ide.Lex.blank` is what keeps prose out, which it also did not.
+     *
+     * **And this file was not in the list the pass reads** until this phase was
+     * made to call `listFiles()` again: the single assertion below was passing
+     * for a whole release with the pass never looking at the file it names,
+     * which is the `Check` note about a test that cannot fail, while the mention
+     * in the string was reported the whole time.
      */
     const safe = [
         "class Safe {",
@@ -11273,11 +11361,28 @@ function* p_check(ide) {
     ].join("\n");
     File.Save(File.Join(TMP, "Safe.js"), safe);
 
+    ide.listFiles();
     pass.run();
-    check("a member, a declaration, a key and a mention in a string are all quiet",
-          !rows().some((r) => r.file === "Safe.js" &&
-                              r.text.includes("setTimeout is not part")),
-          JSON.stringify(rows().filter((r) => r.file === "Safe.js")));
+
+    /* **The pass really did look at it**, said first and on purpose: with the
+     * file missing from the list every assertion below would pass with nothing
+     * scanned, which is how the mention in the string survived. */
+    check("the pass reads the file it is about to be asked about",
+          ide.classes.files.some((f) => File.Name(f) === "Safe.js"),
+          JSON.stringify(ide.classes.files));
+
+    /* One question per shape, on its line: a total of zero would pass for the
+     * wrong reason the day the file stops being read again, and each of these
+     * names the line that was reported when the guards were wrong. */
+    const safeAt = (line) => rows().filter((r) => r.file === "Safe.js" &&
+                                                  r.line === line &&
+                                                  r.text.includes("setTimeout is not part"));
+    eq("a mention in a comment is quiet", safeAt(2).length, 0);
+    eq("...and a mention in a string, which is what it reported first",
+       safeAt(4).length, 0);
+    eq("...and a method on somebody else's object", safeAt(5).length, 0);
+    eq("...and a project's own declaration of the name", safeAt(8).length, 0);
+    eq("...and a key is not a call at all", safeAt(9).length, 0);
 
     /* Running it again says the same thing once, not twice. */
     const again = rows().length;
@@ -13626,6 +13731,7 @@ const PHASES = [
     { name: "apps", run: p_apps },
     { name: "errors", run: p_errors },
     { name: "problems", run: p_problems },
+    { name: "lex",     run: p_lex },
     { name: "names", run: p_names },
     { name: "outline", run: p_outline },
     { name: "check", run: p_check },

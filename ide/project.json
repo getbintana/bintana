@@ -42,6 +42,7 @@
     "modules/Changes.js",
     "modules/Problems.js",
     "modules/Names.js",
+    "modules/Lex.js",
     "modules/Live.js",
     "modules/Check.js",
     "modules/Outline.js",

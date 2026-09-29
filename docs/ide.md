@@ -1711,7 +1711,7 @@ writing it wrong on purpose and watching what the runtime did:
 | a `.js` `sources` does not list | never loaded; the symptom is a `ReferenceError` in another file |
 | a key nothing reads | ignored — `"format"` was in one of this repository's own examples |
 | source that does not compile | refused at the first line, **in every `.js` and not only in the ones with a `.form` beside them** — a module is most of a project, and the save-time check reads the tab in front of you, so a module was read by nobody at any point and its mistake arrived as a `ReferenceError` in whichever *other* file called it |
-| a call to a name this language took | `setTimeout(fn, 100)` says `setTimeout is not part of this language: use Timer.After(delay, tick) — the delay comes first`. The table is the runtime's own (`Application.Replacements()`), built out of the rows it deletes the names with, and the check is asked of **call targets and nothing else** — a member on somebody else's object and a key are quiet, because a check that reports those is a check somebody switches off |
+| a call to a name this language took | `setTimeout(fn, 100)` says `setTimeout is not part of this language: use Timer.After(delay, tick) — the delay comes first`. The table is the runtime's own (`Application.Replacements()`), built out of the rows it deletes the names with, and the check is asked of **call targets and nothing else** — a member on somebody else's object, a declaration, a key and a mention inside a string are all quiet, because a check that reports those is a check somebody switches off |
 
 The collision pair is the subtle one, and it is why the test is `in` against a
 **bare `Form`**: the same mistake resolves two different ways depending on what
