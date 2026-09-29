@@ -4,6 +4,7 @@
   "version": "1.0",
   "description": "Every member the runtime publishes, against what docs/llm/controls.md documents",
   "sources": [
+    "../../tools/apijson/Catalog.js",
     "../../tools/docs/Rows.js",
     "Check.js"
   ]

@@ -28,6 +28,12 @@
  * the Bintana rather than out of C -- accessors with a capital initial, the
  * `static Events` declaration, and the arity of each `Emit` -- and the check is
  * the one that matters here: a property that exists and has no row.
+ *
+ * **And the whole surface is also `api.json`**, the manifest the documentation
+ * repositories read. It is built by `tools/apijson/Catalog.js` -- sourced here,
+ * so the file and the check cannot drift -- and held to the same tables, events
+ * and types, because a repository that has only the file cannot ask it about
+ * anything.
  */
 "use strict";
 
@@ -502,6 +508,14 @@ function sources(root) {
                     .filter((path) => !File.Name(path).startsWith("."));
 }
 
+/* The names the C puts on the global object -- `JS_SetPropertyStr(ctx,
+ * global, "X", ...)`.  A global built entirely in JavaScript (rad.js's
+ * `Timer`, `Settings`) is not one of these and is answered by the class table,
+ * so this is the set whose members are registered outside a class and are
+ * asked about on their own. */
+const GLOBAL_INSTALL = new Regex(
+    "JS_SetPropertyStr\\(\\s*ctx,\\s*global,\\s*\"([A-Za-z_]\\w*)\"");
+
 /*
  * ------------------------------------------------- every global, named once
  *
@@ -513,104 +527,124 @@ function sources(root) {
  * `Multipart`, `Namespace`, `Painter` and `Record` are installed and were not
  * named anywhere in this file.
  *
- * So the installed set is read from where it is decided, the same way
- * everything else here is read from the source rather than from a list: the C
- * that puts a name on the global object, the prelude that does the same through
- * `GLOBAL`, and `close_hatches`'s own array for the ones taken away again
- * before any project runs.
+ * **The runtime answers it now.** `Application.Globals()` is what is installed
+ * -- read off the global object rather than parsed out of the C and the
+ * prelude, so a name added in either place is in it by construction -- and
+ * `Widget.Members` says whether anything public hangs off it. What is left for
+ * the manifest is the half that matters: every one of them must be in
+ * `api.json`, because that is the only description the documentation
+ * repositories can see. A name with **no** members is not part of the surface:
+ * the language's builtins, the prelude's helpers and the scalars are names an
+ * application cannot call, and deciding that by asking is what keeps this from
+ * being a list the next intrinsic is missing from.
  */
-const GLOBAL_INSTALL = new Regex(
-    "JS_SetPropertyStr\\(\\s*ctx,\\s*global,\\s*\"([A-Za-z_]\\w*)\"");
-const GLOBAL_PRELUDE = new Regex("GLOBAL\\.([A-Za-z_]\\w*)\\s*=");
-/*
- * The rows `close_hatches` deletes, read out of the table that also says what to
- * write instead -- so the two cannot disagree, which is the whole reason the
- * table is one and not a list plus a getter with the names typed twice.
- *
- * **The body is lazy, and it has to be.** `[^}]*` stopped at the first `}` and
- * every row after the first one was silently lost, which is how a completeness
- * check stops checking without failing -- the same shape that ate twenty
- * signature comments in `tools/extract_signatures.cmake`. And the name is read
- * off the *row's* opening brace rather than by quoting everything in the body,
- * so a sentence that quotes an identifier (`Namespace("Name")`) is not taken for
- * a name that went away.
- */
-const GLOBAL_GONE    = new Regex(
-    "static const BtaReplacement bta_replacements\\[\\]\\s*=\\s*\\{([\\s\\S]*?)\\n\\};");
-const GLOBAL_GONE_ROW = new Regex("\\{\\s*\"([A-Za-z_][\\w.]*)\"\\s*,");
-const QUOTED         = new Regex("\"([A-Za-z_]\\w*)\"");
+function checkGlobalsListed(problems, catalog) {
+    const listed  = new Set(catalog.Globals.map((g) => g.Name));
+    const widgets = new Set(Widget.Types());
+    const globals = new Set(Application.Globals());
+    let   counted = 0;
 
-/*
- * Named here because they are documented **inside another global's page**,
- * which is where they are used from -- not because they are exempt from being
- * documented at all. The rule the rest of this file follows is that a name is
- * accounted for somewhere; this is the somewhere for these.
- */
-const GLOBALS_ELSEWHERE = {
-    BTA_VERSION: "reference/globals/Application.md, beside Application.Version",
-    Connection:  "reference/globals/Database.md -- what Sqlite() answers with",
-    Field:       "reference/globals/Record.md -- a record's field types",
-    Multipart:   "reference/globals/Http.md -- what a built upload is",
-    Namespace:   "llm/language.md -- a declaration rather than an object",
-    Painter:     "llm/controls.md and reference/widgets -- it belongs to drawing",
-    print:       "llm/language.md -- a bare function, with Logger beside it",
-    Table:       "reference/globals/Database.md -- a Connection's tables",
-};
-
-function checkGlobalsListed(root, problems) {
-    const installed = new Set();
-
-    for (const c of sources(root)) {
-        const src = File.Load(c);
-
-        for (const m of GLOBAL_INSTALL.Matches(src)) installed.add(m.Group(1));
-    }
-    for (const js of Directory.Files(File.Join(root, "runtime/js"), "*.js")) {
-        const src = File.Load(js);
-
-        for (const m of GLOBAL_PRELUDE.Matches(src)) installed.add(m.Group(1));
-    }
-
-    const hatches = GLOBAL_GONE.Match(File.Load(
-        File.Join(root, "runtime/src/bta_runtime.c")));
-
-    if (!hatches) {
-        problems.push("close_hatches' bta_replacements[] could not be read, so " +
-                      "what is installed cannot be told from what is taken away");
-        return 0;
-    }
-    for (const g of GLOBAL_GONE_ROW.Matches(hatches.Group(1))) installed.delete(g.Group(1));
-
-    /*
-     * Accounted for: a row in one of this file's own lists, a page of its own
-     * under `docs/reference/globals`, or a named home in another global's page.
-     *
-     * **A page counts even when nothing holds it to a table**, which is the
-     * bargain `GLOBAL_PAGES` already describes for `Message`, `Exec`,
-     * `Settings`, `Timer`, `Stopwatch`, `Dictionary`, `Regex`, `Clipboard` and
-     * `Record`: they are built in ways this file does not parse, so their pages
-     * are written by hand and held to nothing but existing. That is a weaker
-     * claim than the rest and it is still a claim -- what this check is for is
-     * the name with *no* claim at all.
-     */
-    const pages = Directory.Files(File.Join(root, "docs/reference/globals"), "*.md")
-                           .map((p) => File.BaseName(p));
-    const listed = new Set([
-        ...Dictionary.Values(GLOBAL_VARS).map((v) => v.split(".")[0]),
-        ...Dictionary.Values(GLOBAL_TABLES),
-        ...Dictionary.Keys(GLOBAL_PAGES),
-        ...Dictionary.Keys(GLOBALS_ELSEWHERE),
-        ...pages,
-    ]);
-
-    for (const name of installed) {
+    for (const name of Application.Globals()) {
+        if (widgets.has(name))
+            continue;
+        let members = [];
+        try { members = Widget.Members(name); } catch (e) { continue; }
+        if (!members.length)
+            continue;
+        counted++;
         if (!listed.has(name))
-            problems.push(`global ${name} is installed and named in no list ` +
-                          `here, so nothing holds its documentation to anything`);
+            problems.push(`global ${name} has public members and is not in ` +
+                          `api.json -- run tools/apijson.sh`);
     }
-    return installed.size;
+    for (const g of catalog.Globals)
+        if (!globals.has(g.Name) && g.Name.indexOf(".") < 0)
+            problems.push(`api.json names the global ${g.Name}, which the ` +
+                          `runtime does not install`);
+    return counted;
 }
 
+/*
+ * **`api.json` against the runtime that answers and the C that declares.** The
+ * file is the contract every documentation repository reads, so the two
+ * questions that cannot be asked from there are asked here: that it is what
+ * `Catalog.js` would write -- the same builder `tools/apijson.sh` uses, sourced
+ * by this project too -- and that the answer agrees with the C. A repository
+ * that only has the file can check a page against it; it cannot check the file
+ * against the code, which is why the second half is not going anywhere.
+ */
+function checkApiJson(root, problems, members, events) {
+    const path = File.Join(root, "api.json");
+    const none = { catalog: { Widgets: [], Globals: [], Types: [], Libraries: [] },
+                   checked: 0, ok: false };
+
+    if (!File.Exists(path)) {
+        problems.push("api.json is missing -- run tools/apijson.sh");
+        return none;
+    }
+    let onDisk = null;
+    try { onDisk = File.LoadJson(path); }
+    catch (e) {
+        problems.push(`api.json: ${e.message}`);
+        return none;
+    }
+    /* The file's own `Commit` is kept, so a checkout generated at a tag checks
+     * green: the documentation repositories pin a ref and not a hash. */
+    const catalog = apiCatalog(root, onDisk.Commit || "");
+
+    if (JSON.stringify(onDisk) !== JSON.stringify(catalog))
+        problems.push("api.json is not what the runtime says -- run tools/apijson.sh");
+
+    /* **Every native member a registration table declares is in its class's
+     * own list**, which is the one thing a page is written around and the one
+     * thing the file could get quietly wrong. */
+    const own = {};
+    for (const w of catalog.Widgets) {
+        own[w.Name] = {};
+        for (const m of w.Members)
+            own[w.Name][m.Name] = m.Kind;
+    }
+    const KIND = { "method": "Method", "property": "Property",
+                   "read-only property": "ReadOnly" };
+    const owner = tableClasses(root);
+    let   checked = 0;
+
+    for (const m of members) {
+        const cls = owner[m.table];
+        if (!cls || !own[cls])
+            continue;
+        checked++;
+        if (own[cls][m.name] !== KIND[m.kind])
+            problems.push(`api.json: ${cls}.${m.name} is a ${m.kind} in the C ` +
+                          `and ${own[cls][m.name] || "nothing"} there`);
+    }
+
+    /* Every event the runtime raises is somewhere in it, and the names the C
+     * gives a type or a nested global are in it too. */
+    const raised = new Set();
+    for (const w of catalog.Widgets)
+        for (const e of w.Events) raised.add(e.Name);
+    for (const l of catalog.Libraries)
+        for (const c of l.Classes)
+            for (const e of c.Events) raised.add(e.Name);
+    for (const name in events)
+        if (!raised.has(name))
+            problems.push(`api.json: event ${name} is raised and nowhere in it`);
+
+    const named = new Set();
+    for (const c of sources(root))
+        for (const m of NAMED_TYPE.Matches(File.Load(c))) named.add(m.Group(1));
+    const types = new Set(catalog.Types.map((t) => t.Name));
+    for (const n of named)
+        if (!types.has(n))
+            problems.push(`api.json: the type ${n} is declared and not in it`);
+
+    const namedGlobals = new Set(catalog.Globals.map((g) => g.Name));
+    for (const v of Dictionary.Values(GLOBAL_VARS))
+        if (v.indexOf(".") >= 0 && !namedGlobals.has(v))
+            problems.push(`api.json: the nested global ${v} is not in it`);
+
+    return { catalog: catalog, checked: checked, ok: true };
+}
 
 /*
  * ------------------------------------------------------------ the reference
@@ -1428,7 +1462,8 @@ function Main() {
     for (const page of Dictionary.Keys(docRows(root)))
         problems.push(`${page}: a row does not say what the code says -- run tools/docs.sh`);
     const globals = checkGlobals(root, problems);
-    const named   = checkGlobalsListed(root, problems);
+    const api     = checkApiJson(root, problems, members, events);
+    const named   = api.ok ? checkGlobalsListed(problems, api.catalog) : 0;
     const ref     = checkReference(root, members, events, problems);
     const glob    = checkGlobalPages(root, problems);
     const libs    = checkLibraryPages(root, problems);
@@ -1448,6 +1483,7 @@ function Main() {
           `${docs} members and events saying what they are for, in C and in JavaScript, ` +
           `${shadows} member${shadows === 1 ? "" : "s"} checked ` +
           `for shadowing a base one, ` +
+          `${api.checked} of them held to api.json, ` +
           `all documented -- and ${ref.checked} again in the ${ref.pages} ` +
           `long page${ref.pages === 1 ? "" : "s"} of docs/reference/widgets, ` +
           `${ref.missing} more with members of their own still to write, ` +

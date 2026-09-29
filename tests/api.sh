@@ -4,12 +4,16 @@
 #   tests/api.sh
 #
 # The tool is `tests/api`, a Bintana console project -- no display and no window.
-# It reads `runtime/src/*.c`, `lib/*` and the four references, and fails when
-# something exists that is not written down:
+# It reads `runtime/src/*.c`, `lib/*`, `api.json` and the four references, and
+# fails when something exists that is not written down:
 #
 #   widgets   the accessor tables and the `bta_emit` calls, against controls.md --
 #             a property, method or event with no row, or an event documented
 #             with the wrong number of arguments
+#   api.json  the manifest built by `tools/apijson/Catalog.js` -- the contract
+#             the documentation repositories read -- against the same tables,
+#             the same events and the same types, and against the file itself,
+#             so one that is stale or was edited fails here
 #   globals   the same tables and the `JS_SetPropertyStr` runs that build
 #             `File`, `Dialog`, `Application` and the rest, against library.md
 #   lib/      what a shipped library publishes, against llm/<library>.md

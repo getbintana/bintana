@@ -14936,6 +14936,27 @@ function Main() {
         check("a cycle in the chain terminates rather than hanging",
               has("Ring1").length === 0, JSON.stringify(has("Ring1").length));
 
+        /* **`Own` is what the class itself declares**, which is what its own
+         * page documents: what it inherits belongs to the page of the class
+         * that declares it. The answer used to be a table in the C, read by
+         * whoever asked. */
+        const ownOf = (t, o) => Widget.Members(t, o).map((m) => m.Name);
+        check("Own leaves out what the class inherits",
+              ownOf("Button", { Own: true }).includes("Click") &&
+              !ownOf("Button", { Own: true }).includes("Bounds"),
+              JSON.stringify(ownOf("Button", { Own: true })));
+        check("...so there are fewer of them than of everything it has",
+              Widget.Members("Button", { Own: true }).length <
+              Widget.Members("Button").length,
+              JSON.stringify([Widget.Members("Button", { Own: true }).length,
+                              Widget.Members("Button").length]));
+        check("...and the statics are its own by construction",
+              ownOf("Widget", { Own: true }).includes("New") &&
+              ownOf("Widget", { Own: true }).includes("Types"),
+              JSON.stringify(ownOf("Widget", { Own: true }).slice(-6)));
+        eq("Own and Sources answer together",
+           ownOf("Leaf", { Sources: [lib], Own: true }).join(","), "Leaf");
+
         /* **A library class may shadow a runtime global, and the project's own
          * declaration is the one that answers** -- `Dialog` is a real global
          * full of static functions, so asking the class table first described a

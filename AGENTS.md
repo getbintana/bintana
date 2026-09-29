@@ -55,9 +55,9 @@ reference:
 
 | A change to | goes in |
 |---|---|
-| a widget's properties, methods or events | **its description in the comment above its C entry** (the lines after the signature, see *what a member is for* below) and `./tools/docs.sh`, which writes it into the member rows; a new member also needs its row in [`docs/llm/controls.md`](docs/llm/controls.md) — and `tests/api.sh` **fails** until both are there — plus [`docs/widgets.md`](docs/widgets.md) for the behaviour a table cannot state (`README.md` is presentation only since it was cut to ~60 lines, and takes no API) |
-| a component in `lib/` (the shipped libraries) | [`docs/llm/<library>.md`](docs/llm/charts.md) — and `tests/api.sh` **fails** until it does, the same rule the runtime's own surface is held to |
-| a global (`File`, `Exec`, `Locale`, `Record` …) | [`docs/runtime-api.md`](docs/runtime-api.md) and [`docs/llm/library.md`](docs/llm/library.md) — **and a line in `GLOBAL_TABLES`/`GLOBAL_VARS` in `tests/api/Check.js`**, or the check cannot see it — **and `docs/reference/globals/<Name>.md` with a line in `GLOBAL_PAGES`**, the long page a global is held to member by member. The page is the one part nothing asks about by name: a global with no page at all is invisible to the check, which is how a whole family was added without one |
+| a widget's properties, methods or events | **its description in the comment above its C entry** (the lines after the signature, see *what a member is for* below) and `./tools/docs.sh`, which writes it into the member rows; a new member also needs its row in [`docs/llm/controls.md`](docs/llm/controls.md) — and `tests/api.sh` **fails** until both are there — plus [`docs/widgets.md`](docs/widgets.md) for the behaviour a table cannot state (`README.md` is presentation only since it was cut to ~60 lines, and takes no API). `api.json` carries the same descriptions, so `./tools/apijson.sh` runs in the same change |
+| a component in `lib/` (the shipped libraries) | [`docs/llm/<library>.md`](docs/llm/charts.md) — and `tests/api.sh` **fails** until it does, the same rule the runtime's own surface is held to — and `api.json` via `./tools/apijson.sh`, which reads the library out of its sources |
+| a global (`File`, `Exec`, `Locale`, `Record` …) | [`docs/runtime-api.md`](docs/runtime-api.md) and [`docs/llm/library.md`](docs/llm/library.md) — **and `api.json`, which `tools/apijson.sh` rewrites and `tests/api.sh` fails on when it is stale**, since that file is the whole contract the documentation repositories read — **and a line in `GLOBAL_TABLES`/`GLOBAL_VARS` in `tests/api/Check.js`**, or the member check cannot see it — **and `docs/reference/globals/<Name>.md` with a line in `GLOBAL_PAGES`**, the long page a global is held to member by member. The page is the one part nothing asks about by name: a global with no page at all is invisible to the check, which is how a whole family was added without one |
 | the `.form`, `project.json` or the serialiser | [`docs/formats.md`](docs/formats.md) and [`docs/llm/forms.md`](docs/llm/forms.md) |
 | what `cmake --install` lays down, or the `uninstall` target | [`docs/installing.md`](docs/installing.md) — and `tests/install.sh` must still pass, since it stages a real install, compiles a plugin against it and runs it |
 | the language: an intrinsic installed or removed | [`docs/llm/language.md`](docs/llm/language.md) and `runtime-api.md`'s *language underneath* |
@@ -106,6 +106,7 @@ TIMEOUT=300 ./tests/run.sh                        # a slower machine than this o
 tests/try.sh <project> [args...]                  # run any project, on a virtual display
 ./tests/api.sh                                    # is docs/llm/ still the whole public surface, and do the links land?
 ./tools/docs.sh                                   # write the member rows of docs/ from the descriptions in the C
+./tools/apijson.sh                                # rewrite api.json, the surface as data -- tests/api.sh fails while it is stale
 ./tests/icons.sh                                  # which declared icons this desktop has, and which draw
 ./tests/styles.sh                                 # which style classes its theme defines
 ./tests/install.sh                                # what `make install` produces, run out of a staging prefix
@@ -1164,12 +1165,16 @@ the same through `Widget.Members` with `Sources`), and `tests/ide`'s
   every list in `Check.js`, so nothing fails and its documentation is free to be
   absent. Measured when the check was added: **six** were in that state --
   `BTA_VERSION`, `Field`, `Multipart`, `Namespace`, `Painter` and `Record` were
-  installed and named nowhere in that file. `checkGlobalsListed` reads the
-  installed set from where it is decided -- `JS_SetPropertyStr(ctx, global, …)`
-  in the C, `GLOBAL.X =` in the prelude, minus `close_hatches`' own `gone[]` --
-  and fails on a name with no home at all. A page written by hand counts as a
-  home; `GLOBALS_ELSEWHERE` is for the ones documented inside another global's
-  page, with the where written next to the name.
+  installed and named nowhere in that file.
+  **The runtime answers the installed half now**: `Application.Globals()` is
+  what is on the global object -- so a name added in the C or the prelude is in
+  it by construction -- and `Widget.Members` says whether anything public hangs
+  off it. A global **with members** must be in `api.json`, and a name with none
+  (the language's builtins, the prelude's helpers, `BTA_VERSION`) is not part of
+  the surface and is demanded nowhere. That moved the count from 39 to 36 and
+  retired the C parse, the prelude scan and `close_hatches`' `gone[]` from this
+  check together -- three readings of the same set, each with its own way to be
+  wrong, replaced by one the runtime already does.
   The general shape is worth keeping: **a completeness check that reads only its
   own list is a completeness check about its own list.** The same blind spot let
   eight QuickJS-installed names sit outside `llm/language.md` for as long as
@@ -5298,12 +5303,16 @@ text cannot be modelled beside its attributes (`<guid isPermaLink>`), and
   `Decimal`'s `toString`/`toJSON` (which are why `${d}` and `JSON.stringify(d)`
   are exact).
 - **Adding a global means adding a line to `GLOBAL_TABLES` or `GLOBAL_VARS` in
-  `tests/api/Check.js`, and that is deliberate rather than a chore.** The scan
-  cannot infer them: the very same
+  `tests/api/Check.js` for the member check, and regenerating `api.json`
+  (`tools/apijson.sh`) for the contract the documentation repositories read.**
+  The member check's line is deliberate rather than a chore: the scan cannot
+  infer it, because the very same
   `JS_SetPropertyStr(ctx, x, "Name", JS_New…)` shape builds half the runtime's
   *return values* -- `Exec`'s handle, `File.Info`'s answer, a table row, a
   `Dialect` -- so guessing would demand a documentation heading for every one of
   them. The explicit line is what makes the reference's completeness checkable.
+  The installed half needs no line any more: `checkGlobalsListed` asks
+  `Application.Globals()` and `Widget.Members`.
 - **The globals' check is looser than the widgets' on purpose.** `controls.md` is
   all tables so a member must begin a row; `library.md` is a table for `File`, a
   bullet list for `Dialog` and a sentence for `Logger`, each right for what it

@@ -347,9 +347,22 @@ different number of arguments than the runtime passes.
 It parses rather than links, so it answers when the runtime does not build, which
 is the same bargain `tests/icons` and `tests/styles` make. 281 widget members and
 46 events as this is written, plus 13 class statics, 260 on the globals and 80
-published by `lib/`, and 8 library events read from the code -- the numbers
-`./tests/api.sh` prints, and every one of them has been stale at some point in
-this repository.
+published by `lib/`, 8 library events read from the code and 404 native members
+held to `api.json` -- the numbers `./tests/api.sh` prints, and every one of them
+has been stale at some point in this repository.
+
+**And the whole surface is a file as well.** `api.json` is the contract the
+documentation repositories read, and it is built by `tools/apijson/Catalog.js`
+out of the runtime's own verbs: what each class declares and from which class,
+every global with public members, the types no global holds, and the libraries'
+classes with their events. `tests/api` sources the same builder, so it compares
+the file with a second answer built here, and then holds that answer to the C:
+every member of a registration table, every event a `bta_emit` raises, every
+`type X` name and every nested global must be in it or the check says which one
+is missing. **That is the half a repository with only the file cannot ask** --
+from `api.json` a page can be verified, and the file cannot be verified from
+itself. A description edited in the C and not regenerated is red here naming
+the file, which is what `tools/apijson.sh` is for.
 
 **And a library's events are read from the code that raises them**, which is
 the one thing no class can answer about itself: `Widget.EventNames`,
@@ -421,6 +434,16 @@ check named it as undocumented before any test of it had been run. Which globals
 explicit list in `tests/api/Check.js`, because the same C shape builds half the
 runtime's *return values* and a scan that guessed would demand a heading for
 every one of them.
+
+**Which globals are *installed* is asked of the runtime now**, not parsed out
+of the C and the prelude: `Application.Globals()` is what is on the global
+object -- so a name added anywhere is in it by construction -- and
+`Widget.Members` says whether anything public hangs off it. A global with
+members must be in `api.json`, and a name with none -- the language's builtins,
+the prelude's helpers, `BTA_VERSION` -- is not part of the surface and is not
+demanded anywhere. That is what moved the count from 39 to 36, and it is why
+the six globals this was written for are all in the manifest with nothing
+listed twice.
 
 **And `docs/reference/widgets/` is held to a stricter one.** A long page
 documents the same members as `llm/controls.md` with a real explanation of each,

@@ -1,0 +1,7 @@
+{
+  "name": "apijson",
+  "main": "Main",
+  "version": "1.0",
+  "description": "The runtime's public surface as `api.json`, the contract the documentation repositories are checked against",
+  "sources": ["Catalog.js", "Main.js"]
+}

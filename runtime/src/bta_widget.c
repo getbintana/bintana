@@ -3593,8 +3593,8 @@ static char *proto_owner(JSContext *ctx, JSValueConst at)
 }
 
 static void take_members_of_resolved(JSContext *ctx, JSValueConst klass,
-                                     const char *type, bool all, JSValue out,
-                                     GPtrArray *names, uint32_t *n)
+                                     const char *type, bool all, bool own_only,
+                                     JSValue out, GPtrArray *names, uint32_t *n)
 {
     JSValue proto    = JS_GetPropertyStr(ctx, klass, "prototype");
     bool    is_class = JS_IsObject(proto);
@@ -3678,6 +3678,12 @@ static void take_members_of_resolved(JSContext *ctx, JSValueConst klass,
                 JS_FreePropertyEnum(ctx, tab, len);
             }
             g_free(owner);
+            /* **What the class itself declares** is one step of the chain, and
+             * the statics below are its own by construction.  A page of the
+             * reference documents exactly this, since what it inherits is
+             * documented where it is declared. */
+            if (own_only)
+                break;
             JSValue parent = JS_GetPrototype(ctx, at);
             JS_FreeValue(ctx, at);
             at = parent;
@@ -4867,6 +4873,11 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
      * an array has is `split` and `includes`, which a completion after
      * `File.Load(p).` wants to offer. */
     bool all = false;
+    /* `Own`: only what the class **itself** declares, and not what it
+     * inherits.  The question a reference page is written around -- what it
+     * inherits is documented where it is declared -- and the one `Members`
+     * could not answer before. */
+    bool own_only = false;
     if (argc > 1) {
         sources = texts_arg(ctx, argv[1], "Members", "Sources", &refused);
         if (!refused) forms = texts_arg(ctx, argv[1], "Members", "Forms", &refused);
@@ -4874,6 +4885,9 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
             JSValue a = JS_GetPropertyStr(ctx, argv[1], "All");
             all = JS_ToBool(ctx, a) > 0;
             JS_FreeValue(ctx, a);
+            JSValue o = JS_GetPropertyStr(ctx, argv[1], "Own");
+            own_only = JS_ToBool(ctx, o) > 0;
+            JS_FreeValue(ctx, o);
         }
     }
     if (refused) {
@@ -4899,10 +4913,10 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
                 /* A form class's own children, ahead of the base chain: they
                  * are the class's instance properties, and that is the layer a
                  * caller meets them in. */
-                if (forms)
+                if (forms && !own_only)
                     take_form_children(ctx, forms, d->name, out, names, &n);
 
-                if (!d->base)
+                if (own_only || !d->base)
                     break;
                 if (g_hash_table_contains(index, d->base)) {
                     d = g_hash_table_lookup(index, d->base);
@@ -4911,7 +4925,8 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
                 /* The end of the sources is not the end of the answer. */
                 JSValue up = bta_lookup_global(ctx, d->base);
                 if (!JS_IsException(up)) {
-                    take_members_of_resolved(ctx, up, d->base, all, out, names, &n);
+                    take_members_of_resolved(ctx, up, d->base, all, false,
+                                             out, names, &n);
                     JS_FreeValue(ctx, up);
                 } else {
                     /* **Consumed, not dropped.** An exception left pending under
@@ -4930,7 +4945,8 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
     if (!sources || !g_hash_table_contains(index, type)) {
         JSValue klass = bta_lookup_global(ctx, type);
         if (!JS_IsException(klass)) {
-            take_members_of_resolved(ctx, klass, type, all, out, names, &n);
+            take_members_of_resolved(ctx, klass, type, all, own_only,
+                                     out, names, &n);
             /* **And here too, and the first version did not**: a loaded form
              * class has children the prototype walk cannot see either, so
              * asking for a library's class with the libraries loaded got the
@@ -4938,7 +4954,7 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
              * bug, not two, and the condition it was under
              * was the clue: the children were only read when `Sources` was also
              * given, and nothing about them needs it. */
-            if (forms)
+            if (forms && !own_only)
                 take_form_children(ctx, forms, type, out, names, &n);
             take_catalog(ctx, type, out, names, &n);
             JS_FreeValue(ctx, klass);
@@ -8642,7 +8658,10 @@ void bta_widgets_init(JSContext *ctx, JSValue global)
              *   and a global class (`Connection`) gains what its driver adds.
              *   `options` takes **`All: true`**, which lists the lower-case
              *   names too — what a builtin like `String` or `Array` is made
-             *   of — and **`Sources`, an array of source texts**, and
+             *   of — and **`Own: true`**, which answers only what the class
+             *   **itself** declares: the question a reference page is written
+             *   around, since what a class inherits is documented where it is
+             *   declared — and **`Sources`, an array of source texts**, and
              *   **`Forms`, an array of `.form` texts**, for a class that is a
              *   lexical binding in a file this process never runs — a
              *   library's class, read by an editor that must not execute the
