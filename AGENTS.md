@@ -3000,6 +3000,22 @@ person who wrote it either.
   is GLib's Unix API (`setsid`, in `bta_sys.c`), and `Exec`'s `Control` stream
   is refused -- the same descriptor-inheritance that the debugger's channel
   needs.
+- **A repository path is spelt with `/` on every platform, while
+  `Directory.Files` joins with the platform's separator -- and the two are
+  crossed in `tools/docs/Rows.js`, which is the check's and the writer's one
+  copy.** A page key was `p.slice(root.length + 1)`, so on the Windows job every
+  `docs/reference` key came back backslashed; `docRelative` splits a path on `/`
+  and read the whole key as one component, so every row carrying a link was
+  recomputed with the wrong `..` depth. `tests/api.sh` reported **31 long
+  pages** as rows that do not say what the code says -- all of them reference
+  pages, because the `docs/llm` keys are literals written with `/` -- and
+  `tools/docs.sh` would have written those wrong links into the pages. The
+  normalisation belongs at the boundary (`…slice(root.length + 1).replace(/\\/g,
+  "/")`), which is where the platform's spelling enters, and `File.Join` takes
+  the `/` spelling back on either platform. It is green here and red only on the
+  runner, so the evidence is by hand: a scratch copy of `Rows.js` given the
+  backslashed keys the walk really returns reports the same 31 pages with the
+  fix removed.
 - **When Xvfb is missing, ask for it; another virtual display is a false red
   suite.** `run.sh` exports `HEADLESS=1` and the runner's only way to honour it
   is `xvfb-run`, so a machine without `xorg-x11-server-Xvfb` stops with *no

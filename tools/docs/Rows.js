@@ -29,9 +29,15 @@ function docPages(root) {
     for (const lib of docLibraries(root))
         if (File.Exists(File.Join(root, `docs/llm/${lib}.md`)))
             pages.push(`docs/llm/${lib}.md`);
+    /* A page's name is a repository path and is always spelt with `/`, while
+     * `Directory.Files` joins with the platform's separator -- so on Windows
+     * every key came back backslashed, `docRelative` split it as one component
+     * and counted the `..` wrong: every row carrying a link read as stale, and
+     * `tools/docs` would have written the wrong links into it. `File.Join`
+     * takes a forward-slash page back on either platform. */
     for (const p of Directory.Files(File.Join(root, "docs/reference"),
                                     { Pattern: "*.md", Recursive: true }).sort())
-        pages.push(p.slice(root.length + 1));
+        pages.push(p.slice(root.length + 1).replace(/\\/g, "/"));
     return pages;
 }
 
