@@ -10665,6 +10665,41 @@ function* p_problems(ide) {
     eq("a source with nothing to say clears itself", mine().length, 1);
     eq("...and still not the other", mine()[0].file, "probe/B.js");
 
+    /* --- two sources that agree are one row ---------------------------------- */
+
+    /*
+     * **The duplication this is about, taken straight from how it happens.**
+     * `Ide.Live` runs the name checks over the file on screen and reports under
+     * `names:<file>`; `Ide.Check` runs the same ones over every file and reports
+     * under `project`. Two sources, one check, one text -- and the panel drew
+     * both, so a member with no such member appeared twice and so did the count
+     * on the tab.
+     */
+    const said = { kind: "Warning", file: "probe/A.js", line: 4, text: "setTimeout" };
+    panel.report("q1", [said]);
+    panel.report("q2", [{ ...said }]);
+    eq("two sources saying the same thing draw one row",
+       panel.all.filter((x) => x.text === "setTimeout").length, 1);
+
+    /* ...and only because it is the same finding: a different kind about the
+     * same line is a second statement, not a repeat. */
+    panel.report("q2", [{ ...said, kind: "Error" }]);
+    eq("...while a different severity is a second finding",
+       panel.all.filter((x) => x.text === "setTimeout").length, 2);
+
+    panel.report("q1", [{ ...said, line: 5 }]);
+    panel.report("q2", []);
+    eq("...and a different line is a different place",
+       panel.all.filter((x) => x.text === "setTimeout").length, 1);
+    /* The count on the tab is the panel's, so it is asserted against the panel
+     * and not against this row: a planted fixture is one row among whatever the
+     * earlier phases left, and asking for "1 problem" here would be asking the
+     * test to be the only thing running. */
+    eq("...and the count on the tab is the panel's own",
+       ide.ConsoleBox.Tabs[panel.page], `${panel.all.length} problems`);
+
+    panel.clear("q1");            /* nothing planted may outlive its own block */
+
     /* --- worst first, then where ------------------------------------------- */
 
     panel.clear("p2");

@@ -101,9 +101,46 @@ Ide.Problems = class Problems {
      * of places in. `Locale.Compare` and not `<` for the file names, which is
      * this project's rule everywhere a person sees an order.
      */
+    /*
+     * Every source's rows, worst first, and **a fact the panel can show once.**
+     *
+     * **The merge is not tidiness, it is the half of the rule above that had
+     * nowhere to go.** Two checkers can agree about one thing, and they do:
+     * `Ide.Live` runs the name checks over the file on screen and reports it
+     * under `names:<file>`, and `Ide.Check` runs *the same checks* over every
+     * file -- the whole point of it being the pass is that a control lost to a
+     * name collision is lost in a file nobody has open -- and reports under
+     * `project`. The two are the same check over the same text, so before this
+     * a member with no such member, a handler for an event that does not come,
+     * and every name this language has taken appeared **twice** in the list, and
+     * twice in the count on the tab.
+     *
+     * Keyed on the whole row -- kind and all -- rather than on where and what,
+     * because two checkers disagreeing about the *severity* of one line are
+     * making two statements and the panel is where somebody reads both. Where
+     * they agree on everything, there is one fact and it is drawn once.
+     *
+     * The key is `JSON.stringify` of the three fields, for the reason the
+     * signature above is: a message here is whatever a compiler said, so a
+     * separator character would have to be one no message can hold, and this
+     * does not have to trust that at all.
+     *
+     * It does not change who reports what. Each source still replaces only its
+     * own rows, and neither checker was told anything -- which is the difference
+     * between merging the two answers and pretending there is one, and is why
+     * the fix is here rather than in `Ide.Check`.
+     */
     get all() {
-        const out = [];
-        for (const list of this.bySource.values()) out.push(...list);
+        const out  = [];
+        const seen = new Set();
+
+        for (const list of this.bySource.values())
+            for (const p of list) {
+                const key = JSON.stringify([p.kind, p.file || "", p.line || 0, p.text]);
+                if (seen.has(key)) continue;
+                seen.add(key);
+                out.push(p);
+            }
 
         return out.sort((a, b) => {
             const kind = PROBLEM_KINDS.indexOf(a.kind) - PROBLEM_KINDS.indexOf(b.kind);
