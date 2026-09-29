@@ -5256,6 +5256,44 @@ text cannot be modelled beside its attributes (`<guid isPermaLink>`), and
   `total()` is only `sum()` answering 0 instead of NULL. Do not add either
   because the pair looks incomplete without them.
 
+## A table beside another view: the geometry it can say
+
+A scheduler, a diff, anything that puts a list next to a drawing needs three
+numbers from the list — where its rows are scrolled to, how tall one row is and
+how tall the heading row is — and **`GtkColumnView` has none of the three.**
+There is no row-height getter (GTK measures rows through the cell factories and
+keeps the number to itself), no scroll accessor (the `GtkColumnView` is the
+scrollable child of a `GtkScrolledWindow` this control creates, and the
+adjustment was never exposed), and no header getter (the heading is a child of
+the column view and nothing says which one). So `RowHeight`, `HeaderHeight`,
+`ScrollY` and `ScrollMaxY` are all read out of what GTK *does* publish: the
+adjustment's `upper` and `page_size`, and the column view's own allocation. Do
+not go looking for `gtk_widget_get_first_child` to find the header — that is
+reading a child list that is an implementation detail, and `page_size` says the
+same number without naming what sits above it.
+
+- **A row's height is the rows' extent divided by the rows that are *drawn*.**
+  In a tree, `Count` is every node at every level and a folded branch is in
+  neither `Count` nor the adjustment, so dividing `upper` by `Count` answers a
+  row that gets shorter every time something is folded. Measured on a tree of
+  fifteen nodes: the wrong answer was a third short with one branch folded, and
+  it would have been *worse* the more the user closed. The column view's own
+  model is the flattened list in tree mode, which is the count to divide by.
+- **A table with no columns has no heading row at all**, so `HeaderHeight` is
+  `0` — and `0` also means "not laid out yet", which is what the documentation
+  says. The distinction is the test's: `TableGeometry` waits for a number to
+  come and a table built without `Columns` never gives one, which is how the
+  empty-table assertion had to be given a column to be true at all.
+- **The numbers are a frame behind the rows.** A row added in this turn has no
+  allocation yet, so `RowHeight` is the one before it and `ScrollMaxY` the one
+  before that — the same rule `bta_scroll_set` is written around, and the reason
+  `TableGeometry` waits with `until` instead of asserting as it goes.
+- **Connect the adjustments with `bta_scroll_watch`**, which is also what keeps
+  the finaliser's sweep from leaving two handlers pointing at a freed
+  `BtaWidget`. They are not the widget, so a hand-rolled `g_signal_connect` on
+  the table's own adjustments would fire into freed memory at teardown — the
+  failure `tests/asan.sh` is the one that reports.
+
 ## Two widget limits that leak into a shape
 
 - **A `ComboBox` has no empty text and, with items, no empty state.**

@@ -1552,6 +1552,11 @@ static void build_table(BtaWidget *w)
                                    GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
     gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(w->gtk), w->inner);
 
+    /* The rows scrolled, and the watch that keeps the handlers from firing into
+     * a freed widget: the same two adjustments and the same `Scroll` a
+     * `Scroller` reports, which is what two panes beside each other lock on. */
+    bta_scroll_watch(w);
+
     /* The model is not the widget, so the finaliser's sweep cannot find this
      * on its own -- bta_widget_watch is how it is told. */
     g_signal_connect(sel, "selection-changed",
@@ -2147,6 +2152,71 @@ static JSValue table_remove_row(JSContext *ctx, JSValueConst this_val,
 
     g_list_store_remove(rows, (guint)i);
     return JS_UNDEFINED;
+}
+
+/* ------------------------------------------------------------------ geometry
+ *
+ * Three questions a table drawn *beside* something else has to be able to
+ * answer, and GTK answers none of them: where the rows are scrolled to, how
+ * tall one row is, and how tall the heading row above them is. This is where
+ * the three answers come from, and it is what lets an application put a chart
+ * next to a task list with the rows lined up and one scroll between them.
+ *
+ * **The scroll is the `GtkScrolledWindow` this control already wraps its
+ * `GtkColumnView` in**, so the getter and the setter are the ones a `Scroller`
+ * uses (`bta_scroll_get`/`bta_scroll_set`, and `bta_scroll_watch` for the
+ * `Scroll` event) rather than a second implementation of the same arithmetic
+ * and the same clamping.
+ *
+ * **A row's height is the rows' extent divided by the rows there are**, and the
+ * count has to be the *visible* one. A tree's `Count` is every node at every
+ * level and a folded subtree's rows are not drawn, so dividing by `Count` would
+ * answer a shorter row the more of them were folded away -- and a chart beside a
+ * folded tree is exactly when the answer has to be right. The column view's own
+ * model is the flattened list in tree mode, so its item count is what is on
+ * screen, and the adjustment's upper is those rows' height and nothing else.
+ *
+ * **The heading is what the list's viewport leaves of the column view.** GTK has
+ * no getter for it, and walking `gtk_widget_get_first_child` for the header
+ * would be reading a child list that is an implementation detail; the viewport's
+ * page size says the same number without naming what sits above it.
+ */
+static GtkAdjustment *table_vadjustment(BtaWidget *w)
+{
+    return gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(w->gtk));
+}
+
+static JSValue table_get_row_height(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    GtkAdjustment *a = table_vadjustment(w);
+    GListModel *rows = G_LIST_MODEL(
+        gtk_column_view_get_model(GTK_COLUMN_VIEW(w->inner)));
+    guint n = rows ? g_list_model_get_n_items(rows) : 0;
+
+    if (!a || !n)
+        return JS_NewInt32(ctx, 0);
+
+    return JS_NewInt32(ctx, (int)(gtk_adjustment_get_upper(a) / n + 0.5));
+}
+
+static JSValue table_get_header_height(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    GtkAdjustment *a = table_vadjustment(w);
+    if (!a)
+        return JS_NewInt32(ctx, 0);
+
+    int above = (int)gtk_widget_get_allocated_height(w->inner) -
+                (int)(gtk_adjustment_get_page_size(a) + 0.5);
+
+    return JS_NewInt32(ctx, above > 0 ? above : 0);
 }
 
 /*
@@ -2963,6 +3033,27 @@ static const JSCFunctionListEntry table_props[] = {
      *   every selected row, as an array of indices in order
      */
     JS_CGETSET_DEF("Selection",   table_get_selection, NULL),
+    /* ScrollY
+     *   how far down the rows are scrolled, in pixels -- the wheel, a
+     *   scrollbar, the keyboard or an assignment. Assigning **clamps** to
+     *   `[0, ScrollMaxY]`, so a number past the end means the end
+     */
+    JS_CGETSET_MAGIC_DEF("ScrollY",    bta_scroll_get, bta_scroll_set, BTA_SCROLL_Y),
+    /* ScrollMaxY
+     *   the largest `ScrollY` that still shows a row: the rows' height less
+     *   one view. `0` when there is nothing to scroll
+     */
+    JS_CGETSET_MAGIC_DEF("ScrollMaxY", bta_scroll_get, NULL, BTA_SCROLL_MAX_Y),
+    /* RowHeight
+     *   how tall one row is, as GTK measured it. `0` while the table holds no
+     *   row or has not been laid out
+     */
+    JS_CGETSET_DEF("RowHeight",    table_get_row_height, NULL),
+    /* HeaderHeight
+     *   how tall the row of column headings is. `0` before the first
+     *   allocation
+     */
+    JS_CGETSET_DEF("HeaderHeight", table_get_header_height, NULL),
     /* MultiSelect
      *   more than one row at a time. Refused on a tree
      */
@@ -3160,9 +3251,14 @@ void bta_table_register(void)
          *   `HeaderMenu` for that click, anything else falls back to it. A
          *   primary click also raises `Sort` when `Sortable`, on the release
          */
+        /* Scroll(x, y)
+         *   the position moved — the wheel, a scrollbar, the keyboard or an
+         *   assignment. **Both axes are reported together**, so a diagonal
+         *   move is one event
+         */
         BTA_CLASS_ENUM_TEXT("TableView", "Control", build_table, table_props, false,
                             table_options, "Columns.Text",
-                            "Select,Activate,Data,Sort,CellEdit,HeaderClick"),
+                            "Select,Activate,Data,Sort,CellEdit,HeaderClick,Scroll"),
     };
     bta_register_classes(rows, (int)G_N_ELEMENTS(rows));
 }

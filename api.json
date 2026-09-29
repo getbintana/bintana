@@ -8908,6 +8908,15 @@
           "Native": true
         },
         {
+          "Name": "HeaderHeight",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "how tall the row of column headings is. `0` before the first allocation",
+          "Native": true
+        },
+        {
           "Name": "HeaderMenu",
           "Kind": "Property",
           "Params": -1,
@@ -8980,12 +8989,39 @@
           "Native": true
         },
         {
+          "Name": "RowHeight",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "how tall one row is, as GTK measured it. `0` while the table holds no row or has not been laid out",
+          "Native": true
+        },
+        {
           "Name": "RowLines",
           "Kind": "Property",
           "Params": -1,
           "Signature": "",
           "Returns": "",
           "Doc": "rules between the rows. Default `true`",
+          "Native": true
+        },
+        {
+          "Name": "ScrollMaxY",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the largest `ScrollY` that still shows a row: the rows' height less one view. `0` when there is nothing to scroll",
+          "Native": true
+        },
+        {
+          "Name": "ScrollY",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "how far down the rows are scrolled, in pixels -- the wheel, a scrollbar, the keyboard or an assignment. Assigning **clamps** to `[0, ScrollMaxY]`, so a number past the end means the end",
           "Native": true
         },
         {
@@ -9091,6 +9127,11 @@
           "Name": "HeaderClick",
           "Signature": "(column, button, ctrl, shift)",
           "Doc": "a column heading was pressed — the one pointer event a heading raises, because GTK claims its press before the bubble phase. `button` is `1` primary, `2` middle, `3` secondary. **The return value is the menu of the secondary click**: an array replaces `HeaderMenu` for that click, anything else falls back to it. A primary click also raises `Sort` when `Sortable`, on the release"
+        },
+        {
+          "Name": "Scroll",
+          "Signature": "(x, y)",
+          "Doc": "the position moved — the wheel, a scrollbar, the keyboard or an assignment. **Both axes are reported together**, so a diagonal move is one event"
         },
         {
           "Name": "MouseDown",

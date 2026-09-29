@@ -451,7 +451,7 @@ const TESTS = [
     /* Early on purpose: they show windows of their own, and the pushed-surface
      * assertions in the async tail measure a form on the frame it settles. See
      * the note below. */
-    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableTree", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableIcon", "TableProse",
+    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableTree", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableGeometry", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
     "Expand", "Spacing", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
@@ -13478,6 +13478,106 @@ function Main() {
     HdrT_HeaderClick(column, button, ctrl, shift) {
         this.heads.push([column, button, ctrl, shift]);
         return button === 3 ? [{ name: "HdrDyn", text: "Dynamic" }] : undefined;
+    }
+
+    /* The three numbers a table drawn *beside* something else has to be able to
+     * say. Nothing here asserts a pixel: a row's height and a heading's are
+     * whatever the theme decided, so what is asserted is the arithmetic that
+     * says they are the real ones -- the rows' extent is the rows' count times
+     * the height of one, to the pixel.
+     *
+     * **The rows are measured a frame after they are added**, which is the same
+     * rule `bta_scroll_set` is written around; `until` is how this file waits
+     * for a turn.
+     */
+    testTableGeometry() {
+        const t = new TableView();
+        t.Name = "GeoT";
+        t.Columns = [{ Text: "Task" }, { Text: "Days" }];
+        t.Resize(360, 120);
+        this.Fixed1.Add(t);
+        for (let i = 0; i < 24; i++) t.Add([`Row ${i}`, String(i)]);
+
+        this.geoSeen = [];
+        t.On("Scroll", (x, y) => { this.geoSeen.push([x, y]); });
+
+        until("a table's rows measured", () => t.RowHeight > 0, () => {
+            const row = t.RowHeight, head = t.HeaderHeight;
+            const view = t.Height - head;          /* the list's own viewport */
+
+            check("a row's height is the theme's, and is said", row > 0, `${row}`);
+            check("and the heading row's too", head > 0, `${head}`);
+            check("the rows are taller than one view, or there is nothing to scroll",
+                  t.ScrollMaxY > 0, `${t.ScrollMaxY}`);
+            eq("and what the rows measure is the count of them times one",
+               row * t.Count, t.ScrollMaxY + view);
+
+            eq("a table starts at the top", t.ScrollY, 0);
+            const before = this.geoSeen.length;
+            t.ScrollY = 200;
+            eq("a scroll can be set from code", t.ScrollY, 200);
+            eq("and one move is one event, with both axes",
+               this.geoSeen.length - before, 1);
+            eq("which is the position, not a delta",
+               JSON.stringify(this.geoSeen[this.geoSeen.length - 1]),
+               JSON.stringify([0, 200]));
+
+            t.ScrollY = 1e9;
+            eq("a number past the end means the end", t.ScrollY, t.ScrollMaxY);
+            t.ScrollY = -50;
+            eq("and one before the start means the start", t.ScrollY, 0);
+
+            throws("a ScrollY that is not a number is refused",
+                   () => { t.ScrollY = "down"; });
+
+            this.geoFolded(t, row);
+        });
+    }
+
+    /* A folded row is not drawn, so it is not in the adjustment either: the
+     * height of a row cannot be the extent divided by `Count`, or folding a
+     * branch would answer a shorter row. This is where that is measured. */
+    geoFolded(t, before) {
+        const tree = new TableView();
+        tree.Name = "GeoTree";
+        tree.Columns = [{ Text: "Task" }];
+        tree.Resize(360, 120);
+        this.Fixed1.Add(tree);
+        for (let r = 0; r < 3; r++) {
+            tree.Add([`Root ${r}`], { Key: `r${r}` });
+            for (let c = 0; c < 4; c++)
+                tree.Add([`Leaf ${r}.${c}`], { Key: `r${r}c${c}`, Parent: `r${r}` });
+        }
+
+        until("a tree measured", () => tree.RowHeight > 0, () => {
+            eq("a tree's row is the same row", tree.RowHeight, before);
+            const all = tree.ScrollMaxY;
+            eq("a tree's count is every node, not every row",
+               tree.Count, 15);
+
+            tree.CollapseNode("r1");
+            until("a tree folded", () => tree.ScrollMaxY < all, () => {
+                check("four rows fewer to scroll",
+                      all - tree.ScrollMaxY === 4 * before,
+                      `${all} -> ${tree.ScrollMaxY}`);
+                eq("and the row is still that same row", tree.RowHeight, before);
+
+                tree.ExpandNode("r1");
+                until("a tree open again", () => tree.ScrollMaxY === all, () => {
+                    const empty = new TableView();
+                    empty.Columns = [{ Text: "Task" }];
+                    empty.Resize(360, 120);
+                    this.Fixed1.Add(empty);
+                    until("an empty table measured", () => empty.HeaderHeight > 0, () => {
+                        eq("no row means no row height", empty.RowHeight, 0);
+                        check("and the heading is still there", empty.HeaderHeight > 0);
+                        empty.Delete();
+                        tree.Delete();
+                        t.Delete();
+                    });
+                });
+            });
+        });
     }
 
     /* An icon beside a cell's text, which is what makes a list of files look

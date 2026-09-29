@@ -1054,7 +1054,10 @@ JSValue bta_scroll_set(JSContext *ctx, JSValueConst this_val,
 
 /* Both adjustments report through here, so a diagonal move is one `Scroll` and
  * not two -- GTK moves one axis at a time and the other's value is already the
- * new one by the time either of them says so. */
+ * new one by the time either of them says so. Reached through
+ * `bta_scroll_watch`, which a `TableView` also calls: its `GtkColumnView` sits
+ * in a `GtkScrolledWindow` the same way, and a plan's task list beside its
+ * chart is two panes that have to move together. */
 static void on_scroller_moved(GtkAdjustment *a, gpointer user_data)
 {
     BtaWidget *w = user_data;
