@@ -453,7 +453,7 @@ const TESTS = [
      * the note below. */
     "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableTree", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
-    "Expand", "Spacing", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "CursorBounds", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
+    "Expand", "Spacing", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
     "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "Record", "Nested", "Database", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "Metrics", "Library", "Plugin", "ListMulti", "MenuState",
@@ -1486,6 +1486,66 @@ class WidgetsForm extends Form {
             check("...lower two lines down", c3.Y > c1.Y, JSON.stringify([c1, c3]));
             check("...and further right four columns along", c15.X > c1.X,
                   JSON.stringify([c1, c15]));
+            ed.Delete();
+        });
+    }
+
+    /* --- which character is under a point --------------------------------
+     *
+     * What a tooltip needs and nothing else gave: the point `MouseMove`
+     * reports, in the control's coordinates, turned into a position.  Its own
+     * editor, and one of each, because the verb is the abstract `Editor`'s.
+     */
+    testPositionAt() {
+        const ed = new TextEditor();
+        this.Fixed1.Add(ed);
+        ed.Wrap = false;
+        ed.Resize(220, 120);
+        ed.Text = "hello world\nsecond line\n";
+
+        const memo = new SourceEditor();
+        this.Fixed1.Add(memo);
+        memo.Wrap = false;
+        memo.Resize(160, 90);
+        memo.Text = "abc";
+
+        until("both editors are laid out",
+              () => ed.Bounds().Width > 0 && memo.Bounds().Width > 0, () => {
+            /* The point is taken from the cursor's own rectangle, so it is
+             * over the character the cursor is drawn before. */
+            ed.Select(1, 1, 0);
+            const c1 = ed.CursorBounds();
+            const p1 = ed.PositionAt(c1.X + 1, c1.Y + 4);
+            check("a point over the first character is that character",
+                  p1 && p1.Line === 1 && p1.Column === 1 && p1.Index === 0,
+                  JSON.stringify(p1));
+
+            ed.Select(2, 5, 0);
+            const c2 = ed.CursorBounds();
+            const p2 = ed.PositionAt(c2.X + 1, c2.Y + 4);
+            check("...and it follows the line and the column, in characters",
+                  p2 && p2.Line === 2 && p2.Column === 5 && p2.Index === 16,
+                  JSON.stringify(p2));
+
+            /* **Past the text there is no answer**, or the editor would place
+             * its cursor there and a tooltip would describe a word the
+             * pointer is nowhere near. */
+            eq("past the end of everything there is no position",
+               ed.PositionAt(500, 500), null);
+            eq("...nor above the first line", ed.PositionAt(-5, -5), null);
+            eq("a value that is not a number is refused",
+               (() => { try { ed.PositionAt("x", 1); return ""; }
+                        catch (e) { return e.message; } })(),
+               "PositionAt: \"x\" is not a number");
+
+            memo.Select(1, 1, 0);
+            const mc = memo.CursorBounds();
+            const mp = memo.PositionAt(mc.X + 1, mc.Y + 4);
+            check("a SourceEditor answers the same question",
+                  mp && mp.Line === 1 && mp.Column === 1 && mp.Index === 0,
+                  JSON.stringify(mp));
+
+            memo.Delete();
             ed.Delete();
         });
     }

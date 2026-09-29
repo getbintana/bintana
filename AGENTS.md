@@ -1672,6 +1672,17 @@ anchor instead of at the whole of it. Three things measured on the way:
   enough, and keeps a long file off the keystroke), not backwards: only a
   forward read knows which of those it is in. The innermost open `(` is the
   call; an `{` or `[` inside it is still its argument.
+- **`PositionAt` is the same trip the other way, and the two spaces are not the
+  widget's.** `CursorBounds` answers in the control's coordinates by converting
+  the buffer's rectangle (`get_iter_location`, then `buffer_to_window_coords`)
+  and carrying it from the view to the scroller; `PositionAt` comes in through
+  `window_to_buffer_coords` and `get_iter_at_location` reads the **buffer's**
+  own, which is where `get_iter_location` already answers. Validating the point
+  against the rectangle converted back into the widget's disagreed by the
+  gutter -- 34 pixels of a `SourceEditor` -- so the plain editor answered
+  everywhere and the source editor answered `null` everywhere. Both sides in
+  buffer coordinates; do not convert one half. `tests/widgets`' `PositionAt`
+  has one of each editor for exactly that reason.
 Placement was checked by eye once, on an `Xvfb` with a root capture (a
 popover is its own surface and does not show in a window capture): the hint
 sits directly above the cursor with the argument in bold.

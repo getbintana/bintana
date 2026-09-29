@@ -902,6 +902,7 @@ shape — a `GtkSourceView` *is* a `GtkTextView`.
 | `Clear()` | empties it |
 | `GotoLine(line)` | puts the cursor there and scrolls to it |
 | `CursorBounds()` → `{ X, Y, Width, Height }` | where the insertion cursor is drawn, in the control's own coordinates — what `Popover.Popup(editor, rect)` points at for a hint beside the cursor. Only once the control has been laid out; a cursor scrolled out of view answers a rectangle outside the control, which is the truth and the caller's to test. Read it once the control has a rectangle; before the window is up there is nothing to be drawn in |
+| `PositionAt(x, y)` → `{ Line, Column, Index }` | which character is under that point of the control, in the coordinates `MouseMove` reports — `null` when the point is not over text, so a pointer past the end of a line has no answer to give |
 | `LineOf(index)` | the line a **search's index** falls on, 1-based and clamped — `index` is the number `Regex.Index` gives, and it counts UTF-16 units |
 | `OffsetAt(line, [column])` | the character offset of that position, clamped as `Select` clamps — the inverse read of `Offset` |
 | `Insert(text)` | at the cursor. The selection is left alone, so on a selected word this lands after it rather than replacing it |

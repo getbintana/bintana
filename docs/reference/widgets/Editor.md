@@ -34,6 +34,7 @@ everything here works the same in both.
 | `Insert(text)` | at the cursor | [what is in it](#what-is-in-it) |
 | `LineOf(index)` | the line a **search's index** falls on, 1-based and clamped — `index` is the number `Regex.Index` gives, and it counts UTF-16 units | [the cursor](#the-cursor) |
 | `OffsetAt(line, [column])` | the character offset of that position, clamped as `Select` clamps — the inverse read of `Offset` | [the cursor](#the-cursor) |
+| `PositionAt(x, y)` | which character is under that point of the control, in the coordinates `MouseMove` reports — `null` when the point is not over text, so a pointer past the end of a line has no answer to give | [the cursor](#the-cursor) |
 | `Redo()` | one step forward | [undo](#undo) |
 | `Select(line, [column], [length])` | selects from there | [the cursor](#the-cursor) |
 | `Undo()` | one step back | [undo](#undo) |
@@ -67,6 +68,7 @@ everything here works the same in both.
 | `LineOf(index)` | the line a **search's index** falls on, 1-based and clamped — `index` is the number `Regex.Index` gives, and it counts UTF-16 units |
 | `Select(line, [column], [length])` | selects from there. A column past the end of the line is the end of the line |
 | `OffsetAt(line, [column])` | the character offset of that position, clamped as `Select` clamps — the inverse read of `Offset` |
+| `PositionAt(x, y)` | which character is under that point of the control, in the coordinates `MouseMove` reports — `null` when the point is not over text, so a pointer past the end of a line has no answer to give |
 | **event** `Cursor()` | the cursor moved. `Line` and `Column` say where |
 
 `Line`/`Column` in a status bar is `Cursor` plus two reads — and it is the one

@@ -462,6 +462,80 @@ static JSValue ed_cursor_bounds(JSContext *ctx, JSValueConst this_val,
     return out;
 }
 
+/*
+ * PositionAt(x, y): which character is under that point of the control, as
+ * `{ Line, Column, Index }` -- or `null` when the point is not over text.
+ *
+ * **The point is the one `MouseMove` reports**, in the control's own
+ * coordinates, which is why the walk starts at the scroller the gesture sits
+ * on and comes in to the view: `CursorBounds` makes the same trip the other
+ * way.  `Line` and `Column` are one-based and `Index` counts **characters**,
+ * the unit `Offset` and `Column` already speak -- `Text.LineOf` is the one
+ * that takes a JavaScript index.
+ *
+ * **The rectangle of the position it answers with is what decides `null`.** An
+ * editor positions its cursor wherever it is asked, so asking past the end of
+ * a line would otherwise answer the last character of it -- and a tooltip
+ * would describe a word the pointer is nowhere near.  An empty editor answers
+ * a position only over the first line's own box.
+ */
+static JSValue ed_position_at(JSContext *ctx, JSValueConst this_val,
+                              int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    double x, y;
+    if (argc < 2)
+        return JS_ThrowTypeError(ctx, "PositionAt(x, y) needs a point");
+    if (!bta_to_number(ctx, argv[0], "PositionAt", &x) ||
+        !bta_to_number(ctx, argv[1], "PositionAt", &y))
+        return JS_EXCEPTION;
+
+    GtkTextView *view = GTK_TEXT_VIEW(w->inner);
+    int          vx   = (int) x;
+    int          vy   = (int) y;
+
+    if (w->gtk != w->inner) {
+        graphene_point_t from = GRAPHENE_POINT_INIT((float) x, (float) y), to;
+
+        if (!gtk_widget_compute_point(w->gtk, w->inner, &from, &to))
+            return JS_NULL;
+        vx = (int) to.x;
+        vy = (int) to.y;
+    }
+
+    int bx, by;
+    gtk_text_view_window_to_buffer_coords(view, GTK_TEXT_WINDOW_WIDGET,
+                                          vx, vy, &bx, &by);
+
+    GtkTextIter it;
+    gtk_text_view_get_iter_at_location(view, &it, bx, by);
+
+    /* **Both sides in buffer coordinates**, which is what they already are:
+     * the point came in through `window_to_buffer_coords` and
+     * `get_iter_location` answers in the buffer's own space. Converting one of
+     * them back into the widget's made them disagree by the gutter -- a
+     * `SourceEditor` answered nothing anywhere, and the plain editor passed by
+     * having no gutter to disagree about. */
+    GdkRectangle r;
+    gtk_text_view_get_iter_location(view, &it, &r);
+
+    if (bx < r.x || bx >= r.x + MAX(1, r.width) ||
+        by < r.y || by >= r.y + r.height)
+        return JS_NULL;
+
+    JSValue out = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, out, "Line",
+                      JS_NewInt32(ctx, gtk_text_iter_get_line(&it) + 1));
+    JS_SetPropertyStr(ctx, out, "Column",
+                      JS_NewInt32(ctx, gtk_text_iter_get_line_offset(&it) + 1));
+    JS_SetPropertyStr(ctx, out, "Index",
+                      JS_NewInt32(ctx, gtk_text_iter_get_offset(&it)));
+    return out;
+}
+
 static JSValue ed_goto_line(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv)
 {
@@ -765,6 +839,12 @@ static const JSCFunctionListEntry editor_props[] = {
      *   rectangle; before the window is up there is nothing to be drawn in
      */
     JS_CFUNC_DEF("CursorBounds", 0, ed_cursor_bounds),
+    /* PositionAt(x, y) -> { Line, Column, Index }
+     *   which character is under that point of the control, in the
+     *   coordinates `MouseMove` reports — `null` when the point is not over
+     *   text, so a pointer past the end of a line has no answer to give
+     */
+    JS_CFUNC_DEF("PositionAt", 2, ed_position_at),
     /* Select(line, [column], [length])
      *   selects from there. A column past the end of the line is the end of
      *   the line
