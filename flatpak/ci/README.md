@@ -65,7 +65,7 @@ what a package installs under.
 | `repo` | where the source lives. It has to be reachable by the runner, so a private one needs a token and this file is not where that goes |
 | `ref` | the branch or tag to build. Absent means the default branch. A commit id is not a ref: put a tag on what you want |
 | `project` | the Bintana project inside that repository, packaged by `tools/pack.sh` |
-| `manifest` | **or** a Flatpak manifest, built as it is -- what the IDE uses, because it ships the reference F1 reads as well as its project |
+| `manifest` | **or** a Flatpak manifest, built as it is -- what the IDE uses, because it ships its project and its launcher rather than a project to package |
 | `watch` | the paths in the source whose change rebuilds it. Default `.`, meaning all of it. A `manifest` is watched whether it is listed or not |
 | `finish-args` | the sandbox permissions. The default is the four a windowed application needs (`--share=ipc`, both display sockets, `--device=dri`); a program that opens the user's files adds `--filesystem=home`, or a narrower one |
 
@@ -114,7 +114,7 @@ per application. On every run:
 |---|---|
 | a new tag, or no state at all | everything |
 | the runtime, `lib/`, the vendor, the packaging tool, `CMakeLists.txt` | the BaseApp **and every application** -- a BaseApp's files are copied into each application at build time |
-| `ide/**`, `docs/**` | the IDE alone |
+| `ide/**` | the IDE alone |
 | `examples/hello/**` | the example alone |
 | an application's own repository | it alone |
 | an application's registration (its `app.json`: `finish-args`, `project`, `watch`…) | it alone -- the entry's hash is part of the state, since no commit in any source can see a change here |

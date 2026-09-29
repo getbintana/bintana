@@ -445,6 +445,11 @@ jobs:
                                --generate-notes || true
           gh release upload "$GITHUB_REF_NAME" "$file" --clobber
 
+          # And the public surface as data, which the documentation
+          # repositories fetch: at a tag it is easier to point at the release
+          # than at a raw path, and the two are the same bytes.
+          gh release upload "$GITHUB_REF_NAME" api.json --clobber
+
   # A fourth job, and the first one that is not Linux: the port's Stage 0/1
   # (docs/plans/portability-plan.md), whose deliverable is an error list as much
   # as a build.

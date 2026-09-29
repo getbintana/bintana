@@ -4,7 +4,6 @@
   "watch": [
     "flatpak/io.github.getbintana.Ide.yml",
     "ide",
-    "docs",
     "tools/bintana-ide.svg",
     "tools/bintana-ide.desktop"
   ]

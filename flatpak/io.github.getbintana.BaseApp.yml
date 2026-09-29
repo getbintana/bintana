@@ -5,7 +5,7 @@
 # dependent application at build time** (`flatpak build-init --base`), which is
 # why this manifest has no launcher and no desktop file: what it installs is the
 # runtime and the libraries every application loads. The IDE, the examples and
-# the reference are the IDE app's, and a project's are its own -- that division
+# the IDE's own are the IDE app's, and a project's are its own -- that division
 # is what makes *rebuild only what changed* possible, because a change to the
 # IDE does not touch this ref.
 #
@@ -30,7 +30,7 @@ build-options:
   cflags: -O2
   cxxflags: -O2
 # What belongs to an application is removed here and installed by that
-# application: the IDE (its project, its reference and its launcher), the
+# application: the IDE (its project and its launcher), the
 # examples, and the drawings and desktop file `cmake --install` lays down.
 cleanup:
   - /include

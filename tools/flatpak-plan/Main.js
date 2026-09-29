@@ -199,7 +199,7 @@ function discover(appsDir) {
         app.watch = Array.isArray(app.watch) && app.watch.length ? app.watch : ["."];
 
         /* **A manifest is part of what it builds.**  The IDE's registration
-         * watched `ide`, `docs` and its two desktop files and not
+         * watched `ide` and its two desktop files and not
          * `flatpak/io.github.getbintana.Ide.yml`, so an edit to the manifest
          * itself -- a module, a permission, a source -- rebuilt nothing.  The
          * one path every manifest-built application depends on is added here
