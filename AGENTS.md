@@ -4447,6 +4447,19 @@ person who wrote it either.
   called before GTK is up it is a silent no-op --- `gdk_display_get_default()`
   answers `(nil)` there. `gtk_source_finalize()` runs on the way out, or the
   library's static data is what `tests/asan.sh` reports as ours.
+- **GtkSourceView 5 draws the mark tooltip itself, and nothing was asking it
+  to.** The renderer that owns the mark lane implements `query_tooltip`, and GTK
+  calls a widget's `query_tooltip` only when *that* widget carries
+  `has-tooltip` -- which GtkSourceView sets on the view alone. So the
+  implementation is unreachable and a mark's message never shows, while the
+  `Mark(line, kind, [text])` row, `docs/widgets.md` and the C comment beside it
+  all promised the tooltip for as long as nobody hovered an icon. Measured on
+  5.20.0 with a real pointer on an `Xvfb` of its own: hovering a `Warning` mark
+  drew nothing, and `mark_tooltips_on` -- two lines asking every renderer of the
+  left gutter for tooltips, called where `ShowMarks` creates the renderer --
+  turns the same build into the message in GtkSourceView's own tooltip.
+  **That is the whole check, because the effect needs a pointer**: the suite can
+  only say the text is on the mark, which it already did, and did.
 - **A flag surviving is not the effect happening, and a test that asserts the
   flag passes while the feature is dead.** `TableView.Sortable` read back `true`
   and the headers did nothing: a `.form` applies properties in the order the file

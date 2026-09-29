@@ -233,6 +233,9 @@ static void on_editor_realized(GtkWidget *view, gpointer user_data)
  * `Editor`'s (bta_text.c). */
 enum { ED_LINENUMBERS, ED_COMPLETION, ED_MARKS };
 
+/* Defined with the marks, called from the `ShowMarks` setter. */
+static void mark_tooltips_on(BtaWidget *w);
+
 static JSValue ed_get_flag(JSContext *ctx, JSValueConst this_val, int magic)
 {
     BtaWidget *w = bta_this(ctx, this_val);
@@ -271,6 +274,8 @@ static JSValue ed_set_flag(JSContext *ctx, JSValueConst this_val,
         break;
     case ED_MARKS:
         gtk_source_view_set_show_line_marks(GTK_SOURCE_VIEW(w->inner), b);
+        if (b)
+            mark_tooltips_on(w);      /* the renderer has just been made */
         break;
     default:
         /* A request, carried out by `editor_sync_completion` once there is a
@@ -1176,6 +1181,30 @@ static char *on_mark_tooltip(GtkSourceMarkAttributes *attrs, GtkSourceMark *mark
 }
 
 /*
+ * **The marks tooltip is GtkSourceView's own, and nothing was asking it.**
+ *
+ * The renderer that owns the mark lane implements `query_tooltip`, and GTK
+ * calls a widget's `query_tooltip` only when that widget carries `has-tooltip`.
+ * GtkSourceView 5 sets `has-tooltip` on the view alone, so the lane's
+ * implementation is unreachable and the message never shows -- measured on
+ * 5.20.0: hovering the icon of a `Warning` mark drew nothing, and the same
+ * build with these two lines shows it in GtkSourceView's own tooltip. Asking
+ * every renderer of the left gutter is the whole repair, and it is here
+ * because `ShowMarks` is what creates the marks renderer.
+ */
+static void mark_tooltips_on(BtaWidget *w)
+{
+    GtkSourceGutter *gutter = gtk_source_view_get_gutter(
+        GTK_SOURCE_VIEW(w->inner), GTK_TEXT_WINDOW_LEFT);
+    if (!gutter)
+        return;
+
+    for (GtkWidget *c = gtk_widget_get_first_child(GTK_WIDGET(gutter)); c;
+         c = gtk_widget_get_next_sibling(c))
+        gtk_widget_set_has_tooltip(c, TRUE);
+}
+
+/*
  * Attributes are per view and per category, so they are registered once, the
  * first time a kind is used on this editor.  Asking GTK whether it already has
  * them is the check -- no bookkeeping of our own to fall out of step.
@@ -1267,6 +1296,7 @@ static JSValue ed_mark(JSContext *ctx, JSValueConst this_val,
         JS_FreeCString(ctx, text);
 
     gtk_source_view_set_show_line_marks(GTK_SOURCE_VIEW(w->inner), TRUE);
+    mark_tooltips_on(w);
     return JS_NewInt32(ctx, gtk_text_iter_get_line(&it) + 1);
 }
 
