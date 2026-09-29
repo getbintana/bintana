@@ -7,12 +7,13 @@
  * designer live below the strip) and the labels are the visible tabs.
  *
  * GtkNotebook handles scrolling and Ctrl+Tab for switching, and both are turned
- * on here; **drag-to-reorder is not**, and saying so is the point -- an earlier
- * version of this header claimed it was, for as long as the claim stood.  It
- * takes three pieces to be safe rather than merely present (GTK 4 spells it
- * *per page*, `page-reordered` is the only report that the order changed, and
- * the IDE keeps a list of tab names parallel to it), and the third was what made
- * it a question worth answering rather than a line worth adding.
+ * on here.  **Drag-to-reorder is on too, and it takes three pieces rather than
+ * the one line it looks like**: GTK 4 spells it *per page*
+ * (`gtk_notebook_set_tab_reorderable`), so every page is told as it arrives --
+ * on both roads in; `page-reordered` is the only report that the order changed,
+ * and it is published as `Reordered`; and anything keeping a list of pages
+ * beside the notebook has to follow that event, or it answers with the wrong
+ * page from the next click on.  See `docs/widgets.md`.
  */
 #include "bta.h"
 
@@ -27,6 +28,46 @@ static void on_switch_page(GtkNotebook *nb, GtkWidget *page, guint index,
     JS_FreeValue(ctx, arg);
 }
 
+/*
+ * A tab can be dragged along the strip.  GTK 4 spells that **per page**
+ * (`gtk_notebook_set_tab_reorderable`), not per notebook as GTK 3 did, so every
+ * page is told as it arrives -- and there are two roads in: `notebook_append`,
+ * which `Append` takes, and `bta_notebook_page_added`, which the `.form`
+ * loader, `Add` and the designer all go through.
+ *
+ * **The notebook is passed in and not asked of the page.** A notebook's GTK
+ * children are its header and its internal `GtkStack`, not its pages, so
+ * `gtk_widget_get_parent` of a page is that stack, and the cast is a CRITICAL
+ * and a silent no-op.
+ */
+static void tab_make_movable(GtkWidget *notebook, GtkWidget *page)
+{
+    gtk_notebook_set_tab_reorderable(GTK_NOTEBOOK(notebook), page, TRUE);
+}
+
+/*
+ * page-reordered, which is GTK's own answer to *the pages changed order*.  Both
+ * roads that move a page -- the drag and `gtk_notebook_reorder_child`, which is
+ * what `Reorder` is -- report here, so one handler covers both.
+ */
+static void on_page_reordered(GtkNotebook *nb, GtkWidget *page, guint position,
+                              gpointer user_data)
+{
+    (void)nb;
+    BtaWidget *w   = user_data;
+    JSContext *ctx = w->ctx;
+
+    BtaWidget *pw = g_object_get_data(G_OBJECT(page), BTA_WIDGET_QUARK);
+    if (!pw)
+        return;
+
+    JSValue args[2] = { JS_DupValue(ctx, pw->self),
+                        JS_NewInt32(ctx, (int32_t)position) };
+    bta_emit(w, "Reordered", 2, args);
+    JS_FreeValue(ctx, args[0]);
+    JS_FreeValue(ctx, args[1]);
+}
+
 static void build_notebook(BtaWidget *w)
 {
     w->gtk = gtk_notebook_new();
@@ -39,6 +80,8 @@ static void build_notebook(BtaWidget *w)
     gtk_notebook_set_scrollable(GTK_NOTEBOOK(w->gtk), TRUE);
     g_signal_connect(w->gtk, "switch-page",
                      G_CALLBACK(on_switch_page), w);
+    g_signal_connect(w->gtk, "page-reordered",
+                     G_CALLBACK(on_page_reordered), w);
 }
 
 static JSValue notebook_append(JSContext *ctx, JSValueConst this_val,
@@ -73,6 +116,7 @@ static JSValue notebook_append(JSContext *ctx, JSValueConst this_val,
 
     gint index = gtk_notebook_append_page(GTK_NOTEBOOK(w->gtk), child->gtk,
                                          labelw ? labelw->gtk : NULL);
+    tab_make_movable(w->gtk, child->gtk);
 
     /* A page goes through GtkNotebook and not through the slot, so the adoption
      * that Add() does has to happen here too -- otherwise the page and its tab
@@ -347,6 +391,8 @@ void bta_notebook_page_added(GtkWidget *notebook, GtkWidget *page)
 
     if (name)
         gtk_notebook_set_tab_label(nb, page, gtk_label_new(name));
+
+    tab_make_movable(notebook, page);
 }
 static JSValue notebook_get_tabs(JSContext *ctx, JSValueConst this_val)
 {
@@ -563,8 +609,14 @@ void bta_notebook_register(void)
         /* Switch(index)
          *   a different page is showing — chosen by the user or assigned
          */
+        /* Reordered(page, index)
+         *   the pages changed order — a tab dragged along the strip, or
+         *   `Reorder(page, index)` from code, and **both arrive here**. `index`
+         *   is where the page landed, which is the half a caller keeping its
+         *   own list of pages needs
+         */
         BTA_CLASS_ENUM_TEXT("Notebook", "Container", build_notebook, notebook_props,
-                       false, notebook_options, "Tabs", "Switch"),
+                       false, notebook_options, "Tabs", "Switch,Reordered"),
     };
     bta_register_classes(rows, (int)G_N_ELEMENTS(rows));
 }

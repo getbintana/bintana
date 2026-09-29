@@ -22,6 +22,7 @@ follows is what is its own.
 | `SetAction(control, [where])` | puts a widget **in the tab strip** instead of making it a page | [a widget in the strip](#a-widget-in-the-strip) |
 | `SetTabLabel(index, label)` | renames one, and **`label` is a widget** like `Append`'s — what a tab showing a file name and an asterisk needs | [the strip](#the-strip) |
 | **event** `Switch(index)` | a different page is showing — chosen by the user or assigned | [the page showing](#the-page-showing) |
+| **event** `Reordered(page, index)` | the pages changed order — a tab dragged along the strip, or `Reorder(page, index)` from code, and **both arrive here** | [the pages](#the-pages) |
 
 ## The pages
 
@@ -32,7 +33,16 @@ follows is what is its own.
 | `Count` (ro) | how many pages there are. **An action widget in the strip is not one** |
 
 A page declared in a `.form` is an ordinary child; `Tabs` names them.
-[`Reorder`](Container.md#the-order-they-are-in) moves a page along the strip.
+[`Reorder`](Container.md#the-order-they-are-in) moves a page along the strip, and
+**a tab can also be dragged along it**. Both roads report the same event:
+
+| | |
+|---|---|
+| **event** `Reordered(page, index)` | the pages changed order — a tab dragged along the strip, or `Reorder(page, index)` from code, and **both arrive here**. `index` is where the page landed, which is the half a caller keeping its own list of pages needs |
+
+Anything keeping a list of pages beside the notebook has to follow it: the strip
+moves without asking, and a list that is not rebuilt on `Reordered` answers with
+the wrong page from the next click on.
 
 ## The page showing
 
@@ -72,6 +82,8 @@ is a place a window has and a page is not. In a `.form` it is a child carrying
 - **A blank band above the content.** A notebook with no pages: hide it.
 - **The tab labels came back in another language.** They are prose and go through
   the catalogue; a tab showing a file name is set with `SetTabLabel` from code.
+- **Your own list of pages answers with the wrong one.** A drag moves the strip
+  without anything asking; rebuild the list from `Children` on `Reordered`.
 
 ## What it does not do
 

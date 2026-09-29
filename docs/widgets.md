@@ -3150,32 +3150,36 @@ children, so a notebook is told its tab names while it still has no pages, and
 each page takes its name as it arrives. Without that the names would be assigned
 to nothing and lost on every load.
 
-`Reorder(page, index)` moves a page, and the tab goes with it.
+`Reorder(page, index)` moves a page, and the tab goes with it. **A tab can also
+be dragged along the strip**, and both roads report the same thing:
+`Reordered(page, index)`, which is GTK's `page-reordered` published.
 
-**A tab cannot be dragged along the strip**, and the header in
-`bta_notebook.c` said otherwise for as long as the claim stood. It is worth
-recording what the capability costs, because the answer is not the line it looks
-like. **GTK 4 spells reordering per page** (`gtk_notebook_set_tab_reorderable`),
-not per notebook as GTK 3 did, so it has to be asked for every page as it
-arrives -- and there are **two roads in**: `bta_notebook_page_added`, which the
-`.form` loader, `Add` and the designer all go through, and `notebook_append`,
-which reaches `gtk_notebook_append_page` directly and never gets there. A
-notebook whose first page could be moved and whose second could not is the kind
-of thing nobody reports. And the notebook has to be **passed in** rather than
-asked of the page: a notebook's GTK children are its header and its internal
-`GtkStack`, not its pages, so `gtk_widget_get_parent` of a page is that stack
-and `GTK_NOTEBOOK` on it is a `CRITICAL` and a silent no-op.
+Turning the drag on takes three pieces rather than the one line it looks like.
+**GTK 4 spells reordering per page** (`gtk_notebook_set_tab_reorderable`), not
+per notebook as GTK 3 did, so it has to be asked for every page as it arrives --
+and there are **two roads in**: `bta_notebook_page_added`, which the `.form`
+loader, `Add` and the designer all go through, and `notebook_append`, which
+reaches `gtk_notebook_append_page` directly and never gets there. A notebook
+whose first page could be moved and whose second could not is the kind of thing
+nobody reports. And the notebook has to be **passed in** rather than asked of
+the page: a notebook's GTK children are its header and its internal `GtkStack`,
+not its pages, so `gtk_widget_get_parent` of a page is that stack and
+`GTK_NOTEBOOK` on it is a `CRITICAL` and a silent no-op.
 
-The third piece is the one that decided it. `page-reordered` is the only report
-the notebook gives that its order changed, and publishing it is not enough on
-its own: **a list kept in step with the strip that is not moved on that event
-answers with the wrong page from the next one on, and nothing says so.** The
-IDE has such a list (`Ide.TabSet.tabOrder`, "the order the strip shows them in"),
-so the work was to carry the event, correct the list, and then find that the
-page on screen and the tab the names speak for had started to come apart --
-which is a different bug, on a path this feature runs through every time a tab
-changes. The feature was reverted with the names still disagreeing unexplained.
-**It is not a line, and the line is the cheap third of it.**
+The third piece is the one that matters. `page-reordered` is the only report the
+notebook gives that its order changed, and publishing it is not enough on its
+own: **a list kept in step with the strip that is not moved on that event
+answers with the wrong page from the next one on, and nothing says so.** The IDE
+has such a list (`Ide.TabSet.tabOrder`, "the order the strip shows them in"), and
+the first version of this feature was reverted because moving between a form tab
+and a code tab left the page on screen and the tab the names spoke for as two
+different answers. **The cause was measured later, and it is one word**:
+`Ide.TabSet.nameOfPage` walked its `openTabs` `Map` with `for...in`, which visits
+no entries at all -- so the list was rebuilt empty on the first reorder, and
+every tab click after it did nothing while the notebook went on switching. It is
+iterated with `of` now; the notebook is the truth (`Tabs_Switch` reads the page
+at the index, and `reordered` rebuilds the list from `Children`), and both
+halves are asserted in `tests/ide` and `tests/widgets`.
 
 ### Switcher
 

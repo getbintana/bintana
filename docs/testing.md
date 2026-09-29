@@ -345,8 +345,8 @@ a member has no row in the reference, or when an event is documented with a
 different number of arguments than the runtime passes.
 
 It parses rather than links, so it answers when the runtime does not build, which
-is the same bargain `tests/icons` and `tests/styles` make. 275 widget members and
-45 events as this is written, plus 11 class statics, 254 on the globals and 80
+is the same bargain `tests/icons` and `tests/styles` make. 280 widget members and
+46 events as this is written, plus 13 class statics, 260 on the globals and 80
 published by `lib/` -- the numbers `./tests/api.sh` prints, and every one of them
 has been stale at some point in this repository.
 

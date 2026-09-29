@@ -933,10 +933,24 @@ class MainForm extends Form {
     }
 
     /* The Notebook fires Switch while the .form is still loading, when no tab
-     * has been opened yet: there is nothing at that index and nothing to do. */
+     * has been opened yet: there is nothing at that index and nothing to do.
+     * (`this.tabs` is a field initialiser, so it is not there yet either when a
+     * `.form` declares pages of its own -- a handler the load can reach has to
+     * guard, which is the note over those fields.)
+     *
+     * **The page at the index and not `tabOrder[index]`**: a drag can move a tab
+     * without the IDE asking, and the notebook is where the answer is the moment
+     * it has moved. `reordered` keeps the list in step; this reads the truth. */
     Tabs_Switch(index) {
-        const name = this.tabOrder[index];
+        if (!this.tabs) return;
+        const name = this.tabs.nameAt(index);
         if (name) this.tabs.switchTo(name);
+    }
+
+    /* The strip's order changed -- a tab dragged along it, or `Reorder` from
+     * code.  Both arrive here, through the runtime's `Reordered`. */
+    Tabs_Reordered(page, index) {
+        this.tabs.reordered();
     }
 
     /* Opening a file *by name*, which is what the tree's own selection does:

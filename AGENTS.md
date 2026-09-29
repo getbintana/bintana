@@ -3735,16 +3735,38 @@ person who wrote it either.
   reproducible from a fresh session** -- twelve driven tab switches, strip
   clicks, closes of either tab, a sweep of every file-tree row, each compared
   pixel-for-pixel against a healthy reference -- and it still followed a user
-  around, so it was reverted rather than explained. Three things, and they are
-  the ones to remember: **a second copy of an answer is where the bugs live**
-  (`tabOrder` beside the notebook's own order is exactly that, and the drag is
-  what makes them disagree), **an un-reproducible symptom following a user is
-  still the feature's**, and **the guard that stops a crash can also stop a bug
-  being heard** -- the same state went from a loud `TypeError` to a silently
-  wrong panel, which is a regression the fix caused. What stayed is the two
-  halves that are *proved*: the five canvas handlers ask whether there is a
-  designer before dereferencing it (`tests/ide` goes red without them, and
-  reproduces the reported `TypeError` by name), and
+  around, so it was reverted rather than explained.
+  **The cause was found later, parked in `ide/tab-reorder` as a red assertion
+  that had been asking the wrong question.** `Ide.TabSet.nameOfPage` walked its
+  `openTabs` `Map` with `for...in`, and `for...in` visits the properties of the
+  object, of which a `Map` has none -- so it named **no page at all**, and the
+  list was rebuilt empty on the first reorder. From then on `Tabs_Switch` (which
+  had been changed to read the page through that function) found no name, so a
+  tab click moved the notebook and nothing else: the panel stayed on the tab the
+  names spoke for while the strip showed another, which is the reported symptom
+  exactly. The parked test asked *why the moved page cannot be named*; the answer
+  was *not one page -- every page*, and one word (`of` for `in`) turns the whole
+  phase green. It is rebuilt with the notebook as the truth: `Tabs_Switch` reads
+  `tabs.nameAt(index)` from `Children`, and `reordered()` rebuilds the list from
+  the same walk; `tests/ide`'s designer phase asserts both halves across a
+  `Reorder`, and `tests/widgets`' notebook test asserts the event itself.
+  **The drag gesture itself has no test, because it is a pointer gesture** -- and
+  under Xvfb a synthetic press-and-move did not reach GTK's drag path at all. The
+  check by hand is GTK's *other* real road, which refuses unless the page **is**
+  reorderable: focus a tab and press `Alt+Left`, and `Reordered` arrives with the
+  new index (measured on a probe: `[A,B,C]` became `[B,A,C]`, `index=0`). The
+  enabling line itself was measured through the CSS class the setter adds
+  (`reorderable-page` on every page of a notebook with three).
+  Three things, and they are the ones to remember: **a second copy of an answer
+  is where the bugs live** (`tabOrder` beside the notebook's own order is exactly
+  that, and the drag is what makes them disagree), **an un-reproducible symptom
+  following a user is still the feature's**, and **a function that silently
+  answers "no" is what turns a loud crash into a wrong panel** -- `for...in` over
+  a `Map` is the quietest kind, and it is why the reverted state was a panel
+  disagreeing with the screen rather than an error anybody could read. The two
+  halves that were always *proved* stayed: the five canvas handlers ask whether
+  there is a designer before dereferencing it (`tests/ide` goes red without them,
+  and reproduces the reported `TypeError` by name), and
   `Ide.TabSet.placeContent` brings the canvas names down with the designer
   instead of leaving them naming the last form.
 - **Tab order cannot ride the child list, because paint order already does.**

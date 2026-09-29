@@ -527,6 +527,17 @@ no tab, or when the tab is the other kind**. Everything that reads them is about
 the active tab, so that is the right shape; what touches them elsewhere has to
 say so. See [the window](#the-window) for why per-tab, and what it cost.
 
+**A tab can be dragged along the strip, and the notebook is what answers for the
+order.** `Tabs_Switch` reads the page at the index out of `Tabs.Children` rather
+than `tabOrder[index]`, and `Ide.TabSet.reordered` rebuilds `tabOrder` from the
+notebook on the runtime's `Reordered` — a list kept beside the strip is a cache,
+and it is only as fresh as the last event. The first version of this feature read
+the list and was reverted: `nameOfPage`, which built it, was a `for...in` over
+the `openTabs` `Map` and named no page at all, so the list emptied on the first
+reorder and every tab click after it did nothing while the notebook went on
+switching. See [`docs/widgets.md`](widgets.md#notebook) for what the capability
+costs in the runtime, and the entry in `AGENTS.md` for how it was found.
+
 The strip ends in a button carrying a menu — *Close tab*, *Close others*,
 *Close all*, *Save all*. The commands are on the File menu too, but that is
 across the window from the tabs they act on, and a strip that has filled up is

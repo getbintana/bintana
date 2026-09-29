@@ -8652,6 +8652,9 @@ function Main() {
 
     StripAct_Click() { this.stripSaid = "act"; }
 
+    /* The notebook's `Reordered`, which a drag and `Reorder` from code share. */
+    Book_Reordered(page, index) { this.reordered = `${page.Name}@${index}`; }
+
     /* --- an image ----------------------------------------------------------
      *
      * A picture and nothing else: until this existed, the only control that
@@ -8996,6 +8999,7 @@ function Main() {
 
         /* A notebook orders its pages, and the tab goes with the page. */
         const book = new Notebook();
+        book.Name = "Book";
         this.Add(book);
         const pages = ["p", "q"].map((name) => {
             const panel = new Panel();
@@ -9007,7 +9011,10 @@ function Main() {
         eq("a notebook takes its tab names", JSON.stringify(book.Tabs),
            JSON.stringify(["first", "second"]));
 
+        this.reordered = null;
         book.Reorder(pages[1], 0);
+        eq("moving a page says which page, and where it landed",
+           this.reordered, "q@0");
         eq("reordering a page moves it", book.Children.map((c) => c.Name).join(""), "qp");
         eq("and its tab goes with it", JSON.stringify(book.Tabs),
            JSON.stringify(["second", "first"]));

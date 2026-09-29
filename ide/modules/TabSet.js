@@ -132,6 +132,48 @@ Ide.TabSet = class TabSet {
     }
 
     /*
+     * The file a page is showing, or `""`.  A walk of `openTabs` and not a
+     * second table: `openTabs` already holds every state and every state holds
+     * its own page.
+     *
+     * **`of` and not `in`**: `openTabs` is a `Map`, and `for...in` visits
+     * properties of the object, of which a `Map` has none -- so this answered
+     * `""` for every page, and `reordered` below emptied `tabOrder` on every
+     * event. That was the whole of the bug that got tab reordering reverted.
+     */
+    nameOfPage(page) {
+        if (!page) return "";
+        for (const [name, state] of this.openTabs)
+            if (state.view === page) return name;
+        return "";
+    }
+
+    /*
+     * The file at that place in the strip, or `""` -- and **the notebook is the
+     * answer, not `tabOrder`**: the list is only as fresh as the last event, and
+     * a drag moves a page without asking the IDE.
+     */
+    nameAt(index) {
+        const pages = this.ide.Tabs.Children;
+        return index >= 0 && index < pages.length ? this.nameOfPage(pages[index]) : "";
+    }
+
+    /*
+     * The strip's order changed -- a tab dragged along it, or `Reorder` from
+     * code.  Rebuilt from the notebook, in place, because `tabOrder` is a getter
+     * onto this array.
+     */
+    reordered() {
+        const fresh = [];
+        for (const page of this.ide.Tabs.Children) {
+            const name = this.nameOfPage(page);
+            if (name) fresh.push(name);
+        }
+        this.tabOrder.length = 0;
+        for (const name of fresh) this.tabOrder.push(name);
+    }
+
+    /*
      * Whether a tab has unsaved changes.  The active one is asked of its widgets,
      * which is where the answer is; every other one had it copied out when it
      * left the screen (see `saveActiveState`).

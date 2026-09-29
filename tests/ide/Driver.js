@@ -1879,6 +1879,28 @@ function* p_designer(ide) {
               ide.designer.selected !== null, String(ide.designer.selected));
         ide.designer.select(null);
     }
+
+    /*
+     * **And the same invariant across a reorder, which is the road a drag
+     * takes.** The notebook moves the page on its own and says so with
+     * `Reordered`; `Ide.TabSet.reordered` rebuilds its list from the notebook,
+     * so the list and the strip agree however the page got moved. Both halves
+     * are asked because either alone is the drift: the current page against the
+     * list, and the list against the pages.
+     *
+     * The list is not what a reorder reads -- `nameOfPage`, which built it, was
+     * a `for...in` over a `Map` and named no page at all: `tabOrder` emptied on
+     * the first event and every tab click after it did nothing while the
+     * notebook went on switching. The two assertions below are red on that
+     * version, and this is the road it was reverted over.
+     */
+    const bookPages = ide.Tabs.Children;
+    ide.Tabs.Reorder(bookPages[bookPages.length - 1], 0);
+    yield;
+    eq("a reorder puts the page where the list says it is",
+       ide.Tabs.Current, ide.tabs.tabOrder.indexOf(ide.activeFile));
+    eq("...and the list itself is read back from the notebook",
+       ide.tabs.tabOrder[0], ide.tabs.nameOfPage(ide.Tabs.Children[0]));
 }
 
 function* p_palette(ide) {

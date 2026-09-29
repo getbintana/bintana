@@ -1469,6 +1469,7 @@ Pages in tabs. Its `children` **are** its pages.
 | `SetAction(control, [where])` | puts a widget **in the tab strip** instead of making it a page. `where` is `Start` or `End`; `null` takes it out. In a `.form` this is a child carrying `"strip": "End"` |
 | `SetTabLabel(index, label)` | renames one, and **`label` is a widget** like `Append`'s — what a tab showing a file name and an asterisk needs |
 | **event** `Switch(index)` | a different page is showing — chosen by the user or assigned |
+| **event** `Reordered(page, index)` | the pages changed order — a tab dragged along the strip, or `Reorder(page, index)` from code, and **both arrive here**. `index` is where the page landed, which is the half a caller keeping its own list of pages needs |
 
 ## Switcher
 
