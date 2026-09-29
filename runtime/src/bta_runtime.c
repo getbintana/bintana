@@ -99,6 +99,132 @@ static bool error_handled_by_app(JSContext *ctx, const char *msg, const char *st
     return took;
 }
 
+/*
+ * **The names this language took away, and what to write instead.**
+ *
+ * It used to be a list of names and a paragraph of prose above it, which meant
+ * the whole of what a beginner got out of typing `setTimeout` was
+ * `ReferenceError: setTimeout is not defined` -- while the replacement was
+ * written out in full, a screen away in a comment nobody opens. `rad.js` already
+ * refuses `localeCompare` by name, naming `Locale.Compare` in the sentence, and
+ * the QuickJS patch in `vendor/` makes a refused property say which property it
+ * was. This is the same bargain for the names themselves, and the same bargain
+ * `close_hatches` was already paying for at the other end: the *deletion* has to
+ * be refused out loud because the silent version is the expensive one.
+ *
+ * **One table, read by two.** `bta_close_hatches` deletes from it and
+ * `Application.Replacements` publishes it, so a name that is taken and a name
+ * that says what to use instead cannot disagree -- there is no second list to
+ * keep in step, which is the whole of why this is a table and not a list plus a
+ * getter with the same entries typed again.
+ *
+ * A `""` replacement is deliberate and says something: **there is no word for
+ * that thing in this language**, which is more use to a reader than being
+ * pointed at a neighbour that does a different job. Every entry that has a
+ * replacement has one that exists -- `Timer` and `Stopwatch` are in `rad.js`,
+ * `Namespace` and `CheckSource` and `Regex` are installed here -- and no entry
+ * points at a thing this runtime has never heard of.
+ */
+/* A name that was taken away, and the sentence that says what to use instead.
+ * The two halves are one row because the deletion and the sentence must not be
+ * able to disagree: `bta_close_hatches` walks this, `reference_hint` reads it
+ * when the engine reports a `ReferenceError`, and `Application.Replacements`
+ * hands it out. */
+typedef struct { const char *name; const char *use; } BtaReplacement;
+
+/* The globals, and the raw scheduling primitives with them. */
+static const BtaReplacement bta_replacements[] = {
+    { "eval",  "Application.CheckSource(text) answers whether text would compile" },
+    { "Function", "" },     /* the other way to turn a string into code */
+    { "globalThis", "Namespace(\"Name\") publishes into the global scope" },
+    { "Reflect", "" },      /* metaprogramming this language has no use for */
+    { "Symbol", "" },       /* see the note in bta_close_hatches: no replacement
+                             * can be reached without the name it needs */
+    { "RegExp", "Regex(text, [options]) builds a pattern out of a string" },
+    /* Timer is the published way to schedule: it has a name, a switch and hands
+     * itself back, and these are the same thing said worse.  rad.js built Timer
+     * out of them and holds what it needs. */
+    { "setTimeout",    "Timer.After(delay, tick) — the delay comes first" },
+    { "setInterval",   "Timer.Every(delay, tick) — the delay comes first" },
+    { "clearTimeout",  "Timer.Stop()" },
+    { "clearInterval", "Timer.Stop()" },
+    /* And the forward-only clock, for the same reason one step further: a
+     * reading of it is meaningless alone, so Stopwatch is not a convenience over
+     * it but the only shape in which it says anything. */
+    { "monotonic", "new Stopwatch().Start(), and .Elapsed for the answer" },
+    /*
+     * queueMicrotask goes with setTimeout and for the same sentence: it is
+     * scheduling with no name of ours, no switch and no handle.  It does work --
+     * bta_drain_jobs runs the queue after every event handler, and it was
+     * measured running -- which is exactly what made it worth removing rather
+     * than leaving: a second way to defer, undocumented, that nothing in this
+     * tree ever asked for.  `Timer.After(0, fn)` is the published word, and the
+     * day a program needs *before the next frame* rather than *on the next turn*
+     * it gets a name instead of this one.
+     */
+    { "queueMicrotask", "Timer.After(0, tick) — the delay comes first" },
+    /*
+     * Annex B, and not even that any more: `escape` is a URL encoding no
+     * standard recommends, with no caller anywhere here.  `Text.Escape` is markup
+     * and `Http` builds its own query strings, so the name is free to mislead and
+     * nothing else.
+     */
+    { "escape",   "" },
+    { "unescape", "" },
+};
+
+/*
+ * What `Object` gave up, keyed as `Object.name` so the two tables cannot collide
+ * on a bare word -- `keys` on its own would say nothing about which object it
+ * went from.
+ *
+ * **Only the ones a person plausibly reaches for.** The rest of the statics are
+ * in `bta_close_hatches`' own list with the reasoning; a row saying `""` for
+ * every one of them would be a list of names nobody wanted rather than a
+ * sentence anybody used. `Object.assign` is here because it is the first thing a
+ * JavaScript-trained hand types in this language -- and its absence has cost this
+ * repository a silent bug of its own (`examples/clients` built an object with it
+ * and the `TypeError` landed in a dialog, on a headless run, with nothing on the
+ * terminal).
+ */
+static const BtaReplacement bta_object_replacements[] = {
+    { "Object.keys",     "Dictionary.Keys(bag)" },
+    { "Object.values",   "Dictionary.Values(bag)" },
+    { "Object.entries",  "Dictionary.Entries(bag), as [{ Key, Value }, …]" },
+    { "Object.hasOwn",   "Dictionary.Has(bag, key)" },
+    { "Object.fromEntries", "a Map, which Dictionary reads the same way" },
+    { "Object.assign",   "{ ...a, ...b }" },
+    { "Object.defineProperty", "a get/set pair declared in a class" },
+    /* Nothing in this language can be locked, and saying so is the answer:
+     * there are no imports, so the only code that could write to
+     * Object.prototype is the project's own and its libraries'. */
+    { "Object.freeze",            "" },
+    { "Object.seal",              "" },
+    { "Object.preventExtensions", "" },
+    { "Object.isFrozen",          "" },
+    { "Object.isSealed",          "" },
+    { "Object.isExtensible",      "" },
+};
+
+/* The bag `Application.Replacements` answers with, built from the two tables.
+ * A **verb** and not a read-only property, and it is the shape every "give me
+ * the list this runtime has" answer already has -- `Application.Globals()`,
+ * `Application.Libraries()`, `Widget.Types()`, `Widget.EventNames()`. */
+static JSValue js_application_replacements(JSContext *ctx, JSValueConst this_val,
+                                           int argc, JSValueConst *argv)
+{
+    (void)this_val; (void)argc; (void)argv;
+    JSValue out = JS_NewObject(ctx);
+
+    for (size_t i = 0; i < G_N_ELEMENTS(bta_replacements); i++)
+        JS_SetPropertyStr(ctx, out, bta_replacements[i].name,
+                          JS_NewString(ctx, bta_replacements[i].use));
+    for (size_t i = 0; i < G_N_ELEMENTS(bta_object_replacements); i++)
+        JS_SetPropertyStr(ctx, out, bta_object_replacements[i].name,
+                          JS_NewString(ctx, bta_object_replacements[i].use));
+    return out;
+}
+
 static void report_error(JSContext *ctx, const char *msg, const char *stack)
 {
     if (reporting_error)
@@ -189,6 +315,87 @@ void bta_report_fatal(BtaApp *app, const char *message)
     g_object_unref(d);
 }
 
+/*
+ * The sentence a `ReferenceError` about a curated name should have carried.
+ *
+ * A program that typed `setTimeout` gets `setTimeout is not defined`, and that
+ * is the whole of it -- while the word to write instead has been in the same
+ * table, in the same file, since `Application.Replacements` was added. The
+ * identifier is in **one** place only, the message the engine built, so this
+ * reads it back: the same bargain `check_position` strikes for the line and
+ * column out of a `.stack`, and for the same reason -- there is no other door.
+ * The format is `"%s is not defined"` and nothing else
+ * (`JS_ThrowReferenceErrorNotDefined`, `quickjs.c`), so the suffix is the whole
+ * of the parse.
+ *
+ * **This is where a message is reported, not where a name is bound.** Nothing
+ * here is installed on the global object, so `Application.Globals()` still
+ * answers the truth, the completion popup does not offer a name that throws, and
+ * the cost is paid exactly once -- where a person is about to read it. A program
+ * that catches the error itself and prints `e.message` gets the engine's
+ * sentence, which is the right one for a program: `Application.Replacements()` is
+ * the door for that.
+ *
+ * Answers a `char *` the caller frees, or NULL when there is nothing to add --
+ * and NULL for a name that is not in the table, for an error that is not a
+ * `ReferenceError`, and for a name with no word for it here only if the row says
+ * so.
+ */
+static char *reference_hint(JSContext *ctx, JSValueConst exc, const char *msg)
+{
+    if (!msg || !JS_IsError(exc))
+        return NULL;
+
+    /*
+     * **The `message` property, not the stringified error.** `JS_ToCString` on
+     * an error object gives `"ReferenceError: setTimeout is not defined"` --
+     * the name and the message glued together -- so a parse looking for a name
+     * at the front of it finds a class name. Two properties, asked for by name,
+     * is the whole of what this needs and it is the door that has them.
+     */
+    JSValue name_v = JS_GetPropertyStr(ctx, exc, "name");
+    JSValue text_v = JS_GetPropertyStr(ctx, exc, "message");
+    const char *kind = JS_ToCString(ctx, name_v);
+    const char *text = JS_ToCString(ctx, text_v);
+    bool        is_ref = kind && text && !strcmp(kind, "ReferenceError");
+
+    /* A conversion that failed left its exception on the context, and whoever
+     * asks next would be told about this one. */
+    if (!kind || !text)
+        JS_FreeValue(ctx, JS_GetException(ctx));
+    JS_FreeCString(ctx, kind);
+    JS_FreeValue(ctx, name_v);
+
+    /*
+     * **The message is parsed while it is alive and freed on the way out.**
+     * The first version freed it first and parsed the freed string, which is
+     * a use-after-free the arena allocator hides -- the bytes are usually
+     * still there, so it read correctly and was wrong all the same.
+     */
+    char *hint = NULL;
+    if (is_ref) {
+        for (size_t i = 0; i < G_N_ELEMENTS(bta_replacements); i++) {
+            const BtaReplacement *r = &bta_replacements[i];
+            /* The suffix is the whole of the parse, and the prefix has to be
+             * the whole name: a prefix match alone would enrich a message
+             * about something that merely starts with the same letters. */
+            if (g_str_has_prefix(text, r->name) &&
+                !strcmp(text + strlen(r->name), " is not defined")) {
+                hint = g_strdup_printf("%s is not part of this language%s%s",
+                                       r->name,
+                                       *r->use ? ": use "
+                                               : ", and nothing here replaces it",
+                                       r->use);
+                break;
+            }
+        }
+    }
+
+    JS_FreeCString(ctx, text);
+    JS_FreeValue(ctx, text_v);
+    return hint;
+}
+
 void bta_dump_error(JSContext *ctx)
 {
     JSValue exc = JS_GetException(ctx);
@@ -197,8 +404,20 @@ void bta_dump_error(JSContext *ctx)
     const char *trace = NULL;
     JSValue     stack = JS_UNDEFINED;
 
-    fprintf(stderr, "\n%sBintana error:%s %s\n",
-            error_red(), error_plain(), msg ? msg : "(unknown)");
+    /*
+     * **The engine's own sentence first, then ours.** Both the terminal line and
+     * the dialog carry the pair, so a log line still matches what the engine said
+     * -- which is what a grep over a CI capture is for -- and the person reading
+     * it is told what to write instead.
+     */
+    char *hint = reference_hint(ctx, exc, msg);
+
+    if (hint)
+        fprintf(stderr, "\n%sBintana error:%s %s\n%s\n",
+                error_red(), error_plain(), msg ? msg : "(unknown)", hint);
+    else
+        fprintf(stderr, "\n%sBintana error:%s %s\n",
+                error_red(), error_plain(), msg ? msg : "(unknown)");
 
     if (JS_IsError(exc)) {
         stack = JS_GetPropertyStr(ctx, exc, "stack");
@@ -210,11 +429,20 @@ void bta_dump_error(JSContext *ctx)
     }
     fflush(stderr);
 
-    report_error(ctx, msg, trace);
+    /* An application that took errors over is told the same thing the terminal
+     * was, since the two are the same moment seen twice. `msg` keeps its own
+     * owner throughout: it came from `JS_ToCString` and goes back the same way,
+     * which is not the same as `free` in this engine. */
+    char *shown = hint ? g_strdup_printf("%s — %s", msg ? msg : "(unknown)", hint)
+                       : NULL;
+    report_error(ctx, shown ? shown : msg, trace);
 
+    g_free(shown);
+    g_free(hint);
     JS_FreeCString(ctx, trace);
     JS_FreeCString(ctx, msg);
     JS_FreeValue(ctx, stack);
+
     JS_FreeValue(ctx, exc);
 }
 
@@ -1519,6 +1747,19 @@ static bool install_globals(BtaApp *app)
     JS_SetPropertyStr(ctx, application, "Globals",
                       JS_NewCFunction(ctx, js_globals, "Globals", 0));
 
+    /* Replacements()
+     *   every name this language takes away, and what to write instead. It is
+     *   a bag keyed by the name that went: `{ setTimeout: "Timer.After(delay,
+     *   tick) — the delay comes first", "Object.assign": "{ ...a, ...b }", … }`.
+     *   **`""` where there is no word for that thing here**, which is an
+     *   answer rather than a gap in the table. An editor asks it of an
+     *   identifier nobody can find, so a beginner meets `Timer` at the token
+     *   rather than a `ReferenceError` at the next run
+     */
+    JS_SetPropertyStr(ctx, application, "Replacements",
+                      JS_NewCFunction(ctx, js_application_replacements,
+                                      "Replacements", 0));
+
     /* Where the runtime binary lives, so a project can re-invoke it. */
     char *exe = bta_exe_path();
     /* Executable
@@ -1824,37 +2065,13 @@ void bta_close_hatches(JSContext *ctx)
     }
     JS_FreeValue(ctx, regexp);
 
-    static const char *gone[] = {
-        "eval", "Function", "globalThis", "Reflect", "Symbol", "RegExp",
-        /* Timer is the published way to schedule: it has a name, a switch and
-         * hands itself back, and these are the same thing said worse.  rad.js
-         * built Timer out of them and holds what it needs. */
-        "setTimeout", "setInterval", "clearTimeout", "clearInterval",
-        /* And the forward-only clock, for the same reason one step further: a
-         * reading of it is meaningless alone, so Stopwatch is not a convenience
-         * over it but the only shape in which it says anything. */
-        "monotonic",
-        /*
-         * queueMicrotask goes with setTimeout and for the same sentence: it is
-         * scheduling with no name of ours, no switch and no handle.  It does
-         * work -- bta_drain_jobs runs the queue after every event handler, and
-         * it was measured running -- which is exactly what made it worth
-         * removing rather than leaving: a second way to defer, undocumented,
-         * that nothing in this tree ever asked for.  `Timer.After(0, fn)` is the
-         * published word, and the day a program needs *before the next frame*
-         * rather than *on the next turn* it gets a name instead of this one.
-         */
-        "queueMicrotask",
-        /*
-         * Annex B, and not even that any more: `escape` is a URL encoding no
-         * standard recommends, with no caller anywhere here.  `Text.Escape` is
-         * markup and `Http` builds its own query strings, so the name is free
-         * to mislead and nothing else.
-         */
-        "escape", "unescape",
-    };
-    for (size_t i = 0; i < sizeof(gone) / sizeof(gone[0]); i++)
-        delete_named(ctx, global, gone[i]);
+    /*
+     * The list the table above replaced, walked for the deletion itself. The
+     * second column is not read here: it is published by
+     * `Application.Replacements`, off the same rows.
+     */
+    for (size_t i = 0; i < G_N_ELEMENTS(bta_replacements); i++)
+        delete_named(ctx, global, bta_replacements[i].name);
 
     JS_FreeValue(ctx, global);
 }

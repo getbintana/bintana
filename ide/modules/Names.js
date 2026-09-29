@@ -16,6 +16,16 @@
  * which keeps one per form for the completion popup, and `Ide.Check` builds one
  * per file as it walks, and both of them go through here.
  *
+ * **The third check here asks about no `.form` at all**, and that is deliberate
+ * rather than a widening: it reads the language's own answer to *is this a name
+ * this language has*, which is `Application.Replacements()` -- a table the
+ * runtime builds from the very rows `close_hatches` deletes, so what was taken
+ * and what to write instead cannot disagree. It is a method of its own and not
+ * part of `check()` for the same reason the other two are not `Ide.Check`'s: it
+ * needs the caret rule below, and a second copy of "is this under the cursor" is
+ * a second answer to drift from the first. Both callers add it themselves, which
+ * is what stops a form's class being told about it twice.
+ *
  * **They did not, and all three had the same hole.** Each walked a `.form`'s
  * `children`, and `menus` and `actions` are not among them -- they are blocks of
  * their own, and the loader binds what they name on the form exactly as it binds
@@ -40,6 +50,22 @@ const NAMES_MEMBER  = new Regex("\\bthis\\.([A-Za-z_$][\\w$]*)\\.([A-Za-z_$][\\w
 const NAMES_HANDLER = new Regex(
     "^[ \\t]*([A-Za-z_$][\\w$]*)_([A-Za-z_$][\\w$]*)[ \\t]*\\(", { Multiline: true });
 
+/*
+ * A call: the target, dotted or not, and the parenthesis. The guard in front
+ * refuses a `.`, so `x.setTimeout(` is somebody else's member and not a name of
+ * this language's. Anchored on a character class rather than a lookbehind, which
+ * is a thing this dialect of `Regex` has and this tree uses elsewhere.
+ */
+const NAMES_CALL = new Regex(
+    "(?:^|[^A-Za-z0-9_$.])([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*)[ \\t]*\\(",
+    { Multiline: true });
+
+/* The words that make a call-shaped token a declaration rather than a call. A
+ * project may define its own `setTimeout`, and the runtime's table knows nothing
+ * about that -- so these are asked of the word in front and then ignored. */
+const DECLARING  = /^(function|class|const|let|var)$/;
+const WORD_BEFORE = /[A-Za-z_$][\w$]*[ \t]*$/;
+
 Ide.Names = class Names {
 
     /** @param {MainForm} ide */
@@ -57,6 +83,17 @@ Ide.Names = class Names {
          * so the walk over its menus happens once rather than per match.
          */
         this.samples = new Map();
+
+        /*
+         * The names this language took, read once: the runtime's own table, and
+         * a set of its keys because the question is asked once per call-shaped
+         * token in a file. `Ide.Check` builds the same table over the whole
+         * project, and the alternative -- a list of taken names written here --
+         * would be a second answer that goes stale the moment the runtime takes
+         * one more, which is the mistake this whole module is arranged against.
+         */
+        this.replaced = Application.Replacements();
+        this.retired  = new Set(Dictionary.Keys(this.replaced));
     }
 
     /*
@@ -70,6 +107,62 @@ Ide.Names = class Names {
     check(text, controls, file, caret) {
         return [...this.members(text, controls, file, caret),
                 ...this.handlers(text, controls, file, caret)];
+    }
+
+    /*
+     * `setTimeout(fn, 100)` and `Object.assign(a, b)`: a name this language
+     * has taken, said with the word to write instead.
+     *
+     * **It is asked of call targets and of nothing else, which is the whole
+     * safety of it.** A bare-identifier scan would report a property
+     * (`x.setTimeout`), a key (`{ setTimeout: 1 }`), a declaration
+     * (`function setTimeout()`) and every mention inside a string or a comment --
+     * and a check that says so is a check somebody switches off, which is what
+     * `handlers()`'s paragraph is about. A call is the shape every one of these
+     * takes when a person reaches for one, and the two guards below cannot be
+     * tricked by prose:
+     *
+     *     NAMES_CALL  the guard refuses a `.` in front, so a method on somebody
+     *             else's object is not ours to complain about -- and a dotted
+     *             target is not in the table either, whose keys are a bare
+     *             global or an `Object.` one, so `host.setTimeout(0)` cannot
+     *             match a row whatever it is called
+     *     DECLARING  the five words that make a call-shaped token a *declaration*
+     *             instead: a project is allowed to define its own `setTimeout`,
+     *             and the table knows nothing about that
+     *
+     * An `""` replacement is reported too, and differently: there is no word for
+     * that thing here, which is worth saying out loud rather than leaving as a
+     * bare `ReferenceError` at the next run.
+     */
+    *curated(text, file, caret) {
+        for (const m of NAMES_CALL.Matches(text)) {
+            if (underCaret(m, caret)) continue;
+
+            const name = m.Group(1);
+            if (!this.retired.has(name)) continue;
+
+            /*
+             * The word in front of the *name*, not of the match: the match starts
+             * on its guard character, and at the start of a line that character
+             * is the line break -- so asking the text before the match would read
+             * `function` on the line above and miss the declaration, which is the
+             * one shape that must not be reported.
+             */
+            if (DECLARING.test(wordBefore(text, m.Index + m.Value.indexOf(name))))
+                continue;
+
+            const use = this.replaced[name];
+            yield {
+                kind: "Warning",
+                file,
+                line: Text.LineOf(text, m.Index),
+                text: use
+                    ? `${name} is not part of this language: use ${use}`
+                    : `${name} is not part of this language, and nothing here ` +
+                      `replaces it`,
+            };
+        }
     }
 
     /*
@@ -251,3 +344,10 @@ function typeOf(controls, name) {
 function underCaret(m, caret) {
     return caret >= 0 && caret >= m.Index && caret <= m.Index + m.Value.length;
 }
+
+/* The word ending where a match begins, or `""` -- which is how a declaration is
+ * told from a call without re-running a pattern over the file. */
+function wordBefore(text, index) {
+    return (text.slice(0, index).match(WORD_BEFORE) || [""])[0];
+}
+

@@ -149,6 +149,18 @@ get wrong.
 | a bag of unchecked keys | a `Record` — see [library.md](library.md#record-and-field) |
 | `element.style.color = …` | `Style`, and `app.css` — see [forms.md](forms.md#styles) |
 
+**And the names that were taken are a table the runtime holds, not a list on this
+page.** `Application.Replacements()` answers with the same sentences, built out of
+the very rows the runtime deletes the names with — so a name and its replacement
+cannot drift apart — and the IDE asks it of every call whose name it cannot find,
+so a beginner meets `Timer` **at the token** rather than a `ReferenceError` at the
+next run. This table is for the guidance that has no name to be taken (`a date
+with no time`, `a bag of unchecked keys`) and for the calls worth seeing written
+out; where the two overlap, **the runtime's is the one that is checked**, and a
+row here that stops matching it is this page being wrong. `""` in that table is
+not a gap: it means this language has no word for that thing, which is more use
+than being pointed at a neighbour that does another job.
+
 **Two bare globals**, which is all of them: `print(...)` writes a line to
 stdout, joining its arguments with a space — what a console tool writes and what
 a test reports with, where `Logger` is what an application says something *at a

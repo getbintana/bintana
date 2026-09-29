@@ -10661,6 +10661,45 @@ function Main() {
                typeof Object[gone], "undefined");
         }
 
+        /*
+         * **And every one of them can say what to write instead.**
+         * `Application.Replacements()` is the table the runtime builds out of
+         * the very rows `close_hatches` deletes, so the two cannot disagree --
+         * and *that* is the property worth asserting, rather than the sentences
+         * themselves. The question is asked of `Application.Globals()`, which is
+         * the runtime's own list of what it installed, so a name that is still
+         * there cannot be in the table: a diagnostic built on such a row would
+         * fire on working code. The `Object.*` keys are dotted, which is what
+         * keeps them from colliding with a bare global and what lets a check
+         * refuse `host.setTimeout(0)`.
+         */
+        const replaced = Application.Replacements();
+        const installed = Application.Globals();
+
+        check("no row reports a name that is still installed",
+              Dictionary.Keys(replaced).every((n) => !installed.includes(n)),
+              JSON.stringify(Dictionary.Keys(replaced)
+                  .filter((n) => installed.includes(n))));
+
+        eq("and the first thing a JavaScript hand types is answered",
+           replaced.setTimeout,
+           "Timer.After(delay, tick) — the delay comes first");
+        eq("...and a dotted one, keyed by the object it went from",
+           replaced["Object.assign"], "{ ...a, ...b }");
+        eq("a name with no word for it here says so rather than naming a neighbour",
+           replaced["Object.freeze"], "");
+
+        /* The other half of the same promise: a replacement that names something
+         * has to name something that is *here*. `Timer` renamed and this goes
+         * red, which is the moment somebody would otherwise ship a sentence
+         * pointing at nothing. */
+        check("every word the table points at is a name this runtime has",
+              ["Application", "Namespace", "Regex", "Timer", "Stopwatch",
+               "Dictionary"].every((n) => installed.includes(n)),
+              JSON.stringify(["Application", "Namespace", "Regex", "Timer",
+                              "Stopwatch", "Dictionary"]
+                  .filter((n) => !installed.includes(n))));
+
         /* The plurals are the half that was missed the first time: the singulars
          * were taken and `defineProperties` still wrote the accessors, while
          * `getOwnPropertyDescriptors` read what its singular could not -- enough

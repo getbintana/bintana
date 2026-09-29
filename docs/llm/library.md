@@ -22,6 +22,7 @@ Every name here is a global: ambient, always present, no import.
 | `LibraryPath(name, [project])` | where a library by that name is, or `""` — **the same six-place search the runtime does for `uses`**. Published so that a tool which opens *other* projects asks about theirs rather than keeping a second copy of the path |
 | `Globals()` | every name on the global object: the runtime's own, the ones a library installed, and the JavaScript builtins -- `Math`, `JSON`, `Date`, `Map`, `Timer`, `Confirm`. **A top-level `class` is a lexical binding and not a property of the global object**, so a library's and a project's classes are *not* in it -- read those out of the sources, which is what the IDE does. It exists because the alternative is a hand-written list of global names, and there are a hundred and sixty-four of them |
 | `Libraries([project])` | the names of every library those same six places offer, sorted, each one once. The other direction of the lookup: `LibraryPath` resolves a name you already know, this is what a dialog that offers a choice needs |
+| `Replacements()` | every name this language takes away, and what to write instead. It is a bag keyed by the name that went: `{ setTimeout: "Timer.After(delay, tick) — the delay comes first", "Object.assign": "{ ...a, ...b }", … }`. **`""` where there is no word for that thing here**, which is an answer rather than a gap in the table. An editor asks it of an identifier nobody can find, so a beginner meets `Timer` at the token rather than a `ReferenceError` at the next run |
 | `OnError` | assign `(message, stack) => …` to take over uncaught errors |
 | `Quit(code)` | quit with that exit status. `0` is *it worked*, and a console tool that answers a question answers with this. A `code` that is not a number is **refused** — `Quit("fail")` used to exit `0`, which a runner reads as success. A `code` that is not a number is refused rather than read as `0`, which a runner would take for success; `Quit()` is `0` |
 
@@ -509,6 +510,16 @@ writes. Gone: every widget and `Dialog`/`Message`/`Clipboard`/`Screen` (GTK
 off the main thread is a crash), `Exec`, `File.Watch`, `Timer` and async
 `Http` (the source would fire on the main thread holding this context), and
 `Settings`/`Locale` (process state the main thread owns).
+
+**And the debugger does not reach in here.** `bintana --debug` installs its hook
+on the program's own runtime; a worker's is a second `JSRuntime` on a second
+thread with nothing attached to it, and the channel is one pipe to one process.
+A `Task` is therefore **unbreakpointable and unsteppable** — `Report` from
+inside `Run` is as close as anything comes to watching one, and `Error` with
+its stack is the whole of what its failure says. The same is true of a program
+that never left the main thread and only went wrong inside the worker, which is
+the usual shape of this: what to check is `Lock` and the `Stop()`/`KillAfter`
+dance, not a breakpoint that cannot be set.
 
 **A worker writes.** `File.Save` renames a temporary over its target, so two
 threads saving one path cannot tear it; what concurrency costs here is the

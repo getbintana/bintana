@@ -106,23 +106,29 @@ Ide.Live = class Live {
          * the ones with no form beside them, which the check below returns on. */
         ide.outline.refresh();
 
-        /* A file with no form beside it has no control to check a name against,
-         * and a module is most of those: say nothing rather than guess. */
-        if (!ide.formOf(name)) {
-            this.forget(name);
-            return;
-        }
-
         /* Read once and handed down. `Text` copies the whole buffer out of GTK
          * -- 5 ms for the largest file in this repository, measured -- and this
          * used to ask for it three times in four lines. */
-        const text  = ide.Editor.Text;
-        /* **`Ide.Names` and not a copy of it.** `Ide.Check` walks the whole
-         * project with the same two checks, and *does this control have this
-         * member* has to have one answer. What belongs to this class is the
-         * *moment*: the pause, and the caret rule that goes with it. */
-        const found = ide.names.check(text, ide.completion.controls(), name,
-                                      this.caret(ide.Editor, text));
+        const text = ide.Editor.Text;
+        const at   = this.caret(ide.Editor, text);
+
+        /* `Ide.Names`, and not a copy of it: the project pass runs the same
+         * three. What belongs to this class is the *moment*: the pause, and the
+         * caret rule that goes with it. */
+        const found = [...ide.names.curated(text, name, at)];
+
+        /*
+         * **And then the two that need a form beside it, which a module does not
+         * have.** This is the order they were asked in and it is not tidiness:
+         * the names a language has taken are a fact about the language, so they
+         * are said of every `.js` including a module -- and the member and
+         * handler checks are facts about the `.form` next door, so a file with
+         * none has nothing to check a control against and says nothing rather
+         * than guessing.
+         */
+        const form = ide.formOf(name);
+        if (form)
+            found.push(...ide.names.check(text, ide.completion.controls(), name, at));
 
         ide.problems.report(`names:${name}`, found);
         this.mark(ide.Editor, found);

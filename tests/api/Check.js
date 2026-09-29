@@ -450,8 +450,22 @@ function sources(root) {
 const GLOBAL_INSTALL = new Regex(
     "JS_SetPropertyStr\\(\\s*ctx,\\s*global,\\s*\"([A-Za-z_]\\w*)\"");
 const GLOBAL_PRELUDE = new Regex("GLOBAL\\.([A-Za-z_]\\w*)\\s*=");
+/*
+ * The rows `close_hatches` deletes, read out of the table that also says what to
+ * write instead -- so the two cannot disagree, which is the whole reason the
+ * table is one and not a list plus a getter with the names typed twice.
+ *
+ * **The body is lazy, and it has to be.** `[^}]*` stopped at the first `}` and
+ * every row after the first one was silently lost, which is how a completeness
+ * check stops checking without failing -- the same shape that ate twenty
+ * signature comments in `tools/extract_signatures.cmake`. And the name is read
+ * off the *row's* opening brace rather than by quoting everything in the body,
+ * so a sentence that quotes an identifier (`Namespace("Name")`) is not taken for
+ * a name that went away.
+ */
 const GLOBAL_GONE    = new Regex(
-    "static const char \\*gone\\[\\]\\s*=\\s*\\{([^}]*)\\n\\s*\\};");
+    "static const BtaReplacement bta_replacements\\[\\]\\s*=\\s*\\{([\\s\\S]*?)\\n\\};");
+const GLOBAL_GONE_ROW = new Regex("\\{\\s*\"([A-Za-z_][\\w.]*)\"\\s*,");
 const QUOTED         = new Regex("\"([A-Za-z_]\\w*)\"");
 
 /*
@@ -489,11 +503,11 @@ function checkGlobalsListed(root, problems) {
         File.Join(root, "runtime/src/bta_runtime.c")));
 
     if (!hatches) {
-        problems.push("close_hatches' gone[] could not be read, so what is " +
-                      "installed cannot be told from what is taken away again");
+        problems.push("close_hatches' bta_replacements[] could not be read, so " +
+                      "what is installed cannot be told from what is taken away");
         return 0;
     }
-    for (const g of QUOTED.Matches(hatches.Group(1))) installed.delete(g.Group(1));
+    for (const g of GLOBAL_GONE_ROW.Matches(hatches.Group(1))) installed.delete(g.Group(1));
 
     /*
      * Accounted for: a row in one of this file's own lists, a page of its own
