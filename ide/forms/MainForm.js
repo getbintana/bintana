@@ -1672,6 +1672,26 @@ class MainForm extends Form {
         if (!found.length) this.log(`${Locale.Text("Nothing wrong with the project")}\n`);
     }
 
+    /*
+     * **Just bring the panel up, without running anything.**
+     *
+     * `Ide.Live` fills the Problems page on every pause and `Ide.Check` on every
+     * save, and neither of them changes which page of `ConsoleBox` is showing --
+     * which is right, because a keystroke must not take the view away from
+     * somebody reading the output. The cost is a gutter mark that appears and
+     * nothing visible happens: the count is on the tab label, and the tab is at
+     * the bottom of the window, and there was no way to ask for that page
+     * without also re-running the pass over the project.
+     */
+    MnuProblems_Click() {
+        const page = this.problems.page;
+        if (page < 0) return;
+
+        this.ConsoleBox.Current = page;
+        this.ConsoleBox.Visible = true;
+        this.ProblemView.SetFocus();
+    }
+
     MnuGotoFile_Click()  { QuickForm.show(this, false); }
     MnuCommands_Click()  { QuickForm.show(this, true); }
 

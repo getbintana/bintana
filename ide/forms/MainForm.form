@@ -309,6 +309,11 @@
           "text": "Check the project"
         },
         {
+          "name": "MnuProblems",
+          "text": "Show problems",
+          "shortcut": "<Control><Shift>m"
+        },
+        {
           "name": "MnuProjectSettings",
           "text": "Project settings..."
         }

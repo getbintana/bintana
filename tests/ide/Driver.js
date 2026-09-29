@@ -10838,6 +10838,27 @@ function* p_problems(ide) {
 
     panel.clear("p4");
     eq("and the panel is left as it was found", panel.all.length, before);
+
+    /* --- the menu item that only brings the page up -------------------------- */
+
+    /*
+     * `MnuProblems` is the way back to a panel nothing takes you to: `Ide.Live`
+     * and `Ide.Check` fill it without stealing the view from somebody reading
+     * the output, which is right, so the count on the tab was the only sign
+     * there was anything to read. What the item promises is the page and not
+     * another pass -- the pass is `MnuCheck`'s.
+     */
+    const wasPage = ide.ConsoleBox.Current;
+    const away    = panel.page === 0 ? ide.ConsoleBox.Count - 1 : 0;
+    if (away !== panel.page) ide.ConsoleBox.Current = away;
+
+    ide.MnuProblems_Click();
+    eq("Show problems brings its page up", ide.ConsoleBox.Current, panel.page);
+    eq("...and it is the page of the panel",
+       ide.ConsoleBox.Children[panel.page].Name, "ProblemView");
+    check("...and leaves it showing", ide.ConsoleBox.Visible);
+
+    ide.ConsoleBox.Current = wasPage;
 }
 
 /*
