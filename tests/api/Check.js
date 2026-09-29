@@ -221,6 +221,31 @@ function checkGlobalsListed(problems, catalog) {
     return counted;
 }
 
+/* The first place two JSON values disagree, as a path: `api.json.Widgets[3].Members[7].Doc`. */
+function firstDifference(a, b, path) {
+    if (a === b)
+        return path;
+    if (Array.isArray(a) && Array.isArray(b)) {
+        if (a.length !== b.length)
+            return `${path}: ${a.length} entries against ${b.length}`;
+        for (let i = 0; i < a.length; i++) {
+            if (JSON.stringify(a[i]) === JSON.stringify(b[i]))
+                continue;
+            return firstDifference(a[i], b[i], `${path}[${i}]`);
+        }
+        return path;
+    }
+    if (a && b && typeof a === "object" && typeof b === "object") {
+        const keys = [...new Set([...Dictionary.Keys(a), ...Dictionary.Keys(b)])].sort();
+
+        for (const key of keys)
+            if (JSON.stringify(a[key]) !== JSON.stringify(b[key]))
+                return firstDifference(a[key], b[key], `${path}.${key}`);
+        return path;
+    }
+    return `${path}: ${JSON.stringify(a)} against ${JSON.stringify(b)}`;
+}
+
 /*
  * **`api.json` against the runtime that answers and the C that declares.** The
  * file is the contract every documentation repository reads, so the two
@@ -249,8 +274,15 @@ function checkApiJson(root, problems, members, events) {
      * green: the documentation repositories pin a ref and not a hash. */
     const catalog = apiCatalog(root, onDisk.Commit || "");
 
-    if (JSON.stringify(onDisk) !== JSON.stringify(catalog))
-        problems.push("api.json is not what the runtime says -- run tools/apijson.sh");
+    if (JSON.stringify(onDisk) !== JSON.stringify(catalog)) {
+        /* **Which piece differs, and not only that one does.** A CI log that
+         * says *api.json is stale* sends the reader to regenerate a file that
+         * may be right except for one list; naming the path makes the answer
+         * the log. */
+        problems.push("api.json is not what the runtime says -- " +
+                      firstDifference(onDisk, catalog, "api.json") +
+                      " -- run tools/apijson.sh");
+    }
 
     /* **Every native member a registration table declares is in its class's
      * own list**, which is the one thing a page is written around and the one

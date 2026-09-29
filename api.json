@@ -120,20 +120,6 @@
           "Horizontal",
           "Vertical"
         ],
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -163,6 +149,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -331,20 +331,6 @@
         }
       ],
       "Options": {
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -374,6 +360,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -561,20 +561,6 @@
         }
       ],
       "Options": {
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -604,6 +590,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -754,20 +754,6 @@
         }
       ],
       "Options": {
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -797,6 +783,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -921,20 +921,6 @@
         }
       ],
       "Options": {
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -964,6 +950,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -1168,20 +1168,6 @@
         }
       ],
       "Options": {
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -1211,6 +1197,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -1326,20 +1326,6 @@
           "Horizontal",
           "Vertical"
         ],
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -1369,6 +1355,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -1627,20 +1627,6 @@
           "Horizontal",
           "Vertical"
         ],
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -1670,6 +1656,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -1778,20 +1778,6 @@
         }
       ],
       "Options": {
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -1821,6 +1807,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -1962,20 +1962,6 @@
         }
       ],
       "Options": {
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -2005,6 +1991,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -2233,24 +2233,6 @@
         }
       ],
       "Options": {
-        "Format": [
-          "Number",
-          "Currency"
-        ],
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -2280,6 +2262,24 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "Format": [
+          "Number",
+          "Currency"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -2449,20 +2449,6 @@
         }
       ],
       "Options": {
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -2492,6 +2478,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -2841,20 +2841,6 @@
         }
       ],
       "Options": {
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -2884,6 +2870,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -3021,20 +3021,6 @@
           "Horizontal",
           "Vertical"
         ],
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -3064,6 +3050,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -3224,20 +3224,6 @@
           "Horizontal",
           "Vertical"
         ],
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -3267,6 +3253,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -3390,20 +3390,6 @@
         }
       ],
       "Options": {
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -3433,6 +3419,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -3738,20 +3738,6 @@
           "Horizontal",
           "Vertical"
         ],
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -3781,6 +3767,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -3905,20 +3905,6 @@
           "Horizontal",
           "Vertical"
         ],
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -3948,6 +3934,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -4099,20 +4099,6 @@
           "Horizontal",
           "Vertical"
         ],
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -4142,6 +4128,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -4287,20 +4287,6 @@
         }
       ],
       "Options": {
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -4330,6 +4316,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -4516,20 +4516,6 @@
           "Center",
           "Right"
         ],
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -4559,6 +4545,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -4714,28 +4714,6 @@
         }
       ],
       "Options": {
-        "Mode": [
-          "Continuous",
-          "Discrete"
-        ],
-        "Orientation": [
-          "Horizontal",
-          "Vertical"
-        ],
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -4765,6 +4743,28 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "Mode": [
+          "Continuous",
+          "Discrete"
+        ],
+        "Orientation": [
+          "Horizontal",
+          "Vertical"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -4897,20 +4897,6 @@
         }
       ],
       "Options": {
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -4940,6 +4926,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -5231,20 +5231,6 @@
         }
       ],
       "Options": {
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -5274,6 +5260,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -5484,31 +5484,10 @@
         }
       ],
       "Options": {
-        "Strip": [
-          "Top",
-          "Bottom",
-          "Start",
-          "End",
-          "None"
-        ],
         "Arrangement": [
           "Fixed",
           "Horizontal",
           "Vertical"
-        ],
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
         ],
         "Cursor": [
           "Auto",
@@ -5539,6 +5518,27 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "Strip": [
+          "Top",
+          "Bottom",
+          "Start",
+          "End",
+          "None"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -5653,20 +5653,6 @@
           "Horizontal",
           "Vertical"
         ],
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -5696,6 +5682,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -5809,20 +5809,6 @@
           "Horizontal",
           "Vertical"
         ],
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -5852,6 +5838,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -6015,26 +6015,6 @@
         }
       ],
       "Options": {
-        "Fit": [
-          "Fill",
-          "Contain",
-          "Cover",
-          "ScaleDown"
-        ],
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -6064,6 +6044,26 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "Fit": [
+          "Fill",
+          "Contain",
+          "Cover",
+          "ScaleDown"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -6246,30 +6246,10 @@
         }
       ],
       "Options": {
-        "Position": [
-          "Top",
-          "Bottom",
-          "Left",
-          "Right"
-        ],
         "Arrangement": [
           "Fixed",
           "Horizontal",
           "Vertical"
-        ],
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
         ],
         "Cursor": [
           "Auto",
@@ -6300,6 +6280,26 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "Position": [
+          "Top",
+          "Bottom",
+          "Left",
+          "Right"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -6454,24 +6454,6 @@
         }
       ],
       "Options": {
-        "Orientation": [
-          "Horizontal",
-          "Vertical"
-        ],
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -6501,6 +6483,24 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "Orientation": [
+          "Horizontal",
+          "Vertical"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -6748,20 +6748,6 @@
           "Horizontal",
           "Vertical"
         ],
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -6791,6 +6777,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -6950,30 +6950,10 @@
         }
       ],
       "Options": {
-        "Scrollbars": [
-          "Both",
-          "Horizontal",
-          "Vertical",
-          "None"
-        ],
         "Arrangement": [
           "Fixed",
           "Horizontal",
           "Vertical"
-        ],
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
         ],
         "Cursor": [
           "Auto",
@@ -7004,6 +6984,26 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "Scrollbars": [
+          "Both",
+          "Horizontal",
+          "Vertical",
+          "None"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -7122,24 +7122,6 @@
         }
       ],
       "Options": {
-        "Orientation": [
-          "Horizontal",
-          "Vertical"
-        ],
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -7169,6 +7151,24 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "Orientation": [
+          "Horizontal",
+          "Vertical"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -7382,30 +7382,6 @@
         }
       ],
       "Options": {
-        "ValuePosition": [
-          "Top",
-          "Bottom",
-          "Left",
-          "Right"
-        ],
-        "Orientation": [
-          "Horizontal",
-          "Vertical"
-        ],
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -7435,6 +7411,30 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "Orientation": [
+          "Horizontal",
+          "Vertical"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "ValuePosition": [
+          "Top",
+          "Bottom",
+          "Left",
+          "Right"
         ]
       },
       "Texts": [
@@ -7726,217 +7726,6 @@
         }
       ],
       "Options": {
-        "Language": [
-          "",
-          "abnf",
-          "actionscript",
-          "ada",
-          "ansforth94",
-          "asciidoc",
-          "asp",
-          "astro",
-          "automake",
-          "awk",
-          "dosbatch",
-          "bennugd",
-          "bibtex",
-          "blueprint",
-          "bluespec",
-          "boo",
-          "c",
-          "c-sharp",
-          "cpp",
-          "cpphdr",
-          "chdr",
-          "changelog",
-          "cmake",
-          "cobol",
-          "commonlisp",
-          "css",
-          "csv",
-          "cuda",
-          "d",
-          "dart",
-          "def",
-          "desktop",
-          "diff",
-          "docbook",
-          "docker",
-          "dpatch",
-          "dtd",
-          "eiffel",
-          "elixir",
-          "erb",
-          "erb-html",
-          "erb-js",
-          "erlang",
-          "rpmspec",
-          "fsharp",
-          "fcl",
-          "fish",
-          "ftl",
-          "forth",
-          "fortran",
-          "gap",
-          "gdscript",
-          "genie",
-          "go",
-          "gradle",
-          "dot",
-          "groff",
-          "groovy",
-          "gtk-doc",
-          "gtkrc",
-          "haddock",
-          "haskell",
-          "haxe",
-          "html",
-          "idl",
-          "idl-exelis",
-          "imagej",
-          "ini",
-          "j",
-          "jade",
-          "java",
-          "js",
-          "js-val",
-          "js-expr",
-          "js-fn",
-          "js-lit",
-          "js-mod",
-          "js-st",
-          "jsdoc",
-          "json",
-          "jsx",
-          "julia",
-          "kotlin",
-          "latex",
-          "lean",
-          "cg",
-          "glsl",
-          "less",
-          "lex",
-          "libtool",
-          "haskell-literate",
-          "llvm",
-          "logcat",
-          "logtalk",
-          "lua",
-          "m4",
-          "makefile",
-          "mallard",
-          "markdown",
-          "matlab",
-          "maxima",
-          "mediawiki",
-          "meson",
-          "modelica",
-          "mxml",
-          "nemerle",
-          "netrexx",
-          "nix",
-          "nsis",
-          "objc",
-          "objj",
-          "ocaml",
-          "ocl",
-          "octave",
-          "ooc",
-          "opal",
-          "opencl",
-          "pascal",
-          "perl",
-          "php",
-          "pig",
-          "pkgconfig",
-          "dtl",
-          "tera",
-          "powershell",
-          "prolog",
-          "proto",
-          "puppet",
-          "python3",
-          "python",
-          "r",
-          "reasonml",
-          "gdb-log",
-          "rst",
-          "ruby",
-          "rust",
-          "scala",
-          "scheme",
-          "scilab",
-          "scss",
-          "sh",
-          "solidity",
-          "sparql",
-          "spice",
-          "sql",
-          "sml",
-          "star",
-          "sweave",
-          "swift",
-          "systemverilog",
-          "tcl",
-          "terraform",
-          "testv1",
-          "texinfo",
-          "thrift",
-          "todotxt",
-          "toml",
-          "gettext-translation",
-          "twig",
-          "t2t",
-          "typescript",
-          "typescript-js-expr",
-          "typescript-js-fn",
-          "typescript-js-lit",
-          "typescript-js-mod",
-          "typescript-js-st",
-          "typescript-jsx",
-          "typescript-type-expr",
-          "typescript-type-gen",
-          "typescript-type-lit",
-          "vala",
-          "vbnet",
-          "verilog",
-          "vhdl",
-          "wren",
-          "xml",
-          "xslt",
-          "yacc",
-          "yaml",
-          "yara",
-          "zig"
-        ],
-        "Theme": [
-          "Adwaita",
-          "Adwaita-dark",
-          "classic",
-          "classic-dark",
-          "cobalt",
-          "cobalt-light",
-          "kate",
-          "kate-dark",
-          "oblivion",
-          "solarized-light",
-          "solarized-dark",
-          "tango"
-        ],
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -7966,6 +7755,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -8149,20 +7952,6 @@
         }
       ],
       "Options": {
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -8192,6 +7981,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -8310,20 +8113,6 @@
         }
       ],
       "Options": {
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -8353,6 +8142,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -8502,26 +8305,6 @@
           "Horizontal",
           "Vertical"
         ],
-        "Grows": [
-          "Both",
-          "Start",
-          "End",
-          "Neither"
-        ],
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -8551,6 +8334,26 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "Grows": [
+          "Both",
+          "Start",
+          "End",
+          "Neither"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -8674,20 +8477,6 @@
         }
       ],
       "Options": {
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -8717,6 +8506,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -8885,31 +8688,10 @@
         }
       ],
       "Options": {
-        "Strip": [
-          "Top",
-          "Bottom",
-          "Start",
-          "End",
-          "None"
-        ],
         "Arrangement": [
           "Fixed",
           "Horizontal",
           "Vertical"
-        ],
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
         ],
         "Cursor": [
           "Auto",
@@ -8940,6 +8722,27 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "Strip": [
+          "Top",
+          "Bottom",
+          "Start",
+          "End",
+          "None"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -9386,20 +9189,6 @@
         }
       ],
       "Options": {
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -9429,6 +9218,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -9648,20 +9451,6 @@
         }
       ],
       "Options": {
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -9691,6 +9480,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -9950,33 +9753,10 @@
         }
       ],
       "Options": {
-        "Purpose": [
-          "Text",
-          "Digits",
-          "Number",
-          "Phone",
-          "Url",
-          "Email",
-          "Name"
-        ],
         "Alignment": [
           "Left",
           "Center",
           "Right"
-        ],
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
         ],
         "Cursor": [
           "Auto",
@@ -10007,6 +9787,29 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "Purpose": [
+          "Text",
+          "Digits",
+          "Number",
+          "Phone",
+          "Url",
+          "Email",
+          "Name"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -10132,20 +9935,6 @@
         }
       ],
       "Options": {
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -10175,6 +9964,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -10326,20 +10129,6 @@
         }
       ],
       "Options": {
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -10369,6 +10158,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -10651,20 +10454,6 @@
         }
       ],
       "Options": {
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -10694,6 +10483,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -11002,26 +10805,6 @@
         }
       ],
       "Options": {
-        "Fit": [
-          "Fill",
-          "Contain",
-          "Cover",
-          "ScaleDown"
-        ],
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -11051,6 +10834,26 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "Fit": [
+          "Fill",
+          "Contain",
+          "Cover",
+          "ScaleDown"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [
@@ -11862,20 +11665,6 @@
         }
       ],
       "Options": {
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
         "Cursor": [
           "Auto",
           "Arrow",
@@ -11905,6 +11694,20 @@
           "ResizeTopRight",
           "ResizeColumn",
           "ResizeRow"
+        ],
+        "HAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
+        ],
+        "VAlign": [
+          "Auto",
+          "Start",
+          "End",
+          "Center",
+          "Fill"
         ]
       },
       "Texts": [

@@ -53,6 +53,17 @@ const API_NAMED_TYPE = new Regex("^\\s*/\\*\\s*type\\s+([A-Za-z_][\\w.]*)\\s*\\*
  * names, so the docs check can hold that prose to the code; there are no
  * signatures and no descriptions, because there is no entry to hang one on.
  */
+/*
+ * **The options a machine answers and a manifest must not freeze.** Two of
+ * `SourceEditor`'s properties list what the installed GtkSourceView has -- its
+ * languages and its style schemes -- so the list changes with the package, and
+ * with the version of it: frozen into the manifest, the file generated on one
+ * machine would never equal the file generated on another, and CI would fail
+ * for a reason that is nobody's mistake. `Widget.PropertyOptions` answers them
+ * live, which is where they belong.
+ */
+const API_RUNTIME_OPTIONS = { SourceEditor: ["Language", "Theme"] };
+
 const API_TABLE_TYPES = { menuitem_props: "MenuItem", action_props: "Action",
                           /* And the player, whose accessors are handed to each
                            * instance rather than hung on a prototype: the
@@ -138,15 +149,22 @@ function apiParents(root) {
  * it has -- so this is asked and not read.
  */
 function apiWidget(name, parent) {
-    const out = apiClass(name, undefined, parent);
+    const out     = apiClass(name, undefined, parent);
     const options = {};
+    const runtime = API_RUNTIME_OPTIONS[name] || [];
 
     for (const m of Widget.Members(name))
-        if (m.Kind === "Property") {
+        if (m.Kind === "Property" && !runtime.includes(m.Name)) {
             const got = Widget.PropertyOptions(name, m.Name);
             if (got && got.length) options[m.Name] = got;
         }
-    out.Options = options;
+
+    /* Sorted, because `JSON.stringify` writes an object in insertion order and
+     * the order the members came back in is not this file's business. */
+    const sorted = {};
+    for (const key of Dictionary.Keys(options).sort())
+        sorted[key] = options[key];
+    out.Options = sorted;
     out.Texts   = Widget.TextProperties(name);
     return out;
 }
