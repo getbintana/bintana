@@ -10929,7 +10929,7 @@ function* p_outline(ide) {
 /*
  * The pass over the whole project.
  *
- * Six checks, and each one is a thing the runtime was measured accepting in
+ * Seven checks, and each one is a thing the runtime was measured accepting in
  * silence, so each is planted here on purpose and then taken away again. What is
  * asserted is not only that they fire: it is that the pass **replaces its own
  * rows** -- running it twice must not double anything, and a project with the
@@ -11036,6 +11036,108 @@ function* p_check(ide) {
           said.some((r) => r.file === "Bad.js" && r.text.includes("has no Enabld")),
           JSON.stringify(said));
 
+    /*
+     * **A module is checked too, which is the fix this fixture is here for.**
+     * `Bad.js` is the easy half: it has a `.form` beside it, so the member and
+     * handler checks had something to read. A `.js` with no `.form` -- which is
+     * most of a project, and every file under `modules/` -- was returned early
+     * and read by nobody, at any point, ever. Its answer came from the run, as a
+     * `ReferenceError` in whichever *other* file called it.
+     */
+    const broken = "class Broken {\n    ok() {\n";            /* unterminated */
+    File.Save(File.Join(TMP, "Broken.js"), broken);
+
+    ide.listFiles();
+    pass.run();
+
+    const broke = rows().filter((r) => r.file === "Broken.js");
+    check("a module that does not compile is reported",
+          broke.some((r) => r.kind === "Error"), JSON.stringify(broke));
+    check("...with a line to go to, since the message has one",
+          broke.some((r) => r.line > 0), JSON.stringify(broke));
+    check("...and nothing is said about its members, having no form to read",
+          !broke.some((r) => r.text.includes("has no")), JSON.stringify(broke));
+
+    /* And the same file, once it compiles, has no syntax complaint -- a syntax
+     * complaint is not a marker left behind. It still draws a row from the
+     * manifest check, which is a different question and a correct one: a planted
+     * file is in no `sources`, so it would never load. Asserting on the kind
+     * rather than on the file is what keeps this from testing the wrong thing. */
+    File.Save(File.Join(TMP, "Broken.js"), "class Broken {\n    ok() { return 1; }\n}\n");
+    pass.run();
+    check("a module that compiles has no syntax complaint",
+          !rows().some((r) => r.file === "Broken.js" && r.kind === "Error"),
+          JSON.stringify(rows().filter((r) => r.file === "Broken.js")));
+
+    /* --- a name this language took ------------------------------------------ */
+
+    /*
+     * **`setTimeout(...)` is the first thing a JavaScript-trained hand types
+     * here**, and until now the whole of what it got was a `ReferenceError` at
+     * the next run -- while the replacement sat in a comment in the C. These
+     * are planted in a *module*, which is where a beginner's helper lives and
+     * which nothing read before this pass.
+     */
+    const taken = [
+        "class Taken {",
+        "    run(fn) {",
+        "        setTimeout(fn, 100);",
+        "        const merged = Object.assign({}, { a: 1 });",
+        "        return Object.freeze(merged);",
+        "    }",
+        "}",
+    ].join("\n");
+    File.Save(File.Join(TMP, "Taken.js"), taken);
+
+    ide.listFiles();
+    pass.run();
+
+    const said2 = rows().filter((r) => r.file === "Taken.js");
+    const text  = (r) => r.text;
+    check("a name the language took is reported in a module",
+          said2.some((r) => text(r).includes("setTimeout is not part")),
+          JSON.stringify(said2));
+    check("...naming the word to write instead",
+          said2.some((r) => text(r).includes("Timer.After(delay, tick)")),
+          JSON.stringify(said2));
+    check("...with a line to go to",
+          said2.some((r) => r.text.includes("setTimeout") && r.line > 0),
+          JSON.stringify(said2));
+    check("and a dotted one too, which is the same table keyed by its object",
+          said2.some((r) => text(r).includes("Object.assign") &&
+                               text(r).includes("{ ...a, ...b }")),
+          JSON.stringify(said2));
+    check("one with no replacement says so, rather than naming a neighbour",
+          said2.some((r) => text(r).includes("Object.freeze") &&
+                               text(r).includes("nothing here replaces it")),
+          JSON.stringify(said2));
+
+    /*
+     * **And the four shapes it must not report**, which is the whole safety of
+     * asking of call targets alone. A method on somebody else's object, a
+     * declaration, a key, and a mention inside a string are all things a bare
+     * identifier scan would report, and a check that reports those is a check
+     * somebody switches off.
+     */
+    const safe = [
+        "class Safe {",
+        "    /* setTimeout(fn, 1) in a comment is a mention */",
+        "    call(host) {",
+        "        const name = \"setTimeout(fn, 100)\";",
+        "        return host.setTimeout(0) + name.length;",
+        "    }",
+        "}",
+        "function setTimeout(fn) { return fn; }",
+        "const bag = { setTimeout: 1 };",
+    ].join("\n");
+    File.Save(File.Join(TMP, "Safe.js"), safe);
+
+    pass.run();
+    check("a member, a declaration, a key and a mention in a string are all quiet",
+          !rows().some((r) => r.file === "Safe.js" &&
+                              r.text.includes("setTimeout is not part")),
+          JSON.stringify(rows().filter((r) => r.file === "Safe.js")));
+
     /* Running it again says the same thing once, not twice. */
     const again = rows().length;
     pass.run();
@@ -11065,6 +11167,9 @@ function* p_check(ide) {
 
     File.Delete(File.Join(TMP, "Bad.form"));
     File.Delete(File.Join(TMP, "Bad.js"));
+    File.Delete(File.Join(TMP, "Broken.js"));
+    File.Delete(File.Join(TMP, "Taken.js"));
+    File.Delete(File.Join(TMP, "Safe.js"));
     ide.listFiles();
     pass.run();
 
