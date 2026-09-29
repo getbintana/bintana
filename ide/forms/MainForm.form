@@ -208,6 +208,11 @@
           "shortcut": "F12"
         },
         {
+          "name": "MnuFindRefs",
+          "text": "Find references",
+          "shortcut": "<Shift>F12"
+        },
+        {
           "name": "MnuGotoSymbol",
           "text": "Go to...",
           "shortcut": [

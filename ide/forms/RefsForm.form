@@ -1,0 +1,83 @@
+{
+  "format": "bintana-form/1",
+  "class": "RefsForm",
+  "properties": {
+    "Height": 420,
+    "Icon": "system-search-symbolic",
+    "Text": "References",
+    "Width": 620
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblWord",
+      "properties": {
+        "Ellipsize": true,
+        "HAlign": "Fill",
+        "Height": 24,
+        "Style": "dim-label",
+        "VAlign": "Start",
+        "Width": 588,
+        "X": 16,
+        "Y": 14
+      }
+    },
+    {
+      "type": "RowList",
+      "name": "List",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 300,
+        "MinHeight": 120,
+        "MinWidth": 320,
+        "Style": "frame",
+        "VAlign": "Fill",
+        "Width": 588,
+        "X": 16,
+        "Y": 46
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblCount",
+      "properties": {
+        "Ellipsize": true,
+        "HAlign": "Fill",
+        "Height": 22,
+        "Style": "dim-label",
+        "VAlign": "End",
+        "Width": 300,
+        "X": 16,
+        "Y": 354
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnClose",
+      "properties": {
+        "Cancel": true,
+        "HAlign": "End",
+        "Height": 32,
+        "Text": "Close",
+        "VAlign": "End",
+        "Width": 90,
+        "X": 414,
+        "Y": 372
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnRename",
+      "properties": {
+        "HAlign": "End",
+        "Height": 32,
+        "Style": "suggested-action",
+        "Text": "Rename...",
+        "VAlign": "End",
+        "Width": 110,
+        "X": 494,
+        "Y": 372
+      }
+    }
+  ]
+}

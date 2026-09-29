@@ -11048,6 +11048,165 @@ function* p_names(ide) {
 }
 
 /*
+ * Where a name is used, and the rename that moves it.
+ *
+ * `Ide.Refactor` reads the project's `.js` with `Ide.Lex` -- a comment and a
+ * string are not references -- and answers declarations first. The rename
+ * writes through `TabSet.rewriteSource`, so the disk and the open tab move
+ * together, and it refuses every shape it cannot attribute. What is asserted
+ * here is both halves: the clean rename, and each refusal that keeps a wrong
+ * edit from being written.
+ */
+function* p_refs(ide) {
+    const save = (name, lines) =>
+        File.Save(File.Join(TMP, name), lines.join("\n") + "\n");
+
+    /* --- references ---------------------------------------------------------- */
+
+    save("RefA.js", [
+        "class RefA {",
+        "    /* RefA is mentioned in a comment */",
+        "    static Make() {",
+        "        const s = \"RefA in a string\";",
+        "        return s;",
+        "    }",
+        "}",
+    ]);
+    save("RefB.js", [
+        "class RefB {",
+        "    Build() {",
+        "        const one = new RefA();",
+        "        return RefA.Make() + one;",
+        "    }",
+        "}",
+    ]);
+    save("RefM.js", [
+        "class RefM {",
+        "    refTurn() { return 1; }",
+        "    twice() { return this.refTurn() + this.refTurn(); }",
+        "    refWalk() { return 2; }",
+        "}",
+    ]);
+    save("RefN.js", [
+        "class RefN {",
+        "    hello() {",
+        "        const o = new RefM();",
+        "        return o.refWalk();",
+        "    }",
+        "}",
+    ]);
+    save("RefS.js", [
+        "class RefS {",
+        "    refStop() { return 1; }",
+        "    use(refStop) { return refStop; }",
+        "}",
+    ]);
+    ide.listFiles();
+
+    const refs = ide.refactor.references("RefA");
+
+    eq("the declaration comes first", refs[0].Decl, "Class");
+    eq("...on the line it is on", refs[0].Line, 1);
+    eq("a use in each file, and nothing else", refs.filter((r) => !r.Decl).length, 2);
+    check("a mention in a comment is not a reference",
+          !refs.some((r) => r.File === "RefA.js" && r.Line === 2));
+    check("...and neither is one in a string",
+          !refs.some((r) => r.File === "RefA.js" && r.Line === 4));
+
+    /* --- the rename, and the file it moves with the class -------------------- */
+
+    const done = ide.refactor.rename("RefA", "RefC");
+    eq("a rename writes every code occurrence", done.Moved, 3);
+    eq("...in both files", done.Files.length, 2);
+    check("...and the file named after the class moves with it",
+          done.Files.includes("RefC.js"), JSON.stringify(done.Files));
+
+    const a = File.Load(File.Join(TMP, "RefC.js"));
+    const b = File.Load(File.Join(TMP, "RefB.js"));
+    check("the declaration is renamed", a.includes("class RefC {"));
+    check("the comment keeps its word", a.includes("RefA is mentioned in a comment"));
+    check("the string keeps its word", a.includes("\"RefA in a string\""));
+    check("the uses are renamed",
+          b.includes("new RefC()") && b.includes("RefC.Make()"));
+    check("and no code still says the old name", !b.includes("RefA"));
+
+    /* The tab the move opens is a side effect of it; the fixture does not
+     * outlive the phase and neither may the tab. */
+    ide.tabs.closeByName("RefC.js", true);
+
+    /* --- what it refuses ----------------------------------------------------- */
+
+    const refused = (word, to) => ide.refactor.rename(word, to).Refused || "";
+
+    /* Each refusal computed once: a rename that refuses still walks the whole
+     * project to say why, and asking twice for the message and the detail is
+     * two of those. */
+    const member = refused("refWalk", "refRun");
+    check("a method used on another object refuses",
+          member.includes("member of another object"), member);
+    check("...and the file it is in was not touched",
+          File.Load(File.Join(TMP, "RefN.js")).includes("o.refWalk()"));
+
+    const taken = refused("refTurn", "RefM");
+    check("a name that is already declared refuses",
+          taken.includes("already declared"), taken);
+
+    const shadow = refused("refStop", "refHalt");
+    check("a method shadowed by a local refuses",
+          shadow.includes("a local"), shadow);
+
+    const nothing = refused("Nowhere", "Anywhere");
+    check("a name nothing declares refuses",
+          nothing.includes("Nothing in this project"), nothing);
+
+    const invalid = refused("refTurn", "2turn");
+    check("a word that is not a name refuses",
+          invalid.includes("is not a name"), invalid);
+
+    /* --- the method rename, which is the one that writes --------------------- */
+
+    const spun = ide.refactor.rename("refTurn", "refSpin");
+    eq("a method rename writes the declaration and its uses", spun.Moved, 3);
+
+    const m = File.Load(File.Join(TMP, "RefM.js"));
+    check("...the declaration", m.includes("refSpin() { return 1; }"));
+    check("...and both this. uses",
+          !m.includes("this.refTurn()") && m.includes("this.refSpin()"));
+
+    /* --- the window ---------------------------------------------------------- */
+
+    ide.openInTab("RefM.js");
+    yield* settled(ide);
+
+    /* The word at the cursor is what Shift+F12 asks about: `this.refSpin` at
+     * line 3, column 26 -- `twice() { return this.` is twenty-six characters. */
+    ide.Editor.Select(3, 26, 0);
+    const dlg = ide.findReferences();
+
+    check("the window is up", !!dlg && !!dlg.Visible, String(dlg));
+    eq("...with the declaration and the two uses", dlg.rows.length, 3);
+    check("...and it says whose references they are",
+          dlg.LblWord.Text.includes("refSpin"), dlg.LblWord.Text);
+
+    dlg.List.Select(0);
+    dlg.List_Activate();
+    eq("a row goes to its place", ide.activeFile, "RefM.js");
+    eq("...at its line", ide.Editor.Line, 2);
+    dlg.Close();
+
+    /* A key with no word under it says so rather than opening an empty list. */
+    ide.Editor.Select(4, 0, 0);
+    eq("with no name under the cursor there is nothing to find",
+       ide.findReferences(), null);
+
+    /* Nothing planted outlives its phase, tab included. */
+    ide.tabs.closeByName("RefM.js", true);
+    for (const f of ["RefB.js", "RefM.js", "RefN.js", "RefS.js"])
+        File.Delete(File.Join(TMP, f));
+    ide.listFiles();
+}
+
+/*
  * The outline: what is in the file on screen, beside it.
  *
  * The side panel used to be hidden on every code tab, because what it held spoke
@@ -13733,6 +13892,7 @@ const PHASES = [
     { name: "problems", run: p_problems },
     { name: "lex",     run: p_lex },
     { name: "names", run: p_names },
+    { name: "refs",    run: p_refs },
     { name: "outline", run: p_outline },
     { name: "check", run: p_check },
     { name: "quick", run: p_quick },

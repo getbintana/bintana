@@ -833,6 +833,51 @@ reading the project's `.js` files and stopping at the first declaration: 40 file
 and 20 000 lines for the IDE's own project, once per keypress, which is less than
 *Find in project* does on every search.
 
+### Shift+F12, and the rename
+
+F12 answers *where is this declared*; **Shift+F12** answers *where else is it* —
+the question somebody asks before touching a name at all, and one the same
+doctrine answers without an analyser: a reference is a word in code, and
+`Ide.Lex` is what says which words are code. A mention in a comment or in a
+string is not one, which is the whole difference between this and *Find in
+project*.
+
+The list is a window of its own (`RefsForm`, raised rather than opened twice and
+not modal, because the point of a result is to be gone to). Declarations come
+first and are labelled with their kind, then the uses by file and line; a row
+opens its file at its line, and a `.form` row opens the designer, which is where
+a control is. Nothing is cached: a file that changed since is a reference that
+moved.
+
+**The rename is the same search asked to write**, and it goes through
+`TabSet.rewriteSource`, so the disk and the open tab move together. What it
+refuses is the design, because a rename that guessed would be right until the
+day two objects shared a name — and a program that runs and does the wrong thing
+is worse than one that refused:
+
+| Written | What the rename does |
+|---|---|
+| `this.greet()` | renamed — in any file, since `this` is the receiver it can attribute |
+| `greet()`, bare, in the file that declares it | renamed; **refused** from another file, where the name resolves somewhere else |
+| `other.greet()` | **refused**: without a resolver this cannot tell whose member it is |
+| `{ greet: 1 }`, `greet:` as a label, `cond ? greet : other` | **refused**: a key, a label or a ternary, and not a use this can attribute |
+| a name already declared, or a class of a library the project `uses` | **refused**: the two would collide at load |
+| a local of the same name in a file with a bare use | **refused**: the use could be that binding |
+| `<control>_<event>` | **refused**: rename the control, which carries its handlers along |
+| a form class | **refused**: F2 renames it, and moves its `.form` and `project.json` with it |
+| a control | **refused**: the designer's rename is the one that carries its handlers |
+| a class a `.form` places as a control | **refused**: this does not rewrite `.form` files |
+
+A class whose file is named after it **moves with it**, because the file is where
+a project's class is looked for; one that shares its file with others stays where
+it is. And the libraries are read and never written: a rename that reached into
+one would edit it behind every other project that has it.
+
+Nothing is written before every refusal has been checked, so the two outcomes are
+a count or a sentence — never half a rename. `tests/ide`'s `refs` phase drives
+both, and every refusal in that table is one wrong edit that would otherwise
+have been written.
+
 ## What the editor proposes
 
 Two providers, and the difference between them is the whole point.
@@ -2224,6 +2269,11 @@ unsaved work gets the retype on top of that work and stays unsaved.
 References from *other* files are deliberately **not** rewritten: the IDE lists
 which files still name the old class and leaves them alone, rather than blindly
 editing someone else's code.
+
+**A third rename is not a file's.** A class, a top-level function or a method is
+moved by [Shift+F12's rename](#shiftf12-and-the-rename), which rewrites every
+reference it can attribute and refuses the rest -- the same search shown in the
+list, asked to write.
 
 ### Deleting a control, and the code it leaves
 

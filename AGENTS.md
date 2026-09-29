@@ -4905,6 +4905,17 @@ person who wrote it either.
   `this.MnuHide.Enabled = false` set from code does not survive the next right
   click. Context belongs in the event's answer (`{ enabled: … }`), which is the
   same rule `Sort` already states for sorting.
+- **A project-local `lib/` is the project's files, and not a library, unless
+  `uses` names it.** `Classes.rescan` walks the whole project directory into
+  `files`, and the six-place search only turns a directory into a library when
+  the manifest says so -- so a scan that means *the project's own code* has to
+  ask `Classes.inLibrary(file)` itself, which is what `Ide.Refactor` does and
+  what the tree already did to file a component under its library tab.
+  Measured with `tests/ide`'s own fixture: `lib/gadgets/Dial.js` was scanned,
+  and its `turn` made a rename of a project method refuse for a class the
+  project had never heard of. The same asymmetry runs the other way -- a
+  library *is* declared and must not be written, so `Ide.Refactor` reads its
+  classes to refuse a collision and never rewrites one.
 
 ## Xml and Record
 

@@ -245,6 +245,9 @@ class MainForm extends Form {
      * the two things that ask: the pause, and the project pass. */
     names     = new Ide.Names(this);
     live      = new Ide.Live(this);
+    /* Where a name is used, and moving it everywhere it means the same thing:
+     * F12's other half, and the one rename that is not the designer's. */
+    refactor  = new Ide.Refactor(this);
     /* ...and the pass itself: what is wrong with the project, asked of the whole
      * of it rather than of the file on screen. */
     check     = new Ide.Check(this);
@@ -2172,6 +2175,28 @@ class MainForm extends Form {
     /* F12. Everything about *which* definition is `Navigator`'s; what is here
      * is the key, the way `MnuReference_Click` is F1's and nothing more. */
     MnuGoto_Click() { this.navigator.go(); }
+
+    /*
+     * Shift+F12, F12's other half: *where else is this name*.
+     *
+     * The word is taken the way the completion and F12 take it -- the tail of a
+     * dotted name, because `this.greet` is a use of `greet` -- and the search
+     * and the window are `Ide.Refactor`'s and `RefsForm`'s. A key that silently
+     * does nothing is indistinguishable from one that is not bound, so no word
+     * under the cursor is a line in the log.
+     */
+    MnuFindRefs_Click() { this.findReferences(); }
+
+    findReferences() {
+        const word = this.wordAtCursor();
+        const name = word.includes(".") ? word.slice(word.lastIndexOf(".") + 1)
+                                        : word;
+        if (!name) {
+            this.log(`${Locale.Text("Put the cursor on a name first.")}\n`);
+            return null;
+        }
+        return RefsForm.show(this, name);
+    }
 
     /*
      * --- debugging ----------------------------------------------------------
