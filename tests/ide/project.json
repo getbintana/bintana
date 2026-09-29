@@ -55,6 +55,7 @@
     "../../ide/modules/TabSet.js",
     "../../ide/modules/Completion.js",
     "../../ide/modules/CallTip.js",
+    "../../ide/modules/Tooltip.js",
     "../../ide/modules/Finder.js",
     "../../ide/forms/SearchForm.js",
     "../../ide/forms/SymbolForm.js",

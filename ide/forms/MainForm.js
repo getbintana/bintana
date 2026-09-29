@@ -216,6 +216,7 @@ class MainForm extends Form {
     tabs      = new Ide.TabSet(this);        // the open files
     completion = new Ide.Completion(this);   // what the editor proposes
     callTip    = new Ide.CallTip(this);      // the parameters of the call being written
+    tooltip    = new Ide.Tooltip(this);      // what the name under the pointer is
     recovery  = new Ide.Recovery(this);      // the dirty tabs, copied aside
     session   = new Ide.Session(this);       // the desk, as it was left
     /* The palette is one widget for every open form, so it is the window's and
@@ -1729,8 +1730,21 @@ class MainForm extends Form {
         this.refresh();
     }
 
+    /* "The pointer is here" -- the point decides which name it is about, and
+     * the dwell is `Ide.Tooltip`'s. */
+    Editor_MouseMove(x, y) {
+        this.tooltip.hovered(this.Editor, x, y);
+    }
+
+    Editor_MouseLeave() {
+        this.tooltip.close();
+    }
+
     Editor_Cursor() {
         this.refresh();
+        /* A caret that moved is not a pointer that is resting: typing with the
+         * pointer over a name puts the tooltip away. */
+        this.tooltip.close();
         /* The cursor moving is the question *which argument am I in*, typed or
          * walked into with the arrows. */
         this.callTip.update();
@@ -1775,8 +1789,12 @@ class MainForm extends Form {
             this.cycleTab(shift ? -1 : 1);
             return true;
         }
-        /* Escape puts the parameter hint away first: it is the smaller thing
-         * on screen, and it comes back by itself on the next move. */
+        /* Escape puts the tooltip and then the parameter hint away: the
+         * smaller thing on screen first, and both come back by themselves. */
+        if (key === "Escape" && this.tooltip.visible) {
+            this.tooltip.close();
+            return true;
+        }
         if (key === "Escape" && this.callTip.visible) {
             this.callTip.close(true);
             return true;
@@ -2132,39 +2150,65 @@ class MainForm extends Form {
      * page, which is the one question this form can answer and that one cannot.
      */
     MnuReference_Click() {
-        const root = HelpForm.root();
-        if (!root) {
-            Message.Warning("The reference is not installed beside this build.");
+        const at = this.helpTopic();
+
+        /* A page of the reference package, when it is installed beside this
+         * build... */
+        if (at && at.page) {
+            HelpForm.open(at.page, at.member);
             return;
         }
+        /* ...and the same topic built from the runtime when it is not: the
+         * members and their descriptions are in the runtime, so the help
+         * works with nothing installed but what is running. */
+        if (at && at.name) {
+            const topic = this.completion.reference(at.name, at.member);
+            if (topic) {
+                HelpForm.openTopic(topic);
+                return;
+            }
+        }
 
-        const at = this.helpTopic();
-        if (at) HelpForm.open(at.page, at.member);
-        else    HelpForm.open(File.Join(root, "README.md"));
+        const root = HelpForm.root();
+        if (root) {
+            HelpForm.open(File.Join(root, "README.md"));
+            return;
+        }
+        Message.Warning("The reference is not installed beside this build.");
     }
 
-    /* What F1 is about, or `null` for *the reference itself*. */
+    /* What F1 is about -- `{ name, member, page }` with the page `""` when the
+     * package has none -- or `null` for *the reference itself*. */
     helpTopic() {
         const control = this.designing ? this.designer.selected : null;
 
         if (control) {
             /* The tree's own answer, which knows a stand-in from a control: a
-             * component's name has no page here, and falling through to the word
-             * under the cursor is the right thing when it does not. */
-            const page = HelpForm.pageFor(this.designer.tree.typeOf(control));
+             * component's name has no page here, and the generated topic is
+             * what describes it. */
+            const type = this.designer.tree.typeOf(control);
             const grid = this.designer ? this.designer.grid : null;
-            if (page) return { page, member: grid ? grid.currentProperty() : "" };
+            return { name: type, member: grid ? grid.currentProperty() : "",
+                     page: HelpForm.pageFor(type) };
         }
 
         const word = this.wordAtCursor();
         if (!word) return null;
 
+        /* A handler is named after the event it answers: `Btn_Click` is `Click`
+         * on the control named `Btn`, and that is what F1 should describe. */
+        const under = word.indexOf("_");
+        if (under > 0 && word.indexOf(".") < 0) {
+            const type = this.completion.typeOf(word.slice(0, under));
+            if (type)
+                return { name: type, member: word, page: HelpForm.pageFor(type) };
+        }
+
         /* `File.Load` is a page and a member; `TableView` is a page. */
         const dot  = word.indexOf(".");
         const name = dot > 0 ? word.slice(0, dot) : word;
-        const page = HelpForm.pageFor(name);
-
-        return page ? { page, member: dot > 0 ? word.slice(dot + 1) : "" } : null;
+        return { name, member: dot > 0 ? word.slice(dot + 1) : "",
+                 page: HelpForm.pageFor(name) };
     }
 
     /* The word the caret is in, as a name: letters, digits and the dot that

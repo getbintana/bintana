@@ -530,6 +530,136 @@ Ide.Completion = class Completion {
         return m ? found(m.Signature) : null;
     }
 
+    /*
+     * --- what a name is, for the tooltip and the help window ----------------
+     *
+     * `topic(word)` answers the two questions a pointer resting on an
+     * identifier asks: what is this, and what does it declare. The name is
+     * resolved the way a completion after a dot is -- `resolveChain`, so a
+     * control's type, a field's `new`, a local assigned from a call and a
+     * library class read by the parser all answer with no second reader -- and
+     * a handler name (`Btn_Click`) is resolved to the event it answers.
+     */
+    topic(word) {
+        const name = (word || "").replace(/^\.+|\.+$/g, "");
+        if (!name)
+            return null;
+
+        if (name.indexOf(".") < 0 && name.indexOf("_") > 0) {
+            const cut   = name.indexOf("_");
+            const owner = name.slice(0, cut);
+            const type  = this.typeOf(owner) || (this.widgets.has(owner) ? owner : "");
+            const info  = type ? this.eventInfo(type, name.slice(cut + 1)) : null;
+            return info ? { Title: name, Signature: info.Signature, Doc: info.Doc } : null;
+        }
+        if (name.indexOf(".") < 0)
+            return null;
+
+        const expr  = completionChain(name + ".");
+        const steps = expr ? completionSteps(expr) : null;
+        if (!steps || steps.length < 2)
+            return null;
+
+        const last = steps[steps.length - 1];
+        if (last.index || last.call)
+            return null;
+
+        /* `this.go`: a method of the file being edited, named by the parser. */
+        if (steps.length === 2 && steps[0].name === "this") {
+            const editor = this.ide.Editor;
+            let   own    = null;
+            try {
+                own = Application.Symbols(editor ? editor.Text : "")
+                        .find((x) => x.Name === last.name && x.Kind === "Method");
+            } catch (e) { own = null; }
+            if (own)
+                return { Title: `this.${last.name}`, Signature: own.Params || "()",
+                         Doc: own.Doc || "", Returns: own.Returns || "" };
+        }
+
+        const owner = expr.slice(0, expr.length - last.name.length).replace(/\.$/, "");
+        const t     = this.resolveChain(owner, 0);
+        if (!t)
+            return null;
+        const m = this.membersOfTypeRaw(t).find((x) => x.Name === last.name);
+        return m ? { Title: `${owner}.${last.name}`, Signature: m.Signature || "",
+                     Doc: m.Doc || "", Returns: m.Returns || "" } : null;
+    }
+
+    /*
+     * An event's signature and description for a class this process may never
+     * have run. The runtime answers out of the sources -- the comment above
+     * the `static Events` line that declares it -- and an event the sources do
+     * not name is asked of the class every component inherits, which is where
+     * `MouseDown` comes from.
+     */
+    eventInfo(type, event) {
+        const sources = [...new Set(this.declaredClasses().sources.values())];
+        const ask = (t, options) => {
+            try {
+                const sig = Widget.EventSignature(t, event, options);
+                const doc = Widget.EventDoc(t, event, options);
+                if (sig || doc)
+                    return { Signature: sig || "", Doc: doc || "" };
+            } catch (e) { /* not a class, or no such event */ }
+            return null;
+        };
+        if (this.widgets.has(type))
+            return ask(type);
+        return ask(type, { Sources: sources }) || ask("Component");
+    }
+
+    /*
+     * A class as a Markdown page, for an installation with no reference
+     * package: the help has to work with only the runtime installed, and the
+     * members and descriptions are all in it. `MainForm` hands the answer to
+     * `HelpForm.openTopic`, which is the same window a page opens in.
+     */
+    reference(name, member) {
+        let members = [];
+        try { members = this.rawMembers(name); } catch (e) { members = []; }
+        if (!members.length)
+            return null;
+
+        const lines = [`# ${name}`, ""];
+
+        if (member && member.indexOf("_") > 0) {
+            const cut  = member.indexOf("_");
+            const info = this.eventInfo(name, member.slice(cut + 1));
+            if (info) {
+                lines.push(`## ${member}`, "", "```js",
+                           `${member}${info.Signature || "()"}`, "```", "");
+                if (info.Doc)
+                    lines.push(info.Doc, "");
+                return this.topicPage(name, member, lines);
+            }
+        }
+
+        lines.push("## Every member", "", "| Member | |", "|---|---|");
+        for (const m of members) {
+            const sig = (m.Kind === "Method" || m.Kind === "Static")
+                        ? (m.Signature || "(...)") : "";
+            const doc = (m.Doc || "").replace(/\|/g, "\\|").replace(/\n+/g, " ");
+            lines.push(`| \`${m.Name}${sig}\` | ${doc} |`);
+        }
+        return this.topicPage(name, member, lines);
+    }
+
+    topicPage(name, member, lines) {
+        const where = this.whereFor(name);
+        lines.push("", `[More detail](${where})`);
+        return { Name: name, Member: member || "", Text: lines.join("\n"), Where: where };
+    }
+
+    /* Which page of the reference to point at, guessed from which list the
+     * name is in -- widgets first, then the globals, then a library's class. */
+    whereFor(name) {
+        const section = this.widgets.has(name) ? "widgets"
+                      : Application.Globals().includes(name) ? "globals"
+                      : "libraries";
+        return `https://github.com/getbintana/bintana-docs/blob/main/docs/reference/${section}/${name}.md`;
+    }
+
     /* --- following a chain -------------------------------------------------- */
 
     /*

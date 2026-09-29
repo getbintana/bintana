@@ -5108,25 +5108,33 @@ function* p_document(ide) {
 }
 
 /*
- * F1 and the reference window.
+ * F1, the reference window and the tooltip.
  *
- * The pages are `docs/reference/`, drawn by `lib/markdown` in a window of their
- * own. What is asserted here is the two halves that are the IDE's: **which page
- * F1 is about**, and that the window really lands on it.
+ * The pages are `docs/reference/`, drawn by `lib/markdown` in a window of
+ * their own -- and when the package is not installed, the same window draws a
+ * topic the runtime builds (`Widget.Members`, `Widget.EventDoc`). What is
+ * asserted here is the halves that are the IDE's: **which topic F1 and the
+ * pointer are about**, that the window lands on the member, and that the
+ * generated page is there when the pages are not.
  */
 function* p_help(ide) {
     const root = HelpForm.root();
 
-    check("the reference is found beside this build", !!root, root);
-    if (!root) return;
-
-    check("a class has a page", HelpForm.pageFor("TableView").endsWith("widgets/TableView.md"));
-    check("a global has one too", HelpForm.pageFor("File").endsWith("globals/File.md"));
-    check("and so does a library's component",
-          HelpForm.pageFor("Chart").endsWith("libraries/Chart.md"));
+    /*
+     * **The pages, when the package is beside this build.** The reference
+     * lives in `bintana-docs` now, so a source checkout of the runtime has
+     * none, and what the suite proves either way is the fallback below: the
+     * runtime describing itself.
+     */
+    if (root) {
+        check("a class has a page", HelpForm.pageFor("TableView").endsWith("widgets/TableView.md"));
+        check("a global has one too", HelpForm.pageFor("File").endsWith("globals/File.md"));
+        check("and so does a library's component",
+              HelpForm.pageFor("Chart").endsWith("libraries/Chart.md"));
+    }
     eq("a name that is nothing has none", HelpForm.pageFor("Nonesuch"), "");
 
-    /* --- which page F1 is about ------------------------------------------- */
+    /* --- which topic F1 is about ------------------------------------------ */
     ide.openInTab("Child.js");
     yield;
 
@@ -5135,11 +5143,97 @@ function* p_help(ide) {
     yield;
 
     const topic = ide.helpTopic();
-    check("the word under the cursor decides the page",
-          !!topic && topic.page.endsWith("globals/File.md"), JSON.stringify(topic));
+    check("the word under the cursor decides the topic",
+          !!topic && topic.name === "File", JSON.stringify(topic));
     eq("and the member after the dot", topic.member, "Load");
+    if (root)
+        check("...whose page is the one the package holds",
+              topic.page.endsWith("globals/File.md"), topic.page);
 
-    /* A form tab with a control selected asks about the control's class. */
+    /* --- the built topic, which is what works with only the runtime ------- */
+    const built = ide.completion.reference("File", "Load");
+    check("the runtime describes a member without the package",
+          !!built && built.Text.includes("Load") && built.Text.includes("path"),
+          built ? built.Text.slice(0, 80) : "nothing");
+
+    /* A handler is named after the event it answers, and the event is what F1
+     * should describe -- not the name, which is nobody's declaration. */
+    const click = ide.completion.topic("Button_Click");
+    check("a handler is described as the event it answers",
+          !!click && click.Signature === "()" && click.Doc.includes("pressed"),
+          JSON.stringify(click));
+
+    /* --- the tooltip, from a point in the editor -------------------------- */
+    ide.Editor.Select(1, 16);          /* inside `Load` */
+    yield* settled(ide);
+
+    const cb = ide.Editor.CursorBounds();
+    ide.Editor_MouseMove(cb.X + 1, cb.Y + 4);
+    yield* until(() => ide.tooltip.visible, 120);
+    check("the pointer resting on a name describes it",
+          ide.tooltip.visible &&
+          ide.tooltip.label.Text.includes("Load") &&
+          ide.tooltip.label.Text.includes("path"),
+          ide.tooltip.label.Text.slice(0, 60));
+
+    ide.tooltip.close();
+    yield;
+    check("and it goes away", !ide.tooltip.visible);
+
+    /* --- the window, with the topic the runtime built ---------------------- */
+    const help = HelpForm.openTopic(built);
+    yield* settled(ide);
+
+    check("the window shows the built page", help.Doc.Text.includes("Load"),
+          help.Doc.Text.slice(0, 40));
+    eq("and it landed on the member", help.Doc.Selection, "Load");
+    check("with the address of the long page", help.LblWhere.Text.includes("bintana-docs"),
+          help.LblWhere.Text);
+
+    if (root) {
+        /* --- a page of the package, and browsing it ------------------------ */
+        const page = HelpForm.open(HelpForm.pageFor("TableView"), "Sortable");
+        yield* settled(ide);
+
+        check("the window shows the page", page.Doc.Path.endsWith("widgets/TableView.md"));
+        check("with the document really laid out", page.Doc.ContentHeight > 1000,
+              page.Doc.ContentHeight);
+        eq("and it landed on the member", page.Doc.Selection, "Sortable");
+        check("which is not at the top of the page", page.Doc.Scroll > 0, page.Doc.Scroll);
+
+        check("every page is in the tree", page.Pages.Count > 70, page.Pages.Count);
+        check("under a category each", page.Pages.Exists("cat:widgets") &&
+              page.Pages.Exists("cat:globals") && page.Pages.Exists("cat:libraries"));
+
+        /* A link between two pages is how the reference is browsed. */
+        const was = page.Doc.Path;
+        page.Doc_Link("ListBox.md", "ListBox");
+        yield;
+
+        check("a link opens the page it names", page.Doc.Path.endsWith("widgets/ListBox.md"));
+        check("and Back is offered", page.BtnBack.Enabled);
+
+        page.BtnBack_Click();
+        yield;
+        eq("which goes back where it was", page.Doc.Path, was);
+
+        /* The find box, which is the same verb F1 lands with. */
+        page.TxtFind.Text = "Sortable";
+        page.TxtFind_Activate();
+        yield;
+        check("the find box finds", page.Doc.Selection.includes("Sortable"),
+              JSON.stringify(page.Doc.Selection));
+        eq("and F3 takes the next one", page.Form_KeyPress("F3"), true);
+
+        page.Close();
+        yield;
+        check("the window closes and keeps its page", page.Doc.Path.length > 0);
+    } else {
+        help.Close();
+        yield;
+    }
+
+    /* --- a selected control asks about its class --------------------------- */
     ide.openInTab("Child.form");
     yield;
     ide.designer.addControl("Label");
@@ -5147,47 +5241,11 @@ function* p_help(ide) {
 
     const about = ide.helpTopic();
     check("a selected control asks about its own class",
-          !!about && about.page.endsWith("widgets/Label.md"),
+          !!about && about.name === "Label",
           JSON.stringify(about) + " for " +
           (ide.designer.selected ? ide.designer.tree.typeOf(ide.designer.selected) : "nothing"));
-
-    /* --- the window -------------------------------------------------------- */
-    const help = HelpForm.open(HelpForm.pageFor("TableView"), "Sortable");
-    yield* settled(ide);
-
-    check("the window shows the page", help.Doc.Path.endsWith("widgets/TableView.md"));
-    check("with the document really laid out", help.Doc.ContentHeight > 1000,
-          help.Doc.ContentHeight);
-    eq("and it landed on the member", help.Doc.Selection, "Sortable");
-    check("which is not at the top of the page", help.Doc.Scroll > 0, help.Doc.Scroll);
-
-    check("every page is in the tree", help.Pages.Count > 70, help.Pages.Count);
-    check("under a category each", help.Pages.Exists("cat:widgets") &&
-          help.Pages.Exists("cat:globals") && help.Pages.Exists("cat:libraries"));
-
-    /* A link between two pages is how the reference is browsed. */
-    const was = help.Doc.Path;
-    help.Doc_Link("ListBox.md", "ListBox");
-    yield;
-
-    check("a link opens the page it names", help.Doc.Path.endsWith("widgets/ListBox.md"));
-    check("and Back is offered", help.BtnBack.Enabled);
-
-    help.BtnBack_Click();
-    yield;
-    eq("which goes back where it was", help.Doc.Path, was);
-
-    /* The find box, which is the same verb F1 lands with. */
-    help.TxtFind.Text = "Sortable";
-    help.TxtFind_Activate();
-    yield;
-    check("the find box finds", help.Doc.Selection.includes("Sortable"),
-          JSON.stringify(help.Doc.Selection));
-    eq("and F3 takes the next one", help.Form_KeyPress("F3"), true);
-
-    help.Close();
-    yield;
-    check("the window closes and keeps its page", help.Doc.Path.length > 0);
+    if (root)
+        check("...which has a page", about.page.endsWith("widgets/Label.md"), about.page);
 }
 
 function* p_forms(ide) {

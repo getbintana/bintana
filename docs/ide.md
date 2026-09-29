@@ -651,7 +651,18 @@ order the question is usually asked: a selected control asks about its class, an
 editor with the focus asks about the word the cursor is on — `File.Load` opens
 `File` and lands on `Load` — and neither asks about the index. The type comes
 from `ControlTree.typeOf`, which knows a stand-in from a control, so a component
-of the project falls through to the word rather than opening nothing.
+of the project falls through to the word rather than opening nothing. A handler
+is named after the event it answers, so `Btn_Click` is about `Click` on the
+class of `Btn`, not about a method called `Btn_Click`.
+
+**And the help works with only the runtime installed.** The reference pages are
+a package of their own (`bintana-docs`), and when it is not beside the build
+F1 falls back to `Ide.Completion.reference`: `Widget.Members` and
+`Widget.EventDoc` answer what the class declares, the same descriptions the
+pages would carry, and the window renders the generated Markdown in the same
+place. The last line points at the package's page for the long form. So an
+installation with no documentation still describes every member — one paragraph
+instead of one page.
 
 **Landing on a member is a search and not an anchor.** The finest anchor a page
 has is its class, and what F1 on a property means is *the row that describes it*:
@@ -669,10 +680,19 @@ gets.
 
 **Where the pages are is looked for, not configured**: `<repo>/docs/reference`
 from the IDE's own directory, one hop from the binary for anything else in a
-source tree, and `share/doc/bintana/docs/reference` installed. It is the argument
-`lib_candidates` makes in the runtime, applied here — `bin/` and `share/` move
-together under a prefix and under a packager's DESTDIR, where a path baked in at
-configure time does not.
+source tree, and — installed — `share/doc/bintana/docs/reference` or
+`share/doc/bintana-docs/docs/reference`, the package the pages now come from. It
+is the argument `lib_candidates` makes in the runtime, applied here — `bin/` and
+`share/` move together under a prefix and under a packager's DESTDIR, where a
+path baked in at configure time does not.
+
+**And the pointer resting on a name describes it.** `Ide.Tooltip` arms a 400 ms
+dwell on every `MouseMove`, and `Editor.PositionAt` says which character is under
+the point; the same `Ide.Completion.topic` that answers F1 answers the tooltip,
+so `File.Load` and `Chart.Select` read the same in both. Any movement, a leave,
+a click or a key puts it away, and the popover does not hide itself (`Autohide`
+off) because an autohide one takes the keyboard — the pointer may rest over a
+name while the person goes on typing underneath it.
 
 ## Find and replace
 

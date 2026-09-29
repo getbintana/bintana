@@ -33,15 +33,23 @@ function candidates() {
     const bin = File.Directory(Application.Executable);
 
     return [
-        /* the IDE running from the source tree: <repo>/ide -> <repo>/docs */
+        /* the IDE running from the source tree: <repo>/ide -> <repo>/docs.
+         * Empty once the reference lives in `bintana-docs`, and kept for the
+         * checkouts and installs that still carry it there. */
         File.Join(File.Directory(ide), "docs", "reference"),
         /* one hop from the binary, which is the same tree from anywhere else in
          * it: <repo>/build/bintana -> <repo>/docs. It is what makes the help
          * findable from a project that is not the IDE, and from the suite */
         File.Join(File.Directory(bin), "docs", "reference"),
-        /* installed: share/bintana/ide -> share/doc/bintana/docs */
+        /* installed, and **the package the pages come from first**: the old
+         * `share/doc/bintana/docs/reference` is kept for installs and checkouts
+         * that still carry it, but a machine with both must not read a stale
+         * copy of a page that moved. */
+        File.Join(File.Directory(File.Directory(ide)), "doc", "bintana-docs", "docs", "reference"),
+        File.Join(File.Directory(bin), "share", "doc", "bintana-docs", "docs", "reference"),
         File.Join(File.Directory(File.Directory(ide)), "doc", "bintana", "docs", "reference"),
         File.Join(File.Directory(bin), "share", "doc", "bintana", "docs", "reference"),
+        "/usr/share/doc/bintana-docs/docs/reference",
         "/usr/share/doc/bintana/docs/reference",
     ];
 }
@@ -71,6 +79,27 @@ class HelpForm extends Form {
         const help = HelpForm.window;
         help.Show();
         if (page) help.go(page, member);
+        return help;
+    }
+
+    /*
+     * A topic built from the runtime, for an installation with no reference
+     * package: **the help has to work with only the runtime installed**, and
+     * the members and descriptions are all in it (`Widget.Members`,
+     * `Widget.EventDoc`). The text is Markdown because this window is already
+     * a Markdown viewer; the last line points at the package's page for the
+     * long form, and `Doc_Link` shows the address.
+     *
+     * `topic` is `{ Name, Member, Text, Where }`, which is what
+     * `Ide.Completion.reference` answers.
+     */
+    static openTopic(topic) {
+        if (!topic) return null;
+        if (!HelpForm.window) HelpForm.window = new HelpForm();
+
+        const help = HelpForm.window;
+        help.Show();
+        help.generated(topic);
         return help;
     }
 
@@ -165,6 +194,25 @@ class HelpForm extends Form {
         }
         if (member) this.Doc.Find(member);
         return true;
+    }
+
+    /*
+     * The generated topic, in the same window as a page.
+     *
+     * The path is cleared, because `Doc_Link` resolves a link against the page
+     * it is on and a generated one has none; the tree is left alone, so a
+     * reader can go back to the last page by choosing it (and Back, when there
+     * was one, still returns there).
+     */
+    generated(topic) {
+        if (this.Doc.Path) this.history.push(this.Doc.Path);
+        this.BtnBack.Enabled = this.history.length > 0;
+
+        this.Doc.Path = "";
+        this.Doc.Text = topic.Text;
+        this.LblWhere.Text = topic.Where || "";
+        this.Text = Locale.Text("Reference -- {0}", topic.Name);
+        if (topic.Member) this.Doc.Find(topic.Member);
     }
 
     Pages_Select() {
