@@ -5272,13 +5272,30 @@ not go looking for `gtk_widget_get_first_child` to find the header — that is
 reading a child list that is an implementation detail, and `page_size` says the
 same number without naming what sits above it.
 
-- **A row's height is the rows' extent divided by the rows that are *drawn*.**
-  In a tree, `Count` is every node at every level and a folded branch is in
-  neither `Count` nor the adjustment, so dividing `upper` by `Count` answers a
-  row that gets shorter every time something is folded. Measured on a tree of
-  fifteen nodes: the wrong answer was a third short with one branch folded, and
-  it would have been *worse* the more the user closed. The column view's own
-  model is the flattened list in tree mode, which is the count to divide by.
+- **A row's height is the rows' *natural* height over the rows that are
+  *drawn*.** Two things had to be got right here, and each one was got wrong
+  first by an application that measured it:
+  - **The count is the drawn one.** In a tree, `Count` is every node at every
+    level and a folded branch is in neither `Count` nor the height, so dividing
+    by `Count` answers a row that gets shorter every time something is folded.
+    Measured on a tree of fifteen nodes: the wrong answer was a third short with
+    one branch folded, and it would have been *worse* the more the user closed.
+    The column view's own model is the flattened list in tree mode, which is the
+    count to divide by.
+  - **The height is `gtk_widget_measure`'s, not the adjustment's `upper`.**
+    `upper` is `max(content, page_size)`, so a plan of three tasks in a tall
+    window -- the plan that always fits -- divides the whole viewport and
+    answers 102 for a row that is 36. `bintana-project`'s view check caught it
+    on the fixture with three tasks. Measured on that case: `nat` is 133, the
+    heading is 25, the three rows are 36 each and `upper` is the 575 the
+    viewport is.
+- **Both numbers are `0` until the scrolled window has a viewport**, and a
+  control in a `Fixed` never gives it one: it is handed a rectangle and the
+  window inside it keeps a zero-sized viewport. So `page_size` is `0`, the
+  heading measures as the whole control, and `nat - heading` divides the
+  heading into every row. `TableGeometry` puts its tables in a `Scroller` of
+  their own because of this, and a test that measured in a `Fixed` saw 24 rows
+  of 37.
 - **A table with no columns has no heading row at all**, so `HeaderHeight` is
   `0` — and `0` also means "not laid out yet", which is what the documentation
   says. The distinction is the test's: `TableGeometry` waits for a number to

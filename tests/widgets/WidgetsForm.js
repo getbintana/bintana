@@ -13491,12 +13491,16 @@ function Main() {
      * for a turn.
      */
     testTableGeometry() {
+        /* **In a `Scroller` and not straight into the `Fixed`.** Both numbers
+         * here are `0` until the scrolled window around the column view has a
+         * viewport, and a fixed child is given a rectangle without ever giving
+         * the window inside it one -- so a test that measured there was reading
+         * a division that included the heading, and the 24 rows it had came out
+         * as 37. */
         const t = new TableView();
         t.Name = "GeoT";
         t.Columns = [{ Text: "Task" }, { Text: "Days" }];
-        t.Resize(360, 120);
-        this.Fixed1.Add(t);
-        for (let i = 0; i < 24; i++) t.Add([`Row ${i}`, String(i)]);
+        this.geoAdd(t, 24);
 
         this.geoSeen = [];
         t.On("Scroll", (x, y) => { this.geoSeen.push([x, y]); });
@@ -13530,8 +13534,35 @@ function Main() {
             throws("a ScrollY that is not a number is refused",
                    () => { t.ScrollY = "down"; });
 
-            this.geoFolded(t, row);
+            /* **A plan that fits its pane is the case that was wrong.** The
+             * adjustment's `upper` is `max(content, page_size)`, so three rows
+             * in a tall window divide the whole viewport and answer a row
+             * taller than any row; the height has to come from what the rows
+             * measure, which a viewport does not change. Three rows in the same
+             * table as twenty-four are the same rows. */
+            const fitted = new TableView();
+            fitted.Columns = [{ Text: "Task" }];
+            this.geoAdd(fitted, 1);
+            until("a short table measured", () => fitted.RowHeight > 0, () => {
+                eq("one row that fits its pane is that same row",
+                   fitted.RowHeight, row);
+                eq("and there is nothing to scroll", fitted.ScrollMaxY, 0);
+                fitted.Delete();
+                this.geoFolded(t, row);
+            });
         });
+    }
+
+    /* A table in a scrolled window of its own, which is what gives it a
+     * viewport; the host is removed when the table is. */
+    geoAdd(t, rows, height) {
+        const host = new Scroller();
+        host.Resize(360, height || 120);
+        this.Fixed1.Add(host);
+        host.Add(t);
+        for (let i = 0; i < rows; i++) t.Add([`Row ${i}`, String(i)]);
+        t.geoHost = host;
+        return t;
     }
 
     /* A folded row is not drawn, so it is not in the adjustment either: the
@@ -13541,8 +13572,7 @@ function Main() {
         const tree = new TableView();
         tree.Name = "GeoTree";
         tree.Columns = [{ Text: "Task" }];
-        tree.Resize(360, 120);
-        this.Fixed1.Add(tree);
+        this.geoAdd(tree, 0);
         for (let r = 0; r < 3; r++) {
             tree.Add([`Root ${r}`], { Key: `r${r}` });
             for (let c = 0; c < 4; c++)
@@ -13566,14 +13596,13 @@ function Main() {
                 until("a tree open again", () => tree.ScrollMaxY === all, () => {
                     const empty = new TableView();
                     empty.Columns = [{ Text: "Task" }];
-                    empty.Resize(360, 120);
-                    this.Fixed1.Add(empty);
+                    this.geoAdd(empty, 0);
                     until("an empty table measured", () => empty.HeaderHeight > 0, () => {
                         eq("no row means no row height", empty.RowHeight, 0);
                         check("and the heading is still there", empty.HeaderHeight > 0);
-                        empty.Delete();
-                        tree.Delete();
-                        t.Delete();
+                        empty.geoHost.Delete();
+                        tree.geoHost.Delete();
+                        t.geoHost.Delete();
                     });
                 });
             });

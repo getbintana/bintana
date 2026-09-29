@@ -2168,13 +2168,24 @@ static JSValue table_remove_row(JSContext *ctx, JSValueConst this_val,
  * `Scroll` event) rather than a second implementation of the same arithmetic
  * and the same clamping.
  *
- * **A row's height is the rows' extent divided by the rows there are**, and the
- * count has to be the *visible* one. A tree's `Count` is every node at every
- * level and a folded subtree's rows are not drawn, so dividing by `Count` would
- * answer a shorter row the more of them were folded away -- and a chart beside a
- * folded tree is exactly when the answer has to be right. The column view's own
- * model is the flattened list in tree mode, so its item count is what is on
- * screen, and the adjustment's upper is those rows' height and nothing else.
+ * **A row's height is the rows' natural height over the rows that are
+ * *drawn*.** In a tree, `Count` is every node at every level and a folded
+ * subtree's rows are neither in `Count` nor in the height, so dividing by
+ * `Count` would answer a shorter row the more of them were folded away -- and a
+ * chart beside a folded tree is exactly when the answer has to be right. The
+ * column view's own model is the flattened list in tree mode, so its item count
+ * is what is on screen.
+ *
+ * **And it is the *natural* height, not the adjustment's `upper`.** `upper` is
+ * `max(content, page_size)`: three tasks in a tall window are three rows of 36
+ * pixels inside an `upper` of the whole viewport, and dividing that by three
+ * answers 102 for a row that is 36. That is what this did first, and
+ * `bintana-project`'s own view check caught it on the fixture with three tasks
+ * -- the plan that always fits is the plan that was wrong. Measured on that
+ * case: `nat` is 133, the heading is 25, three rows are 36 each, and `upper` is
+ * the 575 the viewport is. `gtk_widget_measure` asks what the rows *want*,
+ * which a viewport does not change, and what it answers carries the heading,
+ * which is the other thing to take off.
  *
  * **The heading is what the list's viewport leaves of the column view.** GTK has
  * no getter for it, and walking `gtk_widget_get_first_child` for the header
@@ -2186,21 +2197,45 @@ static GtkAdjustment *table_vadjustment(BtaWidget *w)
     return gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(w->gtk));
 }
 
+/* The list's viewport, which is `0` while the scrolled window around it has no
+ * size -- and the reason both numbers here are `0` before a table has been laid
+ * out rather than a division that quietly includes the heading. */
+static int table_viewport(BtaWidget *w)
+{
+    GtkAdjustment *a = table_vadjustment(w);
+    return a ? (int)(gtk_adjustment_get_page_size(a) + 0.5) : 0;
+}
+
+static int table_header_height(BtaWidget *w)
+{
+    int page = table_viewport(w);
+    if (page <= 0)
+        return 0;
+
+    int above = (int)gtk_widget_get_allocated_height(w->inner) - page;
+
+    return above > 0 ? above : 0;
+}
+
 static JSValue table_get_row_height(JSContext *ctx, JSValueConst this_val)
 {
     BtaWidget *w = bta_this(ctx, this_val);
     if (!w)
         return JS_EXCEPTION;
 
-    GtkAdjustment *a = table_vadjustment(w);
     GListModel *rows = G_LIST_MODEL(
         gtk_column_view_get_model(GTK_COLUMN_VIEW(w->inner)));
     guint n = rows ? g_list_model_get_n_items(rows) : 0;
-
-    if (!a || !n)
+    if (!n || table_viewport(w) <= 0)
         return JS_NewInt32(ctx, 0);
 
-    return JS_NewInt32(ctx, (int)(gtk_adjustment_get_upper(a) / n + 0.5));
+    int min = 0, nat = 0, alloc = 0, base = 0;
+    gtk_widget_measure(w->inner, GTK_ORIENTATION_VERTICAL, -1,
+                       &min, &nat, &alloc, &base);
+
+    int wanted = nat - table_header_height(w);
+
+    return JS_NewInt32(ctx, wanted > 0 ? (int)(wanted / (double)n + 0.5) : 0);
 }
 
 static JSValue table_get_header_height(JSContext *ctx, JSValueConst this_val)
@@ -2209,14 +2244,7 @@ static JSValue table_get_header_height(JSContext *ctx, JSValueConst this_val)
     if (!w)
         return JS_EXCEPTION;
 
-    GtkAdjustment *a = table_vadjustment(w);
-    if (!a)
-        return JS_NewInt32(ctx, 0);
-
-    int above = (int)gtk_widget_get_allocated_height(w->inner) -
-                (int)(gtk_adjustment_get_page_size(a) + 0.5);
-
-    return JS_NewInt32(ctx, above > 0 ? above : 0);
+    return JS_NewInt32(ctx, table_header_height(w));
 }
 
 /*
