@@ -5309,13 +5309,23 @@ same number without naming what sits above it.
   own ground showing, and on a theme that does not paint a viewport and a list
   alike the seam is still there — which is what `bintana-project` measured on a
   real desktop.
-  **The road that is left is the name, not the value:** `Background` (and
-  `Foreground`) now take a theme reference — `"@view_bg_color"`, which is the
-  surface a list is drawn on — and write it into the stylesheet as it stands,
-  where GTK resolves it and the theme change is free. So `Background` is
-  "any CSS colour, or a theme's own name", and a word that is neither is still
-  refused with the name it refused. The word `transparent` is one of those: the
-  parser is `gdk_rgba_parse`, which knows the spellings that carry a value.
+  **The road out of that is the class, not the value.** A theme paints a surface
+  with `.view` -- Greybird's own rule is `.view, iconview, .view text, ... {
+  color: #212121; background-color: #fcfcfc; }` -- and a `GtkColumnView` wears
+  that class *itself*, which is how the theme writes it (`columnview.view`). So
+  the answer for "the same ground as the list" is `Style = "view"` on the other
+  control, and it was found that way, on a real screen, after two values that
+  changed nothing. Worth knowing beside the measurement above: **a control
+  paints no background of its own**, so a `Background` set on a `DrawingArea` is
+  a no-op, and a value written on top of the class that works is worse than
+  nothing -- the runtime writes it at `PRIORITY_APPLICATION + 1`, above the
+  theme's, and the two fight.
+  `Background` and `Foreground` do now take a theme reference as well --
+  `"@view_bg_color"` goes into the stylesheet as it stands -- which is a
+  correct generalisation of a CSS value that was refused for no good reason, and
+  which no application here ended up needing. The word `transparent` is still
+  refused: the parser is `gdk_rgba_parse`, which knows the spellings that carry
+  a value.
 - **Both numbers are `0` until the scrolled window has a viewport**, and a
   control in a `Fixed` never gives it one: it is handed a rectangle and the
   window inside it keeps a zero-sized viewport. So `page_size` is `0`, the
