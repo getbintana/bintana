@@ -5298,6 +5298,24 @@ same number without naming what sits above it.
   4.22 -- and it moves the heading and nothing else: the rows and the rows' extent
   are the theme's still. What it bought was a chart beside a list putting two
   rows of axis type in the same band without the type having to be 7 points.
+- **There is no way to read a widget's ground, and there never will be one in
+  GTK4.** Measured on 4.22: `gtk_style_context_get_property` is gone (not
+  deprecated, gone) and `gtk_style_context_lookup_color` answers `false` for
+  every name tried — `background-color`, `view_bg_color`, `white`, all of them.
+  The painter's note in `bta_paint.c` says this and is right about a control
+  painting *itself*; it does not reach **two controls side by side**, which is
+  what an application asks when a chart has to sit on a list's surface. A
+  transparent background is not the answer either: it leaves the scroll view's
+  own ground showing, and on a theme that does not paint a viewport and a list
+  alike the seam is still there — which is what `bintana-project` measured on a
+  real desktop.
+  **The road that is left is the name, not the value:** `Background` (and
+  `Foreground`) now take a theme reference — `"@view_bg_color"`, which is the
+  surface a list is drawn on — and write it into the stylesheet as it stands,
+  where GTK resolves it and the theme change is free. So `Background` is
+  "any CSS colour, or a theme's own name", and a word that is neither is still
+  refused with the name it refused. The word `transparent` is one of those: the
+  parser is `gdk_rgba_parse`, which knows the spellings that carry a value.
 - **Both numbers are `0` until the scrolled window has a viewport**, and a
   control in a `Fixed` never gives it one: it is handed a rectangle and the
   window inside it keeps a zero-sized viewport. So `page_size` is `0`, the

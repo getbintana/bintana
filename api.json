@@ -10965,7 +10965,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "any CSS colour; `\"\"` restores the theme's. The **exception** to `Style`, for when the colour is data — a status, a category, a swatch",
+          "Doc": "any CSS colour, **or a theme's own name** — `\"@view_bg_color\"`, the surface a list is drawn on — which is written into the stylesheet as it stands and so follows the theme. `\"\"` restores the theme's. The **exception** to `Style`, for when the colour is data — a status, a category, a swatch",
           "Native": true
         },
         {

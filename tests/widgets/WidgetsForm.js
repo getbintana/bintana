@@ -12351,6 +12351,22 @@ function Main() {
         eq("an opaque colour round-trips", p.Background, "rgb(32,64,96)");
         p.Foreground = "rgba(32,64,96,0.5)";
         eq("and one with alpha too", p.Foreground, "rgba(32,64,96,0.5)");
+        /* **A theme's own name is a reference and not a colour.** `@view_bg_color`
+         * is the surface a list is drawn on, and this is how a chart drawn
+         * beside a list is put on the same one: GTK removed the resolver
+         * (`get_property` is gone, `lookup_color` answers false for every name
+         * in 4.22 -- measured), so the value cannot be read back and the *name*
+         * can still be written. It goes into the stylesheet as it stands, so
+         * `gdk_rgba_to_string` never sees it. */
+        p.Background = "@view_bg_color";
+        eq("a theme's name round-trips as itself", p.Background, "@view_bg_color");
+        p.Foreground = "@view_fg_color";
+        eq("and so does a theme's text colour", p.Foreground, "@view_fg_color");
+        throws("while a word is still refused",
+               () => { p.Background = "transparent"; });
+        throws("and so is a name with no @",
+               () => { p.Background = "view_bg_color"; });
+
         p.Background = "";
         eq("and it can be cleared back to the theme's", p.Background, "");
     }
