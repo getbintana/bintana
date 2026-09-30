@@ -10965,7 +10965,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "any CSS colour, **or a theme's own name** — `\"@view_bg_color\"`, the surface a list is drawn on — which is written into the stylesheet as it stands and so follows the theme. `\"\"` restores the theme's. The **exception** to `Style`, for when the colour is data — a status, a category, a swatch",
+          "Doc": "any CSS colour — a value, not a reference: `\"@view_bg_color\"` is one too, and is refused. **For a ground, `Style` is what to reach for**: a theme paints a surface with a class, and a control that has to be on the same ground as another one wears the same class. `\"\"` restores the theme's. The **exception** to `Style`, for when the colour is data — a status, a category, a swatch",
           "Native": true
         },
         {

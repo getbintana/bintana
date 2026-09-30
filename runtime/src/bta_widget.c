@@ -2064,22 +2064,7 @@ static JSValue w_set_color(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     char *parsed = NULL;
-    if (*s == '@') {
-        /* **A theme's own name is not a colour and is not parsed as one.** GTK
-         * names its surfaces -- `@view_bg_color` is the one a list is drawn on
-         * -- and the stylesheet understands the reference, so the value goes
-         * into it as it stands.
-         *
-         * That is how two controls are made the same colour without anybody
-         * reading a value back, and it is the only road left: GTK4 **removed**
-         * the resolver (`gtk_style_context_get_property` is gone, and
-         * `gtk_style_context_lookup_color` answers `false` for every name in
-         * 4.22 -- measured, `white` included), so "what colour is that list
-         * drawn on" has no answer in the public API, while "the name of that
-         * colour" has always had one. Anything else is still parsed, and still
-         * refused with the name it refused. */
-        parsed = g_strdup(s);
-    } else if (*s) {
+    if (*s) {
         GdkRGBA rgba;
         if (!gdk_rgba_parse(&rgba, s)) {
             JSValue e = JS_ThrowRangeError(ctx, "'%s' is not a colour", s);
@@ -6813,11 +6798,12 @@ static const JSCFunctionListEntry widget_props[] = {
      */
     JS_CGETSET_DEF("Style", w_get_style, w_set_style),
     /* Background
-     *   any CSS colour, **or a theme's own name** — `"@view_bg_color"`, the
-     *   surface a list is drawn on — which is written into the stylesheet as it
-     *   stands and so follows the theme. `""` restores the theme's. The
-     *   **exception** to `Style`, for when the colour is data — a status, a
-     *   category, a swatch
+     *   any CSS colour — a value, not a reference: `"@view_bg_color"` is one
+     *   too, and is refused. **For a ground, `Style` is what to reach for**: a
+     *   theme paints a surface with a class, and a control that has to be on the
+     *   same ground as another one wears the same class. `""` restores the
+     *   theme's. The **exception** to `Style`, for when the colour is data — a
+     *   status, a category, a swatch
      */
     JS_CGETSET_MAGIC_DEF("Background", w_get_color, w_set_color, COLOR_BG),
     /* Foreground
