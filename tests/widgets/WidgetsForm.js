@@ -13553,6 +13553,32 @@ function Main() {
         });
     }
 
+    /*
+     * A floor for the row of column headings, which the control's own font does
+     * not give: a table at 10, 11, 12 and 13 points has rows of 36, 37, 39 and
+     * 41 pixels and a heading of 25 in every one. What the floor buys is the
+     * heading **and only the heading** -- the rows are the theme's and stay put,
+     * which is what a chart drawn beside the list needs: its own axis type in
+     * the same band, at a size that does not have to be 7 points to fit.
+     */
+    geoHeading(t, row) {
+        t.HeaderMinHeight = 34;
+        until("the heading reaches its floor", () => t.HeaderHeight >= 34, () => {
+            eq("a heading with a floor is that tall", t.HeaderHeight, 34);
+            eq("and the rows are the theme's still", t.RowHeight, row);
+            eq("and nothing else moved to make room", t.ScrollMaxY > 0, true);
+            eq("the floor reads back as it was said", t.HeaderMinHeight, 34);
+
+            t.HeaderMinHeight = 0;
+            until("and the heading goes back to the theme's",
+                  () => t.HeaderHeight < 34, () => {
+                      check("which is not a height either",
+                            t.HeaderHeight > 0, String(t.HeaderHeight));
+                      t.geoHost.Delete();
+                  });
+        });
+    }
+
     /* A table in a scrolled window of its own, which is what gives it a
      * viewport; the host is removed when the table is. */
     geoAdd(t, rows, height) {
@@ -13602,7 +13628,7 @@ function Main() {
                         check("and the heading is still there", empty.HeaderHeight > 0);
                         empty.geoHost.Delete();
                         tree.geoHost.Delete();
-                        t.geoHost.Delete();
+                        this.geoHeading(t, before);
                     });
                 });
             });

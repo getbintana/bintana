@@ -231,6 +231,7 @@ typedef struct {
     bool           multi;
     bool           sortable;
     bool           sort_hooked;   /* the view's sorter is being watched */
+    int            header_min;    /* a floor for the row of column headings */
 } TableState;
 
 static void table_state_free(gpointer p)
@@ -2238,6 +2239,53 @@ static JSValue table_get_row_height(JSContext *ctx, JSValueConst this_val)
     return JS_NewInt32(ctx, wanted > 0 ? (int)(wanted / (double)n + 0.5) : 0);
 }
 
+/*
+ * A floor for the row of column headings.
+ *
+ * **The heading does not follow the widget's font**, which is what an
+ * application reaching for a taller heading tries first: measured here, a table
+ * at 10, 11, 12 and 13 points has rows of 36, 37, 39 and 41 pixels and a
+ * heading of 25 in every one, because the theme sizes the `header` node and not
+ * the control. So the floor is set on the heading itself, which is the same
+ * walk `table_heading_at` already does over GTK's own structure (checked in
+ * 4.10 and 4.22) and the same request every other floor in this runtime is.
+ *
+ * What it is for: a chart drawn *beside* a table has to put its own heading in
+ * the same band, and two rows of axis type in a 25-pixel band is 7-point type.
+ * A heading with a floor is the honest way to buy the room -- and the height it
+ * reaches is what `HeaderHeight` answers.
+ */
+static JSValue table_get_header_min(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    return JS_NewInt32(ctx, table_state(w)->header_min);
+}
+
+static JSValue table_set_header_min(JSContext *ctx, JSValueConst this_val,
+                                    JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    int32_t n;
+    if (!bta_to_int(ctx, val, "HeaderMinHeight", &n))
+        return JS_EXCEPTION;
+    if (n < 0)
+        return JS_ThrowRangeError(ctx, "HeaderMinHeight: %d is not a height", n);
+
+    table_state(w)->header_min = n;
+
+    GtkWidget *header = gtk_widget_get_first_child(w->inner);
+    if (header)
+        gtk_widget_set_size_request(header, -1, n > 0 ? n : -1);
+
+    return JS_UNDEFINED;
+}
+
 static JSValue table_get_header_height(JSContext *ctx, JSValueConst this_val)
 {
     BtaWidget *w = bta_this(ctx, this_val);
@@ -3082,6 +3130,12 @@ static const JSCFunctionListEntry table_props[] = {
      *   allocation
      */
     JS_CGETSET_DEF("HeaderHeight", table_get_header_height, NULL),
+    /* HeaderMinHeight
+     *   a floor for the row of column headings, in pixels. **The heading does
+     *   not follow the control's font** -- the theme sizes it -- so this is
+     *   what makes a taller one. `0`, nothing said
+     */
+    JS_CGETSET_DEF("HeaderMinHeight", table_get_header_min, table_set_header_min),
     /* MultiSelect
      *   more than one row at a time. Refused on a tree
      */

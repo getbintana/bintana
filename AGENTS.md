@@ -5289,6 +5289,15 @@ same number without naming what sits above it.
     on the fixture with three tasks. Measured on that case: `nat` is 133, the
     heading is 25, the three rows are 36 each and `upper` is the 575 the
     viewport is.
+- **`HeaderMinHeight` exists because the heading does not follow the font.** A
+  table at 10, 11, 12 and 13 points has rows of 36, 37, 39 and 41 pixels and a
+  heading of **25 in every one**: the theme sizes the `header` node and not the
+  control, so "make the heading taller" has no answer in the font. The floor is
+  set on the heading widget -- the same `gtk_widget_get_first_child` walk
+  `table_heading_at` already does over GTK's own structure, checked in 4.10 and
+  4.22 -- and it moves the heading and nothing else: the rows and the rows' extent
+  are the theme's still. What it bought was a chart beside a list putting two
+  rows of axis type in the same band without the type having to be 7 points.
 - **Both numbers are `0` until the scrolled window has a viewport**, and a
   control in a `Fixed` never gives it one: it is handed a rectangle and the
   window inside it keeps a zero-sized viewport. So `page_size` is `0`, the

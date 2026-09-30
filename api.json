@@ -8926,6 +8926,15 @@
           "Native": true
         },
         {
+          "Name": "HeaderMinHeight",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "a floor for the row of column headings, in pixels. **The heading does not follow the control's font** -- the theme sizes it -- so this is what makes a taller one. `0`, nothing said",
+          "Native": true
+        },
+        {
           "Name": "Index",
           "Kind": "Property",
           "Params": -1,
