@@ -5320,12 +5320,12 @@ same number without naming what sits above it.
   a no-op, and a value written on top of the class that works is worse than
   nothing -- the runtime writes it at `PRIORITY_APPLICATION + 1`, above the
   theme's, and the two fight.
-  `Background` and `Foreground` do now take a theme reference as well --
-  `"@view_bg_color"` goes into the stylesheet as it stands -- which is a
-  correct generalisation of a CSS value that was refused for no good reason, and
-  which no application here ended up needing. The word `transparent` is still
-  refused: the parser is `gdk_rgba_parse`, which knows the spellings that carry
-  a value.
+  **Nothing in `Background` was widened for it, and that is the point.** It takes
+  a value; a theme's own name is not one and is refused, and so is the keyword
+  `transparent` (the parser is `gdk_rgba_parse`, which knows the spellings that
+  carry a value). Both were tried by an application that got nothing twice, and
+  both are held as refusals so the next one does not spend the afternoon: the
+  road is `Style`.
 - **Both numbers are `0` until the scrolled window has a viewport**, and a
   control in a `Fixed` never gives it one: it is handed a rectangle and the
   window inside it keeps a zero-sized viewport. So `page_size` is `0`, the
