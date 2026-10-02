@@ -1017,6 +1017,15 @@ void bta_gzip_init(JSContext *ctx, JSValue global);
  */
 void bta_notification_init(JSContext *ctx, JSValue global);
 
+/* --- Zip ------------------------------------------------------------------
+ *
+ * `Zip.Open` and the `ZipArchive` it answers: a reader of the central directory,
+ * with every entry's CRC checked, a ceiling on what it inflates to, and names
+ * refused before they become paths. Pure and callback-free, so a worker installs
+ * it too. See runtime/src/bta_zip.c.
+ */
+void bta_zip_init(JSContext *ctx, JSValue global);
+
 /* --- commands: actions and menus ---------------------------------------- */
 
 /*

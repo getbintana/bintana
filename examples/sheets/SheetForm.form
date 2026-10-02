@@ -1,0 +1,80 @@
+{
+  "format": "bintana-form/1",
+  "class": "SheetForm",
+  "properties": {
+    "AcceptFiles": true,
+    "Text": "Sheets",
+    "Width": 760,
+    "Height": 520
+  },
+  "children": [
+    {
+      "type": "Button",
+      "name": "BtnOpen",
+      "properties": {
+        "Height": 34,
+        "Shortcut": ["<Control>o"],
+        "Text": "Open…",
+        "Tooltip": "Ctrl+O. A file can also be dropped on the window",
+        "Width": 100,
+        "X": 12,
+        "Y": 12
+      }
+    },
+    {
+      "type": "ComboBox",
+      "name": "Cmb",
+      "properties": {
+        "Enabled": false,
+        "Height": 34,
+        "Tooltip": "Which sheet of the workbook",
+        "Width": 200,
+        "X": 124,
+        "Y": 12
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblPath",
+      "properties": {
+        "Ellipsize": true,
+        "HAlign": "Fill",
+        "Height": 20,
+        "Style": "dim-label",
+        "VAlign": "Center",
+        "Width": 410,
+        "X": 336,
+        "Y": 19
+      }
+    },
+    {
+      "type": "TableView",
+      "name": "Grid",
+      "properties": {
+        "ColumnLines": true,
+        "HAlign": "Fill",
+        "Height": 400,
+        "MinHeight": 120,
+        "MinWidth": 380,
+        "VAlign": "Fill",
+        "Width": 736,
+        "X": 12,
+        "Y": 58
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblStatus",
+      "properties": {
+        "Ellipsize": true,
+        "HAlign": "Fill",
+        "Height": 20,
+        "Style": "dim-label",
+        "VAlign": "End",
+        "Width": 736,
+        "X": 12,
+        "Y": 488
+      }
+    }
+  ]
+}

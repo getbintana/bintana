@@ -14746,6 +14746,20 @@
           "Native": true
         }
       ]
+    },
+    {
+      "Name": "Zip",
+      "Members": [
+        {
+          "Name": "Open",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(path)",
+          "Returns": "ZipArchive",
+          "Doc": "reads the archive's directory and answers a handle on it. Throws, naming the file and the reason, for anything that is not a zip, is cut short, is zip64 or split over disks, or lists one name twice. An archive up to 32 MiB is held in memory; a bigger one is mapped, so do not open one that is still being written",
+          "Native": true
+        }
+      ]
     }
   ],
   "Types": [
@@ -15735,6 +15749,56 @@
           "Signature": "",
           "Returns": "string",
           "Doc": "all the character data under an element; assigning replaces the children",
+          "Native": true
+        }
+      ]
+    },
+    {
+      "Name": "ZipArchive",
+      "Members": [
+        {
+          "Name": "Close",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "lets go of the archive. Closing twice is not an error; any other call after it throws",
+          "Native": true
+        },
+        {
+          "Name": "Entries",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "{ Name, Size, Compressed, Modified, IsDir }[]",
+          "Doc": "what the archive holds, in the order its directory lists it. `Size` is what the entry inflates to and `Compressed` what it occupies; `Modified` is a `Date` in local time (a zip carries no zone, and counts in two-second steps), or `null`; a folder's `Name` ends in `/`. A copy: it outlives `Close()`",
+          "Native": true
+        },
+        {
+          "Name": "Extract",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(name, path, [{ MaxSize }])",
+          "Returns": "",
+          "Doc": "one entry written to `path`, atomically, as `File.Save` writes. The folder `path` is in must exist. Same refusals as `Read`",
+          "Native": true
+        },
+        {
+          "Name": "ExtractAll",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(folder, [{ MaxSize }])",
+          "Returns": "number",
+          "Doc": "every entry under `folder`, made as needed, answering how many files it wrote. **Nothing is written until every name, every method and the total size have passed**: an entry named `../x`, an absolute path, a drive letter, a backslash or an empty part refuses the whole archive. Existing files are replaced; only files and folders are made, never a link",
+          "Native": true
+        },
+        {
+          "Name": "Read",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(name, [{ MaxSize }])",
+          "Returns": "Bytes",
+          "Doc": "one entry's bytes. **Throws, and never answers wrong**: an entry whose data does not match its checksum, that inflates to more than its directory says, whose local header disagrees with the directory, that is encrypted or uses a method other than stored and deflate, or is over `MaxSize` (256 MiB unless told) is refused with a sentence naming it",
           "Native": true
         }
       ]

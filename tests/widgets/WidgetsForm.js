@@ -34,6 +34,57 @@ function eq(name, got, want) {
     check(name, got === want, `expected ${JSON.stringify(want)}, got ${JSON.stringify(got)}`);
 }
 
+/*
+ * A zip, built by hand, for the archives that no tool will make: a name that leaves
+ * its folder, a checksum that is wrong, a directory that lies about a size.
+ *
+ * **Nothing here is our own zip code.** The CRC-32 and the deflate stream both come
+ * out of `Gzip.Compress` -- a gzip member is a 10-byte header, a raw deflate stream
+ * and an 8-byte trailer that starts with the CRC -- so the reader under test is not
+ * checked against a writer that shares its mistakes, and `unzip -t` accepts what
+ * this builds (asserted, so that a refusal below is the defect and not the builder).
+ *
+ * An entry is `{ name, data, method, flags, crc, usize, localName, payload }`;
+ * everything but `name` and `data` is an override to say something false.
+ */
+function zipLe16(x) { return (x & 255).toString(16).padStart(2, "0") + ((x >> 8) & 255).toString(16).padStart(2, "0"); }
+function zipLe32(x) { return zipLe16(x & 0xffff) + zipLe16((x >>> 16) & 0xffff); }
+
+function zipBuild(entries, extra) {
+    extra = extra || {};
+    let body = new Bytes(""), dir = new Bytes("");
+    let count = 0;
+
+    for (const e of entries) {
+        const data   = typeof e.data === "string" ? new Bytes(e.data) : (e.data || new Bytes(""));
+        const gz     = Gzip.Compress(data);
+        const method = e.method === undefined ? 0 : e.method;
+        const crc    = e.crc !== undefined ? e.crc : gz.Slice(gz.Length - 8, 4).ToHex();
+        const payload = e.payload || (method === 8 ? gz.Slice(10, gz.Length - 18) : data);
+        const usize  = e.usize !== undefined ? e.usize : data.Length;
+        const flags  = e.flags || 0;
+        const local  = e.localName !== undefined ? e.localName : e.name;
+        const time = 25541, date = 22625;                     /* 2024-03-01 12:30:10 */
+
+        const offset = body.Length;
+        body = body.Concat(
+            Bytes.FromHex("504b0304" + zipLe16(20) + zipLe16(flags) + zipLe16(method) + zipLe16(time) +
+                          zipLe16(date) + crc + zipLe32(payload.Length) + zipLe32(usize) +
+                          zipLe16(new Bytes(local).Length) + zipLe16(0)),
+            new Bytes(local), payload);
+        dir = dir.Concat(
+            Bytes.FromHex("504b0102" + zipLe16(20) + zipLe16(20) + zipLe16(flags) + zipLe16(method) + zipLe16(time) +
+                          zipLe16(date) + crc + zipLe32(payload.Length) + zipLe32(usize) +
+                          zipLe16(new Bytes(e.name).Length) + zipLe16(0) + zipLe16(0) + zipLe16(0) + zipLe16(0) +
+                          zipLe32(0) + zipLe32(offset)),
+            new Bytes(e.name));
+        count++;
+    }
+    const total = extra.total !== undefined ? extra.total : count;
+    return body.Concat(dir, Bytes.FromHex("504b0506" + zipLe16(0) + zipLe16(0) + zipLe16(total) + zipLe16(total) +
+                                          zipLe32(dir.Length) + zipLe32(body.Length) + zipLe16(0)));
+}
+
 function sameJson(a, b) {
     return JSON.stringify(a) === JSON.stringify(b);
 }
@@ -443,6 +494,8 @@ const TESTS = [
     "Notification",
     /* And a console example, run as a child: it listens on loopback and talks to itself. */
     "ExampleWebhook",
+    /* And the sheet reader, a Task, in a child project of its own. */
+    "ExampleSheets",
     /* Blocking as well: a child that spawns into terminals it then drops. */
     "TerminalSpawnLifetime",
     /* And one more child: a Video whose Error handler takes it out. */
@@ -464,7 +517,7 @@ const TESTS = [
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
-    "CuratedLanguage", "Dictionary", "Regex", "Bytes", "Hash", "Random", "Gzip", "Screen", "JsonFiles", "XmlFiles", "XmlRecord", "Log", "Apply", "TimerShorthand", "Terminal",
+    "CuratedLanguage", "Dictionary", "Regex", "Bytes", "Hash", "Random", "Gzip", "Zip", "Screen", "JsonFiles", "XmlFiles", "XmlRecord", "Log", "Apply", "TimerShorthand", "Terminal",
     "Settings", "Timer", "ArgumentRefusals", "Icons", "Font", "Style", "Radius", "Padding", "Shadow", "StyleRule",
     "ColorButton",
     "ColorDialog", "FileDialog", "Dialog", "IconList", "FormIcon", "ButtonClick",
@@ -7219,6 +7272,237 @@ function Main() {
 
         for (const f of [src, dst, back, keep, File.Join(SCRATCH, "gz-junk.gz")])
             File.Delete(f);
+    }
+
+    testZip() {
+        Directory.Make(SCRATCH);
+        const dir = File.Join(SCRATCH, "zip");
+
+        if (File.IsDir(dir))
+            Directory.DeleteTree(dir);
+        Directory.Make(dir);
+
+        const put = (name, bytes) => { File.SaveBytes(File.Join(dir, name), bytes); return File.Join(dir, name); };
+        const text = "hola mundo, hello world\n";
+
+        /* ----------------------------------------- the builder is sane */
+        const good = put("good.zip", zipBuild([
+            { name: "a.txt", data: text, method: 8 },
+            { name: "dir/", data: "" },
+            { name: "dir/b.txt", data: "stored", method: 0 },
+        ]));
+        if (Application.HasCommand("unzip")) {
+            const t = Exec.Wait(["unzip", "-t", good], { Timeout: 20000 });
+            check("`unzip -t` accepts what the test builds, so a refusal below is the defect and not the builder",
+                  t.ExitCode === 0, t.Output);
+        }
+
+        const z = Zip.Open(good);
+        const names = z.Entries.map((e) => e.Name);
+        eq("the directory lists the entries in order", names.join(","), "a.txt,dir/,dir/b.txt");
+        eq("a deflated entry reads back", z.Read("a.txt").ToText(), text);
+        eq("a stored one too", z.Read("dir/b.txt").ToText(), "stored");
+        check("a folder says so", z.Entries[1].IsDir === true && z.Entries[0].IsDir === false);
+        check("Size is what it inflates to and Compressed what it occupies",
+              z.Entries[0].Size === text.length && z.Entries[0].Compressed > 0 &&
+              z.Entries[2].Compressed === 6);
+        const when = z.Entries[0].Modified;
+        check("Modified is a Date in local time, to the second the file said",
+              when instanceof Date && when.getFullYear() === 2024 && when.getMonth() === 2 &&
+              when.getDate() === 1 && when.getHours() === 12 && when.getMinutes() === 30 &&
+              when.getSeconds() === 10, String(when));
+
+        /* ------------------------------------------- real tools' archives */
+        if (Application.HasCommand("zip")) {
+            const src = File.Join(dir, "src");
+            Directory.Make(File.Join(src, "nested", "deep"));
+            let big = "";
+            for (let i = 0; i < 30000; i++) big += `line ${i}\n`;                  /* past the 64 KB block */
+            File.Save(File.Join(src, "big.txt"), big);
+            File.Save(File.Join(src, "empty.txt"), "");
+            File.Save(File.Join(src, "ñandú.txt"), "con acento\n");
+            File.Save(File.Join(src, "nested", "deep", "x.txt"), "deep\n");
+            File.SaveBytes(File.Join(src, "random.bin"), Random.Bytes(5000));       /* incompressible */
+
+            const variants = {
+                "deflate":                  ["sh", "-c", `cd "${src}" && zip -qr "${File.Join(dir, "d.zip")}" .`],
+                "stored":                   ["sh", "-c", `cd "${src}" && zip -qr0 "${File.Join(dir, "s.zip")}" .`],
+                /* Written to a pipe the tool cannot seek back in, so it cannot know
+                 * a size before it has written the data: every entry gets a data
+                 * descriptor, which is what LibreOffice writes and what a third of
+                 * a real desktop's documents have. */
+                "with data descriptors":    ["sh", "-c", `cd "${src}" && zip -qr - . > "${File.Join(dir, "p.zip")}"`],
+            };
+            const files = { "deflate": "d.zip", "stored": "s.zip", "with data descriptors": "p.zip" };
+
+            for (const kind of Dictionary.Keys(variants)) {
+                const made = Exec.Wait(variants[kind], { Timeout: 30000 });
+                const archive = File.Join(dir, files[kind]);
+
+                check(`zip made the ${kind} archive`, made.ExitCode === 0 && File.Exists(archive), made.Output);
+
+                const a = Zip.Open(archive);
+                const have = {};
+                for (const e of a.Entries) have[e.Name.replace(/^\.\//, "")] = e;
+
+                eq(`${kind}: every file is listed`,
+                   Dictionary.Keys(have).filter((n) => !n.endsWith("/")).sort().join(","),
+                   "big.txt,empty.txt,nested/deep/x.txt,random.bin,ñandú.txt");
+                check(`${kind}: and the folders are folders`, have["nested/"] && have["nested/"].IsDir);
+                eq(`${kind}: a file past the 64 KB block reads whole`, a.Read(have["big.txt"].Name).ToText(), big);
+                eq(`${kind}: an empty one is empty`, a.Read(have["empty.txt"].Name).Length, 0);
+                eq(`${kind}: a name with an accent reads`, a.Read(have["ñandú.txt"].Name).ToText(), "con acento\n");
+                check(`${kind}: incompressible bytes come back exactly`,
+                      a.Read(have["random.bin"].Name).ToHex() === File.LoadBytes(File.Join(src, "random.bin")).ToHex());
+
+                const mt = have["big.txt"].Modified;
+                const disk = File.Info(File.Join(src, "big.txt")).Modified;
+                check(`${kind}: Modified is the file's own, to two seconds`,
+                      mt instanceof Date && Math.abs(mt.getTime() - disk.getTime()) <= 3000,
+                      `${mt} against ${disk}`);
+
+                const out = File.Join(dir, `out-${files[kind]}`);
+                const n = a.ExtractAll(out);
+                eq(`${kind}: ExtractAll answers how many files it wrote`, n, 5);
+                check(`${kind}: and the tree is the one that went in`,
+                      File.Load(File.Join(out, "nested", "deep", "x.txt")) === "deep\n" &&
+                      File.Load(File.Join(out, "big.txt")) === big);
+                a.Close();
+            }
+        }
+
+        /* ----------------------- a real producer's file, data descriptors and all */
+        if (Application.HasCommand("soffice")) {
+            const lo = File.Join(dir, "lo");
+            Directory.Make(lo);
+            File.Save(File.Join(lo, "in.csv"), "Cliente,Saldo\nÁlvarez,120.50\nÑanculeo,3\n");
+            const conv = Exec.Wait(["soffice", "--headless", "--norestore", "--convert-to", "xlsx",
+                                    "--outdir", lo, File.Join(lo, "in.csv")],
+                                   { Timeout: 120000, Environment: { HOME: lo } });
+            const xlsx = File.Join(lo, "in.xlsx");
+
+            if (conv.ExitCode === 0 && File.Exists(xlsx)) {
+                const x = Zip.Open(xlsx);
+                const nm = x.Entries.map((e) => e.Name);
+
+                check("an .xlsx from LibreOffice lists its parts",
+                      nm.includes("[Content_Types].xml") && nm.includes("xl/workbook.xml") &&
+                      nm.includes("xl/worksheets/sheet1.xml"), nm.join(","));
+                if (Xml.Available) {
+                    const sheet = Xml.ParseBytes(x.Read("xl/worksheets/sheet1.xml"));
+                    check("and its sheet parses as XML", sheet.Root.Name === "worksheet");
+                    check("with the strings in a table of their own",
+                          x.Read("xl/sharedStrings.xml").ToText().includes("Ñanculeo"));
+                }
+                x.Close();
+            } else {
+                print(`Zip: soffice did not convert here (exit ${conv.ExitCode}); that half is skipped`);
+            }
+        }
+
+        /* ------------------------------------------------- what is refused */
+        const nothing = (name) => Directory.Files(File.Join(dir, name), { Recursive: true }).length === 0;
+        const rejected = (label, entries, expectPhrase) => {
+            const archive = put(`${label}.zip`, zipBuild(entries));
+            const out = File.Join(dir, `out-${label}`);
+            let msg = "";
+
+            Directory.Make(out);
+            try { Zip.Open(archive).ExtractAll(out); } catch (e) { msg = e.message; }
+            check(`${label}: the whole archive is refused`, msg.includes(expectPhrase), msg);
+            check(`${label}: and not a byte is written, not even the entry before the bad one`, nothing(`out-${label}`));
+            check(`${label}: nor anything beside the folder`,
+                  !File.Exists(File.Join(dir, "evil.txt")) && !File.Exists(File.Join(dir, "abs.txt")));
+        };
+
+        /* **Zip-slip**: an entry named to land outside the folder it is extracted into. */
+        rejected("slip", [{ name: "ok.txt", data: "fine" }, { name: "../evil.txt", data: "owned" }], "leave the folder");
+        rejected("deeper", [{ name: "a/../../evil.txt", data: "owned" }], "leave the folder");
+        rejected("absolute", [{ name: "ok.txt", data: "fine" }, { name: `${dir}/abs.txt`, data: "owned" }], "absolute");
+        rejected("drive", [{ name: "C:evil.txt", data: "owned" }], "absolute");
+        rejected("backslash", [{ name: "a\\b.txt", data: "owned" }], "backslash");
+        rejected("empty-part", [{ name: "a//b.txt", data: "x" }], "empty part");
+        rejected("dot", [{ name: "./evil.txt", data: "x" }], "empty part");
+        rejected("nul", [{ name: "ok\u0000/../evil.txt", data: "x" }], "NUL");
+        rejected("encrypted-in-all", [{ name: "ok.txt", data: "fine" }, { name: "secret.txt", data: "x", flags: 1 }], "encrypted");
+        rejected("method", [{ name: "bz.txt", data: "x", method: 12 }], "method 12");
+
+        {   /* the ceiling is the caller's to raise, and then it is not in the way */
+            const archive = put("ceil.zip", zipBuild([{ name: "a.txt", data: "x".repeat(600) }, { name: "b.txt", data: "y".repeat(600) }]));
+            const out = File.Join(dir, "out-ceil");
+            let msg = "";
+
+            Directory.Make(out);
+            try { Zip.Open(archive).ExtractAll(out, { MaxSize: 1000 }); } catch (e) { msg = e.message; }
+            check("a ceiling under the total refuses", msg.includes("MaxSize"), msg);
+            eq("and one over it extracts both", Zip.Open(archive).ExtractAll(out, { MaxSize: 2000 }), 2);
+        }
+
+        /* An archive that cannot be opened at all. */
+        const refuses = (label, bytes, phrase) => {
+            const archive = put(`${label}.zip`, bytes);
+            let msg = "";
+
+            try { Zip.Open(archive); } catch (e) { msg = e.message; }
+            check(label, msg.includes(phrase), msg);
+        };
+        refuses("a file that is not a zip is refused, naming it", new Bytes("this is not a zip file at all, just text"), "no end-of-directory");
+        refuses("an empty file is refused", new Bytes(""), "too short");
+        refuses("an archive cut short loses its directory and is refused",
+                good.length ? File.LoadBytes(good).Slice(0, File.LoadBytes(good).Length - 10) : new Bytes(""), "no end-of-directory");
+        refuses("zip64 is refused by name", zipBuild([{ name: "a.txt", data: "x" }], { total: 0xFFFF }), "zip64");
+        refuses("a name listed twice is refused", zipBuild([{ name: "a.txt", data: "one" }, { name: "a.txt", data: "two" }]), "listed twice");
+        throws("a missing file says so", () => Zip.Open(File.Join(dir, "no-such.zip")));
+        throws("a path that is not text is refused", () => Zip.Open(undefined));
+
+        /* Reading an entry, and what makes it refuse. */
+        const reading = (label, entry, phrase, arg) => {
+            const a = Zip.Open(put(`${label}.zip`, zipBuild([{ name: "ok.txt", data: "fine" }, entry])));
+            let msg = "";
+
+            try { a.Read(entry.name, arg); } catch (e) { msg = e.message; }
+            check(label, msg.includes(phrase), msg);
+            eq(`${label}: and the entries beside it still read`, a.Read("ok.txt").ToText(), "fine");
+        };
+        reading("a wrong checksum is refused, never answered", { name: "bad.txt", data: "hello", crc: "00000000" }, "checksum");
+        reading("an encrypted entry is refused, naming it", { name: "secret.txt", data: "x", flags: 1 }, "encrypted");
+        reading("a method it does not read is refused", { name: "bz.txt", data: "x", method: 14 }, "method 14");
+        reading("a directory that understates the size is refused (the stream inflates past it)",
+                { name: "lie.txt", data: "x".repeat(500), method: 8, usize: 10 }, "more than the directory");
+        reading("one that overstates it is refused (the data is shorter)",
+                { name: "lie2.txt", data: "short", method: 8, usize: 50 }, "directory says 50");
+        reading("a stored entry whose two sizes differ is refused",
+                { name: "st.txt", data: "abcdef", method: 0, usize: 3 }, "two sizes differ");
+        reading("a local header that names something else is refused",
+                { name: "x.txt", data: "hello", localName: "y.txt" }, "names something else");
+        reading("a damaged deflate stream is refused",
+                { name: "dmg.txt", data: "x".repeat(200), method: 8, payload: Bytes.FromHex("ffffffffffff") }, "dmg.txt");
+        reading("an entry over MaxSize is refused before it is inflated",
+                { name: "big.txt", data: "x".repeat(100000), method: 8 }, "ceiling", { MaxSize: 1000 });
+
+        /* The archive as a value: a handle, and what happens after it is closed. */
+        const h = Zip.Open(good);
+        const listing = h.Entries;
+
+        h.Close();
+        h.Close();
+        eq("closing twice is not an error, and what Entries answered survives", listing.length, 3);
+        throws("a closed archive refuses a Read", () => h.Read("a.txt"));
+        throws("...and Entries", () => h.Entries);
+
+        const o = Zip.Open(good);
+
+        throws("Read needs a name", () => o.Read());
+        throws("a name that is not there is refused, naming it", () => o.Read("no-such.txt"));
+        throws("a folder cannot be read", () => o.Read("dir/"));
+        throws("an option it does not know is refused", () => o.Read("a.txt", { Level: 9 }));
+        throws("Extract needs a name and a path", () => o.Extract("a.txt"));
+        o.Extract("a.txt", File.Join(dir, "extracted.txt"));
+        eq("Extract writes one entry to the path it is given", File.Load(File.Join(dir, "extracted.txt")), text);
+        throws("...which has to be in a folder that exists", () => o.Extract("a.txt", File.Join(dir, "no-such-dir", "x.txt")));
+        o.Close();
+
+        Directory.DeleteTree(dir);
     }
 
     /* --- Clipboard ----------------------------------------------------------
@@ -17776,6 +18060,152 @@ function Main() {
      * which is the whole point of it.
      */
     /*
+     * `examples/sheets`' reader, against a workbook built to be hard.
+     *
+     * The reader is a `Task` in the example's own file, so this runs it the way the
+     * example does: a child project with a copy of `SheetReader.js` and a `Main` that
+     * prints what it answered. The workbook is built by hand (`zipBuild`) because
+     * the awkward parts of the format are exactly what a producer does not write
+     * on a good day: sheets whose order does not match their file names, a date that
+     * is only a number and a style, a format that mentions `d` inside quotes, rows and
+     * cells that are simply absent, text in runs with a phonetic reading beside it.
+     */
+    testExampleSheets() {
+        const src = File.Join(File.Directory(Application.Directory), "..", "examples", "sheets", "SheetReader.js");
+
+        if (!File.Exists(src)) {
+            print("ExampleSheets: examples/sheets is not beside this suite; skipped");
+            return;
+        }
+        if (!Xml.Available) {
+            print("ExampleSheets: this build has no libxml2; skipped");
+            return;
+        }
+
+        const dir = File.Join(SCRATCH, "sheets");
+
+        if (File.IsDir(dir))
+            Directory.DeleteTree(dir);
+        Directory.Make(dir);
+        File.Save(File.Join(dir, "SheetReader.js"), File.Load(src));
+        File.SaveJson(File.Join(dir, "project.json"),
+                      { name: "sheetprobe", main: "Main", version: "1.0", sources: ["SheetReader.js", "Main.js"] });
+        File.Save(File.Join(dir, "Main.js"),
+                  'function Main() {\n' +
+                  '    const t = new SheetReader();\n' +
+                  '    t.Done  = (r) => { print(JSON.stringify(r)); Application.Quit(0); };\n' +
+                  '    t.Error = (m) => { print("ERROR " + m); Application.Quit(1); };\n' +
+                  '    t.Start({ path: Application.Arguments[0], sheet: Number(Application.Arguments[1] || 0) });\n' +
+                  '}\n');
+
+        const ns  = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"';
+        const rns = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+        const xml = (body) => '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' + body;
+
+        const styles = xml(`<styleSheet ${ns}><numFmts count="3">` +
+            '<numFmt numFmtId="164" formatCode="dd/mm/yyyy"/>' +
+            '<numFmt numFmtId="165" formatCode="0.00&quot; days&quot;"/>' +      /* a `d` in quotes: not a date */
+            '<numFmt numFmtId="166" formatCode="[Red]0"/>' +
+            '</numFmts><cellXfs count="6">' +
+            '<xf numFmtId="0"/><xf numFmtId="14"/><xf numFmtId="164"/><xf numFmtId="165"/><xf numFmtId="20"/><xf numFmtId="166"/>' +
+            '</cellXfs></styleSheet>');
+
+        const strings = xml(`<sst ${ns}>` +
+            '<si><t>plain</t></si>' +
+            '<si><r><t>ri</t></r><r><t>ch</t></r><rPh sb="0" eb="2"><t>IGNORED</t></rPh></si>' +
+            '</sst>');
+
+        const book = (sheets, rels, props) => [
+            { name: "[Content_Types].xml", data: xml('<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>'), method: 8 },
+            { name: "xl/workbook.xml", data: xml(`<workbook ${ns} ${rns}>${props}<sheets>${sheets}</sheets></workbook>`), method: 8 },
+            { name: "xl/_rels/workbook.xml.rels", data: xml(`<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels}</Relationships>`), method: 8 },
+            { name: "xl/styles.xml", data: styles, method: 8 },
+            { name: "xl/sharedStrings.xml", data: strings, method: 8 },
+        ];
+        const sheet = (rows) => xml(`<worksheet ${ns}><sheetData>${rows}</sheetData></worksheet>`);
+        const run = (path, n) => Exec.Wait([Application.Executable, dir, path, String(n || 0)], { Timeout: 60000 });
+        const json = (r) => { try { return JSON.parse(r.Output.trim().split("\n").pop()); } catch (e) { return null; } };
+
+        /* -------- a 1904 workbook; the second sheet listed is the file sheet2.xml */
+        const a = File.Join(dir, "a.xlsx");
+        File.SaveBytes(a, zipBuild([
+            ...book('<sheet name="Second" sheetId="2" r:id="rId9"/><sheet name="First" sheetId="1" r:id="rId3"/>',
+                    '<Relationship Id="rId9" Type="x" Target="worksheets/sheet7.xml"/>' +
+                    '<Relationship Id="rId3" Type="x" Target="/xl/worksheets/sheet2.xml"/>',
+                    '<workbookPr date1904="1"/>'),
+            { name: "xl/worksheets/sheet7.xml", method: 8, data: sheet(
+                '<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row>' +
+                /* rows 2 and 3 are absent; row 4 has no A cell and a hole at C */
+                '<row r="4"><c r="B4" t="inlineStr"><is><t>inline</t></is></c><c r="D4" t="b"><v>1</v></c><c r="E4" t="e"><v>#DIV/0!</v></c></row>' +
+                /* no `r` on the cells: they are where they come */
+                '<row r="5"><c t="str"><v>formula</v></c><c><v>7</v></c></row>' +
+                '<row r="6"><c r="A6" s="1"><v>1</v></c><c r="B6" s="2"><v>1.5</v></c><c r="C6" s="3"><v>1.5</v></c><c r="D6" s="4"><v>0.75</v></c><c r="E6" s="5"><v>12</v></c></row>') },
+            { name: "xl/worksheets/sheet2.xml", method: 0, data: sheet('<row r="1"><c r="A1" t="inlineStr"><is><t>the first sheet</t></is></c></row>') },
+        ]));
+
+        const first = json(run(a, 0));
+
+        check("the workbook is read", first !== null, run(a, 0).Output);
+        if (first) {
+            eq("sheets are named in the order the workbook lists them", first.sheets.join(","), "Second,First");
+            eq("the first listed is the file the relationship names, not sheet1.xml", first.current, 0);
+            eq("a shared string", first.rows[0][0], "plain");
+            eq("a shared string in runs reads as one text, and its phonetic reading is not in it", first.rows[0][1], "rich");
+            eq("rows that are absent are empty rows, and the numbering is the file's", first.rows.length, 6);
+            eq("a row with no A cell starts with an empty one, and a hole is empty",
+               first.rows[3].join("|"), "|inline||TRUE|#DIV/0!");
+            eq("cells with no `r` fall where they come, and a formula's cached string shows",
+               first.rows[4].join("|"), "formula|7");
+            eq("a built-in date style makes a number a date (1904: serial 1 is the 2nd)", first.rows[5][0], "1904-01-02");
+            eq("and a custom one, with its time", first.rows[5][1], "1904-01-02 12:00");
+            eq("a format with a `d` inside quotes is not a date", first.rows[5][2], "1.5");
+            eq("a time alone is a time", first.rows[5][3], "18:00");
+            eq("a format that is only a colour is not a date", first.rows[5][4], "12");
+            eq("the width is the widest row", first.width, 5);
+        }
+
+        const second = json(run(a, 1));
+
+        check("the second sheet is found by its relationship, absolute target and all",
+              second && second.current === 1 && second.rows[0][0] === "the first sheet",
+              run(a, 1).Output);
+        const far = json(run(a, 9));
+
+        check("a sheet number past the end is the last sheet, not an error", far && far.current === 1);
+
+        /* -------- the 1900 epoch, which is what nearly every workbook uses */
+        const b = File.Join(dir, "b.xlsx");
+        File.SaveBytes(b, zipBuild([
+            ...book('<sheet name="Only" sheetId="1" r:id="rId1"/>',
+                    '<Relationship Id="rId1" Type="x" Target="worksheets/sheet1.xml"/>', ''),
+            { name: "xl/worksheets/sheet1.xml", method: 8, data: sheet(
+                '<row r="1"><c r="A1" s="1"><v>45352</v></c><c r="B1" s="1"><v>61</v></c></row>') },
+        ]));
+        const day = json(run(b, 0));
+
+        check("a modern serial is its date", day && day.rows[0][0] === "2024-03-01", run(b, 0).Output);
+        /* Serial 61 is where the format's invented 29 February 1900 stops mattering,
+         * and it is exact from there on; before it the epoch is a day out, which the
+         * reader says in a comment and a viewer can live with. */
+        check("serial 61 is 1 March 1900, the first one the format has right",
+              day && day.rows[0][1] === "1900-03-01", run(b, 0).Output);
+
+        /* -------- what it refuses, in words */
+        const notBook = File.Join(dir, "plain.zip");
+        File.SaveBytes(notBook, zipBuild([{ name: "a.txt", data: "hi" }]));
+        const nb = run(notBook, 0);
+
+        check("a zip that is not a spreadsheet says so", nb.ExitCode === 1 && nb.Output.includes("not a spreadsheet"), nb.Output);
+
+        File.Save(File.Join(dir, "text.xlsx"), "this is not a zip file at all, only text");
+        const tx = run(File.Join(dir, "text.xlsx"), 0);
+
+        check("a file that is not a zip says that", tx.ExitCode === 1 && tx.Output.includes("not a zip file"), tx.Output);
+
+        Directory.DeleteTree(dir);
+    }
+
+    /*
      * `examples/webhook` runs, and fails when a check it demonstrates is gone.
      *
      * An example nobody runs is the first thing in a tree to rot, and this one is
@@ -19987,6 +20417,27 @@ function Main() {
                 next();
             };
             t.Start({ mode: "entropy" });
+        });
+
+        /* An archive read in a worker: the handle is made, used and closed in the
+         * thread that opened it, and what crosses is text. */
+        steps.push(() => {
+            Directory.Make(SCRATCH);
+            const path = File.Join(SCRATCH, "task.zip");
+
+            File.SaveBytes(path, zipBuild([{ name: "a.txt", data: "in a worker", method: 8 },
+                                           { name: "b.txt", data: "beside it" }]));
+
+            const t = new TaskWork();
+
+            t.Error = (m) => fail(`zip errored: ${m}`);
+            t.Done  = (r) => {
+                eq("a worker lists an archive", r.names, "a.txt,b.txt");
+                eq("...and reads an entry of it", r.text, "in a worker");
+                File.Delete(path);
+                next();
+            };
+            t.Start({ mode: "zip", path });
         });
 
         /*

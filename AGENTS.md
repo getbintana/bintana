@@ -5114,6 +5114,52 @@ No click that calls back, on purpose: it would be a tenth async job shape, held 
 something the desktop keeps past the window that sent it. The title and body are
 not translated by `Send`; the caller wraps them in `Locale.Text`.
 
+## Zip: a reader of our own, and what the files on this desktop said
+
+**Designed in [`docs/plans/crypto-compress-plan.md`](docs/plans/crypto-compress-plan.md);
+this is stage 2, the reader.** The writer (stage 3) waits for a caller that has to *make*
+a `.xlsx` or an `.odt` -- `examples/clients` exporting to Excel is the candidate, and it
+is the half `soffice` can check automatically. What bit, in the order it was found:
+
+- **A third of the entries on this desktop have a data descriptor.** Measured over 49
+  real documents (859 entries): 271 carry flag `0x08`, meaning the local header in
+  front of the data holds no size at all, and LibreOffice writes one on **every** entry.
+  So sizes and CRC come from the central directory at the end of the file and the local
+  header is read only to find where the data begins -- which is also why a plain "read
+  the headers in order" reader, the obvious one, would have failed a third of the files
+  it was tried on. The same measurement bounded the scope: every entry stored or deflated,
+  none encrypted, none zip64, none with a name that leaves its folder. Everything else is a
+  refusal that names the feature.
+- **`soffice --headless` is an oracle, and the plan had said it could only be done by
+  hand.** 0.56 s a conversion, `.csv` to `.xlsx` and back with accents and commas intact.
+  It needs a `HOME` of its own (`Environment: { HOME }` on the `Exec`) so it does not write
+  a profile into the developer's. The reader test uses it for a real producer's file; the
+  writer, when it exists, can be checked by converting what it wrote.
+- **The hostile archives are built in JavaScript, and the point is what they are built
+  from.** A gzip member is a 10-byte header (GLib's, with no name field), a raw deflate
+  stream and an 8-byte trailer that begins with the CRC-32 -- so `Gzip.Compress` hands the
+  builder both, and no zip code of ours checks zip code of ours. `unzip -t` accepts the
+  builder's output, which is asserted so that a refusal is known to be the defect.
+- **With the name check taken out the hostile entries were written outside the
+  destination.** That is the mutation that proves the test, and the reason the hostile
+  archives name paths inside `SCRATCH`: `../evil.txt` landed beside the folder and an
+  absolute name landed where it said. A test of a path-traversal check whose bad entry
+  points at somewhere real is a test that does the damage when it goes red.
+- **A zip is read from a copy, up to 32 MiB.** Mapping a file another program may truncate
+  is a `SIGBUS` that ends the process, which no `try` catches; a bigger archive is mapped
+  and the risk is stated in the verb's comment and the page. Nothing here calls back, so a
+  worker has `Zip`, and `testTask` opens and reads an archive in one.
+- **Excel's serial 1 to 60 are a day out in `examples/sheets`, on purpose.** The format
+  counts a 29 February 1900 that never existed, and an epoch of 30 December 1899 gets every
+  serial from 61 on right and everything before it wrong by one. The reader says so in a
+  comment and the test asserts 61, not 59.
+
+`examples/sheets` is the caller: an `.xlsx` read in a `Task` (`SheetReader`, which carries
+its own helpers because a worker loads only the file of its task class) and shown in a
+`TableView` in its on-demand mode, so a hundred thousand rows are arrays of strings and a
+screenful of widgets. Its reader is tested (`ExampleSheets`); the window was checked by a
+screenshot on an `Xvfb`.
+
 ## Xml and Record
 
 **XML is a document and JSON is a value**, and everything else follows from it:

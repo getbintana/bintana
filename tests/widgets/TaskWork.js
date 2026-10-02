@@ -35,6 +35,19 @@ class TaskWork extends Task {
             };
         }
 
+        /* A zip opened and read in a worker: reading an archive off the main
+         * thread is what a worker is for, and the handle never leaves it. */
+        if (msg.mode === "zip") {
+            const z = Zip.Open(msg.path);
+
+            try {
+                return { names: z.Entries.map((e) => e.Name).join(","),
+                         text: z.Read("a.txt").ToText() };
+            } finally {
+                z.Close();
+            }
+        }
+
         /* Pure computation with no callbacks: entropy, a keyed digest, gzip. */
         if (msg.mode === "entropy") {
             const sig = Hash.Hmac("Jefe", "what do ya want for nothing?");

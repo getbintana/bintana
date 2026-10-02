@@ -1,7 +1,7 @@
 # Randomness, HMAC and compression: a plan
 
-**Part A is built, and Part B's stage 1 (`Gzip`) with it; zip (stages 2 and 3)
-is waiting for a caller.** What the first draft guessed and the build corrected is
+**Part A is built, and Part B's stages 1 (`Gzip`) and 2 (the zip reader) with it; the zip
+writer (stage 3) is waiting for a caller that has to make a `.xlsx` or an `.odt`.** What the first draft guessed and the build corrected is
 marked *built* where it happened, and the owner's five questions are answered at
 the end as decisions. Two small families the runtime does not have, planned together
 because they share the same frontier (pure computation over `Bytes`, no
@@ -319,7 +319,7 @@ out.Finish()                                // only now does the file exist
 
 ### Stages
 
-**Stage 1 is built; 2 and 3 are not, and wait for the first application that reads or writes a zip** -- which is what the examples are for.
+**Stages 1 and 2 are built; 3 is not.** The reader was measured before it was written -- 49 real documents, 859 entries, every one stored or deflated, none encrypted or zip64, a third with a data descriptor, which is why only the central directory is trusted -- and `examples/sheets` is its caller. The writer waits for a caller that has to *make* one, and `soffice --headless` (0.56 s a conversion, `.xlsx` to `.csv` and back) is the automatic oracle that stage 3's "open it once by hand" turned out not to need.
 
 0. **Spike: gzip's two failure shapes.** Done in this plan (the table above);
    stage 1 turns the multi-member case into an assertion before any other test.

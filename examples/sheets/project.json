@@ -1,0 +1,11 @@
+{
+  "name": "Sheets",
+  "id": "io.github.getbintana.Sheets",
+  "startup": "SheetForm",
+  "sources": [
+    "SheetReader.js",
+    "SheetForm.js"
+  ],
+  "version": "1.0",
+  "description": "Open an .xlsx: Zip reads the container, Xml reads the parts, a Task does it off the window's thread, and a table that holds nothing asks for each cell it draws"
+}
