@@ -271,6 +271,120 @@ static bool xml_name_ok(const char *s)
     return true;
 }
 
+/*
+ * Whether text can be in an XML document, and where it cannot.
+ *
+ * **libxml2 writes whatever it is given and refuses it when it reads it back.**
+ * Measured: a `U+0001` assigned to `Text` or to an attribute came out of
+ * `Stringify` as the raw byte, and `Xml.Parse` of that output answered *PCDATA
+ * invalid Char value 1* -- this API writing a document it could not read. A lone
+ * surrogate (half a pair, which a JavaScript string may hold) came out as bytes
+ * that are not UTF-8 at all, refused the same way; and a NUL **cut the text short
+ * in silence**: `"a\u0000b"` was written as `a`. So every door text enters by
+ * asks this first: XML 1.0's `Char` -- tab, newline, return, and everything from a
+ * space up except the surrogates and U+FFFE/U+FFFF -- and nothing else. A refusal
+ * and not a silent drop, because which characters an application may lose is the
+ * application's decision (`examples/clients`' `Excel.js` makes it for a pasted
+ * control character in a name); the runtime's is only that what it writes it can
+ * read.
+ *
+ * `len` is the length `JS_ToCStringLen` answered, which is what makes a NUL
+ * visible at all. A sentence for the caller to free, or NULL.
+ */
+static char *xml_text_problem(const char *s, size_t len)
+{
+    const char *p   = s;
+    const char *end = s + len;
+    long        at  = 1;
+
+    while (p < end) {
+        /* Before decoding: GLib answers a NUL as *invalid*, which would name the
+         * wrong problem. */
+        if (*p == '\0')
+            return g_strdup_printf("character %ld is U+0000, which XML cannot carry "
+                                   "-- and which would have cut the text short", at);
+
+        gunichar c = g_utf8_get_char_validated(p, end - p);
+
+        if (c == (gunichar)-1 || c == (gunichar)-2)
+            return g_strdup_printf("character %ld is not valid text -- half of a "
+                                   "surrogate pair, most likely", at);
+
+        bool ok = c == 0x9 || c == 0xA || c == 0xD ||
+                  (c >= 0x20 && c <= 0xD7FF) || (c >= 0xE000 && c <= 0xFFFD) ||
+                  (c >= 0x10000 && c <= 0x10FFFF);
+
+        if (!ok)
+            return g_strdup_printf("character %ld is U+%04X, which XML cannot carry "
+                                   "-- a document holding it could not be read back",
+                                   at, (unsigned)c);
+        p = g_utf8_next_char(p);
+        at++;
+    }
+    return NULL;
+}
+
+/* The same, as a thrown TypeError naming the verb. False when it threw. */
+static bool xml_text_ok(JSContext *ctx, const char *s, size_t len, const char *who)
+{
+    char *why = xml_text_problem(s, len);
+
+    if (!why)
+        return true;
+    JS_ThrowTypeError(ctx, "%s: %s", who, why);
+    g_free(why);
+    return false;
+}
+
+/*
+ * The nearest declaration of `prefix` (NULL for the default namespace) on `node`
+ * or above it.
+ *
+ * Walked by hand rather than with `xmlSearchNs`, because what is asked here has to
+ * work in a **detached** tree -- an `Xml.Element` and what was added to it, which
+ * has no document -- and the old search was skipped there for want of one. That is
+ * what made `SetNamespace` on a child of a detached root write a second
+ * `xmlns="..."` on the child, measured, beside the one in reach.
+ */
+static xmlNsPtr xml_ns_in_scope(xmlNodePtr node, const char *prefix)
+{
+    for (xmlNodePtr at = node; at && at->type == XML_ELEMENT_NODE; at = at->parent)
+        for (xmlNsPtr d = at->nsDef; d; d = d->next) {
+            bool same = prefix ? d->prefix && !strcmp((const char *)d->prefix, prefix)
+                               : !d->prefix;
+            if (same)
+                return d;
+        }
+    return NULL;
+}
+
+/*
+ * An element with no namespace, placed under one whose default namespace is in
+ * scope, takes that namespace -- and so does every element under it that has none.
+ *
+ * **Because that is what the text will say.** libxml2 writes such a child as a bare
+ * `<row>`, which a reader puts in the parent's default namespace; the tree said it
+ * had none. Measured: `Namespace` answered `""` in this process and the URI after a
+ * `Stringify` and a `Parse` -- one element, two answers. Writing a child that is
+ * *meant* to have no namespace under a default one would need `xmlns=""`, which
+ * this API does not write; that is the case given up, and it is rare enough to say
+ * so rather than to support. An empty default declaration (`xmlns=""`) in scope
+ * means "none" and is left alone.
+ */
+static void xml_take_default_ns(xmlNodePtr node)
+{
+    if (!node || node->type != XML_ELEMENT_NODE)
+        return;
+    if (!node->ns) {
+        xmlNsPtr d = xml_ns_in_scope(node, NULL);
+
+        if (d && d->href && *d->href)
+            node->ns = d;
+    }
+    for (xmlNodePtr c = node->children; c; c = c->next)
+        xml_take_default_ns(c);
+}
+
 static JSValue xml_throw_last(JSContext *ctx)
 {
     const xmlError *e = xmlGetLastError();
@@ -404,6 +518,7 @@ static JSValue xml_place_child(JSContext *ctx, BtaXmlNode *parent,
         if (parent->tree->doc)
             xmlSetTreeDoc(el, parent->tree->doc);
         xml_place(parent->node, index, el);
+        xml_take_default_ns(el);
 
         JSValue w = xml_node_new(ctx, parent->tree, el, false);
         if (JS_IsException(w)) {
@@ -431,6 +546,7 @@ static JSValue xml_place_child(JSContext *ctx, BtaXmlNode *parent,
         if (child->tree->root == child->node)
             child->tree->root = NULL;
         xml_place(parent->node, index, child->node);
+        xml_take_default_ns(child->node);
         return JS_DupValue(ctx, value);
     }
 
@@ -440,6 +556,7 @@ static JSValue xml_place_child(JSContext *ctx, BtaXmlNode *parent,
     if (parent->tree->doc)
         xmlSetTreeDoc(copy, parent->tree->doc);
     xml_place(parent->node, index, copy);
+    xml_take_default_ns(copy);
 
     JSValue w = xml_node_new(ctx, parent->tree, copy, false);
     if (JS_IsException(w)) {
@@ -639,6 +756,10 @@ static JSValue xml_node_set_text(JSContext *ctx, JSValueConst this_val,
     const char *s   = JS_ToCStringLen(ctx, &len, val);
     if (!s)
         return JS_EXCEPTION;
+    if (!xml_text_ok(ctx, s, len, "Text")) {
+        JS_FreeCString(ctx, s);
+        return JS_EXCEPTION;
+    }
 
     /*
      * The children go to the orphan list rather than being freed, because a
@@ -739,8 +860,9 @@ static JSValue xml_node_set_attr(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "SetAttr(name, value) expects the name "
                                       "and the value as text");
 
+    size_t      vlen = 0;
     const char *name = JS_ToCString(ctx, argv[0]);
-    const char *v    = JS_ToCString(ctx, argv[1]);
+    const char *v    = JS_ToCStringLen(ctx, &vlen, argv[1]);
     if (!name || !v) {
         if (name) JS_FreeCString(ctx, name);
         if (v)    JS_FreeCString(ctx, v);
@@ -752,6 +874,11 @@ static JSValue xml_node_set_attr(JSContext *ctx, JSValueConst this_val,
         JS_FreeCString(ctx, name);
         JS_FreeCString(ctx, v);
         return e;
+    }
+    if (!xml_text_ok(ctx, v, vlen, "SetAttr")) {
+        JS_FreeCString(ctx, name);
+        JS_FreeCString(ctx, v);
+        return JS_EXCEPTION;
     }
 
     xmlAttrPtr made = xmlSetProp(n->node, BAD_CAST name, BAD_CAST v);
@@ -785,9 +912,10 @@ static JSValue xml_node_set_attr_ns(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "SetAttrNS(uri, name, value) expects the "
                                       "namespace, the name and the value as text");
 
-    const char *uri  = JS_ToCString(ctx, argv[0]);
+    size_t      ulen = 0, vlen = 0;
+    const char *uri  = JS_ToCStringLen(ctx, &ulen, argv[0]);
     const char *name = JS_ToCString(ctx, argv[1]);
-    const char *v    = JS_ToCString(ctx, argv[2]);
+    const char *v    = JS_ToCStringLen(ctx, &vlen, argv[2]);
     if (!uri || !name || !v) {
         if (uri)  JS_FreeCString(ctx, uri);
         if (name) JS_FreeCString(ctx, name);
@@ -803,11 +931,20 @@ static JSValue xml_node_set_attr_ns(JSContext *ctx, JSValueConst this_val,
         return e;
     }
 
+    if (!xml_text_ok(ctx, uri, ulen, "SetAttrNS") ||
+        !xml_text_ok(ctx, v, vlen, "SetAttrNS")) {
+        JS_FreeCString(ctx, uri);
+        JS_FreeCString(ctx, name);
+        JS_FreeCString(ctx, v);
+        return JS_EXCEPTION;
+    }
+
     xmlNsPtr ns = xmlSearchNsByHref(n->node->doc, n->node, BAD_CAST uri);
     if (!ns) {
         JSValue e = JS_ThrowTypeError(ctx,
-            "SetAttrNS: no namespace '%s' is declared on this element -- "
-            "declare it with SetNamespace first", uri);
+            "SetAttrNS: no prefix for '%s' is declared on this element or around "
+            "it -- declare one with DeclareNamespace(uri, prefix), on this element "
+            "or an ancestor", uri);
         JS_FreeCString(ctx, uri);
         JS_FreeCString(ctx, name);
         JS_FreeCString(ctx, v);
@@ -1084,11 +1221,17 @@ static JSValue xml_node_set_namespace(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "SetNamespace(uri, [prefix]) expects "
                                       "the URI");
 
-    const char *uri    = JS_ToCString(ctx, argv[0]);
+    size_t      ulen   = 0;
+    const char *uri    = JS_ToCStringLen(ctx, &ulen, argv[0]);
     const char *prefix = argc > 1 && JS_IsString(argv[1])
                        ? JS_ToCString(ctx, argv[1]) : NULL;
 
     if (!uri) {
+        if (prefix) JS_FreeCString(ctx, prefix);
+        return JS_EXCEPTION;
+    }
+    if (!xml_text_ok(ctx, uri, ulen, "SetNamespace")) {
+        JS_FreeCString(ctx, uri);
         if (prefix) JS_FreeCString(ctx, prefix);
         return JS_EXCEPTION;
     }
@@ -1124,11 +1267,11 @@ static JSValue xml_node_set_namespace(JSContext *ctx, JSValueConst this_val,
         break;
     }
 
-    /* Then the one in reach, or it would be written twice.  A detached element
-     * has no document and so no ancestors to search, which is why that search
-     * is skipped rather than handed a NULL. */
-    if (!ns && n->node->doc) {
-        ns = xmlSearchNs(n->node->doc, n->node, prefix ? BAD_CAST prefix : NULL);
+    /* Then the one in reach, or it would be written twice -- in a detached tree
+     * too, which the search used to skip for want of a document and so declared
+     * the parent's namespace again on every child (`xml_ns_in_scope`). */
+    if (!ns && n->node->parent) {
+        ns = xml_ns_in_scope(n->node->parent, prefix);
         if (ns && (!ns->href || strcmp((const char *)ns->href, uri)))
             ns = NULL;
     }
@@ -1144,6 +1287,78 @@ static JSValue xml_node_set_namespace(JSContext *ctx, JSValueConst this_val,
 
     xmlSetNs(n->node, ns);
     return JS_UNDEFINED;
+}
+
+/*
+ * DeclareNamespace(uri, prefix) -- binds a prefix on this element, for its
+ * attributes and its descendants, **without putting the element in it.**
+ *
+ * `SetAttrNS` looks a namespace up in scope and has always done so, which is what
+ * every format with prefixed attributes needs: OOXML writes `xmlns:r="…"` on the
+ * workbook and `r:id` on each sheet. What was missing was a way to *declare* `r`
+ * -- `SetNamespace(uri, "r")` moves the element into the namespace, and the only
+ * spelling that worked was moving it there and back, which left a declaration on
+ * every sheet. A prefix is required: a default namespace declared on an element
+ * applies to that element itself, so "declare it without moving the element" is a
+ * contradiction there, and `SetNamespace` is the verb for it.
+ *
+ * A prefix already bound to the same URI in scope is the declaration there is and
+ * nothing is written. One bound to a **different** URI here or above is refused:
+ * shadowing a prefix is legal XML, and it is also how a document comes to mean
+ * something else once it is written, since whatever below already used the prefix
+ * would move with it.
+ */
+static JSValue xml_node_declare_namespace(JSContext *ctx, JSValueConst this_val,
+                                          int argc, JSValueConst *argv)
+{
+    BtaXmlNode *n = node_this(ctx, this_val);
+    if (!n)
+        return JS_EXCEPTION;
+    if (argc < 2 || !JS_IsString(argv[0]) || !JS_IsString(argv[1]))
+        return JS_ThrowTypeError(ctx, "DeclareNamespace(uri, prefix) expects the URI "
+                                      "and the prefix as text");
+
+    size_t      ulen   = 0;
+    const char *uri    = JS_ToCStringLen(ctx, &ulen, argv[0]);
+    const char *prefix = JS_ToCString(ctx, argv[1]);
+    JSValue     r      = JS_UNDEFINED;
+
+    if (!uri || !prefix) {
+        if (uri)    JS_FreeCString(ctx, uri);
+        if (prefix) JS_FreeCString(ctx, prefix);
+        return JS_EXCEPTION;
+    }
+
+    if (!xml_text_ok(ctx, uri, ulen, "DeclareNamespace")) {
+        r = JS_EXCEPTION;
+    } else if (!*uri) {
+        r = JS_ThrowTypeError(ctx, "DeclareNamespace: a prefix cannot be bound to an "
+                                   "empty URI");
+    } else if (!xml_name_ok(prefix)) {
+        r = JS_ThrowTypeError(ctx, "DeclareNamespace: '%s' is not a prefix (a name, "
+                                   "with no colon)", prefix);
+    } else if (!g_ascii_strcasecmp(prefix, "xml") || !g_ascii_strcasecmp(prefix, "xmlns")) {
+        r = JS_ThrowTypeError(ctx, "DeclareNamespace: '%s' is reserved by XML itself",
+                              prefix);
+    } else {
+        xmlNsPtr there = xml_ns_in_scope(n->node, prefix);
+
+        if (there && there->href && !strcmp((const char *)there->href, uri)) {
+            /* already in scope: nothing to write */
+        } else if (there) {
+            r = JS_ThrowTypeError(ctx, "DeclareNamespace: the prefix '%s' is already "
+                                       "bound to '%s' here or above, and binding it "
+                                       "again would change what the elements using it "
+                                       "mean", prefix,
+                                  there->href ? (const char *)there->href : "");
+        } else if (!xmlNewNs(n->node, BAD_CAST uri, BAD_CAST prefix)) {
+            r = JS_ThrowInternalError(ctx, "DeclareNamespace: libxml2 refused the "
+                                           "declaration");
+        }
+    }
+    JS_FreeCString(ctx, uri);
+    JS_FreeCString(ctx, prefix);
+    return r;
 }
 
 /* type XmlNode */
@@ -1162,7 +1377,10 @@ static const JSCFunctionListEntry xml_node_props[] = {
     JS_CGETSET_DEF("Namespace", xml_node_get_namespace, NULL),
     /* Text -> string
      *   all the character data under an element; assigning replaces the
-     *   children
+     *   children. **Text XML cannot carry is refused**, naming the character: a
+     *   NUL, a control character other than tab, newline and return, U+FFFE/FFFF
+     *   or half a surrogate pair -- written, each was a document `Xml.Parse` could
+     *   not read back, and a NUL cut the text short in silence
      */
     JS_CGETSET_DEF("Text",      xml_node_get_text,      xml_node_set_text),
     /* Parent -> XmlNode
@@ -1179,7 +1397,8 @@ static const JSCFunctionListEntry xml_node_props[] = {
      */
     JS_CFUNC_DEF("Attr",           1, xml_node_attr),
     /* SetAttr(name, value)
-     *   both as text; creates or replaces
+     *   both as text; creates or replaces. A value XML cannot carry is refused, as
+     *   `Text` refuses one
      */
     JS_CFUNC_DEF("SetAttr",        2, xml_node_set_attr),
     /* RemoveAttr(name)
@@ -1195,7 +1414,8 @@ static const JSCFunctionListEntry xml_node_props[] = {
      */
     JS_CFUNC_DEF("AttrNS",         2, xml_node_attr_ns),
     /* SetAttrNS(uri, name, value)
-     *   writes one
+     *   writes one. The namespace has to have a prefix in scope -- declared on this
+     *   element or an ancestor, by `DeclareNamespace` or by a parsed document
      */
     JS_CFUNC_DEF("SetAttrNS",      3, xml_node_set_attr_ns),
     /* RemoveAttrNS(uri, name)
@@ -1216,7 +1436,10 @@ static const JSCFunctionListEntry xml_node_props[] = {
      */
     JS_CFUNC_DEF("FindAll",        1, xml_node_find_all),
     /* Add(child) -> XmlNode
-     *   a node or an element name
+     *   a node or an element name. An element with no namespace added under a
+     *   default namespace **takes it** -- and so does what is under it with none --
+     *   because that is what the written text says; the tree used to answer `""`
+     *   for it while the text, read back, answered the URI
      */
     JS_CFUNC_DEF("Add",            1, xml_node_add),
     /* Insert(index, child) -> XmlNode
@@ -1233,9 +1456,18 @@ static const JSCFunctionListEntry xml_node_props[] = {
     JS_CFUNC_DEF("Copy",           0, xml_node_copy),
     /* SetNamespace(uri, [prefix])
      *   puts the element in that namespace, reusing a declaration already in
-     *   reach
+     *   reach -- in a detached tree too, where it used to declare it again
      */
     JS_CFUNC_DEF("SetNamespace",   2, xml_node_set_namespace),
+    /* DeclareNamespace(uri, prefix)
+     *   binds `prefix` to `uri` on this element, for its attributes and what is
+     *   under it, **without putting the element in that namespace** -- what
+     *   `SetAttrNS` then finds, as OOXML's `xmlns:r` on a workbook and `r:id` on
+     *   each sheet. A prefix is required (a default namespace is `SetNamespace`'s);
+     *   one already bound to the same URI in scope writes nothing, and one bound to
+     *   another URI here or above is refused
+     */
+    JS_CFUNC_DEF("DeclareNamespace", 2, xml_node_declare_namespace),
 };
 
 #else  /* no libxml2 at build time */

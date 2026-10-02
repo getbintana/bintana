@@ -15586,7 +15586,7 @@
           "Params": 1,
           "Signature": "(child)",
           "Returns": "XmlNode",
-          "Doc": "a node or an element name",
+          "Doc": "a node or an element name. An element with no namespace added under a default namespace **takes it** -- and so does what is under it with none -- because that is what the written text says; the tree used to answer `\"\"` for it while the text, read back, answered the URI",
           "Native": true
         },
         {
@@ -15632,6 +15632,15 @@
           "Signature": "()",
           "Returns": "XmlNode",
           "Doc": "a detached subtree of its own",
+          "Native": true
+        },
+        {
+          "Name": "DeclareNamespace",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(uri, prefix)",
+          "Returns": "",
+          "Doc": "binds `prefix` to `uri` on this element, for its attributes and what is under it, **without putting the element in that namespace** -- what `SetAttrNS` then finds, as OOXML's `xmlns:r` on a workbook and `r:id` on each sheet. A prefix is required (a default namespace is `SetNamespace`'s); one already bound to the same URI in scope writes nothing, and one bound to another URI here or above is refused",
           "Native": true
         },
         {
@@ -15730,7 +15739,7 @@
           "Params": 2,
           "Signature": "(name, value)",
           "Returns": "",
-          "Doc": "both as text; creates or replaces",
+          "Doc": "both as text; creates or replaces. A value XML cannot carry is refused, as `Text` refuses one",
           "Native": true
         },
         {
@@ -15739,7 +15748,7 @@
           "Params": 3,
           "Signature": "(uri, name, value)",
           "Returns": "",
-          "Doc": "writes one",
+          "Doc": "writes one. The namespace has to have a prefix in scope -- declared on this element or an ancestor, by `DeclareNamespace` or by a parsed document",
           "Native": true
         },
         {
@@ -15748,7 +15757,7 @@
           "Params": 1,
           "Signature": "(uri, [prefix])",
           "Returns": "",
-          "Doc": "puts the element in that namespace, reusing a declaration already in reach",
+          "Doc": "puts the element in that namespace, reusing a declaration already in reach -- in a detached tree too, where it used to declare it again",
           "Native": true
         },
         {
@@ -15757,7 +15766,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "string",
-          "Doc": "all the character data under an element; assigning replaces the children",
+          "Doc": "all the character data under an element; assigning replaces the children. **Text XML cannot carry is refused**, naming the character: a NUL, a control character other than tab, newline and return, U+FFFE/FFFF or half a surrogate pair -- written, each was a document `Xml.Parse` could not read back, and a NUL cut the text short in silence",
           "Native": true
         }
       ]

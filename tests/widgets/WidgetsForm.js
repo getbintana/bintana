@@ -556,7 +556,7 @@ const TESTS = [
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
-    "CuratedLanguage", "Dictionary", "Regex", "Bytes", "Hash", "Random", "Gzip", "Zip", "ZipWrite", "Screen", "JsonFiles", "XmlFiles", "XmlRecord", "Log", "Apply", "TimerShorthand", "Terminal",
+    "CuratedLanguage", "Dictionary", "Regex", "Bytes", "Hash", "Random", "Gzip", "Zip", "ZipWrite", "Screen", "JsonFiles", "XmlFiles", "XmlWrite", "XmlRecord", "Log", "Apply", "TimerShorthand", "Terminal",
     "Settings", "Timer", "ArgumentRefusals", "Icons", "Font", "Style", "Radius", "Padding", "Shadow", "StyleRule",
     "ColorButton",
     "ColorDialog", "FileDialog", "Dialog", "IconList", "FormIcon", "ButtonClick",
@@ -10943,6 +10943,116 @@ function Main() {
      * touches only what it models, so everything a shape does not know about
      * stays where it was.
      */
+
+    /*
+     * What `Xml` writes it can read, and what a writer asked for it to write.
+     *
+     * Three things were wrong and each was measured before it was fixed: text XML
+     * cannot carry (a control character, a lone surrogate) was written and then
+     * refused by `Xml.Parse` -- this API producing documents it could not read --
+     * and a NUL cut text short with nothing said; a namespace prefix could not be
+     * declared for an attribute without moving the element into it, which is how
+     * OOXML writes `r:id`; and a child added under a default namespace answered
+     * `""` while the text, read back, put it in that namespace. `Excel.js` is the
+     * caller that found all three.
+     */
+    testXmlWrite() {
+        if (!Xml.Available) {
+            throws("without libxml2 there is nothing to write with", () => Xml.Element("a"));
+            return;
+        }
+        const MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        const RELS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        const count = (text, what) => text.split(what).length - 1;
+        const refused = (label, fn, phrase) => {
+            let msg = "";
+
+            try { fn(); } catch (e) { msg = e.message; }
+            check(label, msg.includes(phrase), msg);
+        };
+
+        /* -------------------------------------- what text can be */
+        const e = Xml.Element("t");
+
+        e.Text = "kept";
+        refused("a control character is refused, naming it and where it is",
+                () => { e.Text = "a\u0001b"; }, "character 2 is U+0001");
+        eq("and the text that was there stays", e.Text, "kept");
+        refused("a NUL is refused rather than cutting the text short", () => { e.Text = "a\u0000b"; }, "U+0000");
+        refused("U+FFFE is refused", () => { e.Text = "￾"; }, "U+FFFE");
+        refused("half a surrogate pair is refused", () => { e.Text = "a\uD800b"; }, "surrogate");
+        refused("an attribute is held to the same", () => e.SetAttr("v", "x\u0007"), "U+0007");
+        refused("so is a NUL in one", () => e.SetAttr("v", "x\u0000y"), "U+0000");
+        refused("and a namespaced one", () => e.SetAttrNS("http://www.w3.org/XML/1998/namespace", "lang", "e\u001Bs"), "U+001B");
+        refused("and a namespace URI", () => e.SetNamespace("urn:a\u0002"), "U+0002");
+
+        const valid = "tab\there, line\nbreak, return\rkept, ñandú, 🙂, �, ";
+        const d = Xml.Element("doc");
+
+        d.Add("t").Text = valid;
+        d.Find("t").SetAttr("v", valid);
+        const back = Xml.Parse(Xml.Stringify(d)).Root.Find("t");
+        eq("everything XML can carry is written and read back as it was", back.Text, valid);
+        eq("in an attribute too", back.Attr("v"), valid);
+
+        /* -------------------------------------- declaring a prefix */
+        const wb = Xml.Element("workbook");
+
+        wb.SetNamespace(MAIN);
+        wb.DeclareNamespace(RELS, "r");
+        eq("declaring a prefix does not move the element", wb.Namespace, MAIN);
+        const sheet = wb.Add("sheets").Add("sheet");
+
+        sheet.SetAttr("name", "Clients");
+        sheet.SetAttrNS(RELS, "id", "rId1");
+        wb.DeclareNamespace(RELS, "r");
+        wb.Find("sheets").DeclareNamespace(RELS, "r");
+        const text = Xml.Stringify(wb);
+
+        eq("the prefix is declared once, where it was asked for -- the same URI again writes nothing", count(text, "xmlns:r="), 1);
+        check("and the attribute carries it", text.includes('r:id="rId1"'), text);
+        eq("no element below repeats the default namespace", count(text, "xmlns="), 1);
+        const read = Xml.Parse(text).Root.Find("sheets").Find("sheet");
+        eq("read back, the attribute is in its namespace", read.AttrNS(RELS, "id"), "rId1");
+        eq("and the sheet in the workbook's", read.Namespace, MAIN);
+
+        refused("binding a prefix in scope to another URI is refused",
+                () => sheet.DeclareNamespace("urn:other", "r"), "already bound");
+        refused("xml is reserved", () => wb.DeclareNamespace("urn:x", "xml"), "reserved");
+        refused("so is xmlns", () => wb.DeclareNamespace("urn:x", "XMLNS"), "reserved");
+        refused("a prefix with a colon is not one", () => wb.DeclareNamespace("urn:x", "a:b"), "not a prefix");
+        refused("nor is an empty one -- a default namespace is SetNamespace's", () => wb.DeclareNamespace("urn:x", ""), "not a prefix");
+        refused("a prefix cannot be bound to nothing", () => wb.DeclareNamespace("", "x"), "empty URI");
+        refused("both are needed, as text", () => wb.DeclareNamespace("urn:x"), "expects");
+        refused("SetAttrNS with no prefix in scope says how to declare one",
+                () => Xml.Element("a").SetAttrNS("urn:nowhere", "k", "v"), "DeclareNamespace");
+
+        /* -------------------------------------- a child's namespace */
+        const ws = Xml.Element("worksheet");
+
+        ws.SetNamespace(MAIN);
+        const row = ws.Add("row");
+        eq("a child added under a default namespace is in it", row.Namespace, MAIN);
+
+        const cell = Xml.Element("c");
+        cell.Add("v").Text = "1";
+        const placed = row.Add(cell);
+        eq("so is a subtree built apart and added", placed.Namespace, MAIN);
+        eq("all the way down", placed.Find("v").Namespace, MAIN);
+
+        const other = Xml.Element("x");
+        other.SetNamespace("urn:other");
+        eq("an element that has a namespace of its own keeps it", ws.Add(other).Namespace, "urn:other");
+
+        const later = ws.Add("row");
+        later.SetNamespace(MAIN);
+        const written = Xml.Stringify(ws);
+        eq("SetNamespace on a child of a detached tree reuses the declaration in reach", count(written, `xmlns="${MAIN}"`), 1);
+        eq("and what is read back agrees with what the tree said", Xml.Parse(written).Root.Find("row").Find("c").Namespace, MAIN);
+
+        eq("under no default namespace a child has none", Xml.Element("plain").Add("child").Namespace, "");
+        eq("and in a parsed document the same rule holds", Xml.Parse('<a xmlns="urn:u"/>').Root.Add("b").Namespace, "urn:u");
+    }
     testXmlRecord() {
         /* The other half of the optional fork: a shape with `static Xml` and no
          * DOM under it can still be declared, and writing it refuses with the
@@ -18447,6 +18557,10 @@ function Main() {
             print("ExampleExcel: the examples are not beside this suite; skipped");
             return;
         }
+        if (!Xml.Available) {
+            print("ExampleExcel: this build has no libxml2, which Excel.js writes with; skipped");
+            return;
+        }
 
         const dir = File.Join(SCRATCH, "excel");
 
@@ -18642,8 +18756,9 @@ function Main() {
     testExampleClientsExport() {
         const example = File.Join(File.Directory(Application.Directory), "..", "examples", "clients");
 
-        if (!File.IsDir(example) || !Application.HasCommand("soffice") || typeof Database.Sqlite !== "function") {
-            print("ExampleClientsExport: needs the example, soffice and sqlite; skipped");
+        if (!File.IsDir(example) || !Application.HasCommand("soffice") || typeof Database.Sqlite !== "function" ||
+            !Xml.Available) {
+            print("ExampleClientsExport: needs the example, soffice, sqlite and libxml2; skipped");
             return;
         }
 

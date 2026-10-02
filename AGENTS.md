@@ -5189,8 +5189,10 @@ three programs that did not write it. What bit:
   the alternative, writing it as text, is a column nobody can sum. It is Excel's limit and `Excel.js` says so.
 
 Three defects were put back in the writer and each went red (names unchecked, a streamed entry not flagged as
-having a descriptor, `Abort` leaving its temporary) and three in `Excel.js` (`&` not escaped, money without its
-style, a date as text -- the last one only after the XML assertions were added).
+having a descriptor, `Abort` leaving its temporary). `Excel.js` was first written as strings, with an escaper of its
+own; it builds every part with `Xml` now (see *Xml and Record* below for what that found), and the defects put back
+in it were money without its style and a date as text -- the last one only went red once the XML assertions were
+added -- and leaving out its `clean()`, which now fails loudly instead of writing a corrupt workbook.
 
 `examples/sheets` is the caller: an `.xlsx` read in a `Task` (`SheetReader`, which carries
 its own helpers because a worker loads only the file of its task class) and shown in a
@@ -5273,6 +5275,38 @@ bag. Five things are worth knowing before touching either half:
   `xmlUnsetProp` does not consult the DTD. Any new call that answers an
   `xmlAttrPtr` from a lookup wants the same check. And `SetAttrNS` returned an
   empty `JS_EXCEPTION` when libxml2 answered NULL; it throws a sentence now.
+- **`Xml` wrote documents it could not read, and only a program that *wrote* XML with it
+  found out.** Everything before was reading -- MSPDI, feeds -- and `SaveXml` writes values that
+  came out of a file, which were valid XML to begin with. `Excel.js` writes values that came out
+  of a database, and building it with `Xml` instead of strings showed three things in one sitting:
+  a `U+0001` assigned to `Text` or an attribute was written as the raw byte and **`Xml.Parse`
+  refused the output** (*PCDATA invalid Char value 1*); half a surrogate pair -- which a JavaScript
+  string may hold, and a `slice` through an emoji makes -- was written as bytes that are not
+  UTF-8; and **a NUL cut the text short in silence** (`"a\u0000b"` written as `a`). libxml2 writes
+  what it is given; checking is the binding's job. `xml_text_problem` is XML 1.0's `Char` and every
+  door text enters by asks it (`Text`, `SetAttr`, `SetAttrNS`, and a namespace URI), refusing with
+  the character and its position. **A NUL has to be looked for before decoding**: GLib's
+  `g_utf8_get_char_validated` answers it as invalid, which named it "half a surrogate pair".
+  A refusal and not a drop, because which characters may be lost is the program's call -- `Excel.js`
+  drops them from a cell, deliberately, in its own `clean()`.
+- **`SetAttrNS` always searched in scope; what was missing was declaring a prefix.** OOXML writes
+  `xmlns:r` on a workbook and `r:id` on each sheet, and the only spelling was moving an element into
+  the namespace and back, which left a declaration on every sheet. `DeclareNamespace(uri, prefix)`
+  is `xmlNewNs` without `xmlSetNs`. A prefix is required -- a default namespace declared on an element
+  applies to the element itself, so that is a contradiction -- and a prefix bound to another URI here
+  or above is refused, because shadowing it would move whatever already used it.
+- **A child added under a default namespace had none in the tree and the parent's in the text.**
+  libxml2 writes a bare `<row>`, which every reader puts in the default namespace; the tree answered
+  `""`. `xml_take_default_ns` runs on whatever `Add`/`Insert` placed, down its subtree. The case given
+  up is a child meant to have no namespace under a default one, which would need `xmlns=""`; nothing in
+  this tree writes one, and `rad.js` reads `Namespace` only off a document's root, which is why the
+  change was low risk -- `XmlRecord` and `XmlFiles` stayed green without a line changed.
+- **`SetNamespace` skipped the search for a declaration in reach when there was no document**, which
+  is every tree built from `Xml.Element`, so a child given its parent's namespace got a second
+  `xmlns="..."` written on it. `xml_ns_in_scope` walks the parents by hand and needs no document.
+  The three were each put back and went red (`XmlWrite`): the text check, the adoption, the old search.
+- **Indentation was measured and kept.** The canonical shape is 59 % more bytes than a flat one, and
+  5.5 % once deflated into a zip -- not worth an option.
 - **`Field.DateTime` exists because XML's `dateTime` is a date and a time**
   together, which `Date` and `Time` cannot say between them; and the namespace
   on `static Xml` is a **list** because MSPDI's own XSD and its own files
