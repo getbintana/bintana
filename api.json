@@ -13620,6 +13620,29 @@
       ]
     },
     {
+      "Name": "Notification",
+      "Members": [
+        {
+          "Name": "Send",
+          "Kind": "Method",
+          "Params": 3,
+          "Signature": "(title, [body], [options])",
+          "Returns": "string",
+          "Doc": "shows a desktop notification and answers its id. With no body, the second argument may be the options: `{ Id, Urgency, Icon }`. `Urgency` is `\"Low\"`, `\"Normal\"` (the default), `\"High\"` or `\"Urgent\"`; `Icon` is a theme icon name; sending again with the same `Id` **replaces** what is showing. The title and body are not looked up in a catalogue -- wrap them in `Locale.Text`. Refused in a project with a `main`, which has no application to send from",
+          "Native": true
+        },
+        {
+          "Name": "Withdraw",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(id)",
+          "Returns": "",
+          "Doc": "takes a notification back, by the id `Send` answered or was given. An id nothing is showing under is not an error",
+          "Native": true
+        }
+      ]
+    },
+    {
       "Name": "Painter",
       "Members": [
         {

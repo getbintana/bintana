@@ -439,6 +439,8 @@ const TESTS = [
     /* Blocking too, and in the same group: it runs children with `Exec.Wait`
      * to see a project's own id answered, and a bad one refused. */
     "ApplicationId",
+    /* Blocking too: a child on a private bus, watched with dbus-monitor. */
+    "Notification",
     /* Blocking as well: a child that spawns into terminals it then drops. */
     "TerminalSpawnLifetime",
     /* And one more child: a Video whose Error handler takes it out. */
@@ -17771,6 +17773,144 @@ function Main() {
      * the asynchronous tail: nothing here waits for a later turn of the loop,
      * which is the whole point of it.
      */
+    /*
+     * A desktop notification, observed on a bus of its own.
+     *
+     * **Nothing here may reach the user's desktop**, and a notification sent from
+     * this process would: the suite inherits the real session bus, a daemon is
+     * listening on it, and the toast would appear over whatever they are doing --
+     * the shape of every "the suite must not open a window" note in AGENTS.md. So
+     * this process only calls what refuses before it sends, and the sending happens
+     * in a child on a private `dbus-daemon` whose configuration names **no service
+     * directory**. That last half is not tidiness: the first version used a bare
+     * `dbus-run-session`, which activated the system's real services on the private
+     * bus -- the portal, `xfconfd` and `xfce4-notifyd` -- and one of them is the
+     * settings daemon. `dbus-monitor` sees the `Notify` call whether or not anyone
+     * answers it, which is all that is asserted: what the runtime *asked for*.
+     */
+    testNotification() {
+        /* The refusals that happen before anything is sent. */
+        throws("a title is needed", () => Notification.Send());
+        throws("and it is text", () => Notification.Send(5));
+        throws("an option it does not know is refused", () => Notification.Send("x", { Urgancy: "High" }));
+        throws("so is an urgency it does not know", () => Notification.Send("x", { Urgency: "loud" }));
+        throws("an empty Id is refused", () => Notification.Send("x", { Id: "" }));
+        throws("an Id that is not text is refused", () => Notification.Send("x", { Id: 5 }));
+        throws("a body that is not text is refused", () => Notification.Send("x", 5));
+        throws("two sets of options are refused", () => Notification.Send("x", { Id: "a" }, { Id: "b" }));
+        throws("Withdraw needs the id", () => Notification.Withdraw());
+
+        if (!Application.HasCommand("dbus-run-session") || !Application.HasCommand("dbus-monitor")) {
+            print("Notification: dbus-run-session or dbus-monitor is not installed; "
+                  + "the half that watches the bus is skipped");
+            return;
+        }
+
+        const dir = File.Join(SCRATCH, "notify");
+        Directory.Make(dir);
+
+        const make = (name, project, sources) => {
+            const d = File.Join(dir, name);
+            Directory.Make(d);
+            File.SaveJson(File.Join(d, "project.json"), project);
+            for (const f of Dictionary.Keys(sources))
+                File.Save(File.Join(d, f), sources[f]);
+            return d;
+        };
+        const form = '{ "type": "Form", "name": "NForm", "properties": { "Width": 200, "Height": 100 }, "children": [] }';
+        const open = (body) =>
+            'class NForm extends Form {\n' +
+            '    Form_Open() {\n' +
+            '        this.Visible = false;\n' +      /* a widget, not a window */
+            '        const t = (n, f) => { try { print(n + ": " + f()); } catch (e) { print(n + " THROWS: " + e.message); } };\n' +
+            body +
+            '        Application.Quit(0);\n' +
+            '    }\n}\n';
+
+        /* What it asks the desktop for. */
+        const sender = make("sender",
+            { name: "sender", id: "org.example.NotifyProbe", startup: "NForm", sources: ["NForm.js"], version: "1.0" },
+            { "NForm.form": form, "NForm.js": open(
+                '        t("plain", () => Notification.Send("Backup finished", "412 files, 1.8 GB").length);\n' +
+                '        t("options only", () => Notification.Send("Only a title", { Icon: "drive-harddisk-symbolic", Id: "disk" }));\n' +
+                '        t("urgent", () => Notification.Send("Urgent one", "now", { Urgency: "Urgent" }).length);\n' +
+                '        t("low", () => Notification.Send("Low one", "later", { Urgency: "low" }).length);\n' +
+                '        t("same id", () => Notification.Send("Replaced", "v2", { Id: "disk" }));\n' +
+                '        t("withdraw", () => Notification.Withdraw("disk"));\n' +
+                '        t("withdraw nothing", () => Notification.Withdraw("never-sent"));\n') });
+
+        File.Save(File.Join(dir, "bus.conf"),
+            '<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN" ' +
+            '"http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">\n' +
+            '<busconfig>\n  <type>session</type>\n  <listen>unix:tmpdir=/tmp</listen>\n' +
+            '  <auth>EXTERNAL</auth>\n  <policy context="default">\n' +
+            '    <allow send_destination="*" eavesdrop="true"/>\n    <allow eavesdrop="true"/>\n' +
+            '    <allow own="*"/>\n  </policy>\n</busconfig>\n');
+        const seen = File.Join(dir, "seen.txt");
+        File.Save(File.Join(dir, "run.sh"),
+            '#!/bin/sh\n' +
+            `dbus-monitor "interface='org.freedesktop.Notifications'" > "${seen}" 2>&1 &\n` +
+            'MON=$!\n' +
+            /* Ready when it has said anything at all: the first thing a monitor
+             * prints is the name it acquired. Bounded, so a monitor that never
+             * speaks is a failed test and not a hung one. */
+            `i=0; until [ -s "${seen}" ] || [ $i -ge 100 ]; do sleep 0.05; i=$((i+1)); done\n` +
+            `GTK_A11Y=none "${Application.Executable}" "${sender}" > "${File.Join(dir, "child.txt")}" 2>&1\n` +
+            'sleep 0.3\nkill $MON\n');
+
+        const ran = Exec.Wait(["dbus-run-session", `--config-file=${File.Join(dir, "bus.conf")}`,
+                               "--", "sh", File.Join(dir, "run.sh")], { Timeout: 60000 });
+        check("the child ran on its own bus", ran.ExitCode === 0, ran.Output);
+
+        const said = File.Load(File.Join(dir, "child.txt"));
+        check("Send answers the id it used", /plain: 36\b/.test(said), said);
+        check("...and the one it was given", said.includes("options only: disk"), said);
+        check("Withdraw answers nothing, and is no error for an id nothing is showing",
+              said.includes("withdraw: undefined") && said.includes("withdraw nothing: undefined"), said);
+
+        const calls = File.Load(seen).split(/(?=^method call )/m)
+                          .filter((c) => c.includes("member=Notify"));
+        eq("five notifications were asked of the desktop", calls.length, 5);
+
+        /* A `Notify` call's strings, in order: the application's name, its icon
+         * parameter, the summary and the body. (The hints are variants and are
+         * indented further.) */
+        const strings = (c) => c.split("\n").filter((l) => /^ {3}string "/.test(l))
+                                .map((l) => l.replace(/^ {3}string "(.*)"$/, "$1"));
+        const urgency = (c) => { const m = /variant\s+byte (\d)/.exec(c); return m ? Number(m[1]) : -1; };
+
+        const first = strings(calls[0]);
+        eq("it is sent in the name of the project's id", first[0], "org.example.NotifyProbe");
+        eq("the title is the summary", first[2], "Backup finished");
+        eq("and the body is the body", first[3], "412 files, 1.8 GB");
+        eq("the default urgency is normal", urgency(calls[0]), 1);
+        eq("a title and no body sends an empty one", strings(calls[1])[3], "");
+        check("an Icon travels with it", calls[1].includes("drive-harddisk-symbolic"));
+        eq("Urgent is the daemon's critical", urgency(calls[2]), 2);
+        eq("Low is the daemon's low, in any case", urgency(calls[3]), 0);
+
+        /* The two the runtime refuses to send from, and says why. */
+        const bare = make("bare", { name: "bare", startup: "NForm", sources: ["NForm.js"], version: "1.0" },
+            { "NForm.form": form, "NForm.js": open(
+                '        t("no id", () => Notification.Send("x"));\n' +
+                '        t("no id withdraw", () => Notification.Withdraw("x"));\n') });
+        const noid = Exec.Wait([Application.Executable, bare], { Timeout: 30000 });
+        check("a project with no id refuses, and says what to declare",
+              /no id THROWS: .*declares no `id`/.test(noid.Output), noid.Output);
+        check("...and so does withdrawing", /no id withdraw THROWS: .*declares no `id`/.test(noid.Output), noid.Output);
+
+        const console_ = make("console", { name: "console", id: "org.example.NotifyConsole", main: "main" },
+            { "Main.js": 'function main() {\n' +
+                         '    try { Notification.Send("x"); print("SENT"); }\n' +
+                         '    catch (e) { print(e.message); }\n' +
+                         '    Application.Quit(0);\n}\n' });
+        const con = Exec.Wait([Application.Executable, console_], { Timeout: 20000 });
+        check("a project with a main has no application to send from, and says so",
+              con.Output.includes("has no display") && !con.Output.includes("SENT"), con.Output);
+
+        Directory.DeleteTree(dir);
+    }
+
     testExecWait() {
         const r = Exec.Wait(["sh", "-c", "echo hola; exit 0"]);
         eq("ExitCode of one that worked", r.ExitCode, 0);

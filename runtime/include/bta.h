@@ -1008,6 +1008,15 @@ void bta_random_init(JSContext *ctx, JSValue global);
  */
 void bta_gzip_init(JSContext *ctx, JSValue global);
 
+/* --- Notification ---------------------------------------------------------
+ *
+ * `Notification.Send` and `Withdraw`, through the `GApplication` so that a
+ * packaged program reaches the desktop by its portal. Main thread only, and a
+ * project with a `main` has no application to send from. See
+ * runtime/src/bta_notification.c.
+ */
+void bta_notification_init(JSContext *ctx, JSValue global);
+
 /* --- commands: actions and menus ---------------------------------------- */
 
 /*

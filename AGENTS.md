@@ -5061,6 +5061,45 @@ member does not count.
 **`tests/run.sh widgets <name>` takes one test, and the name is case-sensitive**
 (`Hash`, not `hash`); a second name is ignored and the line says `[only Hash]`.
 
+## Notification: the suite shares the user's session bus
+
+**`Notification.Send` from `tests/widgets`' own process would put a toast on the
+developer's desktop.** The runner moves `XDG_DATA_HOME` and the display, and not
+the D-Bus session, and a notification daemon is listening on it -- the same shape
+as every "the suite opened a window over somebody's work" note here, from a
+direction nobody had a rule for. So `testNotification` only calls what refuses
+before it sends, and the sending is a **child on a private bus**
+(`dbus-run-session --config-file=…`) watched with `dbus-monitor`, which sees the
+`Notify` call whether or not anyone answers.
+
+**The configuration is the point, and a bare `dbus-run-session` is not safe.** It
+uses the default service directories, so the private bus *activated the system's
+real services*: `xdg-desktop-portal`, `xfce4-notifyd` and **`xfconfd`, which is the
+desktop's settings daemon** -- seen in the monitor's log, "Activating service
+name='org.xfce.Xfconf'", on a spike that was only meant to look. A `<busconfig>`
+with a `<listen>`, an `<auth>` and one permissive `<policy>` and **no `<servicedir>`**
+makes the bus empty; calls to a name nobody owns fail and the monitor still sees
+them. Do that for anything that needs a bus.
+
+Three more, measured with it:
+
+- **A project with no `id` sends nothing and is told nothing.** `gtk_application_new
+  (NULL, …)` is what an id-less project gets, and `g_application_send_notification`
+  answers with a `GLib-GIO-CRITICAL` assertion: five calls, zero on the bus. The
+  verb refuses, naming `project.json`'s `id`.
+- **`High` and `Normal` are the same urgency on a freedesktop daemon** (hint byte
+  1 for both; `Low` is 0 and `Urgent` is 2), because the protocol has three levels.
+  The four stay, since a portal tells them apart, and the page says so. The test
+  asserts Normal, Low and Urgent and deliberately not High -- asserting it would
+  pin a GLib version's mapping.
+- **A same-`Id` replace and a `Withdraw` cannot be seen on a bus with no daemon**:
+  GLib tracks the daemon's reply id and there is no reply, so `replaces_id` is 0 and
+  no `CloseNotification` is sent. Both are by-hand checks on a real desktop.
+
+No click that calls back, on purpose: it would be a tenth async job shape, held by
+something the desktop keeps past the window that sent it. The title and body are
+not translated by `Send`; the caller wraps them in `Locale.Text`.
+
 ## Xml and Record
 
 **XML is a document and JSON is a value**, and everything else follows from it:
