@@ -13085,8 +13085,58 @@
       ]
     },
     {
+      "Name": "Gzip",
+      "Members": [
+        {
+          "Name": "Compress",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(data, [{ Level }])",
+          "Returns": "Bytes",
+          "Doc": "`data` (text as its UTF-8, or a [`Bytes`](docs/llm/library.md#bytes)) as one gzip member. `Level` is 1 (fast) to 9 (small), 6 unless told. A second option, or a value that is neither text nor `Bytes`, is refused. About 50 MB a second: a big one belongs in a [`Task`](docs/llm/library.md#task)",
+          "Native": true
+        },
+        {
+          "Name": "CompressFile",
+          "Kind": "Method",
+          "Params": 3,
+          "Signature": "(source, destination, [{ Level }])",
+          "Returns": "number",
+          "Doc": "gzips a file into another **without loading it**, 64 KB at a time, and answers the bytes written. The destination appears only when it is whole: a failure leaves no half-written file, and an existing one is untouched",
+          "Native": true
+        },
+        {
+          "Name": "Decompress",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(bytes, [{ MaxSize }])",
+          "Returns": "Bytes",
+          "Doc": "what `bytes` holds, **all of it**: members glued together are read to the end, a stream that stops inside one **throws** (naming how far it got) rather than answering what it had, and so does anything that is not gzip. The answer may not pass `MaxSize` bytes (256 MiB unless told), because a few kilobytes can inflate to gigabytes. Text comes out as `ToText()` of the answer",
+          "Native": true
+        },
+        {
+          "Name": "DecompressFile",
+          "Kind": "Method",
+          "Params": 3,
+          "Signature": "(source, destination, [{ MaxSize }])",
+          "Returns": "number",
+          "Doc": "the reverse, streamed, with the same ceiling and the same promise about the destination. Answers the bytes written",
+          "Native": true
+        }
+      ]
+    },
+    {
       "Name": "Hash",
       "Members": [
+        {
+          "Name": "Hmac",
+          "Kind": "Method",
+          "Params": 3,
+          "Signature": "(key, message, [algorithm])",
+          "Returns": "string",
+          "Doc": "the keyed digest (RFC 2104) as lower-case hex, `\"Sha256\"` unless told. `key` and `message` are text (its UTF-8) or a [`Bytes`](docs/llm/library.md#bytes), and **nothing else**: a number or `undefined` is refused rather than signed as the word it spells. For a signature somebody sent you, **do not compare the answer with `===`** -- that is what `Verify` is for",
+          "Native": true
+        },
         {
           "Name": "Md5",
           "Kind": "Method",
@@ -13121,6 +13171,15 @@
           "Signature": "(v)",
           "Returns": "string",
           "Doc": "when what you are comparing against used it",
+          "Native": true
+        },
+        {
+          "Name": "Verify",
+          "Kind": "Method",
+          "Params": 4,
+          "Signature": "(key, message, signature, [algorithm])",
+          "Returns": "boolean",
+          "Doc": "whether `signature` is the keyed digest of `message`, compared in constant time. `signature` is hex (either case) or a [`Bytes`](docs/llm/library.md#bytes) of the raw digest; text that is not hex of the right length is `false`, not an error, since it is what a forged one looks like. Never answers by throwing for a wrong signature",
           "Native": true
         }
       ]
@@ -13890,6 +13949,38 @@
           "Signature": "(area, path, [setup])",
           "Returns": "",
           "Doc": "the same sheets as one PDF, with **no dialog**; → how many pages it wrote. `Copies` is refused here, because a file has none",
+          "Native": true
+        }
+      ]
+    },
+    {
+      "Name": "Random",
+      "Members": [
+        {
+          "Name": "Bytes",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(count)",
+          "Returns": "Bytes",
+          "Doc": "`count` bytes from the operating system's source, 0 to 1,048,576. **The one to make a token, a key or a nonce from** -- `Math.random` is not. Throws, and never falls back to something weaker, if the system has no randomness to give",
+          "Native": true
+        },
+        {
+          "Name": "Int",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(min, max)",
+          "Returns": "number",
+          "Doc": "a whole number from `min` to `max`, **both ends included**, every value exactly as likely. Throws for ends that are not whole numbers, for `min` above `max`, and for a range wider than 2^53",
+          "Native": true
+        },
+        {
+          "Name": "Uuid",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "string",
+          "Doc": "a version 4 UUID in its lower-case 8-4-4-4-12 spelling, from the same source as `Bytes`. Random, so it does not sort by creation: as a database key it scatters an index",
           "Native": true
         }
       ]

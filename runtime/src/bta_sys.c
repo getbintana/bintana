@@ -3741,6 +3741,11 @@ static JSValue sys_hash_text(JSContext *ctx, JSValueConst this_val,
     return out;
 }
 
+static JSValue sys_hash_hmac(JSContext *ctx, JSValueConst this_val,
+                             int argc, JSValueConst *argv);
+static JSValue sys_hash_verify(JSContext *ctx, JSValueConst this_val,
+                               int argc, JSValueConst *argv);
+
 /*
  * Written out rather than built in a loop over `HASHES`, and that is not
  * repetition for its own sake: `tests/api.sh` reads these tables out of the C to
@@ -3768,6 +3773,24 @@ static const JSCFunctionListEntry hash_props[] = {
      *   when what you are comparing against used it
      */
     JS_CFUNC_MAGIC_DEF("Sha512", 1, sys_hash_text, HASH_SHA512),
+    /* Hmac(key, message, [algorithm]) -> string
+     *   the keyed digest (RFC 2104) as lower-case hex, `"Sha256"` unless told.
+     *   `key` and `message` are text (its UTF-8) or a
+     *   [`Bytes`](docs/llm/library.md#bytes), and **nothing else**: a number or
+     *   `undefined` is refused rather than signed as the word it spells. For a
+     *   signature somebody sent you, **do not compare the answer with `===`**
+     *   -- that is what `Verify` is for
+     */
+    JS_CFUNC_DEF("Hmac", 3, sys_hash_hmac),
+    /* Verify(key, message, signature, [algorithm]) -> boolean
+     *   whether `signature` is the keyed digest of `message`, compared in
+     *   constant time. `signature` is hex (either case) or a
+     *   [`Bytes`](docs/llm/library.md#bytes) of the raw digest; text that is
+     *   not hex of the right length is `false`, not an error, since it is what
+     *   a forged one looks like. Never answers by throwing for a wrong
+     *   signature
+     */
+    JS_CFUNC_DEF("Verify", 4, sys_hash_verify),
 };
 
 /* Which algorithm a name means, or -1 with the list said out loud. */
@@ -3792,6 +3815,176 @@ static int hash_kind(JSContext *ctx, JSValueConst v, const char *who)
     g_string_free(list, TRUE);
     JS_FreeCString(ctx, name);
     return -1;
+}
+
+/*
+ * A key or a message for `Hmac`: text (its UTF-8) or `Bytes`, and nothing else.
+ *
+ * `Hash.Sha256(v)` takes anything `JS_ToCString` will convert, which is a
+ * leniency a checksum can afford and a signature cannot: `Hmac(secret, undefined)`
+ * would sign the word "undefined" and the caller would have a valid-looking
+ * signature of nothing. Here a number or a missing argument is a refusal.
+ * The returned pointer is borrowed -- from the `Bytes`, or from `*text`, which
+ * the caller frees with `JS_FreeCString` when it is not NULL.
+ */
+static const uint8_t *hmac_input(JSContext *ctx, JSValueConst v, const char *who,
+                                 const char *what, size_t *len, const char **text)
+{
+    const uint8_t *bytes = bta_bytes_get(v, len);
+
+    *text = NULL;
+    if (bytes)
+        return bytes;
+    if (!JS_IsString(v)) {
+        JS_ThrowTypeError(ctx, "%s: the %s is text or Bytes", who, what);
+        return NULL;
+    }
+    *text = JS_ToCStringLen(ctx, len, v);
+    return (const uint8_t *)*text;
+}
+
+/*
+ * The keyed digest of `message`, raw, into `out` (64 bytes is the longest, Sha512).
+ * `argv` starts at the key; `alg` is the argument index of the algorithm, which
+ * differs between `Hmac` and `Verify`. Answers false with the exception set.
+ */
+static bool hmac_compute(JSContext *ctx, int argc, JSValueConst *argv, int alg,
+                         const char *who, guint8 *out, gsize *outlen)
+{
+    int kind = HASH_SHA256;
+
+    if (argc > alg && !JS_IsUndefined(argv[alg])) {
+        kind = hash_kind(ctx, argv[alg], who);
+        if (kind < 0)
+            return false;
+    }
+
+    size_t      klen = 0, mlen = 0;
+    const char *ktext = NULL, *mtext = NULL;
+    const uint8_t *key = argc > 0 ? hmac_input(ctx, argv[0], who, "key", &klen, &ktext) : NULL;
+
+    if (!key) {
+        if (argc < 1)
+            JS_ThrowTypeError(ctx, "%s needs a key and a message", who);
+        return false;
+    }
+
+    const uint8_t *msg = argc > 1 ? hmac_input(ctx, argv[1], who, "message", &mlen, &mtext) : NULL;
+    if (!msg) {
+        if (argc < 2)
+            JS_ThrowTypeError(ctx, "%s needs a key and a message", who);
+        if (ktext)
+            JS_FreeCString(ctx, ktext);
+        return false;
+    }
+
+    GHmac *h = g_hmac_new(HASHES[kind].type, key, klen);
+    g_hmac_update(h, msg, (gssize)mlen);
+    *outlen = (gsize)g_checksum_type_get_length(HASHES[kind].type);
+    g_hmac_get_digest(h, out, outlen);
+    g_hmac_unref(h);
+
+    if (ktext)
+        JS_FreeCString(ctx, ktext);
+    if (mtext)
+        JS_FreeCString(ctx, mtext);
+    return true;
+}
+
+static JSValue sys_hash_hmac(JSContext *ctx, JSValueConst this_val,
+                             int argc, JSValueConst *argv)
+{
+    guint8 digest[64];
+    gsize  n = sizeof digest;
+
+    if (!hmac_compute(ctx, argc, argv, 2, "Hash.Hmac",
+                      digest, &n))
+        return JS_EXCEPTION;
+
+    static const char hex[] = "0123456789abcdef";
+    char out[129];
+    for (gsize i = 0; i < n; i++) {
+        out[2 * i]     = hex[digest[i] >> 4];
+        out[2 * i + 1] = hex[digest[i] & 15];
+    }
+    out[2 * n] = '\0';
+    return JS_NewString(ctx, out);
+}
+
+/* A hex digit's value, or -1. */
+static int hex_digit(char c)
+{
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+/*
+ * Compared in constant time: every byte is looked at whatever the first
+ * difference was, so how long this takes says nothing about how many leading
+ * bytes of a forged signature were right. `volatile` keeps the compiler from
+ * turning the accumulation back into an early exit. **The lengths are compared
+ * first and that does leak**, which is fine: a digest's length is public (it is
+ * the algorithm's), and a signature of another length is not a near miss.
+ */
+static bool ct_equal(const guint8 *a, const guint8 *b, gsize n)
+{
+    volatile guint8 diff = 0;
+
+    for (gsize i = 0; i < n; i++)
+        diff |= (guint8)(a[i] ^ b[i]);
+    return diff == 0;
+}
+
+static JSValue sys_hash_verify(JSContext *ctx, JSValueConst this_val,
+                               int argc, JSValueConst *argv)
+{
+    guint8 digest[64];
+    gsize  n = sizeof digest;
+
+    if (argc < 3 || JS_IsUndefined(argv[2]) || JS_IsNull(argv[2]))
+        return JS_ThrowTypeError(ctx, "Hash.Verify(key, message, signature, "
+                                      "[algorithm]) needs the signature");
+
+    if (!hmac_compute(ctx, argc, argv, 3,
+                      "Hash.Verify",
+                      digest, &n))
+        return JS_EXCEPTION;
+
+    size_t         slen  = 0;
+    const uint8_t *given = bta_bytes_get(argv[2], &slen);
+
+    if (given)                                   /* the raw digest */
+        return JS_NewBool(ctx, slen == n && ct_equal(digest, given, n));
+
+    if (!JS_IsString(argv[2]))
+        return JS_ThrowTypeError(ctx, "Hash.Verify: the signature is hex text "
+                                      "or Bytes");
+
+    const char *text = JS_ToCStringLen(ctx, &slen, argv[2]);
+    if (!text)
+        return JS_EXCEPTION;
+
+    /* Decode it all and compare once: a signature that is not hex of exactly
+     * the right length is a forgery, and `false` -- not a throw -- is the
+     * answer a caller can branch on without a try. */
+    guint8 raw[64] = { 0 };
+    bool   ok = slen == 2 * n;
+
+    for (gsize i = 0; ok && i < n; i++) {
+        int hi = hex_digit(text[2 * i]), lo = hex_digit(text[2 * i + 1]);
+        if (hi < 0 || lo < 0)
+            ok = false;
+        else
+            raw[i] = (guint8)(hi << 4 | lo);
+    }
+    JS_FreeCString(ctx, text);
+
+    /* A malformed signature is compared against the zeroes anyway, so the
+     * cost does not tell a malformed one from a wrong one. */
+    bool same = ct_equal(digest, raw, n);
+    return JS_NewBool(ctx, ok && same);
 }
 
 /*

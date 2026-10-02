@@ -991,6 +991,23 @@ void bta_task_cleanup(void);   /* stops and joins workers still running */
  */
 void bta_lock_init(JSContext *ctx, JSValue global);
 
+/* --- Random ---------------------------------------------------------------
+ *
+ * `Random.Bytes`, `Int` and `Uuid`, from the operating system's source and never
+ * a weaker one. Pure and callback-free, so a worker installs it too. See
+ * runtime/src/bta_random.c.
+ */
+void bta_random_init(JSContext *ctx, JSValue global);
+
+/* --- Gzip -----------------------------------------------------------------
+ *
+ * `Gzip.Compress`/`Decompress` over values and `CompressFile`/`DecompressFile`
+ * over files, on GIO's zlib converters. Concatenated members are read to the
+ * end, a truncated stream throws, and the output has a ceiling. Pure and
+ * callback-free, so a worker installs it too. See runtime/src/bta_gzip.c.
+ */
+void bta_gzip_init(JSContext *ctx, JSValue global);
+
 /* --- commands: actions and menus ---------------------------------------- */
 
 /*

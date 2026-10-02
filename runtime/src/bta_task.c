@@ -1168,6 +1168,11 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
     /* The table behind it is process-global, so this is the same `Lock` the
      * main thread holds -- which is the whole point of naming them. */
     bta_lock_init(ctx, global);
+    /* Entropy has no callbacks and no list: a worker draws from the same
+     * operating system source the main thread does. */
+    bta_random_init(ctx, global);
+    /* Pure CPU over a value or a file: the reason to have a worker. */
+    bta_gzip_init(ctx, global);
 
     /* rad.js, the same text the main thread runs: Dictionary, Regex,
      * Stopwatch, Record, Field, Table and Namespace come from here, and

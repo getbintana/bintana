@@ -460,7 +460,7 @@ const TESTS = [
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
-    "CuratedLanguage", "Dictionary", "Regex", "Bytes", "Hash", "Screen", "JsonFiles", "XmlFiles", "XmlRecord", "Log", "Apply", "TimerShorthand", "Terminal",
+    "CuratedLanguage", "Dictionary", "Regex", "Bytes", "Hash", "Random", "Gzip", "Screen", "JsonFiles", "XmlFiles", "XmlRecord", "Log", "Apply", "TimerShorthand", "Terminal",
     "Settings", "Timer", "ArgumentRefusals", "Icons", "Font", "Style", "Radius", "Padding", "Shadow", "StyleRule",
     "ColorButton",
     "ColorDialog", "FileDialog", "Dialog", "IconList", "FormIcon", "ButtonClick",
@@ -6993,8 +6993,228 @@ function Main() {
                () => File.Hash(File.Join(SCRATCH, "no-such-file")));
         throws("and hashing needs something to hash", () => Hash.Sha256());
 
+        /* **A keyed digest is held to what the RFCs published, not to itself**:
+         * a test that compared `Hmac` with what `Hmac` said yesterday would
+         * agree with every bug it has. Cases 1, 2 and 6 of RFC 4231 -- the last
+         * is a key longer than the hash's block size, which is the one an
+         * implementation gets wrong -- and the SHA-1 and MD5 cases of RFC 2202. */
+        const jefe = "what do ya want for nothing?";
+        eq("RFC 4231 case 1, a key as Bytes",
+           Hash.Hmac(Bytes.FromHex("0b".repeat(20)), "Hi There"),
+           "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7");
+        eq("RFC 4231 case 2, a key as text", Hash.Hmac("Jefe", jefe),
+           "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843");
+        eq("RFC 4231 case 6, a key longer than the block",
+           Hash.Hmac(Bytes.FromHex("aa".repeat(131)),
+                     "Test Using Larger Than Block-Size Key - Hash Key First"),
+           "60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54");
+        eq("RFC 4231 case 2 in SHA-512, its first half",
+           Hash.Hmac("Jefe", jefe, "Sha512").slice(0, 32),
+           "164b7a7bfcf819e2e395fbe73b56e0a3");
+        eq("RFC 2202 case 2 in SHA-1", Hash.Hmac("Jefe", jefe, "Sha1"),
+           "effcdf6ae5eb2fa2d27416d5f184df9c259a7c79");
+        eq("RFC 2202 case 2 in MD5", Hash.Hmac("Jefe", jefe, "md5"),
+           "750c783e6ab0b503eaa86e310a5db738");
+        eq("an empty key and an empty message are an answer, not a refusal",
+           Hash.Hmac("", "").length, 64);
+        eq("a key as text is the same key as its bytes",
+           Hash.Hmac("Jefe", jefe), Hash.Hmac(new Bytes("Jefe"), new Bytes(jefe)));
+
+        /* Signing the word "undefined" is the failure a lenient `Hmac` would have:
+         * a valid-looking signature that covers nothing. */
+        throws("a message that is not text or Bytes is refused", () => Hash.Hmac("k", undefined));
+        throws("and so is a number", () => Hash.Hmac("k", 5));
+        throws("and a key that is not text or Bytes", () => Hash.Hmac(5, "m"));
+        throws("and a missing key", () => Hash.Hmac());
+        throws("an algorithm it does not know", () => Hash.Hmac("k", "m", "Sha3"));
+
+        const sig = Hash.Hmac("Jefe", jefe);
+        check("Verify accepts the right signature", Hash.Verify("Jefe", jefe, sig) === true);
+        check("...in either case", Hash.Verify("Jefe", jefe, sig.toUpperCase()) === true);
+        check("...and as the raw Bytes", Hash.Verify("Jefe", jefe, Bytes.FromHex(sig)) === true);
+        check("...in the algorithm it is told", Hash.Verify("Jefe", jefe,
+              Hash.Hmac("Jefe", jefe, "Sha512"), "Sha512") === true);
+        check("a wrong signature is false", Hash.Verify("Jefe", jefe, "0".repeat(64)) === false);
+        check("a wrong key is false", Hash.Verify("other", jefe, sig) === false);
+        check("one changed character is false",
+              Hash.Verify("Jefe", jefe, (sig[0] === "a" ? "b" : "a") + sig.slice(1)) === false);
+        check("a signature of the wrong length is false, not an error",
+              Hash.Verify("Jefe", jefe, sig.slice(0, 60)) === false);
+        check("text that is not hex is false, not an error",
+              Hash.Verify("Jefe", jefe, "zz".repeat(32)) === false);
+        check("a signature in another algorithm is false",
+              Hash.Verify("Jefe", jefe, sig, "Sha512") === false);
+        throws("no signature at all is refused, which is a mistake and not a forgery",
+               () => Hash.Verify("Jefe", jefe));
+        throws("and a signature that is neither hex nor Bytes", () => Hash.Verify("Jefe", jefe, 5));
+
         File.Delete(path);
         File.Delete(bigPath);
+    }
+
+    testRandom() {
+        const bytes = Random.Bytes(32);
+        check("Random.Bytes answers a Bytes of the length asked",
+              bytes instanceof Bytes && bytes.Length === 32);
+        eq("0 is an empty Bytes", Random.Bytes(0).Length, 0);
+        eq("1,048,576 is the most", Random.Bytes(1048576).Length, 1048576);
+        check("two draws differ (32 bytes colliding is 2^-256)",
+              Random.Bytes(32).ToHex() !== Random.Bytes(32).ToHex());
+        throws("a negative count is refused", () => Random.Bytes(-1));
+        throws("a count past the limit is refused", () => Random.Bytes(1048577));
+        throws("a count that is not a number is refused", () => Random.Bytes("abc"));
+        throws("a missing count is refused", () => Random.Bytes());
+
+        /* Only bounds are asserted, never a distribution: a test that would fail
+         * one run in a thousand is the kind this repository has paid for. Over
+         * 600 draws of a die, missing a face has a chance of 6 * (5/6)^600. */
+        const seen = {};
+        let low = Infinity, high = -Infinity;
+        for (let i = 0; i < 600; i++) {
+            const v = Random.Int(1, 6);
+            seen[v] = true;
+            low = Math.min(low, v);
+            high = Math.max(high, v);
+        }
+        check("Int(1, 6) reaches both ends and stays inside",
+              low === 1 && high === 6 && Dictionary.Keys(seen).length === 6,
+              `${low}..${high}`);
+        eq("Int(5, 5) is 5", Random.Int(5, 5), 5);
+        let lo = 0, hi = 0;
+        for (let i = 0; i < 300; i++) {
+            const v = Random.Int(-1, 1);
+            lo = Math.min(lo, v);
+            hi = Math.max(hi, v);
+        }
+        check("negative ends work, both included", lo === -1 && hi === 1, `${lo}..${hi}`);
+        check("a span near the top of what a number holds is a whole number inside it",
+              (() => { const v = Random.Int(0, 2 ** 53 - 1); return v >= 0 && v === Math.floor(v); })());
+        throws("ends that are not whole are refused", () => Random.Int(1.5, 3));
+        throws("min above max is refused", () => Random.Int(3, 1));
+        throws("a range wider than 2^53 is refused", () => Random.Int(0, 2 ** 53));
+        throws("an end that is not a number is refused", () => Random.Int("a", 3));
+        throws("both ends are needed", () => Random.Int(1));
+
+        const uuid = Random.Uuid();
+        check("Uuid is a version 4 in the 8-4-4-4-12 spelling",
+              /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(uuid), uuid);
+        const ids = {};
+        for (let i = 0; i < 1000; i++)
+            ids[Random.Uuid()] = true;
+        eq("a thousand of them are all different", Dictionary.Keys(ids).length, 1000);
+    }
+
+    testGzip() {
+        const text = "hola mundo\n".repeat(200);
+        const gz   = Gzip.Compress(text);
+
+        check("Compress answers a Bytes that starts with gzip's magic",
+              gz instanceof Bytes && gz.ToHex().startsWith("1f8b"));
+        check("and is smaller than what was repetitive", gz.Length < text.length / 5);
+        eq("a round trip", Gzip.Decompress(gz).ToText(), text);
+        eq("text goes in as its UTF-8", Gzip.Decompress(Gzip.Compress("ñandú")).ToText(), "ñandú");
+        eq("Bytes go in as they are", Gzip.Decompress(Gzip.Compress(Bytes.FromHex("00ff10"))).ToHex(), "00ff10");
+        eq("empty in, empty out", Gzip.Decompress(Gzip.Compress("")).Length, 0);
+        check("a higher level is not larger, on data that is worth it",
+              Gzip.Compress(text, { Level: 9 }).Length <= Gzip.Compress(text, { Level: 1 }).Length);
+
+        /* **The external oracle**: bytes made by the system's `gzip` (`printf
+         * 'hello world\n' | gzip -n | base64`), so this is checked against a
+         * program that is not ours rather than against our own writer. */
+        eq("what the system's gzip wrote decompresses",
+           Gzip.Decompress(Bytes.FromBase64("H4sIAAAAAAAAA8tIzcnJVyjPL8pJ4QIALTsIrwwAAAA=")).ToText(),
+           "hello world\n");
+
+        /* **The one the converter gets wrong**: `cat a.gz b.gz` is valid gzip, and
+         * GIO's decompressor answers the first member and a success -- measured,
+         * 6 bytes of 12 and no error. */
+        eq("members glued together are read to the end",
+           Gzip.Decompress(Gzip.Compress("hello ").Concat(Gzip.Compress("world\n"))).ToText(),
+           "hello world\n");
+        eq("...three of them, and an empty one between",
+           Gzip.Decompress(Gzip.Compress("a").Concat(Gzip.Compress("")).Concat(Gzip.Compress("b"))).ToText(),
+           "ab");
+
+        throws("a stream that stops inside a member throws", () => Gzip.Decompress(gz.Slice(0, 20)));
+        throws("...a few bytes short of the end", () => Gzip.Decompress(gz.Slice(0, gz.Length - 4)));
+        let msg = "";
+        try { Gzip.Decompress(gz.Slice(0, 20)); } catch (e) { msg = e.message; }
+        check("...and says how far it got, not what it had", msg.includes("20 bytes"), msg);
+        throws("bytes that are not gzip throw", () => Gzip.Decompress(new Bytes("not gzip at all")));
+        throws("bytes after the last member throw", () => Gzip.Decompress(gz.Concat(new Bytes("junk"))));
+        msg = "";
+        try { Gzip.Decompress(gz.Concat(new Bytes("junk"))); } catch (e) { msg = e.message; }
+        check("...naming the byte where the bad one starts", msg.includes(`byte ${gz.Length}`), msg);
+        throws("empty input is not gzip", () => Gzip.Decompress(new Bytes("")));
+        throws("text is not compressed data", () => Gzip.Decompress("abc"));
+
+        /* The ceiling: a hundred kilobytes in a few hundred bytes, stopped at a
+         * thousand -- and a refusal that says so. */
+        const bomb = Gzip.Compress(new Bytes("x".repeat(100000)));
+        throws("the output is capped", () => Gzip.Decompress(bomb, { MaxSize: 1000 }));
+        msg = "";
+        try { Gzip.Decompress(bomb, { MaxSize: 1000 }); } catch (e) { msg = e.message; }
+        check("...and the refusal names the ceiling", msg.includes("MaxSize"), msg);
+        eq("a ceiling that is high enough is not in the way",
+           Gzip.Decompress(bomb, { MaxSize: 100000 }).Length, 100000);
+        eq("Infinity is no ceiling", Gzip.Decompress(bomb, { MaxSize: Infinity }).Length, 100000);
+
+        throws("an option it does not know is refused", () => Gzip.Compress("x", { Lvel: 9 }));
+        throws("a level of 0 is refused", () => Gzip.Compress("x", { Level: 0 }));
+        throws("a level of 10 is refused", () => Gzip.Compress("x", { Level: 10 }));
+        throws("a level that is not whole is refused", () => Gzip.Compress("x", { Level: 5.5 }));
+        throws("a number is not data", () => Gzip.Compress(5));
+        throws("undefined is not data", () => Gzip.Compress(undefined));
+        throws("a negative ceiling is refused", () => Gzip.Decompress(gz, { MaxSize: -1 }));
+        throws("options are an object", () => Gzip.Compress("x", 9));
+
+        /* Files */
+        Directory.Make(SCRATCH);
+        const src  = File.Join(SCRATCH, "gz-src.txt");
+        const dst  = File.Join(SCRATCH, "gz-src.txt.gz");
+        const back = File.Join(SCRATCH, "gz-back.txt");
+        let big = "";
+        for (let i = 0; i < 30000; i++) big += `line ${i}\n`;
+        File.Save(src, big);
+
+        const written = Gzip.CompressFile(src, dst);
+        check("CompressFile answers the bytes it wrote",
+              written === File.Info(dst).Size && written > 0 && written < big.length,
+              `${written}`);
+        eq("DecompressFile answers the bytes it wrote", Gzip.DecompressFile(dst, back), big.length);
+        check("a file past the 64 KB block comes back whole", File.Load(back) === big && big.length > 200000);
+        eq("and what the file verb wrote is what the value verb reads",
+           Gzip.Decompress(File.LoadBytes(dst)).ToText(), big);
+
+        /* The external oracle in the other direction: the system's gzip reads
+         * what was written here. */
+        if (Application.HasCommand("gzip")) {
+            const out = Exec.Wait(["gzip", "-dc", dst]);
+            check("the system's gzip reads what CompressFile wrote",
+                  out.ExitCode === 0 && out.Output === big, `exit ${out.ExitCode}`);
+        }
+
+        /* A refusal leaves nothing: the destination appears only when whole. */
+        const keep = File.Join(SCRATCH, "gz-keep.txt");
+        File.Save(keep, "KEEP");
+        File.Save(File.Join(SCRATCH, "gz-junk.gz"), "this is not gzip");
+        throws("a file that is not gzip is refused", () => Gzip.DecompressFile(File.Join(SCRATCH, "gz-junk.gz"), keep));
+        eq("...and an existing destination is untouched", File.Load(keep), "KEEP");
+        const bombOut = File.Join(SCRATCH, "gz-bomb.txt");
+        throws("a file that inflates past the ceiling is refused",
+               () => Gzip.DecompressFile(dst, bombOut, { MaxSize: 1000 }));
+        check("...and leaves no destination", !File.Exists(bombOut));
+        throws("a source that is not there says so",
+               () => Gzip.CompressFile(File.Join(SCRATCH, "gz-nope"), File.Join(SCRATCH, "gz-nope.gz")));
+        check("...and leaves no destination", !File.Exists(File.Join(SCRATCH, "gz-nope.gz")));
+        throws("a destination in a folder that is not there is refused",
+               () => Gzip.CompressFile(src, File.Join(SCRATCH, "no-such-dir", "x.gz")));
+        throws("a path that is not a string is refused", () => Gzip.CompressFile(undefined, dst));
+        const leftovers = Directory.List(SCRATCH).filter((n) => /^gz-.*\.[A-Za-z0-9]{6}$/.test(n));
+        eq("no temporary file is left behind by any of them", leftovers.length, 0);
+
+        for (const f of [src, dst, back, keep, File.Join(SCRATCH, "gz-junk.gz")])
+            File.Delete(f);
     }
 
     /* --- Clipboard ----------------------------------------------------------
@@ -19578,6 +19798,25 @@ function Main() {
                 next();
             };
             t.Start({ mode: "prelude" });
+        });
+
+        /* Entropy, a keyed digest and a compressor have no callbacks and no list,
+         * so a worker has them -- and compressing is what a worker is for. */
+        steps.push(() => {
+            const t = new TaskWork();
+
+            t.Error = (m) => fail(`entropy errored: ${m}`);
+            t.Done  = (r) => {
+                eq("a worker draws random bytes", r.bytes, 8);
+                check("...an integer in range", r.int >= 1 && r.int <= 3);
+                check("...and a UUID", /^[0-9a-f]{8}-[0-9a-f]{4}-4/.test(r.uuid), r.uuid);
+                eq("a worker signs", r.hmac,
+                   "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843");
+                eq("...and checks a signature", r.verified, true);
+                eq("...and compresses and decompresses", r.gzip, "in a worker");
+                next();
+            };
+            t.Start({ mode: "entropy" });
         });
 
         /*

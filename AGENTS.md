@@ -5004,6 +5004,63 @@ person who wrote it either.
   library *is* declared and must not be written, so `Ide.Refactor` reads its
   classes to refuse a collision and never rewrites one.
 
+## Random, Hmac and Gzip: what was measured and what bit
+
+**Designed in [`docs/plans/crypto-compress-plan.md`](docs/plans/crypto-compress-plan.md)**
+(zip is the part of that plan still waiting for a caller). Five things were not
+obvious and each cost something:
+
+- **GIO's gzip decompressor answers the first member of a multi-member stream
+  and reports success.** `cat a.gz b.gz` is valid gzip; `GZlibDecompressor`
+  returned 6 bytes of 12 with no error, 26 of 52 input bytes consumed. A
+  truncated stream *is* an error, but only if asked at the end of input.
+  `bta_gzip.c` resets the converter at each member's end and goes on, and
+  `testGzip` goes red on exactly the 6-of-12 answer with that line taken out --
+  it was put back and watched, as the rule asks. Measured on the same probe:
+  47 MB deflates in ~960 ms and inflates in ~90 ms, which is why the page sends
+  big ones to a `Task` and why a worker has `Gzip`.
+- **Never quote a GLib message in an error.** `err->message` is translated into
+  the desktop's language: on this machine a corrupt stream said *Datos
+  comprimidos no válidos*, and an error that reads differently per machine cannot
+  be matched by a program or pasted into a report -- the `http_kind_for` lesson
+  again. The sentence is ours and names the byte where the member starts.
+- **`Hmac` is stricter than `Hash.Sha256` on purpose.** `Sha256(v)` accepts
+  whatever `JS_ToCString` converts, which is fine for a checksum; `Hmac(key,
+  undefined)` would sign the word "undefined" and return a signature that looks
+  valid and covers nothing. Key and message are text or `Bytes` and nothing else.
+  `Hash.Verify` compares in constant time (`ct_equal`, `volatile` so the
+  accumulation is not turned back into an early exit) -- **and no test can prove
+  that**, since timing is not an assertion; the property is held by reading the C.
+  What the tests *can* hold is the vectors (RFC 4231 cases 1, 2 and 6, RFC 2202),
+  which is why they are not "agrees with itself".
+- **`Random` throws and never falls back**, and the Windows and macOS entropy
+  branches cannot be compiled here (`RtlGenRandom` is fetched with
+  `GetProcAddress` so the link line did not have to change blind). `Random.Int` is
+  rejection sampling; `r % span` is the bias to refuse by construction.
+- **`add_executable(bintana …)` lists its sources by hand while the signature
+  extractor globs `runtime/src/*.c`.** A new `.c` that is not in the list builds
+  green up to the link and then fails as *undefined reference to `bta_x_init`* --
+  and is already in `generated/bta_signatures.h`, so it looks half registered.
+  A new global is five places: the `.c`, its `CMakeLists.txt` line, its init in
+  `bta.h`, and the two `install` roads, `bta_runtime.c` **and** `bta_task.c`
+  (a global missing from the worker is *not a function* at call time, which
+  `testTask`'s `entropy` step now asserts).
+
+**And two about checking the documentation, which cost an hour.**
+`bintana-docs/check.sh` with no `BINTANA_API` fetches the `api.json` its
+`bintana-ref.txt` pins -- the *previous* surface -- so it is green for a change
+it has never seen. Point it at yours:
+`BINTANA_API=$PWD/api.json BINTANA_SRC=$PWD ./check.sh`. And `tools/docs.sh` run
+that way rewrites **every** row the manifest says is stale, including other
+branches' pending work (it rewrote `Background` in `controls.md` and `Widget.md`
+here); look at `git diff --stat` and take back what is not yours. A long page
+also wants a table row **in the body** for each member, not only in *Every
+member*: the check reads that as "explained", and a section of prose naming the
+member does not count.
+
+**`tests/run.sh widgets <name>` takes one test, and the name is case-sensitive**
+(`Hash`, not `hash`); a second name is ignored and the line says `[only Hash]`.
+
 ## Xml and Record
 
 **XML is a document and JSON is a value**, and everything else follows from it:

@@ -35,6 +35,19 @@ class TaskWork extends Task {
             };
         }
 
+        /* Pure computation with no callbacks: entropy, a keyed digest, gzip. */
+        if (msg.mode === "entropy") {
+            const sig = Hash.Hmac("Jefe", "what do ya want for nothing?");
+            return {
+                bytes:    Random.Bytes(8).Length,
+                int:      Random.Int(1, 3),
+                uuid:     Random.Uuid(),
+                hmac:     sig,
+                verified: Hash.Verify("Jefe", "what do ya want for nothing?", sig),
+                gzip:     Gzip.Decompress(Gzip.Compress("in a worker")).ToText(),
+            };
+        }
+
         /* rad.js runs in here too, so the prelude's classes are the prelude's
          * classes -- and `Dictionary` is what walks the keys of a message,
          * since bta_close_hatches empties `Object` on both sides. */

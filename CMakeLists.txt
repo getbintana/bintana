@@ -191,6 +191,8 @@ add_executable(bintana
     runtime/src/bta_sys.c
     runtime/src/bta_task.c
     runtime/src/bta_lock.c
+    runtime/src/bta_random.c
+    runtime/src/bta_gzip.c
     runtime/src/bta_desktop.c
     runtime/src/bta_printer.c
     runtime/src/bta_database.c
