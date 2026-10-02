@@ -441,6 +441,8 @@ const TESTS = [
     "ApplicationId",
     /* Blocking too: a child on a private bus, watched with dbus-monitor. */
     "Notification",
+    /* And a console example, run as a child: it listens on loopback and talks to itself. */
+    "ExampleWebhook",
     /* Blocking as well: a child that spawns into terminals it then drops. */
     "TerminalSpawnLifetime",
     /* And one more child: a Video whose Error handler takes it out. */
@@ -17773,6 +17775,34 @@ function Main() {
      * the asynchronous tail: nothing here waits for a later turn of the loop,
      * which is the whole point of it.
      */
+    /*
+     * `examples/webhook` runs, and fails when a check it demonstrates is gone.
+     *
+     * An example nobody runs is the first thing in a tree to rot, and this one is
+     * cheap: a console project, so no display, one child that listens on an
+     * ephemeral loopback port and sends itself six deliveries. It exits 0 only if
+     * every one was answered as a receiver must -- which is also why it is worth
+     * more than a line of output: take `Hash.Verify` out of its receiver and two of
+     * the six come back 200 and the status is 1 (measured, and put back).
+     */
+    testExampleWebhook() {
+        const dir = File.Join(File.Directory(Application.Directory), "..", "examples", "webhook");
+
+        if (!File.IsDir(dir)) {
+            print("ExampleWebhook: examples/webhook is not beside this suite; skipped");
+            return;
+        }
+        const ran = Exec.Wait([Application.Executable, dir], { Timeout: 30000 });
+        const lines = ran.Output.split("\n").filter((l) => /^(ok  |FAIL)/.test(l));
+
+        eq("it exits 0 when every delivery was answered as it must be", ran.ExitCode, 0);
+        eq("six deliveries were made", lines.length, 6);
+        check("and none of them failed", lines.every((l) => l.startsWith("ok  ")), ran.Output);
+        check("it says so", ran.Output.includes("all six did what they should"), ran.Output);
+        check("the replay was refused for its age and not its signature",
+              ran.Output.includes("too old: 600 s"), ran.Output);
+    }
+
     /*
      * A desktop notification, observed on a bus of its own.
      *

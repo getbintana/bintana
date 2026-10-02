@@ -1,0 +1,11 @@
+{
+  "name": "Backup",
+  "id": "io.github.getbintana.Backup",
+  "startup": "BackupForm",
+  "sources": [
+    "Packer.js",
+    "BackupForm.js"
+  ],
+  "version": "1.0",
+  "description": "Gzip a folder in a thread of its own, read every copy back to prove it, and tell the user from the desktop when it is done"
+}

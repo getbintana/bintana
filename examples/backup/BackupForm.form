@@ -1,0 +1,66 @@
+{
+  "format": "bintana-form/1",
+  "class": "BackupForm",
+  "properties": {
+    "Text": "Backup",
+    "Width": 560,
+    "Height": 270
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblSource",
+      "properties": { "Height": 20, "Text": "Folder to back up", "Width": 300, "X": 12, "Y": 12 }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtSource",
+      "properties": { "HAlign": "Fill", "Height": 34, "Width": 430, "X": 12, "Y": 34 }
+    },
+    {
+      "type": "Button",
+      "name": "BtnSource",
+      "properties": { "HAlign": "End", "Height": 34, "Text": "Choose…", "Width": 94, "X": 454, "Y": 34 }
+    },
+    {
+      "type": "Label",
+      "name": "LblTarget",
+      "properties": { "Height": 20, "Text": "Save the compressed copies in", "Width": 300, "X": 12, "Y": 80 }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtTarget",
+      "properties": { "HAlign": "Fill", "Height": 34, "Width": 430, "X": 12, "Y": 102 }
+    },
+    {
+      "type": "Button",
+      "name": "BtnTarget",
+      "properties": { "HAlign": "End", "Height": 34, "Text": "Choose…", "Width": 94, "X": 454, "Y": 102 }
+    },
+    {
+      "type": "Button",
+      "name": "BtnStart",
+      "properties": { "Default": true, "Height": 34, "Style": "suggested-action", "Text": "Back up", "Width": 110, "X": 12, "Y": 156 }
+    },
+    {
+      "type": "Button",
+      "name": "BtnStop",
+      "properties": { "Enabled": false, "Height": 34, "Shortcut": ["Escape"], "Text": "Stop", "Tooltip": "Escape", "Width": 90, "X": 130, "Y": 156 }
+    },
+    {
+      "type": "CheckButton",
+      "name": "ChkNotify",
+      "properties": { "Active": true, "Height": 24, "Text": "Tell me when it is done", "Tooltip": "A notification from the desktop, for when this window is behind another", "Width": 240, "X": 236, "Y": 161 }
+    },
+    {
+      "type": "ProgressBar",
+      "name": "Bar",
+      "properties": { "HAlign": "Fill", "Height": 20, "ShowText": true, "Width": 536, "X": 12, "Y": 208 }
+    },
+    {
+      "type": "Label",
+      "name": "LblStatus",
+      "properties": { "Ellipsize": true, "HAlign": "Fill", "Height": 20, "Style": "dim-label", "Width": 536, "X": 12, "Y": 238 }
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "name": "webhook",
+  "main": "Main",
+  "version": "1.0",
+  "description": "A signed webhook: Hash.Hmac signs it, Hash.Verify checks it, Random makes the secret and the delivery id, and six deliveries show what each check is for"
+}

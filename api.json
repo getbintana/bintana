@@ -11145,7 +11145,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "whether the focus is **within** it, which is why a `TextBox` answers `true` while the focus really sits on the entry inside it",
+          "Doc": "whether the focus is **within** it, which is why a `TextBox` answers `true` while the focus really sits on the entry inside it. **On a `Form` it is also whether the window is the one the user is in**: it turns `false` when another window is activated and `true` again when this one is -- measured under a window manager -- which is what a program asks before deciding a notification is worth sending",
           "Native": true
         },
         {

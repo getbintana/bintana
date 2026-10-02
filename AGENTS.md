@@ -5096,6 +5096,20 @@ Three more, measured with it:
   GLib tracks the daemon's reply id and there is no reply, so `replaces_id` is 0 and
   no `CloseNotification` is sent. Both are by-hand checks on a real desktop.
 
+- **"Is the user looking at this window" is `Form.Focused`, and nobody had said so.**
+  `Widget.Focused` is `gtk_event_controller_focus_contains_focus`, which GTK4 turns
+  `false` when the toplevel stops being the active window. Measured on an `Xvfb` with
+  `xfwm4` and two windows: `Focused=true` on the one activated, `false` on the other,
+  swapping with `xdotool windowactivate`. **Without a window manager it never turns
+  false** (nothing takes the focus away), so a headless run of `examples/backup`
+  correctly sends nothing -- seeing its notification needs the window manager, a
+  second window brought forward mid-run, and the private bus above. The first draft
+  asked for a `Form.Active` that does not exist; the lesson is the usual one, that
+  the missing feature was a missing sentence, now in the member's own comment.
+  `examples/backup` and `examples/webhook` are the callers for `Gzip`/`Notification`
+  and for `Random`/`Hmac`/`Verify`; the second is a test (`ExampleWebhook`), the first
+  is by hand because a window does not end.
+
 No click that calls back, on purpose: it would be a tenth async job shape, held by
 something the desktop keeps past the window that sent it. The title and body are
 not translated by `Send`; the caller wraps them in `Locale.Text`.

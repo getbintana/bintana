@@ -6748,7 +6748,11 @@ static const JSCFunctionListEntry widget_props[] = {
     JS_CGETSET_MAGIC_DEF("Focusable", w_get_flag, w_set_flag, FLAG_FOCUSABLE),
     /* Focused
      *   whether the focus is **within** it, which is why a `TextBox` answers
-     *   `true` while the focus really sits on the entry inside it
+     *   `true` while the focus really sits on the entry inside it. **On a
+     *   `Form` it is also whether the window is the one the user is in**: it
+     *   turns `false` when another window is activated and `true` again when
+     *   this one is -- measured under a window manager -- which is what a
+     *   program asks before deciding a notification is worth sending
      */
     JS_CGETSET_DEF("Focused", w_get_focused, NULL),
     /* Expand
