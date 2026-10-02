@@ -35,6 +35,22 @@ class TaskWork extends Task {
             };
         }
 
+        /* A zip written in a worker and read back there: the writer holds a file
+         * and a temporary, and neither leaves the thread that opened it. */
+        if (msg.mode === "zipwrite") {
+            const w = Zip.Create(msg.path);
+
+            w.Add("a.txt", "written in a worker").AddFile("b.bin", msg.source);
+            const n = w.Finish();
+            const z = Zip.Open(msg.path);
+
+            try {
+                return { n, text: z.Read("a.txt").ToText(), size: z.Read("b.bin").Length };
+            } finally {
+                z.Close();
+            }
+        }
+
         /* A zip opened and read in a worker: reading an archive off the main
          * thread is what a worker is for, and the handle never leaves it. */
         if (msg.mode === "zip") {

@@ -85,6 +85,43 @@ function zipBuild(entries, extra) {
                                           zipLe32(dir.Length) + zipLe32(body.Length) + zipLe16(0)));
 }
 
+/*
+ * `soffice` as the other end of a workbook: it is a real spreadsheet program, so
+ * what it reads out of a file somebody else wrote is the only answer to *is this
+ * an .xlsx* that is not our own code agreeing with itself. Run with a `HOME` of its
+ * own (or it writes a profile into the developer's) and the `C` locale (or the
+ * booleans come out as VERDADERO and the decimals with commas). `-1` as the last
+ * filter token exports every sheet, one file each.
+ */
+function sofficeCsv(file, outdir, home) {
+    const done = Exec.Wait(["soffice", "--headless", "--norestore", "--convert-to",
+                            "csv:Text - txt - csv (StarCalc):44,34,76,1,,0,false,true,false,false,false,-1",
+                            "--outdir", outdir, file],
+                           { Timeout: 120000, Environment: { HOME: home, LC_ALL: "C", LANG: "C" } });
+    return done.ExitCode === 0;
+}
+
+/* RFC 4180, enough of it: quoted fields, doubled quotes, newlines inside quotes. */
+function parseCsv(text) {
+    const rows = [];
+    let row = [], field = "", quoted = false;
+
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+
+        if (quoted) {
+            if (ch === '"' && text[i + 1] === '"') { field += '"'; i++; }
+            else if (ch === '"') quoted = false;
+            else field += ch;
+        } else if (ch === '"') quoted = true;
+        else if (ch === ",") { row.push(field); field = ""; }
+        else if (ch === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
+        else field += ch;
+    }
+    if (field !== "" || row.length) { row.push(field); rows.push(row); }
+    return rows;
+}
+
 function sameJson(a, b) {
     return JSON.stringify(a) === JSON.stringify(b);
 }
@@ -496,6 +533,8 @@ const TESTS = [
     "ExampleWebhook",
     /* And the sheet reader, a Task, in a child project of its own. */
     "ExampleSheets",
+    /* And its other half: Excel.js held to a spreadsheet program, and clients exporting its own database. */
+    "ExampleExcel", "ExampleClientsExport",
     /* Blocking as well: a child that spawns into terminals it then drops. */
     "TerminalSpawnLifetime",
     /* And one more child: a Video whose Error handler takes it out. */
@@ -517,7 +556,7 @@ const TESTS = [
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
-    "CuratedLanguage", "Dictionary", "Regex", "Bytes", "Hash", "Random", "Gzip", "Zip", "Screen", "JsonFiles", "XmlFiles", "XmlRecord", "Log", "Apply", "TimerShorthand", "Terminal",
+    "CuratedLanguage", "Dictionary", "Regex", "Bytes", "Hash", "Random", "Gzip", "Zip", "ZipWrite", "Screen", "JsonFiles", "XmlFiles", "XmlRecord", "Log", "Apply", "TimerShorthand", "Terminal",
     "Settings", "Timer", "ArgumentRefusals", "Icons", "Font", "Style", "Radius", "Padding", "Shadow", "StyleRule",
     "ColorButton",
     "ColorDialog", "FileDialog", "Dialog", "IconList", "FormIcon", "ButtonClick",
@@ -7501,6 +7540,188 @@ function Main() {
         eq("Extract writes one entry to the path it is given", File.Load(File.Join(dir, "extracted.txt")), text);
         throws("...which has to be in a folder that exists", () => o.Extract("a.txt", File.Join(dir, "no-such-dir", "x.txt")));
         o.Close();
+
+        Directory.DeleteTree(dir);
+    }
+
+    /*
+     * The writer, held to tools that are not ours.
+     *
+     * **A zip this runtime wrote is read by programs that did not**: `unzip -t`
+     * checks every entry's CRC and `zipfile` is a second, independent
+     * implementation of the format, so an archive both accept -- and that this
+     * runtime's own reader also gives back byte for byte -- is a zip and not
+     * merely a file `Zip.Open` happens to understand. What is asserted of the
+     * writer *itself* is the part no reader can see: that nothing is at the path
+     * until `Finish()`, that a refusal or an abort leaves nothing beside it, and
+     * that it refuses the names `ExtractAll` refuses.
+     */
+    testZipWrite() {
+        Directory.Make(SCRATCH);
+        const dir = File.Join(SCRATCH, "zipw");
+
+        if (File.IsDir(dir))
+            Directory.DeleteTree(dir);
+        Directory.Make(dir);
+
+        const at = (n) => File.Join(dir, n);
+        const leftovers = () => Directory.List(dir).filter((n) => /\.[A-Za-z0-9]{6}$/.test(n));
+
+        let big = "";
+        for (let i = 0; i < 40000; i++) big += `line ${i}\n`;                      /* past the 64 KB block */
+        const noise = Random.Bytes(5000);
+        File.Save(at("big.txt"), big);
+        File.SaveBytes(at("noise.bin"), noise);
+
+        /* ----------------------------------------------- what it writes */
+        const out = at("out.zip");
+        const w = Zip.Create(out);
+
+        check("nothing is at the path while the archive is being written", !File.Exists(out));
+        check("Add answers the writer, so calls chain",
+              w.Add("mimetype", "application/test", { Store: true }) === w);
+        w.Add("folder/")
+         .Add("hello.txt", "hola mundo\n".repeat(50))
+         .Add("ñandú.txt", "con acento")
+         .Add("empty.txt", "")
+         .Add("noise-in-memory.bin", noise)
+         .Add("dated.txt", "x", { Modified: new Date(2020, 5, 15, 10, 20, 30) })
+         .AddFile("streamed/big.txt", at("big.txt"))
+         .AddFile("streamed/noise.bin", at("noise.bin"))
+         .AddFile("streamed/stored.txt", at("big.txt"), { Store: true });
+        check("still nothing at the path before Finish", !File.Exists(out));
+
+        eq("Finish answers how many entries the archive holds", w.Finish(), 10);
+        check("and only now is it there", File.Exists(out));
+        eq("with no temporary left beside it", leftovers().length, 0);
+
+        const r = Zip.Open(out);
+        const byName = {};
+        for (const e of r.Entries) byName[e.Name] = e;
+
+        eq("this runtime's own reader lists them in the order they were added",
+           r.Entries.map((e) => e.Name).join(","),
+           "mimetype,folder/,hello.txt,ñandú.txt,empty.txt,noise-in-memory.bin,dated.txt," +
+           "streamed/big.txt,streamed/noise.bin,streamed/stored.txt");
+        eq("a deflated entry reads back", r.Read("hello.txt").ToText(), "hola mundo\n".repeat(50));
+        eq("a name with an accent reads back by that name", r.Read("ñandú.txt").ToText(), "con acento");
+        eq("an empty entry is empty", r.Read("empty.txt").Length, 0);
+        check("a folder is a folder", byName["folder/"].IsDir === true && byName["folder/"].Size === 0);
+        check("the first entry is stored and says so, which is what a format that wants its mimetype uncompressed asks for",
+              byName["mimetype"].Size === 16 && byName["mimetype"].Compressed === 16);
+        check("deflate is used where it helped", byName["hello.txt"].Compressed < byName["hello.txt"].Size / 5);
+        eq("and not where it did not: incompressible bytes are stored", byName["noise-in-memory.bin"].Compressed, 5000);
+        eq("a streamed file past the 64 KB block reads back whole", r.Read("streamed/big.txt").ToText(), big);
+        check("and was deflated on the way", byName["streamed/big.txt"].Compressed < big.length / 3);
+        eq("`Store` on a streamed file is stored", byName["streamed/stored.txt"].Compressed, big.length);
+        check("streamed noise comes back exactly", r.Read("streamed/noise.bin").ToHex() === noise.ToHex());
+        const when = byName["dated.txt"].Modified;
+        check("Modified is the Date it was given, to the two seconds a zip counts in",
+              when.getFullYear() === 2020 && when.getMonth() === 5 && when.getDate() === 15 &&
+              when.getHours() === 10 && when.getMinutes() === 20 && when.getSeconds() === 30, String(when));
+        check("and now when it was not", Math.abs(byName["hello.txt"].Modified.getTime() - Date.now()) < 5 * 60 * 1000);
+        r.Close();
+
+        if (Application.HasCommand("unzip")) {
+            const t = Exec.Wait(["unzip", "-t", out], { Timeout: 30000 });
+            check("`unzip -t` checks every CRC of what the writer wrote, the streamed entries with their data descriptors among them",
+                  t.ExitCode === 0 && t.Output.includes("No errors detected"), t.Output);
+        }
+        if (Application.HasCommand("python3")) {
+            const script = at("check.py");
+            File.Save(script,
+                'import sys, zipfile\n' +
+                'z = zipfile.ZipFile(sys.argv[1])\n' +
+                'print("testzip", z.testzip())\n' +
+                'print("first", z.namelist()[0], z.infolist()[0].compress_type)\n' +
+                'print("accent", z.read("\\u00f1and\\u00fa.txt").decode())\n' +
+                'print("utf8flag", bool(z.getinfo("\\u00f1and\\u00fa.txt").flag_bits & 0x800))\n' +
+                'print("descriptor", bool(z.getinfo("streamed/big.txt").flag_bits & 0x8))\n' +
+                'print("noflag", z.getinfo("hello.txt").flag_bits)\n');
+            const py = Exec.Wait(["python3", script, out], { Timeout: 30000 });
+            check("`zipfile`, a second implementation of the format, finds nothing wrong", py.Output.includes("testzip None"), py.Output);
+            check("reads the first entry as stored", py.Output.includes("first mimetype 0"), py.Output);
+            check("reads the accented name, which is flagged UTF-8", py.Output.includes("accent con acento") && py.Output.includes("utf8flag True"), py.Output);
+            check("sees the data descriptor on a streamed entry and none on one that was written whole",
+                  py.Output.includes("descriptor True") && py.Output.includes("noflag 0"), py.Output);
+        }
+
+        /* ---------------------------------- the path is the last thing touched */
+        const old = at("existing.zip");
+        File.Save(old, "OLD");
+        const w2 = Zip.Create(old);
+
+        w2.Add("a.txt", "new");
+        eq("an existing file is untouched until Finish", File.Load(old), "OLD");
+        w2.Finish();
+        eq("Finish replaces it", Zip.Open(old).Read("a.txt").ToText(), "new");
+
+        const w3 = Zip.Create(at("aborted.zip"));
+        w3.Add("a.txt", "x").AddFile("b.txt", at("big.txt"));
+        w3.Abort();
+        w3.Abort();
+        check("an aborted writer leaves nothing at the path", !File.Exists(at("aborted.zip")));
+        eq("nor beside it, and aborting twice is not an error", leftovers().length, 0);
+        throws("an aborted archive cannot be added to", () => w3.Add("c.txt", "y"));
+        throws("nor finished", () => w3.Finish());
+        throws("a finished one cannot be added to", () => w.Add("late.txt", "z"));
+        throws("nor finished twice", () => w.Finish());
+        w.Abort();
+        check("aborting a finished archive takes nothing back", File.Exists(out));
+
+        /* An empty archive is a zip, and `unzip` says so with a message of its own. */
+        const empty = at("empty.zip");
+        eq("an archive with nothing in it is allowed", Zip.Create(empty).Finish(), 0);
+        eq("and reads back as nothing", Zip.Open(empty).Entries.length, 0);
+
+        /* ------------------------------------------------- what it refuses */
+        const w4 = Zip.Create(at("refusals.zip"));
+        const refuses = (label, fn, phrase) => {
+            let msg = "";
+
+            try { fn(); } catch (e) { msg = e.message; }
+            check(label, msg.includes(phrase), msg);
+        };
+
+        /* The names `ExtractAll` refuses are the names `Add` refuses, so an archive written here is one nobody can be hurt by. */
+        refuses("a name that leaves the folder", () => w4.Add("../evil.txt", "x"), "leave the folder");
+        refuses("a deeper one", () => w4.Add("a/../../evil.txt", "x"), "leave the folder");
+        refuses("an absolute path", () => w4.Add("/etc/evil.txt", "x"), "absolute");
+        refuses("a drive letter", () => w4.Add("C:evil.txt", "x"), "absolute");
+        refuses("a backslash", () => w4.Add("a\\b.txt", "x"), "backslash");
+        refuses("an empty part", () => w4.Add("a//b.txt", "x"), "empty part");
+        refuses("a dot part", () => w4.Add("./b.txt", "x"), "empty part");
+        refuses("a NUL", () => w4.Add("ok\u0000/../evil.txt", "x"), "NUL");
+        refuses("no name at all", () => w4.Add("", "x"), "no name");
+        refuses("a name that is not text", () => w4.Add(5, "x"), "name");
+        refuses("data that is neither text nor Bytes", () => w4.Add("n.txt", 5), "options");
+        refuses("a file needs its data", () => w4.Add("nodata.txt"), "needs its data");
+        refuses("a folder takes none", () => w4.Add("dir/", "x"), "holds no data");
+        w4.Add("once.txt", "1");
+        refuses("a name twice", () => w4.Add("once.txt", "2"), "already in the archive");
+        refuses("an option it does not know", () => w4.Add("o.txt", "x", { Level: 9 }), "not an option");
+        refuses("Store that is not a boolean", () => w4.Add("o.txt", "x", { Store: "yes" }), "Store");
+        refuses("a Modified that is not a Date", () => w4.Add("o.txt", "x", { Modified: "yesterday" }), "Modified");
+        refuses("two sets of options", () => w4.Add("o.txt", { Store: true }, { Store: false }), "two sets");
+        refuses("AddFile of a file that is not there", () => w4.AddFile("m.txt", at("no-such-file")), "cannot read");
+        refuses("AddFile wants a path", () => w4.AddFile("m.txt", undefined), "path");
+        refuses("AddFile will not make a folder of a file", () => w4.AddFile("m/", at("big.txt")), "folder");
+
+        w4.Add("still-works.txt", "yes");
+        eq("a refusal that came before a byte was written leaves the writer usable", w4.Finish(), 2);
+        eq("and what it kept is exactly what was accepted",
+           Zip.Open(at("refusals.zip")).Entries.map((e) => e.Name).join(","), "once.txt,still-works.txt");
+
+        throws("a path that is not text is refused", () => Zip.Create(undefined));
+        refuses("a folder that is not there is named", () => Zip.Create(at("no-such-dir/x.zip")), "cannot write beside");
+
+        /* The most a zip can hold without zip64, which is not written -- and which this reader refuses, so a bigger one would be a file nothing here could open. */
+        const many = Zip.Create(at("many.zip"));
+        for (let i = 0; i < 65534; i++)
+            many.Add(`e${i}`, "");
+        refuses("the entry past 65,534 is refused, naming zip64", () => many.Add("one-too-many", ""), "zip64");
+        eq("and the archive of 65,534 is written", many.Finish(), 65534);
+        eq("and read back whole", Zip.Open(at("many.zip")).Entries.length, 65534);
 
         Directory.DeleteTree(dir);
     }
@@ -18206,6 +18427,288 @@ function Main() {
     }
 
     /*
+     * `examples/clients/Excel.js`, held to a spreadsheet program.
+     *
+     * The writer is a file of the example, so it is run the way the example runs it:
+     * a child project with a copy of it. What comes out is checked by three readers
+     * that did not write it -- `unzip -t` for the container, `soffice` for the
+     * workbook, and `examples/sheets`' reader for what that example would show -- and
+     * the values are the ones a writer gets wrong: a name with `&` and `<`, a postal
+     * code that must stay text, a quote, spaces that must be kept, a control character
+     * XML cannot carry, a newline in a cell, an empty cell, dates either side of a
+     * leap day, and a decimal that must not become text.
+     */
+    testExampleExcel() {
+        const base  = File.Join(File.Directory(Application.Directory), "..", "examples");
+        const excel = File.Join(base, "clients", "Excel.js");
+        const sheets = File.Join(base, "sheets", "SheetReader.js");
+
+        if (!File.Exists(excel) || !File.Exists(sheets)) {
+            print("ExampleExcel: the examples are not beside this suite; skipped");
+            return;
+        }
+
+        const dir = File.Join(SCRATCH, "excel");
+
+        if (File.IsDir(dir))
+            Directory.DeleteTree(dir);
+        Directory.Make(dir);
+        File.Save(File.Join(dir, "Excel.js"), File.Load(excel));
+        File.Save(File.Join(dir, "SheetReader.js"), File.Load(sheets));
+        File.SaveJson(File.Join(dir, "project.json"),
+                      { name: "excelprobe", main: "Main", version: "1.0", sources: ["Excel.js", "SheetReader.js", "Main.js"] });
+
+        const out = File.Join(dir, "t.xlsx");
+
+        File.Save(File.Join(dir, "Main.js"),
+            'function Main() {\n' +
+            '    Excel.Write(Application.Arguments[0], [\n' +
+            '        { Name: "Clients", Columns: [{ Text: "Name" }, { Text: "Postal" }, { Text: "Balance", Kind: "money" },\n' +
+            '                                      { Text: "Since", Kind: "date" }, { Text: "Active", Kind: "bool" }, { Text: "Id", Kind: "number" }],\n' +
+            '          Rows: [\n' +
+            '            ["Álvarez & Hijos <SA>", "01234", new Decimal("1234.50"), "2024-03-01", true, 1],\n' +
+            '            [\'dice "hola"\', "", new Decimal("0.5"), "1999-12-31", false, 2],\n' +
+            '            ["  spaces kept  ", "B1000", 3, "2000-02-29", true, 3],\n' +
+            '            ["ctrl\\u0001char\\ttab", null, "7.25", "2026-10-02", false, 4],\n' +
+            '            ["línea\\ndos", "X", new Decimal("-12.75"), "2024-12-31", true, 5],\n' +
+            '          ] },\n' +
+            '        { Name: "Orders", Columns: [{ Text: "What" }, { Text: "Amount", Kind: "money" }], Rows: [["Ñandú", new Decimal("99.99")]] },\n' +
+            '    ]);\n' +
+            '    const t = new SheetReader();\n' +
+            '    t.Done  = (r) => { print(JSON.stringify(r)); Application.Quit(0); };\n' +
+            '    t.Error = (m) => { print("ERROR " + m); Application.Quit(1); };\n' +
+            '    t.Start({ path: Application.Arguments[0], sheet: 0 });\n' +
+            '}\n');
+
+        const ran = Exec.Wait([Application.Executable, dir, out], { Timeout: 60000 });
+
+        check("the workbook is written", ran.ExitCode === 0 && File.Exists(out), ran.Output);
+        eq("with no temporary beside it", Directory.List(dir).filter((n) => /\.xlsx\.[A-Za-z0-9]{6}$/.test(n)).length, 0);
+
+        if (Application.HasCommand("unzip")) {
+            const t = Exec.Wait(["unzip", "-t", out], { Timeout: 30000 });
+            check("`unzip -t` finds the container sound", t.ExitCode === 0 && t.Output.includes("No errors detected"), t.Output);
+        }
+
+        /* What `examples/sheets` would show for it -- the writer and the reader
+         * of the two examples, agreeing about a format. */
+        let shown = null;
+        try { shown = JSON.parse(ran.Output.trim().split("\n").pop()); } catch (e) { /* reported below */ }
+        check("the sheet reader reads it", shown !== null, ran.Output);
+        if (shown) {
+            eq("two sheets, named", shown.sheets.join(","), "Clients,Orders");
+            eq("a header row and five rows", shown.rows.length, 6);
+            eq("a name with &, < and > comes back", shown.rows[1][0], "Álvarez & Hijos <SA>");
+            eq("a postal code that is text stays `01234`", shown.rows[1][1], "01234");
+            eq("a decimal is a number by its digits", shown.rows[1][2], "1234.5");
+            eq("a date is a date (the reader recognises the format this writer declares)", shown.rows[1][3], "2024-03-01");
+            eq("a boolean", shown.rows[1][4], "TRUE");
+            eq("a quote", shown.rows[2][0], 'dice "hola"');
+            eq("an empty cell is empty", shown.rows[2][1], "");
+            eq("spaces are kept", shown.rows[3][0], "  spaces kept  ");
+            eq("a leap day", shown.rows[3][3], "2000-02-29");
+            eq("a control character is dropped and a tab kept", shown.rows[4][0], "ctrlchar\ttab");
+            eq("a number that arrives as text is still a number", shown.rows[4][2], "7.25");
+            eq("a newline inside a cell survives", shown.rows[5][0], "línea\ndos");
+        }
+
+        /* **A date is a number with a date format, and that is invisible to every
+         * reader above**: written as the text "2024-03-01" it *shows* the same in
+         * a CSV and in the sheet reader, so a writer that forgot to make dates dates
+         * would pass them all. The serials are worked out here from the calendar
+         * (days since 30 December 1899), not by the writer, and the cell has to carry
+         * the style that names a date format. */
+        const wb = Zip.Open(out);
+        const sheetXml = Xml.ParseBytes(wb.Read("xl/worksheets/sheet1.xml")).Root;
+        const cellsOf = {};
+
+        for (const row of sheetXml.Find("sheetData").FindAll("row"))
+            for (const c of row.FindAll("c"))
+                cellsOf[c.Attr("r")] = c;
+        const serial = (ref) => cellsOf[ref] && cellsOf[ref].Find("v") ? cellsOf[ref].Find("v").Text : null;
+
+        eq("2024-03-01 is the number 45352", serial("D2"), "45352");
+        eq("31 December 1999 is 36525", serial("D3"), "36525");
+        eq("29 February 2000 is 36585", serial("D4"), "36585");
+        eq("2 October 2026 is 46297", serial("D5"), "46297");
+        eq("31 December 2024 is 45657", serial("D6"), "45657");
+        check("and a date cell is not an inline string", cellsOf["D2"].Attr("t") === null);
+        eq("with the style that names a date format", cellsOf["D2"].Attr("s"), "2");
+        eq("a number is a number", serial("F2"), "1");
+        eq("money is a number with the money style", cellsOf["C2"].Attr("s") + ":" + serial("C2"), "3:1234.50");
+        eq("a boolean is a boolean", cellsOf["E2"].Attr("t") + ":" + serial("E2"), "b:1");
+        check("text is an inline string", cellsOf["A2"].Attr("t") === "inlineStr");
+        check("an empty cell is no cell at all", cellsOf["B3"] === undefined);
+        wb.Close();
+
+        if (Application.HasCommand("soffice")) {
+            const csvDir = File.Join(dir, "csv");
+            const home   = File.Join(dir, "home");
+
+            Directory.Make(home);
+            check("`soffice` opens the workbook", sofficeCsv(out, csvDir, home));
+
+            const clients = File.Exists(File.Join(csvDir, "t-Clients.csv"))
+                ? parseCsv(File.Load(File.Join(csvDir, "t-Clients.csv"))) : [];
+
+            eq("a real spreadsheet program reads the header", clients[0] ? clients[0].join("|") : "",
+               "Name|Postal|Balance|Since|Active|Id");
+            eq("&, <, > and an accent", clients[1] ? clients[1][0] : "", "Álvarez & Hijos <SA>");
+            eq("a postal code is text there too, with its zero", clients[1] ? clients[1][1] : "", "01234");
+            eq("the money, the date and the boolean, in one row",
+               clients[1] ? clients[1].slice(2).join("|") : "", "1234.5|2024-03-01|TRUE|1");
+            eq("quotes", clients[2] ? clients[2][0] : "", 'dice "hola"');
+            eq("an empty cell", clients[2] ? clients[2][1] : "x", "");
+            eq("spaces", clients[3] ? clients[3][0] : "", "  spaces kept  ");
+            eq("29 February 2000", clients[3] ? clients[3][3] : "", "2000-02-29");
+            eq("a control character gone and a tab kept", clients[4] ? clients[4][0] : "", "ctrlchar\ttab");
+            eq("a newline in a cell", clients[5] ? clients[5][0] : "", "línea\ndos");
+            eq("a negative decimal", clients[5] ? clients[5][2] : "", "-12.75");
+
+            const orders = File.Exists(File.Join(csvDir, "t-Orders.csv"))
+                ? parseCsv(File.Load(File.Join(csvDir, "t-Orders.csv"))) : [];
+
+            eq("the second sheet is a sheet of its own", orders.map((r) => r.join("|")).join(";"),
+               "What|Amount;Ñandú|99.99");
+
+            /* The money *format* is only visible where cells are shown: the CSV
+             * filter writes a number as the number it is. */
+            Exec.Wait(["soffice", "--headless", "--norestore", "--convert-to", "html", "--outdir",
+                       File.Join(dir, "html"), out],
+                      { Timeout: 120000, Environment: { HOME: home, LC_ALL: "C", LANG: "C" } });
+            const html = File.Exists(File.Join(dir, "html", "t.html")) ? File.Load(File.Join(dir, "html", "t.html")) : "";
+
+            check("money is shown with two decimals, which is the style the cell names",
+                  html.includes(">1234.50<") && html.includes(">0.50<") && html.includes(">-12.75<"));
+        }
+
+        /* ---------------------------------------------------- what it refuses */
+        File.Save(File.Join(dir, "Main.js"),
+            'function Main() {\n' +
+            '    const bad = (label, sheets) => {\n' +
+            '        try { Excel.Write(Application.Arguments[0], sheets); print(label + ": no throw"); }\n' +
+            '        catch (e) { print(label + ": " + e.message); }\n' +
+            '    };\n' +
+            '    const col = (kind) => [{ Text: "c", Kind: kind }];\n' +
+            '    bad("nothing", []);\n' +
+            '    bad("not a number", [{ Name: "a", Columns: col("number"), Rows: [["12 euros"]] }]);\n' +
+            '    bad("not a date", [{ Name: "a", Columns: col("date"), Rows: [["2024-3-1"]] }]);\n' +
+            '    bad("not a bool", [{ Name: "a", Columns: col("bool"), Rows: [["yes"]] }]);\n' +
+            '    bad("a kind", [{ Name: "a", Columns: col("colour"), Rows: [["x"]] }]);\n' +
+            '    bad("no columns", [{ Name: "a", Columns: [], Rows: [] }]);\n' +
+            '    bad("too wide", [{ Name: "a", Columns: col("text"), Rows: [["x", "y"]] }]);\n' +
+            '    bad("slash", [{ Name: "a/b", Columns: col("text"), Rows: [] }]);\n' +
+            '    bad("long", [{ Name: "x".repeat(32), Columns: col("text"), Rows: [] }]);\n' +
+            '    bad("empty name", [{ Name: "", Columns: col("text"), Rows: [] }]);\n' +
+            '    bad("apostrophe", [{ Name: "\'a", Columns: col("text"), Rows: [] }]);\n' +
+            '    bad("twice", [{ Name: "Sheet", Columns: col("text"), Rows: [] }, { Name: "SHEET", Columns: col("text"), Rows: [] }]);\n' +
+            '    print("left: " + File.Exists(Application.Arguments[0]));\n' +
+            '    Application.Quit(0);\n' +
+            '}\n');
+        File.SaveJson(File.Join(dir, "project.json"),
+                      { name: "excelprobe", main: "Main", version: "1.0", sources: ["Excel.js", "Main.js"] });
+
+        const never = File.Join(dir, "never.xlsx");
+        const refused = Exec.Wait([Application.Executable, dir, never], { Timeout: 60000 }).Output;
+        const said = (label) => (refused.split("\n").find((l) => l.startsWith(label + ": ")) || "");
+
+        check("an empty list of sheets is refused", said("nothing").includes("nothing to write"), refused);
+        check("a number that is not one names the cell", said("not a number").includes("'a' A2") && said("not a number").includes("12 euros"), refused);
+        check("a date that is not YYYY-MM-DD", said("not a date").includes("not a date as YYYY-MM-DD"), refused);
+        check("a boolean that is not one", said("not a bool").includes("not true or false"), refused);
+        check("a kind it does not know", said("a kind").includes("colour"), refused);
+        check("a sheet with no columns", said("no columns").includes("no columns"), refused);
+        check("a row wider than its columns", said("too wide").includes("2 values for 1 columns"), refused);
+        check("a sheet name with a slash", said("slash").includes("a character a sheet name cannot have"), refused);
+        check("a sheet name past 31 characters", said("long").includes("1 to 31"), refused);
+        check("a sheet with no name", said("empty name").includes("1 to 31"), refused);
+        check("a sheet name that starts with an apostrophe", said("apostrophe").includes("apostrophe"), refused);
+        check("two sheets of one name, compared without case", said("twice").includes("two sheets are called"), refused);
+        check("and every refusal left no file", refused.includes("left: false") && !File.Exists(never), refused);
+        eq("nor a temporary", Directory.List(dir).filter((n) => /never\.xlsx\./.test(n)).length, 0);
+
+        Directory.DeleteTree(dir);
+    }
+
+    /*
+     * `examples/clients` exporting its own database.
+     *
+     * The example is started as a child with a configuration directory of its own
+     * (the real one holds the developer's clients), given a path, and asked to export
+     * and quit -- its window is hidden before it is shown, so it takes no focus. What it
+     * wrote is then compared with **the database it read**, which is not a file `Excel.js`
+     * had a hand in, through a spreadsheet program that did not write it either.
+     */
+    testExampleClientsExport() {
+        const example = File.Join(File.Directory(Application.Directory), "..", "examples", "clients");
+
+        if (!File.IsDir(example) || !Application.HasCommand("soffice") || typeof Database.Sqlite !== "function") {
+            print("ExampleClientsExport: needs the example, soffice and sqlite; skipped");
+            return;
+        }
+
+        const dir = File.Join(SCRATCH, "clients-export");
+
+        if (File.IsDir(dir))
+            Directory.DeleteTree(dir);
+        Directory.Make(dir);
+
+        const out = File.Join(dir, "clients.xlsx");
+        const cfg = File.Join(dir, "config");
+        const ran = Exec.Wait([Application.Executable, example, out],
+                              { Timeout: 90000, Environment: { HOME: dir, XDG_CONFIG_HOME: cfg } });
+
+        check("the example exports and quits", ran.ExitCode === 0 && File.Exists(out), ran.Output);
+        check("and says what it did", ran.Output.includes("Exported 5 clients"), ran.Output);
+
+        const dbPath = File.Join(cfg, "bintana", "Clients", "clients.db");
+
+        check("it kept its database in the configuration directory it was given", File.Exists(dbPath), dbPath);
+        if (!File.Exists(dbPath) || !File.Exists(out)) {
+            Directory.DeleteTree(dir);
+            return;
+        }
+
+        const db = Database.Sqlite(dbPath);
+        const want = {};
+
+        for (const r of db.Query("SELECT name, category, balance, since, postal_code, active FROM clients"))
+            want[r.name] = r;
+        const orderCount = db.Query("SELECT COUNT(*) AS n FROM orders")[0].n;
+        db.Close();
+
+        const csvDir = File.Join(dir, "csv");
+
+        check("`soffice` opens it", sofficeCsv(out, csvDir, File.Join(dir, "home")));
+
+        const rows = parseCsv(File.Load(File.Join(csvDir, "clients-Clients.csv")));
+
+        eq("the header", rows[0].join("|"), "Name|Category|Balance|Since|Postal code|Active");
+        eq("one row for each client in the database", rows.length - 1, Dictionary.Keys(want).length);
+
+        for (const r of rows.slice(1)) {
+            const w = want[r[0]];
+
+            check(`${r[0]} is a client of the database`, w !== undefined, r.join("|"));
+            if (!w)
+                continue;
+            eq(`${r[0]}: category`, r[1], w.category);
+            /* A spreadsheet holds a number, so `100.50` is `100.5` there. */
+            eq(`${r[0]}: balance`, Number(r[2]), Number(w.balance));
+            eq(`${r[0]}: since`, r[3], w.since);
+            eq(`${r[0]}: postal code, as text`, r[4], w.postal_code);
+            eq(`${r[0]}: active`, r[5], w.active ? "TRUE" : "FALSE");
+        }
+
+        const orders = parseCsv(File.Load(File.Join(csvDir, "clients-Orders.csv")));
+
+        eq("the orders sheet has the header", orders[0].join("|"), "Client|Placed|What|Amount|State");
+        eq("and one row for each order in the database", orders.length - 1, orderCount);
+
+        Directory.DeleteTree(dir);
+    }
+
+    /*
      * `examples/webhook` runs, and fails when a check it demonstrates is gone.
      *
      * An example nobody runs is the first thing in a tree to rot, and this one is
@@ -20438,6 +20941,29 @@ function Main() {
                 next();
             };
             t.Start({ mode: "zip", path });
+        });
+
+        /* An archive *written* in a worker: a temporary and a rename, both inside
+         * the thread, and what crosses is numbers and text. */
+        steps.push(() => {
+            Directory.Make(SCRATCH);
+            const source = File.Join(SCRATCH, "task-source.bin");
+            const path   = File.Join(SCRATCH, "task-written.zip");
+
+            File.SaveBytes(source, Random.Bytes(1234));
+
+            const t = new TaskWork();
+
+            t.Error = (m) => fail(`zip write errored: ${m}`);
+            t.Done  = (r) => {
+                eq("a worker writes an archive", r.n, 2);
+                eq("...and reads back what it put in", r.text, "written in a worker");
+                eq("...and a file it streamed", r.size, 1234);
+                File.Delete(source);
+                File.Delete(path);
+                next();
+            };
+            t.Start({ mode: "zipwrite", path, source });
         });
 
         /*

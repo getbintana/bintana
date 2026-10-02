@@ -41,6 +41,14 @@
  * `Transaction` and `drift()` asks whether any balance still agrees with its own
  * orders.
  *
+ * **Export is the other direction of `examples/sheets`**: the clients that are
+ * *listed* -- the filter applies, because a list that exports something other than
+ * what it shows is a trap -- and their orders, as a two-sheet `.xlsx` that Excel and
+ * LibreOffice open. `Excel.js` is the whole of how, over `Zip.Create`, and it is held
+ * to a real spreadsheet program by the suite rather than to itself. Run it without
+ * the window to see it work: `./build/bintana examples/clients out.xlsx` exports and
+ * quits, and the window never opens.
+ *
  * **And the form is boxes and not coordinates.** It was drawn in a `Fixed`
  * first — 27 controls, 117 numbers, 54 of them an X or a Y — and it broke on a
  * resize. As boxes it is 17 numbers and no coordinates. The rule that came out
@@ -81,6 +89,26 @@ class ClientsForm extends Form {
             this.open();
         } catch (e) {
             Message.Error("Cannot open the database: {0}", e.message);
+            return;
+        }
+
+        /* A path on the command line is a request to export and go, which is how
+         * a script (or a test) asks for the workbook without a pointer. The window
+         * is hidden before anything is shown -- `Form_Open` runs before `Show()`
+         * returns -- so it never appears. */
+        const to = Application.Arguments[0];
+
+        if (to) {
+            this.Visible = false;
+            this.fill();
+            try {
+                this.exportTo(to);
+                print(Locale.Text("Exported {0} clients to {1}", this.rows.length, to));
+                Application.Quit(0);
+            } catch (e) {
+                print(Locale.Text("Could not export: {0}", e.message));
+                Application.Quit(1);
+            }
             return;
         }
 
@@ -527,6 +555,58 @@ class ClientsForm extends Form {
             this.pick();
             this.say(Locale.Text("Deleted {0}", c.Name));
         }, { Title: Locale.Text("Clients"), Accept: Locale.Text("Delete") });
+    }
+
+    /* --- export ------------------------------------------------------------ */
+
+    BtnExport_Click() {
+        Dialog.SaveFile(Locale.Text("Export to Excel"),
+                        { Name: "clients.xlsx",
+                          Filters: [[Locale.Text("Excel workbooks"), "*.xlsx"]] },
+                        (path) => {
+            try {
+                this.exportTo(path);
+                this.say(Locale.Text("Exported {0} clients to {1}", this.rows.length, File.Name(path)));
+            } catch (e) {
+                Message.Error("Could not export: {0}", e.message);
+            }
+        });
+    }
+
+    /*
+     * The clients that are listed, and their orders, as a workbook.
+     *
+     * **What is exported is `this.rows`, the list as it is shown**, so a filter
+     * narrows the export too; and the orders are asked for by client id, one query
+     * for each client, the same way the detail list asks. Money goes in as a
+     * `Decimal` and is written by its digits, and a date as the `YYYY-MM-DD` the
+     * shape holds -- `Excel` turns each into the thing Excel keeps it as. The
+     * postal code is declared text on purpose: `01234` is not a number.
+     *
+     * `Excel.Write` writes the archive to a temporary and moves it into place
+     * last, so a failure leaves a file that was already there as it was.
+     */
+    exportTo(path) {
+        const clients = [];
+        const orders  = [];
+
+        for (const c of this.rows) {
+            clients.push([c.Name, c.Category, c.Balance, c.Since, c.PostalCode, c.Active]);
+
+            for (const o of this.orders.Where("client_id = ?", c.Id))
+                orders.push([c.Name, o.Placed, o.What, o.Amount, o.State]);
+        }
+
+        Excel.Write(path, [
+            { Name: "Clients",
+              Columns: [{ Text: "Name", Width: 28 }, { Text: "Category" }, { Text: "Balance", Kind: "money" },
+                        { Text: "Since", Kind: "date" }, { Text: "Postal code" }, { Text: "Active", Kind: "bool" }],
+              Rows: clients },
+            { Name: "Orders",
+              Columns: [{ Text: "Client", Width: 28 }, { Text: "Placed", Kind: "date" }, { Text: "What", Width: 28 },
+                        { Text: "Amount", Kind: "money" }, { Text: "State" }],
+              Rows: orders },
+        ]);
     }
 
     /* --- the orders, which is the detail ----------------------------------- */

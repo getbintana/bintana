@@ -14751,6 +14751,15 @@
       "Name": "Zip",
       "Members": [
         {
+          "Name": "Create",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(path)",
+          "Returns": "ZipWriter",
+          "Doc": "starts an archive that will be at `path` **when `Finish()` says so** and not before: it is written to a temporary beside it, so a failure, an abort or a dropped writer leaves nothing and an existing file untouched. Throws, naming the folder, when it cannot write there",
+          "Native": true
+        },
+        {
           "Name": "Open",
           "Kind": "Method",
           "Params": 1,
@@ -15799,6 +15808,47 @@
           "Signature": "(name, [{ MaxSize }])",
           "Returns": "Bytes",
           "Doc": "one entry's bytes. **Throws, and never answers wrong**: an entry whose data does not match its checksum, that inflates to more than its directory says, whose local header disagrees with the directory, that is encrypted or uses a method other than stored and deflate, or is over `MaxSize` (256 MiB unless told) is refused with a sentence naming it",
+          "Native": true
+        }
+      ]
+    },
+    {
+      "Name": "ZipWriter",
+      "Members": [
+        {
+          "Name": "Abort",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "throws the archive away: nothing is left at the path and nothing beside it. A writer that is dropped without `Finish` does the same when it is collected; aborting twice is not an error",
+          "Native": true
+        },
+        {
+          "Name": "Add",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(name, [data], [{ Store, Modified }])",
+          "Returns": "ZipWriter",
+          "Doc": "puts an entry in the archive and answers the writer, so calls chain. `data` is text (its UTF-8) or a [`Bytes`](docs/llm/library.md#bytes); a name ending in `/` is a folder and takes none. Deflated, **unless it did not get smaller** (random bytes, a picture) or `Store: true` -- which is also what a format that wants an entry uncompressed asks for (an `.odt`'s `mimetype`, first). `Modified` is a `Date`, now unless told. **The name is held to the rules `ExtractAll` holds one to** (no `../`, absolute path, drive letter, backslash or empty part) and may not repeat",
+          "Native": true
+        },
+        {
+          "Name": "AddFile",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(name, path, [{ Store, Modified }])",
+          "Returns": "ZipWriter",
+          "Doc": "the same for a file, **streamed 64 KB at a time** rather than loaded; its size is written after its data, as a data descriptor, since it is not known before the last block. Because it is streamed it cannot see whether deflating helped, so an incompressible file costs a few bytes more than it is: pass `Store: true` for one that is known to be",
+          "Native": true
+        },
+        {
+          "Name": "Finish",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "number",
+          "Doc": "writes the directory and **only now puts the archive at its path**, replacing what was there, and answers how many entries it holds. Until this the destination is untouched",
           "Native": true
         }
       ]

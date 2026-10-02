@@ -3,11 +3,12 @@
   "startup": "ClientsForm",
   "sources": [
     "Client.js",
+    "Excel.js",
     "ClientsForm.js"
   ],
   "uses": [
     "dialog"
   ],
   "version": "1.0",
-  "description": "A screen over a sqlite table, written by hand to measure what a declared binding would be worth"
+  "description": "A screen over a sqlite table, written by hand to measure what a declared binding would be worth -- and exported to Excel, which is what Zip.Create is for"
 }

@@ -76,6 +76,7 @@
 #include <errno.h>
 #include <math.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #define ZIP_DEFAULT_MAX  ((uint64_t)256 * 1024 * 1024)
 #define ZIP_COPY_LIMIT   ((gsize)32 * 1024 * 1024)
@@ -633,13 +634,11 @@ static JSValue zip_read(JSContext *ctx, JSValueConst this_val, int argc, JSValue
  * means one is not safe for the other), an empty or `.` or `..` component, and a
  * NUL, which would end the path early in C.
  */
-static char *zip_bad_name(const ZipEntry *x)
+static char *zip_name_problem(const char *n, bool nul)
 {
-    const char *n = x->name;
-
     if (!*n)
         return g_strdup("an entry has no name");
-    if (x->nul)
+    if (nul)
         return g_strdup_printf("'%s' has a NUL in its name, which would end a path early", n);
     if (n[0] == '/' || strchr(n, '\\') || (g_ascii_isalpha(n[0]) && n[1] == ':'))
         return g_strdup_printf("'%s' is an absolute or drive path, or uses a backslash", n);
@@ -658,6 +657,11 @@ static char *zip_bad_name(const ZipEntry *x)
     g_strfreev(parts);
     return bad ? g_strdup_printf("'%s' would leave the folder it is extracted into, "
                                  "or has an empty part", n) : NULL;
+}
+
+static char *zip_bad_name(const ZipEntry *x)
+{
+    return zip_name_problem(x->name, x->nul);
 }
 
 static bool zip_write_file(const char *dest, const guint8 *data, gsize n, char **why)
@@ -851,6 +855,804 @@ static const JSCFunctionListEntry zip_proto_props[] = {
     JS_CFUNC_DEF("Close", 0, zip_close),
 };
 
+
+/* ================================================================ writing */
+
+/*
+ * The other direction, and the same rules: a name that `ExtractAll` would refuse
+ * is a name `Add` refuses, so the archive this runtime writes is one it would
+ * read, and one nobody can be hurt by extracting.
+ *
+ * **The file is written to a temporary beside the destination and `Finish()` is
+ * what renames it into place.** An unfinished zip is a file with no directory at
+ * its end, which no reader opens -- but it would still be *there*, looking like an
+ * export that worked, and an existing archive of the same name would already be
+ * gone. So until `Finish` the destination is untouched, a writer that is dropped
+ * or aborted removes its temporary, and a failure part-way leaves nothing at all
+ * (the PDF and `Gzip.CompressFile` rule). A process that is killed leaves the
+ * temporary and only that.
+ *
+ * Sizes are known when `Add` is given its data, so those entries are written plain;
+ * `AddFile` streams a file it will not hold, and so cannot know a size before it
+ * has read it all -- it writes a **data descriptor** after the data, which is the
+ * thing 31 % of the entries on a real desktop carry and every reader here handles.
+ * A zip64 archive is *not* written: past 4 GiB or 65,535 entries is refused with a
+ * sentence, as reading one is.
+ */
+
+typedef struct {
+    char    *name;
+    guint32  crc, csize, usize, offset;
+    guint16  method, flags, dostime, dosdate;
+} ZipOut;
+
+typedef struct {
+    char       *dest, *tmp;
+    FILE       *f;
+    guint64     pos;
+    GArray     *ents;             /* ZipOut */
+    GHashTable *names;            /* name -> 1 */
+    bool        done;             /* finished or aborted */
+    bool        broken;           /* a write failed part-way: nothing more may be added */
+} BtaZipWriter;
+
+static JSClassID bta_zipw_class_id;
+
+static void zipw_discard(BtaZipWriter *w)
+{
+    if (w->f) {
+        fclose(w->f);
+        w->f = NULL;
+    }
+    if (w->tmp) {
+        g_remove(w->tmp);
+        g_free(w->tmp);
+        w->tmp = NULL;
+    }
+}
+
+static void zipw_free(BtaZipWriter *w)
+{
+    if (!w->done)
+        zipw_discard(w);
+    if (w->ents) {
+        for (guint i = 0; i < w->ents->len; i++)
+            g_free(g_array_index(w->ents, ZipOut, i).name);
+        g_array_free(w->ents, TRUE);
+    }
+    if (w->names)
+        g_hash_table_destroy(w->names);
+    g_free(w->tmp);
+    g_free(w->dest);
+}
+
+static void zipw_finalizer(JSRuntime *rt, JSValue val)
+{
+    BtaZipWriter *w = JS_GetOpaque(val, bta_zipw_class_id);
+
+    if (!w)
+        return;
+    zipw_free(w);
+    g_free(w);
+}
+
+static const JSClassDef zipw_class = {
+    "ZipWriter",
+    .finalizer = zipw_finalizer,
+};
+
+static BtaZipWriter *zipw_this(JSContext *ctx, JSValueConst this_val)
+{
+    BtaZipWriter *w = JS_GetOpaque2(ctx, this_val, bta_zipw_class_id);
+
+    if (!w)
+        return NULL;
+    if (w->done) {
+        JS_ThrowTypeError(ctx, "the archive is finished (or was aborted): make another "
+                               "with Zip.Create");
+        return NULL;
+    }
+    if (w->broken) {
+        JS_ThrowTypeError(ctx, "a write to the archive failed, so it cannot be added "
+                               "to any more: Abort() it and start again");
+        return NULL;
+    }
+    return w;
+}
+
+static void put16(guint8 *p, guint v) { p[0] = (guint8)v; p[1] = (guint8)(v >> 8); }
+static void put32(guint8 *p, guint32 v)
+{
+    p[0] = (guint8)v;
+    p[1] = (guint8)(v >> 8);
+    p[2] = (guint8)(v >> 16);
+    p[3] = (guint8)(v >> 24);
+}
+
+static bool zipw_put(BtaZipWriter *w, const void *buf, gsize n)
+{
+    if (n && fwrite(buf, 1, n, w->f) != n) {
+        w->broken = true;
+        return false;
+    }
+    w->pos += n;
+    return true;
+}
+
+/* The DOS date and time of a moment, local, clamped into what the format can say:
+ * 1980 to 2107, two-second steps. */
+static void zip_dos(GDateTime *when, guint16 *dostime, guint16 *dosdate)
+{
+    int y = g_date_time_get_year(when);
+
+    if (y < 1980) {
+        *dostime = 0;
+        *dosdate = (guint16)((0 << 9) | (1 << 5) | 1);
+        return;
+    }
+    if (y > 2107)
+        y = 2107;
+    *dosdate = (guint16)(((y - 1980) << 9) | (g_date_time_get_month(when) << 5) |
+                         g_date_time_get_day_of_month(when));
+    *dostime = (guint16)((g_date_time_get_hour(when) << 11) |
+                         (g_date_time_get_minute(when) << 5) |
+                         (g_date_time_get_second(when) / 2));
+}
+
+/* The options of an `Add`: `Store` and `Modified`, and nothing else. */
+static bool zipw_options(JSContext *ctx, JSValueConst opts, const char *who,
+                         bool *store, guint16 *dostime, guint16 *dosdate)
+{
+    GDateTime *when = NULL;
+    JSPropertyEnum *tab;
+    uint32_t len;
+
+    *store = false;
+    if (!JS_IsUndefined(opts) && !JS_IsNull(opts)) {
+        if (!JS_IsObject(opts))
+            return JS_ThrowTypeError(ctx, "%s: the options are an object (Store, Modified)", who), false;
+        if (JS_GetOwnPropertyNames(ctx, &tab, &len, opts, JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) < 0)
+            return false;
+        for (uint32_t i = 0; i < len; i++) {
+            const char *name = JS_AtomToCString(ctx, tab[i].atom);
+            bool known = name && (strcmp(name, "Store") == 0 || strcmp(name, "Modified") == 0);
+
+            if (!known) {
+                JS_ThrowTypeError(ctx, "%s: '%s' is not an option (Store, Modified)", who,
+                                  name ? name : "?");
+                if (name)
+                    JS_FreeCString(ctx, name);
+                JS_FreePropertyEnum(ctx, tab, len);
+                return false;
+            }
+            JS_FreeCString(ctx, name);
+        }
+        JS_FreePropertyEnum(ctx, tab, len);
+
+        JSValue st = JS_GetPropertyStr(ctx, opts, "Store");
+
+        if (!JS_IsUndefined(st)) {
+            if (!JS_IsBool(st)) {
+                JS_FreeValue(ctx, st);
+                return JS_ThrowTypeError(ctx, "%s: Store is true or false", who), false;
+            }
+            *store = JS_ToBool(ctx, st) > 0;
+        }
+        JS_FreeValue(ctx, st);
+
+        JSValue m = JS_GetPropertyStr(ctx, opts, "Modified");
+
+        if (!JS_IsUndefined(m)) {
+            JSValue f = JS_IsObject(m) ? JS_GetPropertyStr(ctx, m, "getTime") : JS_UNDEFINED;
+            double  ms = NAN;
+
+            if (JS_IsFunction(ctx, f)) {
+                JSValue t = JS_Call(ctx, f, m, 0, NULL);
+
+                if (!JS_IsException(t) && JS_IsNumber(t))
+                    JS_ToFloat64(ctx, &ms, t);
+                JS_FreeValue(ctx, t);
+            }
+            JS_FreeValue(ctx, f);
+            JS_FreeValue(ctx, m);
+            if (!isfinite(ms)) {
+                if (JS_HasException(ctx))
+                    JS_FreeValue(ctx, JS_GetException(ctx));
+                return JS_ThrowTypeError(ctx, "%s: Modified is a Date", who), false;
+            }
+            when = g_date_time_new_from_unix_local((gint64)floor(ms / 1000.0));
+        } else {
+            JS_FreeValue(ctx, m);
+        }
+    }
+    if (!when)
+        when = g_date_time_new_now_local();
+    zip_dos(when, dostime, dosdate);
+    g_date_time_unref(when);
+    return true;
+}
+
+/*
+ * A name for an entry, checked: valid UTF-8, no longer than a header can say, safe
+ * as a path, and not one this archive already holds. `*dir` says it is a folder.
+ * A sentence for the caller to free, or NULL.
+ */
+static char *zipw_name(BtaZipWriter *w, const char *name, gsize len, bool *dir)
+{
+    /* A NUL first: `g_utf8_validate` stops at one and calls it invalid, which
+     * would answer a hostile name with the wrong sentence. */
+    if (strlen(name) != len)
+        return zip_name_problem(name, true);
+    if (!g_utf8_validate(name, (gssize)len, NULL))
+        return g_strdup("the name is not valid UTF-8");
+    if (len > 65535)
+        return g_strdup("the name is longer than a zip can hold (65,535 bytes)");
+
+    char *why = zip_name_problem(name, strlen(name) != len);
+
+    if (why)
+        return why;
+    if (g_hash_table_contains(w->names, name))
+        return g_strdup_printf("'%s' is already in the archive, and which of two an "
+                               "application reads is not something to leave to chance", name);
+    *dir = len > 0 && name[len - 1] == '/';
+    return NULL;
+}
+
+static char *zipw_limits(BtaZipWriter *w, guint64 extra)
+{
+    /* 65,534, and not 65,535: a count of 0xFFFF in the end record is the
+     * sentinel that says *look in the zip64 record*, so an archive of exactly
+     * that many already needs one -- and this reader refuses it for that reason. */
+    if (w->ents->len >= 65534)
+        return g_strdup("a zip with more than 65,534 entries needs zip64, which is not written yet");
+    if (w->pos + extra + 100 > 0xFFFFFFFFu - 4096)
+        return g_strdup("a zip past 4 GiB needs zip64, which is not written yet");
+    return NULL;
+}
+
+static bool zipw_header(BtaZipWriter *w, const ZipOut *o, guint16 flags)
+{
+    guint8 h[30];
+    gsize  nlen = strlen(o->name);
+
+    memset(h, 0, sizeof h);
+    put32(h, 0x04034b50u);
+    put16(h + 4, 20);
+    put16(h + 6, flags);
+    put16(h + 8, o->method);
+    put16(h + 10, o->dostime);
+    put16(h + 12, o->dosdate);
+    put32(h + 14, (flags & 8) ? 0 : o->crc);
+    put32(h + 18, (flags & 8) ? 0 : o->csize);
+    put32(h + 22, (flags & 8) ? 0 : o->usize);
+    put16(h + 26, (guint)nlen);
+    return zipw_put(w, h, sizeof h) && zipw_put(w, o->name, nlen);
+}
+
+static void zipw_note(BtaZipWriter *w, ZipOut *o, bool ascii_only)
+{
+    o->flags = (o->flags & 8) | (ascii_only ? 0 : 0x800);
+    g_hash_table_insert(w->names, o->name, GINT_TO_POINTER(1));
+    g_array_append_val(w->ents, *o);
+}
+
+/* Raw deflate of memory, into `out`. A sentence on failure. */
+static char *zipw_deflate(const guint8 *in, gsize n, GByteArray *out)
+{
+    GConverter *conv = G_CONVERTER(g_zlib_compressor_new(G_ZLIB_COMPRESSOR_FORMAT_RAW, 6));
+    guint8      buf[65536];
+    gsize       off = 0;
+    char       *why = NULL;
+
+    for (;;) {
+        gsize br = 0, bw = 0;
+        GError *err = NULL;
+        /* The whole of what is left is handed over each time, so it is always the
+         * end of the input. */
+        GConverterResult r = g_converter_convert(conv, in + off, n - off, buf, sizeof buf,
+                                                 G_CONVERTER_INPUT_AT_END, &br, &bw, &err);
+
+        off += br;
+        g_byte_array_append(out, buf, (guint)bw);
+        if (r == G_CONVERTER_ERROR) {
+            g_clear_error(&err);
+            why = g_strdup("the data could not be compressed");
+            break;
+        }
+        if (r == G_CONVERTER_FINISHED)
+            break;
+        if (br == 0 && bw == 0) {
+            why = g_strdup("the compressor made no progress");
+            break;
+        }
+    }
+    g_object_unref(conv);
+    return why;
+}
+
+static JSValue zipw_add(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    BtaZipWriter *w = zipw_this(ctx, this_val);
+
+    if (!w)
+        return JS_EXCEPTION;
+    if (argc < 1 || !JS_IsString(argv[0]))
+        return JS_ThrowTypeError(ctx, "ZipWriter.Add(name, [data], [{ Store, Modified }]) needs the "
+                                      "entry's name, as text");
+
+    /* The second argument is the data, or -- for a folder, which has none -- the
+     * options, or nothing. Told apart by type, as `Notification.Send` does. */
+    JSValueConst data = JS_UNDEFINED, opts = JS_UNDEFINED;
+
+    if (argc > 1) {
+        if (JS_IsString(argv[1]) || bta_bytes_get(argv[1], NULL))
+            data = argv[1];
+        else
+            opts = argv[1];
+    }
+    if (argc > 2) {
+        if (JS_IsObject(opts))
+            return JS_ThrowTypeError(ctx, "ZipWriter.Add: two sets of options");
+        opts = argv[2];
+    }
+
+    bool    store;
+    guint16 dostime, dosdate;
+
+    if (!zipw_options(ctx, opts, "ZipWriter.Add", &store, &dostime, &dosdate))
+        return JS_EXCEPTION;
+
+    size_t      nlen = 0, dlen = 0;
+    const char *name = JS_ToCStringLen(ctx, &nlen, argv[0]);
+
+    if (!name)
+        return JS_EXCEPTION;
+
+    const uint8_t *bytes = NULL;
+    const char    *text = NULL;
+
+    if (!JS_IsUndefined(data)) {
+        bytes = bta_bytes_get(data, &dlen);
+        if (!bytes) {
+            text = JS_ToCStringLen(ctx, &dlen, data);
+            bytes = (const uint8_t *)text;
+        }
+        if (!bytes) {
+            JS_FreeCString(ctx, name);
+            return JS_EXCEPTION;
+        }
+    }
+
+    bool  dir = false;
+    char *why = zipw_name(w, name, nlen, &dir);
+
+    if (!why && dir && dlen)
+        why = g_strdup_printf("'%s' is a folder, and a folder holds no data", name);
+    if (!why && !dir && JS_IsUndefined(data))
+        why = g_strdup_printf("'%s' needs its data, as text or Bytes", name);
+    if (!why && dlen > 0xFFFFFFFFu - 4096)
+        why = g_strdup("an entry past 4 GiB needs zip64, which is not written yet");
+    if (!why)
+        why = zipw_limits(w, dlen);
+
+    if (!why) {
+        ZipOut o = { 0 };
+        GByteArray *packed = g_byte_array_new();
+        const guint8 *payload = bytes;
+        gsize psize = dlen;
+
+        o.name = g_strdup(name);
+        o.crc = crc32_of(bytes ? bytes : (const guint8 *)"", dlen);
+        o.usize = (guint32)dlen;
+        o.dostime = dostime;
+        o.dosdate = dosdate;
+        o.method = 0;
+
+        if (!store && dlen > 0) {
+            why = zipw_deflate(bytes, dlen, packed);
+            /* Deflate is kept only when it helped: random bytes and an already
+             * compressed image come out bigger, and a reader pays to inflate
+             * what was not worth deflating. */
+            if (!why && packed->len < dlen) {
+                o.method = 8;
+                payload = packed->data;
+                psize = packed->len;
+            }
+        }
+        o.csize = (guint32)psize;
+
+        if (!why) {
+            guint16 flags = g_str_is_ascii(name) ? 0 : 0x800;
+
+            if (!zipw_header(w, &o, flags) || !zipw_put(w, payload, psize)) {
+                why = g_strdup_printf("cannot write the archive: %s", g_strerror(errno));
+                g_free(o.name);
+            } else {
+                o.offset = (guint32)(w->pos - psize - 30 - strlen(name));
+                zipw_note(w, &o, flags == 0);
+            }
+        } else {
+            g_free(o.name);
+        }
+        g_byte_array_free(packed, TRUE);
+    }
+
+    JSValue r;
+
+    if (why) {
+        r = JS_ThrowInternalError(ctx, "ZipWriter.Add: %s", why);
+        g_free(why);
+    } else {
+        r = JS_DupValue(ctx, this_val);                /* for chaining */
+    }
+    JS_FreeCString(ctx, name);
+    if (text)
+        JS_FreeCString(ctx, text);
+    return r;
+}
+
+static JSValue zipw_add_file(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    BtaZipWriter *w = zipw_this(ctx, this_val);
+
+    if (!w)
+        return JS_EXCEPTION;
+    if (argc < 2 || !JS_IsString(argv[0]))
+        return JS_ThrowTypeError(ctx, "ZipWriter.AddFile(name, path, [{ Store, Modified }]) needs the "
+                                      "entry's name and a file");
+
+    bool    store;
+    guint16 dostime, dosdate;
+
+    if (!zipw_options(ctx, argc > 2 ? argv[2] : JS_UNDEFINED, "ZipWriter.AddFile",
+                      &store, &dostime, &dosdate))
+        return JS_EXCEPTION;
+
+    size_t      nlen = 0;
+    const char *name = JS_ToCStringLen(ctx, &nlen, argv[0]);
+
+    if (!name)
+        return JS_EXCEPTION;
+
+    const char *path = bta_file_path(ctx, argv[1], "ZipWriter.AddFile");
+
+    if (!path) {
+        JS_FreeCString(ctx, name);
+        return JS_EXCEPTION;
+    }
+
+    bool  dir = false;
+    char *why = zipw_name(w, name, nlen, &dir);
+
+    if (!why && dir)
+        why = g_strdup_printf("'%s' names a folder, and a file is not one", name);
+    if (!why)
+        why = zipw_limits(w, 0);
+
+    FILE *in = NULL;
+
+    if (!why && !(in = g_fopen(path, "rb")))
+        why = g_strdup_printf("cannot read '%s': %s", path, g_strerror(errno));
+
+    if (!why) {
+        ZipOut o = { 0 };
+        guint16 flags = (g_str_is_ascii(name) ? 0 : 0x800) | 8;       /* sizes follow the data */
+        guint64 start = w->pos;
+
+        o.name = g_strdup(name);
+        o.dostime = dostime;
+        o.dosdate = dosdate;
+        o.method = store ? 0 : 8;
+        o.offset = (guint32)w->pos;
+
+        if (!zipw_header(w, &o, flags)) {
+            why = g_strdup_printf("cannot write the archive: %s", g_strerror(errno));
+        } else {
+            GConverter *conv = store ? NULL
+                : G_CONVERTER(g_zlib_compressor_new(G_ZLIB_COMPRESSOR_FORMAT_RAW, 6));
+            guint8   inb[65536], outb[65536];
+            guint32  crc = 0xFFFFFFFFu;
+            guint64  usize = 0, csize = 0;
+            gsize    have, off;
+            bool     eof = false;
+
+            /* The CRC is kept running: `crc32_of` is whole-buffer, so the table is
+             * driven here a chunk at a time with the same polynomial. */
+            static guint32 table[256];
+            static bool    ready;
+
+            if (!ready) {
+                for (guint32 i = 0; i < 256; i++) {
+                    guint32 c = i;
+                    for (int k = 0; k < 8; k++)
+                        c = c & 1 ? 0xEDB88320u ^ (c >> 1) : c >> 1;
+                    table[i] = c;
+                }
+                ready = true;
+            }
+
+            while (!why && !eof) {
+                have = fread(inb, 1, sizeof inb, in);
+                if (have == 0) {
+                    if (ferror(in))
+                        why = g_strdup_printf("cannot read '%s': %s", path, g_strerror(errno));
+                    eof = true;
+                }
+                for (gsize i = 0; i < have; i++)
+                    crc = table[(crc ^ inb[i]) & 0xFF] ^ (crc >> 8);
+                usize += have;
+                if (usize > 0xFFFFFFFFu - 4096) {
+                    why = g_strdup("an entry past 4 GiB needs zip64, which is not written yet");
+                    break;
+                }
+
+                if (!conv) {
+                    if (have && !zipw_put(w, inb, have))
+                        why = g_strdup_printf("cannot write the archive: %s", g_strerror(errno));
+                    csize += have;
+                    continue;
+                }
+
+                off = 0;
+                for (;;) {
+                    gsize br = 0, bw = 0;
+                    GError *err = NULL;
+                    GConverterResult r = g_converter_convert(conv, inb + off, have - off, outb,
+                                                             sizeof outb,
+                                                             eof ? G_CONVERTER_INPUT_AT_END : 0,
+                                                             &br, &bw, &err);
+
+                    off += br;
+                    if (bw && !zipw_put(w, outb, bw)) {
+                        why = g_strdup_printf("cannot write the archive: %s", g_strerror(errno));
+                        g_clear_error(&err);
+                        break;
+                    }
+                    csize += bw;
+                    if (r == G_CONVERTER_ERROR) {
+                        /* Called with nothing left and not yet at the end, the
+                         * compressor answers *Need more input* -- as an error,
+                         * the way the decompressor does. It is a request for the
+                         * next block and not a failure; anything else is. */
+                        bool more = !eof && g_error_matches(err, G_IO_ERROR, G_IO_ERROR_PARTIAL_INPUT);
+
+                        g_clear_error(&err);
+                        if (!more)
+                            why = g_strdup("the data could not be compressed");
+                        break;
+                    }
+                    if (r == G_CONVERTER_FINISHED)
+                        break;
+                    if (!eof && off == have && bw == 0)
+                        break;                    /* wants more input */
+                    if (eof && br == 0 && bw == 0) {
+                        why = g_strdup("the compressor made no progress");
+                        break;
+                    }
+                }
+            }
+            if (conv)
+                g_object_unref(conv);
+
+            if (!why) {
+                guint8 d[16];
+
+                o.crc = crc ^ 0xFFFFFFFFu;
+                o.usize = (guint32)usize;
+                o.csize = (guint32)csize;
+                put32(d, 0x08074b50u);
+                put32(d + 4, o.crc);
+                put32(d + 8, o.csize);
+                put32(d + 12, o.usize);
+                if (!zipw_put(w, d, sizeof d))
+                    why = g_strdup_printf("cannot write the archive: %s", g_strerror(errno));
+            }
+        }
+        (void)start;
+
+        if (why) {
+            w->broken = true;                 /* part of an entry is in the file */
+            g_free(o.name);
+        } else {
+            o.flags = (guint16)flags;
+            g_hash_table_insert(w->names, o.name, GINT_TO_POINTER(1));
+            g_array_append_val(w->ents, o);
+        }
+    }
+    if (in)
+        fclose(in);
+
+    JSValue r;
+
+    if (why) {
+        r = JS_ThrowInternalError(ctx, "ZipWriter.AddFile: %s", why);
+        g_free(why);
+    } else {
+        r = JS_DupValue(ctx, this_val);
+    }
+    JS_FreeCString(ctx, name);
+    JS_FreeCString(ctx, path);
+    return r;
+}
+
+static JSValue zipw_finish(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    BtaZipWriter *w = zipw_this(ctx, this_val);
+
+    if (!w)
+        return JS_EXCEPTION;
+
+    char   *why = NULL;
+    guint64 cd_start = w->pos;
+
+    for (guint i = 0; i < w->ents->len && !why; i++) {
+        ZipOut *o = &g_array_index(w->ents, ZipOut, i);
+        guint8  c[46];
+        gsize   nlen = strlen(o->name);
+
+        memset(c, 0, sizeof c);
+        put32(c, 0x02014b50u);
+        put16(c + 4, 20);
+        put16(c + 6, 20);
+        put16(c + 8, o->flags);
+        put16(c + 10, o->method);
+        put16(c + 12, o->dostime);
+        put16(c + 14, o->dosdate);
+        put32(c + 16, o->crc);
+        put32(c + 20, o->csize);
+        put32(c + 24, o->usize);
+        put16(c + 28, (guint)nlen);
+        put32(c + 42, o->offset);
+        if (!zipw_put(w, c, sizeof c) || !zipw_put(w, o->name, nlen))
+            why = g_strdup_printf("cannot write the archive: %s", g_strerror(errno));
+    }
+
+    if (!why) {
+        guint8 e[22];
+
+        memset(e, 0, sizeof e);
+        put32(e, 0x06054b50u);
+        put16(e + 8, w->ents->len);
+        put16(e + 10, w->ents->len);
+        put32(e + 12, (guint32)(w->pos - cd_start));
+        put32(e + 16, (guint32)cd_start);
+        if (!zipw_put(w, e, sizeof e))
+            why = g_strdup_printf("cannot write the archive: %s", g_strerror(errno));
+    }
+    if (!why && fflush(w->f) != 0)
+        why = g_strdup_printf("cannot write the archive: %s", g_strerror(errno));
+    if (!why) {
+        int closed = fclose(w->f);
+
+        w->f = NULL;
+        if (closed != 0)
+            why = g_strdup_printf("cannot write the archive: %s", g_strerror(errno));
+    }
+    if (!why) {
+#ifndef G_OS_WIN32
+        /* What `File.Save` leaves: an ordinary file, not the 0600 a temporary is
+         * born with. */
+        mode_t um = umask(0);
+
+        umask(um);
+        g_chmod(w->tmp, 0666 & ~um);
+#endif
+        if (g_rename(w->tmp, w->dest) != 0)
+            why = g_strdup_printf("cannot move the archive to '%s': %s", w->dest, g_strerror(errno));
+    }
+
+    JSValue r;
+
+    if (why) {
+        zipw_discard(w);
+        w->done = true;
+        r = JS_ThrowInternalError(ctx, "ZipWriter.Finish: %s", why);
+        g_free(why);
+    } else {
+        g_free(w->tmp);
+        w->tmp = NULL;
+        w->done = true;
+        r = JS_NewFloat64(ctx, w->ents->len);
+    }
+    return r;
+}
+
+static JSValue zipw_abort(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    BtaZipWriter *w = JS_GetOpaque2(ctx, this_val, bta_zipw_class_id);
+
+    if (!w)
+        return JS_EXCEPTION;
+    if (!w->done) {
+        zipw_discard(w);
+        w->done = true;
+    }
+    return JS_UNDEFINED;                    /* aborting twice is not an error */
+}
+
+static JSValue zip_create(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    const char *path = argc > 0 ? bta_file_path(ctx, argv[0], "Zip.Create") : NULL;
+
+    if (!path)
+        return JS_ThrowTypeError(ctx, "Zip.Create(path) needs a path");
+
+    char *tmp = g_strdup_printf("%s.XXXXXX", path);
+    int   fd  = g_mkstemp(tmp);
+
+    if (fd < 0) {
+        JSValue r = JS_ThrowInternalError(ctx, "Zip.Create: cannot write beside '%s': %s",
+                                          path, g_strerror(errno));
+        g_free(tmp);
+        JS_FreeCString(ctx, path);
+        return r;
+    }
+
+    BtaZipWriter *w = g_new0(BtaZipWriter, 1);
+
+    w->dest  = g_strdup(path);
+    w->tmp   = tmp;
+    w->f     = fdopen(fd, "wb");
+    w->ents  = g_array_new(FALSE, TRUE, sizeof(ZipOut));
+    w->names = g_hash_table_new(g_str_hash, g_str_equal);
+    JS_FreeCString(ctx, path);
+
+    if (!w->f) {
+        close(fd);
+        zipw_free(w);
+        g_free(w);
+        return JS_ThrowInternalError(ctx, "Zip.Create: cannot write the archive: %s", g_strerror(errno));
+    }
+
+    JSValue proto = JS_GetClassProto(ctx, bta_zipw_class_id);
+    JSValue obj   = JS_NewObjectProtoClass(ctx, proto, bta_zipw_class_id);
+
+    JS_FreeValue(ctx, proto);
+    if (JS_IsException(obj)) {
+        zipw_free(w);
+        g_free(w);
+        return obj;
+    }
+    JS_SetOpaque(obj, w);
+    return obj;
+}
+
+/* type ZipWriter */
+static const JSCFunctionListEntry zipw_proto_props[] = {
+    /* Add(name, [data], [{ Store, Modified }]) -> ZipWriter
+     *   puts an entry in the archive and answers the writer, so calls chain.
+     *   `data` is text (its UTF-8) or a [`Bytes`](docs/llm/library.md#bytes);
+     *   a name ending in `/` is a folder and takes none. Deflated, **unless it
+     *   did not get smaller** (random bytes, a picture) or `Store: true` --
+     *   which is also what a format that wants an entry uncompressed asks for
+     *   (an `.odt`'s `mimetype`, first). `Modified` is a `Date`, now unless told.
+     *   **The name is held to the rules `ExtractAll` holds one to** (no `../`,
+     *   absolute path, drive letter, backslash or empty part) and may not repeat
+     */
+    JS_CFUNC_DEF("Add", 3, zipw_add),
+    /* AddFile(name, path, [{ Store, Modified }]) -> ZipWriter
+     *   the same for a file, **streamed 64 KB at a time** rather than loaded; its
+     *   size is written after its data, as a data descriptor, since it is not
+     *   known before the last block. Because it is streamed it cannot see
+     *   whether deflating helped, so an incompressible file costs a few bytes
+     *   more than it is: pass `Store: true` for one that is known to be
+     */
+    JS_CFUNC_DEF("AddFile", 3, zipw_add_file),
+    /* Finish() -> number
+     *   writes the directory and **only now puts the archive at its path**,
+     *   replacing what was there, and answers how many entries it holds. Until
+     *   this the destination is untouched
+     */
+    JS_CFUNC_DEF("Finish", 0, zipw_finish),
+    /* Abort()
+     *   throws the archive away: nothing is left at the path and nothing beside
+     *   it. A writer that is dropped without `Finish` does the same when it is
+     *   collected; aborting twice is not an error
+     */
+    JS_CFUNC_DEF("Abort", 0, zipw_abort),
+};
+
 void bta_zip_init(JSContext *ctx, JSValue global)
 {
     JSRuntime *rt = JS_GetRuntime(ctx);
@@ -863,6 +1665,14 @@ void bta_zip_init(JSContext *ctx, JSValue global)
     JS_SetPropertyFunctionList(ctx, proto, zip_proto_props, G_N_ELEMENTS(zip_proto_props));
     JS_SetClassProto(ctx, bta_zip_class_id, proto);
 
+    JS_NewClassID(rt, &bta_zipw_class_id);
+    JS_NewClass(rt, bta_zipw_class_id, &zipw_class);
+
+    JSValue wproto = JS_NewObject(ctx);
+
+    JS_SetPropertyFunctionList(ctx, wproto, zipw_proto_props, G_N_ELEMENTS(zipw_proto_props));
+    JS_SetClassProto(ctx, bta_zipw_class_id, wproto);
+
     JSValue zip = JS_NewObject(ctx);
 
     /* Open(path) -> ZipArchive
@@ -873,5 +1683,12 @@ void bta_zip_init(JSContext *ctx, JSValue global)
      *   being written
      */
     JS_SetPropertyStr(ctx, zip, "Open", JS_NewCFunction(ctx, zip_open, "Open", 1));
+    /* Create(path) -> ZipWriter
+     *   starts an archive that will be at `path` **when `Finish()` says so** and
+     *   not before: it is written to a temporary beside it, so a failure, an
+     *   abort or a dropped writer leaves nothing and an existing file untouched.
+     *   Throws, naming the folder, when it cannot write there
+     */
+    JS_SetPropertyStr(ctx, zip, "Create", JS_NewCFunction(ctx, zip_create, "Create", 1));
     JS_SetPropertyStr(ctx, global, "Zip", zip);
 }

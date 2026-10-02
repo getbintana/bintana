@@ -47,6 +47,16 @@
             "Enabled": false,
             "Width": 104
           }
+        },
+        {
+          "type": "Button",
+          "name": "BtnExport",
+          "properties": {
+            "Text": "Export",
+            "Icon": "document-save-symbolic",
+            "Tooltip": "The clients listed, and their orders, as an Excel workbook",
+            "Width": 104
+          }
         }
       ]
     },
