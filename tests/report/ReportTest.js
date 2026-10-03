@@ -106,6 +106,7 @@ class ReportTest extends Form {
             this.testFont();
             this.testTransform();
             this.testImage();
+            this.testRowStyle();
             this.testAuto();
             this.testSave();
             this.testPdf();
@@ -516,6 +517,152 @@ class ReportTest extends Form {
      * The masthead. `Painter.Image` is the runtime feature this needed; what the
      * library adds is the element and where its file is looked for.
      */
+    /*
+     * What a row *looks* like because of what it holds.
+     *
+     * Reported against a Zabbix report, and it was three separate gaps that
+     * every report writer closed years ago: Crystal Reports' conditional
+     * formatting on every property and its *Suppress* on every object,
+     * JasperReports' `printWhenExpression` and conditional styles, SSRS'
+     * expressions on `BackgroundColor` and its `RowNumber()` for the stripe.
+     *
+     * **Off the page, not off the API** -- `Dump()` is the same calls the
+     * drawing made, and a stripe is a `Fill` on a rectangle the dump names with
+     * its colour, so "the second row was shaded and the first was not" is a
+     * measurement rather than a look at a PNG. Each of the three halves was put
+     * back once and watched go red.
+     */
+    testRowStyle() {
+        const C = (name) => `rgb(${name})`;
+        void C;
+        this.Rep.Margins = 40;
+
+        /* A5, so a page holds three 200pt rows and the page break lands *inside*
+         * the run -- which is the half a per-page stripe would get wrong and a
+         * continuous one gets right. */
+        this.Rep.Paper = "A5";
+        this.Rep.Data = [
+            { T: "r1", Sev: "ok"  },
+            { T: "r2", Sev: "bad" },
+            { T: "r3", Sev: "ok"  },
+            { T: "r4", Sev: "bad" },
+            { T: "r5", Sev: "ok"  },
+        ];
+        this.Rep.Sections = {
+            Detail: { Height: 200, Elements: [
+                { Kind: "Box", X: 0, Y: 0, Width: "Band", Height: "Band",
+                  Fill: true, Color: "rgba(0,0,0,0.04)", When: "@Odd" },
+                { Kind: "Field", Field: "T", X: 0, Y: 3,
+                  Color: { Field: "Ink" }, Font: { Field: "Face" } },
+                { Kind: "Text", Text: "!", X: 300, Y: 3, When: { Field: "Sev", Is: "bad" } },
+            ] },
+        };
+        /* `Ink` and `Face` are ordinary fields a caller computes; that they can
+         * be read for a *colour* is the point. */
+        const paint = (r) => { r.Ink = r.Sev === "bad" ? "#c00000" : "#202020";
+                                r.Face = r.Sev === "bad" ? "Bold 12" : "12"; return r; };
+        this.Rep.Data = this.Rep.Data.map(paint);
+
+        /* **Counted over the whole document, not one page**, because a row is a
+         * row whichever sheet it landed on -- and a per-page assertion would
+         * have been the weaker of the two, since a page break is exactly where a
+         * stripe can go wrong. A5 is 420x595 and a 40pt margin each end leaves
+         * 515, so a 200pt band puts two rows on a page and three pages hold five
+         * rows: the breaks are real and every odd row is on a different sheet. */
+        const all = [];
+        for (let n = 1; n <= 3; n++) all.push(this.page(n));
+
+        /* The band fills. The sheet itself is a `Rectangle` at the origin and is
+         * not one of these; what is left is the shading, and its `y` says which
+         * row on that page it belongs to (the first band is at the top margin). */
+        const shades = all.flatMap((ls) => ls.filter((l) => l.startsWith("Rectangle") &&
+                                                         !/^Rectangle \(0,0\)/.test(l)));
+
+        eq("every odd row is shaded and no other is", shades.length, 3);
+        check("and each page's shade is its first row",
+              all.every((ls) => ls.filter((l) => /^Rectangle \(40,40\)/.test(l)).length === 1),
+              shades.join(" | "));
+
+        /* The width is the content area, which the author did not have to know:
+         * 420 - 40 - 40. A number written in the section would have been right
+         * until the paper moved. */
+        eq("a Band box spans the content area", shades[0],
+           "Rectangle (40,40) 340x200");
+
+        eq("the badge is on the rows that carry it",
+           all.flatMap((ls) => this.texts(ls)).filter((t) => t === "!").length, 2);
+
+        /* The colour and the font the row said. `Dump()` does not carry either,
+         * so these two are read the only way they can be: by the *absence* of a
+         * throw and by the section being refused when the spelling is wrong. */
+        throws("a When that is not a condition is refused",
+               () => { this.Rep.Sections = { Detail: { Height: 10, Elements: [
+                   { Kind: "Text", Text: "x", When: "@Third" }] } }; });
+        throws("a When with both Is and IsNot is refused",
+               () => { this.Rep.Sections = { Detail: { Height: 10, Elements: [
+                   { Kind: "Text", Text: "x", When: { Field: "T", Is: 1, IsNot: 2 } }] } }; });
+        throws("a When with no Field is refused",
+               () => { this.Rep.Sections = { Detail: { Height: 10, Elements: [
+                   { Kind: "Text", Text: "x", When: { Is: 1 } }] } }; });
+        throws("a Color that is neither a value nor a field is refused",
+               () => { this.Rep.Sections = { Detail: { Height: 10, Elements: [
+                   { Kind: "Text", Text: "x", Color: { Name: "red" } }] } }; });
+        throws("a Box size that is neither a number nor \"Band\" is refused",
+               () => { this.Rep.Sections = { Detail: { Height: 10, Elements: [
+                   { Kind: "Box", X: 0, Y: 0, Width: "Page" }] } }; });
+
+        /* **A hidden element is not there for the measure either.** An `Auto`
+         * band with one visible line and one 200pt line behind a false `When` is
+         * as tall as the visible one -- a measure that counted what nobody can
+         * see makes a blank sheet the size of the hidden thing. */
+        this.Rep.Sections = {
+            Detail: { Height: "Auto", Elements: [
+                { Kind: "Text", Text: "x", Y: 0 },
+                { Kind: "Text", Text: "tall", Y: 0, When: false },
+            ] },
+        };
+        this.Rep.Data = rows(1, 40);
+
+        /* Before/after on the same data, which is the only way to say the measure
+         * asked: without the `When` the hidden line is 200pt tall and two rows
+         * fit on an A5, and with it the band is one line and twenty-five do. */
+        const withHidden = this.Rep.PageCount;
+        this.Rep.Sections = {
+            Detail: { Height: "Auto", Elements: [
+                { Kind: "Text", Text: "x", Y: 0 },
+                { Kind: "Text", Text: "tall", Y: 0 },
+            ] },
+        };
+        eq("the same band measures twice as tall without the When",
+           withHidden, this.Rep.PageCount);
+        eq("and a hidden element leaves the measure alone",
+           withHidden, 2);
+
+        /* And a `"Band"` box does not make the band taller than itself, which is
+         * the whole point of it: a stripe over a row that wrapped to two lines
+         * has to reach the bottom of the band, and a 200pt number cannot. */
+        this.Rep.Sections = {
+            Detail: { Height: 20, Elements: [
+                { Kind: "Box", X: 0, Y: 0, Width: "Band", Height: "Band", Fill: true },
+                { Kind: "Text", Text: ".", X: 0, Y: 0 },
+            ] },
+        };
+        this.Rep.Data = rows(1, 40);
+        const tall = this.Rep.PageCount;
+        this.Rep.Sections = {
+            Detail: { Height: 20, Elements: [
+                { Kind: "Text", Text: ".", X: 0, Y: 0 },
+            ] },
+        };
+        eq("a Band box leaves the band as tall as it was declared",
+           this.Rep.PageCount, tall);
+
+        /* Back to the plain band, so nothing below reads this report's paper. */
+        this.Rep.Paper = "A4";
+        this.Rep.Sections = PLAIN;
+        this.Rep.Data = [];
+    }
+
     testImage() {
         this.Rep.Margins = 40;
         this.Rep.Sections = {
