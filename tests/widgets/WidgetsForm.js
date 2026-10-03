@@ -20527,38 +20527,103 @@ function Main() {
             eq("...and assigning it back reads back", (probe.Tls = { Cert: TlsCert },
                                                        probe.Tls.Cert), TlsCert);
 
-            /*
-             * **No handshake at all, and that is the whole of what this step can
-             * afford.** What is left is everything that is decided by the
-             * *assignment*: the round trip and the four refusals. Nothing here
-             * touches the network, so nothing here depends on a connection
-             * surviving.
-             *
-             * A handshake in this process is not safe, and that is pre-existing
-             * -- `docs/issues/ISSUE-http-two-handshakes.md` reproduces it in forty
-             * lines with a bare `Http.Client()` that was told nothing at all, and
-             * the same file carries the second road (`Http.Server.Stop()` with a
-             * pooled TLS connection still open, which is `corrupted double-linked
-             * list` rather than the first message). Until that is fixed, **the
-             * acceptance this feature is for cannot be asserted in this suite**:
-             * one accepted request aborts the run before the next assertion.
-             *
-             * **What is therefore unasserted, named so whoever fixes it can add
-             * them back**, each one a single handshake:
-             *
-             *   - a bare client is still refused, with `Kind: "Tls"`;
-             *   - `Tls: { Ca }` naming the server's own certificate answers 200;
-             *   - `Tls: { Cert }` naming the server's own certificate answers 200;
-             *   - `Tls: { Ca }` naming a certificate that did **not** sign it is
-             *     refused -- the one that says the trust is a *second opinion*
-             *     and not a replacement;
-             *   - `Tls: { Cert }` naming a certificate that is **not** the
-             *     server's is refused -- the one that says a pin is a pin.
-             *
-             * The two negative ones are the half that matters most and they are
-             * the reason the feature is not a "accept anything" switch, so the
-             * issue is the place to finish this, not a footnote.
-             */
+            /* The handshakes are `clientTrustHandshakes`, below, against the
+             * server once it speaks https. */
+        };
+
+        /*
+         * The handshakes: one new client per request, so every one of them is a
+         * handshake of its own, in an order chosen so each line is evidence.
+         *
+         * **The third is the one that matters most and it is not about the
+         * file.** A server one client accepted with its own `Tls` must not
+         * become reachable by a client that named nothing. glib-networking keeps
+         * a process's TLS sessions in one cache, a resumed handshake presents no
+         * certificate, and nothing is verified -- so without the client turning
+         * resumption off for the connections its own trust accepted, the bare
+         * client in line three answered 200. Measured against an external
+         * server too, and gone against one that issues no tickets.
+         *
+         * All of this was kept out of the suite for a while on the belief that
+         * a second handshake corrupts the heap. The abort was the `Ca` check
+         * unreffing the URI `soup_message_get_uri` lends, nothing more.
+         */
+        const clientTrustHandshakes = (url, then) => {
+            const cases = [
+                ["a bare client is refused", null, false],
+                ["Tls { Ca } naming the server's own certificate answers", { Ca: TlsCert }, true],
+                ["...and a bare client after it is still refused", null, false],
+                ["Tls { Cert } pinning the server's certificate answers", { Cert: TlsCert }, true],
+                ["Tls { Ca } naming a certificate that did not sign it is refused", { Ca: OtherCert }, false],
+                ["Tls { Cert } pinning another certificate is refused", { Cert: OtherCert }, false],
+            ];
+            let i = 0;
+            const next = () => {
+                if (i >= cases.length) return then();
+                const [what, tls, ok] = cases[i++];
+                const c = tls ? Http.Client({ Timeout: 5000, Tls: tls }) : Http.Client({ Timeout: 5000 });
+                c.Get(url + "hi", {}, (r) => {
+                    check(what, ok && r.Status === 200, `answered ${r.Status}`);
+                    next();
+                }, (e) => {
+                    check(what, !ok && e.Kind === "Tls", `${e.Kind}: ${e.Message}`);
+                    next();
+                });
+            };
+            next();
+        };
+
+        /*
+         * The resumption half needs a server that hands out session tickets,
+         * which ours does not -- measured: with the client's fix taken out, the
+         * bare client above is still refused against `Http.Server`, so that
+         * line alone proves nothing. Python's `ssl` issues TLS 1.3 tickets by
+         * default, so a child serving https is what the evidence is made of:
+         * accept it with `Tls { Ca }`, then a bare client must still be refused.
+         */
+        const resumptionCheck = (then) => {
+            const script = [
+                "import ssl, sys",
+                "from http.server import HTTPServer, BaseHTTPRequestHandler",
+                "class H(BaseHTTPRequestHandler):",
+                "    def do_GET(self):",
+                "        self.send_response(200); self.send_header('Content-Length', '4'); self.end_headers(); self.wfile.write(b'hola')",
+                "    def log_message(self, *a): pass",
+                "s = HTTPServer(('127.0.0.1', 0), H)",
+                "c = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)",
+                `c.load_cert_chain(${JSON.stringify(TlsCert)}, ${JSON.stringify(TlsKey)})`,
+                "s.socket = c.wrap_socket(s.socket, server_side=True)",
+                "print('PORT', s.server_address[1], flush=True)",
+                "s.serve_forever()",
+            ].join("\n");
+            let child = null, started = false;
+            const done = () => { if (child && child.Running) child.Kill(); then(); };
+            try {
+                child = Exec(["python3", "-c", script], (line) => {
+                    const m = /^PORT (\d+)/.exec(line);
+                    if (!m || started) return;
+                    started = true;
+                    const url = `https://127.0.0.1:${m[1]}/`;
+                    Http.Client({ Timeout: 5000, Tls: { Ca: TlsCert } }).Get(url, {}, (r) => {
+                        eq("a ticket-issuing server is accepted with Tls { Ca }", r.Status, 200);
+                        Http.Client({ Timeout: 5000 }).Get(url, {}, (r2) => {
+                            check("...and is not reachable by a bare client resuming that session",
+                                  false, `answered ${r2.Status}`);
+                            done();
+                        }, (e) => {
+                            eq("...and is not reachable by a bare client resuming that session",
+                               e.Kind, "Tls");
+                            done();
+                        });
+                    }, (e) => {
+                        failures.push(`ticket server refused the Ca: ${e.Message}`);
+                        done();
+                    });
+                }, () => { if (!started) { failures.push("the python https server did not start"); then(); } });
+            } catch (e) {
+                failures.push(`python https server could not run: ${e.message}`);
+                then();
+            }
         };
 
         const srv = Http.Server({ Port: 0 });
@@ -20825,10 +20890,12 @@ function Main() {
                     (code) => {
                         eq("tls probe exits", code, 0);
                         clientTrustChecks();
-                        srv.Stop();
-                        srv.Tls = null;
-                        srv.Start();
-                        steps[5]();
+                        clientTrustHandshakes(srv.Url, () => resumptionCheck(() => {
+                            srv.Stop();
+                            srv.Tls = null;
+                            srv.Start();
+                            steps[5]();
+                        }));
                     });
                 } catch (e) {
                     failures.push(`tls probe could not run: ${e.message}`);

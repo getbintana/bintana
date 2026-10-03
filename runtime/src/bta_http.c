@@ -2013,15 +2013,16 @@ static gboolean http_on_accept_certificate(SoupMessage *msg, GTlsCertificate *pe
     if (!t->ca)
         return FALSE;
 
+    /* **Borrowed**: `soup_message_get_uri` is transfer-none, the message keeps
+     * its URI. Unreffing it here freed the message's own `GUri` while soup was
+     * still using it -- the `G_BOX_MAGIC` critical and the "unaligned tcache
+     * chunk" abort, one handshake later, that was taken for a second
+     * handshake being unsafe. `g_network_address_new` copies the host. */
     uri  = soup_message_get_uri(msg);
     host = uri ? g_uri_get_host(uri) : NULL;
-    if (!host) {
-        if (uri)
-            g_uri_unref(uri);
+    if (!host)
         return FALSE;       /* no host to check a name against: refuse */
-    }
     port = g_uri_get_port(uri);
-    g_uri_unref(uri);
 
     identity = G_SOCKET_CONNECTABLE(g_network_address_new(host, port > 0 ? port : 443));
     GTlsCertificateFlags left = g_tls_certificate_verify(peer, identity, t->ca);
@@ -2040,6 +2041,29 @@ static void http_tls_closure_free(gpointer data, GClosure *closure)
     http_tls_unref(data);
 }
 
+/*
+ * **A connection accepted by this client's own trust is never resumed.**
+ * glib-networking keeps the TLS sessions of a process in one cache keyed by the
+ * server, and a resumed handshake presents no certificate, so nothing is
+ * verified and `accept-certificate` never fires. Without this, a server one
+ * client accepted with its `Ca` or `Cert` was then reachable by **every other
+ * client in the process**, a bare `Http.Client()` included -- measured against
+ * an external server, and gone against one that issues no session tickets.
+ * The property is glib-networking's (2.72 and later) and is not in GIO's
+ * headers, so it is looked up before it is set; a backend without it keeps
+ * its own behaviour.
+ */
+static void http_tls_no_resume(SoupMessage *msg, GSocketClientEvent event,
+                               GIOStream *conn, gpointer data)
+{
+    (void)msg;
+    (void)data;
+    if (event != G_SOCKET_CLIENT_TLS_HANDSHAKING || !G_IS_TLS_CLIENT_CONNECTION(conn))
+        return;
+    if (g_object_class_find_property(G_OBJECT_GET_CLASS(conn), "session-resumption-enabled"))
+        g_object_set(conn, "session-resumption-enabled", FALSE, NULL);
+}
+
 static void http_tls_arm(SoupMessage *msg, HttpTlsTrust *t)
 {
     if (!msg || !t)
@@ -2047,6 +2071,7 @@ static void http_tls_arm(SoupMessage *msg, HttpTlsTrust *t)
     g_signal_connect_data(msg, "accept-certificate",
                           G_CALLBACK(http_on_accept_certificate), http_tls_ref(t),
                           http_tls_closure_free, 0);
+    g_signal_connect(msg, "network-event", G_CALLBACK(http_tls_no_resume), NULL);
 }
 
 static JSValue http_client_get_log(JSContext *ctx, JSValueConst this_val)
