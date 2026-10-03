@@ -51,10 +51,26 @@ const CALLS = [
      * entries are here for the extractor's second pass and the lint, and every
      * call site wraps with `Locale.Text`. `many` says each leading literal is a
      * msgid of its own (`ConfirmForm.ask`'s title, message and accept text). */
-    { call: "AskForm.prompt",  args: 2, ctxt: false },
+    { call: "AskForm.prompt",  args: 2, ctxt: false, many: true },
     { call: "ConfirmForm.ask", args: 3, ctxt: false, many: true },
 ];
 
+
+/*
+ * The source with every comment blanked out and everything else where it was:
+ * the same length and the same line breaks, so a match's index is still its
+ * place in the file and its line is still the line a translator is sent to.
+ * Strings and template literals are stepped over whole, which is what keeps a
+ * `"http://..."` from reading as a comment. A regular expression literal is
+ * not told apart: one holding `//` blanks the rest of its own line, and one
+ * holding a quote reads as a string to the end of it -- never further, since
+ * a quoted string here stops at a line break. The cost is a call on that same
+ * line going unseen, which is a missing msgid and not a wrong one.
+ */
+function withoutComments(src) {
+    return src.replace(/"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`|\/\*[\s\S]*?\*\/|\/\/[^\n]*/g,
+                       (m) => m[0] === "/" ? m.replace(/[^\n]/g, " ") : m);
+}
 
 /* One string literal, single or double quoted, with its escapes intact. */
 const LITERAL = `(?:"(?:\\\\.|[^"\\\\])*"|'(?:\\\\.|[^'\\\\])*')`;
@@ -257,8 +273,13 @@ Ide.Strings = class Strings {
         const rel = File.Relative(path, this.ide.project);
         const src = File.Load(path);
 
-        for (const spec of CALLS) this.fromCalls(src, rel, spec);
-        this.lint(src, rel);
+        /* **What a comment shows is an example, not a call.** `AskForm.js`
+         * documents itself with `AskForm.prompt("New form", "Name:", ...)` in
+         * a comment, and the extractor took it for one: a msgid nobody's code
+         * asks for, in the template every translator works from. */
+        const code = withoutComments(src);
+        for (const spec of CALLS) this.fromCalls(code, rel, spec);
+        this.lint(code, rel);
     }
 
     fromCalls(src, rel, spec) {

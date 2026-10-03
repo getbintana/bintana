@@ -9022,6 +9022,10 @@ function* p_strings(ide) {
         '    h() { Message.Info(`prose about ${1} here`); }',
         '    i() { this.Lbl.Text = "escaped caption"; }',
         '    j() { this.Lbl.Style = "heading"; }',
+        '    k() { AskForm.prompt("ask title", "ask label", "Form2", () => {}); }',
+        '    // Locale.Text("only in a line comment")',
+        '    /* Message.Info("only in a block comment") */',
+        '    l() { return Locale.Text("see http://example.org"); }',
         '}',
     ].join("\n"));
 
@@ -9067,6 +9071,22 @@ function* p_strings(ide) {
     const plural = found.find((e) => e.msgid === "{0} file");
     check("a plural carries both forms", plural && plural.plural === "{0} files",
           JSON.stringify(plural));
+
+    /* `AskForm.prompt`'s two literals are two messages -- a title and a label
+     * -- and were read as a singular and its plural, which put "New form"
+     * with a plural of "Name:" in the IDE's own template. */
+    const asked = found.find((e) => e.msgid === "ask title");
+    check("a prompt's title and label are two messages, not a plural",
+          asked && !asked.plural && ids.includes("ask label"), JSON.stringify(asked));
+
+    /* What a comment shows is an example and not a call: `AskForm.js`
+     * documents itself with one, and it was extracted. A `//` inside a string
+     * is not a comment. */
+    check("a call in a comment is not extracted",
+          !ids.includes("only in a line comment") && !ids.includes("only in a block comment"),
+          JSON.stringify(ids.slice(-8)));
+    check("and a // inside a string does not start one",
+          ids.includes("see http://example.org"), JSON.stringify(ids.slice(-8)));
 
     const ctxt = found.find((e) => e.ctxt === "verb");
     check("a context is kept as one", ctxt && ctxt.msgid === "Open",

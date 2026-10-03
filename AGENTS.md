@@ -2201,7 +2201,7 @@ Three things that will waste your time:
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
-  384 assertions against 2789 for the whole project -- 9.5 s against 368 on this
+  384 assertions against 2792 for the whole project -- 9.5 s against 368 on this
   machine -- which is what makes iterating on an early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.
@@ -4635,6 +4635,19 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   `.form` never hits it -- the loader parents before applying properties -- and
   ordinary code does, because build-then-add is the natural order. Anything that
   needs a window is attached on `realize`, not in the setter.
+- **The extractor read comments, and a call's two prose arguments as a
+  plural.** `Ide.Strings` matches calls with a pattern, so the example in
+  `AskForm.js`'s own comment -- `AskForm.prompt("New form", "Name:", …)` --
+  was extracted as a call; and `AskForm.prompt` was declared `args: 2`
+  without `many`, so its title and label became a singular and its plural:
+  the IDE's template carried `"New form"` with a plural of `"Name:"`. Comments
+  are blanked out before matching now (`withoutComments`, keeping every line
+  where it was, since the template cites lines), and the declaration says
+  `many`. **`ide/po/ide.pot` is written by the IDE's own Extract** and had not
+  been run for a week of new dialogs: 101 messages untranslated and 36 fuzzy,
+  most of the fuzzy guesses wrong (*Padding* as *Encabezado*, *Windows
+  installer* as *Desinstalar*). A fuzzy match from msgmerge is a suggestion,
+  never a translation -- read each one.
 - **`Locale.Text(SOME_CONST)` extracts nothing**, and it looks exactly like doing
   it right. The extractor collects a *literal* heading the call, so a constant
   defeats it as thoroughly as a template literal does -- and a `const` is
