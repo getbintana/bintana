@@ -389,13 +389,39 @@ static JSValue action_property_names(JSContext *ctx, JSValueConst this_val,
 static JSValue action_event_names(JSContext *ctx, JSValueConst this_val,
                                   int argc, JSValueConst *argv);
 
+/* type Action */
 static const JSCFunctionListEntry action_props[] = {
+    /* Name
+     *   what the `.form` called the command: `this.<Name>`, `<Name>_Click`,
+     *   and what a control's `Action` names
+     */
     JS_CGETSET_DEF("Name",    action_get_name,    NULL),
+    /* Text
+     *   the label the `.form` declared. It goes through the catalogue
+     *   **once**, however many places show it
+     */
     JS_CGETSET_DEF("Text",    action_get_text,    NULL),
+    /* Icon
+     *   the icon the `.form` declared, lent to a control that names none
+     */
     JS_CGETSET_DEF("Icon",    action_get_icon,    NULL),
+    /* Enabled
+     *   the whole reason this exists: one assignment, and every button, menu
+     *   item and accelerator naming the command follows
+     */
     JS_CGETSET_DEF("Enabled", action_get_enabled, action_set_enabled),
+    /* Click()
+     *   invoked from code, the way a menu item can be
+     */
     JS_CFUNC_DEF("Click", 0, action_click),
+    /* PropertyNames() -> string[]
+     *   what this class has, asked of it the way a control is asked. A
+     *   command is not a widget, so nothing else can make one to ask
+     */
     JS_CFUNC_DEF("PropertyNames", 0, action_property_names),
+    /* EventNames() -> string[]
+     *   the events it raises, `Click`
+     */
     JS_CFUNC_DEF("EventNames",    0, action_event_names),
 };
 
@@ -682,13 +708,42 @@ static JSValue menuitem_set_value(JSContext *ctx, JSValueConst this_val,
                                   "or \"radio\": true if it is dynamic", mi->name);
 }
 
+/* type MenuItem */
 static const JSCFunctionListEntry menuitem_props[] = {
+    /* Name
+     *   what the `.form` called it: `this.<Name>` and the prefix of its
+     *   `<Name>_Click`
+     */
     JS_CGETSET_DEF("Name",    menuitem_get_name,    NULL),
+    /* Enabled
+     *   whether it can be chosen. **Disabling an item also kills its
+     *   accelerator**, so a shortcut can never fire what the menu shows as
+     *   unavailable
+     */
     JS_CGETSET_DEF("Enabled", menuitem_get_enabled, menuitem_set_enabled),
+    /* Items
+     *   on a `dynamic` item, the entries the application assigns -- reassign
+     *   whenever they change. `Click(index, text)` says which was chosen
+     */
     JS_CGETSET_DEF("Items",   menuitem_get_items,   menuitem_set_items),
+    /* Value
+     *   the tick of a `check` item, or the chosen index of a `radio` one.
+     *   **Assigning it does not fire `Click`**, so restoring a saved setting
+     *   raises nothing
+     */
     JS_CGETSET_DEF("Value",   menuitem_get_value,   menuitem_set_value),
+    /* Click([value])
+     *   chosen from code, the way the pointer or the accelerator would
+     */
     JS_CFUNC_DEF("Click", 1, menuitem_click),
+    /* PropertyNames() -> string[]
+     *   what a menu item has, asked of it the way a control is asked: it is
+     *   not a widget, so nothing else can make one to ask
+     */
     JS_CFUNC_DEF("PropertyNames", 0, menuitem_property_names),
+    /* EventNames() -> string[]
+     *   the events it raises, `Click`
+     */
     JS_CFUNC_DEF("EventNames",    0, menuitem_event_names),
 };
 

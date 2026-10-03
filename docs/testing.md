@@ -369,12 +369,12 @@ what each of them can see:
 
 It parses rather than links, so it answers when the runtime does not build,
 which is the same bargain `tests/icons` and `tests/styles` make. The numbers
-`./tests/api.sh` prints as this is written: 13 class statics, 266 global verbs
-with their parameters named, 873 members and events saying what they are for,
+`./tests/api.sh` prints as this is written: 13 class statics, 282 global verbs
+with their parameters named, 899 members and events saying what they are for,
 in C and in JavaScript, 6 members checked for shadowing a base one, 411 members
 held to `api.json`, 80 top-level names in `lib/` with no two libraries claiming
-one, all 42 globals the runtime installs accounted for, and 120 links over the
-35 pages that stayed. Every one of them has been stale at some point in this
+one, all 42 globals the runtime installs accounted for, and 118 links over the
+34 pages that stayed. Every one of them has been stale at some point in this
 repository.
 
 **A library's events are read from the code that raises them**, which is the

@@ -39,6 +39,13 @@
  * `tests/api` holds this list to the dotted names `GLOBAL_VARS` knows. */
 const NESTED_OWNERS = ["Desktop.Entries"];
 
+/* A builtin of the language that has a capital member, and so is not dropped
+ * by having none: `Date.UTC`. It is QuickJS's, documented with the language
+ * (`llm/language.md`) and not as this runtime's surface -- there is no comment
+ * of ours to describe it with, which is how it reached the manifest with an
+ * empty description. */
+const LANGUAGE_GLOBALS = new Set(["Date"]);
+
 /* The type comments naming a prototype no global holds -- a client, a node, a
  * connection -- which is the only way to enumerate them: no verb lists them. */
 const API_NAMED_TYPE = new Regex("^\\s*/\\*\\s*type\\s+([A-Za-z_][\\w.]*)\\s*\\*/",
@@ -63,17 +70,6 @@ const API_NAMED_TYPE = new Regex("^\\s*/\\*\\s*type\\s+([A-Za-z_][\\w.]*)\\s*\\*
  * live, which is where they belong.
  */
 const API_RUNTIME_OPTIONS = { SourceEditor: ["Language", "Theme"] };
-
-const API_TABLE_TYPES = { menuitem_props: "MenuItem", action_props: "Action",
-                          /* And the player, whose accessors are handed to each
-                           * instance rather than hung on a prototype: the
-                           * class answers with no members, and the table is
-                           * what the page documents. */
-                          audioplayer_props: "AudioPlayer" };
-const API_TABLE_BODY  = new Regex(
-    "static const JSCFunctionListEntry (\\w+)\\[\\]\\s*=\\s*\\{([\\s\\S]*?)\\n\\};");
-const API_TABLE_ENTRY = new Regex(
-    "JS_C(GETSET|FUNC)(?:_MAGIC)?_DEF\\(\\s*\"(\\w+)\"");
 
 /* One member, in the shape everything downstream reads.  Sorted by name: the
  * runtime's order is the chain's, and a file that changes with the order of a
@@ -191,7 +187,7 @@ function apiGlobals() {
     const names    = Application.Globals().slice().sort();
 
     for (const name of names) {
-        if (widgets.has(name)) continue;
+        if (widgets.has(name) || LANGUAGE_GLOBALS.has(name)) continue;
         let members = [];
         try { members = Widget.Members(name); } catch (e) { continue; }
         if (!members.length) continue;
@@ -220,21 +216,10 @@ function apiTypes(root) {
         out.push({ Name: name, Members: apiMemberList(members) });
     }
 
-    /* And the two a table describes with no name anywhere else. */
-    for (const file of Directory.Files(File.Join(root, "runtime/src"), "*.c").sort()) {
-        for (const t of API_TABLE_BODY.Matches(File.Load(file))) {
-            const type = API_TABLE_TYPES[t.Group(1)];
-            if (!type)
-                continue;
-            const members = [];
-            for (const e of API_TABLE_ENTRY.Matches(t.Group(2)))
-                members.push({ Name: e.Group(2),
-                               Kind: e.Group(1) === "FUNC" ? "Method" : "Property",
-                               Params: -1, Signature: "", Returns: "",
-                               Doc: "", Native: true });
-            out.push({ Name: type, Members: apiMemberList(members) });
-        }
-    }
+    /* `MenuItem`, `Action` and `AudioPlayer` used to be added here from their
+     * tables by name, with every description empty: the tables carried no
+     * comments and no `type` line, so neither the extractor nor `tests/api`
+     * could see them. They carry both now and arrive above like the rest. */
 
     return out.sort((a, b) => a.Name < b.Name ? -1 : a.Name > b.Name ? 1 : 0);
 }

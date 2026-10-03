@@ -261,24 +261,98 @@ static JSValue audio_set_onended(JSContext *ctx, JSValueConst this_val, JSValueC
 static JSValue audio_get_onerror(JSContext *ctx, JSValueConst this_val);
 static JSValue audio_set_onerror(JSContext *ctx, JSValueConst this_val, JSValueConst val);
 
+/* type AudioPlayer */
 static const JSCFunctionListEntry audioplayer_props[] = {
+    /* Uri
+     *   what to play: a URI (`file://`, `http(s)://`, `rtsp://`) **or a plain
+     *   local path**, which is turned into one. One property for both, so
+     *   there is nothing to disagree. Setting it stops whatever was playing
+     */
     JS_CGETSET_DEF("Uri",      media_get_uri,      media_set_uri),
+    /* User
+     *   RTSP digest identity, applied to the source the playbin builds. `""`
+     *   for none
+     */
     JS_CGETSET_DEF("User",     media_get_user,     media_set_user),
+    /* Password
+     *   the secret beside it. **Write-only**: it reads back `""` and is never
+     *   serialised, so no `.form` carries it in clear text
+     */
     JS_CGETSET_DEF("Password", media_get_password, media_set_password),
+    /* Latency
+     *   ms the RTSP jitterbuffer may hold. Default `2000`, the source's own.
+     *   Read when the source is built, so a change lands on the next `Play`
+     *   from a stopped player
+     */
     JS_CGETSET_DEF("Latency",  media_get_latency,  media_set_latency),
+    /* Volume
+     *   `0`…`1`. Default `1`
+     */
     JS_CGETSET_DEF("Volume",   media_get_volume,   media_set_volume),
+    /* Muted
+     *   silence without touching `Volume`, so unmuting comes back to where it
+     *   was
+     */
     JS_CGETSET_DEF("Muted",    media_get_muted,    media_set_muted),
+    /* Loop
+     *   reseek instead of ending. A live stream cannot seek, so it ends
+     *   anyway
+     */
     JS_CGETSET_DEF("Loop",     media_get_loop,     media_set_loop),
+    /* Buffering
+     *   how full the buffer is, `0`…`100`. `100` is nothing to wait for — a
+     *   local file never says otherwise — and less is a stream refilling,
+     *   which **holds the sound while `Playing` stays true**. It is
+     *   [`ProgressBar.Value`](docs/reference/widgets/ProgressBar.md)'s range,
+     *   since that is where a form puts it
+     */
     JS_CGETSET_DEF("Buffering", media_get_buffering, NULL),
+    /* Position
+     *   seconds in, `0` when unknown — which includes playing live
+     */
     JS_CGETSET_DEF("Position", media_get_position, NULL),
+    /* Duration
+     *   seconds long, `-1` while unknown — which is always, on a live stream
+     */
     JS_CGETSET_DEF("Duration", media_get_duration, NULL),
+    /* Playing
+     *   whether it is going — what `Play` asked for, until `Pause`, `Stop`,
+     *   the end or an error. **Not a sample of the pipeline**, which reads as
+     *   stopped mid-loop and mid-rebuffer
+     */
     JS_CGETSET_DEF("Playing",  media_get_playing,  NULL),
+    /* Seekable
+     *   whether `Seek` has anything to work on. Answered once the stream is
+     *   known, not when playing starts
+     */
     JS_CGETSET_DEF("Seekable", media_get_seekable, NULL),
+    /* OnEnded
+     *   assign `() => …`, called when it plays to the end; `null` takes it
+     *   off. **Anything else is refused where it is assigned**, rather than
+     *   silently never called
+     */
     JS_CGETSET_DEF("OnEnded",  audio_get_onended,  audio_set_onended),
+    /* OnError
+     *   assign `(message, kind) => …`; the same rule. `kind` is `NotFound`,
+     *   `NotAuthorized`, `Unreachable`, `Decode` or `Error`, as a `Video`'s is
+     */
     JS_CGETSET_DEF("OnError",  audio_get_onerror,  audio_set_onerror),
+    /* Play()
+     *   plays, and replays from the top after it ended. **Refused with no
+     *   `Uri`**
+     */
     JS_CFUNC_DEF("Play",  0, media_play),
+    /* Pause()
+     *   holds the position
+     */
     JS_CFUNC_DEF("Pause", 0, media_pause),
+    /* Stop()
+     *   parks it: back to no state, the position forgotten
+     */
     JS_CFUNC_DEF("Stop",  0, media_stop),
+    /* Seek(seconds)
+     *   jumps there. **Refused on a stream that cannot seek**, naming it
+     */
     JS_CFUNC_DEF("Seek",  1, media_seek),
 };
 

@@ -1018,8 +1018,9 @@ static JSValue conn_columns(JSContext *ctx, JSValueConst this_val,
 
     JSValue  out = JS_NewArray(ctx);
     uint32_t at  = 0;
+    int      rc;
 
-    while (sqlite3_step(st) == SQLITE_ROW) {
+    while ((rc = sqlite3_step(st)) == SQLITE_ROW) {
         JSValue col = JS_NewObject(ctx);
         /* PRAGMA table_info: cid, name, type, notnull, dflt_value, pk */
         JS_SetPropertyStr(ctx, col, "Name", text_at(ctx, st, 1));
@@ -1031,6 +1032,15 @@ static JSValue conn_columns(JSContext *ctx, JSValueConst this_val,
         JS_SetPropertyStr(ctx, col, "Key",
                           JS_NewInt32(ctx, sqlite3_column_int(st, 5)));
         JS_SetPropertyUint32(ctx, out, at++, col);
+    }
+    /* A step that failed is not the end of the list: answering the columns
+     * read so far would be a shape with some of its fields missing, which
+     * `Table` would then fit a record against. `Query` refuses the same way. */
+    if (rc != SQLITE_DONE) {
+        JS_FreeValue(ctx, out);
+        JSValue e = throw_sqlite(ctx, c, "cannot read the columns", NULL);
+        sqlite3_finalize(st);
+        return e;
     }
     sqlite3_finalize(st);
     return out;

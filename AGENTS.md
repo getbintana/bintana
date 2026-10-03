@@ -1193,6 +1193,24 @@ the same through `Widget.Members` with `Sources`), and `tests/ide`'s
   own list is a completeness check about its own list.** The same blind spot let
   eight QuickJS-installed names sit outside `llm/language.md` for as long as
   they did.
+- **And it happened again, one level down: 37 members with no description, in
+  the manifest every page is written from.** An external audit named seven
+  (`Desktop.Entries`' six and `Date.UTC`); asking `api.json` itself found
+  thirty more. `checkDocs` and `checkGlobalSignatures` ask the owners the
+  scan finds -- a `JS_SetPropertyStr(ctx, global, …)` or a `/* type X */`
+  line -- and three kinds were found by neither: **an object hung off a
+  global** (`Desktop.Entries`, which `tools/apijson`'s `NESTED_OWNERS` listed
+  and nothing checked), **a table `tools/apijson` added by hand**
+  (`MenuItem`, `Action`, `AudioPlayer`, every description written empty by
+  construction because the tables had no comments to write them from), and
+  **a builtin of the language with a capital member** (`Date.UTC`, which is
+  QuickJS's and has no comment of ours to describe it). The first two are
+  described beside their entries and named with `type` lines now, so they
+  take the road every named type does; `Date` is `LANGUAGE_GLOBALS` in
+  `tools/apijson` and out of the surface. **And `tests/api` reads the
+  manifest whole** -- no member of any section may be blank -- which is the
+  check that does not depend on knowing where owners come from. Removing
+  `Uninstall`'s comment turns three lines red, one per road.
 - **There are nine hand-rolled async job shapes, and two of them have already
   forgotten to release.** `WatchJob` (`bta_sys.c`), `ExecJob`, `TimerJob`,
   `PasteJob`, `DialogJob`, `HttpJob` (`bta_http.c`), `BtaTaskJob`

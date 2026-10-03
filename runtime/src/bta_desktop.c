@@ -569,17 +569,51 @@ void bta_desktop_init(JSContext *ctx, JSValue global)
     g_mkdir_with_parents(dir, 0755);
 
     JSValue entries = JS_NewObject(ctx);
+    /* Directory
+     *   `DataDirectory/applications`, created on first use. Write an entry
+     *   there and the desktop's menu offers it; there is nothing to register
+     *   and no index to update
+     */
     JS_SetPropertyStr(ctx, entries, "Directory", JS_NewString(ctx, dir));
+    /* Exec(argv) -> string
+     *   the value for the `Exec` key: the arguments as an array — the shape
+     *   `Exec` and `Terminal.Run` already take — quoted and escaped the
+     *   format's way
+     */
     JS_SetPropertyStr(ctx, entries, "Exec",
                       JS_NewCFunction(ctx, entries_exec, "Exec", 1));
+    /* Installed() -> string[]
+     *   the ids in `Directory`, sorted, `.desktop` removed. Only this user's:
+     *   a system entry is never listed, and asking whether an entry is
+     *   installed is one `includes` on this
+     */
     JS_SetPropertyStr(ctx, entries, "Installed",
                       JS_NewCFunction(ctx, entries_installed, "Installed", 0));
+    /* Read(id)
+     *   one entry as data, exactly what `Install` takes, or `null` when there
+     *   is no such file
+     */
     JS_SetPropertyStr(ctx, entries, "Read",
                       JS_NewCFunction(ctx, entries_read, "Read", 1));
+    /* Install(id, entry) -> string
+     *   writes `Directory/<id>.desktop` and answers the path. Atomic — a
+     *   temporary beside it, renamed over — so a failure leaves whatever was
+     *   there
+     */
     JS_SetPropertyStr(ctx, entries, "Install",
                       JS_NewCFunction(ctx, entries_install, "Install", 2));
+    /* Write(path, entry)
+     *   the same entry and the same checks at a path the caller names,
+     *   **making the directory** when it is not there. For the entry a
+     *   package installs, which is not one this user's menu has; answers
+     *   nothing
+     */
     JS_SetPropertyStr(ctx, entries, "Write",
                       JS_NewCFunction(ctx, entries_write, "Write", 2));
+    /* Uninstall(id) -> boolean
+     *   removes it, answering whether there was one. A file that is there and
+     *   cannot be removed throws
+     */
     JS_SetPropertyStr(ctx, entries, "Uninstall",
                       JS_NewCFunction(ctx, entries_uninstall, "Uninstall", 1));
     g_free(dir);

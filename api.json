@@ -11934,6 +11934,173 @@
       ]
     },
     {
+      "Name": "AudioPlayer",
+      "Members": [
+        {
+          "Name": "Buffering",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "how full the buffer is, `0`…`100`. `100` is nothing to wait for — a local file never says otherwise — and less is a stream refilling, which **holds the sound while `Playing` stays true**. It is [`ProgressBar.Value`](docs/reference/widgets/ProgressBar.md)'s range, since that is where a form puts it",
+          "Native": true
+        },
+        {
+          "Name": "Duration",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "seconds long, `-1` while unknown — which is always, on a live stream",
+          "Native": true
+        },
+        {
+          "Name": "Latency",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "ms the RTSP jitterbuffer may hold. Default `2000`, the source's own. Read when the source is built, so a change lands on the next `Play` from a stopped player",
+          "Native": true
+        },
+        {
+          "Name": "Loop",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "reseek instead of ending. A live stream cannot seek, so it ends anyway",
+          "Native": true
+        },
+        {
+          "Name": "Muted",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "silence without touching `Volume`, so unmuting comes back to where it was",
+          "Native": true
+        },
+        {
+          "Name": "OnEnded",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `() => …`, called when it plays to the end; `null` takes it off. **Anything else is refused where it is assigned**, rather than silently never called",
+          "Native": true
+        },
+        {
+          "Name": "OnError",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(message, kind) => …`; the same rule. `kind` is `NotFound`, `NotAuthorized`, `Unreachable`, `Decode` or `Error`, as a `Video`'s is",
+          "Native": true
+        },
+        {
+          "Name": "Password",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the secret beside it. **Write-only**: it reads back `\"\"` and is never serialised, so no `.form` carries it in clear text",
+          "Native": true
+        },
+        {
+          "Name": "Pause",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "holds the position",
+          "Native": true
+        },
+        {
+          "Name": "Play",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "plays, and replays from the top after it ended. **Refused with no `Uri`**",
+          "Native": true
+        },
+        {
+          "Name": "Playing",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether it is going — what `Play` asked for, until `Pause`, `Stop`, the end or an error. **Not a sample of the pipeline**, which reads as stopped mid-loop and mid-rebuffer",
+          "Native": true
+        },
+        {
+          "Name": "Position",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "seconds in, `0` when unknown — which includes playing live",
+          "Native": true
+        },
+        {
+          "Name": "Seek",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(seconds)",
+          "Returns": "",
+          "Doc": "jumps there. **Refused on a stream that cannot seek**, naming it",
+          "Native": true
+        },
+        {
+          "Name": "Seekable",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether `Seek` has anything to work on. Answered once the stream is known, not when playing starts",
+          "Native": true
+        },
+        {
+          "Name": "Stop",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "parks it: back to no state, the position forgotten",
+          "Native": true
+        },
+        {
+          "Name": "Uri",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "what to play: a URI (`file://`, `http(s)://`, `rtsp://`) **or a plain local path**, which is turned into one. One property for both, so there is nothing to disagree. Setting it stops whatever was playing",
+          "Native": true
+        },
+        {
+          "Name": "User",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "RTSP digest identity, applied to the source the playbin builds. `\"\"` for none",
+          "Native": true
+        },
+        {
+          "Name": "Volume",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`0`…`1`. Default `1`",
+          "Native": true
+        }
+      ]
+    },
+    {
       "Name": "Bytes",
       "Members": [
         {
@@ -12188,20 +12355,6 @@
       ]
     },
     {
-      "Name": "Date",
-      "Members": [
-        {
-          "Name": "UTC",
-          "Kind": "Static",
-          "Params": 7,
-          "Signature": "",
-          "Returns": "",
-          "Doc": "",
-          "Native": true
-        }
-      ]
-    },
-    {
       "Name": "Day",
       "Members": [
         {
@@ -12364,57 +12517,66 @@
       "Name": "Desktop.Entries",
       "Members": [
         {
+          "Name": "Directory",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`DataDirectory/applications`, created on first use. Write an entry there and the desktop's menu offers it; there is nothing to register and no index to update",
+          "Native": true
+        },
+        {
           "Name": "Exec",
           "Kind": "Method",
           "Params": 1,
-          "Signature": "",
-          "Returns": "",
-          "Doc": "",
+          "Signature": "(argv)",
+          "Returns": "string",
+          "Doc": "the value for the `Exec` key: the arguments as an array — the shape `Exec` and `Terminal.Run` already take — quoted and escaped the format's way",
           "Native": true
         },
         {
           "Name": "Install",
           "Kind": "Method",
           "Params": 2,
-          "Signature": "",
-          "Returns": "",
-          "Doc": "",
+          "Signature": "(id, entry)",
+          "Returns": "string",
+          "Doc": "writes `Directory/<id>.desktop` and answers the path. Atomic — a temporary beside it, renamed over — so a failure leaves whatever was there",
           "Native": true
         },
         {
           "Name": "Installed",
           "Kind": "Method",
           "Params": 0,
-          "Signature": "",
-          "Returns": "",
-          "Doc": "",
+          "Signature": "()",
+          "Returns": "string[]",
+          "Doc": "the ids in `Directory`, sorted, `.desktop` removed. Only this user's: a system entry is never listed, and asking whether an entry is installed is one `includes` on this",
           "Native": true
         },
         {
           "Name": "Read",
           "Kind": "Method",
           "Params": 1,
-          "Signature": "",
+          "Signature": "(id)",
           "Returns": "",
-          "Doc": "",
+          "Doc": "one entry as data, exactly what `Install` takes, or `null` when there is no such file",
           "Native": true
         },
         {
           "Name": "Uninstall",
           "Kind": "Method",
           "Params": 1,
-          "Signature": "",
-          "Returns": "",
-          "Doc": "",
+          "Signature": "(id)",
+          "Returns": "boolean",
+          "Doc": "removes it, answering whether there was one. A file that is there and cannot be removed throws",
           "Native": true
         },
         {
           "Name": "Write",
           "Kind": "Method",
           "Params": 2,
-          "Signature": "",
+          "Signature": "(path, entry)",
           "Returns": "",
-          "Doc": "",
+          "Doc": "the same entry and the same checks at a path the caller names, **making the directory** when it is not there. For the entry a package installs, which is not one this user's menu has; answers nothing",
           "Native": true
         }
       ]
@@ -14824,10 +14986,10 @@
         {
           "Name": "Click",
           "Kind": "Method",
-          "Params": -1,
-          "Signature": "",
+          "Params": 0,
+          "Signature": "()",
           "Returns": "",
-          "Doc": "",
+          "Doc": "invoked from code, the way a menu item can be",
           "Native": true
         },
         {
@@ -14836,16 +14998,16 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "",
+          "Doc": "the whole reason this exists: one assignment, and every button, menu item and accelerator naming the command follows",
           "Native": true
         },
         {
           "Name": "EventNames",
           "Kind": "Method",
-          "Params": -1,
-          "Signature": "",
-          "Returns": "",
-          "Doc": "",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "string[]",
+          "Doc": "the events it raises, `Click`",
           "Native": true
         },
         {
@@ -14854,7 +15016,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "",
+          "Doc": "the icon the `.form` declared, lent to a control that names none",
           "Native": true
         },
         {
@@ -14863,16 +15025,16 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "",
+          "Doc": "what the `.form` called the command: `this.<Name>`, `<Name>_Click`, and what a control's `Action` names",
           "Native": true
         },
         {
           "Name": "PropertyNames",
           "Kind": "Method",
-          "Params": -1,
-          "Signature": "",
-          "Returns": "",
-          "Doc": "",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "string[]",
+          "Doc": "what this class has, asked of it the way a control is asked. A command is not a widget, so nothing else can make one to ask",
           "Native": true
         },
         {
@@ -14881,7 +15043,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "",
+          "Doc": "the label the `.form` declared. It goes through the catalogue **once**, however many places show it",
           "Native": true
         }
       ]
@@ -14895,7 +15057,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "",
+          "Doc": "how full the buffer is, `0`…`100`. `100` is nothing to wait for — a local file never says otherwise — and less is a stream refilling, which **holds the sound while `Playing` stays true**. It is [`ProgressBar.Value`](docs/reference/widgets/ProgressBar.md)'s range, since that is where a form puts it",
           "Native": true
         },
         {
@@ -14904,7 +15066,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "",
+          "Doc": "seconds long, `-1` while unknown — which is always, on a live stream",
           "Native": true
         },
         {
@@ -14913,7 +15075,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "",
+          "Doc": "ms the RTSP jitterbuffer may hold. Default `2000`, the source's own. Read when the source is built, so a change lands on the next `Play` from a stopped player",
           "Native": true
         },
         {
@@ -14922,7 +15084,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "",
+          "Doc": "reseek instead of ending. A live stream cannot seek, so it ends anyway",
           "Native": true
         },
         {
@@ -14931,7 +15093,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "",
+          "Doc": "silence without touching `Volume`, so unmuting comes back to where it was",
           "Native": true
         },
         {
@@ -14940,7 +15102,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "",
+          "Doc": "assign `() => …`, called when it plays to the end; `null` takes it off. **Anything else is refused where it is assigned**, rather than silently never called",
           "Native": true
         },
         {
@@ -14949,7 +15111,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "",
+          "Doc": "assign `(message, kind) => …`; the same rule. `kind` is `NotFound`, `NotAuthorized`, `Unreachable`, `Decode` or `Error`, as a `Video`'s is",
           "Native": true
         },
         {
@@ -14958,25 +15120,25 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "",
+          "Doc": "the secret beside it. **Write-only**: it reads back `\"\"` and is never serialised, so no `.form` carries it in clear text",
           "Native": true
         },
         {
           "Name": "Pause",
           "Kind": "Method",
-          "Params": -1,
-          "Signature": "",
+          "Params": 0,
+          "Signature": "()",
           "Returns": "",
-          "Doc": "",
+          "Doc": "holds the position",
           "Native": true
         },
         {
           "Name": "Play",
           "Kind": "Method",
-          "Params": -1,
-          "Signature": "",
+          "Params": 0,
+          "Signature": "()",
           "Returns": "",
-          "Doc": "",
+          "Doc": "plays, and replays from the top after it ended. **Refused with no `Uri`**",
           "Native": true
         },
         {
@@ -14985,7 +15147,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "",
+          "Doc": "whether it is going — what `Play` asked for, until `Pause`, `Stop`, the end or an error. **Not a sample of the pipeline**, which reads as stopped mid-loop and mid-rebuffer",
           "Native": true
         },
         {
@@ -14994,16 +15156,16 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "",
+          "Doc": "seconds in, `0` when unknown — which includes playing live",
           "Native": true
         },
         {
           "Name": "Seek",
           "Kind": "Method",
-          "Params": -1,
-          "Signature": "",
+          "Params": 1,
+          "Signature": "(seconds)",
           "Returns": "",
-          "Doc": "",
+          "Doc": "jumps there. **Refused on a stream that cannot seek**, naming it",
           "Native": true
         },
         {
@@ -15012,16 +15174,16 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "",
+          "Doc": "whether `Seek` has anything to work on. Answered once the stream is known, not when playing starts",
           "Native": true
         },
         {
           "Name": "Stop",
           "Kind": "Method",
-          "Params": -1,
-          "Signature": "",
+          "Params": 0,
+          "Signature": "()",
           "Returns": "",
-          "Doc": "",
+          "Doc": "parks it: back to no state, the position forgotten",
           "Native": true
         },
         {
@@ -15030,7 +15192,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "",
+          "Doc": "what to play: a URI (`file://`, `http(s)://`, `rtsp://`) **or a plain local path**, which is turned into one. One property for both, so there is nothing to disagree. Setting it stops whatever was playing",
           "Native": true
         },
         {
@@ -15039,7 +15201,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "",
+          "Doc": "RTSP digest identity, applied to the source the playbin builds. `\"\"` for none",
           "Native": true
         },
         {
@@ -15048,7 +15210,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "",
+          "Doc": "`0`…`1`. Default `1`",
           "Native": true
         }
       ]
@@ -15556,10 +15718,10 @@
         {
           "Name": "Click",
           "Kind": "Method",
-          "Params": -1,
-          "Signature": "",
+          "Params": 0,
+          "Signature": "([value])",
           "Returns": "",
-          "Doc": "",
+          "Doc": "chosen from code, the way the pointer or the accelerator would",
           "Native": true
         },
         {
@@ -15568,16 +15730,16 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "",
+          "Doc": "whether it can be chosen. **Disabling an item also kills its accelerator**, so a shortcut can never fire what the menu shows as unavailable",
           "Native": true
         },
         {
           "Name": "EventNames",
           "Kind": "Method",
-          "Params": -1,
-          "Signature": "",
-          "Returns": "",
-          "Doc": "",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "string[]",
+          "Doc": "the events it raises, `Click`",
           "Native": true
         },
         {
@@ -15586,7 +15748,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "",
+          "Doc": "on a `dynamic` item, the entries the application assigns -- reassign whenever they change. `Click(index, text)` says which was chosen",
           "Native": true
         },
         {
@@ -15595,16 +15757,16 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "",
+          "Doc": "what the `.form` called it: `this.<Name>` and the prefix of its `<Name>_Click`",
           "Native": true
         },
         {
           "Name": "PropertyNames",
           "Kind": "Method",
-          "Params": -1,
-          "Signature": "",
-          "Returns": "",
-          "Doc": "",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "string[]",
+          "Doc": "what a menu item has, asked of it the way a control is asked: it is not a widget, so nothing else can make one to ask",
           "Native": true
         },
         {
@@ -15613,7 +15775,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "",
+          "Doc": "the tick of a `check` item, or the chosen index of a `radio` one. **Assigning it does not fire `Click`**, so restoring a saved setting raises nothing",
           "Native": true
         }
       ]

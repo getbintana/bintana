@@ -203,7 +203,7 @@ function checkGlobalsListed(problems, catalog) {
     let   counted = 0;
 
     for (const name of Application.Globals()) {
-        if (widgets.has(name))
+        if (widgets.has(name) || LANGUAGE_GLOBALS.has(name))
             continue;
         let members = [];
         try { members = Widget.Members(name); } catch (e) { continue; }
@@ -328,6 +328,22 @@ function checkApiJson(root, problems, members, events) {
         if (!types.has(n))
             problems.push(`api.json: the type ${n} is declared and not in it`);
 
+    /* **And whatever reached the manifest says what it is for**, whichever
+     * road it came by. The checks above ask the owners they know how to find;
+     * this asks the file every documentation page is written from, so an
+     * owner none of them finds still cannot arrive in it blank. It is the
+     * check that would have caught `Desktop.Entries`, `MenuItem`, `Action`
+     * and `AudioPlayer`, thirty-seven members with no description at all, and
+     * `Date.UTC`, which is the language's and not this runtime's. */
+    for (const section of ["Widgets", "Globals", "Types"])
+        for (const owner of catalog[section])
+            for (const m of owner.Members || [])
+                if (!String(m.Doc || "").trim())
+                    problems.push(`api.json: ${owner.Name}.${m.Name} says nothing about what it is for`);
+    for (const g of catalog.Globals)
+        if (LANGUAGE_GLOBALS.has(g.Name))
+            problems.push(`api.json: ${g.Name} is the language's, not this runtime's surface`);
+
     const namedGlobals = new Set(catalog.Globals.map((g) => g.Name));
     for (const v of NESTED_OWNERS)
         if (!namedGlobals.has(v))
@@ -335,10 +351,9 @@ function checkApiJson(root, problems, members, events) {
 
     /* And the two objects a table describes and nothing owns -- a menu item
      * and a command, which the manifest carries so `forms.md`'s prose can be
-     * held to the code -- and `AudioPlayer`, whose accessors are handed to
-     * each instance and not hung on a prototype. None of them is a widget, so
-     * `tableClasses` says nothing about them and this is the one reader that
-     * does. */
+     * held to the code. Their tables are named with a `type` line now, so the
+     * manifest has them by the road every named type takes; this still holds
+     * the C's entries to it, one by one. */
     const forms   = { menuitem_props: "MenuItem", action_props: "Action" };
     const ofType  = {};
     for (const t of catalog.Types)
@@ -622,7 +637,11 @@ function checkWidgetStatics(root, problems) {
 const NAMED_TYPE = new Regex("^\\s*/\\*\\s*type\\s+([A-Za-z_][\\w.]*)\\s*\\*/", { Multiline: true });
 
 function checkGlobalSignatures(root, problems) {
-    const names = new Set(["Widget"]);
+    /* And the owners hung off a global -- `Desktop.Entries` -- which no line
+     * installs on the global object: the scan below cannot find them, and
+     * that is how six verbs went without a signature or a word for as long
+     * as they did. */
+    const names = new Set(["Widget", ...NESTED_OWNERS]);
     for (const c of sources(root)) {
         const src = File.Load(c);
         for (const m of GLOBAL_INSTALL.Matches(src)) names.add(m.Group(1));
@@ -669,7 +688,7 @@ function checkGlobalSignatures(root, problems) {
  * not something a caller writes, so it is not asked about.
  */
 function checkDocs(root, problems) {
-    const owners = new Set(["Widget", ...Widget.Types()]);
+    const owners = new Set(["Widget", ...Widget.Types(), ...NESTED_OWNERS]);
     for (const c of sources(root)) {
         const src = File.Load(c);
         for (const m of GLOBAL_INSTALL.Matches(src)) owners.add(m.Group(1));
