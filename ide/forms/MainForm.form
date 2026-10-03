@@ -30,6 +30,48 @@
       "name": "ActRenameCtl",
       "text": "Rename...",
       "enabled": false
+    },
+    {
+      "name": "ActDebug",
+      "text": "Debug",
+      "icon": "media-playback-start-symbolic",
+      "shortcut": "<Control>F9",
+      "enabled": false
+    },
+    {
+      "name": "ActPause",
+      "text": "Pause",
+      "icon": "media-playback-pause-symbolic",
+      "shortcut": "<Control>F8",
+      "enabled": false
+    },
+    {
+      "name": "ActStepInto",
+      "text": "Step into",
+      "icon": "go-down-symbolic",
+      "shortcut": "F8",
+      "enabled": false
+    },
+    {
+      "name": "ActStepOver",
+      "text": "Step over",
+      "icon": "go-next-symbolic",
+      "shortcut": "<Shift>F8",
+      "enabled": false
+    },
+    {
+      "name": "ActStepOut",
+      "text": "Step out",
+      "icon": "go-up-symbolic",
+      "shortcut": "<Control><Shift>F8",
+      "enabled": false
+    },
+    {
+      "name": "ActStop",
+      "text": "Stop",
+      "icon": "media-playback-stop-symbolic",
+      "shortcut": "<Shift>F9",
+      "enabled": false
     }
   ],
   "menus": [
@@ -247,9 +289,7 @@
           "shortcut": "<Control>r"
         },
         {
-          "name": "MnuStop",
-          "text": "Stop",
-          "shortcut": "<Shift>F9"
+          "action": "ActStop"
         },
         {
           "name": "MnuStrict",
@@ -398,32 +438,22 @@
       "text": "_Debug",
       "children": [
         {
-          "name": "MnuDebug",
-          "text": "Debug",
-          "shortcut": "<Control>F9"
+          "action": "ActDebug"
         },
         {
-          "name": "MnuPause",
-          "text": "Pause",
-          "shortcut": "<Control>F8"
+          "action": "ActPause"
         },
         {
           "separator": true
         },
         {
-          "name": "MnuStepInto",
-          "text": "Step into",
-          "shortcut": "F8"
+          "action": "ActStepInto"
         },
         {
-          "name": "MnuStepOver",
-          "text": "Step over",
-          "shortcut": "<Shift>F8"
+          "action": "ActStepOver"
         },
         {
-          "name": "MnuStepOut",
-          "text": "Step out",
-          "shortcut": "<Control><Shift>F8"
+          "action": "ActStepOut"
         },
         {
           "separator": true
@@ -724,12 +754,12 @@
                       "type": "Button",
                       "name": "BtnStop",
                       "properties": {
-                        "Enabled": false,
                         "Height": 32,
                         "Icon": "media-playback-stop",
                         "Style": "destructive-action",
                         "Text": "Stop",
-                        "Width": 90
+                        "Width": 90,
+                        "Action": "ActStop"
                       }
                     }
                   ]
@@ -1500,6 +1530,89 @@
                             "VExpand": true
                           },
                           "children": [
+                            {
+                              "type": "Panel",
+                              "name": "DebugBar",
+                              "properties": {
+                                "Arrangement": "Horizontal",
+                                "HAlign": "Fill",
+                                "Spacing": 2
+                              },
+                              "children": [
+                                {
+                                  "type": "Button",
+                                  "name": "BtnDbgDebug",
+                                  "properties": {
+                                    "Action": "ActDebug",
+                                    "Height": 30,
+                                    "Icon": "media-playback-start-symbolic",
+                                    "Style": "flat",
+                                    "Tooltip": "Debug, or continue when stopped (Ctrl+F9)",
+                                    "Width": 34
+                                  }
+                                },
+                                {
+                                  "type": "Button",
+                                  "name": "BtnDbgPause",
+                                  "properties": {
+                                    "Action": "ActPause",
+                                    "Height": 30,
+                                    "Icon": "media-playback-pause-symbolic",
+                                    "Style": "flat",
+                                    "Tooltip": "Pause (Ctrl+F8)",
+                                    "Width": 34
+                                  }
+                                },
+                                {
+                                  "type": "Button",
+                                  "name": "BtnDbgInto",
+                                  "properties": {
+                                    "Action": "ActStepInto",
+                                    "Height": 30,
+                                    "Icon": "go-down-symbolic",
+                                    "Style": "flat",
+                                    "Tooltip": "Step into (F8)",
+                                    "Width": 34
+                                  }
+                                },
+                                {
+                                  "type": "Button",
+                                  "name": "BtnDbgOver",
+                                  "properties": {
+                                    "Action": "ActStepOver",
+                                    "Height": 30,
+                                    "Icon": "go-next-symbolic",
+                                    "Style": "flat",
+                                    "Tooltip": "Step over (Shift+F8)",
+                                    "Width": 34
+                                  }
+                                },
+                                {
+                                  "type": "Button",
+                                  "name": "BtnDbgOut",
+                                  "properties": {
+                                    "Action": "ActStepOut",
+                                    "Height": 30,
+                                    "Icon": "go-up-symbolic",
+                                    "Style": "flat",
+                                    "Tooltip": "Step out (Ctrl+Shift+F8)",
+                                    "Width": 34
+                                  }
+                                },
+                                {
+                                  "type": "Button",
+                                  "name": "BtnDbgStop",
+                                  "properties": {
+                                    "Action": "ActStop",
+                                    "Height": 30,
+                                    "Icon": "media-playback-stop-symbolic",
+                                    "Style": "flat",
+                                    "Tooltip": "Stop (Shift+F9)",
+                                    "Width": 34
+                                  }
+                                }
+                              ]
+                            },
                             {
                               "type": "Split",
                               "name": "DebugBox",

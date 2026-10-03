@@ -518,7 +518,7 @@ function* p_files(ide) {
     ide.MnuSave.Click();
     check("choosing a disabled item does nothing", true);
     eq("menu items report their own name", ide.MnuRun.Name, "MnuRun");
-    eq("Stop is off while nothing runs", ide.MnuStop.Enabled, false);
+    eq("Stop is off while nothing runs", ide.ActStop.Enabled, false);
 
     /* --- multiple tabs: switching preserves per-tab state ---------------- */
     /* With tabs, switching files loses no changes: the state lives in the tab
@@ -8973,7 +8973,8 @@ function* p_strings(ide) {
         format: "bintana-form/1", class: "Strings",
         properties: { Text: "a window title" },
         menus: [{ name: "MnuS", text: "a menu", children: [
-            { name: "MnuS1", text: "a menu item" }] }],
+            { name: "MnuS1", text: "a menu item" }, { action: "ActS" }] }],
+        actions: [{ name: "ActS", text: "a command" }],
         children: [
             { type: "Label", name: "L", properties: { Text: "a caption" },
               design: { Text: "a sample nobody translates" } },
@@ -9048,6 +9049,11 @@ function* p_strings(ide) {
     check("and a window title", ids.includes("a window title"));
     check("and a menu label, at both levels",
           ids.includes("a menu") && ids.includes("a menu item"));
+    /* A command's label is the one prose a form declares that is neither a
+     * property nor a menu item, and the runtime translates it: it was never
+     * extracted, and "Pause" fell out of the IDE's own catalogue the day its
+     * Debug menu became commands. */
+    check("and a command's label", ids.includes("a command"), JSON.stringify(ids.slice(-14)));
     check("and every entry of a list of strings",
           ids.includes("one") && ids.includes("two"));
     check("and a placeholder", ids.includes("a hint"));
@@ -13145,8 +13151,8 @@ function* p_git(ide) {
  * closed and opened again keeps its breakpoints. Those are what this asserts.
  */
 function* p_debug(ide) {
-    for (const name of ["MnuDebug", "MnuPause", "MnuStepInto", "MnuStepOver",
-                        "MnuStepOut", "MnuBreakpoint"])
+    for (const name of ["ActDebug", "ActPause", "ActStepInto", "ActStepOver",
+                        "ActStepOut", "ActStop", "MnuBreakpoint"])
         check(`the Debug menu has ${name}`, ide[name] !== undefined);
 
     check("and the bottom panel has a page for it",
@@ -13155,7 +13161,22 @@ function* p_debug(ide) {
           ide.StackList !== undefined && ide.LocalList !== undefined);
 
     /* Nothing is stopped, so stepping is not offered and the stack is empty. */
-    check("stepping is off until something stops", !ide.MnuStepInto.Enabled);
+    check("stepping is off until something stops", !ide.ActStepInto.Enabled);
+
+    /* **The debug page has the commands as buttons**, bound to the same
+     * commands as the menu and the keys -- so one assignment greys all three,
+     * and the button cannot disagree with the menu about whether a step is
+     * possible. Asked of every button: the command it names, and its state
+     * being the command's. */
+    const bar = { BtnDbgDebug: "ActDebug", BtnDbgPause: "ActPause", BtnDbgInto: "ActStepInto",
+                  BtnDbgOver: "ActStepOver", BtnDbgOut: "ActStepOut", BtnDbgStop: "ActStop" };
+    for (const btn of Dictionary.Keys(bar)) {
+        eq(`${btn} is the ${bar[btn]} command`, ide[btn] && ide[btn].Action, bar[btn]);
+        eq(`and follows it`, ide[btn] && ide[btn].Enabled, ide[bar[btn]].Enabled);
+    }
+    check("with a project and nothing running, Debug is on and stepping is off",
+          ide.BtnDbgDebug.Enabled && !ide.BtnDbgInto.Enabled && !ide.BtnDbgStop.Enabled);
+    eq("and the toolbar's Stop is the same command", ide.BtnStop.Action, "ActStop");
     eq("and the stack is empty", ide.StackList.Count, 0);
 
     /* The startup form's code, whatever the phases above renamed it to. */

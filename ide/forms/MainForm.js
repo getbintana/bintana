@@ -1105,7 +1105,6 @@ class MainForm extends Form {
         this.BtnSave.Enabled   = dirty;
         this.BtnReload.Enabled = open;
         this.BtnRun.Enabled    = open && !this.running;
-        this.BtnStop.Enabled   = this.running;
 
         /* A disabled item loses its accelerator too, so this is all it takes for
          * Ctrl+S not to fire when there is nothing to save. */
@@ -1113,7 +1112,9 @@ class MainForm extends Form {
         this.MnuSaveAll.Enabled = this.hasDirtyTabs();
         this.MnuReload.Enabled = open;
         this.MnuRun.Enabled    = open && !this.running;
-        this.MnuStop.Enabled   = this.running;
+        /* A command: the toolbar's Stop, the Run menu's and the debug bar's
+         * follow this one assignment. */
+        this.ActStop.Enabled   = this.running;
         this.MnuNewForm.Enabled = open;
         this.MnuRename.Enabled  = this.activeFile !== null;
         this.MnuDelete.Enabled  = this.activeFile !== null;
@@ -1205,11 +1206,11 @@ class MainForm extends Form {
          */
         const halted = this.debugger_.halted;
 
-        this.MnuDebug.Enabled    = open && (!this.running || halted);
-        this.MnuPause.Enabled    = this.debugger_.running && !halted;
-        this.MnuStepInto.Enabled = halted;
-        this.MnuStepOver.Enabled = halted;
-        this.MnuStepOut.Enabled  = halted;
+        this.ActDebug.Enabled    = open && (!this.running || halted);
+        this.ActPause.Enabled    = this.debugger_.running && !halted;
+        this.ActStepInto.Enabled = halted;
+        this.ActStepOver.Enabled = halted;
+        this.ActStepOut.Enabled  = halted;
         /* A breakpoint is set on a line, so it wants a code editor -- and it is
          * set whether or not anything is running, which is the point of it. */
         this.MnuBreakpoint.Enabled = !design && !!this.Editor;
@@ -1343,10 +1344,6 @@ class MainForm extends Form {
 
     BtnRun_Click() {
         this.run();
-    }
-
-    BtnStop_Click() {
-        this.stopRun();
     }
 
     /*
@@ -2302,11 +2299,14 @@ class MainForm extends Form {
      * Visual Basic: what one presses to get going is the same whether it has
      * started or not.
      */
-    MnuDebug_Click()      { this.debugger_.start(); }
-    MnuPause_Click()      { this.debugger_.pause(); }
-    MnuStepInto_Click()   { this.debugger_.step("into"); }
-    MnuStepOver_Click()   { this.debugger_.step("over"); }
-    MnuStepOut_Click()    { this.debugger_.step("out"); }
+    /* Commands, so the Debug menu, its keys and the buttons over the debug
+     * page are one thing each: a person coming from a debugger with a toolbar
+     * looks for the buttons, and the menu was the only place they were. */
+    ActDebug_Click()      { this.debugger_.start(); }
+    ActPause_Click()      { this.debugger_.pause(); }
+    ActStepInto_Click()   { this.debugger_.step("into"); }
+    ActStepOver_Click()   { this.debugger_.step("over"); }
+    ActStepOut_Click()    { this.debugger_.step("out"); }
     MnuBreakpoint_Click() { this.debugger_.toggle(); }
 
     /* Stopping where a throw happens, which is **every** throw and not only the
@@ -2639,8 +2639,9 @@ class MainForm extends Form {
     MnuRun_Click()    { this.run(); }
     /* One Stop for both: whichever of the two started a child, this is what
      * ends it -- a second button for "stop the one being debugged" would be a
-     * second answer to a question with one. */
-    MnuStop_Click()   { this.stopRun(); }
+     * second answer to a question with one. It is a command, so the toolbar,
+     * the Run menu and the debug bar are that one Stop. */
+    ActStop_Click()   { this.stopRun(); }
 
     /* A tick, and the runtime has already moved it: what is left is remembering
      * it. What it does is one argument to `bintana` -- see `Ide.Runner`. */

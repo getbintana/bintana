@@ -2201,7 +2201,7 @@ Three things that will waste your time:
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
-  384 assertions against 2792 for the whole project -- 9.5 s against 368 on this
+  384 assertions against 2814 for the whole project -- 9.5 s against 368 on this
   machine -- which is what makes iterating on an early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.
@@ -4648,6 +4648,12 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   most of the fuzzy guesses wrong (*Padding* as *Encabezado*, *Windows
   installer* as *Desinstalar*). A fuzzy match from msgmerge is a suggestion,
   never a translation -- read each one.
+  **And it never read a command's label at all.** `actions[].text` goes
+  through the catalogue like a menu label, and `Ide.Strings` walked `menus`
+  and `children` only. It hid behind the four commands the IDE had, each with
+  a button whose tooltip said the same words; when the Debug menu's items
+  became commands, `"Pause"` fell out of the catalogue. `fromAction` reads
+  them, and the `strings` phase plants one.
 - **`Locale.Text(SOME_CONST)` extracts nothing**, and it looks exactly like doing
   it right. The extractor collects a *literal* heading the call, so a constant
   defeats it as thoroughly as a template literal does -- and a `const` is

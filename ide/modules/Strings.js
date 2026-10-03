@@ -173,7 +173,19 @@ Ide.Strings = class Strings {
         /* A form's own properties are the window's; its class answers for them. */
         this.fromNode({ type: root.class, properties: root.properties }, rel, true);
         for (const item of root.menus || []) this.fromMenu(item, rel);
+        for (const act of root.actions || []) this.fromAction(act, rel);
         for (const child of root.children || []) this.fromNode(child, rel);
+    }
+
+    /* **A command's label is prose the runtime translates**, once for every
+     * place that shows it -- and this never read it. It went unnoticed for as
+     * long as each command also had a button whose tooltip said the same
+     * words, which put the msgid in the template by another road; the Debug
+     * menu's commands have no such button text, and "Pause" fell out of the
+     * catalogue the day the menu items became commands. */
+    fromAction(act, rel) {
+        if (typeof act.text === "string")
+            this.add(act.text, `${rel}: action ${act.name || act.text}`);
     }
 
     /*

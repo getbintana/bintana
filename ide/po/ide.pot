@@ -50,7 +50,7 @@ msgstr ""
 #: forms/NewProjectForm.form: LblName.Text
 #: forms/ProjectForm.form: LblPrName.Text
 #: modules/ControlTree.js:160
-#: modules/Strings.js:277
+#: modules/Strings.js:289
 msgid "Name:"
 msgstr ""
 
@@ -260,7 +260,7 @@ msgid "A width of 0 lets the column size itself. Every column can be dragged wha
 msgstr ""
 
 #: forms/GitForm.form: GitForm.Text
-#: forms/MainForm.js:1862
+#: forms/MainForm.js:1859
 msgid "Changes"
 msgstr ""
 
@@ -464,6 +464,7 @@ msgid "Close tab"
 msgstr ""
 
 #: forms/MainForm.form: menu MnuRename
+#: forms/MainForm.form: action ActRenameCtl
 #: forms/RefsForm.form: BtnRename.Text
 msgid "Rename..."
 msgstr ""
@@ -569,11 +570,6 @@ msgstr ""
 #: forms/MainForm.form: BtnRun.Text
 #: forms/LaunchForm.js:155
 msgid "Run"
-msgstr ""
-
-#: forms/MainForm.form: menu MnuStop
-#: forms/MainForm.form: BtnStop.Text
-msgid "Stop"
 msgstr ""
 
 #: forms/MainForm.form: menu MnuStrict
@@ -685,27 +681,6 @@ msgstr ""
 msgid "_Debug"
 msgstr ""
 
-#: forms/MainForm.form: menu MnuDebug
-#: forms/MainForm.form: ConsoleBox.Tabs
-msgid "Debug"
-msgstr ""
-
-#: forms/MainForm.form: menu MnuPause
-msgid "Pause"
-msgstr ""
-
-#: forms/MainForm.form: menu MnuStepInto
-msgid "Step into"
-msgstr ""
-
-#: forms/MainForm.form: menu MnuStepOver
-msgid "Step over"
-msgstr ""
-
-#: forms/MainForm.form: menu MnuStepOut
-msgid "Step out"
-msgstr ""
-
 #: forms/MainForm.form: menu MnuBreakpoint
 msgid "Toggle breakpoint"
 msgstr ""
@@ -766,6 +741,47 @@ msgstr ""
 msgid "_Help"
 msgstr ""
 
+#: forms/MainForm.form: action ActDelCtl
+#: forms/MainForm.form: BtnDelCtl.Tooltip
+msgid "Delete control"
+msgstr ""
+
+#: forms/MainForm.form: action ActRaise
+#: forms/MainForm.form: BtnRaise.Tooltip
+msgid "Bring to front"
+msgstr ""
+
+#: forms/MainForm.form: action ActLower
+#: forms/MainForm.form: BtnLower.Tooltip
+msgid "Send to back"
+msgstr ""
+
+#: forms/MainForm.form: action ActDebug
+#: forms/MainForm.form: ConsoleBox.Tabs
+msgid "Debug"
+msgstr ""
+
+#: forms/MainForm.form: action ActPause
+msgid "Pause"
+msgstr ""
+
+#: forms/MainForm.form: action ActStepInto
+msgid "Step into"
+msgstr ""
+
+#: forms/MainForm.form: action ActStepOver
+msgid "Step over"
+msgstr ""
+
+#: forms/MainForm.form: action ActStepOut
+msgid "Step out"
+msgstr ""
+
+#: forms/MainForm.form: action ActStop
+#: forms/MainForm.form: BtnStop.Text
+msgid "Stop"
+msgstr ""
+
 #: forms/MainForm.form: Pages.Tabs
 msgid "Welcome"
 msgstr ""
@@ -783,7 +799,7 @@ msgid "Recent"
 msgstr ""
 
 #: forms/MainForm.form: LblStatus.Text
-#: forms/MainForm.js:1255
+#: forms/MainForm.js:1256
 msgid "No project"
 msgstr ""
 
@@ -804,7 +820,7 @@ msgid "Commit what is staged. Enter is the button"
 msgstr ""
 
 #: forms/MainForm.form: BtnTakeDisk.Text
-#: forms/MainForm.js:1941
+#: forms/MainForm.js:1938
 msgid "Reload"
 msgstr ""
 
@@ -906,18 +922,6 @@ msgstr ""
 msgid "Double click an event to write its handler, or to go to it"
 msgstr ""
 
-#: forms/MainForm.form: BtnDelCtl.Tooltip
-msgid "Delete control"
-msgstr ""
-
-#: forms/MainForm.form: BtnRaise.Tooltip
-msgid "Bring to front"
-msgstr ""
-
-#: forms/MainForm.form: BtnLower.Tooltip
-msgid "Send to back"
-msgstr ""
-
 #: forms/MainForm.form: LblOutline.Text
 msgid "Outline"
 msgstr ""
@@ -929,6 +933,30 @@ msgstr ""
 #: forms/MainForm.form: ConsoleBox.Tabs
 #: modules/Problems.js:252
 msgid "Problems"
+msgstr ""
+
+#: forms/MainForm.form: BtnDbgDebug.Tooltip
+msgid "Debug, or continue when stopped (Ctrl+F9)"
+msgstr ""
+
+#: forms/MainForm.form: BtnDbgPause.Tooltip
+msgid "Pause (Ctrl+F8)"
+msgstr ""
+
+#: forms/MainForm.form: BtnDbgInto.Tooltip
+msgid "Step into (F8)"
+msgstr ""
+
+#: forms/MainForm.form: BtnDbgOver.Tooltip
+msgid "Step over (Shift+F8)"
+msgstr ""
+
+#: forms/MainForm.form: BtnDbgOut.Tooltip
+msgid "Step out (Ctrl+Shift+F8)"
+msgstr ""
+
+#: forms/MainForm.form: BtnDbgStop.Tooltip
+msgid "Stop (Shift+F9)"
 msgstr ""
 
 #: forms/MainForm.form: LblStack.Text
@@ -1440,7 +1468,7 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: forms/HelpForm.js:132
-#: forms/MainForm.js:2180
+#: forms/MainForm.js:2177
 msgid "The reference is not installed beside this build."
 msgstr ""
 
@@ -1550,58 +1578,58 @@ msgstr ""
 msgid "the shell ended"
 msgstr ""
 
-#: forms/MainForm.js:1260
+#: forms/MainForm.js:1261
 msgid "{0}   double click to edit"
 msgstr ""
 
-#: forms/MainForm.js:1268
+#: forms/MainForm.js:1269
 msgid "   read-only: not UTF-8"
 msgstr ""
 
-#: forms/MainForm.js:1278
+#: forms/MainForm.js:1279
 msgid "   form {0}x{1}"
 msgstr ""
 
-#: forms/MainForm.js:1281
+#: forms/MainForm.js:1282
 msgid "   Ln {0}, Col {1}"
 msgstr ""
 
-#: forms/MainForm.js:1690
+#: forms/MainForm.js:1687
 msgid "Nothing wrong with the project"
 msgstr ""
 
-#: forms/MainForm.js:1917
+#: forms/MainForm.js:1914
 msgid "{0} is no longer on disk."
 msgstr ""
 
-#: forms/MainForm.js:1919
+#: forms/MainForm.js:1916
 msgid "{0} changed on disk, and there are unsaved changes here."
 msgstr ""
 
-#: forms/MainForm.js:1921
+#: forms/MainForm.js:1918
 msgid "{0} changed on disk."
 msgstr ""
 
-#: forms/MainForm.js:1942
+#: forms/MainForm.js:1939
 msgid "{0} changed on disk. Take the newer file and lose what is unsaved here?"
 msgstr ""
 
-#: forms/MainForm.js:1943
+#: forms/MainForm.js:1940
 msgid "Reload without saving"
 msgstr ""
 
-#: forms/MainForm.js:2256
-#: forms/MainForm.js:2278
+#: forms/MainForm.js:2253
+#: forms/MainForm.js:2275
 #: modules/Navigator.js:74
 msgid "Put the cursor on a name first."
 msgstr ""
 
-#: forms/MainForm.js:2283
+#: forms/MainForm.js:2280
 #: forms/RefsForm.js:105
 msgid "Rename symbol"
 msgstr ""
 
-#: forms/MainForm.js:2283
+#: forms/MainForm.js:2280
 #: forms/RefsForm.js:105
 msgid "New name:"
 msgstr ""
@@ -1667,7 +1695,7 @@ msgid_plural ""
 msgstr[0] ""
 msgstr[1] ""
 
-#: forms/MainForm.js:1262
+#: forms/MainForm.js:1263
 #: forms/QuickForm.js:257
 msgid "{0} file"
 msgid_plural "{0} files"
@@ -1681,13 +1709,13 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: forms/MainForm.js:781
-#: forms/MainForm.js:1493
+#: forms/MainForm.js:1490
 #: modules/Exporter.js:40
 #: modules/Installer.js:29
 msgid "Open a project first."
 msgstr ""
 
-#: forms/MainForm.js:1654
+#: forms/MainForm.js:1651
 msgid "There is no template yet. Run Project > Update translations first: it gathers every string the project shows and writes the .pot a translation starts from."
 msgstr ""
 
@@ -1697,17 +1725,17 @@ msgid ""
 "It can still be edited, but it will not be able to run."
 msgstr ""
 
-#: forms/MainForm.js:1330
+#: forms/MainForm.js:1331
 msgid ""
 "{0}\n"
 "is not there any more."
 msgstr ""
 
-#: forms/MainForm.js:2697
+#: forms/MainForm.js:2698
 msgid "Open a form's design to edit its menus."
 msgstr ""
 
-#: forms/MainForm.js:2730
+#: forms/MainForm.js:2731
 msgid "Open a form's design to edit its tab order."
 msgstr ""
 
@@ -1725,7 +1753,7 @@ msgstr ""
 msgid "{0} is already a project."
 msgstr ""
 
-#: forms/MainForm.js:1603
+#: forms/MainForm.js:1600
 msgid ""
 "Cannot open {0}:\n"
 "{1}"
@@ -2061,7 +2089,7 @@ msgid "none"
 msgstr ""
 
 #: modules/FormFiles.js:144
-#: modules/Strings.js:277
+#: modules/Strings.js:289
 msgid "New form"
 msgstr ""
 
