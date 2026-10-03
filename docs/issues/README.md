@@ -17,6 +17,9 @@ in the same form.
 | [ISSUE-menu-label-extraction.md](ISSUE-menu-label-extraction.md) | A control's menu labels never reach a catalogue |
 | [ISSUE-popover-designer.md](ISSUE-popover-designer.md) | A `Popover` cannot be seen or picked on the design canvas |
 | [ISSUE-worker-locale-order.md](ISSUE-worker-locale-order.md) | A `Task` has no `Locale`, so a worker cannot order names |
+| [ISSUE-xml-list-cost.md](ISSUE-xml-list-cost.md) | Writing a list of N elements costs N times N: `Record.SaveXml` on 8000 tasks takes 151 s, while the read is 3 s and the serialization under one |
+| [ISSUE-xml-ignored-arguments.md](ISSUE-xml-ignored-arguments.md) | A surplus argument is not refused — `parent.Remove(child)` takes the parent out and empties the document, `Add(name, text)` drops the value |
+| [ISSUE-xml-comment-only-element.md](ISSUE-xml-comment-only-element.md) | Nothing says what is in an element that is neither character data nor an element child, so an element holding only a comment reads as empty |
 
 **A gap that is filled is deleted, not archived.** What the runtime can do is in
 [`llm/`](https://github.com/getbintana/bintana-llm/blob/main/docs/llm/README.md), which is where anybody looks for it; an issue kept
@@ -62,7 +65,6 @@ to construct every widget type there is, and a column heading that could offer
 nothing: `HeaderMenu` declares its menu and `HeaderClick(column, button, ctrl,
 shift)` is the press — the one surface of a column view GTK reports nothing
 for — with every item told the column it was opened over.
-
 Never missing: a container that fills the room it is given **and** scrolls when
 it cannot. It was reported against a wall of cameras whose count is only known
 at run time, and it is what a `Scroller` with an `Arrangement` has always done —

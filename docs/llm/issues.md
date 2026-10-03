@@ -184,6 +184,9 @@ needed and what it did instead.
 | No `Locale` inside a `Task`, so a worker cannot order names — the sort has to come back to the main thread, which is what the worker was for | [ISSUE-worker-locale-order](../issues/ISSUE-worker-locale-order.md) |
 | A `Popover` dropped on the design canvas cannot be seen, clicked or dropped into — the control tree is the only road to it, and its content goes in by editing the `.form` | [ISSUE-popover-designer](../issues/ISSUE-popover-designer.md) |
 | A control's `Menu`/`HeaderMenu` declared in a `.form` is invisible to the extractor — the labels are translated at runtime and never reach a catalogue, so the IDE's own four context menus are English under a Spanish one | [ISSUE-menu-label-extraction](../issues/ISSUE-menu-label-extraction.md) |
+| A list in a document costs its square to write — `Children` and `FindAll` rebuild an array of wrappers per access, and `Record.SaveXml` places a list by re-reading its holder per item, so an 8000-task MSPDI plan is a 151-second save against a 3-second read | [ISSUE-xml-list-cost](../issues/ISSUE-xml-list-cost.md) |
+| A surplus argument is not refused. `Remove` declares no parameters and `Add` one, and both are quietly wrong against their own signatures: `parent.Remove(child)` takes the **parent** out — the root, so the document is emptied and `Root` is `null` — and `Add(name, text)` writes an element with no text. They are the only two of twenty-one element members that cannot say no | [ISSUE-xml-ignored-arguments](../issues/ISSUE-xml-ignored-arguments.md) |
+| Nothing says what is in an element that is neither character data nor an element child, so an element holding only a comment reads as an empty leaf, a change to a comment cannot be reported, and an emptiness test deletes it | [ISSUE-xml-comment-only-element](../issues/ISSUE-xml-comment-only-element.md) |
 
 ## One more thing
 
