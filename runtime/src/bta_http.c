@@ -25,6 +25,72 @@
 static SoupSession *http_default_session = NULL;
 static SoupSession *http_default_sync_session = NULL;
 
+/*
+ * What a client was told to trust besides the system's store.
+ *
+ * **Two relations to one file, and the difference is what the file is.** `Ca` is
+ * an issuer: the server's certificate must be *signed by* this one, and the host
+ * must be in it -- which is `g_tls_certificate_verify`, GLib's own chain check,
+ * measured. `Cert` is the server's certificate itself and must be *byte for
+ * byte* that one, which is `g_tls_certificate_is_same`: the pinning the issue
+ * asked for, and a stronger statement than a fingerprint, since a fingerprint
+ * only names the certificate while the file *is* it.
+ *
+ * **Both are read when they are assigned, not per request.** A path that cannot
+ * be read is refused where it was written, and the file is not on the road that
+ * would otherwise be `failing — the same rule `bta_file_path` and the `Add`
+ * conversion follow.
+ *
+ * **Immutable once built, refcounted, and held by the client *and* every job in
+ * flight.** A request outlives the local that made it -- `const c = Http.Client();
+ * c.Get(url, …)` -- so a job cannot read the client's fields, and the Wait road
+ * has no job at all and needs one. A shared, refcounted value is what makes both
+ * the same line; a second copy of the client into the job would be a third
+ * answer to "what does this client trust".
+ */
+typedef struct {
+    int             refcount;
+    GTlsCertificate *ca;    /* `Ca`, or NULL */
+    char           *ca_path;
+    GTlsCertificate *cert;  /* `Cert`, or NULL */
+    char           *cert_path;
+} HttpTlsTrust;
+
+static HttpTlsTrust *http_tls_ref(HttpTlsTrust *t)
+{
+    if (t)
+        t->refcount++;
+    return t;
+}
+
+static void http_tls_unref(HttpTlsTrust *t)
+{
+    if (!t || --t->refcount > 0)
+        return;
+    g_clear_object(&t->ca);
+    g_clear_object(&t->cert);
+    g_free(t->ca_path);
+    g_free(t->cert_path);
+    g_free(t);
+}
+
+/* One certificate file, or an exception naming it. `GTlsCertificate` reads PEM
+ * and DER, so a path to either works and a file that is not a certificate says
+ * so in GLib's own words. */
+static GTlsCertificate *http_tls_cert(JSContext *ctx, const char *path, const char *who)
+{
+    GError         *err  = NULL;
+    GTlsCertificate *cert = g_tls_certificate_new_from_file(path, &err);
+
+    if (!cert) {
+        JS_ThrowTypeError(ctx, "%s: cannot read the certificate '%s': %s", who, path,
+                          err ? err->message : "unknown error");
+        g_clear_error(&err);
+        return NULL;
+    }
+    return cert;
+}
+
 /* One client, two sessions. A pooled connection answers on the context it
  * was made under: the async one's is the default loop, which outlives every
  * request, while each Wait runs on a context of its own that is gone before
@@ -50,6 +116,7 @@ typedef struct {
     char        *auth_pass;
     bool         cookies;    /* true: a jar shared by both sessions */
     SoupCookieJar *jar;      /* owned while cookies are on */
+    HttpTlsTrust *tls;       /* `Tls`; NULL trusts exactly the system's store */
     int           log_level; /* SoupLoggerLogLevel; NONE is off */
     int           idle_ms;   /* 0 is soup's own default (60 s) */
     int           max_conns;     /* constructor-only: soup takes them once */
@@ -94,6 +161,9 @@ typedef struct {
     bool          dead;
     char         *who;       /* the caller's name, for the error text */
     char         *url;       /* what was asked, for the same */
+    /* What this flight was told to trust, referenced -- the client can be gone
+     * before the answer lands, so the job cannot read its fields. */
+    HttpTlsTrust *tls;
 } HttpJob;
 
 static GList *http_jobs;
@@ -138,6 +208,7 @@ static void http_job_free(HttpJob *job)
         g_object_unref(job->sess);
     g_free(job->who);
     g_free(job->url);
+    http_tls_unref(job->tls);
     g_free(job);
 }
 
@@ -170,6 +241,7 @@ static void http_client_finalizer(JSRuntime *rt, JSValue v)
         g_object_unref(c->sess_sync);
     if (c->jar)
         g_object_unref(c->jar);
+    http_tls_unref(c->tls);
     g_free(c->proxy_url);
     g_free(c->base_url);
     /* The runtime is what a finalizer is handed, and freeing against it is
@@ -1780,6 +1852,203 @@ static bool http_log_value(JSContext *ctx, JSValueConst v, const char *who, int 
     return true;
 }
 
+/*
+ * Tls is `{ Ca, Cert }`, `{ Ca }`, `{ Cert }`, `true` (the system store again) or
+ * nothing -- the client's own trust, read where it is assigned.
+ *
+ * **Both files are read here.** A CA path that does not exist is a mistake in a
+ * project file, and finding it out when the first request to an internal server
+ * fails is worse than finding it out on the next line; the same rule the path
+ * conversion and a menu's item labels follow -- a refusal leaves what was there
+ * unchanged.
+ *
+ * **An object with neither key is the system store** rather than an error: that
+ * is what a program writes when it wants to be explicit about asking for the
+ * default, and refusing it would make `Tls: {}` the one spelling of nothing that
+ * throws.
+ */
+static bool http_tls_parse(JSContext *ctx, JSValueConst v, const char *who,
+                           HttpTlsTrust **out)
+{
+    HttpTlsTrust   *t;
+    JSValue         ca, cert;
+    const char     *cas, *certs;
+    bool            has_ca, has_cert;
+
+    *out = NULL;
+    if (JS_IsUndefined(v) || JS_IsNull(v))
+        return true;
+    /* A boolean is the system store, which is what a program building its
+     * options conditionally writes when the option is off. */
+    if (JS_IsBool(v))
+        return true;
+    if (!JS_IsObject(v) || JS_IsArray(v) || JS_IsFunction(ctx, v)) {
+        JS_ThrowTypeError(ctx, "%s: Tls must be an object with Ca and Cert, or nothing", who);
+        return false;
+    }
+
+    ca   = JS_GetPropertyStr(ctx, v, "Ca");
+    cert = JS_GetPropertyStr(ctx, v, "Cert");
+    has_ca   = !JS_IsUndefined(ca)   && !JS_IsNull(ca);
+    has_cert = !JS_IsUndefined(cert) && !JS_IsNull(cert);
+    cas   = has_ca   ? JS_ToCString(ctx, ca)   : NULL;
+    certs = has_cert ? JS_ToCString(ctx, cert) : NULL;
+    if ((has_ca && !cas) || (has_cert && !certs)) {
+        /* The conversion refused and named it; this is not ours to add to. */
+        JS_FreeValue(ctx, ca);
+        JS_FreeValue(ctx, cert);
+        return false;
+    }
+    JS_FreeValue(ctx, ca);
+    JS_FreeValue(ctx, cert);
+
+    if (!cas && !certs)
+        return true;        /* `{}`: the system store, which is what nothing means */
+
+    t = g_new0(HttpTlsTrust, 1);
+    t->refcount = 1;
+    if (cas) {
+        t->ca = http_tls_cert(ctx, cas, who);
+        t->ca_path = g_strdup(cas);
+        if (!t->ca) {
+            JS_FreeCString(ctx, cas);
+            JS_FreeCString(ctx, certs);
+            http_tls_unref(t);
+            return false;
+        }
+    }
+    if (certs) {
+        t->cert = http_tls_cert(ctx, certs, who);
+        t->cert_path = g_strdup(certs);
+        if (!t->cert) {
+            JS_FreeCString(ctx, cas);
+            JS_FreeCString(ctx, certs);
+            http_tls_unref(t);
+            return false;
+        }
+    }
+    JS_FreeCString(ctx, cas);
+    JS_FreeCString(ctx, certs);
+    *out = t;
+    return true;
+}
+
+static JSValue http_client_get_tls(JSContext *ctx, JSValueConst this_val)
+{
+    HttpClientData *c = http_client_data(this_val);
+    JSValue         out;
+
+    if (!c)
+        return JS_ThrowTypeError(ctx, "Tls: not an Http client");
+    if (!c->tls)
+        return JS_NULL;
+
+    out = JS_NewObject(ctx);
+    if (c->tls->ca_path)
+        JS_SetPropertyStr(ctx, out, "Ca", JS_NewString(ctx, c->tls->ca_path));
+    if (c->tls->cert_path)
+        JS_SetPropertyStr(ctx, out, "Cert", JS_NewString(ctx, c->tls->cert_path));
+    return out;
+}
+
+static JSValue http_client_set_tls(JSContext *ctx, JSValueConst this_val, JSValueConst v)
+{
+    HttpClientData *c = http_client_data(this_val);
+    HttpTlsTrust   *t = NULL;
+
+    if (!c)
+        return JS_ThrowTypeError(ctx, "Tls: not an Http client");
+    if (!http_tls_parse(ctx, v, "Tls", &t))
+        return JS_EXCEPTION;
+
+    /* Built before the old one goes, so a refused file leaves the client's trust
+     * exactly as it was. */
+    http_tls_unref(c->tls);
+    c->tls = t;
+    return JS_UNDEFINED;
+}
+
+/*
+ * `SoupMessage::accept-certificate`: what the client was told to trust, asked
+ * about the certificate the server actually presented.
+ *
+ * **The signal only fires when the certificate is unacceptable**, which is what
+ * makes this cheap and safe: a server whose certificate the system store already
+ * trusts never reaches here, so a client with a `Tls` set behaves exactly as one
+ * without it until the store and this disagree. Nothing is connected at all when
+ * the client asked for nothing, so the road a program that never mentions TLS
+ * takes is byte for byte the one it took before this existed.
+ *
+ * **`Cert` is checked before `Ca`, and both are checked.** A pinned certificate
+ * is the stronger statement, so a match wins even when the chain would not
+ * verify; a `Ca` on its own is checked only when nothing pinned matched, so
+ * naming both does not make the pin an OR with the issuer. Either accepts.
+ *
+ * **The host is checked, and that is half of what `Ca` means.** GLib's
+ * `g_tls_certificate_verify` does the whole job -- it reports `BAD_IDENTITY` for
+ * a certificate that does not carry the name we dialled, measured, which is the
+ * check that keeps pinning from being "accept anything signed by this".
+ *
+ * **Returning `FALSE` is soup's own answer**: it propagates and the request
+ * fails with the errors the handshake had, which is what the same request does
+ * with no `Tls` at all. Nothing here widens what is accepted without a file the
+ * program named.
+ */
+static gboolean http_on_accept_certificate(SoupMessage *msg, GTlsCertificate *peer,
+                                           GTlsCertificateFlags errors, gpointer data)
+{
+    HttpTlsTrust       *t    = data;
+    GUri               *uri;
+    const char         *host;
+    GSocketConnectable *identity;
+    int                 port;
+
+    (void)errors;
+    if (!t || !peer)
+        return FALSE;
+
+    if (t->cert && g_tls_certificate_is_same(peer, t->cert))
+        return TRUE;
+
+    if (!t->ca)
+        return FALSE;
+
+    uri  = soup_message_get_uri(msg);
+    host = uri ? g_uri_get_host(uri) : NULL;
+    if (!host) {
+        if (uri)
+            g_uri_unref(uri);
+        return FALSE;       /* no host to check a name against: refuse */
+    }
+    port = g_uri_get_port(uri);
+    g_uri_unref(uri);
+
+    identity = G_SOCKET_CONNECTABLE(g_network_address_new(host, port > 0 ? port : 443));
+    GTlsCertificateFlags left = g_tls_certificate_verify(peer, identity, t->ca);
+
+    g_object_unref(identity);
+    return left == 0;
+}
+
+/* What to attach to a message: nothing when the client asked for nothing, and
+ * otherwise the one signal with a reference on the trust. Both roads call this --
+ * the async one and the Wait -- because a TLS client with the trust on one road
+ * and not the other is the bug this shape exists to make impossible. */
+static void http_tls_closure_free(gpointer data, GClosure *closure)
+{
+    (void)closure;
+    http_tls_unref(data);
+}
+
+static void http_tls_arm(SoupMessage *msg, HttpTlsTrust *t)
+{
+    if (!msg || !t)
+        return;
+    g_signal_connect_data(msg, "accept-certificate",
+                          G_CALLBACK(http_on_accept_certificate), http_tls_ref(t),
+                          http_tls_closure_free, 0);
+}
+
 static JSValue http_client_get_log(JSContext *ctx, JSValueConst this_val)
 {
     HttpClientData *c = http_client_data(this_val);
@@ -2084,6 +2353,10 @@ static JSValue http_start(JSContext *ctx, HttpClientData *c, SoupSession *sess,
     job->id = http_next_id++;
     job->who = g_strdup(who);
     job->url = full; /* kept for the error text */
+    /* What this flight trusts, taken now: the client that named it may be gone
+     * by the time the handshake is even attempted. */
+    job->tls = http_tls_ref(c ? c->tls : NULL);
+    http_tls_arm(msg, job->tls);
     g_object_unref(msg);
 
     http_jobs = g_list_prepend(http_jobs, job);
@@ -2365,14 +2638,23 @@ static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
         return JS_EXCEPTION;
     g_free(full);
 
+    /* The same trust the async road gets, held here for the length of the
+     * flight: a Wait has no job to carry it, and the signal lives on the
+     * message, which is gone by the time this returns. */
+    HttpTlsTrust *tls = http_tls_ref(c ? c->tls : NULL);
+
+    http_tls_arm(msg, tls);
+
     int timeout = 0;
 
     if (!http_int_opt(ctx, opts, "Timeout", c ? c->timeout_ms : 0, &timeout)) {
         g_object_unref(msg);
+        http_tls_unref(tls);
         return JS_EXCEPTION;
     }
     if (timeout < 0) {
         g_object_unref(msg);
+        http_tls_unref(tls);
         return JS_ThrowRangeError(ctx, "%s: Timeout %d is negative", who, timeout);
     }
 
@@ -2438,6 +2720,7 @@ static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
         if (w.bytes)
             g_bytes_unref(w.bytes);
         g_object_unref(msg);
+        http_tls_unref(tls);
 
         JSValue ex = http_throw_error(ctx, who, url, kind, detail, 0);
 
@@ -2452,6 +2735,7 @@ static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
     if (w.bytes)
         g_bytes_unref(w.bytes);
     g_object_unref(msg);
+    http_tls_unref(tls);
     return res;
 }
 
@@ -2661,6 +2945,19 @@ static const JSCFunctionListEntry http_client_props[] = {
      *   login answers the next request
      */
     JS_CGETSET_DEF("Cookies",         http_client_get_cookies, http_client_set_cookies),
+    /* Tls
+     *   `{ Ca, Cert }`, or nothing. `Ca` is a **certificate to verify the
+     *   server's against** — the company's own CA on an internal network, or
+     *   the server's own file when it is self-signed, which is exactly the
+     *   case the system store cannot reach and a per-program file can. `Cert`
+     *   is **the server's certificate, pinned**: it must be byte for byte that
+     *   one. Either accepts; `null` when none is set. Both files are read
+     *   where they are assigned, so a wrong path is a mistake on the next line
+     *   rather than on the first internal request. **The system's store is
+     *   still trusted**, and a server it already accepts never reaches the
+     *   check at all — this is a second opinion, not a replacement
+     */
+    JS_CGETSET_DEF("Tls",             http_client_get_tls, http_client_set_tls),
     /* UserAgent
      *   sent as-is; `""` sends none — and some servers answer the nameless
      *   with an error
@@ -2926,6 +3223,15 @@ static JSValue js_http_client(JSContext *ctx, JSValueConst this_val,
         if (!JS_IsUndefined(ck) && !JS_IsNull(ck))
             c->cookies = JS_ToBool(ctx, ck) > 0;
         JS_FreeValue(ctx, ck);
+
+        JSValue tv = JS_GetPropertyStr(ctx, opts, "Tls");
+
+        if (!http_tls_parse(ctx, tv, "Http.Client", &c->tls)) {
+            JS_FreeValue(ctx, tv);
+            JS_FreeValue(ctx, obj);
+            return JS_EXCEPTION;
+        }
+        JS_FreeValue(ctx, tv);
 
         JSValue lv = JS_GetPropertyStr(ctx, opts, "Log");
 
