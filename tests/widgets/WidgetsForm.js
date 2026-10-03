@@ -14477,11 +14477,22 @@ function Main() {
     }
 
     /* A table in a scrolled window of its own, which is what gives it a
-     * viewport; the host is removed when the table is. */
+     * viewport; the host is removed when the table is.
+     *
+     * **And a size of its own.** An unarranged `Scroller` lays its content out
+     * at the content's *minimum*, and a table's minimum is GTK's to decide: 71
+     * pixels here under 4.22 whatever the host measured, and something else
+     * under the runner's 4.14 -- where one row in a table that was meant to fit
+     * had 13 pixels to scroll, and folding four rows of a tree took 161 off
+     * the extent instead of four rows, because the viewport moved with the
+     * content. Every number this test asserts is measured against the
+     * viewport, so the viewport is declared and not left to a version. */
     geoAdd(t, rows, height) {
         const host = new Scroller();
         host.Resize(360, height || 120);
         this.Fixed1.Add(host);
+        t.Width  = 340;
+        t.Height = height || 120;
         host.Add(t);
         for (let i = 0; i < rows; i++) t.Add([`Row ${i}`, String(i)]);
         t.geoHost = host;
