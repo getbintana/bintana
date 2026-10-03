@@ -5014,14 +5014,14 @@ class WidgetsForm extends Form {
                   'msgid ""\nmsgstr "Content-Type: text/plain; charset=UTF-8\\n"\n\n' +
                   'msgid "both"\nmsgstr "el proyecto"\n');
         File.SaveJson(File.Join(proj, "project.json"),
-                      { name: "uses", startup: "Probe", uses: ["marca"] });
-        File.SaveJson(File.Join(proj, "Probe.form"), {
-            type: "Form", name: "Probe",
-            properties: { Text: "Probe", Width: 200, Height: 80 },
+                      { name: "uses", startup: "Showcase", uses: ["marca"] });
+        File.SaveJson(File.Join(proj, "Showcase.form"), {
+            type: "Form", name: "Showcase",
+            properties: { Text: "Showcase", Width: 200, Height: 80 },
             children: [{ type: "Marca", name: "M", properties: { X: 4, Y: 4 } }],
         });
-        File.Save(File.Join(proj, "Probe.js"), `
-class Probe extends Form {
+        File.Save(File.Join(proj, "Showcase.js"), `
+class Showcase extends Form {
     Form_Open() {
         /*
          * **Never mapped.** Form_Open runs before Show() returns, so hiding here
@@ -5714,19 +5714,19 @@ function Main() {
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.json"),
                       { name: "strict", startup: "Strict",
-                        sources: ["Probe.js", "Strict.js"] });
+                        sources: ["Slab.js", "Strict.js"] });
 
         /* A component of the project: its own `.form`, its own class, placed on
          * the form below like any control. Its `.form` sets **nothing**, so
          * `_lazy` exists only because the class body declares it. */
-        File.SaveJson(File.Join(proj, "Probe.form"), {
+        File.SaveJson(File.Join(proj, "Slab.form"), {
             format: "bintana-form/1",
-            class: "Probe",
+            class: "Slab",
             properties: { Width: 60, Height: 20 },
             children: [],
         });
-        File.Save(File.Join(proj, "Probe.js"),
-                  "class Probe extends Component {\n" +
+        File.Save(File.Join(proj, "Slab.js"),
+                  "class Slab extends Component {\n" +
                   "    _lazy;\n" +
                   "    get Lazy()  { return this._lazy || ''; }\n" +
                   "    set Lazy(v) { this._lazy = String(v); }\n" +
@@ -5742,7 +5742,7 @@ function Main() {
                 { type: "Label",     name: "Lbl",  properties: { Text: "hi" } },
                 { type: "TableView", name: "Tbl",  properties: { X: 1, Y: 40 } },
                 { type: "DrawingArea", name: "Art", properties: { X: 1, Y: 80 } },
-                { type: "Probe",     name: "Cmp",  properties: { X: 1, Y: 110 } },
+                { type: "Slab",      name: "Cmp",  properties: { X: 1, Y: 110 } },
             ],
         });
         File.Save(File.Join(proj, "Strict.js"),
@@ -20449,11 +20449,18 @@ function Main() {
          * that expires one day with nobody watching, and a fixture nobody
          * generated is a fixture nobody can regenerate. Missing either tool
          * skips that one step; it never fails the suite for a machine that
-         * simply does not have openssl. */
+         * simply does not have openssl.
+         *
+         * **Two certificates, and the second is the negative case.** A CA the
+         * server did *not* sign is what "the trust is refused" has to be made
+         * of: with only the one certificate there is nothing to be refused with,
+         * and the assertion that matters -- that a named file widens the trust
+         * and nothing else does -- cannot be written. */
         const tlsDir = File.Join(Environment.TempDirectory,
                                  `bintana-tls-${Environment.ProcessId}`);
         const TlsCert = File.Join(tlsDir, "server.crt");
         const TlsKey = File.Join(tlsDir, "server.key");
+        const OtherCert = File.Join(tlsDir, "other.crt");
         let canTls = Application.HasCommand("openssl") && Application.HasCommand("python3");
 
         if (canTls) {
@@ -20464,13 +20471,95 @@ function Main() {
                                     "-subj", "/CN=127.0.0.1",
                                     "-addext", "subjectAltName=IP:127.0.0.1,DNS:localhost"],
                                    { Timeout: 30000 });
+            /* Same shape, a different key: a certificate that is readable, is a
+             * certificate, and signed nobody. */
+            const other = Exec.Wait(["openssl", "req", "-x509", "-newkey", "rsa:2048",
+                                     "-nodes", "-days", "1",
+                                     "-keyout", File.Join(tlsDir, "other.key"),
+                                     "-out", OtherCert,
+                                     "-subj", "/CN=127.0.0.1",
+                                     "-addext", "subjectAltName=IP:127.0.0.1,DNS:localhost"],
+                                    { Timeout: 30000 });
 
-            canTls = made.ExitCode === 0 && File.Exists(TlsCert) && File.Exists(TlsKey);
+            canTls = made.ExitCode === 0 && other.ExitCode === 0 &&
+                     File.Exists(TlsCert) && File.Exists(TlsKey) && File.Exists(OtherCert);
             if (!canTls)
-                print(`  (skipping the TLS step: openssl exited ${made.ExitCode})`);
+                print(`  (skipping the TLS step: openssl exited ${made.ExitCode}/${other.ExitCode})`);
         } else {
             print("  (skipping the TLS step: it needs openssl and python3)");
         }
+
+        /*
+         * What a client is told to trust besides the system's store.
+         *
+         * The whole of it is a certificate the system store has never heard of:
+         * an internal server on a company's own CA, or self-signed, which is the
+         * installation a report generator meets most and the one nothing else
+         * can be configured for. **The requests are the async road on purpose** --
+         * a `Wait` runs on a context of its own and the server under test lives
+         * on the default one, so asking our own server from a `Wait` deadlocks
+         * rather than answering.
+         */
+        const clientTrustChecks = () => {
+            /* Refusals first, and they are refusals *at the assignment*: a path
+             * that cannot be read is a mistake in a project file and belongs on
+             * the next line, not on the first internal request. The client that
+             * refused keeps exactly what it had. */
+            const probe = Http.Client({ Tls: { Ca: TlsCert } });
+
+            eq("Tls reads back", probe.Tls.Ca, TlsCert);
+
+            for (const [what, fn, name] of [
+                ["Tls that is not an object", () => { probe.Tls = "x"; }, "Tls must be an object"],
+                ["a CA that is not there", () => { probe.Tls = { Ca: File.Join(tlsDir, "no.pem") }; },
+                 "cannot read the certificate"],
+                ["a CA that is not a certificate", () => { probe.Tls = { Ca: TlsKey }; },
+                 "cannot read the certificate"],
+                ["a Ca that is not text", () => { probe.Tls = { Ca: {} }; }, "Tls"],
+            ]) {
+                let complaint = "";
+                try { fn(); } catch (e) { complaint = e.message; }
+                check(what, complaint.includes(name), complaint);
+            }
+            eq("...and the client kept what it had", probe.Tls.Ca, TlsCert);
+            probe.Tls = null;
+            eq("...and null is the system's store", probe.Tls, null);
+            eq("...and assigning it back reads back", (probe.Tls = { Cert: TlsCert },
+                                                       probe.Tls.Cert), TlsCert);
+
+            /*
+             * **No handshake at all, and that is the whole of what this step can
+             * afford.** What is left is everything that is decided by the
+             * *assignment*: the round trip and the four refusals. Nothing here
+             * touches the network, so nothing here depends on a connection
+             * surviving.
+             *
+             * A handshake in this process is not safe, and that is pre-existing
+             * -- `docs/issues/ISSUE-http-two-handshakes.md` reproduces it in forty
+             * lines with a bare `Http.Client()` that was told nothing at all, and
+             * the same file carries the second road (`Http.Server.Stop()` with a
+             * pooled TLS connection still open, which is `corrupted double-linked
+             * list` rather than the first message). Until that is fixed, **the
+             * acceptance this feature is for cannot be asserted in this suite**:
+             * one accepted request aborts the run before the next assertion.
+             *
+             * **What is therefore unasserted, named so whoever fixes it can add
+             * them back**, each one a single handshake:
+             *
+             *   - a bare client is still refused, with `Kind: "Tls"`;
+             *   - `Tls: { Ca }` naming the server's own certificate answers 200;
+             *   - `Tls: { Cert }` naming the server's own certificate answers 200;
+             *   - `Tls: { Ca }` naming a certificate that did **not** sign it is
+             *     refused -- the one that says the trust is a *second opinion*
+             *     and not a replacement;
+             *   - `Tls: { Cert }` naming a certificate that is **not** the
+             *     server's is refused -- the one that says a pin is a pin.
+             *
+             * The two negative ones are the half that matters most and they are
+             * the reason the feature is not a "accept anything" switch, so the
+             * issue is the place to finish this, not a footnote.
+             */
+        };
 
         const srv = Http.Server({ Port: 0 });
         eq("a new server is not running", srv.Running, false);
@@ -20610,6 +20699,8 @@ function Main() {
             srv.Stop();
             if (File.Exists(TlsCert)) File.Delete(TlsCert);
             if (File.Exists(TlsKey)) File.Delete(TlsKey);
+            if (File.Exists(OtherCert)) File.Delete(OtherCert);
+            if (File.Exists(File.Join(tlsDir, "other.key"))) File.Delete(File.Join(tlsDir, "other.key"));
             if (File.IsDir(tlsDir)) Directory.Delete(tlsDir);
             steps.length = 0;
             waiting--;
@@ -20733,6 +20824,7 @@ function Main() {
                     },
                     (code) => {
                         eq("tls probe exits", code, 0);
+                        clientTrustChecks();
                         srv.Stop();
                         srv.Tls = null;
                         srv.Start();
