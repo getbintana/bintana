@@ -13977,6 +13977,20 @@
       ]
     },
     {
+      "Name": "Probe",
+      "Members": [
+        {
+          "Name": "Image",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(path)",
+          "Returns": "{ Width, Height }",
+          "Doc": "the picture's pixels, from its header. `null` when `path` is not a picture this runtime reads — an `.svg` is a document, and the same `Picture` would not have shown it — or is not there. **No widget and no display**, which is what makes it answerable in a `main` project and before anything has been drawn",
+          "Native": true
+        }
+      ]
+    },
+    {
       "Name": "Random",
       "Members": [
         {
@@ -15355,6 +15369,15 @@
           "Signature": "",
           "Returns": "",
           "Doc": "ms before a request is given up on; `0` waits forever",
+          "Native": true
+        },
+        {
+          "Name": "Tls",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`{ Ca, Cert }`, or nothing. `Ca` is a **certificate to verify the server's against** — the company's own CA on an internal network, or the server's own file when it is self-signed, which is exactly the case the system store cannot reach and a per-program file can. `Cert` is **the server's certificate, pinned**: it must be byte for byte that one. Either accepts; `null` when none is set. Both files are read where they are assigned, so a wrong path is a mistake on the next line rather than on the first internal request. **The system's store is still trusted**, and a server it already accepts never reaches the check at all — this is a second opinion, not a replacement",
           "Native": true
         },
         {

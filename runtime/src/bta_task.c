@@ -1175,6 +1175,9 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
     bta_gzip_init(ctx, global);
     /* Reading an archive off the main thread is what a worker is for. */
     bta_zip_init(ctx, global);
+    /* A header read and a dictionary: a report sizing a logo on a thread, which
+     * is the caller a widget could not have served anyway. */
+    bta_probe_init(ctx, global);
 
     /* rad.js, the same text the main thread runs: Dictionary, Regex,
      * Stopwatch, Record, Field, Table and Namespace come from here, and

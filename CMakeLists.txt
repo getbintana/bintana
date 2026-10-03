@@ -195,6 +195,7 @@ add_executable(bintana
     runtime/src/bta_gzip.c
     runtime/src/bta_notification.c
     runtime/src/bta_zip.c
+    runtime/src/bta_probe.c
     runtime/src/bta_desktop.c
     runtime/src/bta_printer.c
     runtime/src/bta_database.c
