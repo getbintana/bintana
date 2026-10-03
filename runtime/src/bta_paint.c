@@ -175,12 +175,25 @@ static double arg_num(JSContext *ctx, JSValueConst v, const char *where, bool *b
  * It lives in `bta_widget.c` now, because every widget answers it as
  * `Widget.Dark` and a second copy of the arithmetic here would be a second
  * answer to one question.
+ *
+ * **The ink comes through `bta_style_root`, and that is the load-bearing line.**
+ * `gtk_widget_get_color` on a control that is in no window answers white in
+ * every theme, and `Save()` -- the call whose whole purpose is to draw with no
+ * frame -- is exactly where that happens: a `Chart` built for a document came
+ * out with a white title, a white legend and white axis labels over a
+ * transparent ground, the slices and bars drawn correctly. It reads as a chart
+ * without words rather than as an error, and every caller had to write
+ * `Foreground = "#222222"` to avoid it. `Widget.Dark` already asked the
+ * application's first window when a control had no root; this asks it too,
+ * which is why it is one function and not two fallbacks. A control *inside* a
+ * window that is merely hidden was measured drawing correctly, so the condition
+ * is *in no window* and not *in no shown window*.
  */
 static void painter_ink(BtaPainter *p, GdkRGBA *rgba)
 {
     *rgba = (GdkRGBA){ 0, 0, 0, 1 };
     if (p->w && p->w->inner)
-        gtk_widget_get_color(p->w->inner, rgba);
+        gtk_widget_get_color(bta_style_root(p->w->inner), rgba);
 }
 
 static char *rgba_text(const GdkRGBA *c)
@@ -224,8 +237,10 @@ static JSValue painter_get_dark(JSContext *ctx, JSValueConst this_val)
 
     /* The widget's own, through the same function `Widget.Dark` answers with:
      * one derivation, so a drawing and the form around it can never disagree
-     * about which way the desktop is. */
-    return JS_NewBool(ctx, bta_widget_dark(p->w ? p->w->inner : NULL));
+     * about which way the desktop is -- and through the same *resolution* of
+     * which widget to ask, or a control in no window would say "light ink" and
+     * the drawing would pick a palette for paper. */
+    return JS_NewBool(ctx, bta_widget_dark(p->w ? bta_style_root(p->w->inner) : NULL));
 }
 
 /* ----------------------------------------------------------------- Color */

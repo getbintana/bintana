@@ -788,6 +788,14 @@ GdkTexture *bta_texture_from_bytes(JSContext *ctx, JSValueConst val, const char 
  * that look like this question answer wrongly). Takes a GtkWidget rather than a
  * BtaWidget because a Painter asks it about the surface it is painting. */
 bool bta_widget_dark(GtkWidget *at);
+/* The widget whose resolved style answers for `at`: `at` itself once it is in a
+ * window, and otherwise the application's first window, which is the answer it
+ * will have the moment it is added. **Every reader of a widget's ink goes
+ * through this**, since the failure without it is silent and looks like
+ * something else: an unrooted control reports white ink, so a drawing saved out
+ * of one comes out with white text and nothing else wrong. NULL in, NULL out --
+ * a console project has no window to borrow a theme from and so has no theme. */
+GtkWidget *bta_style_root(GtkWidget *at);
 /* Scroll a row into view inside whatever scrolled window holds it -- the
  * arithmetic `GtkListBox` has no call for. */
 void bta_widget_reveal(GtkWidget *target);
@@ -1025,6 +1033,17 @@ void bta_notification_init(JSContext *ctx, JSValue global);
  * it too. See runtime/src/bta_zip.c.
  */
 void bta_zip_init(JSContext *ctx, JSValue global);
+
+/* --- Probe ----------------------------------------------------------------
+ *
+ * `Probe.Image(path)` -- what a file *is*, read from its header and with
+ * nothing built: a picture's pixels, which no widget can answer on a console
+ * project and none can answer before a layout has been drawn. The namespace is
+ * the point -- a verb per *kind* of thing, named the way `ffprobe` and
+ * `identify` name the operation. Pure and callback-free, so a worker installs it
+ * too. See runtime/src/bta_probe.c.
+ */
+void bta_probe_init(JSContext *ctx, JSValue global);
 
 /* --- commands: actions and menus ---------------------------------------- */
 

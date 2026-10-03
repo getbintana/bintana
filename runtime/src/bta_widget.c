@@ -6502,16 +6502,40 @@ static JSValue w_set_opacity(JSContext *ctx, JSValueConst this_val, JSValueConst
  * answer it will have the moment it is added. A form is always its own root, so
  * `this.Dark` in `Form_Open` needs none of this -- nor does a control on it,
  * even before the window is presented (also measured).
+ *
+ * **The fallback is one function and every reader of the ink goes through it**,
+ * which is the whole of what `bta_style_root` is. `Widget.Dark` had it and
+ * `Painter.Foreground` did not, so a `Chart` built for a document and saved with
+ * `Save()` drew its title, legend and labels **white on transparent** while the
+ * slices and bars came out right -- a chart without words rather than an error,
+ * and `Save` is precisely the call that needs no window. A control *inside* a
+ * window that is merely hidden was measured drawing correctly, so the condition
+ * is *in no window* and not *in no shown window*.
+ *
+ * **A project with no window at all has no theme to ask** -- a console project
+ * never initialises GTK, so there is no `GtkSettings`, no CSS provider and no
+ * application window to borrow one from, and the answer is white. That is not a
+ * hole in the fallback: a document drawn there is a document with *no* theme in
+ * it, and `lib/report` already says what that means by pinning its own ink
+ * (`INK = "#000000"`) -- "a report is a document that will be printed, and a
+ * theme's ink on white paper is the invisible drawing".
  */
+GtkWidget *bta_style_root(GtkWidget *at)
+{
+    BtaApp *app;
+    GList  *wins;
+
+    if (!at || gtk_widget_get_root(at))
+        return at;
+
+    app  = bta_current_app();
+    wins = app && app->gapp ? gtk_application_get_windows(app->gapp) : NULL;
+    return wins ? GTK_WIDGET(wins->data) : at;
+}
+
 bool bta_widget_dark(GtkWidget *at)
 {
-    if (at && !gtk_widget_get_root(at)) {
-        BtaApp *app  = bta_current_app();
-        GList  *wins = app && app->gapp ? gtk_application_get_windows(app->gapp)
-                                        : NULL;
-        if (wins)
-            at = GTK_WIDGET(wins->data);
-    }
+    at = bta_style_root(at);
     if (!at)
         return false;
 
