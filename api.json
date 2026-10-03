@@ -13985,7 +13985,7 @@
           "Params": 1,
           "Signature": "(path)",
           "Returns": "{ Width, Height }",
-          "Doc": "the picture's pixels, from its header. `null` when `path` is not a picture this runtime reads — an `.svg` is a document, and the same `Picture` would not have shown it — or is not there. **No widget and no display**, which is what makes it answerable in a `main` project and before anything has been drawn",
+          "Doc": "the picture's pixels, from its header. `null` when `path` is not a picture this machine's loaders read -- exactly the files a `Picture` would not show, an `.svg` included where no SVG loader is installed, and its declared size where one is -- or is not there. **No widget and no display**, which is what makes it answerable in a `main` project and before anything has been drawn",
           "Native": true
         }
       ]

@@ -51,9 +51,15 @@
  * GdkPixbuf's `gdk_pixbuf_get_file_info` is the header reader and
  * `gdk_texture_new_from_filename` -- what a `Picture` decodes with -- is built
  * on the same loaders. So a caller told `null` can be sure a `Picture` would not
- * have shown it either. **An `.svg` is `null` here**, and it is also not
- * something a `Picture` draws; an SVG is a *document* to this runtime, which is
- * what `icons/` full of `.svg` files in this tree has always meant.
+ * have shown it either, and the reverse holds too.
+ *
+ * **Which formats that is belongs to the machine, not to this file.** An SVG
+ * was written down here as `null` and measured otherwise: on Fedora 44 GdkPixbuf
+ * reads through glycin, which has an SVG loader, and both this and `Picture`
+ * answer `{ Width: 300, Height: 100 }` for a `viewBox="0 0 300 100"` -- the
+ * size the document declares, since a vector picture has no pixels of its own.
+ * Where no SVG loader is installed both answer nothing. A caller that must
+ * know asks; it does not assume either way.
  *
  * **`null` for both "not there" and "not a picture we read"**, which is one
  * answer for one question and the same one `File.Info` gives for a missing file.
@@ -110,10 +116,11 @@ static JSValue probe_image(JSContext *ctx, JSValueConst this_val,
 static const JSCFunctionListEntry probe_props[] = {
     /* Image(path) -> { Width, Height }
      *   the picture's pixels, from its header. `null` when `path` is not a
-     *   picture this runtime reads — an `.svg` is a document, and the same
-     *   `Picture` would not have shown it — or is not there. **No widget and no
-     *   display**, which is what makes it answerable in a `main` project and
-     *   before anything has been drawn
+     *   picture this machine's loaders read -- exactly the files a `Picture`
+     *   would not show, an `.svg` included where no SVG loader is installed,
+     *   and its declared size where one is -- or is not there. **No widget
+     *   and no display**, which is what makes it answerable in a `main`
+     *   project and before anything has been drawn
      */
     JS_CFUNC_DEF("Image", 1, probe_image),
 };

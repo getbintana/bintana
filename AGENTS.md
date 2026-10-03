@@ -3737,7 +3737,12 @@ person who wrote it either.
   window*; and a **console project has no theme to ask at all** (no GTK
   settings, no window), which is not a hole in the fallback but the truth -- a
   document drawn there has no theme in it, which is what `lib/report` already
-  means by pinning `INK = "#000000"`.
+  means by pinning `INK = "#000000"`. **And the theme's ink is not paper's ink**:
+measured with `GTK_THEME=Adwaita:dark`, the same chart saved with no window comes
+out with *light* text, which on a white page is the original bug back. The
+fallback answers "what would this look like on screen", which is right for a
+control; a program drawing for paper pins its ink, as `lib/report` does and
+`bintana-zabbix` does for its charts.
 - **The IDE copies its dirty tabs aside every thirty seconds, and never writes
   to the project to do it.** `Recovery.js`, into
   `Application.ConfigDirectory/recovery/<digest of the project path>.json`. An
@@ -5079,9 +5084,14 @@ finaliser) whose payoff is the decode cache rather than the size.
 **It reads the same set of files a `Picture` draws**, because
 `gdk_pixbuf_get_file_info` is the header reader and
 `gdk_texture_new_from_filename` -- what `Picture.File` decodes with -- is built
-on the same loaders. So an `.svg` is `null` here and is also not something a
-`Picture` would show: **an SVG is a document to this runtime**, which is what
-`icons/` full of `.svg` has always meant. **`null` for both "not a picture" and
+on the same loaders. **Which files those are is the machine's answer and not
+this runtime's**, and it was first written down wrong: "an `.svg` is `null`
+here", stated in the source, here and in `api.json`, and measured false the
+first time an application used it -- on Fedora 44 GdkPixbuf reads through
+glycin, which has an SVG loader, so `Probe.Image` and `Picture` both answer an
+SVG's declared size (`300x100` for `viewBox="0 0 300 100"`). Where no loader
+reads SVG, both answer nothing. The property that holds is the agreement, not
+the list. **`null` for both "not a picture" and
 "not there"**, one answer for one question and the same one `File.Info` gives; a
 path that is not text is still a **refusal** through `bta_file_path`, because
 `Probe.Image(undefined)` must not quietly probe a file called `./undefined`.
@@ -6285,78 +6295,80 @@ same number without naming what sits above it.
   run can answer the dialog; `on_draw` had the same shape answered years
   before.
 
-## A runtime global shadows a project's own class of the same name
+## A bare class name resolves the way JavaScript does
 
-`bta_lookup_global` resolves a class name **from the global object first** and
-only falls back to `JS_Eval` -- the lexical scope where a top-level `class`
-actually lives -- when the global has nothing by that name. So any installed
-global beats the project's own declaration, and the program does not start:
+`bta_lookup_global` -- what `startup`, a `.form`'s `type`, `Task.Start`,
+`Widget.New` and the class questions all go through -- read the **global object
+first** and fell back to `JS_Eval` only when it had nothing by that name. A
+top-level `class` is a lexical binding and not a property of `globalThis`, so
+every global the runtime installs beat the project's own declaration, and the
+program did not start. Found by adding the global `Probe`, which two
+`tests/widgets` fixtures were already called (they are `Showcase` and `Slab`).
 
-```
-bintana: startup class 'Probe' not found
-```
+**It failed two different ways, and the second one points nowhere near the
+cause.** A global written in C (`File`, `Probe`, `Field`) gave `startup class
+'File' not found`, for a class that was there, loaded and evaluated. A global
+the prelude makes (`Timer`, `Record`) gave `TypeError: not a function` from
+inside `Form`, in an error dialog that kept the process waiting -- the lookup
+found the runtime's object, and building a form out of it is what failed.
 
-**Found by adding the global `Probe`, and it is not about that name.** Every
-installed global is the trap: `Application`, `Bytes`, `Clipboard`, `File`,
-`Hash`, `Http`, `Locale`, `Logger`, `Message`, `Painter`, `Printer`, `Random`,
-`Task`, `Text`, `Xml`, `Zip`, `Timer`, `Field`, `Record`, `Dialog` -- and
-`Timer` is the one a project is most likely to reach for. Two `tests/widgets`
-fixtures had a class called `Probe` and **both** failed the moment it was
-installed; they are `Showcase` and `Slab` now.
+A bare name is now `JS_Eval`'d, which is JavaScript's own order: the lexical
+declaration, then the global property, and a `ReferenceError` for a name that is
+neither -- the same error the fallback always threw. A qualified name
+(`Ide.Designer`) is still a walk down properties. **Nothing got slower**: every
+caller asks the class table first, so `Button` and `Label` never arrive here,
+and the names that do are a project's or a library's, which always went through
+`JS_Eval` before. `tests/widgets`' `ClassNamedLikeAGlobal` runs three children
+-- a startup class called `Timer`, one called `File`, a `.form` control whose
+type is a class called `Probe` -- and is four reds out of five on the old lookup.
 
-**Three places answer "which class is this name" and two of them disagree.**
-`Widget.New` consults **the class table first** and the project's own second,
-and the IDE's completion is built the other way on purpose -- "a class the
-sources declare wins over a class of the same name in the runtime", because in a
-program that uses that library the library's is the class being written.
-`bta_lookup_global` puts the runtime first, and **it is the one a program stops
-at**. The global object is also the wrong thing to ask first on its own terms: a
-top-level `class` is a **lexical binding**, not a property of `globalThis`, so
-the two are not two answers to one question -- and plain JavaScript resolves them
-the other way round.
+**The lesson for adding a global still stands, smaller**: the project's class
+wins now, but a name the runtime publishes is a name a program cannot reach
+while it declares its own, so `grep` the whole tree -- `examples/`, `tests/`,
+`lib/`, not only `runtime/` -- before installing one.
 
-**The lesson for adding a global, which is the sixth place and the one that is
-not in `bta.h`**: a name that is free in `runtime/src` can still be in use by a
-project in this tree, by `examples/`, or by a test fixture, and the failure is
-load-time, says nothing about the collision, and lands in whichever fixture
-happens to have picked it. `grep` the whole tree for the class name before
-installing one, not just `runtime/`.
+## `Tls` on a client: the abort was ours, and the hole was the cache
 
-## An https client and an https server in one process corrupt the heap
+`Http.Client`'s `Tls: { Ca, Cert }` shipped believing that **a second TLS
+handshake in one process corrupts the heap** -- `malloc(): unaligned tcache chunk
+detected`, `G_BOX_MAGIC` at teardown, `corrupted double-linked list` after a
+`Stop()` -- "pre-existing, reproduced with a bare `Http.Client()`", and the suite
+asserted no handshake at all because of it. All three were one line of the new
+code: `http_on_accept_certificate` called `g_uri_unref` on what
+`soup_message_get_uri` returns, which is **transfer none** -- the message's own
+`GUri`, freed while soup still used it. A `GUri` is an atomic rc box, which is
+the `G_BOX_MAGIC`. It only ran on the `Ca` road (a `Cert` pin returns before
+reading the URI), which is why "twelve pinned handshakes" was always clean and
+one `Ca` handshake against an *external* server was enough to abort.
+**AddressSanitizer saw nothing** for the reason the arena note above gives for
+`JSValue`s: glib's rc boxes recycle. Read the transfer annotation of every GLib
+or soup getter you free; `get` usually lends.
 
-`Http.Client`'s `Tls: { Ca, Cert }` is implemented and **measured working** --
-`SoupMessage::accept-certificate` fires, `g_tls_certificate_verify` accepts a
-self-signed certificate the system store rejects, and the request goes through.
-It is also **not assertable end to end on an ordinary build**, because of this,
-which is pre-existing and has nothing to do with `Tls`:
+**The reproducer's "Connection refused" was not TLS either.** Its server was a
+`const` the remaining callbacks did not mention, so it was collected, and a
+collected server disconnects -- the documented "a server lives as long as its
+object", seen with gdb on `close()`: the listening descriptors closed from
+`http_server_finalizer`. Held, every combination of plain and https, before and
+after a `Stop()`/`Start()`, answers. Before believing a listener died, ask
+whether its object did.
 
-- **a second TLS handshake in the process aborts it** --
-  `malloc(): unaligned tcache chunk detected`, detected by glibc in the
-  `g_source_new` soup builds for the second connection's I/O, so the corruption
-  is earlier and only *noticed* there. Reproduced in forty lines with a bare
-  `Http.Client()` that was told nothing at all, and **AddressSanitizer reports
-  nothing on the same run that aborts**;
-- **`Http.Server.Stop()` with one pooled TLS connection still open is the same
-  bug** by another road, and needs no second connection -- `corrupted
-  double-linked list`;
-- quitting with one such connection open trips
-  `g_atomic_rc_box_release_full: assertion 'real_box->magic == G_BOX_MAGIC'`.
-
-Two facts measured while finding it, both of which cost an afternoon: **two
-accepted requests on one client are fine** (the second reuses the pooled
-connection and never handshakes again), so it is a handshake and not a request;
-and **an `Http.Server` whose `Tls` is set before `Start()` answers "Connection
-refused"** and serves nothing, where the same server serves https after a
-`Stop()`/`Start()` cycle -- a separate bug in the same area.
-
-Until it is fixed, `tests/widgets`' `HttpServer` asserts what the **assignment**
-decides -- `Tls`'s round trip and its four refusals -- and no request at all, and
-the five assertions that need a handshake are written out in the step so whoever
-fixes it knows they are waiting. The two that matter most are the *negative*
-ones (`Ca` naming a certificate that did not sign the server, `Cert` naming one
-that is not the server's), because they are what says the trust is a second
-opinion and not an accept-anything switch. Full reproducer and backtraces:
-[`docs/issues/ISSUE-http-two-handshakes.md`](docs/issues/ISSUE-http-two-handshakes.md).
+**And a review found the real hole: a resumed session is never verified.**
+glib-networking caches the TLS sessions of a process by server, and a resumed
+handshake presents no certificate, so `accept-certificate` never fires. A server
+one client accepted with its `Ca` or `Cert` was then reachable by **every other
+client in the process** -- a bare `Http.Client()` included, and one with a wrong
+CA -- which is precisely the "accept-anything" this feature promises not to be.
+Measured against Python's `ssl` (TLS 1.3 tickets by default), and gone against
+the same server with `num_tickets = 0`. `http_tls_no_resume` turns
+`session-resumption-enabled` off on the connections of a client that set `Tls`,
+from `SoupMessage::network-event` at `TLS_HANDSHAKING`; the property is
+glib-networking's (2.72+) and not in GIO's headers, so it is looked up first.
+**`Http.Server` issues no tickets**, so the suite's own server cannot show this:
+`tests/widgets`' `HttpServer` starts a `python3` https child for the one
+assertion that can, and it is red with the call removed. The step now does
+every handshake the feature needs -- a bare client refused, `Ca` and `Cert`
+accepted, a wrong `Ca` and a wrong `Cert` refused, and a bare client after an
+acceptance still refused.
 
 ## Task: what a thread costs here
 
