@@ -915,6 +915,19 @@ JSValue bta_lookup_global(JSContext *ctx, const char *name)
     if (!is_class_path(name))
         return JS_ThrowTypeError(ctx, "'%s' is not a valid class name", name);
 
+    /*
+     * **A bare name is evaluated, and that is JavaScript's own order**: the
+     * global lexical scope -- where a project's `class Timer {}` lives -- before
+     * the global object, where the runtime's `Timer` is a property. Reading the
+     * object first made every installed global beat the project's own class:
+     * `startup class 'File' not found` for a C global, and a `TypeError: not a
+     * function` from inside `Form` for a prelude one (`Timer`, `Record`), with
+     * the class there, loaded and evaluated. An identifier that names nothing
+     * at all is a ReferenceError, which is what the fallback below always threw.
+     */
+    if (!strchr(name, '.'))
+        return JS_Eval(ctx, name, strlen(name), "<class-lookup>", JS_EVAL_TYPE_GLOBAL);
+
     char  **parts = g_strsplit(name, ".", -1);
     JSValue v     = JS_GetGlobalObject(ctx);
 
@@ -937,14 +950,8 @@ JSValue bta_lookup_global(JSContext *ctx, const char *name)
         v = next;
     }
 
-    bool qualified = parts[0] && parts[1];
     g_strfreev(parts);
-
-    if (!JS_IsUndefined(v) || qualified)
-        return v;
-    JS_FreeValue(ctx, v);
-
-    return JS_Eval(ctx, name, strlen(name), "<class-lookup>", JS_EVAL_TYPE_GLOBAL);
+    return v;
 }
 
 /* ---------------------------------------------------------------- globals */

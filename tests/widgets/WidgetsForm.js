@@ -541,6 +541,8 @@ const TESTS = [
     "VideoDroppedInHandler",
     /* A child too: a form opened shorter than it was drawn. */
     "DesignHeightShort",
+    /* Children too: a project's own class named like a runtime global. */
+    "ClassNamedLikeAGlobal",
     "Time",
     "Stopwatch",
     "Shortcut", "Decimal", "FieldDecimal",
@@ -3992,6 +3994,52 @@ class WidgetsForm extends Form {
         if (!m) return;
         eq("opened 100 short, a Fill panel keeps its 10 px gaps", Number(m[1]), 280);
         eq("...and grows with the window after", Number(m[2]), 460);
+    }
+
+    /*
+     * **A project's own class wins over a runtime global of the same name.**
+     * `bta_lookup_global` read the global object first, so every global the
+     * runtime installs beat the project's declaration: `startup class 'File'
+     * not found` for one written in C, a `TypeError: not a function` from
+     * inside `Form` for one the prelude makes (`Timer`, `Record`), and the same
+     * for a control's `type` in a `.form`. JavaScript's own order -- the
+     * lexical declaration before the global property -- is what a bare name
+     * resolves to now. Children, because a startup class is decided once.
+     */
+    testClassNamedLikeAGlobal() {
+        const run = (name, startup, files) => {
+            const dir = File.Join(SCRATCH, "shadow-" + name);
+            Directory.Make(dir);
+            const sources = Dictionary.Keys(files).filter((f) => f.endsWith(".js"));
+            File.SaveJson(File.Join(dir, "project.json"), { name: "shadow" + name, startup: startup, sources: sources });
+            for (const f of Dictionary.Keys(files)) {
+                const v = files[f];
+                if (typeof v === "string") File.Save(File.Join(dir, f), v);
+                else File.SaveJson(File.Join(dir, f), v);
+            }
+            return Exec.Wait([Application.Executable, dir], { Timeout: 30000 });
+        };
+        const form = (cls, children) => ({ format: "bintana-form/1", class: cls,
+                                           properties: { Width: 200, Height: 100 }, children: children || [] });
+        const opens = (cls) =>
+            `class ${cls} extends Form {\n` +
+            `    Form_Open() { this.Visible = false; print("OPENED " + (this instanceof ${cls})); Application.Quit(0); }\n` +
+            `}\n`;
+
+        for (const name of ["Timer", "File"]) {
+            const ran = run(name, name, { [name + ".form"]: form(name), [name + ".js"]: opens(name) });
+            check(`a startup class called ${name} is the project's`, ran.Output.includes("OPENED true"), ran.Output);
+            eq(`...and it exits cleanly`, ran.ExitCode, 0);
+        }
+
+        const ran = run("Control", "F", {
+            "F.form": form("F", [{ type: "Probe", name: "P1", properties: {} }]),
+            "Probe.js": "class Probe extends Panel {}\n",
+            "F.js": "class F extends Form {\n" +
+                    "    Form_Open() { this.Visible = false; print('TYPE ' + (this.P1 instanceof Probe)); Application.Quit(0); }\n" +
+                    "}\n",
+        });
+        check("a control's type named like a global is the project's class", ran.Output.includes("TYPE true"), ran.Output);
     }
 
     MediaVid_Ended() { this.mediaEnded = (this.mediaEnded || 0) + 1; }
