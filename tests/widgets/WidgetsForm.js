@@ -5166,8 +5166,8 @@ class Spike extends Form {
         this.C.Series = [{ Values: [0, 0, 10, 0, 0, 5, 5, 0, 0] }];
         this.C.Save(File.Join("${SCRATCH}", "spike.png"), 400, 240);
 
-        const box  = this.C.lastBox;
-        const zero = this.C.yOf(box, 0), top = this.C.yOf(box, 10);
+        const box  = this.C.Document.lastBox;
+        const zero = this.C.Document.yOf(box, 0), top = this.C.Document.yOf(box, 10);
         let curves = 0, out = 0;
 
         for (const line of this.C.Canvas.Dump().split("\\n")) {
@@ -5195,36 +5195,36 @@ class Spike extends Form {
         this.C.From  = 500;
         this.C.Save(File.Join("${SCRATCH}", "window.png"), 400, 240);
 
-        const b = this.C.lastBox;
+        const b = this.C.Document.lastBox;
         print("count:" + b.view.count);
         print("from:" + b.view.from);
         /* The map and its inverse, at both edges and in the middle. */
         print("roundtrip:" + [500, 550, 599]
-            .every((i) => this.C.indexAt(b, this.C.xOf(b, i)) === i));
+            .every((i) => this.C.Document.indexAt(b, this.C.Document.xOf(b, i)) === i));
         /* Zoomed in far enough, every sample is drawn with its own index -- which
          * is what zooming a decimated series is for. */
-        const drawn = this.C.reduce(long, 400, b.view);
+        const drawn = this.C.Document.reduce(long, 400, b.view);
         print("samples:" + drawn.length + "," + drawn[0][0] + "," + drawn.at(-1)[0]);
 
         /* Clamped, both ways: more than there is shows everything, and a start
          * past the end is pulled back to where the last window fits. */
         this.C.Count = 99999;
-        print("clamped:" + this.C.view().whole);
+        print("clamped:" + this.C.Document.view().whole);
         this.C.Count = 100;
         this.C.From  = 99999;
-        print("pulled:" + this.C.view().from);
+        print("pulled:" + this.C.Document.view().from);
 
         /* And the wheel keeps the datum under the pointer where it was: zooming
          * is a lens, not a jump. */
         this.C.From = 1000; this.C.Count = 200;
         this.C.Save(File.Join("${SCRATCH}", "window.png"), 400, 240);
-        const box2 = this.C.lastBox;
+        const box2 = this.C.Document.lastBox;
         this.C.pointer = (box2.left + box2.right) / 2;
-        const under = this.C.indexAt(box2, this.C.pointer);
+        const under = this.C.Document.indexAt(box2, this.C.pointer);
         this.C.Canvas_MouseWheel(0, -1);
         this.C.Save(File.Join("${SCRATCH}", "window.png"), 400, 240);
-        print("closer:" + (this.C.view().count < 200));
-        print("kept:" + Math.abs(this.C.indexAt(this.C.lastBox, this.C.pointer) - under));
+        print("closer:" + (this.C.Document.view().count < 200));
+        print("kept:" + Math.abs(this.C.Document.indexAt(this.C.Document.lastBox, this.C.pointer) - under));
 
         Application.Quit(0);
     }

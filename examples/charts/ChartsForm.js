@@ -209,20 +209,20 @@ class ChartsForm extends Form {
 
     BtnMeasure_Click() {
         const watch = new Stopwatch().Start();
-        const from  = this.Load.frames || 0;
+        const from  = this.Load.Document.frames || 0;
 
         this.BtnMeasure.Enabled = false;
         const tick = Timer.Every(4, () => this.Load.Refresh());
 
         Timer.After(1000, () => {
             tick.Stop();
-            const fps = (this.Load.frames - from) / (watch.Elapsed / 1000);
+            const fps = (this.Load.Document.frames - from) / (watch.Elapsed / 1000);
             this.BtnMeasure.Enabled = true;
             this.say(Locale.Text("{0} readings, {1} — {2} frames/s, {3} ms drawn",
                                  String(this.readings.length),
                                  this.ChkReduce.Active ? Locale.Text("decimated")
                                                        : Locale.Text("every point"),
-                                 fps.toFixed(1), (this.Load.drawn || 0).toFixed(1)));
+                                 fps.toFixed(1), (this.Load.Document.drawn || 0).toFixed(1)));
         });
     }
 

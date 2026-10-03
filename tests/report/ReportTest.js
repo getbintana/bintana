@@ -110,6 +110,7 @@ class ReportTest extends Form {
             this.testAuto();
             this.testSave();
             this.testPdf();
+            this.testDocument();
             this.testPrint();
             this.testExtremes();
             this.testCharts();
@@ -857,6 +858,186 @@ class ReportTest extends Form {
         check("and the half of it that existed is gone", !File.Exists(broken));
     }
 
+    /* ------------------------------------------------------------ document
+     *
+     * `ReportDocument` is the report with no control, which is what a `main`
+     * project writes a PDF with. Three things are worth holding: it paginates
+     * as the control does (the control *is* one of these), `Paint` draws the
+     * call for call what the control exports for that page, and it writes a
+     * PDF from a project that never initialised GTK -- which is the reason it
+     * exists, and is asked of a real child process.
+     */
+    testDocument() {
+        const at = (name) => File.Join(SCRATCH, name);
+        const sections = {
+            PageHeader: { Height: 20, Elements: [{ Kind: "Text", Text: "Header", X: 0, Y: 0 }] },
+            Detail:     { Height: 100, Elements: [{ Kind: "Field", Field: "T", X: 0, Y: 0 }] },
+        };
+
+        this.Rep.Paper    = "A4";
+        this.Rep.Margins  = 40;
+        this.Rep.Sections = sections;
+        this.Rep.Data     = rows(1, 12);
+
+        const d = new ReportDocument();
+        check("a ReportDocument is not a control", !(d instanceof Widget));
+        check("and the control's own is one", this.Rep.Document instanceof ReportDocument);
+        d.Sections = sections;
+        d.Data     = rows(1, 12);
+        eq("it paginates as the control does", d.PageCount, this.Rep.PageCount);
+
+        d.Data = rows(1, 3);
+        eq("and assigning Data throws the old pages away", d.PageCount, 1);
+        d.Data = rows(1, 12);
+
+        /* Paint on somebody else's frame, against the control's export of the
+         * same page at the same size: the same calls, in the same order. */
+        let which = 2;
+        const area = new DrawingArea();
+        this.Add(area);
+        area.On("Draw", (p, w, h) => d.Paint(p, which, w, h));
+        area.Save(at("doc-page.png"), 595, 842);
+        const painted  = area.Dump();
+        const exported = this.page(2).join("\n");
+        check("Paint draws what the control exports for that page", painted === exported,
+              `${painted.length} against ${exported.length} characters`);
+
+        which = 99;
+        area.Save(at("doc-last.png"), 595, 842);
+        check("and a page past the end is the last one",
+              area.Dump() === this.page(this.Rep.PageCount).join("\n"));
+        area.Remove();
+
+        const pdf = at("document.pdf");
+        d.SavePdf(pdf);
+        eq("SavePdf writes a PDF with no control", File.Info(pdf).Type, "application/pdf");
+        d.Save(at("document.png"), 3, 1);
+        eq("and Save one page at the paper's size", JSON.stringify(Probe.Image(at("document.png"))),
+           JSON.stringify({ Width: 595, Height: 842 }));
+
+        /* A chart's document paints what the control saves. */
+        const c = new Chart();
+        this.Add(c);
+        c.Type   = "Bar";
+        c.Title  = "Parity";
+        c.Labels = ["x", "y", "z"];
+        c.Series = [{ Name: "s", Values: [1, 4, 2] }];
+        c.Save(at("chart-control.png"), 300, 180);
+        const saved = c.Canvas.Dump();
+        const cd = new ChartDocument();
+        check("a ChartDocument is not a control", !(cd instanceof Widget));
+        check("and the control's own is one", c.Document instanceof ChartDocument);
+        cd.Type   = "Bar";
+        cd.Title  = "Parity";
+        cd.Labels = ["x", "y", "z"];
+        cd.Series = [{ Name: "s", Values: [1, 4, 2] }];
+        const pane = new DrawingArea();
+        this.Add(pane);
+        pane.On("Draw", (p, w, h) => cd.Paint(p, w, h));
+        pane.Save(at("chart-doc.png"), 300, 180);
+        check("ChartDocument.Paint draws what the control saves", pane.Dump() === saved,
+              `${pane.Dump().length} against ${saved.length} characters`);
+        c.Type = "Line";
+        eq("and the control's properties are its document's", c.Document.Type, "Line");
+        pane.Remove();
+        c.Remove();
+
+        /* A colour per value: a pie's slices, the legend beside them, and a
+         * bar chart's bars -- the issue was a doughnut of severities whose
+         * Disaster was blue beside a table where it is red. */
+        const RED = "#e45959", ORANGE = "#e97659", GREY = "#97aab3";
+        const colours = (dump) => dump.split("\n").filter((l) => l.startsWith("Color #"))
+                                       .map((l) => l.slice(6));
+        const pie = new ChartDocument();
+        pie.Type   = "Doughnut";
+        pie.Legend = "Bottom";
+        pie.Labels = ["Disaster", "High", "Average", "Not classified"];
+        pie.Series = [{ Name: "Problems", Values: [3, 0, 2, 1], Colors: [RED, ORANGE, "", GREY] }];
+        const pane2 = new DrawingArea();
+        this.Add(pane2);
+        pane2.On("Draw", (p, w, h) => pie.Paint(p, w, h));
+        pane2.Save(at("pie.png"), 320, 240);
+        const drawn = colours(pane2.Dump());
+        eq("a slice takes its value's colour, and a zero keeps the rest in place",
+           drawn.slice(0, 3).join(" "), `${RED} #e5a50a ${GREY}`);
+        check("an empty entry is the palette's colour for that slice", drawn[1] === "#e5a50a",
+              drawn.join(" "));
+        check("and the legend names each slice in its colour",
+              [RED, ORANGE, "#e5a50a", GREY].every((c) => drawn.slice(3).includes(c)), drawn.join(" "));
+
+        const bars = new ChartDocument();
+        bars.Type   = "Bar";
+        bars.Legend = "None";
+        bars.Labels = ["a", "b"];
+        bars.Series = [{ Name: "n", Values: [1, 2], Colors: [RED, GREY] }];
+        pane2.On("Draw", null);
+        pane2.On("Draw", (p, w, h) => bars.Paint(p, w, h));
+        pane2.Save(at("bars.png"), 320, 240);
+        const barColours = colours(pane2.Dump());
+        check("a bar chart's bars take theirs too", barColours.includes(RED) && barColours.includes(GREY),
+              barColours.join(" "));
+        throws("Colors is a list, and a string is Color's job",
+               () => { bars.Series = [{ Values: [1], Colors: RED }]; });
+        pane2.Remove();
+
+        /* A `main` project: no GTK, no display, no widget -- and a PDF. */
+        const dir = at("console");
+        Directory.Make(dir);
+        File.Save(File.Join(dir, "project.json"), JSON.stringify({
+            id: "ar.test.ReportConsole", main: "Main", uses: ["report", "charts"], sources: ["Main.js"],
+        }));
+        File.Save(File.Join(dir, "Main.js"), `
+            function Main() {
+                const d = new ReportDocument();
+                d.Paper = "A5";
+                d.Orientation = "Landscape";
+                d.Sections = {
+                    ReportHeader: { Height: 90, Elements: [
+                        { Kind: "Image", File: ${JSON.stringify(File.Join(Application.Directory, "mark.png"))}, X: 0, Y: 0, Height: 40 },
+                        { Kind: "Text", Text: "Console report", X: 80, Y: 0, Font: "Sans Bold 16" } ] },
+                    Detail: { Height: "Auto", Elements: [
+                        { Kind: "Field", Field: "T", X: 0, Y: 0, Width: 300, Wrap: true } ] },
+                    PageFooter: { Height: 16, Elements: [{ Kind: "Text", Text: "@Page / @Pages", X: 0, Y: 0 }] },
+                };
+                const rows = [];
+                for (let i = 0; i < 40; i++) rows.push({ T: "row " + i });
+                d.Data = rows;
+                d.SavePdf(Application.Arguments[0]);
+                print("pages=" + d.PageCount);
+
+                const c = new ChartDocument();
+                c.Type   = "Pie";
+                c.Title  = "Console chart";
+                c.Labels = ["a", "b", "c"];
+                c.Series = [{ Name: "n", Values: [3, 2, 1] }];
+                c.Save(Application.Arguments[1], 320, 200);
+                print("chartbytes=" + c.ToPng(64, 40).Length);
+                Application.Quit(0);
+            }`);
+        const out   = at("console.pdf");
+        const chart = at("console-chart.png");
+        const r = Exec.Wait([Application.Executable, dir, out, chart],
+                            { Timeout: 30000, Environment: { DISPLAY: "", WAYLAND_DISPLAY: "" } });
+        eq("a main project writes a report", r.ExitCode, 0);
+        const said = /pages=(\d+)/.exec(r.Output || "");
+        check("and says how many pages", said !== null, r.Output);
+        eq("which is a PDF", File.Exists(out) ? File.Info(out).Type : "nothing", "application/pdf");
+        eq("and a chart is a PNG of the size asked for", JSON.stringify(Probe.Image(chart)),
+           JSON.stringify({ Width: 320, Height: 200 }));
+        check("which ToPng answers as bytes too", /chartbytes=[1-9]\d+/.test(r.Output || ""), r.Output);
+
+        if (said && Application.HasCommand("pdfinfo")) {
+            const info = Exec.Wait(["pdfinfo", out], { Timeout: 10000 }).Output;
+            eq("of that many pages", /Pages:\s+(\d+)/.exec(info)?.[1], said[1]);
+            check("on A5 landscape", /Page size:\s+595(\.\d+)? x 420/.test(info), info);
+        }
+        if (Application.HasCommand("pdftotext")) {
+            const text = Exec.Wait(["pdftotext", out, "-"], { Timeout: 10000 }).Output;
+            check("with its text as text", text.includes("Console report") && text.includes("row 39"),
+                  text.slice(0, 200));
+        }
+    }
+
     /* ---------------------------------------------------------------- print
      *
      * A report reaches paper through `Printer`, and what this asserts is the
@@ -928,7 +1109,7 @@ class ReportTest extends Form {
      */
     testExtremes() {
         const rep = this.Rep;
-        const of  = (vals) => rep.computeTotals(vals.map((v) => ({ V: v })), ["V"]).V;
+        const of  = (vals) => rep.Document.computeTotals(vals.map((v) => ({ V: v })), ["V"]).V;
 
         /* Numeric text is a number: as text, "10" is before "9". */
         const text = of(["9", "10", "2"]);
@@ -1010,11 +1191,11 @@ class ReportTest extends Form {
         c.Type = "Line";
         c.Series = [{ Values: [1, 2, null, 4] }];
         draw();
-        const gapX = c.xOf(c.lastBox, 2);
-        eq("the pointer over a gap finds nothing", c.at(gapX, 50), null);
-        c.hover = { series: 0, at: 2, value: NaN };
+        const gapX = c.Document.xOf(c.Document.lastBox, 2);
+        eq("the pointer over a gap finds nothing", c.Document.at(gapX, 50), null);
+        c.Document.hover = { series: 0, at: 2, value: NaN };
         drew("a highlight on a gap does not lose the frame");
-        c.hover = null;
+        c.Document.hover = null;
 
         /* ---- the y range */
         throws("YMin refuses a word", () => { c.YMin = "abc"; });
@@ -1033,7 +1214,7 @@ class ReportTest extends Form {
         c.Type = "Bar";
         draw();
         check("a stacked Line turned Bar measures the stack",
-              c.lastBox.hi >= 10, `hi ${c.lastBox.hi}`);
+              c.Document.lastBox.hi >= 10, `hi ${c.Document.lastBox.hi}`);
         c.Stacked = false;
 
         /* ---- a pie keeps each value's index */
@@ -1041,7 +1222,7 @@ class ReportTest extends Form {
         c.Series = [{ Values: [3, 0, 2] }];
         draw();
         eq("a pie's slices keep their values' indices",
-           JSON.stringify(c.slices.map((x) => x.at)), "[0,2]");
+           JSON.stringify(c.Document.slices.map((x) => x.at)), "[0,2]");
 
         /* ---- a long stack shares its indices */
         const a = [], b = [];
@@ -1059,7 +1240,7 @@ class ReportTest extends Form {
             const m = l.match(/^(?:MoveTo|LineTo) \([-\d.]+,([-\d.]+)\)/);
             if (m) low = Math.max(low, Number(m[1]));
         }
-        const base = c.yOf(c.lastBox, 0);
+        const base = c.Document.yOf(c.Document.lastBox, 0);
         check("a decimated stack's second band stays on the first",
               fills.length >= 2 && path2.length > 10 && low < base - 1, `lowest ${low}, baseline ${base}`);
 
@@ -1070,19 +1251,19 @@ class ReportTest extends Form {
          * series could ever be hovered, whichever band the pointer was in. */
         c.Series = [{ Values: [5, 5, 5] }, { Values: [3, 3, 3] }];
         draw();
-        const sx = c.xOf(c.lastBox, 1);
-        const onTop = c.at(sx, c.yOf(c.lastBox, 6.5));
+        const sx = c.Document.xOf(c.Document.lastBox, 1);
+        const onTop = c.Document.at(sx, c.Document.yOf(c.Document.lastBox, 6.5));
         eq("the pointer in the upper band is on the second series",
            onTop && onTop.series, 1);
         eq("...and reports that series' own value", onTop && onTop.value, 3);
-        eq("the pointer in the lower band is on the first", (c.at(sx, c.yOf(c.lastBox, 2)) || {}).series, 0);
-        c.hover = onTop;
+        eq("the pointer in the lower band is on the first", (c.Document.at(sx, c.Document.yOf(c.Document.lastBox, 2)) || {}).series, 0);
+        c.Document.hover = onTop;
         const marked = draw().split("\n").find((l) => l.startsWith("Arc") && l.includes(" r3.5 ")) || "";
         const markY  = Number((marked.match(/^Arc \([-\d.]+,([-\d.]+)\)/) || [])[1]);
         check("the mark sits on the top of its band",
-              Math.abs(markY - c.yOf(c.lastBox, 8)) < 0.6,
-              `${marked} against ${c.yOf(c.lastBox, 8)}`);
-        c.hover = null;
+              Math.abs(markY - c.Document.yOf(c.Document.lastBox, 8)) < 0.6,
+              `${marked} against ${c.Document.yOf(c.Document.lastBox, 8)}`);
+        c.Document.hover = null;
         c.Stacked = false;
 
         /* ---- a wheel over the whole series is not consumed */
@@ -1105,7 +1286,7 @@ class ReportTest extends Form {
         c.Type = "Bar";
         c.Series = [{ Values: [5] }];
         draw();
-        const bar = c.bars[0], mid = (c.lastBox.left + c.lastBox.right) / 2;
+        const bar = c.Document.bars[0], mid = (c.Document.lastBox.left + c.Document.lastBox.right) / 2;
         check("a lone bar is centred", Math.abs(bar.x + bar.w / 2 - mid) < 4,
               `bar at ${bar.x + bar.w / 2}, middle ${mid}`);
 

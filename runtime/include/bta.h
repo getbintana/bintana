@@ -500,6 +500,9 @@ void bta_painter_init(JSContext *ctx, JSValue global);
 /* `Text`: what a string measures, asked where there is no painter -- the same
  * font map and the same resolution a Painter's TextWidth answers with. */
 void bta_metrics_init(JSContext *ctx, JSValue global);
+/* `Drawing`: a Painter over a PNG or a PDF with no control behind it, so a
+ * project with no display can draw a document. */
+void bta_drawing_init(JSContext *ctx, JSValue global);
 void bta_text_register(void);      /* bta_text.c: Editor and TextEditor */
 /* The plumbing both editors need over whichever view they built: the scroller
  * that becomes `gtk`, the buffer's `Change` and `Cursor`, and the watch without

@@ -12579,6 +12579,38 @@
       ]
     },
     {
+      "Name": "Drawing",
+      "Members": [
+        {
+          "Name": "Save",
+          "Kind": "Method",
+          "Params": 4,
+          "Signature": "(path, width, height, draw)",
+          "Returns": "",
+          "Doc": "`draw(painter, width, height)` against an image of that size, written as a PNG — `DrawingArea.Save` with the handler passed in place of the control, so it needs **no widget and no display**. Ink black, the font `Text` measures with. A `draw` that throws writes no file, and the throw is this call's",
+          "Native": true
+        },
+        {
+          "Name": "SavePdf",
+          "Kind": "Method",
+          "Params": 5,
+          "Signature": "(path, width, height, pages, draw)",
+          "Returns": "",
+          "Doc": "`draw(painter, page, width, height)` once per page into one **PDF** — `DrawingArea.SavePdf` with the drawing passed in place of the control, and `DrawPage`'s own arguments. The size is in **points**, 72 to the inch (A4 is 595×842); `pages` may be `undefined` for one. What a `main` project prints with: **no widget and no display**. A page that throws leaves **no file**",
+          "Native": true
+        },
+        {
+          "Name": "ToPng",
+          "Kind": "Method",
+          "Params": 3,
+          "Signature": "(width, height, draw)",
+          "Returns": "Bytes",
+          "Doc": "the same picture as `Save`, answered as `Bytes` instead of written",
+          "Native": true
+        }
+      ]
+    },
+    {
       "Name": "Environment",
       "Members": [
         {
@@ -14543,7 +14575,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "the desktop's UI font, which is what a control draws with unless CSS says otherwise. `\"\"` where there is no display to ask",
+          "Doc": "the desktop's UI font, which is what a control draws with unless CSS says otherwise. Where there is no desktop to ask — a `main` project — GTK's own default, `\"Sans 10\"`, which is what `Drawing` draws in",
           "Native": true
         },
         {
@@ -15931,6 +15963,15 @@
               "Native": false
             },
             {
+              "Name": "Document",
+              "Kind": "ReadOnly",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "the chart itself — a `ChartDocument`, which is what draws. Every property below that is not about the pointer is a property of it",
+              "Native": false
+            },
+            {
               "Name": "From",
               "Kind": "Property",
               "Params": -1,
@@ -16008,7 +16049,7 @@
               "Params": -1,
               "Signature": "",
               "Returns": "",
-              "Doc": "the data: `[{ Name, Values, Color, Axis }]` — see below. Defaults to `[]`. Assigning it redraws",
+              "Doc": "the data: `[{ Name, Values, Color, Colors, Axis }]` — see below. Defaults to `[]`. Assigning it redraws",
               "Native": false
             },
             {
@@ -16092,6 +16133,193 @@
               "Doc": "the window changed — the wheel, a drag, or the double click that resets it"
             }
           ]
+        },
+        {
+          "Name": "ChartDocument",
+          "Parent": "",
+          "Members": [
+            {
+              "Name": "Antialias",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "smooth edges. Off is faster and looks it; `Reduced` is the knob that actually matters. Defaults to `true`.",
+              "Native": false
+            },
+            {
+              "Name": "Count",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "how many are on screen; `0` is all of them. Defaults to `0`.",
+              "Native": false
+            },
+            {
+              "Name": "Curved",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "rounded lines for `Line` and `Area`, **monotone**: between two samples the curve stays between their values and flattens at a peak instead of inventing a taller one. Off by default because a curve says something about values nobody measured. Defaults to `false`.",
+              "Native": false
+            },
+            {
+              "Name": "Decimals",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "how the numbers are written, `0` to `6`; goes through `Locale.Number`, so the separators are the user's. Defaults to `0`.",
+              "Native": false
+            },
+            {
+              "Name": "From",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "the first value on screen. Defaults to `0`.",
+              "Native": false
+            },
+            {
+              "Name": "Grid",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "the horizontal rules behind the data. Defaults to `true`.",
+              "Native": false
+            },
+            {
+              "Name": "Labels",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "the category axis, as strings. As many as there are values is a label per bar; **fewer** is marks spread evenly across the plot; a pie names its slices from them. Defaults to `[]`.",
+              "Native": false
+            },
+            {
+              "Name": "Legend",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "`None` `Top` `Bottom`. It wraps to at most **three** rows and whatever did not fit is not drawn: a legend of thirty series is the wrong control, and eating the plot to hold one is worse. Defaults to `\"Bottom\"`.",
+              "Native": false
+            },
+            {
+              "Name": "Marks",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "`[{ At, Text }]`, `At` being an index into the values — a **real** time axis, where the caller says where each label goes. Replaces `Labels` on the x axis while it is set. Defaults to `[]`.",
+              "Native": false
+            },
+            {
+              "Name": "Paint",
+              "Kind": "Method",
+              "Params": 3,
+              "Signature": "(p, width, height)",
+              "Returns": "",
+              "Doc": "draws the chart with `p` into `width`×`height` — for a painter something else opened: a `Drawing`, a report's page, a `DrawPage` of your own. The ink is the painter's `Foreground`, so on paper it is black",
+              "Native": false
+            },
+            {
+              "Name": "Reduced",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "more points than pixel columns are decimated to a min and a max per column, which keeps the envelope — a one-sample spike survives it. Defaults to `true`. On by default",
+              "Native": false
+            },
+            {
+              "Name": "Save",
+              "Kind": "Method",
+              "Params": 3,
+              "Signature": "(path, width, height)",
+              "Returns": "",
+              "Doc": "the drawing to a PNG of any size. **No widget and no display**: it draws through `Drawing`, so a `main` project has charts too",
+              "Native": false
+            },
+            {
+              "Name": "Series",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "the data: `[{ Name, Values, Color, Colors, Axis }]` — see below. Defaults to `[]`. Assigning it redraws",
+              "Native": false
+            },
+            {
+              "Name": "ShowValues",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "the number on the bar or the percentage in the slice, drawn only where it measures as fitting. Defaults to `false`.",
+              "Native": false
+            },
+            {
+              "Name": "Stacked",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "series piled instead of side by side. Applies to `Bar` and `Area`; a line and a pie **ignore** it rather than refusing, so the order of two lines in a `.form` never matters. Defaults to `false`.",
+              "Native": false
+            },
+            {
+              "Name": "Title",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "above the plot. **Translated**. Defaults to `\"\"`.",
+              "Native": false
+            },
+            {
+              "Name": "ToPng",
+              "Kind": "Method",
+              "Params": 2,
+              "Signature": "(width, height)",
+              "Returns": "",
+              "Doc": "the same drawing as `Save`, answered as `Bytes` — a chart to attach or put in a reply, with nothing on disk",
+              "Native": false
+            },
+            {
+              "Name": "Type",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "`Bar` `Line` `Area` `Pie` `Doughnut`. Defaults to `\"Bar\"`.",
+              "Native": false
+            },
+            {
+              "Name": "YMax",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "likewise the top. Defaults to `\"\"`.",
+              "Native": false
+            },
+            {
+              "Name": "YMin",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "pins the bottom of the y axis; `\"\"` (or `null`) works it out from the data, on *nice* numbers rather than on the data's own extremes. A value that is not a finite number is refused where it is assigned — stored, it left the axis with no ticks and every frame threw. Defaults to `\"\"`.",
+              "Native": false
+            }
+          ],
+          "Events": []
         }
       ]
     },
@@ -16662,6 +16890,15 @@
               "Native": false
             },
             {
+              "Name": "Document",
+              "Kind": "ReadOnly",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "the report itself — a `ReportDocument`, which is what draws. Everything below that is not about the screen is a property of it",
+              "Native": false
+            },
+            {
               "Name": "Margins",
               "Kind": "Property",
               "Params": -1,
@@ -16730,7 +16967,7 @@
               "Params": 1,
               "Signature": "(path)",
               "Returns": "",
-              "Doc": "**every page, one file**. Vector, at the paper's exact size, so the text in it is text; the pages are the ones the last measure worked out. This is what a report is for — `Save` is for when one page is going into something else",
+              "Doc": "**every page, one file**. Vector, at the paper's exact size, so the text in it is text; the pages are the ones the last measure worked out. This is what a report is for — `Save` is for when one page is going into something else. With no display, `Document.SavePdf` is the same file",
               "Native": false
             },
             {
@@ -16764,6 +17001,103 @@
               "Doc": "the pages were computed: `Data`, `Sections` or `Refresh()`. `count` is the new `PageCount`. Changing the paper, the orientation or the margins re-measures **silently** — read `PageCount` back on the next line — because those can be written in a `.form`, and an event raised while a form is loading arrives before the form's other controls exist"
             }
           ]
+        },
+        {
+          "Name": "ReportDocument",
+          "Parent": "",
+          "Members": [
+            {
+              "Name": "Data",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "the rows: an array of plain objects. `Field` elements read a key off the current row; the group bands read the keys named by each group's `.On`. Defaults to `[]`.",
+              "Native": false
+            },
+            {
+              "Name": "Margins",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "the gutter around the content, in points: one number for all four edges, or `{ Top, Right, Bottom, Left }`. `40`. Every side is a finite number or the assignment throws",
+              "Native": false
+            },
+            {
+              "Name": "Orientation",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "`Portrait` `Landscape`. Defaults to `\"Portrait\"`.",
+              "Native": false
+            },
+            {
+              "Name": "PageCount",
+              "Kind": "ReadOnly",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "how many pages the data and the sections make. Measures when it has to, so it is answerable before anything has been drawn. An empty report is one blank page, not none",
+              "Native": false
+            },
+            {
+              "Name": "Paint",
+              "Kind": "Method",
+              "Params": 4,
+              "Signature": "(p, page, width, height)",
+              "Returns": "",
+              "Doc": "draws page `page` (one-based, clamped) with `p`, scaled to fit `width`×`height` and centred — for a painter something else opened: a `DrawPage` of your own, or a `Drawing` that puts this page beside other things. Black on white, whatever the theme",
+              "Native": false
+            },
+            {
+              "Name": "Paper",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "`A4` `Letter` `A5`, the sheet in points (72 to the inch). Defaults to `\"A4\"`.",
+              "Native": false
+            },
+            {
+              "Name": "Refresh",
+              "Kind": "Method",
+              "Params": 0,
+              "Signature": "()",
+              "Returns": "",
+              "Doc": "measures again now and answers the new `PageCount`. Call it when you changed the rows **in place**; assigning `Data` or `Sections` already throws the old pages away",
+              "Native": false
+            },
+            {
+              "Name": "Save",
+              "Kind": "Method",
+              "Params": 3,
+              "Signature": "(path, page, scale)",
+              "Returns": "",
+              "Doc": "one page to a PNG. `page` defaults to `1`, `scale` to `2` (144 dpi — an A4 page is a 1190px-wide PNG). **No widget and no display**: it draws through `Drawing`",
+              "Native": false
+            },
+            {
+              "Name": "SavePdf",
+              "Kind": "Method",
+              "Params": 1,
+              "Signature": "(path)",
+              "Returns": "",
+              "Doc": "**every page, one file**. Vector, at the paper's exact size, so the text in it is text. **No widget and no display**: it draws through `Drawing`, which is what lets a `main` project — a report run from a timer — write one. A page that throws leaves no file",
+              "Native": false
+            },
+            {
+              "Name": "Sections",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "the band definitions — the whole of what a report is besides the numbers. Checked when assigned, so a typo is refused where it was written. Defaults to `{}`.",
+              "Native": false
+            }
+          ],
+          "Events": []
         }
       ]
     }

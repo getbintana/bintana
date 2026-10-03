@@ -20,14 +20,13 @@ in the same form.
 | [ISSUE-xml-list-cost.md](ISSUE-xml-list-cost.md) | Writing a list of N elements costs N times N: `Record.SaveXml` on 8000 tasks takes 151 s, while the read is 3 s and the serialization under one |
 | [ISSUE-xml-ignored-arguments.md](ISSUE-xml-ignored-arguments.md) | A surplus argument is not refused — `parent.Remove(child)` takes the parent out and empties the document, `Add(name, text)` drops the value |
 | [ISSUE-xml-comment-only-element.md](ISSUE-xml-comment-only-element.md) | Nothing says what is in an element that is neither character data nor an element child, so an element holding only a comment reads as empty |
-| [ISSUE-chart-slice-colours.md](ISSUE-chart-slice-colours.md) | A pie or a doughnut cannot colour its slices: `Series[].Color` is one colour per series, so a chart of severities cannot use their colours |
 
 **A gap that is filled is deleted, not archived.** What the runtime can do is in
 [`llm/`](https://github.com/getbintana/bintana-llm/blob/main/docs/llm/README.md), which is where anybody looks for it; an issue kept
 past its answer is a second description of the same feature, written by somebody
 who did not have it yet, in the directory of things that are missing.
 
-Thirty-two have gone that way — twenty-nine filled, one refused, and two that were
+Thirty-three have gone that way — thirty filled, one refused, and two that were
 never missing. Filled: a drawing that could not carry an image, text that could not be measured outside a `Draw`, a
 document that could only leave as one PNG per page, a program that had to run
 `sha256sum` to hash anything, an application that could not ask how big the
@@ -81,6 +80,10 @@ badge are. And a project's own class named like a runtime global — a form call
 `Timer`, `File` or `Probe` — is the project's again: a bare class name resolves
 the way JavaScript resolves it, the lexical declaration before the global
 property, where it used to stop the program with `startup class 'File' not found`.
+And a pie that could not say what colour a slice is: `Series[].Colors` is a
+colour per value, read by a pie's and a doughnut's slices, by a bar chart's bars
+and by the legend, so a chart of severities can be in their colours beside a
+table that already was.
 And one that was never missing, as a gap: *a second TLS handshake corrupts the
 heap* was one `g_uri_unref` of a borrowed URI in `Tls`'s own check, and its
 "connection refused" was a server collected because nothing held it.

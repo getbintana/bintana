@@ -1825,6 +1825,7 @@ static bool install_globals(BtaApp *app)
     bta_decimal_init(ctx, global);
     bta_painter_init(ctx, global);
     bta_metrics_init(ctx, global);
+    bta_drawing_init(ctx, global);
     bta_day_init(ctx, global);
     bta_database_init(ctx, global);
     bta_sqlite_init(ctx, global);

@@ -639,6 +639,9 @@ static void note_opts(GString *out, const TextOpts *o)
  * cost 1.84 ms, and measuring alone 0.75 ms -- so measuring is 40% of drawing
  * and a layout built per call would be most of a chart's text budget.
  */
+static char *metrics_default_font(void);
+static void  metrics_resolution(PangoLayout *layout);
+
 static PangoLayout *painter_layout(BtaPainter *p)
 {
     if (!p->layout) {
@@ -650,6 +653,19 @@ static PangoLayout *painter_layout(BtaPainter *p)
             if (pc)
                 pango_layout_set_font_description(
                     p->layout, pango_context_get_font_description(pc));
+        } else {
+            /* A painter `Drawing` made has no widget, so it draws with what
+             * `Text` measures with -- the same default font and the same
+             * resolution -- or a report measured by one is drawn by the other
+             * in a different size. */
+            char *name = metrics_default_font();
+            if (name && *name) {
+                PangoFontDescription *fd = pango_font_description_from_string(name);
+                pango_layout_set_font_description(p->layout, fd);
+                pango_font_description_free(fd);
+            }
+            g_free(name);
+            metrics_resolution(p->layout);
         }
     } else {
         pango_cairo_update_layout(p->cr, p->layout);
@@ -1063,6 +1079,14 @@ static PangoLayout *metrics_layout(void)
         g_object_unref(pc);
     }
 
+    metrics_resolution(layout);
+    return layout;
+}
+
+/* The desktop's resolution, off `gtk-xft-dpi`, on the layout's context. Shared
+ * with a painter that has no widget, which must measure what `Text` measures. */
+static void metrics_resolution(PangoLayout *layout)
+{
     /* Asked every time rather than once: the text scale can change while the
      * program runs, and a cached resolution would answer for the old one. */
     GtkSettings *settings = gtk_settings_get_default();
@@ -1079,14 +1103,20 @@ static PangoLayout *metrics_layout(void)
             pango_layout_context_changed(layout);
         }
     }
-    return layout;
 }
 
 /*
  * The desktop's UI font, which is what a control draws with unless CSS says
- * otherwise. `""` where there is no display to ask -- a console project -- and
- * there the caller's own font description is the only one that means anything.
+ * otherwise -- and where there is no desktop to ask, a console project, GTK's
+ * own default for `gtk-font-name`, which is what a window would have.
+ *
+ * **It used to answer `""` there**, and an empty font is not "the default", it
+ * is Pango's: a serif. Nothing showed while nothing drew in a console project;
+ * the first chart drawn through `Drawing` came out in Times beside a report in
+ * a sans, because the report names its fonts and the chart does not.
  */
+#define BTA_FALLBACK_FONT "Sans 10"
+
 static char *metrics_default_font(void)
 {
     GtkSettings *settings = gtk_settings_get_default();
@@ -1094,6 +1124,10 @@ static char *metrics_default_font(void)
 
     if (settings)
         g_object_get(settings, "gtk-font-name", &name, NULL);
+    if (!name || !*name) {
+        g_free(name);
+        name = g_strdup(BTA_FALLBACK_FONT);
+    }
     return name;
 }
 
@@ -1136,10 +1170,16 @@ static PangoLayout *metrics_prepare(JSContext *ctx, const char *who,
 
     PangoLayout *l = metrics_layout();
 
+    /* **The layout is shared, so no font has to be said too.** With nothing
+     * chosen and no desktop to ask -- a console project -- it used to keep the
+     * font of the call before it, so `Text.Height("x")` after
+     * `Text.Height("x", "Bold 18")` measured in Bold 18. */
     if (chosen && *chosen) {
         PangoFontDescription *fd = pango_font_description_from_string(chosen);
         pango_layout_set_font_description(l, fd);
         pango_font_description_free(fd);
+    } else {
+        pango_layout_set_font_description(l, NULL);
     }
     g_free(chosen);
 
@@ -1539,7 +1579,8 @@ static const JSCFunctionListEntry text_props[] = {
     JS_CFUNC_DEF("OffsetAt", 3, js_text_offset_at),
     /* Font
      *   the desktop's UI font, which is what a control draws with unless CSS
-     *   says otherwise. `""` where there is no display to ask
+     *   says otherwise. Where there is no desktop to ask — a `main` project —
+     *   GTK's own default, `"Sans 10"`, which is what `Drawing` draws in
      */
     JS_CGETSET_DEF("Font", js_text_get_font, NULL),
 };
@@ -2286,18 +2327,25 @@ static JSValue area_dump(JSContext *ctx, JSValueConst this_val,
  * `who` names the caller in the complaints, and the size arguments are read
  * from `argv + at` so the two verbs can take them in the places they take them.
  */
-static cairo_surface_t *area_frame(JSContext *ctx, BtaWidget *w, const char *who,
-                                   int argc, JSValueConst *argv, int at)
+/*
+ * One frame of *somebody's* drawing, whoever that is: the control's own handler
+ * or the function `Drawing` was handed. `page` is 0 for a picture and the
+ * 1-based sheet for a document. False with an exception pending when the
+ * drawing threw.
+ */
+typedef bool (*BtaFrameFn)(void *data, cairo_t *cr, int width, int height, int page);
+
+static bool area_frame_fn(void *data, cairo_t *cr, int width, int height, int page)
 {
-    int32_t width  = gtk_widget_get_width(w->gtk);
-    int32_t height = gtk_widget_get_height(w->gtk);
+    return paint_frame_page(data, cr, width, height, page);
+}
 
-    if (argc > at && !JS_IsUndefined(argv[at]) && JS_ToInt32(ctx, &width, argv[at]))
-        return NULL;
-    if (argc > at + 1 && !JS_IsUndefined(argv[at + 1]) &&
-        JS_ToInt32(ctx, &height, argv[at + 1]))
-        return NULL;
-
+/* A picture of that size, drawn -- or NULL with an exception pending. The sizes
+ * are the caller's, checked here, so a widget and `Drawing` refuse alike. */
+static cairo_surface_t *image_frame(JSContext *ctx, const char *who,
+                                    int32_t width, int32_t height,
+                                    BtaFrameFn frame, void *data)
+{
     if (width <= 0 || height <= 0) {
         JS_ThrowRangeError(ctx, "%s: %dx%d is not a size -- a surface that has "
                                 "not been drawn yet has none, so pass one",
@@ -2318,16 +2366,45 @@ static cairo_surface_t *area_frame(JSContext *ctx, BtaWidget *w, const char *who
         cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
     cairo_t *cr = cairo_create(surface);
 
-    bool drawn = paint_frame(w, cr, width, height);
+    bool drawn = frame(data, cr, width, height, 0);
 
     cairo_destroy(cr);
     cairo_surface_flush(surface);
 
     if (!drawn) {
         cairo_surface_destroy(surface);
-        return NULL;        /* the handler's exception is the one to report */
+        return NULL;        /* the drawing's exception is the one to report */
     }
     return surface;
+}
+
+static cairo_surface_t *area_frame(JSContext *ctx, BtaWidget *w, const char *who,
+                                   int argc, JSValueConst *argv, int at)
+{
+    int32_t width  = gtk_widget_get_width(w->gtk);
+    int32_t height = gtk_widget_get_height(w->gtk);
+
+    if (argc > at && !JS_IsUndefined(argv[at]) && JS_ToInt32(ctx, &width, argv[at]))
+        return NULL;
+    if (argc > at + 1 && !JS_IsUndefined(argv[at + 1]) &&
+        JS_ToInt32(ctx, &height, argv[at + 1]))
+        return NULL;
+
+    return image_frame(ctx, who, width, height, area_frame_fn, w);
+}
+
+/* The surface as a PNG file, or a throw naming it. */
+static bool png_write(JSContext *ctx, const char *who, cairo_surface_t *surface,
+                      const char *path)
+{
+    cairo_status_t status = cairo_surface_write_to_png(surface, path);
+
+    if (status != CAIRO_STATUS_SUCCESS) {
+        JS_ThrowInternalError(ctx, "%s: cannot write '%s': %s",
+                              who, path, cairo_status_to_string(status));
+        return false;
+    }
+    return true;
 }
 
 static JSValue area_save(JSContext *ctx, JSValueConst this_val,
@@ -2349,17 +2426,10 @@ static JSValue area_save(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
     }
 
-    cairo_status_t status = cairo_surface_write_to_png(surface, path);
+    bool ok = png_write(ctx, "Save", surface, path);
     cairo_surface_destroy(surface);
-
-    if (status != CAIRO_STATUS_SUCCESS) {
-        JSValue e = JS_ThrowInternalError(ctx, "Save: cannot write '%s': %s",
-                                          path, cairo_status_to_string(status));
-        JS_FreeCString(ctx, path);
-        return e;
-    }
     JS_FreeCString(ctx, path);
-    return JS_UNDEFINED;
+    return ok ? JS_UNDEFINED : JS_EXCEPTION;
 }
 
 /* Where `ToPng` puts the bytes cairo hands it, one chunk at a time. */
@@ -2368,6 +2438,23 @@ static cairo_status_t png_chunk(void *closure, const unsigned char *data,
 {
     g_byte_array_append(closure, data, length);
     return CAIRO_STATUS_SUCCESS;
+}
+
+/* The surface as PNG `Bytes`, or a throw. */
+static JSValue png_bytes(JSContext *ctx, const char *who, cairo_surface_t *surface)
+{
+    GByteArray    *out    = g_byte_array_new();
+    cairo_status_t status = cairo_surface_write_to_png_stream(surface, png_chunk, out);
+
+    if (status != CAIRO_STATUS_SUCCESS) {
+        g_byte_array_unref(out);
+        return JS_ThrowInternalError(ctx, "%s: %s", who,
+                                     cairo_status_to_string(status));
+    }
+
+    JSValue bytes = bta_bytes_new(ctx, out->data, out->len);
+    g_byte_array_unref(out);
+    return bytes;
 }
 
 /*
@@ -2395,19 +2482,8 @@ static JSValue area_to_png(JSContext *ctx, JSValueConst this_val,
     if (!surface)
         return JS_EXCEPTION;
 
-    GByteArray    *out    = g_byte_array_new();
-    cairo_status_t status = cairo_surface_write_to_png_stream(surface, png_chunk, out);
-
+    JSValue bytes = png_bytes(ctx, "ToPng", surface);
     cairo_surface_destroy(surface);
-
-    if (status != CAIRO_STATUS_SUCCESS) {
-        g_byte_array_unref(out);
-        return JS_ThrowInternalError(ctx, "ToPng: %s",
-                                     cairo_status_to_string(status));
-    }
-
-    JSValue bytes = bta_bytes_new(ctx, out->data, out->len);
-    g_byte_array_unref(out);
     return bytes;
 }
 
@@ -2434,66 +2510,43 @@ static JSValue area_to_png(JSContext *ctx, JSValueConst this_val,
  * with the page number, is the same information without touching the event. It
  * is what `Report.SavePdf` uses to move its own page along.
  */
-static JSValue area_save_pdf(JSContext *ctx, JSValueConst this_val,
-                             int argc, JSValueConst *argv)
+/*
+ * A document of `pages` sheets, each one frame -- what `DrawingArea.SavePdf` and
+ * `Drawing.SavePdf` both are once their arguments are read. False with an
+ * exception pending, and then **no file**.
+ */
+static bool pdf_write(JSContext *ctx, const char *who, const char *path,
+                      int32_t width, int32_t height, int32_t pages,
+                      JSValueConst before, BtaFrameFn frame, void *data)
 {
-    BtaWidget *w = bta_this(ctx, this_val);
-    if (!w)
-        return JS_EXCEPTION;
-    if (argc < 3)
-        return JS_ThrowTypeError(ctx, "SavePdf expects "
-                                      "(path, width, height, [pages], [before])");
-
-    const char *path = bta_file_path(ctx, argv[0], "SavePdf");
-    if (!path)
-        return JS_EXCEPTION;
-
-    int32_t width = 0, height = 0, pages = 1;
-    if (JS_ToInt32(ctx, &width, argv[1]) || JS_ToInt32(ctx, &height, argv[2]) ||
-        (argc > 3 && !JS_IsUndefined(argv[3]) && JS_ToInt32(ctx, &pages, argv[3]))) {
-        JS_FreeCString(ctx, path);
-        return JS_EXCEPTION;
-    }
-
-    JSValueConst before = argc > 4 ? argv[4] : JS_UNDEFINED;
-    if (!JS_IsUndefined(before) && !JS_IsNull(before) && !JS_IsFunction(ctx, before)) {
-        JS_FreeCString(ctx, path);
-        return JS_ThrowTypeError(ctx, "SavePdf: `before` is a function called with "
-                                      "the page number, or nothing");
-    }
-
     if (width <= 0 || height <= 0) {
-        JSValue e = JS_ThrowRangeError(ctx, "SavePdf: %dx%d is not a page -- the "
-                                            "size is in points, 72 to the inch "
-                                            "(A4 is 595x842)", width, height);
-        JS_FreeCString(ctx, path);
-        return e;
+        JS_ThrowRangeError(ctx, "%s: %dx%d is not a page -- the size is in "
+                                "points, 72 to the inch (A4 is 595x842)",
+                           who, width, height);
+        return false;
     }
     /* PDF's own ceiling is 200 inches a side, and cairo silently clamps past
      * it -- a document that came out the wrong size with no error is worse than
      * one that was refused. */
     if (width > 14400 || height > 14400) {
-        JSValue e = JS_ThrowRangeError(ctx, "SavePdf: %dx%d points is past PDF's "
-                                            "200 inches a side", width, height);
-        JS_FreeCString(ctx, path);
-        return e;
+        JS_ThrowRangeError(ctx, "%s: %dx%d points is past PDF's 200 inches a "
+                                "side", who, width, height);
+        return false;
     }
     if (pages < 1 || pages > 10000) {
-        JSValue e = JS_ThrowRangeError(ctx, "SavePdf: %d pages is not a document "
-                                            "(1 to 10000)", pages);
-        JS_FreeCString(ctx, path);
-        return e;
+        JS_ThrowRangeError(ctx, "%s: %d pages is not a document (1 to 10000)",
+                           who, pages);
+        return false;
     }
 
     cairo_surface_t *surface = cairo_pdf_surface_create(path, width, height);
     cairo_status_t   status  = cairo_surface_status(surface);
 
     if (status != CAIRO_STATUS_SUCCESS) {
-        JSValue e = JS_ThrowInternalError(ctx, "SavePdf: cannot write '%s': %s",
-                                          path, cairo_status_to_string(status));
+        JS_ThrowInternalError(ctx, "%s: cannot write '%s': %s",
+                              who, path, cairo_status_to_string(status));
         cairo_surface_destroy(surface);
-        JS_FreeCString(ctx, path);
-        return e;
+        return false;
     }
 
     cairo_t *cr = cairo_create(surface);
@@ -2508,7 +2561,7 @@ static JSValue area_save_pdf(JSContext *ctx, JSValueConst this_val,
             JS_FreeValue(ctx, r);
         }
         if (ok)
-            ok = paint_frame_page(w, cr, width, height, page);
+            ok = frame(data, cr, width, height, page);
         if (ok)
             cairo_show_page(cr);
     }
@@ -2527,19 +2580,50 @@ static JSValue area_save_pdf(JSContext *ctx, JSValueConst this_val,
      */
     if (!ok) {
         g_unlink(path);
+        return false;
+    }
+    if (status != CAIRO_STATUS_SUCCESS) {
+        JS_ThrowInternalError(ctx, "%s: cannot write '%s': %s",
+                              who, path, cairo_status_to_string(status));
+        return false;
+    }
+    return true;
+}
+
+static JSValue area_save_pdf(JSContext *ctx, JSValueConst this_val,
+                             int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    if (argc < 3)
+        return JS_ThrowTypeError(ctx, "SavePdf expects "
+                                      "(path, width, height, [pages], [before])");
+
+    const char *path = bta_file_path(ctx, argv[0], "SavePdf");
+    if (!path)
+        return JS_EXCEPTION;
+
+    int32_t width = 0, height = 0, pages = 1;
+    if (!bta_to_int(ctx, argv[1], "SavePdf", &width) ||
+        !bta_to_int(ctx, argv[2], "SavePdf", &height) ||
+        (argc > 3 && !JS_IsUndefined(argv[3]) &&
+         !bta_to_int(ctx, argv[3], "SavePdf", &pages))) {
         JS_FreeCString(ctx, path);
         return JS_EXCEPTION;
     }
 
-    if (status != CAIRO_STATUS_SUCCESS) {
-        JSValue e = JS_ThrowInternalError(ctx, "SavePdf: cannot write '%s': %s",
-                                          path, cairo_status_to_string(status));
+    JSValueConst before = argc > 4 ? argv[4] : JS_UNDEFINED;
+    if (!JS_IsUndefined(before) && !JS_IsNull(before) && !JS_IsFunction(ctx, before)) {
         JS_FreeCString(ctx, path);
-        return e;
+        return JS_ThrowTypeError(ctx, "SavePdf: `before` is a function called with "
+                                      "the page number, or nothing");
     }
 
+    bool ok = pdf_write(ctx, "SavePdf", path, width, height, pages, before,
+                        area_frame_fn, w);
     JS_FreeCString(ctx, path);
-    return JS_UNDEFINED;
+    return ok ? JS_UNDEFINED : JS_EXCEPTION;
 }
 
 static const JSCFunctionListEntry area_props[] = {
@@ -2616,4 +2700,226 @@ void bta_paint_register(void)
                   "Draw,DrawPage,Paginate"),
     };
     bta_register_classes(rows, (int)G_N_ELEMENTS(rows));
+}
+
+/* ---------------------------------------------------------------- Drawing */
+
+/*
+ * **A drawing with no control: `Drawing`.**
+ *
+ * Every way out of a `Painter` used to go through a `DrawingArea` -- `Save`,
+ * `ToPng`, `SavePdf` and `Printer` all take the control and run its handler --
+ * and a control needs a display. So a `main` project, which never initialises
+ * GTK, could measure a report's text (`Text`) and lay out its pages and then
+ * had nothing to draw them with: a report that has to go out at six in the
+ * morning from a timer had to be run under `xvfb-run` to put a window nobody
+ * sees on a display nobody has. Reported by `bintana-zabbix`, whose batch mode
+ * died with `Failed to open display` from exactly there.
+ *
+ * The three verbs are `DrawingArea`'s three, with the same names, the same
+ * arguments and the same refusals, and **the handler is passed where the
+ * control was**: `(painter, width, height)` for a picture, and
+ * `(painter, page, width, height)` for each sheet of a document -- `Draw` and
+ * `DrawPage`'s own arguments. So a drawing written for one is the drawing for
+ * the other, and a library can draw on paper with or without its control.
+ *
+ * **What the painter has, with no control behind it**: ink black and a line
+ * one wide (a control's ink is its theme's, and a document has none -- see
+ * `painter_ink`), and the font `Text` measures with, at the resolution `Text`
+ * measures at, so a page measured by one is drawn by the other at the same
+ * size. A new painter per call: it is a cairo context with names, and nothing
+ * is kept between two drawings that a caller could want.
+ *
+ * **A throw from the drawing is the call's throw**, unlike a control's, whose
+ * handler is an event and is reported as one: here the caller is the one who
+ * passed it, and is on the stack.
+ */
+
+typedef struct {
+    JSContext   *ctx;
+    JSValueConst draw;
+    JSValue      obj;
+    BtaPainter  *p;
+} FreeFrame;
+
+static bool free_frame(void *data, cairo_t *cr, int width, int height, int page)
+{
+    FreeFrame  *f   = data;
+    BtaPainter *p   = f->p;
+    JSContext  *ctx = f->ctx;
+
+    p->cr     = cr;
+    p->width  = width;
+    p->height = height;
+    g_string_truncate(p->dump, 0);
+    g_free(p->color);
+    p->color = NULL;
+
+    GdkRGBA ink;
+    painter_ink(p, &ink);
+    cairo_set_source_rgba(cr, ink.red, ink.green, ink.blue, ink.alpha);
+    cairo_set_line_width(cr, 1);
+
+    JSValue r;
+    if (page >= 1) {
+        JSValueConst argv[4] = { f->obj, JS_NewInt32(ctx, page),
+                                 JS_NewInt32(ctx, width), JS_NewInt32(ctx, height) };
+        r = JS_Call(ctx, f->draw, JS_UNDEFINED, 4, argv);
+    } else {
+        JSValueConst argv[3] = { f->obj, JS_NewInt32(ctx, width),
+                                 JS_NewInt32(ctx, height) };
+        r = JS_Call(ctx, f->draw, JS_UNDEFINED, 3, argv);
+    }
+
+    /* The frame is over: a painter the drawing kept refuses from here on. */
+    p->cr = NULL;
+
+    bool ok = !JS_IsException(r);
+    JS_FreeValue(ctx, r);
+    return ok;
+}
+
+/* A painter with no control, for one call -- or false with a throw. */
+static bool free_painter(JSContext *ctx, const char *who, JSValueConst draw,
+                         FreeFrame *f)
+{
+    if (!JS_IsFunction(ctx, draw)) {
+        JS_ThrowTypeError(ctx, "Drawing.%s: the drawing is a function that is "
+                               "handed the painter", who);
+        return false;
+    }
+
+    JSValue proto = JS_GetClassProto(ctx, bta_painter_class_id);
+    JSValue obj   = JS_NewObjectProtoClass(ctx, proto, bta_painter_class_id);
+    JS_FreeValue(ctx, proto);
+    if (JS_IsException(obj))
+        return false;
+
+    BtaPainter *p = g_new0(BtaPainter, 1);
+    p->dump = g_string_new(NULL);
+    JS_SetOpaque(obj, p);
+
+    *f = (FreeFrame){ ctx, draw, obj, p };
+    return true;
+}
+
+/* The width and the height at `at` and `at + 1`, which `Drawing` always
+ * needs: there is no control to have a size of its own. */
+static bool drawing_size(JSContext *ctx, const char *who, int argc,
+                         JSValueConst *argv, int at, int32_t *w, int32_t *h)
+{
+    if (argc < at + 2) {
+        JS_ThrowTypeError(ctx, "Drawing.%s needs a width and a height: there is "
+                               "no control to take them from", who);
+        return false;
+    }
+    return bta_to_int(ctx, argv[at], who, w) && bta_to_int(ctx, argv[at + 1], who, h);
+}
+
+static JSValue drawing_save(JSContext *ctx, JSValueConst this_val,
+                            int argc, JSValueConst *argv)
+{
+    int32_t w = 0, h = 0;
+    if (!drawing_size(ctx, "Save", argc, argv, 1, &w, &h))
+        return JS_EXCEPTION;
+
+    const char *path = bta_file_path(ctx, argv[0], "Save");
+    if (!path)
+        return JS_EXCEPTION;
+
+    FreeFrame f;
+    if (!free_painter(ctx, "Save", argc > 3 ? argv[3] : JS_UNDEFINED, &f)) {
+        JS_FreeCString(ctx, path);
+        return JS_EXCEPTION;
+    }
+
+    cairo_surface_t *surface = image_frame(ctx, "Save", w, h, free_frame, &f);
+    bool ok = surface && png_write(ctx, "Save", surface, path);
+
+    if (surface)
+        cairo_surface_destroy(surface);
+    JS_FreeValue(ctx, f.obj);
+    JS_FreeCString(ctx, path);
+    return ok ? JS_UNDEFINED : JS_EXCEPTION;
+}
+
+static JSValue drawing_to_png(JSContext *ctx, JSValueConst this_val,
+                              int argc, JSValueConst *argv)
+{
+    int32_t w = 0, h = 0;
+    if (!drawing_size(ctx, "ToPng", argc, argv, 0, &w, &h))
+        return JS_EXCEPTION;
+
+    FreeFrame f;
+    if (!free_painter(ctx, "ToPng", argc > 2 ? argv[2] : JS_UNDEFINED, &f))
+        return JS_EXCEPTION;
+
+    cairo_surface_t *surface = image_frame(ctx, "ToPng", w, h, free_frame, &f);
+    JSValue out = surface ? png_bytes(ctx, "ToPng", surface) : JS_EXCEPTION;
+
+    if (surface)
+        cairo_surface_destroy(surface);
+    JS_FreeValue(ctx, f.obj);
+    return out;
+}
+
+static JSValue drawing_save_pdf(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv)
+{
+    int32_t w = 0, h = 0, pages = 1;
+    if (!drawing_size(ctx, "SavePdf", argc, argv, 1, &w, &h))
+        return JS_EXCEPTION;
+    if (argc > 3 && !JS_IsUndefined(argv[3]) &&
+        !bta_to_int(ctx, argv[3], "SavePdf", &pages))
+        return JS_EXCEPTION;
+
+    const char *path = bta_file_path(ctx, argv[0], "SavePdf");
+    if (!path)
+        return JS_EXCEPTION;
+
+    FreeFrame f;
+    if (!free_painter(ctx, "SavePdf", argc > 4 ? argv[4] : JS_UNDEFINED, &f)) {
+        JS_FreeCString(ctx, path);
+        return JS_EXCEPTION;
+    }
+
+    bool ok = pdf_write(ctx, "SavePdf", path, w, h, pages, JS_UNDEFINED,
+                        free_frame, &f);
+
+    JS_FreeValue(ctx, f.obj);
+    JS_FreeCString(ctx, path);
+    return ok ? JS_UNDEFINED : JS_EXCEPTION;
+}
+
+static const JSCFunctionListEntry drawing_props[] = {
+    /* Save(path, width, height, draw)
+     *   `draw(painter, width, height)` against an image of that size, written
+     *   as a PNG — `DrawingArea.Save` with the handler passed in place of the
+     *   control, so it needs **no widget and no display**. Ink black, the font
+     *   `Text` measures with. A `draw` that throws writes no file, and the
+     *   throw is this call's
+     */
+    JS_CFUNC_DEF("Save",    4, drawing_save),
+    /* ToPng(width, height, draw) -> Bytes
+     *   the same picture as `Save`, answered as `Bytes` instead of written
+     */
+    JS_CFUNC_DEF("ToPng",   3, drawing_to_png),
+    /* SavePdf(path, width, height, pages, draw)
+     *   `draw(painter, page, width, height)` once per page into one **PDF** —
+     *   `DrawingArea.SavePdf` with the drawing passed in place of the
+     *   control, and `DrawPage`'s own arguments. The size is in **points**,
+     *   72 to the inch (A4 is 595×842); `pages` may be `undefined` for one.
+     *   What a `main` project prints with: **no widget and no display**. A
+     *   page that throws leaves **no file**
+     */
+    JS_CFUNC_DEF("SavePdf", 5, drawing_save_pdf),
+};
+
+void bta_drawing_init(JSContext *ctx, JSValue global)
+{
+    JSValue drawing = JS_NewObject(ctx);
+
+    JS_SetPropertyFunctionList(ctx, drawing, drawing_props,
+                               G_N_ELEMENTS(drawing_props));
+    JS_SetPropertyStr(ctx, global, "Drawing", drawing);
 }
