@@ -17,6 +17,8 @@ in the same form.
 | [ISSUE-menu-label-extraction.md](ISSUE-menu-label-extraction.md) | A control's menu labels never reach a catalogue |
 | [ISSUE-popover-designer.md](ISSUE-popover-designer.md) | A `Popover` cannot be seen or picked on the design canvas |
 | [ISSUE-worker-locale-order.md](ISSUE-worker-locale-order.md) | A `Task` has no `Locale`, so a worker cannot order names |
+| [ISSUE-project-class-shadowed.md](ISSUE-project-class-shadowed.md) | A runtime global shadows a project's own class of the same name: `bintana: startup class 'Probe' not found` for a class that is there and loaded, so a project stops starting on any of the 36 global names |
+| [ISSUE-http-two-handshakes.md](ISSUE-http-two-handshakes.md) | A second TLS handshake in one process corrupts the heap, and so does `Http.Server.Stop()` with one pooled TLS connection still open — which is why `Http.Client`'s `Tls` is implemented but its acceptance cannot be asserted yet |
 | [ISSUE-xml-list-cost.md](ISSUE-xml-list-cost.md) | Writing a list of N elements costs N times N: `Record.SaveXml` on 8000 tasks takes 151 s, while the read is 3 s and the serialization under one |
 | [ISSUE-xml-ignored-arguments.md](ISSUE-xml-ignored-arguments.md) | A surplus argument is not refused — `parent.Remove(child)` takes the parent out and empties the document, `Add(name, text)` drops the value |
 | [ISSUE-xml-comment-only-element.md](ISSUE-xml-comment-only-element.md) | Nothing says what is in an element that is neither character data nor an element child, so an element holding only a comment reads as empty |
@@ -26,7 +28,7 @@ in the same form.
 past its answer is a second description of the same feature, written by somebody
 who did not have it yet, in the directory of things that are missing.
 
-Twenty-six have gone that way — twenty-four filled, one refused, and one that was
+Thirty have gone that way — twenty-eight filled, one refused, and one that was
 never missing. Filled: a drawing that could not carry an image, text that could not be measured outside a `Draw`, a
 document that could only leave as one PNG per page, a program that had to run
 `sha256sum` to hash anything, an application that could not ask how big the
@@ -65,6 +67,19 @@ to construct every widget type there is, and a column heading that could offer
 nothing: `HeaderMenu` declares its menu and `HeaderClick(column, button, ctrl,
 shift)` is the press — the one surface of a column view GTK reports nothing
 for — with every item told the column it was opened over.
+And four more in one sitting, all of them "the runtime has no word for this":
+`Probe.Image(path)` measures a picture from its header with no widget and no
+display, so a report can lay a logo out before anything is drawn and a console
+project can ask at all; `Http.Client`'s `Tls: { Ca, Cert }` trusts a certificate
+the program's own — the internal server on a company's CA, or self-signed, which
+is the installation the system-wide store cannot be talked into — through
+`SoupMessage::accept-certificate` and GLib's own chain check, measured before it
+was written; a drawing's ink resolves through the application's first window when
+the control is in none, so a `Chart` saved for a document has a title instead of
+white words on transparent paper; and a `lib/report` element can say `When` and
+read its `Color` off its row, which is what a stripe, a severity colour and a
+badge are.
+
 Never missing: a container that fills the room it is given **and** scrolls when
 it cannot. It was reported against a wall of cameras whose count is only known
 at run time, and it is what a `Scroller` with an `Arrangement` has always done —

@@ -3725,6 +3725,19 @@ person who wrote it either.
   the `GtkSettings` the `ThemeChange` handlers hang off outlives every window,
   so they go through `bta_widget_watch` or they fire on a freed form. Inside the
   handler the colours are already the new ones, measured -- no idle hop needed.
+  **The fallback is `bta_style_root()` and every reader of the ink goes through
+  it**, which is the whole of what it is for: `Widget.Dark` had it and
+  `Painter.Foreground` did not, so a `Chart` built for a document and saved with
+  `Save()` came out with a white title, a white legend and white axis labels over
+  a transparent ground -- the slices and bars drawn correctly, so it reads as a
+  chart without words rather than as an error, and `Save` is exactly the call
+  that needs no window. Every caller had to write `Foreground = "#222222"` to
+  avoid it. **A control *inside* a window that is merely hidden was measured
+  drawing correctly**, so the condition is *in no window* and not *in no shown
+  window*; and a **console project has no theme to ask at all** (no GTK
+  settings, no window), which is not a hole in the fallback but the truth -- a
+  document drawn there has no theme in it, which is what `lib/report` already
+  means by pinning `INK = "#000000"`.
 - **The IDE copies its dirty tabs aside every thirty seconds, and never writes
   to the project to do it.** `Recovery.js`, into
   `Application.ConfigDirectory/recovery/<digest of the project path>.json`. An
@@ -4297,6 +4310,25 @@ person who wrote it either.
   the font once at the top of the `Draw` and assign it for every run**, either
   the element's or that one. Asserted in `tests/report` off two `Text` calls and
   the `Font` lines between them.
+- **Reading the font "once at the top of the `Draw`" is not enough, because
+  there is one painter per control and it outlives the frame.** `paint_frame`
+  says so in its own comment -- "one frame at a time, because there is one
+  painter" -- so `p.Font` at the top of the *next* frame is whatever the *last*
+  element of the previous one assigned. `lib/report` measured each band with
+  `Text.Font` (the measure pass has no painter, which is what lets pagination
+  run in a console program) and drew it with `p.Font`, and the two are only the
+  same value until anything sets a font: one element naming one made every
+  element that named none on the next page and the next export draw in it. A
+  report whose text was measured in `Sans 10` and drawn in `Normal 12` wrapped
+  into five lines into a band measured for four, **with the row below drawn
+  underneath the row above**. `base` is `Text.Font` now, and the report's
+  invariant -- what the measure decided is what the drawing makes -- is true by
+  construction rather than by there happening to be no font in the report. The
+  general shape: **a value read "once per frame" is only per frame if it is
+  reset per frame**, and the reset belongs where the other reading is, not at the
+  read. Found by a new test for conditional row styling, which is the argument
+  for writing the test before believing the comment: the old one named this
+  exact case and called it "a drawing whose font an `app.css` has changed".
 - **`Scale` before `Translate` scales the offset.** Cairo post-multiplies, so of
   two transforms the one written *last* is applied *first* to a point: `Scale(s)`
   then `Translate(o)` puts a point at `s * (p + o)` and not at `o + s * p`.
@@ -5003,6 +5035,65 @@ person who wrote it either.
   project had never heard of. The same asymmetry runs the other way -- a
   library *is* declared and must not be written, so `Ide.Refactor` reads its
   classes to refuse a collision and never rewrites one.
+
+## Probe: what a file is, and why it is not a verb on `File`
+
+`Probe.Image(path) -> { Width, Height }` reads a picture's header with **no
+widget and no display**, which is the whole of it. The prior art agrees on the
+name and on the operation, and that is why it is `Probe`:
+
+- **`ffprobe`, `exiftool`, ImageMagick's `identify`** -- a probe reads the header
+  and says what the thing is without decoding it;
+- **Gambas's `ImageStat`** (`gb.image`) -- "returns information about a specific
+  image", *not creatable*, used as a static, with `Width`, `Height`, `Depth`,
+  `Type`, `Path`. The language closest to this one puts it on an object, not on
+  a file verb;
+- **Go's `image.DecodeConfig`** and **Qt's `QImageReader::size`** -- both read
+  headers only, both on the image side of the library;
+- **.NET has nothing**, and that is the evidence: `System.Drawing.Image.FromFile`
+  decodes the whole picture, and "the size without loading it" is a Stack Overflow
+  question whose accepted answer is a hand-written JPEG parser or a third-party
+  package. Where .NET *has* an image object, the size is on it.
+
+**`File.ImageSize` was written first and is the wrong name**, and the argument
+against it is the one worth keeping: `File` is for working *on* a file (`Load`,
+`Save`, `Info`, `Hash`, `Watch`), and adding a question about a *picture* to the
+object that moves bytes around is a category error. It would also be a second
+answer for a word: **`File.Info` already answers `Type`**, as a MIME type, so a
+`File.ImageSize` puts two answers for one name in one namespace, which is how
+`AddNode` came to be documented under `Container` and had to be renamed to `Add`.
+`Info` was the other candidate and is refused for that reason; `Meta` is the
+standard term for a media file's descriptive data but in a runtime that has
+`Record` and `Field` a bare `Meta` already means *the data of a row*.
+
+**The namespace is the design.** `Probe.Image`, and a verb per *kind* of thing
+when something needs one -- `Probe.Audio`, `Probe.Video`, `Probe.Font` -- with
+deliberately **no `Probe.File`**, because a file's size and time are already
+`File.Info`'s and asking twice is how two answers for one word happen. There is
+no image *object* in this runtime: `Image` and `Picture` are both controls, and a
+decoded picture lives as a `GdkTexture` in the widget's qdata with nothing handing
+it out. `Probe.Image` is the measurement without that object, and an object is a
+separate piece of work (a new `.c`, five registrations, `gc_mark` and a
+finaliser) whose payoff is the decode cache rather than the size.
+
+**It reads the same set of files a `Picture` draws**, because
+`gdk_pixbuf_get_file_info` is the header reader and
+`gdk_texture_new_from_filename` -- what `Picture.File` decodes with -- is built
+on the same loaders. So an `.svg` is `null` here and is also not something a
+`Picture` would show: **an SVG is a document to this runtime**, which is what
+`icons/` full of `.svg` has always meant. **`null` for both "not a picture" and
+"not there"**, one answer for one question and the same one `File.Info` gives; a
+path that is not text is still a **refusal** through `bta_file_path`, because
+`Probe.Image(undefined)` must not quietly probe a file called `./undefined`.
+
+It is `runtime/src/bta_probe.c` and not part of `bta_paint.c` or `bta_sys.c`
+because it will grow into file statistics and audio metadata, which have nothing
+to do with drawing -- and `bta_sys.c` is already 4 483 lines carrying a different
+promise ("verbs that work *on* files", which is the objection above). **A worker
+installs it too**, since it is a header read and a dictionary: a report sizing a
+logo on a thread is the caller a widget could not have served anyway. A new global
+is five places -- the `.c`, its `CMakeLists.txt` line, its init in `bta.h`, and
+the two `install` roads, `bta_runtime.c` **and** `bta_task.c`.
 
 ## Random, Hmac and Gzip: what was measured and what bit
 
@@ -6193,6 +6284,79 @@ same number without naming what sits above it.
   the spot when the run has a callback. Found by reading, since no headless
   run can answer the dialog; `on_draw` had the same shape answered years
   before.
+
+## A runtime global shadows a project's own class of the same name
+
+`bta_lookup_global` resolves a class name **from the global object first** and
+only falls back to `JS_Eval` -- the lexical scope where a top-level `class`
+actually lives -- when the global has nothing by that name. So any installed
+global beats the project's own declaration, and the program does not start:
+
+```
+bintana: startup class 'Probe' not found
+```
+
+**Found by adding the global `Probe`, and it is not about that name.** Every
+installed global is the trap: `Application`, `Bytes`, `Clipboard`, `File`,
+`Hash`, `Http`, `Locale`, `Logger`, `Message`, `Painter`, `Printer`, `Random`,
+`Task`, `Text`, `Xml`, `Zip`, `Timer`, `Field`, `Record`, `Dialog` -- and
+`Timer` is the one a project is most likely to reach for. Two `tests/widgets`
+fixtures had a class called `Probe` and **both** failed the moment it was
+installed; they are `Showcase` and `Slab` now.
+
+**Three places answer "which class is this name" and two of them disagree.**
+`Widget.New` consults **the class table first** and the project's own second,
+and the IDE's completion is built the other way on purpose -- "a class the
+sources declare wins over a class of the same name in the runtime", because in a
+program that uses that library the library's is the class being written.
+`bta_lookup_global` puts the runtime first, and **it is the one a program stops
+at**. The global object is also the wrong thing to ask first on its own terms: a
+top-level `class` is a **lexical binding**, not a property of `globalThis`, so
+the two are not two answers to one question -- and plain JavaScript resolves them
+the other way round.
+
+**The lesson for adding a global, which is the sixth place and the one that is
+not in `bta.h`**: a name that is free in `runtime/src` can still be in use by a
+project in this tree, by `examples/`, or by a test fixture, and the failure is
+load-time, says nothing about the collision, and lands in whichever fixture
+happens to have picked it. `grep` the whole tree for the class name before
+installing one, not just `runtime/`.
+
+## An https client and an https server in one process corrupt the heap
+
+`Http.Client`'s `Tls: { Ca, Cert }` is implemented and **measured working** --
+`SoupMessage::accept-certificate` fires, `g_tls_certificate_verify` accepts a
+self-signed certificate the system store rejects, and the request goes through.
+It is also **not assertable end to end on an ordinary build**, because of this,
+which is pre-existing and has nothing to do with `Tls`:
+
+- **a second TLS handshake in the process aborts it** --
+  `malloc(): unaligned tcache chunk detected`, detected by glibc in the
+  `g_source_new` soup builds for the second connection's I/O, so the corruption
+  is earlier and only *noticed* there. Reproduced in forty lines with a bare
+  `Http.Client()` that was told nothing at all, and **AddressSanitizer reports
+  nothing on the same run that aborts**;
+- **`Http.Server.Stop()` with one pooled TLS connection still open is the same
+  bug** by another road, and needs no second connection -- `corrupted
+  double-linked list`;
+- quitting with one such connection open trips
+  `g_atomic_rc_box_release_full: assertion 'real_box->magic == G_BOX_MAGIC'`.
+
+Two facts measured while finding it, both of which cost an afternoon: **two
+accepted requests on one client are fine** (the second reuses the pooled
+connection and never handshakes again), so it is a handshake and not a request;
+and **an `Http.Server` whose `Tls` is set before `Start()` answers "Connection
+refused"** and serves nothing, where the same server serves https after a
+`Stop()`/`Start()` cycle -- a separate bug in the same area.
+
+Until it is fixed, `tests/widgets`' `HttpServer` asserts what the **assignment**
+decides -- `Tls`'s round trip and its four refusals -- and no request at all, and
+the five assertions that need a handshake are written out in the step so whoever
+fixes it knows they are waiting. The two that matter most are the *negative*
+ones (`Ca` naming a certificate that did not sign the server, `Cert` naming one
+that is not the server's), because they are what says the trust is a second
+opinion and not an accept-anything switch. Full reproducer and backtraces:
+[`docs/issues/ISSUE-http-two-handshakes.md`](docs/issues/ISSUE-http-two-handshakes.md).
 
 ## Task: what a thread costs here
 
