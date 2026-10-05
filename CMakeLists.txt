@@ -94,6 +94,14 @@ pkg_check_modules(GSTREAMER IMPORTED_TARGET gstreamer-1.0)
 # to build against.
 pkg_check_modules(LIBXML IMPORTED_TARGET libxml-2.0)
 
+# Optional: libsecret is what `Keyring` stores a token in. Optional like
+# sqlite and libxml2 -- a program that keeps nothing secret needs none of it --
+# and without it `Keyring` exists, `Available` is false and the verbs refuse
+# naming the package. libsecret has no Windows port, so the `#else` half is
+# what that build compiles. The runtime dependency it brings is libsecret's
+# own shared object, which every GNOME desktop already has.
+pkg_check_modules(SECRET IMPORTED_TARGET libsecret-1)
+
 # ---------------------------------------------------------------- QuickJS ---
 # A fork of quickjs-ng, vendored under vendor/quickjs as a submodule:
 # `getbintana/quickjs`, branch `bintana`, which is upstream v0.17.0 plus the
@@ -201,6 +209,7 @@ add_executable(bintana
     runtime/src/bta_database.c
     runtime/src/bta_sqlite.c
     runtime/src/bta_xml.c
+    runtime/src/bta_keyring.c
     runtime/src/bta_locale.c
     runtime/src/bta_bytes.c
     runtime/src/bta_decimal.c
@@ -274,6 +283,14 @@ if(LIBXML_FOUND)
     message(STATUS "libxml2 ${LIBXML_VERSION}: Xml is available")
 else()
     message(STATUS "no libxml2: Xml exists and refuses to read anything")
+endif()
+
+if(SECRET_FOUND)
+    target_link_libraries(bintana PRIVATE PkgConfig::SECRET)
+    target_compile_definitions(bintana PRIVATE BTA_HAVE_LIBSECRET=1)
+    message(STATUS "libsecret ${SECRET_VERSION}: Keyring is available")
+else()
+    message(STATUS "no libsecret: Keyring exists and refuses to store anything")
 endif()
 target_compile_definitions(bintana PRIVATE BTA_VERSION_STRING="${PROJECT_VERSION}")
 # -Wshadow, -Wnull-dereference and -Wformat=2 are clean across runtime/src

@@ -14,8 +14,12 @@
       "properties": {
         "Arrangement": "Vertical",
         "Expand": true,
+        "HExpand": true,
+        "Height": 446,
         "Margin": 12,
-        "Spacing": 12
+        "Spacing": 12,
+        "VExpand": true,
+        "Width": 616
       },
       "children": [
         {
@@ -24,7 +28,9 @@
           "properties": {
             "Arrangement": "Horizontal",
             "Expand": true,
-            "Spacing": 12
+            "HExpand": true,
+            "Spacing": 12,
+            "VExpand": true
           },
           "children": [
             {
@@ -46,15 +52,20 @@
                   "type": "TreeView",
                   "name": "Tree",
                   "properties": {
-                    "Expand": true
+                    "Expand": true,
+                    "HExpand": true,
+                    "Style": "frame",
+                    "VExpand": true
                   }
                 },
                 {
                   "type": "Grid",
                   "name": "BtnGrid",
                   "properties": {
+                    "ColumnSpacing": 6,
                     "Columns": 3,
                     "Homogeneous": true,
+                    "RowSpacing": 6,
                     "Spacing": 6
                   },
                   "children": [
@@ -193,10 +204,11 @@
                   "type": "Label",
                   "name": "LblHint",
                   "properties": {
-                    "Text": "",
-                    "Wrap": true,
                     "Expand": true,
-                    "VAlign": "Start"
+                    "HExpand": true,
+                    "VAlign": "Start",
+                    "VExpand": true,
+                    "Wrap": true
                   }
                 }
               ]
@@ -216,17 +228,17 @@
               "type": "Button",
               "name": "BtnCancel",
               "properties": {
-                "Text": "Cancel",
-                "Cancel": true
+                "Cancel": true,
+                "Text": "Cancel"
               }
             },
             {
               "type": "Button",
               "name": "BtnOk",
               "properties": {
+                "Default": true,
                 "Style": "suggested-action",
-                "Text": "OK",
-                "Default": true
+                "Text": "OK"
               }
             }
           ]

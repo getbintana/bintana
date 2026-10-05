@@ -558,7 +558,7 @@ const TESTS = [
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
-    "CuratedLanguage", "Dictionary", "Regex", "Bytes", "Hash", "Random", "Gzip", "Zip", "ZipWrite", "Screen", "JsonFiles", "XmlFiles", "XmlWrite", "XmlRecord", "Log", "Apply", "TimerShorthand", "Terminal",
+    "CuratedLanguage", "Dictionary", "Csv", "Regex", "Bytes", "Hash", "Random", "Gzip", "Zip", "ZipWrite", "Screen", "JsonFiles", "XmlFiles", "XmlWrite", "XmlRecord", "Keyring", "Log", "Apply", "TimerShorthand", "Terminal",
     "Settings", "Timer", "ArgumentRefusals", "Icons", "Font", "Style", "Radius", "Padding", "Shadow", "StyleRule",
     "ColorButton",
     "ColorDialog", "FileDialog", "Dialog", "IconList", "FormIcon", "ButtonClick",
@@ -5226,6 +5226,36 @@ class Spike extends Form {
         print("closer:" + (this.C.Document.view().count < 200));
         print("kept:" + Math.abs(this.C.Document.indexAt(this.C.Document.lastBox, this.C.pointer) - under));
 
+        /*
+         * The three of the last reports, on the control: a series' Format
+         * reaches the axis and the readouts, a threshold is a line, a click
+         * on the legend takes a series out and puts it back.
+         */
+        this.C.Zoomable = false;
+        this.C.From = 0; this.C.Count = 0;
+        this.C.Type   = "Bar";
+        this.C.Legend = "Bottom";
+        this.C.Labels = ["a", "b"];
+        this.C.Grid   = false;
+        this.C.Lines  = [{ Value: 1, Text: "SLO", Color: "#e01b24" }];
+        this.C.Series = [{ Name: "one", Values: [1, 2], Format: "Percent" },
+                         { Name: "two", Values: [2, 1], Mirror: true }];
+        this.C.Save(File.Join("${SCRATCH}", "fmt.png"), 400, 240);
+        const fmt = this.C.Canvas.Dump();
+        print("percent:" + fmt.includes("1 %"));
+        print("threshold:" + fmt.includes("SLO"));
+        print("mirror:" + (this.C.Document.text(-2, this.C.Series[1]) === "2"));
+        const tb = this.C.Document.bars[0];
+        const tip = this.C.Document.Tooltip(tb.x + tb.w / 2, tb.y + 2);
+        print("tooltip:" + (!!tip && tip.Text.includes(" %") && tip.Width > 0));
+        const lh = this.C.Document.legendHits[0];
+        this.C.Canvas_MouseDown(lh.x + 2, lh.y + 2);
+        this.C.Save(File.Join("${SCRATCH}", "fmt.png"), 400, 240);
+        print("hidden:" + (this.C.Series[0].Hidden && this.C.Document.bars.length === 2));
+        this.C.Canvas_MouseDown(lh.x + 2, lh.y + 2);
+        this.C.Save(File.Join("${SCRATCH}", "fmt.png"), 400, 240);
+        print("shown:" + (!this.C.Series[0].Hidden && this.C.Document.bars.length === 4));
+
         Application.Quit(0);
     }
 }
@@ -5265,6 +5295,13 @@ class Spike extends Form {
                  eq("the wheel zooms in", said.closer, "true");
                  eq("...and keeps the reading under the pointer where it was",
                     said.kept, "0");
+                 eq("a series' Format reaches the axis and the values",
+                    said.percent, "true");
+                 eq("a threshold is a line across the plot", said.threshold, "true");
+                 eq("a mirrored series writes the absolute value", said.mirror, "true");
+                 eq("a tooltip is measured and formatted", said.tooltip, "true");
+                 eq("a click on the legend hides the series", said.hidden, "true");
+                 eq("...and the next shows it again", said.shown, "true");
                  this.libraryMissing();
              });
     }
@@ -10690,6 +10727,40 @@ function Main() {
         File.Delete(path);
     }
 
+    /* --- the keyring, which the suite does not write to ---------------------
+     *
+     * libsecret is optional at build time, so this is the same fork the other
+     * optional dependencies get -- and the vault itself is **not driven**: a
+     * test secret written into the developer's keyring is a side effect the
+     * suite has no business causing, and a locked collection would make the
+     * answer depend on the machine.  What is asserted is the refusal by name
+     * in a build without libsecret (the `no-libsecret` job is that build) and,
+     * with it, the argument refusals, which touch no bus at all.
+     */
+    testKeyring() {
+        check("Keyring.Available is a boolean", typeof Keyring.Available === "boolean");
+
+        if (!Keyring.Available) {
+            const said = (fn) => { try { fn(); return ""; } catch (e) { return e.message; } };
+            const store = said(() => Keyring.Store("a", "b", "c", () => {}));
+            const lookup = said(() => Keyring.Lookup("a", "b", () => {}));
+            const del = said(() => Keyring.Delete("a", "b", () => {}));
+            check("no libsecret: Store refuses naming the package", store.includes("libsecret"), store);
+            check("...and Lookup too", lookup.includes("libsecret"), lookup);
+            check("...and Delete", del.includes("libsecret"), del);
+            return;
+        }
+
+        check("this build has a keyring", Keyring.Available === true);
+        throws("a callback is required", () => Keyring.Lookup("a", "b"));
+        throws("...and the service is text", () => Keyring.Lookup(5, "b", () => {}));
+        throws("...and the key", () => Keyring.Delete("a", 5, () => {}));
+        throws("...and a value that is text", () => Keyring.Store("a", "b", 5, () => {}));
+        check("with the refusal naming what it wants",
+              (refusal(() => Keyring.Store("a", "b", 5, () => {})) || "").includes("value is text"),
+              refusal(() => Keyring.Store("a", "b", 5, () => {})));
+    }
+
     /* --- XML files, which are a document and not a value --------------------
      *
      * The other program's format.  JSON is a value model and JavaScript has the
@@ -12147,6 +12218,44 @@ function Main() {
         case "Timer":       return Timer;
         default:            return undefined;
         }
+    }
+
+    /* --- Csv ----------------------------------------------------------------
+     *
+     * Rows of text.  The cases are the ones a spreadsheet actually writes: a
+     * quoted comma, a doubled quote, a line break inside a value, CRLF, a BOM,
+     * and `;` from a locale whose decimal separator is the comma.
+     */
+    testCsv() {
+        const rows = Csv.Parse('a,b,c\n1,"dos, tres","dijo ""sí"""\r\n4,"línea\nnueva",\n');
+        eq("three rows", rows.length, 3);
+        eq("the headings", rows[0].join("|"), "a|b|c");
+        eq("a quoted comma stays in its value", rows[1][1], "dos, tres");
+        eq("a doubled quote is one", rows[1][2], 'dijo "sí"');
+        eq("a line break inside quotes stays", rows[2][1], "línea\nnueva");
+        eq("an empty last value is there", rows[2].length, 3);
+        eq("a BOM is not part of the first heading", Csv.Parse("﻿x,y")[0][0], "x");
+        eq("the separator is found", Csv.Parse('a;"b;c";d\n1;2;3')[0].join("|"), "a|b;c|d");
+        eq("a tab too", Csv.Parse("a\tb\n1\t2")[1][1], "2");
+        eq("and can be given", Csv.Parse("a;b,c", { Separator: "," })[0].join("|"), "a;b|c");
+        eq("values stay text", typeof Csv.Parse("007")[0][0], "string");
+        eq("nothing is no rows", Csv.Parse("").length, 0);
+        let threw = "";
+        try { Csv.Parse('a,"open'); } catch (e) { threw = e.message; }
+        check("an unclosed quote is refused", threw.indexOf("not closed") >= 0, threw);
+
+        const text = Csv.Format([["n", "nota"], [1.5, 'a, "b"'], [null, " lead"]]);
+        eq("Format quotes what needs it", text, 'n,nota\n1.5,"a, ""b"""\n," lead"\n');
+        check("and Parse reads it back", sameJson(Csv.Parse(text), [["n", "nota"], ["1.5", 'a, "b"'], ["", " lead"]]),
+              JSON.stringify(Csv.Parse(text)));
+        const path = File.Join(Environment.TempDirectory, `bta-csv-${Environment.ProcessId}.csv`);
+        Csv.Save(path, [["x"], ["y"]], { LineEnd: "\r\n" });
+        eq("Save writes the line end asked for", File.Load(path), "x\r\ny\r\n");
+        eq("Load reads it", Csv.Load(path).length, 2);
+        File.Delete(path);
+        threw = "";
+        try { Csv.Load("/nowhere/x.csv"); } catch (e) { threw = String(e.message || e); }
+        check("Load of a missing file says so", threw !== "", threw);
     }
 
     /* --- Dictionary ---------------------------------------------------------

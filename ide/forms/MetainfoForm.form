@@ -14,8 +14,12 @@
       "properties": {
         "Arrangement": "Vertical",
         "Expand": true,
+        "HExpand": true,
+        "Height": 608,
         "Margin": 16,
-        "Spacing": 10
+        "Spacing": 10,
+        "VExpand": true,
+        "Width": 628
       },
       "children": [
         {
@@ -23,15 +27,15 @@
           "name": "LblWhere",
           "properties": {
             "HAlign": "Fill",
-            "Style": "dim-label",
-            "Text": ""
+            "Style": "dim-label"
           }
         },
         {
           "type": "Grid",
           "name": "Fields",
           "properties": {
-            "Columns": 2,
+            "ColumnSpacing": 8,
+            "RowSpacing": 8,
             "Spacing": 8
           },
           "children": [
@@ -222,10 +226,10 @@
           "type": "TextEditor",
           "name": "TxtDesc",
           "properties": {
+            "Expand": true,
             "HAlign": "Fill",
             "HExpand": true,
-            "VExpand": true,
-            "Wrap": true
+            "VExpand": true
           }
         },
         {
@@ -233,8 +237,8 @@
           "name": "LblProblem",
           "properties": {
             "HAlign": "Fill",
-            "Wrap": true,
-            "Text": ""
+            "Style": "frame",
+            "Wrap": true
           }
         },
         {
@@ -250,17 +254,17 @@
               "type": "Button",
               "name": "BtnCancel",
               "properties": {
-                "Text": "Cancel",
-                "Cancel": true
+                "Cancel": true,
+                "Text": "Cancel"
               }
             },
             {
               "type": "Button",
               "name": "BtnSave",
               "properties": {
-                "Text": "Save",
+                "Default": true,
                 "Style": "suggested-action",
-                "Default": true
+                "Text": "Save"
               }
             }
           ]

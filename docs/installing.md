@@ -16,7 +16,7 @@ and macOS in [plans/macos-plan.md](plans/macos-plan.md).
 | **CMake 3.16+** and **pkg-config** | the build |
 | **QuickJS** | **not a dependency to install**: quickjs-ng v0.17.0, plus the six patches of ours, is vendored in `vendor/quickjs` as a git submodule ([AGENTS.md](../AGENTS.md#the-six-patches-in-vendor)) |
 
-Six more are optional, and CMake prints what it found either way. Without each
+Seven more are optional, and CMake prints what it found either way. Without each
 the runtime builds and the thing itself says which package is missing when it is
 called — see the table below.
 
@@ -184,7 +184,8 @@ Three things it deliberately does not do: it does not bundle GTK (the machine
 needs GTK 4.10+ and GtkSourceView 5), it is built on `ubuntu-24.04` and so wants
 a glibc at least as new (2.39 — Fedora 40, Debian 13, Ubuntu 24.04), and it is
 built **without** the optional dependencies (`sqlite3`, `libsoup`, GStreamer,
-VTE) so that none of them becomes a shared library the downloader has to have.
+VTE, `libxml2`, `libsecret`) so that none of them becomes a shared library the
+downloader has to have.
 
 ### The compiler inside the Windows build
 
@@ -307,6 +308,7 @@ project in [plugins.md](plugins.md#building-one) says where that is.
 | ...and the picture, not just the sound | `gstreamer1-plugin-gtk4` | `gstreamer1.0-gtk4` | `Video`'s sink (`gtk4paintablesink`, from gst-plugins-rs) is missing and `AudioPlayer` still works |
 | `Terminal` | `vte291-gtk4-devel` | `libvte-2.91-gtk4-dev` | the class still draws and still round-trips a `.form`; only `Run`, `Stop` and `Kill` refuse. The only dependency with no Windows port |
 | `Xml`, `File.LoadXml`/`SaveXml` | `libxml2-devel` | `libxml2-dev` | `Xml` exists, `Available` is `false`, and every verb refuses with a sentence. GTK4 itself already loads libxml2 at runtime on most desktops, so this is a **build** dependency and not a new runtime one |
+| `Keyring` (a token in the system's vault) | `libsecret-devel` | `libsecret-1-dev` | `Keyring` exists, `Available` is `false`, and every verb refuses with a sentence naming the package. It has no Windows port; the library itself is on every GNOME desktop already |
 
 `Widget.Available(type)` is how a program asks what the build it is running on
 can actually do — a palette filters on it, and so should anything that offers a
@@ -382,4 +384,4 @@ and a TagLib wrapper worked through.
 | `Package 'gtksourceview-5' not found` | `gtksourceview5-devel` / `libgtksourceview-5-dev` |
 | compile errors about `gtk_alert_dialog` or `gtk_file_dialog` | the GTK is older than 4.10 — Debian 13 / Ubuntu 24.04 or newer |
 | `no vte: Terminal exists and refuses to run one` | not an error: the optional table above |
-| `no sqlite3`, `no libsoup`, `no gstreamer`, `no libxml2` | likewise — a build line, not a failure |
+| `no sqlite3`, `no libsoup`, `no gstreamer`, `no libxml2`, `no libsecret` | likewise — a build line, not a failure |

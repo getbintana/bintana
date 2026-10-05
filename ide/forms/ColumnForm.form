@@ -12,24 +12,17 @@
       "type": "Label",
       "name": "LblCols",
       "properties": {
-        "X": 16,
-        "Y": 14,
-        "Width": 300,
         "Height": 24,
-        "Text": "The columns, in order:"
+        "Text": "The columns, in order:",
+        "Width": 300,
+        "X": 16,
+        "Y": 14
       }
     },
     {
       "type": "TableView",
       "name": "ColList",
       "properties": {
-        "X": 16,
-        "Y": 42,
-        "Width": 420,
-        "Height": 180,
-        "HAlign": "Fill",
-        "VAlign": "Fill",
-        "MinWidth": 260,
         "Columns": [
           {
             "Text": "Heading",
@@ -44,167 +37,175 @@
             "Text": "Alignment",
             "Width": 100
           }
-        ]
+        ],
+        "HAlign": "Fill",
+        "Height": 180,
+        "MinWidth": 260,
+        "Style": "frame",
+        "VAlign": "Fill",
+        "Width": 420,
+        "X": 16,
+        "Y": 42
       }
     },
     {
       "type": "Button",
       "name": "BtnColAdd",
       "properties": {
-        "X": 448,
-        "Y": 42,
-        "Width": 96,
+        "HAlign": "End",
         "Height": 32,
         "Text": "Add",
-        "HAlign": "End"
+        "Width": 96,
+        "X": 448,
+        "Y": 42
       }
     },
     {
       "type": "Button",
       "name": "BtnColDel",
       "properties": {
-        "X": 448,
-        "Y": 80,
-        "Width": 96,
+        "HAlign": "End",
         "Height": 32,
         "Text": "Delete",
-        "HAlign": "End"
+        "Width": 96,
+        "X": 448,
+        "Y": 80
       }
     },
     {
       "type": "Button",
       "name": "BtnColUp",
       "properties": {
-        "X": 448,
-        "Y": 126,
-        "Width": 96,
+        "HAlign": "End",
         "Height": 32,
         "Text": "Up",
-        "HAlign": "End"
+        "Width": 96,
+        "X": 448,
+        "Y": 126
       }
     },
     {
       "type": "Button",
       "name": "BtnColDown",
       "properties": {
-        "X": 448,
-        "Y": 164,
-        "Width": 96,
+        "HAlign": "End",
         "Height": 32,
         "Text": "Down",
-        "HAlign": "End"
+        "Width": 96,
+        "X": 448,
+        "Y": 164
       }
     },
     {
       "type": "Label",
       "name": "LblColText",
       "properties": {
-        "X": 16,
-        "Y": 240,
-        "Width": 90,
         "Height": 24,
-        "Text": "Heading:"
+        "Text": "Heading:",
+        "Width": 90,
+        "X": 16,
+        "Y": 240
       }
     },
     {
       "type": "TextBox",
       "name": "TxtColText",
       "properties": {
-        "X": 112,
-        "Y": 234,
-        "Width": 300,
-        "Height": 34,
+        "ActivatesDefault": true,
         "HAlign": "Fill",
-        "ActivatesDefault": true
+        "Height": 34,
+        "Width": 300,
+        "X": 112,
+        "Y": 234
       }
     },
     {
       "type": "Label",
       "name": "LblColWidth",
       "properties": {
-        "X": 16,
-        "Y": 282,
-        "Width": 90,
         "Height": 24,
-        "Text": "Width:"
+        "Text": "Width:",
+        "Width": 90,
+        "X": 16,
+        "Y": 282
       }
     },
     {
       "type": "SpinBox",
       "name": "SpnColWidth",
       "properties": {
-        "X": 112,
-        "Y": 276,
-        "Width": 100,
         "Height": 34,
-        "Min": 0,
         "Max": 2000,
-        "Step": 10
+        "Min": 0,
+        "Step": 10,
+        "Width": 100,
+        "X": 112,
+        "Y": 276
       }
     },
     {
       "type": "Label",
       "name": "LblColAlign",
       "properties": {
-        "X": 230,
-        "Y": 282,
-        "Width": 80,
         "Height": 24,
-        "Text": "Alignment:"
+        "Text": "Alignment:",
+        "Width": 80,
+        "X": 262,
+        "Y": 282
       }
     },
     {
       "type": "ComboBox",
       "name": "CmbColAlign",
       "properties": {
-        "X": 312,
-        "Y": 276,
+        "Height": 34,
         "Width": 100,
-        "Height": 34
+        "X": 349,
+        "Y": 276
       }
     },
     {
       "type": "Label",
       "name": "LblColHint",
       "properties": {
-        "X": 16,
-        "Y": 322,
-        "Width": 528,
-        "Height": 34,
-        "Text": "A width of 0 lets the column size itself. Every column can be dragged whatever it says here.",
-        "Wrap": true,
-        "Style": "dim-label",
         "HAlign": "Fill",
-        "VAlign": "End"
+        "Height": 34,
+        "Style": "dim-label",
+        "Text": "A width of 0 lets the column size itself. Every column can be dragged whatever it says here.",
+        "VAlign": "End",
+        "Width": 528,
+        "Wrap": true,
+        "X": 16,
+        "Y": 322
       }
     },
     {
       "type": "Button",
       "name": "BtnColCancel",
       "properties": {
-        "X": 354,
-        "Y": 372,
-        "Width": 90,
+        "Cancel": true,
+        "HAlign": "End",
         "Height": 32,
         "Text": "Cancel",
-        "HAlign": "End",
         "VAlign": "End",
-        "Cancel": true
+        "Width": 90,
+        "X": 354,
+        "Y": 372
       }
     },
     {
       "type": "Button",
       "name": "BtnColOk",
       "properties": {
-        "X": 454,
-        "Y": 372,
-        "Width": 90,
-        "Height": 32,
-        "Text": "OK",
-        "Style": "suggested-action",
+        "Default": true,
         "HAlign": "End",
+        "Height": 32,
+        "Style": "suggested-action",
+        "Text": "OK",
         "VAlign": "End",
-        "Default": true
+        "Width": 90,
+        "X": 454,
+        "Y": 372
       }
     }
   ]

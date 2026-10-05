@@ -1858,6 +1858,7 @@ static bool install_globals(BtaApp *app)
     bta_desktop_init(ctx, global);
     bta_printer_init(ctx, global);
     bta_xml_init(ctx, global);
+    bta_keyring_init(ctx, global);
 
     JS_FreeValue(ctx, global);
 
@@ -2679,6 +2680,7 @@ void bta_app_free(BtaApp *app)
     bta_http_cleanup();
     bta_media_cleanup();
     bta_printer_cleanup();
+    bta_keyring_cleanup();
     /* Forms still shown hold a reference the collector cannot see; drop it
      * before the context goes, or JS_FreeRuntime asserts. */
     bta_forms_cleanup();
@@ -2814,7 +2816,7 @@ static gboolean console_idle(gpointer user_data)
     BtaApp *app = user_data;
 
     if (bta_sys_pending() + bta_http_pending() + bta_media_pending() +
-        bta_task_pending() > 0)
+        bta_task_pending() + bta_keyring_pending() > 0)
         return G_SOURCE_CONTINUE;
 
     g_main_loop_quit(app->loop);
@@ -2860,7 +2862,7 @@ static int run_console(BtaApp *app)
      * early -- while a callback runs, the loop is not dispatching this.
      */
     if (!app->quitting && bta_sys_pending() + bta_http_pending() +
-        bta_media_pending() + bta_task_pending() > 0) {
+        bta_media_pending() + bta_task_pending() + bta_keyring_pending() > 0) {
         app->loop  = g_main_loop_new(NULL, FALSE);
         guint tick = g_timeout_add(20, console_idle, app);
 

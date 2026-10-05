@@ -14,8 +14,10 @@
       "name": "Head",
       "properties": {
         "Arrangement": "Vertical",
+        "Height": 74,
         "Margin": 8,
-        "Spacing": 6
+        "Spacing": 6,
+        "Width": 704
       },
       "children": [
         {
@@ -107,9 +109,10 @@
       "name": "LblCount",
       "properties": {
         "HAlign": "Fill",
+        "Height": 18,
         "Margin": 8,
         "Style": "dim-label",
-        "Text": ""
+        "Width": 704
       }
     },
     {
@@ -118,7 +121,12 @@
       "properties": {
         "Expand": true,
         "HAlign": "Fill",
-        "VAlign": "Fill"
+        "HExpand": true,
+        "Height": 344,
+        "Style": "frame",
+        "VAlign": "Fill",
+        "VExpand": true,
+        "Width": 718
       }
     },
     {
@@ -127,8 +135,10 @@
       "properties": {
         "Arrangement": "Horizontal",
         "HAlign": "End",
+        "Height": 34,
         "Margin": 8,
-        "Spacing": 8
+        "Spacing": 8,
+        "Width": 110
       },
       "children": [
         {

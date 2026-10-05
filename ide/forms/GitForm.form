@@ -13,14 +13,15 @@
       "type": "Split",
       "name": "Top",
       "properties": {
-        "Arrangement": "Horizontal",
         "Expand": true,
         "HAlign": "Fill",
         "HExpand": true,
+        "Height": 430,
         "Margin": 8,
-        "Position": 260,
+        "Position": 267,
         "VAlign": "Fill",
-        "VExpand": true
+        "VExpand": true,
+        "Width": 964
       },
       "children": [
         {
@@ -38,6 +39,7 @@
               "type": "Switcher",
               "name": "Which",
               "properties": {
+                "Current": 0,
                 "Expand": true,
                 "HExpand": true,
                 "Tabs": [
@@ -84,6 +86,7 @@
               "type": "Switcher",
               "name": "How",
               "properties": {
+                "Current": 0,
                 "Expand": true,
                 "HExpand": true,
                 "Tabs": [
@@ -97,7 +100,6 @@
                   "type": "Split",
                   "name": "Pair",
                   "properties": {
-                    "Arrangement": "Horizontal",
                     "Expand": true,
                     "HAlign": "Fill",
                     "HExpand": true,
@@ -117,8 +119,7 @@
                         "MinWidth": 120,
                         "ReadOnly": true,
                         "VAlign": "Fill",
-                        "VExpand": true,
-                        "Wrap": false
+                        "VExpand": true
                       }
                     },
                     {
@@ -132,8 +133,7 @@
                         "MinWidth": 120,
                         "ReadOnly": true,
                         "VAlign": "Fill",
-                        "VExpand": true,
-                        "Wrap": false
+                        "VExpand": true
                       }
                     }
                   ]
@@ -149,8 +149,7 @@
                     "Language": "diff",
                     "ReadOnly": true,
                     "VAlign": "Fill",
-                    "VExpand": true,
-                    "Wrap": false
+                    "VExpand": true
                   }
                 }
               ]
@@ -164,9 +163,11 @@
       "name": "LblMessage",
       "properties": {
         "HAlign": "Start",
+        "Height": 16,
         "Margin": 8,
         "Style": "caption-heading",
-        "Text": "Commit message"
+        "Text": "Commit message",
+        "Width": 105
       }
     },
     {
@@ -175,7 +176,9 @@
       "properties": {
         "HAlign": "Fill",
         "Height": 76,
-        "Margin": 8
+        "Margin": 8,
+        "Style": "frame",
+        "Width": 962
       }
     },
     {
@@ -184,8 +187,10 @@
       "properties": {
         "Arrangement": "Horizontal",
         "HAlign": "Fill",
+        "Height": 34,
         "Margin": 8,
-        "Spacing": 8
+        "Spacing": 8,
+        "Width": 964
       },
       "children": [
         {

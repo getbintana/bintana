@@ -890,6 +890,18 @@ void  bta_media_cleanup(void);  /* stops players still going */
 void  bta_printer_cleanup(void); /* cancels print dialogs still waiting */
 guint bta_media_pending(void);  /* players owed an answer (console loop) */
 
+/* --- Keyring -------------------------------------------------------------
+ *
+ * The system's secret store, through libsecret: `Available`, `Store`,
+ * `Lookup` and `Delete`, all asynchronous and all taking a callback, because
+ * the vault is a service on the session bus that may be locked. Optional at
+ * build time (BTA_HAVE_LIBSECRET); without it `Available` is false and the
+ * verbs refuse with a sentence naming the package. See bta_keyring.c.
+ */
+void  bta_keyring_init(JSContext *ctx, JSValue global);
+void  bta_keyring_cleanup(void); /* cancels calls still in flight */
+guint bta_keyring_pending(void); /* vault calls owed an answer (console loop) */
+
 /* --- Scrolling, shared by Scroller and Editor -------------------------- */
 /*
  * Where a widget is scrolled to, for the two that can answer.

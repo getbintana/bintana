@@ -28,6 +28,7 @@
       "properties": {
         "HAlign": "Fill",
         "Height": 300,
+        "Style": "frame",
         "Width": 332,
         "X": 14,
         "Y": 38

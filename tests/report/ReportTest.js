@@ -685,9 +685,31 @@ class ReportTest extends Form {
         eq("and one side given scales the other", drawn[1],
            `Image "${mark}" at (40,40) 60x40`);
 
-        throws("an Image with no File is refused",
+        /* The bytes themselves: the chart a report drew a moment ago, with no
+         * file in between. The dump names their size, because there is no path
+         * to name. */
+        const png = File.LoadBytes(mark);
+
+        this.Rep.Sections = {
+            ReportHeader: { Height: 100, Elements: [
+                { Kind: "Image", Bytes: png, X: 0, Y: 0 },
+                { Kind: "Image", Bytes: png, X: 0, Y: 0, Height: 40 },
+            ] },
+            Detail: { Height: 20, Elements: [{ Kind: "Text", Text: ".", X: 0, Y: 0 }] },
+        };
+        this.Rep.Data = rows(1, 1);
+        const fromBytes = this.page(1).filter((l) => l.startsWith("Image"));
+        eq("Bytes are painted with no file", fromBytes[0],
+           `Image "${png.Length} bytes" at (40,40) 120x80`);
+        eq("and one side given scales the other", fromBytes[1],
+           `Image "${png.Length} bytes" at (40,40) 60x40`);
+
+        throws("an Image with no File or Bytes is refused",
                () => { this.Rep.Sections = { Detail: { Height: 10,
                        Elements: [{ Kind: "Image", X: 0, Y: 0 }] } }; });
+        throws("an Image takes a File or Bytes, not both",
+               () => { this.Rep.Sections = { Detail: { Height: 10,
+                       Elements: [{ Kind: "Image", File: "mark.png", Bytes: png, X: 0, Y: 0 }] } }; });
 
         /* A masthead that is not there is not a blank space where a masthead
          * goes: it throws where it is drawn, which fails the export with it. */
@@ -976,6 +998,96 @@ class ReportTest extends Form {
         const barColours = colours(pane2.Dump());
         check("a bar chart's bars take theirs too", barColours.includes(RED) && barColours.includes(GREY),
               barColours.join(" "));
+        /* HitTest: what a click means, for a drawing that holds the document
+         * itself (a dashboard) and so hears the pointer on its own. */
+        eq("nothing drawn there is null", bars.HitTest(1, 1), null);
+        let hitBar = null;
+        for (let x = 0; x < 320 && !hitBar; x += 4)
+            for (let y = 0; y < 240 && !hitBar; y += 4) {
+                const h = bars.HitTest(x, y);
+                if (h && h.At === 1) hitBar = h;
+            }
+        check("a point on the second bar is that bar", hitBar && hitBar.Series === 0 && hitBar.Value === 2,
+              JSON.stringify(hitBar));
+        eq("a point that is not a number is nothing", bars.HitTest(NaN, 3), null);
+        const ring = new ChartDocument();
+        ring.Type = "Pie";
+        ring.Legend = "None";
+        ring.Labels = ["a", "b"];
+        ring.Series = [{ Values: [1, 3] }];
+        pane2.On("Draw", null);
+        pane2.On("Draw", (p, w, h) => ring.Paint(p, w, h));
+        pane2.Save(at("ring.png"), 200, 200);
+        const centre = ring.HitTest(100, 110);
+        check("and a slice of a pie is its slice", centre !== null && (centre.At === 0 || centre.At === 1),
+              JSON.stringify(centre));
+        /* The three shapes that are not a category plot, and bars and a line
+         * on one plot: each drawn with no control, and each answering a click
+         * through HitTest. */
+        const find = (doc, w, h, want) => {
+            for (let y = 0; y < h; y += 3)
+                for (let x = 0; x < w; x += 3) {
+                    const hit = doc.HitTest(x, y);
+                    if (hit && want(hit)) return hit;
+                }
+            return null;
+        };
+        const scatter = new ChartDocument();
+        scatter.Type = "Scatter";
+        scatter.Labels = ["a", "b", "c"];
+        scatter.Series = [{ Name: "s", X: [1200, 1500, 1900], Values: [1, 3, 2], Sizes: [1, 2, 9] }];
+        scatter.Save(at("scatter.png"), 320, 240);
+        check("a scatter is a PNG", File.Exists(at("scatter.png")));
+        const big = find(scatter, 320, 240, (h) => h.At === 2);
+        check("a click on a bubble is that bubble", big && big.Value === 2, JSON.stringify(big));
+        eq("and its points are where X says, not at their index",
+           JSON.stringify(scatter.points.map((q) => q.xv)), JSON.stringify([1200, 1500, 1900]));
+        check("the x axis does not start at zero for a cloud far from it", scatter.xRange().lo >= 1000,
+              JSON.stringify(scatter.xRange()));
+
+        const heat = new ChartDocument();
+        heat.Type = "Heatmap";
+        heat.Labels = ["lun", "mar", "mié"];
+        heat.Series = [{ Name: "web", Values: [1, 5, null] }, { Name: "db", Values: [9, 0, 2] }];
+        heat.ShowValues = true;
+        heat.Save(at("heat.png"), 320, 200);
+        eq("a heatmap has a cell per value, and none for a gap", heat.cells.length, 5);
+        const hottest = heat.cells.find((c) => c.value === 9);
+        eq("the highest value is the deepest shade", hottest.t, 1);
+        const cell = heat.HitTest(hottest.x + 2, hottest.y + 2);
+        check("a click on a cell is its row and column", cell && cell.Series === 1 && cell.At === 0, JSON.stringify(cell));
+
+        const gauge = new ChartDocument();
+        gauge.Type = "Gauge";
+        gauge.YMax = 100;
+        gauge.Labels = ["SLI"];
+        gauge.Bands = [{ To: 90, Color: "#e01b24" }, { To: 99, Color: "#e5a50a" }, { To: 100, Color: "#2ec27e" }];
+        gauge.Series = [{ Name: "sli", Values: [93.75] }];
+        gauge.Decimals = 1;
+        gauge.Save(at("gauge.png"), 300, 200);
+        const dial = gauge.HitTest(150, gauge.dial.cy - 10);
+        check("a click on the dial is its value", dial && dial.Value === 93.75, JSON.stringify(dial));
+        throws("a band's end is a number", () => { gauge.Bands = [{ To: "x" }]; });
+
+        const combo = new ChartDocument();
+        combo.Type = "Bar";
+        combo.Legend = "None";
+        combo.Labels = ["a", "b", "c"];
+        combo.Series = [{ Name: "count", Values: [3, 5, 4] },
+                        { Name: "rate", Values: [10, 80, 40], Type: "Line", Axis: "Right" }];
+        combo.Save(at("combo.png"), 320, 240);
+        eq("bars and a line on one plot: only the bars are bars", combo.bars.length, 3);
+        check("and a bar is not narrowed for the line beside it", combo.bars[0].w > 320 / 3 / 2 - 10, combo.bars[0].w);
+        const onLine = find(combo, 320, 240, (h) => h.Series === 1);
+        check("a click off the bars finds the line", onLine !== null, JSON.stringify(onLine));
+        throws("a series' Type is Bar, Line or Area", () => { combo.Series = [{ Values: [1], Type: "Pie" }]; });
+        const few = new ChartDocument();
+        few.Labels = ["a", "b"];
+        few.Series = [{ Values: [1, 2] }];
+        eq("with no decimals, an axis never steps finer than one", few.range().ticks.join(), "0,1,2");
+        few.Decimals = 1;
+        check("with one, it may", few.range().ticks.length > 3, few.range().ticks.join());
+
         throws("Colors is a list, and a string is Color's job",
                () => { bars.Series = [{ Values: [1], Colors: RED }]; });
         pane2.Remove();
@@ -1290,6 +1402,186 @@ class ReportTest extends Form {
         check("a lone bar is centred", Math.abs(bar.x + bar.w / 2 - mid) < 4,
               `bar at ${bar.x + bar.w / 2}, middle ${mid}`);
 
+        /* ---- how a series writes its numbers, and the mirror (report 1)
+         *
+         * `Format` and `Unit` are the vocabulary the application's cards
+         * already use, so a chart and the number beside it agree; `Mirror`
+         * draws a series below the axis and writes the absolute value, which
+         * is the whole butterfly and the bug it fixes (the axis used to say
+         * "-1,80" for a series the caller had negated by hand). */
+        const pane = new DrawingArea();
+        this.Add(pane);
+        const show = (doc, w, h) => {
+            pane.On("Draw", null);
+            pane.On("Draw", (p, pw, ph) => doc.Paint(p, pw, ph));
+            pane.Save(File.Join(SCRATCH, "chart-format.png"), w, h);
+            return pane.Dump();
+        };
+
+        const bits = new ChartDocument();
+        bits.Type   = "Line";
+        bits.Legend = "None";
+        bits.YMin   = 0;
+        bits.YMax   = 1e9;
+        bits.Series = [{ Values: [0, 5e8, 1e9], Format: "Bits" }];
+        const bitsDump = show(bits, 400, 240);
+        check("a Bits axis says Gbps and Mbps",
+              bitsDump.includes(`${Locale.Number(1, 1)} Gbps`) &&
+              bitsDump.includes(`${Locale.Number(200, 1)} Mbps`), bitsDump.slice(0, 300));
+
+        const units = new ChartDocument();
+        units.Type   = "Bar";
+        units.Legend = "None";
+        units.YMin   = 0;
+        units.YMax   = 4;
+        units.Series = [{ Values: [2, 4], Format: "Number", Unit: "GB" }];
+        const unitsDump = show(units, 320, 200);
+        check("a unit follows the number", unitsDump.includes(`2 GB`), unitsDump.slice(0, 300));
+
+        const mirror = new ChartDocument();
+        mirror.Type   = "Bar";
+        mirror.Legend = "None";
+        mirror.Series = [{ Values: [3, 5], Mirror: true }];
+        show(mirror, 320, 240);
+        const mbox = mirror.lastBox;
+        check("a mirrored series is drawn below the axis",
+              mirror.bars.length === 2 && mirror.bars.every((b) =>
+                  b.h > 0 && b.y >= mirror.yOf(mbox, 0) - 0.5),
+              JSON.stringify(mirror.bars));
+        eq("...and the axis writes the absolute value", mirror.text(-5, mirror.Series[0]), "5");
+        check("which is the series the axis takes its format from",
+              mirror.axisSeries("Left") === mirror.Series[0]);
+        throws("a Format is one of the five the application uses",
+               () => { mirror.Series = [{ Values: [1], Format: "Money" }]; });
+
+        const gaugeFmt = new ChartDocument();
+        gaugeFmt.Type   = "Gauge";
+        gaugeFmt.YMax   = 100;
+        gaugeFmt.Decimals = 1;
+        gaugeFmt.Labels = ["SLI"];
+        gaugeFmt.Series = [{ Values: [93.75], Format: "Percent" }];
+        const gaugeDump = show(gaugeFmt, 300, 200);
+        check("an indicator with Percent writes it",
+              gaugeDump.includes(`${Locale.Number(93.75, 1)} %`), gaugeDump.slice(0, 300));
+        check("and a bar value uses its own series",
+              (() => {
+                  const two = new ChartDocument();
+                  two.Type = "Bar"; two.Legend = "None"; two.ShowValues = true;
+                  two.YMin = 0; two.YMax = 4;
+                  two.Series = [{ Values: [2], Format: "Number", Unit: "GB" }];
+                  return show(two, 320, 200).includes(`2 GB`);
+              })());
+
+        /* ---- horizontal thresholds (report 2)
+         *
+         * A line at its own value across the plot, and **omitted** when the
+         * axis does not reach it -- a threshold drawn on the border says the
+         * opposite of an axis pinned away from it. */
+        const thr = new ChartDocument();
+        thr.Type   = "Bar";
+        thr.Grid   = false;
+        thr.Legend = "None";
+        thr.Labels = ["a", "b"];
+        thr.YMin   = 0;
+        thr.YMax   = 100;
+        thr.Series = [{ Values: [10, 40] }];
+        thr.Lines  = [{ Value: 99.9, Color: "#e01b24", Text: "SLO", Width: 2 }];
+        const thrDump = show(thr, 320, 240);
+        const crossing = thrDump.split("\n").filter((l) => l.startsWith("MoveTo") || l.startsWith("LineTo"));
+        eq("a threshold is one line across the plot", crossing.length, 2);
+        const crossAt = /^MoveTo \(([-\d.]+),([-\d.]+)\)/.exec(crossing[0] || "");
+        check("...at the y of its value",
+              crossAt && Math.abs(Number(crossAt[2]) - thr.yOf(thr.lastBox, 99.9)) < 0.01, crossing[0]);
+        check("...across the whole plot",
+              crossing[1] && crossing[1].startsWith(`LineTo (${thr.lastBox.right},`), crossing[1]);
+        check("...with its text at the right edge", thrDump.includes("SLO"), thrDump.slice(-200));
+        thr.Lines = [{ Value: 120 }];
+        const awayDump = show(thr, 320, 240);
+        eq("a value the axis does not reach is omitted",
+           awayDump.split("\n").filter((l) => l.startsWith("MoveTo") || l.startsWith("LineTo")).length, 0);
+        throws("a line's value is a number", () => { thr.Lines = [{ Value: "x" }]; });
+        throws("and its width is positive", () => { thr.Lines = [{ Value: 1, Width: -2 }]; });
+        thr.Lines = [];
+
+        /* ---- the window moved from the document (report 3, stage 1)
+         *
+         * The wheel, the drag and the click are arithmetic the document owns,
+         * so a drawing that forwards a pointer to it -- a dashboard of several
+         * charts on one `DrawingArea` -- gets exactly what a `Chart` does. */
+        const win = new ChartDocument();
+        win.Type   = "Line";
+        win.Legend = "None";
+        const steps = [];
+        for (let i = 0; i < 50; i++) steps.push(i);
+        win.Series = [{ Values: steps }];
+        win.Zoomable = true;
+        show(win, 400, 240);
+        const wbox = win.lastBox;
+        const wmid = (wbox.left + wbox.right) / 2;
+        eq("zooming out a whole view is not consumed", win.ZoomAt(wmid, NaN, 1), false);
+        const under = win.indexAt(wbox, wmid);
+        eq("a document zooms about the point", win.ZoomAt(wmid, NaN, -1), true);
+        show(win, 400, 240);
+        check("...keeping the datum under it",
+              Math.abs(win.indexAt(win.lastBox, wmid) - under) <= 1,
+              `${win.indexAt(win.lastBox, wmid)} against ${under}`);
+        win.From = 10; win.Count = 10;
+        show(win, 400, 240);
+        const before = win.view().from;
+        eq("PanBy moves the window", win.PanBy(20), true);
+        check("...by the pixels it was given, to the left", win.view().from < before,
+              `${win.view().from} against ${before}`);
+        win.From = 10; win.Count = 10;
+        show(win, 400, 240);
+        eq("a press that can pan", win.Press(200, 100), true);
+        eq("a move past the threshold is a pan", win.Move(220, 100), "pan");
+        eq("...and a drag is not a click", win.Release(), false);
+        eq("a press and release that never moved is", (win.Press(200, 100), win.Release()), true);
+        win.From = 0; win.Count = 0;
+        show(win, 400, 240);
+        eq("a press on a whole view cannot pan", win.Press(200, 100), false);
+
+        /* ---- the tooltip, measured and placed (report 3, stage 2) */
+        const tip = new ChartDocument();
+        tip.Type   = "Bar";
+        tip.Legend = "None";
+        tip.Labels = ["a", "b"];
+        tip.YMin   = 0;
+        tip.YMax   = 10;
+        tip.Series = [{ Values: [4, 8], Format: "Percent" }];
+        show(tip, 320, 240);
+        const tipBar = tip.bars[1];
+        const tipAt  = tip.Tooltip(tipBar.x + tipBar.w / 2, tipBar.y + 2);
+        check("a tooltip names the label and the value, formatted",
+              tipAt && tipAt.Text.includes("b") && tipAt.Text.includes("%"),
+              JSON.stringify(tipAt));
+        check("...inside the drawing", tipAt.X >= 0 && tipAt.Y >= 0 &&
+              tipAt.X + tipAt.Width <= 320 && tipAt.Y + tipAt.Height <= 240,
+              JSON.stringify(tipAt));
+        eq("and nothing where nothing is drawn", tip.Tooltip(1, 1), null);
+
+        /* ---- a clickable legend, and a hidden series (report 3, stage 3) */
+        const led = new ChartDocument();
+        led.Type   = "Bar";
+        led.Legend = "Bottom";
+        led.Labels = ["a", "b"];
+        led.YMin   = 0;
+        led.Series = [{ Name: "one", Values: [4, 8] }, { Name: "two", Values: [2, 3] }];
+        show(led, 320, 240);
+        const lhit = led.legendHits && led.legendHits[0];
+        check("the legend was drawn", lhit !== undefined, JSON.stringify(led.legendHits));
+        const lh = lhit ? led.LegendHit(lhit.x + 2, lhit.y + 2) : null;
+        check("a click on it names the series", lh && lh.Series === 0, JSON.stringify(lh));
+        led.Series[0].Hidden = true;
+        led.Refresh();
+        show(led, 320, 240);
+        eq("a hidden series is not drawn", led.bars.length, 2);
+        check("...and the range forgets it", led.range().hi < 8,
+              `hi ${led.range().hi}`);
+        led.Series[0].Hidden = false;
+        led.Refresh();
+
+        pane.Remove();
         c.Remove();
     }
 

@@ -67,6 +67,15 @@
  * every other verb that takes one: `Probe.Image(undefined)` must not quietly
  * probe a file called `./undefined`.
  *
+ * **A path and not bytes, and that is the operation talking.** `Painter.Image`
+ * takes either because painting decodes both the same; this one's promise is
+ * the header and no decode, and there is no header reader for memory --
+ * `GdkPixbufLoader` emits `size-prepared` only when it closes, after the whole
+ * picture is decoded, so bytes here would quietly allocate a 12000x8000
+ * photograph's pixels to answer two numbers. The size of a picture already in
+ * memory is the handle's to answer, when there is one, off the decode it
+ * already did.
+ *
  * ## Growing
  *
  * It is a namespace of questions and the questions are what grows: a verb gets
@@ -118,9 +127,11 @@ static const JSCFunctionListEntry probe_props[] = {
      *   the picture's pixels, from its header. `null` when `path` is not a
      *   picture this machine's loaders read -- exactly the files a `Picture`
      *   would not show, an `.svg` included where no SVG loader is installed,
-     *   and its declared size where one is -- or is not there. **No widget
-     *   and no display**, which is what makes it answerable in a `main`
-     *   project and before anything has been drawn
+     *   and its declared size where one is -- or is not there. **A file's
+     *   header and nothing else**: the size of a picture already in memory is
+     *   the handle's to answer, off the decode it already did. **No widget and
+     *   no display**, which is what makes it answerable in a `main` project
+     *   and before anything has been drawn
      */
     JS_CFUNC_DEF("Image", 1, probe_image),
 };

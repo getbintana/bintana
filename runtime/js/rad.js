@@ -188,6 +188,137 @@ File.SaveXml = function (path, node) {
 };
 
 /* ------------------------------------------------------------------------
+ * Csv -- rows of text, the way spreadsheets and other programs exchange them.
+ *
+ * RFC 4180 and what is written in practice: a value in double quotes may hold
+ * the separator, a line break or a quote written twice; a line ends in LF or
+ * CRLF; a UTF-8 byte-order mark at the start is not part of the first heading.
+ * **The separator is found when it is not given**: the one of `,` `;` tab `|`
+ * that the first line holds most of, outside quotes. That is the case that
+ * matters here: a spreadsheet in a locale whose decimal comma is the comma
+ * writes `;`, and a reader that assumed `,` would see one column per line and
+ * say nothing.
+ *
+ * **Every value is text.** What a column means -- a number, a date, a decimal
+ * comma -- is the application's to decide, and a parser that guessed would
+ * turn the code "00123" into 123 for everybody. Rows may have different
+ * lengths; nothing is padded.
+ *
+ * Here and not in C because it is a loop over a string, and a worker runs this
+ * file too.
+ * ---------------------------------------------------------------------- */
+
+const CSV_SEPARATORS = [",", ";", "\t", "|"];
+
+function csvOptions(options, verb) {
+    const o = options || {};
+    if (typeof o !== "object") throw new TypeError(`Csv.${verb}: options are an object, got ${typeof o}`);
+    const sep = o.Separator === undefined ? "" : String(o.Separator);
+    if (sep.length > 1) throw new TypeError(`Csv.${verb}: Separator is one character, got ${JSON.stringify(sep)}`);
+    const quote = o.Quote === undefined ? "\"" : String(o.Quote);
+    if (quote.length !== 1) throw new TypeError(`Csv.${verb}: Quote is one character, got ${JSON.stringify(quote)}`);
+    return { Separator: sep, Quote: quote, LineEnd: o.LineEnd === undefined ? "\n" : String(o.LineEnd) };
+}
+
+/* The separator the first record uses most, counted outside quotes. */
+function csvDetect(text, quote) {
+    const count = new Map(CSV_SEPARATORS.map((c) => [c, 0]));
+    let quoted = false;
+    for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (c === quote) quoted = !quoted;
+        else if (!quoted && (c === "\n" || c === "\r")) break;
+        else if (!quoted && count.has(c)) count.set(c, count.get(c) + 1);
+    }
+    let best = ",", most = 0;
+    for (const c of CSV_SEPARATORS) if (count.get(c) > most) { best = c; most = count.get(c); }
+    return best;
+}
+
+GLOBAL.Csv = {
+
+    /**
+     * the rows of a CSV text, each an array of strings. `options`:
+     * `Separator` (one character; `""` or absent finds it among `,` `;` tab
+     * `|`), `Quote` (default `"`). A last line break makes no empty row
+     */
+    Parse(text, options) {
+        const o = csvOptions(options, "Parse");
+        let t = String(text === undefined || text === null ? "" : text);
+        if (t.charCodeAt(0) === 0xFEFF) t = t.slice(1);
+        const sep = o.Separator || csvDetect(t, o.Quote);
+        const q = o.Quote;
+        const rows = [];
+        let row = [], value = "", quoted = false, started = false;
+        for (let i = 0; i < t.length; i++) {
+            const c = t[i];
+            if (quoted) {
+                if (c === q) {
+                    if (t[i + 1] === q) { value += q; i++; }
+                    else quoted = false;
+                } else value += c;
+                continue;
+            }
+            if (c === q && value === "") { quoted = true; started = true; continue; }
+            if (c === sep) { row.push(value); value = ""; started = true; continue; }
+            if (c === "\r" || c === "\n") {
+                if (c === "\r" && t[i + 1] === "\n") i++;
+                row.push(value);
+                rows.push(row);
+                row = []; value = ""; started = false;
+                continue;
+            }
+            value += c;
+            started = true;
+        }
+        if (quoted) throw new SyntaxError("Csv.Parse: a quoted value is not closed");
+        if (started || value !== "" || row.length) { row.push(value); rows.push(row); }
+        return rows;
+    },
+
+    /**
+     * the rows of a CSV file, as `Parse` reads them. **The error names the
+     * file**
+     */
+    Load(path, options) {
+        const text = File.Load(path);
+        try {
+            return Csv.Parse(text, options);
+        } catch (e) {
+            throw new SyntaxError(`${path}: ${e.message}`);
+        }
+    },
+
+    /**
+     * rows (arrays of values) as CSV text. A value is quoted when it holds
+     * the separator, the quote, a line break or space at either end;
+     * `null` and `undefined` are empty, and a number is written as the
+     * language writes it, never in the desktop's format. `options`:
+     * `Separator` (default `,`), `Quote`, `LineEnd` (default LF)
+     */
+    Format(rows, options) {
+        const o = csvOptions(options, "Format");
+        if (!Array.isArray(rows)) throw new TypeError(`Csv.Format: rows are an array, got ${typeof rows}`);
+        const sep = o.Separator || ",", q = o.Quote;
+        const one = (v) => {
+            const s = v === null || v === undefined ? "" : String(v);
+            const needs = s.indexOf(sep) >= 0 || s.indexOf(q) >= 0 || /[\r\n]/.test(s) ||
+                          (s.length && (s[0] === " " || s[s.length - 1] === " "));
+            return needs ? q + s.split(q).join(q + q) + q : s;
+        };
+        return rows.map((r, i) => {
+            if (!Array.isArray(r)) throw new TypeError(`Csv.Format: row ${i} is not an array`);
+            return r.map(one).join(sep);
+        }).join(o.LineEnd) + (rows.length ? o.LineEnd : "");
+    },
+
+    /** writes rows as a CSV file, as `Format` writes them */
+    Save(path, rows, options) {
+        File.Save(path, Csv.Format(rows, options));
+    },
+};
+
+/* ------------------------------------------------------------------------
  * Settings -- what an application remembers between runs.
  *
  * Application.ConfigDirectory is a directory; this is the file everybody was going to

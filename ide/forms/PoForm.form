@@ -5,7 +5,9 @@
     "Arrangement": "Vertical",
     "Height": 560,
     "Text": "Translations",
-    "Width": 760
+    "Width": 760,
+    "Spacing": 4,
+    "Border": "4"
   },
   "children": [
     {
@@ -13,15 +15,16 @@
       "name": "Bar",
       "properties": {
         "Arrangement": "Horizontal",
+        "Height": 26,
         "Margin": 8,
-        "Spacing": 8
+        "Spacing": 8,
+        "Width": 744
       },
       "children": [
         {
           "type": "Label",
           "name": "LblCount",
           "properties": {
-            "Alignment": "Left",
             "HExpand": true
           }
         },
@@ -41,14 +44,22 @@
       "properties": {
         "Arrangement": "Vertical",
         "Expand": true,
-        "Position": 240
+        "HExpand": true,
+        "Height": 468,
+        "Position": 240,
+        "VExpand": true,
+        "Width": 760
       },
       "children": [
         {
           "type": "ListBox",
           "name": "LstEntries",
           "properties": {
-            "Expand": true
+            "Expand": true,
+            "HExpand": true,
+            "Height": 240,
+            "VExpand": true,
+            "Width": 680
           }
         },
         {
@@ -64,7 +75,6 @@
               "type": "Label",
               "name": "LblSourceCaption",
               "properties": {
-                "Alignment": "Left",
                 "Style": "caption-heading",
                 "Text": "Source"
               }
@@ -73,7 +83,6 @@
               "type": "Label",
               "name": "LblSource",
               "properties": {
-                "Alignment": "Left",
                 "HExpand": true,
                 "Wrap": true
               }
@@ -84,7 +93,10 @@
               "properties": {
                 "Arrangement": "Vertical",
                 "Expand": true,
-                "Spacing": 4
+                "HExpand": true,
+                "Spacing": 4,
+                "Style": "frame",
+                "VExpand": true
               }
             },
             {
@@ -99,7 +111,6 @@
               "type": "Label",
               "name": "LblRefs",
               "properties": {
-                "Alignment": "Left",
                 "Style": "dim-label",
                 "Wrap": true
               }
@@ -114,8 +125,10 @@
       "properties": {
         "Arrangement": "Horizontal",
         "HAlign": "End",
+        "Height": 34,
         "Margin": 8,
-        "Spacing": 8
+        "Spacing": 8,
+        "Width": 208
       },
       "children": [
         {

@@ -11,280 +11,282 @@
       "type": "Label",
       "name": "LblPrName",
       "properties": {
-        "X": 16,
-        "Y": 22,
-        "Width": 110,
         "Height": 24,
-        "Text": "Name:"
+        "Text": "Name:",
+        "Width": 110,
+        "X": 16,
+        "Y": 22
       }
     },
     {
       "type": "TextBox",
       "name": "TxtPrName",
       "properties": {
-        "X": 134,
-        "Y": 16,
-        "Width": 410,
+        "HAlign": "Fill",
         "Height": 34,
-        "HAlign": "Fill"
+        "Width": 410,
+        "X": 134,
+        "Y": 16
       }
     },
     {
       "type": "Label",
       "name": "LblPrVersion",
       "properties": {
-        "X": 16,
-        "Y": 68,
-        "Width": 110,
         "Height": 24,
-        "Text": "Version:"
+        "Text": "Version:",
+        "Width": 110,
+        "X": 16,
+        "Y": 68
       }
     },
     {
       "type": "TextBox",
       "name": "TxtPrVersion",
       "properties": {
-        "X": 134,
-        "Y": 62,
-        "Width": 410,
-        "Height": 34,
         "HAlign": "Fill",
-        "Placeholder": "0.1.0"
+        "Height": 34,
+        "Placeholder": "0.1.0",
+        "Width": 410,
+        "X": 134,
+        "Y": 62
       }
     },
     {
       "type": "Label",
       "name": "LblPrId",
       "properties": {
-        "X": 16,
-        "Y": 114,
-        "Width": 110,
         "Height": 24,
-        "Text": "Application id:"
+        "Text": "Application id:",
+        "Width": 110,
+        "X": 16,
+        "Y": 114
       }
     },
     {
       "type": "TextBox",
       "name": "TxtPrId",
       "properties": {
-        "X": 134,
-        "Y": 108,
-        "Width": 410,
-        "Height": 34,
         "HAlign": "Fill",
+        "Height": 34,
         "Placeholder": "io.github.you.MyApp",
-        "Tooltip": "Reverse-DNS identity: the window's class, the metainfo's <id> and the Flatpak app id. Optional -- a project without one runs, and cannot be packaged."
+        "Tooltip": "Reverse-DNS identity: the window's class, the metainfo's <id> and the Flatpak app id. Optional -- a project without one runs, and cannot be packaged.",
+        "Width": 410,
+        "X": 134,
+        "Y": 108
       }
     },
     {
       "type": "Label",
       "name": "LblPrStartup",
       "properties": {
-        "X": 16,
-        "Y": 160,
-        "Width": 110,
         "Height": 24,
-        "Text": "Starts at:"
+        "Text": "Starts at:",
+        "Width": 110,
+        "X": 16,
+        "Y": 160
       }
     },
     {
       "type": "ComboBox",
       "name": "CmbPrKind",
       "properties": {
-        "X": 134,
-        "Y": 154,
-        "Width": 126,
         "Height": 34,
+        "Index": 0,
         "Items": [
           "a form",
           "a function"
         ],
-        "Tooltip": "A project opens a startup form, or calls a main function and never draws at all."
+        "Text": "a form",
+        "Tooltip": "A project opens a startup form, or calls a main function and never draws at all.",
+        "Width": 126,
+        "X": 134,
+        "Y": 154
       }
     },
     {
       "type": "ComboBox",
       "name": "CmbPrStartup",
       "properties": {
-        "X": 268,
-        "Y": 154,
-        "Width": 276,
+        "HAlign": "Fill",
         "Height": 34,
-        "HAlign": "Fill"
+        "Width": 276,
+        "X": 268,
+        "Y": 154
       }
     },
     {
       "type": "TextBox",
       "name": "TxtPrMain",
       "properties": {
-        "X": 268,
-        "Y": 154,
-        "Width": 276,
         "Height": 34,
+        "Tooltip": "The function the runtime calls; the IDE cannot list functions, so type it",
         "Visible": false,
-        "Tooltip": "The function the runtime calls; the IDE cannot list functions, so type it"
+        "Width": 276,
+        "X": 268,
+        "Y": 154
       }
     },
     {
       "type": "Label",
       "name": "LblPrDesc",
       "properties": {
-        "X": 16,
-        "Y": 206,
-        "Width": 110,
         "Height": 24,
-        "Text": "Description:"
+        "Text": "Description:",
+        "Width": 110,
+        "X": 16,
+        "Y": 206
       }
     },
     {
       "type": "TextBox",
       "name": "TxtPrDesc",
       "properties": {
-        "X": 134,
-        "Y": 200,
-        "Width": 410,
+        "HAlign": "Fill",
         "Height": 34,
-        "HAlign": "Fill"
+        "Width": 410,
+        "X": 134,
+        "Y": 200
       }
     },
     {
       "type": "Label",
       "name": "LblPrUses",
       "properties": {
-        "X": 16,
-        "Y": 250,
-        "Width": 200,
         "Height": 24,
-        "Text": "Libraries:"
+        "Text": "Libraries:",
+        "Width": 200,
+        "X": 16,
+        "Y": 250
       }
     },
     {
       "type": "RowList",
       "name": "LstPrUses",
       "properties": {
-        "X": 16,
-        "Y": 278,
-        "Width": 528,
+        "HAlign": "Fill",
         "Height": 110,
-        "HAlign": "Fill"
+        "Style": "frame",
+        "Width": 528,
+        "X": 16,
+        "Y": 278
       }
     },
     {
       "type": "Label",
       "name": "LblPrUsesHint",
       "properties": {
-        "X": 16,
-        "Y": 396,
-        "Width": 528,
+        "HAlign": "Fill",
         "Height": 36,
-        "Text": "",
-        "Wrap": true,
         "Style": "dim-label",
-        "HAlign": "Fill"
+        "Width": 528,
+        "Wrap": true,
+        "X": 16,
+        "Y": 396
       }
     },
     {
       "type": "Label",
       "name": "LblPrOrder",
       "properties": {
-        "X": 16,
-        "Y": 442,
-        "Width": 200,
         "Height": 24,
-        "Text": "Load order:"
+        "Text": "Load order:",
+        "Width": 200,
+        "X": 16,
+        "Y": 442
       }
     },
     {
       "type": "ListBox",
       "name": "LstPrSources",
       "properties": {
-        "X": 16,
-        "Y": 470,
-        "Width": 424,
-        "Height": 120,
         "HAlign": "Fill",
-        "VAlign": "Fill"
+        "Height": 120,
+        "Style": "frame",
+        "VAlign": "Fill",
+        "Width": 424,
+        "X": 16,
+        "Y": 470
       }
     },
     {
       "type": "Button",
       "name": "BtnPrUp",
       "properties": {
-        "X": 452,
-        "Y": 470,
-        "Width": 92,
+        "HAlign": "End",
         "Height": 32,
         "Text": "Up",
-        "HAlign": "End"
+        "Width": 92,
+        "X": 452,
+        "Y": 470
       }
     },
     {
       "type": "Button",
       "name": "BtnPrDown",
       "properties": {
-        "X": 452,
-        "Y": 508,
-        "Width": 92,
+        "HAlign": "End",
         "Height": 32,
         "Text": "Down",
-        "HAlign": "End"
+        "Width": 92,
+        "X": 452,
+        "Y": 508
       }
     },
     {
       "type": "Button",
       "name": "BtnPrDecide",
       "properties": {
-        "X": 452,
-        "Y": 556,
-        "Width": 92,
+        "HAlign": "End",
         "Height": 32,
         "Text": "Decide",
-        "HAlign": "End",
-        "Tooltip": "Write the order this project already loads in, so it can be changed"
+        "Tooltip": "Write the order this project already loads in, so it can be changed",
+        "Width": 92,
+        "X": 452,
+        "Y": 556
       }
     },
     {
       "type": "Label",
       "name": "LblPrHint",
       "properties": {
-        "X": 16,
-        "Y": 602,
-        "Width": 528,
-        "Height": 40,
-        "Text": "",
-        "Wrap": true,
-        "Style": "dim-label",
         "HAlign": "Fill",
-        "VAlign": "End"
+        "Height": 40,
+        "Style": "dim-label",
+        "VAlign": "End",
+        "Width": 528,
+        "Wrap": true,
+        "X": 16,
+        "Y": 602
       }
     },
     {
       "type": "Button",
       "name": "BtnPrCancel",
       "properties": {
-        "X": 354,
-        "Y": 650,
-        "Width": 90,
+        "Cancel": true,
+        "HAlign": "End",
         "Height": 32,
         "Text": "Cancel",
-        "HAlign": "End",
         "VAlign": "End",
-        "Cancel": true
+        "Width": 90,
+        "X": 354,
+        "Y": 650
       }
     },
     {
       "type": "Button",
       "name": "BtnPrOk",
       "properties": {
-        "X": 454,
-        "Y": 650,
-        "Width": 90,
-        "Height": 32,
-        "Text": "OK",
-        "Style": "suggested-action",
+        "Default": true,
         "HAlign": "End",
+        "Height": 32,
+        "Style": "suggested-action",
+        "Text": "OK",
         "VAlign": "End",
-        "Default": true
+        "Width": 90,
+        "X": 454,
+        "Y": 650
       }
     }
   ]

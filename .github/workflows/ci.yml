@@ -341,6 +341,59 @@ jobs:
           BINTANA_LIB_PATH: ${{ github.workspace }}/lib
         run: ./tests/run.sh widgets
 
+  # A sixth job, and the fourth optional half: `Keyring` without libsecret.
+  # The vault is a service on the session bus, so a build without the library
+  # is a program that keeps no secret -- `Keyring` exists, `Available` is
+  # false, and the verbs refuse with a sentence. The suite's `Keyring` test
+  # takes its other branch here, which is the only build that proves that
+  # branch compiles and runs.
+  #
+  # **Hiding the module rather than not installing it**, like `no-unix-print`
+  # and `no-libxml`: libsecret's headers can arrive as some other package's
+  # dependency, and a runner that grew it would make this job a second copy of
+  # the first one, silently. The wrapper answers "no" for that one name and
+  # CMake's own line is read back to prove it did.
+  no-libsecret:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config \
+            libgtk-4-dev libgtksourceview-5-dev \
+            libsqlite3-dev libsoup-3.0-dev \
+            xvfb \
+            librsvg2-common fonts-cantarell
+
+      - name: Build with libsecret hidden
+        run: |
+          set -euo pipefail
+          mkdir -p fake
+          # Everything but that one name goes through to the real pkg-config.
+          printf '#!/bin/sh\ncase " $* " in *" libsecret-1 "*) exit 1;; esac\nexec /usr/bin/pkg-config "$@"\n' \
+            > fake/pkg-config
+          chmod +x fake/pkg-config
+
+          cmake -S . -B build-nosecret \
+                -DPKG_CONFIG_EXECUTABLE="$PWD/fake/pkg-config" 2>&1 | tee cmake.log
+          # It has to have *decided* it, not merely compiled: the same guard
+          # `no-vte`, `no-unix-print` and `no-libxml` carry, for the same reason.
+          grep -q 'no libsecret:' cmake.log \
+            || { echo "this runner has libsecret: the job would prove nothing"; exit 1; }
+          cmake --build build-nosecret -j"$(nproc)"
+
+      - name: Test
+        env:
+          BINTANA: ./build-nosecret/bintana
+          BINTANA_LIB_PATH: ${{ github.workspace }}/lib
+        run: ./tests/run.sh widgets
+
   # The downloadable one: the same tree `cmake --install` lays down, as a
   # tarball, so somebody without a compiler can run the IDE and the examples.
   #
@@ -358,13 +411,13 @@ jobs:
   #     ./bin/bintana share/bintana/examples/hello
   #
   # **Built with the minimum dependencies on purpose.** The optional ones
-  # (sqlite, soup, GStreamer, VTE, libxml2) would each become a shared library
-  # the downloader must have; without them the binary still runs, and the
-  # features that need one say which package is missing -- and libxml2 is
-  # *hidden* rather than merely not installed, because its headers can arrive
-  # as some other package's dependency and the tarball would then link a
-  # library nobody asked for. A distribution package is the opposite trade and
-  # is a packager's to make.
+  # (sqlite, soup, GStreamer, VTE, libxml2, libsecret) would each become a
+  # shared library the downloader must have; without them the binary still runs,
+  # and the features that need one say which package is missing -- and libxml2
+  # and libsecret are *hidden* rather than merely not installed, because their
+  # headers can arrive as some other package's dependency and the tarball would
+  # then link a library nobody asked for. A distribution package is the
+  # opposite trade and is a packager's to make.
   #
   # **What it does not bundle is GTK.** The tarball needs GTK 4.10+ and
   # GtkSourceView 5 on the machine, and glibc at least as new as ubuntu-24.04's
@@ -399,9 +452,9 @@ jobs:
       - name: Build and stage
         run: |
           set -euo pipefail
-          # libxml2 hidden, and proved hidden: see the job's comment.
+          # libxml2 and libsecret hidden, and proved hidden: see the job's comment.
           mkdir -p fake
-          printf '#!/bin/sh\ncase " $* " in *" libxml-2.0 "*) exit 1;; esac\nexec /usr/bin/pkg-config "$@"\n' \
+          printf '#!/bin/sh\ncase " $* " in *" libxml-2.0 "*) exit 1;; *" libsecret-1 "*) exit 1;; esac\nexec /usr/bin/pkg-config "$@"\n' \
             > fake/pkg-config
           chmod +x fake/pkg-config
 
@@ -409,6 +462,8 @@ jobs:
                 -DPKG_CONFIG_EXECUTABLE="$PWD/fake/pkg-config" 2>&1 | tee cmake.log
           grep -q 'no libxml2:' cmake.log \
             || { echo "this runner has libxml2: the tarball would depend on it"; exit 1; }
+          grep -q 'no libsecret:' cmake.log \
+            || { echo "this runner has libsecret: the tarball would depend on it"; exit 1; }
           cmake --build build -j"$(nproc)"
 
           version=$(grep -m1 -oP 'project\(bintana VERSION \K[0-9][^ )]*' CMakeLists.txt)

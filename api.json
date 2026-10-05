@@ -12341,6 +12341,47 @@
       ]
     },
     {
+      "Name": "Csv",
+      "Members": [
+        {
+          "Name": "Format",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(rows, options)",
+          "Returns": "",
+          "Doc": "rows (arrays of values) as CSV text. A value is quoted when it holds the separator, the quote, a line break or space at either end; `null` and `undefined` are empty, and a number is written as the language writes it, never in the desktop's format. `options`: `Separator` (default `,`), `Quote`, `LineEnd` (default LF)",
+          "Native": false
+        },
+        {
+          "Name": "Load",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(path, options)",
+          "Returns": "",
+          "Doc": "the rows of a CSV file, as `Parse` reads them. **The error names the file**",
+          "Native": false
+        },
+        {
+          "Name": "Parse",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(text, options)",
+          "Returns": "",
+          "Doc": "the rows of a CSV text, each an array of strings. `options`: `Separator` (one character; `\"\"` or absent finds it among `,` `;` tab `|`), `Quote` (default `\"`). A last line break makes no empty row",
+          "Native": false
+        },
+        {
+          "Name": "Save",
+          "Kind": "Method",
+          "Params": 3,
+          "Signature": "(path, rows, options)",
+          "Returns": "",
+          "Doc": "writes rows as a CSV file, as `Format` writes them",
+          "Native": false
+        }
+      ]
+    },
+    {
       "Name": "Database",
       "Members": [
         {
@@ -13537,6 +13578,47 @@
       ]
     },
     {
+      "Name": "Keyring",
+      "Members": [
+        {
+          "Name": "Available",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether this build has libsecret. It says nothing about whether the machine is running a secret service -- a headless session has none -- so a caller treats a failed `Lookup` like an empty vault",
+          "Native": true
+        },
+        {
+          "Name": "Delete",
+          "Kind": "Method",
+          "Params": 3,
+          "Signature": "(service, key, cb)",
+          "Returns": "",
+          "Doc": "forgets it, and calls `cb(ok)`: `false` when there was nothing under those names or the vault could not be asked. Deleting what is not there is not an error",
+          "Native": true
+        },
+        {
+          "Name": "Lookup",
+          "Kind": "Method",
+          "Params": 3,
+          "Signature": "(service, key, cb)",
+          "Returns": "",
+          "Doc": "reads what `Store` saved, and calls `cb(value)` -- the text, or `null` when nothing is stored **or** the vault cannot be asked",
+          "Native": true
+        },
+        {
+          "Name": "Store",
+          "Kind": "Method",
+          "Params": 4,
+          "Signature": "(service, key, value, cb)",
+          "Returns": "",
+          "Doc": "puts `value` in the system's keyring under `service` and `key`, and calls `cb(ok)` when the vault answers -- `false` when it could not store it, which is what a machine with no secret service says. The label a keyring browser shows is made of the two names",
+          "Native": true
+        }
+      ]
+    },
+    {
       "Name": "Locale",
       "Members": [
         {
@@ -14179,7 +14261,7 @@
           "Params": 1,
           "Signature": "(path)",
           "Returns": "{ Width, Height }",
-          "Doc": "the picture's pixels, from its header. `null` when `path` is not a picture this machine's loaders read -- exactly the files a `Picture` would not show, an `.svg` included where no SVG loader is installed, and its declared size where one is -- or is not there. **No widget and no display**, which is what makes it answerable in a `main` project and before anything has been drawn",
+          "Doc": "the picture's pixels, from its header. `null` when `path` is not a picture this machine's loaders read -- exactly the files a `Picture` would not show, an `.svg` included where no SVG loader is installed, and its declared size where one is -- or is not there. **A file's header and nothing else**: the size of a picture already in memory is the handle's to answer, off the decode it already did. **No widget and no display**, which is what makes it answerable in a `main` project and before anything has been drawn",
           "Native": true
         }
       ]
@@ -16098,6 +16180,15 @@
               "Native": false
             },
             {
+              "Name": "Bands",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "a `Gauge`'s coloured ranges, `[{ To, Color, Name }]` in rising order: each runs from the end of the one before (the first from `YMin`) to `To`, and the value's arc takes the colour of the range it falls in. Other types ignore it. Defaults to `[]`.",
+              "Native": false
+            },
+            {
               "Name": "Count",
               "Kind": "Property",
               "Params": -1,
@@ -16170,6 +16261,15 @@
               "Native": false
             },
             {
+              "Name": "Lines",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "horizontal reference lines, `[{ Value, Color, Text, Width }]`, drawn across the plot at `yOf(Value)` with the text at the right edge. A `Value` outside the axis is not drawn; `Width` defaults to `1.5`, and `Color` to the chart's ink. Defaults to `[]`.",
+              "Native": false
+            },
+            {
               "Name": "Marks",
               "Kind": "Property",
               "Params": -1,
@@ -16211,7 +16311,7 @@
               "Params": -1,
               "Signature": "",
               "Returns": "",
-              "Doc": "the data: `[{ Name, Values, Color, Colors, Axis }]` — see below. Defaults to `[]`. Assigning it redraws",
+              "Doc": "the data: `[{ Name, Values, Color, Colors, Axis, Type, X, Sizes }]` — see below. Defaults to `[]`. Assigning it redraws",
               "Native": false
             },
             {
@@ -16247,7 +16347,7 @@
               "Params": -1,
               "Signature": "",
               "Returns": "",
-              "Doc": "`Bar` `Line` `Area` `Pie` `Doughnut`. Defaults to `\"Bar\"`.",
+              "Doc": "`Bar` `Line` `Area` `Pie` `Doughnut` `Scatter` `Heatmap` `Gauge`. Defaults to `\"Bar\"`.",
               "Native": false
             },
             {
@@ -16310,6 +16410,15 @@
               "Native": false
             },
             {
+              "Name": "Bands",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "a `Gauge`'s coloured ranges, `[{ To, Color, Name }]` in rising order: each runs from the end of the one before (the first from `YMin`) to `To`, and the value's arc takes the colour of the range it falls in. Other types ignore it. Defaults to `[]`.",
+              "Native": false
+            },
+            {
               "Name": "Count",
               "Kind": "Property",
               "Params": -1,
@@ -16355,6 +16464,15 @@
               "Native": false
             },
             {
+              "Name": "HitTest",
+              "Kind": "Method",
+              "Params": 2,
+              "Signature": "(x, y)",
+              "Returns": "",
+              "Doc": "what the last `Paint` drew at a point, in the coordinates it drew in: `{ Series, At, Value }` — the bar, the point or the slice a click there means, `At` an index into that series' `Values` — or `null`. What a drawing that holds a document of its own (a dashboard, a page) answers a click with, since only a `Chart` hears the pointer. Nothing drawn yet is `null`",
+              "Native": false
+            },
+            {
               "Name": "Labels",
               "Kind": "Property",
               "Params": -1,
@@ -16373,12 +16491,39 @@
               "Native": false
             },
             {
+              "Name": "LegendHit",
+              "Kind": "Method",
+              "Params": 2,
+              "Signature": "(x, y)",
+              "Returns": "",
+              "Doc": "the legend entry at a point, in the same coordinates: `{ Series, At }` — `Series` is the one to hide or show and `At` the entry that was hit (the slice's index on a pie, the series' own on a plot) — or `null`. Nothing when the legend is `None` or nothing has been drawn yet",
+              "Native": false
+            },
+            {
+              "Name": "Lines",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "horizontal reference lines, `[{ Value, Color, Text, Width }]`, drawn across the plot at `yOf(Value)` with the text at the right edge. A `Value` outside the axis is not drawn; `Width` defaults to `1.5`, and `Color` to the chart's ink. Defaults to `[]`.",
+              "Native": false
+            },
+            {
               "Name": "Marks",
               "Kind": "Property",
               "Params": -1,
               "Signature": "",
               "Returns": "",
               "Doc": "`[{ At, Text }]`, `At` being an index into the values — a **real** time axis, where the caller says where each label goes. Replaces `Labels` on the x axis while it is set. Defaults to `[]`.",
+              "Native": false
+            },
+            {
+              "Name": "Move",
+              "Kind": "Method",
+              "Params": 2,
+              "Signature": "(x, y)",
+              "Returns": "",
+              "Doc": "the pointer at (x, y) after a `Press`: pans when it has dragged more than three pixels, and otherwise marks `hover`. Answers `\"pan\"` (a drag, whose window may or may not have moved), `\"hover\"` (a different point is under the pointer now) or `\"\"`",
               "Native": false
             },
             {
@@ -16391,12 +16536,48 @@
               "Native": false
             },
             {
+              "Name": "PanBy",
+              "Kind": "Method",
+              "Params": 1,
+              "Signature": "(dx)",
+              "Returns": "",
+              "Doc": "pans the window by `dx` pixels: positive moves the values left, the way a drag does. Answers whether the window moved",
+              "Native": false
+            },
+            {
+              "Name": "Press",
+              "Kind": "Method",
+              "Params": 2,
+              "Signature": "(x, y)",
+              "Returns": "",
+              "Doc": "the pointer down at (x, y): remembers where a drag would start and answers whether this document can pan at all — `Zoomable`, a window drawn, and something off it",
+              "Native": false
+            },
+            {
               "Name": "Reduced",
               "Kind": "Property",
               "Params": -1,
               "Signature": "",
               "Returns": "",
               "Doc": "more points than pixel columns are decimated to a min and a max per column, which keeps the envelope — a one-sample spike survives it. Defaults to `true`. On by default",
+              "Native": false
+            },
+            {
+              "Name": "Refresh",
+              "Kind": "Method",
+              "Params": 0,
+              "Signature": "()",
+              "Returns": "",
+              "Doc": "redraws now and forgets what the last frame measured, for when the numbers changed **in place**: `doc.Series[k].Hidden = true` changes no property, so nothing knows to recompute the range",
+              "Native": false
+            },
+            {
+              "Name": "Release",
+              "Kind": "Method",
+              "Params": 0,
+              "Signature": "()",
+              "Returns": "",
+              "Doc": "the pointer up: forgets the press and answers `true` when the gesture never dragged — which is a click, and what raises `Select`",
               "Native": false
             },
             {
@@ -16414,7 +16595,7 @@
               "Params": -1,
               "Signature": "",
               "Returns": "",
-              "Doc": "the data: `[{ Name, Values, Color, Colors, Axis }]` — see below. Defaults to `[]`. Assigning it redraws",
+              "Doc": "the data: `[{ Name, Values, Color, Colors, Axis, Type, X, Sizes, Format, Unit, Mirror, Hidden }]` — see below. Defaults to `[]`. Assigning it redraws",
               "Native": false
             },
             {
@@ -16454,12 +16635,21 @@
               "Native": false
             },
             {
+              "Name": "Tooltip",
+              "Kind": "Method",
+              "Params": 2,
+              "Signature": "(x, y)",
+              "Returns": "",
+              "Doc": "what a tooltip would say at a point, in the coordinates of the last `Paint`: `{ Text, X, Y, Width, Height }` — the label, the series and the value under it, formatted with that series' `Format`, in a box measured with the font the frame drew with — or `null` when nothing is there. **The document does not draw it**: a drawing that keeps a document of its own places the card with its own ink and its own theme, which is why the box comes measured and placed beside the point",
+              "Native": false
+            },
+            {
               "Name": "Type",
               "Kind": "Property",
               "Params": -1,
               "Signature": "",
               "Returns": "",
-              "Doc": "`Bar` `Line` `Area` `Pie` `Doughnut`. Defaults to `\"Bar\"`.",
+              "Doc": "`Bar` `Line` `Area` `Pie` `Doughnut` `Scatter` `Heatmap` `Gauge`. Defaults to `\"Bar\"`.",
               "Native": false
             },
             {
@@ -16478,6 +16668,24 @@
               "Signature": "",
               "Returns": "",
               "Doc": "pins the bottom of the y axis; `\"\"` (or `null`) works it out from the data, on *nice* numbers rather than on the data's own extremes. A value that is not a finite number is refused where it is assigned — stored, it left the axis with no ticks and every frame threw. Defaults to `\"\"`.",
+              "Native": false
+            },
+            {
+              "Name": "ZoomAt",
+              "Kind": "Method",
+              "Params": 3,
+              "Signature": "(x, y, dy)",
+              "Returns": "",
+              "Doc": "zooms the window about `x` — the datum under it stays under it, which is what makes zooming feel like a lens — turning the wheel by `dy`. Answers whether the window moved; a notch that moved nothing is `false`",
+              "Native": false
+            },
+            {
+              "Name": "Zoomable",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "lets the wheel zoom and a drag pan — the arithmetic of it is `ZoomAt`/`PanBy`/`Press`/`Move`/`Release`, so a drawing that forwards a pointer gets the same window a `Chart` does. Off by default, so a chart of four bars never steals a scroll from the `Scroller` around it. Defaults to `false`.",
               "Native": false
             }
           ],
