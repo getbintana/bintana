@@ -90,11 +90,12 @@ const hasOwn      = objectProto.hasOwnProperty;
  * reached both sides -- a worker evaluates this file entire, and it calls
  * bta_close_hatches too -- so the choice is about the message and nothing else.
  *
- * The worker gets a different sentence because it is in a different position:
- * `bta_locale_init` is deliberately not called there, so `Locale.Compare` --
- * which needs no catalogue, only g_utf8_collate -- is missing along with the
- * half that does.  Pointing a worker at a name it has not got would be the
- * second wrong answer in a row.
+ * **One sentence on both sides now.** It used to send a worker to the main
+ * thread, because `bta_locale_init` was not called there and `Locale.Compare`
+ * was missing along with the catalogue half that genuinely must not cross a
+ * thread; `bta_locale_init_facts` gives a worker the half that needs no
+ * catalogue (ISSUE-worker-locale-order), so pointing at `Locale.Compare` is
+ * right wherever this is read.
  * ---------------------------------------------------------------------- */
 
 defineProperty(String.prototype, "localeCompare", {
@@ -102,12 +103,8 @@ defineProperty(String.prototype, "localeCompare", {
     writable:     true,
     value() {
         throw new TypeError(
-            typeof Locale === "undefined"
-                ? "localeCompare compares code units on this engine, so it is " +
-                  "refused -- and a worker has no Locale either, so order the " +
-                  "list on the main thread with Locale.Compare"
-                : "localeCompare compares code units on this engine, so it is " +
-                  "refused -- use Locale.Compare");
+            "localeCompare compares code units on this engine, so it is " +
+            "refused -- use Locale.Compare");
     },
 });
 
@@ -1951,6 +1948,15 @@ GLOBAL.Record = class Record {
          * of nothing would be written into every file. */
         if (v instanceof Bytes || def instanceof Bytes)
             return v instanceof Bytes && v.Length === 0;
+        /*
+         * A list starts empty, and comparing it through `sameValue` would
+         * `JSON.stringify` **every item** -- for a plan of eight thousand tasks
+         * that was a full `Serialize` of the shape on every save, to answer a
+         * question `length` answers. A non-empty `def` is still compared by
+         * value below.
+         */
+        if (Array.isArray(def) && def.length === 0)
+            return Array.isArray(v) && v.length === 0;
         return sameValue(v, def);
     }
 
@@ -2273,6 +2279,7 @@ GLOBAL.Record = class Record {
      */
 
     static #xmlReady = new Map();
+    static #xmlOrderReady = new Map();
 
     static #namingOf(ctor) {
         return NAMINGS[ctor.Naming || "same"];
@@ -2347,8 +2354,13 @@ GLOBAL.Record = class Record {
     }
 
     /* The child element names a parent models, in declaration order -- what
-     * `SaveXml` keeps a missing element's insertion in step with. */
+     * `SaveXml` keeps a missing element's insertion in step with. Built once
+     * per class: it depends on the declaration and not on the record, and a
+     * save of eight thousand tasks asked for it eight thousand times. */
     static #xmlOrder(ctor, fields) {
+        const done = Record.#xmlOrderReady.get(ctor);
+
+        if (done) return done;
         const out = [];
 
         for (const name in fields) {
@@ -2359,6 +2371,7 @@ GLOBAL.Record = class Record {
             else
                 out.push(Record.#xmlFieldName(ctor, name, field));
         }
+        Record.#xmlOrderReady.set(ctor, out);
         return out;
     }
 
@@ -2653,10 +2666,11 @@ GLOBAL.Record = class Record {
                           Record.#atDefault(v, field);
 
             if (field.attribute) {
-                const key = Record.#xmlFieldName(ctor, name, field);
+                const key  = Record.#xmlFieldName(ctor, name, field);
+                const text = Record.#xmlText(field, v);
 
-                if (dflt) el.RemoveAttr(key);
-                else      el.SetAttr(key, Record.#xmlText(field, v));
+                if (dflt)             el.RemoveAttr(key);
+                else if (el.Attr(key) !== text) el.SetAttr(key, text);
                 continue;
             }
 
@@ -2685,8 +2699,23 @@ GLOBAL.Record = class Record {
                 if (child) child.Remove();
                 continue;
             }
-            (child || Record.#xmlInsert(el, key, order)).Text =
-                Record.#xmlText(field, v);
+
+            const text = Record.#xmlText(field, v);
+
+            /*
+             * **An edit that changes nothing is not an edit**, here as in the
+             * property grid: writing the text the element already holds would
+             * orphan the old text node -- `Text =` sends the children to the
+             * tree's orphan list so a wrapper keeps answering -- and
+             * `xml_orphan` walks that list, so a save of an unchanged document
+             * made the next save slower, without bound. Measured on an
+             * 8000-task plan: four identical saves took 458, 1388, 2347 and
+             * 3807 ms. A child with element children is still written, because
+             * its text is a reading of them.
+             */
+            if (child && child.Children.length === 0 && child.Text === text)
+                continue;
+            (child || Record.#xmlInsert(el, key, order)).Text = text;
         }
     }
 
@@ -2743,35 +2772,86 @@ GLOBAL.Record = class Record {
                        ? Record.#xmlKeyName(recordClass(field.item)) : null;
         const used     = new Array(existing.length).fill(false);
         const wanted   = [];
+        const where    = [];   /* the `existing` index each item matched, or -1 */
+
+        /*
+         * Matching is a map when the list is keyed and a cursor when it is not,
+         * and **neither asks the document a question per item**. The first
+         * version looked for each item's key among the unmatched elements --
+         * `Find` builds a wrapper and walks the holder's children every call --
+         * and the positional road asked `used.indexOf(false)` per item, so both
+         * were the square in `ISSUE-xml-list-cost`: an 8000-task plan was a
+         * two-and-a-half-minute save against a 3-second read. The key of each
+         * existing element is read **once**, here.
+         */
+        let byKey = null;
+        let next  = 0;
+
+        if (key) {
+            byKey = new Map();
+            for (let i = 0; i < existing.length; i++) {
+                const got = key.attribute
+                          ? existing[i].Attr(key.name)
+                          : (existing[i].Find(key.name) || {}).Text;
+
+                /* An element with no key of its own matches nothing -- its
+                 * `undefined` is not a key text, which is always a string. */
+                if (got === null || got === undefined) continue;
+                const queue = byKey.get(got);
+
+                if (queue) queue.push(i); else byKey.set(got, [i]);
+            }
+        }
 
         for (const item of v) {
             let found = null;
+            let at    = -1;
 
             if (key) {
-                const want = Record.#xmlKeyText(item, key);
+                const queue = byKey.get(Record.#xmlKeyText(item, key));
 
-                for (let i = 0; i < existing.length; i++) {
-                    if (used[i]) continue;
-                    const got = key.attribute
-                              ? existing[i].Attr(key.name)
-                              : (existing[i].Find(key.name) || {}).Text;
-                    if (got === want) { found = existing[i]; used[i] = true; break; }
+                if (queue && queue.length) {
+                    at = queue.shift();
+                    found = existing[at];
+                    used[at] = true;
                 }
             } else {
-                const i = used.indexOf(false);
-                if (i >= 0) { found = existing[i]; used[i] = true; }
+                while (next < existing.length && used[next]) next++;
+                if (next < existing.length) {
+                    at = next++;
+                    found = existing[at];
+                    used[at] = true;
+                }
             }
 
             if (!found)
                 found = Xml.Element(itemName);
             wanted.push(found);
+            where.push(at);
 
             if (field.item.kind === "record") Record.#xmlSave(item, found);
             else found.Text = Record.#xmlText(field.item, item);
         }
 
         existing.forEach((node, i) => { if (!used[i]) node.Remove(); });
-        Record.#xmlPlace(holder, itemName, wanted, field.in ? null : order);
+
+        /*
+         * **The items that survived, renumbered**, which is what lets the
+         * placement compare positions instead of wrappers: `FindAll` and
+         * `Children` hand out *different wrappers for the same node*, so the
+         * first version of this fix asked `nodes[i] === wanted[i]` and was
+         * false for every item already in place -- every save paid a move per
+         * item and the square came back. What is the same across the two walks
+         * is the **order**, so an item's place is an index and not an object.
+         */
+        const alive = [];
+        let   k     = 0;
+
+        for (let i = 0; i < existing.length; i++)
+            if (used[i]) alive[i] = k++;
+        Record.#xmlPlace(holder, itemName, wanted,
+                         field.in ? null : order,
+                         where.map((i) => (i < 0 ? -1 : alive[i])));
     }
 
     /*
@@ -2787,29 +2867,77 @@ GLOBAL.Record = class Record {
      * `xsd:sequence` refuses.  With none there at all, `order` (the record's
      * own element only) says where the first one goes.
      */
-    static #xmlPlace(holder, itemName, wanted, order) {
+    static #xmlPlace(holder, itemName, wanted, order, from) {
+        /*
+         * The ordinary save is the round trip: every item matched the element
+         * in the same place, so `from[i] === i` and there is nothing to place
+         * -- the children are not even read. That is the case
+         * `ISSUE-xml-list-cost` measured at two and a half minutes, and it is
+         * a comparison per item now.
+         */
+        let same = true;
+
+        for (let i = 0; i < from.length; i++)
+            if (from[i] !== i) { same = false; break; }
+        if (same)
+            return;
+
+        /*
+         * The children are read **once**, and the arrays that describe the
+         * tree are kept in step with what each `Insert` does. The first version
+         * asked `holder.Children` inside the loop -- a fresh array with a fresh
+         * wrapper per child, per item -- which was the other half of the square
+         * in `ISSUE-xml-list-cost`.
+         *
+         * `nodes` is the items there now and `from` says, per wanted item,
+         * which of those it is (`-1` for one being added). Both walks see the
+         * same nodes **in the same order**, which is the fact this rests on:
+         * wrappers are not unique, so position is what can be compared.
+         */
+        const kids  = holder.Children;
+        const nodes = [];
+
+        for (const child of kids)
+            if (child.Name === itemName) nodes.push(child);
+
+        const cur = nodes.slice();      /* the items in the tree, in order */
+
         for (let i = 0; i < wanted.length; i++) {
-            const kids = holder.Children;
-            let   seen = 0;
-            let   at   = -1;
+            const item = from[i] >= 0 ? nodes[from[i]] : wanted[i];
 
-            for (let j = 0; j < kids.length; j++) {
-                if (kids[j].Name !== itemName) continue;
-                if (seen === i) { at = j; break; }
-                seen++;
+            if (cur[i] === item)
+                continue;               /* already where it belongs */
+
+            /* Before the item at position `i` if there is one, after the last
+             * one otherwise; with none there at all, where the declaration
+             * says. `-1` is the end. */
+            let at;
+
+            if (i < cur.length)
+                at = kids.indexOf(cur[i]);
+            else if (cur.length)
+                at = kids.indexOf(cur[cur.length - 1]) + 1;
+            else
+                at = order ? Record.#xmlSlot(holder, itemName, order) : -1;
+
+            if (at < 0) holder.Add(item);
+            else        holder.Insert(at, item);
+
+            /* The same move, in the arrays: a node already in the list leaves
+             * its place first, and everything after it shifts down by one. */
+            const old = kids.indexOf(item);
+
+            if (old >= 0) {
+                kids.splice(old, 1);
+                if (old < at) at--;
             }
+            if (at < 0) kids.push(item);
+            else        kids.splice(at, 0, item);
 
-            if (at < 0) {
-                let last = -1;
-                for (let j = 0; j < kids.length; j++)
-                    if (kids[j].Name === itemName) last = j;
-                at = last >= 0 ? last + 1
-                   : order     ? Record.#xmlSlot(holder, itemName, order)
-                   : -1;
-            }
+            const seen = cur.indexOf(item);
 
-            if (at < 0) holder.Add(wanted[i]);
-            else        holder.Insert(at, wanted[i]);
+            if (seen >= 0) cur.splice(seen, 1);
+            cur.splice(i, 0, item);
         }
     }
 

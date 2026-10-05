@@ -558,7 +558,7 @@ const TESTS = [
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
-    "CuratedLanguage", "Dictionary", "Csv", "Regex", "Bytes", "Hash", "Random", "Gzip", "Zip", "ZipWrite", "Screen", "JsonFiles", "XmlFiles", "XmlWrite", "XmlRecord", "Keyring", "Log", "Apply", "TimerShorthand", "Terminal",
+    "CuratedLanguage", "Dictionary", "Csv", "Regex", "Bytes", "Hash", "Random", "Gzip", "Zip", "ZipWrite", "Screen", "JsonFiles", "XmlFiles", "XmlWrite", "XmlRecord", "XmlSchema", "Keyring", "Log", "Apply", "TimerShorthand", "Terminal",
     "Settings", "Timer", "ArgumentRefusals", "Icons", "Font", "Style", "Radius", "Padding", "Shadow", "StyleRule",
     "ColorButton",
     "ColorDialog", "FileDialog", "Dialog", "IconList", "FormIcon", "ButtonClick",
@@ -10918,6 +10918,59 @@ function Main() {
         eq("the copy has the same shape", holder.Copy().Children.length, 3);
         check("and is detached", holder.Copy().Parent === null);
 
+        /*
+         * **A surplus argument is refused, and here it is the difference
+         * between an inconvenience and a lost document.** `Remove()` declares
+         * none, so `parent.Remove(child)` -- the call a DOM reads as *take
+         * this child out* -- took the **parent** out; on a document's root the
+         * body was gone, `Root` was `null` and `File.SaveXml` wrote a two-line
+         * file where the plan was. `Add(name, text)` accepted the value and
+         * wrote an empty element. Five members beside them already refused,
+         * which is what made these read as a hole rather than a rule
+         * (`ISSUE-xml-ignored-arguments`).
+         */
+        let surplus = "";
+
+        try { holder.Remove(holder.Children[0]); }
+        catch (e) { surplus = e.message; }
+        check("Remove refuses an argument, naming the call",
+              surplus.includes("Remove()"), surplus);
+        eq("...and the holder keeps its children", holder.Children.length, 3);
+
+        surplus = "";
+        try { holder.Add("Fourth", "four"); }
+        catch (e) { surplus = e.message; }
+        check("Add refuses a second argument", surplus.includes("Add"), surplus);
+        eq("...and nothing was added", holder.Children.length, 3);
+
+        /*
+         * **An element holding only a comment is not an empty one**, which is
+         * the question `Children` and `Text` cannot answer between them: both
+         * say nothing about `<r><!--c--></r>`, so a walk that called that a
+         * leaf reported `""`, and the record mapper -- deciding an emptied
+         * list takes its wrapper out -- deleted the comment. `IsEmpty` counts
+         * every kind of child, and `Comments` is the text `Text` cannot carry,
+         * which is what lets a diff report a change to one
+         * (`ISSUE-xml-comment-only-element`).
+         */
+        const commented = Xml.Parse("<r><!-- keep --></r>").Root;
+
+        check("an element with a comment is not empty", commented.IsEmpty === false);
+        eq("...and its comment is readable", commented.Comments.join(","), " keep ");
+        check("...while Text still says nothing", commented.Text === "");
+        check("a self-closed element is empty", Xml.Parse("<r/>").Root.IsEmpty === true);
+        eq("...with no comments", Xml.Parse("<r/>").Root.Comments.length, 0);
+        check("an attribute does not make it non-empty",
+              Xml.Parse('<r a="1"/>').Root.IsEmpty === true);
+        check("text does", Xml.Parse("<r>x</r>").Root.IsEmpty === false);
+        check("an element child does", Xml.Parse("<r><a/></r>").Root.IsEmpty === false);
+        eq("comments are the direct ones, in order",
+           Xml.Parse("<r><!--a--><s><!--b--></s><!--c--></r>")
+               .Root.Comments.join(","), "a,c");
+        check("and a built element starts empty", Xml.Element("r").IsEmpty === true);
+        eq("the comment survives the writer and is still readable",
+           Xml.Parse(Xml.Stringify(commented)).Root.Comments.join(","), " keep ");
+
         /* Removing is done: the wrapper says so rather than reading freed
          * memory, which is the whole reason a tree keeps an orphan list. */
         const doomed = holder.Children[0];
@@ -11468,6 +11521,36 @@ function Main() {
         throws("and 'in' is not a value's",
                () => Field.Text({ in: "Bunch" }));
 
+        /*
+         * **The square this used to be.** `SaveXml` asked the document a
+         * question per item -- `Children[i]` in a loop, a `Find` per item to
+         * match its key -- so a plan of 8000 tasks was a two-and-a-half-minute
+         * save against a three-second read (`ISSUE-xml-list-cost`), and an
+         * application autosaving every minute stopped its window for minutes.
+         * The bound is seconds and not a measurement, the way `Exec`'s and
+         * `Http`'s deadline assertions are: it exists to fail loudly if a save
+         * goes back to being per-item, and 2000 tasks is where the old code
+         * took 6.5 s. A second assertion holds the other half of the fix --
+         * a save of an unchanged document does not rewrite it.
+         */
+        const many = [`<Project xmlns="${MSPDI_NS[0]}"><Tasks>`];
+
+        for (let i = 1; i <= 2000; i++)
+            many.push(`<Task><UID>${i}</UID><Name>T${i}</Name></Task>`);
+        many.push("</Tasks></Project>");
+
+        const bulkDoc = Xml.Parse(many.join(""));
+        const bulk    = XmlProject.LoadXml(bulkDoc);
+        const before  = Xml.Stringify(bulkDoc);
+        const started = Date.now();
+
+        bulk.SaveXml(bulkDoc);
+        const took = Date.now() - started;
+
+        check("a save of 2000 tasks is seconds, not minutes", took < 3000, took);
+        eq("...and an unchanged document comes out as it was",
+           Xml.Stringify(bulkDoc) === before, true);
+
         /* The file road, since that is what a format is for. */
         Directory.Make(SCRATCH);
         const path = File.Join(SCRATCH, "plan.xml");
@@ -11477,6 +11560,139 @@ function Main() {
         eq("...with no complaints", read.Problems.length, 0,
            read.Problems.join(" | "));
         File.Delete(path);
+    }
+
+    /* --- validating a document against a schema -----------------------------
+     *
+     * `Xml.Schema` compiles an XSD once -- from its text, a document or an
+     * element in one -- and `Validate` answers what a file got wrong. It is
+     * the trigger `docs/plans/xml-plan.md` left the XSD row on, fired: an
+     * application that has to reject a bad file before reading it.
+     *
+     * Three things this holds beyond "it validates". The compile is separate
+     * from the check, so one schema answers for as many documents as arrive;
+     * **nothing is written into the document** -- a schema's default attribute
+     * must not appear in the tree, or the next `SaveXml` would write it to the
+     * file; and the two things that look like a schema and are refused: one
+     * that includes or imports another document, because compiling it would
+     * fetch a file or an URL, and a detached element, because the compiler
+     * needs a document to resolve names against.
+     */
+    testXmlSchema() {
+        if (!Xml.Available) {
+            const said = refusal(() => Xml.Schema("<x/>"));
+            check("no libxml2: a schema cannot be compiled either",
+                  said !== null && said.includes("libxml2"), said);
+            return;
+        }
+
+        const XSD =
+            `<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+                        targetNamespace="urn:t" xmlns:t="urn:t"
+                        elementFormDefault="qualified">
+               <xs:complexType name="taskType">
+                 <xs:sequence>
+                   <xs:element name="uid" type="xs:int"/>
+                   <xs:element name="name" type="xs:string" minOccurs="0"/>
+                 </xs:sequence>
+                 <xs:attribute name="note" type="xs:string" default="d"/>
+               </xs:complexType>
+               <xs:element name="task" type="t:taskType"/>
+             </xs:schema>`;
+        const refuses = (label, fn, phrase) => {
+            const why = refusal(fn) || "";
+
+            check(label, why.includes(phrase), why);
+        };
+        const schema = Xml.Schema(XSD);
+
+        check("a schema compiles from its text",
+              typeof schema.Validate === "function");
+
+        const good = Xml.Parse(`<task xmlns="urn:t">
+  <uid>7</uid>
+  <name>a</name>
+</task>`);
+
+        eq("a valid document answers an empty array",
+           JSON.stringify(schema.Validate(good)), "[]");
+        check("and the one schema answers for another document too",
+              schema.Validate(Xml.Parse('<task xmlns="urn:t"><uid>2</uid></task>'))
+                    .length === 0);
+
+        const bad      = Xml.Parse(`<task xmlns="urn:t">
+  <uid>x</uid>
+</task>`);
+        const problems = schema.Validate(bad);
+
+        eq("an invalid document says one thing", problems.length, 1);
+        eq("on the line the value is on", problems[0].Line, 2);
+        eq("with no column -- schema errors report the element, not one",
+           problems[0].Column, 0);
+        check("and a message naming the element and the type",
+              problems[0].Message.includes("uid") &&
+              problems[0].Message.includes("xs:int"),
+              problems[0].Message);
+
+        const missing = schema.Validate(Xml.Parse(`<task xmlns="urn:t">
+  <name>a</name>
+</task>`));
+
+        eq("a missing required element is one problem", missing.length, 1);
+        check("...naming what it expected", missing[0].Message.includes("uid"),
+              missing[0].Message);
+        eq("a root in another namespace does not validate",
+           schema.Validate(Xml.Parse('<task xmlns="urn:other"><uid>1</uid></task>'))
+                 .length, 1);
+
+        /*
+         * The default attribute is the assertion `SaveXml` depends on: libxml2
+         * writes a schema's defaults into the instance when asked with
+         * `XML_SCHEMA_VAL_VC_I_CREATE` (measured, an attribute appears in the
+         * tree), and this never asks -- so the document keeps exactly what it
+         * had and the next save cannot write a value nobody typed.
+         */
+        const dflt = Xml.Parse(`<task xmlns="urn:t">
+  <uid>1</uid>
+</task>`);
+
+        eq("a schema default does not make the document invalid",
+           schema.Validate(dflt).length, 0);
+        check("...and is not written into the tree",
+              dflt.Root.Attr("note") === null,
+              JSON.stringify(dflt.Root.Attr("note")));
+
+        /* A document or an element in one is what `Validate` takes, and a
+         * schema compiles from either -- a file read with `File.LoadXml` is a
+         * document, and its root is an element of one. */
+        check("an element inside a document validates",
+              schema.Validate(good.Root).length === 0);
+        check("a schema compiles from a document",
+              typeof Xml.Schema(Xml.Parse(XSD)).Validate === "function");
+        check("...and from an element in one",
+              typeof Xml.Schema(Xml.Parse(XSD).Root).Validate === "function");
+
+        refuses("a detached element is not a schema",
+                () => Xml.Schema(Xml.Element("schema")), "detached");
+        refuses("something that is not a schema says what it wanted",
+                () => Xml.Schema("<r><a/></r>"), "xs:schema");
+        refuses("a schema that includes another document is refused",
+                () => Xml.Schema(`<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+                    <xs:include schemaLocation="other.xsd"/></xs:schema>`),
+                "self-contained");
+        refuses("...and so is one that imports a remote one",
+                () => Xml.Schema(`<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+                    <xs:import namespace="urn:o" schemaLocation="http://x.example/o.xsd"/>
+                  </xs:schema>`),
+                "self-contained");
+        check("an import with no location locates nothing and compiles",
+              refusal(() => Xml.Schema(`<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+                  <xs:import namespace="urn:o"/>
+                  <xs:element name="x" type="xs:string"/></xs:schema>`)) === null);
+        refuses("a detached element cannot be validated",
+                () => schema.Validate(Xml.Element("task")), "detached");
+        throws("Validate with nothing to check", () => schema.Validate());
+        throws("Schema with nothing to compile", () => Xml.Schema());
     }
 
     /* --- applying a dictionary of properties --------------------------------
@@ -21330,17 +21546,27 @@ function Main() {
                 check("which parses in there", Xml.Available
                       ? r.xmlText === "x" : r.xmlText.includes("libxml2"),
                       r.xmlText);
+                check("...and validates with a schema", Xml.Available
+                      ? r.xmlSchema === "0,1" : r.xmlSchema.includes("libxml2"),
+                      r.xmlSchema);
                 /* And not what would fire on the main loop, or is ours. */
                 eq("a worker has no Timer", r.timer, "undefined");
                 eq("...no Settings", r.settings, "undefined");
                 eq("...no Exec", r.exec, "undefined");
                 /* The curation crosses with rad.js, and says the true thing on
                  * this side: there is no `Locale` here to be sent to. */
-                eq("...and no Locale", r.locale, "undefined");
+                /* The locale facts cross and the catalogue does not: a worker
+                 * can order ten thousand names, which is what it was started
+                 * for, and cannot translate one. */
+                eq("...and Locale, with the facts and not the catalogue",
+                   r.locale, "object");
+                eq("...which orders names", r.localeCmp, -1);
+                check("...and folds accents", r.localeFold === true);
+                eq("...and carries no catalogue verbs", r.localeText, "undefined");
                 check("localeCompare is refused in a worker too",
                       r.lc.includes("code units"), r.lc);
-                check("...naming the main thread, since Locale is not here",
-                      r.lc.includes("main thread"), r.lc);
+                check("...naming Locale.Compare on this side too",
+                      r.lc.includes("Locale.Compare"), r.lc);
                 next();
             };
             t.Start({ mode: "prelude" });

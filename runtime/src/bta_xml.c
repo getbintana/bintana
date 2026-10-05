@@ -57,6 +57,7 @@
 
 #include <libxml/parser.h>
 #include <libxml/tree.h>
+#include <libxml/xmlschemas.h>
 
 /* --------------------------------------------------------------------- trees */
 
@@ -83,6 +84,7 @@ typedef struct {
 
 static JSClassID bta_xml_doc_class_id;
 static JSClassID bta_xml_node_class_id;
+static JSClassID bta_xml_schema_class_id;
 
 static BtaXmlTree *xml_tree_doc(xmlDocPtr doc)
 {
@@ -672,6 +674,50 @@ static JSValue xml_element(JSContext *ctx, JSValueConst this_val,
     return xml_node_new(ctx, xml_tree_root(el), el, true);
 }
 
+/*
+ * IsEmpty -- nothing inside at all: no element, no text, no comment, no
+ * processing instruction. Attributes do not count, so `<r a="1"/>` is empty.
+ *
+ * It is a question `Children` and `Text` cannot answer together, and the pair
+ * they give is wrong on a document that has a comment: `<r><!--c--></r>` reads
+ * as no children and no text, so an emptiness test called it a leaf with the
+ * value `""` -- and the record mapper, deciding that an emptied list takes its
+ * wrapper out, deleted the comment (`ISSUE-xml-comment-only-element`).
+ */
+static JSValue xml_node_get_empty(JSContext *ctx, JSValueConst this_val)
+{
+    BtaXmlNode *n = node_this(ctx, this_val);
+
+    if (!n)
+        return JS_EXCEPTION;
+    return JS_NewBool(ctx, n->node->children == NULL);
+}
+
+/* Comments -> string[]
+ *   the text of the comments directly under this element, in order -- the
+ *   content `Text` cannot carry, for the walk that has to report a change to
+ *   one. Not the comments of its descendants: `Children` is direct too
+ */
+static JSValue xml_node_comments(JSContext *ctx, JSValueConst this_val)
+{
+    BtaXmlNode *n = node_this(ctx, this_val);
+
+    if (!n)
+        return JS_EXCEPTION;
+
+    JSValue  out = JS_NewArray(ctx);
+    uint32_t i   = 0;
+
+    for (xmlNodePtr c = n->node->children; c; c = c->next) {
+        if (c->type != XML_COMMENT_NODE)
+            continue;
+        JS_SetPropertyUint32(ctx, out, i++,
+                             JS_NewString(ctx, c->content
+                                               ? (const char *)c->content : ""));
+    }
+    return out;
+}
+
 /* ---------------------------------------------------------------- document */
 
 /* Root */
@@ -1141,6 +1187,18 @@ static JSValue xml_node_add(JSContext *ctx, JSValueConst this_val,
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "Add(child) expects a node or an "
                                       "element name");
+    /*
+     * **A surplus argument is refused, and it used to be silent.** `Add(name,
+     * text)` wrote an element and dropped the value -- the call a programmer
+     * writes first, and the one every other DOM answers by putting the text
+     * in. `Add` answers the node; the value goes on what it answers.
+     */
+    if (argc > 1)
+        return JS_ThrowTypeError(ctx, "Add(child) takes one argument -- the "
+                                      "node or the element name. The value goes "
+                                      "on what it answers: "
+                                      "parent.Add(Xml.Element(\"Name\")).Text = "
+                                      "text");
     return xml_place_child(ctx, n, -1, argv[0]);
 }
 
@@ -1170,6 +1228,20 @@ static JSValue xml_node_remove(JSContext *ctx, JSValueConst this_val,
     BtaXmlNode *n = node_this(ctx, this_val);
     if (!n)
         return JS_EXCEPTION;
+
+    /*
+     * **An argument is refused, and the silence was total.** `Remove()`
+     * declares no parameters, so `parent.Remove(child)` -- the call a DOM
+     * reads as *take this child out* -- took the **parent** out instead: on a
+     * document's root the body was gone and `Root` was `null`, and
+     * `File.SaveXml` wrote a two-line file where the plan was. The wrapper
+     * half was already caught (`child.Remove()` on a removed node throws);
+     * this is the call that named the wrong node.
+     */
+    if (argc > 0)
+        return JS_ThrowTypeError(ctx, "Remove() takes no arguments and takes "
+                                      "*this* node out -- call it on the node "
+                                      "to remove: child.Remove()");
 
     xmlUnlinkNode(n->node);
 
@@ -1391,6 +1463,18 @@ static const JSCFunctionListEntry xml_node_props[] = {
      *   its element children, in order
      */
     JS_CGETSET_DEF("Children",  xml_node_children,      NULL),
+    /* IsEmpty -> boolean
+     *   whether the element has nothing inside at all: no element, no text, no
+     *   comment, no processing instruction. Attributes do not count. **The one
+     *   question `Children` and `Text` cannot answer together** -- an element
+     *   holding only a comment reads as both empty on them
+     */
+    JS_CGETSET_DEF("IsEmpty",   xml_node_get_empty,     NULL),
+    /* Comments -> string[]
+     *   the text of the comments directly under this element, in order -- what
+     *   `Text` cannot carry, so a change to one can be reported
+     */
+    JS_CGETSET_DEF("Comments",  xml_node_comments,      NULL),
     /* Attr(name) -> string
      *   the value of an attribute **with no namespace**, `""` for one that is
      *   present and empty, `null` for one that is not
@@ -1439,7 +1523,9 @@ static const JSCFunctionListEntry xml_node_props[] = {
      *   a node or an element name. An element with no namespace added under a
      *   default namespace **takes it** -- and so does what is under it with none --
      *   because that is what the written text says; the tree used to answer `""`
-     *   for it while the text, read back, answered the URI
+     *   for it while the text, read back, answered the URI. A second argument
+     *   is refused: the value goes on what it answers --
+     *   `parent.Add(Xml.Element("Name")).Text = text`
      */
     JS_CFUNC_DEF("Add",            1, xml_node_add),
     /* Insert(index, child) -> XmlNode
@@ -1447,7 +1533,9 @@ static const JSCFunctionListEntry xml_node_props[] = {
      */
     JS_CFUNC_DEF("Insert",         2, xml_node_insert),
     /* Remove()
-     *   takes the node out for good
+     *   takes the node out for good. **An argument is refused** -- it is
+     *   *this* node that goes, so `child.Remove()` and not
+     *   `parent.Remove(child)`, which took the parent out
      */
     JS_CFUNC_DEF("Remove",         0, xml_node_remove),
     /* Copy() -> XmlNode
@@ -1468,6 +1556,372 @@ static const JSCFunctionListEntry xml_node_props[] = {
      *   another URI here or above is refused
      */
     JS_CFUNC_DEF("DeclareNamespace", 2, xml_node_declare_namespace),
+};
+
+/* ------------------------------------------------------------------ schema */
+
+/*
+ * A compiled XSD, and the one thing it is for: **rejecting a document before
+ * anything reads it.**
+ *
+ * An application that opens somebody else's file checks it here first, and the
+ * check is cheap to repeat once the schema is compiled: measured on libxml2
+ * 2.12.10 with the 240 KB MSPDI schema, compiling is 70-90 ms and validating
+ * is ~2.9 us a task (3 ms for a thousand, 23 ms for eight thousand). So the
+ * compile is the object and the validation is the verb -- `Xml.Schema(text)`
+ * once, `Validate` as often as a file arrives.
+ *
+ * ## What it deliberately does not do
+ *
+ * **Nothing is written into the document.** libxml2's validator can add a
+ * schema's default and fixed attributes to the instance when it is asked with
+ * `XML_SCHEMA_VAL_VC_I_CREATE` -- measured, two attributes appear in the tree
+ * -- and this never sets it. `SaveXml`'s whole promise is that it touches only
+ * what the shape models, and a validation that quietly added a default would
+ * write it to the file.
+ *
+ * **A schema has to be self-contained.** `xs:include`, `xs:redefine` and an
+ * `xs:import` carrying a `schemaLocation` are refused before the compiler sees
+ * them, because libxml2 resolves those through the process's external entity
+ * loader -- a local file or an URL -- and a failed *remote* import is only a
+ * warning: the schema compiles anyway and validates against something
+ * incomplete, in silence. The official MSPDI schema is one file with no
+ * includes, which is the shape this asks for.
+ *
+ * **A detached element is not a schema.** The compiler needs a document to
+ * resolve names against, so `Xml.Element` built by hand is refused and a
+ * document (`Xml.Parse`, `File.LoadXml`) or text is the road.
+ */
+typedef struct {
+    xmlSchemaPtr schema;
+} BtaXmlSchema;
+
+static void xml_schema_finalizer(JSRuntime *rt, JSValue val)
+{
+    BtaXmlSchema *s = JS_GetOpaque(val, bta_xml_schema_class_id);
+
+    if (!s)
+        return;
+    if (s->schema)
+        xmlSchemaFree(s->schema);
+    js_free_rt(rt, s);
+}
+
+static const JSClassDef xml_schema_class = {
+    "XmlSchema",
+    .finalizer = xml_schema_finalizer,
+};
+
+/* One validation error as libxml2 reports it: a line, a column it usually has
+ * none of, and a sentence naming the element and what it expected. */
+typedef struct {
+    int   line;
+    int   column;
+    char *message;
+} BtaXmlProblem;
+
+static void xml_problem_free(gpointer p)
+{
+    BtaXmlProblem *problem = p;
+
+    if (problem) {
+        g_free(problem->message);
+        g_free(problem);
+    }
+}
+
+static void xml_collect_problem(void *data, const xmlError *e)
+{
+    GPtrArray *problems = data;
+
+    if (!problems || !e || e->level == XML_ERR_WARNING)
+        return;
+
+    BtaXmlProblem *p   = g_new0(BtaXmlProblem, 1);
+    char          *msg = g_strdup(e->message ? e->message
+                                             : "the XML is not valid");
+
+    g_strchomp(msg);
+    p->line    = e->line;
+    p->column  = e->int2;
+    p->message = msg;
+    g_ptr_array_add(problems, p);
+}
+
+static const char *XML_XSD_NS = "http://www.w3.org/2001/XMLSchema";
+
+/*
+ * The document a schema is compiled from. A string is parsed with this file's
+ * own flags, so a schema is held to the same security negatives a document is
+ * (`XML_PARSE_NONET`, no entities, no DTD); a parsed document, or a node in
+ * one, is the caller's and borrowed.
+ */
+static xmlDocPtr xml_schema_doc(JSContext *ctx, JSValueConst source, bool *ours)
+{
+    *ours = false;
+
+    if (JS_IsString(source)) {
+        size_t      len = 0;
+        const char *s   = JS_ToCStringLen(ctx, &len, source);
+
+        if (!s)
+            return NULL;
+        if (len > (size_t)INT_MAX) {
+            JS_FreeCString(ctx, s);
+            JS_ThrowRangeError(ctx, "Xml.Schema: %zu bytes is more than XML "
+                                    "can be read in one piece", len);
+            return NULL;
+        }
+        xmlResetLastError();
+        xmlDocPtr doc = xmlReadMemory(s, (int)len, NULL, NULL, XML_FLAGS);
+
+        JS_FreeCString(ctx, s);
+        if (!doc) {
+            xml_throw_last(ctx);
+            return NULL;
+        }
+        *ours = true;
+        return doc;
+    }
+
+    BtaXmlTree *t = JS_GetOpaque(source, bta_xml_doc_class_id);
+    if (t && t->doc)
+        return t->doc;
+
+    BtaXmlNode *n = JS_GetOpaque(source, bta_xml_node_class_id);
+    if (n && n->node && n->tree->doc)
+        return n->tree->doc;
+    if (n && n->node) {
+        JS_ThrowTypeError(ctx, "Xml.Schema: a detached element has no document "
+                               "to compile a schema from -- pass its text or a "
+                               "parsed document");
+        return NULL;
+    }
+
+    JS_ThrowTypeError(ctx, "Xml.Schema(source) expects the schema as text, a "
+                           "document or an element");
+    return NULL;
+}
+
+static bool xml_schema_root_ok(JSContext *ctx, xmlDocPtr doc)
+{
+    xmlNodePtr root = xmlDocGetRootElement(doc);
+
+    if (!root) {
+        JS_ThrowTypeError(ctx, "Xml.Schema: the document has no root element");
+        return false;
+    }
+
+    const char *ns = root->ns && root->ns->href
+                   ? (const char *)root->ns->href : "";
+
+    if (strcmp((const char *)root->name, "schema") || strcmp(ns, XML_XSD_NS)) {
+        JS_ThrowTypeError(ctx, "Xml.Schema: expected an XML Schema (<xs:schema> "
+                               "in %s), got <%s> in '%s'",
+                           XML_XSD_NS, (const char *)root->name, ns);
+        return false;
+    }
+    return true;
+}
+
+/* The declaration that would make the compiler load another document, or NULL.
+ * An `xs:import` with no `schemaLocation` locates nothing and is left alone. */
+static xmlNodePtr xml_schema_loads(xmlNodePtr node)
+{
+    for (; node; node = node->next) {
+        if (node->type != XML_ELEMENT_NODE)
+            continue;
+
+        bool xsd = node->ns && node->ns->href &&
+                   !strcmp((const char *)node->ns->href, XML_XSD_NS);
+
+        if (xsd) {
+            const char *name = (const char *)node->name;
+            bool        does = !strcmp(name, "include") ||
+                               !strcmp(name, "redefine") ||
+                               (!strcmp(name, "import") &&
+                                xmlHasProp(node, BAD_CAST "schemaLocation"));
+            if (does)
+                return node;
+        }
+
+        xmlNodePtr inner = xml_schema_loads(node->children);
+
+        if (inner)
+            return inner;
+    }
+    return NULL;
+}
+
+/* Schema(source) */
+static JSValue xml_schema(JSContext *ctx, JSValueConst this_val,
+                          int argc, JSValueConst *argv)
+{
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "Xml.Schema(source) expects the schema as "
+                                      "text, a document or an element");
+
+    bool      ours = false;
+    xmlDocPtr doc  = xml_schema_doc(ctx, argv[0], &ours);
+
+    if (!doc)
+        return JS_EXCEPTION;
+    if (!xml_schema_root_ok(ctx, doc)) {
+        if (ours)
+            xmlFreeDoc(doc);
+        return JS_EXCEPTION;
+    }
+
+    xmlNodePtr loads = xml_schema_loads(xmlDocGetRootElement(doc));
+
+    if (loads) {
+        JSValue e = JS_ThrowTypeError(ctx, "Xml.Schema: <%s> would make the "
+                                           "compiler load another document, and "
+                                           "this refuses to fetch one -- a schema "
+                                           "has to be self-contained, so resolve "
+                                           "it into one document first",
+                                      (const char *)loads->name);
+        if (ours)
+            xmlFreeDoc(doc);
+        return e;
+    }
+
+    GPtrArray *problems = g_ptr_array_new_with_free_func(xml_problem_free);
+    xmlSchemaParserCtxtPtr pctxt = xmlSchemaNewDocParserCtxt(doc);
+
+    if (!pctxt) {
+        g_ptr_array_free(problems, TRUE);
+        if (ours)
+            xmlFreeDoc(doc);
+        return JS_ThrowInternalError(ctx, "Xml.Schema: libxml2 could not make a "
+                                          "schema parser");
+    }
+    xmlSchemaSetParserStructuredErrors(pctxt, xml_collect_problem, problems);
+    xmlSchemaPtr schema = xmlSchemaParse(pctxt);
+
+    xmlSchemaFreeParserCtxt(pctxt);
+    if (ours)
+        xmlFreeDoc(doc);
+
+    if (!schema) {
+        const char *why = problems->len
+                        ? ((BtaXmlProblem *)g_ptr_array_index(problems, 0))->message
+                        : "the schema could not be compiled";
+        JSValue e = JS_ThrowSyntaxError(ctx, "Xml.Schema: %s", why);
+
+        g_ptr_array_free(problems, TRUE);
+        return e;
+    }
+    g_ptr_array_free(problems, TRUE);
+
+    JSValue proto = JS_GetClassProto(ctx, bta_xml_schema_class_id);
+    JSValue obj   = JS_NewObjectProtoClass(ctx, proto, bta_xml_schema_class_id);
+
+    JS_FreeValue(ctx, proto);
+    if (JS_IsException(obj)) {
+        xmlSchemaFree(schema);
+        return obj;
+    }
+
+    BtaXmlSchema *s = js_mallocz(ctx, sizeof *s);
+
+    if (!s) {
+        JS_FreeValue(ctx, obj);
+        xmlSchemaFree(schema);
+        return JS_EXCEPTION;
+    }
+    s->schema = schema;
+    JS_SetOpaque(obj, s);
+    return obj;
+}
+
+/* Validate(source) */
+static JSValue xml_schema_validate(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv)
+{
+    BtaXmlSchema *s = JS_GetOpaque(this_val, bta_xml_schema_class_id);
+
+    if (!s || !s->schema)
+        return JS_ThrowTypeError(ctx, "Validate: this is not an XML Schema");
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "Validate(source) expects a document or "
+                                      "an element");
+
+    xmlDocPtr   doc  = NULL;
+    xmlNodePtr  node = NULL;
+    BtaXmlTree *t    = JS_GetOpaque(argv[0], bta_xml_doc_class_id);
+
+    if (t) {
+        doc = t->doc;
+    } else {
+        BtaXmlNode *n = JS_GetOpaque(argv[0], bta_xml_node_class_id);
+
+        if (!n || !n->node)
+            return JS_ThrowTypeError(ctx, "Validate(source) expects a document "
+                                          "or an element");
+        if (!n->tree->doc)
+            return JS_ThrowTypeError(ctx, "Validate: a detached element is in "
+                                          "no document, and the validator needs "
+                                          "one -- validate a parsed document or "
+                                          "one of its elements");
+        doc  = n->tree->doc;
+        node = n->node;
+    }
+
+    if (!doc || !xmlDocGetRootElement(doc))
+        return JS_ThrowTypeError(ctx, "Validate: the document has no root "
+                                      "element");
+
+    GPtrArray *problems = g_ptr_array_new_with_free_func(xml_problem_free);
+    xmlSchemaValidCtxtPtr vctxt = xmlSchemaNewValidCtxt(s->schema);
+
+    if (!vctxt) {
+        g_ptr_array_free(problems, TRUE);
+        return JS_ThrowInternalError(ctx, "Validate: libxml2 could not make a "
+                                          "validator");
+    }
+    xmlSchemaSetValidStructuredErrors(vctxt, xml_collect_problem, problems);
+
+    int rc = node ? xmlSchemaValidateOneElement(vctxt, node)
+                  : xmlSchemaValidateDoc(vctxt, doc);
+
+    xmlSchemaFreeValidCtxt(vctxt);
+
+    if (rc < 0) {
+        const char *why = problems->len
+                        ? ((BtaXmlProblem *)g_ptr_array_index(problems, 0))->message
+                        : "the schema validator could not run";
+        JSValue e = JS_ThrowInternalError(ctx, "Validate: %s", why);
+
+        g_ptr_array_free(problems, TRUE);
+        return e;
+    }
+
+    JSValue out = JS_NewArray(ctx);
+
+    for (guint i = 0; i < problems->len; i++) {
+        BtaXmlProblem *p = g_ptr_array_index(problems, i);
+        JSValue        o = JS_NewObject(ctx);
+
+        JS_SetPropertyStr(ctx, o, "Message", JS_NewString(ctx, p->message));
+        JS_SetPropertyStr(ctx, o, "Line",    JS_NewInt32(ctx, p->line));
+        JS_SetPropertyStr(ctx, o, "Column",  JS_NewInt32(ctx, p->column));
+        JS_SetPropertyUint32(ctx, out, i, o);
+    }
+    g_ptr_array_free(problems, TRUE);
+    return out;
+}
+
+/* type XmlSchema */
+static const JSCFunctionListEntry xml_schema_props[] = {
+    /* Validate(source) -> { Message, Line, Column }[]
+     *   checks a document, or an element in one, against this schema. An empty
+     *   array means valid; each problem carries the line it is on -- libxml2
+     *   reports the element and not a column, so `Column` is `0`. **Nothing is
+     *   written into the document**, so a schema's default stays out of the tree
+     *   and out of the next save
+     */
+    JS_CFUNC_DEF("Validate", 1, xml_schema_validate),
 };
 
 #else  /* no libxml2 at build time */
@@ -1504,6 +1958,12 @@ static JSValue xml_element(JSContext *ctx, JSValueConst this_val,
     return xml_missing(ctx, "Element");
 }
 
+static JSValue xml_schema(JSContext *ctx, JSValueConst this_val,
+                          int argc, JSValueConst *argv)
+{
+    return xml_missing(ctx, "Schema");
+}
+
 #endif
 
 /* ------------------------------------------------------------------ global */
@@ -1525,6 +1985,8 @@ void bta_xml_init(JSContext *ctx, JSValue global)
     JS_NewClass(rt, bta_xml_doc_class_id, &xml_doc_class);
     JS_NewClassID(rt, &bta_xml_node_class_id);
     JS_NewClass(rt, bta_xml_node_class_id, &xml_node_class);
+    JS_NewClassID(rt, &bta_xml_schema_class_id);
+    JS_NewClass(rt, bta_xml_schema_class_id, &xml_schema_class);
 
     JSValue doc_proto = JS_NewObject(ctx);
     JS_SetPropertyFunctionList(ctx, doc_proto, xml_doc_props,
@@ -1535,6 +1997,11 @@ void bta_xml_init(JSContext *ctx, JSValue global)
     JS_SetPropertyFunctionList(ctx, node_proto, xml_node_props,
                                G_N_ELEMENTS(xml_node_props));
     JS_SetClassProto(ctx, bta_xml_node_class_id, node_proto);
+
+    JSValue schema_proto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, schema_proto, xml_schema_props,
+                               G_N_ELEMENTS(xml_schema_props));
+    JS_SetClassProto(ctx, bta_xml_schema_class_id, schema_proto);
 #endif
 
     JSValue xml = JS_NewObject(ctx);
@@ -1561,6 +2028,15 @@ void bta_xml_init(JSContext *ctx, JSValue global)
      */
     JS_SetPropertyStr(ctx, xml, "Element",
                       JS_NewCFunction(ctx, xml_element, "Element", 1));
+    /* Schema(source) -> XmlSchema
+     *   compiles an XSD **once** -- from its text, a document or an element in
+     *   one -- so a file can be checked as often as it arrives. A schema that
+     *   includes or imports another document is refused, because compiling it
+     *   would fetch a file or an URL from inside what is meant to be a check;
+     *   `Validate` is the question and it never writes to the document
+     */
+    JS_SetPropertyStr(ctx, xml, "Schema",
+                      JS_NewCFunction(ctx, xml_schema, "Schema", 1));
 #ifdef BTA_HAVE_LIBXML
     /* Available
      *   whether this build has libxml2; the verbs refuse with a sentence when

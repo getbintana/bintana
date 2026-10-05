@@ -2490,6 +2490,44 @@ void bta_locale_init(JSContext *ctx, JSValue global, const char *project_dir,
     JS_SetPropertyStr(ctx, global, "Locale", locale);
 }
 
+/*
+ * The half of `Locale` a worker gets: **the facts of the process locale and
+ * not the catalogue.**
+ *
+ * `Number`, `Date`, `Currency`, `Parse`, `DecimalPoint` and `Compare`/`Matches`
+ * come from `localeconv` and the C library's collation -- properties of the
+ * process, like the locale itself, and a background thread inherits both
+ * (`.NET`'s `CultureInfo`, Java's `Collator` and Qt's `QCollator` are all
+ * usable off the main thread for the same reason). `Text`, `Plural`,
+ * `Context`, `Current` and `Available` read `L`, the process-global hash table
+ * the main thread fills and can reload while a worker runs -- a race, and prose
+ * belongs where it is shown -- so they are not here.
+ *
+ * **The object is built from the same declaration and the prose members are
+ * taken off it**, so `Locale`'s surface has one definition: a second table
+ * would be a second list of members to keep in step, and the documentation is
+ * written from the first. `Read`/`Write` go with the catalogue: they are its
+ * editor's pair.
+ */
+static const char *const LOCALE_CATALOGUE[] = {
+    "Text", "Plural", "Context", "Read", "Write", "Current", "Available", NULL,
+};
+
+void bta_locale_init_facts(JSContext *ctx, JSValue global)
+{
+    JSValue locale = JS_NewObject(ctx);
+
+    JS_SetPropertyFunctionList(ctx, locale, locale_props,
+                               G_N_ELEMENTS(locale_props));
+    for (const char *const *name = LOCALE_CATALOGUE; *name; name++) {
+        JSAtom atom = JS_NewAtom(ctx, *name);
+
+        JS_DeleteProperty(ctx, locale, atom, 0);
+        JS_FreeAtom(ctx, atom);
+    }
+    JS_SetPropertyStr(ctx, global, "Locale", locale);
+}
+
 void bta_locale_cleanup(void)
 {
     catalogue_clear();

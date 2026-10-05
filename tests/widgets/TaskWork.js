@@ -94,17 +94,38 @@ class TaskWork extends Task {
                     try { return Xml.Parse("<a><b>x</b></a>").Root.Find("b").Text; }
                     catch (e) { return `ERROR ${e.message}`; }
                 })(),
+                /* And a schema is compiled and used here: the same C, no
+                 * window and no callback, so a worker checks a file while the
+                 * window draws. */
+                xmlSchema: (() => {
+                    try {
+                        const s = Xml.Schema(
+                            `<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+                               <xs:element name="x" type="xs:int"/>
+                             </xs:schema>`);
+
+                        return s.Validate(Xml.Parse("<x>1</x>")).length + "," +
+                               s.Validate(Xml.Parse("<x>nope</x>")).length;
+                    } catch (e) { return `ERROR ${e.message}`; }
+                })(),
                 /* Gone: they would fire on the main loop, or are the main
                  * thread's own state. */
                 timer:     typeof Timer,
                 settings:  typeof Settings,
                 exec:      typeof Exec,
-                /* Refused on this side too -- rad.js is evaluated entire here,
-                 * so the curation crosses with it -- and with a sentence of its
-                 * own, because `Locale` is not installed in a worker and
-                 * pointing at `Locale.Compare` would be a second wrong answer.
-                 * See testLocaleOrder for the main thread's half. */
+                /* **Locale is here, with the facts and not the catalogue**:
+                 * `Compare` and `Matches` come from the process locale, which
+                 * a thread inherits, while `Text`/`Plural` read a hash table
+                 * the main thread fills and reloads.  Ordering a long list in
+                 * a worker is the work it was started for. */
                 locale:    typeof Locale,
+                localeCmp: Locale.Compare("Ana", "Bruno"),
+                localeFold: Locale.Matches("Córdoba", "cordoba"),
+                localeText: typeof Locale.Text,
+                /* Refused on this side too -- rad.js is evaluated entire here,
+                 * so the curation crosses with it -- and pointing at
+                 * `Locale.Compare`, which is now the right answer on both
+                 * sides.  See testLocaleOrder for the main thread's half. */
                 lc:        (() => {
                     try { "a".localeCompare("b"); return "NOT REFUSED"; }
                     catch (e) { return e.message; }

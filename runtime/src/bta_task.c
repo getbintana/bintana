@@ -1150,10 +1150,11 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
      * thirds -- and not a lookalike that rounds differently.
      *
      * Not here: bta_locale_init (the catalogue is a process-global hash table
-     * the main thread filled, and prose is assembled where it is shown),
-     * bta_painter_init / bta_metrics_init (cairo and pango, which is drawing),
-     * bta_http_init and bta_media_init (callbacks on the loop), and every GTK
-     * one.  Each is named in docs/plans/task-plan.md with the reason.
+     * the main thread filled, and prose is assembled where it is shown --
+     * bta_locale_init_facts is the half of it a worker does get), the
+     * bta_painter_init / bta_metrics_init pair (cairo and pango, which is
+     * drawing), bta_http_init and bta_media_init (callbacks on the loop), and
+     * every GTK one.  Each is named in docs/plans/task-plan.md with the reason.
      */
     bta_bytes_init(ctx, global);
     bta_decimal_init(ctx, global);
@@ -1178,6 +1179,10 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
     /* A header read and a dictionary: a report sizing a logo on a thread, which
      * is the caller a widget could not have served anyway. */
     bta_probe_init(ctx, global);
+    /* The locale facts and not the catalogue: a worker sorts ten thousand
+     * names with the desktop's collation, which is the work it was started
+     * for, and no `L` crosses a thread. */
+    bta_locale_init_facts(ctx, global);
 
     /* rad.js, the same text the main thread runs: Dictionary, Regex,
      * Stopwatch, Record, Field, Table and Namespace come from here, and

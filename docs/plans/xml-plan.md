@@ -138,7 +138,6 @@ than faked.
 |---|---|
 | `Find("Tasks/Task")` | A path language inside a string, which is the small-language-in-a-value this tree already refused for `Source` and for Go-style field tags. If querying is wanted, the standard vocabulary is **XPath** and it will be spelled that way, the same bargain `Database.Query` makes with SQL |
 | XPath | A whole second language; nothing in the corpus needs it, and `Find`/`FindAll` plus the DOM walk covers reading. Reopens the day a format's navigation cannot be written as two nested loops |
-| XSD validation | A schema is another language and another dependency-shaped feature, and Project is the validator that matters. The corpus's namespace mismatch shows validation would have to remap namespaces first; reopens when an application must reject a bad file before reading it |
 | DTD, entities, network | Security. Parsed with `XML_PARSE_NONET`, and without `NOENT`/`DTDLOAD`/`HUGE`: external entities, billion-laughs and a 2 GB node are not configurations to get right, they are negatives. A program that needs entities has a different problem |
 | HTML | Not XML — `xmlReadMemory`, never `htmlReadMemory`. An HTML parser is a browser dependency, not a data format |
 | SAX, `xmlTextReader` | The DOM costs memory proportional to the file, and a 50 MB MSPDI is a real file. Deferred until one is measured, because `File` already reads whole files and the streaming API is a different contract (callbacks where a program expects an answer) |
@@ -234,17 +233,79 @@ The reason is the two media: a JSON object has no order to violate, and an
 `xsd:sequence` does; the preserving road for XML is `SaveXml`, which needs no
 bag because it never rebuilds the document.
 
+## Validation: the schema is the object, the check is the verb
+
+**The trigger this plan left on the XSD row fired**: an application that has to
+reject a bad file before reading it, with MSPDI's official `mspdi_pj12.xsd` as
+the first real schema. The surface is two calls and no flag:
+
+```js
+const schema = Xml.Schema(File.Load(xsdPath)           // text, a document or
+                              .split(URI_2007)         // an element in one --
+                              .join(URI_WRITTEN));     // the remap is the caller's
+const problems = schema.Validate(File.LoadXml(plan));  // [] means valid
+```
+
+`Validate` answers `{ Message, Line, Column }[]` -- the shape
+`Application.CheckSource` answers, so an editor can underline -- and each one
+is a line, a sentence, and a `Column` of `0`, because that is what libxml2's
+schema errors carry (measured; `Xml.Parse`'s syntax errors do have a column).
+An empty array is valid; a problem is data and not an exception, which is
+`Problems`'s bargain one object over. It is not `File.ValidateXml`: a verb that
+takes a path is a file verb, and the lesson of `Probe.Image` is that a question
+about a *format* does not belong in `File`'s namespace.
+
+**Measured on libxml2 2.12.10, this machine, the 240 KB MSPDI schema**:
+compiling is 70-90 ms and validating is ~2.9 us a task -- 3 ms for a thousand,
+22-23 ms for eight thousand (linear); reading the 5 MB document is 43 ms. So a
+save loop that validated on every autosave would pay the compile if the schema
+were not an object, which is the whole reason it is one.
+
+Four things were chosen before it could be written, each because the
+alternative was measured to be wrong:
+
+- **Nothing is written into the document.** The validator can add a schema's
+  default and fixed attributes when asked with `XML_SCHEMA_VAL_VC_I_CREATE`
+  (measured: two attributes appear in the tree), and this never asks.
+  `SaveXml`'s promise is that it touches only what the shape models; a default
+  that arrived at the check would be written to the file at the next save.
+- **A schema is self-contained.** `xs:include`, `xs:redefine` and an `xs:import`
+  with a `schemaLocation` are refused before the compiler sees them, because
+  libxml2 resolves those through the process's loader -- a local path or an URL
+  -- and a *failed remote* import is only a warning, so the schema compiles and
+  validates against something incomplete in silence. MSPDI is one file with no
+  includes, which is the shape that costs nothing here.
+- **A document is the unit.** `xmlSchemaValidateOneElement` answers `-1` (*no
+  instance to validate*) for a detached node, so `Xml.Element` is refused with
+  a sentence; a parsed document or an element in one are the roads.
+- **The namespace remap is not invented into the API.** The official schema
+  declares `/2007` and Project writes the bare URI, so the file that has to
+  validate fails at the root (*No matching global declaration*) until one of
+  the two is rewritten -- and rewriting the *schema text* is what the external
+  `xmllint` + sed harness already does. Measured both ways: with the schema's
+  two URIs rewritten, the unmodified corpus validates 9 of 10 (the tenth is
+  the fixture that deliberately lacks `CurrencyCode`), which is exactly the
+  answer the shell harness gives.
+
+What it does **not** do is reach into `Record`: `static Xml` could name a
+schema, and a shape could validate on `LoadXml`, but the application that
+asked is a program that wants to look at the problems itself before deciding
+-- so validation is a step the application takes, not a side effect of a
+mapping. A `Schema` on `static Xml` reopens the day two applications want the
+same policy.
+
 ## What was rejected, and why
 
 | Rejected | Why |
 |---|---|
 | GMarkup (GLib) | No namespaces at all, no DOM, and no serializer — writing one by hand is "build another parser", the mistake this tree's notes keep naming |
+| An XSD one-shot `Validate(doc, path)` | It would recompile the schema (70-90 ms) on every file; the schema is the object and the check is the verb |
 | GXml | Not packaged here (checked), and it is a GObject wrapper over libxml2 anyway: a dependency that buys indirection |
 | A native plugin in `lib/xml` | It cannot be part of `rad.js`/`Record`, does not appear in `tests/api`, and makes every user compile. It is the right mould for a format parser, not for a standard syntax the runtime should speak like JSON |
 | A JSON-shaped value mapping | Attributes, order, namespaces and mixed content have nowhere to go; any mapping has to be a declaration with a medium |
 | Strict namespace equality | The official schema and the files disagree (measured); a list is the honest spelling |
 | An unknown-node bag for `ToXml` | Re-emitting an unknown node at the end of a sequence is silently wrong; `Problems` plus `SaveXml` answers both halves |
-| XPath, XSD, SAX now | Each is a language or a contract of its own, and nothing needs one yet — the triggers are in the table above |
+| XPath, SAX now | Each is a language or a contract of its own, and nothing needs one yet — the triggers are in the table above |
 
 ## Implementation, and what it costs
 
@@ -281,8 +342,12 @@ against that binary.
    out of the tree, and so does any claim that the round trip is golden until a
    real Project file opens on the other side.
 5. **MSPDI itself**, outside this plan: written against the DOM by hand first,
-   promoted to `lib/mspdi` when a second consumer wants it. XPath, XSD and
-   streaming wait for their triggers.
+   promoted to `lib/mspdi` when a second consumer wants it. XPath and streaming
+   wait for their triggers.
+6. **Validation**, when the XSD row's trigger fired: `Xml.Schema` +
+   `Schema.Validate`, with `tests/widgets`' `XmlSchema` and the worker's own
+   line in `testTask`. **Built**, in the change that deleted the row from the
+   absent table above.
 
 ## Where it stands
 
@@ -292,7 +357,7 @@ element and the three verbs move it there and back, with `SaveXml` the lossless
 road; the six synthetic files of the corpus were read, walked and written back
 element for element while the C was being written; the optional half refuses by
 name; and the worker parses one off the main thread. What the tests hold is
-`tests/widgets`' `XmlFiles`, `XmlRecord`, and the worker's two lines in
+`tests/widgets`' `XmlFiles`, `XmlRecord`, `XmlSchema`, and the worker's lines in
 `testTask`.
 
 The first caller was not the one this plan was written for.

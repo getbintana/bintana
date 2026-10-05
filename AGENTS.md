@@ -1064,11 +1064,26 @@ the same through `Widget.Members` with `Sources`), and `tests/ide`'s
   extensibility refusal name its property. Either place would have reached both
   sides; **a worker calls `bta_close_hatches` too** (`bta_task.c`, right after
   its own `task_delete` list, which is about main-thread globals and not about
-  hatches), so the `gone[]` list is one catalogue and not two. The worker gets a
-  **different sentence**,
-  because `Locale` is not installed there at all and sending it to
-  `Locale.Compare` would be the second wrong answer in a row. That gap is
-  `docs/issues/ISSUE-worker-locale-order.md`.
+  hatches), so the `gone[]` list is one catalogue and not two. The worker used
+  to get a **different sentence**, because `Locale` was not installed there at
+  all and sending it to `Locale.Compare` would have been the second wrong
+  answer in a row; `bta_locale_init_facts` gives a worker the half of `Locale`
+  that needs no catalogue (`ISSUE-worker-locale-order`, deleted as answered),
+  so it is one sentence on both sides now.
+- **A worker gets `Locale`'s facts and not its catalogue, and the split is the
+  process boundary.** `Number`, `Date`, `Currency`, `Parse`, `DecimalPoint`,
+  `Compare` and `Matches` read `localeconv` and the C library's collation --
+  properties of the process that every thread inherits, which is why .NET's
+  `CultureInfo`, Java's `Collator` and Qt's `QCollator` all work off the main
+  thread. `Text`, `Plural`, `Context`, `Current` and `Available` read `L`, the
+  process-global hash table the main thread fills and can reload mid-run, so
+  they are a race and not merely prose out of place; `Read`/`Write` go with
+  them, being the catalogue editor's pair. `bta_locale_init_facts` builds the
+  object from **the same `locale_props` table** and deletes the prose names, so
+  there is one definition of the surface and the extractor and the docs see one
+  list -- a second table would be a second list to keep in step. The assertion
+  is `testTask`'s: a worker orders `Ana` before `Bruno`, folds `Córdoba`, and
+  has no `Locale.Text`.
 - **The bare `sort()` is the half of that which cannot be refused**, and after
   the refusal above it is the one that stays silent. It gives the same wrong
   order and never consults the locale -- a comparator-less `sort` compares UTF-16
@@ -5656,6 +5671,30 @@ bag. Five things are worth knowing before touching either half:
   is every tree built from `Xml.Element`, so a child given its parent's namespace got a second
   `xmlns="..."` written on it. `xml_ns_in_scope` walks the parents by hand and needs no document.
   The three were each put back and went red (`XmlWrite`): the text check, the adoption, the old search.
+- **A surplus argument is the binding's to refuse, and two verbs were the hole
+  in that.** `Remove` declares none and `Add` one, so `parent.Remove(child)` --
+  the call a DOM reads as *take this child out* -- took the **parent** out: on
+  a document's root the body was gone, `Root` was `null` and the next
+  `File.SaveXml` wrote a two-line file where the plan was. `Add(name, text)`
+  wrote an empty element and dropped the value. Five members beside them
+  refused already (`Element`, `Insert`, `SetAttrNS`, `Text`), which is what
+  made these read as a rule that was left out rather than a style. libxml2's
+  `xmlUnlinkNode` has no argument to get wrong and every DOM raises
+  (`removeChild` throws `NotFoundError`), so what a surplus means is the
+  binding's call -- both throw now, naming the call that was meant
+  (`child.Remove()`, `parent.Add(Xml.Element("Name")).Text = text`), and
+  `XmlFiles` holds the refusal with the document still intact.
+- **`Children` and `Text` cannot answer "is this element empty", and the pair
+  is wrong on a document with a comment.** `<r><!--c--></r>` reads as no
+  children and no text, so a leaf-by-leaf walk reported it with the value `""`
+  -- and `Record`'s mapper, deciding an emptied list takes its wrapper out,
+  deleted the comment. `IsEmpty` is `node->children == NULL`: every kind of
+  child counts, attributes do not, so `<r a="1"/>` is empty and `<r>  </r>` is
+  not (measured -- `XML_PARSE_NOBLANKS` keeps a whitespace-only text node when
+  it is the root's only child). `Comments` is the text of the direct comment
+  children, which is the content `Text` cannot carry and what lets a diff
+  report a change to one. `XmlFiles` asserts the pair, including that a
+  comment survives the writer and is still readable after a parse.
 - **Indentation was measured and kept.** The canonical shape is 59 % more bytes than a flat one, and
   5.5 % once deflated into a zip -- not worth an option.
 - **`Field.DateTime` exists because XML's `dateTime` is a date and a time**
@@ -5669,6 +5708,87 @@ bag. Five things are worth knowing before touching either half:
   hid this; the first format that says `Naming = "lower"` (`examples/feeds`,
   where RSS hands over `<pubDate>`) found **every field silently at its
   default**. A shape with a naming rule or an `as` needs a test that reads one.
+- **`SaveXml` on a list was its square, and the fix has four parts that are
+  easy to mistake for one.** Measured before: an 8000-task MSPDI plan was a
+  **151 s** save against a 3 s read (`ISSUE-xml-list-cost`); after, **0.37 s**,
+  and linear -- 16000 in 0.74 s. The parts, because each was arrived at by
+  getting it wrong first:
+  - **Matching a list by key was a `Find` per existing element, per item** --
+    `Find` builds a wrapper and walks the holder's children every call. The key
+    text of every existing element is read **once** into a `Map` of queues; the
+    unkeyed road keeps a cursor instead of `used.indexOf(false)`. Both were
+    quadratic in the same loop.
+  - **`#xmlPlace` read `holder.Children` per item**, a fresh array of wrappers
+    each time. It reads once now, and an item already in place is a comparison.
+    **The comparison cannot be between wrappers**: `FindAll` and `Children`
+    hand out *different objects wrapping the same node*, so `nodes[i] ===
+    wanted[i]` is false for every item already in position -- the first version
+    of this fix compared them, paid a move per item and the square came back.
+    What is the same across the two walks is the **order**, so `#xmlSaveList`
+    renumbers the survivors and passes `from[i]` (an index, `-1` for a new
+    item), and `#xmlPlace` compares positions. The round trip returns before it
+    even reads the children.
+  - **A no-op `Text` write is not free: it grows the tree's orphan list.**
+    `Text =` unlinks the old children into `tree->orphans` so a wrapper keeps
+    answering, and `xml_orphan` walks that list -- so a save of an *unchanged*
+    document made the next save slower without bound. Measured: four identical
+    saves of an 8000-task plan took **458, 1388, 2347 and 3807 ms**. `#xmlSave`
+    skips a scalar whose element already holds that text (a child with element
+    children is still written, because its text is a reading of them), and an
+    attribute already equal is not set. This is also why the orphan list is
+    worth watching: a program that keeps assigning new text to one element
+    leaks a text node per assignment until the document dies.
+  - **`#atDefault` compared a list through `JSON.stringify`**, which serialises
+    every item -- a full `Serialize` of an 8000-task shape on every save, to
+    answer a question `length` answers. An empty `def` is `length === 0` now;
+    a non-empty one is still compared by value. `#xmlOrder` is cached per class
+    for the same reason: it depends on the declaration and was rebuilt per
+    record.
+  `tests/widgets`' `XmlRecord` holds a 2000-task save under a seconds-wide
+  bound (the old code took 6.5 s there) and asserts an unchanged document comes
+  out as it was.
+- **XSD validation is `Xml.Schema(text|doc|element)` once and
+  `schema.Validate(doc)` as often as a file arrives**, and five things were
+  measured or chosen before it could be (libxml2 2.12.10, the 240 KB MSPDI
+  schema):
+  - **The compile is the object and the check is the verb**, because the
+    compile is 70-90 ms and validating is ~2.9 us a task -- 3 ms for a
+    thousand, 23 ms for eight thousand. A one-shot `Validate(doc, path)` would
+    re-pay the compile on every autosave.
+  - **Nothing is written into the document.** libxml2's validator adds a
+    schema's default and fixed attributes to the instance when asked with
+    `XML_SCHEMA_VAL_VC_I_CREATE` -- measured: two attributes appear in the tree
+    -- and this never sets it, because `SaveXml`'s promise is that it touches
+    only what the shape models, and a default injected at the check would be
+    written to the file at the next save. `testXmlSchema` asserts the default
+    stays out.
+  - **Includes and imports are refused before the compiler sees them.**
+    `xmlSchemaNewDocParserCtxt` resolves `xs:include`/`xs:redefine`/an
+    `xs:import` with a `schemaLocation` through the process's external entity
+    loader -- measured trying `http://example.invalid/o.xsd` -- and a *failed
+    remote* import is only a warning: it compiles anyway and validates against
+    something incomplete, in silence. MSPDI is one file with no includes, which
+    is the shape this asks for; the walk refuses the document that would fetch
+    one, naming it.
+  - **An element is only validatable in a document.** `xmlSchemaValidateDoc`
+    takes the document; `xmlSchemaValidateOneElement` answers `-1` with *no
+    instance to validate* for a detached node (`Xml.Element`, a `Copy()`), so
+    the verb refuses one with a sentence and a document or one of its elements
+    are the roads. `Validate` also takes a document, in which case the root is
+    what is checked.
+  - **A schema error is a line and no column.** libxml2 reports the element
+    (`e->line`) and `int2` is `0` for every schema error measured, unlike
+    `Xml.Parse`, so `Validate` answers `{ Message, Line, Column }` with
+    `Column` always `0` -- uniform with `Application.CheckSource`, and honest
+    about what the engine gives.
+  - **The namespace mismatch is the caller's remap, measured both ways.**
+    Project writes `http://schemas.microsoft.com/project` and the official XSD
+    declares `/2007`, so validating a real file as-is fails at the root (*No
+    matching global declaration*). Rewriting the two URIs in the XSD text
+    (`File.Load(path).split(old).join(new)`) before `Xml.Schema` makes the
+    unmodified file validate -- 9 of the 10 fixtures in `bintana-project`'s
+    corpus, which is the same answer the external `xmllint` + sed harness gets.
+    An option was not invented for it: the remap is the caller's two lines.
 
 `examples/feeds` is the first real caller: two shapes (RSS 2.0 and Atom 1.0)
 over one list, and the four format facts worth knowing -- RSS dates are RFC 822

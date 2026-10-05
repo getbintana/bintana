@@ -265,10 +265,12 @@ what `.github/workflows/ci.yml` relies on. Anything you drive by hand still need
 `gtksourceview-5` (with headers), pkg-config, and `gmodule-2.0`, which is the
 plugin loader and comes with glib. QuickJS is vendored as a submodule, so
 nothing to install for it -- and a fresh clone wants `--recurse-submodules`, or
-`git submodule update --init` before the first configure. Six are optional and CMake says what it found either
+`git submodule update --init` before the first configure. Seven are optional and CMake says what it found either
 way: `sqlite3`, `libsystemd`, `libsoup-3.0`, `gstreamer-1.0`,
 **`vte-2.91-gtk4`** -- the pty behind `Terminal`, and the only dependency with
-no Windows port -- and `libxml2`, which is what `Xml` parses with. The last is
+no Windows port -- `libxml2`, which is what `Xml` parses with, and
+`libsecret-1`, the system's vault behind `Keyring`, which has no Windows port
+either. The libxml2 one is
 optional in the build only: on most desktops GTK4 already loads libxml2 at
 runtime, so what the package buys is the headers. **Package names per distribution and what each
 one turns on are in [`docs/installing.md`](docs/installing.md)**, which is also
@@ -1072,11 +1074,26 @@ the same through `Widget.Members` with `Sources`), and `tests/ide`'s
   extensibility refusal name its property. Either place would have reached both
   sides; **a worker calls `bta_close_hatches` too** (`bta_task.c`, right after
   its own `task_delete` list, which is about main-thread globals and not about
-  hatches), so the `gone[]` list is one catalogue and not two. The worker gets a
-  **different sentence**,
-  because `Locale` is not installed there at all and sending it to
-  `Locale.Compare` would be the second wrong answer in a row. That gap is
-  `docs/issues/ISSUE-worker-locale-order.md`.
+  hatches), so the `gone[]` list is one catalogue and not two. The worker used
+  to get a **different sentence**, because `Locale` was not installed there at
+  all and sending it to `Locale.Compare` would have been the second wrong
+  answer in a row; `bta_locale_init_facts` gives a worker the half of `Locale`
+  that needs no catalogue (`ISSUE-worker-locale-order`, deleted as answered),
+  so it is one sentence on both sides now.
+- **A worker gets `Locale`'s facts and not its catalogue, and the split is the
+  process boundary.** `Number`, `Date`, `Currency`, `Parse`, `DecimalPoint`,
+  `Compare` and `Matches` read `localeconv` and the C library's collation --
+  properties of the process that every thread inherits, which is why .NET's
+  `CultureInfo`, Java's `Collator` and Qt's `QCollator` all work off the main
+  thread. `Text`, `Plural`, `Context`, `Current` and `Available` read `L`, the
+  process-global hash table the main thread fills and can reload mid-run, so
+  they are a race and not merely prose out of place; `Read`/`Write` go with
+  them, being the catalogue editor's pair. `bta_locale_init_facts` builds the
+  object from **the same `locale_props` table** and deletes the prose names, so
+  there is one definition of the surface and the extractor and the docs see one
+  list -- a second table would be a second list to keep in step. The assertion
+  is `testTask`'s: a worker orders `Ana` before `Bruno`, folds `Córdoba`, and
+  has no `Locale.Text`.
 - **The bare `sort()` is the half of that which cannot be refused**, and after
   the refusal above it is the one that stays silent. It gives the same wrong
   order and never consults the locale -- a comparator-less `sort` compares UTF-16
@@ -1203,6 +1220,24 @@ the same through `Widget.Members` with `Sources`), and `tests/ide`'s
   own list is a completeness check about its own list.** The same blind spot let
   eight QuickJS-installed names sit outside `llm/language.md` for as long as
   they did.
+- **And it happened again, one level down: 37 members with no description, in
+  the manifest every page is written from.** An external audit named seven
+  (`Desktop.Entries`' six and `Date.UTC`); asking `api.json` itself found
+  thirty more. `checkDocs` and `checkGlobalSignatures` ask the owners the
+  scan finds -- a `JS_SetPropertyStr(ctx, global, …)` or a `/* type X */`
+  line -- and three kinds were found by neither: **an object hung off a
+  global** (`Desktop.Entries`, which `tools/apijson`'s `NESTED_OWNERS` listed
+  and nothing checked), **a table `tools/apijson` added by hand**
+  (`MenuItem`, `Action`, `AudioPlayer`, every description written empty by
+  construction because the tables had no comments to write them from), and
+  **a builtin of the language with a capital member** (`Date.UTC`, which is
+  QuickJS's and has no comment of ours to describe it). The first two are
+  described beside their entries and named with `type` lines now, so they
+  take the road every named type does; `Date` is `LANGUAGE_GLOBALS` in
+  `tools/apijson` and out of the surface. **And `tests/api` reads the
+  manifest whole** -- no member of any section may be blank -- which is the
+  check that does not depend on knowing where owners come from. Removing
+  `Uninstall`'s comment turns three lines red, one per road.
 - **There are nine hand-rolled async job shapes, and two of them have already
   forgotten to release.** `WatchJob` (`bta_sys.c`), `ExecJob`, `TimerJob`,
   `PasteJob`, `DialogJob`, `HttpJob` (`bta_http.c`), `BtaTaskJob`
@@ -1934,8 +1969,8 @@ program remembered cannot be reopened.
 
 ## Tests
 
-Six Bintana projects are run by the suite — `ide`, `markdown`, `qr`, `report`,
-`smoke` and `widgets` — each printing `N passed, M failed` and quitting with a
+Seven Bintana projects are run by the suite — `ide`, `markdown`, `qr`, `report`,
+`smoke`, `widgets` and `xlsx` — each printing `N passed, M failed` and quitting with a
 non-zero status on failure. They are applications, not a harness — write
 assertions the way the suite already does. A project is any directory under
 `tests/` with a `project.json` that does not declare `main`, so adding one is
@@ -2193,7 +2228,7 @@ Three things that will waste your time:
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
-  384 assertions against 2789 for the whole project -- 9.5 s against 368 on this
+  384 assertions against 2814 for the whole project -- 9.5 s against 368 on this
   machine -- which is what makes iterating on an early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.
@@ -3735,6 +3770,24 @@ person who wrote it either.
   the `GtkSettings` the `ThemeChange` handlers hang off outlives every window,
   so they go through `bta_widget_watch` or they fire on a freed form. Inside the
   handler the colours are already the new ones, measured -- no idle hop needed.
+  **The fallback is `bta_style_root()` and every reader of the ink goes through
+  it**, which is the whole of what it is for: `Widget.Dark` had it and
+  `Painter.Foreground` did not, so a `Chart` built for a document and saved with
+  `Save()` came out with a white title, a white legend and white axis labels over
+  a transparent ground -- the slices and bars drawn correctly, so it reads as a
+  chart without words rather than as an error, and `Save` is exactly the call
+  that needs no window. Every caller had to write `Foreground = "#222222"` to
+  avoid it. **A control *inside* a window that is merely hidden was measured
+  drawing correctly**, so the condition is *in no window* and not *in no shown
+  window*; and a **console project has no theme to ask at all** (no GTK
+  settings, no window), which is not a hole in the fallback but the truth -- a
+  document drawn there has no theme in it, which is what `lib/report` already
+  means by pinning `INK = "#000000"`. **And the theme's ink is not paper's ink**:
+measured with `GTK_THEME=Adwaita:dark`, the same chart saved with no window comes
+out with *light* text, which on a white page is the original bug back. The
+fallback answers "what would this look like on screen", which is right for a
+control; a program drawing for paper pins its ink, as `lib/report` does and
+`bintana-zabbix` does for its charts.
 - **The IDE copies its dirty tabs aside every thirty seconds, and never writes
   to the project to do it.** `Recovery.js`, into
   `Application.ConfigDirectory/recovery/<digest of the project path>.json`. An
@@ -4307,6 +4360,25 @@ person who wrote it either.
   the font once at the top of the `Draw` and assign it for every run**, either
   the element's or that one. Asserted in `tests/report` off two `Text` calls and
   the `Font` lines between them.
+- **Reading the font "once at the top of the `Draw`" is not enough, because
+  there is one painter per control and it outlives the frame.** `paint_frame`
+  says so in its own comment -- "one frame at a time, because there is one
+  painter" -- so `p.Font` at the top of the *next* frame is whatever the *last*
+  element of the previous one assigned. `lib/report` measured each band with
+  `Text.Font` (the measure pass has no painter, which is what lets pagination
+  run in a console program) and drew it with `p.Font`, and the two are only the
+  same value until anything sets a font: one element naming one made every
+  element that named none on the next page and the next export draw in it. A
+  report whose text was measured in `Sans 10` and drawn in `Normal 12` wrapped
+  into five lines into a band measured for four, **with the row below drawn
+  underneath the row above**. `base` is `Text.Font` now, and the report's
+  invariant -- what the measure decided is what the drawing makes -- is true by
+  construction rather than by there happening to be no font in the report. The
+  general shape: **a value read "once per frame" is only per frame if it is
+  reset per frame**, and the reset belongs where the other reading is, not at the
+  read. Found by a new test for conditional row styling, which is the argument
+  for writing the test before believing the comment: the old one named this
+  exact case and called it "a drawing whose font an `app.css` has changed".
 - **`Scale` before `Translate` scales the offset.** Cairo post-multiplies, so of
   two transforms the one written *last* is applied *first* to a point: `Scale(s)`
   then `Translate(o)` puts a point at `s * (p + o)` and not at `o + s * p`.
@@ -4590,6 +4662,25 @@ person who wrote it either.
   `.form` never hits it -- the loader parents before applying properties -- and
   ordinary code does, because build-then-add is the natural order. Anything that
   needs a window is attached on `realize`, not in the setter.
+- **The extractor read comments, and a call's two prose arguments as a
+  plural.** `Ide.Strings` matches calls with a pattern, so the example in
+  `AskForm.js`'s own comment -- `AskForm.prompt("New form", "Name:", …)` --
+  was extracted as a call; and `AskForm.prompt` was declared `args: 2`
+  without `many`, so its title and label became a singular and its plural:
+  the IDE's template carried `"New form"` with a plural of `"Name:"`. Comments
+  are blanked out before matching now (`withoutComments`, keeping every line
+  where it was, since the template cites lines), and the declaration says
+  `many`. **`ide/po/ide.pot` is written by the IDE's own Extract** and had not
+  been run for a week of new dialogs: 101 messages untranslated and 36 fuzzy,
+  most of the fuzzy guesses wrong (*Padding* as *Encabezado*, *Windows
+  installer* as *Desinstalar*). A fuzzy match from msgmerge is a suggestion,
+  never a translation -- read each one.
+  **And it never read a command's label at all.** `actions[].text` goes
+  through the catalogue like a menu label, and `Ide.Strings` walked `menus`
+  and `children` only. It hid behind the four commands the IDE had, each with
+  a button whose tooltip said the same words; when the Debug menu's items
+  became commands, `"Pause"` fell out of the catalogue. `fromAction` reads
+  them, and the `strings` phase plants one.
 - **`Locale.Text(SOME_CONST)` extracts nothing**, and it looks exactly like doing
   it right. The extractor collects a *literal* heading the call, so a constant
   defeats it as thoroughly as a template literal does -- and a `const` is
@@ -5014,6 +5105,140 @@ person who wrote it either.
   library *is* declared and must not be written, so `Ide.Refactor` reads its
   classes to refuse a collision and never rewrites one.
 
+## `Drawing`: a document with no display
+
+**Every way out of a `Painter` went through a `DrawingArea`**, and a control
+needs a display: `Save`, `ToPng`, `SavePdf` and `Printer` all take the control
+and run its handler. So a `main` project -- which never initialises GTK and
+refuses to make a widget -- could measure a report (`Text`), paginate it, and
+then had nothing to draw it with. `bintana-zabbix`'s batch mode died with
+`Failed to open display` from exactly there, and the workaround on offer was
+`xvfb-run`: a window nobody sees on a display nobody has, to write a file from
+a timer.
+
+`Drawing.Save(path, w, h, draw)`, `Drawing.ToPng(w, h, draw)` and
+`Drawing.SavePdf(path, w, h, pages, draw)` are `DrawingArea`'s three verbs with
+**the drawing passed where the control was** -- same names, same arguments,
+same refusals, and `draw` is handed `Draw`'s or `DrawPage`'s own arguments, so
+a drawing written for one is the drawing for the other. The writers are one
+function each underneath (`image_frame`, `pdf_write` in `bta_paint.c`, taking a
+`BtaFrameFn`), so the control and `Drawing` cannot drift in what they refuse.
+Four things that are the design rather than detail:
+
+- **A painter with no control draws black, in `Text`'s font, at `Text`'s
+  resolution.** `painter_ink` already answered black with no widget; the font
+  is the part that had to be written, because a report measured by `Text` and
+  drawn by a painter in another size is the overlapping-rows bug again.
+  `metrics_resolution` is shared for that reason.
+- **The drawing's throw is the call's throw**, where a control's handler is an
+  event and is reported and consumed. The caller passed the function and is on
+  the stack; and a PDF that threw leaves no file, as the control's does.
+- **Not in a `Task`.** A worker installs no `Painter` (cairo and pango are
+  drawing, `docs/plans/task-plan.md`), so it has no `Drawing` either.
+- **`Text` with no font kept the last one.** `metrics_prepare` set a font only
+  when one was given, on a layout shared by every call -- with a desktop the
+  fallback is `gtk-font-name` and it never showed, and in a console project
+  `Text.Height("x")` after `Text.Height("x", "Bold 18")` measured in Bold 18.
+  Found by the first console drawing; the layout's font is cleared now.
+- **And no desktop is not no font.** `Text.Font` answered `""` in a console
+  project, and an empty font is Pango's default, which is a serif: the first
+  chart drawn through `Drawing` came out in Times beside a report in a sans,
+  because the report names its fonts and the chart does not. With no desktop
+  to ask it is GTK's own default for `gtk-font-name`, `"Sans 10"` --
+  `BTA_FALLBACK_FONT` -- which is what a window would have had.
+
+**And the libraries split, because a control is still a widget.** `lib/report`
+is `ReportDocument` -- the paper, the bands, the rows, the measure and the
+drawing, no widget -- and the `Report` control, which holds one as
+`Report.Document` and delegates every property to it; `lib/charts` is
+`ChartDocument` and `Chart` the same way, with the pointer, the wheel, the
+drag and their events left on the control and the hit-test state (`bars`,
+`slices`, `lastBox`, `hover`) on the document, because it is the drawing that
+knows where things went. Three things worth knowing before touching either:
+
+- **The control's own exports still run through its `Canvas`**, not through
+  `Drawing`: the same frame the screen gets, so `Canvas.Dump()` after a `Save`
+  is what was written -- which is how `tests/report` reads a page, and the
+  first version that routed the control through `Drawing` turned 35 of its
+  assertions red for that reason alone. The document's `Save`/`SavePdf` are the
+  ones with no control, and `tests/report` holds the two together: `Paint`
+  draws, call for call, what the control exports for that page.
+- **The language has no descriptor copying**, so the delegation is one written
+  accessor per property, each with its own JSDoc -- the check reads a
+  declaration, and a loop over names would document nothing.
+- **A component's field initialisers run after the `.form` loaded it**, so the
+  document is made lazily in the `Document` getter and the `_doc` field is
+  declared without a value -- the trap *a field initialiser does not beat the
+  `.form` load* above.
+
+`tests/report`'s `testDocument` runs a real `main` project as a child, with
+`uses: ["report", "charts"]`, and asks `pdfinfo` and `pdftotext` about what it
+wrote: the page count it said, the paper it was told, and its words as text.
+
+## Probe: what a file is, and why it is not a verb on `File`
+
+`Probe.Image(path) -> { Width, Height }` reads a picture's header with **no
+widget and no display**, which is the whole of it. The prior art agrees on the
+name and on the operation, and that is why it is `Probe`:
+
+- **`ffprobe`, `exiftool`, ImageMagick's `identify`** -- a probe reads the header
+  and says what the thing is without decoding it;
+- **Gambas's `ImageStat`** (`gb.image`) -- "returns information about a specific
+  image", *not creatable*, used as a static, with `Width`, `Height`, `Depth`,
+  `Type`, `Path`. The language closest to this one puts it on an object, not on
+  a file verb;
+- **Go's `image.DecodeConfig`** and **Qt's `QImageReader::size`** -- both read
+  headers only, both on the image side of the library;
+- **.NET has nothing**, and that is the evidence: `System.Drawing.Image.FromFile`
+  decodes the whole picture, and "the size without loading it" is a Stack Overflow
+  question whose accepted answer is a hand-written JPEG parser or a third-party
+  package. Where .NET *has* an image object, the size is on it.
+
+**`File.ImageSize` was written first and is the wrong name**, and the argument
+against it is the one worth keeping: `File` is for working *on* a file (`Load`,
+`Save`, `Info`, `Hash`, `Watch`), and adding a question about a *picture* to the
+object that moves bytes around is a category error. It would also be a second
+answer for a word: **`File.Info` already answers `Type`**, as a MIME type, so a
+`File.ImageSize` puts two answers for one name in one namespace, which is how
+`AddNode` came to be documented under `Container` and had to be renamed to `Add`.
+`Info` was the other candidate and is refused for that reason; `Meta` is the
+standard term for a media file's descriptive data but in a runtime that has
+`Record` and `Field` a bare `Meta` already means *the data of a row*.
+
+**The namespace is the design.** `Probe.Image`, and a verb per *kind* of thing
+when something needs one -- `Probe.Audio`, `Probe.Video`, `Probe.Font` -- with
+deliberately **no `Probe.File`**, because a file's size and time are already
+`File.Info`'s and asking twice is how two answers for one word happen. There is
+no image *object* in this runtime: `Image` and `Picture` are both controls, and a
+decoded picture lives as a `GdkTexture` in the widget's qdata with nothing handing
+it out. `Probe.Image` is the measurement without that object, and an object is a
+separate piece of work (a new `.c`, five registrations, `gc_mark` and a
+finaliser) whose payoff is the decode cache rather than the size.
+
+**It reads the same set of files a `Picture` draws**, because
+`gdk_pixbuf_get_file_info` is the header reader and
+`gdk_texture_new_from_filename` -- what `Picture.File` decodes with -- is built
+on the same loaders. **Which files those are is the machine's answer and not
+this runtime's**, and it was first written down wrong: "an `.svg` is `null`
+here", stated in the source, here and in `api.json`, and measured false the
+first time an application used it -- on Fedora 44 GdkPixbuf reads through
+glycin, which has an SVG loader, so `Probe.Image` and `Picture` both answer an
+SVG's declared size (`300x100` for `viewBox="0 0 300 100"`). Where no loader
+reads SVG, both answer nothing. The property that holds is the agreement, not
+the list. **`null` for both "not a picture" and
+"not there"**, one answer for one question and the same one `File.Info` gives; a
+path that is not text is still a **refusal** through `bta_file_path`, because
+`Probe.Image(undefined)` must not quietly probe a file called `./undefined`.
+
+It is `runtime/src/bta_probe.c` and not part of `bta_paint.c` or `bta_sys.c`
+because it will grow into file statistics and audio metadata, which have nothing
+to do with drawing -- and `bta_sys.c` is already 4 483 lines carrying a different
+promise ("verbs that work *on* files", which is the objection above). **A worker
+installs it too**, since it is a header read and a dictionary: a report sizing a
+logo on a thread is the caller a widget could not have served anyway. A new global
+is five places -- the `.c`, its `CMakeLists.txt` line, its init in `bta.h`, and
+the two `install` roads, `bta_runtime.c` **and** `bta_task.c`.
+
 ## Random, Hmac and Gzip: what was measured and what bit
 
 **Designed in [`docs/plans/crypto-compress-plan.md`](docs/plans/crypto-compress-plan.md)**
@@ -5070,6 +5295,46 @@ member does not count.
 
 **`tests/run.sh widgets <name>` takes one test, and the name is case-sensitive**
 (`Hash`, not `hash`); a second name is ignored and the line says `[only Hash]`.
+
+## Keyring: the vault, and what it does not promise
+
+`Keyring.Available`, `Store`, `Lookup` and `Delete`, in `bta_keyring.c`, over
+libsecret -- the system's secret store, so a token is not a plain file. What bit
+and what to know:
+
+- **`Available` is the build and not the machine, and the API says so by folding
+  the two failures into one answer.** A runtime linked against libsecret on a
+  headless server has `Available === true` and no service on the bus, so nothing
+  stored and no vault to ask are both `null`/`false`. A caller that keeps a
+  fallback does not have to tell them apart; a caller that cares asks
+  `Available` first and gets the build's answer, which is all it can know.
+- **The callbacks take one value, on purpose.** `Store`/`Delete` answer
+  `cb(ok)` and `Lookup` `cb(value)`, so there is no error protocol to document
+  and a libsecret `GError` is folded into the value. The alternative -- two
+  callbacks like `Http`, or `(value, error)` -- is more surface for an
+  application whose next move is the same either way: fall back.
+- **The schema is made with `secret_schema_new`, not a static initializer.** A
+  written-out `SecretSchema` warns on the library's private tail (`reserved` and
+  seven `reservedN`) with `-Wmissing-field-initializers`, and initializing those
+  fields by hand is a build that breaks the day libsecret grows one. It is
+  created once at init and released in cleanup, after the calls are cancelled.
+- **A `main` project waits for the answer and a worker cannot ask.** The vault
+  is not a window, so `bta_keyring_pending` is summed into the console loop like
+  `bta_http_pending`; a `Task` does not install the global at all, because the
+  callback belongs to the main loop -- the `Http` bargain, not the sqlite one.
+- **The suite never writes to the real vault.** `testKeyring` forks on
+  `Available`: without libsecret the three verbs refuse naming the package (the
+  `no-libsecret` CI job is that build), and with it only the argument refusals
+  are asserted, which touch no bus. A test secret in the developer's keyring is
+  a side effect the suite has no business causing, and a locked collection would
+  make the answer depend on the machine. The real round trip is a by-hand check
+  (`secret-tool`'s collection here is locked, which is exactly the failure the
+  application's fallback exists for).
+- **It is hidden in the `package` job and in its own CI job**, like libxml2:
+  its headers can arrive as another package's dependency, so the tarball hides
+  the module and reads CMake's own `no libsecret:` line back to prove it. The
+  Windows job needs no change -- libsecret has no Windows port and the `#else`
+  half is what that build compiles.
 
 ## Notification: the suite shares the user's session bus
 
@@ -5164,7 +5429,8 @@ is the half `soffice` can check automatically. What bit, in the order it was fou
   serial from 61 on right and everything before it wrong by one. The reader says so in a
   comment and the test asserts 61, not 59.
 
-**The writer (stage 3) is `Zip.Create`, and `examples/clients` is its caller**: `Excel.js` is a
+**The writer (stage 3) is `lib/xlsx/Xlsx.js`** -- it was `examples/clients/Excel.js` until the
+application needed it and it became a library -- and `examples/clients` is its caller: it is a
 workbook's parts, an *Export* button writes what the list shows, and the suite holds the result to
 three programs that did not write it. What bit:
 
@@ -5191,15 +5457,15 @@ three programs that did not write it. What bit:
 - **A test that runs an example which keeps a database runs it in the developer's configuration**
   unless told otherwise. `examples/clients` writes `~/.config/bintana/Clients/clients.db`, so
   `ExampleClientsExport` gives the child `HOME` and `XDG_CONFIG_HOME` of its own, and then reads *that* database
-  to check the workbook against -- a source `Excel.js` had no hand in. The example takes a path as its argument
+  to check the workbook against -- a source `Xlsx` had no hand in. The example takes a path as its argument
   to export and quit, and hides its window before it is shown (`Form_Open` runs before `Show()` returns), so a
   suite run takes no focus. Rows are compared by name and not by position: the list is ordered with
   `Locale.Compare`, which is the desktop's order and not CI's.
 - **Excel holds a number as a double**, so a `Decimal` past fifteen significant digits does not survive the trip;
-  the alternative, writing it as text, is a column nobody can sum. It is Excel's limit and `Excel.js` says so.
+  the alternative, writing it as text, is a column nobody can sum. It is Excel's limit and `Xlsx` says so.
 
 Three defects were put back in the writer and each went red (names unchecked, a streamed entry not flagged as
-having a descriptor, `Abort` leaving its temporary). `Excel.js` was first written as strings, with an escaper of its
+having a descriptor, `Abort` leaving its temporary). `Xlsx.js` was first written as strings, with an escaper of its
 own; it builds every part with `Xml` now (see *Xml and Record* below for what that found), and the defects put back
 in it were money without its style and a date as text -- the last one only went red once the XML assertions were
 added -- and leaving out its `clean()`, which now fails loudly instead of writing a corrupt workbook.
@@ -5209,6 +5475,106 @@ its own helpers because a worker loads only the file of its task class) and show
 `TableView` in its on-demand mode, so a hundred thousand rows are arrays of strings and a
 screenful of widgets. Its reader is tested (`ExampleSheets`); the window was checked by a
 screenshot on an `Xvfb`.
+
+## ChartDocument.HitTest: a click for a drawing that holds the document
+
+`Chart` turns the pointer into `Select` through `ChartDocument.at(x, y)`, which
+is lower-case and so the class talking to itself. A program that paints several
+documents on one `DrawingArea` (Zabbix Reports' dashboards) needs the same
+answer and had no public way to ask, so `HitTest(x, y)` wraps it, in the
+coordinates `Paint` drew in, against the **last** `Paint`. Its test is in
+`tests/report/ReportTest.js`, beside `ChartDocument.Paint`'s.
+
+## lib/charts: Scatter, Heatmap, Gauge, and bars with a line
+
+Three kinds that are not a category plot, and a series that says how it is
+drawn (`Series[].Type`). What to know before touching them:
+
+- **`Gauge` and `Heatmap` lay themselves out** (`drawGauge`, `drawHeat`) and
+  return from `Paint` before `plot()`: no y axis, no window. A `Heatmap`'s
+  `lastBox` has no `view` and a `Gauge` sets it to `null`, so the control's
+  wheel and drag check `lastBox.view` before zooming or panning; without that
+  check a zoomable heatmap threw on the first notch.
+- **A scatter's x axis does not go through zero** and is padded a twentieth
+  at each end. Nice ticks may still reach zero for a cloud close to it (200 to
+  900 rounds to 0 to 1000); the test uses a cloud far from zero for that.
+- **Per-series `Type` partitions the plot**: `drawBars` draws only bar-kind
+  series and groups them among themselves, `drawLines` the rest, and a stacked
+  axis stacks only the series drawn as the chart's own type. `at()` tries the
+  bars, then the first line.
+- **The docs generator owns any table row whose first cell is a member's name
+  in backticks.** A row about a series' field of the same name (`Type`) has to
+  be labelled otherwise ("the series' `Type`"), or `tools/docs.sh` rewrites it
+  into the chart's own `Type`.
+
+## lib/charts: the format, the threshold and the window on the document
+
+Three more, all of them about a drawing that is not a `Chart` control:
+`Series[].Format`/`Unit`/`Mirror`, `ChartDocument.Lines`, and the window and
+pointer verbs the document owns. What bit, in the order it was found:
+
+- **`text(v, [serie])` is the one formatter, and the axis passes the series.**
+  Every number the chart writes goes through it, and the series says how: the
+  five formats are the application's own words (`""`, `Number`, `Percent`,
+  `Duration`, `Bits`), and `Duration`/`Bits` are the arithmetic the app's
+  `Dashboards.Format` already had — written twice in one tree until this, and
+  they would have drifted the first time one changed. The axis of a side takes
+  its format from **its first series** (`axisSeries`), which is why the left
+  margin is measured with that series: a GB axis is wider than its bare
+  numbers, and measuring without it drew the labels over the plot.
+- **A `Mirror` series is negated once, at assignment, and the labels are
+  absolute.** The negation lives in the `Series` setter, so range, bars, lines
+  and the hit test all measure one shape — and `text()` writes the absolute
+  value, so the axis of a butterfly says `1,80` on both sides. The app used to
+  negate in `compute` and the axis repeated the minus back; `Dashboards.Mirror`
+  is gone. A mirrored bar's `y` is the zero line and its height runs down:
+  `b.y >= yOf(0)` is the assertion, not `b.y + b.h <= yOf(0)`.
+- **`Lines` is a threshold and `Marks` is not.** One horizontal line per
+  `Value` at `yOf(Value)` across the plot, text at the right edge, drawn over
+  the data and under the value labels; a value the axis does not reach is
+  **omitted** — a line clamped to the border says the opposite of a pinned
+  axis. `Bands` stays a gauge's ranges and a *rule* stays the application's
+  colour. A gauge, a heatmap and a pie have no plot to cross and ignore it.
+- **The wheel, the drag and the click are the document's now**
+  (`Zoomable`, `ZoomAt`, `PanBy`, `Press`/`Move`/`Release`), because a drawing
+  that paints documents itself — a dashboard of several on one `DrawingArea` —
+  forwards the pointer to the chart under it and wants exactly what the control
+  does. `Move` answers `"pan"`/`"hover"`/`""` and `Release` answers whether the
+  gesture was a click, which is what keeps a drag from also being a `Select`.
+  The control's `Canvas_MouseWheel` is four lines that call it.
+- **`Tooltip` measures with the font the last frame drew with** (`_font`, kept
+  at `Paint`) and **draws nothing**: `{ Text, X, Y, Width, Height }` is a card
+  for whoever owns the document. Measuring with any other font is how the text
+  overflows the box the same call returned.
+- **`LegendHit` is recorded while the legend is drawn**, not recomputed from
+  the layout — the picture is the answer. It answers `{ Series, At }`, where a
+  plot's `At` is the series and a pie's is the slice, because `Series[].Hidden`
+  takes out a series and a slice is not one.
+- **A hidden series needs `Refresh()`, and the app must keep it by name.** It
+  is a plain field of the normalised series, so assigning `Hidden` changes no
+  property and nothing invalidates the cached range; `ChartDocument.Refresh()`
+  clears `_range`/`_reduction` and redraws. The application reassigns
+  `doc.Series` on every compute, so its painter re-applies the flag by series
+  `Name` — the flag would otherwise vanish on the next frame.
+
+## Csv: rows of text, in `rad.js`
+
+`Csv.Parse/Load/Format/Save` live in `runtime/js/rad.js`, beside
+`File.LoadJson`, because a CSV reader is a loop over a string and a worker
+runs that file too. Its test is `testCsv` in `tests/widgets/WidgetsForm.js`,
+and **a `test*` method there runs only when its name is in the list near the
+top of that file** (`"Dictionary", "Csv", "Regex", …`): a test added without
+it passes by never running, which is what the first version of this one did --
+the suite's count did not move, and that was the only sign.
+
+Two decisions a caller relies on:
+
+- **Every value is text.** A parser that guessed numbers would turn the code
+  `00123` into `123` for every caller; the application decides (Zabbix
+  Reports' `FileConnector` infers a column's kind from all of its values).
+- **The separator is detected** from the first record, outside quotes, among
+  `,` `;` tab `|`. A spreadsheet in a decimal-comma locale writes `;`, and
+  assuming `,` reads one column per line with no error.
 
 ## Xml and Record
 
@@ -5287,7 +5653,7 @@ bag. Five things are worth knowing before touching either half:
   empty `JS_EXCEPTION` when libxml2 answered NULL; it throws a sentence now.
 - **`Xml` wrote documents it could not read, and only a program that *wrote* XML with it
   found out.** Everything before was reading -- MSPDI, feeds -- and `SaveXml` writes values that
-  came out of a file, which were valid XML to begin with. `Excel.js` writes values that came out
+  came out of a file, which were valid XML to begin with. `Xlsx` writes values that came out
   of a database, and building it with `Xml` instead of strings showed three things in one sitting:
   a `U+0001` assigned to `Text` or an attribute was written as the raw byte and **`Xml.Parse`
   refused the output** (*PCDATA invalid Char value 1*); half a surrogate pair -- which a JavaScript
@@ -5297,7 +5663,7 @@ bag. Five things are worth knowing before touching either half:
   door text enters by asks it (`Text`, `SetAttr`, `SetAttrNS`, and a namespace URI), refusing with
   the character and its position. **A NUL has to be looked for before decoding**: GLib's
   `g_utf8_get_char_validated` answers it as invalid, which named it "half a surrogate pair".
-  A refusal and not a drop, because which characters may be lost is the program's call -- `Excel.js`
+  A refusal and not a drop, because which characters may be lost is the program's call -- `Xlsx`
   drops them from a cell, deliberately, in its own `clean()`.
 - **`SetAttrNS` always searched in scope; what was missing was declaring a prefix.** OOXML writes
   `xmlns:r` on a workbook and `r:id` on each sheet, and the only spelling was moving an element into
@@ -5315,6 +5681,30 @@ bag. Five things are worth knowing before touching either half:
   is every tree built from `Xml.Element`, so a child given its parent's namespace got a second
   `xmlns="..."` written on it. `xml_ns_in_scope` walks the parents by hand and needs no document.
   The three were each put back and went red (`XmlWrite`): the text check, the adoption, the old search.
+- **A surplus argument is the binding's to refuse, and two verbs were the hole
+  in that.** `Remove` declares none and `Add` one, so `parent.Remove(child)` --
+  the call a DOM reads as *take this child out* -- took the **parent** out: on
+  a document's root the body was gone, `Root` was `null` and the next
+  `File.SaveXml` wrote a two-line file where the plan was. `Add(name, text)`
+  wrote an empty element and dropped the value. Five members beside them
+  refused already (`Element`, `Insert`, `SetAttrNS`, `Text`), which is what
+  made these read as a rule that was left out rather than a style. libxml2's
+  `xmlUnlinkNode` has no argument to get wrong and every DOM raises
+  (`removeChild` throws `NotFoundError`), so what a surplus means is the
+  binding's call -- both throw now, naming the call that was meant
+  (`child.Remove()`, `parent.Add(Xml.Element("Name")).Text = text`), and
+  `XmlFiles` holds the refusal with the document still intact.
+- **`Children` and `Text` cannot answer "is this element empty", and the pair
+  is wrong on a document with a comment.** `<r><!--c--></r>` reads as no
+  children and no text, so a leaf-by-leaf walk reported it with the value `""`
+  -- and `Record`'s mapper, deciding an emptied list takes its wrapper out,
+  deleted the comment. `IsEmpty` is `node->children == NULL`: every kind of
+  child counts, attributes do not, so `<r a="1"/>` is empty and `<r>  </r>` is
+  not (measured -- `XML_PARSE_NOBLANKS` keeps a whitespace-only text node when
+  it is the root's only child). `Comments` is the text of the direct comment
+  children, which is the content `Text` cannot carry and what lets a diff
+  report a change to one. `XmlFiles` asserts the pair, including that a
+  comment survives the writer and is still readable after a parse.
 - **Indentation was measured and kept.** The canonical shape is 59 % more bytes than a flat one, and
   5.5 % once deflated into a zip -- not worth an option.
 - **`Field.DateTime` exists because XML's `dateTime` is a date and a time**
@@ -5328,6 +5718,87 @@ bag. Five things are worth knowing before touching either half:
   hid this; the first format that says `Naming = "lower"` (`examples/feeds`,
   where RSS hands over `<pubDate>`) found **every field silently at its
   default**. A shape with a naming rule or an `as` needs a test that reads one.
+- **`SaveXml` on a list was its square, and the fix has four parts that are
+  easy to mistake for one.** Measured before: an 8000-task MSPDI plan was a
+  **151 s** save against a 3 s read (`ISSUE-xml-list-cost`); after, **0.37 s**,
+  and linear -- 16000 in 0.74 s. The parts, because each was arrived at by
+  getting it wrong first:
+  - **Matching a list by key was a `Find` per existing element, per item** --
+    `Find` builds a wrapper and walks the holder's children every call. The key
+    text of every existing element is read **once** into a `Map` of queues; the
+    unkeyed road keeps a cursor instead of `used.indexOf(false)`. Both were
+    quadratic in the same loop.
+  - **`#xmlPlace` read `holder.Children` per item**, a fresh array of wrappers
+    each time. It reads once now, and an item already in place is a comparison.
+    **The comparison cannot be between wrappers**: `FindAll` and `Children`
+    hand out *different objects wrapping the same node*, so `nodes[i] ===
+    wanted[i]` is false for every item already in position -- the first version
+    of this fix compared them, paid a move per item and the square came back.
+    What is the same across the two walks is the **order**, so `#xmlSaveList`
+    renumbers the survivors and passes `from[i]` (an index, `-1` for a new
+    item), and `#xmlPlace` compares positions. The round trip returns before it
+    even reads the children.
+  - **A no-op `Text` write is not free: it grows the tree's orphan list.**
+    `Text =` unlinks the old children into `tree->orphans` so a wrapper keeps
+    answering, and `xml_orphan` walks that list -- so a save of an *unchanged*
+    document made the next save slower without bound. Measured: four identical
+    saves of an 8000-task plan took **458, 1388, 2347 and 3807 ms**. `#xmlSave`
+    skips a scalar whose element already holds that text (a child with element
+    children is still written, because its text is a reading of them), and an
+    attribute already equal is not set. This is also why the orphan list is
+    worth watching: a program that keeps assigning new text to one element
+    leaks a text node per assignment until the document dies.
+  - **`#atDefault` compared a list through `JSON.stringify`**, which serialises
+    every item -- a full `Serialize` of an 8000-task shape on every save, to
+    answer a question `length` answers. An empty `def` is `length === 0` now;
+    a non-empty one is still compared by value. `#xmlOrder` is cached per class
+    for the same reason: it depends on the declaration and was rebuilt per
+    record.
+  `tests/widgets`' `XmlRecord` holds a 2000-task save under a seconds-wide
+  bound (the old code took 6.5 s there) and asserts an unchanged document comes
+  out as it was.
+- **XSD validation is `Xml.Schema(text|doc|element)` once and
+  `schema.Validate(doc)` as often as a file arrives**, and five things were
+  measured or chosen before it could be (libxml2 2.12.10, the 240 KB MSPDI
+  schema):
+  - **The compile is the object and the check is the verb**, because the
+    compile is 70-90 ms and validating is ~2.9 us a task -- 3 ms for a
+    thousand, 23 ms for eight thousand. A one-shot `Validate(doc, path)` would
+    re-pay the compile on every autosave.
+  - **Nothing is written into the document.** libxml2's validator adds a
+    schema's default and fixed attributes to the instance when asked with
+    `XML_SCHEMA_VAL_VC_I_CREATE` -- measured: two attributes appear in the tree
+    -- and this never sets it, because `SaveXml`'s promise is that it touches
+    only what the shape models, and a default injected at the check would be
+    written to the file at the next save. `testXmlSchema` asserts the default
+    stays out.
+  - **Includes and imports are refused before the compiler sees them.**
+    `xmlSchemaNewDocParserCtxt` resolves `xs:include`/`xs:redefine`/an
+    `xs:import` with a `schemaLocation` through the process's external entity
+    loader -- measured trying `http://example.invalid/o.xsd` -- and a *failed
+    remote* import is only a warning: it compiles anyway and validates against
+    something incomplete, in silence. MSPDI is one file with no includes, which
+    is the shape this asks for; the walk refuses the document that would fetch
+    one, naming it.
+  - **An element is only validatable in a document.** `xmlSchemaValidateDoc`
+    takes the document; `xmlSchemaValidateOneElement` answers `-1` with *no
+    instance to validate* for a detached node (`Xml.Element`, a `Copy()`), so
+    the verb refuses one with a sentence and a document or one of its elements
+    are the roads. `Validate` also takes a document, in which case the root is
+    what is checked.
+  - **A schema error is a line and no column.** libxml2 reports the element
+    (`e->line`) and `int2` is `0` for every schema error measured, unlike
+    `Xml.Parse`, so `Validate` answers `{ Message, Line, Column }` with
+    `Column` always `0` -- uniform with `Application.CheckSource`, and honest
+    about what the engine gives.
+  - **The namespace mismatch is the caller's remap, measured both ways.**
+    Project writes `http://schemas.microsoft.com/project` and the official XSD
+    declares `/2007`, so validating a real file as-is fails at the root (*No
+    matching global declaration*). Rewriting the two URIs in the XSD text
+    (`File.Load(path).split(old).join(new)`) before `Xml.Schema` makes the
+    unmodified file validate -- 9 of the 10 fixtures in `bintana-project`'s
+    corpus, which is the same answer the external `xmllint` + sed harness gets.
+    An option was not invented for it: the remap is the caller's two lines.
 
 `examples/feeds` is the first real caller: two shapes (RSS 2.0 and Atom 1.0)
 over one list, and the four format facts worth knowing -- RSS dates are RFC 822
@@ -6203,6 +6674,81 @@ same number without naming what sits above it.
   the spot when the run has a callback. Found by reading, since no headless
   run can answer the dialog; `on_draw` had the same shape answered years
   before.
+
+## A bare class name resolves the way JavaScript does
+
+`bta_lookup_global` -- what `startup`, a `.form`'s `type`, `Task.Start`,
+`Widget.New` and the class questions all go through -- read the **global object
+first** and fell back to `JS_Eval` only when it had nothing by that name. A
+top-level `class` is a lexical binding and not a property of `globalThis`, so
+every global the runtime installs beat the project's own declaration, and the
+program did not start. Found by adding the global `Probe`, which two
+`tests/widgets` fixtures were already called (they are `Showcase` and `Slab`).
+
+**It failed two different ways, and the second one points nowhere near the
+cause.** A global written in C (`File`, `Probe`, `Field`) gave `startup class
+'File' not found`, for a class that was there, loaded and evaluated. A global
+the prelude makes (`Timer`, `Record`) gave `TypeError: not a function` from
+inside `Form`, in an error dialog that kept the process waiting -- the lookup
+found the runtime's object, and building a form out of it is what failed.
+
+A bare name is now `JS_Eval`'d, which is JavaScript's own order: the lexical
+declaration, then the global property, and a `ReferenceError` for a name that is
+neither -- the same error the fallback always threw. A qualified name
+(`Ide.Designer`) is still a walk down properties. **Nothing got slower**: every
+caller asks the class table first, so `Button` and `Label` never arrive here,
+and the names that do are a project's or a library's, which always went through
+`JS_Eval` before. `tests/widgets`' `ClassNamedLikeAGlobal` runs three children
+-- a startup class called `Timer`, one called `File`, a `.form` control whose
+type is a class called `Probe` -- and is four reds out of five on the old lookup.
+
+**The lesson for adding a global still stands, smaller**: the project's class
+wins now, but a name the runtime publishes is a name a program cannot reach
+while it declares its own, so `grep` the whole tree -- `examples/`, `tests/`,
+`lib/`, not only `runtime/` -- before installing one.
+
+## `Tls` on a client: the abort was ours, and the hole was the cache
+
+`Http.Client`'s `Tls: { Ca, Cert }` shipped believing that **a second TLS
+handshake in one process corrupts the heap** -- `malloc(): unaligned tcache chunk
+detected`, `G_BOX_MAGIC` at teardown, `corrupted double-linked list` after a
+`Stop()` -- "pre-existing, reproduced with a bare `Http.Client()`", and the suite
+asserted no handshake at all because of it. All three were one line of the new
+code: `http_on_accept_certificate` called `g_uri_unref` on what
+`soup_message_get_uri` returns, which is **transfer none** -- the message's own
+`GUri`, freed while soup still used it. A `GUri` is an atomic rc box, which is
+the `G_BOX_MAGIC`. It only ran on the `Ca` road (a `Cert` pin returns before
+reading the URI), which is why "twelve pinned handshakes" was always clean and
+one `Ca` handshake against an *external* server was enough to abort.
+**AddressSanitizer saw nothing** for the reason the arena note above gives for
+`JSValue`s: glib's rc boxes recycle. Read the transfer annotation of every GLib
+or soup getter you free; `get` usually lends.
+
+**The reproducer's "Connection refused" was not TLS either.** Its server was a
+`const` the remaining callbacks did not mention, so it was collected, and a
+collected server disconnects -- the documented "a server lives as long as its
+object", seen with gdb on `close()`: the listening descriptors closed from
+`http_server_finalizer`. Held, every combination of plain and https, before and
+after a `Stop()`/`Start()`, answers. Before believing a listener died, ask
+whether its object did.
+
+**And a review found the real hole: a resumed session is never verified.**
+glib-networking caches the TLS sessions of a process by server, and a resumed
+handshake presents no certificate, so `accept-certificate` never fires. A server
+one client accepted with its `Ca` or `Cert` was then reachable by **every other
+client in the process** -- a bare `Http.Client()` included, and one with a wrong
+CA -- which is precisely the "accept-anything" this feature promises not to be.
+Measured against Python's `ssl` (TLS 1.3 tickets by default), and gone against
+the same server with `num_tickets = 0`. `http_tls_no_resume` turns
+`session-resumption-enabled` off on the connections of a client that set `Tls`,
+from `SoupMessage::network-event` at `TLS_HANDSHAKING`; the property is
+glib-networking's (2.72+) and not in GIO's headers, so it is looked up first.
+**`Http.Server` issues no tickets**, so the suite's own server cannot show this:
+`tests/widgets`' `HttpServer` starts a `python3` https child for the one
+assertion that can, and it is red with the call removed. The step now does
+every handshake the feature needs -- a bare client refused, `Ca` and `Cert`
+accepted, a wrong `Ca` and a wrong `Cert` refused, and a bare client after an
+acceptance still refused.
 
 ## Task: what a thread costs here
 
@@ -7745,7 +8291,7 @@ and macOS in [plans/macos-plan.md](plans/macos-plan.md).
 | **CMake 3.16+** and **pkg-config** | the build |
 | **QuickJS** | **not a dependency to install**: quickjs-ng v0.17.0, plus the six patches of ours, is vendored in `vendor/quickjs` as a git submodule ([AGENTS.md](../AGENTS.md#the-six-patches-in-vendor)) |
 
-Six more are optional, and CMake prints what it found either way. Without each
+Seven more are optional, and CMake prints what it found either way. Without each
 the runtime builds and the thing itself says which package is missing when it is
 called — see the table below.
 
@@ -7913,7 +8459,8 @@ Three things it deliberately does not do: it does not bundle GTK (the machine
 needs GTK 4.10+ and GtkSourceView 5), it is built on `ubuntu-24.04` and so wants
 a glibc at least as new (2.39 — Fedora 40, Debian 13, Ubuntu 24.04), and it is
 built **without** the optional dependencies (`sqlite3`, `libsoup`, GStreamer,
-VTE) so that none of them becomes a shared library the downloader has to have.
+VTE, `libxml2`, `libsecret`) so that none of them becomes a shared library the
+downloader has to have.
 
 ### The compiler inside the Windows build
 
@@ -8036,6 +8583,7 @@ project in [plugins.md](plugins.md#building-one) says where that is.
 | ...and the picture, not just the sound | `gstreamer1-plugin-gtk4` | `gstreamer1.0-gtk4` | `Video`'s sink (`gtk4paintablesink`, from gst-plugins-rs) is missing and `AudioPlayer` still works |
 | `Terminal` | `vte291-gtk4-devel` | `libvte-2.91-gtk4-dev` | the class still draws and still round-trips a `.form`; only `Run`, `Stop` and `Kill` refuse. The only dependency with no Windows port |
 | `Xml`, `File.LoadXml`/`SaveXml` | `libxml2-devel` | `libxml2-dev` | `Xml` exists, `Available` is `false`, and every verb refuses with a sentence. GTK4 itself already loads libxml2 at runtime on most desktops, so this is a **build** dependency and not a new runtime one |
+| `Keyring` (a token in the system's vault) | `libsecret-devel` | `libsecret-1-dev` | `Keyring` exists, `Available` is `false`, and every verb refuses with a sentence naming the package. It has no Windows port; the library itself is on every GNOME desktop already |
 
 `Widget.Available(type)` is how a program asks what the build it is running on
 can actually do — a palette filters on it, and so should anything that offers a
@@ -8111,7 +8659,7 @@ and a TagLib wrapper worked through.
 | `Package 'gtksourceview-5' not found` | `gtksourceview5-devel` / `libgtksourceview-5-dev` |
 | compile errors about `gtk_alert_dialog` or `gtk_file_dialog` | the GTK is older than 4.10 — Debian 13 / Ubuntu 24.04 or newer |
 | `no vte: Terminal exists and refuses to run one` | not an error: the optional table above |
-| `no sqlite3`, `no libsoup`, `no gstreamer`, `no libxml2` | likewise — a build line, not a failure |
+| `no sqlite3`, `no libsoup`, `no gstreamer`, `no libxml2`, `no libsecret` | likewise — a build line, not a failure |
 
 ---
 
@@ -8120,7 +8668,7 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all six projects, 8024 assertions
+./tests/run.sh                          # all seven projects, 8293 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -8230,15 +8778,16 @@ place to have a GL context), which is what makes the suite runnable over ssh and
 in CI: `.github/workflows/ci.yml` installs the dependencies plus `xvfb` and runs
 `./tests/run.sh` unchanged.
 
-## The six projects
+## The seven projects
 
 | Project | What it covers |
 |---|---|
 | `tests/smoke` | The `.form` loader, event dispatch, the basic controls, nesting |
-| `tests/widgets` | Containers, `Arrangement`, `HAlign`/`VAlign`, boxes and splits, a `Scroller` that **fills the room it is given and scrolls when it cannot** (`FillScroll`: the default `Fixed` slot leaving its content at its own size, and the same declarations arranged handing it the view's width and height, and then scrolling once the content asks for more than there is — which is the pair a missing container was reported for, and three of its assertions go red with the `Arrangement` taken away), `Notebook`, `RowList`, `TreeView`, both editors and the source one's search (including the offset/index crossing: `Offset`/`OffsetAt` in characters against `LineOf`, which converts a search's UTF-16 index exactly with the separator model GTK draws, and the same pair on `Text`), radio grouping, the value controls (`Slider`, `ProgressBar`, `DatePicker`, `Calendar` and its marks, `ToggleButton`, `Switch`), multiple selection, menu items that hold a state, drag and drop (the surface, since there is no synthetic pointer — the five feedback events installing, dispatching with the point, and a handler answering `false` as what a refusal looks like — plus the one thing *placing* a drop rests on, which is that a hidden child measures 0x0 at the origin rather than keeping its last rectangle), icons, `PropertyOptions`, a handler installed on the control itself (`On`: it runs, it replaces rather than accumulating, `null` removes it, the answer comes back, `this` is undefined, an event the class does not raise is refused, a second handler for one event refused at both doors that can make the pair -- `On` over a name and a `Name` over an `On` -- and a component built with `new` reporting to whoever holds it, which is the half the naming convention cannot reach), removing a child from every container and refilling it, **including that `Remove()` detaches on the six controls that used to answer to their own `Remove(index)`** — `RemoveRow`/`RemovePage`/`RemoveNode` now (`Removal`), a row's own application key (`Key`/`KeyAt`, `Add(text, key)`, and the four doors that keep a `ComboBox`'s keys in step with its model), renaming one in place (`SetText`), the double click from code (`Activate`) and bringing a row into view (`Reveal`, measured on a `RowList`, whose rows are widgets a `Bounds()` can be asked of; **an editable cell's own gesture is a pointer one and is on the by-hand list**, while `TableView`'s test holds the declaration and `CellEdit`'s veto — and `TableHeaderMenu` holds the heading's the same way: `HeaderMenu` as declared, its items bound, and `HeaderClick(column, button, ctrl, shift)` arriving with all of it, while the heading's own click is a pointer one), **the three numbers a table drawn beside something else has to say** (`TableGeometry`: `RowHeight` and `HeaderHeight` read out of what GTK publishes, held to the arithmetic that says they are the real ones -- the rows' extent is the count of them times the height of one, to the pixel -- plus a tree whose `Count` is every node at every level and whose row is still that same row with a branch folded away, `ScrollY` set from code and clamped at both ends, one move being one event with both axes, a table with no rows keeping its heading -- which is the assertion that had to be given a column, because a `ColumnView` with no columns has no heading row at all -- and a `HeaderMinHeight` floor reaching the heading it asks for while the rows stay the theme's), `Add` on a control that is already somewhere moving it rather than attaching it twice, and a container put inside what it contains refused rather than hanging (`AddMoves`), a container that keeps a proportion (`Aspect`: the ratio written four ways and refused three, one child and a second refused, and the two numbers that make it usable -- its minimum is its child's, and the child is the biggest rectangle of that shape that fits, centred, reshaped when the ratio changes while it runs), a surface that floats over a control (`Popover`: the open/close round trip with the two events it raises, `Visible` read-only and refused as a design property and never serialised, one child with a second refused, the four sides offered and a fifth refused by name, `Show()` and a popover in no container refusing, `Clear`/`Remove` on the content, and that a closed popover is not where the Tab walk stops -- `FocusNext()` answered `false` on a panel full of controls while GTK went on naming it), moving a child in every container that has an order and what an index means in each (`Reorder`: the same four moves asserted on a box, a `Grid`, a `Flow`, a `RowList` and an `Overlay`; `Placement` per class; a stack's base layer, which is `Children[0]` and the one that fills, through `Reorder`, `Raise`/`Lower` and the base being deleted; and a `RowList` row reordered **with the selection on it**, which has to survive the round trip through GTK's own remove and raise no event), what every numeric setter refuses (`NumericSetters`: a value past an integer, a `Columns.Width` that is a word, and the two named properties), a missing argument refusing with a sentence rather than an empty exception (`MissingArgs`: the fifteen members that returned `JS_EXCEPTION` with nothing set, and the painter's non-finite coordinates, which are refused by name), a path or `Save` text that is not a string refused instead of converted (`StrictArgs`, which also covers an `Exec` environment value and an HTTP header whose conversion fails), the serialiser round trip, a command several places point at (`Action`: the shared `Enabled`, and the four things a bound control refuses), `Record`/`Field` and records inside records (`Nested`: a list of them, a shape that contains itself, and a cycle refused rather than hung on), a record over a sqlite table (`Database`: the driver, `Table`, and the four ways a shape can fail to fit a table — **120 assertions with sqlite and one without**, since it is an optional build dependency and the claim there is that it says which package is missing), moving pictures and sound (`Media`: a `Video` played to its end and replayed, seekable once known, its frame measured and saved as a PNG, `Pause` holding a position, a node with declared properties round-tripping back to the same file, `Loop` still going past one length, `Buffering` reading `100` on a local clip that never waits for data (below 100 needs a server throttled under the bitrate, which is a measurement by hand and not a test), a missing file and an unreachable RTSP camera answering `Error` with a message that names the clip and a `kind` a form can branch on, an `AudioPlayer` cue played and looped — **and the properties still answering without GStreamer, where only the verbs refuse**, since the designer and the serialiser read every value of a control and must not depend on an optional build dependency. **The clips are generated with `gst-launch-1.0` into a temporary directory rather than committed**, the TLS certificate's bargain; where there is no `gst-launch` the parts that need a file are skipped, and where GStreamer has its base plugins but not the GTK4 sink — a CI runner, say — the video half skips and the audio half runs), `TextProperties`/`Locale`/`Fill` and design values (`LocaleRead`: a catalogue read as data -- the header as entry zero, a fuzzy entry kept flag and all, an untranslated one, a plural with its second msgid and every form, a context that is its own entry, comments as written, the `#~` tail as raw lines with a null msgid -- **and written back by `Locale.Write`**: *nothing lost* and *writing twice changes nothing*, the two properties the pair promises, plus the refusals a writer owes -- a path, an entry, a `msgid` or a form that is not text, and the whole text built before the file is touched so a refusal leaves the catalogue alone), the first real rectangle (`Allocated`: the `On` half and the named half, once each, the box against `Bounds()`, and a control on a hidden page hearing it when the page is shown), the curated language (`CuratedLanguage`: the removed names absent, `RegExp` among them and `RegExp.prototype.constructor` with it -- so a literal cannot hand the constructor back -- and `Regex`'s `Unicode` flag doing what `\p{L}` and an emoji need; `CheckSource`'s line and column, which no `Error` setting can move; and **`Application.Symbols`**, the classes, methods and top-level functions with their lines -- a nested function not reported, a comment and a string producing nothing, a getter and a setter as two, a static accessor as `StaticGetter`/`StaticSetter`, **every member's parameter list its own whatever its body holds** -- an arrow in the body, a function in a getter, an arrow in a default value, two top-level functions in a row, which is the shared buffer that reported `QrCode.Encode(value, n)` --, a namespaced class expression named by its own name and an anonymous one by the assignment, and source that does not compile answering what the parser reached), `Locale.Compare` and `Locale.Matches`, `Day`, `Stopwatch`, `Exec` and its `Stop` (including a `Control` line that arrives two seconds after the child has ended -- dropped, where it used to complete into a freed job and crash CI, and two seconds because at a third of a second the assertion was a bet on how long `Form_Open` still had to run under a sanitizer; stdin written to a filter and closed, which is what makes `sort` answer -- `Exec.Wait`'s `Input` and the handle's `CloseInput`; 300 KB written into a `cat` that echoes it, which used to hang the program; `Timeout` and `Stop()` reaching a grandchild that holds the output after its leader exited; a child that quits with `Printer.Send`'s dialog still open and ends with 0 rather than an abort -- and that **a NUL does not end its output** -- `Exec.Wait` was built on a call that hands back a C string, so `git status -z` read one record and lost the rest), **a program run under the debugger** (`testDebugger`: `bintana --debug` through `Exec`'s `Control` and `Write` -- a breakpoint armed, the program stopped on that line, the stack naming the frame and its caller, an argument read by name out of `vardefs`, `this` among them because the vendor patch gave the frame a slot for it, and a `let` before its declaration correctly absent. It is also what guards that patch: without the hook in the interpreter nothing ever stops and the build is fine), **and what a stopped program can be asked** (`testDebuggerAsks`: a conditional breakpoint that stops on the one turn its test holds, a `const` of the stopped frame and a `let` of the caller's read by name -- which a direct eval cannot reach and is why the runtime compiles the expression as a function of the frame's own names -- an expression that throws answering its message instead of failing, a value written back reaching the program's own arithmetic, and a stop on the line that threw with the frame that built the failure still alive), a `File.Watch` that stops itself, a form shown narrower than it was drawn, **a shown form the runtime holds** (`FormKeepalive`: one closed and one left open with nothing in JavaScript pointing at either — the two roads the drop and the teardown sweep take, since the collection itself is not forceable from here), the `Grid`, what this build can run and what it merely *has* (`Available`: an ordinary control, an abstract class, a component of the project, a name that is no class at all — and `Terminal` either way, **with a branch for each**: with VTE the pty, the pattern and the scrollback; without it the state still answering, a `.form`'s `LinkPattern` still round-tripping, and `Run`/`Stop`/`Kill` refusing by name, since a build with no pty must still be able to draw and save a form that has a `Terminal` in it — and `Video`, whose answer is **asked of the machine** (GStreamer's registry, and the GTK4 sink in it): the class and the instance are asserted to agree, and the palette phase in `tests/ide` is what holds the two directions of `Available` against the buttons), **and which names the completed one offers** (`completion`: a bare name after a space, after an `=` and inside a call's arguments -- **four ways, because one of them is the test's own invention and the suite was green on the broken one** -- plus `Timer.`, `Printer.`, `File.`, `Confirm.`, a control's members from its `.form`, a method being written, and **a library class offered only when the project declares that library in `uses`, **and the members of one it does** -- an accessor, a static and a name narrowed by the word being typed, all read out of the parser because the IDE never runs that library, with a lower-case member asserted *absent* because the runtime verb hides it and the two must not disagree -- four assertions that fail on a runtime-only answer**: the one it does names is offered and four from the five it does not are not, which is the assertion that fails on a walk of every library installed) -- **and which names the completed one offers** (`completion`: a bare name after a space, after an `=` and inside a call's arguments -- **four ways, because one of them was the test's own invention and the suite was green on the broken one** -- plus `Timer.`, `Printer.`, `File.`, `Confirm.`, a control's members from its `.form`, a method being written, **what the popup says after the name -- the names where a signature was declared and `(...)` where none ever was, with no member of either list annotated with an invented name** -- and **a library class offered only when the project declares that library in `uses`**: the one it does name is offered and four from the five it does not are not, which is the assertion that fails on a walk of every library installed) -- **how a class is asked what it has without building a control** (`ClassIntrospection`: **a class the process never loaded** (`ClassIntrospection`: `Widget.Members` with `Sources` -- a chain declared entirely among the sources, a base the sources do not declare ending the walk in the class table, a class shadowing a runtime global, an `extends` that is a call, a **cycle in the chain that terminates instead of hanging**, a source entry that is not a string, **a form's children -- for a class only declared and for one this process has loaded, which is the same bug on two roads** -- a lower-case child asserted absent, **the source walk answering in the loaded walk's words** (a getter alone `ReadOnly`, as `Widget.Member` says of a loaded class, a getter and a setter one `Property` with no signature, a static accessor a `Static`, and a signature's count by `Function.length`'s rule), a `.form` of another class ignored, a broken one not a refusal, and five refusals naming what was refused) --  -- `Widget.Members` over `Timer`, a class in rad.js the three widget verbs say *not a widget class* about, both of its statics and an instance method, and over `File` as a global object through the same call, with the two refusals named -- **and the popup agreeing with the runtime** — `completion` asks the popup for the same members the runtime describes, over every widget class and the test project's own library, so a name that exists and is not offered is red --  (a `static`, a getter, a setter and a plain method told apart -- one of which was an assertion that *recorded* the limitation as the expected answer -- and the parameter list with the names, the brackets and the rest) -- **the parser reporting a class's base class** (`Super` on a symbol: a class that extends one, a chain, one that extends nothing, an `extends` that is a call reporting *none* rather than the callee's name, a method carrying none, and a class that breaks in its own body still carrying the supertype it read before the break) -- **and `Application.Globals()`**, the runtime's own, the builtins, each once, and none of the hatches the language closed -- then every other class query against the same answer its instance gives — properties, methods, events, prose and options — with an abstract class answering, a project's `Stepper` resolved by its qualified name and answering differently from the root one, `Member` telling a property from a method from a read-only name, and a name that is no class refused) and **the parameters a member declares beside itself** (`Signatures`: a method's comment, an event's, an override answering its own where the ancestor answers another, a project class's `static Signatures` inherited by its subclass, and `null` for a name that declares nothing), **the two questions of `lib/dialog`** (`Dialog`: a yes/no and a one-field prompt, **which is the one test here that shows windows of its own and closes every one** -- a callback that runs on accepting and on nothing else, an empty field that answers nothing and leaves the window up, the checkbox's state as the callback's second argument, the window growing by exactly the 34 pixels the checkbox takes, and the **split that is the design**: nothing in the yes/no is `Default` and its cancel button holds the focus so Enter cannot destroy anything, while the prompt's OK is `Default` and its field is `ActivatesDefault` -- put `Default` on the destructive button and the test goes red), the CSS node of every control, a library's native half (`Plugin`: a real shared object built by CMake from `tests/plugins/testplug.c` and loaded through `uses`, every verb of the callback table driven through it -- a global installed, text, numbers, objects, arrays and an error JavaScript catches, **a JavaScript function the plugin calls back** -- with its error reaching the caller and a non-function refused -- the declared arity padding a missing argument with `undefined`, the library's `.js` running after the `.so`, `cleanup` at teardown, and the loader's two refusals: a plugin claiming another ABI and a shared object with no entry point, each stopping the program and naming the file -- plus `testplug-abi1`, the same source compiled against the **frozen version-1 header** in `tests/plugins/abi1/`, which is what catches a field reordered in the host table without the number moving), the clipboard both ways round, in both currencies (`Clipboard`: a copy comes back; an image goes on as `Bytes` and reads back as a 120x80 `Picture`; text where there is an image is `""` and an image where there is text is `null`; and what it refuses — a string, no bytes, bytes that are not an image, and a paste with no callback), a `DrawingArea` rendered without a screen (`Save` into a PNG, and `Dump` asserted call by call; `Print` to a PDF with no dialog, the range and the copies answered back, the refusals, and no half-written file when a page throws — the dialog itself cannot be clicked by a test and is checked by hand), XML documents (`XmlFiles`: `Available` first, since libxml2 is optional; parsing, entities, attributes — **and the namespaced ones**, which is how `xml:lang` is spelled: `SetAttrNS`/`AttrNS`/`RemoveAttrNS` round-tripping through the writer, `Attr("lang")` answering `null` for `xml:lang` because an unprefixed name means no namespace, `AttributeNames` still listing the local name, and an undeclared namespace refused by URI —, the namespace resolved, `Find`/`FindAll`/`Children` in file order, building and the copy-in-another-tree rule, a removed node refusing to answer rather than reading freed memory, the orphan list kept by the node and not by the wrapper (a node removed through two wrappers, a child added back after a `Text` assignment, a detached root moved under its own orphan — each a double free at teardown that only `tests/asan.sh` reports), `SetNamespace` twice and a clashing declaration refused in words, the canonical shape with its declaration and its kept comment and its escaped ampersand, the error naming line and file — and a worker parsing one, asserted in `testTask`), and a record over it (`XmlRecord`: `Field.DateTime` with a zone kept as written, and a range refused beside one rather than ordered wrongly; `static Xml`, `attribute`, `in`/`element` and the three verbs — `ToXml(true)` writes every field where `ToXml()` leaves the defaults out; `LoadXml` reads a field by its `as`/`Naming` spelling and not by its property name, is lenient, and says what it did not model with the path in each sentence — an unknown element or attribute, and also child markup, an attribute or a repetition inside a scalar, which are three things it is not taking — checks the root and the namespace **list**, and leaves a value the setter refuses at its start; `SaveXml` in place — a comment, an unknown element, an unknown attribute and an unknown child all untouched while the record's own edits land, a list reconciled by `key` with one item removed and one added, **a key at its default matched and kept** (`UID 0` beside an unmodelled child: the element is not replaced, the key is written, and a non-key default of the same element is still removed, while `ToXml()` writes a default key too), a new item of a list with no `in` placed after the last one of its name, or where the declaration puts it, rather than at the end of the record's element, and an emptied list taking its wrapper with it — plus a round trip through `File.SaveXml`/`File.LoadXml`), **a keyed digest, entropy and gzip** (`Hash`/`Random`/`Gzip`: `Hmac` held to RFC 4231 cases 1, 2 and 6 -- the last a key longer than the block -- and RFC 2202, never to itself; `Verify` accepting hex in either case and `Bytes`, and answering `false` rather than throwing for a forgery; `Random.Int` asserted by bounds and never by distribution; `Gzip` checked against bytes the system's `gzip` made and the system's `gzip -dc` reading what `CompressFile` wrote, with **concatenated members read to the end, a truncated stream and trailing bytes refused, and the output ceiling** -- the first of those goes red with the 6-of-12-bytes answer GIO gives by default -- and no destination or temporary left behind by any refused file verb; the worker step in `testTask` asserts a `Task` has all three), **a zip read, and refused** (`Zip`: archives from the real tools -- `zip` deflated, stored and written to a pipe so every entry has a **data descriptor**, which a third of a real desktop's documents do -- and an `.xlsx` from `soffice`; and the hostile ones built by hand with the CRC and the deflate taken from `Gzip.Compress`, so the reader is not checked against a writer that shares its mistakes and `unzip -t` accepts what the builder makes. Every name that leaves its folder refuses **the whole archive before a byte is written**, a wrong checksum is never answered, a stream that inflates past the directory's size is stopped, and a refusal leaves the other entries readable. Three defects were put back and each went red -- no CRC check, no name check, no cap on the inflater -- and with the name check out the hostile files *were* written outside the destination, which is why the test aims at a scratch directory. A worker opens and reads one in `testTask`), **what `Xml` writes it can read** (`XmlWrite`: a NUL, a control character, U+FFFE and half a surrogate pair refused by `Text`, `SetAttr`, `SetAttrNS` and a namespace URI, naming the character and where it is, with the text that was there kept; everything XML can carry written and read back as it was; `DeclareNamespace` binding `r:` once, where it was asked, with `r:id` read back in its namespace and a rebinding refused; a child added under a default namespace in it, down a subtree built apart, while one with its own keeps it; and no declaration repeated on the children of a detached tree. Each of the three fixes was put back and went red), **a zip written, and held to tools that are not ours** (`ZipWrite`: `unzip -t` checks every CRC and Python's `zipfile` reads it as a second implementation of the format, while this runtime's reader gives it back byte for byte -- streamed entries with their data descriptors, stored and deflated, a folder, an empty entry, an accented name flagged UTF-8, a `Modified` date; nothing at the path until `Finish()`, an existing file untouched until then, an abort leaving nothing beside it; the names `ExtractAll` refuses refused by `Add` too; and 65,534 entries written and read back, the one after refused. Three defects put back went red: names unchecked, a streamed entry not flagged as having a descriptor, an abort leaving its temporary), **`examples/clients/Excel.js` held to a spreadsheet program** (`ExampleExcel`: `soffice` reads `&`, `<`, a postal code that stays text, quotes, kept spaces, a dropped control character, a newline in a cell, leap days and money; the money *format* is asserted in its HTML export, since its CSV writes the number as it is; and the date serials are read out of the sheet's XML, because a date written as text passes every reader that only shows values -- which is how that defect went unseen until it was put back), **`examples/clients` exporting its own database** (`ExampleClientsExport`: the example run as a child with a configuration directory of its own, exporting and quitting with its window hidden, and its workbook compared through `soffice` with the database it read), **`examples/sheets`' reader against a workbook built to be hard** (`ExampleSheets`: sheets whose order does not match their file names, found through the relationships, absolute target and all; a 1904 epoch; a format that mentions `d` inside quotes, which is not a date; rows and cells that are simply absent; rich text with a phonetic reading beside it; and what it says for a zip that is no spreadsheet), **`examples/webhook` run as a child** (`ExampleWebhook`: a console project that listens on an ephemeral loopback port and sends itself six deliveries, exiting 0 only if each was answered as a receiver must -- take `Hash.Verify` out of its receiver and two come back 200 and the status is 1, which is what makes an example worth running; `examples/backup` is a window that never ends by itself and is a by-hand check, done on `xfwm4` with a second window activated mid-run), **a desktop notification, watched on a bus of its own** (`Notification`: the refusals asserted in the process, and the sending in a child under `dbus-run-session` with a configuration that names **no service directory** -- the first version used the default one and activated the system's real portal, `xfconfd` and `xfce4-notifyd` on the private bus -- observed with `dbus-monitor`, which sees the `Notify` call whether or not anyone answers it: five calls, the summary, the body, the `desktop-entry` of the project's id, an icon and the urgency byte; skipped where `dbus-run-session` is missing. **Nothing here may be sent from the suite's own process**, which inherits the real session bus), `File`/`Directory`/`Exec` (including a line appended without reading the file back, and `Logger.Target` set to a path), **the application's own identity** (`ApplicationId`: a child project with an `id` answers it through `Application.Id`, one without answers `""`, and one whose id is not an application id **stops the program** naming it — which is the half a window's class depends on, and the reason the rule is not left to the desktop to discover), **the user's own menu entries** (`Desktop`: an entry installed into a scratch `XDG_DATA_HOME`, read back and removed — **and `Write`, the same entry at a path the caller names, making the directory**, which is the half a packaging step uses, since the entry a package installs is not one this user's menu has; every refusal the runtime makes — an id that could be a path, a group that is not a `[Desktop Entry]`, an application with no `Exec`, a value that is not text; and then the one thing a file comparison cannot say, which is that the desktop's own reader understands it — `gio launch` runs the entry against a script that dumps its arguments, and a space, a percent, a double quote, a dollar, a backslash and an accent all come back exactly as they went in), an HTTP client against servers of its own on 127.0.0.1 (`HttpWait`: the blocking spelling, the verbs, a built upload, the stub without libsoup; `Http`: the callbacks, every verb echoed, a multipart framed and reposted, Basic auth, `Accept-Language`, no proxy, a jar that sends back, a proxy proved by transit, tuned pools, redirect, cancel and guard, and two requests in flight with one of them stopped — each callback handed its own handle, which is what lets a form drop the answer to a request it replaced), an answer read **as it arrives** (`HttpStream`, against a server that dribbles a line every fifth of a second: the first line asserted under half a second **and** the last one more than half a second after it, since without the second half a server that answered all at once would pass; the blank line that separates two SSE events arriving as `""`; a CRLF feed with no carriage return left on it; an error page that comes back whole with the line callback never called; a stream stopped from **inside** its own line callback; a guard that cuts one with what already arrived kept; and a streamed `POST`, which is how a completions endpoint talks) a handler that replaces itself mid-request and reads a captured variable afterwards, which was a use-after-free under ASan (`HttpServerSwap`), and a handler that answers and then stops its own server, which used to cut the answer (`HttpServerStop`), and serving over the same transport (`HttpServer`, dogfooded through the client: ephemeral port, echo, `404`, silence is `500`, `Stop` true then false; `Allow`, `Auth`, uploads parsed back, and `Tls` probed over real HTTPS — **the three HTTP tests need `python3` for the servers the client is aimed at, and the TLS step also needs `openssl`, which makes its own throwaway certificate into a temporary directory rather than keeping one in the tree; each is skipped, not failed, where the tool is missing**) |
-| `tests/report` | `lib/report`: pagination, the group ladder, the totals, the masthead, the bands that grow, the PDF, printing it with no dialog, `Page` and a paper change pulling the page back both raising no `Page` (a setter must not raise an event), a band taller than the page warned about once through `Logger`, and the five regressions the library shipped once, and a margin side that is not a finite number refused; `Min`/`Max` over numeric text, mixed kinds and names, and a `Decimal` group key (`testExtremes`). **It also holds `lib/charts`' own regressions** (`testCharts`, which is why the project `uses` both): gaps in a line and an area drawn as gaps rather than throwing, `YMin`/`YMax` refusing a non-number, a range wider than a double, a stacked `Line` turned `Bar`, a pie with a zero keeping its indices, a decimated stack's second band on the first, a wheel over the whole series not consumed, a lone slot centred, and the hover on a stacked `Area` finding the band under the pointer and marking the top of it — each seen red against the library before the fix |
+| `tests/widgets` | Containers, `Arrangement`, `HAlign`/`VAlign`, boxes and splits, a `Scroller` that **fills the room it is given and scrolls when it cannot** (`FillScroll`: the default `Fixed` slot leaving its content at its own size, and the same declarations arranged handing it the view's width and height, and then scrolling once the content asks for more than there is — which is the pair a missing container was reported for, and three of its assertions go red with the `Arrangement` taken away), `Notebook`, `RowList`, `TreeView`, both editors and the source one's search (including the offset/index crossing: `Offset`/`OffsetAt` in characters against `LineOf`, which converts a search's UTF-16 index exactly with the separator model GTK draws, and the same pair on `Text`), radio grouping, the value controls (`Slider`, `ProgressBar`, `DatePicker`, `Calendar` and its marks, `ToggleButton`, `Switch`), multiple selection, menu items that hold a state, drag and drop (the surface, since there is no synthetic pointer — the five feedback events installing, dispatching with the point, and a handler answering `false` as what a refusal looks like — plus the one thing *placing* a drop rests on, which is that a hidden child measures 0x0 at the origin rather than keeping its last rectangle), icons, `PropertyOptions`, a handler installed on the control itself (`On`: it runs, it replaces rather than accumulating, `null` removes it, the answer comes back, `this` is undefined, an event the class does not raise is refused, a second handler for one event refused at both doors that can make the pair -- `On` over a name and a `Name` over an `On` -- and a component built with `new` reporting to whoever holds it, which is the half the naming convention cannot reach), removing a child from every container and refilling it, **including that `Remove()` detaches on the six controls that used to answer to their own `Remove(index)`** — `RemoveRow`/`RemovePage`/`RemoveNode` now (`Removal`), a row's own application key (`Key`/`KeyAt`, `Add(text, key)`, and the four doors that keep a `ComboBox`'s keys in step with its model), renaming one in place (`SetText`), the double click from code (`Activate`) and bringing a row into view (`Reveal`, measured on a `RowList`, whose rows are widgets a `Bounds()` can be asked of; **an editable cell's own gesture is a pointer one and is on the by-hand list**, while `TableView`'s test holds the declaration and `CellEdit`'s veto — and `TableHeaderMenu` holds the heading's the same way: `HeaderMenu` as declared, its items bound, and `HeaderClick(column, button, ctrl, shift)` arriving with all of it, while the heading's own click is a pointer one), **the three numbers a table drawn beside something else has to say** (`TableGeometry`: `RowHeight` and `HeaderHeight` read out of what GTK publishes, held to the arithmetic that says they are the real ones -- the rows' extent is the count of them times the height of one, to the pixel -- plus a tree whose `Count` is every node at every level and whose row is still that same row with a branch folded away, `ScrollY` set from code and clamped at both ends, one move being one event with both axes, a table with no rows keeping its heading -- which is the assertion that had to be given a column, because a `ColumnView` with no columns has no heading row at all -- and a `HeaderMinHeight` floor reaching the heading it asks for while the rows stay the theme's), `Add` on a control that is already somewhere moving it rather than attaching it twice, and a container put inside what it contains refused rather than hanging (`AddMoves`), a container that keeps a proportion (`Aspect`: the ratio written four ways and refused three, one child and a second refused, and the two numbers that make it usable -- its minimum is its child's, and the child is the biggest rectangle of that shape that fits, centred, reshaped when the ratio changes while it runs), a surface that floats over a control (`Popover`: the open/close round trip with the two events it raises, `Visible` read-only and refused as a design property and never serialised, one child with a second refused, the four sides offered and a fifth refused by name, `Show()` and a popover in no container refusing, `Clear`/`Remove` on the content, and that a closed popover is not where the Tab walk stops -- `FocusNext()` answered `false` on a panel full of controls while GTK went on naming it), moving a child in every container that has an order and what an index means in each (`Reorder`: the same four moves asserted on a box, a `Grid`, a `Flow`, a `RowList` and an `Overlay`; `Placement` per class; a stack's base layer, which is `Children[0]` and the one that fills, through `Reorder`, `Raise`/`Lower` and the base being deleted; and a `RowList` row reordered **with the selection on it**, which has to survive the round trip through GTK's own remove and raise no event), what every numeric setter refuses (`NumericSetters`: a value past an integer, a `Columns.Width` that is a word, and the two named properties), a missing argument refusing with a sentence rather than an empty exception (`MissingArgs`: the fifteen members that returned `JS_EXCEPTION` with nothing set, and the painter's non-finite coordinates, which are refused by name), a path or `Save` text that is not a string refused instead of converted (`StrictArgs`, which also covers an `Exec` environment value and an HTTP header whose conversion fails), the serialiser round trip, a command several places point at (`Action`: the shared `Enabled`, and the four things a bound control refuses), `Record`/`Field` and records inside records (`Nested`: a list of them, a shape that contains itself, and a cycle refused rather than hung on), a record over a sqlite table (`Database`: the driver, `Table`, and the four ways a shape can fail to fit a table — **120 assertions with sqlite and one without**, since it is an optional build dependency and the claim there is that it says which package is missing), moving pictures and sound (`Media`: a `Video` played to its end and replayed, seekable once known, its frame measured and saved as a PNG, `Pause` holding a position, a node with declared properties round-tripping back to the same file, `Loop` still going past one length, `Buffering` reading `100` on a local clip that never waits for data (below 100 needs a server throttled under the bitrate, which is a measurement by hand and not a test), a missing file and an unreachable RTSP camera answering `Error` with a message that names the clip and a `kind` a form can branch on, an `AudioPlayer` cue played and looped — **and the properties still answering without GStreamer, where only the verbs refuse**, since the designer and the serialiser read every value of a control and must not depend on an optional build dependency. **The clips are generated with `gst-launch-1.0` into a temporary directory rather than committed**, the TLS certificate's bargain; where there is no `gst-launch` the parts that need a file are skipped, and where GStreamer has its base plugins but not the GTK4 sink — a CI runner, say — the video half skips and the audio half runs), `TextProperties`/`Locale`/`Fill` and design values (`LocaleRead`: a catalogue read as data -- the header as entry zero, a fuzzy entry kept flag and all, an untranslated one, a plural with its second msgid and every form, a context that is its own entry, comments as written, the `#~` tail as raw lines with a null msgid -- **and written back by `Locale.Write`**: *nothing lost* and *writing twice changes nothing*, the two properties the pair promises, plus the refusals a writer owes -- a path, an entry, a `msgid` or a form that is not text, and the whole text built before the file is touched so a refusal leaves the catalogue alone), the first real rectangle (`Allocated`: the `On` half and the named half, once each, the box against `Bounds()`, and a control on a hidden page hearing it when the page is shown), the curated language (`CuratedLanguage`: the removed names absent, `RegExp` among them and `RegExp.prototype.constructor` with it -- so a literal cannot hand the constructor back -- and `Regex`'s `Unicode` flag doing what `\p{L}` and an emoji need; `CheckSource`'s line and column, which no `Error` setting can move; and **`Application.Symbols`**, the classes, methods and top-level functions with their lines -- a nested function not reported, a comment and a string producing nothing, a getter and a setter as two, a static accessor as `StaticGetter`/`StaticSetter`, **every member's parameter list its own whatever its body holds** -- an arrow in the body, a function in a getter, an arrow in a default value, two top-level functions in a row, which is the shared buffer that reported `QrCode.Encode(value, n)` --, a namespaced class expression named by its own name and an anonymous one by the assignment, and source that does not compile answering what the parser reached), `Locale.Compare` and `Locale.Matches`, `Day`, `Stopwatch`, `Exec` and its `Stop` (including a `Control` line that arrives two seconds after the child has ended -- dropped, where it used to complete into a freed job and crash CI, and two seconds because at a third of a second the assertion was a bet on how long `Form_Open` still had to run under a sanitizer; stdin written to a filter and closed, which is what makes `sort` answer -- `Exec.Wait`'s `Input` and the handle's `CloseInput`; 300 KB written into a `cat` that echoes it, which used to hang the program; `Timeout` and `Stop()` reaching a grandchild that holds the output after its leader exited; a child that quits with `Printer.Send`'s dialog still open and ends with 0 rather than an abort -- and that **a NUL does not end its output** -- `Exec.Wait` was built on a call that hands back a C string, so `git status -z` read one record and lost the rest), **a program run under the debugger** (`testDebugger`: `bintana --debug` through `Exec`'s `Control` and `Write` -- a breakpoint armed, the program stopped on that line, the stack naming the frame and its caller, an argument read by name out of `vardefs`, `this` among them because the vendor patch gave the frame a slot for it, and a `let` before its declaration correctly absent. It is also what guards that patch: without the hook in the interpreter nothing ever stops and the build is fine), **and what a stopped program can be asked** (`testDebuggerAsks`: a conditional breakpoint that stops on the one turn its test holds, a `const` of the stopped frame and a `let` of the caller's read by name -- which a direct eval cannot reach and is why the runtime compiles the expression as a function of the frame's own names -- an expression that throws answering its message instead of failing, a value written back reaching the program's own arithmetic, and a stop on the line that threw with the frame that built the failure still alive), a `File.Watch` that stops itself, a form shown narrower than it was drawn, **a shown form the runtime holds** (`FormKeepalive`: one closed and one left open with nothing in JavaScript pointing at either — the two roads the drop and the teardown sweep take, since the collection itself is not forceable from here), the `Grid`, what this build can run and what it merely *has* (`Available`: an ordinary control, an abstract class, a component of the project, a name that is no class at all — and `Terminal` either way, **with a branch for each**: with VTE the pty, the pattern and the scrollback; without it the state still answering, a `.form`'s `LinkPattern` still round-tripping, and `Run`/`Stop`/`Kill` refusing by name, since a build with no pty must still be able to draw and save a form that has a `Terminal` in it — and `Video`, whose answer is **asked of the machine** (GStreamer's registry, and the GTK4 sink in it): the class and the instance are asserted to agree, and the palette phase in `tests/ide` is what holds the two directions of `Available` against the buttons), **and which names the completed one offers** (`completion`: a bare name after a space, after an `=` and inside a call's arguments -- **four ways, because one of them is the test's own invention and the suite was green on the broken one** -- plus `Timer.`, `Printer.`, `File.`, `Confirm.`, a control's members from its `.form`, a method being written, and **a library class offered only when the project declares that library in `uses`, **and the members of one it does** -- an accessor, a static and a name narrowed by the word being typed, all read out of the parser because the IDE never runs that library, with a lower-case member asserted *absent* because the runtime verb hides it and the two must not disagree -- four assertions that fail on a runtime-only answer**: the one it does names is offered and four from the five it does not are not, which is the assertion that fails on a walk of every library installed) -- **and which names the completed one offers** (`completion`: a bare name after a space, after an `=` and inside a call's arguments -- **four ways, because one of them was the test's own invention and the suite was green on the broken one** -- plus `Timer.`, `Printer.`, `File.`, `Confirm.`, a control's members from its `.form`, a method being written, **what the popup says after the name -- the names where a signature was declared and `(...)` where none ever was, with no member of either list annotated with an invented name** -- and **a library class offered only when the project declares that library in `uses`**: the one it does name is offered and four from the five it does not are not, which is the assertion that fails on a walk of every library installed) -- **how a class is asked what it has without building a control** (`ClassIntrospection`: **a class the process never loaded** (`ClassIntrospection`: `Widget.Members` with `Sources` -- a chain declared entirely among the sources, a base the sources do not declare ending the walk in the class table, a class shadowing a runtime global, an `extends` that is a call, a **cycle in the chain that terminates instead of hanging**, a source entry that is not a string, **a form's children -- for a class only declared and for one this process has loaded, which is the same bug on two roads** -- a lower-case child asserted absent, **the source walk answering in the loaded walk's words** (a getter alone `ReadOnly`, as `Widget.Member` says of a loaded class, a getter and a setter one `Property` with no signature, a static accessor a `Static`, and a signature's count by `Function.length`'s rule), a `.form` of another class ignored, a broken one not a refusal, and five refusals naming what was refused) --  -- `Widget.Members` over `Timer`, a class in rad.js the three widget verbs say *not a widget class* about, both of its statics and an instance method, and over `File` as a global object through the same call, with the two refusals named -- **and the popup agreeing with the runtime** — `completion` asks the popup for the same members the runtime describes, over every widget class and the test project's own library, so a name that exists and is not offered is red --  (a `static`, a getter, a setter and a plain method told apart -- one of which was an assertion that *recorded* the limitation as the expected answer -- and the parameter list with the names, the brackets and the rest) -- **the parser reporting a class's base class** (`Super` on a symbol: a class that extends one, a chain, one that extends nothing, an `extends` that is a call reporting *none* rather than the callee's name, a method carrying none, and a class that breaks in its own body still carrying the supertype it read before the break) -- **and `Application.Globals()`**, the runtime's own, the builtins, each once, and none of the hatches the language closed -- then every other class query against the same answer its instance gives — properties, methods, events, prose and options — with an abstract class answering, a project's `Stepper` resolved by its qualified name and answering differently from the root one, `Member` telling a property from a method from a read-only name, and a name that is no class refused) and **the parameters a member declares beside itself** (`Signatures`: a method's comment, an event's, an override answering its own where the ancestor answers another, a project class's `static Signatures` inherited by its subclass, and `null` for a name that declares nothing), **the two questions of `lib/dialog`** (`Dialog`: a yes/no and a one-field prompt, **which is the one test here that shows windows of its own and closes every one** -- a callback that runs on accepting and on nothing else, an empty field that answers nothing and leaves the window up, the checkbox's state as the callback's second argument, the window growing by exactly the 34 pixels the checkbox takes, and the **split that is the design**: nothing in the yes/no is `Default` and its cancel button holds the focus so Enter cannot destroy anything, while the prompt's OK is `Default` and its field is `ActivatesDefault` -- put `Default` on the destructive button and the test goes red), the CSS node of every control, a library's native half (`Plugin`: a real shared object built by CMake from `tests/plugins/testplug.c` and loaded through `uses`, every verb of the callback table driven through it -- a global installed, text, numbers, objects, arrays and an error JavaScript catches, **a JavaScript function the plugin calls back** -- with its error reaching the caller and a non-function refused -- the declared arity padding a missing argument with `undefined`, the library's `.js` running after the `.so`, `cleanup` at teardown, and the loader's two refusals: a plugin claiming another ABI and a shared object with no entry point, each stopping the program and naming the file -- plus `testplug-abi1`, the same source compiled against the **frozen version-1 header** in `tests/plugins/abi1/`, which is what catches a field reordered in the host table without the number moving), the clipboard both ways round, in both currencies (`Clipboard`: a copy comes back; an image goes on as `Bytes` and reads back as a 120x80 `Picture`; text where there is an image is `""` and an image where there is text is `null`; and what it refuses — a string, no bytes, bytes that are not an image, and a paste with no callback), a `DrawingArea` rendered without a screen (`Save` into a PNG, and `Dump` asserted call by call; `Print` to a PDF with no dialog, the range and the copies answered back, the refusals, and no half-written file when a page throws — the dialog itself cannot be clicked by a test and is checked by hand), XML documents (`XmlFiles`: `Available` first, since libxml2 is optional; parsing, entities, attributes — **and the namespaced ones**, which is how `xml:lang` is spelled: `SetAttrNS`/`AttrNS`/`RemoveAttrNS` round-tripping through the writer, `Attr("lang")` answering `null` for `xml:lang` because an unprefixed name means no namespace, `AttributeNames` still listing the local name, and an undeclared namespace refused by URI —, the namespace resolved, `Find`/`FindAll`/`Children` in file order, building and the copy-in-another-tree rule, a removed node refusing to answer rather than reading freed memory, the orphan list kept by the node and not by the wrapper (a node removed through two wrappers, a child added back after a `Text` assignment, a detached root moved under its own orphan — each a double free at teardown that only `tests/asan.sh` reports), `SetNamespace` twice and a clashing declaration refused in words, the canonical shape with its declaration and its kept comment and its escaped ampersand, the error naming line and file, **a surplus argument refused by `Remove` and `Add`** — `parent.Remove(child)` took the parent out and `Add(name, text)` dropped the value; both name the call that was meant and leave the document intact — **and an element holding only a comment that is not an empty one** (`IsEmpty` counts every kind of child, an attribute does not make it non-empty, `Comments` is the text `Text` cannot carry and is direct children only, and a comment survives the writer — and a worker parsing one, asserted in `testTask`)), and a record over it (`XmlRecord`: `Field.DateTime` with a zone kept as written, and a range refused beside one rather than ordered wrongly; `static Xml`, `attribute`, `in`/`element` and the three verbs — `ToXml(true)` writes every field where `ToXml()` leaves the defaults out; `LoadXml` reads a field by its `as`/`Naming` spelling and not by its property name, is lenient, and says what it did not model with the path in each sentence — an unknown element or attribute, and also child markup, an attribute or a repetition inside a scalar, which are three things it is not taking — checks the root and the namespace **list**, and leaves a value the setter refuses at its start; `SaveXml` in place — a comment, an unknown element, an unknown attribute and an unknown child all untouched while the record's own edits land, a list reconciled by `key` with one item removed and one added, **a key at its default matched and kept** (`UID 0` beside an unmodelled child: the element is not replaced, the key is written, and a non-key default of the same element is still removed, while `ToXml()` writes a default key too), a new item of a list with no `in` placed after the last one of its name, or where the declaration puts it, rather than at the end of the record's element, and an emptied list taking its wrapper with it — plus a round trip through `File.SaveXml`/`File.LoadXml`, **and a 2000-task save under a seconds-wide bound** — the square this used to be: `ISSUE-xml-list-cost` was a 151-second save at 8000 tasks and the old code took 6.5 s at 2000, while the assertion also holds that an unchanged document comes out as it was, which is the half that was growing the tree's orphan list), **a document checked before it is read** (`XmlSchema`: an XSD compiled once from its text, a document or an element in one, and validating as many documents as arrive — a valid one answers an empty array, a bad value names the line and the element with `Column` always `0` because libxml2 reports no column for a schema error, a missing required element names what it expected, and a root in another namespace is one problem; **a schema's default attribute is asserted *not* to appear in the tree**, since libxml2 can write defaults into the instance and the next `SaveXml` would then write them to the file; a schema compiles from a document and from an element in one, and a document and an element in one both validate; and the refusals: what is not an `<xs:schema>`, a detached element as the source or as the thing to check, and a schema that includes or imports another document, because compiling it would fetch one — while an import with no location compiles. A worker compiles and validates one in `testTask`), **a keyed digest, entropy and gzip** (`Hash`/`Random`/`Gzip`: `Hmac` held to RFC 4231 cases 1, 2 and 6 -- the last a key longer than the block -- and RFC 2202, never to itself; `Verify` accepting hex in either case and `Bytes`, and answering `false` rather than throwing for a forgery; `Random.Int` asserted by bounds and never by distribution; `Gzip` checked against bytes the system's `gzip` made and the system's `gzip -dc` reading what `CompressFile` wrote, with **concatenated members read to the end, a truncated stream and trailing bytes refused, and the output ceiling** -- the first of those goes red with the 6-of-12-bytes answer GIO gives by default -- and no destination or temporary left behind by any refused file verb; the worker step in `testTask` asserts a `Task` has all three), **a zip read, and refused** (`Zip`: archives from the real tools -- `zip` deflated, stored and written to a pipe so every entry has a **data descriptor**, which a third of a real desktop's documents do -- and an `.xlsx` from `soffice`; and the hostile ones built by hand with the CRC and the deflate taken from `Gzip.Compress`, so the reader is not checked against a writer that shares its mistakes and `unzip -t` accepts what the builder makes. Every name that leaves its folder refuses **the whole archive before a byte is written**, a wrong checksum is never answered, a stream that inflates past the directory's size is stopped, and a refusal leaves the other entries readable. Three defects were put back and each went red -- no CRC check, no name check, no cap on the inflater -- and with the name check out the hostile files *were* written outside the destination, which is why the test aims at a scratch directory. A worker opens and reads one in `testTask`), **what `Xml` writes it can read** (`XmlWrite`: a NUL, a control character, U+FFFE and half a surrogate pair refused by `Text`, `SetAttr`, `SetAttrNS` and a namespace URI, naming the character and where it is, with the text that was there kept; everything XML can carry written and read back as it was; `DeclareNamespace` binding `r:` once, where it was asked, with `r:id` read back in its namespace and a rebinding refused; a child added under a default namespace in it, down a subtree built apart, while one with its own keeps it; and no declaration repeated on the children of a detached tree. Each of the three fixes was put back and went red), **a zip written, and held to tools that are not ours** (`ZipWrite`: `unzip -t` checks every CRC and Python's `zipfile` reads it as a second implementation of the format, while this runtime's reader gives it back byte for byte -- streamed entries with their data descriptors, stored and deflated, a folder, an empty entry, an accented name flagged UTF-8, a `Modified` date; nothing at the path until `Finish()`, an existing file untouched until then, an abort leaving nothing beside it; the names `ExtractAll` refuses refused by `Add` too; and 65,534 entries written and read back, the one after refused. Three defects put back went red: names unchecked, a streamed entry not flagged as having a descriptor, an abort leaving its temporary), **`lib/xlsx` held to a spreadsheet program** (`ExampleExcel`: `soffice` reads `&`, `<`, a postal code that stays text, quotes, kept spaces, a dropped control character, a newline in a cell, leap days and money; the money *format* is asserted in its HTML export, since its CSV writes the number as it is; and the date serials are read out of the sheet's XML, because a date written as text passes every reader that only shows values -- which is how that defect went unseen until it was put back), **`examples/clients` exporting its own database** (`ExampleClientsExport`: the example run as a child with a configuration directory of its own, exporting and quitting with its window hidden, and its workbook compared through `soffice` with the database it read), **`examples/sheets`' reader against a workbook built to be hard** (`ExampleSheets`: sheets whose order does not match their file names, found through the relationships, absolute target and all; a 1904 epoch; a format that mentions `d` inside quotes, which is not a date; rows and cells that are simply absent; rich text with a phonetic reading beside it; and what it says for a zip that is no spreadsheet), **`examples/webhook` run as a child** (`ExampleWebhook`: a console project that listens on an ephemeral loopback port and sends itself six deliveries, exiting 0 only if each was answered as a receiver must -- take `Hash.Verify` out of its receiver and two come back 200 and the status is 1, which is what makes an example worth running; `examples/backup` is a window that never ends by itself and is a by-hand check, done on `xfwm4` with a second window activated mid-run), **a desktop notification, watched on a bus of its own** (`Notification`: the refusals asserted in the process, and the sending in a child under `dbus-run-session` with a configuration that names **no service directory** -- the first version used the default one and activated the system's real portal, `xfconfd` and `xfce4-notifyd` on the private bus -- observed with `dbus-monitor`, which sees the `Notify` call whether or not anyone answers it: five calls, the summary, the body, the `desktop-entry` of the project's id, an icon and the urgency byte; skipped where `dbus-run-session` is missing. **Nothing here may be sent from the suite's own process**, which inherits the real session bus), `File`/`Directory`/`Exec` (including a line appended without reading the file back, and `Logger.Target` set to a path), **the application's own identity** (`ApplicationId`: a child project with an `id` answers it through `Application.Id`, one without answers `""`, and one whose id is not an application id **stops the program** naming it — which is the half a window's class depends on, and the reason the rule is not left to the desktop to discover), **the user's own menu entries** (`Desktop`: an entry installed into a scratch `XDG_DATA_HOME`, read back and removed — **and `Write`, the same entry at a path the caller names, making the directory**, which is the half a packaging step uses, since the entry a package installs is not one this user's menu has; every refusal the runtime makes — an id that could be a path, a group that is not a `[Desktop Entry]`, an application with no `Exec`, a value that is not text; and then the one thing a file comparison cannot say, which is that the desktop's own reader understands it — `gio launch` runs the entry against a script that dumps its arguments, and a space, a percent, a double quote, a dollar, a backslash and an accent all come back exactly as they went in), an HTTP client against servers of its own on 127.0.0.1 (`HttpWait`: the blocking spelling, the verbs, a built upload, the stub without libsoup; `Http`: the callbacks, every verb echoed, a multipart framed and reposted, Basic auth, `Accept-Language`, no proxy, a jar that sends back, a proxy proved by transit, tuned pools, redirect, cancel and guard, and two requests in flight with one of them stopped — each callback handed its own handle, which is what lets a form drop the answer to a request it replaced), an answer read **as it arrives** (`HttpStream`, against a server that dribbles a line every fifth of a second: the first line asserted under half a second **and** the last one more than half a second after it, since without the second half a server that answered all at once would pass; the blank line that separates two SSE events arriving as `""`; a CRLF feed with no carriage return left on it; an error page that comes back whole with the line callback never called; a stream stopped from **inside** its own line callback; a guard that cuts one with what already arrived kept; and a streamed `POST`, which is how a completions endpoint talks) a handler that replaces itself mid-request and reads a captured variable afterwards, which was a use-after-free under ASan (`HttpServerSwap`), and a handler that answers and then stops its own server, which used to cut the answer (`HttpServerStop`), and serving over the same transport (`HttpServer`, dogfooded through the client: ephemeral port, echo, `404`, silence is `500`, `Stop` true then false; `Allow`, `Auth`, uploads parsed back, and `Tls` probed over real HTTPS — **the three HTTP tests need `python3` for the servers the client is aimed at, and the TLS step also needs `openssl`, which makes its own throwaway certificate into a temporary directory rather than keeping one in the tree; each is skipped, not failed, where the tool is missing**. **A client's own `Tls` is asserted over the wire**: the round trip and the four refusals of the assignment, then a handshake per case against the step's own https server — a bare client refused, `Ca` and `Cert` accepted, a `Ca` and a `Cert` that are not the server's refused — and against a `python3` https child that issues session tickets, which ours does not, a bare client refused **after** another client accepted the server: the one that says the trust is a second opinion and not a switch, red with resumption left on |
+| `tests/report` | `lib/report`: pagination, the group ladder, the totals, the masthead, the bands that grow, the PDF, printing it with no dialog, `Page` and a paper change pulling the page back both raising no `Page` (a setter must not raise an event), a band taller than the page warned about once through `Logger`, and the five regressions the library shipped once, and a margin side that is not a finite number refused; `Min`/`Max` over numeric text, mixed kinds and names, and a `Decimal` group key (`testExtremes`). **It also holds `lib/charts`' own regressions** (`testCharts`, which is why the project `uses` both): gaps in a line and an area drawn as gaps rather than throwing, `YMin`/`YMax` refusing a non-number, a range wider than a double, a stacked `Line` turned `Bar`, a pie with a zero keeping its indices, a decimated stack's second band on the first, a wheel over the whole series not consumed, a lone slot centred, and the hover on a stacked `Area` finding the band under the pointer and marking the top of it — each seen red against the library before the fix. **And both libraries without their control** (`testDocument`): a `ReportDocument` paginates as the control does, its `Paint` and a `ChartDocument`'s draw call for call what the controls export, and a real `main` project — no GTK, no display — writes a report with a logo and a chart, which `pdfinfo` and `pdftotext` read back for its page count, its paper and its words |
 | `tests/markdown` | `lib/markdown`: what the parser makes of each block, the markup a paragraph is drawn as, the pictures (including the one that is not there), scrolling and `ScrollTo` (an assignment to `Scroll` raising no event and a key raising one), anchors in any script and deduplicated (`setup`, `setup-1`), a delimiter row with the wrong cell count not making a table, an intraword `_` closing nothing, a tab indenting a nested item, the export at the width it was asked for, and a pagination that cuts between blocks and never through one. **The selection and the links are asserted on the words and on the frame**: what a drag covers, what a double click takes, that the highlight is painted behind the text and that an export carries none, that a selection survives the column changing under it — which is what it is a pair of offsets for — and, for a link, that a click follows it, that a click past the words follows nothing, that a drag is not a click, and that an anchor nobody claimed scrolls. It also loads `examples/markdown/Guide.md`, so the library's shop window is read by something Margins that leave no room on the sheet are refused by `SavePdf` rather than hanging it, and a side that is not a finite number by the setter. |
 | `tests/qr` | `lib/qr`: the encoder against numbers from outside this code — the Reed-Solomon codewords of the standard's annex I example (`01234567` at 1-M) and of the "HELLO WORLD" 1-Q every tutorial walks through, the fifteen-bit format strings and the eighteen-bit version strings of its tables, the data capacities of table 7, and the famous 40-L limits (2953 bytes, 7089 digits, 4296 alphanumerics) at the boundary and one past it — plus the function patterns where the standard puts them, `Bytes` encoding to the same symbol as the text, the refusals, and the SVG and block-character outputs. **The masks the penalty rules choose for six inputs are pinned**, each checked against Project Nayuki's reference, because the zigzag and the wrong cells still make a well-formed symbol that does not scan: a rewrite of section 7.8.3 goes red instead of changing every code in silence. The view is asserted off `Canvas.Dump()` after a synchronous `Save()`: whole pixels a module, centred, black on white because the theme did not get a say, and one fill for all the dark modules |
+| `tests/xlsx` | `lib/xlsx`: a workbook written with one sheet of every kind of cell -- text (a postal code that stays text, kept spaces, an escaped `&`/`<`, a control character dropped), number, money (a `Decimal` by its digits), date (the serial plus the style that names the date format, which is the only thing that tells a date from text that shows the same), bool and an empty value that is no cell at all -- read back out of the parts with `Zip` and `Xml`, plus the refusals (a sheet's name, a value that is not its kind, a row wider than its columns) and that a refused write leaves no file. The build without libxml2 is the other branch, where `Write` refuses naming the package. `unzip -t` is the second opinion when the machine has it; the program that really opens a workbook is `ExampleExcel`'s `soffice` |
 | `tests/ide` | The IDE itself, driven the way a user drives it — including **F1, the reference window and the tooltip** (`help`): which topic each of the three answers picks, that the runtime builds the page when the package is not installed, that the window lands on the member, that a link between two pages is followed, that Back goes back, and that a pointer resting on `File.Load` describes it and goes away — and **installing the project as a user application** (`apps`): the menu item, the dialog, the id a name slugs to, an entry that points at this executable and this project, a rename that moves the file instead of leaving two, and an uninstall that leaves nothing. The runner points `XDG_DATA_HOME` at a scratch directory, so the entry is not one anybody's menu will offer Three phases hold what the IDE writes back: `foreign` opens a Latin-1 `.js` and `.form` and drives every road that writes a tab -- save, save all, a source rewrite, a recovery snapshot and its restore, a reload -- asserting the bytes did not move (and that a UTF-8 file holding U+FFFD is an ordinary tab); `prefixes` renames `Btn` beside a `Btn_Ok` and back, so a handler is only ever its control's name plus one of its events; `background` renames a form and a class a form places while that tab is behind another, and saves it. The `git` phase also discards `data[1].json` beside `data1.json` (a path, not a glob) and an untracked folder, reads an `RM` record on both sides of the Changes window, and pushes a new branch with two remotes only after asking which; `recovery` holds an offer nobody answered through a tick and a door out; `forms` deletes on a filesystem with no trash (faked) only after a second question, and says rather than throws when that delete fails. |
 
 **A shipped library is held to its page the way the runtime is.** `tests/api.sh`
@@ -8299,8 +8848,8 @@ or a discarded project leaves behind.
 stale; the one above is here to be read.
 
 The saving is the point of it: `welcome files` is **105** assertions and
-`designer` **368**, against **2681** for the whole project — measured at 3.7 s,
-9.0 s and 346 s on the machine this was last run on, where what carries over to
+`designer` **390**, against **2814** for the whole project — measured at 3.8 s,
+9.2 s and 480 s on the machine this was last run on, where what carries over to
 another machine is the proportion and not the seconds. Iterating on an early
 phase stops being minutes a time.
 
@@ -8333,9 +8882,9 @@ own says so with `reportsItself`.
 
 ### tests/widgets selects
 
-`tests/widgets` is 162 tests listed in `TESTS`, and a filter there **selects** rather
-than running a prefix — `./tests/run.sh widgets record` is 140 assertions
-against 4723 in about thirteen. It can select because these tests are
+`tests/widgets` is 188 tests listed in `TESTS`, and a filter there **selects** rather
+than running a prefix — `./tests/run.sh widgets record` is 142 assertions
+against 4819 in about twenty. It can select because these tests are
 independent: each builds the controls it needs and deletes them again. The two that
 are not say so in the file:
 
@@ -8488,12 +9037,12 @@ what each of them can see:
 
 It parses rather than links, so it answers when the runtime does not build,
 which is the same bargain `tests/icons` and `tests/styles` make. The numbers
-`./tests/api.sh` prints as this is written: 13 class statics, 240 global verbs
-with their parameters named, 828 members and events saying what they are for,
-in C and in JavaScript, 6 members checked for shadowing a base one, 406 members
-held to `api.json`, 78 top-level names in `lib/` with no two libraries claiming
-one, all 36 globals the runtime installs accounted for, and 104 links over the
-30 pages that stayed. Every one of them has been stale at some point in this
+`./tests/api.sh` prints as this is written: 13 class statics, 285 global verbs
+with their parameters named, 918 members and events saying what they are for,
+in C and in JavaScript, 6 members checked for shadowing a base one, 411 members
+held to `api.json`, 88 top-level names in `lib/` with no two libraries claiming
+one, all 44 globals the runtime installs accounted for, and 118 links over the
+34 pages that stayed. Every one of them has been stale at some point in this
 repository.
 
 **A library's events are read from the code that raises them**, which is the
@@ -9502,7 +10051,6 @@ needed and what it did instead.
 | No editable / autocompleting combo | [ISSUE-editable-combo](../issues/ISSUE-editable-combo.md) |
 | A control laid onto a page — `Print` sends what a `Draw` paints, so a form with real widgets on it still has no path to paper except drawing it by hand | [controls.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/controls.md#drawingarea) |
 | A `Fixed` container that does not stretch a `Fill` child when it itself grows — a reusable component that wants to fill its cell has to change its `Arrangement` | [ISSUE-fixed-fill-child](../issues/ISSUE-fixed-fill-child.md) |
-| No `Locale` inside a `Task`, so a worker cannot order names — the sort has to come back to the main thread, which is what the worker was for | [ISSUE-worker-locale-order](../issues/ISSUE-worker-locale-order.md) |
 | A `Popover` dropped on the design canvas cannot be seen, clicked or dropped into — the control tree is the only road to it, and its content goes in by editing the `.form` | [ISSUE-popover-designer](../issues/ISSUE-popover-designer.md) |
 | A control's `Menu`/`HeaderMenu` declared in a `.form` is invisible to the extractor — the labels are translated at runtime and never reach a catalogue, so the IDE's own four context menus are English under a Spanish one | [ISSUE-menu-label-extraction](../issues/ISSUE-menu-label-extraction.md) |
 

@@ -1190,6 +1190,11 @@ void bta_grid_reflow(GtkWidget *slot);
 void bta_locale_init(JSContext *ctx, JSValue global, const char *project_dir,
                     GPtrArray *libs);
 
+/* The worker's half: `Number`, `Date`, `Currency`, `Parse`, `DecimalPoint`,
+ * `Compare` and `Matches`, and not the catalogue -- see the note over it in
+ * bta_locale.c. No project directory and no `L`: it reads none of it. */
+void bta_locale_init_facts(JSContext *ctx, JSValue global);
+
 /* Decimal: exact base-10 arithmetic with the ordinary operators, which needs
  * the JS_SetArithHandler patch in vendor/quickjs. */
 void bta_decimal_init(JSContext *ctx, JSValue global);

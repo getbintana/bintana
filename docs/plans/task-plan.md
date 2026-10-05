@@ -113,7 +113,10 @@ Built the way the main context is — `bta_new_context`, the `init` functions,
   `Timer` (rad.js builds it on the captured `setTimeout`, so it is deleted
   *after* rad.js runs, not before), the asynchronous half of `Http`.
 - **Gone, because it is process state the main thread owns:** `Settings`,
-  and `Locale` — see below.
+  and the **catalogue half of `Locale`** (`Text`, `Plural`, `Context`,
+  `Current`, `Available`, `Read`, `Write`) — see below. The facts half
+  (`Compare`, `Matches`, `Number`, `Date`, `Currency`, `Parse`,
+  `DecimalPoint`) is there, because none of it reads `L`.
 - **There:** the language and `rad.js` entire, `print`, `Logger`, `Decimal`,
   `Bytes`, `Day`/`Time`, `Hash`, `Dictionary`, `Regex`, `Stopwatch`, `Record`,
   `Field`, `Table`, `Sqlite`, an `Application` that answers facts, and
@@ -124,11 +127,16 @@ Built the way the main context is — `bta_new_context`, the `init` functions,
 `bta_locale.c` holds the catalogue in a `static struct` with a `GHashTable`.
 It is filled once by `bta_locale_init` during boot and read afterwards, so a
 worker could read it with no lock at all — provided nothing reloads it while
-the program runs. Phase 1 leaves `Locale` out of the worker rather than lean
-on that, because a worker computes and the prose is assembled where it is
-shown. **The day a language can be changed without restarting, that hash table
-is the runtime's first real mutex**, and it is named here so it is not
-discovered then.
+the program runs. Phase 1 left `Locale` out of the worker rather than lean on
+that, and that was **the whole global for a half's reason**: `Compare` and
+`Matches` are `g_utf8_collate` and a fold, `Number`/`Date`/`Currency`/`Parse`/
+`DecimalPoint` are `localeconv`, and none of them touches `L`. A worker got
+none of them and could not put two names in order — the work it was started
+for. `bta_locale_init_facts` installs that half (ISSUE-worker-locale-order,
+deleted as answered) and the catalogue half stays out, because a worker
+computes and the prose is assembled where it is shown. **The day a language
+can be changed without restarting, that hash table is the runtime's first real
+mutex**, and it is named here so it is not discovered then.
 
 ## Writing, and the lock that is not its condition
 

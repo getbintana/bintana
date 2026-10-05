@@ -15027,6 +15027,15 @@
           "Native": true
         },
         {
+          "Name": "Schema",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(source)",
+          "Returns": "XmlSchema",
+          "Doc": "compiles an XSD **once** -- from its text, a document or an element in one -- so a file can be checked as often as it arrives. A schema that includes or imports another document is refused, because compiling it would fetch a file or an URL from inside what is meant to be a check; `Validate` is the question and it never writes to the document",
+          "Native": true
+        },
+        {
           "Name": "Stringify",
           "Kind": "Method",
           "Params": 1,
@@ -15885,7 +15894,7 @@
           "Params": 1,
           "Signature": "(child)",
           "Returns": "XmlNode",
-          "Doc": "a node or an element name. An element with no namespace added under a default namespace **takes it** -- and so does what is under it with none -- because that is what the written text says; the tree used to answer `\"\"` for it while the text, read back, answered the URI",
+          "Doc": "a node or an element name. An element with no namespace added under a default namespace **takes it** -- and so does what is under it with none -- because that is what the written text says; the tree used to answer `\"\"` for it while the text, read back, answered the URI. A second argument is refused: the value goes on what it answers -- `parent.Add(Xml.Element(\"Name\")).Text = text`",
           "Native": true
         },
         {
@@ -15922,6 +15931,15 @@
           "Signature": "",
           "Returns": "XmlNode[]",
           "Doc": "its element children, in order",
+          "Native": true
+        },
+        {
+          "Name": "Comments",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string[]",
+          "Doc": "the text of the comments directly under this element, in order -- what `Text` cannot carry, so a change to one can be reported",
           "Native": true
         },
         {
@@ -15970,6 +15988,15 @@
           "Native": true
         },
         {
+          "Name": "IsEmpty",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "boolean",
+          "Doc": "whether the element has nothing inside at all: no element, no text, no comment, no processing instruction. Attributes do not count. **The one question `Children` and `Text` cannot answer together** -- an element holding only a comment reads as both empty on them",
+          "Native": true
+        },
+        {
           "Name": "Name",
           "Kind": "Property",
           "Params": -1,
@@ -16011,7 +16038,7 @@
           "Params": 0,
           "Signature": "()",
           "Returns": "",
-          "Doc": "takes the node out for good",
+          "Doc": "takes the node out for good. **An argument is refused** -- it is *this* node that goes, so `child.Remove()` and not `parent.Remove(child)`, which took the parent out",
           "Native": true
         },
         {
@@ -16066,6 +16093,20 @@
           "Signature": "",
           "Returns": "string",
           "Doc": "all the character data under an element; assigning replaces the children. **Text XML cannot carry is refused**, naming the character: a NUL, a control character other than tab, newline and return, U+FFFE/FFFF or half a surrogate pair -- written, each was a document `Xml.Parse` could not read back, and a NUL cut the text short in silence",
+          "Native": true
+        }
+      ]
+    },
+    {
+      "Name": "XmlSchema",
+      "Members": [
+        {
+          "Name": "Validate",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(source)",
+          "Returns": "{ Message, Line, Column }[]",
+          "Doc": "checks a document, or an element in one, against this schema. An empty array means valid; each problem carries the line it is on -- libxml2 reports the element and not a column, so `Column` is `0`. **Nothing is written into the document**, so a schema's default stays out of the tree and out of the next save",
           "Native": true
         }
       ]
