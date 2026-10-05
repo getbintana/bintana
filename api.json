@@ -17470,6 +17470,36 @@
           "Events": []
         }
       ]
+    },
+    {
+      "Name": "xlsx",
+      "Classes": [
+        {
+          "Name": "Xlsx",
+          "Parent": "",
+          "Members": [
+            {
+              "Name": "Available",
+              "Kind": "Static",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "whether this build can write a workbook: libxml2 is optional, and it is what the parts are written with",
+              "Native": false
+            },
+            {
+              "Name": "Write",
+              "Kind": "Static",
+              "Params": 2,
+              "Signature": "(path, sheets)",
+              "Returns": "",
+              "Doc": "writes `sheets` as an `.xlsx` at `path`; answers the number of sheets. Each sheet is `{ Name, Columns, Rows }`, a column's `Kind` being `text` (the default), `number`, `money`, `date` or `bool`. **Throws** naming the cell for a value that cannot be its kind, and naming the package when the build has no libxml2",
+              "Native": false
+            }
+          ],
+          "Events": []
+        }
+      ]
     }
   ]
 }

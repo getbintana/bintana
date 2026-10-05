@@ -1,0 +1,6 @@
+{
+  "name": "xlsx",
+  "startup": "XlsxTest",
+  "uses": ["xlsx"],
+  "sources": ["XlsxTest.js"]
+}

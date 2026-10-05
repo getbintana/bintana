@@ -1,0 +1,10 @@
+{
+  "format": "bintana-form/1",
+  "class": "XlsxTest",
+  "properties": {
+    "Text": "xlsx",
+    "Width": 320,
+    "Height": 200
+  },
+  "children": []
+}

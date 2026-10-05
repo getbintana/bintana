@@ -1944,8 +1944,8 @@ program remembered cannot be reopened.
 
 ## Tests
 
-Six Bintana projects are run by the suite — `ide`, `markdown`, `qr`, `report`,
-`smoke` and `widgets` — each printing `N passed, M failed` and quitting with a
+Seven Bintana projects are run by the suite — `ide`, `markdown`, `qr`, `report`,
+`smoke`, `widgets` and `xlsx` — each printing `N passed, M failed` and quitting with a
 non-zero status on failure. They are applications, not a harness — write
 assertions the way the suite already does. A project is any directory under
 `tests/` with a `project.json` that does not declare `main`, so adding one is
@@ -5404,7 +5404,8 @@ is the half `soffice` can check automatically. What bit, in the order it was fou
   serial from 61 on right and everything before it wrong by one. The reader says so in a
   comment and the test asserts 61, not 59.
 
-**The writer (stage 3) is `Zip.Create`, and `examples/clients` is its caller**: `Excel.js` is a
+**The writer (stage 3) is `lib/xlsx/Xlsx.js`** -- it was `examples/clients/Excel.js` until the
+application needed it and it became a library -- and `examples/clients` is its caller: it is a
 workbook's parts, an *Export* button writes what the list shows, and the suite holds the result to
 three programs that did not write it. What bit:
 
@@ -5431,15 +5432,15 @@ three programs that did not write it. What bit:
 - **A test that runs an example which keeps a database runs it in the developer's configuration**
   unless told otherwise. `examples/clients` writes `~/.config/bintana/Clients/clients.db`, so
   `ExampleClientsExport` gives the child `HOME` and `XDG_CONFIG_HOME` of its own, and then reads *that* database
-  to check the workbook against -- a source `Excel.js` had no hand in. The example takes a path as its argument
+  to check the workbook against -- a source `Xlsx` had no hand in. The example takes a path as its argument
   to export and quit, and hides its window before it is shown (`Form_Open` runs before `Show()` returns), so a
   suite run takes no focus. Rows are compared by name and not by position: the list is ordered with
   `Locale.Compare`, which is the desktop's order and not CI's.
 - **Excel holds a number as a double**, so a `Decimal` past fifteen significant digits does not survive the trip;
-  the alternative, writing it as text, is a column nobody can sum. It is Excel's limit and `Excel.js` says so.
+  the alternative, writing it as text, is a column nobody can sum. It is Excel's limit and `Xlsx` says so.
 
 Three defects were put back in the writer and each went red (names unchecked, a streamed entry not flagged as
-having a descriptor, `Abort` leaving its temporary). `Excel.js` was first written as strings, with an escaper of its
+having a descriptor, `Abort` leaving its temporary). `Xlsx.js` was first written as strings, with an escaper of its
 own; it builds every part with `Xml` now (see *Xml and Record* below for what that found), and the defects put back
 in it were money without its style and a date as text -- the last one only went red once the XML assertions were
 added -- and leaving out its `clean()`, which now fails loudly instead of writing a corrupt workbook.
@@ -5627,7 +5628,7 @@ bag. Five things are worth knowing before touching either half:
   empty `JS_EXCEPTION` when libxml2 answered NULL; it throws a sentence now.
 - **`Xml` wrote documents it could not read, and only a program that *wrote* XML with it
   found out.** Everything before was reading -- MSPDI, feeds -- and `SaveXml` writes values that
-  came out of a file, which were valid XML to begin with. `Excel.js` writes values that came out
+  came out of a file, which were valid XML to begin with. `Xlsx` writes values that came out
   of a database, and building it with `Xml` instead of strings showed three things in one sitting:
   a `U+0001` assigned to `Text` or an attribute was written as the raw byte and **`Xml.Parse`
   refused the output** (*PCDATA invalid Char value 1*); half a surrogate pair -- which a JavaScript
@@ -5637,7 +5638,7 @@ bag. Five things are worth knowing before touching either half:
   door text enters by asks it (`Text`, `SetAttr`, `SetAttrNS`, and a namespace URI), refusing with
   the character and its position. **A NUL has to be looked for before decoding**: GLib's
   `g_utf8_get_char_validated` answers it as invalid, which named it "half a surrogate pair".
-  A refusal and not a drop, because which characters may be lost is the program's call -- `Excel.js`
+  A refusal and not a drop, because which characters may be lost is the program's call -- `Xlsx`
   drops them from a cell, deliberately, in its own `clean()`.
 - **`SetAttrNS` always searched in scope; what was missing was declaring a prefix.** OOXML writes
   `xmlns:r` on a workbook and `r:id` on each sheet, and the only spelling was moving an element into

@@ -44,7 +44,8 @@
  * **Export is the other direction of `examples/sheets`**: the clients that are
  * *listed* -- the filter applies, because a list that exports something other than
  * what it shows is a trap -- and their orders, as a two-sheet `.xlsx` that Excel and
- * LibreOffice open. `Excel.js` is the whole of how, over `Zip.Create`, and it is held
+ * LibreOffice open. `Xlsx` -- the library that ships with the runtime -- is the whole of how,
+ * over `Zip.Create`, and it is held
  * to a real spreadsheet program by the suite rather than to itself. Run it without
  * the window to see it work: `./build/bintana examples/clients out.xlsx` exports and
  * quits, and the window never opens.
@@ -580,10 +581,10 @@ class ClientsForm extends Form {
      * narrows the export too; and the orders are asked for by client id, one query
      * for each client, the same way the detail list asks. Money goes in as a
      * `Decimal` and is written by its digits, and a date as the `YYYY-MM-DD` the
-     * shape holds -- `Excel` turns each into the thing Excel keeps it as. The
+     * shape holds -- `Xlsx` turns each into the thing Excel keeps it as. The
      * postal code is declared text on purpose: `01234` is not a number.
      *
-     * `Excel.Write` writes the archive to a temporary and moves it into place
+     * `Xlsx.Write` writes the archive to a temporary and moves it into place
      * last, so a failure leaves a file that was already there as it was.
      */
     exportTo(path) {
@@ -597,7 +598,7 @@ class ClientsForm extends Form {
                 orders.push([c.Name, o.Placed, o.What, o.Amount, o.State]);
         }
 
-        Excel.Write(path, [
+        Xlsx.Write(path, [
             { Name: "Clients",
               Columns: [{ Text: "Name", Width: 28 }, { Text: "Category" }, { Text: "Balance", Kind: "money" },
                         { Text: "Since", Kind: "date" }, { Text: "Postal code" }, { Text: "Active", Kind: "bool" }],

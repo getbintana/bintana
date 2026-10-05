@@ -10,6 +10,7 @@
     "WidgetsForm.js"
   ],
   "uses": [
-    "dialog"
+    "dialog",
+    "xlsx"
   ]
 }

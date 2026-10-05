@@ -533,7 +533,7 @@ const TESTS = [
     "ExampleWebhook",
     /* And the sheet reader, a Task, in a child project of its own. */
     "ExampleSheets",
-    /* And its other half: Excel.js held to a spreadsheet program, and clients exporting its own database. */
+    /* And its other half: lib/xlsx held to a spreadsheet program, and clients exporting its own database. */
     "ExampleExcel", "ExampleClientsExport",
     /* Blocking as well: a child that spawns into terminals it then drops. */
     "TerminalSpawnLifetime",
@@ -11072,7 +11072,7 @@ function Main() {
      * and a NUL cut text short with nothing said; a namespace prefix could not be
      * declared for an attribute without moving the element into it, which is how
      * OOXML writes `r:id`; and a child added under a default namespace answered
-     * `""` while the text, read back, put it in that namespace. `Excel.js` is the
+     * `""` while the text, read back, put it in that namespace. `lib/xlsx` is the
      * caller that found all three.
      */
     testXmlWrite() {
@@ -18705,28 +18705,27 @@ function Main() {
     }
 
     /*
-     * `examples/clients/Excel.js`, held to a spreadsheet program.
+     * `lib/xlsx`, held to a spreadsheet program.
      *
-     * The writer is a file of the example, so it is run the way the example runs it:
-     * a child project with a copy of it. What comes out is checked by three readers
-     * that did not write it -- `unzip -t` for the container, `soffice` for the
-     * workbook, and `examples/sheets`' reader for what that example would show -- and
-     * the values are the ones a writer gets wrong: a name with `&` and `<`, a postal
-     * code that must stay text, a quote, spaces that must be kept, a control character
-     * XML cannot carry, a newline in a cell, an empty cell, dates either side of a
-     * leap day, and a decimal that must not become text.
+     * The writer is the library, and a child project declares it in `uses` -- which
+     * is the point of the move: there is no copy of it anywhere. What comes out is
+     * checked by three readers that did not write it -- `unzip -t` for the container,
+     * `soffice` for the workbook, and `examples/sheets`' reader for what that example
+     * would show -- and the values are the ones a writer gets wrong: a name with `&`
+     * and `<`, a postal code that must stay text, a quote, spaces that must be kept,
+     * a control character XML cannot carry, a newline in a cell, an empty cell, dates
+     * either side of a leap day, and a decimal that must not become text.
      */
     testExampleExcel() {
-        const base  = File.Join(File.Directory(Application.Directory), "..", "examples");
-        const excel = File.Join(base, "clients", "Excel.js");
+        const base   = File.Join(File.Directory(Application.Directory), "..", "examples");
         const sheets = File.Join(base, "sheets", "SheetReader.js");
 
-        if (!File.Exists(excel) || !File.Exists(sheets)) {
+        if (!File.Exists(sheets)) {
             print("ExampleExcel: the examples are not beside this suite; skipped");
             return;
         }
-        if (!Xml.Available) {
-            print("ExampleExcel: this build has no libxml2, which Excel.js writes with; skipped");
+        if (!Xlsx.Available) {
+            print("ExampleExcel: this build has no libxml2, which Xlsx writes with; skipped");
             return;
         }
 
@@ -18735,16 +18734,18 @@ function Main() {
         if (File.IsDir(dir))
             Directory.DeleteTree(dir);
         Directory.Make(dir);
-        File.Save(File.Join(dir, "Excel.js"), File.Load(excel));
         File.Save(File.Join(dir, "SheetReader.js"), File.Load(sheets));
+        /* The writer is the library, not a copy of it: the scratch project
+         * declares it, which is the whole point of the move. */
         File.SaveJson(File.Join(dir, "project.json"),
-                      { name: "excelprobe", main: "Main", version: "1.0", sources: ["Excel.js", "SheetReader.js", "Main.js"] });
+                      { name: "excelprobe", main: "Main", version: "1.0", uses: ["xlsx"],
+                        sources: ["SheetReader.js", "Main.js"] });
 
         const out = File.Join(dir, "t.xlsx");
 
         File.Save(File.Join(dir, "Main.js"),
             'function Main() {\n' +
-            '    Excel.Write(Application.Arguments[0], [\n' +
+            '    Xlsx.Write(Application.Arguments[0], [\n' +
             '        { Name: "Clients", Columns: [{ Text: "Name" }, { Text: "Postal" }, { Text: "Balance", Kind: "money" },\n' +
             '                                      { Text: "Since", Kind: "date" }, { Text: "Active", Kind: "bool" }, { Text: "Id", Kind: "number" }],\n' +
             '          Rows: [\n' +
@@ -18868,7 +18869,7 @@ function Main() {
         File.Save(File.Join(dir, "Main.js"),
             'function Main() {\n' +
             '    const bad = (label, sheets) => {\n' +
-            '        try { Excel.Write(Application.Arguments[0], sheets); print(label + ": no throw"); }\n' +
+            '        try { Xlsx.Write(Application.Arguments[0], sheets); print(label + ": no throw"); }\n' +
             '        catch (e) { print(label + ": " + e.message); }\n' +
             '    };\n' +
             '    const col = (kind) => [{ Text: "c", Kind: kind }];\n' +
@@ -18888,7 +18889,7 @@ function Main() {
             '    Application.Quit(0);\n' +
             '}\n');
         File.SaveJson(File.Join(dir, "project.json"),
-                      { name: "excelprobe", main: "Main", version: "1.0", sources: ["Excel.js", "Main.js"] });
+                      { name: "excelprobe", main: "Main", version: "1.0", uses: ["xlsx"], sources: ["Main.js"] });
 
         const never = File.Join(dir, "never.xlsx");
         const refused = Exec.Wait([Application.Executable, dir, never], { Timeout: 60000 }).Output;
@@ -18918,7 +18919,7 @@ function Main() {
      * The example is started as a child with a configuration directory of its own
      * (the real one holds the developer's clients), given a path, and asked to export
      * and quit -- its window is hidden before it is shown, so it takes no focus. What it
-     * wrote is then compared with **the database it read**, which is not a file `Excel.js`
+     * wrote is then compared with **the database it read**, which is not a file `Xlsx`
      * had a hand in, through a spreadsheet program that did not write it either.
      */
     testExampleClientsExport() {
