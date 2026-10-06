@@ -1630,7 +1630,23 @@ static void xml_problem_free(gpointer p)
     }
 }
 
+/*
+ * **`xmlStructuredErrorFunc` gained its `const` in libxml2 2.12, and the
+ * suite's Clang job runs on Ubuntu 24.04, whose 2.9.14 spells the parameter
+ * `xmlErrorPtr`.** Passing the callback below there is an incompatible
+ * function pointer type at the assignment, which Clang refuses by default --
+ * while GCC 13 only warns, which is why the failure came from `tests/asan.sh`
+ * (the one job built with Clang) and not from the ordinary one. The const is
+ * the whole of the difference: same pointer, same fields, so the parameter
+ * follows the header and the body reads the same either way. A new
+ * libxml2 callback in this file wants the typedef the header has, not this
+ * file's opinion about const.
+ */
+#if LIBXML_VERSION >= 21200
 static void xml_collect_problem(void *data, const xmlError *e)
+#else
+static void xml_collect_problem(void *data, xmlErrorPtr e)
+#endif
 {
     GPtrArray *problems = data;
 

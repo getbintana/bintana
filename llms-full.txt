@@ -3090,6 +3090,19 @@ person who wrote it either.
   the zero of the flags type and says it in every version. **A new GTK or GDK
   name is checked against the floor, not against this machine**: grep the header
   for its `GDK_AVAILABLE_IN_*`, and when it is newer, spell the older thing.
+- **And its libxml2, where a callback's signature changed *constness* --
+  and it was Clang that said so.** libxml2 2.12 made
+  `xmlStructuredErrorFunc` take a `const xmlError *`; Ubuntu 24.04 ships
+  **2.9.14**, whose typedef is `void (*)(void *, xmlErrorPtr)`. The two schema
+  callbacks in `bta_xml.c` were declared `const xmlError *`, so the assignment
+  was an **incompatible function pointer type** there -- which Clang refuses by
+  default and GCC 13 only warns about, so the whole ordinary job stayed green
+  and `tests/asan.sh`, the one build that uses Clang, went red on a file
+  nobody had touched. `xml_collect_problem`'s parameter follows
+  `LIBXML_VERSION` now. **A callback typedef is written the way the header in
+  front of you spells it**: a `const` that arrived in 2.12 is the modern
+  header's opinion and not part of the ABI, and adding it to an older library
+  buys a red sanitizer job and nothing else.
 - **In an `Overlay` the bottom of the stack is the layer that fills.** The base
   is a GTK *property* (`gtk_overlay_set_child`) and the floaters are a list, so
   `Reorder(child, 0)` swaps the property rather than moving a sibling — both
