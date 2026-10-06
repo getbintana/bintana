@@ -1,0 +1,30 @@
+/*
+ * The two surfaces of the window, and nothing else: the toolbar is chrome and
+ * the canvas is a page.
+ *
+ * `alpha(currentColor, …)` rather than a colour, so both follow the desktop's
+ * light or dark theme -- a grey written here is grey on a dark theme too,
+ * where it should be lighter than the ground. That is the whole reason the
+ * appearance of a form belongs in this file and not in per-widget colours.
+ */
+
+/* The toolbar: the window's own ground, a hairline under it, and room. */
+.vector-bar {
+    background: alpha(currentColor, 0.05);
+    border-bottom: 1px solid alpha(currentColor, 0.12);
+    padding: 6px 8px;
+}
+
+/* The desk the page lies on: a shade of the window's own ground, so the
+ * sheet's edge reads at any scroll position. */
+.vector-view {
+    background: alpha(currentColor, 0.08);
+}
+
+/* The page lying on the desk. The white is painted by the control's own
+ * `Draw` -- a background set here would be missing from the exported PNG -- so
+ * this is only the edge around it. */
+.vector-paper {
+    border-radius: 4px;
+    box-shadow: 0 1px 4px alpha(currentColor, 0.4);
+}

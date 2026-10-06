@@ -1,0 +1,7 @@
+<!-- Select: the four corners of a marquee. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path d="M1 1h5v2H3v3H1z"/>
+  <path d="M15 1v5h-2V3h-3V1z"/>
+  <path d="M1 15v-5h2v3h3v2z"/>
+  <path d="M15 15h-5v-2h3v-3h2z"/>
+</svg>

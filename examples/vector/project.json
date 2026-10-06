@@ -1,0 +1,9 @@
+{
+  "name": "Vector",
+  "startup": "VectorForm",
+  "sources": [
+    "VectorForm.js"
+  ],
+  "version": "1.0",
+  "description": "A vector graphics editor: a resizable sheet of records, each path selectable and editable, with pencil, eraser, line, rectangle, ellipse, bucket and marquee as icon buttons, a colour with opacity, undo and redo, and a selection copied to the clipboard or a PNG"
+}

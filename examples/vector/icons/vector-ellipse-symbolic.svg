@@ -1,0 +1,4 @@
+<!-- An ellipse: a circle with two radii. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path fill-rule="evenodd" d="M1 8a7 5 0 1 0 14 0 7 5 0 1 0-14 0zM3 8a5 3 0 1 0 10 0 5 3 0 1 0-10 0z"/>
+</svg>

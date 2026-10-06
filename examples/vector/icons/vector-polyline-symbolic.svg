@@ -1,0 +1,4 @@
+<!-- A polyline: a run of segments. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path d="M2.8 12.5 6.1 6.7 9.0 10.5 14.7 3.6 L13.3 2.4 9.0 7.5 5.9 3.3 1.2 11.5Z"/>
+</svg>

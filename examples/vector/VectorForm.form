@@ -1,0 +1,331 @@
+{
+  "format": "bintana-form/1",
+  "class": "VectorForm",
+  "properties": {
+    "Text": "Vector",
+    "Width": 960,
+    "Height": 680,
+    "Arrangement": "Vertical",
+    "Spacing": 0,
+    "AcceptFiles": true
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "Bar",
+      "properties": {
+        "Style": "vector-bar",
+        "Arrangement": "Vertical",
+        "Spacing": 6
+      },
+      "children": [
+        {
+          "type": "Panel",
+          "name": "Tools",
+          "properties": {
+            "Arrangement": "Horizontal",
+            "Spacing": 6,
+            "Height": 34
+          },
+          "children": [
+            {
+              "type": "ToggleButton",
+              "name": "BtnEdit",
+              "properties": {
+                "Icon": "vector-edit-symbolic",
+                "Tooltip": "Edit — select a path, move it, reshape it (1)"
+              }
+            },
+            {
+              "type": "ToggleButton",
+              "name": "BtnPencil",
+              "properties": {
+                "Icon": "vector-pencil-symbolic",
+                "Tooltip": "Pencil — draw freehand (2)"
+              }
+            },
+            {
+              "type": "ToggleButton",
+              "name": "BtnEraser",
+              "properties": {
+                "Icon": "vector-eraser-symbolic",
+                "Tooltip": "Eraser — stroke the paper colour (3)"
+              }
+            },
+            {
+              "type": "ToggleButton",
+              "name": "BtnLine",
+              "properties": {
+                "Icon": "vector-line-symbolic",
+                "Tooltip": "Line (4)"
+              }
+            },
+            {
+              "type": "ToggleButton",
+              "name": "BtnPoly",
+              "properties": {
+                "Icon": "vector-polyline-symbolic",
+                "Tooltip": "Polyline — click each point; click the first to close it, Return or double click to end (5)"
+              }
+            },
+            {
+              "type": "ToggleButton",
+              "name": "BtnRect",
+              "properties": {
+                "Icon": "vector-rectangle-symbolic",
+                "Tooltip": "Rectangle (6)"
+              }
+            },
+            {
+              "type": "ToggleButton",
+              "name": "BtnEllipse",
+              "properties": {
+                "Icon": "vector-ellipse-symbolic",
+                "Tooltip": "Ellipse (7)"
+              }
+            },
+            {
+              "type": "ToggleButton",
+              "name": "BtnBucket",
+              "properties": {
+                "Icon": "vector-bucket-symbolic",
+                "Tooltip": "Bucket — fill the shape you click (8)"
+              }
+            },
+            {
+              "type": "ToggleButton",
+              "name": "BtnSelect",
+              "properties": {
+                "Icon": "vector-select-symbolic",
+                "Tooltip": "Select — a marquee to copy (9)"
+              }
+            }
+          ]
+        },
+        {
+          "type": "Panel",
+          "name": "Colours",
+          "properties": {
+            "Arrangement": "Horizontal",
+            "Spacing": 8,
+            "Height": 34
+          },
+          "children": [
+            {
+              "type": "Label",
+              "name": "LblLine",
+              "properties": {
+                "Text": "Line"
+              }
+            },
+            {
+              "type": "ColorButton",
+              "name": "Colour",
+              "properties": {
+                "Value": "#e01b24"
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblFill",
+              "properties": {
+                "Text": "Fill"
+              }
+            },
+            {
+              "type": "ColorButton",
+              "name": "FillColour",
+              "properties": {
+                "Value": "#3584e4"
+              }
+            },
+            {
+              "type": "CheckButton",
+              "name": "ChkFill",
+              "properties": {
+                "Text": "Filled"
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblOpacity",
+              "properties": {
+                "Text": "Opacity"
+              }
+            },
+            {
+              "type": "Slider",
+              "name": "Alpha",
+              "properties": {
+                "Min": 0,
+                "Max": 100,
+                "Value": 100,
+                "ShowValue": true,
+                "ValuePosition": "Right",
+                "Width": 130,
+                "Tooltip": "How transparent the colours are"
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblBrush",
+              "properties": {
+                "Text": "Width"
+              }
+            },
+            {
+              "type": "SpinBox",
+              "name": "Brush",
+              "properties": {
+                "Min": 1,
+                "Max": 40,
+                "Value": 3,
+                "Width": 80
+              }
+            }
+          ]
+        },
+        {
+          "type": "Panel",
+          "name": "Commands",
+          "properties": {
+            "Arrangement": "Horizontal",
+            "Spacing": 8,
+            "Height": 34
+          },
+          "children": [
+            {
+              "type": "Button",
+              "name": "BtnUndo",
+              "properties": {
+                "Text": "Undo",
+                "Tooltip": "Undo the last step (Ctrl+Z)",
+                "Width": 90,
+                "Shortcut": "<Control>z"
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnRedo",
+              "properties": {
+                "Text": "Redo",
+                "Tooltip": "Redo what Undo took (Ctrl+Y)",
+                "Width": 90,
+                "Shortcut": ["<Control>y", "<Control><Shift>z"]
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnClear",
+              "properties": {
+                "Text": "Clear",
+                "Tooltip": "Start a blank page",
+                "Width": 90
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnPhoto",
+              "properties": {
+                "Text": "Photo…",
+                "Tooltip": "Place a picture under the drawing (Ctrl+O)",
+                "Width": 100,
+                "Shortcut": "<Control>o"
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnCopy",
+              "properties": {
+                "Text": "Copy",
+                "Tooltip": "Copy the selection to the clipboard (Ctrl+C)",
+                "Width": 90,
+                "Shortcut": "<Control>c"
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnPaste",
+              "properties": {
+                "Text": "Paste",
+                "Tooltip": "Paste an image from the clipboard (Ctrl+V)",
+                "Width": 90,
+                "Shortcut": "<Control>v"
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnRaise",
+              "properties": {
+                "Icon": "vector-raise-symbolic",
+                "Tooltip": "Raise the selected path one place"
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnLower",
+              "properties": {
+                "Icon": "vector-lower-symbolic",
+                "Tooltip": "Lower the selected path one place"
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnSave",
+              "properties": {
+                "Text": "Save PNG…",
+                "Tooltip": "Write the drawing as a PNG (Ctrl+S)",
+                "Style": "suggested-action",
+                "Width": 130,
+                "Shortcut": "<Control>s"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Panel",
+      "name": "Page",
+      "properties": {
+        "Arrangement": "Vertical",
+        "Spacing": 6,
+        "Margin": 8,
+        "Expand": true
+      },
+      "children": [
+        {
+          "type": "Scroller",
+          "name": "View",
+          "properties": {
+            "Expand": true,
+            "Scrollbars": "Both",
+            "Style": "vector-view"
+          },
+          "children": [
+            {
+              "type": "DrawingArea",
+              "name": "Canvas",
+              "properties": {
+                "Width": 800,
+                "Height": 600,
+                "Cursor": "Crosshair",
+                "Tooltip": "Drag to draw · Edit drags the points · the corner resizes the page",
+                "Style": "vector-paper"
+              }
+            }
+          ]
+        },
+        {
+          "type": "Label",
+          "name": "LblHint",
+          "properties": {
+            "Text": "Page 800 x 600 · 1–9 pick a tool · the corner resizes the page",
+            "Style": "dim-label",
+            "Alignment": "Left"
+          }
+        }
+      ]
+    }
+  ]
+}
