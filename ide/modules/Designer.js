@@ -137,6 +137,7 @@ Ide.Designer = class Designer {
         this.drag     = null;
         this.band     = null;
         this.dirty    = false;
+        this.version  = 0;       // moves on every touch(): see TabSet.contentOf
         this.undoStack = [];
         this.redoStack = [];
 
@@ -937,6 +938,10 @@ Ide.Designer = class Designer {
 
     touch() {
         this.dirty = true;
+        /* Every edit goes through here, which is what makes it the one place a
+         * version can be kept: `TabSet.contentOf` serialises this form and
+         * caches it by this number, and it is asked for on every caret move. */
+        this.version++;
         this.refresh();
     }
 

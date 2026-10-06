@@ -2370,6 +2370,31 @@ per-keystroke live check a person would feel; `PropGrid_Filter` is eighteenth.
 **A capture counts *and* times; the first capture counts and the second reads
 the clock.**
 
+**The first optimization that harvest paid for was `Editor_Cursor`, and the
+spans were temporary.** Four calls it made on every caret move were found by
+putting `Profile.Begin`/`End` around each -- the IDE does not carry them now --
+and measured before and after over the same `tests/ide` phase (a phase, because
+a full profile is 6 minutes a run): `Launch.show` **0.43 → 0.16 ms**, of which
+the manifest was read three times (`this.all`, then `this.chosen`, then `named`)
+and the run-config radio menu was rebuilt whether or not it said anything;
+`Completion.declaredClasses` **0.94 → 0.07 ms**, because it asked
+`TabSet.contentOf` for every open tab and a designer's answer was
+`serializeForm()` -- the whole drawn form -- per question; and
+`Widget.Members` was **2.9 ms** of that same check for a runtime global,
+because `rawMembers` handed the project's sources to a namesake the sources do
+not declare and the runtime parses every one into an index before it looks --
+**0.37 ms** once the sources are passed only where a source declares the name.
+`this.` completion parsed the file per caret move, now once per text. Over the
+whole project the event went **216 → 184 ms over 252 calls (0.86 → 0.73 ms)**.
+Two attempts did not pay and are
+written down so they are not tried again: **`File.Info` is 141 us** -- it
+queries the content type and renders themed icons for `Icon` -- so stamping a
+cache with it saved exactly nothing over the read it was meant to skip; and
+sharing `declaredClasses`' parse with `this.` completion re-reads every open
+tab's text, which on a big file measured *worse* than one parse per editor text.
+**A cache key has to be cheaper than what it guards, and the obvious key is
+usually not.**
+
 **And a profiled by-hand run has to reproduce the runner's screen.** The first
 attempt used a bare `xvfb-run -a` (and so does `tests/try.sh`), whose default
 screen is smaller than the runner's `--server-args=-screen 0 1280x1024x24`, and

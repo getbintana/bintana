@@ -452,6 +452,35 @@ Ide.Completion = class Completion {
     /* --- the call the cursor is in ------------------------------------------ */
 
     /*
+     * The methods the file being edited declares, from **one parse per text**
+     * and not per question.
+     *
+     * `this.go(` and the tooltip on it each ran `Application.Symbols` over the
+     * editor's whole text -- and both are asked on every caret move, where a
+     * capture of the completion phase showed 4.4 ms for the parse of the IDE's
+     * own `MainForm.js` inside `callAt`. The text is the key: it changes while
+     * typing, and reparsing then is what the old code did on every question.
+     * Sharing `declaredClasses`' parse instead was tried and measured worse --
+     * that walk re-reads every open tab's text, which is the expensive half on
+     * a big file.
+     */
+    ownSymbols() {
+        const editor = this.ide.Editor;
+        const text   = editor ? editor.Text : "";
+
+        if (this._ownText !== text) {
+            try { this._own = Application.Symbols(text); }
+            catch (e) { this._own = []; }
+            this._ownText = text;
+        }
+        return this._own;
+    }
+
+    ownMethod(name) {
+        return this.ownSymbols().find((x) => x.Name === name && x.Kind === "Method") || null;
+    }
+
+    /*
      * `{ Name, Signature, Index, At }` for the innermost call the text ends
      * inside, or null: which function, what it declares, which argument the
      * cursor is in (counted from zero), and where its bracket opened, which is
@@ -512,12 +541,7 @@ Ide.Completion = class Completion {
 
         /* `this.go(`: a method of the class being edited, named by the parser. */
         if (steps.length === 2 && steps[0].name === "this") {
-            const editor = this.ide.Editor;
-            let own = null;
-            try {
-                own = Application.Symbols(editor ? editor.Text : "")
-                        .find((x) => x.Name === last.name && x.Kind === "Method");
-            } catch (e) { own = null; }
+            const own = this.ownMethod(last.name);
             if (own) return found(own.Params || "()");
         }
         if (steps.length < 2) return null;
@@ -566,12 +590,7 @@ Ide.Completion = class Completion {
 
         /* `this.go`: a method of the file being edited, named by the parser. */
         if (steps.length === 2 && steps[0].name === "this") {
-            const editor = this.ide.Editor;
-            let   own    = null;
-            try {
-                own = Application.Symbols(editor ? editor.Text : "")
-                        .find((x) => x.Name === last.name && x.Kind === "Method");
-            } catch (e) { own = null; }
+            const own = this.ownMethod(last.name);
             if (own)
                 return { Title: `this.${last.name}`, Signature: own.Params || "()",
                          Doc: own.Doc || "", Returns: own.Returns || "" };
@@ -775,7 +794,15 @@ Ide.Completion = class Completion {
         const key = (all ? "*" : "") + name;
         if (this._raw.has(key)) return this._raw.get(key);
 
-        const list = [...new Set(found.sources.values())];
+        /* **The sources only where a source declares the name.** `Widget.Members`
+         * parses every one of them into an index before it looks anything up,
+         * and this runs on every caret move: a runtime global (`File`,
+         * `Locale`) resolved against the whole project measured 2.9 ms a call
+         * in a capture of the completion phase. Empty is not a different
+         * answer -- the class table answers whatever no source declared, and
+         * `Forms` still rides along for a loaded class's children. */
+        const declared = found.sources.has(name);
+        const list = declared ? [...new Set(found.sources.values())] : [];
         let got = [];
         try {
             got = Widget.Members(name, { Sources: list, Forms: found.forms, All: !!all });

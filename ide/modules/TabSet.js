@@ -1212,9 +1212,25 @@ Ide.TabSet = class TabSet {
         if (!state || state.foreign) return null;
 
         if (state.mode === "design") {
-            return { name, mode: "design",
-                     root: state.designer && !state.stale
-                         ? state.designer.serializeForm() : state.root };
+            const designer = state.designer && !state.stale ? state.designer : null;
+            if (!designer)
+                return { name, mode: "design", root: state.root };
+
+            /*
+             * **One serialization per edit.** `Completion.declaredClasses` asks
+             * for this on every caret move, and building the whole node tree of
+             * a form each time was 0.8 ms of every question -- a capture of the
+             * completion phase put 160 of 320 ms there. `Designer.touch` is the
+             * one call every edit makes, so its version is what the answer
+             * changes on; the designer itself is part of the key because a
+             * reload replaces it at version zero.
+             */
+            if (state.formOf !== designer || state.formAt !== designer.version) {
+                state.formOf = designer;
+                state.formAt = designer.version;
+                state.formCached = designer.serializeForm();
+            }
+            return { name, mode: "design", root: state.formCached };
         }
         return { name, mode: "edit",
                  text: state.editor ? state.editor.Text : state.text };

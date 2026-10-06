@@ -58,12 +58,11 @@ Ide.Launch = class Launch {
      * things already write.
      *
      * **Which puts a file read on the typing path**, since `show()` is called
-     * from `refresh()` and `Editor_Cursor` refreshes on every caret move. That
-     * is worth knowing and it is not worth a cache: measured at **0.31 ms** a
-     * read -- `File.LoadJson` plus building the records -- against a 16 ms
-     * frame. A cache would have to be invalidated by the mtime of a file this
-     * window writes itself, and buying 0.3 ms with an invalidation rule is the
-     * wrong trade until something measures otherwise.
+     * from `refresh()` and `Editor_Cursor` refreshes on every caret move. It
+     * used to pay it three times -- `this.chosen` and `named` read the manifest
+     * again -- and reads once now; measured at **0.15 ms** a read, which is
+     * what read-through costs and what a cache would have to buy back with an
+     * invalidation rule.
      */
     get all() {
         const config = this.ide.manifest.read();
@@ -206,14 +205,33 @@ Ide.Launch = class Launch {
         const empty = all.length === 0;
         const item  = this.ide.MnuLaunch;
 
-        item.Items   = empty ? [Locale.Text("(none declared)")]
+        /*
+         * **One read of the manifest.** `this.chosen` reads it twice more --
+         * once itself and once through `named` -- and this runs on every caret
+         * move, where a capture put the three reads at 0.24 of the 0.43 ms the
+         * whole call cost.
+         */
+        const name   = this.chosenName();
+        const chosen = empty ? null : (all.find((one) => one.Name === name) || all[0]);
+        const value  = chosen ? all.findIndex((one) => one.Name === chosen.Name) : -1;
+        const labels = empty ? [Locale.Text("(none declared)")]
                              : all.map((one) => one.Name);
+        const edit   = this.ide.project !== "";
+
+        /*
+         * The menu is rebuilt only when what it would say moved. Assigning
+         * `Items` rebuilds the radio list inside the dynamic item, and this
+         * runs on every caret move; `Ide.Outline` and `Ide.Events` keep the
+         * same signature for the same reason.
+         */
+        const signature = `${labels.join("\u0000")}|${empty}|${value}|${edit}`;
+        if (signature === this.drawn) return;
+        this.drawn = signature;
+
+        item.Items   = labels;
         item.Enabled = !empty;
-
-        const chosen = this.chosen;
-        item.Value   = chosen ? all.findIndex((one) => one.Name === chosen.Name) : -1;
-
-        this.ide.MnuLaunchEdit.Enabled = this.ide.project !== "";
+        item.Value   = value;
+        this.ide.MnuLaunchEdit.Enabled = edit;
     }
 
     /* --- what a run is made of -------------------------------------------- */
