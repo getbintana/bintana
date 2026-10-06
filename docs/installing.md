@@ -340,17 +340,22 @@ native stack says `JS_CallInternal` and never which function a `.js` file
 declared. A capture carries `Startup`, one span per loaded script, `Form` per
 form built, `Draw`/`DrawPage` per frame, `Task` per worker body, `Event` per
 event whose handler ran, and whatever the application marks with
-`Profile.Begin`/`Mark`/`End`. **An ordinary run pays a branch per instrumented
-point**: with no `--profile` and not under Sysprof, `Profile.Active` is `false`,
-its verbs are no-ops and nothing is allocated or timed.
+`Profile.Begin`/`Mark`/`End` and graphs with `Profile.Counter`. **An ordinary
+run pays a branch per instrumented point**: with no `--profile` and not under
+Sysprof, `Profile.Active` is `false`, its verbs are no-ops and nothing is
+allocated or timed.
 
 For callgraphs worth reading, build with debug symbols and frame pointers — the
 default `Debug` build has both; a Release build wants
 `-g -fno-omit-frame-pointer`. One project at a time is the way to profile the
-suite, since one capture file holds one run:
+suite by hand, since one capture file holds one run:
 
 ```sh
 tests/try.sh --profile /tmp/widgets.syscap tests/widgets 12345
+```
+
+```sh
+BINTANA_PROFILE=/tmp/caps ./tests/run.sh    # one /tmp/caps/<project>.syscap each
 ```
 
 ## Running the test suite

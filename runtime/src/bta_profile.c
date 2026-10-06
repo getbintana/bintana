@@ -48,6 +48,7 @@
  */
 #include "bta.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -64,7 +65,113 @@ static int64_t profile_started; /* when `bta_profile_start` ran, for Startup */
 static SysprofCaptureWriter *profile_writer;
 /* The capture writer is not thread-safe; a Task marks from its own thread. */
 static GMutex profile_writer_lock;
+
+/*
+ * Counters, by the name the application gave them.  One counter has an id per
+ * road -- the collector numbers from `(pid << 16)` and the writer from 1 -- and
+ * the table holds both, so `Profile.Counter("Rows", n)` on this thread and on a
+ * worker's updates the same pair of tracks.
+ */
+typedef struct {
+    char     *name;
+    unsigned  collector_id;
+    bool      collector_defined;
+    unsigned  writer_id;
+    bool      writer_defined;
+} ProfileCounter;
+
+static GHashTable *profile_counters;
+static GMutex      profile_counter_lock;
+
+static void profile_counter_free(gpointer data)
+{
+    ProfileCounter *c = data;
+
+    g_free(c->name);
+    g_free(c);
+}
+#endif  /* BTA_HAVE_SYSPROF */
+
+/*
+ * One number on a track of its own, defined the first time it is seen.
+ *
+ * Separate from `profile_emit` because a counter is not a span: it has no
+ * duration, the capture draws it on a graph of its own, and the two roads
+ * spell the calls differently enough (a `time, cpu, pid` triple on the writer's)
+ * that sharing one function would mean a parameter nobody reads.  The value is
+ * a double on both, which is what a JavaScript number is.
+ */
+static void profile_counter(const char *name, double value)
+{
+#ifdef BTA_HAVE_SYSPROF
+    if (!profile_on)
+        return;
+
+    g_mutex_lock(&profile_counter_lock);
+
+    if (!profile_counters)
+        profile_counters = g_hash_table_new_full(g_str_hash, g_str_equal,
+                                                 g_free, profile_counter_free);
+
+    ProfileCounter *c = g_hash_table_lookup(profile_counters, name);
+    if (!c) {
+        c = g_new0(ProfileCounter, 1);
+        c->name = g_strdup(name);
+        g_hash_table_insert(profile_counters, g_strdup(name), c);
+    }
+
+    if (profile_collector) {
+        if (!c->collector_defined) {
+            SysprofCaptureCounter def = { 0 };
+
+            def.id             = sysprof_collector_request_counters(1);
+            def.type           = SYSPROF_CAPTURE_COUNTER_DOUBLE;
+            def.value.vdbl     = 0.0;
+            g_strlcpy(def.category, "App", sizeof def.category);
+            g_strlcpy(def.name, name, sizeof def.name);
+            sysprof_collector_define_counters(&def, 1);
+            c->collector_id      = def.id;
+            c->collector_defined = true;
+        }
+        SysprofCaptureCounterValue v = { 0 };
+
+        v.vdbl = value;
+        sysprof_collector_set_counters(&c->collector_id, &v, 1);
+    }
+
+    if (profile_writer) {
+        g_mutex_lock(&profile_writer_lock);
+
+        if (!c->writer_defined) {
+            SysprofCaptureCounter def = { 0 };
+
+            def.id         = sysprof_capture_writer_request_counter(profile_writer, 1);
+            def.type       = SYSPROF_CAPTURE_COUNTER_DOUBLE;
+            def.value.vdbl = 0.0;
+            g_strlcpy(def.category, "App", sizeof def.category);
+            g_strlcpy(def.name, name, sizeof def.name);
+            sysprof_capture_writer_define_counters(profile_writer,
+                                                   g_get_monotonic_time(), -1,
+                                                   (int32_t)getpid(), &def, 1);
+            c->writer_id      = def.id;
+            c->writer_defined = true;
+        }
+        SysprofCaptureCounterValue v = { 0 };
+
+        v.vdbl = value;
+        sysprof_capture_writer_set_counters(profile_writer,
+                                            g_get_monotonic_time(), -1,
+                                            (int32_t)getpid(), &c->writer_id,
+                                            &v, 1);
+        g_mutex_unlock(&profile_writer_lock);
+    }
+
+    g_mutex_unlock(&profile_counter_lock);
+#else
+    (void)name;
+    (void)value;
 #endif
+}
 
 /*
  * `Profile.Begin`'s open spans, per thread: a `Task` worker runs its own
@@ -198,6 +305,10 @@ void bta_profile_finish(void)
         profile_writer = NULL;
         g_mutex_unlock(&profile_writer_lock);
     }
+
+    g_mutex_lock(&profile_counter_lock);
+    g_clear_pointer(&profile_counters, g_hash_table_unref);
+    g_mutex_unlock(&profile_counter_lock);
 #endif
     /* The spans `Profile.Begin` left open, if any: the thread's own storage. */
     g_private_replace(&profile_stack_key, NULL);
@@ -330,6 +441,39 @@ static JSValue js_profile_mark(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
+static JSValue js_profile_counter(JSContext *ctx, JSValueConst this_val,
+                                  int argc, JSValueConst *argv)
+{
+    if (argc < 2)
+        return JS_ThrowTypeError(ctx,
+                                 "Profile.Counter(name, value) expects a name "
+                                 "and a number");
+
+    const char *name = profile_name(ctx, argv[0], "Profile.Counter");
+    if (!name)
+        return JS_EXCEPTION;
+
+    double value;
+
+    if (!bta_to_number(ctx, argv[1], "Profile.Counter", &value)) {
+        JS_FreeCString(ctx, name);
+        return JS_EXCEPTION;
+    }
+    /* `bta_to_number` refuses NaN; infinity has no graph and would be a track
+     * that never lands.  No value in the sentence: `%g` would spell it with
+     * the desktop's decimal separator, the bta_paint.c trap. */
+    if (!isfinite(value)) {
+        JS_ThrowRangeError(ctx, "Profile.Counter: the value has to be a finite "
+                                "number");
+        JS_FreeCString(ctx, name);
+        return JS_EXCEPTION;
+    }
+
+    profile_counter(name, value);
+    JS_FreeCString(ctx, name);
+    return JS_UNDEFINED;
+}
+
 /*
  * The members, and what each is for, in the shape the extractor and the
  * documentation read: the comment above the entry, its signature on the first
@@ -350,6 +494,15 @@ static const JSCFunctionListEntry profile_props[] = {
      *   `Active` is false
      */
     JS_CFUNC_DEF("Begin", 1, js_profile_begin),
+    /* Counter(name, value)
+     *   one number on a track of its own — rows loaded, items in a cache, a
+     *   queue's depth — defined the first time the name is seen and updated
+     *   after, so a capture shows it as a graph beside the marks. The capture
+     *   keeps 31 characters of the name; the value is a number, and one that
+     *   is not finite is refused even with nobody listening, because a typo
+     *   should not wait for a capture. Inert when `Active` is false
+     */
+    JS_CFUNC_DEF("Counter", 2, js_profile_counter),
     /* End(name)
      *   closes the innermost `Begin`, which has to be the same name. A `name`
      *   that does not match is refused naming both, since a span closed in the

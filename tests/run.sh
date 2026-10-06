@@ -7,7 +7,9 @@
 #   ./tests/run.sh ide list       what phases it has
 #
 # `BINTANA=<path>` runs a build other than ./build/bintana and `TIMEOUT=<seconds>`
-# moves the hang guard.
+# moves the hang guard.  `BINTANA_PROFILE=<dir>` profiles every project the run
+# starts, one `<project>.syscap` under that directory (the runner reads it and
+# turns it into `--profile` on each child, since it builds their command lines).
 #
 # **The virtual display is the default**, and `HEADLESS=` -- empty, not 0 -- is
 # the way back to a real screen for the questions that need one (an icon, a

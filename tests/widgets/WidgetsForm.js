@@ -18798,12 +18798,22 @@ function Main() {
             let wrong = null;
             try {
                 Profile.Begin("x");
+                Profile.Counter("x", 1);
                 Profile.Mark("y");
                 Profile.End("x");
                 Profile.End("not-open");
             } catch (e) { wrong = e.message; }
             eq("an unprofiled run's Profile verbs are inert", wrong, null);
         }
+
+        /* The arguments are checked even with nobody listening, the way the
+         * other verbs' are: a program's typo should not wait for a capture. */
+        eq("a counter value that is not a number is refused",
+           refusal(() => Profile.Counter("x", "no")),
+           'Profile.Counter: "no" is not a number');
+        eq("...and one with no graph is refused too",
+           refusal(() => Profile.Counter("x", Infinity)),
+           "Profile.Counter: the value has to be a finite number");
 
         const dir = File.Join(SCRATCH, "profile");
         Directory.Make(dir);
@@ -18813,6 +18823,8 @@ function Main() {
                   'function Main() {\n' +
                   '    print("active:" + Profile.Active);\n' +
                   '    Profile.Begin("Work");\n' +
+                  '    Profile.Counter("Rows", 3);\n' +
+                  '    Profile.Counter("Rows", 4);\n' +
                   '    Profile.Mark("Half");\n' +
                   '    let n = 0; for (let i = 0; i < 200000; i++) n += i;\n' +
                   '    Profile.End("Work");\n' +
@@ -18841,6 +18853,7 @@ function Main() {
               text.includes("Script") && text.includes("Main.js"), capture);
         check("...and the application's own spans",
               text.includes("Work") && text.includes("Half"), capture);
+        check("...and its counter", text.includes("Rows"), capture);
     }
 
     /* --- Exec.Wait ------------------------------------------------------

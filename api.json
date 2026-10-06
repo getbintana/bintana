@@ -14288,6 +14288,15 @@
           "Native": true
         },
         {
+          "Name": "Counter",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(name, value)",
+          "Returns": "",
+          "Doc": "one number on a track of its own — rows loaded, items in a cache, a queue's depth — defined the first time the name is seen and updated after, so a capture shows it as a graph beside the marks. The capture keeps 31 characters of the name; the value is a number, and one that is not finite is refused even with nobody listening, because a typo should not wait for a capture. Inert when `Active` is false",
+          "Native": true
+        },
+        {
           "Name": "End",
           "Kind": "Method",
           "Params": 1,

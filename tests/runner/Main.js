@@ -117,6 +117,22 @@ const GRACE = 5000;
 const DATA_HOME = File.Join(Environment.TempDirectory,
                             `bta-suite-${Environment.ProcessId}`, "data");
 
+/*
+ * `BINTANA_PROFILE=<dir>` profiles every project the run starts, one capture
+ * per project.
+ *
+ * An environment variable and not an argument, because the runner **builds**
+ * each child's command line: `./tests/run.sh --profile x` would hand the flag
+ * to the runner, which is not the program being measured.  The variable is
+ * read here and becomes `--profile <dir>/<project>.syscap` in the argv below.
+ *
+ * One file per project and not one for the suite: a capture is one run, and
+ * several processes writing one file would truncate each other's -- the
+ * runner's own reason for passing the pid down to the projects, applied to the
+ * profiler.  `tests/widgets Profile` is what holds the other end of it.
+ */
+const PROFILE = Environment.Get("BINTANA_PROFILE") || "";
+
 function Main() {
     const only  = Application.Arguments[0] || "";
     const extra = Application.Arguments[1] || "";
@@ -137,6 +153,13 @@ function Main() {
         Logger.Error("no display and no xvfb-run -- install xorg-x11-server-Xvfb (or xvfb)");
         Application.Quit(2);
         return;
+    }
+
+    /* `Directory.Make` creates any missing parent, so the variable can name a
+     * directory that is not there yet. */
+    if (PROFILE) {
+        Directory.Make(PROFILE);
+        print(`== profiling into ${PROFILE}`);
     }
 
     run(projects, wrap, extra, 0, 0);
@@ -166,6 +189,11 @@ function run(projects, wrap, extra, i, failed) {
     const watch = new Stopwatch().Start();
 
     const argv = [...wrap.argv, BINTANA,
+                  /* `BINTANA_PROFILE`: one capture per project, named after it.
+                   * Before `--strict`, because the option and its argument have
+                   * to sit together and before the project. */
+                  ...(PROFILE ? ["--profile",
+                                 File.Join(PROFILE, `${name}.syscap`)] : []),
                   /* **Every project runs strict.** These are our own, and under
                    * the switch a control refuses a name its class does not have
                    * instead of taking it and doing nothing -- which is the bug

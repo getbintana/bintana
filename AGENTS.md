@@ -114,6 +114,7 @@ cmake -S . -B build && cmake --build build -j    # build (needed after any C cha
 ./tests/run.sh ide list                           # what a project can be asked for
 BINTANA=/other/bintana ./tests/run.sh             # suite against another build
 TIMEOUT=300 ./tests/run.sh                        # a slower machine than this one
+BINTANA_PROFILE=/tmp/caps ./tests/run.sh          # a Sysprof capture per project, under /tmp/caps
 ./tests/asan.sh                                   # suite under AddressSanitizer
 tests/try.sh <project> [args...]                  # run any project, on a virtual display
 ./tests/api.sh                                    # does the runtime still say what it publishes, and is api.json current?
@@ -2280,6 +2281,18 @@ What bit, or would, in the order it was learned:
   its own thread -- that is the work a capture wants attributed most -- so the
   writer is held under one `GMutex`. The collector keeps a buffer per thread and
   locks only in its shared mode, which this process does not reach.
+- **A counter is not a span, and one name has an id per road.** `Profile.Counter`
+  keeps a table of name to the ids the collector and the writer handed out (the
+  collector numbers from `(pid << 16)`, the writer from 1), defines each counter
+  once on the roads that are live and sets it after -- the writer's
+  `define_counters`/`set_counters` want the `time, cpu, pid` triple the
+  collector's do not, which is why this is its own function and not a flag on
+  `profile_emit`. The table is under its own mutex and written from workers; the
+  value is a double, which is what a JavaScript number is; and
+  `SysprofCaptureCounter` keeps **31 characters of the name**, silently, the
+  same bargain marks make at 24 and 40. `bta_profile_finish` destroys the table
+  -- a capture writer is flushed by unref and this one is not, so leaving it
+  would be the last allocation standing at teardown.
 - **GTK's frame marks are the distribution's build, not ours.** Fedora's GTK
   4.22 carries `libsysprof-capture` and calls `sysprof_collector_mark` itself
   (measured: `../src/libsysprof-capture/sysprof-collector.c` in
@@ -2290,9 +2303,12 @@ What bit, or would, in the order it was learned:
   `--profile` and the two `SYSPROF_*` variables once; with none of them there is
   no `collector_init`, no writer, no allocation, and each instrumented point is
   a load of one bool (`bta_profile_begin()` answers 0, `bta_profile_end` returns
-  on it). `Profile.Active` is `false` and `Begin`/`End`/`Mark` are no-ops --
-  **including `End`'s mismatch refusal**, which would otherwise make an
-  instrumented application fail wherever it is not being profiled.
+  on it). `Profile.Active` is `false` and `Begin`/`End`/`Mark`/`Counter` are
+  no-ops -- **including `End`'s mismatch refusal**, which would otherwise make an
+  instrumented application fail wherever it is not being profiled. `Counter`
+  alone still refuses a value that is not a finite number with the profiler off,
+  deliberately: arguments are checked the way every other verb's are, because a
+  program's typo should not wait for a capture to be noticed.
 - **The event span sits inside the handler check**, so the ~3850 dispatches per
   pointer sweep this file measured, with one handler among them, raise one mark
   and not 3850. The label is built (`g_strdup_printf`) only when the profiler is
@@ -2311,6 +2327,13 @@ What bit, or would, in the order it was learned:
   `-g -fno-omit-frame-pointer`. One project at a time, since one capture file
   holds one run: `tests/try.sh --profile /tmp/w.syscap tests/widgets 12345`, or
   `sysprof-cli -- ./build/bintana ide examples/hello`.
+- **`BINTANA_PROFILE=<dir>` profiles the whole suite, one capture per project.**
+  It is an environment variable because the runner **builds** each child's
+  command line: `./tests/run.sh --profile x` would hand the flag to the runner,
+  which is not the program being measured. The runner reads it and turns it into
+  `--profile <dir>/<project>.syscap` on each child. One file per project and not
+  one for the suite, since a capture is one run and several processes writing
+  one file would truncate each other's.
 
 Measured on this machine: `--profile` over `tests/widgets` writes a 125 KB
 capture carrying **1199 marks** (1065 `Event`, 88 `Draw`, 79 `Form`, 35 `Task`,
