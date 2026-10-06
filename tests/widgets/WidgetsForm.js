@@ -527,6 +527,9 @@ const TESTS = [
     /* Blocking too, and in the same group: it runs children with `Exec.Wait`
      * to see a project's own id answered, and a bad one refused. */
     "ApplicationId",
+    /* Blocking too: a console child under `--profile`, whose capture the
+     * parent reads back. */
+    "Profile",
     /* Blocking too: a child on a private bus, watched with dbus-monitor. */
     "Notification",
     /* And a console example, run as a child: it listens on loopback and talks to itself. */
@@ -18766,6 +18769,78 @@ function Main() {
         eq("Quit refuses a word, and a number after it is the status", word.ExitCode, 3);
         check("...naming what it was handed",
               word.Output.includes('"fail" is not a number'), word.Output);
+    }
+
+    /*
+     * The profiler. `Profile` is installed in every run and inert until
+     * something listens -- an instrumented application runs unchanged without
+     * a capture -- and `--profile <file>` writes a Sysprof capture with the
+     * runtime's own marks in it, with no Sysprof installed. That last part is
+     * what makes the capture assertable here, and it is the road that does not
+     * depend on a package or a permission: the child writes a file, the parent
+     * reads it.
+     *
+     * The capture is binary; `File.Load` answers U+FFFD for what is not UTF-8,
+     * and the marks' group, name and message are text inside it either way.
+     */
+    testProfile() {
+        check("Profile is installed",
+              typeof Profile.Begin === "function" &&
+              typeof Profile.Mark  === "function" &&
+              typeof Profile.End   === "function");
+
+        /* With nobody listening the verbs do nothing -- not even the mismatch
+         * refusal, which would otherwise make an instrumented program fail
+         * wherever it is not being profiled. Skipped when the suite itself is
+         * running under Sysprof, where `Active` is true and the spans are
+         * real. */
+        if (!Profile.Active) {
+            let wrong = null;
+            try {
+                Profile.Begin("x");
+                Profile.Mark("y");
+                Profile.End("x");
+                Profile.End("not-open");
+            } catch (e) { wrong = e.message; }
+            eq("an unprofiled run's Profile verbs are inert", wrong, null);
+        }
+
+        const dir = File.Join(SCRATCH, "profile");
+        Directory.Make(dir);
+        File.SaveJson(File.Join(dir, "project.json"),
+                      { name: "profile", main: "Main", sources: ["Main.js"] });
+        File.Save(File.Join(dir, "Main.js"),
+                  'function Main() {\n' +
+                  '    print("active:" + Profile.Active);\n' +
+                  '    Profile.Begin("Work");\n' +
+                  '    Profile.Mark("Half");\n' +
+                  '    let n = 0; for (let i = 0; i < 200000; i++) n += i;\n' +
+                  '    Profile.End("Work");\n' +
+                  '    print("n:" + n);\n' +
+                  '}\n');
+
+        const capture = File.Join(SCRATCH, "profile.syscap");
+        const ran = Exec.Wait([Application.Executable, "--profile", capture, dir],
+                              { Timeout: 20000, Stderr: "separate" });
+
+        /* A build without sysprof-capture refuses the flag; the manifest and
+         * every ordinary run are unaffected, so the fork is on the child. */
+        if (ran.ExitCode === 2 && (ran.Errors || "").includes("sysprof-capture")) {
+            print("  (skipping the capture half: this build has no sysprof-capture)");
+            return;
+        }
+
+        eq("the profiled child runs", ran.ExitCode, 0, ran.Output);
+        check("...with the profiler on", ran.Output.includes("active:true"), ran.Output);
+        check("...and its work done", ran.Output.includes("n:19999900000"), ran.Output);
+
+        const text = File.Load(capture);
+        check("the capture carries the startup span",
+              text.includes("Bintana") && text.includes("Startup"), capture);
+        check("...the script by name",
+              text.includes("Script") && text.includes("Main.js"), capture);
+        check("...and the application's own spans",
+              text.includes("Work") && text.includes("Half"), capture);
     }
 
     /* --- Exec.Wait ------------------------------------------------------

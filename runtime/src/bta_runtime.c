@@ -462,12 +462,15 @@ void bta_drain_jobs(JSRuntime *rt)
 
 int bta_eval_file(JSContext *ctx, const char *path)
 {
+    int64_t prof = bta_profile_begin();
+    int     rc   = 0;
     size_t  len;
     char   *src = bta_read_file(path, &len);
 
     if (!src) {
         fprintf(stderr, "bintana: cannot read %s\n", path);
-        return -1;
+        rc = -1;
+        goto out;
     }
 
     /*
@@ -494,11 +497,24 @@ int bta_eval_file(JSContext *ctx, const char *path)
     if (JS_IsException(r)) {
         bta_dump_error(ctx);
         JS_FreeValue(ctx, r);
-        return -1;
+        rc = -1;
+        goto out;
     }
     JS_FreeValue(ctx, r);
     bta_drain_jobs(JS_GetRuntime(ctx));
-    return 0;
+
+out:
+    /* One span per loaded file, named by its basename: the shape a capture of
+     * a startup wants, where a script that grew is the one that moved.  The
+     * end is read before the basename is built, so the profiler's own work is
+     * not charged to the file. */
+    if (prof) {
+        int64_t done = g_get_monotonic_time();
+        char   *base = g_path_get_basename(path);
+        bta_profile_end_at(prof, done, "Bintana", "Script", base);
+        g_free(base);
+    }
+    return rc;
 }
 
 /* in bta.h: a worker thread builds the same language. */
@@ -1502,6 +1518,14 @@ static bool install_globals(BtaApp *app)
      */
     JS_SetPropertyStr(ctx, global, "BTA_VERSION",
                       JS_NewString(ctx, BTA_VERSION_STRING));
+
+    /*
+     * The profiler an application marks its own work with -- `Profile.Begin`,
+     * `End`, `Mark` and `Active`.  Installed here and in a worker's own boot
+     * (`task_build_worker`), because a `Task` computing on a thread is exactly
+     * the work a capture wants attributed.  Inert in an ordinary run.
+     */
+    bta_profile_init(ctx, global);
 
     /*
      * Logger, which is what `console` was standing in for badly: its .log and
@@ -2855,6 +2879,10 @@ static int run_console(BtaApp *app)
     JS_FreeValue(ctx, r);
     bta_drain_jobs(app->rt);
 
+    /* The profiler's "Startup" span: from `--profile`/Sysprof to the end of
+     * `main`, which for a console project is the whole of its start. */
+    bta_profile_startup_done(app->name);
+
     /*
      * A poll and not a signal from each of the three places work can finish:
      * this only decides *when to notice* that there is nothing left, and
@@ -2956,6 +2984,11 @@ static void on_activate(GtkApplication *gapp, gpointer user_data)
     /* The startup form is owned by the runtime for the life of the process. */
     app->startup_form = form;
     bta_drain_jobs(app->rt);
+
+    /* The profiler's "Startup" span ends where the window is up and the
+     * project's own `Form_Open` has run: everything before the first frame
+     * that can be blamed on opening the program. */
+    bta_profile_startup_done(app->name);
 }
 
 int bta_app_run(BtaApp *app, int argc, char **argv)

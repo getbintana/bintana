@@ -312,6 +312,31 @@ object is three to five times the rest. That is why `Painter.TextWidth` returns 
 number, why the `Draw` event **carries** the surface size instead of making the
 handler ask for it, and why `OriginIn` returns two numbers rather than a point.
 
+## Profiling
+
+The runtime raises named marks on a Sysprof timeline (`runtime/src/bta_profile.c`),
+at the places where time goes and a sampled stack cannot say it: QuickJS
+interprets, so a native frame is `JS_CallInternal` whatever function a `.js` file
+declared. A capture carries `Startup` (to the window being up, or to a console
+`main` returning), one `Script` span per loaded file, `Form` per form built,
+`Draw`/`DrawPage` per frame, `Task` per worker body, and `Event` per event whose
+handler ran — named `<Control>_<Event>` — plus whatever an application marks with
+`Profile.Begin`/`End`/`Mark`.
+
+Two roads carry the same marks, one `profile_emit` underneath so they cannot
+drift: the **collector** (`SYSPROF_CONTROL_FD`, what GTK itself uses, under
+`sysprof-cli` or the Sysprof application) and a **capture file**
+(`--profile <file>`, or `SYSPROF_TRACE_FD`). The file road needs no Sysprof
+installed, which is what makes it testable — `tests/widgets`' `Profile` reads a
+child's capture back — and the collector road is the one that also carries the
+samples and GTK's frame marks.
+
+**When nobody is listening nothing is initialised**: `bta_profile_start` looks
+at the environment once, and every instrumented point is a branch on one bool
+(`bta_profile_begin()` answers 0 and nothing is timed or allocated). The writer
+is not thread-safe — a `Task` marks from its own thread — so it is held under a
+mutex; the collector keeps a buffer per thread and needs nothing.
+
 ## Properties, discovered and never listed
 
 A property is a `JS_CGETSET_DEF` on a class's props array. Nothing else knows it

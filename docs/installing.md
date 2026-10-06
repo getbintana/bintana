@@ -16,7 +16,7 @@ and macOS in [plans/macos-plan.md](plans/macos-plan.md).
 | **CMake 3.16+** and **pkg-config** | the build |
 | **QuickJS** | **not a dependency to install**: quickjs-ng v0.17.0, plus the six patches of ours, is vendored in `vendor/quickjs` as a git submodule ([AGENTS.md](../AGENTS.md#the-six-patches-in-vendor)) |
 
-Seven more are optional, and CMake prints what it found either way. Without each
+Eight more are optional, and CMake prints what it found either way. Without each
 the runtime builds and the thing itself says which package is missing when it is
 called — see the table below.
 
@@ -309,12 +309,49 @@ project in [plugins.md](plugins.md#building-one) says where that is.
 | `Terminal` | `vte291-gtk4-devel` | `libvte-2.91-gtk4-dev` | the class still draws and still round-trips a `.form`; only `Run`, `Stop` and `Kill` refuse. The only dependency with no Windows port |
 | `Xml`, `File.LoadXml`/`SaveXml` | `libxml2-devel` | `libxml2-dev` | `Xml` exists, `Available` is `false`, and every verb refuses with a sentence. GTK4 itself already loads libxml2 at runtime on most desktops, so this is a **build** dependency and not a new runtime one |
 | `Keyring` (a token in the system's vault) | `libsecret-devel` | `libsecret-1-dev` | `Keyring` exists, `Available` is `false`, and every verb refuses with a sentence naming the package. It has no Windows port; the library itself is on every GNOME desktop already |
+| `--profile` and the runtime's marks in a Sysprof capture | `sysprof-capture-devel` | `libsysprof-capture-4-dev` | `--profile` refuses naming the package, and a capture carries no marks of ours — the samples and GTK's frame marks are Sysprof's and unaffected |
 
 `Widget.Available(type)` is how a program asks what the build it is running on
 can actually do — a palette filters on it, and so should anything that offers a
 feature rather than using one. For the two globals that are not widgets the
 question is spelled `Xml.Available` (a value, read off the build) and a refusing
 call for `Database.Sqlite`.
+
+## Profiling
+
+Two ways in, neither of which needs the runtime built specially:
+
+```sh
+# Samples, GTK's frame marks and the runtime's own, in one capture:
+sysprof-cli -- ./build/bintana ide examples/hello
+# ...or the Sysprof application's "Profile a new process".
+
+# The runtime's marks alone, with no Sysprof installed, to open later:
+./build/bintana --profile /tmp/ide.syscap ide examples/hello
+```
+
+`sysprof` (the application and `sysprof-cli`) is a separate install —
+`sudo dnf install sysprof`, `sudo apt install sysprof`; what CMake looks for is
+the capture library above, which another `-devel` package usually pulls in
+already.
+
+**The marks are what a sampled profile cannot see.** QuickJS interprets, so a
+native stack says `JS_CallInternal` and never which function a `.js` file
+declared. A capture carries `Startup`, one span per loaded script, `Form` per
+form built, `Draw`/`DrawPage` per frame, `Task` per worker body, `Event` per
+event whose handler ran, and whatever the application marks with
+`Profile.Begin`/`Mark`/`End`. **An ordinary run pays a branch per instrumented
+point**: with no `--profile` and not under Sysprof, `Profile.Active` is `false`,
+its verbs are no-ops and nothing is allocated or timed.
+
+For callgraphs worth reading, build with debug symbols and frame pointers — the
+default `Debug` build has both; a Release build wants
+`-g -fno-omit-frame-pointer`. One project at a time is the way to profile the
+suite, since one capture file holds one run:
+
+```sh
+tests/try.sh --profile /tmp/widgets.syscap tests/widgets 12345
+```
 
 ## Running the test suite
 
@@ -385,3 +422,4 @@ and a TagLib wrapper worked through.
 | compile errors about `gtk_alert_dialog` or `gtk_file_dialog` | the GTK is older than 4.10 — Debian 13 / Ubuntu 24.04 or newer |
 | `no vte: Terminal exists and refuses to run one` | not an error: the optional table above |
 | `no sqlite3`, `no libsoup`, `no gstreamer`, `no libxml2`, `no libsecret` | likewise — a build line, not a failure |
+| `no sysprof-capture: --profile says so when asked` | likewise; a Sysprof run still shows the samples and GTK's frames |

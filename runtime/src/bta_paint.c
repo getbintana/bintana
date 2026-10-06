@@ -2169,6 +2169,7 @@ static bool paint_frame_page(BtaWidget *w, cairo_t *cr, int width, int height,
 
     bool onpaper = page >= 1 && bta_has_handler(w, "DrawPage");
     bool ok;
+    int64_t prof = bta_profile_begin();
 
     if (onpaper) {
         JSValueConst argv[4] = { obj, JS_NewInt32(ctx, page),
@@ -2179,6 +2180,13 @@ static bool paint_frame_page(BtaWidget *w, cairo_t *cr, int width, int height,
                                  JS_NewInt32(ctx, height) };
         ok = bta_emit_ok(w, "Draw", 3, argv);
     }
+
+    /* One span per frame, however it was asked for: a screen frame, a
+     * `Printer` sheet, and `Save`/`SavePdf` all come through here. The control
+     * is the message, since the name is what the capture filters on. */
+    if (prof)
+        bta_profile_end(prof, "Bintana", onpaper ? "DrawPage" : "Draw",
+                        w->name ? w->name : "");
 
     /* The frame is over: every call on this painter refuses from here on. */
     p->cr = NULL;
@@ -2366,7 +2374,10 @@ static cairo_surface_t *image_frame(JSContext *ctx, const char *who,
         cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
     cairo_t *cr = cairo_create(surface);
 
-    bool drawn = frame(data, cr, width, height, 0);
+    int64_t prof  = bta_profile_begin();
+    bool    drawn = frame(data, cr, width, height, 0);
+    if (prof)
+        bta_profile_end(prof, "Bintana", who, "");
 
     cairo_destroy(cr);
     cairo_surface_flush(surface);
@@ -2552,6 +2563,8 @@ static bool pdf_write(JSContext *ctx, const char *who, const char *path,
     cairo_t *cr = cairo_create(surface);
     bool     ok = true;
 
+    int64_t prof = bta_profile_begin();
+
     for (int32_t page = 1; page <= pages && ok; page++) {
         if (JS_IsFunction(ctx, before)) {
             JSValueConst args[1] = { JS_NewInt32(ctx, page) };
@@ -2565,6 +2578,11 @@ static bool pdf_write(JSContext *ctx, const char *who, const char *path,
         if (ok)
             cairo_show_page(cr);
     }
+
+    /* The whole document, from the first page to the last: `who` is
+     * `SavePdf`, and the per-page `DrawPage` spans sit inside it. */
+    if (prof)
+        bta_profile_end(prof, "Bintana", who, "");
 
     cairo_destroy(cr);
     cairo_surface_finish(surface);

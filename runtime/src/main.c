@@ -32,7 +32,11 @@ static void usage(void)
           "  --strict  a control refuses a property its class does not have,\n"
           "            so a misspelt name throws where it is written instead\n"
           "            of doing nothing forever.  For development: an\n"
-          "            application that keeps state on a control will throw.\n",
+          "            application that keeps state on a control will throw.\n"
+          "  --profile <file>  write a Sysprof capture of the runtime's own\n"
+          "            marks to <file>, with no Sysprof installed.  Running\n"
+          "            under `sysprof-cli` or the Sysprof application instead\n"
+          "            needs no flag and carries the samples too.\n",
           stderr);
 }
 
@@ -66,6 +70,7 @@ int main(int argc, char **argv)
 #endif
 
     const char *dir  = NULL;
+    const char *profile = NULL;
     GPtrArray  *rest = g_ptr_array_new();
 
     for (int i = 1; i < argc; i++) {
@@ -101,6 +106,21 @@ int main(int argc, char **argv)
             bta_strict_want();
             continue;
         }
+        /*
+         * `--profile <file>` takes its argument, so the option and the path
+         * must sit together before the project (the first bare word is the
+         * project; anything after it belongs to the project).
+         */
+        if (!dir && !strcmp(argv[i], "--profile")) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "bintana: --profile needs a file\n");
+                usage();
+                g_ptr_array_unref(rest);
+                return 2;
+            }
+            profile = argv[++i];
+            continue;
+        }
         if (!dir && argv[i][0] == '-') {
             fprintf(stderr, "bintana: unknown option '%s'\n", argv[i]);
             g_ptr_array_unref(rest);
@@ -125,6 +145,11 @@ int main(int argc, char **argv)
         return 2;
     }
 
+    if (!bta_profile_start(profile)) {
+        g_ptr_array_unref(rest);
+        return 2;
+    }
+
     BtaApp *app = bta_app_new(dir);
     app->args = (char **)rest->pdata;
 
@@ -133,6 +158,7 @@ int main(int argc, char **argv)
     int   rc = bta_app_run(app, 1, fake_argv);
 
     bta_app_free(app);
+    bta_profile_finish();
     g_ptr_array_unref(rest);   /* holds argv pointers, not copies */
     return rc;
 }

@@ -25,6 +25,7 @@ jobs:
             build-essential cmake pkg-config \
             libgtk-4-dev libgtksourceview-5-dev libvte-2.91-gtk4-dev \
             libsqlite3-dev libsoup-3.0-dev libxml2-dev \
+            libsysprof-capture-4-dev \
             libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
             gstreamer1.0-tools \
             xvfb xdotool desktop-file-utils \
@@ -391,6 +392,59 @@ jobs:
       - name: Test
         env:
           BINTANA: ./build-nosecret/bintana
+          BINTANA_LIB_PATH: ${{ github.workspace }}/lib
+        run: ./tests/run.sh widgets
+
+  # A seventh job, and the fifth optional half: the profiler without
+  # sysprof-capture. `--profile` refuses naming the package, `Profile` is still
+  # installed with `Active` false and its verbs no-ops -- so an instrumented
+  # program runs unchanged -- and `tests/widgets`' `Profile` takes its other
+  # branch, which is the only build that proves the `#else` half compiles and
+  # runs.
+  #
+  # **Hiding the module rather than not installing it**: `sysprof-capture-devel`
+  # arrives as another `-devel` package's dependency on most distributions, and
+  # a runner that grew it would make this job a second copy of the first one,
+  # silently. The wrapper answers "no" for that one name and CMake's own line is
+  # read back to prove it did.
+  no-sysprof:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config \
+            libgtk-4-dev libgtksourceview-5-dev \
+            libsqlite3-dev libsoup-3.0-dev \
+            xvfb \
+            librsvg2-common fonts-cantarell
+
+      - name: Build with sysprof-capture hidden
+        run: |
+          set -euo pipefail
+          mkdir -p fake
+          # Everything but that one name goes through to the real pkg-config.
+          printf '#!/bin/sh\ncase " $* " in *" sysprof-capture-4 "*) exit 1;; esac\nexec /usr/bin/pkg-config "$@"\n' \
+            > fake/pkg-config
+          chmod +x fake/pkg-config
+
+          cmake -S . -B build-nosysprof \
+                -DPKG_CONFIG_EXECUTABLE="$PWD/fake/pkg-config" 2>&1 | tee cmake.log
+          # It has to have *decided* it, not merely compiled: the same guard
+          # `no-vte`, `no-unix-print`, `no-libxml` and `no-libsecret` carry.
+          grep -q 'no sysprof-capture:' cmake.log \
+            || { echo "this runner has sysprof-capture: the job would prove nothing"; exit 1; }
+          cmake --build build-nosysprof -j"$(nproc)"
+
+      - name: Test
+        env:
+          BINTANA: ./build-nosysprof/bintana
           BINTANA_LIB_PATH: ${{ github.workspace }}/lib
         run: ./tests/run.sh widgets
 

@@ -14267,6 +14267,47 @@
       ]
     },
     {
+      "Name": "Profile",
+      "Members": [
+        {
+          "Name": "Active",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "boolean",
+          "Doc": "whether the marks are going anywhere: true while this run is under Sysprof or was started with `--profile`. False in an ordinary run, where `Begin`/`End`/`Mark` do nothing at all",
+          "Native": true
+        },
+        {
+          "Name": "Begin",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(name)",
+          "Returns": "",
+          "Doc": "opens a span on the timeline. `End(name)` closes it and the pair becomes one mark of the whole stretch — what an application uses around its own work (loading, computing, laying out), since a sampled profile cannot say which of its functions was running. Inert when `Active` is false",
+          "Native": true
+        },
+        {
+          "Name": "End",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(name)",
+          "Returns": "",
+          "Doc": "closes the innermost `Begin`, which has to be the same name. A `name` that does not match is refused naming both, since a span closed in the wrong order would put one name's time on another's. Inert when `Active` is false",
+          "Native": true
+        },
+        {
+          "Name": "Mark",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(name)",
+          "Returns": "",
+          "Doc": "one instant on the timeline with no duration — a point in the program rather than a stretch. Inert when `Active` is false",
+          "Native": true
+        }
+      ]
+    },
+    {
       "Name": "Random",
       "Members": [
         {

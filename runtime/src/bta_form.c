@@ -653,7 +653,9 @@ static const FormEntry *form_path(BtaApp *app, const char *class_name)
 
 /* -------------------------------------------------------------------- entry */
 
-int bta_form_build(JSContext *ctx, JSValueConst form_obj, const char *class_name)
+/* The body, wrapped below by the profiler's span. */
+static int form_build(JSContext *ctx, JSValueConst form_obj,
+                      const char *class_name)
 {
     BtaApp *app = bta_current_app();
     if (!app)
@@ -756,5 +758,17 @@ out:
         bta_widget_styles_release();
     JS_FreeValue(ctx, root);
     g_free(path);
+    return rc;
+}
+
+int bta_form_build(JSContext *ctx, JSValueConst form_obj, const char *class_name)
+{
+    int64_t prof = bta_profile_begin();
+    int     rc   = form_build(ctx, form_obj, class_name);
+
+    /* The class name is the message and not the mark's name, which is fixed:
+     * which form cost what is what a capture of a project is read for. */
+    if (prof)
+        bta_profile_end(prof, "Bintana", "Form", class_name);
     return rc;
 }

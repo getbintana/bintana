@@ -365,7 +365,29 @@ static JSValue emit_on(JSContext *ctx, BtaWidget *w, JSValueConst form,
 
     JSValue result = JS_UNDEFINED;
     if (JS_IsFunction(ctx, fn)) {
+        int64_t prof = bta_profile_begin();
+
         result = JS_Call(ctx, fn, self, argc, argv);
+
+        /* Read before the label below: the profiler's own string work is not
+         * part of what the handler took. */
+        int64_t done = prof ? g_get_monotonic_time() : 0;
+
+        /*
+         * Every event whose handler ran is a span, named by the pair the
+         * dispatch looked up. **Only when a handler is there**, which is the
+         * common case's opposite: a pointer over a twelve-deep tree raises
+         * twelve dispatches and measured one handler in 3850, so nothing is
+         * built -- no mark, no label -- for the other 3849. The label is built
+         * under the active check for the same reason; an idle run pays a load.
+         */
+        if (prof) {
+            char *label = name && *name ? g_strdup_printf("%s_%s", name, event)
+                                        : g_strdup(event);
+            bta_profile_end_at(prof, done, "Event", label, "");
+            g_free(label);
+        }
+
         if (JS_IsException(result)) {
             bta_dump_error(ctx);
             JS_FreeValue(ctx, result);

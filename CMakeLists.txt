@@ -102,6 +102,15 @@ pkg_check_modules(LIBXML IMPORTED_TARGET libxml-2.0)
 # own shared object, which every GNOME desktop already has.
 pkg_check_modules(SECRET IMPORTED_TARGET libsecret-1)
 
+# Optional: sysprof-capture is what lets a Sysprof capture carry the runtime's
+# own marks -- and what `--profile` writes to a file. Static and self-contained
+# (no GLib of its own, BSD-2-Clause-Patent) and already pulled in on most
+# desktops by another `-devel` package, so finding it is the ordinary case.
+# Without it the runtime builds and profiles nothing: `--profile` refuses with
+# a sentence naming the package, and the marks the runtime and GTK would raise
+# are simply not raised. See runtime/src/bta_profile.c.
+pkg_check_modules(SYSPROF IMPORTED_TARGET sysprof-capture-4)
+
 # ---------------------------------------------------------------- QuickJS ---
 # A fork of quickjs-ng, vendored under vendor/quickjs as a submodule:
 # `getbintana/quickjs`, branch `bintana`, which is upstream v0.17.0 plus the
@@ -196,6 +205,7 @@ add_executable(bintana
     runtime/src/bta_table.c
     runtime/src/bta_treerows.c
     runtime/src/bta_debug.c
+    runtime/src/bta_profile.c
     runtime/src/bta_sys.c
     runtime/src/bta_task.c
     runtime/src/bta_lock.c
@@ -291,6 +301,16 @@ if(SECRET_FOUND)
     message(STATUS "libsecret ${SECRET_VERSION}: Keyring is available")
 else()
     message(STATUS "no libsecret: Keyring exists and refuses to store anything")
+endif()
+
+if(SYSPROF_FOUND)
+    target_link_libraries(bintana PRIVATE PkgConfig::SYSPROF)
+    target_compile_definitions(bintana PRIVATE BTA_HAVE_SYSPROF=1)
+    message(STATUS "sysprof-capture ${SYSPROF_VERSION}: --profile can write a "
+                   "capture, and a Sysprof run carries the runtime's marks")
+else()
+    message(STATUS "no sysprof-capture: --profile says so when asked; a Sysprof "
+                   "run still shows the samples")
 endif()
 target_compile_definitions(bintana PRIVATE BTA_VERSION_STRING="${PROJECT_VERSION}")
 # -Wshadow, -Wnull-dereference and -Wformat=2 are clean across runtime/src

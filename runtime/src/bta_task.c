@@ -1162,6 +1162,10 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
     bta_database_init(ctx, global);
     bta_sqlite_init(ctx, global);
     bta_sys_init(ctx, global);
+    /* A worker computing on a thread is what a capture wants attributed most:
+     * `Profile.Begin` here marks the same collector the main thread does (per
+     * thread, so it is safe) and the same capture file (under its own lock). */
+    bta_profile_init(ctx, global);
     /* Pure computation over a string, and libxml2 is thread-safe per document:
      * parsing a big file off the main thread is what this is for. */
     bta_xml_init(ctx, global);
@@ -1372,10 +1376,16 @@ static gpointer task_thread(gpointer data)
         goto unwind;
     }
 
+    int64_t prof = bta_profile_begin();
     ans = JS_Call(ctx, run, inst, 1, (JSValueConst *)&msg);
     JS_FreeValue(ctx, msg);
     JS_FreeValue(ctx, run);
     JS_FreeValue(ctx, inst);
+
+    /* The `Run` body, on its own thread: the mark the main-thread timeline
+     * could never place, and the one a Task exists to move work onto. */
+    if (prof)
+        bta_profile_end(prof, "Task", job->class_name, "");
 
     task_ending(job, ctx, JS_IsException(ans));
     if (job->fail) {

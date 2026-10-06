@@ -989,6 +989,43 @@ void bta_sys_cleanup(void);   /* cancels children still running */
  */
 guint bta_sys_pending(void);
 
+/* --- profiling -------------------------------------------------------------
+ *
+ * Sysprof (`runtime/src/bta_profile.c`): the marks a capture carries -- where
+ * the time went in a form being built, a script being loaded, a frame being
+ * drawn, a `Task` running, an event's handler.  The marks are what a sampled
+ * profile cannot see: QuickJS interprets, so a native stack says
+ * `JS_CallInternal` and never which function a `.js` file declared.
+ *
+ * `--profile <file>` writes a Sysprof capture of those marks with no Sysprof
+ * installed, to be opened later; running under `sysprof-cli` or the Sysprof
+ * application instead connects the collector, and GTK's own frame marks join
+ * the same capture.  **Both are inert when nobody is listening**: `begin`
+ * answers 0, and every call site's mark is a branch that does nothing, so an
+ * ordinary run pays a load per instrumented point and no allocation.
+ *
+ * `bta_profile_init` is the `Profile` object an application uses for its own
+ * code (`Begin`/`End`/`Mark`/`Active`), installed by `install_globals` and by
+ * a worker's own boot.
+ */
+bool bta_profile_start(const char *file);   /* false + a sentence when the build lacks it */
+void bta_profile_finish(void);              /* flush the capture; called by main too */
+bool bta_profile_active(void);
+/* A span's start: 0 when nobody is listening, which is what every call site
+ * guards on and why nothing is timed when the profiler is off. */
+int64_t bta_profile_begin(void);
+void    bta_profile_end(int64_t begin, const char *group, const char *name,
+                        const char *message);
+/* The same, with the end read by the caller: for a mark whose name has to be
+ * built after the work, so the profiler's own string work is not charged to
+ * the handler being measured. */
+void    bta_profile_end_at(int64_t begin, int64_t end, const char *group,
+                           const char *name, const char *message);
+/* Ends the "Startup" span opened by `bta_profile_start`: the window is up, or
+ * a console `main` has returned. */
+void bta_profile_startup_done(const char *project);
+void bta_profile_init(JSContext *ctx, JSValue global);
+
 /* --- Task ----------------------------------------------------------------
  *
  * A class that runs in a thread of its own: `class Sizer extends Task` with a

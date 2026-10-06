@@ -255,12 +255,13 @@ what `.github/workflows/ci.yml` relies on. Anything you drive by hand still need
 `gtksourceview-5` (with headers), pkg-config, and `gmodule-2.0`, which is the
 plugin loader and comes with glib. QuickJS is vendored as a submodule, so
 nothing to install for it -- and a fresh clone wants `--recurse-submodules`, or
-`git submodule update --init` before the first configure. Seven are optional and CMake says what it found either
+`git submodule update --init` before the first configure. Eight are optional and CMake says what it found either
 way: `sqlite3`, `libsystemd`, `libsoup-3.0`, `gstreamer-1.0`,
 **`vte-2.91-gtk4`** -- the pty behind `Terminal`, and the only dependency with
-no Windows port -- `libxml2`, which is what `Xml` parses with, and
+no Windows port -- `libxml2`, which is what `Xml` parses with,
 `libsecret-1`, the system's vault behind `Keyring`, which has no Windows port
-either. The libxml2 one is
+either, and `sysprof-capture-4` (Fedora `sysprof-capture-devel`), which is what
+`--profile` and the runtime's marks in a Sysprof capture are built on. The libxml2 one is
 optional in the build only: on most desktops GTK4 already loads libxml2 at
 runtime, so what the package buys is the headers. **Package names per distribution and what each
 one turns on are in [`docs/installing.md`](docs/installing.md)**, which is also
@@ -2244,6 +2245,104 @@ Three things that will waste your time:
 
 Copy a project to `/tmp` before driving it interactively — a stray drag plus a
 save will edit `examples/hello` for real.
+
+## Profiling: Sysprof, and what the marks are for
+
+`runtime/src/bta_profile.c`. A sampled profile of this runtime is a stack of
+`JS_CallInternal`: QuickJS interprets, so no native frame names the `.js`
+function that was running. The marks are the other half, and they are also the
+half that is assertable -- a capture is a file, and `tests/widgets`' `Profile`
+reads a child's back.
+
+**Two roads in, one `profile_emit` underneath**, because the two APIs disagree
+about their arguments and would otherwise drift. The **collector**
+(`sysprof_collector_mark(time, duration, group, name, message)`,
+`SYSPROF_CONTROL_FD`) is what GTK itself uses under `sysprof-cli` or the
+application's *Profile a new process*, and a run under it carries the samples
+and GTK's frame marks besides. A **capture file**
+(`sysprof_capture_writer_add_mark(writer, time, cpu, pid, duration, group,
+name, message)` -- `duration` in a different place and unsigned) is
+`--profile <file>`: no Sysprof installed, opened in the application later.
+`SYSPROF_TRACE_FD`, which is what `sysprof-cli --use-trace-fd` sets, takes the
+writer road too, the way an app calling `sysprof_capture_writer_new_from_env`
+is expected to.
+
+What bit, or would, in the order it was learned:
+
+- **The times are microseconds on `CLOCK_MONOTONIC`**, which is exactly
+  `g_get_monotonic_time()`. Sysprof's own `example/app.c` comments say
+  *nsec* in three places and are wrong; the header
+  (`sysprof-clock.h`) is `tv_sec * 1000000 + tv_nsec / 1000`.
+- **`group` and `name` are truncated by the capture format** (24 and 40
+  characters, `SysprofCaptureMark`), silently; `message` is not. A mark whose
+  name is a long handler wants the message.
+- **The writer is not thread-safe and the collector is.** A `Task` marks from
+  its own thread -- that is the work a capture wants attributed most -- so the
+  writer is held under one `GMutex`. The collector keeps a buffer per thread and
+  locks only in its shared mode, which this process does not reach.
+- **GTK's frame marks are the distribution's build, not ours.** Fedora's GTK
+  4.22 carries `libsysprof-capture` and calls `sysprof_collector_mark` itself
+  (measured: `../src/libsysprof-capture/sysprof-collector.c` in
+  `libgtk-4.so.1`), so frames appear under the collector with no line here. A
+  GTK built without profiler support contributes none, and a `--profile` file
+  never carries them -- that road has no samples either.
+- **Nothing is initialised until somebody listens.** `bta_profile_start` reads
+  `--profile` and the two `SYSPROF_*` variables once; with none of them there is
+  no `collector_init`, no writer, no allocation, and each instrumented point is
+  a load of one bool (`bta_profile_begin()` answers 0, `bta_profile_end` returns
+  on it). `Profile.Active` is `false` and `Begin`/`End`/`Mark` are no-ops --
+  **including `End`'s mismatch refusal**, which would otherwise make an
+  instrumented application fail wherever it is not being profiled.
+- **The event span sits inside the handler check**, so the ~3850 dispatches per
+  pointer sweep this file measured, with one handler among them, raise one mark
+  and not 3850. The label is built (`g_strdup_printf`) only when the profiler is
+  on, and it is what the dispatch looked up: `<Name>_<Event>`. **The end stamp is
+  read before the label is built** (`bta_profile_end_at`), so the profiler's own
+  string work is not charged to the handler -- which on a 3.6 us handler would
+  be a share of it, and exactly the kind of error that matters when the question
+  is a microsecond one. The same rule for `Script`, whose basename is built
+  after the end is taken.
+- **`Profile.Begin` spans are per thread and nest LIFO** -- a worker has its own
+  -- and a mismatched `End` throws naming both, rather than putting one span's
+  time on another's name. `bta_profile_finish` frees an open stack for the main
+  thread; a worker's goes with the `GPrivate` destructor.
+- **For callgraphs worth reading, build with debug symbols and frame
+  pointers** -- the default `Debug` build has both; a release wants
+  `-g -fno-omit-frame-pointer`. One project at a time, since one capture file
+  holds one run: `tests/try.sh --profile /tmp/w.syscap tests/widgets 12345`, or
+  `sysprof-cli -- ./build/bintana ide examples/hello`.
+
+Measured on this machine: `--profile` over `tests/widgets` writes a 125 KB
+capture carrying **1199 marks** (1065 `Event`, 88 `Draw`, 79 `Form`, 35 `Task`,
+10 `Script`, the rest `Save` and the one `Startup`), and `sysprof_capture_reader`
+reads every one of them back; the same suite passes with the profiler off, where
+nothing is written at all.
+
+**The first harvest was the IDE, and the event marks are what it found.**
+`--profile` over `tests/ide` is 3.9 MB and **37,449 marks** in 354 s with the
+suite green (2818 assertions) -- against 431 s for the ordinary runner run, so
+the writer's per-mark cost does not show at this size. 37,238 of those marks are
+`Event` and 211 are the runtime's (`Bintana`); **28,402 of them are one
+handler**, `PropGrid_Filter` -- the property grid's filter answering GTK for
+every row of every rebuild, 76 % of the capture. **That count is not a cost, and
+reading durations rather than counting marks is what the second look is for**:
+the same handler is **104 ms of the whole run** (28,402 calls at 3.66 us, max
+32 us) -- a row-table lookup and a string compare, asked once per row per
+rebuild, about 40 rows times the ~700 rebuilds a driven IDE does. Exclusive
+(leaf) time over the same capture -- a mark's duration less the marks nested
+inside it, since the spans nest and a parent's inclusive time carries its
+children -- puts `Click` first at **1.94 s**, then `BtnSave_Click` 249 ms, and
+`Editor_Cursor` **216 ms over 252 calls, 0.86 ms each**, which is the
+per-keystroke live check a person would feel; `PropGrid_Filter` is eighteenth.
+**A capture counts *and* times; the first capture counts and the second reads
+the clock.**
+
+**And a profiled by-hand run has to reproduce the runner's screen.** The first
+attempt used a bare `xvfb-run -a` (and so does `tests/try.sh`), whose default
+screen is smaller than the runner's `--server-args=-screen 0 1280x1024x24`, and
+eight geometry assertions failed -- panes that did not grow on a resize, a hint
+that would not fit beside a call. Every one read as the profiler changing the
+layout; none had anything to do with it.
 
 ## Traps
 
