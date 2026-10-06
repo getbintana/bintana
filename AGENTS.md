@@ -718,6 +718,32 @@ hold. `docs/plans/debug-plan.md` is the design and the measurements.
   `debug` phase covers the IDE's half -- the commands, and the gutter mark being
   the state -- and deliberately starts no child, because driving one from there
   says the same thing again, slower and through a window.
+- **Three more verbs arrived later, and two of them were already half there.**
+  Conditions had been built in the runtime for as long as they existed and had no
+  way in from the IDE: `Debugger.armCommand` sent `{do,file,line,id}` and never
+  `when`. The way in is one dialog (`BreakpointForm`) for the condition and the
+  **logpoint**'s message, and the trap it carries is that **a setting changed on
+  a running program is a fresh breakpoint** -- the protocol has no *change a
+  breakpoint*, so it is a `clear` by the id that is armed and a new `break`.
+  A logpoint is `log` on the same order: the expression is evaluated where the
+  program stands, sent as `{"event":"log",…}` and **the program is not stopped**,
+  which is why a loop records every turn and holds none. Because a log line is a
+  sentence and not a value, `evaluate` gained a `message` mode that hands a
+  string back unquoted, where the immediate box and the values panel quote one --
+  and the string is unwrapped by the evaluator rather than by `say_log`, so there
+  is one place that knows how a result becomes text.
+  **`runto` is a one-shot breakpoint**: armed like any other, removed from
+  `dbg.breaks` the moment it is reached, so a loop under it stops once; a second
+  `runto` drops the first, and it is not announced with `armed` because there is
+  no mark for the IDE to move. It appears in `obey` with the other verbs and is
+  ignored by an older runtime, which is the whole point of *a verb appears when
+  it works* -- and the comment at the end of `obey` had been listing `runto`,
+  `eval` and `stopOnThrow` as not built long after two of them were, which is how
+  a reader concludes a verb is missing.
+  `tests/widgets` holds the protocol (`testDebuggerRunTo`, `testDebuggerLog`) and
+  `tests/ide`'s `debug` phase holds the IDE's half: the dialog, the tooltip that
+  says both settings, the arm command carrying them, and the refusal of run to
+  cursor with nothing running.
 
 ### 5. `async` is refused where it is written
 
@@ -2343,7 +2369,7 @@ nothing is written at all.
 
 **The first harvest was the IDE, and the event marks are what it found.**
 `--profile` over `tests/ide` is 3.9 MB and **37,449 marks** in 354 s with the
-suite green (2818 assertions) -- against 431 s for the ordinary runner run, so
+suite green (2818 assertions then; 2862 today) -- against 431 s for the ordinary runner run, so
 the writer's per-mark cost does not show at this size. 37,238 of those marks are
 `Event` and 211 are the runtime's (`Bintana`); **28,402 of them are one
 handler**, `PropGrid_Filter` -- the property grid's filter answering GTK for

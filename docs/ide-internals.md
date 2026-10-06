@@ -253,6 +253,14 @@ same argument](#f12-and-where-a-name-is-declared). What it costs is one parse of
 one file, and it is cheaper than the pattern it replaced: **3.4 ms against
 6.9 ms** on this IDE's own 110 KB `MainForm.js`, measured.
 
+**`Ctrl+T` is the same bargain one size up.** `Navigator.projectSymbols` parses
+every `.js` of the listing on each press -- no index either, and for the same
+reason -- and `SymbolForm` filters it in memory. A tab being edited is read live
+through `sourceOf`, so a class typed and not saved is offered like any other,
+and a symbol carries its file, which is why the digits half of that box is off
+for the project: a line number names a place in a file, and here the file is
+part of the address.
+
 It runs on the pause after typing, and **`Ide.Live` owns that timer**: one pause
 should mean one pass over the file however many readers it has. A pass that found
 the same methods compares a signature and stops there, which is what keeps the

@@ -23607,8 +23607,160 @@ class PQ extends Form {
                 eq("with the values that led to it", by.n, "9");
                 eq("...including what it had worked out", by.doubled, "18");
 
+                this.testDebuggerRunTo();
+            });
+    }
+
+    /*
+     * Run to cursor: a breakpoint that takes itself out when it is reached.
+     *
+     * The loop is the assertion -- its body runs three times, so a `runto` that
+     * left its breakpoint armed would stop on every pass. The second half asks
+     * again from *inside* a stop, which is the ordinary way the command is used
+     * and is also what proves a new one replaces the old.
+     */
+    testDebuggerRunTo() {
+        const proj = File.Join(SCRATCH, "dbg3");
+
+        Directory.Make(proj);
+        File.Save(File.Join(proj, "project.json"),
+                  JSON.stringify({ name: "dbg3", main: "Main", sources: ["Main.js"] }));
+        File.Save(File.Join(proj, "Main.js"),
+                  '"use strict";\n' +
+                  'function work(n) {\n' +
+                  '    let total = 0;\n' +
+                  '    for (let i = 0; i < 3; i++) {\n' +
+                  '        total += n;\n' +
+                  '    }\n' +
+                  '    return total;\n' +
+                  '}\n' +
+                  'function Main() {\n' +
+                  '    print(`total ${work(2)}`);\n' +
+                  '    Application.Quit(0);\n' +
+                  '}\n');
+
+        const stops = [];
+        const out   = [];
+        let   asked = false;
+
+        const job = Exec([Application.Executable, "--debug", proj],
+            {
+                Timeout: 20000,
+                Control: (line) => {
+                    const msg  = JSON.parse(line);
+                    const kind = msg.event || msg.reply;
+
+                    if (kind === "ready") {
+                        job.Write(JSON.stringify({ do: "runto", file: "Main.js", line: 5 }));
+                        job.Write(JSON.stringify({ do: "continue" }));
+                    } else if (kind === "stopped") {
+                        stops.push(msg);
+                        /* The first stop is the line asked for; from there the
+                         * caret moves and the second `runto` replaces it. */
+                        if (!asked) {
+                            asked = true;
+                            job.Write(JSON.stringify({ do: "runto", file: "Main.js",
+                                                       line: 7 }));
+                        } else {
+                            job.Write(JSON.stringify({ do: "continue" }));
+                        }
+                    }
+                },
+            },
+            (line) => out.push(line),
+            (code) => {
+                eq("a program run to the cursor finishes", code, 0);
+                check("and printed what it was going to print",
+                      out.join("").includes("total 6"), JSON.stringify(out));
+
+                /* The loop body runs three times, so one stop here is the
+                 * one-shot working. The second is the line the caret moved to. */
+                eq("run to cursor stopped twice", stops.length, 2);
+                eq("first where it was sent", stops[0].frames[0].Line, 5);
+                eq("and then where the caret moved to", stops[1].frames[0].Line, 7);
+                eq("both are plain stops", stops[0].reason, "breakpoint");
+                eq("...the second too", stops[1].reason, "breakpoint");
+
+                this.testDebuggerLog();
+            });
+
+        check("run to cursor answers the write", typeof job.Write === "function");
+    }
+
+    /*
+     * A logpoint: the value of an expression recorded where the program is
+     * standing, and **not** a stop. The condition beside it still decides
+     * whether it fires, a message that comes back as a string is a sentence
+     * rather than a quoted value, and an expression that throws records its
+     * message instead of stopping on every pass -- the rule a broken condition
+     * already follows.
+     */
+    testDebuggerLog() {
+        const proj = File.Join(SCRATCH, "dbg4");
+
+        Directory.Make(proj);
+        File.Save(File.Join(proj, "project.json"),
+                  JSON.stringify({ name: "dbg4", main: "Main", sources: ["Main.js"] }));
+        File.Save(File.Join(proj, "Main.js"),
+                  '"use strict";\n' +
+                  'function Main() {\n' +
+                  '    let total = 0;\n' +
+                  '    for (let i = 0; i < 3; i++) {\n' +
+                  '        total += i;\n' +
+                  '    }\n' +
+                  '    print(`total ${total}`);\n' +
+                  '    Application.Quit(0);\n' +
+                  '}\n');
+
+        const logs  = [];
+        const stops = [];
+        const out   = [];
+
+        const job = Exec([Application.Executable, "--debug", proj],
+            {
+                Timeout: 20000,
+                Control: (line) => {
+                    const msg  = JSON.parse(line);
+                    const kind = msg.event || msg.reply;
+
+                    if (kind === "ready") {
+                        job.Write(JSON.stringify({ do: "break", file: "Main.js",
+                                                   line: 5, id: 1, when: "i === 1",
+                                                   log: '"i=" + i + " total=" + total' }));
+                        job.Write(JSON.stringify({ do: "break", file: "Main.js",
+                                                   line: 7, id: 2,
+                                                   log: "no.such.thing" }));
+                        job.Write(JSON.stringify({ do: "continue" }));
+                    } else if (kind === "log") {
+                        logs.push(msg);
+                    } else if (kind === "stopped") {
+                        stops.push(msg);
+                        job.Write(JSON.stringify({ do: "continue" }));
+                    }
+                },
+            },
+            (line) => out.push(line),
+            (code) => {
+                eq("a program with logpoints finishes", code, 0);
+                check("and printed what it was going to print",
+                      out.join("").includes("total 3"), JSON.stringify(out));
+
+                /* The whole point: it recorded, and the program never stopped. */
+                eq("a logpoint does not stop", stops.length, 0);
+                eq("and both fired once", logs.length, 2);
+                eq("with the expression's answer", logs[0].text, "i=1 total=0");
+                eq("naming the file", logs[0].file, "Main.js");
+                eq("...and the line", logs[0].line, 5);
+                check("the second is a failure and not a stop",
+                      logs[1] && logs[1].failed === true, JSON.stringify(logs));
+                check("...whose message is the answer",
+                      logs[1] && typeof logs[1].text === "string" && logs[1].text.length > 0,
+                      JSON.stringify(logs));
+
                 this.testExecKill();
             });
+
+        check("a logpoint answers the write", typeof job.Write === "function");
     }
 
     testExecKill() {

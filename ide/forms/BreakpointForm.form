@@ -1,0 +1,119 @@
+{
+  "format": "bintana-form/1",
+  "class": "BreakpointForm",
+  "properties": {
+    "Text": "Breakpoint",
+    "Width": 460,
+    "Height": 232,
+    "Resizable": false
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblWhere",
+      "properties": {
+        "X": 16,
+        "Y": 12,
+        "Width": 428,
+        "Height": 20,
+        "Text": "",
+        "HAlign": "Fill",
+        "Style": "dim-label"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblCondition",
+      "properties": {
+        "X": 16,
+        "Y": 40,
+        "Width": 428,
+        "Height": 20,
+        "Text": "Stop only when:",
+        "HAlign": "Fill"
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtCondition",
+      "properties": {
+        "X": 16,
+        "Y": 64,
+        "Width": 428,
+        "Height": 34,
+        "Text": "",
+        "Placeholder": "an expression, e.g. n > 3 - empty stops every time",
+        "HAlign": "Fill",
+        "ActivatesDefault": true
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblLog",
+      "properties": {
+        "X": 16,
+        "Y": 106,
+        "Width": 428,
+        "Height": 20,
+        "Text": "Message (an expression, recorded without stopping):",
+        "HAlign": "Fill"
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtMessage",
+      "properties": {
+        "X": 16,
+        "Y": 130,
+        "Width": 428,
+        "Height": 34,
+        "Text": "",
+        "Placeholder": "e.g. \"total=\" + total - empty stops when the condition holds",
+        "HAlign": "Fill",
+        "ActivatesDefault": true
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnClear",
+      "properties": {
+        "X": 16,
+        "Y": 184,
+        "Width": 90,
+        "Height": 32,
+        "Text": "Clear",
+        "HAlign": "Start",
+        "VAlign": "End"
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnCancel",
+      "properties": {
+        "X": 246,
+        "Y": 184,
+        "Width": 90,
+        "Height": 32,
+        "Text": "Cancel",
+        "HAlign": "End",
+        "VAlign": "End",
+        "Cancel": true
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnOk",
+      "properties": {
+        "HAlign": "End",
+        "Height": 32,
+        "Style": "suggested-action",
+        "Text": "OK",
+        "VAlign": "End",
+        "Width": 100,
+        "X": 344,
+        "Y": 184,
+        "Default": true
+      }
+    }
+  ]
+}

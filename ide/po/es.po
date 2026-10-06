@@ -2671,3 +2671,111 @@ msgstr "No se pudo ejecutar {0}: {1}"
 #: modules/Translations.js:317
 msgid "{0} is not installed, or not on the PATH."
 msgstr "{0} no está instalado, o no está en el PATH."
+
+#: forms/BreakpointForm.form: BreakpointForm.Text
+msgid "Breakpoint"
+msgstr "Punto de corte"
+
+#: forms/BreakpointForm.form: LblCondition.Text
+msgid "Stop only when:"
+msgstr "Detener solo cuando:"
+
+#: forms/BreakpointForm.form: TxtCondition.Placeholder
+msgid "an expression, e.g. n > 3 - empty stops every time"
+msgstr "una expresión, p. ej. n > 3 - vacío se detiene siempre"
+
+#: forms/BreakpointForm.form: LblLog.Text
+msgid "Message (an expression, recorded without stopping):"
+msgstr "Mensaje (una expresión, se registra sin detenerse):"
+
+#: forms/BreakpointForm.form: TxtMessage.Placeholder
+msgid "e.g. \"total=\" + total - empty stops when the condition holds"
+msgstr "p. ej. \"total=\" + total - vacío se detiene cuando se cumple la condición"
+
+#: forms/BreakpointForm.form: BtnClear.Text
+msgid "Clear"
+msgstr "Limpiar"
+
+#: forms/MainForm.form: action ActRunTo
+msgid "Run to cursor"
+msgstr "Ejecutar hasta el cursor"
+
+#: forms/MainForm.form: BtnDbgRunTo.Tooltip
+msgid "Run to cursor (Ctrl+F10)"
+msgstr "Ejecutar hasta el cursor (Ctrl+F10)"
+
+#: forms/MainForm.form: menu MnuBreakpointProps
+msgid "Breakpoint..."
+msgstr "Punto de corte..."
+
+#: forms/MainForm.form: menu MnuGotoProjectSymbol
+msgid "Go to symbol in project..."
+msgstr "Ir a símbolo en el proyecto..."
+
+#: forms/SearchForm.form: TxtReplace.Tooltip
+msgid ""
+"The replacement. With Regular expression on, $1 and $$ are the pattern's "
+"groups"
+msgstr ""
+"El reemplazo. Con expresión regular activada, $1 y $$ son los grupos del "
+"patrón"
+
+#: forms/SearchForm.form: BtnReplace.Tooltip
+msgid "Replace the match the selected row stands on"
+msgstr "Reemplazar la coincidencia sobre la que está la fila elegida"
+
+#: forms/SearchForm.form: BtnReplaceAll.Text
+msgid "Replace all"
+msgstr "Reemplazar todo"
+
+#: forms/SearchForm.form: BtnReplaceAll.Tooltip
+msgid "Replace every match, in the files the filter picked"
+msgstr "Reemplazar todas las coincidencias, en los archivos que eligió el filtro"
+
+#: modules/Debugger.js:109
+msgid "only when"
+msgstr "solo cuando"
+
+#: modules/Debugger.js:110
+msgid "message"
+msgstr "mensaje"
+
+#: modules/Debugger.js:283
+msgid "Put the caret on a breakpoint first."
+msgstr "Poné el cursor sobre un punto de corte primero."
+
+#: modules/Debugger.js:710
+msgid "Run to cursor needs a program being debugged."
+msgstr "Ejecutar hasta el cursor necesita un programa en depuración."
+
+#: forms/SearchForm.js:296
+msgid "Choose one of the matches to replace it."
+msgstr "Elegí una de las coincidencias para reemplazarla."
+
+#: forms/SearchForm.js:315
+msgid "{0}:{1}: replaced"
+msgstr "{0}:{1}: reemplazado"
+
+#: forms/SearchForm.js:334
+msgid "Nothing to replace."
+msgstr "No hay nada que reemplazar."
+
+#: forms/SearchForm.js:344
+msgid "Replace in project"
+msgstr "Reemplazar en el proyecto"
+
+#: forms/SearchForm.js:345
+msgid "Replace {0} occurrence in {1} file?"
+msgid_plural "Replace {0} occurrences in {1} files?"
+msgstr[0] "¿Reemplazar {0} aparición en {1} archivo?"
+msgstr[1] "¿Reemplazar {0} apariciones en {1} archivos?"
+
+#: forms/SymbolForm.js:62
+msgid "Go to symbol in project"
+msgstr "Ir a símbolo en el proyecto"
+
+#: forms/SearchForm.js:354
+msgid "{0} replacement made"
+msgid_plural "{0} replacements made"
+msgstr[0] "{0} reemplazo hecho"
+msgstr[1] "{0} reemplazos hechos"

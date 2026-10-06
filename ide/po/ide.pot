@@ -2589,3 +2589,106 @@ msgstr ""
 #: modules/Translations.js:317
 msgid "{0} is not installed, or not on the PATH."
 msgstr ""
+#: forms/BreakpointForm.form: BreakpointForm.Text
+msgid "Breakpoint"
+msgstr ""
+
+#: forms/BreakpointForm.form: LblCondition.Text
+msgid "Stop only when:"
+msgstr ""
+
+#: forms/BreakpointForm.form: TxtCondition.Placeholder
+msgid "an expression, e.g. n > 3 - empty stops every time"
+msgstr ""
+
+#: forms/BreakpointForm.form: LblLog.Text
+msgid "Message (an expression, recorded without stopping):"
+msgstr ""
+
+#: forms/BreakpointForm.form: TxtMessage.Placeholder
+msgid "e.g. \"total=\" + total - empty stops when the condition holds"
+msgstr ""
+
+#: forms/BreakpointForm.form: BtnClear.Text
+msgid "Clear"
+msgstr ""
+
+#: forms/MainForm.form: action ActRunTo
+msgid "Run to cursor"
+msgstr ""
+
+#: forms/MainForm.form: BtnDbgRunTo.Tooltip
+msgid "Run to cursor (Ctrl+F10)"
+msgstr ""
+
+#: forms/MainForm.form: menu MnuBreakpointProps
+msgid "Breakpoint..."
+msgstr ""
+
+#: forms/MainForm.form: menu MnuGotoProjectSymbol
+msgid "Go to symbol in project..."
+msgstr ""
+
+#: forms/SearchForm.form: TxtReplace.Tooltip
+msgid "The replacement. With Regular expression on, $1 and $$ are the pattern's groups"
+msgstr ""
+
+#: forms/SearchForm.form: BtnReplace.Tooltip
+msgid "Replace the match the selected row stands on"
+msgstr ""
+
+#: forms/SearchForm.form: BtnReplaceAll.Text
+msgid "Replace all"
+msgstr ""
+
+#: forms/SearchForm.form: BtnReplaceAll.Tooltip
+msgid "Replace every match, in the files the filter picked"
+msgstr ""
+
+#: modules/Debugger.js:109
+msgid "only when"
+msgstr ""
+
+#: modules/Debugger.js:110
+msgid "message"
+msgstr ""
+
+#: modules/Debugger.js:283
+msgid "Put the caret on a breakpoint first."
+msgstr ""
+
+#: modules/Debugger.js:710
+msgid "Run to cursor needs a program being debugged."
+msgstr ""
+
+#: forms/SearchForm.js:296
+msgid "Choose one of the matches to replace it."
+msgstr ""
+
+#: forms/SearchForm.js:315
+msgid "{0}:{1}: replaced"
+msgstr ""
+
+#: forms/SearchForm.js:334
+msgid "Nothing to replace."
+msgstr ""
+
+#: forms/SearchForm.js:344
+msgid "Replace in project"
+msgstr ""
+
+#: forms/SearchForm.js:345
+msgid "Replace {0} occurrence in {1} file?"
+msgid_plural "Replace {0} occurrences in {1} files?"
+msgstr[0] ""
+msgstr[1] ""
+
+#: forms/SymbolForm.js:62
+msgid "Go to symbol in project"
+msgstr ""
+
+#: forms/SearchForm.js:354
+msgid "{0} replacement made"
+msgid_plural "{0} replacements made"
+msgstr[0] ""
+msgstr[1] ""

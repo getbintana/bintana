@@ -3,7 +3,7 @@
   "class": "SearchForm",
   "properties": {
     "Arrangement": "Vertical",
-    "Height": 520,
+    "Height": 562,
     "Icon": "system-search-symbolic",
     "Text": "Find in project",
     "Width": 720
@@ -14,7 +14,7 @@
       "name": "Head",
       "properties": {
         "Arrangement": "Vertical",
-        "Height": 74,
+        "Height": 116,
         "Margin": 8,
         "Spacing": 6,
         "Width": 704
@@ -98,6 +98,47 @@
               "properties": {
                 "Tooltip": "Which files to look in",
                 "Width": 170
+              }
+            }
+          ]
+        },
+        {
+          "type": "Panel",
+          "name": "ReplaceRow",
+          "properties": {
+            "Arrangement": "Horizontal",
+            "HAlign": "Fill",
+            "Spacing": 8
+          },
+          "children": [
+            {
+              "type": "TextBox",
+              "name": "TxtReplace",
+              "properties": {
+                "HAlign": "Fill",
+                "HExpand": true,
+                "Icon": "edit-find-replace-symbolic",
+                "Tooltip": "The replacement. With Regular expression on, $1 and $$ are the pattern's groups"
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnReplace",
+              "properties": {
+                "Height": 32,
+                "Text": "Replace",
+                "Tooltip": "Replace the match the selected row stands on",
+                "Width": 110
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnReplaceAll",
+              "properties": {
+                "Height": 32,
+                "Text": "Replace all",
+                "Tooltip": "Replace every match, in the files the filter picked",
+                "Width": 130
               }
             }
           ]

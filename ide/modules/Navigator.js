@@ -183,6 +183,34 @@ Ide.Navigator = class Navigator {
         return methodsOf(source).map((s) => ({ name: s.Name, line: s.Line }));
     }
 
+    /*
+     * Every declaration of every source of the project, in load order and in the
+     * order they are written: what *Go to symbol in project* offers.
+     *
+     * Classes, top-level functions and methods -- the three kinds a name can be
+     * declared as. Read on every press and **never kept**, for the reason
+     * `classNamed` gives: an index would have to be thrown away whenever a class
+     * is renamed, a file is added or a tab is edited, and a jump to a line that
+     * no longer declares anything is worse than none. A tab being edited is read
+     * live, through `sourceOf`.
+     */
+    projectSymbols() {
+        const out = [];
+
+        for (const file of this.ide.classes.files) {
+            if (!File.IsExtension(file, "js")) continue;
+
+            for (const symbol of Application.Symbols(this.sourceOf(file))) {
+                if (symbol.Kind !== "Class" &&
+                    symbol.Kind !== "Function" &&
+                    symbol.Kind !== "Method") continue;
+
+                out.push({ name: symbol.Name, file, line: symbol.Line });
+            }
+        }
+        return out;
+    }
+
     /* Whether a `.form` holds a control of that name, at any depth. */
     formHolds(form, name) {
         let tree;

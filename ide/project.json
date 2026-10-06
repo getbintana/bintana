@@ -5,6 +5,7 @@
   "startup": "MainForm",
   "sources": [
     "forms/AskForm.js",
+    "forms/BreakpointForm.js",
     "forms/ConfirmForm.js",
     "forms/AboutForm.js",
     "forms/NewProjectForm.js",

@@ -69,6 +69,8 @@ struct BtaBreakStruct {
     int   line;         /* where it really stops: the first one at or after it */
     int   id;           /* the IDE's, echoed back so it can tell them apart */
     char *when;         /* a condition, or NULL */
+    char *log;          /* an expression to record and not stop on, or NULL */
+    bool  one_shot;     /* run-to-cursor: takes itself out when it is reached */
 };
 
 static struct {
@@ -158,7 +160,8 @@ void bta_debug_compiled(JSContext *ctx, const char *path, JSValueConst compiled)
             continue;
         }
         bp->line = at;
-        say_armed(ctx, bp);
+        if (!bp->one_shot)
+            say_armed(ctx, bp);
         k++;
     }
 }
@@ -472,8 +475,15 @@ static void emit_object(JSContext *ctx, JSValue object)
  * question asked by a debugger is not something the program should then find
  * itself handling. What a throwing expression answers is the message, which is
  * what a person typing in an immediate box wants to see anyway.
+ *
+ * `message` is a logpoint's half: a string that comes back **is** the line to
+ * write, unquoted, because `"i=" + i` is a sentence somebody wrote to read.
+ * Everything else -- the immediate box, a value in the panel -- quotes a string
+ * so that `"Ana"` is told apart from a name, which is the same answer
+ * `JSON.stringify` gives.
  */
-static char *evaluate(JSContext *ctx, int frame, const char *expr, bool *failed)
+static char *evaluate(JSContext *ctx, int frame, const char *expr, bool *failed,
+                      bool message)
 {
     JSValue out;
     char   *text;
@@ -495,7 +505,14 @@ static char *evaluate(JSContext *ctx, int frame, const char *expr, bool *failed)
         return text;
     }
 
-    text = render(ctx, out);
+    if (message && JS_IsString(out)) {
+        const char *s = JS_ToCString(ctx, out);
+
+        text = g_strdup(s ? s : "");
+        JS_FreeCString(ctx, s);
+    } else {
+        text = render(ctx, out);
+    }
     JS_FreeValue(ctx, out);
     if (failed)
         *failed = false;
@@ -540,6 +557,25 @@ static void say_stopped(JSContext *ctx, const uint8_t *pc, const char *reason)
     emit_object(ctx, event);
 }
 
+/*
+ * A logpoint: what an expression came to where the program is standing, sent
+ * and **not** stopped on. The message is the expression's own answer, rendered
+ * the way a watch is, so `n` records the value and `"total: " + total` records
+ * a sentence. An expression that throws records its message and the program
+ * carries on, which is the rule a broken condition already follows.
+ */
+static void say_log(JSContext *ctx, BtaBreak *bp, const char *text, bool failed)
+{
+    JSValue event = JS_NewObject(ctx);
+
+    JS_SetPropertyStr(ctx, event, "event", JS_NewString(ctx, "log"));
+    JS_SetPropertyStr(ctx, event, "file", JS_NewString(ctx, bp->file));
+    JS_SetPropertyStr(ctx, event, "line", JS_NewInt32(ctx, bp->line));
+    JS_SetPropertyStr(ctx, event, "text", JS_NewString(ctx, text));
+    JS_SetPropertyStr(ctx, event, "failed", JS_NewBool(ctx, failed));
+    emit_object(ctx, event);
+}
+
 /* The locals of one frame, rendered. */
 static void say_locals(JSContext *ctx, int frame)
 {
@@ -580,11 +616,13 @@ static void say_locals(JSContext *ctx, int frame)
 
 /* ------------------------------------------------------- reading commands */
 
-static void set_break(JSContext *ctx, JSValue cmd)
+static void set_break(JSContext *ctx, JSValue cmd, bool one_shot)
 {
     BtaBreak   *bp = g_new0(BtaBreak, 1);
-    const char *file = NULL, *when = NULL;
+    const char *file = NULL, *when = NULL, *log = NULL;
     JSValue     v;
+
+    bp->one_shot = one_shot;
 
     v = JS_GetPropertyStr(ctx, cmd, "file");
     file = JS_ToCString(ctx, v);
@@ -609,6 +647,15 @@ static void set_break(JSContext *ctx, JSValue cmd)
     }
     JS_FreeValue(ctx, v);
 
+    v = JS_GetPropertyStr(ctx, cmd, "log");
+    if (JS_IsString(v)) {
+        log = JS_ToCString(ctx, v);
+        if (log && *log)
+            bp->log = g_strdup(log);
+        JS_FreeCString(ctx, log);
+    }
+    JS_FreeValue(ctx, v);
+
     /*
      * Moved to a line that exists, and the IDE is told where it went: a mark in
      * the gutter beside a line that can never stop is a lie the programmer then
@@ -625,10 +672,36 @@ static void set_break(JSContext *ctx, JSValue cmd)
     if (at > 0) {
         bp->line = at;
         g_ptr_array_add(dbg.breaks, bp);
-        say_armed(ctx, bp);
+        if (!one_shot)
+            say_armed(ctx, bp);
         return;
     }
     g_ptr_array_add(dbg.breaks, bp);    /* pending */
+}
+
+/* One run-to-cursor at a time: arming a second one takes the first out, since
+ * what it was going to stop at is no longer where the caret is. */
+static void drop_one_shots(void)
+{
+    for (guint i = 0; i < dbg.breaks->len; ) {
+        BtaBreak *bp = g_ptr_array_index(dbg.breaks, i);
+
+        if (bp->one_shot)
+            g_ptr_array_remove_index(dbg.breaks, i);
+        else
+            i++;
+    }
+}
+
+/* The one that was just reached. */
+static void remove_one_shot(BtaBreak *bp)
+{
+    for (guint i = 0; i < dbg.breaks->len; i++) {
+        if (g_ptr_array_index(dbg.breaks, i) == bp) {
+            g_ptr_array_remove_index(dbg.breaks, i);
+            return;
+        }
+    }
 }
 
 static void free_break(gpointer p)
@@ -636,6 +709,7 @@ static void free_break(gpointer p)
     BtaBreak *bp = p;
     g_free(bp->file);
     g_free(bp->when);
+    g_free(bp->log);
     g_free(bp);
 }
 
@@ -679,7 +753,15 @@ static bool obey(JSContext *ctx, const char *line, int depth_now)
     }
 
     if (!strcmp(verb, "break")) {
-        set_break(ctx, cmd);
+        set_break(ctx, cmd, false);
+    } else if (!strcmp(verb, "runto")) {
+        /* A breakpoint that takes itself out when it is reached, and letting the
+           program go: the next stop is the line the caret is on. One at a time,
+           because a second one means the caret moved. */
+        drop_one_shots();
+        set_break(ctx, cmd, true);
+        dbg.mode = RUN;
+        go = true;
     } else if (!strcmp(verb, "clear")) {
         clear_break(ctx, cmd);
     } else if (!strcmp(verb, "continue")) {
@@ -712,7 +794,7 @@ static bool obey(JSContext *ctx, const char *line, int depth_now)
 
         JS_ToInt32(ctx, &frame, fv);
         if (text) {
-            char   *answer = evaluate(ctx, frame, text, &failed);
+            char   *answer = evaluate(ctx, frame, text, &failed, false);
             JSValue out    = JS_NewObject(ctx);
 
             JS_SetPropertyStr(ctx, out, "reply", JS_NewString(ctx, "eval"));
@@ -770,12 +852,12 @@ static bool obey(JSContext *ctx, const char *line, int depth_now)
         dbg.mode = PAUSE;
     }
     /*
-     * Anything else is ignored, deliberately: the protocol will grow verbs
-     * this build does not have (`stopOnThrow`, `runto`, `eval` -- stages 3 to 6
-     * of docs/plans/debug-plan.md), and a debugger that died on one would make
-     * every future IDE incompatible with every older runtime. What it must not
-     * do is *accept* one and do nothing, which is why none of them is listed
-     * above until it works.
+     * Anything else is ignored, deliberately: a newer IDE may speak a verb this
+     * runtime does not have, and a debugger that died on one would make every
+     * IDE incompatible with every older runtime. What it must not do is *accept*
+     * one and do nothing, which is why a verb is listed above only once it
+     * works -- and why `runto`, which armed a breakpoint and looked like it
+     * worked while nothing stopped, was not listed until it did.
      */
 
     JS_FreeCString(ctx, verb);
@@ -833,6 +915,8 @@ static void wait_for_orders(JSContext *ctx, int depth_now)
 /* Whether a breakpoint is armed for this place. */
 static BtaBreak *break_at(const char *file, int line)
 {
+    BtaBreak *fallback = NULL;
+
     for (guint i = 0; i < dbg.breaks->len; i++) {
         BtaBreak *bp = g_ptr_array_index(dbg.breaks, i);
 
@@ -841,10 +925,18 @@ static BtaBreak *break_at(const char *file, int line)
         /* The IDE names a file the way the project does and the engine names it
            the way it was loaded, so the shorter one has to be a tail of the
            other -- `forms/Form1.js` against `/home/…/forms/Form1.js`. */
-        if (path_is(file, bp->file))
+        if (!path_is(file, bp->file))
+            continue;
+
+        /* Run to cursor wins the line it asked for: it was armed for exactly
+           this arrival, and a persistent breakpoint earlier in the list would
+           otherwise answer first and leave the one-shot armed for ever. */
+        if (bp->one_shot)
             return bp;
+        if (!fallback)
+            fallback = bp;
     }
-    return NULL;
+    return fallback;
 }
 
 static bool step_wants_this(int depth_now)
@@ -979,6 +1071,28 @@ static void on_step(JSContext *ctx, const uint8_t *pc, void *opaque)
            round trip to the IDE and a jump in the editor. */
         if (bp->when && !condition_holds(ctx, bp->when))
             return;
+
+        /*
+         * A logpoint records and carries on, which is the whole of what it is --
+         * and it is checked after the condition, so `when` still decides whether
+         * it fires. The expression is evaluated the way a watch is, in the frame
+         * that is about to be left.
+         */
+        if (bp->log) {
+            bool  failed = false;
+            char *text   = evaluate(ctx, 0, bp->log, &failed, true);
+
+            say_log(ctx, bp, text, failed);
+            g_free(text);
+            if (bp->one_shot)
+                remove_one_shot(bp);
+            return;
+        }
+
+        /* Run-to-cursor takes itself out as it is reached, so the next pass over
+           the same line does not stop again. */
+        if (bp->one_shot)
+            remove_one_shot(bp);
     }
 
     BtaRunMode was = dbg.mode;

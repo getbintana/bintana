@@ -30,6 +30,9 @@ const BREAK_MARK = "Bookmark";
  * rather than by colour alone. */
 const HERE_MARK = "Info";
 
+/* What a breakpoint's settings are keyed by, here and in the runtime's `id`. */
+function breakKey(file, line) { return `${file}:${line}`; }
+
 Ide.Debugger = class Debugger {
 
     /** @param {MainForm} ide */
@@ -42,6 +45,11 @@ Ide.Debugger = class Debugger {
         this.marks = new Map();
         /* "file:line" -> the id the protocol knows that breakpoint by. */
         this.ids = new Map();
+        /* And what a breakpoint can be told to do: a condition, a message, or
+         * neither.  The runtime has carried `when` since conditions were built
+         * and `log` beside it now; these are what the IDE sends. */
+        this.whens = new Map();
+        this.logs  = new Map();
         /* The child while it is being debugged, and what it last said. */
         this.job     = null;
         this.stopped = null;      /* the frames, innermost first */
@@ -70,14 +78,37 @@ Ide.Debugger = class Debugger {
         const line = this.ide.Editor.Line;
         const on   = this.linesOf(this.ide.Editor).includes(line);
 
-        if (on) this.ide.Editor.Unmark(line, BREAK_MARK);
-        else    this.ide.Editor.Mark(line, BREAK_MARK,
-                                     Locale.Text("Stop here while debugging"));
+        if (on) {
+            this.ide.Editor.Unmark(line, BREAK_MARK);
+            /* A breakpoint taken away takes its condition and its message with
+             * it: both described a stop that no longer exists. */
+            this.whens.delete(breakKey(file, line));
+            this.logs.delete(breakKey(file, line));
+        } else {
+            this.ide.Editor.Mark(line, BREAK_MARK, this.markText(file, line));
+        }
 
         this.remember(file);
         if (this.running) this.send(on ? { do: "clear", id: this.idOf(file, line) }
                                        : this.armCommand(file, line));
         return true;
+    }
+
+    /*
+     * What a breakpoint's gutter mark says under the pointer: what it is, and
+     * the two things it can be told to do. A condition and a message have no dot
+     * of their own -- one mark kind is one picture -- so the tooltip is where a
+     * breakpoint's settings are visible from.
+     */
+    markText(file, line) {
+        const key  = breakKey(file, line);
+        const when = this.whens.get(key);
+        const log  = this.logs.get(key);
+        let   text = Locale.Text("Stop here while debugging");
+
+        if (when) text += ` · ${Locale.Text("only when")}: ${when}`;
+        if (log)  text += ` · ${Locale.Text("message")}: ${log}`;
+        return text;
     }
 
     /*
@@ -92,11 +123,33 @@ Ide.Debugger = class Debugger {
         this.marks.set(file, this.linesOf(ed));
     }
 
-    /* A file renamed: the same lines under the new name. */
+    /* A file renamed: the same lines under the new name, and the settings with
+     * them -- a condition describes the line and not the path. */
     renamed(oldName, newName) {
-        if (!this.marks.has(oldName)) return;
-        this.marks.set(newName, this.marks.get(oldName));
-        this.marks.delete(oldName);
+        if (this.marks.has(oldName)) {
+            this.marks.set(newName, this.marks.get(oldName));
+            this.marks.delete(oldName);
+        }
+
+        for (const map of [this.whens, this.logs])
+            for (const [key, value] of [...map]) {
+                const at = key.lastIndexOf(":");
+                if (key.slice(0, at) !== oldName) continue;
+
+                map.delete(key);
+                map.set(`${newName}:${key.slice(at + 1)}`, value);
+            }
+    }
+
+    /* One setting moving from one address to another: a breakpoint the runtime
+     * resolved to a different line, or a file that was renamed. */
+    moveNotes(fromKey, toKey) {
+        for (const map of [this.whens, this.logs]) {
+            if (!map.has(fromKey)) continue;
+
+            map.set(toKey, map.get(fromKey));
+            map.delete(fromKey);
+        }
     }
 
     /*
@@ -116,7 +169,7 @@ Ide.Debugger = class Debugger {
         if (!lines) return;
 
         for (const line of lines)
-            editor.Mark(line, BREAK_MARK, Locale.Text("Stop here while debugging"));
+            editor.Mark(line, BREAK_MARK, this.markText(file, line));
     }
 
     /*
@@ -145,13 +198,101 @@ Ide.Debugger = class Debugger {
     }
 
     armCommand(file, line) {
-        const id = this.nextId++;
-        this.ids.set(`${file}:${line}`, id);
-        return { do: "break", file, line, id };
+        const id      = this.nextId++;
+        const key     = breakKey(file, line);
+        const command = { do: "break", file, line, id };
+
+        this.ids.set(key, id);
+        /* The runtime carries both since conditions and logpoints were built;
+         * an absent one is a breakpoint that stops, which is what it always
+         * was. */
+        const when = this.whens.get(key);
+        const log  = this.logs.get(key);
+        if (when) command.when = when;
+        if (log)  command.log  = log;
+        return command;
     }
 
     idOf(file, line) {
-        return this.ids.get(`${file}:${line}`) || 0;
+        return this.ids.get(breakKey(file, line)) || 0;
+    }
+
+    /* --- a breakpoint's settings -------------------------------------------- */
+
+    setCondition(file, line, text) { this.setNote(this.whens, file, line, text); }
+    setMessage(file, line, text)   { this.setNote(this.logs,  file, line, text); }
+
+    /*
+     * One setting changed: written down, drawn again, and -- if a program is
+     * running -- taken back to the runtime, which has the old one armed.
+     */
+    setNote(map, file, line, text) {
+        const key   = breakKey(file, line);
+        const clean = (text || "").trim();
+
+        if (clean) map.set(key, clean);
+        else       map.delete(key);
+
+        this.refreshMark(file, line);
+        this.rearm(file, line);
+    }
+
+    /* The breakpoint's tooltip, redrawn where it is on screen. */
+    refreshMark(file, line) {
+        const ed = this.editorFor(file);
+        if (!ed || !this.linesOf(ed).includes(line)) return;
+
+        ed.Unmark(line, BREAK_MARK);
+        ed.Mark(line, BREAK_MARK, this.markText(file, line));
+    }
+
+    /* The open editor of a file, whichever tab it is, or null. */
+    editorFor(file) {
+        if (file === this.ide.activeFile) return this.ide.Editor;
+
+        const state = this.ide.openTabs.get(file);
+        return state && state.editor;
+    }
+
+    /*
+     * A breakpoint already armed, told again. Clearing by the id it has and
+     * arming a fresh one is the whole of it: the protocol has no *change a
+     * breakpoint*, and a program that is stopped is a program whose armed set
+     * can be edited one at a time.
+     */
+    rearm(file, line) {
+        if (!this.running) return;
+
+        this.send({ do: "clear", id: this.idOf(file, line) });
+        this.send(this.armCommand(file, line));
+    }
+
+    /*
+     * *Breakpoint...*: the condition and the message of the breakpoint under the
+     * caret. Refused where there is none, because the thing being edited does
+     * not exist yet -- F9 puts one down first, which is the order the gutter
+     * already teaches.
+     */
+    editBreakpoint() {
+        const file = this.ide.activeFile;
+        const ed   = this.ide.Editor;
+        if (!file || !ed) return false;
+
+        const line = ed.Line;
+        if (!this.linesOf(ed).includes(line)) {
+            this.ide.log(`${Locale.Text("Put the caret on a breakpoint first.")}\n`);
+            return false;
+        }
+
+        const key = breakKey(file, line);
+        this.ide.breakpointDialog = BreakpointForm.edit(
+            `${File.Name(file)}:${line}`,
+            this.whens.get(key), this.logs.get(key),
+            (condition, message) => {
+                this.setCondition(file, line, condition);
+                this.setMessage(file, line, message);
+            });
+        return true;
     }
 
     /* --- the run ------------------------------------------------------------ */
@@ -261,8 +402,19 @@ Ide.Debugger = class Debugger {
         if (kind === "ready")   this.ready();
         else if (kind === "armed")   this.armed(msg);
         else if (kind === "stopped") this.halt(msg);
+        else if (kind === "log")     this.recorded(msg);
         else if (kind === "locals")  this.showLocals(msg);
         else if (kind === "eval")    this.answered(msg);
+    }
+
+    /*
+     * A logpoint's line, in the output pane: where it fired and what the
+     * expression came to. A line of the run and not a row of the values panel --
+     * the program is still going, and a logpoint inside a loop would fill any
+     * list.
+     */
+    recorded(msg) {
+        this.ide.log(`${this.projectName(msg.file)}:${msg.line}: ${msg.text}\n`);
     }
 
     /*
@@ -292,12 +444,12 @@ Ide.Debugger = class Debugger {
         if (from === undefined || from === msg.line) return;
 
         this.marks.set(name, lines.map((l) => (l === from ? msg.line : l)));
+        this.moveNotes(breakKey(name, from), breakKey(name, msg.line));
 
         const state = this.ide.openTabs.get(name);
         if (state && state.editor) {
             state.editor.Unmark(from, BREAK_MARK);
-            state.editor.Mark(msg.line, BREAK_MARK,
-                              Locale.Text("Stop here while debugging"));
+            state.editor.Mark(msg.line, BREAK_MARK, this.markText(name, msg.line));
         }
         /* The newline is the log's business and not the translator's. */
         this.ide.log(`${Locale.Text("{0}:{1} cannot stop; the breakpoint moved to line {2}.",
@@ -541,6 +693,25 @@ Ide.Debugger = class Debugger {
     }
 
     /* --- the commands ------------------------------------------------------- */
+
+    /*
+     * Run to cursor: a breakpoint that takes itself out when it is reached, so
+     * the next stop is the line the caret is on -- and a loop below it does not
+     * stop again. Only while a program is being debugged: with none there is
+     * nothing to run.
+     */
+    runToCommand(file, line) { return { do: "runto", file, line }; }
+
+    runToCursor() {
+        const file = this.ide.activeFile;
+        if (!file || !this.ide.Editor) return false;
+
+        if (!this.running) {
+            this.ide.log(`${Locale.Text("Run to cursor needs a program being debugged.")}\n`);
+            return false;
+        }
+        return this.send(this.runToCommand(file, this.ide.Editor.Line));
+    }
 
     step(kind) {
         if (!this.halted) return false;

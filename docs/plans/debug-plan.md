@@ -1,9 +1,10 @@
 # Debugging: what was built, and the plan for the rest
 
-**Stages 1 to 4 and 6 are built** (2026-09-13): breakpoints and conditional
-breakpoints, stopping, stopping where a throw happens, the call stack, standing
-in a frame further up, its arguments and variables by name, step into / over /
-out, an immediate window, watches, and changing a value. **Ten of the eleven.**
+**Stages 1 to 4 and 6 are built** (2026-09-13): breakpoints, conditional
+breakpoints and logpoints, stopping, stopping where a throw happens, the call
+stack, standing in a frame further up, its arguments and variables by name,
+step into / over / out, run to the cursor, an immediate window, watches, and
+changing a value. **Ten of the eleven.**
 What is left is stage 5 — the bytecode patch, which is about what the hook costs
 and not about what the debugger does — and the one thing deliberately not built
 first is [at the end](#dap-the-plan-to-evaluate).
@@ -195,6 +196,7 @@ From the child, on descriptor 3:
 {"event":"ready"}
 {"event":"stopped","reason":"breakpoint"|"step"|"exception"|"pause",
  "frames":[{"name":"Btn_Click","file":"Form1.js","line":42}, …]}
+{"event":"log","file":"Form1.js","line":42,"text":"total=3","failed":false}
 {"event":"resumed"}
 {"event":"exited","code":0}
 ```
@@ -210,13 +212,16 @@ From the IDE, on stdin:
    → {"reply":"locals","frame":0,"items":[{"Name":"n","Value":"3","Argument":true}, …]}
 
 {"do":"break", … ,"when":"n > 3"}                      ← built
+{"do":"break", … ,"log":"\"n=\" + n"}                  ← built (a logpoint: records
+                                                        and carries on)
 {"do":"eval","frame":0,"text":"this.Ok.Text"}         ← built
    → {"reply":"eval","frame":0,"text":…,"value":"\"ok\"","failed":false}
-{"do":"set","frame":0,"name":"n","text":"4"}          ← built (the value is an
+{"do":"set","frame":0,"name":"n","text":"4"}           ← built (the value is an
                                                         expression, not a literal)
-{"do":"stopOnThrow","value":true}                     ← built
+{"do":"stopOnThrow","value":true}                      ← built
 
-{"do":"runto","file":"Form1.js","line":88}            not built
+{"do":"runto","file":"Form1.js","line":88}             ← built (one-shot: it takes
+                                                        itself out when reached)
 ```
 
 **A value comes back as text the child rendered**, and an object is rendered by
@@ -249,7 +254,7 @@ useless exactly where it matters. Expanding is a second `locals` against a path.
 | **1** | `JS_SetDebugHandler` in the vendor (technique 1), `bta_debug.c` with the channel and the stack, `bintana --debug`, breakpoints in the gutter through `SourceEditor.Mark(line, "Bookmark")`, a *Debug* page on `ConsoleBox`, Continue, Pause and Stop | 1, 4, 6, 11 | **built** |
 | **2** | step over / into / out, standing in a frame, and locals/arguments/`this` by name off `vardefs` | 5, 6, 7 | **built** |
 | **3** | an object shown by what is in it, watches, the immediate window, changing a value | 8–10 | **built** |
-| **4** | conditional breakpoints — the condition is evaluated in the frame, and only for the breakpoint that matched | 2 (a logging one is not built) | **built** |
+| **4** | conditional breakpoints and logpoints — the condition is evaluated in the frame and only for the breakpoint that matched, and a `log` records an expression without stopping | 2 | **built** |
 | **6** | stopping where a throw happens, with the frame that built it still alive | 3 (see below) | **built** |
 | **5** | technique 2, the bytecode patch, measured against the same benchmark | — | the one left |
 

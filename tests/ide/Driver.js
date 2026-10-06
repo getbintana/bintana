@@ -4527,6 +4527,50 @@ function* p_goto(ide) {
     yield* until(() => !escaping.Visible);
     check("pressing it closes the window", !escaping.Visible);
 
+    /* --- Ctrl+T: the symbols of the whole project ---------------------------
+     *
+     * The other half of the same question: `Ctrl+Shift+O` is the file on
+     * screen, and this is every file the project has -- which is the only way
+     * to reach a name in a file nobody has open.
+     */
+    ide.MnuGotoProjectSymbol_Click();
+    const all = ide.symbolPicker;
+    yield;
+
+    check("go to symbol in project opens the same window",
+          all !== undefined && all.project === true);
+    const every = ide.navigator.projectSymbols();
+    check("with the project's declarations", every.length > 0, String(every.length));
+    eq("a row per declaration", all.List.Count, every.length);
+    check("a method of another file is in it",
+          every.some((s) => s.name === "greet" && s.file === "Child.js"),
+          JSON.stringify(every.filter((s) => s.name === "greet")));
+    check("and so is a class",
+          every.some((s) => s.name === "Child" && s.file === "Child.js"));
+
+    /* Typing matches the name **and the file**, which is what tells two symbols
+     * of one name apart. */
+    const greets = every.map((s, i) => [s, i]).filter(([s]) => s.name === "greet");
+    all.TxtFind.Text = "greet";
+    all.TxtFind_Change();
+    check("typing keeps the symbols named that way",
+          greets.every(([, i]) => all.matches(i)));
+
+    /* Digits are not a line here: a symbol is an address of its own. */
+    check("a number is not a line in this window", all.lineWanted() === 0);
+
+    /* And choosing one opens its file at its line, through the same
+     * `Navigator.showCode` F12 goes through. */
+    all.List.Index = greets[0][1];
+    const symbol = all.wanted();
+    eq("the chosen row is the symbol", symbol.name, "greet");
+    all.BtnOk_Click();
+    yield* settled(ide);
+
+    eq("choosing opens the file the symbol is in", ide.activeFile, symbol.file);
+    eq("and lands on its line", ide.Editor.Line, symbol.line);
+    check("and the dialog is gone", !all.Visible);
+
     /* --- back to what the phases after this one expect ---------------------- */
     ide.closeTabByName("Child.js", true);
     yield;
@@ -12185,6 +12229,70 @@ function* p_search(ide) {
     eq("and the file node opens the file without pretending to a line",
        ide.activeFile, "Needle.js");
 
+    /* --- replacing, the other half of finding -------------------------------
+     *
+     * One occurrence through the row that names it, everything through the
+     * button that asks first. Both go through `TabSet.rewriteSource`, so the
+     * file on disk and the tab that has it open move together.
+     */
+    win.TxtTerm.Text = "aguja";
+    win.TxtReplace.Text = "brújula";
+    win.search();
+    win.Results.Key = "h:0";
+    check("replacing the selected match writes it", win.replaceOne() === true);
+    check("the file has the new word",
+          File.Load(File.Join(TMP, "Needle.js")).includes("brújula"));
+    eq("and only the one occurrence", win.search(), 2);
+    check("with the open tab carried along", ide.Editor.Text.includes("brújula"),
+          ide.Editor.Text);
+
+    /* All of them at once, and the question is asked before anything is
+     * written: this is the one edit here with no undo. */
+    win.TxtReplace.Text = "brújula";
+    check("replace all asks", win.replaceAll() === true && !!win.confirmReplace);
+    win.confirmReplace.BtnYes.Click();
+
+    eq("every occurrence is gone",
+       File.Load(File.Join(TMP, "Needle.js")).split("aguja").length - 1, 0);
+    eq("and the search now finds none", win.search(), 0);
+    check("the tab was carried along too",
+          ide.Editor.Text.split("brújula").length - 1 >= 3, ide.Editor.Text);
+
+    /* Put it back, so what follows reads the file it expects. */
+    ide.Editor.Text = NEEDLE;
+    ide.save();
+    eq("put back, the search finds them again", win.search(), 3);
+
+    /* A `.form` is a drawing and a catalogue has its own editor, so neither is
+     * a file this window writes -- and a file that is not UTF-8 opens read-only
+     * everywhere in the IDE, this road included. The Latin file holds a real
+     * `aguja`, so a filter that forgot it would have written it. */
+    File.Save(File.Join(TMP, "Trampa.js"),
+              "class Trampa extends Form {\n    Form_Open() { print(\"aguja\"); }\n}\n");
+    File.Save(File.Join(TMP, "Trampa.form"),
+              '{"format":"bintana-form/1","class":"Trampa","properties":{},' +
+              '"children":[{"type":"Label","name":"L",' +
+              '"properties":{"Text":"aguja"}}]}');
+    File.SaveBytes(File.Join(TMP, "Latin.js"),
+                   new Bytes([0x61, 0x67, 0x75, 0x6a, 0x61, 0x20, 0xe9]));
+    ide.listFiles();
+
+    win.TxtTerm.Text = "aguja";
+    win.search();
+    const targets = win.replaceableFiles(win.patternNow());
+    eq("only the code files are written",
+       JSON.stringify(targets.map((t) => t.name).sort()),
+       JSON.stringify(["Needle.js", "Trampa.js"]));
+    /* And the search itself did see them, or the filter above would be proving
+     * nothing: the `.form` text and the Latin-1 file both hold a real `aguja`. */
+    check("while the search found hits in the ones left out",
+          win.search() > targets.length);
+
+    File.Delete(File.Join(TMP, "Trampa.js"));
+    File.Delete(File.Join(TMP, "Trampa.form"));
+    File.Delete(File.Join(TMP, "Latin.js"));
+    ide.listFiles();
+
     win.BtnClose.Click();
     yield;
     check("closing lets go of it, so the next one is a fresh window",
@@ -13187,7 +13295,8 @@ function* p_git(ide) {
  */
 function* p_debug(ide) {
     for (const name of ["ActDebug", "ActPause", "ActStepInto", "ActStepOver",
-                        "ActStepOut", "ActStop", "MnuBreakpoint"])
+                        "ActStepOut", "ActRunTo", "ActStop", "MnuBreakpoint",
+                        "MnuBreakpointProps"])
         check(`the Debug menu has ${name}`, ide[name] !== undefined);
 
     check("and the bottom panel has a page for it",
@@ -13204,7 +13313,8 @@ function* p_debug(ide) {
      * possible. Asked of every button: the command it names, and its state
      * being the command's. */
     const bar = { BtnDbgDebug: "ActDebug", BtnDbgPause: "ActPause", BtnDbgInto: "ActStepInto",
-                  BtnDbgOver: "ActStepOver", BtnDbgOut: "ActStepOut", BtnDbgStop: "ActStop" };
+                  BtnDbgOver: "ActStepOver", BtnDbgOut: "ActStepOut",
+                  BtnDbgRunTo: "ActRunTo", BtnDbgStop: "ActStop" };
     for (const btn of Dictionary.Keys(bar)) {
         eq(`${btn} is the ${bar[btn]} command`, ide[btn] && ide[btn].Action, bar[btn]);
         eq(`and follows it`, ide[btn] && ide[btn].Enabled, ide[bar[btn]].Enabled);
@@ -13279,6 +13389,60 @@ function* p_debug(ide) {
     ide.Editor.Undo();
     yield* settled(ide);
     check("undo puts it back", lines().includes(at.line), JSON.stringify(lines()));
+
+    /*
+     * --- the condition and the message --------------------------------------
+     *
+     * One dialog for both, and the mark's tooltip is where they are visible from
+     * -- one mark kind is one picture. Both travel in the arm command, which is
+     * what the runtime actually reads.
+     */
+    ide.Editor.GotoLine(at.line);
+    const key = `${js}:${at.line}`;
+
+    check("the dialog opens on a breakpoint",
+          ide.debugger_.editBreakpoint() === true && !!ide.breakpointDialog);
+    ide.breakpointDialog.TxtCondition.Text = "n > 1";
+    ide.breakpointDialog.BtnOk_Click();
+
+    eq("the condition is kept", ide.debugger_.whens.get(key), "n > 1");
+    eq("and goes to the runtime", ide.debugger_.armCommand(js, at.line).when, "n > 1");
+    check("and the mark says so",
+          (ide.Editor.Marks("Bookmark")[0] || {}).Text.includes("n > 1"),
+          JSON.stringify(ide.Editor.Marks("Bookmark")));
+
+    ide.debugger_.editBreakpoint();
+    ide.breakpointDialog.TxtMessage.Text = '"n=" + n';
+    ide.breakpointDialog.BtnOk_Click();
+
+    eq("the message is kept", ide.debugger_.logs.get(key), '"n=" + n');
+    eq("and goes to the runtime", ide.debugger_.armCommand(js, at.line).log, '"n=" + n');
+    eq("without losing the condition",
+       ide.debugger_.armCommand(js, at.line).when, "n > 1");
+
+    /* **Clear is the third answer**: neither, and the breakpoint itself stays. */
+    ide.debugger_.editBreakpoint();
+    ide.breakpointDialog.BtnClear_Click();
+
+    eq("clear takes the condition away", ide.debugger_.whens.get(key), undefined);
+    eq("and the message", ide.debugger_.logs.get(key), undefined);
+    eq("while the breakpoint stays", ide.debugger_.all().length, 1);
+    check("and the mark is back to what it was",
+          !(ide.Editor.Marks("Bookmark")[0] || {}).Text.includes("n >"),
+          JSON.stringify(ide.Editor.Marks("Bookmark")));
+
+    /*
+     * --- run to cursor ------------------------------------------------------
+     *
+     * The command is the protocol's, and with nothing running it refuses: there
+     * is no program for the cursor's line to be reached by.
+     */
+    const runto = ide.debugger_.runToCommand(js, at.line);
+    eq("run to cursor asks the runtime for the line", runto.do, "runto");
+    eq("...naming the file", runto.file, js);
+    eq("...and the line", runto.line, at.line);
+    check("and with nothing running it refuses", ide.debugger_.runToCursor() === false);
+    check("which the command's state agrees with", !ide.ActRunTo.Enabled);
 
     /* --- back to what the phase after this one expects ----------------------- */
     /* The caret went back to the top when the tab reopened, and F9 acts where

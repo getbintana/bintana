@@ -4,6 +4,7 @@
   "startup": "MainForm",
   "sources": [
     "../../ide/forms/AskForm.js",
+    "../../ide/forms/BreakpointForm.js",
     "../../ide/forms/ConfirmForm.js",
     "../../ide/forms/AboutForm.js",
     "../../ide/forms/NewProjectForm.js",

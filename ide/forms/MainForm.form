@@ -67,6 +67,13 @@
       "enabled": false
     },
     {
+      "name": "ActRunTo",
+      "text": "Run to cursor",
+      "icon": "media-seek-forward-symbolic",
+      "shortcut": "<Control>F10",
+      "enabled": false
+    },
+    {
       "name": "ActStop",
       "text": "Stop",
       "icon": "media-playback-stop-symbolic",
@@ -268,6 +275,11 @@
           ]
         },
         {
+          "name": "MnuGotoProjectSymbol",
+          "text": "Go to symbol in project...",
+          "shortcut": "<Control>t"
+        },
+        {
           "name": "MnuGotoFile",
           "text": "Go to file...",
           "shortcut": "<Control>p"
@@ -456,12 +468,19 @@
           "action": "ActStepOut"
         },
         {
+          "action": "ActRunTo"
+        },
+        {
           "separator": true
         },
         {
           "name": "MnuBreakpoint",
           "text": "Toggle breakpoint",
           "shortcut": "F9"
+        },
+        {
+          "name": "MnuBreakpointProps",
+          "text": "Breakpoint..."
         },
         {
           "separator": true
@@ -1596,6 +1615,18 @@
                                     "Icon": "go-up-symbolic",
                                     "Style": "flat",
                                     "Tooltip": "Step out (Ctrl+Shift+F8)",
+                                    "Width": 34
+                                  }
+                                },
+                                {
+                                  "type": "Button",
+                                  "name": "BtnDbgRunTo",
+                                  "properties": {
+                                    "Action": "ActRunTo",
+                                    "Height": 30,
+                                    "Icon": "media-seek-forward-symbolic",
+                                    "Style": "flat",
+                                    "Tooltip": "Run to cursor (Ctrl+F10)",
                                     "Width": 34
                                   }
                                 },

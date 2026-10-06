@@ -1,5 +1,6 @@
 /*
- * Go to a method of the file, or to a line of it.
+ * Go to a method of the file, or to a line of it -- and, with `goProject`, to a
+ * symbol of the whole project.
  *
  * Visual Basic put the procedures of a module in a drop-down over the code;
  * Lazarus has the Code Explorer; every editor since has some spelling of
@@ -13,9 +14,10 @@
  * second window. That is what the modern quick-open does, and it is the only
  * thing here that is not simply Visual Basic's drop-down drawn as a list.
  *
- * It knows nothing about parsing: the list it is handed comes from
- * `Navigator.symbols`, which is the one regular expression in this IDE that says
- * what a declaration looks like. This dialog filters it and hands back a line.
+ * It knows nothing about parsing: the list it is handed comes from `Navigator`,
+ * which asks the runtime's parser -- `Application.Symbols` -- what a declaration
+ * is. This dialog filters it and hands back a line, or the symbol itself when
+ * the file is part of the address.
  */
 "use strict";
 
@@ -35,6 +37,31 @@ class SymbolForm extends Form {
         dlg.lines    = lines || 0;
         dlg.onChoose = onChoose;
         dlg.Modal    = true;
+        dlg.fill();
+
+        dlg.Show();
+        dlg.TxtFind.SetFocus();
+        return dlg;
+    }
+
+    /*
+     * SymbolForm.goProject(symbols, onChoose)
+     *
+     * The same box over the whole project, where a symbol is
+     * `{ name, file, line }`: the aside says where, typing matches the name and
+     * the file, and **the digits half is off** -- a line number names a place in
+     * a file, and here the file is not the question. One filter and one Enter,
+     * because a second expression for either is how the two come to disagree.
+     */
+    static goProject(symbols, onChoose) {
+        const dlg = new SymbolForm();
+
+        dlg.symbols  = symbols || [];
+        dlg.lines    = 0;
+        dlg.project  = true;
+        dlg.onChoose = onChoose;
+        dlg.Modal    = true;
+        dlg.Text     = Locale.Text("Go to symbol in project");
         dlg.fill();
 
         dlg.Show();
@@ -65,7 +92,8 @@ class SymbolForm extends Form {
             row.Add(name);
 
             const at = new Label();
-            at.Text   = String(symbol.line);
+            at.Text   = this.project ? `${symbol.file}:${symbol.line}`
+                                     : String(symbol.line);
             at.Style  = "dim-label";
             at.HAlign = "End";
             row.Add(at);
@@ -81,6 +109,8 @@ class SymbolForm extends Form {
      * end of the file is not a line, and says so by being none.
      */
     lineWanted() {
+        if (this.project) return 0;         /* no file of its own to number */
+
         const text = this.TxtFind.Text.trim();
         if (!/^\d+$/.test(text)) return 0;
 
@@ -102,17 +132,30 @@ class SymbolForm extends Form {
 
         const text = this.TxtFind.Text.trim();
         if (text === "") return true;
+
+        /* Over the whole project the file is half of what tells two symbols of
+         * one name apart, so it is matched too -- `main.greet` narrows what
+         * `greet` does not. */
+        if (this.project)
+            return Locale.Matches(`${symbol.name} ${symbol.file}`, text);
+
         /* Digits are a line, so nothing in the list matches them. */
         if (/^\d+$/.test(text)) return false;
 
         return symbol.name.toLowerCase().includes(text.toLowerCase());
     }
 
+    /*
+     * The first row still showing, answered **the way this window hands things
+     * back**: a line for one file, the symbol itself when the symbol is the
+     * address. `wanted()` is the same answer with the chosen row first.
+     */
     firstShowing() {
         for (let i = 0; i < this.symbols.length; i++)
-            if (this.matches(i)) return this.symbols[i].line;
+            if (this.matches(i)) return this.project ? this.symbols[i]
+                                                     : this.symbols[i].line;
 
-        return 0;
+        return this.project ? null : 0;
     }
 
     /*
@@ -129,7 +172,8 @@ class SymbolForm extends Form {
      */
     wanted() {
         const at = this.List.Index;
-        if (at >= 0 && this.matches(at)) return this.symbols[at].line;
+        if (at >= 0 && this.matches(at))
+            return this.project ? this.symbols[at] : this.symbols[at].line;
 
         return this.firstShowing();
     }
@@ -145,7 +189,7 @@ class SymbolForm extends Form {
         }
 
         const text = this.TxtFind.Text.trim();
-        if (/^\d+$/.test(text) && text !== "") {
+        if (!this.project && /^\d+$/.test(text) && text !== "") {
             this.LblCount.Text = Locale.Plural("the file has {0} line",
                                                "the file has {0} lines", this.lines);
             return;
@@ -154,7 +198,9 @@ class SymbolForm extends Form {
         let showing = 0;
         for (let i = 0; i < this.symbols.length; i++) if (this.matches(i)) showing++;
 
-        this.LblCount.Text = Locale.Plural("{0} method", "{0} methods", showing);
+        this.LblCount.Text = this.project
+            ? Locale.Plural("{0} symbol", "{0} symbols", showing)
+            : Locale.Plural("{0} method", "{0} methods", showing);
     }
 
     /* --- events ----------------------------------------------------------- */
@@ -188,13 +234,15 @@ class SymbolForm extends Form {
         const typed = this.lineWanted();
         if (typed) return this.leave(typed);
 
-        const line = this.wanted();
-        if (line) this.leave(line);
+        const target = this.wanted();
+        if (target) this.leave(target);
         /* Nothing matched: the bar already says so, and closing on a keystroke
          * that found nothing would lose what was typed. */
     }
 
-    chose(symbol) { if (symbol) this.leave(symbol.line); }
+    chose(symbol) {
+        if (symbol) this.leave(this.project ? symbol : symbol.line);
+    }
 
     /*
      * Going, once.

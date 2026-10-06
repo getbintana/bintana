@@ -1198,6 +1198,10 @@ class MainForm extends Form {
          * project: on a form tab there is no word to be on. */
         this.MnuGoto.Enabled = !design && !!this.Editor;
         this.MnuGotoSymbol.Enabled = !design && !!this.Editor;
+        /* The project's symbols are not about the tab: a project is what it
+         * wants, and the whole point of it is looking for a name in a file
+         * nobody has open. */
+        this.MnuGotoProjectSymbol.Enabled = open;
 
         /*
          * Debugging.  *Debug* is *Continue* while it is stopped, so it is
@@ -1211,9 +1215,14 @@ class MainForm extends Form {
         this.ActStepInto.Enabled = halted;
         this.ActStepOver.Enabled = halted;
         this.ActStepOut.Enabled  = halted;
+        /* Run to cursor is a command *during* a session: it sends a breakpoint
+         * the runtime takes out when it is reached, so there must be a program
+         * to reach it. Stopped or running freely are both uses of it. */
+        this.ActRunTo.Enabled    = open && this.debugger_.running;
         /* A breakpoint is set on a line, so it wants a code editor -- and it is
          * set whether or not anything is running, which is the point of it. */
         this.MnuBreakpoint.Enabled = !design && !!this.Editor;
+        this.MnuBreakpointProps.Enabled = this.MnuBreakpoint.Enabled;
 
         /* Asking is only a question a stopped program can answer; keeping one is
          * not, so a watch can be written down before anything runs. */
@@ -2307,7 +2316,12 @@ class MainForm extends Form {
     ActStepInto_Click()   { this.debugger_.step("into"); }
     ActStepOver_Click()   { this.debugger_.step("over"); }
     ActStepOut_Click()    { this.debugger_.step("out"); }
+    ActRunTo_Click()      { this.debugger_.runToCursor(); }
     MnuBreakpoint_Click() { this.debugger_.toggle(); }
+    /* The condition and the message of the breakpoint under the caret: one
+     * dialog because they are one question, and the runtime has carried both
+     * since conditions and logpoints were built. */
+    MnuBreakpointProps_Click() { this.debugger_.editBreakpoint(); }
 
     /* Stopping where a throw happens, which is **every** throw and not only the
      * ones nobody catches: whether something above will catch it is not a
@@ -2624,6 +2638,20 @@ class MainForm extends Form {
                               this.Editor.GotoLine(line);
                               this.Editor.SetFocus();
                           });
+    }
+
+    /*
+     * Ctrl+T: every declaration the project holds -- classes and top-level
+     * functions included, where `Ctrl+Shift+O` is the file on screen. Read on
+     * every press and not indexed, which is `Navigator.projectSymbols`'s bargain
+     * and the same one F12 makes.
+     */
+    MnuGotoProjectSymbol_Click() {
+        if (!this.project) return;
+
+        this.symbolPicker =
+            SymbolForm.goProject(this.navigator.projectSymbols(),
+                                 (symbol) => this.navigator.showCode(symbol));
     }
 
     MnuRecent_Click(index) {
