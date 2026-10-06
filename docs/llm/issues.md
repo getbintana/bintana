@@ -180,9 +180,7 @@ needed and what it did instead.
 | A word for *do this, then that* | [`docs/plans/async-plan.md`](../plans/async-plan.md) |
 | No editable / autocompleting combo | [ISSUE-editable-combo](../issues/ISSUE-editable-combo.md) |
 | A control laid onto a page — `Print` sends what a `Draw` paints, so a form with real widgets on it still has no path to paper except drawing it by hand | [controls.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/controls.md#drawingarea) |
-| A `Fixed` container that does not stretch a `Fill` child when it itself grows — a reusable component that wants to fill its cell has to change its `Arrangement` | [ISSUE-fixed-fill-child](../issues/ISSUE-fixed-fill-child.md) |
 | A `Popover` dropped on the design canvas cannot be seen, clicked or dropped into — the control tree is the only road to it, and its content goes in by editing the `.form` | [ISSUE-popover-designer](../issues/ISSUE-popover-designer.md) |
-| A control's `Menu`/`HeaderMenu` declared in a `.form` is invisible to the extractor — the labels are translated at runtime and never reach a catalogue, so the IDE's own four context menus are English under a Spanish one | [ISSUE-menu-label-extraction](../issues/ISSUE-menu-label-extraction.md) |
 
 ## One more thing
 

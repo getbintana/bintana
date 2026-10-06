@@ -13,8 +13,6 @@ in the same form.
 | Issue | The missing capability |
 |---|---|
 | [ISSUE-editable-combo.md](ISSUE-editable-combo.md) | No editable / autocompleting combo |
-| [ISSUE-fixed-fill-child.md](ISSUE-fixed-fill-child.md) | A `Fixed` container does not stretch a `Fill` child when it grows |
-| [ISSUE-menu-label-extraction.md](ISSUE-menu-label-extraction.md) | A control's menu labels never reach a catalogue |
 | [ISSUE-popover-designer.md](ISSUE-popover-designer.md) | A `Popover` cannot be seen or picked on the design canvas |
 
 
@@ -23,7 +21,7 @@ in the same form.
 past its answer is a second description of the same feature, written by somebody
 who did not have it yet, in the directory of things that are missing.
 
-Thirty-seven have gone that way — thirty-four filled, one refused, and two that
+Thirty-nine have gone that way — thirty-six filled, one refused, and two that
 were never missing. Filled: a drawing that could not carry an image, text that could not be measured outside a `Draw`, a
 document that could only leave as one PNG per page, a program that had to run
 `sha256sum` to hash anything, an application that could not ask how big the
@@ -97,7 +95,17 @@ the message names the call that was meant,
 and an element holding only a comment that read as an empty one: `IsEmpty`
 counts every kind of child and `Comments` reads the text `Text` cannot carry,
 so the walk that reported what a save changed can see the comment and does not
-delete it.
+delete it,
+and a `Fill` child of a `Fixed` container that a box stretched: the declared
+size is the anchor origin on **every** surface now and not only on a form, so a
+component drawn at 180x130 hands the room its host gives it down to its `Fill`
+child -- which used to keep the drawn size, because the panel latched the cell
+as its design,
+and a control's `Menu`/`HeaderMenu` labels, which no class can declare as
+prose: `Ide.Strings` walks the two keys by name, the same way it walks a form's
+own `menus` block, and the reference names the control and the menu. The IDE's
+own four context menus were English under a Spanish window until the template
+knew their 13 labels.
 And one that was never missing, as a gap: *a second TLS handshake corrupts the
 heap* was one `g_uri_unref` of a borrowed URI in `Tls`'s own check, and its
 "connection refused" was a server collected because nothing held it.

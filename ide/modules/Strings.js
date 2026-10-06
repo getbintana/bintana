@@ -55,6 +55,21 @@ const CALLS = [
     { call: "ConfirmForm.ask", args: 3, ctxt: false, many: true },
 ];
 
+/*
+ * The two properties that carry a menu whose labels are prose, and which no
+ * class can declare.
+ *
+ * `Widget.TextProperties` is how a property says it holds text a person reads,
+ * and a `Menu`/`HeaderMenu` is not that: it is a structure whose *items* carry
+ * `text`, translated one by one in `append_item` (`bta_menu.c`), where the
+ * comment says why `BtaClass.texts` cannot express it -- a menu item is not a
+ * widget and has no class. So the walk knows these two keys by name, exactly
+ * as `fromMenu` knows the form's own `menus` block, and the labels reach a
+ * catalogue with the control and the menu each came from
+ * (`ISSUE-menu-label-extraction`).
+ */
+const MENU_KEYS = ["Menu", "HeaderMenu"];
+
 
 /*
  * The source with every comment blanked out and everything else where it was:
@@ -229,6 +244,20 @@ Ide.Strings = class Strings {
                 else                      take(value);
             }
         }
+
+        /*
+         * A control's own menu, which is prose the class cannot declare.  The
+         * reference names the control and which menu, so a translator sees
+         * `Files.HeaderMenu MnuFileHide` and not a bare label.
+         */
+        for (const key of MENU_KEYS) {
+            const items = props[key];
+
+            if (!Array.isArray(items)) continue;
+            for (const item of items)
+                this.fromMenu(item, rel, `${node.name || node.type}.${key}`);
+        }
+
         for (const child of node.children || []) this.fromNode(child, rel);
     }
 
@@ -269,14 +298,17 @@ Ide.Strings = class Strings {
         return answer;
     }
 
-    fromMenu(item, rel) {
+    fromMenu(item, rel, owner) {
         /* A menu label is prose declared in the .form, and the runtime looks it
-         * up when it builds the bar -- but it is not a property, so no class
-         * declares it and this has to know the key by name. */
+         * up when it builds the menu -- but it is not a property, so no class
+         * declares it and this has to know the key by name.  `owner` is the
+         * control and the menu a label came from when the item was not part of
+         * the form's own `menus` block. */
         if (typeof item.text === "string")
-            this.add(item.text, `${rel}: menu ${item.name || item.text}`);
+            this.add(item.text,
+                     `${rel}: ${owner ? `${owner} ` : "menu "}${item.name || item.text}`);
 
-        for (const child of item.children || []) this.fromMenu(child, rel);
+        for (const child of item.children || []) this.fromMenu(child, rel, owner);
     }
 
     /* --- the code half, which is the exception -------------------------- */

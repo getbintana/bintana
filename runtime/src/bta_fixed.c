@@ -224,102 +224,72 @@ static void bta_fixed_layout_allocate(GtkLayoutManager *manager, GtkWidget *widg
     /*
      * The size the coordinates were written against.
      *
-     * Normally the first real allocation, because at that moment nothing has
-     * moved yet. **A form is the exception**, and it is the one that matters: a
-     * window's declared `Width`/`Height` *are* the numbers every coordinate in
-     * its `.form` was measured from, and a control whose text outgrew its
-     * declared width makes the window open wider than that. Latching the wider
-     * size would make the design size whatever the translation happened to
-     * need, so every anchor would be inert and the extra room would sit dead
-     * against the far edge -- an input that never stretches, buttons that never
-     * reach the corner.
+     * **The declaration is the design on every surface, and not only on a
+     * window.** It was `is_form` alone, and that made `Fill` inert on a `Panel`
+     * a box had stretched: the panel's first allocation *is* the cell, so it
+     * latched that and no slack was ever left -- a component with a `Fill`
+     * frame inside stayed at the size it was drawn at, and the only way around
+     * it was changing the component's `Arrangement`, which is a decision its
+     * host cannot make (`ISSUE-fixed-fill-child`). A control's
+     * `Width`/`Height` -- from the `.form`, or the `Resize` that stands in for
+     * one on a surface built in code -- are what its children's coordinates
+     * were written against, and that is true whether a surface, a box or a
+     * grid is what gives it the room. The allocation is the fallback for a
+     * surface that declared no size at all, which is the only case with no
+     * origin to keep.
      *
-     * **Only a form**, and that limit is the rule this codebase already states:
-     * a `Width` inside a box is a *minimum*, not a size, so a `Panel` arranged
-     * `Fixed` that a box stretched to 280 has no business calling its declared
-     * 60 the design. A window's size is nobody else's business, which is what
-     * makes its declaration authoritative.
+     * `drawn_w`/`drawn_h` first and `w`/`h` after: on a form the second pair is
+     * the size the window is *now* -- `Resize` writes it, and a form that
+     * restores a remembered size has already changed it by the time this runs --
+     * while a file's numbers keep meaning what they meant. On a surface with no
+     * `.form` the `Resize` before it was shown *is* its declaration, so `w`/`h`
+     * is the answer there.
      *
-     * Capped by the allocation **on the height and not on the width**, and the
-     * asymmetry is the whole of the fix rather than an oversight: a form's own
-     * height covers its menu bar and the slot's does not, so vertically the
-     * slot's first allocation is the smaller of the two and is the right answer.
-     * There is no such thing horizontally -- nothing sits beside the slot -- so
-     * the only way the first allocation comes out *narrower* than the
-     * declaration is that the window was opened smaller than the form was drawn
-     * at, and capping to that is exactly wrong.
-     *
-     * It cost a window with its buttons off the right edge. A form declared 760
-     * wide restored a remembered 680 before it was shown, so this latched 680,
-     * and a strip drawn at `12..748` then had a trailing gap of **minus 68** --
-     * which `Fill` faithfully kept at every size afterwards, so the strip was 68
-     * pixels wider than its window whether that window was 680 or maximised to
-     * 1920. Every anchored control in every form opened narrower than it was
-     * drawn had the same fault; restoring a size is only the commonest way to
-     * arrive at one.
-     *
-     * The declaration is what the coordinates in the file were measured against.
-     * That is true whichever size the window happens to open at, which is what
-     * makes it the design size and not the allocation.
+     * A form is still the only one that subtracts anything: its height covers
+     * the menu bar and its own `Margin`, and the slot's does not. On a `Panel`
+     * the margin is GTK's, which shifts the box inside the cell and keeps its
+     * size -- measured, a 100x100 panel with `Margin: 5` is a 100x100 box at
+     * (5,5) -- so its coordinates are relative to the box and nothing is
+     * subtracted. And on width a form subtracts nothing either, because
+     * nothing sits beside the slot: a window opened narrower than it was drawn
+     * must keep the declaration, which is the bug that made a strip drawn at
+     * `12..748` end 68 pixels past a 680 window at every size afterwards.
      *
      * Guarded against the degenerate first pass GTK sometimes makes before a
      * window has a real size: latching 1x1 would send every anchored control
      * flying on the next frame.
      */
     if (self->design_w <= 0 && width > 1 && height > 1) {
-        BtaWidget *own = g_object_get_data(G_OBJECT(widget), BTA_WIDGET_QUARK);
-        /* `drawn_w`/`drawn_h` and **not** `w`/`h`: the second pair is the size
-         * the window is now, which `Resize` writes, and a form that restores a
-         * remembered size has already changed it by the time this runs. */
-        bool       declared = own && own->is_form;
-
-        /*
-         * The `.form`'s size when there was a `.form`, and the size code gave it
-         * otherwise -- and the fallback is not a compromise. A form built from
-         * code has no file of coordinates to protect, so the `Resize` before it
-         * was shown *is* its declaration; a form with a file has one, and the
-         * file's numbers keep meaning what they meant however the window is
-         * resized afterwards.
-         */
+        BtaWidget *own     = g_object_get_data(G_OBJECT(widget), BTA_WIDGET_QUARK);
+        bool       is_form = own && own->is_form;
         int dw = own && own->drawn_w > 0 ? own->drawn_w : (own ? own->w : 0);
         int dh = own && own->drawn_h > 0 ? own->drawn_h : (own ? own->h : 0);
+        int chrome = 0;
 
-        /*
-         * **The declared height, less what the window puts above the surface
-         * and around it** -- a menu bar, and a form's `Margin` -- and not
-         * `MIN(dh, height)`, which was that subtraction guessed from the
-         * allocation. The guess is right only when the window opens at the
-         * size it declares: a form declared 400 tall and opened at 300 (a
-         * remembered size, a `Resize` in `Form_Open`) latched 300 as its
-         * design, and a `Fill` panel drawn 380 tall inside it kept its
-         * negative gap at every size after -- 560 tall in a 480 window,
-         * measured. What is subtracted is read off the widgets, so it is the
-         * same number whatever size the window happens to be.
-         */
-        int chrome = gtk_widget_get_margin_top(widget) +
+        if (is_form) {
+            chrome = gtk_widget_get_margin_top(widget) +
                      gtk_widget_get_margin_bottom(widget);
-        GtkWidget *holder = gtk_widget_get_parent(widget);
 
-        if (holder && !GTK_IS_WINDOW(holder)) {
-            for (GtkWidget *c = gtk_widget_get_first_child(holder); c;
-                 c = gtk_widget_get_next_sibling(c))
-                if (c != widget && gtk_widget_get_visible(c))
-                    chrome += gtk_widget_get_height(c);
+            GtkWidget *holder = gtk_widget_get_parent(widget);
+
+            if (holder && !GTK_IS_WINDOW(holder)) {
+                for (GtkWidget *c = gtk_widget_get_first_child(holder); c;
+                     c = gtk_widget_get_next_sibling(c))
+                    if (c != widget && gtk_widget_get_visible(c))
+                        chrome += gtk_widget_get_height(c);
+            }
         }
 
-        self->design_w = (declared && dw > 0) ? dw : width;
-        self->design_h = (declared && dh > 0) ? MAX(dh - chrome, 1) : height;
+        self->design_w = dw > 0 ? dw : width;
+        self->design_h = dh > 0 ? MAX(dh - chrome, 1) : height;
 
         /*
          * Measuring needs the design size to know what gap a stretched control
          * was drawn with on its far side, and until this moment there was none
          * to have. So the first pass measured without it; ask for another now
-         * that there is one.
-         *
-         * Only when it turns out to differ from what was allocated, which is
-         * only on a form whose contents pushed it past what it declared -- every
-         * other surface latches exactly what it was given and has nothing to
-         * reconsider.
+         * that there is one. It runs when the declaration and the cell disagree
+         * -- a form whose contents pushed it past what it declared, and a
+         * `Panel` a box stretched past what its children were drawn against.
          */
         if (self->design_w != width || self->design_h != height)
             gtk_widget_queue_resize(widget);

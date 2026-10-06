@@ -4,6 +4,7 @@
   "sources": [
     "Stepper.js",
     "Chip.js",
+    "Tile.js",
     "Gadgets/Stepper.js",
     "Translated.js",
     "TaskWork.js",

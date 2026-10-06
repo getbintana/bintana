@@ -441,8 +441,14 @@ value** rather than a flag set, because a property with one value out of a list
 is already a drop-down in the designer's grid and a flag set would have needed
 an editor of its own.
 
-The reference size is the surface's **first real allocation**: at that moment
-nothing has moved yet, so it is the origin every anchor is measured from.
+The reference size is what the surface **declared** — the `.form`'s
+`Width`/`Height`, or the `Resize` a surface built in code got before it was
+shown — because that is the size its children's coordinates were written
+against. A surface that declared nothing falls back to its first real
+allocation: at that moment nothing has moved yet, so it is the only origin
+there is. A declaration on a `Panel` is a *minimum* as a request and still the
+origin here, which is what lets a `Fill` child follow a box that stretched its
+panel (`ISSUE-fixed-fill-child`).
 
 Everywhere else the same property is handed straight to GTK's `halign`/`valign`,
 which is where the four words come from -- but never on a surface, where GTK

@@ -1,0 +1,24 @@
+{
+  "format": "bintana-form/1",
+  "class": "Tile",
+  "properties": {
+    "Width": 180,
+    "Height": 130,
+    "HAlign": "Fill",
+    "VAlign": "Fill"
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "Box",
+      "properties": {
+        "X": 0,
+        "Y": 0,
+        "Width": 180,
+        "Height": 130,
+        "HAlign": "Fill",
+        "VAlign": "Fill"
+      }
+    }
+  ]
+}

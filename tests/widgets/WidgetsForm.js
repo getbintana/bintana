@@ -22091,19 +22091,61 @@ function Main() {
 
                 /* The other half of the rule: which container the control is in
                  * is what decides, and a control changes containers.  Turned
-                 * into a surface, the same Center means the anchor again -- so
-                 * the control goes back to the coordinates it was given, not to
-                 * the middle of anything. */
+                 * into a surface, the same Center means the anchor again --
+                 * measured against the size the panel was **declared** at and
+                 * not against the cell the box stretched it to.  That is the
+                 * rule `ISSUE-fixed-fill-child` fixed: a `Fill` child of a
+                 * `Panel` a box stretched used to keep its drawn size, because
+                 * the surface latched the cell as its design and no slack was
+                 * ever left. */
                 col.Arrangement = "Fixed";
                 middle.Move(4, 4);
 
-                until("the column becomes a surface", () => at(middle).X === 4, () => {
-                    eq("a drawn control is where it was drawn", at(middle).X, 4);
+                const slack  = col.Bounds().Width - col.Width;
+                const wanted = 4 + Math.trunc(slack / 2);
+
+                until("the column becomes a surface", () => at(middle).X === wanted, () => {
+                    eq("Center anchors against the declaration", at(middle).X, wanted);
                     eq("at the size it asked for",              at(middle).Width, 60);
 
-                    col.Delete();
-                    row.Delete();
-                    done();
+                    /*
+                     * And the issue's own shape, with a component: `Tile.form`
+                     * draws a 180x130 surface with a `Fill` child as big as it,
+                     * and a host gives the component a cell of its own.  The
+                     * child follows the room -- it used to keep 180, because
+                     * the surface latched the cell as its design and there was
+                     * no slack to keep the far gap with
+                     * (`ISSUE-fixed-fill-child`).
+                     */
+                    const tileHost = new Panel();
+
+                    tileHost.Name = "BTileHost";
+                    tileHost.Arrangement = "Vertical";
+                    tileHost.Resize(300, 200);
+                    tileHost.HAlign = "Fill";       /* 640 across the form */
+                    tileHost.VAlign = "Start";      /* and 200 tall */
+                    this.Add(tileHost);
+
+                    const tile = new Tile();
+
+                    tile.Name = "BTile";
+                    tile.HExpand = true;
+                    tile.VExpand = true;
+                    tileHost.Add(tile);
+
+                    until("the tile is laid out",
+                          () => tile.Bounds().Width > 180 && tile.Bounds().Height > 100,
+                          () => {
+                        eq("a component's Fill child follows the host's room",
+                           tile.Box.Bounds(tile).Width, tile.Bounds().Width);
+                        eq("...on both axes",
+                           tile.Box.Bounds(tile).Height, tile.Bounds().Height);
+
+                        tileHost.Delete();
+                        col.Delete();
+                        row.Delete();
+                        done();
+                    });
                 });
             });
         });

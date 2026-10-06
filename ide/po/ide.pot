@@ -50,7 +50,7 @@ msgstr ""
 #: forms/NewProjectForm.form: LblName.Text
 #: forms/ProjectForm.form: LblPrName.Text
 #: modules/ControlTree.js:160
-#: modules/Strings.js:289
+#: modules/Strings.js:321
 msgid "Name:"
 msgstr ""
 
@@ -287,6 +287,7 @@ msgid "Commit message"
 msgstr ""
 
 #: forms/GitForm.form: BtnStage.Text
+#: forms/MainForm.form: ChangeTable.Menu MnuChStage
 #: forms/MainForm.form: BtnChStage.Text
 msgid "Stage"
 msgstr ""
@@ -297,6 +298,7 @@ msgid "Put the chosen files in the next commit"
 msgstr ""
 
 #: forms/GitForm.form: BtnUnstage.Text
+#: forms/MainForm.form: ChangeTable.Menu MnuChUnstage
 msgid "Unstage"
 msgstr ""
 
@@ -459,21 +461,26 @@ msgid "Refresh"
 msgstr ""
 
 #: forms/MainForm.form: menu MnuCloseTab
+#: forms/MainForm.form: TabActions.Menu MnuTabClose
 #: modules/TabSet.js:623
 msgid "Close tab"
 msgstr ""
 
 #: forms/MainForm.form: menu MnuRename
 #: forms/MainForm.form: action ActRenameCtl
+#: forms/MainForm.form: FileTree.Menu MnuFtRename
+#: forms/MainForm.form: WidgetTree.Menu MnuTrRename
 #: forms/RefsForm.form: BtnRename.Text
 msgid "Rename..."
 msgstr ""
 
 #: forms/MainForm.form: menu MnuDelete
+#: forms/MainForm.form: FileTree.Menu MnuFtDelete
 msgid "Delete from project..."
 msgstr ""
 
 #: forms/MainForm.form: menu MnuSaveAll
+#: forms/MainForm.form: TabActions.Menu MnuTabSaveAll
 msgid "Save all"
 msgstr ""
 
@@ -625,6 +632,7 @@ msgid "Show problems"
 msgstr ""
 
 #: forms/MainForm.form: menu MnuProjectSettings
+#: forms/MainForm.form: FileTree.Menu MnuFtProject
 msgid "Project settings..."
 msgstr ""
 
@@ -807,8 +815,44 @@ msgstr ""
 msgid "What this tree shows"
 msgstr ""
 
+#: forms/MainForm.form: FileTree.Menu MnuFtStartup
+msgid "Set as startup form"
+msgstr ""
+
+#: forms/MainForm.form: FileTree.Menu MnuFtTranslate
+msgid "Edit translations"
+msgstr ""
+
+#: forms/MainForm.form: FileTree.Menu MnuFtNewTranslation
+msgid "New translation from this template..."
+msgstr ""
+
+#: forms/MainForm.form: FileTree.Menu MnuFtTranslateWith
+msgid "Open in external editor"
+msgstr ""
+
 #: forms/MainForm.form: ChangeTable.Tooltip
 msgid "Double click a file to read what changed in it"
+msgstr ""
+
+#: forms/MainForm.form: ChangeTable.Menu MnuChDiff
+msgid "Show the diff"
+msgstr ""
+
+#: forms/MainForm.form: ChangeTable.Menu MnuChOpen
+msgid "Open the file"
+msgstr ""
+
+#: forms/MainForm.form: ChangeTable.Menu MnuChDiscard
+msgid "Discard changes..."
+msgstr ""
+
+#: forms/MainForm.form: ChangeTable.Menu MnuChAll
+msgid "Stage everything"
+msgstr ""
+
+#: forms/MainForm.form: ChangeTable.Menu MnuChWindow
+msgid "Changes window..."
 msgstr ""
 
 #: forms/MainForm.form: TxtCommit.Placeholder
@@ -830,6 +874,14 @@ msgstr ""
 
 #: forms/MainForm.form: TabActions.Tooltip
 msgid "Tab actions"
+msgstr ""
+
+#: forms/MainForm.form: TabActions.Menu MnuTabOthers
+msgid "Close others"
+msgstr ""
+
+#: forms/MainForm.form: TabActions.Menu MnuTabAll
+msgid "Close all"
 msgstr ""
 
 #: forms/MainForm.form: FindText.Tooltip
@@ -920,6 +972,14 @@ msgstr ""
 
 #: forms/MainForm.form: EventList.Tooltip
 msgid "Double click an event to write its handler, or to go to it"
+msgstr ""
+
+#: forms/MainForm.form: WidgetTree.Menu MnuTrExpand
+msgid "Expand all"
+msgstr ""
+
+#: forms/MainForm.form: WidgetTree.Menu MnuTrCollapse
+msgid "Collapse all"
 msgstr ""
 
 #: forms/MainForm.form: LblOutline.Text
@@ -1141,6 +1201,7 @@ msgstr ""
 
 #: forms/NewProjectForm.form: CmbKind.Items
 #: forms/ProjectForm.form: CmbPrKind.Items
+#: forms/ProjectForm.form: CmbPrKind.Text
 msgid "a form"
 msgstr ""
 
@@ -2089,7 +2150,7 @@ msgid "none"
 msgstr ""
 
 #: modules/FormFiles.js:144
-#: modules/Strings.js:289
+#: modules/Strings.js:321
 msgid "New form"
 msgstr ""
 

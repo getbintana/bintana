@@ -2486,8 +2486,11 @@ person who wrote it either.
   answers `Fixed` before lunch and `Horizontal` after. Reading the type where the
   arrangement was meant is how `HAlign` gets taken away from every child of a box
   (`widget_apply_align`). Its reference size is latched from its
-  **first real allocation**; code that resizes a surface before it has ever been
-  allocated is setting the design size, not resizing anything.
+  **declaration** when it has one -- the `.form`'s `Width`/`Height`, or the
+  `Resize` a surface built in code got before it was shown -- and from its first
+  real allocation otherwise; code that resizes a surface that declared nothing
+  before it has ever been allocated is setting the design size, not resizing
+  anything.
 - **A `Split` used to let a window be made smaller than its own contents**, and
   the symptom is overlap rather than clipping: GTK's paned defaults to
   `shrink-*-child = TRUE`, so it reports a minimum of nothing and the halves are
@@ -2501,13 +2504,15 @@ person who wrote it either.
   itself, and `Expand` is what makes the control take more. `PoForm`'s editors
   got `MinHeight` first and were squeezed to 46px; `Height` plus `Expand` is the
   pair that gives a floor of 64 and growth to whatever there is.
-- **A `Fixed` inside a hidden page latches the wrong design size, and the symptom
-  is a whole panel laid out at the old window size.** A hidden `Switcher` page is
-  never allocated, so its first allocation happens when it is *shown* -- and if
-  the window was enlarged first, that is the size it latches. Every anchor under
-  it then has `dx = 0` and nothing fills. Enlarging the IDE on the welcome page
-  and then opening a project is the case: the workspace came up at 1100x720
-  inside a 1500x950 window. **Not a runtime bug**: `WorkBox`, `SideBar` and
+- **A `Fixed` inside a hidden page that declares no size latches the wrong design
+  size, and the symptom is a whole panel laid out at the old window size.** A
+  hidden `Switcher` page is never allocated, so its first allocation happens when
+  it is *shown* -- and if the window was enlarged first, that is the size it
+  latches. Every anchor under it then has `dx = 0` and nothing fills. Enlarging
+  the IDE on the welcome page and then opening a project is the case: the
+  workspace came up at 1100x720 inside a 1500x950 window. **A declaration is the
+  way out** -- a `.form`'s `Width`/`Height` is latched whatever the allocation
+  order -- and **not a runtime bug** for the rest: `WorkBox`, `SideBar` and
   `ConsoleBox` were `Fixed` when each of them is a *column* -- a label over a
   tree, a toolbar over a split -- with every child `Fill` at the full width and
   coordinates that never meant anything. A box has no design size to get wrong.
@@ -2553,14 +2558,25 @@ person who wrote it either.
   of each child's *minimum*, so a caption whose translated text outgrew its
   declared width pushes the surface out instead of clipping -- right, and the
   reason the anchor origin cannot be the first allocation. It used to be, so on a
-  pushed form the design size *became* the pushed size: every anchor went inert
-  and the extra room sat dead against the far edge. The IDE's own *New
-  translation* dialog is where it was seen -- the input stopped 77px short and the
-  buttons sat 85px left of the corner. **A form's declared `Width`/`Height` is the
-  origin now**, and only a form's: a `Width` inside a box is a minimum, not a
-  size, so a `Panel` a box stretched to 280 has no business calling its declared
-  60 the design. Getting that wrong broke two assertions in `testAnchors` and is
-  what the `is_form` check in `bta_fixed.c` is for.
+   pushed form the design size *became* the pushed size: every anchor went inert
+   and the extra room sat dead against the far edge. The IDE's own *New
+   translation* dialog is where it was seen -- the input stopped 77px short and the
+   buttons sat 85px left of the corner. **The declared `Width`/`Height` is the
+   origin now, on every surface and not only on a form**
+   (`ISSUE-fixed-fill-child`): it was `is_form` alone, and that made `Fill`
+   inert on a `Panel` a box had stretched -- the panel's first allocation *is*
+   the cell, so it latched that and no slack was ever left. A component's
+   `Tile.form` drawn at 180x130 with a `Fill` child as big as it stayed 180
+   wide in a 640 cell, and the only way around it was changing the component's
+   `Arrangement`, a decision its host cannot make. A `Width` inside a box is
+   still a *minimum* as a request; as the origin of its children's coordinates
+   it is the design, and that is true whatever gives the surface its room. The
+   allocation is the fallback only when nothing was declared. Two consequences
+   measured while fixing it: a `Panel`'s `Margin` is **not** chrome to subtract
+   (a 100x100 panel with `Margin: 5` is a 100x100 box at (5,5) -- GTK shifts it
+   inside the cell and keeps its size), and `testBoxAlign`'s last assertion
+   moved with the rule: a `Center` child of a stretched panel now anchors
+   against the declaration and not against the cell.
 - **The design height is the declared one less what sits around the surface,
   read off the widgets.** It was `MIN(declared, allocated)` -- a menu bar's
   subtraction guessed from the allocation, right only when the window opens at
@@ -4671,6 +4687,22 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   a button whose tooltip said the same words; when the Debug menu's items
   became commands, `"Pause"` fell out of the catalogue. `fromAction` reads
   them, and the `strings` phase plants one.
+- **A control's own `Menu`/`HeaderMenu` is prose no class declares, and the
+  extractor walked neither.** `Widget.TextProperties` is how a *property* says
+  it holds text; a `Menu` is a structure whose items carry `text`, and the
+  runtime translates each label in `append_item` -- where the comment says why
+  `BtaClass.texts` cannot express it: a menu item is not a widget and has no
+  class. So `Ide.Strings` knows the two keys by name, exactly as `fromMenu`
+  knows the form's own `menus` block, and the reference names the control and
+  the menu (`ChangeTable.Menu MnuChStage`). Without it the IDE's own four
+  context menus were English under a Spanish window -- 13 labels in no
+  catalogue, and a `po` entry written by hand came back obsolete at the next
+  `msgmerge` because the template did not mention it. The `strings` phase
+  plants a control with both menus, nested items included, and checks the
+  reference; the IDE's own `ide.pot`/`es.po` were regenerated with it.  The
+  bullet below still holds -- this is not a per-widget list: `Menu` and
+  `HeaderMenu` are the menu machinery's two names, and the *labels* inside them
+  are the runtime's business, which is why nothing has to be declared.
 - **`Locale.Text(SOME_CONST)` extracts nothing**, and it looks exactly like doing
   it right. The extractor collects a *literal* heading the call, so a constant
   defeats it as thoroughly as a template literal does -- and a `const` is

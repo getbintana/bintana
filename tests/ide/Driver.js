@@ -8978,6 +8978,18 @@ function* p_strings(ide) {
         children: [
             { type: "Label", name: "L", properties: { Text: "a caption" },
               design: { Text: "a sample nobody translates" } },
+            /* A control's own menu, which no class can declare as prose: the
+             * runtime translates each label when it builds the menu, and the
+             * extractor has to walk the two keys by name
+             * (`ISSUE-menu-label-extraction`). */
+            { type: "Label", name: "Ctx",
+              properties: { Text: "a menu holder",
+                            Menu: [{ name: "MnuCtx", text: "a context menu" },
+                                   { name: "MnuCtxSub", text: "a context parent",
+                                     children: [{ name: "MnuCtxLeaf",
+                                                  text: "a nested context label" }] }] } },
+            { type: "TableView", name: "TblCtx",
+              properties: { HeaderMenu: [{ name: "MnuHead", text: "a heading menu" }] } },
             { type: "ComboBox", name: "C", properties: { Items: ["one", "two"] } },
             { type: "TextBox", name: "T",
               properties: { Placeholder: "a hint", Text: "" } },
@@ -9049,6 +9061,29 @@ function* p_strings(ide) {
     check("and a window title", ids.includes("a window title"));
     check("and a menu label, at both levels",
           ids.includes("a menu") && ids.includes("a menu item"));
+
+    /*
+     * **A control's own menu is prose no class declares.** `Menu` and
+     * `HeaderMenu` are structures, and the runtime translates each item's
+     * `text` in `append_item` -- so the labels are reached by walking the two
+     * keys, and the reference names the control and the menu a label came
+     * from.  Without it the IDE's own four context menus were English under a
+     * Spanish one (`ISSUE-menu-label-extraction`).
+     */
+    check("a control's own menu label is extracted, nested ones included",
+          ids.includes("a context menu") && ids.includes("a context parent") &&
+          ids.includes("a nested context label"), JSON.stringify(ids.slice(-18)));
+    check("and its heading menu's", ids.includes("a heading menu"),
+          JSON.stringify(ids.slice(-18)));
+
+    const ctx = found.find((e) => e.msgid === "a context menu");
+    check("...with the control and the menu it belongs to in the reference",
+          ctx && ctx.where.some((w) => w.includes("Ctx.Menu MnuCtx")),
+          JSON.stringify(ctx && ctx.where));
+    const leaf = found.find((e) => e.msgid === "a nested context label");
+    check("...and the nested item names its own",
+          leaf && leaf.where.some((w) => w.includes("Ctx.Menu MnuCtxLeaf")),
+          JSON.stringify(leaf && leaf.where));
     /* A command's label is the one prose a form declares that is neither a
      * property nor a menu item, and the runtime translates it: it was never
      * extracted, and "Pause" fell out of the IDE's own catalogue the day its
