@@ -7,12 +7,13 @@
  * control's size from `DEFAULT_SIZE` -- which is what keeps a control looking
  * the same wherever the IDE draws it.
  *
- * The palette itself is **one widget shared by every open designer**, so it is
- * the IDE's and not a designer's: the buttons dispatch to whichever form is on
- * screen, and only what the palette *offers* -- the project's components --
- * needs a rebuild.  Each designer used to decide on its own, which came to 108
- * rebuilds of the same palette in one suite run at ~160 ms each: a third of its
- * running time, and a visible hitch every time a user moved between two forms.
+ * The palette itself is **one widget per open form**, built by `Ide.Workspace`
+ * with the rest of the tab: the buttons are the tab's page's, so the palette
+ * sits under the strip with the canvas, and each form's page keeps its own
+ * marked tool and its own scroll for free.  `Palette.offer` is still what
+ * decides whether a listing means a rebuild, and the cost of a build was
+ * measured before that choice -- ~14 ms, against the 44-211 ms opening a form
+ * already costs.
  */
 "use strict";
 
@@ -315,16 +316,17 @@ const DEFAULT_SIZE = {
 
 Ide.Palette = class Palette {
 
-    /** @param {MainForm} ide */
-    constructor(ide) {
-        this.ide     = ide;
-        this.buttons = {};
+    /** @param {Ide.Designer} designer */
+    constructor(designer) {
+        this.designer = designer;
+        this.ide      = designer.ide;
+        this.buttons  = {};
         /* What the buttons were built from, so a rebuild only happens when the
          * answer would be different. */
-        this.offers  = null;
+        this.offers   = null;
     }
 
-    get book() { return this.ide.Palette; }
+    get book() { return this.designer.workspace.paletteBook; }
 
     /*
      * The project's components, as the IDE found them: [{name, ...}].  They are a
@@ -415,15 +417,14 @@ Ide.Palette = class Palette {
         /*
          * The handler belongs to the button, which is what lets the palette be
          * rebuilt -- a library ticked, a tab switched -- without the previous
-         * set of them being deleted off the IDE's form by hand.
+         * set of them being deleted off the form by hand.
          *
-         * It reads `ide.designer` **when it runs** rather than closing over one:
-         * the palette is one widget for every open form, and a button that added
-         * a control to a canvas nobody was looking at is what a closure over one
-         * designer used to do.
+         * It reads **its own designer**, which is the form whose page holds
+         * this button: a click can only come from the tab on screen, and the
+         * button belongs to that tab's palette.
          */
         button.On("Click", () => {
-            const designer = this.ide.designer;
+            const designer = this.designer;
             if (!designer) return;      /* no form on screen: nothing to add to */
 
             designer.tool = type;

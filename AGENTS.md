@@ -349,6 +349,41 @@ The corollary runs the other way too, and is easy to forget: before writing C,
 check whether the thing is expressible as a Bintana form. `AskForm` and
 `ConfirmForm` are dialogs, not runtime primitives.
 
+**The workspace belongs to the tab, and the strip is above it.** `Ide.Workspace`
+(`ide/modules/Workspace.js`) builds, once per open file, everything under the
+tab strip: the palette, the control tree and the design bar on the left, the
+canvas or the editor in the middle, and the property grid, the events page or
+the outline on the right. It is per tab because a widget belongs to one parent
+and a notebook puts its pages under its own strip, so a shared panel cannot be
+under it -- it stood beside the whole notebook and the strip stopped at the
+editor's edge. The cost was measured with Sysprof before the choice was made:
+the whole workspace is ~7 ms with an empty palette, the palette is most of it
+at ~14 ms in the IDE, against the 44-211 ms a form tab already costs to open
+(the canvas, the designer and the form built for real). Four things follow:
+
+- **A widget built in code is not published on the form.** Only the `.form`
+  loader does `form[name] = control`; `Container.Add` binds it for dispatch and
+  nothing else. So `ide.WidgetTree`, `ide.PropGrid` and the rest do not exist
+  by construction: `TabSet.placeContent` repoints them at the active page's,
+  and at `null` where the page has no such half. A new per-tab widget wants its
+  line there, or no handler can reach it.
+- **A palette button belongs to the page it is on.** Its `On("Click")` closes
+  over its own designer, so a reference held across a tab switch adds to the tab
+  it came from -- which a user cannot do and a test did, until it refetched
+  after the switch.
+- **A named menu item cannot be per tab.** The control tree's menu exposes its
+  items on the form, and a second tree's `MnuTrRename` is a name the runtime
+  refuses; the three items are commands now (`ActTrRename`, `ActTrExpand`,
+  `ActTrCollapse`), the bargain `CANVAS_MENU` had already made.
+- **`Session` remembers the widths, not the widgets.** The per-page splits are
+  rebuilt with every tab, so `Session.divider(name, fallback)` answers with the
+  live value of the page on screen and falls back to the saved one, and
+  `DIVIDERS` lists `PageSplit`/`CenterSplit`/`SideSplit`/`EditSplit`.
+
+`tests/ide`'s `designer` phase holds the shape -- the strip spans, the panels
+begin below it, the canvas and both panels are inside the page -- and the
+whole-project count in [`docs/testing.md`](docs/testing.md) moves with it.
+
 ## Runtime architecture
 
 **All widget classes share one `JSClassID`.** What makes a `Button` a `Button`
@@ -2246,7 +2281,7 @@ Three things that will waste your time:
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
-  384 assertions against 2814 for the whole project -- 9.5 s against 368 on this
+  390 assertions against 2860 for the whole project -- 9.2 s against 413 on this
   machine -- which is what makes iterating on an early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.
@@ -2369,7 +2404,7 @@ nothing is written at all.
 
 **The first harvest was the IDE, and the event marks are what it found.**
 `--profile` over `tests/ide` is 3.9 MB and **37,449 marks** in 354 s with the
-suite green (2818 assertions then; 2862 today) -- against 431 s for the ordinary runner run, so
+suite green (2818 assertions then; 2860 today) -- against 431 s for the ordinary runner run, so
 the writer's per-mark cost does not show at this size. 37,238 of those marks are
 `Event` and 211 are the runtime's (`Bintana`); **28,402 of them are one
 handler**, `PropGrid_Filter` -- the property grid's filter answering GTK for

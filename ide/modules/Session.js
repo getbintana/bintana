@@ -48,8 +48,13 @@ const PROJECTS_KEY = "session.projects";
  * control to touch. A hand-edited file -- or one left by a future version that
  * had five of them -- can then say nothing that reaches a widget this version
  * did not mean to move.
+ *
+ * `PageSplit`, `CenterSplit`, `SideSplit` and `EditSplit` are the per-tab
+ * workspace's (`Ide.Workspace`): there is one set per open file, so what is
+ * remembered is the width the person dragged, not a widget -- see `divider`.
  */
-const DIVIDERS = ["Split", "RightSplit", "WorkArea", "SideSplit"];
+const DIVIDERS = ["Split", "RightSplit", "PageSplit", "CenterSplit",
+                  "SideSplit", "EditSplit"];
 
 /*
  * Under this is not a window, it is a mistake in a file: the IDE's own minimum
@@ -133,6 +138,25 @@ Ide.Session = class Session {
 
     sane(n) {
         return Number.isFinite(Number(n)) && Number(n) >= MIN_WINDOW;
+    }
+
+    /*
+     * Where one divider sits, for a page that is being built right now.
+     *
+     * The per-tab workspace is new every time a file opens, so its splits have
+     * no widget at the moment `restoreWindow` runs -- there is nothing open
+     * yet. The live value of the page on screen is the freshest answer (a drag
+     * on one form is a preference about the window, and the next form should
+     * inherit it), and the saved value is the answer when nothing is open.
+     */
+    divider(name, fallback) {
+        const live = this.ide[name];
+        if (live && live.Position > 0) return live.Position;
+
+        const saved = this.window();
+        const at    = saved && saved.dividers;
+        const where = Number(at && at[name]);
+        return Number.isFinite(where) && where > 0 ? Math.round(where) : fallback;
     }
 
     /*

@@ -816,15 +816,36 @@ function* p_designer(ide) {
         yield;
     }
 
-    /* The other half of the arrangement: the canvas is the page's own, and what
-     * sits beside the notebook is the shared panel -- one selection, one panel,
-     * however many forms are open. */
+    /*
+     * The workspace is the page's: the canvas, the palette, the control tree
+     * and the property panel all live inside the tab, below the strip -- which
+     * is what lets the strip span the window.  It used to be the other way
+     * round: the panels were the IDE's and stood beside the whole notebook, so
+     * the strip stopped at the editor's edge and the panels read as belonging
+     * to nothing.
+     */
+    const dTab = ide.openTabs.get(ide.activeFile).view;
+
     check("the canvas belongs to the page",
-          ide.openTabs.get(ide.activeFile).view.Children.some((c) => c === ide.CanvasScroll),
-          ide.openTabs.get(ide.activeFile).view.Children.map((c) => c.Name).join(" "));
-    check("and the side panel is the notebook's neighbour, not its content",
-          ide.WorkArea.Children.some((c) => c === ide.SidePanel),
-          ide.WorkArea.Children.map((c) => c.Name).join(" "));
+          dTab.Children.includes(ide.ControlsBox) &&
+          dTab.Children.includes(ide.CenterSplit) &&
+          ide.CenterSplit.Children[0].Children.some((c) => c === ide.CanvasScroll),
+          dTab.Children.map((c) => c.Name).join(" "));
+    check("...and so do the two panels",
+          ide.CenterSplit.Children.some((c) => c === ide.SidePanel) &&
+          ide.ControlsBox.Children.length === 2,
+          `center=${ide.CenterSplit.Children.map((c) => c.Name).join(" ")} ` +
+          `controls=${ide.ControlsBox.Children.map((c) => c.Name).join(" ")}`);
+
+    /* Below the strip, which is the point of the page owning them: the strip
+     * spans the window and the panels begin under it. */
+    const pageAt = dTab.Bounds();
+    check("the panels begin below the tab strip",
+          ide.ControlsBox.Bounds().Y >= pageAt.Y &&
+          ide.SidePanel.Bounds().Y   >= pageAt.Y,
+          `page=${JSON.stringify(pageAt)} ` +
+          `controls=${JSON.stringify(ide.ControlsBox.Bounds())} ` +
+          `side=${JSON.stringify(ide.SidePanel.Bounds())}`);
 
     /*
      * And the button that ends the strip is the only way to reach *Close others*
@@ -837,30 +858,29 @@ function* p_designer(ide) {
           ide.TabActions.Icon !== "" || ide.TabActions.Text !== "",
           `icon="${ide.TabActions.Icon}" text="${ide.TabActions.Text}"`);
     /*
-     * The panel is three views of one selection, and the strip is what says
-     * which is on screen: what the selection *is* on the first page, what it
-     * *does* on the second, and the palette and the control tree -- which are
-     * about the shape of the form rather than about the selection -- on the
-     * third.  A column 280 wide cannot show them at once, and what it used to
-     * do instead was give each a share of the height.
+     * The right panel is two views of one selection: what it *is* on the first
+     * page, what it *does* on the second.  The palette and the control tree
+     * are the other column now -- where the shape of the form is -- which is
+     * what took them out from behind a tab and gave them a height of their
+     * own.
      */
-    eq("the side panel is a switcher", ide.SideTabs.Count, 3);
-    eq("with a page for each half of designing",
+    eq("the side panel is a switcher", ide.SideTabs.Count, 2);
+    eq("with a page for each half of the selection",
        JSON.stringify(ide.SideTabs.Tabs),
-       JSON.stringify(["Properties", "Events", "Controls"]));
+       JSON.stringify(["Properties", "Events"]));
 
-    /* Nothing in the side panel may hang out of it.  A control anchored inside
+    /* Nothing in either column may hang out of it.  A control anchored inside
      * a container keeps the gap it was *drawn* with, so a coordinate guessed
      * against a container whose height the theme decides -- this one is the
      * split's minus the tab strip -- overflows by that difference for good, at
-     * every window size.  Which is why the panel is a box and not coordinates.
+     * every window size.  Which is why the panels are boxes and not
+     * coordinates.
      *
-     * Each page is put on screen before it is measured: a page nobody is looking
-     * at has no allocation, and a 0x0 satisfies every inequality below while
-     * saying nothing at all. */
-    for (const [page, content] of [[0, ide.PropGrid], [1, ide.EventList],
-                                   [2, ide.Palette], [2, ide.WidgetTree]]) {
-        ide.SideTabs.Current = page;
+     * Each switcher page is put on screen before it is measured: a page nobody
+     * is looking at has no allocation, and a 0x0 satisfies every inequality
+     * below while saying nothing at all. */
+    for (const [which, content] of [[0, ide.PropGrid], [1, ide.EventList]]) {
+        ide.SideTabs.Current = which;
         yield* until(() => content.Bounds().Height > 0);
 
         const panel = ide.SidePanel.Bounds();
@@ -870,6 +890,17 @@ function* p_designer(ide) {
               r.Y >= panel.Y && r.Y + r.Height <= panel.Y + panel.Height &&
               r.X >= panel.X && r.X + r.Width  <= panel.X + panel.Width,
               `${content.Name}=${JSON.stringify(r)} panel=${JSON.stringify(panel)}`);
+    }
+    for (const content of [ide.Palette, ide.WidgetTree]) {
+        yield* until(() => content.Bounds().Height > 0);
+
+        const box = ide.ControlsBox.Bounds();
+        const r   = content.Bounds();
+
+        check(`${content.Name} stays inside the controls panel`,
+              r.Y >= box.Y && r.Y + r.Height <= box.Y + box.Height &&
+              r.X >= box.X && r.X + r.Width  <= box.X + box.Width,
+              `${content.Name}=${JSON.stringify(r)} box=${JSON.stringify(box)}`);
     }
     ide.SideTabs.Current = 0;
     yield* settled(ide);
@@ -893,9 +924,9 @@ function* p_designer(ide) {
     ok.HAlign = "Fill";
     yield* settled(ide);
     const drawnAt = ide.designer.rectOf(ok);
-    const room    = ide.WorkArea.Position;
+    const room    = ide.CenterSplit.Position;
 
-    ide.WorkArea.Position = room - 140;
+    ide.CenterSplit.Position = room - 140;
     yield* until(() => ide.designer.rectOf(ok).w > 0);
     yield* settled(ide);
 
@@ -911,19 +942,19 @@ function* p_designer(ide) {
      * canvas its minimum handed it the space anyway -- spilling it outside its
      * own half and over the panel beside it.  Dragging the divider is what
      * makes that visible, so the divider is what this drives.
-     */
-    /*
-     * Not below the tab strip: the notebook is the split's half now, and a
-     * notebook is at least as wide as its tabs.  Asking for 150 is asking for
-     * something no layout can give, and what it gives instead is the strip
-     * drawn outside its own half.
+     *
+     * The canvas's half is `CenterSplit`'s first child, and the panel is the
+     * second: asking for 300 is asking for something no layout can give, since
+     * the panel's own minimum holds the divider at ~279, and what it gives
+     * instead is the view drawn over the panel.
      */
     for (const pos of [300, 250]) {
-        ide.WorkArea.Position = pos;
+        ide.CenterSplit.Position = pos;
         yield* until(() => ide.CanvasScroll.Bounds().Width > 0);
         yield* settled(ide);
 
-        const host = ide.WorkArea.Bounds(), view = ide.CanvasScroll.Bounds();
+        const host = ide.CenterSplit.Children[0].Bounds();
+        const view = ide.CanvasScroll.Bounds();
         const side = ide.SidePanel.Bounds();
 
         check(`the canvas view stays in its half of the split at ${pos}`,
@@ -934,7 +965,7 @@ function* p_designer(ide) {
               `view=${JSON.stringify(view)} side=${JSON.stringify(side)}`);
     }
 
-    ide.WorkArea.Position = room;
+    ide.CenterSplit.Position = room;
     ok.HAlign = "Start";
     yield* settled(ide);
 
@@ -1093,23 +1124,23 @@ function* p_designer(ide) {
     /* Collapsing is what a deep form needs -- the IDE's own is eight levels --
      * and the two commands apply to the tree, not to a selection, so unlike the
      * rest of the menu they stay live with nothing selected. */
-    ide.MnuTrCollapse.Click();
+    ide.ActTrCollapse.Click();
     yield;
     eq("Collapse all closes the tree", ide.WidgetTree.Expanded("@form"), false);
     eq("without losing a node of it",
        ide.WidgetTree.Count, ide.designer.allControls().length + 1);
 
-    ide.MnuTrExpand.Click();
+    ide.ActTrExpand.Click();
     yield;
     eq("Expand all opens it again", ide.WidgetTree.Expanded("@form"), true);
 
     /* And selecting still reaches a node whichever way the tree is left. */
-    ide.MnuTrCollapse.Click();
+    ide.ActTrCollapse.Click();
     yield;
     ide.WidgetTree.Key = "Ok";
     yield;
     eq("selecting reaches a node in a closed tree", ide.designer.selected.Name, "Ok");
-    ide.MnuTrExpand.Click();
+    ide.ActTrExpand.Click();
     yield;
 
     ide.designer.select(byName(ide, "Ok"));
@@ -1132,7 +1163,7 @@ function* p_designer(ide) {
     yield;
     eq("it goes grey with nothing selected", ide.ActDelCtl.Enabled, false);
     eq("...and so does the button",          ide.BtnDelCtl.Enabled, false);
-    eq("rename included",                    ide.MnuTrRename.Enabled, false);
+    eq("rename included",                    ide.ActTrRename.Enabled, false);
 
     /* Bring to front from the menu is the same restack the button does. Undone
      * afterwards: painting order is what the tests below this one measure, and
@@ -5864,7 +5895,11 @@ function* p_forms(ide) {
 
     const wasThere = ide.Surface.Children.length;
 
-    palComp.Click();
+    /* Asked again rather than kept from the component's own tab: a palette
+     * button belongs to the page it is on now, and the one grabbed above is
+     * the Marcador tab's.  A user cannot click a hidden button; the test can,
+     * which is how this was found. */
+    palette(ide, "Marcador").Click();
     yield* settled(ide);   // GTK has to have laid it out
 
     eq("clicking it adds a control", ide.Surface.Children.length, wasThere + 1);
@@ -7856,11 +7891,14 @@ function* p_projects(ide) {
     check("so a control past the edge of the view still exists to be edited",
           statusAt.x + statusAt.w > view.Width, JSON.stringify(statusAt));
 
-    /* Deep in there is the palette notebook and the property grid: the tree is
-     * walked whole, not just its first level. */
+    /* Deep in there is the console's debug page and the find bar: the tree is
+     * walked whole, not just its first level.  (The palette and the property
+     * grid used to be declared here and are the tabs' now -- see Workspace.js
+     * -- so what is deep in this form is what the `.form` still declares.) */
     const deep = ide.designer.allControls().map((c) => c.Name);
     check("every control is reachable, however deep",
-          deep.includes("PropGrid") && deep.includes("Palette") && deep.includes("LogView"),
+          deep.includes("StackList") && deep.includes("FindText") &&
+          deep.includes("LogView"),
           `${deep.length} controls`);
 
     /*
@@ -8004,7 +8042,12 @@ function* p_menus(ide) {
     /* The bar is a real menu bar's height, asked of a real one: the IDE is
      * itself a form with menus, so its own window has one.  An entry is a Label
      * and not a Button so that the two can agree -- a Button's floor is eight
-     * pixels over -- and this is what would say so if a desktop broke it. */
+     * pixels over -- and this is what would say so if a desktop broke it.
+     *
+     * A frame first: the board is laid out over a frame of GTK's choosing, and
+     * the preview bar with it -- the page holds a split now, so the room the
+     * board gets is one pass further down. */
+    yield* settled(ide);
     check("its height was measured, not assumed", Ide.MenuBar.measured > 0,
           `${Ide.MenuBar.measured}`);
     eq("and the preview comes out at a real bar's height",
@@ -11510,8 +11553,8 @@ function* p_outline(ide) {
 
     check("the side panel is showing over a code tab", ide.SidePanel.Visible);
     check("...with the outline in it",  ide.OutlineBox.Visible);
-    check("...and not the switcher, which speaks about a selection",
-          !ide.SideTabs.Visible);
+    check("...and no switcher at all, which speaks about a selection",
+          !ide.SideTabs);
 
     /* --- what is in it ------------------------------------------------------- */
 
@@ -11582,7 +11625,7 @@ function* p_outline(ide) {
     ide.openInTab("Main.form");
     yield* settled(ide);
     check("a form tab shows the switcher", ide.SideTabs.Visible);
-    check("...and not the outline", !ide.OutlineBox.Visible);
+    check("...and has no outline at all", !ide.OutlineBox);
 
     ide.openInTab("Main.js");
     yield* settled(ide);

@@ -26,11 +26,11 @@
  * This class is three lookups and a list of rows, which is why a control that
  * grows an event in C shows up here without the IDE learning anything.
  *
- * One instance, on the IDE and not on the designer -- the panel is shared and
- * so is the selection, exactly like the palette.  What it keeps is a signature
- * of what it last drew, so hanging off `MainForm.refresh()` -- which runs on
- * every edit, every selection *and* every pixel of a form resize -- costs a
- * string compare rather than a rebuild.
+ * One instance per designer, beside the property grid it belongs with: the
+ * list and the switcher are widgets of that form's own page now, and what it
+ * keeps -- a signature of what it last drew -- is that page's answer.  Hanging
+ * off `MainForm.refresh()` -- which runs on every edit, every selection *and*
+ * every pixel of a form resize -- costs a string compare rather than a rebuild.
  */
 "use strict";
 
@@ -53,9 +53,9 @@ const EVENTS_PAGE = 1;
 
 Ide.Events = class Events {
 
-    /** @param {MainForm} ide */
-    constructor(ide) {
-        this.ide = ide;
+    /** @param {Ide.Designer} designer */
+    constructor(designer) {
+        this.designer = designer;
         /* What the rows currently say, so an unchanged refresh does nothing. */
         this.drawn = null;
         /* Parallel to the rows: which event each one is about. */
@@ -70,7 +70,7 @@ Ide.Events = class Events {
      * spells that `openHandler("Form", "Open")`, so "Form" is the name here too.
      */
     target() {
-        return this.ide.designing ? this.ide.designer.selected : null;
+        return this.designer.selected;
     }
 
     /* The name a handler for this target is written under. */
@@ -89,9 +89,7 @@ Ide.Events = class Events {
      * the form being designed is not running, so there is no instance to ask.
      */
     list() {
-        if (!this.ide.designing) return [];
-
-        const designer = this.ide.designer;
+        const designer = this.designer;
         const control  = designer.selected;
 
         if (control) return designer.eventsOf(control);
@@ -118,7 +116,7 @@ Ide.Events = class Events {
         /* One read of the `.js`, and every event answered from it -- rather
          * than `hasHandler` per event, which reads it once each. */
         const written = Ide.FormFiles.handlersIn(
-            this.ide.formFiles.siblingSource(), name);
+            this.designer.ide.formFiles.siblingSource(), name);
 
         const signature = `${name}|${events.join(",")}|${written.join(",")}`;
         if (signature === this.drawn) return;
@@ -130,8 +128,8 @@ Ide.Events = class Events {
     /* Whether the page is on screen at all.  Hidden, it is redrawn when it is
      * shown, so nothing is lost by not keeping it up to date. */
     visible() {
-        return this.ide.designing && this.ide.SidePanel.Visible &&
-               this.ide.SideTabs.Current === EVENTS_PAGE;
+        return this.designer.workspace.sidePanel.Visible &&
+               this.designer.workspace.sideTabs.Current === EVENTS_PAGE;
     }
 
     /* The switcher moved to this page: whatever is there was drawn for another
@@ -142,7 +140,7 @@ Ide.Events = class Events {
     }
 
     build(name, events, written) {
-        const list = this.ide.EventList;
+        const list = this.designer.workspace.eventList;
 
         list.Clear();
         this.events = events.slice();
@@ -172,7 +170,7 @@ Ide.Events = class Events {
         row.Arrangement = "Horizontal";
         row.Spacing     = 6;
         row.Margin      = 2;
-        this.ide.EventList.Add(row);      // the row first, then what is in it
+        this.designer.workspace.eventList.Add(row);   // the row first, then what is in it
 
         const mark = new Label();
         mark.Text  = exists ? WRITTEN : "";
@@ -210,6 +208,6 @@ Ide.Events = class Events {
         const event = this.events[index];
         if (!event) return;
 
-        this.ide.openHandler(this.targetName(), event);
+        this.designer.ide.openHandler(this.targetName(), event);
     }
 };

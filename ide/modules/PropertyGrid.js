@@ -14,12 +14,13 @@
  * are read from and written to the root node -- and a never-shown instance
  * (`formProbe`) answers what the list, the defaults and the drop-downs are.
  *
- * One per designer, like the control tree: `PropGrid` is a single widget, but
- * what it shows is this form's selection.  Each editor **carries its own
- * handler** (`editor.On("Change", ...)`), so a rebuilt grid drops the previous
- * set with the controls they belonged to; nothing of the grid's is left on the
- * IDE's form to be taken back off.  The one exception is the sample menu, whose
- * entries are menu *items* rather than widgets and so have nowhere to carry one.
+ * One per designer, like the control tree and the palette: `PropGrid` is the
+ * tab's own widget now (`Ide.Workspace`), and what it shows is this form's
+ * selection.  Each editor **carries its own handler** (`editor.On("Change",
+ * ...)`), so a rebuilt grid drops the previous set with the controls they
+ * belonged to; nothing of the grid's is left on the IDE's form to be taken
+ * back off.  The one exception is the sample menu, whose entries are menu
+ * *items* rather than widgets and so have nowhere to carry one.
  *
  * The grid is rebuilt only when the set of properties changes: while a control
  * is dragged, X and Y refresh dozens of times a second, and rebuilding the
@@ -441,7 +442,7 @@ Ide.PropertyGrid = class PropertyGrid {
             /* The mode is this designer's, so the switch shows this designer's
              * answer -- behind `updating`, since assigning to a Switch reports
              * a click exactly as if someone had flipped it. */
-            this.ide.PropDesign.Active = this.designMode;
+            this.designer.workspace.propDesign.Active = this.designMode;
             this.fill();
         } finally {
             this.updating = false;
@@ -490,7 +491,7 @@ Ide.PropertyGrid = class PropertyGrid {
         if (wanted === this.filter) return;
 
         this.filter = wanted;
-        this.ide.PropGrid.Refilter();
+        this.designer.workspace.propGrid.Refilter();
     }
 
     /* What the filter lets through: the property's own name, matched anywhere
@@ -694,7 +695,7 @@ Ide.PropertyGrid = class PropertyGrid {
     }
 
     build(keys) {
-        const grid = this.ide.PropGrid;
+        const grid = this.designer.workspace.propGrid;
 
         /* Nothing to unwire: each handler belongs to the editor it was installed
          * on and goes when the grid is emptied.  It used to be four `delete`s a
@@ -734,7 +735,7 @@ Ide.PropertyGrid = class PropertyGrid {
         head.Margin = 4;
 
         this.rowInfo.push(keys);      // before Add: GTK filters on insertion
-        this.ide.PropGrid.Add(head);
+        this.designer.workspace.propGrid.Add(head);
     }
 
     addRow(key) {
@@ -744,7 +745,7 @@ Ide.PropertyGrid = class PropertyGrid {
         row.Margin  = 2;
 
         this.rowInfo.push([key]);
-        this.ide.PropGrid.Add(row);   // the row first, then what goes inside it
+        this.designer.workspace.propGrid.Add(row);   // the row first, then what goes inside it
 
         /* Markup, because a property that is not at its default is shown in
          * bold and the name is what carries it. A property name is an

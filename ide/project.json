@@ -54,6 +54,7 @@
     "modules/Installer.js",
     "forms/PoForm.js",
     "modules/Document.js",
+    "modules/Workspace.js",
     "modules/TabSet.js",
     "modules/Completion.js",
     "modules/CallTip.js",

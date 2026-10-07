@@ -74,10 +74,18 @@ Ide.Outline = class Outline {
         const code = !!ide.Editor && !!ide.activeFile &&
                      File.IsExtension(ide.activeFile, "js");
 
-        ide.SidePanel.Visible  = code || form;
-        ide.SideTabs.Visible   = form;
-        ide.OutlineBox.Visible = code;
+        /* The half a page has not got is `null` -- a form tab carries no
+         * outline, a code tab no switcher -- so every line asks before it
+         * writes. */
+        if (ide.ControlsBox) ide.ControlsBox.Visible = form;
+        if (ide.SideTabs)    ide.SideTabs.Visible    = form;
+        if (ide.OutlineBox)  ide.OutlineBox.Visible  = code;
+        if (ide.SidePanel)   ide.SidePanel.Visible   = code || form;
 
+        /* The list belongs to the page, so arriving at one means a list to
+         * fill: the signature below is about one editor's text, not about
+         * whose list is showing. */
+        this.drawn = null;
         if (code) this.refresh();
     }
 
@@ -90,7 +98,8 @@ Ide.Outline = class Outline {
      */
     refresh() {
         const ide = this.ide;
-        if (!ide.Editor || !ide.OutlineBox.Visible) return;
+        if (!ide.Editor || !ide.OutlineBox || !ide.OutlineBox.Visible) return;
+        if (!ide.OutlineList) return;
 
         const found = ide.navigator.symbols(ide.Editor.Text);
         const signature = found.map((s) => `${s.line}:${s.name}`).join("\n");
@@ -107,6 +116,7 @@ Ide.Outline = class Outline {
     /* A row was chosen: go to the line it is at. */
     chosen() {
         if (this.syncing) return;
+        if (!this.ide.OutlineList || !this.ide.Editor) return;
 
         const line = this.lines[this.ide.OutlineList.Index];
         if (!line || !this.ide.Editor) return;
@@ -134,7 +144,8 @@ Ide.Outline = class Outline {
         if (this.moving) return;
 
         const ide = this.ide;
-        if (!ide.Editor || !ide.OutlineBox.Visible) return;
+        if (!ide.Editor || !ide.OutlineBox || !ide.OutlineBox.Visible) return;
+        if (!ide.OutlineList) return;
 
         const at = ide.Editor.Line;
         let which = -1;

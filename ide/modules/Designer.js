@@ -10,15 +10,14 @@
  *
  * What this file is left with is the canvas: what is selected, what a drag or a
  * key does to it, how a control is added and named, the undo history, and
- * reading and writing the `.form`.  The three panels beside it each have a class
- * of their own, and each is a widget the IDE owns and the active designer fills
- * in:
+ * reading and writing the `.form`.  The panels around it each have a class of
+ * their own, and each drives the widget of the tab's own page (`Ide.Workspace`):
  *
  *   Chrome         what is drawn *over* the form -- outline, handles, guides
  *   ControlTree    what the form is made of, as a tree
  *   PropertyGrid   what one property of the selection is worth
- *   Palette what can be added -- and the IDE's, since it is one palette
- *                  for every open form (see Palette.js)
+ *   Palette        what can be added
+ *   Events         what the selection raises, and which handlers are written
  */
 "use strict";
 
@@ -90,17 +89,21 @@ function snap(v) {
 Ide.Designer = class Designer {
 
     /*
-     * One designer per open form, each with the canvas of its own tab.  The side
-     * panel -- palette, control tree, property grid -- is not passed in: it is
-     * the IDE's, shared, because it is chrome about *the selection* and there is
-     * one selection, the active tab's.  Whichever designer is showing drives it.
+     * One designer per open form, each with the canvas of its own tab and the
+     * workspace that tab holds -- palette, control tree, property grid and
+     * events.  **They are the tab's and not the IDE's**: a widget belongs to
+     * one parent, and the panels sit below the strip with the canvas, so each
+     * form keeps its own filter, its own tree and its own marked tool, which
+     * is what `placeContent`'s repointing is for.
      */
     /**
      * @param {MainForm} ide
      * @param {object} canvas
+     * @param {Ide.Workspace} workspace
      */
-    constructor(ide, canvas) {
+    constructor(ide, canvas, workspace) {
         this.ide      = ide;
+        this.workspace = workspace;
         this.surface  = canvas.surface;
         this.glass    = canvas.glass;
         this.view     = canvas.view;      // the Scroller the board sits in
@@ -145,13 +148,18 @@ Ide.Designer = class Designer {
          * the panels it is drawn with.  One per designer, like the canvas. */
         this.chrome = new Ide.Chrome(this);
 
-        /* What the form is made of, as a tree: one per designer, because what it
-         * shows is this form's controls even though the widget is shared. */
+        /* What the form is made of, as a tree: one per designer, and its widget
+         * is the tab's own -- see Workspace. */
         this.tree = new Ide.ControlTree(this);
 
-        /* And what one property of it is worth, which is the same bargain: a
-         * shared widget, filled in by whichever designer is on screen. */
+        /* And what one property of it is worth: same bargain. */
         this.grid = new Ide.PropertyGrid(this);
+
+        /* The palette and the events page, one per form now for the same
+         * reason: the buttons are widgets of this tab's page, and which one is
+         * marked is this designer's tool. */
+        this.palette = new Ide.Palette(this);
+        this.events  = new Ide.Events(this);
 
         /* The glass layer takes focus when clicked, and that is where it gets
          * the keys: Delete, arrows, Escape. */
@@ -231,13 +239,12 @@ Ide.Designer = class Designer {
     }
 
     /*
-     * The palette, which is the IDE's: one widget for every open designer, so
-     * what it offers is the project's business and only which button is marked
-     * changes hands.  Called on every switch and after every listing, and it is
-     * `offer` that decides whether any of that is a rebuild.
+     * The palette this form's page holds.  Called on every switch and after
+     * every listing, and it is `offer` that decides whether any of that is a
+     * rebuild.
      */
     showTool() {
-        const palette = this.ide.palette;
+        const palette = this.palette;
         if (!palette) return;
 
         palette.offer(this.components);
@@ -974,11 +981,11 @@ Ide.Designer = class Designer {
         this.ide.ActLower.Enabled  = has;
 
         /* Renaming is two things with one condition: the canvas's command
-         * renames the selection, the tree's item renames the row the pointer is
-         * on. The first is a command only because the canvas menu is assigned
-         * to each tab's canvas, and a named item cannot be in two menus. */
+         * renames the selection, the tree's renames the row the pointer is on.
+         * Both are commands now -- a named item cannot be in a menu that each
+         * form's tree carries. */
         this.ide.ActRenameCtl.Enabled = has;
-        if (this.ide.MnuTrRename) this.ide.MnuTrRename.Enabled = has;
+        this.ide.ActTrRename.Enabled  = has;
         /* Saving is the toolbar's -- one Save for a form and for a .js, enabled
          * by `refresh()` from the same `isDirty()` the menu's Ctrl+S reads.  A
          * second button for it in the design bar answered a question the panel

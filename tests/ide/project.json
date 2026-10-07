@@ -53,6 +53,7 @@
     "../../ide/modules/Installer.js",
     "../../ide/forms/PoForm.js",
     "../../ide/modules/Document.js",
+    "../../ide/modules/Workspace.js",
     "../../ide/modules/TabSet.js",
     "../../ide/modules/Completion.js",
     "../../ide/modules/CallTip.js",

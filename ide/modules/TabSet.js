@@ -3,16 +3,19 @@
  *
  * One page of `Tabs` per open file, and **the page owns what is in it**: a code
  * tab has its own `SourceEditor`, a form tab its own canvas and the `Designer`
- * driving it.  That is what buys what one shared editor could not: the undo
- * history, the selection, the scroll position and the design tree belong to the
- * widget, so they survive a switch without anyone saving and restoring them, and
- * switching a notebook is all the showing and hiding there is.
+ * driving it, and both have the workspace around them -- palette, control tree,
+ * property grid and outline (`Ide.Workspace`), because the strip is above all
+ * of it and a widget belongs to one parent.  That is what buys what one shared
+ * editor could not: the undo history, the selection, the scroll position, the
+ * design tree and the property filter belong to the widget, so they survive a
+ * switch without anyone saving and restoring them, and switching a notebook is
+ * all the showing and hiding there is.
  *
- * What is *not* per tab is the side panel and the find bar -- they speak about a
- * selection, and there is one because there is one active tab.  Which is why
- * `ide.Editor`, `ide.designer`, `ide.Surface` and friends are not controls of
- * `MainForm.form` any more: they are words for "the active one", repointed by
- * `placeContent` and `null` when nothing is open.
+ * What is still *not* per tab is the find bar and the reload notice: they
+ * speak about the active editor and are the same strip over every page.
+ * `ide.Editor`, `ide.designer`, `ide.Surface` and the workspace's own names
+ * are not controls of `MainForm.form` any more: they are words for "the active
+ * one", repointed by `placeContent` and `null` when nothing is open.
  *
  * `ide.activeFile` is read all over the IDE and written only here.
  */
@@ -98,9 +101,9 @@ const BOARD_MARGIN = 8;
  * is assigned to the active one on each switch, and a named item assigned to a
  * second canvas is a second menu taking the first one's name -- which the
  * runtime refuses now, since the first menu's item went dead when it was
- * allowed. `ActRenameCtl` renames the *selection*; the tree's `MnuTrRename`
- * renames the row the pointer is on, a different command, and keeps its name
- * because the tree's menu is built once.
+ * allowed. `ActRenameCtl` renames the *selection*; the tree's `ActTrRename`
+ * renames the row the pointer is on, a different command, and is a command for
+ * the same reason: there is one tree per form tab.
  */
 const CANVAS_MENU = [
     { action: "ActRenameCtl" },
@@ -197,21 +200,28 @@ Ide.TabSet = class TabSet {
 
         this.watch(name, state);
 
-        /* The Notebook has one page per open file, made here and destroyed with
-         * the tab: with nothing open it has none, and a strip with a nameless
-         * page in it is a tab that opens nothing.  There is one SourceEditor and it
-         * is moved into whichever page is active; between files it waits in
-         * WorkArea, which is where the .form declares it.
+        /*
+         * The page and the workspace in it: the palette and the property panel
+         * are the tab's own now, built by `Ide.Workspace` -- which is what
+         * lets the strip span the window with everything below it, and what
+         * gives each form its own filter, its own tree and its own selection
+         * state for free.  See Workspace.js for the shape and for what it
+         * costs, measured.
          *
-         * A box and not a Panel, even though the rest of this window is drawn in
-         * coordinates now.  HAlign "Fill" keeps the gaps a control was drawn
-         * with, so it needs a design size to keep them from -- and a view is
-         * made here, by code, with no idea how big the page will be.  An
-         * editor put in one would keep its natural size and leave the rest of
-         * the page empty.  A box has no such question: it fills. */
-        const view = new Panel();
-        view.Arrangement = "Vertical";
+         * The box the canvas or the editor goes in is a box and not a surface,
+         * even though the rest of this window is drawn in coordinates now.
+         * HAlign "Fill" keeps the gaps a control was drawn with, so it needs a
+         * design size to keep them from -- and a view is made here, by code,
+         * with no idea how big the page will be.  An editor put in one would
+         * keep its natural size and leave the rest of the page empty.  A box
+         * has no such question: it fills. */
+        const workspace = new Ide.Workspace(this.ide, state.mode === "design");
+        const view      = workspace.page;
         this.ide.Tabs.Append(view);
+        /* Only now do these widgets have a form: a `Menu` names handlers on
+         * it and an `Action` names one of its commands, and both refuse a
+         * widget that has been added to nothing. */
+        workspace.bind();
 
         /*
          * A code tab gets its own editor, made here and destroyed with the page.
@@ -272,9 +282,9 @@ Ide.TabSet = class TabSet {
              */
             if (isDocument(name)) {
                 state.document = new Ide.Document(
-                    this.ide, view, ed, File.Join(this.ide.project, name));
+                    this.ide, workspace.main, ed, File.Join(this.ide.project, name));
             } else {
-                view.Add(ed);
+                workspace.main.Add(ed);
             }
         } else {
             /*
@@ -282,11 +292,9 @@ Ide.TabSet = class TabSet {
              * The names are the same on every tab -- events dispatch by name and
              * only the page on screen has any, so `Glass_MouseDown` is whichever
              * one is showing; `ide.Surface` and friends are repointed at it by
-             * placeContent, exactly as `ide.Editor` is.
-             *
-             * The side panel is *not* per tab: palette, control tree and
-             * property grid are chrome about the selection, and there is one
-             * selection because there is one active tab.
+             * placeContent, exactly as `ide.Editor` is.  The palette, the tree
+             * and the property panel are that same bargain, built by the
+             * workspace this page holds.
              */
             const scroll   = new Scroller();
             const board    = new Panel();
@@ -319,7 +327,7 @@ Ide.TabSet = class TabSet {
              * is the board that *is* the window -- bar and canvas together. */
             titlebar.decorate(board);
 
-            view.Add(scroll);
+            workspace.main.Add(scroll);
             scroll.Add(board);
             board.Add(titlebar.panel);
             /* Between the decoration and the canvas, which is where the runtime
@@ -333,11 +341,11 @@ Ide.TabSet = class TabSet {
             state.canvas   = { scroll, canvas, surface, glass, board, titlebar, menubar };
             state.designer = new Ide.Designer(this.ide,
                                           { surface, glass, view: scroll, titlebar,
-                                            menubar });
+                                            menubar }, workspace);
             /* The list, not setComponents: it has to be known before the tree is
-             * built, because a component becomes a stand-in -- but rebuilding the
-             * shared palette is `adopt`'s job, and the switch that follows does
-             * it.  Doing both was two rebuilds per file opened. */
+             * built, because a component becomes a stand-in -- but filling the
+             * palette is `adopt`'s job, and the switch that follows does it.
+             * Doing both was two rebuilds per file opened. */
             state.designer.components = this.ide.components;
             state.designer.loadRoot(state.root, File.Join(this.ide.project, name));
             /* Reading a form is not editing it. */
@@ -348,8 +356,9 @@ Ide.TabSet = class TabSet {
         label.Text = name;
         this.ide.Tabs.SetTabLabel(this.ide.Tabs.Count - 1, label);
 
-        state.view = view;
-        state.label = label;
+        state.view      = view;
+        state.workspace = workspace;
+        state.label     = label;
         this.openTabs.set(name, state);
         this.tabOrder.push(name);
 
@@ -595,9 +604,6 @@ Ide.TabSet = class TabSet {
          * entirely and the editor has the room.
          */
         this.ide.Tabs.Visible = this.ide.Tabs.Count > 0;
-        /* The column the notebook is in goes with it: with no page there is no
-         * editor either, so nothing in it has anything to show. */
-        this.ide.EditorBox.Visible = this.ide.Tabs.Count > 0;
 
         for (let i = 0; i < this.tabOrder.length; i++) {
             const name  = this.tabOrder[i];
@@ -868,21 +874,17 @@ Ide.TabSet = class TabSet {
     }
 
     /*
-     * The active page holds the content, and that is the whole of it: the editor
-     * when the tab is code, the design host when it is a form.  The other one
-     * waits hidden in `WorkArea`, where the `.form` declares both.
+     * The active page holds everything, and that is the whole of it: the
+     * editor when the tab is code, the canvas and the two panels when it is a
+     * form.  Nothing moves and nothing is rebuilt -- switching a notebook is
+     * all the showing and hiding there is.
      *
-     * It used to be the other way round -- the pages stayed empty and the two
-     * hung *below* the notebook, shown and hidden in place.  That is a notebook
-     * used for its tab strip alone, and it cost exactly what you would expect:
-     * the empty page went on claiming height, so a blank band opened between the
-     * tabs and the designer, and `Tabs.VExpand = !designing` was there to beat it
-     * back.  With the content in the page there is no empty page to claim
-     * anything, the notebook expands the way a notebook does, and the band is not
-     * something that can happen.
-     *
-     * Nothing moves when nothing changed: re-parenting takes the focus with it,
-     * and this runs on every tab switch.
+     * **The page used to hold the content alone, with the panels beside the
+     * whole notebook** -- so the strip stopped at the editor's edge and the
+     * panels stood at full height next to the tabs, which read as belonging to
+     * nothing.  The workspace is the tab's now (Workspace.js), and what is
+     * left here is the repointing: every name that used to be a control of the
+     * `.form` is a word for *the active one*, and `null` when nothing is open.
      */
     placeContent() {
         const state = this.activeState();
@@ -914,6 +916,43 @@ Ide.TabSet = class TabSet {
         this.ide.Canvas       = canvas ? canvas.canvas : null;
         this.ide.Surface      = canvas ? canvas.surface : null;
         this.ide.Glass        = canvas ? canvas.glass   : null;
+
+        /*
+         * And the workspace's own names, the same bargain one level down:
+         * palette, control tree, property grid, events and outline are one per
+         * page now, and `ide.WidgetTree` is a word for *the active one*. The
+         * halves a page has not got are `null`, so a reader can ask without
+         * knowing which kind of tab is up.
+         *
+         * The splits go in the same breath, for `Session`: what it remembers
+         * are the widths the person dragged, and the widget they belong to is
+         * the active page's.
+         */
+        const ws = state && state.workspace ? state.workspace : null;
+
+        this.ide.ControlsBox = ws ? ws.controlsBox : null;
+        this.ide.SidePanel   = ws ? ws.sidePanel   : null;
+        this.ide.SideTabs    = ws ? ws.sideTabs    : null;
+        this.ide.PropBox     = ws ? ws.propBox     : null;
+        this.ide.PropDesign  = ws ? ws.propDesign  : null;
+        this.ide.PropFind    = ws ? ws.propFind    : null;
+        this.ide.PropGrid    = ws ? ws.propGrid    : null;
+        this.ide.EventList   = ws ? ws.eventList   : null;
+        this.ide.OutlineBox  = ws ? ws.outlineBox  : null;
+        this.ide.OutlineList = ws ? ws.outlineList : null;
+        this.ide.Palette     = ws ? ws.paletteBook : null;
+        this.ide.WidgetTree  = ws ? ws.widgetTree  : null;
+        this.ide.BtnDelCtl   = ws ? ws.btnDelCtl   : null;
+        this.ide.BtnRaise    = ws ? ws.btnRaise    : null;
+        this.ide.BtnLower    = ws ? ws.btnLower    : null;
+        this.ide.PageSplit   = ws && ws.design ? ws.page : null;
+        this.ide.CenterSplit = ws ? ws.centerSplit : null;
+        this.ide.SideSplit   = ws ? ws.sideSplit   : null;
+        this.ide.EditSplit   = ws && !ws.design ? ws.page : null;
+
+        /* The two per-designer helpers, which speak through those widgets. */
+        this.ide.palette = state && state.designer ? state.designer.palette : null;
+        this.ide.events  = state && state.designer ? state.designer.events  : null;
 
         /* This tab's canvas carries the menu; see CANVAS_MENU. */
         if (this.ide.Glass)

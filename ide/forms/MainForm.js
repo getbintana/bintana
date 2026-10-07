@@ -219,13 +219,13 @@ class MainForm extends Form {
     tooltip    = new Ide.Tooltip(this);      // what the name under the pointer is
     recovery  = new Ide.Recovery(this);      // the dirty tabs, copied aside
     session   = new Ide.Session(this);       // the desk, as it was left
-    /* The palette is one widget for every open form, so it is the window's and
-     * not a designer's: what it offers is the project's components, and the
-     * designer on screen only says which tool is marked. */
-    palette   = new Ide.Palette(this);
-    /* And the events page, beside the properties: one instance for the same
-     * reason the palette is one, since what it shows is the one selection. */
-    events    = new Ide.Events(this);
+    /* The palette and the events page are one per form now, and these are the
+     * words for *the active one*: `TabSet.placeContent` repoints them at the
+     * tab on screen and nulls them when there is none, exactly as it does for
+     * `ide.Editor` and `ide.designer`.  Declared here so every reader of them
+     * is answered either way. */
+    palette   = null;
+    events    = null;
     /* F12: where a name is declared, by looking it up rather than guessing. */
     navigator = new Ide.Navigator(this);
     /* Breakpoints, the stack and the values: what the runtime's `--debug` says,
@@ -1123,8 +1123,9 @@ class MainForm extends Form {
         this.showHandlers(picked);
         /* The same list the menu above is offering, drawn: it answers "nothing
          * changed" without reading anything, which is what lets it hang off a
-         * call that also runs on every pixel of a form resize. */
-        this.events.fill();
+         * call that also runs on every pixel of a form resize.  Only a form
+         * tab has an events page, so only then is there an `ide.events`. */
+        if (this.events) this.events.fill();
         /*
          * `ActDelCtl`, `ActRaise` and `ActLower` are **not** set here any more:
          * they are commands, and `Designer.refresh` owns whether a command that
@@ -1393,7 +1394,9 @@ class MainForm extends Form {
 
     /* The events page: activating a row writes that handler, or goes to it --
      * `openHandler` decides which, exactly as a double click on the canvas does. */
-    EventList_Activate() { this.events.activated(this.EventList.Index); }
+    EventList_Activate() {
+        if (this.events) this.events.activated(this.EventList.Index);
+    }
 
     /*
      * The side panel changed page.  What is on the events page was drawn for
@@ -2084,23 +2087,25 @@ class MainForm extends Form {
      * across the window.
      *
      * **Which is now what the file says**, since they point at an `action`: the
-     * three commands they share with the toolbar have no names of their own
-     * here at all. There used to be two extra sets -- `MnuCvDel`, `MnuTrDel` --
-     * because a menu item is exposed on the form by name and two widgets cannot
-     * both own `MnuDel`. An item that points at a command is not one, so it
-     * needs no name.  Renaming is two commands that read the same and are not --
-     * the canvas renames the selection (`ActRenameCtl`, a command because the
-     * canvas menu is reassigned to each tab's canvas) and the tree renames the
-     * row the pointer is on (`MnuTrRename`).
+     * commands they share with the toolbar have no names of their own here at
+     * all. There used to be two extra sets -- `MnuCvDel`, `MnuTrDel` -- because
+     * a menu item is exposed on the form by name and two widgets cannot both
+     * own `MnuDel`. An item that points at a command is not one, so it needs no
+     * name.  Renaming is two commands that read the same and are not -- the
+     * canvas renames the selection (`ActRenameCtl`) and the tree renames the
+     * row the pointer is on (`ActTrRename`); both are commands because each
+     * form tab carries its own canvas and its own tree now.
      */
     ActRenameCtl_Click() { this.renameSelectedControl(); }
-    MnuTrRename_Click() { this.designer.tree.renameFromKey(this.WidgetTree.Key); }
+    ActTrRename_Click() {
+        if (this.designer) this.designer.tree.renameFromKey(this.WidgetTree.Key);
+    }
 
     /* These two apply to the tree and not to a selection, so unlike the rest
      * they stay live with nothing selected. A form nested eight deep -- the
      * IDE's own is -- is what they are for. */
-    MnuTrExpand_Click()   { this.WidgetTree.ExpandAll(); }
-    MnuTrCollapse_Click() { this.WidgetTree.CollapseAll(); }
+    ActTrExpand_Click()   { if (this.WidgetTree) this.WidgetTree.ExpandAll(); }
+    ActTrCollapse_Click() { if (this.WidgetTree) this.WidgetTree.CollapseAll(); }
 
     /* The canvas has no key to rename by, so the menu is where it lives.  Named
      * for what it renames, since the file has a rename of its own. */

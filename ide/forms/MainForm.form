@@ -79,6 +79,19 @@
       "icon": "media-playback-stop-symbolic",
       "shortcut": "<Shift>F9",
       "enabled": false
+    },
+    {
+      "name": "ActTrRename",
+      "text": "Rename...",
+      "enabled": false
+    },
+    {
+      "name": "ActTrExpand",
+      "text": "Expand all"
+    },
+    {
+      "name": "ActTrCollapse",
+      "text": "Collapse all"
     }
   ],
   "menus": [
@@ -1003,505 +1016,236 @@
                   },
                   "children": [
                     {
-                      "type": "Split",
+                      "type": "Panel",
                       "name": "WorkArea",
                       "properties": {
-                        "Height": 470,
-                        "Position": 520,
-                        "Width": 839
+                        "Arrangement": "Vertical",
+                        "Expand": true,
+                        "HExpand": true,
+                        "VExpand": true
                       },
                       "children": [
                         {
                           "type": "Panel",
-                          "name": "EditorBox",
+                          "name": "ReloadBar",
                           "properties": {
-                            "Arrangement": "Vertical",
+                            "Arrangement": "Horizontal",
+                            "HAlign": "Fill",
+                            "Height": 38,
+                            "Margin": 4,
+                            "Spacing": 8,
+                            "Style": "toolbar",
+                            "Visible": false
+                          },
+                          "children": [
+                            {
+                              "type": "Image",
+                              "name": "ImgReload",
+                              "properties": {
+                                "Icon": "dialog-warning",
+                                "Size": 16
+                              }
+                            },
+                            {
+                              "type": "Label",
+                              "name": "LblReload",
+                              "properties": {
+                                "HAlign": "Fill",
+                                "HExpand": true
+                              }
+                            },
+                            {
+                              "type": "Button",
+                              "name": "BtnTakeDisk",
+                              "properties": {
+                                "Height": 28,
+                                "Style": "suggested-action",
+                                "Text": "Reload",
+                                "Width": 90
+                              }
+                            },
+                            {
+                              "type": "Button",
+                              "name": "BtnReloadHide",
+                              "properties": {
+                                "Height": 28,
+                                "Icon": "window-close-symbolic",
+                                "Style": "flat",
+                                "Tooltip": "Keep what is open",
+                                "Width": 30
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Notebook",
+                          "name": "Tabs",
+                          "properties": {
                             "Expand": true,
                             "HExpand": true,
+                            "Margin": 2,
                             "VExpand": true
                           },
                           "children": [
                             {
-                              "type": "Panel",
-                              "name": "ReloadBar",
+                              "type": "Button",
+                              "name": "TabActions",
                               "properties": {
-                                "Arrangement": "Horizontal",
-                                "HAlign": "Fill",
-                                "Height": 38,
-                                "Margin": 4,
-                                "Spacing": 8,
-                                "Style": "toolbar",
-                                "Visible": false
-                              },
-                              "children": [
-                                {
-                                  "type": "Image",
-                                  "name": "ImgReload",
-                                  "properties": {
-                                    "Icon": "dialog-warning",
-                                    "Size": 16
-                                  }
-                                },
-                                {
-                                  "type": "Label",
-                                  "name": "LblReload",
-                                  "properties": {
-                                    "HAlign": "Fill",
-                                    "HExpand": true
-                                  }
-                                },
-                                {
-                                  "type": "Button",
-                                  "name": "BtnTakeDisk",
-                                  "properties": {
-                                    "Height": 28,
-                                    "Style": "suggested-action",
-                                    "Text": "Reload",
-                                    "Width": 90
-                                  }
-                                },
-                                {
-                                  "type": "Button",
-                                  "name": "BtnReloadHide",
-                                  "properties": {
-                                    "Height": 28,
-                                    "Icon": "window-close-symbolic",
-                                    "Style": "flat",
-                                    "Tooltip": "Keep what is open",
-                                    "Width": 30
-                                  }
-                                }
-                              ]
-                            },
-                            {
-                              "type": "Notebook",
-                              "name": "Tabs",
-                              "properties": {
-                                "Expand": true,
-                                "HExpand": true,
-                                "Margin": 2,
-                                "VExpand": true
-                              },
-                              "children": [
-                                {
-                                  "type": "Button",
-                                  "name": "TabActions",
-                                  "properties": {
-                                    "Height": 28,
-                                    "Menu": [
-                                      {
-                                        "name": "MnuTabClose",
-                                        "text": "Close tab"
-                                      },
-                                      {
-                                        "name": "MnuTabOthers",
-                                        "text": "Close others"
-                                      },
-                                      {
-                                        "name": "MnuTabAll",
-                                        "text": "Close all"
-                                      },
-                                      {
-                                        "separator": true
-                                      },
-                                      {
-                                        "name": "MnuTabSaveAll",
-                                        "text": "Save all"
-                                      }
-                                    ],
-                                    "Style": "flat",
-                                    "Tooltip": "Tab actions",
-                                    "Width": 32
+                                "Height": 28,
+                                "Menu": [
+                                  {
+                                    "name": "MnuTabClose",
+                                    "text": "Close tab"
                                   },
-                                  "strip": "End"
-                                }
-                              ]
-                            },
-                            {
-                              "type": "Panel",
-                              "name": "FindBar",
-                              "properties": {
-                                "Arrangement": "Vertical",
-                                "HAlign": "Fill",
-                                "Margin": 2,
-                                "Spacing": 2,
-                                "Style": "toolbar",
-                                "Visible": false
+                                  {
+                                    "name": "MnuTabOthers",
+                                    "text": "Close others"
+                                  },
+                                  {
+                                    "name": "MnuTabAll",
+                                    "text": "Close all"
+                                  },
+                                  {
+                                    "separator": true
+                                  },
+                                  {
+                                    "name": "MnuTabSaveAll",
+                                    "text": "Save all"
+                                  }
+                                ],
+                                "Style": "flat",
+                                "Tooltip": "Tab actions",
+                                "Width": 32
                               },
-                              "children": [
-                                {
-                                  "type": "Panel",
-                                  "name": "FindRow",
-                                  "properties": {
-                                    "Arrangement": "Horizontal",
-                                    "HAlign": "Fill",
-                                    "Spacing": 4
-                                  },
-                                  "children": [
-                                    {
-                                      "type": "TextBox",
-                                      "name": "FindText",
-                                      "properties": {
-                                        "HAlign": "Fill",
-                                        "HExpand": true,
-                                        "Icon": "edit-find-symbolic",
-                                        "Tooltip": "Text to find"
-                                      }
-                                    },
-                                    {
-                                      "type": "Label",
-                                      "name": "LblFindCount",
-                                      "properties": {
-                                        "Alignment": "Right",
-                                        "Style": "dim-label",
-                                        "Width": 96
-                                      }
-                                    },
-                                    {
-                                      "type": "Button",
-                                      "name": "BtnFindPrev",
-                                      "properties": {
-                                        "Icon": "pan-up-symbolic",
-                                        "Style": "flat",
-                                        "Tooltip": "Previous match (Shift+F3)"
-                                      }
-                                    },
-                                    {
-                                      "type": "Button",
-                                      "name": "BtnFindNext",
-                                      "properties": {
-                                        "Icon": "pan-down-symbolic",
-                                        "Style": "flat",
-                                        "Tooltip": "Next match (F3)"
-                                      }
-                                    },
-                                    {
-                                      "type": "CheckButton",
-                                      "name": "ChkFindCase",
-                                      "properties": {
-                                        "Text": "Aa",
-                                        "Tooltip": "Match case"
-                                      }
-                                    },
-                                    {
-                                      "type": "CheckButton",
-                                      "name": "ChkFindWord",
-                                      "properties": {
-                                        "Text": "Word",
-                                        "Tooltip": "Whole word only"
-                                      }
-                                    },
-                                    {
-                                      "type": "CheckButton",
-                                      "name": "ChkFindRegex",
-                                      "properties": {
-                                        "Text": ".*",
-                                        "Tooltip": "Regular expression"
-                                      }
-                                    },
-                                    {
-                                      "type": "Button",
-                                      "name": "BtnFindClose",
-                                      "properties": {
-                                        "Icon": "window-close-symbolic",
-                                        "Style": "flat",
-                                        "Tooltip": "Close the find bar (Escape)"
-                                      }
-                                    }
-                                  ]
-                                },
-                                {
-                                  "type": "Panel",
-                                  "name": "ReplaceRow",
-                                  "properties": {
-                                    "Arrangement": "Horizontal",
-                                    "HAlign": "Fill",
-                                    "Spacing": 4,
-                                    "Visible": false
-                                  },
-                                  "children": [
-                                    {
-                                      "type": "TextBox",
-                                      "name": "ReplaceText",
-                                      "properties": {
-                                        "HAlign": "Fill",
-                                        "HExpand": true,
-                                        "Icon": "edit-find-replace-symbolic",
-                                        "Tooltip": "Replace the matches with this"
-                                      }
-                                    },
-                                    {
-                                      "type": "Button",
-                                      "name": "BtnReplace",
-                                      "properties": {
-                                        "Text": "Replace"
-                                      }
-                                    },
-                                    {
-                                      "type": "Button",
-                                      "name": "BtnReplaceAll",
-                                      "properties": {
-                                        "Text": "All"
-                                      }
-                                    }
-                                  ]
-                                }
-                              ]
+                              "strip": "End"
                             }
                           ]
                         },
                         {
                           "type": "Panel",
-                          "name": "SidePanel",
+                          "name": "FindBar",
                           "properties": {
                             "Arrangement": "Vertical",
-                            "Height": 300,
+                            "HAlign": "Fill",
+                            "Margin": 2,
                             "Spacing": 2,
-                            "Visible": false,
-                            "Width": 280
+                            "Style": "toolbar",
+                            "Visible": false
                           },
                           "children": [
                             {
-                              "type": "Switcher",
-                              "name": "SideTabs",
+                              "type": "Panel",
+                              "name": "FindRow",
                               "properties": {
-                                "Current": 0,
-                                "Expand": true,
-                                "HExpand": true,
-                                "Tabs": [
-                                  "Properties",
-                                  "Events",
-                                  "Controls"
-                                ],
-                                "VExpand": true
+                                "Arrangement": "Horizontal",
+                                "HAlign": "Fill",
+                                "Spacing": 4
                               },
                               "children": [
                                 {
-                                  "type": "Panel",
-                                  "name": "PropBox",
+                                  "type": "TextBox",
+                                  "name": "FindText",
                                   "properties": {
-                                    "Arrangement": "Vertical",
-                                    "Spacing": 2
-                                  },
-                                  "children": [
-                                    {
-                                      "type": "Panel",
-                                      "name": "PropDesignRow",
-                                      "properties": {
-                                        "Arrangement": "Horizontal",
-                                        "Margin": 4,
-                                        "Spacing": 6
-                                      },
-                                      "children": [
-                                        {
-                                          "type": "Label",
-                                          "name": "PropDesignLabel",
-                                          "properties": {
-                                            "HExpand": true,
-                                            "Text": "Design values",
-                                            "Tooltip": "Edit what the designer shows instead of what the application will run with"
-                                          }
-                                        },
-                                        {
-                                          "type": "Switch",
-                                          "name": "PropDesign",
-                                          "properties": {
-                                            "Tooltip": "Edit what the designer shows instead of what the application will run with",
-                                            "VAlign": "Center"
-                                          }
-                                        }
-                                      ]
-                                    },
-                                    {
-                                      "type": "TextBox",
-                                      "name": "PropFind",
-                                      "properties": {
-                                        "HExpand": true,
-                                        "Margin": 4,
-                                        "Placeholder": "Filter properties",
-                                        "Tooltip": "Show only the properties whose name contains this"
-                                      }
-                                    },
-                                    {
-                                      "type": "RowList",
-                                      "name": "PropGrid",
-                                      "properties": {
-                                        "Expand": true,
-                                        "HExpand": true,
-                                        "VExpand": true
-                                      }
-                                    }
-                                  ]
+                                    "HAlign": "Fill",
+                                    "HExpand": true,
+                                    "Icon": "edit-find-symbolic",
+                                    "Tooltip": "Text to find"
+                                  }
                                 },
                                 {
-                                  "type": "Panel",
-                                  "name": "EventsBox",
+                                  "type": "Label",
+                                  "name": "LblFindCount",
                                   "properties": {
-                                    "Arrangement": "Vertical",
-                                    "Spacing": 2
-                                  },
-                                  "children": [
-                                    {
-                                      "type": "RowList",
-                                      "name": "EventList",
-                                      "properties": {
-                                        "Expand": true,
-                                        "HExpand": true,
-                                        "Tooltip": "Double click an event to write its handler, or to go to it",
-                                        "VExpand": true
-                                      }
-                                    }
-                                  ]
+                                    "Alignment": "Right",
+                                    "Style": "dim-label",
+                                    "Width": 96
+                                  }
                                 },
                                 {
-                                  "type": "Panel",
-                                  "name": "ControlsBox",
+                                  "type": "Button",
+                                  "name": "BtnFindPrev",
                                   "properties": {
-                                    "Arrangement": "Vertical",
-                                    "Spacing": 2
-                                  },
-                                  "children": [
-                                    {
-                                      "type": "Split",
-                                      "name": "SideSplit",
-                                      "properties": {
-                                        "Arrangement": "Vertical",
-                                        "Expand": true,
-                                        "HExpand": true,
-                                        "Position": 140,
-                                        "VExpand": true
-                                      },
-                                      "children": [
-                                        {
-                                          "type": "Notebook",
-                                          "name": "Palette",
-                                          "properties": {
-                                            "HExpand": true
-                                          }
-                                        },
-                                        {
-                                          "type": "TreeView",
-                                          "name": "WidgetTree",
-                                          "properties": {
-                                            "Expand": true,
-                                            "HExpand": true,
-                                            "Menu": [
-                                              {
-                                                "name": "MnuTrRename",
-                                                "text": "Rename..."
-                                              },
-                                              {
-                                                "action": "ActDelCtl"
-                                              },
-                                              {
-                                                "separator": true
-                                              },
-                                              {
-                                                "action": "ActRaise"
-                                              },
-                                              {
-                                                "action": "ActLower"
-                                              },
-                                              {
-                                                "separator": true
-                                              },
-                                              {
-                                                "name": "MnuTrExpand",
-                                                "text": "Expand all"
-                                              },
-                                              {
-                                                "name": "MnuTrCollapse",
-                                                "text": "Collapse all"
-                                              }
-                                            ],
-                                            "VExpand": true
-                                          }
-                                        }
-                                      ]
-                                    },
-                                    {
-                                      "type": "Panel",
-                                      "name": "DesignBar",
-                                      "properties": {
-                                        "Arrangement": "Horizontal",
-                                        "Height": 36,
-                                        "Margin": 2,
-                                        "Spacing": 4,
-                                        "Style": "toolbar"
-                                      },
-                                      "children": [
-                                        {
-                                          "type": "Button",
-                                          "name": "BtnDelCtl",
-                                          "properties": {
-                                            "Action": "ActDelCtl",
-                                            "Height": 30,
-                                            "Icon": "edit-delete-symbolic",
-                                            "Style": "flat",
-                                            "Tooltip": "Delete control",
-                                            "Width": 34
-                                          }
-                                        },
-                                        {
-                                          "type": "Button",
-                                          "name": "BtnRaise",
-                                          "properties": {
-                                            "Action": "ActRaise",
-                                            "Height": 30,
-                                            "Icon": "go-up-symbolic",
-                                            "Style": "flat",
-                                            "Tooltip": "Bring to front",
-                                            "Width": 34
-                                          }
-                                        },
-                                        {
-                                          "type": "Button",
-                                          "name": "BtnLower",
-                                          "properties": {
-                                            "Action": "ActLower",
-                                            "Height": 30,
-                                            "Icon": "go-down-symbolic",
-                                            "Style": "flat",
-                                            "Tooltip": "Send to back",
-                                            "Width": 34
-                                          }
-                                        }
-                                      ]
-                                    }
-                                  ]
+                                    "Icon": "pan-up-symbolic",
+                                    "Style": "flat",
+                                    "Tooltip": "Previous match (Shift+F3)"
+                                  }
+                                },
+                                {
+                                  "type": "Button",
+                                  "name": "BtnFindNext",
+                                  "properties": {
+                                    "Icon": "pan-down-symbolic",
+                                    "Style": "flat",
+                                    "Tooltip": "Next match (F3)"
+                                  }
+                                },
+                                {
+                                  "type": "CheckButton",
+                                  "name": "ChkFindCase",
+                                  "properties": {
+                                    "Text": "Aa",
+                                    "Tooltip": "Match case"
+                                  }
+                                },
+                                {
+                                  "type": "CheckButton",
+                                  "name": "ChkFindWord",
+                                  "properties": {
+                                    "Text": "Word",
+                                    "Tooltip": "Whole word only"
+                                  }
+                                },
+                                {
+                                  "type": "CheckButton",
+                                  "name": "ChkFindRegex",
+                                  "properties": {
+                                    "Text": ".*",
+                                    "Tooltip": "Regular expression"
+                                  }
+                                },
+                                {
+                                  "type": "Button",
+                                  "name": "BtnFindClose",
+                                  "properties": {
+                                    "Icon": "window-close-symbolic",
+                                    "Style": "flat",
+                                    "Tooltip": "Close the find bar (Escape)"
+                                  }
                                 }
                               ]
                             },
                             {
                               "type": "Panel",
-                              "name": "OutlineBox",
+                              "name": "ReplaceRow",
                               "properties": {
-                                "Arrangement": "Vertical",
-                                "Expand": true,
-                                "HExpand": true,
-                                "VExpand": true,
+                                "Arrangement": "Horizontal",
+                                "HAlign": "Fill",
+                                "Spacing": 4,
                                 "Visible": false
                               },
                               "children": [
                                 {
-                                  "type": "Label",
-                                  "name": "LblOutline",
+                                  "type": "TextBox",
+                                  "name": "ReplaceText",
                                   "properties": {
-                                    "HAlign": "Start",
-                                    "Margin": 4,
-                                    "Style": "caption-heading",
-                                    "Text": "Outline"
+                                    "HAlign": "Fill",
+                                    "HExpand": true,
+                                    "Icon": "edit-find-replace-symbolic",
+                                    "Tooltip": "Replace the matches with this"
                                   }
                                 },
                                 {
-                                  "type": "ListBox",
-                                  "name": "OutlineList",
+                                  "type": "Button",
+                                  "name": "BtnReplace",
                                   "properties": {
-                                    "Expand": true,
-                                    "HAlign": "Fill",
-                                    "HExpand": true,
-                                    "VAlign": "Fill",
-                                    "VExpand": true
+                                    "Text": "Replace"
+                                  }
+                                },
+                                {
+                                  "type": "Button",
+                                  "name": "BtnReplaceAll",
+                                  "properties": {
+                                    "Text": "All"
                                   }
                                 }
                               ]

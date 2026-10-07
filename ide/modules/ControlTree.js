@@ -8,10 +8,11 @@
  * Selecting from either side ends in the same place -- `Designer.setSelection`
  * is the one funnel -- so the two can never disagree about what is selected.
  *
- * One per designer, unlike the palette: `WidgetTree` is a single widget, but
- * what it shows is *this* form's controls, so each open form keeps its own idea
- * of what is on it and what is selected.  Whichever designer is on screen fills
- * it in; a rebuild only happens when the shape of the form really changed.
+ * One per designer, like the palette and the property grid: `WidgetTree` is a
+ * widget of the tab's own page now, and what it shows is *this* form's
+ * controls.  Each open form keeps its own idea of what is on it and what is
+ * selected, and a rebuild only happens when the shape of the form really
+ * changed.
  */
 "use strict";
 
@@ -35,7 +36,7 @@ Ide.ControlTree = class ControlTree {
         this.muted     = false;
     }
 
-    get tree() { return this.designer.ide.WidgetTree; }
+    get tree() { return this.designer.workspace.widgetTree; }
 
     /* The name the .form knows a control by, stand-ins included: a component is
      * shown as what it will be, not as the Label standing in for it. */
