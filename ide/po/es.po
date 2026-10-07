@@ -2537,10 +2537,10 @@ msgid "The box this control is in decides where it goes."
 msgstr "La caja en la que está este control decide dónde va."
 
 #: modules/PropertyGrid.js:1494
-msgid "On a fixed surface a control keeps the place and size it was given."
+msgid "Nothing hands out spare room on a fixed surface: HAlign and VAlign anchor a control instead."
 msgstr ""
-"En una superficie fija un control conserva el lugar y el tamaño que se le "
-"dio."
+"Nada reparte el espacio sobrante en una superficie fija: HAlign y VAlign "
+"anclan el control en su lugar."
 
 #: modules/PropertyGrid.js:1500
 msgid "Does nothing while {0} is off."

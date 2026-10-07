@@ -2281,7 +2281,7 @@ Three things that will waste your time:
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
-  390 assertions against 2860 for the whole project -- 9.2 s against 413 on this
+  390 assertions against 2876 for the whole project -- 9.2 s against 413 on this
   machine -- which is what makes iterating on an early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.
@@ -2404,7 +2404,7 @@ nothing is written at all.
 
 **The first harvest was the IDE, and the event marks are what it found.**
 `--profile` over `tests/ide` is 3.9 MB and **37,449 marks** in 354 s with the
-suite green (2818 assertions then; 2874 today) -- against 431 s for the ordinary runner run, so
+suite green (2818 assertions then; 2876 today) -- against 431 s for the ordinary runner run, so
 the writer's per-mark cost does not show at this size. 37,238 of those marks are
 `Event` and 211 are the runtime's (`Bintana`); **28,402 of them are one
 handler**, `PropGrid_Filter` -- the property grid's filter answering GTK for
@@ -2971,6 +2971,18 @@ person who wrote it either.
   not a function -- `fire` skipped one in silence, so `Timer.After(fn, 300)`,
   the arguments swapped, ran nothing ever. Found by making exactly that mistake
   in a probe during the same audit.
+- **The property grid greyed `HAlign` and `VAlign` on a `Fixed` surface, and
+  they are the only two that work there.** `PLACED_BY_ANCHORS` listed them with
+  `Expand`/`HExpand`/`VExpand` under *a fixed surface keeps the place it was
+  given*, which is true of the three `Expand*` (measured inert) and false of the
+  alignments: in `bta_fixed.c` they **are** the anchor rule, and `Fill` is the
+  only way a control on a surface follows its window. Symptom: a `Calendar` on a
+  `Fixed` form did not grow with the window, and the one pair that could make it
+  was turned off in the designer -- editing the `.form` by hand was the only way
+  out. Only the three `Expand*` are off now, with a sentence that points at the
+  alignments; `tests/ide`'s `palette` phase asserts both halves. **A reason
+  written for a set of properties has to be true of each member**: the measurement
+  covered `Expand`, and the list grew `HAlign` beside it.
 - **`Arrangement` is only on a container whose slot is a `BtaFixed`.** `Panel`,
   `Frame`, `Expander`, `Scroller`, `Form` and a `Component` have one; `Split`
   overrides the property with `Horizontal`/`Vertical` and no `Fixed`; `Grid`,

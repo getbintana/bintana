@@ -2393,17 +2393,26 @@ function* p_palette(ide) {
 
     /*
      * **A row that does nothing is turned off, and says why.** On a fixed
-     * surface a control keeps the place and size it was given, and the
-     * alignment properties are inert -- measured in `tests/widgets`: a Button
-     * given `HExpand`, `Expand` and `HAlign = Fill` there is allocated exactly
-     * the rectangle it had without them. The pair is decided by the *parent*,
-     * so each half is off in the other's world.
+     * surface nothing hands out spare room, so `Expand`/`HExpand`/`VExpand` are
+     * inert -- measured in `tests/widgets`. The pair is decided by the
+     * *parent*, so each half is off in the other's world.
+     *
+     * `HAlign`/`VAlign` are **not** inert there: they are the anchor rule, and
+     * `Fill` is the only way a control on a surface follows its window. They
+     * were greyed with the others, which made a `Calendar` on a `Fixed` form
+     * impossible to make grow from the designer.
      */
     check("this surface places by coordinates",
           ide.designer.isFixed(ide.Surface));
     check("so where it sits can be edited", editor(ide, "X").Enabled);
     check("and how it asks for room cannot",
-          !editor(ide, "HExpand").Enabled && !editor(ide, "HAlign").Enabled);
+          !editor(ide, "HExpand").Enabled && !editor(ide, "Expand").Enabled
+          && !editor(ide, "VExpand").Enabled);
+    check("but the anchors, which are what a surface reads, can",
+          editor(ide, "HAlign").Enabled && editor(ide, "VAlign").Enabled);
+    check("and the grid says nothing against them",
+          ide.designer.grid.disabledReason("HAlign") === ""
+          && ide.designer.grid.disabledReason("VAlign") === "");
     check("with the reason on the row rather than a grey box and no answer",
           editor(ide, "HExpand").Tooltip !== "", editor(ide, "HExpand").Tooltip);
     check("and the name is greyed with it",

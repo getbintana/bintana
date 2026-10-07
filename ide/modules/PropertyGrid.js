@@ -245,11 +245,17 @@ const USELESS = {
  * RAD designer: on a fixed surface a control is placed at X/Y and nothing
  * absorbs slack; inside a box the box places it and the alignment is how it
  * asks for room. Each set is inert in the other's world -- measured: a Button
- * given `HExpand`, `Expand` and `HAlign = Fill` on a fixed surface is allocated
- * exactly the same rectangle as one given none of them.
+ * given `HExpand` and `Expand` on a fixed surface is allocated exactly the same
+ * rectangle as one given none of them.
+ *
+ * **`HAlign` and `VAlign` are not in the second set, and were for a while.**
+ * On a fixed surface they are the anchor rule itself (`bta_fixed.c`): `Fill`
+ * keeps the gap on both sides and so is the only way a control there follows
+ * its window. Greying them left a `Calendar` that could not be made to grow
+ * from the designer -- the one pair that could do it was the one turned off.
  */
 const PLACED_BY_BOX     = ["X", "Y"];
-const PLACED_BY_ANCHORS = ["HAlign", "VAlign", "Expand", "HExpand", "VExpand"];
+const PLACED_BY_ANCHORS = ["Expand", "HExpand", "VExpand"];
 
 /* Width of the name column. */
 const PROP_LABEL_W = 96;
@@ -1509,7 +1515,7 @@ Ide.PropertyGrid = class PropertyGrid {
         if (places !== "Coordinates" && PLACED_BY_BOX.includes(key))
             return Locale.Text("The box this control is in decides where it goes.");
         if (places === "Coordinates" && PLACED_BY_ANCHORS.includes(key))
-            return Locale.Text("On a fixed surface a control keeps the place and size it was given.");
+            return Locale.Text("Nothing hands out spare room on a fixed surface: HAlign and VAlign anchor a control instead.");
 
         /* And the pairs inside one widget, asked of the widget itself. A
          * stand-in has none of them: what it is standing in for is a class this

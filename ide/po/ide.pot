@@ -2474,7 +2474,7 @@ msgid "The box this control is in decides where it goes."
 msgstr ""
 
 #: modules/PropertyGrid.js:1494
-msgid "On a fixed surface a control keeps the place and size it was given."
+msgid "Nothing hands out spare room on a fixed surface: HAlign and VAlign anchor a control instead."
 msgstr ""
 
 #: modules/PropertyGrid.js:1500
