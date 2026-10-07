@@ -48,9 +48,67 @@ char *bta_read_file(const char *path, size_t *len)
  */
 static bool reporting_error;   /* one at a time, and never from inside one */
 
+/*
+ * What an error is shown in is a window of Bintana's own: `showError` in
+ * `forms.js`, built out of the same controls an application uses, with the
+ * message as a header, the backtrace apart and Copy beside Close.  This file
+ * only asks for it (`show_error_window`).  What is below is the **fallback**, a
+ * `GtkAlertDialog`, for the two times that window cannot be had: the error that
+ * stops a program before `forms.js` has run (`bta_report_fatal`), and one in
+ * `forms.js`'s own code.  It has the same two buttons, **Copy** -- which keeps
+ * the alert up -- and Close, which is also Escape.  The words are the runtime's
+ * own and so are not translated: a prose position C owns has no catalogue to look
+ * in (see `docs/resources.md`).
+ */
+static const char *const ERROR_BUTTONS[] = { "Copy", "Close", NULL };
+
+static void error_copy(const char *text)
+{
+    GdkDisplay *display = gdk_display_get_default();
+    if (!display)
+        return;
+
+    gdk_clipboard_set_text(gdk_display_get_clipboard(display), text);
+}
+
+/* What Copy puts on the clipboard: the sentence, then the stack under it. */
+static char *error_text(const char *msg, const char *stack)
+{
+    return (stack && *stack) ? g_strdup_printf("%s\n\n%s", msg ? msg : "Error", stack)
+                             : g_strdup(msg ? msg : "Error");
+}
+
+static GtkAlertDialog *error_alert(const char *msg, const char *stack)
+{
+    GtkAlertDialog *d = gtk_alert_dialog_new("%s", msg ? msg : "Error");
+    if (stack && *stack)
+        gtk_alert_dialog_set_detail(d, stack);
+    gtk_alert_dialog_set_buttons(d, ERROR_BUTTONS);
+    gtk_alert_dialog_set_cancel_button(d, 1);
+    gtk_alert_dialog_set_default_button(d, 1);
+    gtk_alert_dialog_set_modal(d, TRUE);
+    return d;
+}
+
 static void on_error_dismissed(GObject *src, GAsyncResult *res, gpointer data)
 {
-    gtk_alert_dialog_choose_finish(GTK_ALERT_DIALOG(src), res, NULL);
+    char *text = data;
+    int   which = gtk_alert_dialog_choose_finish(GTK_ALERT_DIALOG(src), res, NULL);
+
+    if (which == 0) {
+        /* Copy: ask again with the same alert, so `reporting_error` stays up
+         * and a handler that throws on a timer still cannot stack them. */
+        BtaApp *app = bta_current_app();
+
+        error_copy(text);
+        if (app && app->gapp) {
+            gtk_alert_dialog_choose(GTK_ALERT_DIALOG(src),
+                                    gtk_application_get_active_window(app->gapp),
+                                    NULL, on_error_dismissed, text);
+            return;
+        }
+    }
+    g_free(text);
     reporting_error = false;
 }
 
@@ -225,6 +283,41 @@ static JSValue js_application_replacements(JSContext *ctx, JSValueConst this_val
     return out;
 }
 
+/* Asks `forms.js` for its window.  False when there is none or it threw, and
+ * the throw is consumed -- the alert below is the answer then, and an error in
+ * the error window must not become a second one. */
+static bool show_error_window(JSContext *ctx, const char *msg, const char *stack)
+{
+    JSValue global = JS_GetGlobalObject(ctx);
+    JSValue fn     = JS_GetPropertyStr(ctx, global, "showError");
+    bool    shown  = false;
+
+    if (JS_IsFunction(ctx, fn)) {
+        JSValue argv[2] = { JS_NewString(ctx, msg ? msg : ""),
+                            JS_NewString(ctx, stack ? stack : "") };
+        JSValue r = JS_Call(ctx, fn, JS_UNDEFINED, 2, (JSValueConst *)argv);
+
+        if (JS_IsException(r)) {
+            JSValue     e = JS_GetException(ctx);
+            const char *m = JS_ToCString(ctx, e);
+
+            fprintf(stderr, "bintana: the error window failed: %s\n", m ? m : "?");
+            if (!m)
+                JS_FreeValue(ctx, JS_GetException(ctx));
+            JS_FreeCString(ctx, m);
+            JS_FreeValue(ctx, e);
+        } else {
+            shown = true;
+        }
+        JS_FreeValue(ctx, r);
+        JS_FreeValue(ctx, argv[0]);
+        JS_FreeValue(ctx, argv[1]);
+    }
+    JS_FreeValue(ctx, fn);
+    JS_FreeValue(ctx, global);
+    return shown;
+}
+
 static void report_error(JSContext *ctx, const char *msg, const char *stack)
 {
     if (reporting_error)
@@ -242,15 +335,16 @@ static void report_error(JSContext *ctx, const char *msg, const char *stack)
         return;
     }
 
-    GtkAlertDialog *d = gtk_alert_dialog_new("%s", msg ? msg : "Error");
-    if (stack && *stack)
-        gtk_alert_dialog_set_detail(d, stack);
-    gtk_alert_dialog_set_modal(d, TRUE);
+    if (show_error_window(ctx, msg, stack)) {
+        reporting_error = false;      /* `showError` keeps its own one-at-a-time */
+        return;
+    }
 
     /* choose() and not show(): being told when it is dismissed is what keeps a
      * handler that throws on every tick from stacking up dialogs forever. */
+    GtkAlertDialog *d = error_alert(msg, stack);
     gtk_alert_dialog_choose(d, gtk_application_get_active_window(app->gapp),
-                            NULL, on_error_dismissed, NULL);
+                            NULL, on_error_dismissed, error_text(msg, stack));
     g_object_unref(d);
 }
 
@@ -280,11 +374,27 @@ static bool error_to_terminal(void)
 static const char *error_red(void)   { return error_to_terminal() ? "\x1b[1;31m" : ""; }
 static const char *error_plain(void) { return error_to_terminal() ? "\x1b[0m"    : ""; }
 
-/* The fatal alert's answer, which is what lets the caller quit afterwards. */
+/* The fatal alert's answer, which is what lets the caller quit afterwards.
+ * Copy leaves it up, as the handler errors' alert does. */
+typedef struct { GMainLoop *loop; const char *text; } FatalAlert;
+
 static void on_fatal_dismissed(GObject *src, GAsyncResult *res, gpointer data)
 {
-    gtk_alert_dialog_choose_finish(GTK_ALERT_DIALOG(src), res, NULL);
-    g_main_loop_quit(data);
+    FatalAlert *fa = data;
+    int which = gtk_alert_dialog_choose_finish(GTK_ALERT_DIALOG(src), res, NULL);
+
+    if (which == 0) {
+        BtaApp *app = bta_current_app();
+
+        error_copy(fa->text);
+        if (app && app->gapp) {
+            gtk_alert_dialog_choose(GTK_ALERT_DIALOG(src),
+                                    gtk_application_get_active_window(app->gapp),
+                                    NULL, on_fatal_dismissed, fa);
+            return;
+        }
+    }
+    g_main_loop_quit(fa->loop);
 }
 
 void bta_report_fatal(BtaApp *app, const char *message)
@@ -303,12 +413,12 @@ void bta_report_fatal(BtaApp *app, const char *message)
     if (!app || !app->gapp || !gtk_is_initialized())
         return;
 
-    GtkAlertDialog *d    = gtk_alert_dialog_new("%s", message ? message : "Error");
+    GtkAlertDialog *d    = error_alert(message, NULL);
     GMainLoop      *loop = g_main_loop_new(NULL, FALSE);
+    FatalAlert      fa   = { loop, message ? message : "Error" };
 
-    gtk_alert_dialog_set_modal(d, TRUE);
     gtk_alert_dialog_choose(d, gtk_application_get_active_window(app->gapp), NULL,
-                            on_fatal_dismissed, loop);
+                            on_fatal_dismissed, &fa);
     g_main_loop_run(loop);
 
     g_main_loop_unref(loop);

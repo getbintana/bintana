@@ -880,3 +880,111 @@ Container.prototype.BuildChildren = function (node, designing = false) {
  * complaint when it is declared rather than a property that silently is not
  * checked.
  */
+
+/* ---------------------------------------------------------------------
+ * The window an uncaught error is shown in.
+ *
+ * The runtime's own, built out of the controls an application uses and not out
+ * of a `.form`: it is what is shown when the application's code is what
+ * failed, so it cannot depend on a project's files being where it expects them.
+ * C asks for it by name (`show_error_window` in `bta_runtime.c`) and falls back
+ * to a `GtkAlertDialog` when this is absent or throws -- which is the only
+ * reason it may not be a class: a name in the prelude that C looks up is a
+ * function nobody else is told about, lower case, outside the surface.
+ *
+ * A generic title, a header with the message, the backtrace apart in a monospace
+ * box, and Copy beside Close.  The words are not translated: a prose position
+ * the runtime owns has no catalogue to look in.  **One at a time**, as the
+ * alert's `reporting_error` was: a handler that throws on a timer would
+ * otherwise stack a window per tick.
+ * ------------------------------------------------------------------- */
+let errorWindowOpen = false;
+
+function showError(message, stack) {
+    if (errorWindowOpen) return;
+
+    const detail = String(stack || "").trim();
+    const text   = detail ? `${message}\n\n${detail}` : String(message);
+
+    const form = new Form();
+    form.Text      = "Error";
+    form.Modal     = true;
+    form.Center    = true;
+    form.Width     = 560;
+    form.Height    = detail ? 380 : 140;
+    form.Arrangement = "Vertical";
+
+    const body = new Panel();
+    body.Arrangement = "Vertical";
+    body.Spacing     = 12;
+    body.Margin      = 18;
+    body.HExpand     = true;
+    body.VExpand     = true;
+    form.Add(body);
+
+    /* What happened. */
+    const head = new Panel();
+    head.Arrangement = "Horizontal";
+    head.Spacing     = 12;
+    head.HExpand     = true;
+
+    const icon = new Image();
+    icon.Icon   = "dialog-error-symbolic";
+    icon.Size   = 32;
+    icon.VAlign = "Start";
+    icon.Style  = "error";
+    head.Add(icon);
+
+    const title = new Label();
+    title.Text       = String(message);
+    title.Style      = "title-4";
+    title.Wrap       = true;
+    title.HAlign     = "Fill";
+    title.HExpand    = true;
+    head.Add(title);
+    body.Add(head);
+
+    /* Where. */
+    if (detail) {
+        const caption = new Label();
+        caption.Text   = "Backtrace";
+        caption.Style  = "heading";
+        caption.HAlign = "Start";
+        body.Add(caption);
+
+        const trace = new TextEditor();
+        trace.Text     = detail;
+        trace.ReadOnly = true;
+        trace.Style    = "frame";
+        trace.Font     = "Monospace 10";
+        trace.Wrap     = true;
+        trace.HExpand  = true;
+        trace.VExpand  = true;
+        body.Add(trace);
+    }
+
+    /* What to do with it. */
+    const buttons = new Panel();
+    buttons.Arrangement = "Horizontal";
+    buttons.Spacing     = 6;
+    buttons.HAlign      = "End";
+    buttons.VAlign      = "End";
+    body.Add(buttons);
+
+    const copy = new Button();
+    copy.Text = "Copy";
+    copy.On("Click", () => { Clipboard.Copy(text); copy.Text = "Copied"; });
+    buttons.Add(copy);
+
+    const close = new Button();
+    close.Text    = "Close";
+    close.Default = true;
+    close.Cancel  = true;
+    close.On("Click", () => form.Close());
+    buttons.Add(close);
+
+    form.On("Close", () => { errorWindowOpen = false; });
+
+    errorWindowOpen = true;
+    form.Show();
+}

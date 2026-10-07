@@ -3958,6 +3958,32 @@ person who wrote it either.
   into a grey `[RowList]` box. That is why what a list draws is the node's own
   `item` key beside `design` and not inside it. It is also the good case: a typo
   in a design block cannot be a value that quietly never applies.
+- **An uncaught error is shown in a window of Bintana's own, and C only asks
+  for it.** `showError(message, stack)` at the end of `forms.js` is built out of
+  the controls an application uses -- a generic title, a header with the
+  message, the backtrace apart in a monospace `TextEditor`, **Copy** (which
+  copies the message and the stack and says *Copied*) beside **Close**, which is
+  also Escape -- and `show_error_window` in `bta_runtime.c` calls it by name.
+  Two things hold it together. **It is one at a time in JavaScript**
+  (`errorWindowOpen`, put down by the form's `Close`), because `reporting_error`
+  in C is down again the moment the call returns; a handler that throws on a
+  timer would stack a window per tick without it. And **the `GtkAlertDialog` is
+  still there as the fallback**, with the same two buttons: the error that stops
+  a program before `forms.js` has run (`bta_report_fatal`) has nothing else to
+  be shown in, and one thrown by `showError` itself is consumed and answered by
+  the alert rather than becoming a second error. The words are not translated: a
+  prose position the runtime owns has no catalogue. It is a lower-case function,
+  so it is not part of the surface -- do not make it a class a project could
+  declare over. **`forms.js` is baked into the binary**, so changing it needs a
+  rebuild, and a stale `build/` can hide that: if the repo moves,
+  `build/CMakeCache.txt` names the old directory and CMake refuses it
+  (*different than the directory ... where CMakeCache.txt was created*), so
+  `cmake --build build` fails with a `CMake Error` -- and a command that filters
+  its output to `error|warning` can read that as "built" and test the old
+  binary. Delete `build/CMakeCache.txt` and `build/CMakeFiles` and configure
+  again. A dialog with
+  no buttons set said `Cerrar`, GTK's own, which is how an old binary shows
+  itself in a capture.
 - **Every `ide/**/*.js` shares one global scope.** They are separate
   `JS_Eval(JS_EVAL_TYPE_GLOBAL)` calls in one context, which is what lets `Runner`
   use `MainForm`'s `SOURCE_LINK` and `Palette` use `Chrome`'s `SELECT_COLOR` -- and
