@@ -1270,6 +1270,7 @@
                           "type": "TextEditor",
                           "name": "LogView",
                           "properties": {
+                            "Border": "0 solid #ffffff",
                             "Expand": true,
                             "Font": "Monospace 10",
                             "HAlign": "Fill",

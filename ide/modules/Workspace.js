@@ -54,7 +54,7 @@ const TREE_MENU = [
 /* What the columns start at with no remembered width; see Session.divider. */
 const CONTROLS_W = 280;
 const CENTER_W   = 520;
-const SIDE_W     = 520;     /* the editor's outline, same idea */
+const OUTLINE_W  = 260;     /* the editor's outline: the editor takes the rest */
 const PALETTE_H  = 200;     /* the palette (two rows) and its title */
 
 Ide.Workspace = class Workspace {
@@ -174,7 +174,11 @@ Ide.Workspace = class Workspace {
 
         this.buildOutline();
 
-        this.page.Position = this.ide.session.divider("EditSplit", SIDE_W);
+        /* `Position` is the editor's width, since the first half is the editor,
+         * so the outline's is what is left of the room the tabs have. */
+        const room = this.ide.Tabs.Bounds().Width || (this.ide.Bounds().Width - CONTROLS_W);
+        this.page.Position = this.ide.session.divider("EditSplit",
+                                                     Math.max(300, room - OUTLINE_W));
     }
 
     /* A panel's title above its content, so each side panel says what it is
