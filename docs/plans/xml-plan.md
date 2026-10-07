@@ -193,7 +193,14 @@ The rules, each of them a consequence of something already in the tree:
   wrote, which is the one road that stays exact), `Bytes` from base64, `Enum`
   against its values. The setter runs after and still owns the range, so the
   field remains the one declaration of what a value may be.
-- **Order is declaration order**, which is how a class states an `xsd:sequence`.
+- **Order is declaration order**, which is how a class states an `xsd:sequence`
+  -- or **`static Xml.Order`**, the type's whole sequence, declared when the
+  shape models only part of it: MSPDI's `Task` carries `IsPublished` and
+  `CommitmentType` a library may never read, and a new `<PredecessorLink>` has
+  to be placed before them. The option names every modelled element, or the
+  first write refuses; `SaveXml` then inserts against the names it does not
+  model too, and `ToXml` writes in that order -- `tests/widgets`' `XmlOrder`
+  holds the same document with the declaration and without it.
   `ToXml()` omits what is at its default, exactly as `Serialize` does, and
   `ToXml(true)` writes every field.
 - **Lists**: `{ in: "Tasks" }` wraps; without `in` the items are siblings. A

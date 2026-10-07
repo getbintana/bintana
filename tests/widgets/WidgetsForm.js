@@ -562,7 +562,7 @@ const TESTS = [
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
-    "CuratedLanguage", "Dictionary", "Csv", "Regex", "Bytes", "Hash", "Random", "Gzip", "Zip", "ZipWrite", "Screen", "JsonFiles", "XmlFiles", "XmlWrite", "XmlRecord", "XmlSchema", "Keyring", "Log", "Apply", "TimerShorthand", "Terminal",
+    "CuratedLanguage", "Dictionary", "Csv", "Regex", "Bytes", "Hash", "Random", "Gzip", "Zip", "ZipWrite", "Screen", "JsonFiles", "XmlFiles", "XmlWrite", "XmlRecord", "XmlOrder", "XmlSchema", "Keyring", "Log", "Apply", "TimerShorthand", "Terminal",
     "Settings", "Timer", "ArgumentRefusals", "Icons", "Font", "Style", "Radius", "Padding", "Shadow", "StyleRule",
     "ColorButton",
     "ColorDialog", "FileDialog", "Dialog", "IconList", "FormIcon", "ButtonClick",
@@ -11609,6 +11609,223 @@ function Main() {
         eq("...with no complaints", read.Problems.length, 0,
            read.Problems.join(" | "));
         File.Delete(path);
+    }
+
+    /* --- the sequence a shape only partly models ----------------------------
+     *
+     * `SaveXml` inserts a missing element before the first sibling the
+     * declaration puts after it, which is only answerable while the shape
+     * declares the whole `xsd:sequence`.  `static Xml.Order` is that
+     * declaration: the type's element names in the schema's order, anchors the
+     * shape never reads included, and every element the shape writes has to be
+     * among them.  The application that asked for it measured it on MSPDI: a
+     * `<PredecessorLink>` added to a task carrying `IsPublished` and
+     * `CommitmentType` came out after them, and the schema answered *This
+     * element is not expected* -- an input that validated, an output that did
+     * not, and no golden to see it.
+     */
+    testXmlOrder() {
+        if (!Xml.Available) {
+            const Bare = class extends Record {
+                static Xml = { Root: "thing", Order: ["a"] };
+                static Fields = { A: Field.Text() };
+            };
+            const said = refusal(() => new Bare({ A: "x" }).ToXml());
+
+            check("no libxml2: Order or not, a record cannot be written as an element",
+                  said !== null && said.includes("libxml2"), said);
+            return;
+        }
+
+        const SeqLink = class extends Record {
+            static Xml = { Root: "PredecessorLink" };
+            static Fields = { PredecessorUID: Field.Int({ key: true }) };
+        };
+        const SeqTask = class extends Record {
+            static Xml = {
+                Root: "Task",
+                Order: ["UID", "Name", "PredecessorLink", "IsPublished",
+                        "CommitmentType"],
+            };
+            static Fields = {
+                UID:   Field.Int({ key: true }),
+                Name:  Field.Text(),
+                Links: Field.List(() => SeqLink),
+            };
+        };
+        const TASK =
+            "<Task><UID>1</UID><Name>Analyse</Name>" +
+            "<IsPublished>0</IsPublished><CommitmentType>0</CommitmentType></Task>";
+
+        const seqDoc = Xml.Parse(TASK);
+        const seq    = SeqTask.LoadXml(seqDoc);
+
+        seq.Links.push(new SeqLink({ PredecessorUID: 2 }));
+        seq.SaveXml(seqDoc);
+        eq("a new element goes before an unmodelled sibling the sequence puts after it",
+           seqDoc.Root.Children.map((c) => c.Name).join(","),
+           "UID,Name,PredecessorLink,IsPublished,CommitmentType");
+        eq("...and is the one that was added",
+           seqDoc.Root.Find("PredecessorLink").Find("PredecessorUID").Text, "2");
+
+        /* The other half of the same fact: without the declaration the order
+         * is the fields', the unmodelled siblings do not count, and the end is
+         * the answer -- which is the wrong one. */
+        const PlainTask = class extends Record {
+            static Xml = { Root: "Task" };
+            static Fields = {
+                UID:   Field.Int({ key: true }),
+                Name:  Field.Text(),
+                Links: Field.List(() => SeqLink),
+            };
+        };
+        const plainDoc = Xml.Parse(TASK);
+        const plain    = PlainTask.LoadXml(plainDoc);
+
+        plain.Links.push(new SeqLink({ PredecessorUID: 2 }));
+        plain.SaveXml(plainDoc);
+        eq("without it, an unmodelled successor does not count and the element is appended",
+           plainDoc.Root.Children.map((c) => c.Name).join(","),
+           "UID,Name,IsPublished,CommitmentType,PredecessorLink");
+
+        /* A real `xsd:sequence`, so the assertion is not our own order read
+         * back: the save with the declaration validates and the same save
+         * without it does not. */
+        const schema = Xml.Schema(
+            `<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+               <xs:element name="Task">
+                 <xs:complexType>
+                   <xs:sequence>
+                     <xs:element name="UID" type="xs:int"/>
+                     <xs:element name="Name" type="xs:string"/>
+                     <xs:element name="PredecessorLink" minOccurs="0"
+                                 maxOccurs="unbounded">
+                       <xs:complexType>
+                         <xs:sequence>
+                           <xs:element name="PredecessorUID" type="xs:int"/>
+                         </xs:sequence>
+                       </xs:complexType>
+                     </xs:element>
+                     <xs:element name="IsPublished" type="xs:int" minOccurs="0"/>
+                     <xs:element name="CommitmentType" type="xs:int" minOccurs="0"/>
+                   </xs:sequence>
+                 </xs:complexType>
+               </xs:element>
+             </xs:schema>`);
+
+        eq("the document with the link in place validates",
+           schema.Validate(seqDoc).map((p) => p.Message).join(" | "), "");
+        check("and the same save without the declaration does not",
+              schema.Validate(plainDoc).length > 0,
+              JSON.stringify(schema.Validate(plainDoc)));
+
+        /* A scalar goes through the same road, and a list under a wrapper is
+         * placed by its wrapper's name. */
+        const SeqRate = class extends Record {
+            static Xml = {
+                Root: "Rate",
+                Order: ["RatesFrom", "StandardRate", "OvertimeRate"],
+            };
+            static Fields = {
+                RatesFrom:    Field.DateTime(),
+                StandardRate: Field.Number(),
+            };
+        };
+        const rateDoc = Xml.Parse(
+            "<Rate><RatesFrom>2026-01-01T00:00:00</RatesFrom>" +
+            "<OvertimeRate>9</OvertimeRate></Rate>");
+        const rate = SeqRate.LoadXml(rateDoc);
+
+        rate.StandardRate = 5;
+        rate.SaveXml(rateDoc);
+        eq("a scalar's element too",
+           rateDoc.Root.Children.map((c) => c.Name).join(","),
+           "RatesFrom,StandardRate,OvertimeRate");
+
+        const SeqProject = class extends Record {
+            static Xml = { Root: "Project", Order: ["Tasks", "Author"] };
+            static Fields = { Tasks: Field.List(() => SeqTask, { in: "Tasks" }) };
+        };
+        const projDoc = Xml.Parse("<Project><Author>Ana</Author></Project>");
+        const proj    = SeqProject.LoadXml(projDoc);
+
+        proj.Tasks.push(new SeqTask({ Name: "N" }));
+        proj.SaveXml(projDoc);
+        eq("a wrapped list is placed by the sequence's name for its wrapper",
+           projDoc.Root.Children.map((c) => c.Name).join(","), "Tasks,Author");
+
+        /* `ToXml` writes in the declared sequence -- one declaration for both
+         * verbs -- so a shape whose fields are not in schema order can still
+         * write a valid document. */
+        const Reordered = class extends Record {
+            static Xml = { Root: "R", Order: ["B", "A"] };
+            static Fields = { A: Field.Text(), B: Field.Text() };
+        };
+        const xml = Xml.Stringify(new Reordered({ A: "a", B: "b" }).ToXml(true));
+
+        check("ToXml writes in the sequence, not in the declaration's order",
+              xml.indexOf("<B>") < xml.indexOf("<A>"), xml);
+
+        /* The option's own refusals: a modelled element it does not name would
+         * be placed by accident, which is the silent wrong answer it exists to
+         * end. */
+        const Short = class extends Record {
+            static Xml = { Root: "S", Order: ["A"] };
+            static Fields = { A: Field.Text(), B: Field.Text() };
+        };
+        const missing = refusal(() => new Short({ A: "a", B: "b" }).ToXml());
+
+        check("an element the shape writes and the option does not name is refused",
+              missing !== null && missing.includes("'B'") &&
+              missing.includes("Order"), missing);
+        const missingSave = refusal(() => {
+            new Short({ A: "a" }).SaveXml(Xml.Parse("<S><A>a</A></S>"));
+        });
+
+        check("...and SaveXml refuses it too",
+              missingSave !== null && missingSave.includes("'B'"), missingSave);
+
+        const bad = (order, phrase) => {
+            const Bad = class extends Record {
+                static Xml = { Root: "Bad", Order: order };
+                static Fields = { A: Field.Text() };
+            };
+            const said = refusal(() => new Bad().ToXml());
+
+            check(`Order ${phrase}`,
+                  said !== null && said.includes(phrase), said);
+        };
+
+        bad("A",        "must be a non-empty list");
+        bad([],         "must be a non-empty list");
+        bad([""],       "[0] must be an element name");
+        bad([1],        "[0] must be an element name");
+        bad(["A", "A"], "twice");
+
+        /* It merges down the chain like `Root` and `Namespace`: a child
+         * inherits it, and a child that adds a field has to extend it -- which
+         * the refusal above is what says. */
+        const Parent = class extends Record {
+            static Xml = { Root: "P", Order: ["A", "B"] };
+            static Fields = { A: Field.Text(), B: Field.Text() };
+        };
+        const Child = class extends Parent {
+            static Fields = { C: Field.Text() };
+        };
+        const inherited = refusal(() => new Child({ C: "c" }).ToXml());
+
+        check("a child inherits the sequence, so its new field is caught",
+              inherited !== null && inherited.includes("'C'"), inherited);
+
+        const Extended = class extends Parent {
+            static Xml = { Order: ["A", "B", "C"] };
+            static Fields = { C: Field.Text() };
+        };
+        const ext = new Extended({ A: "a", B: "b", C: "c" });
+
+        eq("and extending it is enough -- Root comes down too",
+           ext.ToXml().Name, "P");
+        eq("with nothing refused", refusal(() => ext.ToXml()), null);
     }
 
     /* --- validating a document against a schema -----------------------------

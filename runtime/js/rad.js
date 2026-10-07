@@ -2272,6 +2272,17 @@ GLOBAL.Record = class Record {
      * There is no raw-node bag, because re-emitting an unknown element at the
      * end of an `xsd:sequence` is a wrong answer that looks right.
      *
+     * **A shape that models only part of an `xsd:sequence` declares `Order`**:
+     * the type's element names in the schema's order, anchors included, with
+     * **every element the shape writes** among them.  Without it the order is
+     * the fields' declaration order, which can only place a new element
+     * relative to the modelled siblings -- one whose successors are all
+     * unmodelled lands at the end, past elements the schema puts later, and
+     * the document stops validating with nothing said.  With it, `SaveXml`
+     * inserts before the first sibling the sequence puts after the new
+     * element, modelled or not, and `ToXml` writes in that order rather than
+     * in declaration order.
+     *
      * `static Xml` merges down the class chain the way `Fields` does, a string
      * `Namespace` or a list: the first is written, all of them are accepted on
      * read -- an official schema and the files it describes can disagree about
@@ -2280,6 +2291,7 @@ GLOBAL.Record = class Record {
 
     static #xmlReady = new Map();
     static #xmlOrderReady = new Map();
+    static #xmlNamesReady = new Map();
 
     static #namingOf(ctor) {
         return NAMINGS[ctor.Naming || "same"];
@@ -2299,12 +2311,12 @@ GLOBAL.Record = class Record {
             if (!own.value || typeof own.value !== "object" ||
                 Array.isArray(own.value))
                 throw new TypeError(`${c.name}.Xml must be a static object of ` +
-                                    `{ Root, Namespace }`);
+                                    `{ Root, Namespace, Order }`);
 
             for (const key in own.value) {
-                if (key !== "Root" && key !== "Namespace")
+                if (key !== "Root" && key !== "Namespace" && key !== "Order")
                     throw new RangeError(`${c.name}.Xml: '${key}' is not an ` +
-                                         `XML option (Root, Namespace)`);
+                                         `XML option (Root, Namespace, Order)`);
                 out[key] = own.value[key];
             }
         }
@@ -2312,6 +2324,28 @@ GLOBAL.Record = class Record {
         if (out.Root !== undefined &&
             (typeof out.Root !== "string" || !out.Root))
             throw new TypeError(`${ctor.name}.Xml.Root must be an element name`);
+
+        if (out.Order !== undefined) {
+            if (!Array.isArray(out.Order) || !out.Order.length)
+                throw new TypeError(`${ctor.name}.Xml.Order must be a non-empty ` +
+                                    `list of the type's element names, in the ` +
+                                    `schema's order`);
+
+            const seen = new Set();
+
+            for (let i = 0; i < out.Order.length; i++) {
+                const entry = out.Order[i];
+
+                if (typeof entry !== "string" || !entry)
+                    throw new TypeError(`${ctor.name}.Xml.Order[${i}] must be an ` +
+                                        `element name`);
+                if (seen.has(entry))
+                    throw new RangeError(`${ctor.name}.Xml.Order names '${entry}' ` +
+                                         `twice, so where an element goes cannot ` +
+                                         `be answered`);
+                seen.add(entry);
+            }
+        }
 
         const uris = out.Namespace === undefined ? []
                    : Array.isArray(out.Namespace) ? out.Namespace
@@ -2353,26 +2387,83 @@ GLOBAL.Record = class Record {
                              `of values: only a record knows its own element`);
     }
 
-    /* The child element names a parent models, in declaration order -- what
-     * `SaveXml` keeps a missing element's insertion in step with. Built once
-     * per class: it depends on the declaration and not on the record, and a
-     * save of eight thousand tasks asked for it eight thousand times. */
+    /* The element a field is written as, or `null` for an attribute -- which
+     * is not an element and has no place in an order.  One place, so the order
+     * the fields declare and the order `ToXml` writes in cannot disagree. */
+    static #xmlEntry(ctor, name, field) {
+        if (field.attribute) return null;
+        if (field.kind === "list")
+            return field.in || Record.#xmlItemName(field);
+        return Record.#xmlFieldName(ctor, name, field);
+    }
+
+    /* The child element names a parent writes, in the order it writes them --
+     * what `SaveXml` keeps a missing element's insertion in step with.  Built
+     * once per class: it depends on the declaration and not on the record, and
+     * a save of eight thousand tasks asked for it eight thousand times.
+     *
+     * `Xml.Order` replaces the derived list with the type's own sequence, so
+     * an element added among children the shape does **not** model still lands
+     * before the first sibling the sequence puts after it.  Every element the
+     * shape writes has to be in it: an anchor list missing one of those would
+     * place that field by accident, and nothing would say so. */
     static #xmlOrder(ctor, fields) {
         const done = Record.#xmlOrderReady.get(ctor);
 
         if (done) return done;
-        const out = [];
+
+        const write = [];
 
         for (const name in fields) {
-            const field = fields[name];
-            if (field.attribute) continue;
-            if (field.kind === "list")
-                out.push(field.in || Record.#xmlItemName(field));
-            else
-                out.push(Record.#xmlFieldName(ctor, name, field));
+            const entry = Record.#xmlEntry(ctor, name, fields[name]);
+
+            if (entry !== null) write.push(entry);
         }
+
+        const shape = Record.#xmlOf(ctor);
+
+        if (shape.Order)
+            for (const entry of write)
+                if (!shape.Order.includes(entry))
+                    throw new RangeError(`${ctor.name}.Xml.Order does not name ` +
+                                         `'${entry}', which the shape writes -- ` +
+                                         `the sequence has to name every element ` +
+                                         `it places`);
+
+        const out = shape.Order || write;
+
         Record.#xmlOrderReady.set(ctor, out);
         return out;
+    }
+
+    /* The fields' own names in the order their elements are written: the
+     * declaration's order, or `Order`'s when the shape declares one.  Cached
+     * like the order it comes from -- `ToXml` asks once per record. */
+    static #xmlNames(ctor, fields) {
+        const done = Record.#xmlNamesReady.get(ctor);
+
+        if (done) return done;
+
+        const names = [];
+
+        for (const name in fields) names.push(name);
+
+        const shape = Record.#xmlOf(ctor);
+
+        if (shape.Order) {
+            const rank = new Map();
+
+            Record.#xmlOrder(ctor, fields);   /* and its check, once */
+            for (const name of names) {
+                const entry = Record.#xmlEntry(ctor, name, fields[name]);
+
+                rank.set(name, entry === null ? -1 : shape.Order.indexOf(entry));
+            }
+            names.sort((a, b) => rank.get(a) - rank.get(b));
+        }
+
+        Record.#xmlNamesReady.set(ctor, names);
+        return names;
     }
 
     /* One value as XML spells it.  A boolean is `true`/`false`, which is the
@@ -2578,7 +2669,7 @@ GLOBAL.Record = class Record {
 
         if (shape.Uris.length) el.SetNamespace(shape.Uris[0]);
 
-        for (const name in fields) {
+        for (const name of Record.#xmlNames(ctor, fields)) {
             const field = fields[name];
             const v     = rec.#d[name];
 

@@ -5944,7 +5944,7 @@ what the shape models, which is what an interchange round trip needs. Unknown
 elements and attributes are reported in `Problems` and never silently written
 back -- an unknown node re-emitted at the end of an `xsd:sequence` is a wrong
 answer that looks right, so the lossless road is `SaveXml` and not a raw-node
-bag. Five things are worth knowing before touching either half:
+bag. Six things are worth knowing before touching either half:
 
 - **A `key` is identity and is written whatever it holds, so an XML key at its
   default still matches.** `#xmlKeyText` used to answer `null` for a key equal
@@ -5990,6 +5990,21 @@ bag. Five things are worth knowing before touching either half:
   MSPDI tests could not see it because every list there is `in: "Tasks"`. It
   goes after the last item of its name now, and with none there, where
   `#xmlSlot` (the same answer `#xmlInsert` gives a scalar) puts it.
+- **`#xmlSlot` places a new element by the declared order, so a shape that
+  models only part of an `xsd:sequence` has to declare the whole of it.** The
+  order was the modelled fields' declaration order and an unmodelled sibling
+  did not count: a `<PredecessorLink>` added to a task Project 2010+ wrote --
+  one carrying `IsPublished` and `CommitmentType`, neither modelled -- was
+  appended after them. An input that validated came back an output that did
+  not, nothing else said so, and only `Xml.Schema` could see it
+  (`ISSUE-xml-sequence-order`, answered as `static Xml.Order`). The option is
+  the type's element names in schema order, the unmodelled ones included as
+  the anchors, and **it has to name every element the shape writes** -- one
+  left out is refused on the first write, naming it, because a field the
+  sequence does not place would otherwise be placed by accident.
+  `tests/widgets`' `XmlOrder` holds the same document with the declaration and
+  without it against a real `xsd:sequence` (eight assertions, red with the
+  option taken out), and the shape with no option behaves exactly as it did.
 - **`xmlNewNs` answers NULL for a prefix the element already declares, and says
   nothing.** `SetNamespace` returned `JS_EXCEPTION` with no exception set --
   twice on one `Xml.Element` (no document, so the search was skipped), or a new
