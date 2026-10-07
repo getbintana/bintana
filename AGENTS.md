@@ -6473,6 +6473,14 @@ same number without naming what sits above it.
   them; and moving a `Fixed` form's content means growing its declared
   `Width`/`Height` by the same amount, or the anchors keep the old gaps.
 
+- **A drop-down whose `Items` are prose is addressed by `Index`, never by its
+  words.** `Ide.Kind` was `"a form"`/`"a function"` and the dialogs assigned and
+  compared `Text`; under a Spanish desktop the loader had translated the items,
+  so opening *Project settings* threw `'a form' is not one of CmbPrKind's items`.
+  The suite runs in English and could not see it. It is `0`/`1` and `Index` now
+  (`ProjectForm`, `NewProjectForm`). Keywords go in a list filled from code, as
+  the `Items` trap above says; a list that is prose is read by position.
+
 - **A row of buttons whose texts are translated is a box and not coordinates.**
   `ConfirmForm` had `BtnOther`, `BtnNo` and `BtnYes` at fixed `X` with `HAlign:
   End`: "Quit without saving" outgrew its 90 and the form was pushed wider, so

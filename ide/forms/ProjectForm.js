@@ -60,7 +60,7 @@ class ProjectForm extends Form {
          * be written from here; one kind and one name cannot.
          */
         dlg.CmbPrStartup.Items = dlg.classNames;
-        dlg.CmbPrKind.Text = record.Main ? Ide.Kind.Function : Ide.Kind.Form;
+        dlg.CmbPrKind.Index = record.Main ? Ide.Kind.Function : Ide.Kind.Form;
         dlg.showKind(record.Main || record.Startup);
 
         dlg.showUses();
@@ -80,7 +80,7 @@ class ProjectForm extends Form {
      * way, which is what lets a broken name be seen and fixed.
      */
     showKind(name) {
-        const isFunction = this.CmbPrKind.Text === Ide.Kind.Function;
+        const isFunction = this.CmbPrKind.Index === Ide.Kind.Function;
 
         /* One control per kind, in the same place, one shown at a time: a
          * `ComboBox` is a list and refuses a name that is not in it, which is
@@ -260,7 +260,7 @@ class ProjectForm extends Form {
     apply() {
         /* One of the two carries the name and the other is emptied, so the
          * manifest this writes can never declare both. */
-        const console = this.CmbPrKind.Text === Ide.Kind.Function;
+        const console = this.CmbPrKind.Index === Ide.Kind.Function;
         const starts  = this.startsAt();
 
         const fields = [

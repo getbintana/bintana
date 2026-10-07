@@ -25,7 +25,7 @@ class NewProjectForm extends Form {
         const dlg = new NewProjectForm();
 
         dlg.TxtBase.Text = baseDir || Application.Directory;
-        dlg.CmbKind.Text = Ide.Kind.Form;      /* what most projects are */
+        dlg.CmbKind.Index = Ide.Kind.Form;      /* what most projects are */
         dlg.onAccept     = onAccept;
         dlg.Modal        = true;
 
@@ -54,7 +54,7 @@ class NewProjectForm extends Form {
         /* What will be there afterwards, and not only where: the two kinds of
          * project are two different sets of files, and finding that out by
          * looking at the tree afterwards is late. */
-        const first = this.CmbKind.Text === Ide.Kind.Function ? "Main.js"
+        const first = this.CmbKind.Index === Ide.Kind.Function ? "Main.js"
                                                           : "forms/Form1.form";
 
         this.LblHint.Text = name && base
@@ -86,7 +86,7 @@ class NewProjectForm extends Form {
         }
 
         const info = { name, base, id, description: this.TxtDesc.Text.trim(),
-                       console: this.CmbKind.Text === Ide.Kind.Function };
+                       console: this.CmbKind.Index === Ide.Kind.Function };
         this.dismiss();
         if (this.onAccept) this.onAccept(info);
     }

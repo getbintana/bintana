@@ -22,13 +22,18 @@
 Namespace("Ide");
 
 /*
- * What a project starts at, in the two words the dialogs show.
+ * What a project starts at: the *index* of the entry in the dialogs' drop-down.
+ *
+ * Not the words. The entries are prose, so the `.form` loader translates them
+ * and under Spanish `Text` answers "un formulario": assigning or comparing the
+ * English word threw `'a form' is not one of CmbPrKind's items` on opening
+ * Project settings. The position is the same in every language.
  *
  * Here and not in either dialog, because both ask the same question and a
  * project's sources share one scope: two files declaring `const KIND_FORM` at
  * the top level is a redeclaration, and the runtime says so.
  */
-Ide.Kind = { Form: "a form", Function: "a function" };
+Ide.Kind = { Form: 0, Function: 1 };
 
 Ide.ProjectFile = class ProjectFile extends Record {
     static Naming = "lower";
