@@ -1033,6 +1033,34 @@ Ide.Designer = class Designer {
         return box.PickAt(local[0], local[1]);
     }
 
+    /*
+     * Where a control may go without leaving the room its container gives it.
+     *
+     * The left and top edges were always held at 0, and the far ones were held
+     * by nothing -- so with a `Padding` on the form (or on a panel) a control
+     * could be dropped, dragged or nudged out past the right and bottom edge of
+     * the content box, and the running form clipped or grew around it. 0 is the
+     * content box's origin and `Bounds()` is its size, which is also what the
+     * surface wears the padding for.
+     *
+     * A room that has not been laid out (0x0) says nothing, and a control bigger
+     * than the room stays at 0: the near edge wins, as it always did.
+     */
+    keepInside(parent, x, y, w, h) {
+        const room = parent ? parent.Bounds() : null;
+        const fx = room && room.Width  > 0 ? Math.min(x, room.Width  - w) : x;
+        const fy = room && room.Height > 0 ? Math.min(y, room.Height - h) : y;
+
+        return [Math.max(0, fx), Math.max(0, fy)];
+    }
+
+    /* The size a control is placed with: what it asked for, else what it drew. */
+    placedSize(c) {
+        const b = c.Bounds();
+        return { w: c.Width > 0 ? c.Width : b.Width,
+                 h: c.Height > 0 ? c.Height : b.Height };
+    }
+
     /* The container a control sits in, which is not always the surface. */
     parentOf(control, from = this.surface) {
         for (const c of from.Children) {
@@ -1709,7 +1737,11 @@ Ide.Designer = class Designer {
             }
 
             for (const start of d.starts) {
-                start.c.Move(Math.max(0, start.x + ax), Math.max(0, start.y + ay));
+                const size = this.placedSize(start.c);
+                const at   = this.keepInside(this.parentOf(start.c),
+                                             start.x + ax, start.y + ay,
+                                             size.w, size.h);
+                start.c.Move(at[0], at[1]);
             }
         } else {
             const [left, top, right, bottom] = HANDLES[d.mode];
@@ -1730,7 +1762,17 @@ Ide.Designer = class Designer {
                 nh = MIN_SIZE;
             }
 
-            s.Move(Math.max(0, nx), Math.max(0, ny));
+            nx = Math.max(0, nx);
+            ny = Math.max(0, ny);
+
+            /* A handle on the far side stops at the content box's edge. */
+            const room = this.parentOf(s)?.Bounds();
+            if (room && room.Width  > 0 && right)
+                nw = Math.max(MIN_SIZE, Math.min(nw, room.Width  - nx));
+            if (room && room.Height > 0 && bottom)
+                nh = Math.max(MIN_SIZE, Math.min(nh, room.Height - ny));
+
+            s.Move(nx, ny);
             s.Resize(nw, nh);
         }
 
@@ -1866,7 +1908,10 @@ Ide.Designer = class Designer {
 
         control.Delete();
         target.Add(control);
-        control.Move(Math.max(0, snap(local[0])), Math.max(0, snap(local[1])));
+        const size = this.placedSize(control);
+        const at   = this.keepInside(target, snap(local[0]), snap(local[1]),
+                                     size.w, size.h);
+        control.Move(at[0], at[1]);
 
         /* Hiding them avoids a flicker at the old position; the chrome puts
          * them back in place on the next frame. */
@@ -1932,11 +1977,23 @@ Ide.Designer = class Designer {
         /* Resizing from the keyboard goes to the primary only; moving, to all. */
         if (ctrl) {
             const s = this.selected;
-            s.Resize(Math.max(MIN_SIZE, s.Width + by[0]),
-                     Math.max(MIN_SIZE, s.Height + by[1]));
+            const room = this.parentOf(s)?.Bounds();
+            let nw = Math.max(MIN_SIZE, s.Width + by[0]);
+            let nh = Math.max(MIN_SIZE, s.Height + by[1]);
+
+            if (room && room.Width  > 0 && by[0] > 0)
+                nw = Math.max(s.Width,  Math.min(nw, room.Width  - s.X));
+            if (room && room.Height > 0 && by[1] > 0)
+                nh = Math.max(s.Height, Math.min(nh, room.Height - s.Y));
+
+            s.Resize(nw, nh);
         } else {
             for (const c of this.selection) {
-                c.Move(Math.max(0, c.X + by[0]), Math.max(0, c.Y + by[1]));
+                const size = this.placedSize(c);
+                const at   = this.keepInside(this.parentOf(c),
+                                             c.X + by[0], c.Y + by[1],
+                                             size.w, size.h);
+                c.Move(at[0], at[1]);
             }
         }
 
@@ -2018,7 +2075,10 @@ Ide.Designer = class Designer {
                 ? corner
                 : (target.LocalPoint(corner[0], corner[1], this.surface) || corner);
 
-            widget.Move(Math.max(0, snap(local[0])), Math.max(0, snap(local[1])));
+            const size = this.placedSize(widget);
+            const at   = this.keepInside(target, snap(local[0]), snap(local[1]),
+                                         size.w, size.h);
+            widget.Move(at[0], at[1]);
         } else {
             /* Nothing to drop *onto*: what the pointer chose is the place in
              * the row, or the layer of the stack. `Add` already put it last, so

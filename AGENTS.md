@@ -2281,7 +2281,7 @@ Three things that will waste your time:
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
-  390 assertions against 2876 for the whole project -- 9.2 s against 413 on this
+  390 assertions against 2885 for the whole project -- 9.2 s against 413 on this
   machine -- which is what makes iterating on an early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.
@@ -2404,7 +2404,7 @@ nothing is written at all.
 
 **The first harvest was the IDE, and the event marks are what it found.**
 `--profile` over `tests/ide` is 3.9 MB and **37,449 marks** in 354 s with the
-suite green (2818 assertions then; 2876 today) -- against 431 s for the ordinary runner run, so
+suite green (2818 assertions then; 2885 today) -- against 431 s for the ordinary runner run, so
 the writer's per-mark cost does not show at this size. 37,238 of those marks are
 `Event` and 211 are the runtime's (`Bintana`); **28,402 of them are one
 handler**, `PropGrid_Filter` -- the property grid's filter answering GTK for
@@ -2983,6 +2983,36 @@ person who wrote it either.
   alignments; `tests/ide`'s `palette` phase asserts both halves. **A reason
   written for a set of properties has to be true of each member**: the measurement
   covered `Expand`, and the list grew `HAlign` beside it.
+- **A form's declared size includes its own `Padding` and `Border`, and the
+  anchors were measured as if it did not.** `Padding` is CSS on the window's
+  node; GTK takes it off before the surface is allocated, so a form declared
+  412x276 with `Padding: 6` is laid out in **400x264** while
+  `bta_fixed_layout_allocate` latched 412x276 as the origin of its anchors. A
+  `Fill` child drawn flush with the padding came out 12 px short on the right and
+  the bottom -- the designer, an unanchored board that shows the declared sizes,
+  had no such gap, which is how it read as *the runtime disagrees with the
+  design*. The latch subtracts the form's padding and border now
+  (`gtk_style_context_get_padding`/`_border` on the window, deprecated in 4.10
+  and the only reader of the CSS box: `gtk_widget_get_width` of the window, its
+  surface and the layout are all already the content box, so there is nothing to
+  diff). **Forms only**: a `Panel`'s declared `Width` is the box its children were
+  drawn in. `tests/widgets`' `DesignPadding` is a child that measures a `Fill`
+  panel before and after a resize, red by 12 px without it. Found in
+  `~/Escritorio/Prueba`, after the designer learned to keep controls inside the
+  content box and made the mismatch visible.
+- **The designer held a control at 0 on the near edges and at nothing on the far
+  ones.** Every move was `Math.max(0, x)`, so with a `Padding` on the form (or a
+  panel) a control could be dragged, dropped, nudged or grown past the right and
+  bottom of the content box, and the running form clipped it. `keepInside` in
+  `Designer.js` is the one place that knows the room (`parent.Bounds()` is the
+  content box, whose origin is X=0) and all five roads go through it -- drag,
+  handle resize, `dropInto`, `dropControl`, and the arrows. A room that is not
+  laid out yet (0x0) is no limit, and a control bigger than the room stays at 0.
+  `tests/ide`'s `palette` phase asserts the keys and a drag past the corner;
+  **a new road that moves a control has to ask `keepInside` too**, or it is the
+  sixth hole. The align-to-anchor moves (`Designer.js` near `anchor.X + at.x`)
+  still use only `Math.max(0, ...)`: they line a control up with another, so the
+  far edge is the anchor's problem.
 - **`Arrangement` is only on a container whose slot is a `BtaFixed`.** `Panel`,
   `Frame`, `Expander`, `Scroller`, `Form` and a `Component` have one; `Split`
   overrides the property with `Horizontal`/`Vertical` and no `Fixed`; `Grid`,

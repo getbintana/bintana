@@ -280,8 +280,36 @@ static void bta_fixed_layout_allocate(GtkLayoutManager *manager, GtkWidget *widg
             }
         }
 
-        self->design_w = dw > 0 ? dw : width;
-        self->design_h = dh > 0 ? MAX(dh - chrome, 1) : height;
+        /*
+         * **A form's declared size includes its own `Padding` and `Border`, and
+         * the coordinates were drawn inside them.** Both are CSS on the window's
+         * node, and GTK takes them off before the surface is allocated, so a
+         * form declared 412x276 with `Padding: 6` was laid out in 400x264
+         * against an origin of 412x276: every `Fill` child ended 12 pixels short
+         * of the far edge, a gap the designer (an unanchored board that shows the
+         * declared sizes) never had. Asked of the style rather than of the
+         * allocations because there is nothing to diff -- the window and the
+         * surface are both already the content box -- and so a theme's own
+         * padding counts as well. Forms only: a `Panel`'s `Width` is the box its
+         * children were drawn in.
+         */
+        int box_w = 0, box_h = 0;
+
+        if (is_form && own->gtk) {
+            GtkStyleContext *sc = gtk_widget_get_style_context(own->gtk);
+            GtkBorder pad, bor;
+
+            G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+            gtk_style_context_get_padding(sc, &pad);
+            gtk_style_context_get_border(sc, &bor);
+            G_GNUC_END_IGNORE_DEPRECATIONS
+
+            box_w = pad.left + pad.right  + bor.left + bor.right;
+            box_h = pad.top  + pad.bottom + bor.top  + bor.bottom;
+        }
+
+        self->design_w = dw > 0 ? MAX(dw - box_w, 1) : width;
+        self->design_h = dh > 0 ? MAX(dh - chrome - box_h, 1) : height;
 
         /*
          * Measuring needs the design size to know what gap a stretched control

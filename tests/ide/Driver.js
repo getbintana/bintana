@@ -1626,6 +1626,18 @@ function* p_designer(ide) {
     eq("dragging marks the form dirty", ide.designer.dirty, true);
     eq("and the toolbar's Save follows", ide.BtnSave.Enabled, true);
 
+    /* ...and a drag that overshoots the far corner stops inside the surface,
+     * where the near corner already held it. */
+    const area = ide.Surface.Bounds();
+    ide.Glass_MouseDown(45, 55);
+    ide.Glass_MouseMove(area.Width + 3000, area.Height + 3000, 1, false, true);
+    ide.Glass_MouseUp();
+    check("a drag past the right edge keeps the control inside",
+          ok.X + ok.Width <= area.Width, `right=${ok.X + ok.Width} room=${area.Width}`);
+    check("and past the bottom one",
+          ok.Y + ok.Height <= area.Height, `bottom=${ok.Y + ok.Height} room=${area.Height}`);
+    ok.Move(40, 50);
+
     /* --- designer: resizing --------------------------------------------- */
     ide.Glass_MouseDown(45, 55);
     ide.Glass_MouseUp();
@@ -2625,6 +2637,34 @@ function* p_palette(ide) {
 
     eq("a key nobody wants is left alone",
        ide.Glass_KeyPress("F7", false, false), false);
+
+    /*
+     * **The far edges hold like the near ones.** X and Y were kept at 0 and
+     * nothing kept a control inside the right and bottom of its container, so
+     * with a `Padding` a control could be pushed out past the content box.
+     */
+    const room = ide.Surface.Bounds();
+    check("the surface has a room to keep controls in",
+          room.Width > 0 && room.Height > 0, JSON.stringify(room));
+
+    const fit = ide.designer.keepInside(ide.Surface, 99999, 99999, cb.Width, cb.Height);
+    eq("a control asked to go past the far corner stops at it",
+       JSON.stringify(fit),
+       JSON.stringify([room.Width - cb.Width, room.Height - cb.Height]));
+    eq("and past the near one at zero",
+       JSON.stringify(ide.designer.keepInside(ide.Surface, -50, -50, cb.Width, cb.Height)),
+       "[0,0]");
+
+    cb.Move(room.Width - cb.Width, room.Height - cb.Height);
+    ide.Glass_KeyPress("Right", false, false);
+    ide.Glass_KeyPress("Down", false, false);
+    eq("an arrow at the right edge does not push it out", cb.X, room.Width - cb.Width);
+    eq("nor one at the bottom", cb.Y, room.Height - cb.Height);
+
+    const wide = cb.Width;
+    ide.Glass_KeyPress("Right", true, false);
+    eq("ctrl+arrow cannot grow it past the edge", cb.Width, wide);
+    cb.Move(kx + 1, ky + 4);
 
     eq("Escape is consumed", ide.Glass_KeyPress("Escape", false, false), true);
     eq("Escape deselects", ide.designer.selected, null);
@@ -6375,8 +6415,11 @@ function* p_nested(ide) {
     ide.Glass_MouseDown(before[0] + 5, before[1] + 5);
     eq("the drag starts on the loose control", ide.designer.selected.Name, "Label2");
 
-    /* Drop well inside the Frame, somewhere with no controls. */
-    const dropX = 250, dropY = 190;
+    /* Drop well inside the Frame, somewhere with no controls -- and far enough
+     * from its right edge for the whole label to fit: the far edges hold now, so
+     * a drop that overhangs is pulled in (the next assertions would then be
+     * about the clamp and not about teleporting). */
+    const dropX = 200, dropY = 190;
     ide.Glass_MouseMove(dropX, dropY);
     ide.Glass_MouseUp(dropX, dropY);
     yield* settled(ide);
@@ -6394,6 +6437,10 @@ function* p_nested(ide) {
      * new container has laid it out. */
     yield* settled(ide);
     const landed = adopted.OriginIn(ide.Surface);
+    check("and it is inside the container it joined",
+          adopted.X + adopted.Width <= grupo.Bounds().Width &&
+          adopted.Y + adopted.Height <= grupo.Bounds().Height,
+          `${adopted.X + adopted.Width}x${adopted.Y + adopted.Height} in ${grupo.Bounds().Width}x${grupo.Bounds().Height}`);
     check("and it stayed visually where it was dropped",
           Math.abs(landed[0] - (dropX - 5)) <= 4 &&
           Math.abs(landed[1] - (dropY - 5)) <= 4,

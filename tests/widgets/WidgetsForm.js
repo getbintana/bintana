@@ -544,6 +544,7 @@ const TESTS = [
     "VideoDroppedInHandler",
     /* A child too: a form opened shorter than it was drawn. */
     "DesignHeightShort",
+    "DesignPadding",
     /* Children too: a project's own class named like a runtime global. */
     "ClassNamedLikeAGlobal",
     "Time",
@@ -3997,6 +3998,51 @@ class WidgetsForm extends Form {
         if (!m) return;
         eq("opened 100 short, a Fill panel keeps its 10 px gaps", Number(m[1]), 280);
         eq("...and grows with the window after", Number(m[2]), 460);
+    }
+
+    /*
+     * **A form's declared size includes its own `Padding`, and the design is
+     * what is left inside it.** The surface latched the declaration (412x276) as
+     * the origin of its anchors while GTK laid it out in the content box
+     * (400x264), so a `Fill` panel drawn flush with the padding came out 12 px
+     * short on the right and the bottom at run time, where the designer showed
+     * it flush. A child, because the latch happens once at the first allocation.
+     */
+    testDesignPadding() {
+        const dir = File.Join(SCRATCH, "designpad");
+        Directory.Make(dir);
+        File.SaveJson(File.Join(dir, "project.json"),
+                      { name: "designpad", startup: "F", sources: ["F.js"] });
+        File.SaveJson(File.Join(dir, "F.form"),
+                      { format: "bintana-form/1", class: "F",
+                        properties: { Width: 412, Height: 276, Padding: "6", Arrangement: "Fixed" },
+                        children: [{ type: "Panel", name: "P",
+                                     properties: { X: 0, Y: 0, Width: 400, Height: 264,
+                                                   HAlign: "Fill", VAlign: "Fill" } }] });
+        File.Save(File.Join(dir, "F.js"),
+                  'class F extends Form {\n' +
+                  '    Form_Open() {\n' +
+                  '        Timer.After(700, () => {\n' +
+                  '            const a = this.P.Bounds();\n' +
+                  '            this.Resize(512, 376);\n' +
+                  '            Timer.After(700, () => {\n' +
+                  '                const b = this.P.Bounds();\n' +
+                  '                print(`B ${a.Width} ${a.Height} ${b.Width} ${b.Height}`);\n' +
+                  '                Application.Quit(0);\n' +
+                  '            });\n' +
+                  '        });\n' +
+                  '    }\n' +
+                  '}\n');
+
+        const ran = Exec.Wait([Application.Executable, dir], { Timeout: 30000 });
+        const m   = ran.Output.match(/B (\d+) (\d+) (\d+) (\d+)/);
+        check("the child measured its panel", !!m, ran.Output);
+        if (!m) return;
+        eq("a Fill panel drawn flush with the padding is flush at run time: width",
+           Number(m[1]), 400);
+        eq("...and height", Number(m[2]), 264);
+        eq("...and still flush after the window grows: width", Number(m[3]), 500);
+        eq("...and height", Number(m[4]), 364);
     }
 
     /*
