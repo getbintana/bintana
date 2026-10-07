@@ -6496,7 +6496,12 @@ same number without naming what sits above it.
   76-wide buttons in 328, with "Move down" wider than that and the list not
   following the window. Both are a `Bar` panel (`Horizontal`, `Spacing: 8`)
   with an expanding `Spacer` before the right-hand buttons, and the
-  `TabOrderForm` root is `Vertical` with the list `VExpand`. Names are
+  `TabOrderForm` root is `Vertical` with the list `VExpand`.
+  `lib/dialog/Confirm` had the same row and the same overlap, worse because its
+  `Accept` text is the caller's ("Discard all unsaved changes" put `Accept` at
+  265..442 over `Cancel` at 235..314); it is a `Bar` now. `AskText` was left
+  alone: its two words are fixed and it moves its buttons by coordinate when
+  `Option` is shown. Names are
   unchanged: the loader publishes them on the form whatever the nesting.
 
 - **`MinWidth` and `MinHeight` do nothing unless the matching axis is `Fill`.**

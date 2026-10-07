@@ -22,32 +22,45 @@
       }
     },
     {
-      "type": "Button",
-      "name": "BtnCancel",
+      "type": "Panel",
+      "name": "Bar",
       "properties": {
-        "Cancel": true,
-        "HAlign": "End",
+        "Arrangement": "Horizontal",
+        "Spacing": 8,
+        "X": 12,
+        "Y": 92,
+        "Width": 368,
         "Height": 32,
-        "Text": "Cancel",
-        "VAlign": "End",
-        "Width": 90,
-        "X": 162,
-        "Y": 92
-      }
-    },
-    {
-      "type": "Button",
-      "name": "BtnAccept",
-      "properties": {
-        "HAlign": "End",
-        "Height": 32,
-        "Style": "destructive-action",
-        "Text": "Delete",
-        "VAlign": "End",
-        "Width": 120,
-        "X": 260,
-        "Y": 92
-      }
+        "HAlign": "Fill",
+        "VAlign": "End"
+      },
+      "children": [
+        {
+          "type": "Panel",
+          "name": "Spacer",
+          "properties": {
+            "HExpand": true
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnCancel",
+          "properties": {
+            "Text": "Cancel",
+            "Cancel": true,
+            "Width": 90
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnAccept",
+          "properties": {
+            "Text": "Delete",
+            "Style": "destructive-action",
+            "Width": 90
+          }
+        }
+      ]
     }
   ]
 }
