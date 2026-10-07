@@ -520,6 +520,23 @@ Ide.PropertyGrid = class PropertyGrid {
             this.build(keys);
         }
         this.sync();
+        this.titleSelection();
+    }
+
+    /* The header over the panel names what it is showing: `Button1 (Button)`,
+     * as the control tree does, or the form's own when nothing is selected. */
+    titleSelection() {
+        const title = this.designer.workspace.propTitle;
+        if (!title) return;
+
+        const t    = this.target;
+        const root = this.designer.root;
+
+        /* No target is the form itself, which the tree writes `Form1 (Form)`:
+         * its name is its class, and its kind is the one `formProbe` builds. */
+        if (t && t.Name)  title.Text = `${t.Name} (${this.typeName()})`;
+        else if (root)    title.Text = `${root.class} (${this.designer.isComponent(root.class) ? "Component" : "Form"})`;
+        else              title.Text = Locale.Text("Inspector");
     }
 
     allKeys() {

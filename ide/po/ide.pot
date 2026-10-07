@@ -2692,3 +2692,15 @@ msgid "{0} replacement made"
 msgid_plural "{0} replacements made"
 msgstr[0] ""
 msgstr[1] ""
+
+#: modules/Workspace.js
+msgid "Toolbox"
+msgstr ""
+
+#: modules/Workspace.js
+msgid "Structure"
+msgstr ""
+
+#: modules/Workspace.js
+msgid "Inspector"
+msgstr ""

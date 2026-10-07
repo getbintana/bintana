@@ -55,7 +55,7 @@ const TREE_MENU = [
 const CONTROLS_W = 280;
 const CENTER_W   = 520;
 const SIDE_W     = 520;     /* the editor's outline, same idea */
-const PALETTE_H  = 140;
+const PALETTE_H  = 200;     /* the palette (two rows) and its title */
 
 Ide.Workspace = class Workspace {
 
@@ -79,6 +79,7 @@ Ide.Workspace = class Workspace {
         this.btnRaise    = null;
         this.btnLower    = null;
         this.sideTabs    = null;
+        this.propTitle   = null;
         this.propBox     = null;
         this.propDesign  = null;
         this.propFind    = null;
@@ -137,14 +138,15 @@ Ide.Workspace = class Workspace {
         this.paletteBook = new Notebook();
         this.paletteBook.Name    = "Palette";
         this.paletteBook.HExpand = true;
-        this.sideSplit.Add(this.paletteBook);
+        this.paletteBook.VExpand = true;
+        this.sideSplit.Add(this.titled(Locale.Text("Toolbox"), this.paletteBook));
 
         this.widgetTree = new TreeView();
         this.widgetTree.Name    = "WidgetTree";
         this.widgetTree.Expand  = true;
         this.widgetTree.HExpand = true;
         this.widgetTree.VExpand = true;
-        this.sideSplit.Add(this.widgetTree);
+        this.sideSplit.Add(this.titled(Locale.Text("Structure"), this.widgetTree));
 
         this.controlsBox.Add(this.sideSplit);
         this.controlsBox.Add(this.buildBar());
@@ -173,6 +175,25 @@ Ide.Workspace = class Workspace {
         this.buildOutline();
 
         this.page.Position = this.ide.session.divider("EditSplit", SIDE_W);
+    }
+
+    /* A panel's title above its content, so each side panel says what it is
+     * the way the outline does. `text` arrives already through `Locale.Text`:
+     * the literal has to be at the call site for the extractor to find it. */
+    titled(text, content) {
+        const box = new Panel();
+        box.Arrangement = "Vertical";
+        box.HExpand     = true;
+        box.VExpand     = true;
+
+        const head = new Label();
+        head.HAlign = "Start";
+        head.Margin = 4;
+        head.Style  = "heading";
+        head.Text   = text;
+        box.Add(head);
+        box.Add(content);
+        return box;
     }
 
     /* The three buttons under the control tree, pointing at the IDE's own
@@ -270,6 +291,15 @@ Ide.Workspace = class Workspace {
         this.eventList.Tooltip = Locale.Text("Double click an event to write its handler, or to go to it");
         this.eventsBox.Add(this.eventList);
 
+        /* What the two pages below speak about; `PropertyGrid.fill` writes it. */
+        this.propTitle = new Label();
+        this.propTitle.Name   = "PropTitle";
+        this.propTitle.HAlign = "Start";
+        this.propTitle.Margin = 4;
+        this.propTitle.Style  = "heading";
+        this.propTitle.Text   = Locale.Text("Inspector");
+        this.sidePanel.Add(this.propTitle);
+
         this.sideTabs.Append(this.propBox,   Locale.Text("Properties"));
         this.sideTabs.Append(this.eventsBox, Locale.Text("Events"));
         this.sidePanel.Add(this.sideTabs);
@@ -289,7 +319,7 @@ Ide.Workspace = class Workspace {
         caption.Name    = "LblOutline";
         caption.HAlign  = "Start";
         caption.Margin  = 4;
-        caption.Style   = "caption-heading";
+        caption.Style   = "heading";
         caption.Text    = Locale.Text("Outline");
         this.outlineBox.Add(caption);
 

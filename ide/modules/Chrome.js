@@ -23,9 +23,11 @@ const SELECT_COLOR  = "#1c71d8";
  * blue, because it is a statement about the control and not about the choosing. */
 const OVERFLOW_COLOR = "#e5a50a";
 const GUIDE_COLOR   = "#e01b24";
-/* The form's grips: darker than a control's selection, so the two are telling
- * apart at a glance even when a control sits against the form's edge. */
-const FORM_HANDLE_COLOR = "#26456e";
+/* The form's grips are this grey while a control is the selection: they only
+ * mark where to drag, and **no line is drawn along the form's edge, selected or
+ * not** -- it gets in the way of seeing the application as it will look. They
+ * take the selection's blue when the form itself is selected -- always blue,
+ * even a darker one, said "selected" about a form that was not. */
 const BOUNDS_COLOR  = "#77767b";
 
 const HANDLE = 8;               // side of the little resize square
@@ -79,14 +81,13 @@ Ide.Chrome = class Chrome {
         }
 
         /*
-         * The form's own resize grips, on the border `layoutBounds` already
-         * draws.  In another colour than a control's, because they resize a
-         * different thing and sitting on the same canvas they would otherwise
-         * read as one more selection.
+         * The form's own resize grips, straddling its edge and drawn as nothing
+         * else: no border, only the squares to drag.  Grey while a control is the
+         * selection, so they do not read as one more selection.
          */
         this.formHandles = {};
         for (const id of FORM_HANDLES) {
-            const h = this.bar(FORM_HANDLE_COLOR);
+            const h = this.bar(BOUNDS_COLOR);
             h.Resize(HANDLE, HANDLE);
             h.Cursor = HANDLE_CURSOR[id];
             this.formHandles[id] = h;
@@ -95,13 +96,6 @@ Ide.Chrome = class Chrome {
         /* Alignment guides: one vertical and one horizontal, in another colour
          * so they cannot be mistaken for the selection. */
         this.guides = { v: this.bar(GUIDE_COLOR), h: this.bar(GUIDE_COLOR) };
-
-        /* The form's border and the shading of what falls outside it.  The
-         * surface stretches with the window, so without this the declared size
-         * is invisible and it is easy to leave controls outside the area the
-         * window will really have. */
-        this.bounds = [];
-        for (let i = 0; i < 4; i++) this.bounds.push(this.bar(BOUNDS_COLOR));
 
         /* One set of four bars per secondary selection, made on demand. */
         this.extraOutlines = [];
@@ -271,7 +265,16 @@ Ide.Chrome = class Chrome {
     layoutBounds() {
         const gw = this.glass.Width, gh = this.glass.Height;
         if (!this.designer.root || gw <= 0 || gh <= 0) {
-            for (const b of this.bounds) b.Visible = false;
+            /* A tab just opened has no allocation, and nothing else asks again:
+             * the grips were missing until the first click. `Allocated` is the
+             * frame the glass gets one, and it is listened for once. */
+            if (this.designer.root && !this.waitingForGlass) {
+                this.waitingForGlass = true;
+                this.glass.On("Allocated", () => {
+                    this.waitingForGlass = false;
+                    this.layout();
+                });
+            }
             for (const id of FORM_HANDLES) this.formHandles[id].Visible = false;
             return;
         }
@@ -286,7 +289,8 @@ Ide.Chrome = class Chrome {
          * be grabbed at all.  What the grip *does* is unaffected -- a drag moves
          * the window's height, and the two differ by a constant. */
         const { w, h } = this.designer.clientSize();
-        this.frameBars(this.bounds, { x: 0, y: 0, w, h });
+        const colour = this.designer.selected ? BOUNDS_COLOR : SELECT_COLOR;
+        for (const id of FORM_HANDLES) this.formHandles[id].Background = colour;
         this.layoutFormHandles(w, h);
     }
 

@@ -6634,15 +6634,16 @@ function* p_nested(ide) {
        ide.MnuAlignLeft.Enabled, false);
 
     /* --- the form's own bounds --------------------------------------------------
-     * The surface stretches with the window, so the drawn border is the only
-     * thing that says where the form really ends. */
+     * The surface stretches with the window, so the grips on its edge are what
+     * say where the form really ends -- no line is drawn along it. */
     ide.designer.select(null);
     yield* settled(ide);   // GTK has to have laid it out
 
     eq("the declared size comes from the form node",
        JSON.stringify(ide.designer.formSize()), JSON.stringify({ w: 360, h: 260 }));
-    check("the boundary is drawn", ide.designer.chrome.bounds[0].Visible);
-    eq("along the declared width", ide.designer.chrome.bounds[0].Width, 360);
+    const corner = ide.designer.chrome.formHandles.se;
+    check("the corner grip is drawn", corner.Visible);
+    eq("on the declared width", corner.X + corner.Width / 2, 360);
     /*
      * What is outside the form is not drawn: it is the scroller's own
      * background, and the board covers itself with the theme's window colour.
@@ -6672,7 +6673,7 @@ function* p_nested(ide) {
     editor(ide, "Width").Value = 300;
     yield* settled(ide);   // GTK has to have laid it out
     eq("editing it changes the form", ide.designer.formSize().w, 300);
-    eq("and the boundary follows", ide.designer.chrome.bounds[0].Width, 300);
+    eq("and the grip follows", corner.X + corner.Width / 2, 300);
     /* And so does what is around it, without anything being laid out: the board
      * shrank, so more of the scroller's background is what is left.  Not exactly
      * 300 -- the form's grips straddle its border, so the glass carrying them is
