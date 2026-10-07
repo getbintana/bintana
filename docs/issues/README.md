@@ -14,6 +14,7 @@ in the same form.
 |---|---|
 | [ISSUE-editable-combo.md](ISSUE-editable-combo.md) | No editable / autocompleting combo |
 | [ISSUE-popover-designer.md](ISSUE-popover-designer.md) | A `Popover` cannot be seen or picked on the design canvas |
+| [ISSUE-xml-sequence-order.md](ISSUE-xml-sequence-order.md) | `SaveXml` cannot place a new element among children the shape does not model |
 
 
 **A gap that is filled is deleted, not archived.** What the runtime can do is in
