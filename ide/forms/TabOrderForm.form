@@ -5,7 +5,10 @@
     "Height": 396,
     "Icon": "view-sort-ascending-symbolic",
     "Text": "Tab order",
-    "Width": 352
+    "Width": 380,
+    "Arrangement": "Vertical",
+    "Spacing": 8,
+    "Margin": 12
   },
   "children": [
     {
@@ -14,12 +17,7 @@
       "properties": {
         "Ellipsize": true,
         "HAlign": "Fill",
-        "Height": 22,
-        "Text": "Tab order",
-        "VAlign": "End",
-        "Width": 328,
-        "X": 12,
-        "Y": 12
+        "Text": "Tab order"
       }
     },
     {
@@ -27,63 +25,58 @@
       "name": "LstOrder",
       "properties": {
         "HAlign": "Fill",
-        "Height": 300,
-        "Style": "frame",
-        "Width": 328,
-        "X": 12,
-        "Y": 40
+        "VExpand": true,
+        "Style": "frame"
       }
     },
     {
-      "type": "Button",
-      "name": "BtnUp",
+      "type": "Panel",
+      "name": "Bar",
       "properties": {
-        "Height": 32,
-        "Text": "Move up",
-        "VAlign": "End",
-        "Width": 76,
-        "X": 12,
-        "Y": 352
-      }
-    },
-    {
-      "type": "Button",
-      "name": "BtnDown",
-      "properties": {
-        "Height": 32,
-        "Text": "Move down",
-        "VAlign": "End",
-        "Width": 76,
-        "X": 96,
-        "Y": 352
-      }
-    },
-    {
-      "type": "Button",
-      "name": "BtnCancel",
-      "properties": {
-        "Cancel": true,
-        "Height": 32,
-        "Text": "Cancel",
-        "VAlign": "End",
-        "Width": 76,
-        "X": 180,
-        "Y": 352
-      }
-    },
-    {
-      "type": "Button",
-      "name": "BtnOk",
-      "properties": {
-        "Default": true,
-        "Height": 32,
-        "Style": "suggested-action",
-        "Text": "OK",
-        "VAlign": "End",
-        "Width": 76,
-        "X": 264,
-        "Y": 352
-      }
+        "Arrangement": "Horizontal",
+        "Spacing": 8,
+        "HAlign": "Fill"
+      },
+      "children": [
+        {
+          "type": "Button",
+          "name": "BtnUp",
+          "properties": {
+            "Text": "Move up"
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnDown",
+          "properties": {
+            "Text": "Move down"
+          }
+        },
+        {
+          "type": "Panel",
+          "name": "Spacer",
+          "properties": {
+            "HExpand": true
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnCancel",
+          "properties": {
+            "Text": "Cancel",
+            "Cancel": true
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnOk",
+          "properties": {
+            "Text": "OK",
+            "Default": true,
+            "Style": "suggested-action"
+          }
+        }
+      ]
     }
   ]
 }

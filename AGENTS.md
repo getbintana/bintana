@@ -6473,6 +6473,17 @@ same number without naming what sits above it.
   them; and moving a `Fixed` form's content means growing its declared
   `Width`/`Height` by the same amount, or the anchors keep the old gaps.
 
+- **A row of buttons whose texts are translated is a box and not coordinates.**
+  `ConfirmForm` had `BtnOther`, `BtnNo` and `BtnYes` at fixed `X` with `HAlign:
+  End`: "Quit without saving" outgrew its 90 and the form was pushed wider, so
+  the End-anchored buttons moved by different amounts and `Yes` (295..418)
+  covered `Cancel` (264..320) -- measured with a probe. `TabOrderForm` was four
+  76-wide buttons in 328, with "Move down" wider than that and the list not
+  following the window. Both are a `Bar` panel (`Horizontal`, `Spacing: 8`)
+  with an expanding `Spacer` before the right-hand buttons, and the
+  `TabOrderForm` root is `Vertical` with the list `VExpand`. Names are
+  unchanged: the loader publishes them on the form whatever the nesting.
+
 - **`MinWidth` and `MinHeight` do nothing unless the matching axis is `Fill`.**
   It is documented -- *"only means something on an axis whose `HAlign` is
   `Fill`"* -- and it is still the trap, because a floor that is quietly ignored

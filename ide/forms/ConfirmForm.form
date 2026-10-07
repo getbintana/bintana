@@ -22,46 +22,53 @@
       }
     },
     {
-      "type": "Button",
-      "name": "BtnOther",
+      "type": "Panel",
+      "name": "Bar",
       "properties": {
-        "HAlign": "End",
-        "Height": 32,
-        "Text": "",
-        "VAlign": "End",
-        "Visible": false,
-        "Width": 170,
+        "Arrangement": "Horizontal",
+        "Spacing": 8,
         "X": 12,
-        "Y": 92
-      }
-    },
-    {
-      "type": "Button",
-      "name": "BtnNo",
-      "properties": {
-        "X": 192,
         "Y": 92,
-        "Width": 90,
+        "Width": 368,
         "Height": 32,
-        "Text": "Cancel",
-        "HAlign": "End",
-        "VAlign": "End",
-        "Cancel": true
-      }
-    },
-    {
-      "type": "Button",
-      "name": "BtnYes",
-      "properties": {
-        "HAlign": "End",
-        "Height": 32,
-        "Style": "destructive-action",
-        "Text": "Delete",
-        "VAlign": "End",
-        "Width": 90,
-        "X": 290,
-        "Y": 92
-      }
+        "HAlign": "Fill",
+        "VAlign": "End"
+      },
+      "children": [
+        {
+          "type": "Panel",
+          "name": "Spacer",
+          "properties": {
+            "HExpand": true
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnOther",
+          "properties": {
+            "Text": "",
+            "Visible": false
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnNo",
+          "properties": {
+            "Text": "Cancel",
+            "Width": 90,
+            "Cancel": true
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnYes",
+          "properties": {
+            "Text": "Delete",
+            "Style": "destructive-action",
+            "Width": 90
+          }
+        }
+      ]
     }
   ]
 }
