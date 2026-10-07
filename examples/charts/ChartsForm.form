@@ -113,13 +113,6 @@
           "type": "ComboBox",
           "name": "CmbType",
           "properties": {
-            "Items": [
-              "Bar",
-              "Line",
-              "Area",
-              "Pie",
-              "Doughnut"
-            ],
             "Width": 110
           }
         },

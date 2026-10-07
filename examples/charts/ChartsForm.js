@@ -116,6 +116,11 @@ class ChartsForm extends Form {
         this.Share.Stacked = true;
         this.Share.Legend  = "Bottom";
 
+        /* Filled here and not in the .form: `Items` is prose, so the loader
+         * would translate "Bar" and `Sales.Type` would be handed the
+         * translation. These are the chart's own words. `ready` is still down,
+         * so the `Select` this raises is ignored. */
+        this.CmbType.Items = ["Bar", "Line", "Area", "Pie", "Doughnut"];
         this.CmbType.Text = "Bar";
         this.ready = true;
         this.say(Locale.Text("{0} readings in the bottom chart", String(n)));

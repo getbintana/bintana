@@ -6480,6 +6480,13 @@ same number without naming what sits above it.
   The suite runs in English and could not see it. It is `0`/`1` and `Index` now
   (`ProjectForm`, `NewProjectForm`). Keywords go in a list filled from code, as
   the `Items` trap above says; a list that is prose is read by position.
+  An audit of every `ComboBox` with `Items` in a `.form` found one more reader
+  by text, `examples/charts` (`CmbType.Text` handed to `Chart.Type`; it is filled
+  from code now), and `examples/files` and `examples/kanban` already read by
+  index. And every IDE dialog was opened under `LANGUAGE=es` and `ru` and
+  checked for controls outside the window and overlapping buttons: none left --
+  the probe is worth rebuilding when a dialog gains a button (it reported the old
+  `ConfirmForm` overlap, which is how it was known to see anything).
 
 - **A row of buttons whose texts are translated is a box and not coordinates.**
   `ConfirmForm` had `BtnOther`, `BtnNo` and `BtnYes` at fixed `X` with `HAlign:
