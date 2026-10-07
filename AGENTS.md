@@ -592,8 +592,8 @@ than the fork itself**: the fix was where it had always been.
 **And a false finding in a commit message is worse than none**, because this
 file then repeats it: both were corrected in the amend, and the hunk is what
 made me look for the fork checkout at all -- which is where the actual work
-belongs. **The patch goes in `/home/matias/Proyectos/bintana-quickjs`**, on the
-`bintana` branch, and the submodule moves to the commit that comes out of it.
+belongs. **The patch goes in a checkout of the fork**, on the `bintana` branch,
+and the submodule moves to the commit that comes out of it.
 
 An upgrade happens in two repositories:
 
