@@ -239,6 +239,14 @@ const SIZE = ["Width", "Height"];
  * had just refused. A read-only override that the property grid and the
  * serialiser both ignore is what a class says *this is a question, not a
  * switch* with.
+ *
+ * **And a `__` name is skipped, because it is a note and not a property.** The
+ * runtime keeps its own notes about a widget -- `__declared`, `__children`,
+ * `__menus`, `__actions` -- as accessors on `Widget.prototype`, and
+ * `__declared` is the one with a setter, since the loader and `rad.js` both
+ * write it. That pair is exactly what this walk looks for, so without the line
+ * below the property grid offered a note for editing. A note is readable from
+ * JavaScript and is nothing a `.form` carries.
  */
 function settableProperties(widget) {
     const out  = [];
@@ -251,7 +259,8 @@ function settableProperties(widget) {
             seen.push(key);
 
             const d = ownDescriptor(p, key);
-            if (d && typeof d.get === "function" && typeof d.set === "function")
+            if (d && typeof d.get === "function" && typeof d.set === "function"
+                && !key.startsWith("__"))
                 out.push(key);
         }
     }

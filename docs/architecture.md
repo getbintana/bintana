@@ -347,7 +347,9 @@ exists — not the loader, not the serialiser, not the designer:
 - **The serialiser** (`rad.js`) walks the prototype chain for accessors that have
   **both** a getter and a setter, and writes those whose value differs from a
   freshly constructed control's. A read-only accessor is excluded automatically,
-  because the loader could never assign it back.
+  because the loader could never assign it back; one whose name begins with `__`
+  is excluded too, because that is a note the runtime keeps about the widget and
+  not a property (see [plans/strict-plan.md](plans/strict-plan.md)).
 - **The designer** asks `PropertyNames()` — the same discovery — and picks an
   editor per row from the value's type.
 - **A property with a closed set of values** declares them in its class row

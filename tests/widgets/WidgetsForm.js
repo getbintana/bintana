@@ -16189,6 +16189,25 @@ function Main() {
         check("the settable properties of a class are a control's",
               sameJson(Widget.PropertyNames("Button"), btn.PropertyNames()),
               JSON.stringify(Widget.PropertyNames("Button").slice(0, 6)));
+
+        /*
+         * **And a runtime note is not one, though JavaScript reads it.**
+         * `__declared` is an accessor with a setter on `Widget.prototype` --
+         * the loader and `rad.js` both write it -- so a getter/setter walk
+         * found it and the property grid offered it for editing. It is the
+         * strict-plan fact seen from the grid's side: the note lives off the
+         * widget and is nothing a `.form` carries. Asserted against both of
+         * this walk's consumers, which are the two that have to agree.
+         */
+        btn.__declared = { Text: ["hola", "hello"] };
+        check("a runtime note is not a property, though it is readable",
+              btn.__declared.Text[1] === "hello" &&
+              !Widget.PropertyNames("Button").includes("__declared") &&
+              !btn.PropertyNames().includes("__declared") &&
+              !("__declared" in btn.Serialize().properties),
+              JSON.stringify(btn.PropertyNames().filter(
+                  (n) => n.startsWith("__"))));
+
         check("its events are the control's, most derived first",
               sameJson(Widget.EventNames("Button"), btn.EventNames()));
         eq("...and the head is still the one a double click writes",

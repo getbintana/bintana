@@ -3079,6 +3079,13 @@ person who wrote it either.
   decides whether it is settable**, tracked with a `seen` list rather than a
   check on the result. `forms.js`, and the general fix rather than a special
   case for one class.
+  **And a `__` name is skipped, because it is a note and not a property.** The
+  runtime's notes (`__declared`, `__children`, `__menus`, `__actions`) became
+  accessors on `Widget.prototype` when the strict-plan cleanup moved them off
+  the wrapper, and `__declared` is the one with a setter -- the loader and
+  `rad.js` both write it -- so the getter/setter walk found it and the property
+  grid offered it for editing. Stated as a prefix and not a list of four, so a
+  note added later is skipped for free.
 - **A margin that uses up the paper is a loop that never ends.** `lib/markdown`'s
   `pageBreaks` advanced by the printable height, and `Margins = 421` on A4
   leaves none: `SavePdf` and `Send` hung the program. It refuses before the

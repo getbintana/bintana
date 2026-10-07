@@ -2145,6 +2145,14 @@ function* p_palette(ide) {
     check("and never read-only ones",
           !ide.designer.grid.propKeys.includes("Children"),
           JSON.stringify(ide.designer.grid.propKeys));
+    /* The runtime's own notes are readable from JavaScript -- `__declared` is
+     * what the loader leaves when it translates prose -- and are not properties
+     * a person edits: the grid used to offer the one with a setter. */
+    check("nor the runtime's own notes",
+          !ide.designer.grid.propKeys.includes("__declared") &&
+          !ide.designer.grid.propKeys.includes("__children"),
+          JSON.stringify(ide.designer.grid.propKeys.filter(
+              (k) => k.startsWith("__"))));
 
     /* One row per property, and in each the editor the value asks for: that is
      * what makes a new property in C editable properly without touching the
