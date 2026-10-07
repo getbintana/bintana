@@ -2404,7 +2404,7 @@ nothing is written at all.
 
 **The first harvest was the IDE, and the event marks are what it found.**
 `--profile` over `tests/ide` is 3.9 MB and **37,449 marks** in 354 s with the
-suite green (2818 assertions then; 2860 today) -- against 431 s for the ordinary runner run, so
+suite green (2818 assertions then; 2874 today) -- against 431 s for the ordinary runner run, so
 the writer's per-mark cost does not show at this size. 37,238 of those marks are
 `Event` and 211 are the runtime's (`Bintana`); **28,402 of them are one
 handler**, `PropGrid_Filter` -- the property grid's filter answering GTK for
@@ -2642,6 +2642,36 @@ person who wrote it either.
   slot and not the only one) -- three true sentences, and the fourth was in
   nobody's reach because no document had put `Arrangement` and `Scroller` in
   the same paragraph.
+- **The designer's surface stands in for the form, so a form property it must
+  answer to has to be copied onto it by hand.** `buildSurface` applied
+  `Arrangement` and nothing else, so a form declared `Horizontal` with
+  `Spacing: 12` was drawn with no gap at all -- the grid said 12, the canvas
+  showed 0, and the running form was right. `Margin`, `Padding`, `Font`,
+  `Radius`, the colours and the rest were in the same state. `FORM_LOOK` in
+  `Designer.js` lists what the surface wears; `applyFormLook` applies it after
+  the arrangement on every rebuild (a missing key goes back to a fresh
+  control's value) and `setFormProperty` for a later edit. `Style` is
+  deliberately not in the list: the surface's own `Style` is `background`.
+  **`Margin` and `Padding` are one padding here** (`formBox`), on the surface
+  *and* on Glass: the runtime puts both inside the window, a real `Margin` on
+  the surface left a ring of the board's colour that made the grips look off
+  the corner, and `Bounds()` is the content box, so a surface padded alone put
+  every selection outline padding-pixels off its control (558 against 598 with
+  40). **`Border` insets too and its width is part of `formInset()`**: a CSS
+  border shrinks the content box exactly like a padding, so the surface wears
+  the border, its own padding is the inset *less* the border, and Glass wears
+  the whole inset as padding and no border -- the same border drawn twice with
+  alpha would come out darker. Without that the outlines landed a border-width
+  off and the far grips two of them (measured with a probe: content 100x100 in
+  a 200 board). A sum past the 1000 a `Padding` carries per side is clamped, so
+  a form the runtime accepts still opens. **The grips go on the corner that is
+  drawn, not on the declared size**: contents that cannot get narrower keep the
+  window bigger than asked, so `layoutFormHandles` reads the surface's
+  allocation plus `formInset()` and looks again after 40 ms until it stops
+  changing (nothing announces that allocation). A test that sets a form size
+  drives the grid's editor, not `setFormProperty`, which does not relayout the
+  chrome by itself. A new form property that changes layout wants a line in
+  `FORM_LOOK`.
 - **A `Split` inside a `Fixed` gave its diff 46 pixels of a 620-pixel window.**
   Two mistakes that look like one. The window was a `Fixed` root with every
   region at an `X`, a `Y` and a height of its own, so a taller window gave the

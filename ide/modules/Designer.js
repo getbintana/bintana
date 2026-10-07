@@ -82,6 +82,61 @@ const OUTSIDE_COLOR = "rgba(0,0,0,0.13)";
 /* How close an edge has to be to snap to another control's. */
 const GUIDE_SNAP = 5;
 
+/* The form properties that change how its surface looks or lays out, which the
+ * canvas has to wear for the grid and the drawing to say one thing. */
+const FORM_LOOK = ["Spacing", "Homogeneous", "Background",
+                   "Foreground", "Font", "FontScale", "Border", "Radius", "Shadow",
+                   "Opacity"];
+
+/* What a fresh control answers, asked once of one. */
+let lookDefaults = null;
+function formLookDefault(key) {
+    if (!lookDefaults) {
+        const fresh = Widget.New("Panel");
+        lookDefaults = {};
+        for (const k of FORM_LOOK.concat("Padding")) lookDefaults[k] = fresh[k];
+        fresh.Delete();
+    }
+    return lookDefaults[key];
+}
+
+/* A `Padding` as CSS spells it -- one to four sizes -- as the four sides. */
+function paddingSides(v) {
+    const n = String(v === undefined || v === null ? "" : v).split(/[\s,]+/)
+        .filter((x) => x !== "").map((x) => parseFloat(x) || 0);
+    if (n.length === 0) return { t: 0, r: 0, b: 0, l: 0 };
+    const [t, r = t, b = t, l = r] = n;
+    return { t, r, b, l };
+}
+
+/* Four sides as a `Padding` string, in CSS's order. */
+function sidesText(s) {
+    return `${s.t} ${s.r} ${s.b} ${s.l}`;
+}
+
+/*
+ * A `Border` as CSS spells it -- the width first, a style and a colour after --
+ * as the one number that insets.  The runtime's parser takes the first size it
+ * finds and calls anything else a style or a colour, and a border with no width
+ * is no border at all, which is what `Border: "0"` means.
+ */
+function borderWidth(v) {
+    for (const x of String(v === undefined || v === null ? "" : v).split(/\s+/)) {
+        const m = /^(\d+)(px)?$/.exec(x);
+        if (m) return parseInt(m[1], 10);
+    }
+    return 0;
+}
+
+/* `Padding` refuses more than this a side, and a form's margin, border and
+ * padding add up: the canvas shows what it can carry and the grips agree with
+ * what is drawn rather than with the sum. */
+const INSET_MAX = 1000;
+
+function insetSide(v) {
+    return Math.min(INSET_MAX, Math.max(0, v));
+}
+
 function snap(v) {
     return Math.round(v / GRID) * GRID;
 }
@@ -293,6 +348,66 @@ Ide.Designer = class Designer {
         this.surface.Resize(w, h);
     }
 
+    formMargin() {
+        const p = (this.root && this.root.properties) || {};
+        return Math.max(0, parseFloat(p.Margin) || 0);
+    }
+
+    /* The width of the form's `Border`, which insets like the padding does. */
+    formBorder() {
+        const p = (this.root && this.root.properties) || {};
+        return borderWidth(p.Border);
+    }
+
+    /*
+     * The form's `Margin` and `Padding` are both room *inside* its window, so on
+     * the canvas they are one padding on the surface and on Glass.  A margin
+     * would leave a ring of the board's own colour between the window's edge and
+     * what is drawn as the form, and the grips -- which belong on the window's
+     * edge -- would look off the corner by exactly that much.
+     *
+     * The surface's share is the inset *less its border*: `Border` is worn by
+     * the surface too, and a CSS border insets the contents like a padding, so
+     * counting it twice would push every control inwards.  Glass wears no
+     * border -- drawing a translucent one twice would darken it -- so
+     * `applyBox` gives it the whole inset instead.
+     */
+    formBox() {
+        const p = (this.root && this.root.properties) || {};
+        const b = this.formBorder();
+        if (p.Margin === undefined && p.Padding === undefined && b === 0)
+            return formLookDefault("Padding");
+
+        const i = this.formInset();
+        return sidesText({ t: Math.max(0, i.t - b), r: Math.max(0, i.r - b),
+                           b: Math.max(0, i.b - b), l: Math.max(0, i.l - b) });
+    }
+
+    applyBox() {
+        const box = this.formBox();
+        this.surface.Padding = box;
+
+        /* One origin for the two layers: the whole inset, border included.  A
+         * form that declares nothing keeps the fresh control's answer on both. */
+        const i = this.formInset();
+        this.glass.Padding = (i.t || i.r || i.b || i.l) ? sidesText(i) : box;
+    }
+
+    /*
+     * How far the form's edge is from where its children's coordinates start,
+     * on each side: the margin, the border and the padding, in that order, as
+     * the runtime puts them.  Glass is laid out from that origin and the form's
+     * border and grips are drawn at the *window's* edge.  A sum past what a
+     * `Padding` can carry is clamped, so a form the runtime accepts still
+     * opens here and the grips agree with what is drawn.
+     */
+    formInset() {
+        const p = (this.root && this.root.properties) || {};
+        const m = this.formMargin(), pad = paddingSides(p.Padding), b = this.formBorder();
+        return { l: insetSide(m + b + pad.l), t: insetSide(m + b + pad.t),
+                 r: insetSide(m + b + pad.r), b: insetSide(m + b + pad.b) };
+    }
+
     /*
      * The control's rectangle in the space where the chrome is placed.
      *
@@ -407,7 +522,41 @@ Ide.Designer = class Designer {
         this.surface.Clear();
         if (this.surface.Arrangement !== want) this.surface.Arrangement = want;
 
+        this.applyFormLook(root.properties || {});
+
         for (const node of root.children || []) this.buildNode(this.surface, node);
+    }
+
+    /*
+     * What of the form's own properties the surface has to wear, since it
+     * stands in for the form and has no `.form` of its own to say them.  The
+     * runtime puts a form's `Spacing` on its slot, which is what the surface
+     * is, and styles the rest the way it does any control.  `Margin` and
+     * `Padding` are one thing here: see `formBox`.
+     *
+     * Each is applied after the arrangement (`Spacing` and `Homogeneous` belong
+     * to the box it makes) and a missing one is put back to what a fresh control
+     * answers, because a rebuild must not keep the last form's colour or gap --
+     * `Background` included, or undoing a colour left it painted on the board.
+     * The box goes on Glass too: the two layers share an origin, and `Bounds()`
+     * answers the *content* box -- inside the border and padding -- so a surface
+     * inset alone puts every outline that many pixels off its control.
+     */
+    applyFormLook(props) {
+        for (const key of FORM_LOOK) {
+            try {
+                this.setLook(key, props[key] === undefined ? formLookDefault(key) : props[key]);
+            } catch (e) {
+                /* Refused: the canvas wears the fresh control's answer, which
+                 * is what a rebuild has to be able to account for. */
+                try { this.setLook(key, formLookDefault(key)); } catch (e2) {}
+            }
+        }
+        this.applyBox();
+    }
+
+    setLook(key, value) {
+        this.surface[key] = value;
     }
 
     /*
@@ -2396,8 +2545,26 @@ Ide.Designer = class Designer {
         } else if (rebuilding) {
             this.select(null);
             this.buildSurface({ properties: this.root.properties, children: kids });
-        } else if (key === "Background" || key === "Foreground") {
-            this.surface[key] = value;
+        } else if (key === "Margin" || key === "Padding") {
+            this.applyBox();
+            if (this.chrome) this.chrome.layout();
+        } else if (key === "Border") {
+            /* The border insets what the padding leaves, so both layers' box
+             * is re-applied with it. */
+            try {
+                this.setLook("Border", value === undefined || value === null || value === ""
+                                      ? formLookDefault("Border") : value);
+            } catch (e) {
+                /* Refused: a border the canvas cannot account for is none. */
+                this.setLook("Border", formLookDefault("Border"));
+            }
+            this.applyBox();
+            if (this.chrome) this.chrome.layout();
+        } else if (FORM_LOOK.includes(key)) {
+            try {
+                this.setLook(key, value === undefined || value === null || value === ""
+                                  ? formLookDefault(key) : value);
+            } catch (e) { /* refused: the grid reports it, the canvas keeps what it had */ }
         }
     }
 

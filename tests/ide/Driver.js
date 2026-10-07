@@ -6673,7 +6673,13 @@ function* p_nested(ide) {
     editor(ide, "Width").Value = 300;
     yield* settled(ide);   // GTK has to have laid it out
     eq("editing it changes the form", ide.designer.formSize().w, 300);
-    eq("and the grip follows", corner.X + corner.Width / 2, 300);
+    /* The corner that is drawn: contents that cannot get narrower keep the board
+     * wider than the 300 asked for, and the grip belongs on the board. */
+    {
+        const sb = ide.Surface.Bounds();
+        eq("and the grip follows", corner.Bounds().X + corner.Bounds().Width / 2,
+           sb.X + sb.Width);
+    }
     /* And so does what is around it, without anything being laid out: the board
      * shrank, so more of the scroller's background is what is left.  Not exactly
      * 300 -- the form's grips straddle its border, so the glass carrying them is
@@ -7102,7 +7108,7 @@ function* p_projects(ide) {
     File.Save(File.Join(TMP, "Elastic.form"), JSON.stringify({
         format: "bintana-form/1",
         class: "Elastic",
-        properties: { Text: "Elastic", Width: 400, Height: 300, Arrangement: "Vertical" },
+        properties: { Text: "Elastic", Width: 400, Height: 300, Arrangement: "Vertical", Spacing: 7, Margin: 5, Padding: "40", Radius: 2, Border: "10px solid #ff0000" },
         children: [
             { type: "Panel", name: "Bar", properties: { Arrangement: "Horizontal", Spacing: 4 }, children: [
                 { type: "Button", name: "One",   properties: { Width: 80, Height: 30, Text: "first" } },
@@ -7119,6 +7125,80 @@ function* p_projects(ide) {
     yield; yield;
 
     eq("the surface lays out the way the form declares", ide.Surface.Arrangement, "Vertical");
+    eq("and with the gap it declares", ide.Surface.Spacing, 7);
+    eq("and its margin and padding are one padding inside the window", ide.Surface.Padding, "45 45 45 45");
+    eq("and its radius", ide.Surface.Radius, "2");
+    eq("and its border", ide.Surface.Border, "10 solid rgb(255,0,0)");
+    /* The border insets the surface's own contents like a padding, so the
+     * layer under the chrome gets the whole inset -- margin, border and
+     * padding -- or every outline is a border-width off. */
+    eq("Glass wears the whole inset, border included", ide.Glass.Padding, "55 55 55 55");
+
+    /*
+     * And a property the form does not declare has to come back to a fresh
+     * control's answer on a rebuild: undo used to take the colour off the
+     * root and leave it painted on the board.
+     */
+    editor(ide, "Background").Value = "rgb(1,2,3)";
+    yield;
+    eq("a colour on the form reaches the board", ide.Surface.Background, "rgb(1,2,3)");
+    ide.MnuUndo_Click();
+    yield* settled(ide);
+    eq("and undo puts the theme's back", ide.Surface.Background, "");
+
+    {
+        /* Bounds() is the content box, inside the border and the padding: both
+         * layers have to start at the same place or every outline is that many
+         * pixels off. */
+        yield; yield;
+        const c = ide.Surface.Children[0];
+        ide.designer.setSelection([c]);
+        yield; yield; yield;
+        const o = ide.designer.chrome.outline[0].Bounds(), g = c.Bounds();
+        check("an outline lands on its control under a margin, a border and a padding",
+              o.X === g.X && o.Y === g.Y, JSON.stringify([o, g]));
+        /* The window's edge is where the canvas ends, whatever the margin,
+         * border and padding inside it: the board is the form's size and the
+         * grips sit on its border. */
+        const corner = () => {
+            const sb = ide.Surface.Bounds(), se = ide.designer.chrome.formHandles.se.Bounds();
+            return { gx: se.X + se.Width / 2, gy: se.Y + se.Height / 2,
+                     x: sb.X + sb.Width + 55, y: sb.Y + sb.Height + 55 };
+        };
+        let k = corner();
+        check("the grip sits on the window's corner under a margin, a border and a padding",
+              k.gx === k.x && k.gy === k.y, JSON.stringify(k));
+        /* Smaller than its contents: the window cannot be, and the grips stay on
+         * the corner that is drawn and not on the size that was asked for. */
+        editor(ide, "Width").Value = 60;
+        editor(ide, "Height").Value = 60;
+        yield; yield; yield;
+        const sat = () => { const c = corner(); return c.gx === c.x && c.gy === c.y; };
+        yield* until(sat, 200);
+        k = corner();
+        check("and still when the form is dragged smaller than what is in it",
+              k.gx === k.x && k.gy === k.y, JSON.stringify(k));
+        editor(ide, "Width").Value = 400;
+        editor(ide, "Height").Value = 300;
+        yield; yield;
+    }
+
+    /*
+     * And a form the runtime accepts has to open here: a margin past the 1000
+     * a `Padding` carries used to make the box assignment throw out of the
+     * rebuild, so the form would not draw at all.  The canvas shows what it
+     * can carry, which is also what the grips are placed against.  Through
+     * the designer and not the grid, whose path would leave two more edits on
+     * the undo stack the order test below is about.
+     */
+    ide.designer.setFormProperty("Margin", 2000);
+    yield;
+    eq("a margin past what a Padding carries is clamped, not refused",
+       ide.Surface.Padding, "990 990 990 990");
+    eq("and Glass keeps the whole inset", ide.Glass.Padding, "1000 1000 1000 1000");
+    ide.designer.setFormProperty("Margin", 5);
+    yield;
+    eq("and putting it back restores the box", ide.Surface.Padding, "45 45 45 45");
 
     const row   = ide.Surface.Children[0];
     const rowOrder = () => row.Children.map((c) => c.Name).join(",");

@@ -297,8 +297,29 @@ Ide.Chrome = class Chrome {
     /* Straddling the border, so the grip is grabbable from either side of it. */
     layoutFormHandles(w, h) {
         const half = HANDLE / 2;
-        const at   = { e:  [w, h / 2], s: [w / 2, h], se: [w, h] };
+        /* Glass starts inside the form's whole inset -- margin, border and
+         * padding, which is what `formInset()` answers; the window's edge is
+         * outside all three.  And the edge is where the surface *really* ends,
+         * not where the declared size says: contents that cannot fit make the
+         * window bigger than asked, so a form dragged smaller than what is in it
+         * keeps its grips on the corner that is drawn.  Declared size is only
+         * the answer before there is an allocation. */
+        const i    = this.designer.formInset();
+        const real = this.designer.surface.Bounds();
+        const rw   = real && real.Width  > 0 ? real.Width  + i.r : w - i.l;
+        const rh   = real && real.Height > 0 ? real.Height + i.b : h - i.t;
+        /* Middles of the window's edges, in Glass's coordinates: the window is
+         * the content plus the inset on each side, and starts `inset` before it. */
+        const mx = rw / 2 - i.l / 2, my = rh / 2 - i.t / 2;
+        const at = { e: [rw, my], s: [mx, rh], se: [rw, rh] };
 
+        /* An allocation that arrives after this layout (the contents refused to
+         * shrink) is not announced to anybody: look again until it settles. */
+        const key = real ? `${real.Width}x${real.Height}` : "";
+        if (key !== this.formEdge) {
+            this.formEdge = key;
+            Timer.After(40, () => { try { this.layout(); } catch (e) { /* the tab went */ } });
+        }
         for (const id of FORM_HANDLES) {
             this.formHandles[id].Move(Math.round(at[id][0] - half),
                                       Math.round(at[id][1] - half));
