@@ -3,8 +3,8 @@
   "class": "BreakpointForm",
   "properties": {
     "Text": "Breakpoint",
-    "Width": 460,
-    "Height": 232,
+    "Width": 452,
+    "Height": 228,
     "Resizable": false
   },
   "children": [
@@ -12,7 +12,7 @@
       "type": "Label",
       "name": "LblWhere",
       "properties": {
-        "X": 16,
+        "X": 12,
         "Y": 12,
         "Width": 428,
         "Height": 20,
@@ -25,7 +25,7 @@
       "type": "Label",
       "name": "LblCondition",
       "properties": {
-        "X": 16,
+        "X": 12,
         "Y": 40,
         "Width": 428,
         "Height": 20,
@@ -37,7 +37,7 @@
       "type": "TextBox",
       "name": "TxtCondition",
       "properties": {
-        "X": 16,
+        "X": 12,
         "Y": 64,
         "Width": 428,
         "Height": 34,
@@ -51,7 +51,7 @@
       "type": "Label",
       "name": "LblLog",
       "properties": {
-        "X": 16,
+        "X": 12,
         "Y": 106,
         "Width": 428,
         "Height": 20,
@@ -63,7 +63,7 @@
       "type": "TextBox",
       "name": "TxtMessage",
       "properties": {
-        "X": 16,
+        "X": 12,
         "Y": 130,
         "Width": 428,
         "Height": 34,
@@ -77,7 +77,7 @@
       "type": "Button",
       "name": "BtnClear",
       "properties": {
-        "X": 16,
+        "X": 12,
         "Y": 184,
         "Width": 90,
         "Height": 32,
@@ -90,7 +90,7 @@
       "type": "Button",
       "name": "BtnCancel",
       "properties": {
-        "X": 246,
+        "X": 242,
         "Y": 184,
         "Width": 90,
         "Height": 32,
@@ -110,7 +110,7 @@
         "Text": "OK",
         "VAlign": "End",
         "Width": 100,
-        "X": 344,
+        "X": 340,
         "Y": 184,
         "Default": true
       }

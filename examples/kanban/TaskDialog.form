@@ -3,60 +3,60 @@
   "class": "TaskDialog",
   "properties": {
     "Text": "Task",
-    "Width": 440,
-    "Height": 480,
+    "Width": 432,
+    "Height": 468,
     "Resizable": false
   },
   "children": [
     {
       "type": "Label",
       "name": "LblTitle",
-      "properties": { "Height": 20, "Text": "Title", "Width": 408, "X": 16, "Y": 12 }
+      "properties": { "Height": 20, "Text": "Title", "Width": 408, "X": 12, "Y": 12 }
     },
     {
       "type": "TextBox",
       "name": "TxtTitle",
-      "properties": { "HAlign": "Fill", "Height": 34, "Width": 408, "X": 16, "Y": 36 }
+      "properties": { "HAlign": "Fill", "Height": 34, "Width": 408, "X": 12, "Y": 36 }
     },
     {
       "type": "Label",
       "name": "LblNotes",
-      "properties": { "Height": 20, "Text": "Notes", "Width": 408, "X": 16, "Y": 78 }
+      "properties": { "Height": 20, "Text": "Notes", "Width": 408, "X": 12, "Y": 78 }
     },
     {
       "type": "TextEditor",
       "name": "EdNotes",
-      "properties": { "HAlign": "Fill", "Height": 110, "Width": 408, "X": 16, "Y": 102 }
+      "properties": { "HAlign": "Fill", "Height": 110, "Width": 408, "X": 12, "Y": 102 }
     },
     {
       "type": "Label",
       "name": "LblPri",
-      "properties": { "Height": 20, "Text": "Priority", "Width": 190, "X": 16, "Y": 220 }
+      "properties": { "Height": 20, "Text": "Priority", "Width": 190, "X": 12, "Y": 220 }
     },
     {
       "type": "ComboBox",
       "name": "CmbPriority",
-      "properties": { "Height": 34, "Width": 190, "X": 16, "Y": 244 }
+      "properties": { "Height": 34, "Width": 190, "X": 12, "Y": 244 }
     },
     {
       "type": "Label",
       "name": "LblCol",
-      "properties": { "Height": 20, "Text": "Column", "Width": 190, "X": 218, "Y": 220 }
+      "properties": { "Height": 20, "Text": "Column", "Width": 190, "X": 214, "Y": 220 }
     },
     {
       "type": "ComboBox",
       "name": "CmbColumn",
-      "properties": { "Height": 34, "Width": 190, "X": 218, "Y": 244 }
+      "properties": { "Height": 34, "Width": 190, "X": 214, "Y": 244 }
     },
     {
       "type": "Label",
       "name": "LblDue",
-      "properties": { "Height": 20, "Text": "Due date", "Width": 190, "X": 16, "Y": 286 }
+      "properties": { "Height": 20, "Text": "Due date", "Width": 190, "X": 12, "Y": 286 }
     },
     {
       "type": "DatePicker",
       "name": "PckDue",
-      "properties": { "Height": 34, "Width": 150, "X": 16, "Y": 310 }
+      "properties": { "Height": 34, "Width": 150, "X": 12, "Y": 310 }
     },
     {
       "type": "Button",
@@ -67,7 +67,7 @@
         "Style": "flat",
         "Tooltip": "No date",
         "Width": 40,
-        "X": 174,
+        "X": 170,
         "Y": 310
       }
     },
@@ -80,7 +80,7 @@
         "Style": "error",
         "Width": 408,
         "Wrap": true,
-        "X": 16,
+        "X": 12,
         "Y": 352
       }
     },
@@ -94,7 +94,7 @@
         "Text": "Cancel",
         "VAlign": "End",
         "Width": 90,
-        "X": 222,
+        "X": 218,
         "Y": 424
       }
     },
@@ -109,7 +109,7 @@
         "Text": "Save",
         "VAlign": "End",
         "Width": 90,
-        "X": 326,
+        "X": 322,
         "Y": 424
       }
     }

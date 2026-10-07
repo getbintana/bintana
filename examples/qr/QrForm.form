@@ -7,7 +7,7 @@
     "Height": 480,
     "Arrangement": "Horizontal",
     "Spacing": 16,
-    "Margin": 16
+    "Margin": 12
   },
   "children": [
     {

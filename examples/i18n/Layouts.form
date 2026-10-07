@@ -14,7 +14,7 @@
       "name": "LblIntro",
       "properties": {
         "Alignment": "Left",
-        "Margin": 8,
+        "Margin": 12,
         "Text": "The same three buttons, laid out four ways. The dashed line is where the box above them ends.",
         "Wrap": true
       }
@@ -25,7 +25,7 @@
       "properties": {
         "Arrangement": "Fixed",
         "Height": 76,
-        "Margin": 8,
+        "Margin": 12,
         "Text": "1. Coordinates, no slack"
       },
       "children": [
@@ -57,7 +57,7 @@
       "properties": {
         "Arrangement": "Fixed",
         "Height": 76,
-        "Margin": 8,
+        "Margin": 12,
         "Text": "2. Coordinates, with room to grow into"
       },
       "children": [
@@ -88,7 +88,7 @@
       "name": "FrmBox",
       "properties": {
         "Height": 70,
-        "Margin": 8,
+        "Margin": 12,
         "Text": "3. A horizontal box"
       },
       "children": [
@@ -127,7 +127,7 @@
       "name": "FrmEven",
       "properties": {
         "Height": 70,
-        "Margin": 8,
+        "Margin": 12,
         "Text": "4. A horizontal box, homogeneous"
       },
       "children": [
@@ -166,7 +166,7 @@
       "name": "Bar",
       "properties": {
         "Arrangement": "Horizontal",
-        "Margin": 8,
+        "Margin": 12,
         "Spacing": 8
       },
       "children": [
@@ -192,7 +192,7 @@
       "name": "Report",
       "properties": {
         "Expand": true,
-        "Margin": 8,
+        "Margin": 12,
         "ReadOnly": true,
         "Wrap": false
       }

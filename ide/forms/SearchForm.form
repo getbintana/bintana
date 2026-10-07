@@ -15,7 +15,7 @@
       "properties": {
         "Arrangement": "Vertical",
         "Height": 116,
-        "Margin": 8,
+        "Margin": 12,
         "Spacing": 6,
         "Width": 704
       },
@@ -151,7 +151,7 @@
       "properties": {
         "HAlign": "Fill",
         "Height": 18,
-        "Margin": 8,
+        "Margin": 12,
         "Style": "dim-label",
         "Width": 704
       }
@@ -177,7 +177,7 @@
         "Arrangement": "Horizontal",
         "HAlign": "End",
         "Height": 34,
-        "Margin": 8,
+        "Margin": 12,
         "Spacing": 8,
         "Width": 110
       },

@@ -3,7 +3,7 @@
   "class": "GpxForm",
   "properties": {
     "AcceptFiles": true,
-    "Height": 600,
+    "Height": 594,
     "Icon": "find-location-symbolic",
     "Text": "GPX",
     "Width": 900
@@ -19,7 +19,7 @@
         "VAlign": "Start",
         "Width": 740,
         "X": 12,
-        "Y": 10
+        "Y": 12
       },
       "design": {
         "Text": "Mañana en bici"
@@ -37,7 +37,7 @@
         "VAlign": "Start",
         "Width": 120,
         "X": 768,
-        "Y": 10
+        "Y": 12
       }
     },
     {
@@ -50,7 +50,7 @@
         "VAlign": "Start",
         "Width": 400,
         "X": 12,
-        "Y": 54
+        "Y": 56
       }
     },
     {
@@ -65,7 +65,7 @@
         "VAlign": "Start",
         "Width": 100,
         "X": 424,
-        "Y": 54
+        "Y": 56
       }
     },
     {
@@ -78,7 +78,7 @@
         "VAlign": "Start",
         "Width": 40,
         "X": 800,
-        "Y": 54
+        "Y": 56
       }
     },
     {
@@ -91,7 +91,7 @@
         "VAlign": "Start",
         "Width": 40,
         "X": 848,
-        "Y": 54
+        "Y": 56
       }
     },
     {
@@ -105,7 +105,7 @@
         "VAlign": "Fill",
         "Width": 876,
         "X": 12,
-        "Y": 98
+        "Y": 100
       },
       "children": [
         {
@@ -206,7 +206,7 @@
         "VAlign": "End",
         "Width": 560,
         "X": 12,
-        "Y": 548
+        "Y": 550
       },
       "design": {
         "Text": "2,32 km · +10 m · 8 points · 45 min"
@@ -224,7 +224,7 @@
         "VAlign": "End",
         "Width": 308,
         "X": 580,
-        "Y": 548
+        "Y": 550
       },
       "design": {
         "Text": "z15 · 4 cache · 2 asked · 0 304"

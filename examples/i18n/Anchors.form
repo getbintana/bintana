@@ -5,7 +5,7 @@
     "Arrangement": "Fixed",
     "Height": 300,
     "Text": "Anchors under translation",
-    "Width": 460
+    "Width": 452
   },
   "children": [
     {
@@ -16,39 +16,39 @@
         "HAlign": "Fill",
         "Text": "Drawn at 460 wide. Resize the window and press Measure.",
         "Width": 428,
-        "X": 16,
+        "X": 12,
         "Y": 12
       }
     },
     {
       "type": "Button",
       "name": "BtnStart",
-      "properties": { "HAlign": "Start", "Height": 30, "Text": "Start", "Width": 120, "X": 16, "Y": 48 }
+      "properties": { "HAlign": "Start", "Height": 30, "Text": "Start", "Width": 120, "X": 12, "Y": 48 }
     },
     {
       "type": "Button",
       "name": "BtnCenter",
-      "properties": { "HAlign": "Center", "Height": 30, "Text": "Center", "Width": 120, "X": 170, "Y": 48 }
+      "properties": { "HAlign": "Center", "Height": 30, "Text": "Center", "Width": 120, "X": 166, "Y": 48 }
     },
     {
       "type": "Button",
       "name": "BtnEnd",
-      "properties": { "HAlign": "End", "Height": 30, "Text": "End", "Width": 120, "X": 324, "Y": 48 }
+      "properties": { "HAlign": "End", "Height": 30, "Text": "End", "Width": 120, "X": 320, "Y": 48 }
     },
     {
       "type": "TextBox",
       "name": "TxtFill",
-      "properties": { "HAlign": "Fill", "Height": 32, "Width": 428, "X": 16, "Y": 92 }
+      "properties": { "HAlign": "Fill", "Height": 32, "Width": 428, "X": 12, "Y": 92 }
     },
     {
       "type": "Panel",
       "name": "RightEdge",
-      "properties": { "Background": "#e01b24", "HAlign": "End", "Height": 60, "Width": 3, "X": 441, "Y": 132 }
+      "properties": { "Background": "#e01b24", "HAlign": "End", "Height": 60, "Width": 3, "X": 437, "Y": 132 }
     },
     {
       "type": "Button",
       "name": "BtnLong",
-      "properties": { "HAlign": "End", "Height": 32, "Text": "Save", "Width": 120, "X": 316, "Y": 146 }
+      "properties": { "HAlign": "End", "Height": 32, "Text": "Save", "Width": 120, "X": 312, "Y": 146 }
     },
     {
       "type": "TextEditor",
@@ -60,14 +60,14 @@
         "Wrap": false,
         "VAlign": "Fill",
         "Width": 428,
-        "X": 16,
+        "X": 12,
         "Y": 200
       }
     },
     {
       "type": "Button",
       "name": "BtnMeasureA",
-      "properties": { "HAlign": "End", "Height": 30, "Text": "Measure", "VAlign": "End", "Width": 110, "X": 334, "Y": 258 }
+      "properties": { "HAlign": "End", "Height": 30, "Text": "Measure", "VAlign": "End", "Width": 110, "X": 330, "Y": 258 }
     }
   ]
 }

@@ -3,7 +3,7 @@
   "class": "Feeds",
   "properties": {
     "AcceptFiles": true,
-    "Height": 560,
+    "Height": 562,
     "Icon": "application-rss+xml-symbolic",
     "Text": "Feeds",
     "Width": 780
@@ -19,7 +19,7 @@
         "VAlign": "Start",
         "Width": 620,
         "X": 12,
-        "Y": 10
+        "Y": 12
       },
       "design": {
         "Text": "Bintana — cambios"
@@ -37,7 +37,7 @@
         "VAlign": "Start",
         "Width": 120,
         "X": 648,
-        "Y": 10
+        "Y": 12
       }
     },
     {
@@ -51,7 +51,7 @@
         "VAlign": "Fill",
         "Width": 360,
         "X": 12,
-        "Y": 54
+        "Y": 56
       },
       "item": {
         "of": "FeedItem",
@@ -68,7 +68,7 @@
         "VAlign": "End",
         "Width": 360,
         "X": 12,
-        "Y": 516
+        "Y": 518
       },
       "design": {
         "Text": "3 items · 2 things the shape does not model"
@@ -85,7 +85,7 @@
         "VAlign": "Start",
         "Width": 384,
         "X": 384,
-        "Y": 54
+        "Y": 56
       },
       "design": {
         "Text": "Mon, 21 Sep 2026 18:04:00 -0300"
@@ -103,7 +103,7 @@
         "Width": 384,
         "Wrap": true,
         "X": 384,
-        "Y": 86
+        "Y": 88
       }
     },
     {
@@ -116,7 +116,7 @@
         "VAlign": "End",
         "Width": 384,
         "X": 384,
-        "Y": 518
+        "Y": 520
       },
       "design": {
         "Text": "https://example.invalid/bintana/xml"

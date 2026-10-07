@@ -16,7 +16,7 @@
       "properties": {
         "Arrangement": "Vertical",
         "Expand": true,
-        "Margin": 16,
+        "Margin": 12,
         "Spacing": 8
       },
       "children": [

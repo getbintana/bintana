@@ -2,9 +2,9 @@
   "format": "bintana-form/1",
   "class": "MainForm",
   "properties": {
-    "Height": 560,
+    "Height": 564,
     "Text": "Composites",
-    "Width": 460
+    "Width": 464
   },
   "children": [
     {
@@ -23,8 +23,8 @@
         ],
         "VAlign": "Fill",
         "Width": 440,
-        "X": 10,
-        "Y": 10
+        "X": 12,
+        "Y": 12
       },
       "children": [
         {

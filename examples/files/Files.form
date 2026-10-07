@@ -4,7 +4,7 @@
   "properties": {
     "Text": "Files",
     "Icon": "folder-symbolic",
-    "Width": 660,
+    "Width": 661,
     "Height": 460
   },
   "children": [
@@ -16,7 +16,7 @@
         "Height": 34,
         "Style": "linked",
         "Width": 190,
-        "X": 12,
+        "X": 13,
         "Y": 12
       },
       "children": [
@@ -50,7 +50,7 @@
         "Height": 20,
         "Style": "dim-label",
         "Width": 434,
-        "X": 214,
+        "X": 215,
         "Y": 19
       }
     },
@@ -64,7 +64,7 @@
         "Placeholder": "Filter by name",
         "Tooltip": "Anywhere in the name, accents folded. The rows are not rebuilt to filter",
         "Width": 300,
-        "X": 12,
+        "X": 13,
         "Y": 56
       }
     },
@@ -84,7 +84,7 @@
         ],
         "Text": "Everything",
         "Width": 150,
-        "X": 320,
+        "X": 321,
         "Y": 56
       }
     },
@@ -97,7 +97,7 @@
         "Text": "Hidden ones",
         "VAlign": "Center",
         "Width": 170,
-        "X": 478,
+        "X": 479,
         "Y": 61
       }
     },
@@ -112,7 +112,7 @@
         "Style": "frame",
         "VAlign": "Fill",
         "Width": 636,
-        "X": 11,
+        "X": 12,
         "Y": 100
       }
     },
@@ -126,7 +126,7 @@
         "VAlign": "End",
         "Width": 516,
         "Wrap": true,
-        "X": 12,
+        "X": 13,
         "Y": 408
       }
     },
@@ -142,7 +142,7 @@
         "Tooltip": "A folder is entered; anything else goes to the desktop",
         "VAlign": "End",
         "Width": 108,
-        "X": 540,
+        "X": 541,
         "Y": 410
       }
     }

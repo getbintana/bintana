@@ -2,8 +2,8 @@
   "format": "bintana-form/1",
   "class": "About",
   "properties": {
-    "Height": 44,
-    "Width": 220
+    "Height": 48,
+    "Width": 228
   },
   "children": [
     {
@@ -13,8 +13,8 @@
         "Height": 24,
         "Icon": "applications-development",
         "Width": 24,
-        "X": 8,
-        "Y": 10
+        "X": 12,
+        "Y": 12
       }
     },
     {
@@ -24,8 +24,8 @@
         "Height": 20,
         "Style": "dim-label",
         "Width": 172,
-        "X": 40,
-        "Y": 12
+        "X": 44,
+        "Y": 14
       },
       "design": {
         "Text": "hello 1.0"

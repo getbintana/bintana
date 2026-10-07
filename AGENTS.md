@@ -6457,6 +6457,22 @@ same number without naming what sits above it.
 
 ## Laying out a form: which of the two models
 
+- **The distance from a window's edge to its controls is 12, and 16 added
+  nothing.** elementary's HIG says it (*"12px (minimum) space between any
+  widgets and the window's border"*, 6px between buttons) and the old GNOME HIG
+  says the same 12-pixel border; the current developer.gnome.org HIG and
+  libadwaita publish **no** pixel value at all (only `.toolbar`'s 6px), so a
+  GNOME 6/12/18/24 scale is folklore and not a rule. Every `Fixed` form is
+  drawn with exactly 12 on each side -- it had 8, 10, 11, 12, 14, 16, 18, 20,
+  24 and 26, in the same IDE, with a dialog (`lib/dialog/Confirm`) whose accept
+  button ended 14px *outside* its own window -- and a box form puts `Margin: 12`
+  on the root or on each child that touches the edge. Toolbar strips (`Bar` with
+  `Margin: 6`) are the exception the Adwaita `.toolbar` rule justifies, and a
+  list or split that runs to the edge has none by design. Notes: adjacent
+  children's margins add, so a `Margin: 12` on two neighbours is 24 between
+  them; and moving a `Fixed` form's content means growing its declared
+  `Width`/`Height` by the same amount, or the anchors keep the old gaps.
+
 - **`MinWidth` and `MinHeight` do nothing unless the matching axis is `Fill`.**
   It is documented -- *"only means something on an axis whose `HAlign` is
   `Fill`"* -- and it is still the trap, because a floor that is quietly ignored

@@ -5,7 +5,7 @@
     "Height": 396,
     "Icon": "view-sort-ascending-symbolic",
     "Text": "Tab order",
-    "Width": 360
+    "Width": 352
   },
   "children": [
     {
@@ -17,9 +17,9 @@
         "Height": 22,
         "Text": "Tab order",
         "VAlign": "End",
-        "Width": 332,
-        "X": 14,
-        "Y": 10
+        "Width": 328,
+        "X": 12,
+        "Y": 12
       }
     },
     {
@@ -29,9 +29,9 @@
         "HAlign": "Fill",
         "Height": 300,
         "Style": "frame",
-        "Width": 332,
-        "X": 14,
-        "Y": 38
+        "Width": 328,
+        "X": 12,
+        "Y": 40
       }
     },
     {
@@ -41,9 +41,9 @@
         "Height": 32,
         "Text": "Move up",
         "VAlign": "End",
-        "Width": 80,
-        "X": 14,
-        "Y": 348
+        "Width": 76,
+        "X": 12,
+        "Y": 352
       }
     },
     {
@@ -53,9 +53,9 @@
         "Height": 32,
         "Text": "Move down",
         "VAlign": "End",
-        "Width": 80,
-        "X": 100,
-        "Y": 348
+        "Width": 76,
+        "X": 96,
+        "Y": 352
       }
     },
     {
@@ -66,9 +66,9 @@
         "Height": 32,
         "Text": "Cancel",
         "VAlign": "End",
-        "Width": 80,
-        "X": 186,
-        "Y": 348
+        "Width": 76,
+        "X": 180,
+        "Y": 352
       }
     },
     {
@@ -80,9 +80,9 @@
         "Style": "suggested-action",
         "Text": "OK",
         "VAlign": "End",
-        "Width": 80,
-        "X": 272,
-        "Y": 348
+        "Width": 76,
+        "X": 264,
+        "Y": 352
       }
     }
   ]

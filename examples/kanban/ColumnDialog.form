@@ -3,20 +3,20 @@
   "class": "ColumnDialog",
   "properties": {
     "Text": "Kanban",
-    "Width": 380,
-    "Height": 190,
+    "Width": 372,
+    "Height": 176,
     "Resizable": false
   },
   "children": [
     {
       "type": "Label",
       "name": "LblPrompt",
-      "properties": { "HAlign": "Fill", "Height": 20, "Width": 348, "X": 16, "Y": 20 }
+      "properties": { "HAlign": "Fill", "Height": 20, "Width": 348, "X": 12, "Y": 12 }
     },
     {
       "type": "TextBox",
       "name": "TxtName",
-      "properties": { "HAlign": "Fill", "Height": 34, "Width": 348, "X": 16, "Y": 48 }
+      "properties": { "HAlign": "Fill", "Height": 34, "Width": 348, "X": 12, "Y": 40 }
     },
     {
       "type": "Label",
@@ -27,8 +27,8 @@
         "Style": "error",
         "Width": 348,
         "Wrap": true,
-        "X": 16,
-        "Y": 90
+        "X": 12,
+        "Y": 82
       }
     },
     {
@@ -41,8 +41,8 @@
         "Text": "Cancel",
         "VAlign": "End",
         "Width": 90,
-        "X": 170,
-        "Y": 140
+        "X": 166,
+        "Y": 132
       }
     },
     {
@@ -56,8 +56,8 @@
         "Text": "OK",
         "VAlign": "End",
         "Width": 90,
-        "X": 274,
-        "Y": 140
+        "X": 270,
+        "Y": 132
       }
     }
   ]

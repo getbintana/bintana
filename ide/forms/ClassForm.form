@@ -2,10 +2,10 @@
   "format": "bintana-form/1",
   "class": "ClassForm",
   "properties": {
-    "Height": 560,
+    "Height": 558,
     "Icon": "applications-graphics-symbolic",
     "Text": "Class",
-    "Width": 430
+    "Width": 422
   },
   "children": [
     {
@@ -13,8 +13,8 @@
       "name": "LblTxtName",
       "properties": {
         "Text": "Name",
-        "X": 16,
-        "Y": 22,
+        "X": 12,
+        "Y": 18,
         "Width": 88,
         "Height": 22
       }
@@ -25,9 +25,9 @@
       "properties": {
         "HAlign": "Fill",
         "Height": 34,
-        "Width": 300,
-        "X": 112,
-        "Y": 16,
+        "Width": 302,
+        "X": 108,
+        "Y": 12,
         "Placeholder": "field-label"
       }
     },
@@ -36,8 +36,8 @@
       "name": "LblColBack",
       "properties": {
         "Text": "Background",
-        "X": 16,
-        "Y": 66,
+        "X": 12,
+        "Y": 62,
         "Width": 88,
         "Height": 22
       }
@@ -50,9 +50,9 @@
         "HAlign": "Fill",
         "Height": 34,
         "Style": "linked",
-        "Width": 298,
-        "X": 112,
-        "Y": 60
+        "Width": 302,
+        "X": 108,
+        "Y": 56
       },
       "children": [
         {
@@ -81,8 +81,8 @@
       "name": "LblColFore",
       "properties": {
         "Text": "Foreground",
-        "X": 16,
-        "Y": 106,
+        "X": 12,
+        "Y": 102,
         "Width": 88,
         "Height": 22
       }
@@ -95,9 +95,9 @@
         "HAlign": "Fill",
         "Height": 34,
         "Style": "linked",
-        "Width": 298,
-        "X": 112,
-        "Y": 100
+        "Width": 302,
+        "X": 108,
+        "Y": 96
       },
       "children": [
         {
@@ -126,8 +126,8 @@
       "name": "LblTxtFont",
       "properties": {
         "Text": "Font",
-        "X": 16,
-        "Y": 146,
+        "X": 12,
+        "Y": 142,
         "Width": 88,
         "Height": 22
       }
@@ -138,9 +138,9 @@
       "properties": {
         "HAlign": "Fill",
         "Height": 34,
-        "Width": 300,
-        "X": 112,
-        "Y": 140,
+        "Width": 302,
+        "X": 108,
+        "Y": 136,
         "Placeholder": "Bold — or Cantarell Bold 12"
       }
     },
@@ -149,8 +149,8 @@
       "name": "LblSpnScale",
       "properties": {
         "Text": "Font scale",
-        "X": 16,
-        "Y": 186,
+        "X": 12,
+        "Y": 182,
         "Width": 88,
         "Height": 22
       }
@@ -161,9 +161,9 @@
       "properties": {
         "HAlign": "Fill",
         "Height": 34,
-        "Width": 300,
-        "X": 112,
-        "Y": 180,
+        "Width": 302,
+        "X": 108,
+        "Y": 176,
         "Min": 0.5,
         "Max": 4,
         "Step": 0.05,
@@ -176,8 +176,8 @@
       "name": "LblSpnOpacity",
       "properties": {
         "Text": "Opacity",
-        "X": 16,
-        "Y": 226,
+        "X": 12,
+        "Y": 222,
         "Width": 88,
         "Height": 22
       }
@@ -188,9 +188,9 @@
       "properties": {
         "HAlign": "Fill",
         "Height": 34,
-        "Width": 300,
-        "X": 112,
-        "Y": 220,
+        "Width": 302,
+        "X": 108,
+        "Y": 216,
         "Min": 0,
         "Max": 1,
         "Step": 0.05,
@@ -203,8 +203,8 @@
       "name": "LblTxtBorder",
       "properties": {
         "Text": "Border",
-        "X": 16,
-        "Y": 266,
+        "X": 12,
+        "Y": 262,
         "Width": 88,
         "Height": 22
       }
@@ -215,9 +215,9 @@
       "properties": {
         "HAlign": "Fill",
         "Height": 34,
-        "Width": 300,
-        "X": 112,
-        "Y": 260,
+        "Width": 302,
+        "X": 108,
+        "Y": 256,
         "Placeholder": "1 solid #888888"
       }
     },
@@ -226,8 +226,8 @@
       "name": "LblTxtRadius",
       "properties": {
         "Text": "Radius",
-        "X": 16,
-        "Y": 306,
+        "X": 12,
+        "Y": 302,
         "Width": 88,
         "Height": 22
       }
@@ -238,9 +238,9 @@
       "properties": {
         "HAlign": "Fill",
         "Height": 34,
-        "Width": 300,
-        "X": 112,
-        "Y": 300,
+        "Width": 302,
+        "X": 108,
+        "Y": 296,
         "Placeholder": "6, or 8 8 0 0"
       }
     },
@@ -249,8 +249,8 @@
       "name": "LblTxtPadding",
       "properties": {
         "Text": "Padding",
-        "X": 16,
-        "Y": 346,
+        "X": 12,
+        "Y": 342,
         "Width": 88,
         "Height": 22
       }
@@ -261,9 +261,9 @@
       "properties": {
         "HAlign": "Fill",
         "Height": 34,
-        "Width": 300,
-        "X": 112,
-        "Y": 340,
+        "Width": 302,
+        "X": 108,
+        "Y": 336,
         "Placeholder": "4, or 4 8"
       }
     },
@@ -272,8 +272,8 @@
       "name": "LblTxtShadow",
       "properties": {
         "Text": "Shadow",
-        "X": 16,
-        "Y": 386,
+        "X": 12,
+        "Y": 382,
         "Width": 88,
         "Height": 22
       }
@@ -284,9 +284,9 @@
       "properties": {
         "HAlign": "Fill",
         "Height": 34,
-        "Width": 300,
-        "X": 112,
-        "Y": 380,
+        "Width": 302,
+        "X": 108,
+        "Y": 376,
         "Placeholder": "0 1 4 0 rgba(0,0,0,0.3)"
       }
     },
@@ -299,8 +299,8 @@
         "Style": "frame",
         "VAlign": "End",
         "Width": 398,
-        "X": 16,
-        "Y": 428
+        "X": 12,
+        "Y": 424
       },
       "children": [
         {
@@ -327,8 +327,8 @@
         "Style": "dim-label",
         "VAlign": "End",
         "Width": 200,
-        "X": 16,
-        "Y": 524
+        "X": 12,
+        "Y": 520
       }
     },
     {
@@ -341,8 +341,8 @@
         "Text": "Cancel",
         "VAlign": "End",
         "Width": 90,
-        "X": 226,
-        "Y": 518
+        "X": 222,
+        "Y": 514
       }
     },
     {
@@ -356,8 +356,8 @@
         "Text": "Save",
         "VAlign": "End",
         "Width": 90,
-        "X": 324,
-        "Y": 518
+        "X": 320,
+        "Y": 514
       }
     }
   ]

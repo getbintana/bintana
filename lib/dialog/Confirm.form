@@ -2,10 +2,10 @@
   "format": "bintana-form/1",
   "class": "Confirm",
   "properties": {
-    "Height": 150,
+    "Height": 136,
     "Resizable": false,
     "Text": "",
-    "Width": 400
+    "Width": 392
   },
   "children": [
     {
@@ -17,8 +17,8 @@
         "VAlign": "Fill",
         "Width": 368,
         "Wrap": true,
-        "X": 16,
-        "Y": 20
+        "X": 12,
+        "Y": 12
       }
     },
     {
@@ -31,8 +31,8 @@
         "Text": "Cancel",
         "VAlign": "End",
         "Width": 90,
-        "X": 190,
-        "Y": 100
+        "X": 162,
+        "Y": 92
       }
     },
     {
@@ -45,8 +45,8 @@
         "Text": "Delete",
         "VAlign": "End",
         "Width": 120,
-        "X": 294,
-        "Y": 100
+        "X": 260,
+        "Y": 92
       }
     }
   ]

@@ -2,10 +2,10 @@
   "format": "bintana-form/1",
   "class": "QuickForm",
   "properties": {
-    "Height": 460,
+    "Height": 452,
     "Icon": "system-search-symbolic",
     "Text": "Go to file",
-    "Width": 520
+    "Width": 512
   },
   "children": [
     {
@@ -18,8 +18,8 @@
         "Placeholder": "A file, or > for a command",
         "Tooltip": "Type part of a file's name, or > to run a command",
         "Width": 488,
-        "X": 16,
-        "Y": 16
+        "X": 12,
+        "Y": 12
       }
     },
     {
@@ -33,8 +33,8 @@
         "Style": "frame",
         "VAlign": "Fill",
         "Width": 488,
-        "X": 16,
-        "Y": 58
+        "X": 12,
+        "Y": 54
       }
     },
     {
@@ -47,8 +47,8 @@
         "Style": "dim-label",
         "VAlign": "End",
         "Width": 300,
-        "X": 16,
-        "Y": 394
+        "X": 12,
+        "Y": 390
       }
     },
     {
@@ -61,8 +61,8 @@
         "Text": "Cancel",
         "VAlign": "End",
         "Width": 90,
-        "X": 316,
-        "Y": 412
+        "X": 312,
+        "Y": 408
       }
     },
     {
@@ -76,8 +76,8 @@
         "Text": "Go",
         "VAlign": "End",
         "Width": 90,
-        "X": 414,
-        "Y": 412
+        "X": 410,
+        "Y": 408
       }
     }
   ]

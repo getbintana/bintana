@@ -17,7 +17,7 @@
         "Expand": true,
         "HAlign": "Fill",
         "HExpand": true,
-        "Margin": 8,
+        "Margin": 12,
         "Position": 220,
         "VAlign": "Fill",
         "VExpand": true
@@ -148,7 +148,7 @@
       "properties": {
         "Arrangement": "Horizontal",
         "HAlign": "Fill",
-        "Margin": 8,
+        "Margin": 12,
         "Spacing": 8
       },
       "children": [

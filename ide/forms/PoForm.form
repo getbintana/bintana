@@ -16,7 +16,7 @@
       "properties": {
         "Arrangement": "Horizontal",
         "Height": 26,
-        "Margin": 8,
+        "Margin": 12,
         "Spacing": 8,
         "Width": 744
       },
@@ -126,7 +126,7 @@
         "Arrangement": "Horizontal",
         "HAlign": "End",
         "Height": 34,
-        "Margin": 8,
+        "Margin": 12,
         "Spacing": 8,
         "Width": 208
       },

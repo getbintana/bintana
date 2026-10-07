@@ -5,7 +5,7 @@
     "Text": "TableView",
     "Icon": "x-office-spreadsheet-symbolic",
     "Width": 708,
-    "Height": 436
+    "Height": 440
   },
   "children": [
     {

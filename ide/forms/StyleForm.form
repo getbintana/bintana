@@ -2,10 +2,10 @@
   "format": "bintana-form/1",
   "class": "StyleForm",
   "properties": {
-    "Height": 420,
+    "Height": 412,
     "Icon": "applications-graphics-symbolic",
     "Text": "Choose classes",
-    "Width": 420
+    "Width": 412
   },
   "children": [
     {
@@ -17,8 +17,8 @@
         "Icon": "edit-clear-symbolic",
         "Placeholder": "Filter classes",
         "Width": 388,
-        "X": 16,
-        "Y": 16
+        "X": 12,
+        "Y": 12
       }
     },
     {
@@ -32,8 +32,8 @@
         "Style": "frame",
         "VAlign": "Fill",
         "Width": 388,
-        "X": 16,
-        "Y": 58
+        "X": 12,
+        "Y": 54
       }
     },
     {
@@ -46,8 +46,8 @@
         "Style": "dim-label",
         "VAlign": "End",
         "Width": 240,
-        "X": 16,
-        "Y": 344
+        "X": 12,
+        "Y": 340
       }
     },
     {
@@ -59,8 +59,8 @@
         "Tooltip": "A class of your own, in app.css",
         "VAlign": "End",
         "Width": 80,
-        "X": 16,
-        "Y": 372
+        "X": 12,
+        "Y": 368
       }
     },
     {
@@ -72,8 +72,8 @@
         "Tooltip": "Edit the project's class the list is on",
         "VAlign": "End",
         "Width": 80,
-        "X": 102,
-        "Y": 372
+        "X": 98,
+        "Y": 368
       }
     },
     {
@@ -86,8 +86,8 @@
         "Text": "Cancel",
         "VAlign": "End",
         "Width": 90,
-        "X": 216,
-        "Y": 372
+        "X": 212,
+        "Y": 368
       }
     },
     {
@@ -101,8 +101,8 @@
         "Text": "Apply",
         "VAlign": "End",
         "Width": 90,
-        "X": 314,
-        "Y": 372
+        "X": 310,
+        "Y": 368
       }
     }
   ]

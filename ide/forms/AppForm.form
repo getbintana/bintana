@@ -3,16 +3,16 @@
   "class": "AppForm",
   "properties": {
     "Text": "Install as user application",
-    "Width": 560,
-    "Height": 312
+    "Width": 552,
+    "Height": 304
   },
   "children": [
     {
       "type": "Label",
       "name": "LblAppName",
       "properties": {
-        "X": 16,
-        "Y": 22,
+        "X": 12,
+        "Y": 18,
         "Width": 110,
         "Height": 24,
         "Text": "Name:"
@@ -22,8 +22,8 @@
       "type": "TextBox",
       "name": "TxtAppName",
       "properties": {
-        "X": 134,
-        "Y": 16,
+        "X": 130,
+        "Y": 12,
         "Width": 410,
         "Height": 34,
         "HAlign": "Fill"
@@ -33,8 +33,8 @@
       "type": "Label",
       "name": "LblAppComment",
       "properties": {
-        "X": 16,
-        "Y": 68,
+        "X": 12,
+        "Y": 64,
         "Width": 110,
         "Height": 24,
         "Text": "Comment:"
@@ -44,8 +44,8 @@
       "type": "TextBox",
       "name": "TxtAppComment",
       "properties": {
-        "X": 134,
-        "Y": 62,
+        "X": 130,
+        "Y": 58,
         "Width": 410,
         "Height": 34,
         "HAlign": "Fill",
@@ -56,8 +56,8 @@
       "type": "Label",
       "name": "LblAppIcon",
       "properties": {
-        "X": 16,
-        "Y": 114,
+        "X": 12,
+        "Y": 110,
         "Width": 110,
         "Height": 24,
         "Text": "Icon:"
@@ -67,8 +67,8 @@
       "type": "TextBox",
       "name": "TxtAppIcon",
       "properties": {
-        "X": 134,
-        "Y": 108,
+        "X": 130,
+        "Y": 104,
         "Width": 324,
         "Height": 34,
         "HAlign": "Fill",
@@ -79,8 +79,8 @@
       "type": "Button",
       "name": "BtnAppIcon",
       "properties": {
-        "X": 466,
-        "Y": 108,
+        "X": 462,
+        "Y": 104,
         "Width": 78,
         "Height": 34,
         "Text": "Choose…",
@@ -91,8 +91,8 @@
       "type": "Label",
       "name": "LblAppWhere",
       "properties": {
-        "X": 16,
-        "Y": 156,
+        "X": 12,
+        "Y": 152,
         "Width": 528,
         "Height": 38,
         "Text": "",
@@ -105,8 +105,8 @@
       "type": "Label",
       "name": "LblAppHint",
       "properties": {
-        "X": 16,
-        "Y": 200,
+        "X": 12,
+        "Y": 196,
         "Width": 528,
         "Height": 40,
         "Text": "The application is offered in this user's menu. Nothing is installed system-wide and no password is asked.",
@@ -119,8 +119,8 @@
       "type": "Button",
       "name": "BtnAppUninstall",
       "properties": {
-        "X": 16,
-        "Y": 264,
+        "X": 12,
+        "Y": 260,
         "Width": 110,
         "Height": 32,
         "Text": "Uninstall",
@@ -132,8 +132,8 @@
       "type": "Button",
       "name": "BtnAppCancel",
       "properties": {
-        "X": 354,
-        "Y": 264,
+        "X": 350,
+        "Y": 260,
         "Width": 90,
         "Height": 32,
         "Text": "Cancel",
@@ -146,8 +146,8 @@
       "type": "Button",
       "name": "BtnAppInstall",
       "properties": {
-        "X": 454,
-        "Y": 264,
+        "X": 450,
+        "Y": 260,
         "Width": 90,
         "Height": 32,
         "Text": "Install",

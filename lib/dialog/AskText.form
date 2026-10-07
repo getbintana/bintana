@@ -2,10 +2,10 @@
   "format": "bintana-form/1",
   "class": "AskText",
   "properties": {
-    "Height": 140,
+    "Height": 132,
     "Resizable": false,
     "Text": "",
-    "Width": 380
+    "Width": 372
   },
   "children": [
     {
@@ -14,8 +14,8 @@
       "properties": {
         "HAlign": "Fill",
         "Width": 348,
-        "X": 16,
-        "Y": 16
+        "X": 12,
+        "Y": 12
       }
     },
     {
@@ -26,8 +26,8 @@
         "HAlign": "Fill",
         "Height": 34,
         "Width": 348,
-        "X": 16,
-        "Y": 44
+        "X": 12,
+        "Y": 40
       }
     },
     {
@@ -38,8 +38,8 @@
         "Height": 26,
         "Visible": false,
         "Width": 348,
-        "X": 16,
-        "Y": 84
+        "X": 12,
+        "Y": 80
       }
     },
     {
@@ -52,8 +52,8 @@
         "Text": "Cancel",
         "VAlign": "End",
         "Width": 90,
-        "X": 176,
-        "Y": 92
+        "X": 172,
+        "Y": 88
       }
     },
     {
@@ -67,8 +67,8 @@
         "Text": "OK",
         "VAlign": "End",
         "Width": 90,
-        "X": 274,
-        "Y": 92
+        "X": 270,
+        "Y": 88
       }
     }
   ]

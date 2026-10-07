@@ -2,10 +2,10 @@
   "format": "bintana-form/1",
   "class": "LaunchForm",
   "properties": {
-    "Height": 520,
+    "Height": 512,
     "Icon": "system-run-symbolic",
     "Text": "Run configurations",
-    "Width": 660
+    "Width": 652
   },
   "children": [
     {
@@ -16,8 +16,8 @@
         "Style": "dim-label",
         "Text": "Configurations:",
         "Width": 180,
-        "X": 16,
-        "Y": 14
+        "X": 12,
+        "Y": 12
       }
     },
     {
@@ -30,8 +30,8 @@
         "Style": "frame",
         "VAlign": "Fill",
         "Width": 190,
-        "X": 16,
-        "Y": 36
+        "X": 12,
+        "Y": 34
       }
     },
     {
@@ -43,8 +43,8 @@
         "Tooltip": "A new configuration, with the defaults below copied into it",
         "VAlign": "End",
         "Width": 92,
-        "X": 16,
-        "Y": 420
+        "X": 12,
+        "Y": 418
       }
     },
     {
@@ -55,8 +55,8 @@
         "Text": "Remove",
         "VAlign": "End",
         "Width": 92,
-        "X": 114,
-        "Y": 420
+        "X": 110,
+        "Y": 418
       }
     },
     {
@@ -66,8 +66,8 @@
         "Height": 20,
         "Text": "Name:",
         "Width": 110,
-        "X": 226,
-        "Y": 36
+        "X": 222,
+        "Y": 34
       }
     },
     {
@@ -76,9 +76,9 @@
       "properties": {
         "HAlign": "Fill",
         "Height": 32,
-        "Width": 406,
-        "X": 226,
-        "Y": 58
+        "Width": 418,
+        "X": 222,
+        "Y": 56
       }
     },
     {
@@ -88,8 +88,8 @@
         "Height": 20,
         "Text": "Arguments, one per line:",
         "Width": 260,
-        "X": 226,
-        "Y": 98
+        "X": 222,
+        "Y": 96
       }
     },
     {
@@ -99,9 +99,9 @@
         "HAlign": "Fill",
         "Height": 96,
         "Style": "frame",
-        "Width": 406,
-        "X": 226,
-        "Y": 120
+        "Width": 418,
+        "X": 222,
+        "Y": 118
       }
     },
     {
@@ -111,8 +111,8 @@
         "Height": 20,
         "Text": "Directory, empty for the project’s own:",
         "Width": 300,
-        "X": 226,
-        "Y": 226
+        "X": 222,
+        "Y": 224
       }
     },
     {
@@ -121,9 +121,9 @@
       "properties": {
         "HAlign": "Fill",
         "Height": 32,
-        "Width": 406,
-        "X": 226,
-        "Y": 248
+        "Width": 418,
+        "X": 222,
+        "Y": 246
       }
     },
     {
@@ -133,8 +133,8 @@
         "Height": 20,
         "Text": "Environment, NAME=value one per line:",
         "Width": 300,
-        "X": 226,
-        "Y": 288
+        "X": 222,
+        "Y": 286
       }
     },
     {
@@ -144,9 +144,9 @@
         "HAlign": "Fill",
         "Height": 90,
         "Style": "frame",
-        "Width": 406,
-        "X": 226,
-        "Y": 310
+        "Width": 418,
+        "X": 222,
+        "Y": 308
       }
     },
     {
@@ -157,8 +157,8 @@
         "Text": "Strict checks",
         "Tooltip": "A control refuses a property its class does not have",
         "Width": 190,
-        "X": 226,
-        "Y": 410
+        "X": 222,
+        "Y": 408
       }
     },
     {
@@ -168,8 +168,8 @@
         "Height": 26,
         "Text": "Stop where something is thrown",
         "Width": 260,
-        "X": 226,
-        "Y": 438
+        "X": 222,
+        "Y": 436
       }
     },
     {
@@ -180,8 +180,8 @@
         "Style": "dim-label",
         "Text": "New configurations start with these two as they are now.",
         "Width": 220,
-        "X": 226,
-        "Y": 466
+        "X": 222,
+        "Y": 464
       }
     },
     {
@@ -194,8 +194,8 @@
         "Text": "Cancel",
         "VAlign": "End",
         "Width": 92,
-        "X": 456,
-        "Y": 470
+        "X": 448,
+        "Y": 468
       }
     },
     {
@@ -209,8 +209,8 @@
         "Text": "Save",
         "VAlign": "End",
         "Width": 92,
-        "X": 556,
-        "Y": 470
+        "X": 548,
+        "Y": 468
       }
     }
   ]

@@ -2,10 +2,10 @@
   "format": "bintana-form/1",
   "class": "SymbolForm",
   "properties": {
-    "Height": 420,
+    "Height": 412,
     "Icon": "format-justify-fill-symbolic",
     "Text": "Go to",
-    "Width": 380
+    "Width": 372
   },
   "children": [
     {
@@ -18,8 +18,8 @@
         "Placeholder": "A method, or a line number",
         "Tooltip": "Type part of a method's name, or a number to go to that line",
         "Width": 348,
-        "X": 16,
-        "Y": 16
+        "X": 12,
+        "Y": 12
       }
     },
     {
@@ -33,8 +33,8 @@
         "Style": "frame",
         "VAlign": "Fill",
         "Width": 348,
-        "X": 16,
-        "Y": 58
+        "X": 12,
+        "Y": 54
       }
     },
     {
@@ -47,8 +47,8 @@
         "Style": "dim-label",
         "VAlign": "End",
         "Width": 200,
-        "X": 16,
-        "Y": 354
+        "X": 12,
+        "Y": 350
       }
     },
     {
@@ -61,8 +61,8 @@
         "Text": "Cancel",
         "VAlign": "End",
         "Width": 90,
-        "X": 176,
-        "Y": 372
+        "X": 172,
+        "Y": 368
       }
     },
     {
@@ -76,8 +76,8 @@
         "Text": "Go",
         "VAlign": "End",
         "Width": 90,
-        "X": 274,
-        "Y": 372
+        "X": 270,
+        "Y": 368
       }
     }
   ]

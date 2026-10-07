@@ -3,8 +3,8 @@
   "class": "AskForm",
   "properties": {
     "Text": "Bintana",
-    "Width": 380,
-    "Height": 140,
+    "Width": 372,
+    "Height": 132,
     "Resizable": false
   },
   "children": [
@@ -12,8 +12,8 @@
       "type": "Label",
       "name": "LblPrompt",
       "properties": {
-        "X": 16,
-        "Y": 16,
+        "X": 12,
+        "Y": 12,
         "Width": 348,
         "Height": 22,
         "Text": "",
@@ -24,8 +24,8 @@
       "type": "TextBox",
       "name": "TxtValue",
       "properties": {
-        "X": 16,
-        "Y": 44,
+        "X": 12,
+        "Y": 40,
         "Width": 348,
         "Height": 34,
         "Text": "",
@@ -37,8 +37,8 @@
       "type": "CheckButton",
       "name": "ChkOption",
       "properties": {
-        "X": 16,
-        "Y": 84,
+        "X": 12,
+        "Y": 80,
         "Width": 348,
         "Height": 26,
         "Text": "",
@@ -50,8 +50,8 @@
       "type": "Button",
       "name": "BtnCancel",
       "properties": {
-        "X": 176,
-        "Y": 92,
+        "X": 172,
+        "Y": 88,
         "Width": 90,
         "Height": 32,
         "Text": "Cancel",
@@ -70,8 +70,8 @@
         "Text": "OK",
         "VAlign": "End",
         "Width": 90,
-        "X": 274,
-        "Y": 92,
+        "X": 270,
+        "Y": 88,
         "Default": true
       }
     }

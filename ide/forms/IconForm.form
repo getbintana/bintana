@@ -2,17 +2,17 @@
   "format": "bintana-form/1",
   "class": "IconForm",
   "properties": {
-    "Height": 440,
+    "Height": 422,
     "Text": "Choose an icon",
-    "Width": 560
+    "Width": 552
   },
   "children": [
     {
       "type": "TextBox",
       "name": "TxtFind",
       "properties": {
-        "X": 16,
-        "Y": 16,
+        "X": 12,
+        "Y": 12,
         "Width": 528,
         "Height": 34,
         "Icon": "edit-find-symbolic",
@@ -30,16 +30,16 @@
         "Spacing": 2,
         "VAlign": "Fill",
         "Width": 528,
-        "X": 16,
-        "Y": 58
+        "X": 12,
+        "Y": 54
       }
     },
     {
       "type": "Label",
       "name": "LblCount",
       "properties": {
-        "X": 16,
-        "Y": 386,
+        "X": 12,
+        "Y": 382,
         "Width": 300,
         "Height": 22,
         "Text": "",
@@ -50,8 +50,8 @@
       "type": "Button",
       "name": "BtnNone",
       "properties": {
-        "X": 356,
-        "Y": 382,
+        "X": 352,
+        "Y": 378,
         "Width": 90,
         "Height": 32,
         "Text": "None",
@@ -63,8 +63,8 @@
       "type": "Button",
       "name": "BtnCancel",
       "properties": {
-        "X": 454,
-        "Y": 382,
+        "X": 450,
+        "Y": 378,
         "Width": 90,
         "Height": 32,
         "Text": "Cancel",

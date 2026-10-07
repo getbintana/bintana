@@ -3,8 +3,8 @@
   "class": "ProjectForm",
   "properties": {
     "Text": "Project",
-    "Width": 560,
-    "Height": 698
+    "Width": 552,
+    "Height": 690
   },
   "children": [
     {
@@ -14,8 +14,8 @@
         "Height": 24,
         "Text": "Name:",
         "Width": 110,
-        "X": 16,
-        "Y": 22
+        "X": 12,
+        "Y": 18
       }
     },
     {
@@ -25,8 +25,8 @@
         "HAlign": "Fill",
         "Height": 34,
         "Width": 410,
-        "X": 134,
-        "Y": 16
+        "X": 130,
+        "Y": 12
       }
     },
     {
@@ -36,8 +36,8 @@
         "Height": 24,
         "Text": "Version:",
         "Width": 110,
-        "X": 16,
-        "Y": 68
+        "X": 12,
+        "Y": 64
       }
     },
     {
@@ -48,8 +48,8 @@
         "Height": 34,
         "Placeholder": "0.1.0",
         "Width": 410,
-        "X": 134,
-        "Y": 62
+        "X": 130,
+        "Y": 58
       }
     },
     {
@@ -59,8 +59,8 @@
         "Height": 24,
         "Text": "Application id:",
         "Width": 110,
-        "X": 16,
-        "Y": 114
+        "X": 12,
+        "Y": 110
       }
     },
     {
@@ -72,8 +72,8 @@
         "Placeholder": "io.github.you.MyApp",
         "Tooltip": "Reverse-DNS identity: the window's class, the metainfo's <id> and the Flatpak app id. Optional -- a project without one runs, and cannot be packaged.",
         "Width": 410,
-        "X": 134,
-        "Y": 108
+        "X": 130,
+        "Y": 104
       }
     },
     {
@@ -83,8 +83,8 @@
         "Height": 24,
         "Text": "Starts at:",
         "Width": 110,
-        "X": 16,
-        "Y": 160
+        "X": 12,
+        "Y": 156
       }
     },
     {
@@ -100,8 +100,8 @@
         "Text": "a form",
         "Tooltip": "A project opens a startup form, or calls a main function and never draws at all.",
         "Width": 126,
-        "X": 134,
-        "Y": 154
+        "X": 130,
+        "Y": 150
       }
     },
     {
@@ -111,8 +111,8 @@
         "HAlign": "Fill",
         "Height": 34,
         "Width": 276,
-        "X": 268,
-        "Y": 154
+        "X": 264,
+        "Y": 150
       }
     },
     {
@@ -123,8 +123,8 @@
         "Tooltip": "The function the runtime calls; the IDE cannot list functions, so type it",
         "Visible": false,
         "Width": 276,
-        "X": 268,
-        "Y": 154
+        "X": 264,
+        "Y": 150
       }
     },
     {
@@ -134,8 +134,8 @@
         "Height": 24,
         "Text": "Description:",
         "Width": 110,
-        "X": 16,
-        "Y": 206
+        "X": 12,
+        "Y": 202
       }
     },
     {
@@ -145,8 +145,8 @@
         "HAlign": "Fill",
         "Height": 34,
         "Width": 410,
-        "X": 134,
-        "Y": 200
+        "X": 130,
+        "Y": 196
       }
     },
     {
@@ -156,8 +156,8 @@
         "Height": 24,
         "Text": "Libraries:",
         "Width": 200,
-        "X": 16,
-        "Y": 250
+        "X": 12,
+        "Y": 246
       }
     },
     {
@@ -168,8 +168,8 @@
         "Height": 110,
         "Style": "frame",
         "Width": 528,
-        "X": 16,
-        "Y": 278
+        "X": 12,
+        "Y": 274
       }
     },
     {
@@ -181,8 +181,8 @@
         "Style": "dim-label",
         "Width": 528,
         "Wrap": true,
-        "X": 16,
-        "Y": 396
+        "X": 12,
+        "Y": 392
       }
     },
     {
@@ -192,8 +192,8 @@
         "Height": 24,
         "Text": "Load order:",
         "Width": 200,
-        "X": 16,
-        "Y": 442
+        "X": 12,
+        "Y": 438
       }
     },
     {
@@ -205,8 +205,8 @@
         "Style": "frame",
         "VAlign": "Fill",
         "Width": 424,
-        "X": 16,
-        "Y": 470
+        "X": 12,
+        "Y": 466
       }
     },
     {
@@ -217,8 +217,8 @@
         "Height": 32,
         "Text": "Up",
         "Width": 92,
-        "X": 452,
-        "Y": 470
+        "X": 448,
+        "Y": 466
       }
     },
     {
@@ -229,8 +229,8 @@
         "Height": 32,
         "Text": "Down",
         "Width": 92,
-        "X": 452,
-        "Y": 508
+        "X": 448,
+        "Y": 504
       }
     },
     {
@@ -242,8 +242,8 @@
         "Text": "Decide",
         "Tooltip": "Write the order this project already loads in, so it can be changed",
         "Width": 92,
-        "X": 452,
-        "Y": 556
+        "X": 448,
+        "Y": 552
       }
     },
     {
@@ -256,8 +256,8 @@
         "VAlign": "End",
         "Width": 528,
         "Wrap": true,
-        "X": 16,
-        "Y": 602
+        "X": 12,
+        "Y": 598
       }
     },
     {
@@ -270,8 +270,8 @@
         "Text": "Cancel",
         "VAlign": "End",
         "Width": 90,
-        "X": 354,
-        "Y": 650
+        "X": 350,
+        "Y": 646
       }
     },
     {
@@ -285,8 +285,8 @@
         "Text": "OK",
         "VAlign": "End",
         "Width": 90,
-        "X": 454,
-        "Y": 650
+        "X": 450,
+        "Y": 646
       }
     }
   ]

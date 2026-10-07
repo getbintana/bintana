@@ -4,7 +4,7 @@
   "properties": {
     "Text": "Kanban",
     "Width": 1000,
-    "Height": 600
+    "Height": 590
   },
   "children": [
     {
@@ -17,7 +17,7 @@
         "Spacing": 6,
         "Width": 976,
         "X": 12,
-        "Y": 10
+        "Y": 12
       },
       "children": [
         {
@@ -80,7 +80,7 @@
         "Spacing": 6,
         "Width": 976,
         "X": 12,
-        "Y": 54
+        "Y": 56
       },
       "children": [
         {
@@ -148,7 +148,7 @@
         "VAlign": "Fill",
         "Width": 976,
         "X": 12,
-        "Y": 96
+        "Y": 98
       }
     },
     {
@@ -162,7 +162,7 @@
         "Width": 976,
         "Wrap": true,
         "X": 12,
-        "Y": 524
+        "Y": 526
       }
     }
   ]

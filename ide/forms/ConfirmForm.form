@@ -3,8 +3,8 @@
   "class": "ConfirmForm",
   "properties": {
     "Text": "Bintana",
-    "Width": 400,
-    "Height": 150,
+    "Width": 392,
+    "Height": 136,
     "Resizable": false
   },
   "children": [
@@ -12,8 +12,8 @@
       "type": "Label",
       "name": "LblMessage",
       "properties": {
-        "X": 16,
-        "Y": 20,
+        "X": 12,
+        "Y": 12,
         "Width": 368,
         "Height": 60,
         "Text": "",
@@ -31,16 +31,16 @@
         "VAlign": "End",
         "Visible": false,
         "Width": 170,
-        "X": 16,
-        "Y": 100
+        "X": 12,
+        "Y": 92
       }
     },
     {
       "type": "Button",
       "name": "BtnNo",
       "properties": {
-        "X": 196,
-        "Y": 100,
+        "X": 192,
+        "Y": 92,
         "Width": 90,
         "Height": 32,
         "Text": "Cancel",
@@ -59,8 +59,8 @@
         "Text": "Delete",
         "VAlign": "End",
         "Width": 90,
-        "X": 294,
-        "Y": 100
+        "X": 290,
+        "Y": 92
       }
     }
   ]

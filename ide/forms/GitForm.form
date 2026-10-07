@@ -17,7 +17,7 @@
         "HAlign": "Fill",
         "HExpand": true,
         "Height": 430,
-        "Margin": 8,
+        "Margin": 12,
         "Position": 267,
         "VAlign": "Fill",
         "VExpand": true,
@@ -164,7 +164,7 @@
       "properties": {
         "HAlign": "Start",
         "Height": 16,
-        "Margin": 8,
+        "Margin": 12,
         "Style": "caption-heading",
         "Text": "Commit message",
         "Width": 105
@@ -176,7 +176,7 @@
       "properties": {
         "HAlign": "Fill",
         "Height": 76,
-        "Margin": 8,
+        "Margin": 12,
         "Style": "frame",
         "Width": 962
       }
@@ -188,7 +188,7 @@
         "Arrangement": "Horizontal",
         "HAlign": "Fill",
         "Height": 34,
-        "Margin": 8,
+        "Margin": 12,
         "Spacing": 8,
         "Width": 964
       },

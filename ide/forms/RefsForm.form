@@ -2,10 +2,10 @@
   "format": "bintana-form/1",
   "class": "RefsForm",
   "properties": {
-    "Height": 420,
+    "Height": 414,
     "Icon": "system-search-symbolic",
     "Text": "References",
-    "Width": 620
+    "Width": 612
   },
   "children": [
     {
@@ -18,8 +18,8 @@
         "Style": "dim-label",
         "VAlign": "Start",
         "Width": 588,
-        "X": 16,
-        "Y": 14
+        "X": 12,
+        "Y": 12
       }
     },
     {
@@ -33,8 +33,8 @@
         "Style": "frame",
         "VAlign": "Fill",
         "Width": 588,
-        "X": 16,
-        "Y": 46
+        "X": 12,
+        "Y": 44
       }
     },
     {
@@ -47,8 +47,8 @@
         "Style": "dim-label",
         "VAlign": "End",
         "Width": 300,
-        "X": 16,
-        "Y": 354
+        "X": 12,
+        "Y": 352
       }
     },
     {
@@ -61,8 +61,8 @@
         "Text": "Close",
         "VAlign": "End",
         "Width": 90,
-        "X": 398,
-        "Y": 372
+        "X": 394,
+        "Y": 370
       }
     },
     {
@@ -75,8 +75,8 @@
         "Text": "Rename...",
         "VAlign": "End",
         "Width": 110,
-        "X": 494,
-        "Y": 372
+        "X": 490,
+        "Y": 370
       }
     }
   ]
