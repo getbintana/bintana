@@ -2713,6 +2713,15 @@ person who wrote it either.
 - A widget must be attached to its parent **before** X/Y are applied, or the
   coordinates never reach a live surface. The loader and `Container.AddNode`
   both do this in that order.
+- **The form's resize grips encode the selection, and a tab just opened has no
+  allocation to draw them on.** Grey while a control is selected, the selection's
+  blue when the form is, and no line along the form's edge: always-blue grips made
+  the form read as selected beside a selected control. `Glass` has no allocation
+  on the first frame of a new tab, so the grips drew nothing until something
+  moved -- the layout asks again until there is one (the `Chrome.position` rule).
+  The side panels' titles are `heading` labels from `Workspace.titled`; `text`
+  arrives already through `Locale.Text`, since the literal has to be at the call
+  site for the extractor.
 - **A `Fixed` slot is `BtaFixed`, not `GtkFixed`** (`runtime/src/bta_fixed.c`).
   It reads x/y/w/h and `HAlign`/`VAlign` off each child's `BtaWidget`, so moving
   a control is `gtk_widget_queue_allocate` on the parent and attaching one is a
