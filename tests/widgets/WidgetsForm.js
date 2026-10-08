@@ -553,7 +553,7 @@ const TESTS = [
     /* Early on purpose: they show windows of their own, and the pushed-surface
      * assertions in the async tail measure a form on the frame it settles. See
      * the note below. */
-    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableTree", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableGeometry", "TableIcon", "TableProse",
+    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableReorder", "TableTree", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableGeometry", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
     "Expand", "Spacing", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
@@ -14730,6 +14730,120 @@ function Main() {
     }
 
     /*
+     * Reordering columns -- by dragging a heading, or by `ReorderColumn` from
+     * code.
+     *
+     * **The gesture is a pointer one and the suite cannot make it** (GTK has no
+     * keyboard road either: a heading answers Escape to a drag and nothing
+     * else), so what is held here is the whole of what a drag does once the
+     * model has moved: the declaration, the rows and the save follow, the event
+     * says where the column came from and where it went, and a program can turn
+     * the drag off. The drag itself is on the by-hand list.
+     */
+    testTableReorder() {
+        const t = new TableView();
+        this.Fixed1.Add(t);
+        t.Columns = [{ Text: "A" }, { Text: "B" }, { Text: "C" }];
+        t.Add(["a", "b", "c"]);
+        t.Add(["d", "e", "f"]);
+
+        eq("Reorderable is on by default, as GTK ships it", t.Reorderable, true);
+        eq("and a fresh declaration writes none of it",
+           t.Serialize().properties.Reorderable, undefined);
+
+        this.reorders = [];
+        t.On("Reordered", (column, index) => this.reorders.push([column, index]));
+
+        t.ReorderColumn(0, 2);
+        eq("a reorder is reported with where the column was and where it went",
+           JSON.stringify(this.reorders), "[[0,2]]");
+        eq("the declaration is the new order",
+           JSON.stringify(t.Columns.map((c) => c.Text)), '["B","C","A"]');
+        eq("the rows moved with it", JSON.stringify(t.Row(0)), '["b","c","a"]');
+        eq("a cell is addressed by the column it is in", t.Cell(1, 0), "e");
+        eq("and the save carries the order",
+           JSON.stringify(t.Serialize().properties.Columns.map((c) => c.Text)),
+           '["B","C","A"]');
+
+        t.Index = 1;
+        t.ReorderColumn(2, 0);
+        eq("moving it back is the same thing the other way",
+           JSON.stringify(t.Columns.map((c) => c.Text)), '["A","B","C"]');
+        eq("and the rows are back", JSON.stringify(t.Row(1)), '["d","e","f"]');
+        eq("reordering is not moving the selection", t.Index, 1);
+        eq("two moves, two reports", JSON.stringify(this.reorders),
+           "[[0,2],[2,0]]");
+
+        t.ReorderColumn(1, 1);
+        eq("moving one where it already is does nothing at all",
+           JSON.stringify(this.reorders), "[[0,2],[2,0]]");
+
+        throws("a column that is not there is refused",
+               () => t.ReorderColumn(0, 9));
+        throws("...and so is a column that is not a number",
+               () => t.ReorderColumn("a", 0));
+        throws("ReorderColumn wants both ends",
+               () => t.ReorderColumn(0));
+
+        /* A short row keeps its values with their columns, and the hole reads
+         * empty. */
+        t.Clear();
+        t.Add(["solo"]);
+        t.ReorderColumn(0, 2);
+        eq("a short row's value follows its column",
+           JSON.stringify(t.Row(0)), '["","","solo"]');
+        eq("and the hole reads empty", t.Cell(0, 0), "");
+
+        /* A row may carry more values than there are columns: those are not
+         * columns, so they stay at the end. */
+        t.Clear();
+        t.Add(["x", "y", "z", "extra"]);
+        t.ReorderColumn(0, 2);
+        eq("values past the declared columns stay where they are",
+           JSON.stringify(t.Row(0)), '["y","z","x","extra"]');
+
+        /* Locking the order, and the declaration carrying it. */
+        t.Reorderable = false;
+        eq("Reorderable can be turned off", t.Reorderable, false);
+        eq("...and is saved when it is not the default",
+           t.Serialize().properties.Reorderable, false);
+        t.Reorderable = true;
+
+        /* A tree: the nodes' values follow too, and the reorder is still
+         * `Reordered` over columns. */
+        const tr = new TableView();
+        this.Fixed1.Add(tr);
+        tr.Columns = [{ Text: "Name" }, { Text: "Size" }];
+        tr.Add(["dir", "4"],  { Key: "k1" });
+        tr.Add(["file", "1"], { Key: "k2" });
+        this.treeMoves = [];
+        tr.On("Reordered", (column, index) => this.treeMoves.push([column, index]));
+        tr.ReorderColumn(0, 1);
+        eq("a tree's columns reorder the same way",
+           JSON.stringify(tr.Columns.map((c) => c.Text)), '["Size","Name"]');
+        eq("and its nodes' values follow", JSON.stringify(tr.Row("k1")),
+           '["4","dir"]');
+        eq("with the pair reported", JSON.stringify(this.treeMoves), "[[0,1]]");
+        tr.Delete();
+
+        /* An on-demand table: it holds no rows, but it has columns, and the
+         * program is told so its `Data` can follow. */
+        const v = new TableView();
+        this.Fixed1.Add(v);
+        v.Columns = [{ Text: "N" }, { Text: "Square" }];
+        v.Count = 3;
+        v.Index = 1;
+        v.ReorderColumn(1, 0);
+        eq("an on-demand table's declaration reorders too",
+           JSON.stringify(v.Columns.map((c) => c.Text)), '["Square","N"]');
+        eq("...and re-asking its cells is not losing the selection",
+           v.Index, 1);
+        v.Delete();
+
+        t.Delete();
+    }
+
+    /*
      * On demand: `Count = N` and the table asks `Data(row, column)` for each
      * cell it draws.
      *
@@ -15236,6 +15350,18 @@ function Main() {
             eq("what is saved is what the file declared, not what was shown",
                saved[0].Text, "Customer");
             eq("and the rest of the column is unchanged", saved[1].Alignment, "Right");
+
+            /*
+             * **And the pair travels together when the columns move.** The
+             * reorder permutes what is on the control *and* what the file
+             * declared; permuting only the first would save the old order, and
+             * permuting only the second would save the translation.
+             */
+            form.Grid1.ReorderColumn(0, 1);
+            const moved = form.Grid1.Serialize().properties.Columns;
+            eq("a reorder saves the new order", moved[0].Text, "Balance");
+            eq("with what the file declared, not the translation",
+               moved[1].Text, "Customer");
             form.Close();
         } finally {
             Locale.Current = "";

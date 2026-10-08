@@ -8744,6 +8744,24 @@
           "Native": true
         },
         {
+          "Name": "ReorderColumn",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(column, index)",
+          "Returns": "",
+          "Doc": "moves the column at `column` to `index` — the heading drag, from code, and the road a test can take because the gesture is a pointer one. `Columns` is the new order afterwards, the rows moved with it, and `Reordered(column, index)` is raised. Moving one to where it already is does nothing",
+          "Native": true
+        },
+        {
+          "Name": "Reorderable",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether a column heading can be dragged to move its column. **The reorder changes `Columns`** — and the rows with it — and raises `Reordered(column, index)`; `false` locks the order, which is what a program whose `Data` maps the position onto its own data wants. Default `true`",
+          "Native": true
+        },
+        {
           "Name": "Reveal",
           "Kind": "Method",
           "Params": 1,
@@ -8899,6 +8917,11 @@
           "Name": "Sort",
           "Signature": "(column, ascending)",
           "Doc": "a sortable header was clicked. **The handler decides** — `SortBy` is what actually reorders"
+        },
+        {
+          "Name": "Reordered",
+          "Signature": "(column, index)",
+          "Doc": "a heading was dragged, or `ReorderColumn` moved one: the column that was at `column` is now at `index`. `Columns` is the new order and the rows moved with it. **The columns the table answers with are the ones the user arranged**, which is why a program that maps the position onto its own data turns `Reorderable` off"
         },
         {
           "Name": "CellEdit",
