@@ -8605,7 +8605,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "an array of `{ Text, Width, Alignment, Editable }`. `Text` is **translated**; `Width: 0` sizes itself and the last column takes the slack; `Editable: true` makes a cell a field — clicked, typed and committed — and an editable column reads left-aligned, because a `GtkEditableLabel` is not a label",
+          "Doc": "an array of `{ Text, Width, Alignment, Editable, Link }`. `Text` is **translated**; `Width: 0` sizes itself and the last column takes the slack; `Editable: true` makes a cell a field — clicked, typed and committed — and an editable column reads left-aligned, because a `GtkEditableLabel` is not a label. `Link: true` makes each cell a link — underlined, a pointer over it, a focus stop, Enter — whose address is the cell's text unless `SetUri` or `Data` says another, and a cell with no text is plain. **A column is a field or a link, never both**",
           "Native": true
         },
         {
@@ -8843,6 +8843,15 @@
           "Native": true
         },
         {
+          "Name": "SetUri",
+          "Kind": "Method",
+          "Params": 3,
+          "Signature": "(row, column, uri)",
+          "Returns": "",
+          "Doc": "where a `Link` cell goes when that is not its text. `\"\"` makes the cell not a link, `null` goes back to opening its text. Refused on an on-demand table",
+          "Native": true
+        },
+        {
           "Name": "SortBy",
           "Kind": "Method",
           "Params": 3,
@@ -8884,7 +8893,7 @@
         {
           "Name": "Data",
           "Signature": "(row, column)",
-          "Doc": "the table needs a cell. **The return value is the answer**: a string, or `{ Text, Icon }` for a cell with a picture"
+          "Doc": "the table needs a cell. **The return value is the answer**: a string, or `{ Text, Icon, Uri }` for a cell with a picture or an address of its own. In a `Link` column an absent `Uri` means the text is the address and `\"\"` means this cell is not a link"
         },
         {
           "Name": "Sort",
@@ -8895,6 +8904,11 @@
           "Name": "CellEdit",
           "Signature": "(row, column, text)",
           "Doc": "an editable cell's edit ended — Enter, or the focus moving away. `row` is an index in a flat table and a key in a tree, as every verb here addresses one. **Returning `false` refuses it** and the cell goes back to what it said; anything else is taken and the text is written into the row. An on-demand table holds no cells, so there the handler stores it"
+        },
+        {
+          "Name": "CellLink",
+          "Signature": "(row, column, uri)",
+          "Doc": "a `Link` cell was activated — a click, or Enter on it. `row` is an index in a flat table and a key in a tree. **Returning `false` refuses it** and nothing is opened, as in `CellEdit`; anything else lets the desktop open `uri`"
         },
         {
           "Name": "HeaderClick",

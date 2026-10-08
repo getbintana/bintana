@@ -2281,7 +2281,7 @@ Three things that will waste your time:
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
-  390 assertions against 2885 for the whole project -- 9.2 s against 413 on this
+  392 assertions against 2881 for the whole project -- 9.2 s against 413 on this
   machine -- which is what makes iterating on an early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.
@@ -2404,7 +2404,7 @@ nothing is written at all.
 
 **The first harvest was the IDE, and the event marks are what it found.**
 `--profile` over `tests/ide` is 3.9 MB and **37,449 marks** in 354 s with the
-suite green (2818 assertions then; 2885 today) -- against 431 s for the ordinary runner run, so
+suite green (2818 assertions then; 2881 today) -- against 431 s for the ordinary runner run, so
 the writer's per-mark cost does not show at this size. 37,238 of those marks are
 `Event` and 211 are the runtime's (`Bintana`); **28,402 of them are one
 handler**, `PropGrid_Filter` -- the property grid's filter answering GTK for
@@ -5673,6 +5673,29 @@ member does not count.
 
 **`tests/run.sh widgets <name>` takes one test, and the name is case-sensitive**
 (`Hash`, not `hash`); a second name is ignored and the line says `[only Hash]`.
+
+## A link in a `TableView` cell
+
+`Columns[].Link: true` makes a column's cells `GtkLabel`s holding a markup link
+(`<a href>`), **not** `GtkLinkButton`s: the label keeps `Alignment` and the
+ellipsis, and GTK already gives a link in a label the underline, the pointer, the
+focus stop and Enter. Its default `activate-link` hands the address to the
+desktop. The address is the cell's text; `SetUri` (held rows) and `Uri` in
+`Data`'s answer replace it, and there **an empty `Uri` is "not a link" while an
+absent one is "the text"** -- two answers, not one. `CellLink(row, column, uri)`
+is raised first and `false` refuses, which is `CellEdit`'s veto; the answer to
+GTK is inverted, because TRUE from `activate-link` means *handled, do not open*.
+`Link` and `Editable` on one column are refused at declaration. The row is read
+and the arguments built before the emit, since a handler may empty the table and
+unbind the label under it. Measured with a real pointer on an `Xvfb`: the click
+reaches `CellLink` with the right arguments; `tests/widgets` holds the
+declaration, `SetUri` and the event's contract, and **whether the desktop then
+opens the address is by hand** -- the suite must never launch a browser. The
+designer's column dialog does not offer `Link` yet (nor `Editable`): the
+property grid's JSON field is the way in, and the dialog preserves the key.
+**The probe killed the user's window manager**: clean up a hand-driven `Xvfb`
+and its `xfwm4` by the PIDs you started (`$!`), never `pkill xfwm4` -- it matches
+the desktop's own.
 
 ## Keyring: the vault, and what it does not promise
 

@@ -53,6 +53,7 @@ struct _BtaTableRow {
     GObject    parent_instance;
     GPtrArray *cells;          /* of char*, one per column; NULL when virtual */
     GPtrArray *icons;          /* of char*, lazily made: most rows have none */
+    GPtrArray *uris;           /* of char*, lazily made: what `SetUri` put on a link cell */
     guint      index;          /* virtual rows: which row this is */
 
     /*
@@ -76,6 +77,7 @@ static void bta_table_row_finalize(GObject *object)
     BtaTableRow *self = BTA_TABLE_ROW(object);
 
     g_clear_pointer(&self->icons, g_ptr_array_unref);
+    g_clear_pointer(&self->uris, g_ptr_array_unref);
     g_clear_pointer(&self->cells, g_ptr_array_unref);
     g_clear_pointer(&self->key, g_free);
     g_clear_object(&self->children);
@@ -107,6 +109,11 @@ static const char *row_cell(BtaTableRow *row, guint i)
 static const char *row_icon(BtaTableRow *row, guint i)
 {
     return row && row->icons && i < row->icons->len ? row->icons->pdata[i] : NULL;
+}
+
+static const char *row_uri(BtaTableRow *row, guint i)
+{
+    return row && row->uris && i < row->uris->len ? row->uris->pdata[i] : NULL;
 }
 
 /* Grows a lazily made list to reach `i`, so a table with one icon on one row
@@ -557,6 +564,7 @@ static void table_row_changed(BtaWidget *w, BtaTableRow *row, int at)
  * at least they agree. Give a column an icon on every row or on none.
  */
 static void on_cell_edited(GObject *obj, GParamSpec *pspec, gpointer user_data);
+static gboolean on_cell_link(GtkLabel *label, const char *uri, gpointer user_data);
 
 static void on_setup_cell(GtkSignalListItemFactory *f, GtkListItem *item,
                           gpointer user_data)
@@ -565,6 +573,8 @@ static void on_setup_cell(GtkSignalListItemFactory *f, GtkListItem *item,
     GtkWidget *image = gtk_image_new();
     bool       editable = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(f),
                                                             "bta-editable"));
+    bool       link     = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(f),
+                                                            "bta-link"));
     /* **An editable cell is a `GtkEditableLabel`**, which is a label until it is
      * clicked and then a field; a `GtkLabel` has no such state and swapping one
      * for the other on a click is a second implementation of what GTK already
@@ -578,6 +588,14 @@ static void on_setup_cell(GtkSignalListItemFactory *f, GtkListItem *item,
     if (!editable) {
         gtk_label_set_xalign(GTK_LABEL(label), x);
         gtk_label_set_ellipsize(GTK_LABEL(label), PANGO_ELLIPSIZE_END);
+        /* **A link cell is a `GtkLabel` with a link in it**, and not a
+         * `GtkLinkButton`: the label keeps `Alignment` and the ellipsis, and
+         * what GTK gives a link in a label -- the underline, the pointer, the
+         * focus stop and Enter -- is the whole affordance. Its default
+         * `activate-link` hands the address to the desktop, which is all
+         * `LinkButton` does too; ours only reports it first. */
+        if (link)
+            g_signal_connect(label, "activate-link", G_CALLBACK(on_cell_link), user_data);
     } else {
         g_object_set_data(G_OBJECT(label), "bta-edit-widget", user_data);
         g_signal_connect(label, "notify::editing", G_CALLBACK(on_cell_edited), NULL);
@@ -617,14 +635,16 @@ static void on_setup_cell(GtkSignalListItemFactory *f, GtkListItem *item,
  * and not one per row in the table.
  */
 static void cell_of(BtaWidget *w, BtaTableRow *row, guint col,
-                    char **text, char **icon)
+                    char **text, char **icon, char **uri)
 {
     *text = NULL;
     *icon = NULL;
+    *uri  = NULL;
 
     if (row && row->cells) {
         *text = g_strdup(row_cell(row, col));
         *icon = g_strdup(row_icon(row, col));
+        *uri  = g_strdup(row_uri(row, col));
         return;
     }
     if (!row)
@@ -642,26 +662,34 @@ static void cell_of(BtaWidget *w, BtaTableRow *row, guint col,
     } else if (JS_IsObject(r)) {
         JSValue     tv = JS_GetPropertyStr(ctx, r, "Text");
         JSValue     iv = JS_GetPropertyStr(ctx, r, "Icon");
+        JSValue     uv = JS_GetPropertyStr(ctx, r, "Uri");
         bool        no_t = JS_IsUndefined(tv) || JS_IsNull(tv);
         bool        no_i = JS_IsUndefined(iv) || JS_IsNull(iv);
+        bool        no_u = JS_IsUndefined(uv) || JS_IsNull(uv);
         const char *ts = no_t ? NULL : JS_ToCString(ctx, tv);
         const char *is = no_i ? NULL : JS_ToCString(ctx, iv);
+        const char *us = no_u ? NULL : JS_ToCString(ctx, uv);
 
         /* A `Text` or `Icon` whose conversion throws (a `toString` that throws,
          * a Symbol) is reported the way a `Data` handler that throws is: this
          * runs inside a bind, with nobody to hand it to, and left pending it
          * landed on whatever called into JavaScript next. `null` is no icon,
          * not the icon called "null". */
-        if ((!no_t && !ts) || (!no_i && !is))
+        if ((!no_t && !ts) || (!no_i && !is) || (!no_u && !us))
             bta_dump_error(ctx);
 
         *text = g_strdup(ts ? ts : "");
         *icon = is && *is ? g_strdup(is) : NULL;
+        /* Unlike an icon, an empty `Uri` is an answer: it is *no link on this
+         * row*, where an absent one means *the text is the address*. */
+        *uri  = us ? g_strdup(us) : NULL;
 
         JS_FreeCString(ctx, ts);
         JS_FreeCString(ctx, is);
+        JS_FreeCString(ctx, us);
         JS_FreeValue(ctx, tv);
         JS_FreeValue(ctx, iv);
+        JS_FreeValue(ctx, uv);
     }
 
     JS_FreeValue(ctx, r);
@@ -714,6 +742,8 @@ static void on_unbind_cell(GtkSignalListItemFactory *f, GtkListItem *item,
 
         if (GTK_IS_EDITABLE_LABEL(lbl))
             g_object_set_data(G_OBJECT(lbl), "bta-edit-row", NULL);
+        else if (lbl)
+            g_object_set_data(G_OBJECT(lbl), "bta-link-row", NULL);
     }
 }
 
@@ -808,6 +838,51 @@ static void on_cell_edited(GObject *obj, GParamSpec *pspec, gpointer user_data)
     JS_FreeValue(ctx, self);
 }
 
+/*
+ * A link cell was activated: a click, or Enter with the focus on it.
+ *
+ * `CellLink(row, column, uri)`, the row addressed as every other event of this
+ * table addresses one. **A handler that answers `false` refuses it** -- nothing
+ * is opened -- which is `CellEdit`'s veto in the same control; anything else
+ * lets the desktop open it. The answer to GTK is inverted, since for
+ * `activate-link` TRUE means *handled, do not open*.
+ *
+ * The handler may empty the table, which unbinds this label under the emit, so
+ * the row is read and the arguments built before it runs and nothing after it
+ * touches the cell.
+ */
+static gboolean on_cell_link(GtkLabel *label, const char *uri, gpointer user_data)
+{
+    BtaWidget   *w   = user_data;
+    BtaTableRow *row = g_object_get_data(G_OBJECT(label), "bta-link-row");
+    guint        col = GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(label),
+                                                          "bta-link-col"));
+
+    if (!w || !row)
+        return FALSE;
+
+    JSContext *ctx  = w->ctx;
+    JSValue    self = JS_DupValue(ctx, w->self);
+    int        at   = row->cells ? table_index_in(table_store_of(w, row), row)
+                                  : (int)row->index;
+    JSValue    argv[3];
+
+    argv[0] = table_state(w)->tree
+                  ? JS_NewString(ctx, row->key ? row->key : "")
+                  : JS_NewInt32(ctx, at);
+    argv[1] = JS_NewInt32(ctx, (int)col);
+    argv[2] = JS_NewString(ctx, uri ? uri : "");
+
+    JSValue  r      = bta_emit_answer(w, "CellLink", 3, argv, NULL);
+    gboolean refuse = JS_IsStrictEqual(ctx, r, JS_FALSE);
+
+    JS_FreeValue(ctx, r);
+    for (int i = 0; i < 3; i++)
+        JS_FreeValue(ctx, argv[i]);
+    JS_FreeValue(ctx, self);
+    return refuse;
+}
+
 static void on_bind_cell(GtkSignalListItemFactory *f, GtkListItem *item,
                          gpointer user_data)
 {
@@ -858,8 +933,8 @@ static void on_bind_cell(GtkSignalListItemFactory *f, GtkListItem *item,
     GtkWidget *img = gtk_widget_get_first_child(box);
     GtkWidget *lbl = gtk_widget_get_last_child(box);
 
-    char *text = NULL, *icon = NULL;
-    cell_of(w, row, col, &text, &icon);
+    char *text = NULL, *icon = NULL, *uri = NULL;
+    cell_of(w, row, col, &text, &icon, &uri);
 
     if (GTK_IS_EDITABLE_LABEL(lbl)) {
         /* What the cell says now, and the address its edit will be reported
@@ -870,6 +945,21 @@ static void on_bind_cell(GtkSignalListItemFactory *f, GtkListItem *item,
         g_object_set_data(G_OBJECT(lbl), "bta-edit-row", row);
         g_object_set_data(G_OBJECT(lbl), "bta-edit-col", GUINT_TO_POINTER(col));
         gtk_editable_set_text(GTK_EDITABLE(lbl), text ? text : "");
+    } else if (GPOINTER_TO_INT(g_object_get_data(G_OBJECT(f), "bta-link"))) {
+        /* The address is the cell's own text unless `SetUri` or `Data` said
+         * another; an empty one is a cell that is not a link. */
+        const char *target = uri ? uri : text;
+
+        g_object_set_data(G_OBJECT(lbl), "bta-link-row", row);
+        g_object_set_data(G_OBJECT(lbl), "bta-link-col", GUINT_TO_POINTER(col));
+        if (target && *target && text && *text) {
+            char *markup = g_markup_printf_escaped("<a href=\"%s\">%s</a>",
+                                                   target, text);
+            gtk_label_set_markup(GTK_LABEL(lbl), markup);
+            g_free(markup);
+        } else {
+            gtk_label_set_text(GTK_LABEL(lbl), text ? text : "");
+        }
     } else {
         gtk_label_set_text(GTK_LABEL(lbl), text ? text : "");
     }
@@ -884,6 +974,7 @@ static void on_bind_cell(GtkSignalListItemFactory *f, GtkListItem *item,
 
     g_free(text);
     g_free(icon);
+    g_free(uri);
     if (owned)
         g_clear_object(&row);
 }
@@ -897,7 +988,7 @@ static void on_bind_cell(GtkSignalListItemFactory *f, GtkListItem *item,
  * -- VB6's ListView through an ImageList, Gambas' `.Picture`, Qt's item -- and
  * it is what makes a list of files look like a list of files.
  *
- * "" takes it off. A virtual table answers with `{ Text, Icon }` from `Data`
+ * "" takes it off. A virtual table answers with `{ Text, Icon, Uri }` from `Data`
  * instead: it holds no cells to hang one on.
  */
 static JSValue table_set_icon(JSContext *ctx, JSValueConst this_val,
@@ -945,6 +1036,81 @@ static JSValue table_set_icon(JSContext *ctx, JSValueConst this_val,
     row_pad(&row->icons, (guint)c);
     g_free(row->icons->pdata[c]);
     row->icons->pdata[c] = s && *s ? g_strdup(s) : NULL;
+
+    JS_FreeCString(ctx, s);
+    table_row_changed(w, row, at);
+    g_object_unref(row);
+    return JS_UNDEFINED;
+}
+
+/*
+ * SetUri(row, column, uri) -- where a link cell goes, when that is not what it
+ * says.
+ *
+ * The same shape as `SetIcon` and for the same reason: a cell is text, and an
+ * address is a second thing that hangs on it. With none, a `Link` column opens
+ * the cell's own text. `""` makes the cell *not* a link and `null` takes the
+ * address off again -- the two answers `Data` gives with `Uri` empty and
+ * absent. A virtual table answers `{ Text, Uri }` from `Data` instead.
+ */
+static JSValue table_set_uri(JSContext *ctx, JSValueConst this_val,
+                             int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    TableState *st = table_state(w);
+
+    if (st->virt)
+        return JS_ThrowTypeError(ctx,
+            "SetUri: a table that answers Data holds no cells; "
+            "return { Text, Uri } from the handler instead");
+
+    int32_t c;
+    if (argc < 3 || !bta_to_int(ctx, argv[1], "SetUri", &c))
+        return JS_ThrowTypeError(ctx, st->tree
+            ? "SetUri(key, column, uri) expects a key, a column and an address"
+            : "SetUri(row, column, uri) expects two numbers and an address");
+
+    bool         bad = false;
+    BtaTableRow *row = table_row_arg(ctx, w, argv[0], &bad);
+    int          at  = st->tree ? -1 : 0;
+
+    if (bad)
+        return JS_EXCEPTION;
+    if (!row) {
+        const char *name = JS_ToCString(ctx, argv[0]);
+        JSValue     e    = JS_ThrowRangeError(ctx, "SetUri: there is no %s %s",
+                                              table_what(w), name ? name : "");
+        JS_FreeCString(ctx, name);
+        return e;
+    }
+    if (c < 0) {
+        g_object_unref(row);
+        return JS_ThrowRangeError(ctx, "SetUri: %d is not a column", c);
+    }
+
+    /* Converted before anything is touched: a refusal leaves the row as it was. */
+    const char *s = NULL;
+    if (!JS_IsNull(argv[2])) {
+        if (!JS_IsString(argv[2])) {
+            g_object_unref(row);
+            return JS_ThrowTypeError(ctx,
+                "SetUri: the address is text, or null to take it off");
+        }
+        s = JS_ToCString(ctx, argv[2]);
+        if (!s) {
+            g_object_unref(row);
+            return JS_EXCEPTION;
+        }
+    }
+    if (!st->tree)
+        JS_ToInt32(ctx, &at, argv[0]);
+
+    row_pad(&row->uris, (guint)c);
+    g_free(row->uris->pdata[c]);
+    row->uris->pdata[c] = s ? g_strdup(s) : NULL;
 
     JS_FreeCString(ctx, s);
     table_row_changed(w, row, at);
@@ -1680,7 +1846,25 @@ static bool table_build_columns(JSContext *ctx, BtaWidget *w, JSValueConst list)
             JS_ThrowTypeError(ctx, "%s: Editable is a boolean", where);
             return false;
         }
+        bool editable_decl = JS_ToBool(ctx, ev) > 0;
         JS_FreeValue(ctx, ev);
+
+        JSValue lv = JS_GetPropertyStr(ctx, col, "Link");
+        if (!JS_IsUndefined(lv) && !JS_IsBool(lv)) {
+            JS_FreeValue(ctx, lv);
+            JS_FreeValue(ctx, col);
+            JS_ThrowTypeError(ctx, "%s: Link is a boolean", where);
+            return false;
+        }
+        /* A cell is a field or it is a link; the one control cannot be both. */
+        if (editable_decl && JS_ToBool(ctx, lv) > 0) {
+            JS_FreeValue(ctx, lv);
+            JS_FreeValue(ctx, col);
+            JS_ThrowTypeError(ctx,
+                "%s: a column cannot be both Editable and a Link", where);
+            return false;
+        }
+        JS_FreeValue(ctx, lv);
 
         bool bad = false;
         alignment_of(ctx, col, where, &bad);
@@ -1718,6 +1902,11 @@ static bool table_build_columns(JSContext *ctx, BtaWidget *w, JSValueConst list)
 
         JS_FreeValue(ctx, ev);
 
+        JSValue lv   = JS_GetPropertyStr(ctx, col, "Link");
+        bool    link = JS_ToBool(ctx, lv) > 0;
+
+        JS_FreeValue(ctx, lv);
+
         GtkListItemFactory *f = gtk_signal_list_item_factory_new();
         g_object_set_data(G_OBJECT(f), COLUMN_INDEX_KEY, GUINT_TO_POINTER(i));
         if (i == 0 && table_state(w)->tree)
@@ -1726,11 +1915,13 @@ static bool table_build_columns(JSContext *ctx, BtaWidget *w, JSValueConst list)
                           GINT_TO_POINTER((int)(x * 100)));
         g_object_set_data(G_OBJECT(f), "bta-editable",
                           GINT_TO_POINTER(editable));
+        g_object_set_data(G_OBJECT(f), "bta-link", GINT_TO_POINTER(link));
         g_signal_connect(f, "setup", G_CALLBACK(on_setup_cell), w);
         g_signal_connect(f, "bind",  G_CALLBACK(on_bind_cell),  w);
-        /* Only the column that carries the expander watches anything, and only
-         * an editable one has an address to let go of -- either is a reason. */
-        if ((i == 0 && table_state(w)->tree) || editable)
+        /* Only the column that carries the expander watches anything, and an
+         * editable or a link one has an address to let go of -- any of them is
+         * a reason. */
+        if ((i == 0 && table_state(w)->tree) || editable || link)
             g_signal_connect(f, "unbind", G_CALLBACK(on_unbind_cell), w);
 
         GtkColumnViewColumn *c =
@@ -3087,11 +3278,14 @@ static JSValue table_reveal_row(JSContext *ctx, JSValueConst this_val,
 
 static const JSCFunctionListEntry table_props[] = {
     /* Columns
-     *   an array of `{ Text, Width, Alignment, Editable }`. `Text` is
+     *   an array of `{ Text, Width, Alignment, Editable, Link }`. `Text` is
      *   **translated**; `Width: 0` sizes itself and the last column takes the
      *   slack; `Editable: true` makes a cell a field — clicked, typed and
      *   committed — and an editable column reads left-aligned, because a
-     *   `GtkEditableLabel` is not a label
+     *   `GtkEditableLabel` is not a label. `Link: true` makes each cell a link
+     *   — underlined, a pointer over it, a focus stop, Enter — whose address
+     *   is the cell's text unless `SetUri` or `Data` says another, and a cell
+     *   with no text is plain. **A column is a field or a link, never both**
      */
     JS_CGETSET_DEF("Columns",     table_get_columns,   table_set_columns),
     /* Count
@@ -3245,6 +3439,12 @@ static const JSCFunctionListEntry table_props[] = {
      *   Refused on an on-demand table
      */
     JS_CFUNC_DEF("SetIcon", 3, table_set_icon),
+    /* SetUri(row, column, uri)
+     *   where a `Link` cell goes when that is not its text. `""` makes the
+     *   cell not a link, `null` goes back to opening its text. Refused on an
+     *   on-demand table
+     */
+    JS_CFUNC_DEF("SetUri", 3, table_set_uri),
     /* HeaderMenu
      *   the menu a column heading offers on a secondary click, as the same
      *   array of items `Menu` takes. Built for each click, and every item's
@@ -3311,7 +3511,9 @@ void bta_table_register(void)
          */
         /* Data(row, column)
          *   the table needs a cell. **The return value is the answer**: a
-         *   string, or `{ Text, Icon }` for a cell with a picture
+         *   string, or `{ Text, Icon, Uri }` for a cell with a picture or an
+         *   address of its own. In a `Link` column an absent `Uri` means the
+         *   text is the address and `""` means this cell is not a link
          */
         /* Sort(column, ascending)
          *   a sortable header was clicked. **The handler decides** — `SortBy`
@@ -3324,6 +3526,12 @@ void bta_table_register(void)
          *   cell goes back to what it said; anything else is taken and the
          *   text is written into the row. An on-demand table holds no cells,
          *   so there the handler stores it
+         */
+        /* CellLink(row, column, uri)
+         *   a `Link` cell was activated — a click, or Enter on it. `row` is an
+         *   index in a flat table and a key in a tree. **Returning `false`
+         *   refuses it** and nothing is opened, as in `CellEdit`; anything else
+         *   lets the desktop open `uri`
          */
         /* HeaderClick(column, button, ctrl, shift)
          *   a column heading was pressed — the one pointer event a heading
@@ -3340,7 +3548,7 @@ void bta_table_register(void)
          */
         BTA_CLASS_ENUM_TEXT("TableView", "Control", build_table, table_props, false,
                             table_options, "Columns.Text",
-                            "Select,Activate,Data,Sort,CellEdit,HeaderClick,Scroll"),
+                            "Select,Activate,Data,Sort,CellEdit,CellLink,HeaderClick,Scroll"),
     };
     bta_register_classes(rows, (int)G_N_ELEMENTS(rows));
 }

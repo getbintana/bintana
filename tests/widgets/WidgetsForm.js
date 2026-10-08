@@ -14680,6 +14680,52 @@ function Main() {
         eq("with no handler the event is taken",
            t.Emit("CellEdit", 0, 0, "otro"), undefined);
 
+        /*
+         * **A column may be a link**: a `GtkLabel` with a link in it, and
+         * `CellLink(row, column, uri)` raised before the desktop opens it. The
+         * press is a pointer gesture, so what is held here is the declaration,
+         * the refusals, `SetUri`, and the event's contract; the click is on the
+         * by-hand list.
+         */
+        t.Columns = [{ Text: "A" }, { Text: "Url", Link: true }];
+        eq("Link is part of the declaration and round-trips",
+           JSON.stringify(t.Columns), '[{"Text":"A"},{"Text":"Url","Link":true}]');
+        throws("and it is a boolean",
+               () => { t.Columns = [{ Text: "A", Link: "yes" }]; });
+        throws("and a column is a field or a link, never both",
+               () => { t.Columns = [{ Text: "A", Link: true, Editable: true }]; });
+        eq("a refused declaration leaves the columns as they were",
+           JSON.stringify(t.Columns), '[{"Text":"A"},{"Text":"Url","Link":true}]');
+
+        t.Clear();
+        t.Add(["uno", "https://example.org/"]);
+        t.SetUri(0, 1, "https://example.org/other");
+        eq("SetUri leaves the text alone", t.Cell(0, 1), "https://example.org/");
+        t.SetUri(0, 1, null);
+        throws("an address is text or null", () => t.SetUri(0, 1, 5));
+        throws("a row that is not there is refused", () => t.SetUri(9, 1, ""));
+
+        this.cellLinks = [];
+        t.On("CellLink", (row, column, uri) => {
+            this.cellLinks.push([row, column, uri]);
+            return false;
+        });
+        eq("a refused link answers false",
+           t.Emit("CellLink", 0, 1, "https://example.org/"), false);
+        eq("and the handler is asked with the row, the column and the address",
+           JSON.stringify(this.cellLinks), '[[0,1,"https://example.org/"]]');
+        t.On("CellLink", null);
+
+        const v = new TableView();
+        this.Fixed1.Add(v);
+        v.Name    = "VirtLink";
+        v.Columns = [{ Text: "N", Link: true }];
+        v.On("Data", (row, col) => ({ Text: "r" + row, Uri: row ? "https://example.org/" + row : "" }));
+        v.Count = 2;
+        throws("an on-demand table holds no cells to give an address",
+               () => v.SetUri(0, 0, "x"));
+        v.Delete();
+
         t.Delete();
     }
 
