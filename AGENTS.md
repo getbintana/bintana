@@ -5697,63 +5697,6 @@ property grid's JSON field is the way in, and the dialog preserves the key.
 and its `xfwm4` by the PIDs you started (`$!`), never `pkill xfwm4` -- it matches
 the desktop's own.
 
-## Reordering a `TableView`'s columns, and the rebuild that is not there
-
-`GtkColumnView:reorderable` is **TRUE since GTK 4.0** -- a heading can always be
-dragged -- and this runtime used to switch it off. It is on now, and *followed*.
-A drop ends in `gtk_column_view_insert_column`, which takes the column out of
-the model and puts it back, so the order changes in one place and **two
-`items-changed`** are the only report: a removal, then an insertion. The first
-is where the column that moved is read -- the one missing from the set -- and
-the second, complete, is where the permutation is. There is no signal of its
-own, and **no keyboard road** either (a `GtkColumnViewTitle` answers Escape to a
-drag and nothing else), so the gesture cannot be a test: `ReorderColumn` makes
-the same call from code and is the road everything is held by, and the drag
-itself is a by-hand item.
-
-What the runtime does with the permutation is the part to remember:
-
-- **The declaration, the `__declared` note and the rows move together.** `p[j]`
-  is the column that was at `p[j]` and is now at `j`: the spec is permuted, and
-  so is the note (`Columns.Text` is prose -- permuting only the applied array
-  makes the next save write the old order) and every row's `cells`, `icons` and
-  `uris`, subtrees included. A value a row never had stays a **hole** wherever
-  it lands, which is why `row_cell` answers `""` for a NULL entry and `Row()`
-  does too.
-- **The columns are not rebuilt, and that is the design.** The first version
-  rebuilt them from the reordered spec, inside the insertion's own
-  `items-changed`; measured on GTK 4.22, a drag that ended `B,C,A` drew its
-  headings **`A | C | A`** -- the header row does not survive the columns being
-  taken away and put back mid-insert. It also threw away the width a person
-  dragged and the sorted arrow for nothing. GTK has already put the columns
-  where the user dropped them and the cells travel with them; what has to follow
-  is each factory's index -- the number `Data`, `Cell` and the rest address by
-  -- which is renumbered in place. A field that commits an edit and a link that
-  is clicked read that number **when the event happens** and not when the cell
-  was bound (`factory_decl`), or a column that moved would write its edit into
-  the column it used to be.
-- **A tree gets fresh factories**, because the disclosure is a widget a factory
-  builds and it belongs on the first *visible* column: a reorder that changes
-  which column is first moves the expander and the indent with it. The factories
-  are made by `table_make_factory`, shared with `table_build_columns` so the two
-  roads cannot disagree about what a factory carries.
-- **`Data`'s `column` is a position**, and a reorder changes it: a program whose
-  handler maps the position onto its own data follows `Reordered` -- or sets
-  `Reorderable = false`, which is what that property is for.
-  `Reordered(column, index)` is told once the state is whole, the same pair
-  `ReorderColumn(column, index)` takes.
-
-**The gesture itself could not be measured under Xvfb, and the reason is
-GTK's.** XTEST motion with the button held does not reach the header's drag
-gesture: the title's click claims the sequence at the press and the motion never
-arrives -- in GTK alone as much as here. A pure `GtkColumnView` probe reorders
-nothing and its resize drag is just as dead, while a slider drags fine, so it is
-the title's claim and not this runtime. What *was* measured is the path a drop
-takes once the model has moved: a probe calling the drop's exact
-`gtk_column_view_insert_column`, under AddressSanitizer, flat and tree, both
-directions, with the headings and the expander checked by screenshot. The real
-pointer is still the by-hand item.
-
 ## Keyring: the vault, and what it does not promise
 
 `Keyring.Available`, `Store`, `Lookup` and `Delete`, in `bta_keyring.c`, over

@@ -100,18 +100,10 @@ static void bta_table_row_init(BtaTableRow *self)
  * are columns: a row is data and the columns are a view of it. Reading past the
  * end is "" rather than an error, so adding a column does not invalidate every
  * row already in the table.
- *
- * **A hole inside the row answers "" too.** Reordering the columns permutes a
- * row's values with them, and a value the row never had stays missing wherever
- * it lands -- so `pdata[i]` may be NULL in the middle now, and every reader
- * goes through here.
  */
 static const char *row_cell(BtaTableRow *row, guint i)
 {
-    const char *s = row && row->cells && i < row->cells->len
-                        ? row->cells->pdata[i] : NULL;
-
-    return s ? s : "";
+    return row && row->cells && i < row->cells->len ? row->cells->pdata[i] : "";
 }
 
 static const char *row_icon(BtaTableRow *row, guint i)
@@ -132,51 +124,6 @@ static void row_pad(GPtrArray **list, guint i)
         *list = g_ptr_array_new_with_free_func(g_free);
     while ((*list)->len <= i)
         g_ptr_array_add(*list, NULL);
-}
-
-/*
- * One of a row's lists, permuted to follow the columns.
- *
- * `p[j]` is the old index of the column that now sits at `j`, so a new position
- * takes the value the old one held -- the same `p` the spec was permuted by,
- * and that is the whole point: a cell is looked up by the column it is in, and
- * if the columns move and the values do not, the next bind shows one column's
- * data under another's heading.
- *
- * Two things it has to get right. A value the row never had stays a **hole**
- * wherever it lands (readers answer "" for it, and trailing holes are simply
- * not there), and positions past the declared columns -- a row may be given
- * more values than there are columns -- are not columns at all, so they stay
- * where they are. A list nobody made stays unmade.
- */
-static void row_permute(GPtrArray **list, const guint *p, guint n)
-{
-    GPtrArray *old = *list;
-
-    if (!old || old->len == 0)
-        return;
-
-    guint needed = old->len;
-    for (guint j = 0; j < n; j++)
-        if (p[j] < old->len)
-            needed = MAX(needed, j + 1);
-
-    GPtrArray *fresh = g_ptr_array_new_full(needed, g_free);
-
-    for (guint j = 0; j < needed; j++) {
-        const char *v = NULL;
-
-        if (j < n) {
-            if (p[j] < old->len)
-                v = old->pdata[p[j]];
-        } else if (j < old->len) {
-            v = old->pdata[j];
-        }
-        g_ptr_array_add(fresh, v ? g_strdup(v) : NULL);
-    }
-
-    g_ptr_array_unref(old);
-    *list = fresh;
 }
 
 /*
@@ -292,14 +239,6 @@ typedef struct {
     bool           sortable;
     bool           sort_hooked;   /* the view's sorter is being watched */
     int            header_min;    /* a floor for the row of column headings */
-    /* The columns being rebuilt: `items-changed` fires per removal and per
-     * insertion, and only a build that is not ours is a reorder. A count and
-     * not a flag, because reading a spec can run a getter that assigns
-     * `Columns` again. */
-    int            building;
-    /* The drag in flight: the declared index the remove signal took out, which
-     * is the column the insert that follows is about. -1 when none. */
-    int            drag_col;
 } TableState;
 
 static void table_state_free(gpointer p)
@@ -603,12 +542,6 @@ static void table_row_changed(BtaWidget *w, BtaTableRow *row, int at)
  * what a cell needs to know: the row carries its own values and a column is a
  * view of one of them.
  */
-/*
- * The declared index of the column, kept on its factory as **index plus one**:
- * a factory with no answer and column 0 would both read 0 otherwise, and the
- * reorder tells a column that is not ours from a model that is not complete by
- * exactly that. The cell address is this minus one.
- */
 #define COLUMN_INDEX_KEY "bta-column-index"
 /* Set on the factory of the column that carries the disclosure: the first one,
  * and only while the table is a tree. */
@@ -633,18 +566,6 @@ static void table_row_changed(BtaWidget *w, BtaTableRow *row, int at)
 static void on_cell_edited(GObject *obj, GParamSpec *pspec, gpointer user_data);
 static gboolean on_cell_link(GtkLabel *label, const char *uri, gpointer user_data);
 
-/* The declared index a factory carries, or -1 when it carries none. The cell
- * handlers read it at event time and not at bind time: a reorder renumbers the
- * factories in place, and a field that commits an edit or a link that is
- * clicked must answer for the column it is in *now*. */
-static int factory_decl(GtkListItemFactory *f)
-{
-    guint stored = f ? GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(f),
-                                                          COLUMN_INDEX_KEY)) : 0;
-
-    return stored ? (int)(stored - 1) : -1;
-}
-
 static void on_setup_cell(GtkSignalListItemFactory *f, GtkListItem *item,
                           gpointer user_data)
 {
@@ -660,11 +581,6 @@ static void on_setup_cell(GtkSignalListItemFactory *f, GtkListItem *item,
      * has. It is not a `GtkLabel`, so `Alignment` and ellipsizing are the
      * label's and not this one's: an editable column reads left-aligned. */
     GtkWidget *label = editable ? gtk_editable_label_new("") : gtk_label_new("");
-
-    /* The factory travels with the column, so a cell asks it which column it is
-     * in when an edit commits or a link is clicked -- a reorder renumbers the
-     * factories in place and the answer has to be the one that is true then. */
-    g_object_set_data(G_OBJECT(label), "bta-factory", f);
 
     /* Left by default and right for numbers, which is what `Alignment` says;
      * the factory carries it because a label is made here and bound there. */
@@ -849,8 +765,7 @@ static void on_cell_edited(GObject *obj, GParamSpec *pspec, gpointer user_data)
 
     BtaWidget   *w   = g_object_get_data(obj, "bta-edit-widget");
     BtaTableRow *row = g_object_get_data(obj, "bta-edit-row");
-    int          at_col = factory_decl(g_object_get_data(obj, "bta-factory"));
-    guint        col = at_col >= 0 ? (guint)at_col : 0;
+    guint        col = GPOINTER_TO_UINT(g_object_get_data(obj, "bta-edit-col"));
     const char  *was = g_object_get_data(obj, "bta-edit-old");
     const char  *txt = gtk_editable_get_text(GTK_EDITABLE(obj));
 
@@ -940,9 +855,8 @@ static gboolean on_cell_link(GtkLabel *label, const char *uri, gpointer user_dat
 {
     BtaWidget   *w   = user_data;
     BtaTableRow *row = g_object_get_data(G_OBJECT(label), "bta-link-row");
-    int          at_col = factory_decl(g_object_get_data(G_OBJECT(label),
-                                                         "bta-factory"));
-    guint        col = at_col >= 0 ? (guint)at_col : 0;
+    guint        col = GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(label),
+                                                          "bta-link-col"));
 
     if (!w || !row)
         return FALSE;
@@ -972,8 +886,8 @@ static gboolean on_cell_link(GtkLabel *label, const char *uri, gpointer user_dat
 static void on_bind_cell(GtkSignalListItemFactory *f, GtkListItem *item,
                          gpointer user_data)
 {
-    int          decl = factory_decl(GTK_LIST_ITEM_FACTORY(f));
-    guint        col  = decl >= 0 ? (guint)decl : 0;
+    guint        col  = GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(f),
+                                                           COLUMN_INDEX_KEY));
     BtaWidget   *w    = user_data;
     gpointer     what = gtk_list_item_get_item(item);
     GtkWidget   *box  = gtk_list_item_get_child(item);
@@ -1029,6 +943,7 @@ static void on_bind_cell(GtkSignalListItemFactory *f, GtkListItem *item,
         g_object_set_data_full(G_OBJECT(lbl), "bta-edit-old",
                                g_strdup(text ? text : ""), g_free);
         g_object_set_data(G_OBJECT(lbl), "bta-edit-row", row);
+        g_object_set_data(G_OBJECT(lbl), "bta-edit-col", GUINT_TO_POINTER(col));
         gtk_editable_set_text(GTK_EDITABLE(lbl), text ? text : "");
     } else if (GPOINTER_TO_INT(g_object_get_data(G_OBJECT(f), "bta-link"))) {
         /* The address is the cell's own text unless `SetUri` or `Data` said
@@ -1036,6 +951,7 @@ static void on_bind_cell(GtkSignalListItemFactory *f, GtkListItem *item,
         const char *target = uri ? uri : text;
 
         g_object_set_data(G_OBJECT(lbl), "bta-link-row", row);
+        g_object_set_data(G_OBJECT(lbl), "bta-link-col", GUINT_TO_POINTER(col));
         if (target && *target && text && *text) {
             char *markup = g_markup_printf_escaped("<a href=\"%s\">%s</a>",
                                                    target, text);
@@ -1327,39 +1243,6 @@ static JSValue table_set_sortable(JSContext *ctx, JSValueConst this_val,
         g_clear_object(&s);
         g_object_unref(c);
     }
-    return JS_UNDEFINED;
-}
-
-/*
- * `Reorderable` -- whether a heading can be dragged to move its column.
- *
- * GTK ships this on, and this runtime follows the drag; the property exists so
- * that a program which cannot live with the order changing -- one whose `Data`
- * maps the column position onto its own data, say -- can turn it off and keep
- * the old, fixed order. It is read and written on the view itself: there is no
- * state to keep, because the view outlives every column.
- */
-static JSValue table_get_reorderable(JSContext *ctx, JSValueConst this_val)
-{
-    BtaWidget *w = bta_this(ctx, this_val);
-    if (!w)
-        return JS_EXCEPTION;
-    return JS_NewBool(ctx,
-        gtk_column_view_get_reorderable(GTK_COLUMN_VIEW(w->inner)));
-}
-
-static JSValue table_set_reorderable(JSContext *ctx, JSValueConst this_val,
-                                     JSValueConst val)
-{
-    BtaWidget *w = bta_this(ctx, this_val);
-    if (!w)
-        return JS_EXCEPTION;
-
-    int b = JS_ToBool(ctx, val);
-    if (b < 0)
-        return JS_EXCEPTION;
-
-    gtk_column_view_set_reorderable(GTK_COLUMN_VIEW(w->inner), b);
     return JS_UNDEFINED;
 }
 
@@ -1805,11 +1688,6 @@ static void on_row_activated(GtkColumnView *view, guint position,
 
 /* ---------------------------------------------------------------- build */
 
-/* Defined with the rest of the reorder, after `table_build_columns`; connected
- * here because the model it watches is made with the view. */
-static void on_columns_changed(GListModel *cols, guint position, guint removed,
-                               guint added, gpointer user_data);
-
 static void build_table(BtaWidget *w)
 {
     TableState *st = g_new0(TableState, 1);
@@ -1829,15 +1707,10 @@ static void build_table(BtaWidget *w)
 
     w->inner = gtk_column_view_new(GTK_SELECTION_MODEL(sel));
     gtk_column_view_set_show_row_separators(GTK_COLUMN_VIEW(w->inner), TRUE);
-    /* **GTK's default is already TRUE** -- a heading can be dragged since 4.0 --
-     * and this runtime turns it on and then *follows* it: `on_columns_changed`
-     * writes the new order back into `Columns` and the rows. A table that sets
-     * `Reorderable = false` gets the old, fixed order. */
-    gtk_column_view_set_reorderable(GTK_COLUMN_VIEW(w->inner), TRUE);
+    gtk_column_view_set_reorderable(GTK_COLUMN_VIEW(w->inner), FALSE);
 
     g_object_set_data_full(G_OBJECT(w->inner), TABLE_STATE_KEY, st,
                            table_state_free);
-    st->drag_col = -1;
 
     /* Content whose size is not its parent's business, like every other list
      * here: the view is the room there is and the rows scroll inside it. */
@@ -1857,12 +1730,6 @@ static void build_table(BtaWidget *w)
                      G_CALLBACK(on_selection_changed), w);
     bta_widget_watch(w, sel);
     g_signal_connect(w->inner, "activate", G_CALLBACK(on_row_activated), w);
-
-    /* The columns model, watched the same way and for the same reason: a
-     * heading drag reorders it, and `items-changed` is its only report. */
-    GListModel *cols = gtk_column_view_get_columns(GTK_COLUMN_VIEW(w->inner));
-    bta_widget_watch(w, cols);
-    g_signal_connect(cols, "items-changed", G_CALLBACK(on_columns_changed), w);
 
     /*
      * The heading's press, in the **capture** phase and for any button: GTK's
@@ -1918,51 +1785,6 @@ static float alignment_of(JSContext *ctx, JSValueConst col, const char *where,
     }
     JS_FreeValue(ctx, v);
     return x;
-}
-
-/*
- * One column's factory: told which column it is (as index plus one) and what
- * the declaration said about it. `first_of_tree` is the column that carries the
- * disclosure.
- *
- * A function because a reorder makes factories too: the one of a column whose
- * place in a tree changed is replaced, which is what moves the expander, and
- * the two roads must not disagree about what a factory carries.
- */
-static GtkListItemFactory *table_make_factory(JSContext *ctx, BtaWidget *w,
-                                              JSValueConst col, guint i,
-                                              bool first_of_tree)
-{
-    bool  bad = false;
-    float x   = alignment_of(ctx, col, "Columns", &bad);
-
-    JSValue ev       = JS_GetPropertyStr(ctx, col, "Editable");
-    bool    editable = JS_ToBool(ctx, ev) > 0;
-
-    JS_FreeValue(ctx, ev);
-
-    JSValue lv   = JS_GetPropertyStr(ctx, col, "Link");
-    bool    link = JS_ToBool(ctx, lv) > 0;
-
-    JS_FreeValue(ctx, lv);
-
-    GtkListItemFactory *f = gtk_signal_list_item_factory_new();
-    g_object_set_data(G_OBJECT(f), COLUMN_INDEX_KEY, GUINT_TO_POINTER(i + 1));
-    if (first_of_tree)
-        g_object_set_data(G_OBJECT(f), TREE_COLUMN_KEY, GINT_TO_POINTER(1));
-    g_object_set_data(G_OBJECT(f), "bta-xalign",
-                      GINT_TO_POINTER((int)(x * 100)));
-    g_object_set_data(G_OBJECT(f), "bta-editable",
-                      GINT_TO_POINTER(editable));
-    g_object_set_data(G_OBJECT(f), "bta-link", GINT_TO_POINTER(link));
-    g_signal_connect(f, "setup", G_CALLBACK(on_setup_cell), w);
-    g_signal_connect(f, "bind",  G_CALLBACK(on_bind_cell),  w);
-    /* Only the column that carries the expander watches anything, and an
-     * editable or a link one has an address to let go of -- any of them is
-     * a reason. */
-    if (first_of_tree || editable || link)
-        g_signal_connect(f, "unbind", G_CALLBACK(on_unbind_cell), w);
-    return f;
 }
 
 /* Builds the GtkColumnViewColumns from the declaration. Every existing column
@@ -2051,12 +1873,7 @@ static bool table_build_columns(JSContext *ctx, BtaWidget *w, JSValueConst list)
             return false;
     }
 
-    /* Out with the old. Walked backwards because removing shortens the list.
-     *
-     * Counted as *building*, because every removal and every insertion below
-     * fires `items-changed` and the reorder's handler must not take its own
-     * rebuild for a heading drag. */
-    table_state(w)->building++;
+    /* Out with the old. Walked backwards because removing shortens the list. */
     GListModel *have = gtk_column_view_get_columns(view);
     for (guint i = g_list_model_get_n_items(have); i > 0; i--) {
         GtkColumnViewColumn *c = g_list_model_get_item(have, i - 1);
@@ -2077,8 +1894,35 @@ static bool table_build_columns(JSContext *ctx, BtaWidget *w, JSValueConst list)
             bta_to_int(ctx, wv, "Columns.Width", &px);
         JS_FreeValue(ctx, wv);
 
-        GtkListItemFactory *f = table_make_factory(ctx, w, col, i,
-                                                   i == 0 && table_state(w)->tree);
+        bool  bad = false;
+        float x   = alignment_of(ctx, col, "Columns", &bad);
+
+        JSValue ev       = JS_GetPropertyStr(ctx, col, "Editable");
+        bool    editable = JS_ToBool(ctx, ev) > 0;
+
+        JS_FreeValue(ctx, ev);
+
+        JSValue lv   = JS_GetPropertyStr(ctx, col, "Link");
+        bool    link = JS_ToBool(ctx, lv) > 0;
+
+        JS_FreeValue(ctx, lv);
+
+        GtkListItemFactory *f = gtk_signal_list_item_factory_new();
+        g_object_set_data(G_OBJECT(f), COLUMN_INDEX_KEY, GUINT_TO_POINTER(i));
+        if (i == 0 && table_state(w)->tree)
+            g_object_set_data(G_OBJECT(f), TREE_COLUMN_KEY, GINT_TO_POINTER(1));
+        g_object_set_data(G_OBJECT(f), "bta-xalign",
+                          GINT_TO_POINTER((int)(x * 100)));
+        g_object_set_data(G_OBJECT(f), "bta-editable",
+                          GINT_TO_POINTER(editable));
+        g_object_set_data(G_OBJECT(f), "bta-link", GINT_TO_POINTER(link));
+        g_signal_connect(f, "setup", G_CALLBACK(on_setup_cell), w);
+        g_signal_connect(f, "bind",  G_CALLBACK(on_bind_cell),  w);
+        /* Only the column that carries the expander watches anything, and an
+         * editable or a link one has an address to let go of -- any of them is
+         * a reason. */
+        if ((i == 0 && table_state(w)->tree) || editable || link)
+            g_signal_connect(f, "unbind", G_CALLBACK(on_unbind_cell), w);
 
         GtkColumnViewColumn *c =
             gtk_column_view_column_new(title ? title : "", f);
@@ -2108,387 +1952,7 @@ static bool table_build_columns(JSContext *ctx, BtaWidget *w, JSValueConst list)
         JS_FreeValue(ctx, tv);
         JS_FreeValue(ctx, col);
     }
-    table_state(w)->building--;
     return true;
-}
-
-/* ------------------------------------------------------- reordering columns
- *
- * **A heading can be dragged, and that is GTK's doing, not ours**: the view
- * ships `reorderable` as TRUE, and a drop ends in
- * `gtk_column_view_insert_column`, which takes the column out of its model and
- * puts it back -- so the order changes in one place, the columns model, and
- * `items-changed` is the only report of it. There is no signal of its own, and
- * no keyboard road either: a `GtkColumnViewTitle` answers Escape to a drag and
- * nothing else.
- *
- * What this runtime adds is *following* it. `Columns` is the declaration and
- * every cell is addressed by its index, so a drag that only moved the widgets
- * would leave the spec, the save and `Data`'s column answering for an order
- * nobody sees. The model is read as a permutation, and the same `p` moves the
- * declaration (and the `__declared` note, or a form opened in another language
- * would save the old order), every row's cells, icons and addresses, and the
- * factories' idea of which column they are -- which is also what
- * `ReorderColumn` does from code, by making the same call the drop makes.
- * **One order, and it is the one the user made.**
- *
- * **Nothing is rebuilt, and that is the design.** The first version rebuilt the
- * columns from the reordered spec, inside the insertion's own `items-changed`;
- * measured on GTK 4.22, a drag that ended `B,C,A` drew its headings `A | C | A`
- * -- the header row, mid-insert, does not survive the columns being taken away
- * and put back. It also threw away the width a person dragged and the sorted
- * arrow for nothing. The widgets are already in the order the user made: the
- * cells travel with them, so the only things that have to follow are the
- * declaration, the rows, and the factory index each column answers by. A tree
- * gets fresh factories, because the disclosure is a widget a factory builds and
- * it belongs on the first column.
- */
-
-/* The declared index of a column's factory, or -1 when it is not one of ours. */
-static int column_decl_of(GtkColumnViewColumn *c)
-{
-    return factory_decl(gtk_column_view_column_get_factory(c));
-}
-
-/* The declared order of the model, `p[j]` being the column that was at `p[j]`
- * and now sits at `j`. False unless the model is a complete permutation of the
- * declared columns -- the half of a build or of a drop that is not the whole
- * picture. */
-static bool table_column_order(BtaWidget *w, guint n, guint *p)
-{
-    GListModel *cols = gtk_column_view_get_columns(GTK_COLUMN_VIEW(w->inner));
-
-    if (g_list_model_get_n_items(cols) != n)
-        return false;
-
-    bool *seen = g_new0(bool, n);
-    bool  ok   = true;
-
-    for (guint j = 0; ok && j < n; j++) {
-        GtkColumnViewColumn *c = g_list_model_get_item(cols, j);
-        int                  k = column_decl_of(c);
-
-        if (k < 0 || (guint)k >= n || seen[k])
-            ok = false;
-        else {
-            seen[k] = true;
-            p[j]    = (guint)k;
-        }
-        g_object_unref(c);
-    }
-    g_free(seen);
-    return ok;
-}
-
-/* The column the remove signal took out, told by the one that is missing from
- * the model -- a drop is a remove and an insert, and between them the model is
- * one short. -1 when the set does not answer. */
-static int table_column_missing(BtaWidget *w, guint n)
-{
-    GListModel *cols = gtk_column_view_get_columns(GTK_COLUMN_VIEW(w->inner));
-    bool       *seen = g_new0(bool, n);
-    int         missing = -1;
-
-    for (guint j = 0; j < g_list_model_get_n_items(cols); j++) {
-        GtkColumnViewColumn *c = g_list_model_get_item(cols, j);
-        int                  k = column_decl_of(c);
-
-        g_object_unref(c);
-        if (k < 0 || (guint)k >= n || seen[k])
-            goto done;                      /* not one of ours, or twice */
-        seen[k] = true;
-    }
-    for (guint k = 0; k < n; k++)
-        if (!seen[k]) {
-            if (missing >= 0)
-                goto done;                  /* two missing is not a drag */
-            missing = (int)k;
-        }
-done:
-    g_free(seen);
-    return missing;
-}
-
-/* Reorders an array's own entries in place: `p[j]` is the old index of what the
- * new position `j` takes. */
-static void js_array_permute(JSContext *ctx, JSValueConst arr, const guint *p,
-                             guint n)
-{
-    JSValue *vals = js_malloc(ctx, sizeof(JSValue) * n);
-
-    if (!vals)
-        return;
-
-    for (guint j = 0; j < n; j++)
-        vals[j] = JS_GetPropertyUint32(ctx, arr, j);
-    for (guint j = 0; j < n; j++)
-        JS_SetPropertyUint32(ctx, arr, j, vals[p[j]]);
-
-    js_free(ctx, vals);
-}
-
-/* One node and everything under it, its lists following the columns. */
-static void table_permute_node(BtaTableRow *node, const guint *p, guint n)
-{
-    row_permute(&node->cells, p, n);
-    row_permute(&node->icons, p, n);
-    row_permute(&node->uris,  p, n);
-
-    if (!node->children)
-        return;
-
-    guint kids = g_list_model_get_n_items(G_LIST_MODEL(node->children));
-    for (guint i = 0; i < kids; i++) {
-        BtaTableRow *child = g_list_model_get_item(G_LIST_MODEL(node->children), i);
-        table_permute_node(child, p, n);
-        g_object_unref(child);
-    }
-}
-
-/* Every row there is. A table that answers `Data` holds none. */
-static void table_permute_rows(BtaWidget *w, const guint *p, guint n)
-{
-    GListModel *roots = G_LIST_MODEL(table_state(w)->rows);
-    guint       count = g_list_model_get_n_items(roots);
-
-    for (guint i = 0; i < count; i++) {
-        BtaTableRow *node = g_list_model_get_item(roots, i);
-        table_permute_node(node, p, n);
-        g_object_unref(node);
-    }
-}
-
-/*
- * The whole of a reorder: the spec, the note, the rows -- and the columns'
- * factories, never the columns themselves.
- *
- * `p` is the permutation as `table_column_order` reads it, and `from`/`to` are
- * the pair the event is told -- where the moved column was and where it is now,
- * which is what `ReorderColumn` takes as well.
- *
- * **The model is not touched here**, and that is the design rather than a
- * saving: GTK has already put the columns where the user dropped them, the
- * cells travel with them, and rebuilding the columns from the spec threw away
- * the width a person dragged and the sorted arrow -- and, because this runs
- * inside the insertion's own `items-changed`, it left the header row showing a
- * title that was no longer there (measured: a drag that ended `B,C,A` drew
- * `A | C | A`). What is left to do is say so: the declaration, the note and
- * the rows are permuted, and each factory is told the position its column is at
- * now -- so the next bind reads the right cell, and `Data` is asked for the
- * position the user sees. A tree is the one case with more to it: the
- * disclosure is a widget a factory builds, so the column arriving at the front
- * gets a fresh factory and the one that left it gets a plain one, which is what
- * moves the expander.
- */
-static void table_apply_column_order(JSContext *ctx, BtaWidget *w,
-                                     const guint *p, guint n, int from, int to)
-{
-    TableState *st   = table_state(w);
-    GListModel *cols = gtk_column_view_get_columns(GTK_COLUMN_VIEW(w->inner));
-
-    JSValue *slot = bta_widget_note(w, BTA_NOTE_COLUMNS);
-    JSValue  held = JS_DupValue(ctx, *slot);
-
-    /* The declaration, and what the file said before a translation stood in for
-     * it -- the two travel together or a save writes the old order. The note is
-     * only live while what it applied is still what is there. */
-    if (JS_IsArray(held)) {
-        js_array_permute(ctx, held, p, n);
-
-        JSValue bag = *bta_widget_note(w, BTA_NOTE_DECLARED);
-
-        if (JS_IsObject(bag)) {
-            JSValue pair = JS_GetPropertyStr(ctx, bag, "Columns");
-
-            if (JS_IsArray(pair)) {
-                JSValue applied = JS_GetPropertyUint32(ctx, pair, 1);
-
-                if (JS_IsStrictEqual(ctx, applied, held)) {
-                    JSValue declared = JS_GetPropertyUint32(ctx, pair, 0);
-
-                    if (JS_IsArray(declared) && !JS_IsStrictEqual(ctx, declared, held))
-                        js_array_permute(ctx, declared, p, n);
-                    JS_FreeValue(ctx, declared);
-                }
-                JS_FreeValue(ctx, applied);
-            }
-            JS_FreeValue(ctx, pair);
-        }
-    }
-
-    table_permute_rows(w, p, n);
-
-    for (guint j = 0; j < n; j++) {
-        GtkColumnViewColumn *c = g_list_model_get_item(cols, j);
-
-        if (st->tree) {
-            /* A fresh factory per column: it carries the position, and the
-             * disclosure goes to the first one. */
-            JSValue             col = JS_GetPropertyUint32(ctx, held, j);
-            GtkListItemFactory *f   = table_make_factory(ctx, w, col, j, j == 0);
-
-            JS_FreeValue(ctx, col);
-            gtk_column_view_column_set_factory(c, f);
-            g_object_unref(f);
-        } else {
-            /* Only the position changed: this factory already carries what the
-             * declaration said about this column. */
-            GtkListItemFactory *f = gtk_column_view_column_get_factory(c);
-
-            if (f)
-                g_object_set_data(G_OBJECT(f), COLUMN_INDEX_KEY,
-                                  GUINT_TO_POINTER(j + 1));
-        }
-        g_object_unref(c);
-    }
-
-    if (from >= 0 && to >= 0) {
-        JSValue argv[2] = { JS_NewInt32(ctx, from), JS_NewInt32(ctx, to) };
-
-        bta_emit(w, "Reordered", 2, argv);
-        JS_FreeValue(ctx, argv[0]);
-        JS_FreeValue(ctx, argv[1]);
-    }
-    JS_FreeValue(ctx, held);
-}
-
-/*
- * A heading drag, as the model reports it.
- *
- * The drop is a removal and an insertion of the same column, so this runs twice:
- * once with the model one short, which is where the column that moved is read
- * (the one missing from the set), and once complete, which is where the
- * permutation is. Only a complete state can be mirrored, and one still in the
- * old order -- a build, a drop that did not move -- is nothing to do.
- */
-static void on_columns_changed(GListModel *cols, guint position, guint removed,
-                               guint added, gpointer user_data)
-{
-    BtaWidget  *w  = user_data;
-    TableState *st = table_state(w);
-
-    if (st->building)
-        return;
-
-    JSValue *slot = bta_widget_note(w, BTA_NOTE_COLUMNS);
-    guint    n    = 0;
-
-    if (JS_IsArray(*slot)) {
-        JSValue lenv = JS_GetPropertyStr(w->ctx, *slot, "length");
-
-        JS_ToUint32(w->ctx, &n, lenv);
-        JS_FreeValue(w->ctx, lenv);
-    }
-    if (n == 0) {
-        st->drag_col = -1;
-        return;
-    }
-
-    guint have = g_list_model_get_n_items(cols);
-
-    /* The half of the drop that took the column out: the one missing from the
-     * model is the one being dragged. */
-    if (have + 1 == n && removed == 1 && added == 0) {
-        st->drag_col = table_column_missing(w, n);
-        return;
-    }
-    if (have != n) {
-        st->drag_col = -1;
-        return;
-    }
-
-    guint *p = g_new(guint, n);
-
-    if (!table_column_order(w, n, p)) {
-        g_free(p);
-        st->drag_col = -1;
-        return;
-    }
-
-    bool moved = false;
-    for (guint j = 0; j < n; j++)
-        if (p[j] != j)
-            moved = true;
-
-    if (!moved) {
-        g_free(p);
-        st->drag_col = -1;
-        return;
-    }
-
-    int from = st->drag_col;
-    int to   = -1;
-
-    if (from >= 0 && (guint)from < n) {
-        for (guint j = 0; j < n; j++)
-            if (p[j] == (guint)from)
-                to = (int)j;
-    }
-    /* The removal was not seen -- tell the pair from the permutation itself.
-     * A drag moves one column, and one column moving is the block between the
-     * first and last position that changed. */
-    if (from < 0 || to < 0) {
-        guint a = n, b = 0;
-
-        for (guint j = 0; j < n; j++)
-            if (p[j] != j) {
-                a = MIN(a, j);
-                b = MAX(b, j);
-            }
-        if (p[b] == a)      { from = (int)a; to = (int)b; }
-        else if (p[a] == b) { from = (int)b; to = (int)a; }
-        else                { from = -1; }
-    }
-    st->drag_col = -1;
-
-    table_apply_column_order(w->ctx, w, p, n, from, to);
-    g_free(p);
-}
-
-/*
- * ReorderColumn(column, index) -- the drag, from code.
- *
- * The gesture itself is a pointer one and no test can make it, so this is both
- * the API for moving a column and the road everything about a reorder is held
- * by. `column` is where it is now and `index` where it goes, the same pair
- * `Reordered` reports; moving one to where it already is is nothing at all.
- *
- * **It makes the same call the drop makes** -- `gtk_column_view_insert_column`
- * on a column that is already in the model -- so the removal and the insertion
- * it emits are the ones `on_columns_changed` mirrors, and there is one road
- * that moves a column and not two that could disagree.
- */
-static JSValue table_reorder_column(JSContext *ctx, JSValueConst this_val,
-                                    int argc, JSValueConst *argv)
-{
-    BtaWidget *w = bta_this(ctx, this_val);
-    if (!w)
-        return JS_EXCEPTION;
-
-    int32_t from, to;
-
-    if (argc < 2 || !bta_to_int(ctx, argv[0], "ReorderColumn", &from)
-                 || !bta_to_int(ctx, argv[1], "ReorderColumn", &to))
-        return JS_ThrowTypeError(ctx,
-            "ReorderColumn(column, index) expects two columns");
-
-    GListModel *cols = gtk_column_view_get_columns(GTK_COLUMN_VIEW(w->inner));
-    guint       n    = g_list_model_get_n_items(cols);
-
-    if (from < 0 || (guint)from >= n)
-        return JS_ThrowRangeError(ctx, "ReorderColumn: there is no column %d",
-                                  from);
-    if (to < 0 || (guint)to >= n)
-        return JS_ThrowRangeError(ctx, "ReorderColumn: there is no column %d",
-                                  to);
-    if (from == to)
-        return JS_UNDEFINED;
-
-    GtkColumnViewColumn *c = g_list_model_get_item(cols, (guint)from);
-
-    gtk_column_view_insert_column(GTK_COLUMN_VIEW(w->inner), (guint)to, c);
-    g_object_unref(c);
-    return JS_UNDEFINED;
 }
 
 static JSValue table_get_columns(JSContext *ctx, JSValueConst this_val)
@@ -3119,12 +2583,9 @@ static JSValue table_row(JSContext *ctx, JSValueConst this_val,
 
     JSValue out = JS_NewArray(ctx);
 
-    /* A NULL is a hole a reorder left: the column exists and this row never had
-     * a value for it, which reads the same as past the end. */
     for (guint c = 0; c < row->cells->len; c++)
         JS_SetPropertyUint32(ctx, out, c,
-                             JS_NewString(ctx, row->cells->pdata[c]
-                                                   ? row->cells->pdata[c] : ""));
+                             JS_NewString(ctx, row->cells->pdata[c]));
 
     g_object_unref(row);
     return out;
@@ -3996,14 +3457,6 @@ static const JSCFunctionListEntry table_props[] = {
      *   it raises `Sort`. Default `false`
      */
     JS_CGETSET_DEF("Sortable", table_get_sortable, table_set_sortable),
-    /* Reorderable
-     *   whether a column heading can be dragged to move its column. **The
-     *   reorder changes `Columns`** — and the rows with it — and raises
-     *   `Reordered(column, index)`; `false` locks the order, which is what a
-     *   program whose `Data` maps the position onto its own data wants.
-     *   Default `true`
-     */
-    JS_CGETSET_DEF("Reorderable", table_get_reorderable, table_set_reorderable),
     /* Select(index)
      *   move the selection from code. `Select` leaves the others alone where
      *   several are allowed
@@ -4037,14 +3490,6 @@ static const JSCFunctionListEntry table_props[] = {
      *   `Sort` is raised
      */
     JS_CFUNC_DEF("SortColumn", 2, table_sort_column),
-    /* ReorderColumn(column, index)
-     *   moves the column at `column` to `index` — the heading drag, from code,
-     *   and the road a test can take because the gesture is a pointer one.
-     *   `Columns` is the new order afterwards, the rows moved with it, and
-     *   `Reordered(column, index)` is raised. Moving one to where it already
-     *   is does nothing
-     */
-    JS_CFUNC_DEF("ReorderColumn", 2, table_reorder_column),
 };
 
 void bta_table_register(void)
@@ -4073,13 +3518,6 @@ void bta_table_register(void)
         /* Sort(column, ascending)
          *   a sortable header was clicked. **The handler decides** — `SortBy`
          *   is what actually reorders
-         */
-        /* Reordered(column, index)
-         *   a heading was dragged, or `ReorderColumn` moved one: the column
-         *   that was at `column` is now at `index`. `Columns` is the new order
-         *   and the rows moved with it. **The columns the table answers with
-         *   are the ones the user arranged**, which is why a program that maps
-         *   the position onto its own data turns `Reorderable` off
          */
         /* CellEdit(row, column, text)
          *   an editable cell's edit ended — Enter, or the focus moving away.
@@ -4110,7 +3548,7 @@ void bta_table_register(void)
          */
         BTA_CLASS_ENUM_TEXT("TableView", "Control", build_table, table_props, false,
                             table_options, "Columns.Text",
-                            "Select,Activate,Data,Sort,Reordered,CellEdit,CellLink,HeaderClick,Scroll"),
+                            "Select,Activate,Data,Sort,CellEdit,CellLink,HeaderClick,Scroll"),
     };
     bta_register_classes(rows, (int)G_N_ELEMENTS(rows));
 }
