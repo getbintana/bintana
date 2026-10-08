@@ -1989,6 +1989,7 @@ static bool install_globals(BtaApp *app)
     bta_notification_init(ctx, global);
     bta_zip_init(ctx, global);
     bta_probe_init(ctx, global);
+    bta_popover_init(ctx, global);
     bta_desktop_init(ctx, global);
     bta_printer_init(ctx, global);
     bta_xml_init(ctx, global);
@@ -2817,6 +2818,7 @@ void bta_app_free(BtaApp *app)
     bta_keyring_cleanup();
     /* Forms still shown hold a reference the collector cannot see; drop it
      * before the context goes, or JS_FreeRuntime asserts. */
+    bta_popover_cleanup();
     bta_forms_cleanup();
     bta_locale_cleanup();
     bta_widgets_cleanup(app->ctx);

@@ -420,7 +420,7 @@ static JSValue ed_line_of(JSContext *ctx, JSValueConst this_val,
 
 /*
  * CursorBounds(): where the insertion cursor is drawn, `{ X, Y, Width, Height }`
- * in the control's own coordinates -- the space `Popover.Popup(editor, rect)`
+ * in the control's own coordinates -- the space `Popover.Show(content, editor, { Rect })`
  * reads, which is what a hint beside the cursor is made of.
  *
  * `get_iter_location` answers in buffer coordinates, which scroll; the view
@@ -832,7 +832,7 @@ static const JSCFunctionListEntry editor_props[] = {
     JS_CFUNC_DEF("GotoLine", 1, ed_goto_line),
     /* CursorBounds() -> { X, Y, Width, Height }
      *   where the insertion cursor is drawn, in the control's own coordinates
-     *   — what `Popover.Popup(editor, rect)` points at for a hint beside the
+     *   — what `Popover.Show(content, editor, { Rect })` points at for a hint beside the
      *   cursor. Only once the control has been laid out; a cursor scrolled
      *   out of view answers a rectangle outside the control, which is the
      *   truth and the caller's to test. Read it once the control has a

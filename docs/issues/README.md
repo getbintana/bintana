@@ -13,7 +13,6 @@ in the same form.
 | Issue | The missing capability |
 |---|---|
 | [ISSUE-editable-combo.md](ISSUE-editable-combo.md) | No editable / autocompleting combo |
-| [ISSUE-popover-designer.md](ISSUE-popover-designer.md) | A `Popover` cannot be seen or picked on the design canvas |
 
 
 **A gap that is filled is deleted, not archived.** What the runtime can do is in

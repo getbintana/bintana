@@ -7391,12 +7391,6 @@ GtkWidget *bta_slot_first_child(GtkWidget *slot)
     if (!slot)
         return NULL;
 
-    /* GTK 4.22 wraps a popover's content in a `GtkPopoverContent`, so
-     * `gtk_widget_get_first_child` answers GTK's own widget and not the
-     * application's. The one child there is the child. */
-    if (GTK_IS_POPOVER(slot))
-        return gtk_popover_get_child(GTK_POPOVER(slot));
-
     return gtk_widget_get_first_child(slot);
 }
 
@@ -7422,30 +7416,6 @@ bool bta_container_attach(JSContext *ctx, BtaWidget *parent, BtaWidget *child)
     }
     if (child->is_form) {
         JS_ThrowTypeError(ctx, "a form cannot be added to a container");
-        return false;
-    }
-
-    /*
-     * **A popover can only live where a layout manager places the children.**
-     * GTK presents a popover from `gtk_layout_manager_allocate`, which skips it
-     * through `should_layout`; a container that allocates its child itself --
-     * a paned's halves, an aspect frame's one, a notebook's or a stack's page,
-     * an overlay's base -- hands the popover an ordinary rectangle, and opening
-     * it then is `pixman_region32_init_rect: Invalid rectangle` (a page adds a
-     * `gtk_widget_map` critical on top, the moment it is added). Measured on
-     * each of those; a surface, a grid, a flow and a row list are clean. An
-     * overlay's floaters are laid out properly, and refused all the same:
-     * `Reorder(x, 0)`, `Lower()` and taking the base out all promote a floater
-     * to base, so an overlay can never promise a popover stays one. Refused
-     * here, before anything is attached.
-     */
-    if (GTK_IS_POPOVER(child->gtk) &&
-        (GTK_IS_PANED(slot) || GTK_IS_ASPECT_FRAME(slot) ||
-         GTK_IS_NOTEBOOK(slot) || GTK_IS_STACK(slot) || GTK_IS_POPOVER(slot) ||
-         GTK_IS_OVERLAY(slot))) {
-        JS_ThrowTypeError(ctx, "a Popover cannot go directly in %s: put it in a "
-                          "Panel (or any surface) inside it",
-                          parent->name ? parent->name : "this container");
         return false;
     }
 
@@ -7492,17 +7462,6 @@ bool bta_container_attach(JSContext *ctx, BtaWidget *parent, BtaWidget *child)
             return false;
         }
         gtk_aspect_frame_set_child(GTK_ASPECT_FRAME(slot), child->gtk);
-    } else if (GTK_IS_POPOVER(slot)) {
-        /* The same one child, and the same refusal: a popover's content is a
-         * property of GTK's, so setting it twice would drop the first without
-         * a word. What is *in* the popover takes no room on the form -- GTK
-         * measures it against the popup's own surface, not the slot's. */
-        if (gtk_popover_get_child(GTK_POPOVER(slot))) {
-            JS_ThrowRangeError(ctx, "%s holds one child",
-                               parent->name ? parent->name : "a popover");
-            return false;
-        }
-        gtk_popover_set_child(GTK_POPOVER(slot), child->gtk);
     } else if (GTK_IS_LIST_BOX(slot)) {
         /* Appended, not put: GTK wraps it in a row, which is what gives the
          * highlight and the keyboard navigation. */
@@ -7540,20 +7499,14 @@ bool bta_container_attach(JSContext *ctx, BtaWidget *parent, BtaWidget *child)
 
 bool bta_container_detach(JSContext *ctx, BtaWidget *child)
 {
+    /* A control a popover is showing is in no container of the program's: the
+     * popover lets go of it, and there is nothing left to take out. */
+    if (bta_popover_take(child))
+        return true;
+
     GtkWidget *slot = gtk_widget_get_parent(child->gtk);
     if (!slot)
         return true;   /* already detached */
-
-    /*
-     * A popover's child is not its GTK child: GTK 4.22 wraps the content in a
-     * `GtkPopoverContent` of its own, so the parent above is that wrapper and
-     * the popover is an ancestor. Naming it here is what makes the branch below
-     * fire -- and what makes the release at the end find the right owner,
-     * because `slot` is where the `BtaWidget` back-pointer is read from.
-     */
-    GtkWidget *pop = gtk_widget_get_ancestor(child->gtk, GTK_TYPE_POPOVER);
-    if (pop && gtk_popover_get_child(GTK_POPOVER(pop)) == child->gtk)
-        slot = pop;
 
     /*
      * **A widget on its way out must not still be the window's default button.**
@@ -7686,11 +7639,6 @@ bool bta_container_detach(JSContext *ctx, BtaWidget *child)
          * `Split` and a cleared `Overlay` both had, and the reason every branch
          * here mirrors its attach exactly. */
         gtk_aspect_frame_set_child(GTK_ASPECT_FRAME(slot), NULL);
-    else if (GTK_IS_POPOVER(slot))
-        /* The same shape for the same reason: `gtk_popover_set_child` is the
-         * only way to empty one, and unparenting its content would leave GTK
-         * believing the popover was still full. */
-        gtk_popover_set_child(GTK_POPOVER(slot), NULL);
     else if (GTK_IS_FRAME(slot))
         gtk_widget_unparent(child->gtk);
     else {

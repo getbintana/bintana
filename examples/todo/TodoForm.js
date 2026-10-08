@@ -47,18 +47,19 @@
  * task and its label, and is deleted with the widget.  Nothing is left on the
  * form to keep in step.
  *
- * ## The options are a `Popover`, and a `Menu` would have been the wrong tool
+ * ## The options float over the button, and a `Menu` would have been the wrong tool
  *
- * Each row carries a three-dots button, and what it drops is a `Popover` whose
- * content is three ordinary `Button`s.  A `Menu` is the other road and it does
+ * Each row carries a three-dots button, and what it drops is a `Panel` of three
+ * ordinary `Button`s, shown with `Popover.Show`.  A `Menu` is the other road and it does
  * not fit here: a menu item's handler is looked up on the *form* by name, and
  * there is one row too many for that -- the three options would have to be
  * methods that find their row again, when `On` closes over the task and goes
  * with it, exactly as the tick does.
  *
- * `Popup(kebab)` opens it over the button and `Close()` puts it away.  Where
- * the row sits in the list is not something it knew when it was built, so which
- * of the two ends is a real move is asked in the `Open` handler -- and moving
+ * `Popover.Show(options, kebab)` opens it over the button and
+ * `Popover.Close(options)` puts it away.  Where the row sits in the list is not
+ * something it knew when it was built, so which of the two ends is a real move
+ * is asked as it opens -- and moving
  * a row moves what is in `this.todos` with it, because what the list shows is
  * never the truth.
  *
@@ -137,51 +138,48 @@ class TodoForm extends Form {
             this.showTask(task, words);
         });
 
-        /* The popover is a child of the row like anything else -- invisible,
-         * and it takes no room -- so it is deleted when the row is. */
-        const pop = new Popover();
-        pop.Style = "menu";
-
-        const up   = this.choice(pop, "Move up",   () => this.move(task, row, -1));
-        const down = this.choice(pop, "Move down", () => this.move(task, row, +1));
-        const kill = this.choice(pop, "Delete",    () => this.remove(task, row));
-
-        pop.On("Open", () => {
-            const at = this.Todos.Children.indexOf(row);
-            up.Enabled   = at > 0;
-            down.Enabled = at >= 0 && at < this.Todos.Count - 1;
-        });
-
+        /* What the popover shows is a `Panel` of three buttons that belongs to
+         * nobody's tree: `Popover.Show` floats it over the button, and it is
+         * built here, with the row, so the closures below can see the task. */
         const options = new Panel();
         options.Arrangement = "Vertical";
         options.Spacing = 2;
+
+        const up   = this.choice(options, "Move up",   () => this.move(task, row, -1));
+        const down = this.choice(options, "Move down", () => this.move(task, row, +1));
+        const kill = this.choice(options, "Delete",    () => this.remove(task, row));
         options.Add(up);
         options.Add(down);
         options.Add(kill);
-        pop.Add(options);
 
         const kebab = new Button();
         kebab.Icon = this.kebab;
         kebab.Style = "flat";
         kebab.Tooltip = "Options";
         kebab.VAlign = "Center";
-        kebab.On("Click", () => pop.Popup(kebab));
+        kebab.On("Click", () => {
+            /* Where the row sits is not something it knew when it was built, so
+             * which of the two ends is a real move is asked as it opens. */
+            const at = this.Todos.Children.indexOf(row);
+            up.Enabled   = at > 0;
+            down.Enabled = at >= 0 && at < this.Todos.Count - 1;
+            Popover.Show(options, kebab);
+        });
 
         row.Add(tick);
         row.Add(words);
         row.Add(kebab);
-        row.Add(pop);
         return row;
     }
 
     /* One line of the options.  It closes the popover before it acts: the
      * click is *inside* it, so nothing else is going to. */
-    choice(pop, text, run) {
+    choice(options, text, run) {
         const button = new Button();
         button.Text   = text;
         button.Style  = "flat";
         button.HAlign = "Fill";
-        button.On("Click", () => { pop.Close(); run(); });
+        button.On("Click", () => { Popover.Close(options); run(); });
         return button;
     }
 
@@ -198,7 +196,7 @@ class TodoForm extends Form {
         this.todos.splice(to, 0, task);
     }
 
-    /* Both places a task lives, and the row carries its popover out with it. */
+    /* Both places a task lives. */
     remove(task, row) {
         const at = this.todos.indexOf(task);
         if (at >= 0) this.todos.splice(at, 1);

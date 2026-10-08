@@ -23,13 +23,12 @@ Namespace("Ide");
 Ide.Tooltip = class Tooltip {
     constructor(ide) {
         this.ide   = ide;
-        this.pop   = null;
         this.label = null;
         this.timer = null;
         this.at    = "";
     }
 
-    get visible() { return !!(this.pop && this.pop.Visible); }
+    get visible() { return !!(this.label && Popover.IsOpen(this.label)); }
 
     /* The pointer moved over `ed`: what was open goes away and the dwell
      * starts over. */
@@ -59,7 +58,7 @@ Ide.Tooltip = class Tooltip {
      * any movement back over the editor closes it through `hovered` first.
      */
     left() {
-        if (this.pop && this.pop.Visible)
+        if (this.visible)
             return;
         this.close();
     }
@@ -97,21 +96,19 @@ Ide.Tooltip = class Tooltip {
         if (!info)
             return this.close();
 
-        if (!this.pop) {
-            this.pop = new Popover();
-            this.pop.Autohide = false;
-            this.pop.Position = "Top";
+        if (!this.label) {
             this.label = new Label();
             this.label.Markup = true;
             this.label.Wrap   = true;
             this.label.Width  = 360;
-            this.pop.Add(this.label);
-            this.ide.Add(this.pop);
         }
         this.label.Text = this.markup(info);
         this.at = word;
         try {
-            this.pop.Popup(ed, { X: x, Y: y, Width: 1, Height: 1 });
+            Popover.Show(this.label, ed, {
+                Rect: { X: x, Y: y, Width: 1, Height: 1 },
+                Position: "Top", Autohide: false,
+            });
         } catch (e) {
             /* Not on screen -- a tab being switched, a window going: nothing
              * to point at and nothing to report. */
@@ -137,7 +134,7 @@ Ide.Tooltip = class Tooltip {
     close() {
         this.stop();
         this.at = "";
-        if (this.pop && this.pop.Visible)
-            this.pop.Close();
+        if (this.label && Popover.IsOpen(this.label))
+            Popover.Close(this.label);
     }
 };

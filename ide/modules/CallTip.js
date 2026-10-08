@@ -14,26 +14,25 @@ Namespace("Ide");
  * rad.js read out of its own source and a library class read by the parser all
  * answer here with no second list.
  *
- * **Two runtime verbs, because a hint has to point at a place in a control**
- * and a `Popover` pointed at whole controls: `Editor.CursorBounds()` says where
- * the cursor is drawn, and `Popup(anchor, rect)` points at that rectangle.
- * Both are ordinary API, since the IDE has none of its own.
+ * **Two runtime verbs, because a hint has to point at a place in a control**:
+ * `Editor.CursorBounds()` says where the cursor is drawn, and `Popover.Show`'s
+ * `Rect` points at that rectangle. Both are ordinary API, since the IDE has
+ * none of its own.
  *
  * The popover does not hide itself (`Autohide` off): an autohide one takes the
- * keyboard, and the whole point is that typing goes on underneath it. It is
- * built on first use and added to the form itself -- a surface, which is one of
- * the containers GTK presents a popover from.
+ * keyboard, and the whole point is that typing goes on underneath it. Its
+ * content is one `Label`, built on first use and shown over the editor -- it is
+ * in no form's tree, so nothing here adds it anywhere.
  */
 Ide.CallTip = class CallTip {
     constructor(ide) {
         this.ide   = ide;
-        this.pop   = null;
         this.label = null;
         /* Escape put it away for this call; it stays away until the call does. */
         this.dismissed = null;
     }
 
-    get visible() { return !!(this.pop && this.pop.Visible); }
+    get visible() { return !!(this.label && Popover.IsOpen(this.label)); }
 
     /* The text from the start of the file to the cursor, as JavaScript counts
      * it: `Line` and `Column` count characters, so the line is cut by code
@@ -89,19 +88,16 @@ Ide.CallTip = class CallTip {
         if (this.dismissed === key) return;
         this.dismissed = null;
 
-        if (!this.pop) {
-            this.pop = new Popover();
-            this.pop.Autohide = false;
-            this.pop.Position = "Top";
+        if (!this.label) {
             this.label = new Label();
             this.label.Markup = true;
-            this.pop.Add(this.label);
-            ide.Add(this.pop);
         }
         this.label.Text = this.markup(info);
         this.key = key;
         try {
-            this.pop.Popup(ed, ed.CursorBounds());
+            Popover.Show(this.label, ed, {
+                Rect: ed.CursorBounds(), Position: "Top", Autohide: false,
+            });
         } catch (e) {
             /* Not on screen -- a tab being switched, a window going: nothing to
              * point at, and nothing to report. */
@@ -111,6 +107,6 @@ Ide.CallTip = class CallTip {
 
     close(byHand) {
         if (byHand) this.dismissed = this.key || null;
-        if (this.pop && this.pop.Visible) this.pop.Close();
+        if (this.label && Popover.IsOpen(this.label)) Popover.Close(this.label);
     }
 };

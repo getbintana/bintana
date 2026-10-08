@@ -762,11 +762,9 @@ BtaWidget *bta_slot_child(GtkWidget *child);
 /* The direct GTK child of the slot that carries `child`: itself, or the row or
  * cell a RowList or a Flow wrapped it in. The inverse of bta_slot_child(). */
 GtkWidget *bta_child_holder(GtkWidget *child);
-/* What a slot reports as its first content widget, which is not always GTK's
- * first child: a `GtkPopover` wraps its content in a `GtkPopoverContent` of its
- * own, and the widget an application means is `gtk_popover_get_child`. Every
- * walk over a slot starts here, so the wrapper stays out of `Children`, `Clear`
- * and the binding cascade. */
+/* What a slot reports as its first content widget: GTK's first child. Every
+ * walk over a slot starts here, so a wrapper GTK puts in between has one place
+ * to be looked through. */
 GtkWidget *bta_slot_first_child(GtkWidget *slot);
 /* How many of ours a slot holds, wrappers looked through -- what an index in
  * `Reorder` is counted against. */
@@ -1096,6 +1094,18 @@ void bta_zip_init(JSContext *ctx, JSValue global);
  * too. See runtime/src/bta_probe.c.
  */
 void bta_probe_init(JSContext *ctx, JSValue global);
+
+/*
+ * `Popover.Show(content, anchor, [options])` -- a control floating over another,
+ * opened by a verb and **in no form's tree**. It replaced a container class of
+ * the same name, whose every difficulty came from living in the tree. A job per
+ * open control holds it and its `Closed` function until the popover is down;
+ * `bta_popover_cleanup` lets go of what is still open at teardown, before the
+ * context goes. See runtime/src/bta_popover.c.
+ */
+void bta_popover_init(JSContext *ctx, JSValue global);
+void bta_popover_cleanup(void);
+bool bta_popover_take(BtaWidget *cw);
 
 /* --- commands: actions and menus ---------------------------------------- */
 

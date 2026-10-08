@@ -1,0 +1,24 @@
+{
+  "format": "bintana-form/1",
+  "class": "ChoiceList",
+  "properties": {
+    "Arrangement": "Vertical"
+  },
+  "children": [
+    {
+      "type": "RowList",
+      "name": "Lst",
+      "properties": {
+        "ActivateOnSingleClick": true,
+        "HAlign": "Fill",
+        "Height": 220,
+        "Padding": "8",
+        "Width": 360
+      },
+      "item": {
+        "of": "Choice",
+        "count": 3
+      }
+    }
+  ]
+}

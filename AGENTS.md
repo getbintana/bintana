@@ -1768,8 +1768,8 @@ returning nothing six of those go red.
 for it and got them as ordinary API: `Editor.CursorBounds()` (where the cursor
 is drawn, in the control's coordinates: `get_iter_location`, then
 `buffer_to_window_coords`, then `compute_point` from the view to the scroller)
-and `Popover.Popup(anchor, [rect])`, which points at a rectangle inside the
-anchor instead of at the whole of it. Three things measured on the way:
+and `Popover.Show(content, anchor, { Rect })`, which points at a rectangle
+inside the anchor instead of at the whole of it. Three things measured on the way:
 - **An `Autohide` popover takes the keyboard; one without it does not.** The
   hint is `Autohide: false`, and `tests/ide` asserts the editor still has the
   focus with it open -- after asserting it had the focus first, because a check
@@ -1809,7 +1809,7 @@ sits directly above the cursor with the argument in bold.
 is under the point. **`MouseLeave` is not what closes it, and finding that out
 cost a real pointer.** A popover maps under the pointer for the instant GTK
 places it, the editor is sent a `leave` for that instant, and a handler that
-closed on it killed the tooltip in its own frame: `Popover.Visible` true, 168
+closed on it killed the tooltip in its own frame: `Popover.IsOpen` true, 168
 characters of label, **nothing on screen** -- and every assertion green, because
 the suite calls `Editor_MouseMove` by name and never produces a surface.
 `Tooltip.left()` ignores a leave while the popover is up (the mapping one) and
@@ -1819,9 +1819,9 @@ tooltip appear at the edge for a pointer that was somewhere else. Measured with
 a real pointer on an `Xvfb`: resting over `File.Load` shows the popover, and
 crossing a word and leaving inside the 400 ms leaves nothing. **A test that
 calls a handler instead of producing the event it is about cannot see this
-class of bug** -- and **`Popover.Bounds()` is not how to ask whether one is on
-screen**: it answers `{Width: 0, Height: 0}` for a popover that is drawn, so
-`Visible` and a root capture are the two that answer.
+class of bug** -- and **`IsOpen` says the program opened it and nothing has
+closed it, not that a surface is drawn**: a popover is its own surface and
+does not show in a window capture, so a root capture is the one that answers.
 
 **And the classes are the open tabs' before they are the disk's.**
 `declaredClasses` used to walk the project once and keep what the files said,
@@ -3095,67 +3095,88 @@ person who wrote it either.
   full. Its `Placement` is `Single`, the sixth word: one child and one place, so
   a gesture there is *land* -- told `Coordinates` an editor offers X/Y that do
   nothing, told `Order` it asks for an order the container has not got.
-- **A `GtkPopover` is a surface and not a widget in the layout, and five things
-  were measured before it could be one of ours.** Each is a bullet because each
-  one changed the design:
-  - **It contributes no measure.** A box holding a button and a popover as tall
-    as a paragraph still asks for the button's 34 pixels, closed *and* open --
-    which is what makes it safe to draw one into a `.form` at all.
-  - **GTK 4.22 wraps its content in a `GtkPopoverContent` of its own**, so
-    `gtk_widget_get_first_child(popover)` is that wrapper and the widget an
-    application means is `gtk_popover_get_child`. Every walk over a slot that
-    can be a popover goes through `bta_slot_first_child` now (`Children`,
-    `Clear`, the binding cascade, `bta_container_count`, and the
-    `Default`/`Cancel` searches `bta_widget_flagged` and `form_keep_one` --
-    which this sentence claimed for a commit while those two still read GTK's
-    first child, so a `Cancel` button inside a popover was never found) and `bta_container_detach` finds the popover as the content's
-    *ancestor* -- without which `Remove()` of the content refused with *cannot
-    remove from this container*, and `Children` answered `0` about a popover
-    holding a `RowList`. **A `GtkPopover` setter is a property, not an
-    unparent**: `Clear`, `Remove` and a second `Add` all go through
-    `gtk_popover_set_child`.
-  - **`gtk_widget_set_visible(TRUE)` before there is a toplevel is a segfault**,
-    not a warning: the popup surface is made against a toplevel that is not
-    there. That is why `Visible` is **read-only on a `Popover`** -- the one
-    place a class shadows a property `Widget` already had -- and why `Show()`
-    refuses and `Popup(anchor)` is the only verb. `Widget.Member("Popover",
-    "Visible")` answers `ReadOnly`, so a `.form` that declares it is refused at
-    load; the serialiser never writes it, and the property grid never offers
-    it. (`tests/api.sh` flags the shadow; it is on the deliberate list there.)
-  - **GTK's autohide focus walk asserts on a window with no focus.** With
-    `Autohide` on and nothing focusable inside, `gtk_popover_focus` reads
-    `gtk_root_get_focus` and calls `gtk_widget_is_ancestor` on the `NULL` --
-    one critical per open, measured, after a popover closed onto a panel that
-    cannot take the focus. `Popup` seeds one: the anchor if it can take it
-    (which also keeps the keyboard in the field that opened a suggestion list),
-    otherwise the window's own first focusable control.
-  - **Only a container that lays children out through a layout manager can
-    hold one.** GTK presents a popover from `gtk_layout_manager_allocate`,
-    which skips it through `should_layout`; a `GtkPaned`'s halves, a
-    `GtkAspectFrame`'s child, a notebook's or stack's page and an overlay's base
-    are allocated by the container itself, so the popover got an ordinary
-    rectangle and opening it was `pixman_region32_init_rect: Invalid
-    rectangle` (a page added `gtk_widget_map` criticals the moment it was
-    added). Measured by probe on each; a surface, a `Grid`, a `Flow` and a
-    `RowList` are clean. `bta_container_attach` refuses the rest, and an
-    `Overlay` whole: its floaters are laid out properly, but `Reorder(x, 0)`,
-    `Lower()` and the base leaving all promote one to base.
-  - **`Popup` asks the popover's own container, not only the anchor.** The point
-    is computed in the container's coordinates, and a hidden one has none: the
-    popover opened pointing at nothing while `Open` fired. And the focus seed
-    raises `GotFocus` synchronously, so everything read before it is read again
-    after -- a handler can take the popover out between the two.
-  - **A closed popover is not a Tab stop, and leaving it in the list broke the
-    walk.** GTK sets the surface's `focus_child` to the popover while it is
-    open and a closed one goes on naming it, so `bta_fixed_focus` started
-    *after* the popover it could not focus and found nothing left -- `FocusNext()`
-    answered `false` on a panel full of controls. `bta_fixed_focus` skips
-    `GTK_IS_POPOVER` when it builds its stops.
+- **`Popover` is a verb, and the control that used to carry the name is gone --
+  every trap this list had about it came from living in the form's tree.**
+  `Popover.Show(content, anchor, [{ Rect, Position, Arrow, Autohide, Closed }])`,
+  `Close(content)` and `IsOpen(content)` (`bta_popover.c`); the content is any
+  control, usually a component with a `.form` of its own, drawn in its own tab.
+  The control was a container with one child, it took no room, and so the
+  designer could not draw, pick or drop into it (`ISSUE-popover-designer`,
+  deleted as answered), it could live only in a container that allocates through
+  a layout manager, `Visible` had to be read-only, and the runtime kept a
+  `GtkPopoverContent` workaround in every walk over a slot. The same decision as
+  `MenuButton`: it is something the runtime does, and a widget of its own bought
+  a place for those problems to live. What was measured on the way, so it is not
+  measured twice:
+  - **Where the `GtkPopover` is parented is the whole of the design, and it is
+    not the anchor.** A probe under AddressSanitizer, one anchor at a time:
+    parented to a `Button`, `Entry`, `Scroller`, `SpinButton` or `DropDown` it
+    works and says *Finalizing ..., but it still has children left* unless
+    something unparents on `destroy`; parented to a **`ListBox` or a
+    `TextView` it hangs the process at full CPU** (they manage their children
+    themselves and take the popover for a row or an embedded widget) -- which
+    are the likeliest anchors there are, an editor for a hint and a list for
+    its menu; parented to the `GtkWindow` it says *Finalizing GtkWindow* for the
+    same reason. It is parented to **the window's own content** (`gtk_window_
+    get_child`: the form's surface, or the column holding its menu bar), whose
+    dispose unparents its children, and the rectangle is worked out against that
+    with `gtk_widget_compute_bounds`, which answers for any descendant. That one
+    choice is also why the old restrictions are gone: no layout-manager rule, no
+    container-must-be-mapped rule.
+  - **A window that closes does not finalise, so a weak reference on the popover
+    never tells.** `Form.Close` leaves the window alive for as long as the
+    program holds the form, and its children with it; the popover is only
+    *unmapped* and `closed` is not emitted, because nothing popped it down.
+    Measured: `Closed` never arrived. The job listens to `unmap` as well as
+    `closed`, and keeps the weak reference for the window that really is
+    finalised.
+  - **An anchor that leaves the screen closes the popover**, and that is a
+    correctness rule and not tidiness: deleting the anchor while its popover was
+    open took the window's focus with it, and GTK's own first-focus walk then
+    went into the open popover and asserted (`gtk_widget_is_ancestor: assertion
+    'GTK_IS_WIDGET (widget)'`, the old *autohide focus walk* critical from the
+    other side). The job connects `unmap` on the anchor and pops down. `Show`
+    still seeds a focus on the way in -- `grab_focus`, then a Tab walk, then
+    `gtk_window_set_focus`, because a window that has not painted yet takes
+    neither of the first two.
+  - **No JavaScript runs inside a GTK signal here.** `closed` and `unmap` arrive
+    from inside hiding a window or disposing an anchor, and a program's `Closed`
+    that deletes something is the `widget_disconnect_tree` hazard. The signal
+    marks the job and queues an idle (`job_settle`), which tells the program and
+    then lets go; the idle holds a **reference on the job and not a pointer to
+    it**, since a freed job's address is handed to the next one. So `Closed`
+    arrives a turn after `Close()`, `IsOpen` is false at once, and a `Show`
+    from inside `Closed` reopens the same job instead of tearing it down.
+  - **The control is held by the job, not by the form.** Strong, invisible to
+    the collector on purpose (the `form_hold` bargain), freed on every road: the
+    popover closing, the window closing (`unmap`), the window finalised, and
+    `bta_popover_cleanup` at teardown, before the context goes. A control put
+    elsewhere or taken out while it is shown goes through `bta_popover_take` from
+    the top of `bta_container_detach` -- the popover is not a container the
+    program ever saw, so detach has no branch for it, and without the call a
+    `Close()` followed by `Add()` was *cannot remove from this container* for the
+    turn before the idle ran.
+  - **A `Show` refuses before it moves anything.** The content comes out of
+    wherever it was (`bta_widget_bring_in`, as `Add` does) and a refusal after
+    that would leave a control with no parent that its program did not ask to
+    lose; options are validated first, and a misspelt one is refused by name.
+  - **The suite cannot show a popover on a window that has not painted.**
+    `gtk_popover_focus` asserts when the window has no focus at its first paint,
+    and a test that opens one on the frame a rectangle appears reads as a bug in
+    the runtime; `testPopover` waits for the window's first paint (`Timer.After`)
+    in the one place it opens one over a second window.
+  - **`bta_slot_first_child` still exists and is GTK's first child.** It was the
+    one place a popover's `GtkPopoverContent` wrapper was looked through; the
+    wrapper is no longer in any slot, and every walk still starts there so the
+    next wrapper has one place to go. `bta_fixed_focus` still skips
+    `GTK_IS_POPOVER`: ours are children of the surface now, and a closed one
+    that GTK names as the `focus_child` made the walk start after it and find
+    nothing left.
 - **`settableProperties` had the override rule backwards, and a read-only
   property could not be taken away.** The walk collected a name if *any* class
   in the chain had both accessors, so a subclass's getter-only declaration was
   skipped and the base's setter was offered, serialised and loaded anyway --
-  exactly the `Popover.Visible` that has to be refused. It is the boundary
+  exactly the `Popover.Visible` the old control had to refuse -- the class is gone and the rule is not. It is the boundary
   `Widget.Member` already walked: **the most derived class that declares a name
   decides whether it is settable**, tracked with a `seen` list rather than a
   check on the result. `forms.js`, and the general fix rather than a special

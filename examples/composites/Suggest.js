@@ -7,8 +7,9 @@
  * take a row with Enter or the mouse, and **a value that is in no list is just
  * as valid** -- a category that is usually one of ten and occasionally new.
  *
- * This is that, built out of two controls and the popover between them, so the
- * shape is worth reading before it is worth using.
+ * This is that, built out of two controls and the list that floats between them
+ * (`SuggestList`, its own component), so the shape is worth reading before it is
+ * worth using.
  *
  * ## The list keeps its own answers
  *
@@ -23,19 +24,19 @@
  *
  * Arrowing through the list only moves the highlight -- the field keeps what
  * was typed, so a half-word is never replaced by a suggestion on the way past.
- * Taking a row is Enter, a click, or `Lst_Activate`, and that is the moment the
+ * Taking a row is Enter, a click, or the list's `Take`, and that is the moment the
  * text is written back: `accept()`.
  *
  * ## The focus is the delicate half
  *
- * The popover is `Autohide: false`, and that is the price of being typeable:
+ * The list is shown with `Autohide: false`, and that is the price of being typeable:
  * an autohide popover **takes the keyboard into the list** while it is shown,
  * so the letters stop reaching the field -- measured, with the field fighting
  * to take the focus back on every turn.  With autohide off GTK leaves the
  * keyboard alone, and `LostFocus` is what closes it: **one turn later**,
  * because the *press* of a click on a row is what takes the focus and the
  * *release* is what activates the row.  Closing on the spot took the popup out
- * from under the release, and measured, `Lst_Activate` never arrived.
+ * from under the release, and measured, the list's `Take` never arrived.
  *
  * The one gesture it does not see is a click on a bare background, which moves
  * no focus and so tells nobody anything: Escape, a row, Enter, Tab or another
@@ -80,6 +81,20 @@ class Suggest extends Component {
     updating = false;
     needle   = "";
 
+    /* The list that floats under the field: its own component, made on first
+     * use. It is a field's worth of state and not part of this form's tree, so
+     * the designer draws it in its own tab. */
+    #list = null;
+
+    get list() {
+        if (!this.#list) {
+            this.#list = new SuggestList();
+            this.#list.filter = (index) => this.shown[index] !== false;
+            this.#list.On("Take", (at) => this.accept(at));
+        }
+        return this.#list;
+    }
+
     /* --- what a consumer sets and reads --------------------------------- */
 
     get Items() { return this.items; }
@@ -94,7 +109,7 @@ class Suggest extends Component {
         this.updating = false;
 
         this.chosen = -1;
-        this.Pop.Close();
+        Popover.Close(this.list);
     }
 
     get Index() { return this.chosen; }
@@ -107,22 +122,22 @@ class Suggest extends Component {
     fill(items) {
         this.items = (items || []).map((one) => String(one));
 
-        this.Lst.Clear();
+        this.list.Lst.Clear();
         for (const text of this.items) {
             const row = new Label();
             row.Text    = text;
             row.Margin  = 6;
             row.HAlign  = "Fill";
             row.HExpand = true;
-            this.Lst.Add(row);
+            this.list.Lst.Add(row);
         }
 
         this.chosen = -1;
-        this.Pop.Close();
+        Popover.Close(this.list);
         this.refilter();
     }
 
-    /* Which rows the needle keeps, once -- `Lst_Filter` below is the lookup. */
+    /* Which rows the needle keeps, once -- `SuggestList`'s `filter` is the lookup. */
     refilter() {
         this.needle = this.Txt.Text.trim();
 
@@ -130,24 +145,24 @@ class Suggest extends Component {
             (text) => this.needle === "" || Locale.Matches(text, this.needle));
         this.visible = this.shown.filter(Boolean).length;
 
-        this.Lst.Refilter();
+        this.list.Lst.Refilter();
     }
 
     /* Nothing chosen yet is where Enter cannot take: free text. */
     get takes() {
-        return this.Lst.Index >= 0 && this.shown[this.Lst.Index] === true;
+        return this.list.Lst.Index >= 0 && this.shown[this.list.Lst.Index] === true;
     }
 
     open() {
         if (this.visible === 0) {
-            this.Pop.Close();
+            Popover.Close(this.list);
             return;
         }
 
         /* As wide as the field it belongs to, so the rows read as one column
          * and not as a box that happens to be below it. */
-        this.Lst.Width = Math.max(240, this.Txt.Bounds().Width);
-        this.Pop.Popup(this.Txt);
+        this.list.Width = Math.max(240, this.Txt.Bounds().Width);
+        Popover.Show(this.list, this.Txt, { Autohide: false, Arrow: false });
     }
 
     /* One step along the *visible* rows, wrapping. */
@@ -155,7 +170,7 @@ class Suggest extends Component {
         const n = this.items.length;
         if (!n) return;
 
-        let at = this.Lst.Index >= 0 ? this.Lst.Index : (delta > 0 ? -1 : 0);
+        let at = this.list.Lst.Index >= 0 ? this.list.Lst.Index : (delta > 0 ? -1 : 0);
 
         for (let i = 0; i < n; i++) {
             at = (at + delta + n) % n;
@@ -163,14 +178,14 @@ class Suggest extends Component {
         }
 
         if (this.shown[at]) {
-            this.Lst.Select(at);
-            this.Lst.Reveal(at);
+            this.list.Lst.Select(at);
+            this.list.Lst.Reveal(at);
         }
     }
 
     accept(at) {
         if (at < 0 || at >= this.items.length || !this.shown[at]) {
-            this.Pop.Close();
+            Popover.Close(this.list);
             return;
         }
 
@@ -182,7 +197,7 @@ class Suggest extends Component {
         this.updating = false;
 
         this.chosen = at;
-        this.Pop.Close();
+        Popover.Close(this.list);
 
         /* A click took the focus into the list; the field wants it back. */
         this.Txt.SetFocus();
@@ -203,20 +218,20 @@ class Suggest extends Component {
     }
 
     Txt_Activate() {
-        if (this.takes) this.accept(this.Lst.Index);
-        else            this.Pop.Close();
+        if (this.takes) this.accept(this.list.Lst.Index);
+        else            Popover.Close(this.list);
     }
 
     Txt_KeyPress(key) {
-        if (key === "Escape" && this.Pop.Visible) {
-            this.Pop.Close();
+        if (key === "Escape" && Popover.IsOpen(this.list)) {
+            Popover.Close(this.list);
             return true;
         }
 
         if ((key === "Down" || key === "Up") && this.visible > 0) {
             /* Opening with the arrow selects as it opens -- the first row for
              * Down, the last for Up -- so Enter after it takes something. */
-            if (!this.Pop.Visible) this.open();
+            if (!Popover.IsOpen(this.list)) this.open();
             this.step(key === "Down" ? 1 : -1);
             return true;
         }
@@ -232,17 +247,8 @@ class Suggest extends Component {
          * popup by then, so there is nothing to do.
          */
         Timer.After(0, () => {
-            if (this.Pop.Visible) this.Pop.Close();
+            if (Popover.IsOpen(this.list)) Popover.Close(this.list);
         });
-    }
-
-    Lst_Activate() {
-        this.accept(this.Lst.Index);
-    }
-
-    /* A lookup, as the handler a layout asks is not allowed to be more. */
-    Lst_Filter(row, index) {
-        return this.shown[index] !== false;
     }
 
 }

@@ -4,7 +4,9 @@
   "sources": [
     "MainForm.js",
     "Suggest.js",
+    "SuggestList.js",
     "Choice.js",
+    "ChoiceList.js",
     "RichSelect.js",
     "Tags.js"
   ],

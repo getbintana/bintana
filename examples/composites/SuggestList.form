@@ -1,0 +1,17 @@
+{
+  "format": "bintana-form/1",
+  "class": "SuggestList",
+  "properties": {
+    "Arrangement": "Vertical"
+  },
+  "children": [
+    {
+      "type": "RowList",
+      "name": "Lst",
+      "properties": {
+        "ActivateOnSingleClick": true,
+        "HAlign": "Fill"
+      }
+    }
+  ]
+}

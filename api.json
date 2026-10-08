@@ -2553,7 +2553,7 @@
           "Params": 0,
           "Signature": "()",
           "Returns": "{ X, Y, Width, Height }",
-          "Doc": "where the insertion cursor is drawn, in the control's own coordinates — what `Popover.Popup(editor, rect)` points at for a hint beside the cursor. Only once the control has been laid out; a cursor scrolled out of view answers a rectangle outside the control, which is the truth and the caller's to test. Read it once the control has a rectangle; before the window is up there is nothing to be drawn in",
+          "Doc": "where the insertion cursor is drawn, in the control's own coordinates — what `Popover.Show(content, editor, { Rect })` points at for a hint beside the cursor. Only once the control has been laid out; a cursor scrolled out of view answers a rectangle outside the control, which is the truth and the caller's to test. Read it once the control has a rectangle; before the window is up there is nothing to be drawn in",
           "Native": true
         },
         {
@@ -6057,242 +6057,6 @@
           "End",
           "Center",
           "Fill"
-        ],
-        "VAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ]
-      },
-      "Texts": [
-        "Tooltip"
-      ]
-    },
-    {
-      "Name": "Popover",
-      "Parent": "Container",
-      "Members": [
-        {
-          "Name": "Arrow",
-          "Kind": "Property",
-          "Params": -1,
-          "Signature": "",
-          "Returns": "",
-          "Doc": "draw the tail pointing back at the control. Default `false`, unlike GTK's own — a menu wants the tail and a list of suggestions flush against a field does not",
-          "Native": true
-        },
-        {
-          "Name": "Autohide",
-          "Kind": "Property",
-          "Params": -1,
-          "Signature": "",
-          "Returns": "",
-          "Doc": "`true` by default: a click outside or Escape closes it, and `Close` is raised",
-          "Native": true
-        },
-        {
-          "Name": "Close",
-          "Kind": "Method",
-          "Params": 0,
-          "Signature": "()",
-          "Returns": "",
-          "Doc": "closes it, and does nothing when it is already closed",
-          "Native": true
-        },
-        {
-          "Name": "Popup",
-          "Kind": "Method",
-          "Params": 2,
-          "Signature": "(anchor, [rect])",
-          "Returns": "",
-          "Doc": "opens it over that control — or, with `rect` (`{ X, Y, Width, Height }` in the anchor's own coordinates), pointed at that rectangle inside it, which is how a hint sits beside an editor's cursor (`Editor.CursorBounds()`). A field that is not a number is refused. The anchor **and the container the popover is in** must be on screen — a hidden panel, a collapsed `Expander` or a page not shown is refused with a sentence. The point is taken once: an anchor that moves, scrolls or is deleted afterwards leaves the popover where it opened. The anchor must have been laid out and the window must be up, because the popup is positioned against the anchor's rectangle.",
-          "Native": true
-        },
-        {
-          "Name": "Position",
-          "Kind": "Property",
-          "Params": -1,
-          "Signature": "",
-          "Returns": "",
-          "Doc": "`Top`, `Bottom`, `Left` or `Right`: the side of the anchor it **prefers**, and GTK moves it when there is no room there. Default `\"Bottom\"`",
-          "Native": true
-        },
-        {
-          "Name": "Show",
-          "Kind": "Method",
-          "Params": 0,
-          "Signature": "()",
-          "Returns": "",
-          "Doc": "refuses and names `Popup(anchor)`; the inherited one would build a popup surface before the window exists. The inherited verb would show a surface with nothing to point at",
-          "Native": true
-        },
-        {
-          "Name": "Visible",
-          "Kind": "ReadOnly",
-          "Params": -1,
-          "Signature": "",
-          "Returns": "",
-          "Doc": "the answer to *is it open* — and **read-only**, because it is a state and not a declaration. **Read-only**: opening has a verb, and this is the question half",
-          "Native": true
-        }
-      ],
-      "Events": [
-        {
-          "Name": "Open",
-          "Signature": "()",
-          "Doc": "it came up — `Popup()`, or anything else that showed it"
-        },
-        {
-          "Name": "Close",
-          "Signature": "()",
-          "Doc": "it went down: `Close()`, autohide, or the window going with it. **Not** when the popover itself is deleted or taken out while open — its handlers are unhooked before GTK takes it down"
-        },
-        {
-          "Name": "MouseDown",
-          "Signature": "(x, y, button, ctrl, shift)",
-          "Doc": "coordinates are relative to the widget"
-        },
-        {
-          "Name": "MouseUp",
-          "Signature": "(x, y, button, ctrl, shift)",
-          "Doc": "and came up"
-        },
-        {
-          "Name": "MouseMove",
-          "Signature": "(x, y, button, ctrl, shift)",
-          "Doc": "the pointer moved over it. `button` is `0` here"
-        },
-        {
-          "Name": "MouseEnter",
-          "Signature": "(x, y)",
-          "Doc": "the question motion cannot answer: there is no `MouseMove` for having left"
-        },
-        {
-          "Name": "MouseLeave",
-          "Signature": "()",
-          "Doc": "and left — the question motion cannot answer, since there is no `MouseMove` for having gone"
-        },
-        {
-          "Name": "MouseWheel",
-          "Signature": "(dx, dy)",
-          "Doc": "how far the wheel turned, in GTK's units: one notch is `1.0` on a wheel and a fraction on a touchpad. **Returning `true` consumes it**, which stops the scroller around it from also moving"
-        },
-        {
-          "Name": "DblClick",
-          "Signature": "(x, y, button, ctrl, shift)",
-          "Doc": "two clicks"
-        },
-        {
-          "Name": "KeyPress",
-          "Signature": "(key, ctrl, shift, alt)",
-          "Doc": "a key went down. **Returning `true` consumes it.** A control that edits text claims a printable key, so on a `TextBox` `b` arrives only as `KeyRelease`"
-        },
-        {
-          "Name": "KeyRelease",
-          "Signature": "(key, ctrl, shift, alt)",
-          "Doc": "and came up. Nothing here is consumable"
-        },
-        {
-          "Name": "GotFocus",
-          "Signature": "()",
-          "Doc": "answers for the **control**, so it fires for the focus arriving anywhere within it"
-        },
-        {
-          "Name": "LostFocus",
-          "Signature": "()",
-          "Doc": "where *the user is done with this box* is said — validation, formatting, saving a field"
-        },
-        {
-          "Name": "Drop",
-          "Signature": "(data, x, y)",
-          "Doc": "something with `DragData` was dropped on a widget with `AcceptDrop`. The point is in **this widget's** coordinates, and so is `Bounds(this widget)` asked of a child — so *which row a drop is over* is a comparison and not arithmetic, and on a scroller both numbers already carry the scroll (a child above the view reads a negative `Y`). A hidden child measures 0x0, so skip what is not `Visible`. Only arrives when the drop was not refused (see `DragOver`). **Undo here whatever `DragEnter` lit up**: no `DragLeave` follows a drop (see its row). Refused drops never arrive (see `DragOver`)."
-        },
-        {
-          "Name": "FileDrop",
-          "Signature": "(paths, x, y)",
-          "Doc": "files were dropped from the file manager or the desktop on a widget with `AcceptFiles`. `paths` is an array of full paths — **only files that have one**: a file on a remote share has no local path and does not arrive, and a drop of nothing but those is refused rather than delivered empty"
-        },
-        {
-          "Name": "DragEnter",
-          "Signature": "(data, x, y)",
-          "Doc": "the drag came over a widget with `AcceptDrop`, carrying the same point `Drop` will. What the target lights up with — a column, a highlight — goes here. **The refusal does not live here**: a `false` from this one is overwritten by the very next `DragOver`, which in any real drag is immediately, so a target that refuses says so in `DragOver`"
-        },
-        {
-          "Name": "DragOver",
-          "Signature": "(data, x, y)",
-          "Doc": "the drag moved over it, point after point. Where an insertion line sits is recomputed here. **Returning `false` refuses the drop at that point**: the cursor shows it and `Drop` never fires. Anything else — including answering nothing — accepts it, and with no handler everything is accepted. Strictly `false`: a handler that answers nothing returns `undefined`, which must not refuse every drag anywhere"
-        },
-        {
-          "Name": "DragLeave",
-          "Signature": "()",
-          "Doc": "the drag left without dropping. Undoes what `DragEnter` did — **and a drop is not a leave**: measured, nothing arrives after a `Drop`, and the leave for that target is delivered at the *next* drag instead, right after its `DragBegin` and for a target that drag never touched. So a target undoes its own feedback in `Drop` as well, and anything counting enters against leaves has to expect the late one"
-        },
-        {
-          "Name": "DragBegin",
-          "Signature": "()",
-          "Doc": "on the widget being dragged: the drag started. Grey the card here"
-        },
-        {
-          "Name": "DragEnd",
-          "Signature": "()",
-          "Doc": "on the widget being dragged: the drag finished — dropped or refused. Puts back whatever `DragBegin` changed"
-        },
-        {
-          "Name": "Allocated",
-          "Signature": "(box)",
-          "Doc": "the first time GTK has given it a real rectangle — the moment `Form_Open` is reliably too early for. `box` is `Bounds()` exactly (`{X, Y, Width, Height}`, window coordinates). **Once**: a control that was already on screen has missed it, so ask `Bounds()` first when it may have. A control on a hidden page hears it when the page is shown. Nothing polls — the hook is the window's own layout pass"
-        }
-      ],
-      "Options": {
-        "Arrangement": [
-          "Fixed",
-          "Horizontal",
-          "Vertical"
-        ],
-        "Cursor": [
-          "Auto",
-          "Arrow",
-          "Hand",
-          "Grab",
-          "Grabbing",
-          "Text",
-          "VerticalText",
-          "Wait",
-          "Progress",
-          "Help",
-          "Crosshair",
-          "Cell",
-          "ContextMenu",
-          "Move",
-          "Scroll",
-          "Copy",
-          "Link",
-          "NoDrop",
-          "NotAllowed",
-          "ZoomIn",
-          "ZoomOut",
-          "None",
-          "ResizeHorizontal",
-          "ResizeVertical",
-          "ResizeTopLeft",
-          "ResizeTopRight",
-          "ResizeColumn",
-          "ResizeRow"
-        ],
-        "HAlign": [
-          "Auto",
-          "Start",
-          "End",
-          "Center",
-          "Fill"
-        ],
-        "Position": [
-          "Top",
-          "Bottom",
-          "Left",
-          "Right"
         ],
         "VAlign": [
           "Auto",
@@ -14198,6 +13962,38 @@
           "Signature": "(x, y)",
           "Returns": "",
           "Doc": "move the origin",
+          "Native": true
+        }
+      ]
+    },
+    {
+      "Name": "Popover",
+      "Members": [
+        {
+          "Name": "Close",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(content)",
+          "Returns": "",
+          "Doc": "closes it. Nothing happens when it is not open; `Closed` is called once it is down",
+          "Native": true
+        },
+        {
+          "Name": "IsOpen",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(content)",
+          "Returns": "boolean",
+          "Doc": "whether `Show` opened it and it has not closed since",
+          "Native": true
+        },
+        {
+          "Name": "Show",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(content, anchor, [{ Rect, Position, Arrow, Autohide, Closed }])",
+          "Returns": "",
+          "Doc": "opens `content` — any control, usually a component with a `.form` of its own — floating over `anchor`. **Not in the form's tree**: it takes no room, appears in no `Children`, and nothing in the form being drawn mentions it. A control that is in a container is taken out of it, as `Add` would; it comes back out, free-standing, when the popover closes, and can be shown again. The options: `Rect` (`{ X, Y, Width, Height }` in the anchor's own coordinates — what `Editor.CursorBounds()` answers — points at a place in it instead of the whole of it), `Position` (`Top`, `Bottom`, `Left` or `Right`, the side it **prefers**; default `\"Bottom\"`), `Arrow` (the tail pointing back at the anchor, default `true`; `false` for a list flush against a field), `Autohide` (a click outside or Escape closes it, default `true`) and `Closed` (a function called once when it went down, **by any road**, the window going included). A misspelt option is refused. Showing a control that is already open moves it, with the options given this time. The anchor must be on screen, which it cannot be before the window is shown. The point is taken once: an anchor that moves afterwards leaves the popover where it opened",
           "Native": true
         }
       ]

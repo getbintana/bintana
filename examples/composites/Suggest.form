@@ -17,24 +17,6 @@
         "X": 0,
         "Y": 0
       }
-    },
-    {
-      "type": "Popover",
-      "name": "Pop",
-      "properties": {
-        "Autohide": false
-      },
-      "children": [
-        {
-          "type": "RowList",
-          "name": "Lst",
-          "properties": {
-            "ActivateOnSingleClick": true,
-            "Height": 200,
-            "Width": 360
-          }
-        }
-      ]
     }
   ]
 }

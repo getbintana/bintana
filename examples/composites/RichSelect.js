@@ -6,7 +6,7 @@
  *
  * ## It is a menu, and that is what makes it easy
  *
- * The `Popover` is left with its default `Autohide: true`, which is GTK's own
+ * The list is shown with the default `Autohide: true`, which is GTK's own
  * menu behaviour: opening it moves the focus into the list, the arrows walk
  * the rows, Enter activates, Escape or a click outside closes it.  **None of
  * that is written here** -- the only key-free difference from `Suggest` is the
@@ -34,6 +34,21 @@ class RichSelect extends Component {
     rows   = [];
     chosen = -1;
 
+    /* The rows that float under the face: their own component, made on first
+     * use, so the designer draws them in a tab of their own. */
+    #list = null;
+
+    get list() {
+        if (!this.#list) {
+            this.#list = new ChoiceList();
+            this.#list.On("Take", (at) => {
+                this.choose(at, true);
+                Popover.Close(this.#list);
+            });
+        }
+        return this.#list;
+    }
+
     /* --- what a consumer sets and reads --------------------------------- */
 
     get Items() { return this.items; }
@@ -53,13 +68,13 @@ class RichSelect extends Component {
             Detail: String(one.Detail || ""),
         }));
 
-        this.Lst.Clear();
+        this.list.Lst.Clear();
         this.rows = this.items.map((item) => {
             const row = new Choice();
             row.Icon   = item.Icon;
             row.Title  = item.Title;
             row.Detail = item.Detail;
-            this.Lst.Add(row);
+            this.list.Lst.Add(row);
             return row;
         });
 
@@ -89,13 +104,8 @@ class RichSelect extends Component {
     /* --- the controls saying things -------------------------------------- */
 
     Face_Click() {
-        if (this.Pop.Visible) this.Pop.Close();
-        else                  this.Pop.Popup(this.Face);
-    }
-
-    Lst_Activate() {
-        this.choose(this.Lst.Index, true);
-        this.Pop.Close();
+        if (Popover.IsOpen(this.list)) Popover.Close(this.list);
+        else                           Popover.Show(this.list, this.Face);
     }
 
 }
