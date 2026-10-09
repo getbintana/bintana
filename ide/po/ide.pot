@@ -898,6 +898,38 @@ msgstr ""
 msgid "What this tree shows"
 msgstr ""
 
+#: forms/MainForm.form
+msgid "Nothing open"
+msgstr ""
+
+#: forms/MainForm.form
+msgid "Choose a file in the tree on the left to open it, or create a form from the File menu."
+msgstr ""
+
+#: forms/MainForm.form
+msgid "Tree options"
+msgstr ""
+
+#: forms/MainForm.form
+msgid "Clear filter"
+msgstr ""
+
+#: modules/Workspace.js
+msgid "Filter controls"
+msgstr ""
+
+#: modules/Workspace.js
+msgid "Show only the controls whose name or type contains this"
+msgstr ""
+
+#: forms/MainForm.form: TxtFilter.Placeholder
+msgid "Filter files"
+msgstr ""
+
+#: forms/MainForm.form: TxtFilter.Tooltip
+msgid "Show only the files whose name contains this"
+msgstr ""
+
 #: forms/MainForm.form: FileTree.Menu MnuFtStartup
 msgid "Set as startup form"
 msgstr ""

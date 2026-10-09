@@ -34,6 +34,41 @@ Ide.ControlTree = class ControlTree {
         this.signature = null;
         this.key       = null;
         this.muted     = false;
+
+        /* What the box over the tree says. Per form, like the selection: each
+         * tab's tree is filtered by what was typed in its own box. */
+        this.filter    = "";
+    }
+
+    /* Show only the controls whose name or type contains `text`, and the
+     * containers on the way to them. Empty is every control. */
+    setFilter(text) {
+        text = text.trim();
+        if (text === this.filter) return;
+        this.filter = text;
+        this.refresh();
+    }
+
+    /* Whether a control is shown: it matches, or something inside it does. A
+     * match keeps what is inside it, so typing a panel's name shows its contents. */
+    keeps(control, inMatch) {
+        const needle = this.filter.toLowerCase();
+        if (!needle || inMatch) return true;
+        const has = (c) => c === this.designer.selected ||
+            `${c.Name} ${this.typeOf(c)}`.toLowerCase().includes(needle);
+        if (has(control)) return true;
+        return this.holdsMatch(control, has);
+    }
+
+    matches(control) {
+        const needle = this.filter.toLowerCase();
+        return !!needle && (control === this.designer.selected ||
+               `${control.Name} ${this.typeOf(control)}`.toLowerCase().includes(needle));
+    }
+
+    holdsMatch(control, has) {
+        if (!("Children" in control) || control.Item || control.__node) return false;
+        return control.Children.some((c) => has(c) || this.holdsMatch(c, has));
     }
 
     get tree() { return this.designer.workspace.widgetTree; }
@@ -62,6 +97,10 @@ Ide.ControlTree = class ControlTree {
      */
     shape() {
         const parts = [];
+        /* The selection is part of what a filter shows: the control one is
+         * working on stays on the tree whatever the box says. */
+        const picked = this.designer.selected;
+        parts.push(`filter:${this.filter}${this.filter && picked ? `:${picked.Name}` : ""}`);
         const walk = (container, depth) => {
             for (const c of container.Children) {
                 parts.push(`${depth}:${c.Name}:${this.typeOf(c)}`);
@@ -88,14 +127,16 @@ Ide.ControlTree = class ControlTree {
         tree.Clear();
         tree.Add(TREE_ROOT, this.formLabel(), "", paletteIcon("Form"));
 
-        const walk = (container, parentKey) => {
+        const walk = (container, parentKey, inMatch) => {
             for (const c of container.Children) {
+                if (!this.keeps(c, inMatch)) continue;
                 tree.Add(c.Name, `${c.Name} (${this.typeOf(c)})`, parentKey,
                          this.iconFor(c));
-                if ("Children" in c && !c.Item && !c.__node) walk(c, c.Name);
+                if ("Children" in c && !c.Item && !c.__node)
+                    walk(c, c.Name, inMatch || this.matches(c));
             }
         };
-        walk(this.designer.surface, TREE_ROOT);
+        walk(this.designer.surface, TREE_ROOT, false);
         this.muted = false;
 
         this.key = null;            // the tree was emptied; nothing is on it now
@@ -115,6 +156,9 @@ Ide.ControlTree = class ControlTree {
     sync() {
         const tree = this.tree;
         if (!tree) return;
+        /* A filter is rebuilt for the selection, or a control picked on the
+         * canvas that the box hides would have no row to be selected on. */
+        if (this.filter) this.refresh();
 
         const want = this.designer.selected ? this.designer.selected.Name : TREE_ROOT;
         if (want === this.key || !tree.Exists(want)) return;

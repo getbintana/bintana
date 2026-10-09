@@ -68,6 +68,27 @@ const DIVIDERS = ["Split", "RightSplit", "PageSplit", "CenterSplit",
  */
 const MIN_WINDOW = 200;
 
+/*
+ * The dividers whose **second** half is the one that keeps its size -- the
+ * canvas and its property panel, the editor and its outline, the editor and the
+ * console -- so what a person chose is how much room *that half* has, and the
+ * first half takes whatever the window gives.
+ *
+ * `Position` is the first half's size, which is the wrong number to keep: a
+ * `Position` set before the first allocation is what that allocation honours, so
+ * a window that opens bigger than the one the number was measured in (maximised,
+ * or a remembered size) kept the old width for the canvas and gave the panel the
+ * rest. These are saved as a second number, `ends`, beside `dividers` -- which
+ * stays what it was -- and put back on the split's first real rectangle.
+ */
+const END_FIXED = ["CenterSplit", "EditSplit", "RightSplit"];
+
+/* How long a split is along the axis it divides. */
+function extentOf(split) {
+    const box = split.Bounds();
+    return split.Arrangement === "Vertical" ? box.Height : box.Width;
+}
+
 Ide.Session = class Session {
 
     /** @param {MainForm} ide */
@@ -133,6 +154,7 @@ Ide.Session = class Session {
             if (ide[name] && Number.isFinite(where) && where > 0)
                 ide[name].Position = Math.round(where);
         }
+        if (ide.RightSplit) this.settle(ide.RightSplit, "RightSplit");
         return true;
     }
 
@@ -160,6 +182,37 @@ Ide.Session = class Session {
     }
 
     /*
+     * How much room the second half of one of `END_FIXED` has: the live page's
+     * if there is one, else the saved one, else nothing -- the caller's own.
+     */
+    endOf(name) {
+        const live = this.ide[name];
+        if (live) {
+            const size = extentOf(live);
+            if (size > 0 && live.Position > 0 && size > live.Position)
+                return size - live.Position;
+        }
+        const saved = this.window();
+        const end   = Number(saved && saved.ends && saved.ends[name]);
+        return Number.isFinite(end) && end > 0 ? Math.round(end) : 0;
+    }
+
+    /*
+     * Gives the second half its room once the split has a size: on its first
+     * real rectangle, because anything earlier is worked out against nothing.
+     * `fallback` is what it gets when nobody ever chose -- 0 is *leave it*.
+     */
+    settle(split, name, fallback = 0) {
+        const end = this.endOf(name) || fallback;
+        if (!end) return;
+
+        split.On("Allocated", () => {
+            const size = extentOf(split);
+            if (size > end + MIN_WINDOW / 2) split.Position = size - end;
+        });
+    }
+
+    /*
      * Every resize, which is what `Form_Resize` is for and all this costs: two
      * numbers, compared and kept. Nothing is written here -- a `Settings.Set`
      * per frame of a drag is a file rewritten a hundred times to record a
@@ -180,7 +233,22 @@ Ide.Session = class Session {
         for (const name of DIVIDERS)
             if (ide[name]) dividers[name] = ide[name].Position;
 
-        const saved = { maximized: !!ide.Maximized, dividers };
+        /* What a page not on screen cannot say is kept from the last time. */
+        const before = this.window();
+        const kept   = before && before.ends && typeof before.ends === "object"
+                       ? before.ends : {};
+        const ends   = {};
+        /* The names this version means, and nothing a file happens to hold --
+         * and no `Object.assign`, which is not in this language. */
+        for (const name of END_FIXED) {
+            const last = Number(kept[name]);
+            if (Number.isFinite(last) && last > 0) ends[name] = last;
+            if (!ide[name]) continue;
+            const size = extentOf(ide[name]);
+            if (size > ide[name].Position) ends[name] = size - ide[name].Position;
+        }
+
+        const saved = { maximized: !!ide.Maximized, dividers, ends };
         if (this.size) {
             saved.width  = this.size.width;
             saved.height = this.size.height;

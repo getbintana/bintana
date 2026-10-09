@@ -376,6 +376,9 @@ class MainForm extends Form {
         this.session.saveTabs();
 
         this.project = dir;
+        /* A filter is about the tree it was typed over, and not remembered. */
+        this.projectTree.filter = "";
+        this.TxtFilter.Text     = "";
         this.git.forget();      /* another project is another repository */
         /* Without asking: every door that leads here asked first
          * (`leaveProject`), and asking here would be asking after `project`
@@ -526,6 +529,10 @@ class MainForm extends Form {
      * in twice.
      */
     dressTabActions() {
+        /* The options button over the project tree wears the same icon. */
+        this.BtnFtOptions.Icon = TAB_ACTION_ICON.find((n) => Application.HasIcon(n)) || "";
+        if (!this.BtnFtOptions.Icon) this.BtnFtOptions.Text = "\u22ef";
+
         this.TabActions.Icon = TAB_ACTION_ICON.find((n) => Application.HasIcon(n)) || "";
         if (!this.TabActions.Icon) this.TabActions.Text = "⋯";   /* ⋯ */
     }
@@ -1435,6 +1442,10 @@ class MainForm extends Form {
      * the grid and survives selecting another control -- one looks for `Margin`
      * and then walks the form with it still typed.
      */
+    TreeFind_Change() {
+        if (this.designer) this.designer.tree.setFilter(this.TreeFind.Text);
+    }
+
     PropFind_Change() {
         if (this.designer) this.designer.grid.setFilter(this.PropFind.Text);
     }
@@ -1885,6 +1896,38 @@ class MainForm extends Form {
                                                   : this.projectTree.view;
     }
 
+    /* Escape empties a filter and gives the focus back to what it filters. */
+    TxtFilter_KeyPress(key) {
+        if (key !== "Escape") return false;
+        this.TxtFilter.Text = "";
+        this.FileTree.SetFocus();
+        return true;
+    }
+
+    TreeFind_KeyPress(key) {
+        if (key !== "Escape") return false;
+        this.TreeFind.Text = "";
+        this.WidgetTree.SetFocus();
+        return true;
+    }
+
+    ActFocusFileFilter_Execute() { this.TxtFilter.SetFocus(); }
+    ActFocusTreeFilter_Execute() { if (this.TreeFind) this.TreeFind.SetFocus(); }
+
+    BtnFtOptions_Click() { this.BtnFtOptions.PopupMenu(0, 0); }
+
+    /* The project tree's options: the same two verbs the control tree has, a way
+     * to drop the filter without reaching for the box, and a re-read of the disk. */
+    ActFtExpand_Execute()      { this.FileTree.ExpandAll(); }
+    ActFtCollapse_Execute()    { this.FileTree.CollapseAll(); }
+    ActFtClearFilter_Execute() { this.TxtFilter.Text = ""; }
+    ActFtRefresh_Execute()     { if (this.project) this.listFiles(); }
+
+    /* The box over the tree: what is typed is what the tree keeps. */
+    TxtFilter_Change() {
+        if (this.projectTree) this.projectTree.setFilter(this.TxtFilter.Text);
+    }
+
     CmbView_Select() {
         const which = this.CmbView.Index;
         /* Filling `Items` moves the chooser to nothing on the way past, and
@@ -1895,6 +1938,7 @@ class MainForm extends Form {
 
         Settings.Set("side.changes", changes);
         this.FileTree.Visible   = !changes;
+        this.FtFilterRow.Visible = !changes;
         this.ChangesBox.Visible = changes;
 
         if (changes) this.changes.shown();
@@ -2106,6 +2150,7 @@ class MainForm extends Form {
      * IDE's own is -- is what they are for. */
     ActTrExpand_Execute()   { if (this.WidgetTree) this.WidgetTree.ExpandAll(); }
     ActTrCollapse_Execute() { if (this.WidgetTree) this.WidgetTree.CollapseAll(); }
+    ActTrClearFilter_Execute() { if (this.TreeFind) this.TreeFind.Text = ""; }
 
     /* The canvas has no key to rename by, so the menu is where it lives.  Named
      * for what it renames, since the file has a rename of its own. */

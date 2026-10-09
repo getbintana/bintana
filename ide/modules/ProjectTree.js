@@ -70,6 +70,75 @@ Ide.ProjectTree = class ProjectTree {
         /* Which view is up. Remembered across runs, because it is a way of
          * working and not a thing one re-chooses every morning. */
         this.view = Settings.Get("tree.view", VIEW_PROJECT);
+
+        /* What the filter box says. Not remembered: a filter left over from
+         * yesterday is a tree that looks empty for no visible reason. */
+        this.filter = "";
+    }
+
+    /* The one door a row goes through, so the tree remembers each row's parent:
+     * pruning a filter needs to keep the way to a match, and the tree control
+     * cannot be asked who a node's parent is. */
+    node(key, text, parentKey, icon) {
+        this.ide.FileTree.Add(key, text, parentKey, icon);
+        this.parents[key] = parentKey;
+        this.texts[key]   = text;
+    }
+
+    /* Show only the files whose name contains `text`, and the groups on the way
+     * to them. An empty text is the whole tree. */
+    setFilter(text) {
+        text = text.trim();
+        if (text === this.filter) return;
+
+        this.filter = text;
+        this.build();
+    }
+
+    /*
+     * Takes out what does not match, after the tree is built the ordinary way:
+     * one place that knows what a filter means, rather than a test in each of
+     * the dozen places that add a row.
+     *
+     * A file matches on its path, so `forms/Main` finds it as well as `Main`; a
+     * form's node matches on its class name and keeps both of its files, since
+     * design and code are one thing here. Case is ignored. A group is kept when
+     * something under it is, and a **match keeps its whole subtree** -- typing a
+     * namespace or a folder shows what is in it.
+     */
+    prune() {
+        const needle = this.filter.toLowerCase();
+        if (!needle) return;
+
+        const ide  = this.ide;
+        const keep = new Set();
+        const has  = (s) => String(s).toLowerCase().includes(needle);
+
+        const keys = Dictionary.Keys(this.parents);
+        for (const key of keys) {
+            const file = this.byKey[key];
+            /* A file row matches by its path; a group by what it is called. */
+            if (!(file ? has(file) || has(this.texts[key]) : has(this.texts[key])))
+                continue;
+            /* The row, the way up to it ... */
+            for (let k = key; k !== undefined && k !== "" && !keep.has(k); k = this.parents[k])
+                keep.add(k);
+        }
+        /* ... and everything below a match. */
+        const matched = new Set(keep);
+        for (const key of keys) {
+            for (let k = this.parents[key]; k !== undefined && k !== ""; k = this.parents[k])
+                if (matched.has(k) && has(this.texts[k])) { keep.add(key); break; }
+        }
+
+        for (const key of keys) {
+            if (keep.has(key)) continue;
+            /* A removed node takes its subtree, so a later key may be gone. */
+            if (ide.FileTree.Exists(key)) ide.FileTree.RemoveNode(key);
+            delete this.byKey[key];
+            delete this.labels[key];
+        }
+        ide.FileTree.ExpandAll();
     }
 
     /* The views, in the order the chooser offers them. Their *names* are prose
@@ -100,6 +169,8 @@ Ide.ProjectTree = class ProjectTree {
         ide.muted = true;
         ide.FileTree.Clear();
         this.byKey = {};
+        this.parents = {};
+        this.texts   = {};
         /* What each file row was labelled with, so something that decorates one
          * -- git's indicator today -- can put the label back rather than
          * decorating its own decoration. Only file rows: a category has nothing
@@ -115,6 +186,7 @@ Ide.ProjectTree = class ProjectTree {
             }
         }
 
+        this.prune();
         ide.muted = false;
     }
 
@@ -148,7 +220,7 @@ Ide.ProjectTree = class ProjectTree {
         for (const entry of entries) {
             if (entry.dir) {
                 const key = `dir:${entry.rel}`;
-                this.ide.FileTree.Add(key, entry.name, parentKey, this.icon("folder"));
+                this.node(key, entry.name, parentKey, this.icon("folder"));
                 this.addRealFolder(entry.rel, key);
                 continue;
             }
@@ -166,6 +238,7 @@ Ide.ProjectTree = class ProjectTree {
 
             this.addFile(entry.rel, entry.name, parentKey, icon);
             this.byKey[entry.rel] = entry.rel;
+            this.tip(entry.rel, entry.rel);
         }
     }
 
@@ -178,7 +251,7 @@ Ide.ProjectTree = class ProjectTree {
      * answers for the *selected* row and a decoration is applied to all of them.
      */
     addFile(key, text, parentKey, icon) {
-        this.ide.FileTree.Add(key, text, parentKey, icon);
+        this.node(key, text, parentKey, icon);
         this.labels[key] = text;
     }
 
@@ -277,7 +350,7 @@ Ide.ProjectTree = class ProjectTree {
             const path = inFolder(folder, name);
             const key  = `dir:${path}`;
 
-            this.ide.FileTree.Add(key, name, parentKey, this.icon("folder"));
+            this.node(key, name, parentKey, this.icon("folder"));
             this.addFolder(path, key);
         }
         this.addCategories(this.filesOf(folder), parentKey, folder);
@@ -332,7 +405,7 @@ Ide.ProjectTree = class ProjectTree {
         const key = `ns:${path}`;
 
         /* The last segment, since the ones before it are the nodes above. */
-        this.ide.FileTree.Add(key, path.slice(path.lastIndexOf(".") + 1),
+        this.node(key, path.slice(path.lastIndexOf(".") + 1),
                               parentKey, this.icon("namespace"));
 
         for (const child of this.namespacesUnder(path, byPath))
@@ -385,7 +458,7 @@ Ide.ProjectTree = class ProjectTree {
         for (const cat of groups) {
             if (!cat.files.length) continue;
 
-            this.ide.FileTree.Add(cat.key, cat.text, parentKey, this.icon(cat.icon));
+            this.node(cat.key, cat.text, parentKey, this.icon(cat.icon));
             for (const form of cat.files) {
                 /* Keyed by path and shown by class: a project with the same
                  * name in two folders will not run, but the tree that says so
@@ -399,6 +472,7 @@ Ide.ProjectTree = class ProjectTree {
                 this.addFile(group, File.BaseName(form), cat.key,
                                   this.icon(starts ? "startup" : "form"));
                 this.byKey[group] = form;
+                this.tip(group, form);
 
                 this.addLeaf(form, Locale.Text("design"), group, "design");
                 paired.push(form);
@@ -425,7 +499,7 @@ Ide.ProjectTree = class ProjectTree {
                                           !isImageFile(f));
 
         if (mods.length) {
-            this.ide.FileTree.Add(catKey("mods"), Locale.Text("Modules"), parentKey,
+            this.node(catKey("mods"), Locale.Text("Modules"), parentKey,
                               this.icon("mods"));
             for (const f of mods) this.addLeaf(f, File.Name(f), catKey("mods"), "code");
         }
@@ -441,7 +515,7 @@ Ide.ProjectTree = class ProjectTree {
          * the category names what is in it.
          */
         if (langs.length) {
-            this.ide.FileTree.Add(catKey("langs"), Locale.Text("Translations"), parentKey,
+            this.node(catKey("langs"), Locale.Text("Translations"), parentKey,
                               this.icon("langs"));
             for (const f of langs)
                 this.addLeaf(f, File.Name(f), catKey("langs"), "catalogue");
@@ -462,7 +536,7 @@ Ide.ProjectTree = class ProjectTree {
          * different view.
          */
         if (pics.length) {
-            this.ide.FileTree.Add(catKey("images"), Locale.Text("Images"), parentKey,
+            this.node(catKey("images"), Locale.Text("Images"), parentKey,
                               this.icon("images"));
             for (const f of pics)
                 this.addLeaf(f, File.Name(f), catKey("images"), "image");
@@ -475,13 +549,13 @@ Ide.ProjectTree = class ProjectTree {
          * came to read.
          */
         if (docs.length) {
-            this.ide.FileTree.Add(catKey("docs"), Locale.Text("Documents"), parentKey,
+            this.node(catKey("docs"), Locale.Text("Documents"), parentKey,
                               this.icon("docs"));
             for (const f of docs)
                 this.addLeaf(f, File.Name(f), catKey("docs"), "document");
         }
         if (rest.length) {
-            this.ide.FileTree.Add(catKey("other"), Locale.Text("Other"), parentKey,
+            this.node(catKey("other"), Locale.Text("Other"), parentKey,
                               this.icon("other"));
             for (const f of rest) this.addLeaf(f, File.Name(f), catKey("other"), "file");
         }
@@ -490,5 +564,16 @@ Ide.ProjectTree = class ProjectTree {
     addLeaf(fileName, text, parentKey, kind) {
         this.addFile(fileName, text, parentKey, this.icon(kind || "file"));
         this.byKey[fileName] = fileName;
+        this.tip(fileName, fileName);
+    }
+
+    /*
+     * What the pointer resting on a row says: where the file is. A name is cut
+     * by the width of the panel and says nothing of its folder -- two `README`s
+     * are the same row twice -- so the path is the tooltip. Left off where it
+     * would only repeat the label.
+     */
+    tip(key, path) {
+        if (path !== this.texts[key]) this.ide.FileTree.SetTooltip(key, path);
     }
 };

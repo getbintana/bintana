@@ -92,6 +92,36 @@
     {
       "name": "ActTrCollapse",
       "text": "Collapse all"
+    },
+    {
+      "name": "ActTrClearFilter",
+      "text": "Clear filter"
+    },
+    {
+      "name": "ActFtExpand",
+      "text": "Expand all"
+    },
+    {
+      "name": "ActFtCollapse",
+      "text": "Collapse all"
+    },
+    {
+      "name": "ActFtClearFilter",
+      "text": "Clear filter"
+    },
+    {
+      "name": "ActFtRefresh",
+      "text": "Refresh"
+    },
+    {
+      "name": "ActFocusFileFilter",
+      "text": "Filter files",
+      "shortcut": "<Control><Alt>f"
+    },
+    {
+      "name": "ActFocusTreeFilter",
+      "text": "Filter controls",
+      "shortcut": "<Control><Alt>c"
     }
   ],
   "menus": [
@@ -617,7 +647,7 @@
       "type": "Switcher",
       "name": "Pages",
       "properties": {
-        "Current": 0,
+        "Current": 1,
         "HAlign": "Fill",
         "Height": 692,
         "Strip": "None",
@@ -790,12 +820,12 @@
                       "type": "Button",
                       "name": "BtnStop",
                       "properties": {
+                        "Action": "ActStop",
                         "Height": 32,
                         "Icon": "media-playback-stop",
                         "Style": "destructive-action",
                         "Text": "Stop",
-                        "Width": 90,
-                        "Action": "ActStop"
+                        "Width": 90
                       }
                     }
                   ]
@@ -819,6 +849,7 @@
               "name": "Split",
               "properties": {
                 "Expand": true,
+                "Grows": "End",
                 "HAlign": "Fill",
                 "HExpand": true,
                 "MinHeight": 400,
@@ -1006,6 +1037,52 @@
                           ]
                         }
                       ]
+                    },
+                    {
+                      "type": "Panel",
+                      "name": "FtFilterRow",
+                      "properties": {
+                        "Arrangement": "Horizontal",
+                        "HAlign": "Fill",
+                        "Margin": 4,
+                        "Style": "linked"
+                      },
+                      "children": [
+                        {
+                          "type": "TextBox",
+                          "name": "TxtFilter",
+                          "properties": {
+                            "HAlign": "Fill",
+                            "HExpand": true,
+                            "Placeholder": "Filter files",
+                            "Tooltip": "Show only the files whose name contains this"
+                          }
+                        },
+                        {
+                          "type": "Button",
+                          "name": "BtnFtOptions",
+                          "properties": {
+                            "Menu": [
+                              {
+                                "action": "ActFtExpand"
+                              },
+                              {
+                                "action": "ActFtCollapse"
+                              },
+                              {
+                                "separator": true
+                              },
+                              {
+                                "action": "ActFtClearFilter"
+                              },
+                              {
+                                "action": "ActFtRefresh"
+                              }
+                            ],
+                            "Tooltip": "Tree options"
+                          }
+                        }
+                      ]
                     }
                   ]
                 },
@@ -1014,8 +1091,9 @@
                   "name": "RightSplit",
                   "properties": {
                     "Arrangement": "Vertical",
+                    "Grows": "Start",
                     "Height": 648,
-                    "Position": 470,
+                    "Position": 464,
                     "Width": 839
                   },
                   "children": [
@@ -1255,6 +1333,61 @@
                               ]
                             }
                           ]
+                        },
+                        {
+                          "type": "Panel",
+                          "name": "EmptyBox",
+                          "properties": {
+                            "Arrangement": "Vertical",
+                            "Expand": true,
+                            "HExpand": true,
+                            "VExpand": true,
+                            "Background": "rgba(0,0,0,0.13)",
+                            "Style": "frame"
+                          },
+                          "children": [
+                            {
+                              "type": "Panel",
+                              "name": "EmptyCol",
+                              "properties": {
+                                "Arrangement": "Vertical",
+                                "HAlign": "Center",
+                                "Spacing": 10,
+                                "VAlign": "Center",
+                                "VExpand": true,
+                                "Width": 360
+                              },
+                              "children": [
+                                {
+                                  "type": "Image",
+                                  "name": "ImgEmpty",
+                                  "properties": {
+                                    "Icon": "document-edit-symbolic",
+                                    "Size": 64
+                                  }
+                                },
+                                {
+                                  "type": "Label",
+                                  "name": "LblEmpty",
+                                  "properties": {
+                                    "Alignment": "Center",
+                                    "Style": "title-2",
+                                    "Text": "Nothing open"
+                                  }
+                                },
+                                {
+                                  "type": "Label",
+                                  "name": "LblEmptyHint",
+                                  "properties": {
+                                    "Alignment": "Center",
+                                    "Style": "dim-label",
+                                    "Text": "Choose a file in the tree on the left to open it, or create a form from the File menu.",
+                                    "Wrap": true
+                                  }
+                                }
+                              ]
+                            }
+                          ]
                         }
                       ]
                     },
@@ -1262,6 +1395,7 @@
                       "type": "Notebook",
                       "name": "ConsoleBox",
                       "properties": {
+                        "Current": 0,
                         "Height": 173,
                         "Tabs": [
                           "Output",
@@ -1274,7 +1408,6 @@
                           "type": "TextEditor",
                           "name": "LogView",
                           "properties": {
-                            "Border": "0 solid #ffffff",
                             "Expand": true,
                             "Font": "Monospace 10",
                             "HAlign": "Fill",
@@ -1397,7 +1530,6 @@
                               "type": "Split",
                               "name": "DebugBox",
                               "properties": {
-                                "Arrangement": "Horizontal",
                                 "Expand": true,
                                 "HExpand": true,
                                 "Position": 320,

@@ -2294,11 +2294,74 @@ Three things that will waste your time:
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
-  392 assertions against 2938 for the whole project -- 9.2 s against 409 to 624 on this
+  392 assertions against 2970 for the whole project -- 9.2 s against 409 to 624 on this
   machine -- which is what makes iterating on an early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.
-- **`tests/ide` always passes a project, so `Form_Open`'s no-project branch is
+- - **The project tree's filter prunes after building and does not filter while
+  adding.** `ProjectTree.node` is the one door every row goes through (it records
+  each row's parent and label, because a `TreeView` cannot be asked who a node's
+  parent is), and `prune()` removes what does not match and calls `ExpandAll`. A
+  match keeps its whole subtree and the way up to it; a removed key must leave
+  `byKey` **and** `labels`, or `Git.markTree` calls `SetText` on a row that is not
+  there. `TxtFilter_Change` fires while the `.form` loads, before `projectTree`
+  exists -- the *field initialiser does not beat the load* trap -- so it asks.
+- **The control tree's filter (`TreeFind`) is per tab and its state is the
+  designer's.** The box is built in `Workspace` beside `PropFind` and repointed by
+  `TabSet.placeContent`; `TreeFind_Change` hands the text to `designer.tree`
+  (`ControlTree.setFilter`), which keeps it, folds it into `shape()` so a changed
+  filter rebuilds and an edit does not, and skips what neither matches nor holds a
+  match. A match keeps its subtree. A selected control the filter hides is simply
+  not on the tree: `sync()` already refuses a key that does not exist.
+- **The options buttons beside both filters are commands, never named items.**
+  The project tree's is declared in `MainForm.form` (`BtnFtOptions`, `Menu` of
+  `ActFt*` actions, popped by `BtnFtOptions_Click`); the control tree's is
+  `Workspace.treeOptions`, one per tab, whose `Menu` (`TREE_OPTIONS`) is assigned in
+  `bind()` because a menu needs the page to be in the window, and whose click is an
+  `On` closing over its own button. A named item would be a second `MnuX` per tab.
+- **A `Split` with no `Grows` grows both halves, and a `Position` set before the
+  first allocation is what that allocation honours.** Two reports of one thing:
+  enlarging the window grew the side bars (`Split` and `RightSplit` declared no
+  `Grows`, so `Both`), and opening a `.js` in a window already big -- maximised, or
+  a remembered size -- left the editor at the 300 it was worked out against nothing
+  with and gave the *Contenido* outline the rest. The first is `Grows` in
+  `MainForm.form` (`Split` `End`, `RightSplit` `Start`). The second is
+  `Session.settle`: for the dividers whose **second** half keeps its size
+  (`END_FIXED`: `CenterSplit`, `EditSplit`, `RightSplit`) what is saved is that
+  half's room (`ends`, beside the unchanged `dividers`) and it is put back on the
+  split's first `Allocated`, from the live page's, the saved one, or the declared
+  default (`OUTLINE_W`). A page that is not on screen cannot say its `ends`, so
+  `saveWindow` merges with the last ones. Reproduced on an `Xvfb` with a remembered
+  width of 1800 -- there is no window manager, so `Maximized` cannot be.
+- **`TreeView.SetTooltip(key, text)` is per node, and the project tree puts the
+  path there** (`ProjectTree.tip`), left off where it would repeat the label. It is
+  not translated and it costs the rows one `gtk_widget_set_tooltip_text` on bind --
+  which also has to *clear* it, since rows are recycled.
+- **Filters are not remembered, and Escape empties them.** `openProject` clears
+  `projectTree.filter` and `TxtFilter`; `TxtFilter_KeyPress`/`TreeFind_KeyPress`
+  empty the box and hand the focus to the tree. `Ctrl+Alt+F` and `Ctrl+Alt+C` focus
+  the two. The control tree keeps the **selected** control on the tree whatever the
+  filter says (it is part of `shape()`), and `sync()` refreshes first when a filter
+  is set, or a control picked on the canvas that the box hides has no row.
+- **No tab open is a state with a message, not an empty room.** `TabSet.render`
+  hides the strip when `Tabs.Count` is 0 (a notebook with no page still takes
+  space) and shows `EmptyBox` in its place -- declared in `MainForm.form`, visible
+  by default because the welcome page is the first state and `render` has not run
+  then. `tests/ide`'s *nothing in the work area is showing* assertion exempts it.
+- **`Label.Alignment` placed the block and left its lines justified left.** It set
+  `xalign` only, so a `Wrap`ped paragraph with `Alignment: "Center"` was a centred
+  box of left-aligned lines -- measured on the empty view's hint. It sets `justify`
+  beside it now (`Center`/`Right`/`Left`). The empty view wears the designer's
+  surround (`rgba(0,0,0,0.13)`, the `OUTSIDE_COLOR` of `Designer.js`) and the
+  `frame` class; a colour is the exception this project reserves for what a class
+  cannot say, and the theme has no class for *the room around a drawing*.
+- **`Object.assign` is not in this language, and nothing says so until the window
+  closes.** `saveWindow` used it for a day and `Form_Close` threw `not a function`
+  -- on the commonest way out, which no suite phase drives except `session`. It
+  was green in `designer`, `widgets` and `api`; only the `session` prefix saw it.
+  Run the prefix that ends at the *file you changed's own phase* and not only the
+  nearest one.
+**`tests/ide` always passes a project, so `Form_Open`'s no-project branch is
   never taken.** Reading a field in `refresh()` that only `listFiles()` fills
   crashed `bintana ide` on startup with every one of the 967 assertions still passing —
   the welcome-page ones included, because the crash happens *after* them. Anything
@@ -2417,7 +2480,7 @@ nothing is written at all.
 
 **The first harvest was the IDE, and the event marks are what it found.**
 `--profile` over `tests/ide` is 3.9 MB and **37,449 marks** in 354 s with the
-suite green (2818 assertions then; 2938 today) -- against 431 s for the ordinary runner run, so
+suite green (2818 assertions then; 2970 today) -- against 431 s for the ordinary runner run, so
 the writer's per-mark cost does not show at this size. 37,238 of those marks are
 `Event` and 211 are the runtime's (`Bintana`); **28,402 of them are one
 handler**, `PropGrid_Filter` -- the property grid's filter answering GTK for

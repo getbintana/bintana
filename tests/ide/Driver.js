@@ -335,10 +335,11 @@ function* p_welcome(ide) {
 
     eq("no file, no pages", ide.Tabs.Count, 0);
     eq("and no strip either", ide.Tabs.Visible, false);
+    eq("and an empty view that says so, not a blank panel", ide.EmptyBox.Visible, true);
     eq("nor an editor: a code tab owns its own, and there is no tab",
        ide.Editor, null);
-    check("so nothing in the work area is showing",
-          ide.WorkArea.Children.every((c) => !c.Visible),
+    check("so nothing in the work area is showing but that",
+          ide.WorkArea.Children.every((c) => c === ide.EmptyBox || !c.Visible),
           ide.WorkArea.Children.map((c) => `${c.Name}=${c.Visible}`).join(" "));
 
     /*
@@ -641,6 +642,53 @@ function* p_files(ide) {
     ide.Editor.Text  = childSource;
     ide.MnuSave.Click();
 
+    /* --- no file open: a message and not a blank panel -------------------- */
+    check("a tab on screen takes the empty view away", ide.Tabs.Count > 0 && !ide.EmptyBox.Visible);
+    ide.closeAllTabs();
+    yield;
+    check("closing the last one brings it back", ide.Tabs.Count === 0 && ide.EmptyBox.Visible);
+    ide.FileTree.Key = "Child.js";
+    yield;
+    check("and opening a file takes it away again", ide.Tabs.Count > 0 && !ide.EmptyBox.Visible);
+
+    /* --- the filter over the tree ---------------------------------------- */
+    ide.TxtFilter.Text = "CHILD";
+    check("a filter keeps the files whose name has it, whatever the case",
+          ide.FileTree.Exists("Child.js") && ide.FileTree.Exists("Child.form"));
+    check("and the way down to them", ide.FileTree.Exists("form:Child") &&
+          ide.FileTree.Exists("cat:forms"));
+    check("and takes out what does not match",
+          !ide.FileTree.Exists("project.json") && !ide.FileTree.Exists("app.css"));
+    check("what is gone is not a file the tree stands for",
+          ide.projectTree.byKey["project.json"] === undefined);
+    ide.FileTree.Key = "Child.js";
+    eq("a filtered row still selects its file", ide.projectTree.byKey[ide.FileTree.Key],
+       "Child.js");
+
+    ide.TxtFilter.Text = "zzz-nothing";
+    eq("a filter that matches nothing leaves no rows", ide.FileTree.Count, 0);
+
+    ide.TxtFilter.Text = "CHILD";
+    ide.ActFtClearFilter.Execute();
+    eq("Clear filter empties the box", ide.TxtFilter.Text, "");
+    ide.ActFtCollapse.Execute();
+    eq("Collapse all closes the project tree", ide.FileTree.Expanded("cat:forms"), false);
+    ide.ActFtExpand.Execute();
+    eq("Expand all opens it", ide.FileTree.Expanded("cat:forms"), true);
+    ide.ActFtRefresh.Execute();
+    check("Refresh rebuilds it from the disk", ide.FileTree.Exists("Child.js"));
+    check("and the options button is there, with a menu", !!ide.BtnFtOptions.Menu);
+
+    /* Escape empties the box and gives the focus back to the tree. */
+    ide.TxtFilter.Text = "CHILD";
+    eq("Escape in the filter is consumed", ide.TxtFilter_KeyPress("Escape"), true);
+    eq("and empties it", ide.TxtFilter.Text, "");
+    eq("another key is not", ide.TxtFilter_KeyPress("a"), false);
+
+    ide.TxtFilter.Text = "";
+    check("clearing it brings the whole tree back",
+          ide.FileTree.Exists("project.json") && ide.FileTree.Exists("app.css") &&
+          ide.FileTree.Exists("Child.js"));
 }
 
 function* p_designer(ide) {
@@ -1153,6 +1201,37 @@ function* p_designer(ide) {
     eq("selecting reaches a node in a closed tree", ide.designer.selected.Name, "Ok");
     ide.ActTrExpand.Execute();
     yield;
+
+    /* The filter over the tree: by name or by type, the root always there. */
+    const total = ide.WidgetTree.Count;
+    ide.TreeFind.Text = "ok";
+    yield;
+    check("a filter keeps the control it names, whatever the case",
+          ide.WidgetTree.Exists("Ok"));
+    check("and the form it is on", ide.WidgetTree.Exists("@form"));
+    check("and takes the others out", ide.WidgetTree.Count < total,
+          `${ide.WidgetTree.Count} of ${total}`);
+    ide.designer.select(null);
+    yield;
+    ide.TreeFind.Text = "zzz-nothing";
+    yield;
+    eq("one that matches nothing leaves only the form", ide.WidgetTree.Count, 1);
+    /* The control one is working on stays on the tree whatever the box says. */
+    ide.TreeFind.Text = "zzz-nothing";
+    yield;
+    ide.designer.select(byName(ide, "Ok"));
+    yield;
+    check("the selected control stays on a filtered tree", ide.WidgetTree.Exists("Ok"));
+    eq("and Escape in the box is consumed", ide.TreeFind_KeyPress("Escape"), true);
+    eq("and empties it", ide.TreeFind.Text, "");
+    ide.TreeFind.Text = "zzz-nothing";
+    yield;
+    ide.ActTrClearFilter.Execute();
+    yield;
+    eq("Clear filter in the options menu empties the box", ide.TreeFind.Text, "");
+    eq("and brings every control back", ide.WidgetTree.Count, total);
+    check("the options button is per tab and has a menu",
+          !!ide.TreeOptions && !!ide.TreeOptions.Menu);
 
     ide.designer.select(byName(ide, "Ok"));
     yield;
@@ -6409,7 +6488,8 @@ function* p_nested(ide) {
     eq("the strip empties with the last file", ide.Tabs.Count, 0);
     eq("and the editor is blank", ide.activeFile, null);
     check("and there is none left: it went with the page that owned it",
-          ide.Editor === null && ide.WorkArea.Children.every((c) => !c.Visible),
+          ide.Editor === null &&
+          ide.WorkArea.Children.every((c) => c === ide.EmptyBox || !c.Visible),
           `${ide.Editor} / ` +
           ide.WorkArea.Children.map((c) => `${c.Name}=${c.Visible}`).join(" "));
 
@@ -14628,6 +14708,11 @@ function* p_session(ide) {
     eq("and its height", win.height, 640);
     eq("and where the tree divider was", win.dividers.Split, home + 40);
     eq("and where the console one was", win.dividers.RightSplit, console_);
+    check("and how much room the console keeps, which is what survives a resize",
+          typeof win.ends === "object" && win.ends.RightSplit > 0, JSON.stringify(win.ends));
+    ide.session.saveWindow();
+    check("a second write keeps what a page not on screen cannot say",
+          Settings.Get("session.window", {}).ends.RightSplit > 0);
 
     /* A number that could not have come from a resize is a file somebody has
      * edited by hand, and the last real size stands. */

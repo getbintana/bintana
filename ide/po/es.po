@@ -850,6 +850,38 @@ msgstr "Sin proyecto"
 msgid "What this tree shows"
 msgstr "Qué muestra este árbol"
 
+#: forms/MainForm.form
+msgid "Nothing open"
+msgstr "Nada abierto"
+
+#: forms/MainForm.form
+msgid "Choose a file in the tree on the left to open it, or create a form from the File menu."
+msgstr "Elegí un archivo del árbol de la izquierda para abrirlo, o creá un formulario desde el menú Archivo."
+
+#: forms/MainForm.form
+msgid "Tree options"
+msgstr "Opciones del árbol"
+
+#: forms/MainForm.form
+msgid "Clear filter"
+msgstr "Quitar el filtro"
+
+#: modules/Workspace.js
+msgid "Filter controls"
+msgstr "Filtrar controles"
+
+#: modules/Workspace.js
+msgid "Show only the controls whose name or type contains this"
+msgstr "Muestra solo los controles cuyo nombre o tipo contiene esto"
+
+#: forms/MainForm.form: TxtFilter.Placeholder
+msgid "Filter files"
+msgstr "Filtrar archivos"
+
+#: forms/MainForm.form: TxtFilter.Tooltip
+msgid "Show only the files whose name contains this"
+msgstr "Muestra solo los archivos cuyo nombre contiene esto"
+
 #: forms/MainForm.form: FileTree.Menu MnuFtStartup
 msgid "Set as startup form"
 msgstr "Marcar como formulario de inicio"

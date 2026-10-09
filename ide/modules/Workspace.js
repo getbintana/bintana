@@ -51,6 +51,20 @@ const TREE_MENU = [
     { action: "ActTrCollapse" },
 ];
 
+/* What the button beside the filter offers: the tree's own menu and the way
+ * to drop the filter. Commands only, for the reason above. */
+const TREE_OPTIONS = [
+    { action: "ActTrExpand" },
+    { action: "ActTrCollapse" },
+    { separator: true },
+    { action: "ActTrClearFilter" },
+    { separator: true },
+    { action: "ActTrRename" },
+    { action: "ActDelCtl" },
+    { action: "ActRaise" },
+    { action: "ActLower" },
+];
+
 /* What the columns start at with no remembered width; see Session.divider. */
 const CONTROLS_W = 280;
 const CENTER_W   = 520;
@@ -74,6 +88,8 @@ Ide.Workspace = class Workspace {
         this.sideSplit   = null;
         this.paletteBook = null;
         this.widgetTree  = null;
+        this.treeFind    = null;
+        this.treeOptions = null;
         this.barButtons  = [];
         this.btnDelCtl   = null;
         this.btnRaise    = null;
@@ -146,7 +162,37 @@ Ide.Workspace = class Workspace {
         this.widgetTree.Expand  = true;
         this.widgetTree.HExpand = true;
         this.widgetTree.VExpand = true;
-        this.sideSplit.Add(this.titled(Locale.Text("Structure"), this.widgetTree));
+        /* A filter over it, which is the property grid's bargain: typed here,
+         * applied by `ControlTree` for whichever form is showing. */
+        this.treeFind = new TextBox();
+        this.treeFind.Name        = "TreeFind";
+        this.treeFind.HExpand     = true;
+        this.treeFind.Margin      = 4;
+        this.treeFind.Icon        = "edit-find-symbolic";
+        this.treeFind.Placeholder = Locale.Text("Filter controls");
+        this.treeFind.Tooltip     = Locale.Text("Show only the controls whose name or type contains this");
+
+
+        /* ...and the menu of what can be done to the tree. Built here and given
+         * its `Menu` in `bind`, once the page is in the window. */
+        this.treeOptions = new Button();
+        this.treeOptions.Name    = "TreeOptions";
+        this.treeOptions.Tooltip = Locale.Text("Tree options");
+        this.treeOptions.Icon    = TAB_ACTION_ICON.find((n) => Application.HasIcon(n)) || "";
+        if (!this.treeOptions.Icon) this.treeOptions.Text = "\u22ef";
+        this.treeOptions.On("Click", () => this.treeOptions.PopupMenu(0, 0));
+
+        const findRow = new Panel();
+        findRow.Arrangement = "Horizontal";
+        findRow.HAlign      = "Fill";
+        findRow.Style       = "linked";     /* one control: entry and button joined */
+        this.treeFind.Margin = 0;
+        findRow.Margin       = 4;
+        findRow.Add(this.treeFind);
+        findRow.Add(this.treeOptions);
+
+        this.sideSplit.Add(this.titled(Locale.Text("Structure"), this.widgetTree,
+                                       findRow));
 
         this.controlsBox.Add(this.sideSplit);
         this.controlsBox.Add(this.buildBar());
@@ -158,6 +204,8 @@ Ide.Workspace = class Workspace {
 
         this.page.Position        = this.ide.session.divider("PageSplit",   CONTROLS_W);
         this.centerSplit.Position = this.ide.session.divider("CenterSplit", CENTER_W);
+        /* The panel keeps its room and the canvas takes the rest: see Session. */
+        this.ide.session.settle(this.centerSplit, "CenterSplit");
         this.sideSplit.Position   = this.ide.session.divider("SideSplit",   PALETTE_H);
     }
 
@@ -176,15 +224,19 @@ Ide.Workspace = class Workspace {
 
         /* `Position` is the editor's width, since the first half is the editor,
          * so the outline's is what is left of the room the tabs have. */
-        const room = this.ide.Tabs.Bounds().Width || (this.ide.Bounds().Width - CONTROLS_W);
+        const room  = this.ide.Tabs.Bounds().Width || (this.ide.Bounds().Width - CONTROLS_W);
         this.page.Position = this.ide.session.divider("EditSplit",
-                                                     Math.max(300, room - OUTLINE_W));
+                                                      Math.max(300, room - OUTLINE_W));
+
+        /* The outline keeps its width and the editor takes the rest -- and
+         * with no choice made yet, the width it is declared at: see Session. */
+        this.ide.session.settle(this.page, "EditSplit", OUTLINE_W);
     }
 
     /* A panel's title above its content, so each side panel says what it is
      * the way the outline does. `text` arrives already through `Locale.Text`:
      * the literal has to be at the call site for the extractor to find it. */
-    titled(text, content) {
+    titled(text, content, under) {
         const box = new Panel();
         box.Arrangement = "Vertical";
         box.HExpand     = true;
@@ -196,6 +248,7 @@ Ide.Workspace = class Workspace {
         head.Style  = "heading";
         head.Text   = text;
         box.Add(head);
+        if (under) box.Add(under);      /* between the title and what it titles */
         box.Add(content);
         return box;
     }
@@ -348,7 +401,8 @@ Ide.Workspace = class Workspace {
     bind() {
         if (!this.design) return;
 
-        this.widgetTree.Menu = TREE_MENU;
+        this.widgetTree.Menu    = TREE_MENU;
+        this.treeOptions.Menu   = TREE_OPTIONS;
         for (const [button, action] of this.barButtons) button.Action = action;
     }
 };

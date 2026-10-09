@@ -604,6 +604,10 @@ Ide.TabSet = class TabSet {
          * entirely and the editor has the room.
          */
         this.ide.Tabs.Visible = this.ide.Tabs.Count > 0;
+        /* ...and what takes its place says so, rather than a blank panel: a
+         * project with no file open is a state, and the empty room reads as the
+         * IDE having lost something. */
+        this.ide.EmptyBox.Visible = !this.ide.Tabs.Visible;
 
         for (let i = 0; i < this.tabOrder.length; i++) {
             const name  = this.tabOrder[i];
@@ -942,6 +946,8 @@ Ide.TabSet = class TabSet {
         this.ide.OutlineList = ws ? ws.outlineList : null;
         this.ide.Palette     = ws ? ws.paletteBook : null;
         this.ide.WidgetTree  = ws ? ws.widgetTree  : null;
+        this.ide.TreeFind    = ws ? ws.treeFind    : null;
+        this.ide.TreeOptions = ws ? ws.treeOptions : null;
         this.ide.BtnDelCtl   = ws ? ws.btnDelCtl   : null;
         this.ide.BtnRaise    = ws ? ws.btnRaise    : null;
         this.ide.BtnLower    = ws ? ws.btnLower    : null;
