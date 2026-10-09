@@ -6087,6 +6087,83 @@ function* p_forms(ide) {
           (nestedBox.children || []).some((c) => c.type === "Marcador"),
           JSON.stringify(nestedFile));
 
+    /*
+     * **...and a save after an edit, which is the one that rewrote it.** The
+     * save above wrote nothing new: the tab was clean. `Serialize` walks a
+     * panel's subtree in the runtime, which writes a stand-in as the
+     * `Component` it is drawn with -- so a `Report` inside a scroller came back
+     * `"type": "Component"`, tinted, and the application lost its properties.
+     * The undo snapshot and an `Arrangement` change rebuilt the surface from the
+     * same walk, and turned even a component directly on the form into one.
+     */
+    File.SaveJson(File.Join(TMP, "Nested.form"), {
+        format: "bintana-form/1", class: "Nested",
+        properties: { Text: "Nested", Width: 400, Height: 300 },
+        children: [
+            { type: "Marcador", name: "CompTop",
+              properties: { X: 12, Y: 200, Width: 80, Height: 30 } },
+            { type: "Panel", name: "Box",
+              properties: { Arrangement: "Vertical", Spacing: 6, Width: 300, Height: 150 },
+              children: [
+                  { type: "Button", name: "BtnInside",
+                    properties: { Text: "Inside" } },
+                  { type: "Marcador", name: "CompInside" },
+                  { type: "Notebook", name: "Pages",
+                    children: [
+                        { type: "Panel", name: "Page1",
+                          properties: { Caption: "One" },
+                          children: [{ type: "Marcador", name: "CompPage" }] },
+                    ] },
+              ] },
+        ],
+    });
+    ide.tabs.closeByName("Nested.form", true);
+    ide.openNamed("Nested.form");
+    yield* settled(ide);
+
+    const marcadores = (node) => {
+        const out = [];
+        const walk = (n) => {
+            if (n.name && n.name.startsWith("Comp")) out.push(`${n.name}:${n.type}`);
+            for (const c of n.children || []) walk(c);
+        };
+        walk(node);
+        return out.sort().join(",");
+    };
+    const wanted = "CompInside:Marcador,CompPage:Marcador,CompTop:Marcador";
+    const drawn  = () => ["CompTop", "CompInside", "CompPage"]
+        .map((n) => byName(ide, n))
+        .every((c) => c !== undefined && !!c.__node && c.__node.type === "Marcador");
+
+    ide.designer.pushUndo();
+    ide.designer.setFormProperty("Text", "Nested edited");
+    ide.designer.touch();
+    ide.BtnSave_Click();
+    const edited = JSON.parse(File.Load(File.Join(TMP, "Nested.form")));
+    eq("an edited save writes a nested component as itself", marcadores(edited), wanted);
+    const insideNode = edited.children.find((c) => c.name === "Box")
+                             .children.find((c) => c.name === "CompInside");
+    check("with none of the drawing's tint",
+          !("Background" in (insideNode.properties || {})), JSON.stringify(insideNode));
+
+    ide.designer.undo();
+    yield* settled(ide);
+    check("an undo keeps every stand-in a stand-in", drawn(),
+          ide.designer.allControls().map((c) => `${c.Name}:${c.constructor.name}`).join(" "));
+    eq("and so does what it would save",
+       marcadores(ide.designer.serializeForm()), wanted);
+    ide.designer.redo();
+    yield* settled(ide);
+    check("and so does a redo", drawn());
+
+    ide.designer.setFormProperty("Arrangement", "Vertical");
+    yield* settled(ide);
+    check("rearranging the form keeps them too", drawn());
+    eq("all the way to the file", marcadores(ide.designer.serializeForm()), wanted);
+    ide.designer.setFormProperty("Arrangement", "Fixed");
+    yield* settled(ide);
+    ide.BtnSave_Click();
+
     /* And with no project open there is nothing of the project to offer. */
     ide.designer.setComponents([]);
     check("closing the project empties the component tab",

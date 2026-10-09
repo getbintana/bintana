@@ -3762,6 +3762,21 @@ person who wrote it either.
   one level at a time now -- `parent.AddNode({ ...node, children: [] }, true)`
   and then recurses -- so the stand-in replaces exactly the node that failed.
   `tests/ide`'s `forms` phase has the nested case.
+- **...and `Serialize` writes a stand-in as the `Component` it is drawn with.**
+  `nodeOf` hands back the node a stand-in carries, and it was only asked about
+  the surface's own children: for anything else it called `Serialize`, whose
+  walk is the runtime's and knows nothing of `__node`. So a `Report` inside a
+  scroller came back from the first *edited* save as `"type": "Component"`,
+  tinted, with the drawing's `Arrangement` and `Spacing` -- and the application
+  lost `Paper` and `PageCount`. The undo snapshot and an `Arrangement` change
+  called `Serialize` directly, so there even a component on the form itself
+  turned into a plain `Component` that the next save wrote down for good.
+  `standInsBack` walks the node `Serialize` wrote beside the controls and swaps
+  each stand-in's entry for its own node (a notebook's strip widgets included);
+  the runtime still decides which children are written. **Anything that writes
+  the surface goes through `nodeOf`, never `Serialize`.** The existing test was
+  green throughout because it saved a clean tab, which writes nothing: the
+  `forms` phase now edits first, and undoes, redoes and rearranges.
 - **A `Width`/`Height` in a box is a *minimum*, not a size.** A `SourceEditor`
   declared 605 tall makes the notebook holding it 605 tall, and a `Scroller`
   declared 520 wide is a canvas the split can no longer squeeze. Everything in a

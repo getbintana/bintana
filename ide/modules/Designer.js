@@ -441,7 +441,9 @@ Ide.Designer = class Designer {
             properties: (this.root && this.root.properties) || {},
             menus: (this.root && this.root.menus) || [],
             actions: (this.root && this.root.actions) || [],
-            children: this.surface.Children.map((c) => c.Serialize(true)),
+            /* `nodeOf` and not `Serialize`, or an undo turns every stand-in
+             * into the plain `Component` it is drawn with. */
+            children: this.surface.Children.map((c) => this.nodeOf(c, true)),
             selected: this.selection.map((c) => c.Name),
         });
     }
@@ -1077,7 +1079,8 @@ Ide.Designer = class Designer {
      * must not silently replace.
      */
     nodeOf(control, parentIsFixed) {
-        if (!control.__node) return control.Serialize(parentIsFixed);
+        if (!control.__node)
+            return this.standInsBack(control, control.Serialize(parentIsFixed));
 
         const node  = control.__node;
         const props = { ...(node.properties || {}) };
@@ -1089,6 +1092,44 @@ Ide.Designer = class Designer {
         /* The name is the one thing about a stand-in the designer does own:
          * it is what the form's handlers will be named after. */
         return { ...node, name: control.Name, properties: props };
+    }
+
+    /*
+     * **`Serialize` walks the subtree in the runtime, and the runtime does not
+     * know what a stand-in is.** It writes one as the `Component` it really is,
+     * with the tint and the arrangement the drawing gave it -- so a `Report`
+     * two levels down came back from a save as `"type": "Component"`, and the
+     * application lost `Paper`, `PageCount` and the rest. Only the surface's own
+     * children went through `nodeOf`, so a component directly on the form was
+     * fine and the same one inside a panel was not.
+     *
+     * The runtime still decides *which* children are written (none for a
+     * component or a list drawing its `item`), and this only swaps a stand-in's
+     * entry for the node it carries: `node.children` lists `Children` in order,
+     * with a notebook's strip widgets after them, marked. The X/Y rule is the
+     * runtime's own (`serializeChildren`), so a node with no stand-in in it comes
+     * out exactly as `Serialize` wrote it.
+     */
+    standInsBack(control, node) {
+        const kids = node.children;
+        if (!kids) return node;
+
+        const fixed = control.Arrangement === "Fixed";
+        const back  = (c, n, isFixed) =>
+            c.__node ? this.nodeOf(c, isFixed) : this.standInsBack(c, n);
+
+        control.Children.forEach((c, i) => {
+            if (i < kids.length) kids[i] = back(c, kids[i], fixed);
+        });
+
+        if (control instanceof Notebook) {
+            for (const where of ["Start", "End"]) {
+                const c  = control.GetAction(where);
+                const at = kids.findIndex((n) => n.strip === where);
+                if (c && at >= 0) kids[at] = { ...back(c, kids[at], false), strip: where };
+            }
+        }
+        return node;
     }
 
     /* Which way a container runs.  One word for every container -- a Panel
@@ -2790,7 +2831,7 @@ Ide.Designer = class Designer {
          * because whether a child writes X/Y depends on the old answer. */
         const rebuilding = key === "Arrangement";
         const kids = rebuilding
-            ? this.surface.Children.map((c) => c.Serialize(this.isFixed(this.surface)))
+            ? this.surface.Children.map((c) => this.nodeOf(c, this.isFixed(this.surface)))
             : null;
 
         this.root.properties = this.root.properties || {};
