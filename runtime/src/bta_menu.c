@@ -325,6 +325,9 @@ static JSValue action_set_enabled(JSContext *ctx, JSValueConst this_val,
 
 /* Run from code, so a test can invoke a command without a pointer -- the
  * same thing `MenuItem.Click()` is for. */
+/* Set while `Execute()` runs a command, so `yield_to_text` stands aside. */
+static gboolean executing;
+
 static JSValue action_execute(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv)
 {
@@ -335,7 +338,10 @@ static JSValue action_execute(JSContext *ctx, JSValueConst this_val,
     if (!g_action_get_enabled(G_ACTION(a->action)))
         return JS_ThrowTypeError(ctx, "%s is disabled", a->name);
 
+    /* Code asked for the command, not a key: no text field takes it over. */
+    executing = TRUE;
     g_action_activate(G_ACTION(a->action), NULL);
+    executing = FALSE;
     return JS_UNDEFINED;
 }
 
@@ -441,11 +447,70 @@ static JSValue action_event_names(JSContext *ctx, JSValueConst this_val,
     return one_event(ctx, "Execute");
 }
 
+/*
+ * **A focused text field answers its own editing keys, before any menu.**
+ *
+ * GTK4 resolves an application's accelerators in the capture phase, ahead of
+ * the focused widget, so an Edit menu with `<Control>c` took Ctrl+C from every
+ * `TextBox` and editor in the window: the IDE copied the selected *control* as
+ * JSON while the user had selected a word in the property grid. So when the
+ * item or command being run carries one of the standard editing accelerators
+ * and the window's focus is a text field, the field's own action runs instead
+ * and the handler does not. A click on the menu item goes the same way, which
+ * is what Edit > Copy means on every desktop: copy what has the focus.
+ */
+static const struct { guint key; GdkModifierType mods; const char *action; }
+TEXT_KEYS[] = {
+    { GDK_KEY_c, GDK_CONTROL_MASK,                  "clipboard.copy" },
+    { GDK_KEY_x, GDK_CONTROL_MASK,                  "clipboard.cut" },
+    { GDK_KEY_v, GDK_CONTROL_MASK,                  "clipboard.paste" },
+    { GDK_KEY_a, GDK_CONTROL_MASK,                  "selection.select-all" },
+    { GDK_KEY_z, GDK_CONTROL_MASK,                  "text.undo" },
+    { GDK_KEY_z, GDK_CONTROL_MASK | GDK_SHIFT_MASK, "text.redo" },
+    { GDK_KEY_y, GDK_CONTROL_MASK,                  "text.redo" },
+};
+
+static gboolean yield_to_text(const char *path)
+{
+    BtaApp *app = bta_current_app();
+
+    if (executing || !app || !app->gapp || !path)
+        return FALSE;
+
+    GtkWindow *win = gtk_application_get_active_window(app->gapp);
+    GtkWidget *focus = win ? gtk_root_get_focus(GTK_ROOT(win)) : NULL;
+
+    if (!focus || !(GTK_IS_TEXT(focus) || GTK_IS_TEXT_VIEW(focus)))
+        return FALSE;
+
+    char   **accels  = gtk_application_get_accels_for_action(app->gapp, path);
+    gboolean yielded = FALSE;
+
+    for (char **a = accels; a && *a && !yielded; a++) {
+        guint           key  = 0;
+        GdkModifierType mods = 0;
+
+        if (!gtk_accelerator_parse(*a, &key, &mods))
+            continue;
+        key = gdk_keyval_to_lower(key);
+        for (size_t i = 0; i < G_N_ELEMENTS(TEXT_KEYS); i++)
+            if (TEXT_KEYS[i].key == key && TEXT_KEYS[i].mods == mods) {
+                gtk_widget_activate_action(focus, TEXT_KEYS[i].action, NULL);
+                yielded = TRUE;
+                break;
+            }
+    }
+    g_strfreev(accels);
+    return yielded;
+}
+
 static void on_action_activate(GSimpleAction *action, GVariant *param,
                                gpointer user_data)
 {
     BtaAction *a = user_data;
 
+    if (yield_to_text(a->path))
+        return;
     JS_FreeValue(a->ctx, bta_emit_on(a->ctx, a->form, a->name, "Execute", 0, NULL));
 }
 
@@ -771,6 +836,9 @@ static void on_menu_activate(GSimpleAction *action, GVariant *param, gpointer us
     JSContext   *ctx  = mi->ctx;
     JSValue      argv[3];
     int          argc = 0;
+
+    if (yield_to_text(mi->path))
+        return;
 
     /*
      * A stateful action does not change its own state once something handles

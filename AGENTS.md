@@ -4041,6 +4041,28 @@ person who wrote it either.
   reopening: **an open tab keeps its designer**, so `openNamed` on it rebuilds
   nothing and an assertion about what the file does on opening passes against
   the bug.
+- **GTK4 runs an application's accelerators before the focused widget, so an
+  Edit menu took Ctrl+C from every text field.** `set_accels_for_action` is
+  resolved in the capture phase: the IDE's `MnuCopy` (`<Control>c`) copied the
+  selected *control* as JSON while the user had a word selected in the property
+  grid. `yield_to_text` in `bta_menu.c` is the rule now, for every application:
+  when a menu item or command whose accelerators include a standard editing key
+  (Ctrl+C/X/V/A/Z, Ctrl+Shift+Z, Ctrl+Y) is activated and the active window's
+  focus is a `GtkText` or `GtkTextView`, the field's own action
+  (`clipboard.copy`, `text.undo`...) runs and the handler does not. A click on
+  the item goes the same way -- Edit > Copy copies what has the focus -- and
+  `Action.Execute()` does not (`executing`), since code asked for the command.
+  The suite cannot send a key; it was measured with `xdotool` on an `Xvfb` with
+  `xfwm4`: focus in a `TextBox` copies its text, focus on a button runs the
+  handler. **The designer depends on the canvas taking the focus** (`glass.
+  SetFocus()` on a click), or Ctrl+C after picking a control would copy the
+  grid's text instead.
+- **A cut and a paste is a move, and keeps the name.** The clipboard of a cut
+  carries `cut: true` and the form it came from; `Designer.keptName` hands the
+  name back unless a control on screen has it (the second paste of one cut is a
+  copy) or the paste lands in another form whose `.js` answers for that name.
+  The handlers that stayed in the `.js` are the point of keeping it, so a cut
+  deletes quietly (`deleteSelected(true)`, no *orphaned handlers* line).
 - **A menu bar's label is translated by the process that builds it.**
   `append_item` calls `bta_locale_lookup`, so a menu previewed inside the IDE is
   drawn against the IDE's catalogue. There is no way to opt out from JS. A `Text`

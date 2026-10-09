@@ -3246,6 +3246,16 @@ function* p_clipboard(ide) {
     ide.MnuPaste_Click();
     yield* until(() => ide.Surface.Children.length > before + 1);
     eq("so pasting brings it back", ide.Surface.Children.length, before + 2);
+    eq("under the name it had: a cut and a paste is a move, not a copy",
+       ide.designer.selected.Name, cutName);
+
+    /* The same cut pasted again is a second control, and that one is new. */
+    ide.MnuPaste_Click();
+    yield* until(() => ide.Surface.Children.length > before + 2);
+    check("pasting the cut a second time names the copy afresh",
+          ide.designer.selected.Name !== cutName, ide.designer.selected.Name);
+    ide.MnuUndo_Click();
+    eq("(undone)", ide.Surface.Children.length, before + 2);
 
     /* --- a container brings its contents, renamed all the way down ----------
      *

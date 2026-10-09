@@ -2648,26 +2648,42 @@ Ide.Designer = class Designer {
     /* What a text on the clipboard turns out to be, or nothing at all. Anything
      * that is not ours is not an error: a clipboard holding a paragraph of prose
      * is the ordinary state of a clipboard. */
-    clipNodes(text) {
-        if (!text) return [];
+    clipRead(text) {
+        if (!text) return null;
         try {
             const clip = JSON.parse(text);
-            if (!clip || clip.format !== Designer.CLIP_FORMAT) return [];
-            return Array.isArray(clip.nodes) ? clip.nodes : [];
+            if (!clip || clip.format !== Designer.CLIP_FORMAT) return null;
+            if (!Array.isArray(clip.nodes) || !clip.nodes.length) return null;
+            return clip;
         } catch (e) {
-            return [];
+            return null;
         }
     }
 
-    copySelection() {
+    clipNodes(text) {
+        const clip = this.clipRead(text);
+        return clip ? clip.nodes : [];
+    }
+
+    /* A cut says so on the clipboard, with the form it came from: cutting and
+     * pasting is *moving* the control, so the paste keeps its name -- and with
+     * it the handlers the `.js` still holds for it -- where a copy is a second
+     * control and is named afresh. */
+    copySelection(cut = false) {
         if (!this.selection.length) return false;
-        Clipboard.Copy(JSON.stringify(this.clipOf(this.selection), null, 2));
+        const clip = this.clipOf(this.selection);
+        if (cut) {
+            clip.cut  = true;
+            clip.from = this.path;
+        }
+        Clipboard.Copy(JSON.stringify(clip, null, 2));
         return true;
     }
 
     cutSelection() {
-        if (!this.copySelection()) return false;
-        this.deleteSelected();
+        if (!this.copySelection(true)) return false;
+        /* Quiet: the handlers are not orphaned, they are waiting for the paste. */
+        this.deleteSelected(true);
         return true;
     }
 
@@ -2680,15 +2696,15 @@ Ide.Designer = class Designer {
     paste() {
         if (!this.path) return;
         Clipboard.Paste((text) => {
-            const nodes = this.clipNodes(text);
-            if (!nodes.length) {
+            const clip = this.clipRead(text);
+            if (!clip) {
                 /* A gesture that appears to do nothing is worse than one that
                  * says why: Ctrl+V over a clipboard holding something else is
                  * the commonest way to meet this. */
                 this.ide.log("Nothing to paste: the clipboard holds no controls.\n");
                 return;
             }
-            this.pasteNodes(nodes);
+            this.pasteNodes(clip.nodes, null, clip.cut ? clip.from || "" : null);
         });
     }
 
@@ -2716,7 +2732,7 @@ Ide.Designer = class Designer {
      * can take children, the surface otherwise -- the same `dropTarget` the
      * palette uses, so pasting into a Panel is done by selecting the Panel.
      */
-    pasteNodes(nodes, into) {
+    pasteNodes(nodes, into, cutFrom = null) {
         const target = into || this.dropTarget();
         if (!this.canTake(target)) return;
 
@@ -2733,7 +2749,8 @@ Ide.Designer = class Designer {
         const made    = [];
 
         for (const node of nodes) {
-            const control = this.buildNode(target, this.renamedNode(node, claimed));
+            const control = this.buildNode(target,
+                                           this.renamedNode(node, claimed, cutFrom));
             if (!control) continue;
 
             if (this.pages(target)) {
@@ -2765,22 +2782,42 @@ Ide.Designer = class Designer {
      * on the form, so two controls called `Button3` at different depths collide
      * in the dispatch even though nothing on screen looks wrong.
      */
-    renamedNode(node, claimed) {
-        const name = this.uniqueName(node.type, claimed);
+    renamedNode(node, claimed, cutFrom = null) {
+        const name = (cutFrom !== null && this.keptName(node.name, claimed, cutFrom))
+                  || this.uniqueName(node.type, claimed);
         claimed.push(name);
 
         return {
             ...node,
             name,
-            children: (node.children || []).map((c) => this.renamedNode(c, claimed)),
+            children: (node.children || []).map((c) =>
+                this.renamedNode(c, claimed, cutFrom)),
         };
     }
 
-    deleteSelected() {
+    /*
+     * The name a cut control keeps, or nothing when it cannot.
+     *
+     * Not when something on the form has it already -- the second paste of one
+     * cut is a copy -- and not in *another* form whose `.js` answers for that
+     * name: the handlers that stayed behind are in the form it was cut from,
+     * and code that happens to share the name here would be captured, which is
+     * exactly what `uniqueName` refuses.
+     */
+    keptName(name, claimed, cutFrom) {
+        if (!name || claimed.includes(name)) return null;
+        if (this.allControls().some((c) => c.Name === name)) return null;
+        if (cutFrom !== this.path &&
+            Ide.FormFiles.handlersIn(this.ide.formFiles.siblingSource(), name).length)
+            return null;
+        return name;
+    }
+
+    deleteSelected(quiet = false) {
         if (!this.selection.length) return;
         this.pushUndo();
 
-        this.reportOrphans(this.selection);
+        if (!quiet) this.reportOrphans(this.selection);
 
         for (const control of this.selection) control.Delete();
         this.select(null);
