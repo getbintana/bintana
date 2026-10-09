@@ -6108,6 +6108,7 @@ function* p_forms(ide) {
                   { type: "Button", name: "BtnInside",
                     properties: { Text: "Inside" } },
                   { type: "Marcador", name: "CompInside" },
+                  { type: "Grid", name: "GridIn", properties: { Columns: 2 } },
                   { type: "Notebook", name: "Pages",
                     children: [
                         { type: "Panel", name: "Page1",
@@ -6163,6 +6164,21 @@ function* p_forms(ide) {
     ide.designer.setFormProperty("Arrangement", "Fixed");
     yield* settled(ide);
     ide.BtnSave_Click();
+
+    /*
+     * **A row named like a picker is not always a field.** `Icon`, `Style` and
+     * `Columns` get a button inside a text field, and the grid wired its
+     * `IconClick` by the key's name alone -- so selecting a `Grid`, whose
+     * `Columns` is a number and gets a spin, threw out of `On` and left the grid
+     * half built.
+     */
+    let gridRefused = "";
+    try { ide.designer.select(byName(ide, "GridIn")); }
+    catch (e) { gridRefused = e.message; }
+    eq("selecting a grid builds its property grid", gridRefused, "");
+    check("and its Columns row is a spin", editor(ide, "Columns") instanceof SpinBox,
+          String(editor(ide, "Columns")));
+    ide.designer.select(null);
 
     /* And with no project open there is nothing of the project to offer. */
     ide.designer.setComponents([]);

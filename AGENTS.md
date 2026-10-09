@@ -3643,6 +3643,12 @@ person who wrote it either.
   raise. **The guard is asked of the icon** (`editor instanceof TextBox &&
   editor.Icon`) and not by repeating `makeEditor`'s condition, so the two cannot
   drift.
+  **And the guard was put on one branch of two.** The other wired the chooser
+  by the key's *name* -- `Icon`, `Columns`, `Style` -- and `Grid.Columns` is a
+  number, so it gets a spin: selecting any `Grid` threw out of `On` and left the
+  grid half built. The pickers ask the icon now too, and `tests/ide`'s `forms`
+  phase selects a grid. **A key's name is not its editor's shape**; ask the
+  editor.
 - **What the IDE kept dispatching by name is exactly what is not a widget.**
   Nineteen sites in seven files became `On`; what is left is three, all menu
   items -- `MenuBar`'s leaves and `PropertyGrid`'s sample entries -- because a

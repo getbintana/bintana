@@ -1051,12 +1051,14 @@ Ide.PropertyGrid = class PropertyGrid {
         if (this.designMode) {
             if (editor instanceof TextBox && editor.Icon)
                 editor.On("IconClick", () => this.pickSample(key));
-        } else if (key === "Icon") {
-            editor.On("IconClick", () => this.pickIcon(key));
-        } else if (key === "Columns") {
-            editor.On("IconClick", () => this.editColumns(key));
-        } else if (key === "Style") {
-            editor.On("IconClick", () => this.pickStyle(key));
+        } else if (editor instanceof TextBox && editor.Icon) {
+            /* Same guard as above, because the key's name is not the editor's
+             * shape: `Grid.Columns` is a number and gets a spin, and a property
+             * with declared options gets a drop-down -- neither has a field to
+             * click, and `On` refuses an event it cannot raise. */
+            if (key === "Icon")         editor.On("IconClick", () => this.pickIcon(key));
+            else if (key === "Columns") editor.On("IconClick", () => this.editColumns(key));
+            else if (key === "Style")   editor.On("IconClick", () => this.pickStyle(key));
         }
     }
 
