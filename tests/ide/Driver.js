@@ -3107,6 +3107,35 @@ function* p_pages(ide) {
     yield;
     eq("with nothing in a page container it is not offered", ide.ActAddPage.Enabled, false);
 
+    /* --- the strip is where a page container is grabbed ---------------------
+     *
+     * A switcher's buttons span its strip and its body is the page, so a press
+     * on a button that then moves has to move the switcher: it was the only
+     * place left to grab it from, and the press used to end there. The page
+     * changes on the release of a click, never on the press of a drag. */
+    yield* settled(ide);
+    const stepsNow = byName(ide, "Steps");
+    const grip = tabAt(stepsNow, 0);
+    check("a switcher's first button is on its strip", !!grip);
+    if (grip) {
+        const x0 = stepsNow.X;
+        const was = designer.selected;
+        eq("the switcher is on its second page", stepsNow.Current, 1);
+        ide.Glass_MouseDown(grip[0], grip[1], 1, false);
+        ide.Glass_MouseMove(grip[0] + 2, grip[1], 1, false, false);
+        eq("a press on a button that has not travelled moves nothing", stepsNow.X, x0);
+        eq("nor changes the page: that is the click's, on release", stepsNow.Current, 1);
+        eq("nor the selection", designer.selected, was);
+        ide.Glass_MouseMove(grip[0] - 40, grip[1], 1, false, false);
+        ide.Glass_MouseUp(grip[0] - 40, grip[1], 1, false);
+        yield* settled(ide);
+        eq("dragging from a button selects the switcher", designer.selected, stepsNow);
+        check("and moves it", stepsNow.X < x0, `X ${stepsNow.X}, was ${x0}`);
+        eq("on the page it was on", stepsNow.Current, 1);
+        ide.MnuUndo.Click();
+        yield;
+    }
+
     /* --- saved and run ------------------------------------------------------ */
     ide.BtnSave.Click();
     const saved = JSON.parse(File.Load(File.Join(TMP, "Pager.form")));

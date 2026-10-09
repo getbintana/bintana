@@ -82,6 +82,10 @@ const OUTSIDE_COLOR = "rgba(0,0,0,0.13)";
 /* How close an edge has to be to snap to another control's. */
 const GUIDE_SNAP = 5;
 
+/* How far a press on a tab has to travel before it moves the page container
+ * instead of only showing that page. */
+const TAB_DRAG = 4;
+
 /* The form properties that change how its surface looks or lays out, which the
  * canvas has to wear for the grid and the drawing to say one thing. */
 const FORM_LOOK = ["Spacing", "Homogeneous", "Background",
@@ -204,6 +208,7 @@ Ide.Designer = class Designer {
         this.root     = null;    // root node as read, to rewrite it
         this.selection = [];     // the last one is the primary (see get selected)
         this.drag     = null;
+        this.tabPress = null;    // a press on a tab that may become a drag
         this.band     = null;
         this.dirty    = false;
         this.version  = 0;       // moves on every touch(): see TabSet.contentOf
@@ -1809,17 +1814,22 @@ Ide.Designer = class Designer {
         /*
          * A press on a tab (or a switcher's button) is a page, not the
          * container: the real strip is under the Glass and never sees it, so
-         * the container is asked which page is there. The page is shown and
-         * selected -- the tab sheet being clicked, as in Delphi -- and no drag
-         * starts. Ctrl keeps its meaning everywhere else on the canvas, the
-         * container's toggle.
+         * the container is asked which page is there. Ctrl keeps its meaning
+         * everywhere else on the canvas, the container's toggle.
+         *
+         * **Nothing happens on the press**, because the strip is also where
+         * the container is grabbed: a `Switcher`'s buttons span its whole
+         * strip and its body is the page, so there is nowhere else to drag it
+         * from. A press that moves `TAB_DRAG` pixels selects the container and
+         * moves it, on the page it was on (`mouseMove`); one released where it
+         * was is a click, and shows and selects the page -- the tab sheet
+         * being clicked, as in Delphi (`mouseUp`).
          */
         if (hit && !ctrl && this.pages(hit) && !hit.__node) {
             const b  = hit.Bounds(this.surface);
             const at = b ? hit.PageAt(x - b.X, y - b.Y) : -1;
             if (at >= 0) {
-                this.showPage(hit, at);
-                this.select(hit.Children[at]);
+                this.tabPress = { host: hit, at, x, y };
                 return;
             }
         }
@@ -2051,6 +2061,13 @@ Ide.Designer = class Designer {
     }
 
     mouseMove(x, y, noSnap) {
+        const t = this.tabPress;
+        if (t && Math.max(Math.abs(x - t.x), Math.abs(y - t.y)) >= TAB_DRAG) {
+            this.tabPress = null;
+            this.select(t.host);
+            this.beginDrag("move", t.x, t.y);
+        }
+
         if (this.band) {
             this.band.x1 = x;
             this.band.y1 = y;
@@ -2186,6 +2203,16 @@ Ide.Designer = class Designer {
     }
 
     mouseUp(x, y, button, ctrl) {
+        const t = this.tabPress;
+        this.tabPress = null;
+        if (t) {
+            if (t.at < t.host.Count) {
+                this.showPage(t.host, t.at);
+                this.select(t.host.Children[t.at]);
+            }
+            return;
+        }
+
         if (this.band) {
             this.endBand(ctrl);
             return;

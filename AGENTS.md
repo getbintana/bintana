@@ -6747,6 +6747,14 @@ designer was left), and letting the press through the Glass to the real strip
   on it: `book.Tabs` answered the old tabs and `book.Count` the old count while
   every edit went to the new one. Look it up by name after anything that
   restores.
+- **A tab is clicked on the release, and a press that moves grabs the
+  container.** The first version ended the press at the page, which left a
+  `Switcher` with nowhere to be dragged from: its buttons span the whole strip
+  and its body is the page, so every point of it answered something other than
+  the switcher. `tabPress` turns into a move of the container after `TAB_DRAG`
+  pixels and the page does not change; one released in place is the click,
+  and only then is the page shown and selected. A `Notebook` happened to work
+  only through the empty strip beside its tabs. `tests/ide`'s `pages` phase drags `Steps` from its first button.
 - **A strip that scrolls hides a tab.** `testPageAt`'s side-strip case failed
   with a `SetAction` button in a 160-pixel notebook: three tabs and the button
   do not fit, and the strip scrolls. The test sweeps a band of parallel lines
