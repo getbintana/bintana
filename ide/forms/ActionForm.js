@@ -18,12 +18,6 @@
 /* A command's name is a property of the form and the prefix of its handler. */
 const ACTION_IDENT = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
-const ACTION_HELP =
-    "A command is what a button's and a menu item's Action point at: they take " +
-    "its text and its icon when they declare none, and they are enabled and " +
-    "disabled together (this.Name.Enabled = false).\n\n" +
-    "Its handler is Name_Click. Double click a command to write it.";
-
 class ActionForm extends Form {
 
     /*
@@ -56,7 +50,9 @@ class ActionForm extends Form {
 
     Form_Open() {
         this.muted = false;
-        this.LblHint.Text = ACTION_HELP;
+        /* The literal at the call, so the extractor finds it and the
+         * catalogue translates it: a constant would be neither. */
+        this.LblHint.Text = Locale.Text("A command is what a button's and a menu item's Action point at: they take its text and its icon when they declare none, and they are enabled and disabled together (this.Name.Enabled = false).\n\nIts handler is Name_Click. Double click a command to write it.");
     }
 
     labelOf(act) {
