@@ -86,8 +86,13 @@ const NOISE = /^(?:\([^)]*\): )?(?:Gdk-WARNING|Gtk-WARNING|libEGL warning)/;
  * **And every run now says what each project cost** (`== widgets passed in
  * 9.0s`), so this paragraph is history and the next measurement of the guard is
  * read off a run rather than remembered from here.
+ *
+ * **Twelve hundred, the third time**: `ide` passed in 624 s alone and a full run
+ * reported `timed out after 600s`, exactly the coin toss above -- while the next
+ * full run took 409, so one machine's real time moves by half. Twice the slow
+ * end, so the next growth is read off a run long before it trips.
  */
-const TIMEOUT = Number(Environment.Get("TIMEOUT")) || 600;
+const TIMEOUT = Number(Environment.Get("TIMEOUT")) || 1200;
 
 /*
  * The grace between the guard's two signals, handed to `Exec` as `KillAfter`.

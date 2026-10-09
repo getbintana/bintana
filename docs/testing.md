@@ -1,14 +1,14 @@
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 8464 assertions
+./tests/run.sh                          # all seven projects, 8473 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
 ./tests/run.sh ide list                 # what it can be asked for
 ./tests/pack.sh                         # lib/package, the packaging step's output: 91 assertions
 BINTANA=/other/bintana ./tests/run.sh
-TIMEOUT=300 ./tests/run.sh              # a slower machine than the one this was written on
+TIMEOUT=2400 ./tests/run.sh             # a slower machine than the one this was written on
 BINTANA_PROFILE=/tmp/caps ./tests/run.sh
                                         # a Sysprof capture per project, under /tmp/caps
 HEADLESS= ./tests/run.sh                # ...on your own screen; see below
@@ -84,11 +84,11 @@ once per timeout, and the survivor held the output pipe open so the last of the
 project's output was never read. See [`runtime-api.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/runtime-api.md#exec). That timeout is a guard against a
 hang -- an uncaught throw in `Form_Open` aborts before `Application.Quit` and the
 project would sit there forever -- so it has to stay well clear of how long a
-project legitimately takes: `tests/ide` drives the whole IDE and takes **4m45
-here**, twice that under a sanitizer -- which is 95% of the whole suite's wall
+project legitimately takes: `tests/ide` drives the whole IDE and takes **between
+6m50 and 10m24 here**, twice that under a sanitizer -- which is 95% of the whole suite's wall
 clock, against 8.8 seconds for `widgets` and about 3 each for the other three, so
-running the projects in parallel would buy nothing. The guard is 600 because it
-was 300 and a passing run tripped it. `TIMEOUT=<seconds>` overrides it, and
+running the projects in parallel would buy nothing. The guard is 1200 because it
+was 300 and then 600 and a passing run tripped each. `TIMEOUT=<seconds>` overrides it, and
 `tests/asan.sh` raises it on its own. A guard set just above the real time makes a
 slow machine look like a broken one. **And the runner prints what each project
 cost with its result** — `== widgets passed in 9.0s` — so the next time that
@@ -183,7 +183,7 @@ or a discarded project leaves behind.
 stale; the one above is here to be read.
 
 The saving is the point of it: `welcome files` is **105** assertions and
-`designer` **392**, against **2881** for the whole project — measured at 3.8 s,
+`designer` **392**, against **2938** for the whole project — measured at 3.8 s,
 9.2 s and 413 s on the machine this was last run on, where what carries over to
 another machine is the proportion and not the seconds. Iterating on an early
 phase stops being minutes a time.
