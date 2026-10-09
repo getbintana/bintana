@@ -3901,6 +3901,48 @@ person who wrote it either.
   `HeaderMenu` as a declared note and builds neither (`DRAWN_NOT_BUILT` in
   `forms.js`); the serialiser writes the note back as it does a translated
   caption.
+  **`Action` is the third, and it was found from the other side**: a drawn
+  control's command is looked up among the actions of the form it is on, which
+  is the IDE's, so every button of a project bound to a command the IDE has not
+  got threw and was drawn as a grey stand-in -- fourteen of `bintana-project`'s
+  `MainForm`, `BtnWelcomeOpen` among them -- and the two it had (`ActNew`,
+  `ActOpen`) were bound to the IDE's own commands. It is in `DRAWN_NOT_BUILT`
+  now, and `Designer.lendAction` lends the label and the icon from the drawn
+  form's own `actions` by `bta_action_dress`'s rule, leaving the loader's
+  `__declared` note so a save writes nothing it lent. **Anything a control
+  resolves against `w->form` is resolved against the IDE in a drawing** -- a new
+  property of that kind wants the same treatment, and `tests/ide`'s `nested`
+  phase (`Mandos.form`) is the shape of the test.
+  **The property grid has to know it too, or the row lies.** The control
+  answers `""` for a note it did not build, so `DRAWN_NOTES` in
+  `PropertyGrid.js` makes those rows read `Declared()` and write the note
+  (`Designer.setDrawnNote`), and `Action` is a drop-down of the drawn form's
+  commands. A **lent** `Text`/`Icon` is not the control's either: the row is
+  empty, the command's value is the placeholder and the tooltip names the
+  command (`PropertyGrid.lentBy`, which recognises the note `lendAction`
+  leaves); emptying a label of the control's own lends the command's back.
+  Two things bit on the way. **"Iconic" means an icon the control declared**,
+  not one the command lent it a line earlier -- read the lent one as declared
+  and emptying `Text` gave back nothing, because the button looked like an
+  icon button. And **`restore` rebuilds from a snapshot, not from the root**,
+  so a value read off the node passed to `buildSurface` was gone after the
+  first undo; `drawnActions` is a getter on `this.root`, and the snapshot
+  carries `actions` like it carries `menus`.
+  **The commands are edited with `ActionForm`** (*Form > Edit commands...*, `MnuEditCommands` -- `MnuCommands` is the command palette, and taking its name silently replaced Ctrl+Shift+P's handler),
+  the menus' shape: a dialog on the spec, applied on OK. A command something
+  points at is not deleted, a name another thing on the form has is refused,
+  and a rename is the control rename's bargain -- the pointing controls and
+  menu items follow (`Designer.eachActionUse`), `X_Click` and `this.X` move in
+  the `.js`, the form is saved and undo is cleared.
+  **A stand-in honours `Visible: false` too**, for the same reason from the
+  other side: a built control is handed every property and a hidden one drops
+  out of the drawing, while a stand-in was handed only its name and geometry --
+  so `bintana-project`'s `Plan`, a `Report` the form keeps hidden because it
+  only prints, sat on the board under the page that is shown. `Visible` is a
+  stand-in row now and lives in the node. Its test closes the tab before
+  reopening: **an open tab keeps its designer**, so `openNamed` on it rebuilds
+  nothing and an assertion about what the file does on opening passes against
+  the bug.
 - **A menu bar's label is translated by the process that builds it.**
   `append_item` calls `bta_locale_lookup`, so a menu previewed inside the IDE is
   drawn against the IDE's catalogue. There is no way to opt out from JS. A `Text`

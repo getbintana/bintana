@@ -440,6 +440,7 @@ Ide.Designer = class Designer {
              * not on the surface. */
             properties: (this.root && this.root.properties) || {},
             menus: (this.root && this.root.menus) || [],
+            actions: (this.root && this.root.actions) || [],
             children: this.surface.Children.map((c) => c.Serialize(true)),
             selected: this.selection.map((c) => c.Name),
         });
@@ -476,6 +477,8 @@ Ide.Designer = class Designer {
         if (this.root) {
             if (snap.menus && snap.menus.length) this.root.menus = snap.menus;
             else                                 delete this.root.menus;
+            if (snap.actions && snap.actions.length) this.root.actions = snap.actions;
+            else                                     delete this.root.actions;
         }
         this.buildSurface({ properties: (this.root && this.root.properties) || {},
                             children: snap.children });
@@ -603,6 +606,7 @@ Ide.Designer = class Designer {
              * code fills in has something to be laid out by.
              */
             const built = parent.AddNode({ ...node, children: [] }, true);
+            this.lendAction(built, node);
 
             /* ...and what a list holds while it is being drawn, which is the
              * other half of the same idea and cannot be a property: see
@@ -615,6 +619,73 @@ Ide.Designer = class Designer {
             for (const built of parent.Children.slice(had)) built.Delete();
             return this.standIn(parent, node);
         }
+    }
+
+    /*
+     * A control bound to a command shows what the command would lend it.
+     *
+     * In a drawing `Action` is a note and not a binding (`DRAWN_NOT_BUILT` in
+     * forms.js): bound, it was looked up among the *IDE's* commands, so a
+     * command the IDE has not got made the button a stand-in and one it has
+     * pointed the drawn button at the IDE's. Not bound, nothing lends the label,
+     * and a button declaring neither `Text` nor `Icon` came out blank. So the
+     * designer lends it here, by `bta_action_dress`'s rule -- each of `Text`
+     * and `Icon` only where the control has none, and no `Text` beside an icon
+     * -- and leaves the same `__declared` note the loader does: declared
+     * nothing, applied the command's. So a save writes nothing back, and a
+     * `Text` typed in the grid afterwards is newer than the note and wins.
+     */
+    lendAction(widget, node) {
+        const name = (node.properties || {}).Action;
+        const act  = name && (this.drawnActions || []).find((a) => a.name === name);
+        if (!act) return;
+
+        const notes  = widget.__declared || (widget.__declared = {});
+        /* An icon of the control's own, and not one this lent it earlier: the
+         * rule is about what the control declared. */
+        const icon   = notes.Icon;
+        const iconic = !!widget.Icon &&
+                       !(icon && icon[0] === "" && icon[1] === widget.Icon);
+        const lend   = (key, value) => {
+            if (!value || !(key in widget) || widget[key] !== "") return;
+            widget[key] = value;
+            notes[key]  = ["", widget[key]];
+        };
+        if (!iconic) lend("Text", act.text);
+        lend("Icon", act.icon);
+    }
+
+    /*
+     * The property grid's edit of a note a drawing does not build
+     * (`DRAWN_NOTES`): the note takes the value, and the control is left alone.
+     * The serialiser writes the note's first half while the control still holds
+     * its second, which it does, since nothing assigns it.
+     *
+     * A new command takes back what the old one lent -- a `Text` or `Icon` whose
+     * note still says *declared nothing, applied this* -- and lends its own, so
+     * the drawing does not keep the previous command's label.
+     */
+    setDrawnNote(widget, key, value) {
+        const notes = widget.__declared || (widget.__declared = {});
+        notes[key]  = [value, widget[key]];
+        if (key !== "Action") return;
+
+        for (const lent of ["Text", "Icon"]) {
+            const note = notes[lent];
+            if (note && note[0] === "" && widget[lent] === note[1]) {
+                widget[lent] = "";
+                delete notes[lent];
+            }
+        }
+        this.lendAction(widget, { properties: { Action: value } });
+    }
+
+    /* The drawing's commands, for `lendAction` and the grid's `Action` row: the
+     * surface is drawn on the IDE's own form, whose actions are the IDE's and
+     * not these. Read off the root every time, because `restore` rebuilds the
+     * surface from a snapshot that is not the root. */
+    get drawnActions() {
+        return (this.root && this.root.actions) || [];
     }
 
     /* The node, shown as itself and carrying itself: what goes back to the file
@@ -722,6 +793,16 @@ Ide.Designer = class Designer {
                                                  : [120, 30];
         standIn.Resize(props.Width || size[0], props.Height || size[1]);
         if (this.isFixed(parent)) standIn.Move(props.X || 0, props.Y || 0);
+
+        /*
+         * Hidden like the control it stands for. A built control is handed its
+         * `Visible: false` like any property and drops out of the drawing; a
+         * stand-in was handed nothing, so a component the form keeps hidden --
+         * bintana-project's `Plan`, a `Report` that only ever prints -- sat on
+         * the board under everything that is shown. It stays in the tree, which
+         * is where a hidden control is selected from.
+         */
+        if (props.Visible === false) standIn.Visible = false;
 
         return standIn;
     }
@@ -2438,6 +2519,130 @@ Ide.Designer = class Designer {
         if (spec && spec.length) this.root.menus = spec;
         else                     delete this.root.menus;
 
+        this.touch();
+        return true;
+    }
+
+    /* --- the form's commands ----------------------------------------------- */
+
+    actions() {
+        return (this.root && this.root.actions) || [];
+    }
+
+    /*
+     * Every place in the drawing that names a command, by the command: a
+     * control's `Action` (a note on a built control, a property in a stand-in's
+     * node), a menu item `{ action }` in the form's bar or in a control's own
+     * `Menu`/`HeaderMenu`. `visit(where, name, rename)` is called for each, and
+     * `rename(to)` changes that one place.
+     */
+    eachActionUse(visit) {
+        const inMenu = (items, where) => {
+            for (const item of items || []) {
+                if (item && item.action) {
+                    visit(where, item.action, (to) => { item.action = to; });
+                }
+                if (item && Array.isArray(item.children)) inMenu(item.children, where);
+            }
+        };
+        /* A stand-in carries its subtree as nodes, which nothing built. */
+        const inNode = (node) => {
+            const p = node.properties || {};
+            const where = node.name || node.type;
+            if (p.Action) visit(where, p.Action, (to) => { p.Action = to; });
+            inMenu(p.Menu, where);
+            inMenu(p.HeaderMenu, where);
+            for (const child of node.children || []) inNode(child);
+        };
+
+        inMenu(this.root && this.root.menus, Locale.Text("the menu bar"));
+
+        for (const c of this.allControls()) {
+            if (c.__node) { inNode(c.__node); continue; }
+
+            const name = c.Declared("Action");
+            if (name) visit(c.Name, name, (to) => this.setDrawnNote(c, "Action", to));
+            inMenu(c.Declared("Menu"), c.Name);
+            inMenu(c.Declared("HeaderMenu"), c.Name);
+        }
+    }
+
+    /* What the command editor needs to know about the rest of the form: what
+     * points at each command, and every other name on it -- a command is
+     * published on the form beside the controls and the menu items. */
+    actionContext() {
+        const uses = {};
+        this.eachActionUse((where, name) => {
+            (uses[name] = uses[name] || []).includes(where) || uses[name].push(where);
+        });
+
+        const taken = this.allControls().map((c) => c.Name).filter(Boolean);
+        const items = (list) => {
+            for (const item of list || []) {
+                if (item && item.name) taken.push(item.name);
+                if (item && Array.isArray(item.children)) items(item.children);
+            }
+        };
+        items(this.root && this.root.menus);
+        return { uses, taken };
+    }
+
+    /*
+     * The command editor's answer: the spec, and `[old, new]` for what it
+     * renamed.
+     *
+     * A rename is the control rename's bargain and for the same reason: a
+     * command's name is the prefix of its handler, so `ActOld_Click` moves to
+     * `ActNew_Click` in the `.js`, and that is not undoable -- the form is saved
+     * and the history cleared. A name the code already answers for is refused
+     * first, since two methods of one name in a class is the silent kind. What
+     * points at the command -- controls, the menu bar, a control's own menu --
+     * follows it, or the next load refuses the form.
+     *
+     * The surface is rebuilt either way, because a command's text and icon are
+     * lent to every control pointing at it that declared none.
+     */
+    setActions(spec, renames = []) {
+        if (!this.root) return false;
+
+        const events = ["Click"];
+        for (const [, to] of renames) {
+            const answered = Ide.FormFiles.handlersIn(this.ide.formFiles.siblingSource(),
+                                                      to, events);
+            if (answered.length) {
+                Message.Error("The code already has handlers for {0}: {1}.\nRename or delete them first.",
+                              to, answered.map((e) => `${to}_${e}`).join(", "));
+                return false;
+            }
+        }
+
+        this.pushUndo();
+
+        if (spec && spec.length) this.root.actions = spec;
+        else                     delete this.root.actions;
+
+        const to = new Map(renames);
+        if (to.size) {
+            this.eachActionUse((where, name, rename) => {
+                if (to.has(name)) rename(to.get(name));
+            });
+        }
+
+        this.restore(this.snapshot());
+
+        if (to.size) {
+            let moved = 0;
+            for (const [from, name] of renames) {
+                moved += this.ide.renameHandlers(this.path, from, name, events) || 0;
+            }
+            this.save();
+            this.undoStack = [];
+            this.redoStack = [];
+            this.ide.log(renames.map(([a, b]) => `Renamed ${a} to ${b}`).join(", ") +
+                         (moved ? ` (${moved} in the code)\n` : "\n"));
+        }
+
+        this.grid.fill();
         this.touch();
         return true;
     }

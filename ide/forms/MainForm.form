@@ -515,6 +515,10 @@
           "shortcut": "<Control>m"
         },
         {
+          "name": "MnuEditCommands",
+          "text": "Edit commands..."
+        },
+        {
           "separator": true
         },
         {

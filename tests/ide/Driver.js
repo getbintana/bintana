@@ -5992,6 +5992,44 @@ function* p_forms(ide) {
     eq("renaming a stand-in reaches the file", renamedComp.name, "Marcador9");
 
     /*
+     * **A stand-in is hidden like the control it stands for.** A built control
+     * is handed its `Visible: false` and drops out of the drawing; a stand-in
+     * was handed nothing, so bintana-project's `Plan` -- a `Report` the form
+     * keeps hidden because it only prints -- sat on the board under the page
+     * that is shown. The row is the node's, and the drawing follows it.
+     */
+    ide.designer.select(byName(ide, "Marcador9"));
+    yield;
+    eq("a stand-in has a Visible row", editor(ide, "Visible").Text, "true");
+    editor(ide, "Visible").Text = "false";
+    yield;
+    eq("hiding it hides the drawing", byName(ide, "Marcador9").Visible, false);
+    ide.BtnSave_Click();
+    const hiddenComp = JSON.parse(File.Load(File.Join(TMP, "Refactor.form")))
+                           .children.find((c) => c.type === "Marcador");
+    eq("and the node carries it", hiddenComp.properties.Visible, false);
+
+    /* Closed and opened, so the drawing is built from the file: an open tab
+     * keeps its designer, and the stand-in would still be the one hidden above. */
+    ide.tabs.closeByName("Refactor.form", true);
+    yield;
+    ide.openNamed("Refactor.form");
+    yield* settled(ide);
+    eq("a stand-in the file hides is hidden when it opens",
+       byName(ide, "Marcador9").Visible, false);
+
+    ide.designer.select(byName(ide, "Marcador9"));
+    yield;
+    editor(ide, "Visible").Text = "true";
+    yield;
+    eq("showing it again shows it", byName(ide, "Marcador9").Visible, true);
+    ide.BtnSave_Click();
+    const shownComp = JSON.parse(File.Load(File.Join(TMP, "Refactor.form")))
+                          .children.find((c) => c.type === "Marcador");
+    check("and shown is not written, being the default",
+          !("Visible" in shownComp.properties), JSON.stringify(shownComp.properties));
+
+    /*
      * **A component nested inside another control**, which is where a stand-in
      * used to cost the whole ancestor. `AddNode` builds a node *and its
      * children* in one call, so the throw for a class the IDE cannot
@@ -6318,6 +6356,188 @@ function* p_nested(ide) {
        savedRefused.children[0].properties.Style, ".danger");
     eq("and the children under it",
        (savedRefused.children[0].children || []).length, 1);
+
+    /* --- a control bound to a command of the drawn form ----------------------
+     *
+     * `Action` is looked up among the actions of the form a control is on, and
+     * a drawing's form is the IDE's. So a command the IDE has not got threw and
+     * the button became a stand-in -- fourteen of bintana-project's buttons,
+     * `BtnWelcomeOpen` among them -- and one the IDE has (`ActOpen`) bound the
+     * drawn button to the IDE's own command. In a drawing it is a note now, and
+     * the designer lends the label the command would have.
+     */
+    File.Save(File.Join(TMP, "Mandos.form"), JSON.stringify({
+        format: "bintana-form/1",
+        class: "Mandos",
+        properties: { Text: "Mandos", Width: 360, Height: 260 },
+        actions: [
+            { name: "ActDibujo", text: "Dibujar", icon: "edit-symbolic" },
+            { name: "ActOpen",   text: "Abrir…",  icon: "document-open-symbolic" },
+        ],
+        children: [
+            { type: "Button", name: "BtnDibujo",
+              properties: { X: 10, Y: 10, Width: 120, Height: 30, Action: "ActDibujo" } },
+            { type: "Button", name: "BtnAbrir",
+              properties: { X: 10, Y: 50, Width: 120, Height: 30, Action: "ActOpen",
+                            Icon: "folder-symbolic" } },
+        ],
+    }, null, 2));
+    File.Save(File.Join(TMP, "Mandos.js"),
+              "class Mandos extends Form {\n" +
+              "    ActOpen_Click() { this.ActOpen.Enabled = false; }\n" +
+              "}\n");
+
+    ide.listFiles();
+    ide.openNamed("Mandos.form");
+    yield* settled(ide);
+
+    const mandos = ide.Surface.Children;
+    check("a command the IDE has not got is not a stand-in",
+          mandos.length === 2 && mandos.every((c) => c.__node === undefined),
+          mandos.map((c) => `${c.Name}:${c.constructor.name}`).join(" "));
+    eq("it wears the command's label", mandos[0].Text, "Dibujar");
+    eq("and its icon", mandos[0].Icon, "edit-symbolic");
+    eq("an icon declared takes no label", mandos[1].Text, "");
+    eq("and keeps its own icon", mandos[1].Icon, "folder-symbolic");
+    eq("a command the IDE has is not bound to the IDE's", mandos[1].Action, "");
+
+    /* ...and the property grid shows and edits the note, not the control: the
+     * control answers `""`, and assigning it would look the command up among
+     * the IDE's again. */
+    ide.designer.select(mandos[0]);
+    yield;
+    const actRow = editor(ide, "Action");
+    check("the grid offers the drawn form's commands",
+          actRow instanceof ComboBox
+          && JSON.stringify(actRow.Items) === JSON.stringify(["", "ActDibujo", "ActOpen"]),
+          actRow && JSON.stringify(actRow.Items));
+    eq("and shows the one the control points at", actRow.Text, "ActDibujo");
+    actRow.Text = "ActOpen";
+    yield;
+    eq("choosing another takes its label", mandos[0].Text, "Abrir…");
+    eq("and its icon", mandos[0].Icon, "document-open-symbolic");
+    eq("and still binds nothing of the IDE's", mandos[0].Action, "");
+    eq("and the grid says so", editor(ide, "Action").Text, "ActOpen");
+
+    ide.designer.save();
+    const savedMandos = JSON.parse(File.Load(File.Join(TMP, "Mandos.form")));
+    eq("the save writes the command back",
+       savedMandos.children.map((c) => c.properties.Action).join(","),
+       "ActOpen,ActOpen");
+    check("and nothing the command lent",
+          savedMandos.children[0].properties.Text === undefined
+          && savedMandos.children[0].properties.Icon === undefined,
+          JSON.stringify(savedMandos.children[0].properties));
+
+    /* A lent label is the command's and not the control's, so the grid shows
+     * it as what stands behind an empty row, and says where it comes from. */
+    ide.designer.select(mandos[0]);
+    yield;
+    eq("a lent label is not the row's value", editor(ide, "Text").Text, "");
+    eq("it is the placeholder", editor(ide, "Text").Placeholder, "Abrir…");
+    eq("and so is a lent icon", editor(ide, "Icon").Placeholder, "document-open-symbolic");
+    check("the tooltip names the command",
+          editor(ide, "Text").Tooltip.includes("ActOpen"), editor(ide, "Text").Tooltip);
+
+    typeInto(ide, "Text", "Mío");
+    yield;
+    eq("a label of its own wins", mandos[0].Text, "Mío");
+    eq("and the row is the value, with no placeholder",
+       editor(ide, "Text").Text + "|" + editor(ide, "Text").Placeholder, "Mío|");
+    typeInto(ide, "Text", "");
+    yield;
+    eq("emptying it gives the command's back", mandos[0].Text, "Abrir…");
+    eq("as a placeholder again", editor(ide, "Text").Placeholder, "Abrir…");
+
+    /* --- the command editor --------------------------------------------------
+     *
+     * There was no way to make a command from the IDE: the grid's `Action`
+     * drop-down offered what somebody had typed into the file. Driven through
+     * the menu item, as a user would. */
+    const realMandosErr = Message.Error;
+    const mandosSaid    = [];
+    Message.Error = (...args) => { mandosSaid.push(Locale.Text(...args)); };
+    try {
+        ide.MnuEditCommands_Click();
+        yield;
+        const cmd = ide.actionEditor;
+        eq("the editor lists the form's commands",
+           cmd.actions.map((a) => a.name).join(","), "ActDibujo,ActOpen");
+
+        cmd.List.Key = "1";
+        yield;
+        eq("and shows the one chosen", cmd.TxtText.Text, "Abrir…");
+        cmd.BtnDelete_Click();
+        eq("a command in use is not deleted", cmd.actions.length, 2);
+        check("and the refusal names what uses it",
+              mandosSaid.length === 1 && mandosSaid[0].includes("BtnDibujo")
+              && mandosSaid[0].includes("BtnAbrir"), mandosSaid.join(" / "));
+
+        cmd.BtnAdd_Click();
+        yield;
+        eq("a new command goes after the chosen one", cmd.index, 2);
+        cmd.TxtName.Text = "BtnDibujo";
+        cmd.TxtText.Text = "Nuevo";
+        cmd.ChkEnabled.Active = false;
+        yield;
+        eq("a disabled command says so", cmd.actions[2].enabled, false);
+        eq("the list follows what is typed", cmd.actions[2].text, "Nuevo");
+        cmd.BtnOk_Click();
+        check("a name the form already has is refused",
+              mandosSaid.length === 2 && mandosSaid[1].includes("BtnDibujo"),
+              mandosSaid.join(" / "));
+        cmd.TxtName.Text = "ActNuevo";
+
+        cmd.List.Key = "1";
+        yield;
+        cmd.TxtName.Text = "ActAbrir";
+        cmd.BtnOk_Click();
+        yield* settled(ide);
+    } finally {
+        Message.Error = realMandosErr;
+    }
+    eq("and nothing else was refused", mandosSaid.length, 2);
+
+    const renamed = ide.Surface.Children;
+    eq("the form has the commands",
+       ide.designer.actions().map((a) => a.name).join(","), "ActDibujo,ActAbrir,ActNuevo");
+    eq("a control follows its command's rename",
+       renamed.map((c) => c.Declared("Action")).join(","), "ActAbrir,ActAbrir");
+    eq("and still wears its label", renamed[0].Text, "Abrir…");
+
+    const savedRenamed = JSON.parse(File.Load(File.Join(TMP, "Mandos.form")));
+    eq("a rename is saved, like a control's",
+       savedRenamed.children.map((c) => c.properties.Action).join(","), "ActAbrir,ActAbrir");
+    eq("with the disabled command",
+       JSON.stringify(savedRenamed.actions[2]),
+       JSON.stringify({ name: "ActNuevo", text: "Nuevo", enabled: false }));
+    const mandosCode = File.Load(File.Join(TMP, "Mandos.js"));
+    check("and the handler follows it into the code",
+          mandosCode.includes("ActAbrir_Click()") && mandosCode.includes("this.ActAbrir.Enabled")
+          && !mandosCode.includes("ActOpen"), mandosCode);
+
+    ide.designer.select(renamed[1]);
+    yield;
+    check("the grid offers the new command",
+          editor(ide, "Action").Items.includes("ActNuevo"),
+          JSON.stringify(editor(ide, "Action").Items));
+
+    /* An edit that renames nothing is undoable like any other, and undo has to
+     * bring the commands back with the controls: the lent labels come from
+     * them. */
+    ide.MnuEditCommands_Click();
+    yield;
+    ide.actionEditor.List.Key = "1";
+    yield;
+    ide.actionEditor.TxtText.Text = "Abrir de otro modo";
+    ide.actionEditor.BtnOk_Click();
+    yield* settled(ide);
+    eq("a command's new text reaches the controls",
+       ide.Surface.Children[0].Text, "Abrir de otro modo");
+    ide.designer.undo();
+    yield* settled(ide);
+    eq("and undo takes it back", ide.Surface.Children[0].Text, "Abrir…");
+    eq("with the command", ide.designer.actions()[1].text, "Abrir…");
 
     /* --- designer: nested containers ----------------------------------------
      * A Frame on purpose: it shifts its content by the border and the label, by
@@ -7850,7 +8070,9 @@ function* p_projects(ide) {
     yield;
     eq("the grid offers what the designer owns, then what the class declares",
        ide.designer.grid.propKeys.join(","),
-       "Name,X,Y,Width,Height,Caption,Step,Value");
+       /* `Visible` among the designer's: every control has it and the drawing
+        * honours it, so a stand-in's lives in its node like the class's own. */
+       "Name,X,Y,Width,Height,Visible,Caption,Step,Value");
     check("a getter with no setter is left out, as everywhere else",
           !ide.designer.grid.propKeys.includes("Readonly"),
           JSON.stringify(ide.designer.grid.propKeys));

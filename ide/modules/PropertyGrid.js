@@ -122,6 +122,16 @@ const DESIGN_NUMBERS = { TableView: ["Count"] };
  * `Placement: "Order"` says (a `RowList`, a `Flow`). A container drawn in
  * coordinates has its children in the file: there is nothing to stand in for.
  */
+/*
+ * What a drawing keeps as a note and does not build (`DRAWN_NOT_BUILT` in
+ * forms.js): each is resolved against the form a control is on, and a drawing's
+ * form is the IDE's. So the control answers `""` or nothing for them, and what
+ * the row shows and edits is the note -- `Declared` -- and never the live value.
+ * Without it a button bound to a command showed an empty `Action`, and an edit
+ * there assigned it for real and was refused, or bound the IDE's command.
+ */
+const DRAWN_NOTES = ["Action", "Menu", "HeaderMenu"];
+
 const ITEM_OF    = "Item.of";
 const ITEM_COUNT = "Item.count";
 const ITEM_KEYS  = [ITEM_OF, ITEM_COUNT];
@@ -563,8 +573,12 @@ Ide.PropertyGrid = class PropertyGrid {
         /* A stand-in gets what the designer really owns -- its name and where
          * it sits -- plus whatever its class declares, read from the source. */
         if (this.target && this.target.__node) {
-            return [...STANDIN_PROPS,
-                    ...this.designer.componentProps(this.target.__node.type)];
+            /* `Visible` too, because every control has it and the drawing
+             * honours it: a stand-in hidden by its node had no row to show it
+             * again from. It lives in the node, like the class's own. */
+            return [...STANDIN_PROPS, "Visible",
+                    ...this.designer.componentProps(this.target.__node.type)
+                        .filter((key) => key !== "Visible")];
         }
 
         /* With nothing selected the grid switches to editing the form itself.
@@ -910,7 +924,11 @@ Ide.PropertyGrid = class PropertyGrid {
          * would be offered the Label's values.  Its class is read instead, and
          * one that declares no list gets the text field it always had.
          */
-        const options = this.target && this.target.__node
+        /* A command is one of the drawn form's, which is what the control would
+         * be bound to when the form runs -- and `""` is no command. */
+        const options = this.target && !this.target.__node && key === "Action"
+            ? ["", ...(this.designer.drawnActions || []).map((a) => a.name)]
+            : this.target && this.target.__node
             ? this.designer.componentOptions(this.target.__node.type, key)
             : (this.target ? this.target.PropertyOptions(key)
                            : this.formProbe().PropertyOptions(key));
@@ -1368,6 +1386,12 @@ Ide.PropertyGrid = class PropertyGrid {
 
                 const value  = this.propertyValue(key);
 
+                /* Only a lent row has one in normal mode; every other row is
+                 * cleared, since the editor outlives the target. */
+                if ("Placeholder" in editor) {
+                    editor.Placeholder = this.lentBy(key) ? this.show(this.target[key]) : "";
+                }
+
                 if (editor instanceof SpinBox) {
                     /*
                      * As many decimals as the control holds, and never fewer
@@ -1468,6 +1492,10 @@ Ide.PropertyGrid = class PropertyGrid {
      * the runtime asks GTK, so it cannot drift from what the widget is.
      */
     rowHint(key) {
+        const lent = this.lentBy(key);
+        if (lent) {
+            return Locale.Text("Taken from the command {0}. Type a value to use this control's own.", lent);
+        }
         if (key !== "Style") return "";
 
         const node = this.styleNode();
@@ -1539,9 +1567,36 @@ Ide.PropertyGrid = class PropertyGrid {
          * properties are not on it, they are in the node it came from. */
         if (this.target.__node && !STANDIN_PROPS.includes(key)) {
             const p = this.target.__node.properties || {};
+            /* A boolean, so the row is the two-item drop-down; shown unless the
+             * node says otherwise. */
+            if (key === "Visible") return p.Visible !== false;
             return key in p ? p[key] : "";
         }
+        if (DRAWN_NOTES.includes(key)) return this.target.Declared(key);
+        if (this.lentBy(key)) return "";
         return this.target[key];
+    }
+
+    /*
+     * The command a row's value is lent by, or `""`.
+     *
+     * A control bound to a command and declaring no `Text` (or `Icon`) wears
+     * the command's, and the file says nothing -- so the row is empty, the
+     * command's value is the placeholder and the tooltip says where it comes
+     * from. Showing it as the value read as though the control declared it, and
+     * an edit that changed something else would then have written it into the
+     * file. Recognised by the note `lendAction` leaves: declared nothing,
+     * applied what the control still holds.
+     */
+    lentBy(key) {
+        const target = this.target;
+        if (this.designMode || !target || target.__node) return "";
+        if (key !== "Text" && key !== "Icon") return "";
+
+        const action = target.Declared("Action");
+        const note   = target.__declared && target.__declared[key];
+        if (!action || !note || note[0] !== "" || note[1] === "") return "";
+        return target[key] === note[1] ? action : "";
     }
 
     show(value) {
@@ -1766,9 +1821,30 @@ Ide.PropertyGrid = class PropertyGrid {
 
             this.beginEdit(key);
             node.properties = node.properties || {};
+
+            /* Shown is the default and is not written; hidden is, and the
+             * stand-in follows it, as a built control would. */
+            if (key === "Visible") {
+                if (value === false) node.properties.Visible = false;
+                else                 delete node.properties.Visible;
+                this.target.Visible = value !== false;
+                this.sync();
+                this.designer.chrome.position();
+                this.designer.touch();
+                return;
+            }
             node.properties[key] = this.componentValue(value, this.propertyValue(key));
 
             this.sync();
+            this.designer.touch();
+            return;
+        }
+
+        if (DRAWN_NOTES.includes(key)) {
+            this.beginEdit(key);
+            this.designer.setDrawnNote(this.target, key, value);
+            this.fill();
+            this.designer.chrome.position();
             this.designer.touch();
             return;
         }
@@ -1780,6 +1856,13 @@ Ide.PropertyGrid = class PropertyGrid {
             Message.Error(`${key}: ${e.message}`);
             this.sync();
             return;
+        }
+
+        /* Emptying a control's own label gives it the command's back, which is
+         * what the form will do when it runs. */
+        if ((key === "Text" || key === "Icon") && value === "") {
+            const action = this.target.Declared("Action");
+            if (action) this.designer.lendAction(this.target, { properties: { Action: action } });
         }
 
         this.fill();

@@ -2738,6 +2738,24 @@ class MainForm extends Form {
             (spec) => this.designer.setMenus(spec),
             (name) => this.openHandler(name, "Click"));
     }
+
+    /*
+     * The commands of the form being designed -- what a button's and a menu
+     * item's `Action` point at, and what the property grid's `Action` row
+     * offers. The same shape as the menus: a dialog on the spec, kept while it
+     * is open so a test can drive it.
+     */
+    MnuEditCommands_Click() {
+        if (!this.designing) {
+            Message.Warning("Open a form's design to edit its commands.");
+            return;
+        }
+        this.actionEditor = ActionForm.edit(
+            this.designer.actions(),
+            this.designer.actionContext(),
+            (spec, renames) => this.designer.setActions(spec, renames),
+            (name) => this.openHandler(name, "Click"));
+    }
     /* Aligns against the last control touched, which is the convention. */
     MnuAlignLeft_Click()   { this.designer.align("left"); }
     MnuAlignRight_Click()  { this.designer.align("right"); }

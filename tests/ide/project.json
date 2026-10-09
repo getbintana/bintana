@@ -9,6 +9,7 @@
     "../../ide/forms/AboutForm.js",
     "../../ide/forms/NewProjectForm.js",
     "../../ide/forms/MenuForm.js",
+    "../../ide/forms/ActionForm.js",
     "../../ide/modules/Palette.js",
     "../../ide/modules/Chrome.js",
     "../../ide/modules/TitleBar.js",

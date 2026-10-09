@@ -760,7 +760,14 @@ function translateDeclared(value) {
  * one a translated caption leaves -- and not built. The menu bar is the
  * designer's own preview (`Ide.MenuBar`), which sanitises for the same reasons.
  */
-const DRAWN_NOT_BUILT = ["Menu", "HeaderMenu"];
+/*
+ * `Action` joins them for the same reason: it is looked up among the actions of
+ * the form the control is on, which in a drawing is the IDE's.  A command the
+ * IDE has not got (`ActSettings` in bintana-project) threw, so every button
+ * bound to one became a grey stand-in -- and one it *has* (`ActOpen`) bound the
+ * drawn button to the IDE's own command, which it would then run.
+ */
+const DRAWN_NOT_BUILT = ["Menu", "HeaderMenu", "Action"];
 
 function applyNode(widget, node, designing) {
     const properties = node.properties || {};

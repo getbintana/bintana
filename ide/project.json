@@ -10,6 +10,7 @@
     "forms/AboutForm.js",
     "forms/NewProjectForm.js",
     "forms/MenuForm.js",
+    "forms/ActionForm.js",
     "modules/Palette.js",
     "modules/Chrome.js",
     "modules/TitleBar.js",
