@@ -2330,7 +2330,8 @@ Three things that will waste your time:
   (`END_FIXED`: `CenterSplit`, `EditSplit`, `RightSplit`) what is saved is that
   half's room (`ends`, beside the unchanged `dividers`) and it is put back on the
   split's first `Allocated`, from the live page's, the saved one, or the declared
-  default (`OUTLINE_W`). A page that is not on screen cannot say its `ends`, so
+  default (`OUTLINE_W`, and `CONSOLE_H` for the console, which is left where it was
+  when an older settings file saved the divider without `ends`). A page that is not on screen cannot say its `ends`, so
   `saveWindow` merges with the last ones. Reproduced on an `Xvfb` with a remembered
   width of 1800 -- there is no window manager, so `Maximized` cannot be.
 - **`TreeView.SetTooltip(key, text)` is per node, and the project tree puts the

@@ -83,6 +83,10 @@ const MIN_WINDOW = 200;
  */
 const END_FIXED = ["CenterSplit", "EditSplit", "RightSplit"];
 
+/* The console's height when nobody has chosen one: what `MainForm.form` draws it
+ * with (a 648 split at 464, less its handle). */
+const CONSOLE_H = 190;
+
 /* How long a split is along the axis it divides. */
 function extentOf(split) {
     const box = split.Bounds();
@@ -154,7 +158,13 @@ Ide.Session = class Session {
             if (ide[name] && Number.isFinite(where) && where > 0)
                 ide[name].Position = Math.round(where);
         }
-        if (ide.RightSplit) this.settle(ide.RightSplit, "RightSplit");
+        /* The console keeps its height and the editor takes the rest. With a
+         * divider saved by a version that did not keep `ends` there is nothing
+         * to say how tall the console was, so it stays where it was left; with
+         * none at all it is the height the form is drawn with. */
+        if (ide.RightSplit)
+            this.settle(ide.RightSplit, "RightSplit",
+                        Number(at.RightSplit) > 0 ? 0 : CONSOLE_H);
         return true;
     }
 
