@@ -28,6 +28,7 @@ struct _BtaTreeNode {
     char       *key;
     char       *text;
     char       *icon;          /* icon name, or NULL for a node with none */
+    char       *tooltip;       /* what the pointer resting on the row says, or NULL */
     GListStore *children;      /* of BtaTreeNode, created lazily */
     /* Borrowed: the parent's store holds this node, so the parent outlives it.
      * Expanding needs it, because a row only exists once its ancestors are
@@ -44,6 +45,7 @@ static void bta_tree_node_finalize(GObject *object)
     g_free(self->key);
     g_free(self->text);
     g_free(self->icon);
+    g_free(self->tooltip);
     g_clear_object(&self->children);
 
     G_OBJECT_CLASS(bta_tree_node_parent_class)->finalize(object);
@@ -213,6 +215,10 @@ static void on_bind_row(GtkSignalListItemFactory *f, GtkListItem *item, gpointer
     GtkWidget   *label = gtk_widget_get_last_child(box);
 
     gtk_label_set_text(GTK_LABEL(label), node ? node->text : "");
+    /* Rows are recycled, so a row with no tooltip must say so rather than keep
+     * the one the node before it left. */
+    gtk_widget_set_tooltip_text(GTK_WIDGET(expander),
+                                node && node->tooltip ? node->tooltip : NULL);
 
     /* An icon the theme does not really have is dropped rather than shown as
      * the broken-image glyph -- the same bargain Button.Icon makes, and for the
@@ -522,7 +528,7 @@ static void tree_reselect(BtaWidget *w, BtaTreeNode *node)
  * are the same two members for the control that has one column instead of many
  * -- so no column argument, and that is the whole of the difference.
  */
-enum { NODE_TEXT, NODE_ICON };
+enum { NODE_TEXT, NODE_ICON, NODE_TIP };
 
 static JSValue tree_set_one(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv, int magic)
@@ -531,11 +537,12 @@ static JSValue tree_set_one(JSContext *ctx, JSValueConst this_val,
     if (!w)
         return JS_EXCEPTION;
 
-    const char *who = magic == NODE_TEXT ? "SetText" : "SetIcon";
+    const char *who = magic == NODE_TEXT ? "SetText"
+                    : magic == NODE_TIP  ? "SetTooltip" : "SetIcon";
 
     if (argc < 2)
         return JS_ThrowTypeError(ctx, "%s(key, %s) needs both", who,
-                                 magic == NODE_TEXT ? "text" : "name");
+                                 magic == NODE_TEXT || magic == NODE_TIP ? "text" : "name");
 
     const char *key = JS_ToCString(ctx, argv[0]);
     if (!key)
@@ -556,6 +563,9 @@ static JSValue tree_set_one(JSContext *ctx, JSValueConst this_val,
     if (magic == NODE_TEXT) {
         g_free(node->text);
         node->text = g_strdup(value);
+    } else if (magic == NODE_TIP) {
+        g_free(node->tooltip);
+        node->tooltip = *value ? g_strdup(value) : NULL;
     } else {
         /* "" takes it off, and a name the theme cannot draw is dropped the same
          * way `Add` drops one -- better no icon than the broken-image glyph. */
@@ -951,6 +961,12 @@ static const JSCFunctionListEntry tree_props[] = {
      *   otherwise it is `TableView`'s
      */
     JS_CFUNC_MAGIC_DEF("SetIcon", 2, tree_set_one, NODE_ICON),
+    /* SetTooltip(key, text)
+     *   what resting the pointer on that row says, or `""` for nothing. For
+     *   what the label cannot hold — a full path under a file's name. **Not
+     *   translated**: it is yours to say in the language you mean
+     */
+    JS_CFUNC_MAGIC_DEF("SetTooltip", 2, tree_set_one, NODE_TIP),
     /* Exists(key)
      *   whether that node is there. The question you ask *before* you know,
      *   so it answers rather than throwing

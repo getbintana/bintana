@@ -1718,6 +1718,12 @@ static JSValue label_set_align(JSContext *ctx, JSValueConst this_val, JSValueCon
     if (!g_ascii_strcasecmp(s, "Center"))     x = 0.5f;
     else if (!g_ascii_strcasecmp(s, "Right")) x = 1.0f;
     gtk_label_set_xalign(GTK_LABEL(w->gtk), x);
+    /* `xalign` places the block; the lines of a wrapped text are justified by
+     * `justify`, which defaults to left -- so a centred paragraph came out as a
+     * centred box of left-aligned lines. */
+    gtk_label_set_justify(GTK_LABEL(w->gtk), x == 0.5f ? GTK_JUSTIFY_CENTER
+                                           : x == 1.0f ? GTK_JUSTIFY_RIGHT
+                                                       : GTK_JUSTIFY_LEFT);
 
     JS_FreeCString(ctx, s);
     return JS_UNDEFINED;

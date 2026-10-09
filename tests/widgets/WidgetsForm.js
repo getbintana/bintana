@@ -8820,6 +8820,11 @@ function Main() {
         eq("nor does changing the icon", t.Key, "named");
         throws("a key that is not there", () => t.SetText("nope", "x"));
         throws("SetIcon needs both",      () => t.SetIcon("named"));
+        t.SetTooltip("named", "a/b/named");
+        t.SetTooltip("named", "");         /* "" takes it off */
+        eq("a tooltip does not move the selection either", t.Key, "named");
+        throws("SetTooltip on a key that is not there", () => t.SetTooltip("nope", "x"));
+        throws("SetTooltip needs both",   () => t.SetTooltip("named"));
         t.RemoveNode("named");
 
         const was = t.Count;

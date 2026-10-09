@@ -10165,6 +10165,15 @@
           "Native": true
         },
         {
+          "Name": "SetTooltip",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(key, text)",
+          "Returns": "",
+          "Doc": "what resting the pointer on that row says, or `\"\"` for nothing. For what the label cannot hold — a full path under a file's name. **Not translated**: it is yours to say in the language you mean",
+          "Native": true
+        },
+        {
           "Name": "Text",
           "Kind": "ReadOnly",
           "Params": -1,
