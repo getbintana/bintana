@@ -1452,6 +1452,15 @@
           "Native": true
         },
         {
+          "Name": "Designing",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "a drawing of a form rather than a form: the controls inside it, at any depth, run no `<name>_<event>` on the form they belong to, while a handler installed with `On` still answers. What a form designer sets on its canvas, so a drawn `Notebook` named like one of the designer's own does not run the designer's handler. Default `false`",
+          "Native": true
+        },
+        {
           "Name": "FocusNext",
           "Kind": "Method",
           "Params": 0,
@@ -5309,7 +5318,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "which page is showing, `-1` when there are none. Assigning it switches, and **raises `Switch`**. Default `-1`",
+          "Doc": "which page is showing, `-1` when there are none. Assigning it switches, and **raises `Switch`**. An index past the last page is **kept and applied when that page arrives**, so a `.form` may declare the page it opens on. Default `-1`",
           "Native": true
         },
         {
@@ -5319,6 +5328,15 @@
           "Signature": "(where)",
           "Returns": "",
           "Doc": "the widget in that end of the strip, or `null`",
+          "Native": true
+        },
+        {
+          "Name": "PageAt",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(x, y)",
+          "Returns": "number",
+          "Doc": "the index of the page whose tab is under that point, in this control's own coordinates, or `-1` where there is none: away from the strip, on a widget in the strip (`SetAction`), or with `Strip: \"None\"`. What a form designer asks to turn a click on the strip into a page, since it keeps the pointer for itself and the strip never sees the press",
           "Native": true
         },
         {
@@ -8318,7 +8336,16 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "which page is showing. Assigning it switches, and **raises `Switch`**. Default `-1`",
+          "Doc": "which page is showing. Assigning it switches, and **raises `Switch`**. An index past the last page is **kept and applied when that page arrives**, so a `.form` may declare the page it opens on. Default `-1`",
+          "Native": true
+        },
+        {
+          "Name": "PageAt",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(x, y)",
+          "Returns": "number",
+          "Doc": "the index of the page whose button is under that point, in this control's own coordinates, or `-1` where there is none: away from the strip or with `Strip: \"None\"`. What a form designer asks to turn a click on the strip into a page, since it keeps the pointer for itself and the strip never sees the press",
           "Native": true
         },
         {

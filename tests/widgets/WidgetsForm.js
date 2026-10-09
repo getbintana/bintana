@@ -555,7 +555,7 @@ const TESTS = [
      * the note below. */
     "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableTree", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableGeometry", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
-    "Expand", "Spacing", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
+    "Expand", "Spacing", "Designing", "CurrentPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
     "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "Record", "Nested", "Database", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "Metrics", "Library", "Plugin", "ListMulti", "MenuState",
@@ -9827,6 +9827,246 @@ function Main() {
     }
 
     Sw_Switch(index) { this.switched.push(index); }
+
+    /* --- PageAt: which tab is under a point ---------------------------------
+     *
+     * A form designer keeps the pointer for itself, so the real strip never
+     * sees a press and a click on a tab has to be turned into a page by asking.
+     * Nothing hands out a tab's rectangle, so the strip is swept and what each
+     * point answers is read back: every page once, in order along the strip,
+     * and `-1` off it.
+     */
+    testPageAt() {
+        /* The indices met along one line, each once, in the order met. */
+        const line = (c, points) => {
+            const seen = [];
+            for (const [x, y] of points) {
+                const at = c.PageAt(x, y);
+                if (at >= 0 && seen[seen.length - 1] !== at) seen.push(at);
+            }
+            return seen;
+        };
+        const across = (y, w) => { const out = []; for (let x = 1; x < w; x += 2) out.push([x, y]); return out; };
+        const down   = (x, h) => { const out = []; for (let y = 1; y < h; y += 2) out.push([x, y]); return out; };
+        /* A band of parallel lines, since the strip is as thick as the theme
+         * says, and the line that met the most: the one through the middle of
+         * the tabs. */
+        const band = (along, from, to, len) => {
+            const lines = [];
+            for (let at = from; at < to; at += 3) lines.push(along(at, len));
+            return lines;
+        };
+        const sweep = (c, lines) => {
+            let best = [];
+            for (const pts of lines) {
+                const got = line(c, pts);
+                if (got.length > best.length) best = got;
+            }
+            return best.join(",");
+        };
+
+        const book = new Notebook();
+        this.Fixed1.Add(book);
+        book.Move(10, 10);
+        book.Resize(360, 160);
+        book.Tabs = ["One", "Two", "Three"];
+        for (let i = 0; i < 3; i++) book.Add(new Panel());
+        const action = new Button();
+        action.Text = "+";
+        book.SetAction(action, "End");
+
+        const sw = new Switcher();
+        this.Fixed1.Add(sw);
+        sw.Move(10, 190);
+        sw.Resize(360, 120);
+        for (let i = 0; i < 4; i++) sw.Append(new Panel(), `S${i}`);
+
+        throws("a point that is not one is refused", () => book.PageAt("left", 1));
+        throws("and so is half of one", () => sw.PageAt(1));
+
+        until("the strips are laid out",
+              () => book.Bounds().Width > 0 && sw.Bounds().Width > 0, () => {
+            const bw = book.Bounds().Width, bh = book.Bounds().Height;
+            const sww = sw.Bounds().Width;
+
+            eq("each tab of a notebook answers its page, in order",
+               sweep(book, band(across, 0, 40, bw)), "0,1,2");
+            eq("the page's body is no tab", book.PageAt(bw / 2, bh - 20), -1);
+
+            const ab = action.Bounds(book);
+            eq("nor is a widget in the strip",
+               book.PageAt(ab.X + ab.Width / 2, ab.Y + ab.Height / 2), -1);
+
+            book.Strip = "Bottom";
+            until("the strip moves to the bottom", () => book.PageAt(bw / 2, 5) === -1, () => {
+                eq("at the bottom too",
+                   sweep(book, band(across, bh - 40, bh, bw)), "0,1,2");
+
+                /* Taller for it: three tabs and the strip widget do not fit
+                 * down 160 pixels, and a strip that scrolls hides a tab. */
+                book.Strip = "Start";
+                book.Resize(360, 300);
+                const sh = 300;
+                until("and to the side",
+                      () => sweep(book, band(down, 0, bw / 2, sh)) === "0,1,2", () => {
+                    eq("down the side, in order", sweep(book, band(down, 0, bw / 2, sh)), "0,1,2");
+
+                    book.Strip = "None";
+                    eq("with no strip there is no tab anywhere",
+                       sweep(book, band(across, 0, sh, bw)), "");
+                    book.Delete();
+                });
+            });
+
+            eq("each button of a switcher answers its page",
+               sweep(sw, band(across, 0, 40, sww)), "0,1,2,3");
+
+            /* A hidden page has no button, so the buttons after it belong to
+             * the pages after it: counting buttons made the third answer for
+             * the second. */
+            sw.Children[1].Visible = false;
+            until("the hidden page's button goes",
+                  () => sweep(sw, band(across, 0, 40, sww)) !== "0,1,2,3", () => {
+                eq("a hidden page's button does not shift the others",
+                   sweep(sw, band(across, 0, 40, sww)), "0,2,3");
+
+                sw.Strip = "None";
+                eq("a switcher with no strip has no button anywhere",
+                   sweep(sw, band(across, 0, 120, sww)), "");
+                sw.Delete();
+            });
+        });
+    }
+
+    /* --- Current named before its page exists ------------------------------
+     *
+     * The loader applies a node's properties before its children, so a
+     * declared `Current` used to reach a container with no pages and be lost:
+     * the form opened on the first page, and a designer that saved it wrote the
+     * default back. It is kept now and applied when the page arrives -- by
+     * every road a page comes in.
+     */
+    testCurrentPending() {
+        for (const type of ["Notebook", "Switcher"]) {
+            const panel = new Panel();
+            this.Fixed1.Add(panel);
+
+            panel.BuildChildren({ children: [{
+                type, name: "Pend" + type,
+                properties: { Current: 1, Tabs: ["A", "B", "C"] },
+                children: [{ type: "Panel" }, { type: "Panel" }, { type: "Panel" }],
+            }] });
+            const built = panel.Children[0];
+            eq(`${type}: a declared Current opens on that page`, built.Current, 1);
+
+            const byAppend = Widget.New(type);
+            panel.Add(byAppend);
+            byAppend.Current = 2;
+            eq(`${type}: with no pages there is nothing to show yet`,
+               byAppend.Current, -1);
+            byAppend.Append(new Panel());
+            byAppend.Append(new Panel());
+            eq(`${type}: not until the page it names`, byAppend.Current, 0);
+            byAppend.Append(new Panel(), type === "Notebook" ? undefined : "Named");
+            eq(`${type}: Append brings it`, byAppend.Current, 2);
+
+            const byAdd = Widget.New(type);
+            panel.Add(byAdd);
+            byAdd.Current = 1;
+            byAdd.Add(new Panel());
+            byAdd.Add(new Panel());
+            eq(`${type}: and so does Add`, byAdd.Current, 1);
+
+            if (type === "Switcher") {
+                const named = Widget.New(type);
+                panel.Add(named);
+                named.Current = 1;
+                named.Append(new Panel(), "One");
+                named.Append(new Panel(), "Two");
+                eq("Switcher: a named Append too", named.Current, 1);
+            }
+
+            const forgot = Widget.New(type);
+            panel.Add(forgot);
+            forgot.Current = 3;
+            forgot.Add(new Panel());
+            forgot.Current = 0;
+            forgot.Add(new Panel()); forgot.Add(new Panel()); forgot.Add(new Panel());
+            eq(`${type}: an assignment the pages can satisfy forgets what was waiting`,
+               forgot.Current, 0);
+
+            panel.Delete();
+        }
+    }
+
+    /* --- Designing: a drawing answers to nobody by name ---------------------
+     *
+     * A form designer builds what it draws out of real controls in its own
+     * window, so each of them is bound to the designer's form, and a drawn
+     * notebook named like one of the designer's own ran the designer's handler
+     * when it changed page. `Designing` on the canvas closes the named road
+     * for everything inside it, at any depth, and leaves `On` open -- which is
+     * how the designer itself listens to a drawn control.
+     */
+    DrawnBook_Switch(index) { this.drawnSwitches.push(index); }
+
+    testDesigning() {
+        this.drawnSwitches = [];
+
+        const board = new Panel();
+        this.Fixed1.Add(board);
+        board.Name = "DrawBoard";
+        eq("a container is not a drawing until it says so", board.Designing, false);
+
+        const inner = new Panel();
+        board.Add(inner);
+        const book = new Notebook();
+        book.Name = "DrawnBook";
+        inner.Add(book);
+        book.Add(new Panel());
+        book.Add(new Panel());
+        this.drawnSwitches = [];
+
+        book.Current = 1;
+        eq("outside a drawing the named handler runs", this.drawnSwitches.join(), "1");
+
+        board.Designing = true;
+        eq("the flag reads back", board.Designing, true);
+        check("and is a container's property, saved like the rest",
+              board.PropertyNames().includes("Designing"));
+
+        this.drawnSwitches = [];
+        book.Current = 0;
+        eq("inside a drawing, two levels down, it does not", this.drawnSwitches.length, 0);
+
+        /* Outside a drawing this pair is refused (the form answers Switch by
+         * name already); inside one the named handler can never run, so there
+         * is no pair -- and the designer depends on that, since it listens to
+         * drawn controls with `On` whatever they are called. */
+        let heard = [];
+        book.On("Switch", (i) => heard.push(i));
+        book.Current = 1;
+        eq("and On still answers inside a drawing", heard.join(), "1");
+        eq("while the named one stays quiet", this.drawnSwitches.length, 0);
+        book.On("Switch", null);
+
+        const late = new Button();
+        late.Name = "DrawnLate";
+        late.On("Click", () => {});
+        this.DrawnLate_Click = () => {};
+        board.Add(late);
+        check("a control bringing a handler into a drawing makes no pair to refuse",
+              late.Parent === board || board.Children.includes(late));
+
+        board.Designing = false;
+        this.drawnSwitches = [];
+        book.Current = 0;
+        eq("and turned off, the named road is back", this.drawnSwitches.join(), "0");
+
+
+        delete this.DrawnLate_Click;
+        board.Delete();
+    }
 
     /* --- AspectFrame: a rectangle of a given proportion ---------------------
      *

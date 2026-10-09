@@ -2279,7 +2279,7 @@ Three things that will waste your time:
   with the first frame of its stack. **A new phase does not have to remember
   this**, which is the point; what it does mean is that a test deliberately
   provoking an error has to catch it.
-- **`tests/ide/Driver.js` is forty-five phases, and the phase is the scope.** It used
+- **`tests/ide/Driver.js` is forty-nine phases, and the phase is the scope.** It used
   to be one 4000-line generator where every `const` shared one scope, so a name
   near the top collided with one added at the bottom and the suite died with
   `SyntaxError: invalid redefinition of lexical identifier` — three times in one
@@ -2294,7 +2294,7 @@ Three things that will waste your time:
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
-  392 assertions against 2971 for the whole project -- 9.2 s against 409 to 624 on this
+  392 assertions against 3039 for the whole project -- 9.2 s against 409 to 624 on this
   machine -- which is what makes iterating on an early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.
@@ -2481,7 +2481,7 @@ nothing is written at all.
 
 **The first harvest was the IDE, and the event marks are what it found.**
 `--profile` over `tests/ide` is 3.9 MB and **37,449 marks** in 354 s with the
-suite green (2818 assertions then; 2971 today) -- against 431 s for the ordinary runner run, so
+suite green (2818 assertions then; 3039 today) -- against 431 s for the ordinary runner run, so
 the writer's per-mark cost does not show at this size. 37,238 of those marks are
 `Event` and 211 are the runtime's (`Bintana`); **28,402 of them are one
 handler**, `PropGrid_Filter` -- the property grid's filter answering GTK for
@@ -6653,6 +6653,83 @@ same number without naming what sits above it.
   collation is exactly what another client cannot read. It stops being an answer
   at stage 3's cursor, where the rows are not all loaded; `docs/plans/data-plan.md`
   carries that as an open question with two candidates.
+
+## The designer's pages: the page shown is a design value
+
+A `Notebook` or `Switcher` on the canvas shows one page, and reaching another
+used to be editing `Current` in the grid. **`Current` is the page the
+application opens on, and the page the designer shows is `design.Current`**,
+written with `SetDesign`, so looking at a page is never an edit. Two things
+were rejected on the way and should not come back: saving the page looked at
+as `Current` (Delphi's `ActivePage`: the program then opens wherever the
+designer was left), and letting the press through the Glass to the real strip
+(it would make the drawn controls live). What bit, in the order it was found:
+
+- **A drawn control ran the IDE's handlers.** Every control on the canvas is
+  bound to `MainForm`, so a drawn `Notebook` named `Tabs` that changed page ran
+  the IDE's `Tabs_Switch` and moved the IDE to another file -- and the IDE's own
+  `MainForm.form`, opened in itself, is full of those names. `Container.Designing`
+  on the surface closes the **named road only** for everything inside it
+  (`bta_widget_drawn`, a walk up GTK's parents asked only once a named handler
+  was found, so it costs nothing on the 3849 dispatches out of 3850 that find
+  none). `On` stays open because the designer listens to drawn controls with it
+  (`Chrome`'s `Allocated`), and the three doors that refuse a handler pair skip
+  a drawn control, since its named handler can never run. Removing the line in
+  `Designer` is an uncaught error in `tests/ide`'s `pages` phase.
+- **A declared `Current` was lost, and `MainForm.form` carried the proof.** The
+  loader applies properties before children, so the index reached a container
+  with no pages; both classes now keep it and apply it when that page arrives,
+  from **every** road -- the slot's `*_page_added`, `Notebook.Append`, which
+  reaches GTK without it, and a *named* `Switcher.Append`, which skipped it.
+  The day it started working, `tests/ide`'s welcome assertion went red: the IDE
+  window declared `Pages.Current: 1`, written by the designer when somebody saved
+  `MainForm.form` while looking at the workspace page -- Delphi's `ActivePage`
+  problem, in this tree -- and it had been harmless only because it was lost.
+  The runner passes the IDE an argument, so `Form_Open` takes the `openProject`
+  branch and never assigns the welcome page. **A `.form`'s `Current` means
+  something now**: the audit found no other one above 0.
+- **`showPage` is the only road that changes a drawn container's page.** The
+  serialiser believes `__declared.Current` only while the page shown is the one
+  it applied, so a `Current` assigned behind its back is written down as the
+  initial page. The initial page is followed **by the page widget**
+  (`Designer.initialPages`), not by index, and `nodeOf` re-writes the notes just
+  before every serialisation (`settlePages`) -- a reorder or a delete moves the
+  indices under them. `buildNode` holds `design.Current` back until the pages
+  exist, or `SetDesign` takes the empty container's `-1` for the declaration.
+- **`PageAt` and the two structures it reads.** A notebook's tab is the label
+  *and the padding around it*: the label's parent is the tab widget, and asking
+  only for the label missed most presses. **A `GtkStackSwitcher` drops the
+  button of a hidden page instead of hiding it** (measured on 4.22), so the k-th
+  shown button is the k-th shown page, and counting buttons made the third page
+  answer as the second. The designer converts with `Bounds(this.surface)`, not
+  `LocalPoint`: `LocalPoint` answers in the slot, and a `Switcher`'s slot is the
+  stack under the strip, so a press on a top strip came out negative.
+- **A page is an object, and three of the gestures already existed.** A new page
+  container arrives with two `Panel` pages (`seedPages`, in `newControl`, so the
+  palette and a drop both get them), and with one selected the palette's click
+  goes to the page on screen (`intoShownPage`); *Add page* passes the container
+  to `addControl` explicitly, which is the one road where a new control is meant
+  to be a page. The *Tab* row is **not a property**: `TAB_KEY` in
+  `PropertyGrid` is a row the grid adds for a page and writes to its container's
+  `Tabs[index]`, so the file says what it always said. Moving a page needed
+  nothing -- the arrow keys reorder a child of any container with an order -- and
+  deleting one is `Delete`, which is why the four page commands the plan listed
+  became one (`ActAddPage`).
+- **A `Split` gets the same seed, for a reason of GTK's.** With no `Position`
+  set a paned puts its divider where the first child's natural size ends, and
+  an empty half has none -- so an empty split had its handle against the edge,
+  invisible. `seedHalves` adds two `Panel`s and writes `Position` as half the
+  palette's size along the split's axis.
+- **A test that holds a control across an undo holds a corpse.** `restore`
+  rebuilds the surface, so `book` from before the undo is a notebook no longer
+  on it: `book.Tabs` answered the old tabs and `book.Count` the old count while
+  every edit went to the new one. Look it up by name after anything that
+  restores.
+- **A strip that scrolls hides a tab.** `testPageAt`'s side-strip case failed
+  with a `SetAction` button in a 160-pixel notebook: three tabs and the button
+  do not fit, and the strip scrolls. The test sweeps a band of parallel lines
+  and keeps the one that met the most, since nothing hands out a tab's
+  rectangle.
 
 ## Laying out a form: which of the two models
 

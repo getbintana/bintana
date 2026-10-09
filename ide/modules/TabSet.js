@@ -108,6 +108,7 @@ const BOARD_MARGIN = 8;
 const CANVAS_MENU = [
     { action: "ActRenameCtl" },
     { action: "ActDelCtl" },
+    { action: "ActAddPage" },
     { separator: true },
     { action: "ActRaise" },
     { action: "ActLower" },

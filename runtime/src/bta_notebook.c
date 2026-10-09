@@ -84,6 +84,8 @@ static void build_notebook(BtaWidget *w)
                      G_CALLBACK(on_page_reordered), w);
 }
 
+static void current_pending_arrived(GtkWidget *notebook);
+
 static JSValue notebook_append(JSContext *ctx, JSValueConst this_val,
                                int argc, JSValueConst *argv)
 {
@@ -125,6 +127,7 @@ static JSValue notebook_append(JSContext *ctx, JSValueConst this_val,
     if (labelw)
         bta_widget_adopt(ctx, this_val, w, argv[1], labelw);
 
+    current_pending_arrived(w->gtk);
     return JS_NewInt32(ctx, index);
 }
 
@@ -296,6 +299,39 @@ static JSValue notebook_get_current(JSContext *ctx, JSValueConst this_val)
     return JS_NewInt32(ctx, gtk_notebook_get_current_page(GTK_NOTEBOOK(w->gtk)));
 }
 
+/*
+ * Current is **remembered** when it names a page that is not there yet, and
+ * applied when that page arrives -- `Tabs`' bargain, for the same reason.
+ *
+ * The `.form` loader applies a node's properties before it builds its
+ * children, so a notebook declaring `Current: 1` was told so with no pages,
+ * GTK dropped it, and the declaration did nothing: the application opened on
+ * the first page, and a form opened in a designer and saved lost its initial
+ * page, since the getter then answered the default. An assignment the pages
+ * can satisfy applies at once and forgets anything pending; a negative one
+ * keeps GTK's meaning, the last page.
+ */
+#define CURRENT_PENDING_KEY "bta-notebook-current"
+
+static void current_pending_set(GtkWidget *notebook, int index)
+{
+    g_object_set_data(G_OBJECT(notebook), CURRENT_PENDING_KEY,
+                      index >= 0 ? GINT_TO_POINTER(index + 1) : NULL);
+}
+
+/* A page arrived: is it the one a `Current` was waiting for? Every road a page
+ * comes in by asks -- the slot's (`bta_notebook_page_added`) and `Append`'s,
+ * which reaches GTK without it. */
+static void current_pending_arrived(GtkWidget *notebook)
+{
+    int want = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(notebook),
+                                                 CURRENT_PENDING_KEY)) - 1;
+    if (want < 0 || want >= gtk_notebook_get_n_pages(GTK_NOTEBOOK(notebook)))
+        return;
+    current_pending_set(notebook, -1);
+    gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), want);
+}
+
 static JSValue notebook_set_current(JSContext *ctx, JSValueConst this_val,
                                     JSValueConst val)
 {
@@ -305,8 +341,57 @@ static JSValue notebook_set_current(JSContext *ctx, JSValueConst this_val,
     int32_t index;
     if (!bta_to_int(ctx, val, "Current", &index))
         return JS_EXCEPTION;
+
+    if (index >= gtk_notebook_get_n_pages(GTK_NOTEBOOK(w->gtk))) {
+        current_pending_set(w->gtk, index);
+        return JS_UNDEFINED;
+    }
+    current_pending_set(w->gtk, -1);
     gtk_notebook_set_current_page(GTK_NOTEBOOK(w->gtk), index);
     return JS_UNDEFINED;
+}
+
+/*
+ * PageAt(x, y): which tab is under a point.
+ *
+ * A tab is the label *and the box around it*: GTK puts each label in a tab
+ * widget of its own with padding, so a press on that padding is a press on the
+ * tab, and asking only whether the hit is inside the label missed it. The tab
+ * widget is the label's parent, which is the one fact of GTK's structure this
+ * reads -- there is no accessor for it.
+ */
+static JSValue notebook_page_at(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    if (argc < 2)
+        return JS_ThrowTypeError(ctx, "PageAt(x, y) needs a point");
+
+    double x, y;
+    if (!bta_to_number(ctx, argv[0], "PageAt", &x) ||
+        !bta_to_number(ctx, argv[1], "PageAt", &y))
+        return JS_EXCEPTION;
+
+    GtkNotebook *nb = GTK_NOTEBOOK(w->gtk);
+    if (!gtk_notebook_get_show_tabs(nb))
+        return JS_NewInt32(ctx, -1);
+
+    GtkWidget *hit = gtk_widget_pick(w->gtk, x, y,
+                                     GTK_PICK_NON_TARGETABLE | GTK_PICK_INSENSITIVE);
+    if (!hit)
+        return JS_NewInt32(ctx, -1);
+
+    int n = gtk_notebook_get_n_pages(nb);
+    for (int i = 0; i < n; i++) {
+        GtkWidget *label = gtk_notebook_get_tab_label(nb, gtk_notebook_get_nth_page(nb, i));
+        GtkWidget *tab   = label ? gtk_widget_get_parent(label) : NULL;
+
+        if (tab && (hit == tab || gtk_widget_is_ancestor(hit, tab)))
+            return JS_NewInt32(ctx, i);
+    }
+    return JS_NewInt32(ctx, -1);
 }
 
 static JSValue notebook_set_tab_label(JSContext *ctx, JSValueConst this_val,
@@ -393,6 +478,7 @@ void bta_notebook_page_added(GtkWidget *notebook, GtkWidget *page)
         gtk_notebook_set_tab_label(nb, page, gtk_label_new(name));
 
     tab_make_movable(notebook, page);
+    current_pending_arrived(notebook);
 }
 static JSValue notebook_get_tabs(JSContext *ctx, JSValueConst this_val)
 {
@@ -562,7 +648,9 @@ static const JSCFunctionListEntry notebook_props[] = {
     JS_CGETSET_DEF("Count",   notebook_get_count,   NULL),
     /* Current
      *   which page is showing, `-1` when there are none. Assigning it
-     *   switches, and **raises `Switch`**. Default `-1`
+     *   switches, and **raises `Switch`**. An index past the last page is **kept and
+     *   applied when that page arrives**, so a `.form` may declare the page it
+     *   opens on. Default `-1`
      */
     JS_CGETSET_DEF("Current", notebook_get_current, notebook_set_current),
     /* Append(child, [label])
@@ -575,6 +663,14 @@ static const JSCFunctionListEntry notebook_props[] = {
      *   you keep and mutate
      */
     JS_CFUNC_DEF ("Append",     2, notebook_append),
+    /* PageAt(x, y) -> number
+     *   the index of the page whose tab is under that point, in this
+     *   control's own coordinates, or `-1` where there is none: away from the
+     *   strip, on a widget in the strip (`SetAction`), or with `Strip: "None"`. What a form designer
+     *   asks to turn a click on the strip into a page, since it keeps the
+     *   pointer for itself and the strip never sees the press
+     */
+    JS_CFUNC_DEF ("PageAt",     2, notebook_page_at),
     /* RemovePage(index)
      *   takes that page out, and the control in it goes with it
      */

@@ -244,12 +244,36 @@ static const char *tab_pending(GtkWidget *stack, int index)
     return NULL;
 }
 
-void bta_switcher_page_added(GtkWidget *stack, GtkWidget *page)
-{
-    int index = stack_index(stack, page);
-    if (index < 0)
-        return;
+/*
+ * Current is **remembered** when it names a page that is not there yet, and
+ * applied when that page arrives -- `Tabs`' bargain, and Notebook.Current's:
+ * the `.form` loader applies a node's properties before its children, so a
+ * declared `Current` used to find no page and do nothing.
+ */
+#define CURRENT_PENDING_KEY "bta-switcher-current"
 
+static void current_pending_set(GtkWidget *stack, int index)
+{
+    g_object_set_data(G_OBJECT(stack), CURRENT_PENDING_KEY,
+                      index >= 0 ? GINT_TO_POINTER(index + 1) : NULL);
+}
+
+/* A page arrived: is it the one a `Current` was waiting for?  Asked by every
+ * road in -- the slot's and `Append`'s, named or not. */
+static void current_pending_arrived(GtkWidget *stack)
+{
+    int want = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(stack),
+                                                 CURRENT_PENDING_KEY)) - 1;
+    GtkWidget *page = want >= 0 ? stack_nth(stack, want) : NULL;
+    if (!page)
+        return;
+    current_pending_set(stack, -1);
+    gtk_stack_set_visible_child(GTK_STACK(stack), page);
+}
+
+/* The page's name, as the slot's road gives it. */
+static void page_take_name(GtkWidget *stack, GtkWidget *page, int index)
+{
     const char *promised = tab_pending(stack, index);
     if (promised && *promised) {
         page_set_title(stack, page, promised);
@@ -264,6 +288,16 @@ void bta_switcher_page_added(GtkWidget *stack, GtkWidget *page)
     char *fallback = g_strdup_printf("Page %d", index + 1);
     page_set_title(stack, page, fallback);
     g_free(fallback);
+}
+
+void bta_switcher_page_added(GtkWidget *stack, GtkWidget *page)
+{
+    int index = stack_index(stack, page);
+    if (index < 0)
+        return;
+
+    page_take_name(stack, page, index);
+    current_pending_arrived(stack);
 }
 
 static JSValue switcher_get_tabs(JSContext *ctx, JSValueConst this_val)
@@ -361,11 +395,74 @@ static JSValue switcher_set_current(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     /* An index nothing answers to leaves the strip as it was: a switcher shown
-     * before its pages were built would otherwise blank itself. */
+     * before its pages were built would otherwise blank itself.  One past the
+     * pages is remembered for the page that will answer it; a negative one is
+     * nothing and forgets what was waiting. */
     GtkWidget *page = stack_nth(w->slot, index);
-    if (page)
+    if (page) {
+        current_pending_set(w->slot, -1);
         gtk_stack_set_visible_child(GTK_STACK(w->slot), page);
+    } else {
+        current_pending_set(w->slot, index);
+    }
     return JS_UNDEFINED;
+}
+
+/*
+ * PageAt(x, y): which button of the strip is under a point.
+ *
+ * **A hidden page has no button** -- measured on GTK 4.22, the strip drops it
+ * rather than hiding it -- so the third button of a strip whose second page is
+ * hidden is the *third* page, and counting buttons answered the second. The
+ * k-th shown button is the k-th shown page, which holds whether a GTK hides
+ * that button or removes it. That the strip's order is the pages' holds
+ * because pages only ever arrive at the end here: `Reorder` takes them all out
+ * and puts them back.
+ */
+static JSValue switcher_page_at(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    if (argc < 2)
+        return JS_ThrowTypeError(ctx, "PageAt(x, y) needs a point");
+
+    double x, y;
+    if (!bta_to_number(ctx, argv[0], "PageAt", &x) ||
+        !bta_to_number(ctx, argv[1], "PageAt", &y))
+        return JS_EXCEPTION;
+
+    GtkWidget *strip = switcher_strip(w);
+    if (!strip || !gtk_widget_get_visible(strip))
+        return JS_NewInt32(ctx, -1);
+
+    GtkWidget *hit = gtk_widget_pick(w->gtk, x, y,
+                                     GTK_PICK_NON_TARGETABLE | GTK_PICK_INSENSITIVE);
+    if (!hit)
+        return JS_NewInt32(ctx, -1);
+
+    int shown = 0, k = -1;
+    for (GtkWidget *b = gtk_widget_get_first_child(strip); b && k < 0;
+         b = gtk_widget_get_next_sibling(b)) {
+        if (!gtk_widget_get_visible(b))
+            continue;
+        if (hit == b || gtk_widget_is_ancestor(hit, b))
+            k = shown;
+        shown++;
+    }
+    if (k < 0)
+        return JS_NewInt32(ctx, -1);
+
+    int i = 0;
+    for (GtkWidget *c = gtk_widget_get_first_child(w->slot); c;
+         c = gtk_widget_get_next_sibling(c), i++) {
+        if (!gtk_widget_get_visible(c))
+            continue;
+        if (k-- == 0)
+            return JS_NewInt32(ctx, i);
+    }
+    return JS_NewInt32(ctx, -1);
 }
 
 /* ------------------------------------------------------------ the pages */
@@ -418,6 +515,7 @@ static JSValue switcher_append(JSContext *ctx, JSValueConst this_val,
     if (name) {
         page_set_title(w->slot, child->gtk, name);
         JS_FreeCString(ctx, name);
+        current_pending_arrived(w->slot);
     } else {
         bta_switcher_page_added(w->slot, child->gtk);
     }
@@ -540,7 +638,9 @@ static const JSCFunctionListEntry switcher_props[] = {
     JS_CGETSET_DEF("Count",   switcher_get_count,   NULL),
     /* Current
      *   which page is showing. Assigning it switches, and **raises
-     *   `Switch`**. Default `-1`
+     *   `Switch`**. An index past the last page is **kept and
+     *   applied when that page arrives**, so a `.form` may declare the page it
+     *   opens on. Default `-1`
      */
     JS_CGETSET_DEF("Current", switcher_get_current, switcher_set_current),
     /* Append(child, [name])
@@ -549,6 +649,14 @@ static const JSCFunctionListEntry switcher_props[] = {
      *   [`Notebook`](docs/reference/widgets/Notebook.md)'s tab label is one
      */
     JS_CFUNC_DEF("Append", 2, switcher_append),
+    /* PageAt(x, y) -> number
+     *   the index of the page whose button is under that point, in this
+     *   control's own coordinates, or `-1` where there is none: away from the
+     *   strip or with `Strip: "None"`. What a form designer
+     *   asks to turn a click on the strip into a page, since it keeps the
+     *   pointer for itself and the strip never sees the press
+     */
+    JS_CFUNC_DEF("PageAt", 2, switcher_page_at),
     /* RemovePage(index)
      *   takes it out, with the control in it
      */

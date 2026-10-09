@@ -804,6 +804,40 @@ static JSValue cont_set_anchored(JSContext *ctx, JSValueConst this_val,
 }
 
 /*
+ * Designing: this container holds a drawing of a form, not a form.
+ *
+ * What it changes is the dispatch -- see bta_widget_drawn -- and nothing about
+ * layout or drawing: the controls inside are real and look real, they simply
+ * do not run `<name>_<event>` on the form that owns them, which in a designer
+ * is the designer's own.
+ */
+static JSValue cont_get_designing(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    if (!w->slot)
+        return JS_ThrowTypeError(ctx, "not a container");
+    return JS_NewBool(ctx, w->designing);
+}
+
+static JSValue cont_set_designing(JSContext *ctx, JSValueConst this_val,
+                                  JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    if (!w->slot)
+        return JS_ThrowTypeError(ctx, "not a container");
+
+    int b = JS_ToBool(ctx, val);
+    if (b < 0)
+        return JS_EXCEPTION;
+    w->designing = b;
+    return JS_UNDEFINED;
+}
+
+/*
  * Spacing and Homogeneous belong to the box a container *is arranged as*, not
  * to a class of its own -- which is why they live here now.  On a container
  * that is not arranged as a box they read 0 and false and assigning is ignored,
@@ -1436,6 +1470,14 @@ static const JSCFunctionListEntry container_props[] = {
      *   `true`
      */
     JS_CGETSET_DEF("Anchored",    cont_get_anchored,    cont_set_anchored),
+    /* Designing
+     *   a drawing of a form rather than a form: the controls inside it, at any
+     *   depth, run no `<name>_<event>` on the form they belong to, while a
+     *   handler installed with `On` still answers. What a form designer sets
+     *   on its canvas, so a drawn `Notebook` named like one of the designer's
+     *   own does not run the designer's handler. Default `false`
+     */
+    JS_CGETSET_DEF("Designing",   cont_get_designing,   cont_set_designing),
     /* Children
      *   its real children, one level deep, in the order they are in
      */

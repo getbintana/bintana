@@ -338,6 +338,38 @@ void bta_widget_relayout(BtaWidget *w)
  * function that reads `this` throws where it is written rather than finding the
  * global object.
  */
+/*
+ * **Is this control part of a drawing?** -- inside a container whose
+ * `Designing` is on, at any depth, and not counting the container itself.
+ *
+ * A form designer builds the form it draws out of real controls, in its own
+ * window, so every one of them is bound to the *designer's* form: a drawn
+ * `Notebook` named `Tabs` that switched page ran the IDE's own `Tabs_Switch`
+ * and moved the IDE to another file. Nothing about the drawing can tell the
+ * two forms apart by name, so the drawing says what it is and the dispatch
+ * asks.
+ *
+ * **Only the named road is closed.** A handler installed with `On` was put on
+ * the control by whoever built the drawing -- the designer listens to a drawn
+ * control's `Allocated` that way -- and nobody else can have put one there.
+ *
+ * Asked by walking up GTK's parents, so it holds however a control got in
+ * (`AddNode`, `Add`, a paste) and costs nothing on the common path: the
+ * dispatch asks only once it has found a named handler to call.
+ */
+bool bta_widget_drawn(BtaWidget *w)
+{
+    if (!w || !w->gtk)
+        return false;
+    for (GtkWidget *c = gtk_widget_get_parent(w->gtk); c;
+         c = gtk_widget_get_parent(c)) {
+        BtaWidget *cw = g_object_get_data(G_OBJECT(c), BTA_WIDGET_QUARK);
+        if (cw && cw != w && cw->designing)
+            return true;
+    }
+    return false;
+}
+
 static JSValue emit_on(JSContext *ctx, BtaWidget *w, JSValueConst form,
                        const char *name, const char *event,
                        int argc, JSValueConst *argv, bool *threw)
@@ -361,6 +393,12 @@ static JSValue emit_on(JSContext *ctx, BtaWidget *w, JSValueConst form,
         fn   = JS_GetPropertyStr(ctx, form, key);
         self = form;
         g_free(key);
+
+        /* A drawing answers to nobody by name: see bta_widget_drawn. */
+        if (JS_IsFunction(ctx, fn) && bta_widget_drawn(w)) {
+            JS_FreeValue(ctx, fn);
+            return JS_UNDEFINED;
+        }
     }
 
     JSValue result = JS_UNDEFINED;
@@ -508,6 +546,10 @@ bool bta_widget_adopt_refused(JSContext *ctx, JSValueConst parent_val,
     if (!JS_IsUndefined(child->form))
         return false;
 
+    /* Into a drawing, nothing answers by name, so no pair can be made. */
+    if (parent->designing || bta_widget_drawn(parent))
+        return false;
+
     JSValueConst form = parent->is_form ? parent_val : parent->form;
     char        *bad  = pair_with_named(ctx, child, form, child->name);
 
@@ -646,7 +688,7 @@ bool bta_has_handler(BtaWidget *w, const char *event)
             return true;
     }
 
-    if (!w->name || JS_IsUndefined(w->form))
+    if (!w->name || JS_IsUndefined(w->form) || bta_widget_drawn(w))
         return false;
 
     char   *key = g_strdup_printf("%s_%s", w->name, event);
@@ -695,7 +737,7 @@ static JSValue w_set_name(JSContext *ctx, JSValueConst this_val, JSValueConst va
      * and nothing can watch `this.Btn_Click = fn` being assigned onto it after
      * the fact, so what is refused is the pair the *runtime* is handed.
      */
-    char *bad = pair_with_named(ctx, w, w->form, s);
+    char *bad = bta_widget_drawn(w) ? NULL : pair_with_named(ctx, w, w->form, s);
 
     if (bad) {
         JSValue e = JS_ThrowTypeError(ctx,
@@ -5569,7 +5611,8 @@ static JSValue w_on(JSContext *ctx, JSValueConst this_val,
      *
      * `On(event, null)` is exempt: taking a handler away cannot make a pair.
      */
-    if (!clearing && named_handler_exists(ctx, w->form, w->name, event)) {
+    if (!clearing && !bta_widget_drawn(w) &&
+        named_handler_exists(ctx, w->form, w->name, event)) {
         JSValue e = JS_ThrowTypeError(ctx,
             "On: %s already answers '%s' through %s_%s on its form, and a "
             "control has one handler for one event", w->name, event,

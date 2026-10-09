@@ -32,6 +32,12 @@
       "enabled": false
     },
     {
+      "name": "ActAddPage",
+      "text": "Add page",
+      "icon": "list-add-symbolic",
+      "enabled": false
+    },
+    {
       "name": "ActDebug",
       "text": "Debug",
       "icon": "media-playback-start-symbolic",
@@ -647,7 +653,7 @@
       "type": "Switcher",
       "name": "Pages",
       "properties": {
-        "Current": 1,
+        "Current": 0,
         "HAlign": "Fill",
         "Height": 692,
         "Strip": "None",

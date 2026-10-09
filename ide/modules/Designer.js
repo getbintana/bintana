@@ -189,6 +189,17 @@ Ide.Designer = class Designer {
         this.surface.Anchored = false;
         this.glass.Anchored   = false;
 
+        /* What is on the surface is a drawing, bound to the IDE's own form like
+         * every control in this window: without this a drawn `Notebook` named
+         * `Tabs` that changed page ran the IDE's `Tabs_Switch` and switched the
+         * IDE's file tab. The Glass is not inside it -- it is the IDE's. */
+        this.surface.Designing = true;
+
+        /* The page each page container opens on, by the page and not by its
+         * index -- so reordering or deleting pages while another is shown does
+         * not move it. See `showPage`. */
+        this.initialPages = new WeakMap();
+
         this.path     = null;    // .form abierto
         this.root     = null;    // root node as read, to rewrite it
         this.selection = [];     // the last one is the primary (see get selected)
@@ -482,11 +493,23 @@ Ide.Designer = class Designer {
             if (snap.actions && snap.actions.length) this.root.actions = snap.actions;
             else                                     delete this.root.actions;
         }
+        /* The page each container shows is a view and not part of what was
+         * undone: kept, where the container is still there with that page. */
+        const views = this.allControls()
+            .filter((c) => this.pages(c) && c.Count > 0)
+            .map((c) => [c.Name, c.Current]);
+
         this.buildSurface({ properties: (this.root && this.root.properties) || {},
                             children: snap.children });
 
+        for (const [name, at] of views) {
+            const c = this.allControls().find((x) => x.Name === name);
+            if (c && this.pages(c) && at < c.Count) this.showPage(c, at);
+        }
+
         /* The controls were rebuilt, so the selection is recovered by name and
-         * not by reference. */
+         * not by reference -- and if what was undone sits on another page, the
+         * selection's reveal brings that page up. */
         const names = snap.selected || [];
         const back  = this.allControls().filter((c) => names.includes(c.Name));
         this.setSelection(back);
@@ -607,7 +630,20 @@ Ide.Designer = class Designer {
              * is applied over the properties, which is how a label whose text the
              * code fills in has something to be laid out by.
              */
-            const built = parent.AddNode({ ...node, children: [] }, true);
+            /* The page shown is held back until the pages exist: applied with
+             * the properties it would name a page that is not there yet, and
+             * `SetDesign` would take the empty container's -1 for the page
+             * the form opens on. */
+            const shown = node.design && node.design.Current;
+            let   spec  = { ...node, children: [] };
+            if (shown !== undefined) {
+                const design = {};
+                for (const k of Dictionary.Keys(node.design))
+                    if (k !== "Current") design[k] = node.design[k];
+                spec = { ...spec, design };
+            }
+
+            const built = parent.AddNode(spec, true);
             this.lendAction(built, node);
 
             /* ...and what a list holds while it is being drawn, which is the
@@ -616,6 +652,13 @@ Ide.Designer = class Designer {
             if (node.item) this.showItem(built, node.item);
 
             for (const child of node.children || []) this.buildNode(built, child);
+
+            /* The pages are there now, and so is the page the form opens on --
+             * the runtime keeps a `Current` that named a page not built yet. */
+            if (this.pages(built) && built.Count > 0) {
+                this.initialPages.set(built, built.Children[Math.max(0, built.Current)]);
+                if (shown !== undefined) this.showPage(built, shown);
+            }
             return built;
         } catch (e) {
             for (const built of parent.Children.slice(had)) built.Delete();
@@ -959,6 +1002,166 @@ Ide.Designer = class Designer {
         return this.placementOf(container) === "Pages";
     }
 
+    /* --- the page one looks at ---------------------------------------------
+     *
+     * A page container shows one page at a time and the designer edits what is
+     * on screen, so looking at another page has to be easy -- and it must not
+     * be an edit. **`Current` is the page the application opens on**, chosen
+     * on purpose in the grid; **the page shown here is a design value over it**
+     * (`design.Current`), which no running application reads. Browsing pages
+     * therefore never marks the form dirty, never goes on the undo stack, and
+     * never changes where the program starts. (Delphi saves the page that was
+     * looked at as `ActivePage`, and the application opens wherever the
+     * designer was left: the complaint this split exists to avoid.)
+     *
+     * **Every road that changes a drawn container's page goes through
+     * `showPage`.** The serialiser believes the note `SetDesign` leaves only
+     * while the page shown is the one it applied, so a `Current` assigned
+     * behind its back would be written down as the initial page.
+     */
+
+    /* The index of the page `c` opens on, followed by the page itself so it
+     * survives the pages being reordered or deleted around it. */
+    initialPage(c) {
+        if (this.initialPages.has(c)) {
+            const at = c.Children.indexOf(this.initialPages.get(c));
+            if (at >= 0) return at;
+            /* That page is gone: the first one is where a container opens
+             * when nothing is said. */
+            const first = c.Children[0];
+            if (first) this.initialPages.set(c, first);
+            else       this.initialPages.delete(c);
+            return first ? 0 : -1;
+        }
+        /* Not followed yet: the note says, while it is still true, and the page
+         * on screen otherwise -- which is what a container nobody navigated
+         * shows. */
+        const note = c.__declared && c.__declared.Current;
+        const at   = note && note[1] === c.Current ? note[0] : c.Current;
+        if (c.Children[at]) this.initialPages.set(c, c.Children[at]);
+        return at;
+    }
+
+    /* Writes down which page is the initial one and which is shown, without
+     * moving anything: the note the serialiser reads `properties.Current` from,
+     * and the design value `design.Current` comes from -- or neither, when the
+     * two are the same page. */
+    markPages(c, initial, shown) {
+        const notes = c.__declared || (c.__declared = {});
+        if (shown === initial || shown < 0 || initial < 0) {
+            delete notes.Current;
+            if (c.DesignValue("Current") !== undefined) c.SetDesign("Current", "");
+            return;
+        }
+        notes.Current = [initial, shown];
+        c.SetDesign("Current", shown);
+    }
+
+    /* Shows page `index` of a drawn page container: a design value, not an
+     * edit. Showing the initial page drops the design value, so `design.Current`
+     * is only in a file while a container was left on another page. */
+    showPage(c, index) {
+        if (!this.pages(c) || index < 0 || index >= c.Count) return;
+        const initial = this.initialPage(c);
+        if (c.Current !== index) c.Current = index;
+        this.markPages(c, initial, index);
+    }
+
+    /* The page the application opens on, chosen in the grid -- an edit, which
+     * the caller makes undoable. It is also shown: choosing where the program
+     * starts and looking at it are one gesture. */
+    setInitialPage(c, index) {
+        if (!this.pages(c) || index < 0 || index >= c.Count) return;
+        this.initialPages.set(c, c.Children[index]);
+        this.showPage(c, index);
+    }
+
+    /* The notes again, for every page container in a subtree, just before it is
+     * written: a page reordered, deleted or added since the last `showPage`
+     * has moved the indices under them. */
+    settlePages(control) {
+        if (!("Children" in control)) return;
+        for (const c of [control, ...this.allControls(control)]) {
+            if (this.pages(c) && c.Count > 0)
+                this.markPages(c, this.initialPage(c), c.Current);
+        }
+    }
+
+    /* Every page container around a control shows the page it is on, innermost
+     * first -- or picking a control in the tree leaves the canvas on another
+     * page, with nothing drawn and nothing to click. */
+    reveal(control) {
+        let child = control;
+        for (let at = this.parentOf(child); at; at = this.parentOf(at)) {
+            if (this.pages(at)) {
+                const index = at.Children.indexOf(child);
+                if (index >= 0 && at.Current !== index) this.showPage(at, index);
+            }
+            child = at;
+        }
+    }
+
+    /* The page container the page bar and the keys work on: the selection
+     * itself, or the nearest one around it. */
+    pageHost() {
+        for (let c = this.selected; c; c = this.parentOf(c)) {
+            if (this.pages(c) && !c.__node) return c;
+        }
+        return null;
+    }
+
+    /* The previous or the next page, shown and selected. */
+    stepPage(by) {
+        const host = this.pageHost();
+        if (!host || host.Count === 0) return false;
+        const at = Math.min(host.Count - 1, Math.max(0, host.Current + by));
+        this.showPage(host, at);
+        this.select(host.Children[at]);
+        return true;
+    }
+
+    /* A new page at the end, shown and selected: a Panel, which is what a page
+     * is when nothing else is said. */
+    addPage() {
+        const host = this.pageHost();
+        if (!host) return false;
+        this.addControl("Panel", host);
+        return true;
+    }
+
+    /*
+     * With a page container selected, the palette puts a control **on the page
+     * on screen** rather than making it a page -- which is what the eye says is
+     * being added to. A page that is not a container (a control added as a
+     * page) cannot take it, so then it is a page as before; a new page is
+     * `addPage`'s, from the page bar or the canvas's menu.
+     */
+    intoShownPage(target) {
+        if (!this.pages(target) || target.__node) return target;
+        const page = target.Children[target.Current];
+        return page && "Children" in page && !page.__node && !page.Item &&
+               this.placementOf(page) !== "Pages" ? page : target;
+    }
+
+    /* The page container `control` is a page of, and which page: or null. */
+    pageOf(control) {
+        const host = control && this.parentOf(control);
+        if (!host || !this.pages(host) || host.__node) return null;
+        const index = host.Children.indexOf(control);
+        return index >= 0 ? { host, index } : null;
+    }
+
+    /* The caption of a page's tab, written on its container: `Tabs` is prose,
+     * so this is the msgid. An edit -- the caller makes it undoable. */
+    setTabOf(page, text) {
+        const at = this.pageOf(page);
+        if (!at) return;
+        const tabs = at.host.Tabs.slice();
+        while (tabs.length < at.host.Count) tabs.push("");
+        tabs[at.index] = text;
+        at.host.Tabs = tabs;
+    }
+
     split(container) {
         return this.placementOf(container) === "Halves";
     }
@@ -1079,8 +1282,10 @@ Ide.Designer = class Designer {
      * must not silently replace.
      */
     nodeOf(control, parentIsFixed) {
-        if (!control.__node)
+        if (!control.__node) {
+            this.settlePages(control);
             return this.standInsBack(control, control.Serialize(parentIsFixed));
+        }
 
         const node  = control.__node;
         const props = { ...(node.properties || {}) };
@@ -1284,6 +1489,7 @@ Ide.Designer = class Designer {
          * Both are commands now -- a named item cannot be in a menu that each
          * form's tree carries. */
         this.ide.ActRenameCtl.Enabled = has;
+        this.ide.ActAddPage.Enabled   = this.pageHost() !== null;
         this.ide.ActTrRename.Enabled  = has;
         /* Saving is the toolbar's -- one Save for a form and for a .js, enabled
          * by `refresh()` from the same `isDirty()` the menu's Ctrl+S reads.  A
@@ -1549,6 +1755,7 @@ Ide.Designer = class Designer {
         this.selection = controls.filter(
             (c) => !controls.some((other) => other !== c && this.contains(other, c)));
 
+        if (this.selected) this.reveal(this.selected);
         this.chrome.position();
         this.grid.fill();
         this.refresh();
@@ -1572,6 +1779,17 @@ Ide.Designer = class Designer {
 
     mouseDown(x, y, button, ctrl) {
         this.glass.SetFocus();      /* so the keys arrive here */
+
+        /* The page bar is the designer's own and drawn over everything, so it
+         * answers first. */
+        const part = this.chrome.pageBarAt(x, y);
+        if (part) {
+            if (part === "prev")      this.stepPage(-1);
+            else if (part === "next") this.stepPage(1);
+            else if (part === "add")  this.addPage();
+            return;
+        }
+
         const grabbed = this.chrome.handleAt(x, y);
         if (grabbed) {
             this.beginDrag(grabbed, x, y);
@@ -1587,6 +1805,24 @@ Ide.Designer = class Designer {
         }
 
         const hit = this.hitTest(x, y);
+
+        /*
+         * A press on a tab (or a switcher's button) is a page, not the
+         * container: the real strip is under the Glass and never sees it, so
+         * the container is asked which page is there. The page is shown and
+         * selected -- the tab sheet being clicked, as in Delphi -- and no drag
+         * starts. Ctrl keeps its meaning everywhere else on the canvas, the
+         * container's toggle.
+         */
+        if (hit && !ctrl && this.pages(hit) && !hit.__node) {
+            const b  = hit.Bounds(this.surface);
+            const at = b ? hit.PageAt(x - b.X, y - b.Y) : -1;
+            if (at >= 0) {
+                this.showPage(hit, at);
+                this.select(hit.Children[at]);
+                return;
+            }
+        }
 
         if (!hit) {
             /* On the background: dragging draws a selection rectangle. */
@@ -2052,6 +2288,10 @@ Ide.Designer = class Designer {
             this.select(null);
             return true;
         }
+        /* The pages of the container around the selection, the way a notebook
+         * of the desktop's own is walked. */
+        if (ctrl && (key === "Page_Up" || key === "Page_Down"))
+            return this.stepPage(key === "Page_Up" ? -1 : 1);
         if (!this.selected) return false;
 
         if (key === "Delete" || key === "BackSpace") {
@@ -2186,7 +2426,7 @@ Ide.Designer = class Designer {
             /* A page goes at the end: a notebook shows one at a time, so there
              * is no "where the pointer is" to read. */
             this.nameTab(target, widget);
-            target.Current = target.Count - 1;
+            this.showPage(target, target.Count - 1);
         } else if (kind === "Halves") {
             /* The runtime put it in whichever half was free. */
         } else if (kind === "Single") {
@@ -2252,14 +2492,57 @@ Ide.Designer = class Designer {
         if (widget.PropertyNames().includes("Text")) {
             try { widget.Text = widget.Name; } catch (e) { /* no lo acepta */ }
         }
+        this.seedPages(widget);
+        this.seedHalves(widget, type);
         return widget;
     }
 
-    addControl(type) {
+    /*
+     * A split arrives with its two halves, and the divider in the middle of the
+     * size the palette gives it. Empty, it was a box with no handle to see or
+     * grab: GTK puts the divider where the first half's natural size ends, and
+     * an empty half has none, so it sat against the edge. The position is
+     * written, so the file says where the divider starts.
+     */
+    seedHalves(widget, type) {
+        if (!this.split(widget) || widget.__node || widget.Children.length > 0) return;
+        for (let i = 0; i < 2; i++) {
+            const half = Widget.New("Panel");
+            half.Name = this.uniqueName("Panel");
+            widget.Add(half);
+        }
+        const [w, h] = this.sizeFor(type);
+        widget.Position = Math.round((widget.Arrangement === "Vertical" ? h : w) / 2);
+    }
+
+    /*
+     * A page container arrives with two empty pages, the first one shown --
+     * `TabControl`'s answer in WinForms. Empty, it was a box with no tabs, and
+     * the next natural gesture (a button from the palette with the container
+     * selected) made the *button* a page instead of putting it on one. Two and
+     * not one, because a single page does not look like something that has
+     * pages; a page too many is one Delete.
+     */
+    seedPages(widget) {
+        if (!this.pages(widget) || widget.__node || widget.Count > 0) return;
+        for (let i = 0; i < 2; i++) {
+            const page = Widget.New("Panel");
+            page.Name = this.uniqueName("Panel");
+            widget.Add(page);
+            this.nameTab(widget, page);
+        }
+        this.initialPages.set(widget, widget.Children[0]);
+        this.showPage(widget, 0);
+    }
+
+    /* `into` is a container the caller already chose -- `addPage` names the
+     * page container itself, which is the one case where a new control is
+     * meant to be a page. */
+    addControl(type, into = null) {
         if (!this.path) return;
         if (!PALETTE.includes(type) && !this.isComponent(type)) return;
 
-        const target = this.dropTarget();
+        const target = into || this.intoShownPage(this.dropTarget());
         if (!this.canTake(target)) return;
 
         this.pushUndo();
@@ -2271,7 +2554,7 @@ Ide.Designer = class Designer {
 
         if (this.pages(target)) {
             this.nameTab(target, widget);
-            target.Current = target.Count - 1;
+            this.showPage(target, target.Count - 1);
         }
 
         /* In a box it goes at the end, which is where Add already put it. */
@@ -2455,7 +2738,7 @@ Ide.Designer = class Designer {
 
             if (this.pages(target)) {
                 this.nameTab(target, control);
-                target.Current = target.Count - 1;
+                this.showPage(target, target.Count - 1);
             }
 
             /* In a box there are no coordinates to offset: it went to the end,

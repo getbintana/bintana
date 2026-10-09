@@ -95,6 +95,15 @@ Ide.ControlTree = class ControlTree {
      * property does not throw the tree away and take the selection with it.
      * The signature covers what the tree shows: nesting, order, names, types.
      */
+    /* A page is named by its tab first: `Panel1`, `Panel2` say nothing about
+     * which is *Datos*, and picking a page in the tree is how one gets to it. */
+    labelOf(c, container) {
+        const base = `${c.Name} (${this.typeOf(c)})`;
+        if (!this.designer.pages(container) || container.__node) return base;
+        const tab = (container.Tabs || [])[container.Children.indexOf(c)];
+        return tab && tab !== c.Name ? `${tab} — ${base}` : base;
+    }
+
     shape() {
         const parts = [];
         /* The selection is part of what a filter shows: the control one is
@@ -103,7 +112,9 @@ Ide.ControlTree = class ControlTree {
         parts.push(`filter:${this.filter}${this.filter && picked ? `:${picked.Name}` : ""}`);
         const walk = (container, depth) => {
             for (const c of container.Children) {
-                parts.push(`${depth}:${c.Name}:${this.typeOf(c)}`);
+                /* The label and not only the name: a tab renamed is a row
+                 * that says something else. */
+                parts.push(`${depth}:${this.labelOf(c, container)}`);
                 /* Not into a list showing its design-time item: what is in it is a
                  * drawing of a component, not a control of this form. */
                 if ("Children" in c && !c.Item && !c.__node) walk(c, depth + 1);
@@ -130,7 +141,7 @@ Ide.ControlTree = class ControlTree {
         const walk = (container, parentKey, inMatch) => {
             for (const c of container.Children) {
                 if (!this.keeps(c, inMatch)) continue;
-                tree.Add(c.Name, `${c.Name} (${this.typeOf(c)})`, parentKey,
+                tree.Add(c.Name, this.labelOf(c, container), parentKey,
                          this.iconFor(c));
                 if ("Children" in c && !c.Item && !c.__node)
                     walk(c, c.Name, inMatch || this.matches(c));

@@ -149,6 +149,10 @@ struct BtaWidget {
      * here and not on the slot, because Arrangement replaces the slot and the
      * answer has to survive that. */
     bool       anchored;
+    /* Containers: what is inside is a drawing of a form being designed, so the
+     * controls in it raise no `<name>_<event>` on the form they are bound to
+     * (see `Designing` and bta_widget_drawn). */
+    bool       designing;
     bool       is_form;
     bool       opened;  /* forms: has Form_Open already fired? */
     /* Forms: the window was destroyed by an allowed close, so `Show` can
@@ -692,6 +696,7 @@ JSValue    bta_emit_answer(BtaWidget *w, const char *event, int argc,
 /* Whether the form declared a handler for it -- asked only where there is a
  * second event to fall back on. See bta_widget.c. */
 bool       bta_has_handler(BtaWidget *w, const char *event);
+bool       bta_widget_drawn(BtaWidget *w);
 /* Same as bta_emit, for event sources that are not widgets (menu items).
  * Returns what the handler returned, so an event can be consumed;
  * JS_UNDEFINED when there is no handler. The caller owns the result. */

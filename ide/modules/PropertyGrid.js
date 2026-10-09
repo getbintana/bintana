@@ -172,7 +172,17 @@ const FORM_HIDDEN = [
  * -- so nothing is built to ask. It is also exact: a property every widget has
  * *is* base, whatever declared it.
  */
-const ESSENTIAL = ["Name", "Text"];
+/*
+ * A page's tab caption, as a row of the page. It is not a property of the
+ * page -- the caption lives in its container's `Tabs` -- but the page is what
+ * is selected when one wants to rename the tab, and `Tabs` as a JSON list on
+ * the container was the only way to it. Written to `Tabs[index]`, so the
+ * file says what it always said.
+ */
+const TAB_KEY = "Tab";
+
+const ESSENTIAL = ["Name", TAB_KEY, "Text"];
+
 
 /*
  * `FontScale` and `Opacity` sit with `Font` and not in the group at the end.
@@ -585,10 +595,11 @@ Ide.PropertyGrid = class PropertyGrid {
          * Its properties are not a control's -- the form is not on the surface,
          * it *is* the surface -- so they come from the root node. */
         if (this.target) {
-            return this.target.PropertyNames().filter((key) => {
+            const keys = this.target.PropertyNames().filter((key) => {
                 const value = this.target[key];
                 return typeof value !== "function" && value !== undefined;
             });
+            return this.designer.pageOf(this.target) ? [TAB_KEY, ...keys] : keys;
         }
         return this.designer.root ? this.formProps() : [];
     }
@@ -912,6 +923,15 @@ Ide.PropertyGrid = class PropertyGrid {
                 box.Tooltip = Locale.Text("How many the designer shows; the application decides the real number");
             }
             return box;
+        }
+
+        /* A page container's `Current` is the page the application opens on,
+         * chosen by its name; the page the canvas shows is a design value over
+         * it (Designer.showPage), so the two never read as one. */
+        if (this.isPageChoice(key)) {
+            const combo = new ComboBox();
+            combo.Tooltip = Locale.Text("The page the application opens on. Which page the designer shows is only where you are looking, and is not saved as this.");
+            return combo;
         }
 
         const value   = this.propertyValue(key);
@@ -1394,6 +1414,12 @@ Ide.PropertyGrid = class PropertyGrid {
                     editor.Placeholder = this.lentBy(key) ? this.show(this.target[key]) : "";
                 }
 
+                if (this.isPageChoice(key)) {
+                    editor.Items = this.pageNames();
+                    editor.Index = value;
+                    continue;
+                }
+
                 if (editor instanceof SpinBox) {
                     /*
                      * As many decimals as the control holds, and never fewer
@@ -1562,8 +1588,26 @@ Ide.PropertyGrid = class PropertyGrid {
         combo.Text = text;
     }
 
+    /* Whether this row is a page container's initial page. */
+    isPageChoice(key) {
+        return !this.designMode && key === "Current" && !!this.target &&
+               !this.target.__node && this.designer.pages(this.target);
+    }
+
+    /* The pages as the drop-down offers them: numbered, since two tabs may say
+     * the same thing, and named by what their tab says. */
+    pageNames() {
+        const tabs = this.target.Tabs || [];
+        return this.target.Children.map((c, i) => `${i + 1}. ${tabs[i] || c.Name}`);
+    }
+
     propertyValue(key) {
         if (!this.target) return this.formProperty(key);
+        if (this.isPageChoice(key)) return this.designer.initialPage(this.target);
+        if (key === TAB_KEY) {
+            const at = this.designer.pageOf(this.target);
+            return at ? (at.host.Tabs[at.index] || "") : "";
+        }
 
         /* A stand-in is a Label wearing a component's name: the component's own
          * properties are not on it, they are in the node it came from. */
@@ -1611,6 +1655,7 @@ Ide.PropertyGrid = class PropertyGrid {
         const editor  = this.editors[key];
         const current = this.propertyValue(key);
 
+        if (this.isPageChoice(key))        return editor.Index;
         if (editor instanceof SpinBox)     return editor.Value;
         if (editor instanceof ColorButton) return editor.Value;
         if (editor instanceof FontButton)  return editor.Value;
@@ -1838,6 +1883,25 @@ Ide.PropertyGrid = class PropertyGrid {
             node.properties[key] = this.componentValue(value, this.propertyValue(key));
 
             this.sync();
+            this.designer.touch();
+            return;
+        }
+
+        if (key === TAB_KEY) {
+            this.beginEdit(key);
+            this.designer.setTabOf(this.target, String(value));
+            this.fill();
+            this.designer.chrome.position();
+            this.designer.touch();
+            return;
+        }
+
+        if (this.isPageChoice(key)) {
+            if (value < 0) return;
+            this.beginEdit(key);
+            this.designer.setInitialPage(this.target, value);
+            this.fill();
+            this.designer.chrome.position();
             this.designer.touch();
             return;
         }

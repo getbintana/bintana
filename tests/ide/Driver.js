@@ -2862,6 +2862,279 @@ function* p_palette(ide) {
 }
 
 /*
+ * The pages of a page container, walked through in the designer.
+ *
+ * **The page shown is a design value and `Current` is the page the application
+ * opens on.** Looking at a page -- picked in the tree, with the page bar, with
+ * Ctrl+Page Up/Down -- is not an edit: nothing goes dirty and `properties`
+ * keeps the initial page, while `design.Current` remembers where the designer
+ * was. Choosing the initial page is the grid's, and is an edit.
+ *
+ * The containers are named `Tabs` and `SideTabs` on purpose: those are the
+ * IDE's own, and a drawn control's `Switch` used to run the IDE's handler --
+ * `Tabs_Switch` moved the IDE to another file. A drawing answers to nobody by
+ * name now (`Designing` on the surface).
+ *
+ * It opens a form of its own and goes back to the one it found.
+ */
+function* p_pages(ide) {
+    const was = ide.activeFile;
+
+    File.Save(File.Join(TMP, "Pager.form"), JSON.stringify({
+        format: "bintana-form/1",
+        class: "Pager",
+        properties: { Text: "Pager", Width: 560, Height: 300 },
+        children: [
+            { type: "Notebook", name: "Tabs",
+              properties: { X: 10, Y: 10, Width: 300, Height: 200,
+                            Tabs: ["Uno", "Dos", "Tres"], Current: 1 },
+              design: { Current: 2 },
+              children: [
+                { type: "Panel", name: "PgA", children: [
+                    { type: "Button", name: "BtnA",
+                      properties: { X: 10, Y: 10, Width: 80, Height: 30, Text: "a" } } ] },
+                { type: "Panel", name: "PgB", children: [
+                    { type: "Panel", name: "Inner",
+                      properties: { X: 5, Y: 5, Width: 200, Height: 100 }, children: [
+                        { type: "Button", name: "BtnDeep",
+                          properties: { X: 10, Y: 10, Width: 80, Height: 30, Text: "deep" } } ] } ] },
+                { type: "Panel", name: "PgC" },
+              ] },
+            { type: "Switcher", name: "SideTabs",
+              properties: { X: 330, Y: 10, Width: 200, Height: 150, Strip: "None" },
+              children: [
+                { type: "Panel", name: "SwA" },
+                { type: "Panel", name: "SwB", children: [
+                    { type: "Label", name: "LblB",
+                      properties: { X: 10, Y: 10, Width: 100, Height: 20, Text: "b" } } ] },
+              ] },
+            /* A strip at the top: the case where the stack under it is not
+             * where the control's own coordinates start. */
+            { type: "Switcher", name: "Steps",
+              properties: { X: 330, Y: 170, Width: 200, Height: 120 },
+              children: [ { type: "Panel", name: "StA" }, { type: "Panel", name: "StB" } ] },
+        ],
+    }, null, 2));
+    File.Save(File.Join(TMP, "Pager.js"), "class Pager extends Form {\n}\n");
+
+    const sideBefore = ide.SideTabs.Current;
+
+    ide.listFiles();
+    ide.openNamed("Pager.form");
+    yield; yield;
+
+    const book = byName(ide, "Tabs");
+    const side = byName(ide, "SideTabs");
+    const designer = ide.designer;
+
+    eq("the form opens on the page the designer was left on", book.Current, 2);
+    eq("which is not the page the application opens on",
+       designer.initialPage(book), 1);
+    eq("building a drawn notebook called Tabs did not move the IDE's own tabs",
+       ide.activeFile, "Pager.form");
+    eq("nor did a drawn SideTabs move the IDE's side panel", ide.SideTabs.Current, sideBefore);
+    eq("and opening is not an edit", designer.dirty, false);
+
+    /* --- picking a control shows its page --------------------------------- */
+    ide.WidgetTree.Key = "BtnA";
+    yield;
+    eq("picking a control on another page shows that page", book.Current, 0);
+    yield* until(() => designer.rectOf(byName(ide, "BtnA")).w > 0);
+    check("and the control is drawn there", designer.rectOf(byName(ide, "BtnA")).w > 0,
+          JSON.stringify(designer.rectOf(byName(ide, "BtnA"))));
+    eq("looking at a page is not an edit", designer.dirty, false);
+    eq("and the IDE stayed on its own tab", ide.activeFile, "Pager.form");
+
+    ide.WidgetTree.Key = "BtnDeep";
+    yield;
+    eq("two levels inside a page, too", book.Current, 1);
+
+    ide.WidgetTree.Key = "LblB";
+    yield;
+    eq("and in a switcher with no strip to click", side.Current, 1);
+    eq("without moving the IDE's own switcher", ide.SideTabs.Current, sideBefore);
+
+    designer.select(book);
+    yield;
+    eq("selecting the container itself shows the page it was on", book.Current, 1);
+
+    /* --- the keys and the page bar ----------------------------------------- */
+    ide.WidgetTree.Key = "BtnA";
+    yield;
+    ide.Glass_KeyPress("Page_Down", true, false);
+    yield;
+    eq("Ctrl+Page Down shows the next page", book.Current, 1);
+    eq("and selects it", designer.selected, byName(ide, "PgB"));
+    ide.Glass_KeyPress("Page_Up", true, false);
+    yield;
+    eq("Ctrl+Page Up the one before", book.Current, 0);
+
+    const bar = designer.chrome.pageBar;
+    yield* until(() => bar.Visible && bar.Bounds(designer.glass).Width > 0);
+    check("a page bar is drawn for the container around the selection",
+          bar.Visible && bar.Bounds(designer.glass).Width > 0);
+    check("saying which page it is",
+          designer.chrome.pageParts.name.Text.startsWith("1 / 3"),
+          designer.chrome.pageParts.name.Text);
+
+    const middle = (w) => {
+        const b = w.Bounds(designer.glass);
+        return [b.X + b.Width / 2, b.Y + b.Height / 2];
+    };
+    const [nx, ny] = middle(designer.chrome.pageParts.next);
+    ide.Glass_MouseDown(nx, ny, 1, false);
+    ide.Glass_MouseUp(nx, ny, 1, false);
+    yield;
+    eq("its arrow shows the next page", book.Current, 1);
+    eq("and selects it", designer.selected, byName(ide, "PgB"));
+    eq("still not an edit", designer.dirty, false);
+
+    /* --- what the file says ------------------------------------------------- */
+    let node = designer.serializeForm().children.find((n) => n.name === "Tabs");
+    eq("the initial page is still what the file said", node.properties.Current, 1);
+    check("and the page shown is not written while it is the initial one",
+          !node.design || node.design.Current === undefined, JSON.stringify(node.design));
+
+    designer.showPage(book, 2);
+    node = designer.serializeForm().children.find((n) => n.name === "Tabs");
+    eq("left on another page, properties keep the initial one", node.properties.Current, 1);
+    eq("and design says where the designer was", node.design && node.design.Current, 2);
+
+    /* The initial page follows the page, not its index. */
+    book.Reorder(byName(ide, "PgA"), 2);
+    node = designer.serializeForm().children.find((n) => n.name === "Tabs");
+    eq("reordering moves the initial page with it",
+       node.properties.Current, book.Children.indexOf(byName(ide, "PgB")));
+    book.Reorder(byName(ide, "PgA"), 0);
+
+    /* --- a click on the real strip ------------------------------------------
+     *
+     * The Glass keeps the pointer, so the strip never sees the press; the
+     * designer asks the container which page is there. Where a tab is comes
+     * from `PageAt` itself (its contract is `tests/widgets`'), turned into the
+     * canvas's coordinates the way the designer does. */
+    const tabAt = (c, want) => {
+        const r = c.Bounds(designer.surface);
+        for (let y = 1; y < 60; y += 2)
+            for (let x = 1; x < r.Width; x += 2)
+                if (c.PageAt(x, y) === want) return [r.X + x, r.Y + y];
+        return null;
+    };
+    const clickAt = (pt) => {
+        ide.Glass_MouseDown(pt[0], pt[1], 1, false);
+        ide.Glass_MouseUp(pt[0], pt[1], 1, false);
+    };
+
+    yield* settled(ide);
+    const third = tabAt(book, 2);
+    check("the third tab is on the strip", !!third);
+    if (third) {
+        clickAt(third);
+        yield;
+        eq("clicking a tab shows its page", book.Current, 2);
+        eq("and selects the page, not the notebook", designer.selected, byName(ide, "PgC"));
+        eq("and is not an edit", designer.dirty, false);
+        eq("nor a move", book.X, 10);
+    }
+
+    const steps = byName(ide, "Steps");
+    const second = tabAt(steps, 1);
+    check("a switcher's second button is on its strip", !!second);
+    if (second) {
+        clickAt(second);
+        yield;
+        eq("clicking a switcher's button shows its page", steps.Current, 1);
+        eq("and selects it", designer.selected, byName(ide, "StB"));
+    }
+
+    /* --- the grid: the initial page is chosen there, and that is an edit ---- */
+    designer.select(book);
+    yield;
+    const pick = editor(ide, "Current");
+    eq("Current is offered as the pages", pick.constructor.name, "ComboBox");
+    check("named by their tabs", pick.Items.length === 3 && pick.Items[1].includes("Dos"),
+          JSON.stringify(pick.Items));
+    eq("pointing at the initial page", pick.Index, 1);
+
+    editor(ide, "Current").Index = 0;
+    yield;
+    eq("choosing one is an edit", designer.dirty, true);
+    eq("and shows it", book.Current, 0);
+    node = designer.serializeForm().children.find((n) => n.name === "Tabs");
+    eq("the file opens there now", node.properties.Current, 0);
+    check("with nothing left to say about the view",
+          !node.design || node.design.Current === undefined, JSON.stringify(node.design));
+
+    designer.showPage(book, 2);
+    ide.MnuUndo.Click();
+    yield;
+    node = designer.serializeForm().children.find((n) => n.name === "Tabs");
+    eq("undo takes the initial page back", node.properties.Current, 1);
+    eq("and leaves the page being looked at where it was", byName(ide, "Tabs").Current, 2);
+
+    /* --- a page is an object: its tab is a row of its own -------------------
+     *
+     * Undo rebuilt the controls above, so the notebook is looked up again. */
+    const tabs = byName(ide, "Tabs");
+    ide.WidgetTree.Key = "PgB";
+    yield;
+    const tabRow = editor(ide, "Tab");
+    check("a page has a row for its tab", !!tabRow);
+    eq("saying what the tab says", tabRow && tabRow.Text, "Dos");
+    check("and the tree names the page by its tab",
+          ide.WidgetTree.Text.startsWith("Dos"), ide.WidgetTree.Text);
+
+    typeInto(ide, "Tab", "Datos");
+    yield;
+    eq("editing the row renames the tab", tabs.Tabs[1], "Datos");
+    eq("which is an edit", designer.dirty, true);
+    check("and the tree follows", ide.WidgetTree.Text.startsWith("Datos"), ide.WidgetTree.Text);
+    check("a control that is not a page has no such row",
+          (designer.select(byName(ide, "BtnDeep")), !editor(ide, "Tab")));
+
+    /* --- Add page, from the canvas's menu ----------------------------------- */
+    designer.select(byName(ide, "BtnDeep"));
+    yield;
+    eq("Add page is offered inside a page container", ide.ActAddPage.Enabled, true);
+    ide.ActAddPage_Execute();
+    yield;
+    eq("and adds a page at the end", tabs.Count, 4);
+    eq("shown", tabs.Current, 3);
+    eq("and selected", designer.selected, tabs.Children[3]);
+    designer.select(byName(ide, "LblB"));
+    yield;
+    designer.select(null);
+    yield;
+    eq("with nothing in a page container it is not offered", ide.ActAddPage.Enabled, false);
+
+    /* --- saved and run ------------------------------------------------------ */
+    ide.BtnSave.Click();
+    const saved = JSON.parse(File.Load(File.Join(TMP, "Pager.form")));
+    const sb = saved.children.find((n) => n.name === "Tabs");
+    eq("saved with the initial page", sb.properties.Current, 1);
+    eq("and the page shown as a design value -- the one Add page left on screen",
+       sb.design && sb.design.Current, 3);
+
+    const run = new Panel();
+    ide.Add(run);
+    run.Visible = false;
+    /* Renamed: built in the IDE's window, `Tabs` would be the IDE's name. */
+    const copy = JSON.parse(JSON.stringify(saved));
+    copy.children[0].name = "RunTabs";
+    copy.children[1].name = "RunSide";
+    run.BuildChildren(copy);
+    eq("the application opens on the initial page, not the one looked at",
+       run.Children.find((c) => c.Name === "RunTabs").Current, 1);
+    eq("and its second tab says what the row wrote",
+       run.Children.find((c) => c.Name === "RunTabs").Tabs[1], "Datos");
+    run.Delete();
+
+    ide.tabs.closeByName("Pager.form", true);
+    if (was) ide.openNamed(was);
+    yield; yield;
+}
+
+/*
  * Copy, cut, paste and duplicate.
  *
  * It runs on the form `p_palette` left saved and puts it back exactly as it
@@ -7820,18 +8093,25 @@ function* p_projects(ide) {
 
     const book = ide.designer.selected;
     eq("the palette offers a notebook now", book.constructor.name, "Notebook");
-    eq("with no pages yet", book.Count, 0);
+    /* Two pages to start from: empty, the next control from the palette used
+     * to become a page instead of going on one. */
+    eq("with two pages to start from", book.Count, 2);
+    eq("showing the first", book.Current, 0);
+    eq("and that is not where the form opens yet, it is", ide.designer.initialPage(book), 0);
 
-    palette(ide, "Panel").Click();
+    palette(ide, "Button").Click();
     yield;
+    eq("the palette puts a control on the page on screen", book.Count, 2);
+    eq("on the first page", ide.designer.parentOf(ide.designer.selected), book.Children[0]);
+
     ide.designer.select(book);
-    palette(ide, "Frame").Click();
+    ide.designer.addPage();
     yield;
-
-    eq("adding to a notebook makes a page", book.Count, 2);
+    eq("Add page makes a page", book.Count, 3);
     check("and each page gets a tab that says which it is",
-          book.Tabs.length === 2 && book.Tabs.every(Boolean), JSON.stringify(book.Tabs));
-    eq("the page just added is the one shown", book.Current, 1);
+          book.Tabs.length === 3 && book.Tabs.every(Boolean), JSON.stringify(book.Tabs));
+    eq("the page just added is the one shown", book.Current, 2);
+    eq("and selected", ide.designer.selected, book.Children[2]);
 
     const paged = book.Children.map((c) => c.Name).join(",");
     book.Reorder(book.Children[0], 1);
@@ -7852,18 +8132,20 @@ function* p_projects(ide) {
 
     const sw = ide.designer.selected;
     eq("the palette offers a switcher too", sw.constructor.name, "Switcher");
-    eq("with no pages yet", sw.Count, 0);
+    eq("with two pages to start from too", sw.Count, 2);
 
-    palette(ide, "Panel").Click();
-    yield;
     ide.designer.select(sw);
-    palette(ide, "Frame").Click();
+    palette(ide, "Label").Click();
     yield;
+    eq("and the palette fills the page on screen", sw.Count, 2);
 
-    eq("adding to a switcher makes a page", sw.Count, 2);
+    ide.designer.select(sw);
+    ide.designer.addPage();
+    yield;
+    eq("Add page makes a page of a switcher too", sw.Count, 3);
     check("each page gets a name on the strip",
-          sw.Tabs.length === 2 && sw.Tabs.every(Boolean), JSON.stringify(sw.Tabs));
-    eq("and the page just added is the one shown", sw.Current, 1);
+          sw.Tabs.length === 3 && sw.Tabs.every(Boolean), JSON.stringify(sw.Tabs));
+    eq("and the page just added is the one shown", sw.Current, 2);
 
     const swPaged = sw.Children.map((c) => c.Name).join(",");
     sw.Reorder(sw.Children[0], 1);
@@ -7872,18 +8154,22 @@ function* p_projects(ide) {
           sw.Tabs.join(",") === sw.Children.map((c) => c.Name).join(","),
           `${sw.Children.map((c) => c.Name)} ${sw.Tabs}`);
 
-    /* A split: two halves, and the third is refused rather than thrown. */
+    /* A split: two halves, and the third is refused rather than thrown. It
+     * arrives with both, and the divider in the middle -- empty, the handle sat
+     * against the edge where nobody could see it. */
     ide.designer.select(null);
     palette(ide, "Split").Click();
     yield;
     const paned = ide.designer.selected;
 
-    palette(ide, "Label").Click();
-    yield;
-    ide.designer.select(paned);
-    palette(ide, "Label").Click();
-    yield;
-    eq("a split takes two children", paned.Children.length, 2);
+    eq("a split arrives with its two halves", paned.Children.length, 2);
+    eq("as panels to put things in", paned.Children[0].constructor.name, "Panel");
+    eq("and the divider in the middle of it", paned.Position, 120);
+    yield* until(() => ide.designer.rectOf(paned.Children[1]).w > 0);
+    check("both halves are drawn, so the handle is between them",
+          ide.designer.rectOf(paned.Children[0]).w > 40 &&
+          ide.designer.rectOf(paned.Children[1]).w > 40,
+          JSON.stringify(paned.Children.map((c) => ide.designer.rectOf(c))));
 
     ide.designer.select(paned);
     palette(ide, "Label").Click();
@@ -7897,9 +8183,9 @@ function* p_projects(ide) {
     const savedBook = withBoxes.children.find((n) => n.type === "Notebook");
     const savedPane = withBoxes.children.find((n) => n.type === "Split");
 
-    eq("the notebook is saved with its pages", savedBook.children.length, 2);
+    eq("the notebook is saved with its pages", savedBook.children.length, 3);
     check("and with its tab names",
-          Array.isArray(savedBook.properties.Tabs) && savedBook.properties.Tabs.length === 2,
+          Array.isArray(savedBook.properties.Tabs) && savedBook.properties.Tabs.length === 3,
           JSON.stringify(savedBook.properties));
     eq("the split with its two halves", savedPane.children.length, 2);
 
@@ -7911,7 +8197,7 @@ function* p_projects(ide) {
     reload.BuildChildren(withBoxes);
 
     const back = reload.Children.find((c) => c.constructor.name === "Notebook");
-    eq("reloading gives the pages back", back.Count, 2);
+    eq("reloading gives the pages back", back.Count, 3);
     eq("with the names they were saved with",
        back.Tabs.join(","), savedBook.properties.Tabs.join(","));
     reload.Delete();
@@ -14896,6 +15182,7 @@ const PHASES = [
     { name: "files", run: p_files },
     { name: "designer", run: p_designer },
     { name: "palette", run: p_palette },
+    { name: "pages", run: p_pages },
     { name: "clipboard", run: p_clipboard },
     { name: "taborder", run: p_taborder },
     { name: "completion", run: p_completion },

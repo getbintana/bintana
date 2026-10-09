@@ -2141,6 +2141,9 @@ class MainForm extends Form {
      * form tab carries its own canvas and its own tree now.
      */
     ActRenameCtl_Execute() { this.renameSelectedControl(); }
+    /* A page at the end of the page container the selection is in, or is --
+     * the canvas's menu for what the page bar's `+` does. */
+    ActAddPage_Execute()   { if (this.designer) this.designer.addPage(); }
     ActTrRename_Execute() {
         if (this.designer) this.designer.tree.renameFromKey(this.WidgetTree.Key);
     }
