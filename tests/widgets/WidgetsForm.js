@@ -2524,13 +2524,19 @@ class WidgetsForm extends Form {
         throws("a control that is not pressed cannot have one",
                () => { lbl.Action = "ActTest"; });
 
-        /* Fired from code, the way a menu item can be. */
+        /* Run from code, the way a menu item can be clicked. A command's event
+         * is `Execute` and not `Click`: it runs from a button, a menu item, an
+         * accelerator or code, and only one of those is a click. */
         this.actionFired = 0;
-        act.Click();
-        eq("Click runs the handler", this.actionFired, 1);
+        act.Execute();
+        eq("Execute runs the handler", this.actionFired, 1);
+        eq("...and it is the one event a command raises",
+           JSON.stringify(act.EventNames()), JSON.stringify(["Execute"]));
+        eq("...while a menu item still raises Click",
+           JSON.stringify(this.MnuTick.EventNames()), JSON.stringify(["Click"]));
         act.Enabled = false;
-        throws("...and a disabled command refuses to be pressed",
-               () => act.Click());
+        throws("...and a disabled command refuses to run",
+               () => act.Execute());
         act.Enabled = true;
 
         /*
@@ -2571,7 +2577,7 @@ class WidgetsForm extends Form {
         iconic.Delete();
     }
 
-    ActTest_Click() { this.actionFired = (this.actionFired || 0) + 1; }
+    ActTest_Execute() { this.actionFired = (this.actionFired || 0) + 1; }
 
     /* Whether assigning to a member throws, which is what "read-only" means to
      * a program rather than to a descriptor. */
@@ -5799,6 +5805,50 @@ function Main() {
                  check("...saying which command and why",
                        all.includes("action 'Controls'") &&
                        all.includes("a Form already has a member of that name"), all);
+                 check("...and the form never opened", !all.includes("ran"), all);
+                 waiting--;
+                 this.commandOldHandler();
+             });
+    }
+
+    /*
+     * A command raised `Click` until it raised `Execute`, so a form written
+     * before carries `ActGo_Click`: a handler that would never be called again,
+     * with nothing to say so. The form is refused instead, naming the method
+     * and the name it wants.
+     */
+    commandOldHandler() {
+        waiting++;
+
+        const proj = File.Join(SCRATCH, "action-old-click");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "actoldclick", startup: "OldClick", sources: ["OldClick.js"] });
+        File.SaveJson(File.Join(proj, "OldClick.form"), {
+            format: "bintana-form/1",
+            class: "OldClick",
+            properties: { Width: 200, Height: 100 },
+            actions: [{ name: "ActGo", text: "Go" }],
+            children: [],
+        });
+        File.Save(File.Join(proj, "OldClick.js"),
+                  "Application.OnError = (m) => { print('caught: ' + m); };\n" +
+                  "class OldClick extends Form {\n" +
+                  "    Form_Open() { print('ran'); }\n" +
+                  "    ActGo_Click() {}\n" +
+                  "}\n");
+
+        const said = [];
+        Exec([Application.Executable, proj], { Timeout: 20000 },
+             (line) => said.push(line),
+             (code) => {
+                 const all = said.join("\n");
+
+                 check("a command's old Click handler stops the form",
+                       code !== 0, String(code));
+                 check("...naming the method and the name it wants",
+                       all.includes("ActGo_Click: a command raises Execute, not Click") &&
+                       all.includes("ActGo_Execute"), all);
                  check("...and the form never opened", !all.includes("ran"), all);
                  waiting--;
                  this.strictChecks();

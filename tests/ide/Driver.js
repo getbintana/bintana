@@ -1124,23 +1124,23 @@ function* p_designer(ide) {
     /* Collapsing is what a deep form needs -- the IDE's own is eight levels --
      * and the two commands apply to the tree, not to a selection, so unlike the
      * rest of the menu they stay live with nothing selected. */
-    ide.ActTrCollapse.Click();
+    ide.ActTrCollapse.Execute();
     yield;
     eq("Collapse all closes the tree", ide.WidgetTree.Expanded("@form"), false);
     eq("without losing a node of it",
        ide.WidgetTree.Count, ide.designer.allControls().length + 1);
 
-    ide.ActTrExpand.Click();
+    ide.ActTrExpand.Execute();
     yield;
     eq("Expand all opens it again", ide.WidgetTree.Expanded("@form"), true);
 
     /* And selecting still reaches a node whichever way the tree is left. */
-    ide.ActTrCollapse.Click();
+    ide.ActTrCollapse.Execute();
     yield;
     ide.WidgetTree.Key = "Ok";
     yield;
     eq("selecting reaches a node in a closed tree", ide.designer.selected.Name, "Ok");
-    ide.ActTrExpand.Click();
+    ide.ActTrExpand.Execute();
     yield;
 
     ide.designer.select(byName(ide, "Ok"));
@@ -1172,7 +1172,7 @@ function* p_designer(ide) {
 
     ide.designer.select(byName(ide, painted[0]));
     yield;
-    ide.ActRaise.Click();
+    ide.ActRaise.Execute();
     yield;
     check("choosing Bring to front restacks, as the button does",
           ide.Surface.Children.map((c) => c.Name).join(",") !== painted.join(","),
@@ -2744,13 +2744,13 @@ function* p_palette(ide) {
     const names = () => ide.Surface.Children.map((w) => w.Name).join(",");
     eq("the new control is last, so it paints on top", names(), "Ok,Msg,CheckButton1");
 
-    ide.ActLower_Click();
+    ide.ActLower_Execute();
     eq("Al fondo sends it behind", names(), "CheckButton1,Ok,Msg");
-    ide.ActRaise_Click();
+    ide.ActRaise_Execute();
     eq("Al frente brings it back", names(), "Ok,Msg,CheckButton1");
 
     /* --- designer: deleting --------------------------------------------- */
-    ide.ActDelCtl_Click();
+    ide.ActDelCtl_Execute();
     eq("deleting removes it from the surface",
        ide.Surface.Children.length, beforeAdd);
     eq("and clears the selection", ide.designer.selected, null);
@@ -3846,7 +3846,7 @@ function* p_completion(ide) {
     ide.openInTab("Child.form");
     yield* settled(ide);
     ide.designer.select(byName(ide, added));
-    ide.ActDelCtl_Click();
+    ide.ActDelCtl_Execute();
     ide.BtnSave_Click();
     yield;
     eq("and the form is back to what it was", ide.Surface.Children.length, 2);
@@ -3900,7 +3900,7 @@ function* p_handlers(ide) {
      * assertion that searched the whole scrollback would pass on that -- which
      * is exactly what it did until the fix was reverted and it stayed green. */
     const said = ide.LogView.Text.length;
-    ide.ActDelCtl_Click();
+    ide.ActDelCtl_Execute();
 
     check("the control is gone", !ide.Surface.Children.some((c) => c.Name === doomed));
     eq("and its code is not, which is the user's to keep",
@@ -3946,7 +3946,7 @@ function* p_handlers(ide) {
 
     /* --- back to what the phases after this one expect ---------------------- */
     ide.designer.select(byName(ide, fresh));
-    ide.ActDelCtl_Click();
+    ide.ActDelCtl_Execute();
     ide.BtnSave_Click();
     yield;
 
@@ -4374,7 +4374,7 @@ function* p_events(ide) {
        eventRows(ide)[0].method, `${button.Name}_Click`);
 
     /* --- back to what the phases after this one expect ---------------------- */
-    ide.ActDelCtl_Click();
+    ide.ActDelCtl_Execute();
     ide.BtnSave_Click();
     yield;
 
@@ -6384,7 +6384,7 @@ function* p_nested(ide) {
     }, null, 2));
     File.Save(File.Join(TMP, "Mandos.js"),
               "class Mandos extends Form {\n" +
-              "    ActOpen_Click() { this.ActOpen.Enabled = false; }\n" +
+              "    ActOpen_Execute() { this.ActOpen.Enabled = false; }\n" +
               "}\n");
 
     ide.listFiles();
@@ -6513,7 +6513,7 @@ function* p_nested(ide) {
        JSON.stringify({ name: "ActNuevo", text: "Nuevo", enabled: false }));
     const mandosCode = File.Load(File.Join(TMP, "Mandos.js"));
     check("and the handler follows it into the code",
-          mandosCode.includes("ActAbrir_Click()") && mandosCode.includes("this.ActAbrir.Enabled")
+          mandosCode.includes("ActAbrir_Execute()") && mandosCode.includes("this.ActAbrir.Enabled")
           && !mandosCode.includes("ActOpen"), mandosCode);
 
     ide.designer.select(renamed[1]);
@@ -7126,7 +7126,7 @@ function* p_nested(ide) {
     /* --- deleting several ----------------------------------------------------- */
     const beforeMulti = ide.Surface.Children.length;
     ide.designer.setSelection([byName(ide, "Label2")]);
-    ide.ActDelCtl_Click();
+    ide.ActDelCtl_Execute();
     eq("deleting removes the selected control",
        ide.Surface.Children.length, beforeMulti - 1);
     ide.MnuUndo_Click();

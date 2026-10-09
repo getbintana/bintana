@@ -2592,8 +2592,8 @@ Ide.Designer = class Designer {
      * renamed.
      *
      * A rename is the control rename's bargain and for the same reason: a
-     * command's name is the prefix of its handler, so `ActOld_Click` moves to
-     * `ActNew_Click` in the `.js`, and that is not undoable -- the form is saved
+     * command's name is the prefix of its handler, so `ActOld_Execute` moves to
+     * `ActNew_Execute` in the `.js`, and that is not undoable -- the form is saved
      * and the history cleared. A name the code already answers for is refused
      * first, since two methods of one name in a class is the silent kind. What
      * points at the command -- controls, the menu bar, a control's own menu --
@@ -2605,7 +2605,7 @@ Ide.Designer = class Designer {
     setActions(spec, renames = []) {
         if (!this.root) return false;
 
-        const events = ["Click"];
+        const events = ["Execute"];
         for (const [, to] of renames) {
             const answered = Ide.FormFiles.handlersIn(this.ide.formFiles.siblingSource(),
                                                       to, events);

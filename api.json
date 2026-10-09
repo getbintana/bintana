@@ -14935,15 +14935,6 @@
       "Name": "Action",
       "Members": [
         {
-          "Name": "Click",
-          "Kind": "Method",
-          "Params": 0,
-          "Signature": "()",
-          "Returns": "",
-          "Doc": "invoked from code, the way a menu item can be",
-          "Native": true
-        },
-        {
           "Name": "Enabled",
           "Kind": "Property",
           "Params": -1,
@@ -14958,7 +14949,16 @@
           "Params": 0,
           "Signature": "()",
           "Returns": "string[]",
-          "Doc": "the events it raises, `Click`",
+          "Doc": "the events it raises, `Execute`",
+          "Native": true
+        },
+        {
+          "Name": "Execute",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "runs the command from code, as a button or an accelerator would -- raising `Execute`. **Throws while it is disabled**",
           "Native": true
         },
         {
@@ -14976,7 +14976,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "what the `.form` called the command: `this.<Name>`, `<Name>_Click`, and what a control's `Action` names",
+          "Doc": "what the `.form` called the command: `this.<Name>`, `<Name>_Execute`, and what a control's `Action` names",
           "Native": true
         },
         {
@@ -14996,6 +14996,13 @@
           "Returns": "",
           "Doc": "the label the `.form` declared. It goes through the catalogue **once**, however many places show it",
           "Native": true
+        }
+      ],
+      "Events": [
+        {
+          "Name": "Execute",
+          "Signature": "()",
+          "Doc": "the command ran: from a control or a menu item that points at it, its accelerator, or `Execute()`. **Not raised while it is disabled**"
         }
       ]
     },
@@ -15728,6 +15735,13 @@
           "Returns": "",
           "Doc": "the tick of a `check` item, or the chosen index of a `radio` one. **Assigning it does not fire `Click`**, so restoring a saved setting raises nothing",
           "Native": true
+        }
+      ],
+      "Events": [
+        {
+          "Name": "Click",
+          "Signature": "([value])",
+          "Doc": "it was chosen. A check item is handed its new state, a dynamic one the index and the text of the entry"
         }
       ]
     },

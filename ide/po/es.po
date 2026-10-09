@@ -69,9 +69,9 @@ msgstr "Subir"
 msgid "Down"
 msgstr "Bajar"
 
-#: forms/ActionForm.form: LblName.Text forms/MenuForm.form:
-msgid "Name (its handler is Name_Click)"
-msgstr "Nombre (su handler es Nombre_Click)"
+#: forms/ActionForm.form: LblName.Text
+msgid "Name (its handler is Name_Execute)"
+msgstr "Nombre (su handler es Nombre_Execute)"
 
 #: forms/ActionForm.form: LblText.Text forms/MenuForm.form:
 msgid "Text"
@@ -1070,6 +1070,10 @@ msgstr "Submenú"
 msgid "Rule"
 msgstr "Separador"
 
+#: forms/MenuForm.form: LblName.Text
+msgid "Name (its handler is Name_Click)"
+msgstr "Nombre (su handler es Nombre_Click)"
+
 #: forms/MenuForm.form: ChkDynamic.Text
 msgid "Entries filled by the application (dynamic)"
 msgstr "Entradas que llena la aplicación (dynamic)"
@@ -1429,13 +1433,13 @@ msgid ""
 "its text and its icon when they declare none, and they are enabled and "
 "disabled together (this.Name.Enabled = false).\n"
 "\n"
-"Its handler is Name_Click. Double click a command to write it."
+"Its handler is Name_Execute. Double click a command to write it."
 msgstr ""
 "Un comando es aquello a lo que apuntan el Action de un botón y el de un ítem "
 "de menú: toman su texto y su icono cuando no declaran los suyos, y se "
 "habilitan y deshabilitan juntos (this.Nombre.Enabled = false).\n"
 "\n"
-"Su handler es Nombre_Click. Doble clic en un comando para escribirlo."
+"Su handler es Nombre_Execute. Doble clic en un comando para escribirlo."
 
 #: forms/ActionForm.js:264
 msgid "A command has no name."
@@ -2669,7 +2673,8 @@ msgstr "Editar las columnas"
 
 #: modules/PropertyGrid.js:1497
 msgid "Taken from the command {0}. Type a value to use this control's own."
-msgstr "Tomado del comando {0}. Escribí un valor para que el control use el suyo."
+msgstr ""
+"Tomado del comando {0}. Escribí un valor para que el control use el suyo."
 
 #: modules/PropertyGrid.js:1502
 msgid ""

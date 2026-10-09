@@ -123,7 +123,7 @@
                   "type": "Label",
                   "name": "LblName",
                   "properties": {
-                    "Text": "Name (its handler is Name_Click)"
+                    "Text": "Name (its handler is Name_Execute)"
                   }
                 },
                 {

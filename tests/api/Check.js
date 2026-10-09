@@ -316,6 +316,8 @@ function checkApiJson(root, problems, members, events) {
     for (const l of catalog.Libraries)
         for (const c of l.Classes)
             for (const e of c.Events) raised.add(e.Name);
+    for (const t of catalog.Types)
+        for (const e of t.Events || []) raised.add(e.Name);
     for (const name in events)
         if (!raised.has(name))
             problems.push(`api.json: event ${name} is raised and nowhere in it`);

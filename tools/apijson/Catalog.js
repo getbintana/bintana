@@ -191,7 +191,9 @@ function apiGlobals() {
         let members = [];
         try { members = Widget.Members(name); } catch (e) { continue; }
         if (!members.length) continue;
-        out.push({ Name: name, Members: apiMemberList(members) });
+        const type = { Name: name, Members: apiMemberList(members) };
+        if (API_TYPE_EVENTS[name]) type.Events = API_TYPE_EVENTS[name];
+        out.push(type);
     }
     for (const name of NESTED_OWNERS) {
         let members = [];
@@ -200,6 +202,24 @@ function apiGlobals() {
     }
     return out.sort((a, b) => a.Name < b.Name ? -1 : a.Name > b.Name ? 1 : 0);
 }
+
+/*
+ * **The events of the two types that raise one**, which no verb can be asked:
+ * a menu item and a command are made per item by the form that declares them,
+ * so there is no class to hand `Widget.EventNames`. Two entries, and
+ * `tests/api` holds them to the C the other way round -- every `bta_emit*` in
+ * the runtime has to be in the manifest somewhere, and until this table a
+ * command's `Click` passed that check only because `Button` raises one too.
+ */
+const API_TYPE_EVENTS = {
+    Action:   [{ Name: "Execute", Signature: "()",
+                 Doc: "the command ran: from a control or a menu item that " +
+                      "points at it, its accelerator, or `Execute()`. " +
+                      "**Not raised while it is disabled**" }],
+    MenuItem: [{ Name: "Click", Signature: "([value])",
+                 Doc: "it was chosen. A check item is handed its new state, " +
+                      "a dynamic one the index and the text of the entry" }],
+};
 
 /* The prototypes no global holds, named by the `type X` comment above the
  * table that declares them. */
@@ -213,7 +233,9 @@ function apiTypes(root) {
     for (const name of [...names].sort()) {
         let members = [];
         try { members = Widget.Members(name); } catch (e) { continue; }
-        out.push({ Name: name, Members: apiMemberList(members) });
+        const type = { Name: name, Members: apiMemberList(members) };
+        if (API_TYPE_EVENTS[name]) type.Events = API_TYPE_EVENTS[name];
+        out.push(type);
     }
 
     /* `MenuItem`, `Action` and `AudioPlayer` used to be added here from their

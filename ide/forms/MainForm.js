@@ -2096,16 +2096,16 @@ class MainForm extends Form {
      * row the pointer is on (`ActTrRename`); both are commands because each
      * form tab carries its own canvas and its own tree now.
      */
-    ActRenameCtl_Click() { this.renameSelectedControl(); }
-    ActTrRename_Click() {
+    ActRenameCtl_Execute() { this.renameSelectedControl(); }
+    ActTrRename_Execute() {
         if (this.designer) this.designer.tree.renameFromKey(this.WidgetTree.Key);
     }
 
     /* These two apply to the tree and not to a selection, so unlike the rest
      * they stay live with nothing selected. A form nested eight deep -- the
      * IDE's own is -- is what they are for. */
-    ActTrExpand_Click()   { if (this.WidgetTree) this.WidgetTree.ExpandAll(); }
-    ActTrCollapse_Click() { if (this.WidgetTree) this.WidgetTree.CollapseAll(); }
+    ActTrExpand_Execute()   { if (this.WidgetTree) this.WidgetTree.ExpandAll(); }
+    ActTrCollapse_Execute() { if (this.WidgetTree) this.WidgetTree.CollapseAll(); }
 
     /* The canvas has no key to rename by, so the menu is where it lives.  Named
      * for what it renames, since the file has a rename of its own. */
@@ -2122,9 +2122,9 @@ class MainForm extends Form {
      * and `MainForm.refresh` said `design && designer.selected !== null`.
      * Whether those agreed was not answerable by reading either one.
      */
-    ActDelCtl_Click()   { this.designer.deleteSelected(); }
-    ActRaise_Click()    { this.designer.restack(true); }
-    ActLower_Click()    { this.designer.restack(false); }
+    ActDelCtl_Execute()   { this.designer.deleteSelected(); }
+    ActRaise_Execute()    { this.designer.restack(true); }
+    ActLower_Execute()    { this.designer.restack(false); }
 
     /* --- menu ------------------------------------------------------------
      * The items duplicate the toolbar on purpose: the menu is what carries the
@@ -2316,12 +2316,12 @@ class MainForm extends Form {
     /* Commands, so the Debug menu, its keys and the buttons over the debug
      * page are one thing each: a person coming from a debugger with a toolbar
      * looks for the buttons, and the menu was the only place they were. */
-    ActDebug_Click()      { this.debugger_.start(); }
-    ActPause_Click()      { this.debugger_.pause(); }
-    ActStepInto_Click()   { this.debugger_.step("into"); }
-    ActStepOver_Click()   { this.debugger_.step("over"); }
-    ActStepOut_Click()    { this.debugger_.step("out"); }
-    ActRunTo_Click()      { this.debugger_.runToCursor(); }
+    ActDebug_Execute()      { this.debugger_.start(); }
+    ActPause_Execute()      { this.debugger_.pause(); }
+    ActStepInto_Execute()   { this.debugger_.step("into"); }
+    ActStepOver_Execute()   { this.debugger_.step("over"); }
+    ActStepOut_Execute()    { this.debugger_.step("out"); }
+    ActRunTo_Execute()      { this.debugger_.runToCursor(); }
     MnuBreakpoint_Click() { this.debugger_.toggle(); }
     /* The condition and the message of the breakpoint under the caret: one
      * dialog because they are one question, and the runtime has carried both
@@ -2674,7 +2674,7 @@ class MainForm extends Form {
      * ends it -- a second button for "stop the one being debugged" would be a
      * second answer to a question with one. It is a command, so the toolbar,
      * the Run menu and the debug bar are that one Stop. */
-    ActStop_Click()   { this.stopRun(); }
+    ActStop_Execute()   { this.stopRun(); }
 
     /* A tick, and the runtime has already moved it: what is left is remembering
      * it. What it does is one argument to `bintana` -- see `Ide.Runner`. */
@@ -2754,7 +2754,7 @@ class MainForm extends Form {
             this.designer.actions(),
             this.designer.actionContext(),
             (spec, renames) => this.designer.setActions(spec, renames),
-            (name) => this.openHandler(name, "Click"));
+            (name) => this.openHandler(name, "Execute"));
     }
     /* Aligns against the last control touched, which is the convention. */
     MnuAlignLeft_Click()   { this.designer.align("left"); }

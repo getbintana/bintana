@@ -3932,7 +3932,7 @@ person who wrote it either.
   the menus' shape: a dialog on the spec, applied on OK. A command something
   points at is not deleted, a name another thing on the form has is refused,
   and a rename is the control rename's bargain -- the pointing controls and
-  menu items follow (`Designer.eachActionUse`), `X_Click` and `this.X` move in
+  menu items follow (`Designer.eachActionUse`), `X_Execute` and `this.X` move in
   the `.js`, the form is saved and undo is cleared.
   **A stand-in honours `Visible: false` too**, for the same reason from the
   other side: a built control is handed every property and a hidden one drops
@@ -6704,6 +6704,23 @@ same number without naming what sits above it.
   greys every place the command appears. A plain item's spec *does* take
   `enabled` (the key `actions` already had), which is what lets a menu built for
   the moment say *not now* without leaving the entry out.
+- **A command raises `Execute`, and a menu item still raises `Click`.** It was
+  `Click` for both, because `on_menu_activate` and `on_action_activate` were
+  written as one event -- and a command is not clicked: it runs from a button,
+  a menu item, an accelerator or code. `Execute` and not `Activate`, because
+  `Activate` here already means *Enter or a double click on a row* (`ListBox`,
+  `TreeView`, `TextBox`), and it is Delphi's own pair: `TMenuItem.OnClick`
+  beside `TAction.OnExecute`. The method that runs one from code is
+  `Execute()`. **A form still carrying a command's old `<Name>_Click` is
+  refused at load** (`bta_actions_build`), naming the method -- a handler under
+  a name the dispatch never asks for is silent, and the rename crossed
+  fifty-one handlers in four repositories. And **`tests/api` could not see an
+  event a type raises**: the manifest's `Types` carried no events, so the
+  command's `Click` passed only because `Button` raises one too, and `Execute`
+  was the first name to fail. `API_TYPE_EVENTS` in `tools/apijson` gives
+  `Action` and `MenuItem` theirs -- two entries, because nothing can be asked
+  for the events of an object a form makes per item -- and the check counts
+  them.
 - **And the IDE lost six names it only had for want of somewhere to put a
   command.** `MnuCvDel`, `MnuTrDel`, `MnuCvRaise`, `MnuTrRaise`, `MnuCvLower`,
   `MnuTrLower` existed because "a menu item is exposed on the form by name, and

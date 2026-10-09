@@ -52,7 +52,7 @@ class ActionForm extends Form {
         this.muted = false;
         /* The literal at the call, so the extractor finds it and the
          * catalogue translates it: a constant would be neither. */
-        this.LblHint.Text = Locale.Text("A command is what a button's and a menu item's Action point at: they take its text and its icon when they declare none, and they are enabled and disabled together (this.Name.Enabled = false).\n\nIts handler is Name_Click. Double click a command to write it.");
+        this.LblHint.Text = Locale.Text("A command is what a button's and a menu item's Action point at: they take its text and its icon when they declare none, and they are enabled and disabled together (this.Name.Enabled = false).\n\nIts handler is Name_Execute. Double click a command to write it.");
     }
 
     labelOf(act) {

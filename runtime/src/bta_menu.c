@@ -323,9 +323,9 @@ static JSValue action_set_enabled(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
-/* Pressed from code, so a test can invoke a command without a pointer -- the
+/* Run from code, so a test can invoke a command without a pointer -- the
  * same thing `MenuItem.Click()` is for. */
-static JSValue action_click(JSContext *ctx, JSValueConst this_val,
+static JSValue action_execute(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv)
 {
     BtaAction *a = action_this(ctx, this_val);
@@ -369,14 +369,17 @@ static JSValue members_of(JSContext *ctx, const JSCFunctionListEntry *tab, int n
     return out;
 }
 
-/* One event, and it is the one every item and every command raises: choosing
- * it.  Written here because it is emitted here -- `on_menu_activate` and
- * `on_action_activate` are the two calls, and both say "Click". */
-static JSValue click_only(JSContext *ctx)
+/* One event each, and it is choosing the thing.  Written here because it is
+ * emitted here: `on_menu_activate` says "Click", because a menu item is
+ * clicked, and `on_action_activate` says "Execute", because a command is not --
+ * it runs from a button, a menu item, an accelerator or code, and naming it
+ * after one of those gestures read as though the others did not count. That is
+ * Delphi's pair too: `TMenuItem.OnClick` and `TAction.OnExecute`. */
+static JSValue one_event(JSContext *ctx, const char *name)
 {
     JSValue out = JS_NewArray(ctx);
 
-    JS_SetPropertyUint32(ctx, out, 0, JS_NewString(ctx, "Click"));
+    JS_SetPropertyUint32(ctx, out, 0, JS_NewString(ctx, name));
     return out;
 }
 
@@ -392,7 +395,7 @@ static JSValue action_event_names(JSContext *ctx, JSValueConst this_val,
 /* type Action */
 static const JSCFunctionListEntry action_props[] = {
     /* Name
-     *   what the `.form` called the command: `this.<Name>`, `<Name>_Click`,
+     *   what the `.form` called the command: `this.<Name>`, `<Name>_Execute`,
      *   and what a control's `Action` names
      */
     JS_CGETSET_DEF("Name",    action_get_name,    NULL),
@@ -410,17 +413,18 @@ static const JSCFunctionListEntry action_props[] = {
      *   item and accelerator naming the command follows
      */
     JS_CGETSET_DEF("Enabled", action_get_enabled, action_set_enabled),
-    /* Click()
-     *   invoked from code, the way a menu item can be
+    /* Execute()
+     *   runs the command from code, as a button or an accelerator would --
+     *   raising `Execute`. **Throws while it is disabled**
      */
-    JS_CFUNC_DEF("Click", 0, action_click),
+    JS_CFUNC_DEF("Execute", 0, action_execute),
     /* PropertyNames() -> string[]
      *   what this class has, asked of it the way a control is asked. A
      *   command is not a widget, so nothing else can make one to ask
      */
     JS_CFUNC_DEF("PropertyNames", 0, action_property_names),
     /* EventNames() -> string[]
-     *   the events it raises, `Click`
+     *   the events it raises, `Execute`
      */
     JS_CFUNC_DEF("EventNames",    0, action_event_names),
 };
@@ -434,7 +438,7 @@ static JSValue action_property_names(JSContext *ctx, JSValueConst this_val,
 static JSValue action_event_names(JSContext *ctx, JSValueConst this_val,
                                   int argc, JSValueConst *argv)
 {
-    return click_only(ctx);
+    return one_event(ctx, "Execute");
 }
 
 static void on_action_activate(GSimpleAction *action, GVariant *param,
@@ -442,7 +446,7 @@ static void on_action_activate(GSimpleAction *action, GVariant *param,
 {
     BtaAction *a = user_data;
 
-    JS_FreeValue(a->ctx, bta_emit_on(a->ctx, a->form, a->name, "Click", 0, NULL));
+    JS_FreeValue(a->ctx, bta_emit_on(a->ctx, a->form, a->name, "Execute", 0, NULL));
 }
 
 /* ------------------------------------------------------------- JS class */
@@ -756,7 +760,7 @@ static JSValue menuitem_property_names(JSContext *ctx, JSValueConst this_val,
 static JSValue menuitem_event_names(JSContext *ctx, JSValueConst this_val,
                                     int argc, JSValueConst *argv)
 {
-    return click_only(ctx);
+    return one_event(ctx, "Click");
 }
 
 /* ---------------------------------------------------------------- build */
@@ -921,6 +925,31 @@ int bta_actions_build(JSContext *ctx, JSValueConst form_obj, BtaWidget *w,
             return JS_ThrowTypeError(ctx, "actions[%u] has no name: a command is "
                                           "named so a control can point at it", i),
                    -1;
+        }
+
+        /*
+         * **A command's handler is `<Name>_Execute`, and it used to be
+         * `<Name>_Click`.** A handler under the old name would never be called
+         * again and nothing would say so -- the dispatch looks a name up and
+         * finds nothing, which is what an unhandled command looks like too. So
+         * a form that still carries one is refused here, naming the method and
+         * what to call it, before anything about this command is wired.
+         */
+        {
+            char   *old = g_strdup_printf("%s_Click", name);
+            JSValue fn  = JS_GetPropertyStr(ctx, form_obj, old);
+            bool    had = JS_IsFunction(ctx, fn);
+
+            JS_FreeValue(ctx, fn);
+            if (had) {
+                JS_ThrowTypeError(ctx, "%s: a command raises Execute, not Click "
+                                       "-- rename the method %s_Execute", old, name);
+                g_free(old);
+                g_free(name);
+                JS_FreeValue(ctx, spec);
+                return -1;
+            }
+            g_free(old);
         }
 
         /* `g_strdup` and not the pointer itself: a bind that is refused frees
