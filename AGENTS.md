@@ -379,6 +379,19 @@ at ~14 ms in the IDE, against the 44-211 ms a form tab already costs to open
   rebuilt with every tab, so `Session.divider(name, fallback)` answers with the
   live value of the page on screen and falls back to the saved one, and
   `DIVIDERS` lists `PageSplit`/`CenterSplit`/`SideSplit`/`EditSplit`.
+- **And the canvas is what is left, which at the declared 1100 is 281.** The
+  project's tree, the tab's controls column and its side panel each keep a
+  floor, so the room a form is drawn in shrank by the panels this change moved
+  under the strip -- and `tests/ide`'s `nested` phase, which asserts there is
+  room *around* a 360 form, went red with this commit and stayed red for every
+  commit after it, while the message said *suite green*. The window it ran in
+  is whatever `~/.config/bintana/ide-test` last saved, so a run that inherited
+  a wider one passed. The phase sizes the window it measures in now; **a test
+  about the room around something sets the room**, because the settings file
+  the suite shares is somebody else's state. The same inheritance put the
+  `palette` phase's property grid at 188 px after a run that left the console
+  higher, so `Driver.js` deletes `session.window` at load, before `Form_Open`
+  can restore it: every run starts at the window `MainForm.form` declares.
 
 `tests/ide`'s `designer` phase holds the shape -- the strip spans, the panels
 begin below it, the canvas and both panels are inside the page -- and the

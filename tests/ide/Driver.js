@@ -19,6 +19,17 @@
 const TAG = Application.Arguments[0] ? `-${Application.Arguments[0]}` : "";
 const TMP = `/tmp/bta-test-ide${TAG}`;
 
+/*
+ * **Every run starts at the window the IDE declares.** `MainForm`'s `Form_Open`
+ * gives back the size and the dividers the last session left, and the settings
+ * directory is the one the suite deliberately shares -- so each run inherited
+ * the last one's console split, and the `palette` phase measured a property
+ * grid 188 px tall after a run that had left the console higher, and 230 after
+ * one that had not. Sources load before the startup form opens, so this runs
+ * first; the `session` phase writes and checks its own.
+ */
+Settings.Delete("session.window");
+
 let passed = 0;
 const failures = [];
 
@@ -6913,6 +6924,18 @@ function* p_nested(ide) {
      * The surface stretches with the window, so the grips on its edge are what
      * say where the form really ends -- no line is drawn along it. */
     ide.designer.select(null);
+    /*
+     * **Room for the form, asked for rather than assumed.** What the canvas
+     * gets is the window less the project's tree and the tab's two panels, and
+     * since those became the tab's own a window at the IDE's declared 1100
+     * leaves 281 -- less than this 360 form, so the board scrolled and every
+     * assertion below about the room around it failed -- in a run that
+     * inherited a wider window from the last session it passed, which is how it
+     * stayed red unnoticed. The room is set here, and put back after the save.
+     */
+    const boardWas = { w: ide.Width, h: ide.Height };
+    ide.Resize(1260, ide.Height);
+    yield* until(() => ide.CanvasScroll.Bounds().Width > 400);
     yield* settled(ide);   // GTK has to have laid it out
 
     eq("the declared size comes from the form node",
@@ -6978,6 +7001,8 @@ function* p_nested(ide) {
     ide.BtnSave_Click();
     eq("and the size is what gets written",
        JSON.parse(File.Load(File.Join(TMP, "Anidado.form"))).properties.Width, 360);
+    ide.Resize(boardWas.w, boardWas.h);
+    yield* settled(ide);
 
     /* --- distributing --------------------------------------------------------- */
     /* Three controls squeezed to the left and one far away: distributing has to
