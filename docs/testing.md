@@ -183,7 +183,7 @@ or a discarded project leaves behind.
 stale; the one above is here to be read.
 
 The saving is the point of it: `welcome files` is **105** assertions and
-`designer` **392**, against **2970** for the whole project — measured at 3.8 s,
+`designer` **392**, against **2971** for the whole project — measured at 3.8 s,
 9.2 s and 413 s on the machine this was last run on, where what carries over to
 another machine is the proportion and not the seconds. Iterating on an early
 phase stops being minutes a time.

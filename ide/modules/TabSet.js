@@ -683,6 +683,12 @@ Ide.TabSet = class TabSet {
                 /* Last file: with no page to be in, setMode below puts the
                  * editor back where the .form declares it, showing nothing. */
                 this.ide.activeFile = null;
+                /* The tree pointed at the file that is gone: a row selected for
+                 * nothing open reads as the file still being there. Muted, since
+                 * clearing a selection is not the user choosing a row. */
+                this.ide.muted = true;
+                this.ide.FileTree.Key = "";
+                this.ide.muted = false;
                 this.setMode(false);
                 this.render();
                 this.ide.refresh();

@@ -2294,7 +2294,7 @@ Three things that will waste your time:
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
-  392 assertions against 2970 for the whole project -- 9.2 s against 409 to 624 on this
+  392 assertions against 2971 for the whole project -- 9.2 s against 409 to 624 on this
   machine -- which is what makes iterating on an early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.
@@ -2480,7 +2480,7 @@ nothing is written at all.
 
 **The first harvest was the IDE, and the event marks are what it found.**
 `--profile` over `tests/ide` is 3.9 MB and **37,449 marks** in 354 s with the
-suite green (2818 assertions then; 2970 today) -- against 431 s for the ordinary runner run, so
+suite green (2818 assertions then; 2971 today) -- against 431 s for the ordinary runner run, so
 the writer's per-mark cost does not show at this size. 37,238 of those marks are
 `Event` and 211 are the runtime's (`Bintana`); **28,402 of them are one
 handler**, `PropGrid_Filter` -- the property grid's filter answering GTK for

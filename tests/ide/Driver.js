@@ -647,6 +647,7 @@ function* p_files(ide) {
     ide.closeAllTabs();
     yield;
     check("closing the last one brings it back", ide.Tabs.Count === 0 && ide.EmptyBox.Visible);
+    eq("and the tree no longer points at a file that is not open", ide.FileTree.Key, "");
     ide.FileTree.Key = "Child.js";
     yield;
     check("and opening a file takes it away again", ide.Tabs.Count > 0 && !ide.EmptyBox.Visible);
