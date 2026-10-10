@@ -131,7 +131,12 @@ add_library(quickjs STATIC
 )
 target_include_directories(quickjs PUBLIC ${CMAKE_SOURCE_DIR}/vendor/quickjs)
 target_compile_definitions(quickjs PRIVATE _GNU_SOURCE)
-target_compile_options(quickjs PRIVATE -w)
+# `-funsigned-char` is how QuickJS is meant to be built: upstream's CMake has
+# carried it since its first version, and Bellard's Makefile before that, so
+# the engine's byte handling is written for an unsigned `char`.  x86 defaults
+# to signed and ARM to unsigned, which without the flag made this one source
+# two programs on the two architectures.
+target_compile_options(quickjs PRIVATE -w -funsigned-char)
 # `libm` and pthread are POSIX: MinGW has neither, and QuickJS needs neither
 # there -- its Windows paths use the C runtime.  A `find_library` that fails
 # sets the variable to `M_LIB-NOTFOUND`, which is a configure error if it is

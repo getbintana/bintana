@@ -2679,6 +2679,43 @@ eight geometry assertions failed -- panes that did not grow on a resize, a hint
 that would not fit beside a call. Every one read as the profiler changing the
 layout; none had anything to do with it.
 
+## Profiling the interpreter: `perf`, and what is left
+
+`perf record` over `tests/bench --child <program>` against a `RelWithDebInfo`
+build is the profile of the engine (Sysprof's marks are the profile of a
+program). Four things measured with it, after the eleventh and twelfth patches:
+
+- **This machine is a hybrid CPU, so `perf` records two events.** Without
+  `-e cpu_core/cycles/u` the report shows `cpu_atom/cycles` first, and its 23
+  samples -- start-up, on an efficiency core -- put `do_lookup_x` in the
+  dynamic linker at 52 % of `sort`. It is nothing; the 9 000 samples on the
+  performance cores are 90 % `JS_CallInternal`. Read `# Samples:` before a
+  percentage.
+- **What is left is the interpreter and the value size, not a function to
+  fix.** `polynom` and `sort` are 90 % `JS_CallInternal`; `primes` is 27 %
+  `set_value`, which is a store into an 80 MB array of 16-byte `JSValue`s and
+  so a cache miss, not code; `btree` is object creation and property lookup
+  (`find_own_property`, `JS_SetPropertyInternal2`, the arena) -- QuickJS has no
+  inline caches, so every `this.left` is a hash lookup, and adding them is a
+  project rather than a patch.
+- **A global costs 5 to 10 % over a local, measured**: a call through a
+  top-level function 514 against 477 ms over 1e7, a top-level `const` 292
+  against 271, `new` of a top-level class no difference. Every Bintana program
+  is globals, and it is not worth changing.
+- **The debugger's per-opcode check shows in `perf annotate`** (`movq
+  0x500(%r12)` and a `testq` before each dispatch), and its cost is the number
+  in patch 4's note: 0 % on arithmetic, about 10 % on property reads. Taking
+  it out of the loop means a second dispatch table swapped in when a debugger
+  attaches -- worth a few points, and measured as noise on a loaded machine
+  (a browser tab at 99 % moved the whole bench from 30 to 39 s, with spreads
+  of 900 ms). **Check `uptime` before believing a bench run.**
+
+**And QuickJS is compiled with `-funsigned-char` now**, as upstream's CMake
+and Bellard's Makefile always did -- this tree passed `-w` alone, so the
+engine was built with a signed `char` on x86 and an unsigned one on ARM. No
+difference was found (the fork's tests are 0/118 both ways, and its byte
+handling reads `uint8_t`), which is why it is alignment and not a fix.
+
 ## Traps
 
 **This list is where the sentence from
