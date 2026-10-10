@@ -4906,7 +4906,7 @@ static JSValue decimalbox_get_limit(JSContext *ctx, JSValueConst this_val,
     int         scale;
 
     if (!held || !bta_decimal_from_text(held, &units, &scale))
-        return JS_ThrowInternalError(ctx, "this box lost its own limits");
+        return JS_ThrowPlainError(ctx, "this box lost its own limits");
 
     return bta_decimal_new(ctx, units, scale);
 }

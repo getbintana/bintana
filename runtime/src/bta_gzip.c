@@ -321,7 +321,7 @@ static JSValue gz_finish_memory(JSContext *ctx, GConverter *conv, char *why,
     JSValue r;
 
     if (why) {
-        r = JS_ThrowInternalError(ctx, "%s: %s", who, why);
+        r = JS_ThrowPlainError(ctx, "%s: %s", who, why);
         g_free(why);
     } else {
         r = bta_bytes_new(ctx, out->data, out->len);
@@ -467,7 +467,7 @@ static JSValue gz_file(JSContext *ctx, int argc, JSValueConst *argv,
 
     JSValue r;
     if (why) {
-        r = JS_ThrowInternalError(ctx, "%s: %s", who, why);
+        r = JS_ThrowPlainError(ctx, "%s: %s", who, why);
         g_free(why);
     } else {
         r = JS_NewFloat64(ctx, (double)written);

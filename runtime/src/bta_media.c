@@ -469,12 +469,12 @@ static BtaMedia *media_this(JSContext *ctx, JSValueConst this_val)
             return NULL;
         m = g_object_get_data(G_OBJECT(w->gtk), MEDIA_KEY);
         if (!m) {
-            JS_ThrowInternalError(ctx, "Video: no player behind this control");
+            JS_ThrowPlainError(ctx, "Video: no player behind this control");
             return NULL;
         }
     }
     if (m->dead) {
-        JS_ThrowInternalError(ctx, "%s: torn down", media_who(m));
+        JS_ThrowPlainError(ctx, "%s: torn down", media_who(m));
         return NULL;
     }
     return m;
@@ -942,7 +942,7 @@ static JSValue video_save(JSContext *ctx, JSValueConst this_val,
     JSValue       r     = JS_UNDEFINED;
 
     if (!image) {
-        r = JS_ThrowInternalError(ctx,
+        r = JS_ThrowPlainError(ctx,
             "Save: there is no frame yet -- nothing has been decoded");
         goto out;
     }
@@ -955,12 +955,12 @@ static JSValue video_save(JSContext *ctx, JSValueConst this_val,
         GskRenderer *ren = nat ? gtk_native_get_renderer(nat) : NULL;
 
         if (iw <= 0 || ih <= 0) {
-            r = JS_ThrowInternalError(ctx,
+            r = JS_ThrowPlainError(ctx,
                 "Save: there is no frame yet -- nothing has been decoded");
             goto out;
         }
         if (!ren) {
-            r = JS_ThrowInternalError(ctx,
+            r = JS_ThrowPlainError(ctx,
                 "Save: a frame that is not a texture can only be written from "
                 "a control in a window that is on screen");
             goto out;
@@ -977,12 +977,12 @@ static JSValue video_save(JSContext *ctx, JSValueConst this_val,
             gsk_render_node_unref(node);
         }
         if (!tex) {
-            r = JS_ThrowInternalError(ctx, "Save: the frame could not be drawn");
+            r = JS_ThrowPlainError(ctx, "Save: the frame could not be drawn");
             goto out;
         }
     }
     if (!gdk_texture_save_to_png(tex, path))
-        r = JS_ThrowInternalError(ctx, "Save: cannot write '%s'", path);
+        r = JS_ThrowPlainError(ctx, "Save: cannot write '%s'", path);
 
 out:
     if (tex)
@@ -1102,7 +1102,7 @@ static BtaMedia *audio_this(JSContext *ctx, JSValueConst this_val)
         return NULL;
     }
     if (m->dead) {
-        JS_ThrowInternalError(ctx, "AudioPlayer: torn down");
+        JS_ThrowPlainError(ctx, "AudioPlayer: torn down");
         return NULL;
     }
     return m;
@@ -1210,7 +1210,7 @@ static JSValue audioplayer_construct(JSContext *ctx, JSValueConst new_target,
 #ifndef BTA_HAVE_GST
     /* Nothing declarative depends on this one -- no .form builds a player --
      * so the refusal lands at the constructor, where sqlite's does. */
-    return JS_ThrowInternalError(ctx, MEDIA_NO_GST);
+    return JS_ThrowPlainError(ctx, MEDIA_NO_GST);
 #endif
     proto = JS_GetClassProto(ctx, audioplayer_class_id);
     obj = JS_NewObjectProtoClass(ctx, proto, audioplayer_class_id);
@@ -1598,7 +1598,7 @@ static bool engine_ensure(JSContext *ctx, BtaMedia *m)
     if (!pb)
         pb = gst_element_factory_make("playbin", NULL);
     if (!pb) {
-        JS_ThrowInternalError(ctx,
+        JS_ThrowPlainError(ctx,
             "no playbin3 element: this GStreamer installation cannot play "
             "anything, which means its base plugins are not installed");
         return false;
@@ -1610,7 +1610,7 @@ static bool engine_ensure(JSContext *ctx, BtaMedia *m)
 
         if (!sink) {
             g_object_unref(pb);
-            JS_ThrowInternalError(ctx,
+            JS_ThrowPlainError(ctx,
                 "no gtk4paintablesink element: a Video needs GStreamer's GTK4 "
                 "plugin, which ships in gst-plugins-rs -- sound alone needs no "
                 "window and no plugin beyond the base ones (see AudioPlayer)");
@@ -1627,7 +1627,7 @@ static bool engine_ensure(JSContext *ctx, BtaMedia *m)
         g_object_get(sink, "paintable", &paintable, NULL);
         if (!paintable) {
             g_object_unref(pb);
-            JS_ThrowInternalError(ctx, "the video sink produced no paintable");
+            JS_ThrowPlainError(ctx, "the video sink produced no paintable");
             return false;
         }
         gtk_picture_set_paintable(GTK_PICTURE(m->picture), paintable);
@@ -1701,7 +1701,7 @@ static bool engine_seek(JSContext *ctx, BtaMedia *m, double seconds)
     }
     if (!gst_element_seek_simple(m->playbin, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH,
                                  (gint64)(seconds * GST_SECOND))) {
-        JS_ThrowInternalError(ctx, "Seek: the seek failed");
+        JS_ThrowPlainError(ctx, "Seek: the seek failed");
         return false;
     }
     return true;
@@ -1786,14 +1786,14 @@ static void engine_teardown(BtaMedia *m)
 static bool engine_start(JSContext *ctx, BtaMedia *m)
 {
     (void)m;
-    JS_ThrowInternalError(ctx, MEDIA_NO_GST);
+    JS_ThrowPlainError(ctx, MEDIA_NO_GST);
     return false;
 }
 
 static bool engine_seek(JSContext *ctx, BtaMedia *m, double seconds)
 {
     (void)m; (void)seconds;
-    JS_ThrowInternalError(ctx, MEDIA_NO_GST);
+    JS_ThrowPlainError(ctx, MEDIA_NO_GST);
     return false;
 }
 

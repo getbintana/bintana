@@ -354,8 +354,8 @@ static void on_begin_print(GtkPrintOperation *op, GtkPrintContext *context,
     JS_FreeValue(ctx, answer);
 
     if (threw) {
-        JS_ThrowInternalError(ctx, "the Paginate handler threw: nothing was "
-                                   "printed past the error above");
+        JS_ThrowPlainError(ctx, "the Paginate handler threw: nothing was "
+                                "printed past the error above");
         print_fail(run);
         return;
     }
@@ -503,8 +503,8 @@ static void on_print_done(GtkPrintOperation *op, GtkPrintOperationResult result,
         /* Raised and then dumped, which is how every handler's error is
          * reported here: `Application.OnError` sees it, and there is no caller
          * left to throw at. */
-        JS_ThrowInternalError(ctx, "%s: %s", run->who,
-                              err ? err->message : "the printer refused");
+        JS_ThrowPlainError(ctx, "%s: %s", run->who,
+                           err ? err->message : "the printer refused");
         bta_dump_error(ctx);
         g_clear_error(&err);
     } else if (result == GTK_PRINT_OPERATION_RESULT_APPLY && run->ok) {
@@ -749,8 +749,8 @@ static JSValue printer_to_file(JSContext *ctx, JSValueConst this_val,
         g_unlink(path);
         answer = JS_EXCEPTION;
     } else if (result == GTK_PRINT_OPERATION_RESULT_ERROR) {
-        JS_ThrowInternalError(ctx, "Printer.ToFile: %s",
-                              err ? err->message : "the file could not be written");
+        JS_ThrowPlainError(ctx, "Printer.ToFile: %s",
+                           err ? err->message : "the file could not be written");
         g_clear_error(&err);
         g_unlink(path);
         answer = JS_EXCEPTION;

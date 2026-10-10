@@ -2196,9 +2196,9 @@ static bool paint_frame_page(BtaWidget *w, cairo_t *cr, int width, int height,
      * exporter needs is something to fail *with*, and the on-screen draw
      * function throws this away -- see `on_draw`. */
     if (!ok)
-        JS_ThrowInternalError(ctx, "the %s handler threw: nothing was drawn "
-                                   "past the error above",
-                              onpaper ? "DrawPage" : "Draw");
+        JS_ThrowPlainError(ctx, "the %s handler threw: nothing was drawn "
+                                "past the error above",
+                           onpaper ? "DrawPage" : "Draw");
     return ok;
 }
 
@@ -2411,8 +2411,8 @@ static bool png_write(JSContext *ctx, const char *who, cairo_surface_t *surface,
     cairo_status_t status = cairo_surface_write_to_png(surface, path);
 
     if (status != CAIRO_STATUS_SUCCESS) {
-        JS_ThrowInternalError(ctx, "%s: cannot write '%s': %s",
-                              who, path, cairo_status_to_string(status));
+        JS_ThrowPlainError(ctx, "%s: cannot write '%s': %s",
+                           who, path, cairo_status_to_string(status));
         return false;
     }
     return true;
@@ -2459,8 +2459,8 @@ static JSValue png_bytes(JSContext *ctx, const char *who, cairo_surface_t *surfa
 
     if (status != CAIRO_STATUS_SUCCESS) {
         g_byte_array_unref(out);
-        return JS_ThrowInternalError(ctx, "%s: %s", who,
-                                     cairo_status_to_string(status));
+        return JS_ThrowPlainError(ctx, "%s: %s", who,
+                                  cairo_status_to_string(status));
     }
 
     JSValue bytes = bta_bytes_new(ctx, out->data, out->len);
@@ -2554,8 +2554,8 @@ static bool pdf_write(JSContext *ctx, const char *who, const char *path,
     cairo_status_t   status  = cairo_surface_status(surface);
 
     if (status != CAIRO_STATUS_SUCCESS) {
-        JS_ThrowInternalError(ctx, "%s: cannot write '%s': %s",
-                              who, path, cairo_status_to_string(status));
+        JS_ThrowPlainError(ctx, "%s: cannot write '%s': %s",
+                           who, path, cairo_status_to_string(status));
         cairo_surface_destroy(surface);
         return false;
     }
@@ -2601,8 +2601,8 @@ static bool pdf_write(JSContext *ctx, const char *who, const char *path,
         return false;
     }
     if (status != CAIRO_STATUS_SUCCESS) {
-        JS_ThrowInternalError(ctx, "%s: cannot write '%s': %s",
-                              who, path, cairo_status_to_string(status));
+        JS_ThrowPlainError(ctx, "%s: cannot write '%s': %s",
+                           who, path, cairo_status_to_string(status));
         return false;
     }
     return true;

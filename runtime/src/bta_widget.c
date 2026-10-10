@@ -7530,7 +7530,7 @@ bool bta_container_attach(JSContext *ctx, BtaWidget *parent, BtaWidget *child)
         gtk_stack_add_child(GTK_STACK(slot), child->gtk);
         bta_switcher_page_added(slot, child->gtk);
     } else {
-        JS_ThrowInternalError(ctx, "unsupported container slot");
+        JS_ThrowPlainError(ctx, "unsupported container slot");
         return false;
     }
 
@@ -7685,7 +7685,7 @@ bool bta_container_detach(JSContext *ctx, BtaWidget *child)
     else if (GTK_IS_FRAME(slot))
         gtk_widget_unparent(child->gtk);
     else {
-        JS_ThrowInternalError(ctx, "cannot remove from this container");
+        JS_ThrowPlainError(ctx, "cannot remove from this container");
         return false;
     }
 
@@ -8398,7 +8398,7 @@ static JSValue bta_ctor(JSContext *ctx, JSValueConst new_target,
     cls->build(w);
     if (!w->gtk) {
         JS_FreeValue(ctx, obj);
-        return JS_ThrowInternalError(ctx, "%s: build produced no widget", cls->name);
+        return JS_ThrowPlainError(ctx, "%s: build produced no widget", cls->name);
     }
     if (!w->inner)
         w->inner = w->gtk;
@@ -8574,7 +8574,7 @@ JSValue bta_widget_new(JSContext *ctx, const char *type)
     }
 
     if (JS_IsUndefined(cls->ctor))
-        return JS_ThrowInternalError(ctx, "widget class '%s' not initialised", type);
+        return JS_ThrowPlainError(ctx, "widget class '%s' not initialised", type);
     return JS_CallConstructor(ctx, cls->ctor, 0, NULL);
 }
 

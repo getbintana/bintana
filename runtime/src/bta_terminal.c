@@ -147,7 +147,7 @@ static JSValue term_signal(JSContext *ctx, JSValueConst this_val,
     /* A verb, and the verbs refuse: a build with no pty has no child to end,
      * and answering `false` would say *there was none running* about a runtime
      * where there can never be one. */
-    return JS_ThrowInternalError(ctx, TERM_NO_VTE);
+    return JS_ThrowPlainError(ctx, TERM_NO_VTE);
 #endif
 }
 
@@ -719,7 +719,7 @@ static void term_build(BtaWidget *w)
 static bool term_spawn(JSContext *ctx, BtaWidget *w, char **argv, const char *cwd)
 {
     (void)w; (void)argv; (void)cwd;
-    JS_ThrowInternalError(ctx, TERM_NO_VTE);
+    JS_ThrowPlainError(ctx, TERM_NO_VTE);
     return false;
 }
 

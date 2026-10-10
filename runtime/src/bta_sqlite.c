@@ -191,14 +191,14 @@ static JSValue throw_sqlite(JSContext *ctx, BtaConn *c, const char *what,
     const char *said = sqlite3_errmsg(c->db);
 
     if (!sql)
-        return JS_ThrowInternalError(ctx, "%s: %s", what, said);
+        return JS_ThrowPlainError(ctx, "%s: %s", what, said);
 
     char cut[161];
     g_strlcpy(cut, sql, sizeof cut);
     if (strlen(sql) >= sizeof cut)
         g_strlcpy(cut + sizeof cut - 4, "...", 4);
 
-    return JS_ThrowInternalError(ctx, "%s: %s -- in: %s", what, said, cut);
+    return JS_ThrowPlainError(ctx, "%s: %s -- in: %s", what, said, cut);
 }
 
 /* ------------------------------------------------- decimals, inside sqlite */
@@ -467,8 +467,8 @@ static bool bind_ok(JSContext *ctx, sqlite3_stmt *st, int rc, int at)
 {
     if (rc == SQLITE_OK)
         return true;
-    JS_ThrowInternalError(ctx, "cannot bind parameter %d: %s", at,
-                          sqlite3_errmsg(sqlite3_db_handle(st)));
+    JS_ThrowPlainError(ctx, "cannot bind parameter %d: %s", at,
+                       sqlite3_errmsg(sqlite3_db_handle(st)));
     return false;
 }
 
@@ -856,8 +856,8 @@ static JSValue conn_script(JSContext *ctx, JSValueConst this_val,
     int   rc   = sqlite3_exec(c->db, sql, NULL, NULL, &said);
 
     if (rc != SQLITE_OK) {
-        JSValue e = JS_ThrowInternalError(ctx, "cannot run the script: %s",
-                                          said ? said : sqlite3_errmsg(c->db));
+        JSValue e = JS_ThrowPlainError(ctx, "cannot run the script: %s",
+                                       said ? said : sqlite3_errmsg(c->db));
         sqlite3_free(said);
         JS_FreeCString(ctx, sql);
         return e;
@@ -1131,9 +1131,9 @@ static JSValue database_sqlite(JSContext *ctx, JSValueConst this_val,
                              SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL);
 
     if (rc != SQLITE_OK) {
-        JSValue e = JS_ThrowInternalError(ctx, "cannot open %s: %s", path,
-                                          db ? sqlite3_errmsg(db)
-                                             : sqlite3_errstr(rc));
+        JSValue e = JS_ThrowPlainError(ctx, "cannot open %s: %s", path,
+                                       db ? sqlite3_errmsg(db)
+                                          : sqlite3_errstr(rc));
         sqlite3_close(db);
         JS_FreeCString(ctx, path);
         return e;
@@ -1259,7 +1259,7 @@ void bta_sqlite_init(JSContext *ctx, JSValue global)
 static JSValue database_sqlite(JSContext *ctx, JSValueConst this_val,
                                int argc, JSValueConst *argv)
 {
-    return JS_ThrowInternalError(ctx,
+    return JS_ThrowPlainError(ctx,
         "this runtime was built without sqlite, so there is no database to "
         "open. Install sqlite3's development package and build again -- CMake "
         "finds it with pkg-config and prints which it found");

@@ -269,7 +269,7 @@ void bta_keyring_cleanup(void)
 
 static JSValue keyring_unavailable(JSContext *ctx, const char *who)
 {
-    return JS_ThrowInternalError(ctx,
+    return JS_ThrowPlainError(ctx,
         "%s: this runtime was built without libsecret, so there is no keyring "
         "to ask. Install libsecret's development package and build again -- "
         "CMake finds it with pkg-config and prints which it found", who);

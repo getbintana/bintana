@@ -99,8 +99,8 @@ static JSValue sys_file_load(JSContext *ctx, JSValueConst this_val,
     GError *err  = NULL;
 
     if (!g_file_get_contents(path, &data, &len, &err)) {
-        JSValue e = JS_ThrowInternalError(ctx, "cannot read %s: %s", path,
-                                          err ? err->message : "unknown error");
+        JSValue e = JS_ThrowPlainError(ctx, "cannot read %s: %s", path,
+                                       err ? err->message : "unknown error");
         g_clear_error(&err);
         JS_FreeCString(ctx, path);
         return e;
@@ -145,8 +145,8 @@ static JSValue sys_file_save(JSContext *ctx, JSValueConst this_val,
 
     JS_FreeCString(ctx, text);
     if (!ok) {
-        JSValue e = JS_ThrowInternalError(ctx, "cannot write %s: %s", path,
-                                          err ? err->message : "unknown error");
+        JSValue e = JS_ThrowPlainError(ctx, "cannot write %s: %s", path,
+                                       err ? err->message : "unknown error");
         g_clear_error(&err);
         JS_FreeCString(ctx, path);
         return e;
@@ -196,18 +196,18 @@ static JSValue sys_file_append(JSContext *ctx, JSValueConst this_val,
     JSValue           e     = JS_UNDEFINED;
 
     if (!out) {
-        e = JS_ThrowInternalError(ctx, "cannot append to %s: %s", path,
-                                  error ? error->message : "unknown error");
+        e = JS_ThrowPlainError(ctx, "cannot append to %s: %s", path,
+                               error ? error->message : "unknown error");
     } else {
         gsize written = 0;
 
         if (!g_output_stream_write_all(G_OUTPUT_STREAM(out), text, len,
                                        &written, NULL, &error))
-            e = JS_ThrowInternalError(ctx, "cannot write %s: %s", path,
-                                      error ? error->message : "unknown error");
+            e = JS_ThrowPlainError(ctx, "cannot write %s: %s", path,
+                                   error ? error->message : "unknown error");
         else if (!g_output_stream_close(G_OUTPUT_STREAM(out), NULL, &error))
-            e = JS_ThrowInternalError(ctx, "cannot close %s: %s", path,
-                                      error ? error->message : "unknown error");
+            e = JS_ThrowPlainError(ctx, "cannot close %s: %s", path,
+                                   error ? error->message : "unknown error");
         g_object_unref(out);
     }
 
@@ -467,9 +467,9 @@ static JSValue sys_file_rename(JSContext *ctx, JSValueConst this_val,
     /* Refuse to clobber: renaming over an existing file loses it silently. */
     JSValue e = JS_UNDEFINED;
     if (g_file_test(to, G_FILE_TEST_EXISTS))
-        e = JS_ThrowInternalError(ctx, "%s already exists", to);
+        e = JS_ThrowPlainError(ctx, "%s already exists", to);
     else if (g_rename(from, to) != 0)
-        e = JS_ThrowInternalError(ctx, "cannot rename %s to %s", from, to);
+        e = JS_ThrowPlainError(ctx, "cannot rename %s to %s", from, to);
 
     JS_FreeCString(ctx, from);
     JS_FreeCString(ctx, to);
@@ -505,15 +505,15 @@ static JSValue sys_file_copy(JSContext *ctx, JSValueConst this_val,
 
     JSValue e = JS_UNDEFINED;
     if (g_file_test(to, G_FILE_TEST_EXISTS)) {
-        e = JS_ThrowInternalError(ctx, "%s already exists", to);
+        e = JS_ThrowPlainError(ctx, "%s already exists", to);
     } else {
         GFile  *src = g_file_new_for_path(from);
         GFile  *dst = g_file_new_for_path(to);
         GError *error = NULL;
 
         if (!g_file_copy(src, dst, G_FILE_COPY_NONE, NULL, NULL, NULL, &error))
-            e = JS_ThrowInternalError(ctx, "cannot copy %s to %s: %s", from, to,
-                                      error ? error->message : "unknown error");
+            e = JS_ThrowPlainError(ctx, "cannot copy %s to %s: %s", from, to,
+                                   error ? error->message : "unknown error");
         g_clear_error(&error);
         g_object_unref(src);
         g_object_unref(dst);
@@ -661,7 +661,7 @@ static JSValue sys_file_open(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "File.Open(path) needs a path");
 
     if (!g_file_test(path, G_FILE_TEST_EXISTS)) {
-        JSValue e = JS_ThrowInternalError(ctx, "there is no %s to open", path);
+        JSValue e = JS_ThrowPlainError(ctx, "there is no %s to open", path);
         JS_FreeCString(ctx, path);
         return e;
     }
@@ -842,8 +842,8 @@ static JSValue sys_file_watch(JSContext *ctx, JSValueConst this_val,
     g_object_unref(file);
 
     if (!monitor) {
-        JSValue e = JS_ThrowInternalError(ctx, "cannot watch %s: %s", path,
-                                          error ? error->message : "unknown error");
+        JSValue e = JS_ThrowPlainError(ctx, "cannot watch %s: %s", path,
+                                       error ? error->message : "unknown error");
         g_clear_error(&error);
         JS_FreeCString(ctx, path);
         return e;
@@ -882,7 +882,7 @@ static JSValue sys_file_delete(JSContext *ctx, JSValueConst this_val,
 
     bool ok = g_remove(path) == 0;
     JSValue e = ok ? JS_UNDEFINED
-                   : JS_ThrowInternalError(ctx, "cannot delete %s", path);
+                   : JS_ThrowPlainError(ctx, "cannot delete %s", path);
     JS_FreeCString(ctx, path);
     return e;
 }
@@ -919,8 +919,8 @@ static JSValue sys_file_trash(JSContext *ctx, JSValueConst this_val,
     JSValue e     = JS_UNDEFINED;
 
     if (!g_file_trash(file, NULL, &error))
-        e = JS_ThrowInternalError(ctx, "cannot trash %s: %s", path,
-                                  error ? error->message : "unknown error");
+        e = JS_ThrowPlainError(ctx, "cannot trash %s: %s", path,
+                               error ? error->message : "unknown error");
 
     g_clear_error(&error);
     g_object_unref(file);
@@ -998,15 +998,15 @@ static JSValue sys_dir_copy(JSContext *ctx, JSValueConst this_val,
     if (g_file_test(to, G_FILE_TEST_EXISTS)) {
         /* The same refusal `File.Copy` makes, and for more reason: merging a
          * tree into an existing one is a different operation nobody asked for. */
-        e = JS_ThrowInternalError(ctx, "%s already exists", to);
+        e = JS_ThrowPlainError(ctx, "%s already exists", to);
     } else {
         GFile  *src   = g_file_new_for_path(from);
         GFile  *dst   = g_file_new_for_path(to);
         GError *error = NULL;
 
         if (!copy_tree(src, dst, &error))
-            e = JS_ThrowInternalError(ctx, "cannot copy %s to %s: %s", from, to,
-                                      error ? error->message : "unknown error");
+            e = JS_ThrowPlainError(ctx, "cannot copy %s to %s: %s", from, to,
+                                   error ? error->message : "unknown error");
         g_clear_error(&error);
         g_object_unref(src);
         g_object_unref(dst);
@@ -1067,8 +1067,8 @@ static JSValue sys_dir_delete(JSContext *ctx, JSValueConst this_val,
 
     bool    ok = g_rmdir(path) == 0;
     JSValue e  = ok ? JS_UNDEFINED
-                    : JS_ThrowInternalError(ctx, "cannot delete %s: %s", path,
-                                            g_strerror(errno));
+                    : JS_ThrowPlainError(ctx, "cannot delete %s: %s", path,
+                                         g_strerror(errno));
     JS_FreeCString(ctx, path);
     return e;
 }
@@ -1084,14 +1084,14 @@ static JSValue sys_dir_delete_tree(JSContext *ctx, JSValueConst this_val,
     if (!g_file_test(path, G_FILE_TEST_IS_DIR)) {
         /* A file handed to a recursive delete is a path that was computed
          * wrong, and taking it would be doing the wrong thing quietly. */
-        e = JS_ThrowInternalError(ctx, "%s is not a folder", path);
+        e = JS_ThrowPlainError(ctx, "%s is not a folder", path);
     } else {
         GFile  *dir   = g_file_new_for_path(path);
         GError *error = NULL;
 
         if (!delete_tree(dir, &error))
-            e = JS_ThrowInternalError(ctx, "cannot delete %s: %s", path,
-                                      error ? error->message : "unknown error");
+            e = JS_ThrowPlainError(ctx, "cannot delete %s: %s", path,
+                                   error ? error->message : "unknown error");
         g_clear_error(&error);
         g_object_unref(dir);
     }
@@ -1115,8 +1115,8 @@ static JSValue sys_dir_list(JSContext *ctx, JSValueConst this_val,
     GError *err = NULL;
     GDir   *dir = g_dir_open(path, 0, &err);
     if (!dir) {
-        JSValue e = JS_ThrowInternalError(ctx, "cannot list %s: %s", path,
-                                          err ? err->message : "unknown error");
+        JSValue e = JS_ThrowPlainError(ctx, "cannot list %s: %s", path,
+                                       err ? err->message : "unknown error");
         g_clear_error(&err);
         JS_FreeCString(ctx, path);
         JS_FreeCString(ctx, pattern);
@@ -1157,7 +1157,7 @@ static JSValue sys_dir_make(JSContext *ctx, JSValueConst this_val,
 
     bool    ok = g_mkdir_with_parents(path, 0755) == 0;
     JSValue e  = ok ? JS_UNDEFINED
-                    : JS_ThrowInternalError(ctx, "cannot create %s", path);
+                    : JS_ThrowPlainError(ctx, "cannot create %s", path);
     JS_FreeCString(ctx, path);
     return e;
 }
@@ -1249,8 +1249,8 @@ static JSValue sys_dir_walk(JSContext *ctx, JSValueConst this_val,
     }
 
     if (!g_file_test(path, G_FILE_TEST_IS_DIR)) {
-        JSValue e = JS_ThrowInternalError(ctx, "cannot list %s: not a directory",
-                                          path);
+        JSValue e = JS_ThrowPlainError(ctx, "cannot list %s: not a directory",
+                                       path);
         JS_FreeCString(ctx, path);
         JS_FreeCString(ctx, pattern);
         return e;
@@ -2125,7 +2125,7 @@ static int exec_control_fd(JSContext *ctx, JSValueConst opts,
     JS_FreeValue(ctx, cb);
 
 #ifdef G_OS_WIN32
-    JS_ThrowInternalError(ctx,
+    JS_ThrowPlainError(ctx,
         "Exec: Control needs a descriptor a child inherits, which this platform has not got");
     return -2;
 #else
@@ -2138,8 +2138,8 @@ static int exec_control_fd(JSContext *ctx, JSValueConst opts,
      * about what failure looks like.
      */
     if (pipe(ends) != 0) {
-        JS_ThrowInternalError(ctx, "Exec: Control could not be opened: %s",
-                              g_strerror(errno));
+        JS_ThrowPlainError(ctx, "Exec: Control could not be opened: %s",
+                           g_strerror(errno));
         return -2;
     }
 
@@ -2223,8 +2223,8 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
     g_ptr_array_unref(args);
 
     if (!proc) {
-        JSValue e = JS_ThrowInternalError(ctx, "Exec failed: %s",
-                                          err ? err->message : "unknown error");
+        JSValue e = JS_ThrowPlainError(ctx, "Exec failed: %s",
+                                       err ? err->message : "unknown error");
         g_clear_error(&err);
         if (ctl_fd >= 0)
             close(ctl_fd);
@@ -2535,8 +2535,8 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
     g_ptr_array_unref(args);
 
     if (!proc) {
-        JSValue e = JS_ThrowInternalError(ctx, "Exec.Wait failed: %s",
-                                          err ? err->message : "unknown error");
+        JSValue e = JS_ThrowPlainError(ctx, "Exec.Wait failed: %s",
+                                       err ? err->message : "unknown error");
         g_clear_error(&err);
         g_clear_pointer(&input, g_bytes_unref);
         g_main_context_pop_thread_default(priv);
@@ -2604,8 +2604,8 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
     GBytes *out = w.out, *errs = w.errs;
 
     if (w.err) {
-        JSValue e = JS_ThrowInternalError(ctx, "Exec.Wait failed: %s",
-                                          w.err->message);
+        JSValue e = JS_ThrowPlainError(ctx, "Exec.Wait failed: %s",
+                                       w.err->message);
         g_clear_error(&w.err);
         g_clear_pointer(&out, g_bytes_unref);
         g_clear_pointer(&errs, g_bytes_unref);
@@ -2821,8 +2821,8 @@ static JSValue env_cwd_set(JSContext *ctx, JSValueConst this_val, JSValueConst v
      * later, in whatever tried to read a file. */
     int rc = g_chdir(path);
     if (rc != 0) {
-        JSValue e = JS_ThrowInternalError(ctx, "cannot enter %s: %s",
-                                          path, g_strerror(errno));
+        JSValue e = JS_ThrowPlainError(ctx, "cannot enter %s: %s",
+                                       path, g_strerror(errno));
         JS_FreeCString(ctx, path);
         return e;
     }
@@ -3134,7 +3134,7 @@ static JSValue sys_clip_paste(JSContext *ctx, JSValueConst this_val,
 
     GdkClipboard *clip = clipboard_of();
     if (!clip)
-        return JS_ThrowInternalError(ctx, "no display, no clipboard");
+        return JS_ThrowPlainError(ctx, "no display, no clipboard");
 
     PasteJob *job = g_new0(PasteJob, 1);
     job->ctx    = ctx;
@@ -3223,7 +3223,7 @@ static JSValue sys_clip_paste_image(JSContext *ctx, JSValueConst this_val,
 
     GdkClipboard *clip = clipboard_of();
     if (!clip)
-        return JS_ThrowInternalError(ctx, "no display, no clipboard");
+        return JS_ThrowPlainError(ctx, "no display, no clipboard");
 
     PasteJob *job = g_new0(PasteJob, 1);
     job->ctx    = ctx;
@@ -3669,8 +3669,8 @@ static JSValue sys_file_load_bytes(JSContext *ctx, JSValueConst this_val,
     GError *err  = NULL;
 
     if (!g_file_get_contents(path, &data, &len, &err)) {
-        JSValue e = JS_ThrowInternalError(ctx, "cannot read %s: %s", path,
-                                          err ? err->message : "unknown error");
+        JSValue e = JS_ThrowPlainError(ctx, "cannot read %s: %s", path,
+                                       err ? err->message : "unknown error");
         g_clear_error(&err);
         JS_FreeCString(ctx, path);
         return e;
@@ -3705,8 +3705,8 @@ static JSValue sys_file_save_bytes(JSContext *ctx, JSValueConst this_val,
     bool    ok  = g_file_set_contents(path, (const char *)bytes, (gssize)len, &err);
 
     if (!ok) {
-        JSValue e = JS_ThrowInternalError(ctx, "cannot write %s: %s", path,
-                                          err ? err->message : "unknown error");
+        JSValue e = JS_ThrowPlainError(ctx, "cannot write %s: %s", path,
+                                       err ? err->message : "unknown error");
         g_clear_error(&err);
         JS_FreeCString(ctx, path);
         return e;
@@ -4054,8 +4054,8 @@ static JSValue sys_file_hash(JSContext *ctx, JSValueConst this_val,
 
     FILE *f = g_fopen(path, "rb");
     if (!f) {
-        JSValue e = JS_ThrowInternalError(ctx, "File.Hash: cannot read '%s': %s",
-                                          path, g_strerror(errno));
+        JSValue e = JS_ThrowPlainError(ctx, "File.Hash: cannot read '%s': %s",
+                                       path, g_strerror(errno));
         JS_FreeCString(ctx, path);
         return e;
     }
@@ -4071,8 +4071,8 @@ static JSValue sys_file_hash(JSContext *ctx, JSValueConst this_val,
     fclose(f);
 
     if (failed) {
-        JSValue e = JS_ThrowInternalError(ctx, "File.Hash: cannot read '%s': %s",
-                                          path, g_strerror(errno));
+        JSValue e = JS_ThrowPlainError(ctx, "File.Hash: cannot read '%s': %s",
+                                       path, g_strerror(errno));
         g_checksum_free(sum);
         JS_FreeCString(ctx, path);
         return e;

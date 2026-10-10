@@ -413,8 +413,8 @@ static JSValue xml_doc_dump(JSContext *ctx, xmlDocPtr doc)
 
     xmlDocDumpFormatMemoryEnc(doc, &mem, &size, "UTF-8", 1);
     if (!mem)
-        return JS_ThrowInternalError(ctx, "Xml.Stringify: the document could "
-                                          "not be written");
+        return JS_ThrowPlainError(ctx, "Xml.Stringify: the document could "
+                                       "not be written");
 
     JSValue out;
     if (size > 0 && mem[size - 1] == '\n') {
@@ -1002,8 +1002,8 @@ static JSValue xml_node_set_attr_ns(JSContext *ctx, JSValueConst this_val,
     JS_FreeCString(ctx, name);
     JS_FreeCString(ctx, v);
     if (!made)
-        return JS_ThrowInternalError(ctx, "SetAttrNS: libxml2 could not set "
-                                          "the attribute");
+        return JS_ThrowPlainError(ctx, "SetAttrNS: libxml2 could not set "
+                                       "the attribute");
     return JS_UNDEFINED;
 }
 
@@ -1424,8 +1424,8 @@ static JSValue xml_node_declare_namespace(JSContext *ctx, JSValueConst this_val,
                                        "mean", prefix,
                                   there->href ? (const char *)there->href : "");
         } else if (!xmlNewNs(n->node, BAD_CAST uri, BAD_CAST prefix)) {
-            r = JS_ThrowInternalError(ctx, "DeclareNamespace: libxml2 refused the "
-                                           "declaration");
+            r = JS_ThrowPlainError(ctx, "DeclareNamespace: libxml2 refused the "
+                                        "declaration");
         }
     }
     JS_FreeCString(ctx, uri);
@@ -1809,8 +1809,8 @@ static JSValue xml_schema(JSContext *ctx, JSValueConst this_val,
         g_ptr_array_free(problems, TRUE);
         if (ours)
             xmlFreeDoc(doc);
-        return JS_ThrowInternalError(ctx, "Xml.Schema: libxml2 could not make a "
-                                          "schema parser");
+        return JS_ThrowPlainError(ctx, "Xml.Schema: libxml2 could not make a "
+                                       "schema parser");
     }
     xmlSchemaSetParserStructuredErrors(pctxt, xml_collect_problem, problems);
     xmlSchemaPtr schema = xmlSchemaParse(pctxt);
@@ -1893,8 +1893,8 @@ static JSValue xml_schema_validate(JSContext *ctx, JSValueConst this_val,
 
     if (!vctxt) {
         g_ptr_array_free(problems, TRUE);
-        return JS_ThrowInternalError(ctx, "Validate: libxml2 could not make a "
-                                          "validator");
+        return JS_ThrowPlainError(ctx, "Validate: libxml2 could not make a "
+                                       "validator");
     }
     xmlSchemaSetValidStructuredErrors(vctxt, xml_collect_problem, problems);
 
@@ -1907,7 +1907,7 @@ static JSValue xml_schema_validate(JSContext *ctx, JSValueConst this_val,
         const char *why = problems->len
                         ? ((BtaXmlProblem *)g_ptr_array_index(problems, 0))->message
                         : "the schema validator could not run";
-        JSValue e = JS_ThrowInternalError(ctx, "Validate: %s", why);
+        JSValue e = JS_ThrowPlainError(ctx, "Validate: %s", why);
 
         g_ptr_array_free(problems, TRUE);
         return e;
@@ -1944,7 +1944,7 @@ static const JSCFunctionListEntry xml_schema_props[] = {
 
 static JSValue xml_missing(JSContext *ctx, const char *what)
 {
-    return JS_ThrowInternalError(ctx,
+    return JS_ThrowPlainError(ctx,
         "this runtime was built without libxml2, so Xml.%s cannot read XML. "
         "Install libxml2's development package and build again -- CMake finds "
         "it with pkg-config and prints which it found", what);

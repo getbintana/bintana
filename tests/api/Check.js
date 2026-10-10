@@ -795,6 +795,25 @@ function checkLinks(root, problems) {
     return { links, pages: files.length };
 }
 
+/*
+ * **A refusal a program can catch is never an `InternalError`.** Upstream
+ * QuickJS made that class uncatchable from JavaScript (quickjs-ng `db0fe52`),
+ * because it means the engine is in a state nobody should carry on from -- and
+ * the runtime used to throw one 122 times for ordinary failures: `File.Load`'s
+ * *cannot read*, a refused Zip, a database that would not open. Under that
+ * engine every `try { File.Load(p) } catch` stops catching, and nothing fails
+ * to build. `JS_ThrowPlainError` is the spelling, or a `TypeError` or
+ * `RangeError` where that is what the refusal is.
+ */
+function uncatchable(root, path, src, problems) {
+    if (!src.includes("JS_ThrowInternalError")) return;
+    src.split("\n").forEach((line, i) => {
+        if (line.includes("JS_ThrowInternalError"))
+            problems.push(`${relative(root, path)}:${i + 1}: JS_ThrowInternalError ` +
+                          `is a throw JavaScript cannot catch -- JS_ThrowPlainError`);
+    });
+}
+
 function Main() {
     const root = Application.Arguments[0] || File.Directory(Application.Directory);
     const problems = [];
@@ -828,6 +847,7 @@ function Main() {
             const n = Number(e.Group(2));
             events[e.Group(1)] = Math.max(events[e.Group(1)] || 0, n);
         }
+        uncatchable(root, c, src, problems);
     }
     for (const name in HELPER_EVENTS)
         events[name] = Math.max(events[name] || 0, HELPER_EVENTS[name]);

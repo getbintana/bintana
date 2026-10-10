@@ -324,7 +324,7 @@ static int build_one(JSContext *ctx, JSValueConst form_obj,
     BtaWidget *w = bta_widget_of(obj);
     if (!w) {
         JS_FreeValue(ctx, obj);
-        JS_ThrowInternalError(ctx, "form: '%s' did not produce a widget", type);
+        JS_ThrowPlainError(ctx, "form: '%s' did not produce a widget", type);
         goto out;
     }
 
@@ -668,8 +668,8 @@ static int form_build(JSContext *ctx, JSValueConst form_obj,
         return 0;
 
     if (!found->path) {
-        JS_ThrowInternalError(ctx, "more than one %s.form in the project",
-                              class_name);
+        JS_ThrowPlainError(ctx, "more than one %s.form in the project",
+                           class_name);
         return -1;
     }
     char *path = g_strdup(found->path);
@@ -677,7 +677,7 @@ static int form_build(JSContext *ctx, JSValueConst form_obj,
     size_t len;
     char  *src = bta_read_file(path, &len);
     if (!src) {
-        JS_ThrowInternalError(ctx, "cannot read %s", path);
+        JS_ThrowPlainError(ctx, "cannot read %s", path);
         g_free(path);
         return -1;
     }
@@ -695,7 +695,7 @@ static int form_build(JSContext *ctx, JSValueConst form_obj,
     bool held = false;
     BtaWidget *w = bta_widget_of(form_obj);
     if (!w) {
-        JS_ThrowInternalError(ctx, "%s: not a form", class_name);
+        JS_ThrowPlainError(ctx, "%s: not a form", class_name);
         goto out;
     }
 

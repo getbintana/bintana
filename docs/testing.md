@@ -1,7 +1,7 @@
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 8610 assertions
+./tests/run.sh                          # all seven projects, 8630 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -219,7 +219,7 @@ own says so with `reportsItself`.
 
 `tests/widgets` is 195 tests listed in `TESTS`, and a filter there **selects** rather
 than running a prefix — `./tests/run.sh widgets record` is 142 assertions
-against 4911 in about twenty. It can select because these tests are
+against 4912 in about twenty. It can select because these tests are
 independent: each builds the controls it needs and deletes them again. The two that
 are not say so in the file:
 
@@ -349,8 +349,10 @@ what each of them can see:
   runtime are. It parses the `JSCFunctionListEntry` tables and every `bta_emit`
   call, and fails when a member has no signature or no description beside it,
   when an event's comment disagrees with the arity it is raised with, when a
-  library's events do not match the code that raises them, or when a link in
-  the Markdown that stayed points at a file that is gone.
+  library's events do not match the code that raises them, when the C throws
+  a `JS_ThrowInternalError` (a class the engine makes uncatchable, so a refusal
+  in it is one no program can handle), or when a link in the Markdown that
+  stayed points at a file that is gone.
 - **`api.json` is the contract between the two halves**: every widget class
   with what it declares and from which class, every global with public members,
   the types no global holds, and the libraries' classes with their events. It
@@ -372,12 +374,12 @@ what each of them can see:
 
 It parses rather than links, so it answers when the runtime does not build,
 which is the same bargain `tests/icons` and `tests/styles` make. The numbers
-`./tests/api.sh` prints as this is written: 13 class statics, 285 global verbs
-with their parameters named, 918 members and events saying what they are for,
-in C and in JavaScript, 6 members checked for shadowing a base one, 411 members
+`./tests/api.sh` prints as this is written: 13 class statics, 294 global verbs
+with their parameters named, 928 members and events saying what they are for,
+in C and in JavaScript, 5 members checked for shadowing a base one, 409 members
 held to `api.json`, 88 top-level names in `lib/` with no two libraries claiming
-one, all 44 globals the runtime installs accounted for, and 118 links over the
-34 pages that stayed. Every one of them has been stale at some point in this
+one, all 46 globals the runtime installs accounted for, and 107 links over the
+28 pages that stayed. Every one of them has been stale at some point in this
 repository.
 
 **A library's events are read from the code that raises them**, which is the

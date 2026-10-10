@@ -141,9 +141,9 @@ static JSValue notification_send(JSContext *ctx, JSValueConst this_val,
 
     BtaApp *app = bta_current_app();
     if (!app || !app->gapp)
-        return JS_ThrowInternalError(ctx, "%s: a project with a main has no display "
-                                          "and no application to send from -- say it "
-                                          "on stdout", who);
+        return JS_ThrowPlainError(ctx, "%s: a project with a main has no display "
+                                       "and no application to send from -- say it "
+                                       "on stdout", who);
 
     /* **A notification belongs to an application id, and a project without one
      * has none.** GLib's answer is an assertion (`g_application_get_application_id
@@ -152,10 +152,10 @@ static JSValue notification_send(JSContext *ctx, JSValueConst this_val,
      * the project's own key, and it is also what a desktop groups the
      * notifications of one program under, so it is asked for by name. */
     if (!g_application_get_application_id(G_APPLICATION(app->gapp)))
-        return JS_ThrowInternalError(ctx, "%s: this project declares no `id` in "
-                                          "project.json, and a desktop notification "
-                                          "is sent in the name of one (for example "
-                                          "\"org.example.MyApp\")", who);
+        return JS_ThrowPlainError(ctx, "%s: this project declares no `id` in "
+                                       "project.json, and a desktop notification "
+                                       "is sent in the name of one (for example "
+                                       "\"org.example.MyApp\")", who);
 
     bool        bad = false;
     const char *id  = notification_text(ctx, opts, "Id", who, &bad);
@@ -230,12 +230,12 @@ static JSValue notification_withdraw(JSContext *ctx, JSValueConst this_val,
 
     BtaApp *app = bta_current_app();
     if (!app || !app->gapp)
-        return JS_ThrowInternalError(ctx, "Notification.Withdraw: a project with a "
-                                          "main has no application to withdraw from");
+        return JS_ThrowPlainError(ctx, "Notification.Withdraw: a project with a "
+                                       "main has no application to withdraw from");
 
     if (!g_application_get_application_id(G_APPLICATION(app->gapp)))
-        return JS_ThrowInternalError(ctx, "Notification.Withdraw: this project "
-                                          "declares no `id`, so it has sent nothing");
+        return JS_ThrowPlainError(ctx, "Notification.Withdraw: this project "
+                                       "declares no `id`, so it has sent nothing");
 
     const char *id = JS_ToCString(ctx, argv[0]);
     if (!id)

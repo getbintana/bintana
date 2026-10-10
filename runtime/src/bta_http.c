@@ -629,7 +629,7 @@ static bool http_parse_auth(JSContext *ctx, JSValueConst v, const char *who,
         g_free(*user);
         g_free(*pass);
         *user = *pass = NULL;
-        JS_ThrowInternalError(ctx, "%s: out of memory", who);
+        JS_ThrowPlainError(ctx, "%s: out of memory", who);
         return false;
     }
     return true;
@@ -660,7 +660,7 @@ static bool http_resolve_auth(JSContext *ctx, HttpClientData *c, JSValueConst op
             g_free(*user);
             g_free(*pass);
             *user = *pass = NULL;
-            JS_ThrowInternalError(ctx, "%s: out of memory", who);
+            JS_ThrowPlainError(ctx, "%s: out of memory", who);
             return false;
         }
     }
@@ -726,7 +726,7 @@ static JSValue http_multipart_construct(JSContext *ctx, JSValueConst new_target,
     if (!m->mp) {
         JS_FreeValue(ctx, obj);
         g_free(m);
-        return JS_ThrowInternalError(ctx, "Multipart: out of memory");
+        return JS_ThrowPlainError(ctx, "Multipart: out of memory");
     }
     JS_SetOpaque(obj, m);
     return obj;
@@ -866,7 +866,7 @@ static JSValue http_multipart_part(JSContext *ctx, JSValueConst this_val,
     if (idx < 0 || idx >= n)
         return JS_ThrowRangeError(ctx, "Part: index %d is beyond %d parts", idx, n);
     if (!soup_multipart_get_part(m->mp, idx, &ph, &pb))
-        return JS_ThrowInternalError(ctx, "Part: cannot read part %d", idx);
+        return JS_ThrowPlainError(ctx, "Part: cannot read part %d", idx);
     soup_message_headers_get_content_disposition(ph, &dispo, &params);
     name = (params && g_hash_table_lookup(params, "name"))
         ? (const char *)g_hash_table_lookup(params, "name") : "";
@@ -1229,7 +1229,7 @@ static JSValue http_throw_error(JSContext *ctx, const char *who, const char *url
     char   *msg = http_error_text(who, url, detail);
     JSValue ex;
 
-    JS_ThrowInternalError(ctx, "%s", msg);
+    JS_ThrowPlainError(ctx, "%s", msg);
     g_free(msg);
     ex = JS_GetException(ctx);
     if (JS_IsObject(ex)) {
@@ -1726,7 +1726,7 @@ static bool http_proxy_value(JSContext *ctx, JSValueConst v, const char *who,
     *url = g_strdup(s);
     JS_FreeCString(ctx, s);
     if (!*url) {
-        JS_ThrowInternalError(ctx, "%s: out of memory", who);
+        JS_ThrowPlainError(ctx, "%s: out of memory", who);
         return false;
     }
     return true;
@@ -2458,7 +2458,7 @@ static JSValue http_call(JSContext *ctx, HttpClientData *c, SoupSession *sess,
         url_free = g_strdup(s);
         JS_FreeCString(ctx, s);
         if (!url_free)
-            return JS_ThrowInternalError(ctx, "%s: out of memory", who);
+            return JS_ThrowPlainError(ctx, "%s: out of memory", who);
     }
     url = url_free;
     at = 1;
@@ -4203,7 +4203,7 @@ static bool http_server_parse_tls(JSContext *ctx, JSValueConst v, const char *wh
         g_free(*cert);
         g_free(*key);
         *cert = *key = NULL;
-        JS_ThrowInternalError(ctx, "%s: out of memory", who);
+        JS_ThrowPlainError(ctx, "%s: out of memory", who);
         return false;
     }
     return true;
@@ -4475,7 +4475,7 @@ static JSValue http_server_start(JSContext *ctx, JSValueConst this_val,
     else
         s->server = soup_server_new(NULL, NULL);
     if (!s->server)
-        return JS_ThrowInternalError(ctx, "Http.Server.Start: cannot make a server");
+        return JS_ThrowPlainError(ctx, "Http.Server.Start: cannot make a server");
     if (s->tls_cert) {
         GTlsCertificate *cert =
             g_tls_certificate_new_from_files(s->tls_cert, s->tls_key, &err);
@@ -4487,7 +4487,7 @@ static JSValue http_server_start(JSContext *ctx, JSValueConst this_val,
             g_clear_error(&err);
             g_object_unref(s->server);
             s->server = NULL;
-            JSValue e = JS_ThrowInternalError(ctx, "%s", detail);
+            JSValue e = JS_ThrowPlainError(ctx, "%s", detail);
 
             g_free(detail);
             return e;
@@ -4508,7 +4508,7 @@ static JSValue http_server_start(JSContext *ctx, JSValueConst this_val,
         g_clear_error(&err);
         g_object_unref(s->server);
         s->server = NULL;
-        JSValue e = JS_ThrowInternalError(ctx, "%s", detail);
+        JSValue e = JS_ThrowPlainError(ctx, "%s", detail);
 
         g_free(detail);
         return e;
@@ -4876,7 +4876,7 @@ void bta_http_cleanup(void)
 static JSValue http_missing(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv)
 {
-    return JS_ThrowInternalError(ctx,
+    return JS_ThrowPlainError(ctx,
         "this runtime was built without libsoup, so there is no HTTP client. "
         "Install libsoup3's development package and build again -- CMake "
         "finds it with pkg-config and prints which it found");

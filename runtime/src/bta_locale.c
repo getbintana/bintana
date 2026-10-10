@@ -2066,7 +2066,7 @@ static JSValue js_locale_date(JSContext *ctx, JSValueConst this_val,
      * desktop with no 12-hour clock -- so it is answered rather than crashed on,
      * even though none of the four above has ever done it. */
     if (!shown)
-        return JS_ThrowInternalError(ctx,
+        return JS_ThrowPlainError(ctx,
             "Locale.Date: this desktop does not spell %s", kinds[which].name);
 
     JSValue out = JS_NewString(ctx, shown);

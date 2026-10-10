@@ -958,7 +958,7 @@ static JSValue task_unpack(JSContext *ctx, const char *json)
     if (!JS_IsObject(dec)) {
         JS_FreeValue(ctx, dec);
         JS_FreeValue(ctx, v);
-        return JS_ThrowInternalError(ctx, "Task: no Decimal to unpack with");
+        return JS_ThrowPlainError(ctx, "Task: no Decimal to unpack with");
     }
     out = task_revive(ctx, dec, v);
     JS_FreeValue(ctx, dec);

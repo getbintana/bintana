@@ -115,9 +115,9 @@ static bool random_fill(guint8 *buf, size_t n, const char **why)
 
 static JSValue random_throw(JSContext *ctx, const char *who, const char *why)
 {
-    return JS_ThrowInternalError(ctx, "%s: the operating system gave no "
-                                      "randomness (%s), and nothing weaker is "
-                                      "used in its place", who, why);
+    return JS_ThrowPlainError(ctx, "%s: the operating system gave no "
+                                   "randomness (%s), and nothing weaker is "
+                                   "used in its place", who, why);
 }
 
 /* A uniformly drawn integer in [0, span), `span` >= 1. */

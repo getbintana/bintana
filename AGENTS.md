@@ -593,13 +593,19 @@ drops it. **The release builds were `-O0` too**: an unset
 none, so the tarball and the zip ran four times slower than the same source
 optimised -- `RelWithDebInfo` in both now, as `docs/installing.md` says.
 
-**Before rebasing onto the release after v0.17.0, read `db0fe52`: upstream made
-`InternalError` uncatchable from JavaScript, and the runtime throws one 122
-times** -- for ordinary failures a program is documented to catch (`File.Load`'s
-*cannot read*, Http, Zip, Sqlite, Media). Taken as is, every `try { File.Load }
-catch` stops catching, and nothing fails to build. Those throws want to be
-`JS_ThrowPlainError` (or a `TypeError`/`RangeError` where that is what they
-are) first, with a test that catches one. The same range changes
+**The runtime never throws an `InternalError`, because upstream made that
+class uncatchable from JavaScript** (`db0fe52`, after v0.17.0) -- it means the
+engine is in a state nobody should carry on from. The runtime used to throw one
+122 times, for ordinary failures a program is documented to catch (`File.Load`'s
+*cannot read*, Http, Zip, Sqlite, Media), so on that engine every `try {
+File.Load } catch` would have stopped catching with nothing failing to build.
+Every one is `JS_ThrowPlainError` now: each was read, and none was a wrong
+argument that wanted a `TypeError`. `tests/api` fails on a
+`JS_ThrowInternalError` anywhere under `runtime/src`, naming the line, and
+`tests/widgets`' `File` asserts a failed `File.Load` is caught as an `Error`
+(red on the old spelling). A new throw is `JS_ThrowPlainError`, or a
+`TypeError`/`RangeError` when that is what the refusal is. The rebase past
+v0.17.0 still has two things to read: the same range changes
 `JSInterruptHandler` to take a `JSContext*` (`876442b`, `task_interrupt` in
 `bta_task.c`) and compiles an untagged template literal to `OP_add` (`c359cac`),
 which is the path patch 1 hooks -- `testDecimal`'s template assertions are the

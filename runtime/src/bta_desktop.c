@@ -207,8 +207,8 @@ static JSValue entries_read(JSContext *ctx, JSValueConst this_val,
 
         if (!g_key_file_load_from_file(kf, path, G_KEY_FILE_KEEP_TRANSLATIONS,
                                        &err)) {
-            out = JS_ThrowInternalError(ctx, "cannot read %s: %s", path,
-                                        err ? err->message : "unknown error");
+            out = JS_ThrowPlainError(ctx, "cannot read %s: %s", path,
+                                     err ? err->message : "unknown error");
             g_clear_error(&err);
         } else {
             out = JS_NewObject(ctx);
@@ -223,8 +223,8 @@ static JSValue entries_read(JSContext *ctx, JSValueConst this_val,
                     /* The half-built object goes before the exception takes its
                      * place: overwriting it would leave the reference behind. */
                     JS_FreeValue(ctx, out);
-                    out = JS_ThrowInternalError(ctx, "cannot read %s: %s", path,
-                                                err ? err->message : "unknown error");
+                    out = JS_ThrowPlainError(ctx, "cannot read %s: %s", path,
+                                             err ? err->message : "unknown error");
                     g_clear_error(&err);
                     JS_FreeValue(ctx, group);
                     break;
@@ -234,7 +234,7 @@ static JSValue entries_read(JSContext *ctx, JSValueConst this_val,
 
                     if (!val) {
                         JS_FreeValue(ctx, out);
-                        out = JS_ThrowInternalError(ctx,
+                        out = JS_ThrowPlainError(ctx,
                             "cannot read %s: %s in [%s]", path,
                             err ? err->message : "invalid value", groups[i]);
                         g_clear_error(&err);
@@ -375,8 +375,8 @@ static JSValue entry_write_file(JSContext *ctx, const char *path,
     /* The serialised key file lives in memory, so it cannot outgrow G_MAXSSIZE;
      * the cast is for the signedness of the length the write takes. */
     if (!g_file_set_contents(path, text, (gssize)len, &error)) {
-        JSValue e = JS_ThrowInternalError(ctx, "cannot write %s: %s", path,
-                                          error ? error->message : "unknown error");
+        JSValue e = JS_ThrowPlainError(ctx, "cannot write %s: %s", path,
+                                       error ? error->message : "unknown error");
         g_clear_error(&error);
         g_free(text);
         g_free(dir);
@@ -475,7 +475,7 @@ static JSValue entries_uninstall(JSContext *ctx, JSValueConst this_val,
     if (!g_file_test(path, G_FILE_TEST_EXISTS)) {
         out = JS_FALSE;
     } else if (g_remove(path) != 0) {
-        out = JS_ThrowInternalError(ctx, "cannot remove %s", path);
+        out = JS_ThrowPlainError(ctx, "cannot remove %s", path);
     } else {
         out = JS_TRUE;
     }
@@ -511,8 +511,8 @@ static JSValue entries_installed(JSContext *ctx, JSValueConst this_val,
          * permission problem from reading as "nothing installed". */
         JSValue out;
         if (g_file_test(dir, G_FILE_TEST_IS_DIR))
-            out = JS_ThrowInternalError(ctx, "cannot list %s: %s", dir,
-                                        error ? error->message : "unknown error");
+            out = JS_ThrowPlainError(ctx, "cannot list %s: %s", dir,
+                                     error ? error->message : "unknown error");
         else
             out = JS_NewArray(ctx);
 
