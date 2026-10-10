@@ -6,7 +6,7 @@
 #
 # Run from the repository root, inside an MSYS2 UCRT64 shell, after the build:
 #
-#   cmake -S . -B build -G Ninja
+#   cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
 #   cmake --build build -j
 #   tools/windows-portable.sh build stage/bintana-0.2.1-windows-x86_64
 #

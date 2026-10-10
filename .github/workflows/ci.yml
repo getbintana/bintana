@@ -512,7 +512,11 @@ jobs:
             > fake/pkg-config
           chmod +x fake/pkg-config
 
+          # RelWithDebInfo, because an unset type is CMakeLists.txt's Debug
+          # (-O0) and the interpreter is then two to three times slower than
+          # the Flatpak's; the symbols stay, for a Sysprof capture.
           cmake -S . -B build -DCMAKE_INSTALL_PREFIX=/usr \
+                -DCMAKE_BUILD_TYPE=RelWithDebInfo \
                 -DPKG_CONFIG_EXECUTABLE="$PWD/fake/pkg-config" 2>&1 | tee cmake.log
           grep -q 'no libxml2:' cmake.log \
             || { echo "this runner has libxml2: the tarball would depend on it"; exit 1; }
@@ -613,7 +617,9 @@ jobs:
 
       - name: Build
         run: |
-          cmake -S . -B build -G Ninja
+          # Optimised for the same reason as the tarball: the zip is what a
+          # Windows user runs, and an unset type is Debug.
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
           cmake --build build -j"$(nproc)"
 
       # The same check the Linux jobs run, and it needs no display: it parses C

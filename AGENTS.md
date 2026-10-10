@@ -580,6 +580,31 @@ carries a fix as a second commit, `1493dc7`, until it is squashed into it). The 
 `BINTANA.md` is the recipe; what follows is what each patch does and what
 dropping it costs.
 
+**And one upstream commit taken before its release: `2f0aa72`, the GCC 14+
+fix, which made the interpreter two to three times faster here.** `JS_MKVAL`
+wrote only the 32-bit half of a `JSValue`'s union, and since GCC 14 (GCC PR
+114134) every `js_int32`/`js_bool` inlined into `JS_CallInternal` became a
+read-modify-write through the stack. This machine is GCC 16: a 3e7-turn integer
+loop went **1650 -> 580 ms** and 2e7 property reads **1092 -> 570 ms**, Release
+against Release. It is a cherry-pick (`-x`) on top of the ten and not a patch,
+listed in `BINTANA.md`, and the rebase onto the release that contains it simply
+drops it. **The release builds were `-O0` too**: an unset
+`CMAKE_BUILD_TYPE` is `Debug` here, and the `package` and `windows` jobs set
+none, so the tarball and the zip ran four times slower than the same source
+optimised -- `RelWithDebInfo` in both now, as `docs/installing.md` says.
+
+**Before rebasing onto the release after v0.17.0, read `db0fe52`: upstream made
+`InternalError` uncatchable from JavaScript, and the runtime throws one 122
+times** -- for ordinary failures a program is documented to catch (`File.Load`'s
+*cannot read*, Http, Zip, Sqlite, Media). Taken as is, every `try { File.Load }
+catch` stops catching, and nothing fails to build. Those throws want to be
+`JS_ThrowPlainError` (or a `TypeError`/`RangeError` where that is what they
+are) first, with a test that catches one. The same range changes
+`JSInterruptHandler` to take a `JSContext*` (`876442b`, `task_interrupt` in
+`bta_task.c`) and compiles an untagged template literal to `OP_add` (`c359cac`),
+which is the path patch 1 hooks -- `testDecimal`'s template assertions are the
+ones to read.
+
 **A stale `origin/bintana` in the submodule looks exactly like a diverged pin,
 and it is not one.** Working on the seventh patch, `vendor/quickjs` sat detached
 at a commit whose history had the same seven subjects as `origin/bintana` and
@@ -619,7 +644,7 @@ git push --force-with-lease origin bintana
 git submodule update --remote vendor/quickjs              # and commit the pin
 ```
 
-Then the suite. All nine are marked `Bintana patch` in the source, and
+Then the suite. All ten are marked `Bintana patch` in the source, and
 **dropping one does not fail to build** -- that is the property they share and
 the reason `tests/widgets` asserts each of them (`Decimal`, `JsonFiles`,
 `strictChecks`, `testDebugger`, `testCuratedLanguage`) -- the last of which now carries
@@ -695,7 +720,12 @@ hold. `docs/plans/debug-plan.md` is the design and the measurements.
   the plan: **+12.5 % on tight arithmetic and +16.4 % on property reads**, off,
   against the same tree built without it and measured back to back. That is why stage 5
   of the plan is the bytecode patch and why this one is called scaffolding in
-  its own comment.
+  its own comment. **Those numbers predate the GCC fix above and no longer
+  hold**: measured again with it, Release, the hook compiled out against
+  compiled in and off, it is **0 %** on the integer loop (572-582 against
+  577-587 ms) and **about 10 %** on property reads (507-510 against 565-570 ms).
+  Most of what was charged to the branch was the partial-`JSValue` codegen it
+  sat beside, which makes stage 5 much less pressing than the plan argues.
 - **`JSStackFrame.this_obj`** exists because `this` is a *parameter* of the call
   and had no slot on the frame: a debugger could read every local of a method
   and not the one name its body uses most. Borrowed like `cur_func` -- the

@@ -64,10 +64,17 @@ has to be installed to run an example or the IDE from the source tree.
 ## Install
 
 ```sh
-cmake -S . -B build -DCMAKE_INSTALL_PREFIX=/usr/local
+cmake -S . -B build -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build -j
 sudo cmake --install build          # or: sudo make -C build install
 ```
+
+**Name the build type when the binary is for running and not for working on
+the runtime.** With none, `CMakeLists.txt` builds `Debug` -- `-O0`, which is
+what a checkout being debugged wants -- and the interpreter is then two to three
+times slower: a tight integer loop measured 2520 ms there and 620 ms under
+`RelWithDebInfo`, which keeps the symbols a Sysprof capture reads. The tarball,
+the Windows zip and the Flatpak are all built optimised.
 
 `/usr/local` on both distributions, for one reason: both pkg-configs search it,
 so a plugin later runs `pkg-config --cflags bintana` with no special path.

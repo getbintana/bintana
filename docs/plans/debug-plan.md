@@ -130,6 +130,12 @@ turns each, best of five within a run and the lowest of four runs:
 | a call per turn | 746.7 ms | 848.4 ms | **+13.6 %** |
 | property reads | 813.8 ms | 947.5 ms | **+16.4 %** |
 
+**Re-measured after the GCC 14+ fix (`2f0aa72`, taken into the fork early):
+0 % on the arithmetic loop and about 10 % on property reads.** The table above
+was taken on GCC 16 without it, where every `JSValue` built in
+`JS_CallInternal` went through the stack, and much of what it charges to the
+branch was that. See `AGENTS.md`, *The ten patches in vendor/*.
+
 **Between 12 % and 16 % for a branch that is never taken.** Measured twice, and
 the second time is the one above: the first pass compared against a binary built
 an hour earlier and came out 11–23 %, a spread that was the machine and not the
