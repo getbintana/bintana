@@ -2710,6 +2710,8 @@ program). Four things measured with it, after the eleventh and twelfth patches:
   (a browser tab at 99 % moved the whole bench from 30 to 39 s, with spreads
   of 900 ms). **Check `uptime` before believing a bench run.**
 
+**What to do about it, and in what order, is [`docs/plans/interpreter-plan.md`](docs/plans/interpreter-plan.md)**: measure a real workload first, the debugger's check second, inline caches last and only past a gate -- upstream had them and took them out (`7de6d46`).
+
 **And QuickJS is compiled with `-funsigned-char` now**, as upstream's CMake
 and Bellard's Makefile always did -- this tree passed `-w` alone, so the
 engine was built with a signed `char` on x86 and an unsigned one on ARM. No
