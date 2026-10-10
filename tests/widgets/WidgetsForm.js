@@ -24392,9 +24392,12 @@ class PQ extends Form {
                 /* The whole point: it recorded, and the program never stopped. */
                 eq("a logpoint does not stop", stops.length, 0);
                 eq("and both fired once", logs.length, 2);
-                eq("with the expression's answer", logs[0].text, "i=1 total=0");
-                eq("naming the file", logs[0].file, "Main.js");
-                eq("...and the line", logs[0].line, 5);
+                /* Read through a guard: a throw here would end the chain and
+                 * the run would time out instead of failing. */
+                const first = logs[0] || {};
+                eq("with the expression's answer", first.text, "i=1 total=0");
+                eq("naming the file", first.file, "Main.js");
+                eq("...and the line", first.line, 5);
                 check("the second is a failure and not a stop",
                       logs[1] && logs[1].failed === true, JSON.stringify(logs));
                 check("...whose message is the answer",

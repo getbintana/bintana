@@ -1337,6 +1337,21 @@ the same through `Widget.Members` with `Sources`), and `tests/ide`'s
   after its parent exits -- and is `heap-use-after-free` under `asan.sh`
   without the fix. **A read that outlives what says the run is over has to be
   cancelled by whatever frees the job, not by teardown alone.**
+  **And the other half of that race was losing lines, not memory.** Once the
+  read was cancelled at the free, whatever the child wrote on descriptor 3
+  just before it exited -- the debugger's last logpoints -- was dropped
+  whenever the exit and stdout's end were dispatched before the read that
+  would deliver them: the `no-libsecret` job lost both of `testDebuggerLog`'s
+  logs, the exit callback then threw reading `logs[0].text`, the chain never
+  reached the next test and the run **timed out** after 1200 s instead of
+  failing. Measured with a child that writes five control lines and exits, 200
+  times on a machine with sixteen busy loops: **128 of 200 runs lost lines**
+  on the old code, none now. A finished run waits for the control stream's end
+  too, but at most `EXEC_CONTROL_LINGER` (250 ms) -- the child is reaped, so
+  what it wrote is already in the pipe, and what is still open after that is a
+  grandchild's, which `testExecControlLate` still holds is dropped. And an
+  exit callback in a test reads what it asserts through a guard: **a throw in
+  the callback that continues a chain is a hang, not a red line.**
   **And `Write` was the other half of that struct's trouble: it blocked.** A
   synchronous `g_output_stream_write_all` on the UI thread deadlocks with any
   child that writes while it reads -- once `cat`'s stdout pipe fills it stops

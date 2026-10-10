@@ -1308,6 +1308,15 @@ typedef struct {
     bool              eof;       /* stdout drained */
     bool              err_eof;   /* stderr drained, or there is no second pipe */
     bool              reaped;    /* process exited */
+    /*
+     * The control stream ended, or stopped being waited for.  A child's last
+     * protocol lines are in the pipe when it exits, and the exit and stdout's
+     * end can be dispatched before the read that would deliver them -- so the
+     * end of the run waits for this too, but only `linger` long: a grandchild
+     * holding descriptor 3 must not keep the run alive (testExecControlLate).
+     */
+    bool              ctl_eof;
+    guint             linger;
     int               status;
     /* Ours, not the system's: the handle Exec hands back names the job by this
      * and never by the pid, so a Kill after the child is gone finds nothing
@@ -1358,6 +1367,8 @@ static void exec_job_free(ExecJob *job)
         g_source_remove(job->guard);
     if (job->force)
         g_source_remove(job->force);
+    if (job->linger)
+        g_source_remove(job->linger);
 
     JS_FreeValue(job->ctx, job->on_line);
     JS_FreeValue(job->ctx, job->on_control);
@@ -1374,12 +1385,38 @@ static void exec_job_free(ExecJob *job)
     g_free(job);
 }
 
+static void exec_maybe_finish(ExecJob *job);
+
+/* How long a finished run still listens to its control stream.  The child is
+ * reaped, so whatever it wrote there is already in the pipe and arrives within
+ * a turn or two of the loop; what is still open after this is a grandchild's. */
+#define EXEC_CONTROL_LINGER 250
+
+static gboolean on_exec_linger(gpointer data)
+{
+    ExecJob *job = data;
+    job->linger  = 0;
+    job->ctl_eof = true;
+    exec_maybe_finish(job);
+    return G_SOURCE_REMOVE;
+}
+
 /* Finish only once every pipe and the process are done, so no output is
  * reported after the exit callback. */
 static void exec_maybe_finish(ExecJob *job)
 {
     if (!job->eof || !job->err_eof || !job->reaped)
         return;
+
+    /* The control stream is not the run ending, but what the child said on it
+     * before it ended is owed: the debugger's last logpoints were dropped on a
+     * loaded machine when the exit was dispatched first.  Wait for its end, a
+     * bounded while. */
+    if (job->control && !job->ctl_eof) {
+        if (!job->linger)
+            job->linger = g_timeout_add(EXEC_CONTROL_LINGER, on_exec_linger, job);
+        return;
+    }
 
     /* Written before the callback runs, so a handler asking the handle what
      * happened is answered rather than told the child is still running. */
@@ -1546,8 +1583,11 @@ static void on_exec_line(GObject *src, GAsyncResult *res, gpointer user_data)
         /* The control stream ending is not the child ending: it closes when the
            program stops speaking the protocol, and what says the run is over is
            still stdout draining and the process being reaped. */
-        if (is_ctl)
+        if (is_ctl) {
+            job->ctl_eof = true;
+            exec_maybe_finish(job);
             return;
+        }
         if (is_err)
             job->err_eof = true;
         else
