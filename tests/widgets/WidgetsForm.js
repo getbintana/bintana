@@ -562,7 +562,7 @@ const TESTS = [
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
-    "CuratedLanguage", "Dictionary", "Csv", "Regex", "Bytes", "Hash", "Random", "Gzip", "Zip", "ZipWrite", "Screen", "JsonFiles", "XmlFiles", "XmlWrite", "XmlRecord", "XmlOrder", "XmlSchema", "Keyring", "Log", "Apply", "TimerShorthand", "Terminal",
+    "CuratedLanguage", "LongAppend", "Dictionary", "Csv", "Regex", "Bytes", "Hash", "Random", "Gzip", "Zip", "ZipWrite", "Screen", "JsonFiles", "XmlFiles", "XmlWrite", "XmlRecord", "XmlOrder", "XmlSchema", "Keyring", "Log", "Apply", "TimerShorthand", "Terminal",
     "Settings", "Timer", "ArgumentRefusals", "Icons", "Font", "Style", "Radius", "Padding", "Shadow", "StyleRule",
     "ColorButton",
     "ColorDialog", "FileDialog", "Dialog", "IconList", "FormIcon", "ButtonClick",
@@ -12410,6 +12410,31 @@ function Main() {
         eq("After fired", this.afterRan, true);
         eq("and does not repeat", this.pendingAfter.Enabled, false);
         check("a stopped Every never fired", !this.everyRan, String(this.everyRan));
+    }
+
+    /* --- a long append, the eleventh fork patch -------------------------------
+     *
+     * QuickJS used to hang every closed rope leaf under a new root and rebalance
+     * -- walk every leaf -- each time the depth reached 60, so `s += x` in a loop
+     * was quadratic: twice the appends took 4.2 times as long. The patch closes a
+     * leaf like a binary counter and the rope never needs rebalancing. Dropping
+     * it fails nothing else, which is why the ratio is asserted here: about 2 with
+     * it, 4 without, and 3 between them.
+     */
+    testLongAppend() {
+        const append = (n) => {
+            const t = Date.now();
+            let s = "";
+            for (let i = 0; i < n; i++) s += ".(A)";
+            return { ms: Date.now() - t, s };
+        };
+        const half = append(4e6);
+        const whole = append(8e6);
+        eq("a long append keeps every character", whole.s.length, 32e6);
+        eq("and reads back from its end", whole.s.slice(-9), ").(A).(A)");
+        check("twice the appends take about twice as long",
+              whole.ms < Math.max(half.ms, 20) * 3,
+              `${whole.ms} ms against ${half.ms} ms`);
     }
 
     /* --- the language a project actually gets --------------------------------

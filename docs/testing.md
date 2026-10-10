@@ -1,7 +1,7 @@
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 8630 assertions
+./tests/run.sh                          # all seven projects, 8633 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -219,7 +219,7 @@ own says so with `reportsItself`.
 
 `tests/widgets` is 195 tests listed in `TESTS`, and a filter there **selects** rather
 than running a prefix — `./tests/run.sh widgets record` is 142 assertions
-against 4912 in about twenty. It can select because these tests are
+against 4915 in about twenty. It can select because these tests are
 independent: each builds the controls it needs and deletes them again. The two that
 are not say so in the file:
 
@@ -619,12 +619,17 @@ Gambas's own `.py` versions, process time):
 | string1 | 44654 | 7801 | 10254 | 7813 | 3601 |
 | string2 | 77105 | 34184 | 34608 | 33175 | did not finish |
 
+`string2` is **3938** with the eleventh fork patch, which closes a rope leaf
+like a binary counter instead of rebalancing the whole string every few dozen
+leaves; the other seven did not move. The table is the engine before it.
+
 Milliseconds. The Debug and the no-fix columns are one run each. Two things
 in it are worth keeping: **the GCC 14+ fix is half of `polynom` and a quarter
-of `primes`**, and **the strings are where the engine loses most** -- `string2`
+of `primes`**, and **the strings are where the engine lost most** -- `string2`
 appends 26 million short strings to one that ends 104 MB long, and the cost of
-an append grows with the string (Python 3.14 is quadratic there and was
-stopped after eleven minutes, which is why Gambas's own runner skips it).
+an append grew with the string until the eleventh patch (Python 3.14 is
+quadratic there and was stopped after eleven minutes, which is why Gambas's own
+runner skips it).
 
 ## Scratch state
 

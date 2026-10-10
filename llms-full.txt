@@ -264,10 +264,10 @@ numbers sit beside Gambas's published table; each runs in a process of its own
 and **checks its answer**, so a faster wrong result is a failure and never a
 time. Not in `tests/run.sh`, since a timing is not an assertion. What it found
 the first day is in `docs/testing.md`: QuickJS beats CPython 3.14 on floating
-point (`mandelbrot`, `nbody`) and loses the other five Python finishes, and **appending to a long string grows
-faster than its length** -- a fifth of `string2`'s appends is 90 ms and all of
-them 1067 ms over five times the data -- which is the engine lead it leaves
-open. `-O3` against `-O2` moves `string1` 24 % one way and `nbody` 12 % the
+point (`mandelbrot`, `nbody`) and loses the other five Python finishes, and **appending to a long string grew
+faster than its length** -- a fifth of `string2`'s appends was 90 ms and all of
+them 1067 ms over five times the data -- which was the engine's rope rebalance
+and is the eleventh patch now (`string2` 34.8 -> 3.9 s). `-O3` against `-O2` moves `string1` 24 % one way and `nbody` 12 % the
 other, and nothing else: the packages' `RelWithDebInfo` stays.
 
 `tests/install.sh` is the only one that needs no `HEADLESS` of its own, and it is
@@ -597,11 +597,11 @@ used to read as no id at all; a project that declares none keeps the old answer,
 program's own name. `GtkApplication` also takes the id as the default window
 icon when the theme has one by that name (`gtkapplication.c`).
 
-## The ten patches in vendor/
+## The eleven patches in vendor/
 
 `vendor/quickjs` is a **submodule** of
 [`getbintana/quickjs`](https://github.com/getbintana/quickjs), branch `bintana`:
-upstream **v0.17.0** plus the ten patches below, one commit each (the eighth
+upstream **v0.17.0** plus the eleven patches below, one commit each (the eighth
 carries a fix as a second commit, `1493dc7`, until it is squashed into it). The fork's
 `BINTANA.md` is the recipe; what follows is what each patch does and what
 dropping it costs.
@@ -612,7 +612,7 @@ wrote only the 32-bit half of a `JSValue`'s union, and since GCC 14 (GCC PR
 114134) every `js_int32`/`js_bool` inlined into `JS_CallInternal` became a
 read-modify-write through the stack. This machine is GCC 16: a 3e7-turn integer
 loop went **1650 -> 580 ms** and 2e7 property reads **1092 -> 570 ms**, Release
-against Release. It is a cherry-pick (`-x`) on top of the ten and not a patch,
+against Release. It is a cherry-pick (`-x`) under the eleventh and not a patch,
 listed in `BINTANA.md`, and the rebase onto the release that contains it simply
 drops it. **The release builds were `-O0` too**: an unset
 `CMAKE_BUILD_TYPE` is `Debug` here, and the `package` and `windows` jobs set
@@ -676,11 +676,11 @@ git push --force-with-lease origin bintana
 git submodule update --remote vendor/quickjs              # and commit the pin
 ```
 
-Then the suite. All ten are marked `Bintana patch` in the source, and
+Then the suite. All eleven are marked `Bintana patch` in the source, and
 **dropping one does not fail to build** -- that is the property they share and
 the reason `tests/widgets` asserts each of them (`Decimal`, `JsonFiles`,
-`strictChecks`, `testDebugger`, `testCuratedLanguage`) -- the last of which now carries
-the seventh, the eighth and the ninth. Grep the fork for the
+`strictChecks`, `testDebugger`, `testCuratedLanguage`, `LongAppend`) -- the
+fifth of which carries the seventh, the eighth and the ninth. Grep the fork for the
 marker after a rebase; there is no build-time check that they survived.
 
 ### 1. Operators on a Decimal
@@ -1096,6 +1096,45 @@ comment inside a body documenting nothing, an assigned function with an inline
 `@returns`, a literal's method and getter, a nested literal owning nothing, and
 the same through `Widget.Members` with `Sources`), and `tests/ide`'s
 `completion` asserts a library member's popup row.
+
+### 11. A long append stays linear
+
+`js_rope_push` in `quickjs.c`, called from `JS_ConcatString` when a rope's
+open leaf is full: the closed leaf joins the subtree on its left while the two
+are the same depth, and the join carries leftwards -- a binary counter. It is
+the one patch that is about speed and nothing else, and like 2 and 3 it is a
+candidate to send upstream.
+
+**What it replaced was quadratic, and `tests/bench` is what said so.** QuickJS
+concatenates through ropes: a short append is copied into the rope's last leaf
+until that leaf passes `JS_STRING_ROPE_SHORT_LEN` (512), and then the full leaf
+was hung under a **new root, one level deeper**. At `JS_STRING_ROPE_MAX_DEPTH`
+(60) the rope is rebalanced, which walks and rebuilds every leaf -- and a
+rebalanced rope of a few hundred thousand leaves is already ~26 deep, so the
+next rebalance came after another ~34 leaves (17 KB). Measured, appending four
+characters at a time: 1e6, 2e6, 4e6 and 8e6 appends took **88, 218, 652 and
+2731 ms**; with the threshold raised to 1000 as a diagnosis, 66, 131, 260 and
+521. With the patch the rope left of the open leaf is a chain of perfect
+subtrees of decreasing depth, about **2 log2(leaves) deep -- 42 at the longest
+string the engine allows** -- so the rebalance is never reached: 75, 132, 259,
+523 ms. Gambas's `string2` (26 million appends, 104 MB) went **34.8 -> 3.9 s**;
+nothing else in the bench moved.
+
+Three things about the shape of it. **A shared rope is never written to**: the
+push takes new nodes and duplicates the children it keeps, so a copy someone
+held is untouched, which the fork's test checks by appending ropes kept from
+earlier. **Only a closed leaf is pushed**: a short append still goes into the
+open leaf, or every four-character piece would become a leaf of its own. And
+**raising the threshold is not the fix** -- it divides the quadratic term by
+sixteen and keeps it.
+
+The fork carries `tests/test_rope_append.js` (40 seeds of appends, prepends and
+shared ropes against the same parts joined, plus the linearity); it was clean
+under AddressSanitizer with gcc and with clang -- an ASan build routes every
+block through `malloc` (`JS_ARENA_LARGE_BLOCKS_ONLY`), so the rope nodes *are*
+seen there, unlike the arena note below -- and with `JS_DUMP_LEAKS`. **Dropping
+it does not fail to build**: `tests/widgets`' `LongAppend` asserts twice the
+appends take less than three times as long, which was 4.45 on the old engine.
 
 ## Memory rules
 
@@ -9571,7 +9610,7 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 8630 assertions
+./tests/run.sh                          # all seven projects, 8633 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -9789,7 +9828,7 @@ own says so with `reportsItself`.
 
 `tests/widgets` is 195 tests listed in `TESTS`, and a filter there **selects** rather
 than running a prefix — `./tests/run.sh widgets record` is 142 assertions
-against 4912 in about twenty. It can select because these tests are
+against 4915 in about twenty. It can select because these tests are
 independent: each builds the controls it needs and deletes them again. The two that
 are not say so in the file:
 
@@ -10189,12 +10228,17 @@ Gambas's own `.py` versions, process time):
 | string1 | 44654 | 7801 | 10254 | 7813 | 3601 |
 | string2 | 77105 | 34184 | 34608 | 33175 | did not finish |
 
+`string2` is **3938** with the eleventh fork patch, which closes a rope leaf
+like a binary counter instead of rebalancing the whole string every few dozen
+leaves; the other seven did not move. The table is the engine before it.
+
 Milliseconds. The Debug and the no-fix columns are one run each. Two things
 in it are worth keeping: **the GCC 14+ fix is half of `polynom` and a quarter
-of `primes`**, and **the strings are where the engine loses most** -- `string2`
+of `primes`**, and **the strings are where the engine lost most** -- `string2`
 appends 26 million short strings to one that ends 104 MB long, and the cost of
-an append grows with the string (Python 3.14 is quadratic there and was
-stopped after eleven minutes, which is why Gambas's own runner skips it).
+an append grew with the string until the eleventh patch (Python 3.14 is
+quadratic there and was stopped after eleven minutes, which is why Gambas's own
+runner skips it).
 
 ## Scratch state
 
