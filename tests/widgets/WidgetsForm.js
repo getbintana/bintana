@@ -24295,8 +24295,12 @@ class PQ extends Form {
                     const kind = msg.event || msg.reply;
 
                     if (kind === "ready") {
+                        /* `runto` lets the program go by itself, as the IDE
+                         * sends it.  A `continue` after it was a second order
+                         * that, on a slow runner, arrived while the program
+                         * was already stopped at line 5 and released it
+                         * before the second `runto` could be asked for. */
                         job.Write(JSON.stringify({ do: "runto", file: "Main.js", line: 5 }));
-                        job.Write(JSON.stringify({ do: "continue" }));
                     } else if (kind === "stopped") {
                         stops.push(msg);
                         /* The first stop is the line asked for; from there the
@@ -24320,10 +24324,13 @@ class PQ extends Form {
                 /* The loop body runs three times, so one stop here is the
                  * one-shot working. The second is the line the caret moved to. */
                 eq("run to cursor stopped twice", stops.length, 2);
-                eq("first where it was sent", stops[0].frames[0].Line, 5);
-                eq("and then where the caret moved to", stops[1].frames[0].Line, 7);
-                eq("both are plain stops", stops[0].reason, "breakpoint");
-                eq("...the second too", stops[1].reason, "breakpoint");
+                /* Through a guard: a throw here ends the chain and the run
+                 * times out instead of failing. */
+                const at = (k) => (stops[k] && stops[k].frames && stops[k].frames[0]) || {};
+                eq("first where it was sent", at(0).Line, 5);
+                eq("and then where the caret moved to", at(1).Line, 7);
+                eq("both are plain stops", (stops[0] || {}).reason, "breakpoint");
+                eq("...the second too", (stops[1] || {}).reason, "breakpoint");
 
                 this.testDebuggerLog();
             });

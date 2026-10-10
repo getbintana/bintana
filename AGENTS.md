@@ -1352,6 +1352,14 @@ the same through `Widget.Members` with `Sources`), and `tests/ide`'s
   grandchild's, which `testExecControlLate` still holds is dropped. And an
   exit callback in a test reads what it asserts through a guard: **a throw in
   the callback that continues a chain is a hang, not a red line.**
+  **The next run of the same job hung the same way one test earlier**, and
+  that one was the test's own race: `testDebuggerRunTo` sent `runto` *and*
+  `continue` at `ready`, but `runto` already lets the program go -- so on the
+  runner the spare `continue` arrived while the program sat at line 5 and
+  released it before the second `runto` was asked, leaving one stop where two
+  were asserted and `stops[1].frames` throwing. The IDE sends `runto` alone,
+  and the test does now. **An order that releases the program is sent once
+  per stop**; a second one is consumed by whatever stop comes next.
   **And `Write` was the other half of that struct's trouble: it blocked.** A
   synchronous `g_output_stream_write_all` on the UI thread deadlocks with any
   child that writes while it reads -- once `cat`'s stdout pipe fills it stops
