@@ -1,7 +1,7 @@
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 8633 assertions
+./tests/run.sh                          # all seven projects, 8637 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -219,7 +219,7 @@ own says so with `reportsItself`.
 
 `tests/widgets` is 195 tests listed in `TESTS`, and a filter there **selects** rather
 than running a prefix — `./tests/run.sh widgets record` is 142 assertions
-against 4915 in about twenty. It can select because these tests are
+against 4919 in about twenty. It can select because these tests are
 independent: each builds the controls it needs and deletes them again. The two that
 are not say so in the file:
 
@@ -621,7 +621,10 @@ Gambas's own `.py` versions, process time):
 
 `string2` is **3938** with the eleventh fork patch, which closes a rope leaf
 like a binary counter instead of rebalancing the whole string every few dozen
-leaves; the other seven did not move. The table is the engine before it.
+leaves, and `string1` is **5505** with the twelfth, which searches a narrow
+string with `memchr` and `memcmp`; the other six did not move, and the eight
+together are **30.0 s** against the 65.5 of the RelWithDebInfo column. The
+table is the engine before both.
 
 Milliseconds. The Debug and the no-fix columns are one run each. Two things
 in it are worth keeping: **the GCC 14+ fix is half of `polynom` and a quarter

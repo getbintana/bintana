@@ -267,7 +267,9 @@ the first day is in `docs/testing.md`: QuickJS beats CPython 3.14 on floating
 point (`mandelbrot`, `nbody`) and loses the other five Python finishes, and **appending to a long string grew
 faster than its length** -- a fifth of `string2`'s appends was 90 ms and all of
 them 1067 ms over five times the data -- which was the engine's rope rebalance
-and is the eleventh patch now (`string2` 34.8 -> 3.9 s). `-O3` against `-O2` moves `string1` 24 % one way and `nbody` 12 % the
+and is the eleventh patch now (`string2` 34.8 -> 3.9 s); the twelfth made
+`string1` a `memchr` (10.3 -> 5.5 s), and the eight programs together went
+65.7 -> 30.0 s. `-O3` against `-O2` moves `string1` 24 % one way and `nbody` 12 % the
 other, and nothing else: the packages' `RelWithDebInfo` stays.
 
 `tests/install.sh` is the only one that needs no `HEADLESS` of its own, and it is
@@ -597,11 +599,11 @@ used to read as no id at all; a project that declares none keeps the old answer,
 program's own name. `GtkApplication` also takes the id as the default window
 icon when the theme has one by that name (`gtkapplication.c`).
 
-## The eleven patches in vendor/
+## The twelve patches in vendor/
 
 `vendor/quickjs` is a **submodule** of
 [`getbintana/quickjs`](https://github.com/getbintana/quickjs), branch `bintana`:
-upstream **v0.17.0** plus the eleven patches below, one commit each (the eighth
+upstream **v0.17.0** plus the twelve patches below, one commit each (the eighth
 carries a fix as a second commit, `1493dc7`, until it is squashed into it). The fork's
 `BINTANA.md` is the recipe; what follows is what each patch does and what
 dropping it costs.
@@ -676,10 +678,11 @@ git push --force-with-lease origin bintana
 git submodule update --remote vendor/quickjs              # and commit the pin
 ```
 
-Then the suite. All eleven are marked `Bintana patch` in the source, and
+Then the suite. All twelve are marked `Bintana patch` in the source, and
 **dropping one does not fail to build** -- that is the property they share and
 the reason `tests/widgets` asserts each of them (`Decimal`, `JsonFiles`,
-`strictChecks`, `testDebugger`, `testCuratedLanguage`, `LongAppend`) -- the
+`strictChecks`, `testDebugger`, `testCuratedLanguage`, `LongAppend`,
+`StringSearch`) -- the
 fifth of which carries the seventh, the eighth and the ninth. Grep the fork for the
 marker after a rebase; there is no build-time check that they survived.
 
@@ -1135,6 +1138,38 @@ block through `malloc` (`JS_ARENA_LARGE_BLOCKS_ONLY`), so the rope nodes *are*
 seen there, unlike the arena note below -- and with `JS_DUMP_LEAKS`. **Dropping
 it does not fail to build**: `tests/widgets`' `LongAppend` asserts twice the
 appends take less than three times as long, which was 4.45 on the old engine.
+
+### 12. A string search is the C library's
+
+`string_cmp` compares two narrow (8-bit) strings with `memcmp`,
+`string_indexof_char` finds a byte with `memchr`, and
+`String.prototype.indexOf` (forwards) and `includes` go through
+`string_indexof`. Like 11 it is about speed alone and a candidate to send
+upstream.
+
+**`indexOf` and `includes` did not even use the engine's own search.** They
+compared the needle at every position through `string_cmp`, which reads one
+character at a time with `string_get`; `string_indexof` -- what `replace`,
+`replaceAll` and `split` use -- at least skipped to the next occurrence of the
+first character, a byte at a time. So a search that finds nothing walked the
+whole string at about 1.7 ns a byte: `indexOf` of an absent needle over 4 MB,
+200 times, was **1343 ms, and 16 ms with the patch**; Gambas's `string1` (a
+string growing to 540 KB and `replaceAll`'d 33,768 times) went **10.3 -> 5.5
+s**. What is left there is copying -- linearising the rope the `+=` made and
+building the result -- which `memcpy` already does.
+
+**The answers are the fork's test and the speed is this tree's.** The fork
+carries `tests/test_string_search.js`: seven searches held to ones written out
+in JavaScript, 4000 random cases over narrow and wide alphabets, empty needles
+and positions past either end, watched to fail on a deliberately wrong
+reference. `tests/widgets`' `StringSearch` asserts the speed without a clock:
+a **wide** string keeps the loops, so the same search over the same length
+narrow and wide is a ratio of the machine with itself -- 1.0 on the old engine
+(167 against 167 ms), 30 to 50 with the patch -- and the check is four.
+**Dropping it does not fail to build**, and that ratio is what goes red.
+`lastIndexOf`, `startsWith` and `endsWith` still compare position by position,
+through the `memcmp` now; a backwards search has no `memrchr` the C standard
+promises, and the other two compare at one position only.
 
 ## Memory rules
 
@@ -9610,7 +9645,7 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 8633 assertions
+./tests/run.sh                          # all seven projects, 8637 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -9828,7 +9863,7 @@ own says so with `reportsItself`.
 
 `tests/widgets` is 195 tests listed in `TESTS`, and a filter there **selects** rather
 than running a prefix — `./tests/run.sh widgets record` is 142 assertions
-against 4915 in about twenty. It can select because these tests are
+against 4919 in about twenty. It can select because these tests are
 independent: each builds the controls it needs and deletes them again. The two that
 are not say so in the file:
 
@@ -10230,7 +10265,10 @@ Gambas's own `.py` versions, process time):
 
 `string2` is **3938** with the eleventh fork patch, which closes a rope leaf
 like a binary counter instead of rebalancing the whole string every few dozen
-leaves; the other seven did not move. The table is the engine before it.
+leaves, and `string1` is **5505** with the twelfth, which searches a narrow
+string with `memchr` and `memcmp`; the other six did not move, and the eight
+together are **30.0 s** against the 65.5 of the RelWithDebInfo column. The
+table is the engine before both.
 
 Milliseconds. The Debug and the no-fix columns are one run each. Two things
 in it are worth keeping: **the GCC 14+ fix is half of `polynom` and a quarter

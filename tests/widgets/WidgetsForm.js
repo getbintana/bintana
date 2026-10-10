@@ -562,7 +562,7 @@ const TESTS = [
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
-    "CuratedLanguage", "LongAppend", "Dictionary", "Csv", "Regex", "Bytes", "Hash", "Random", "Gzip", "Zip", "ZipWrite", "Screen", "JsonFiles", "XmlFiles", "XmlWrite", "XmlRecord", "XmlOrder", "XmlSchema", "Keyring", "Log", "Apply", "TimerShorthand", "Terminal",
+    "CuratedLanguage", "LongAppend", "StringSearch", "Dictionary", "Csv", "Regex", "Bytes", "Hash", "Random", "Gzip", "Zip", "ZipWrite", "Screen", "JsonFiles", "XmlFiles", "XmlWrite", "XmlRecord", "XmlOrder", "XmlSchema", "Keyring", "Log", "Apply", "TimerShorthand", "Terminal",
     "Settings", "Timer", "ArgumentRefusals", "Icons", "Font", "Style", "Radius", "Padding", "Shadow", "StyleRule",
     "ColorButton",
     "ColorDialog", "FileDialog", "Dialog", "IconList", "FormIcon", "ButtonClick",
@@ -12435,6 +12435,34 @@ function Main() {
         check("twice the appends take about twice as long",
               whole.ms < Math.max(half.ms, 20) * 3,
               `${whole.ms} ms against ${half.ms} ms`);
+    }
+
+    /* --- a string search, the twelfth fork patch ------------------------------
+     *
+     * indexOf and includes compared the needle at every position, and the
+     * search under replace and split went a byte at a time; on a narrow (8-bit)
+     * string they are memchr and memcmp now. A wide (16-bit) string keeps the
+     * loop, which is what makes this measurable without a clock: the same
+     * search over the same length was as slow narrow as wide on the old
+     * engine (167 against 167 ms) and is thirty to fifty times faster narrow
+     * on the new one. The answers themselves are the fork's test to hold.
+     */
+    testStringSearch() {
+        const narrow = "abcdefgh".repeat(1 << 17);
+        const wide = "abcdefg\u0100".repeat(1 << 17);
+        const time = (s) => {
+            const t = Date.now();
+            let n = 0;
+            for (let i = 0; i < 100; i++) n += s.indexOf("zq");
+            return { ms: Date.now() - t, n };
+        };
+        const a = time(narrow), b = time(wide);
+        eq("a search that finds nothing answers -1", a.n, -100);
+        eq("on a wide string too", b.n, -100);
+        eq("and finds what is there", (narrow + "zq").indexOf("zq"), narrow.length);
+        check("a narrow search is the C library's, not a loop",
+              a.ms * 4 < Math.max(b.ms, 20),
+              `narrow ${a.ms} ms against wide ${b.ms} ms`);
     }
 
     /* --- the language a project actually gets --------------------------------
