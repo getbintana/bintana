@@ -32,6 +32,18 @@
       "enabled": false
     },
     {
+      "name": "ActPrevPage",
+      "text": "Previous page",
+      "icon": "go-previous-symbolic",
+      "enabled": false
+    },
+    {
+      "name": "ActNextPage",
+      "text": "Next page",
+      "icon": "go-next-symbolic",
+      "enabled": false
+    },
+    {
       "name": "ActAddPage",
       "text": "Add page",
       "icon": "list-add-symbolic",

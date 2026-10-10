@@ -2141,9 +2141,12 @@ class MainForm extends Form {
      * form tab carries its own canvas and its own tree now.
      */
     ActRenameCtl_Execute() { this.renameSelectedControl(); }
-    /* A page at the end of the page container the selection is in, or is --
-     * the canvas's menu for what the page bar's `+` does. */
+    /* The pages of the page container the selection is in, or is: a page at
+     * the end, the one before, the one after -- from the design bar, and the
+     * first also from the canvas's menu. */
     ActAddPage_Execute()   { if (this.designer) this.designer.addPage(); }
+    ActPrevPage_Execute()  { if (this.designer) this.designer.stepPage(-1); }
+    ActNextPage_Execute()  { if (this.designer) this.designer.stepPage(1); }
     ActTrRename_Execute() {
         if (this.designer) this.designer.tree.renameFromKey(this.WidgetTree.Key);
     }

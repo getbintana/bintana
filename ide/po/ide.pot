@@ -58,7 +58,7 @@ msgstr ""
 #: forms/ColumnForm.form: BtnColDel.Text
 #: forms/ConfirmForm.form: BtnYes.Text
 #: forms/MenuForm.form: BtnDelete.Text
-#: forms/MainForm.js:2556
+#: forms/MainForm.js:2559
 #: modules/FormFiles.js:728
 msgid "Delete"
 msgstr ""
@@ -825,19 +825,30 @@ msgid "_Help"
 msgstr ""
 
 #: forms/MainForm.form: action ActDelCtl
+#: modules/Workspace.js:272
 msgid "Delete control"
 msgstr ""
 
 #: forms/MainForm.form: action ActRaise
+#: modules/Workspace.js:273
 msgid "Bring to front"
 msgstr ""
 
 #: forms/MainForm.form: action ActLower
+#: modules/Workspace.js:274
 msgid "Send to back"
 msgstr ""
 
+#: forms/MainForm.form: action ActPrevPage
+msgid "Previous page"
+msgstr ""
+
+#: forms/MainForm.form: action ActNextPage
+msgid "Next page"
+msgstr ""
+
 #: forms/MainForm.form: action ActAddPage
-#: modules/Chrome.js:141
+#: modules/Workspace.js:278
 msgid "Add page"
 msgstr ""
 
@@ -1294,7 +1305,7 @@ msgid "Base folder:"
 msgstr ""
 
 #: forms/NewProjectForm.form: BtnCreate.Text
-#: forms/MainForm.js:2424
+#: forms/MainForm.js:2427
 msgid "Create"
 msgstr ""
 
@@ -1647,7 +1658,7 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: forms/HelpForm.js:132
-#: forms/MainForm.js:2239
+#: forms/MainForm.js:2242
 msgid "The reference is not installed beside this build."
 msgstr ""
 
@@ -1801,71 +1812,71 @@ msgstr ""
 msgid "Reload without saving"
 msgstr ""
 
-#: forms/MainForm.js:2315
-#: forms/MainForm.js:2337
+#: forms/MainForm.js:2318
+#: forms/MainForm.js:2340
 #: modules/Navigator.js:74
 msgid "Put the cursor on a name first."
 msgstr ""
 
-#: forms/MainForm.js:2342
+#: forms/MainForm.js:2345
 #: forms/RefsForm.js:105
 msgid "Rename symbol"
 msgstr ""
 
-#: forms/MainForm.js:2342
+#: forms/MainForm.js:2345
 #: forms/RefsForm.js:105
 msgid "New name:"
 msgstr ""
 
-#: forms/MainForm.js:2422
+#: forms/MainForm.js:2425
 msgid "Start a repository"
 msgstr ""
 
-#: forms/MainForm.js:2423
+#: forms/MainForm.js:2426
 msgid "Create a git repository in {0}?"
 msgstr ""
 
-#: forms/MainForm.js:2479
+#: forms/MainForm.js:2482
 msgid "(no branches yet)"
 msgstr ""
 
-#: forms/MainForm.js:2486
+#: forms/MainForm.js:2489
 msgid "(no other branch)"
 msgstr ""
 
-#: forms/MainForm.js:2515
+#: forms/MainForm.js:2518
 msgid "Switch branch"
 msgstr ""
 
-#: forms/MainForm.js:2519
+#: forms/MainForm.js:2522
 msgid "Switch"
 msgstr ""
 
-#: forms/MainForm.js:2534
+#: forms/MainForm.js:2537
 msgid "New branch"
 msgstr ""
 
-#: forms/MainForm.js:2534
+#: forms/MainForm.js:2537
 msgid "Called"
 msgstr ""
 
-#: forms/MainForm.js:2554
+#: forms/MainForm.js:2557
 msgid "Delete a branch"
 msgstr ""
 
-#: forms/MainForm.js:2555
+#: forms/MainForm.js:2558
 msgid "Delete {0}? Anything committed only there would be refused rather than lost."
 msgstr ""
 
-#: forms/MainForm.js:2638
+#: forms/MainForm.js:2641
 msgid "Clone a repository"
 msgstr ""
 
-#: forms/MainForm.js:2638
+#: forms/MainForm.js:2641
 msgid "From"
 msgstr ""
 
-#: forms/MainForm.js:2646
+#: forms/MainForm.js:2649
 msgid "Clone into"
 msgstr ""
 
@@ -1885,7 +1896,7 @@ msgid_plural "{0} files"
 msgstr[0] ""
 msgstr[1] ""
 
-#: forms/MainForm.js:2516
+#: forms/MainForm.js:2519
 msgid "There is {0} change here. Switching keeps it, unless the two branches disagree about the same file."
 msgid_plural "There are {0} changes here. Switching keeps them, unless the two branches disagree about the same file."
 msgstr[0] ""
@@ -1914,15 +1925,15 @@ msgid ""
 "is not there any more."
 msgstr ""
 
-#: forms/MainForm.js:2779
+#: forms/MainForm.js:2782
 msgid "Open a form's design to edit its menus."
 msgstr ""
 
-#: forms/MainForm.js:2798
+#: forms/MainForm.js:2801
 msgid "Open a form's design to edit its commands."
 msgstr ""
 
-#: forms/MainForm.js:2830
+#: forms/MainForm.js:2833
 msgid "Open a form's design to edit its tab order."
 msgstr ""
 
@@ -1946,7 +1957,7 @@ msgid ""
 "{1}"
 msgstr ""
 
-#: forms/MainForm.js:2663
+#: forms/MainForm.js:2666
 #: modules/FormFiles.js:431
 #: modules/FormFiles.js:612
 msgid "{0} already exists."
@@ -2208,18 +2219,6 @@ msgstr ""
 msgid "Nothing has changed."
 msgstr ""
 
-#: modules/Chrome.js:138
-msgid "Previous page (Ctrl+Page Up)"
-msgstr ""
-
-#: modules/Chrome.js:140
-msgid "Next page (Ctrl+Page Down)"
-msgstr ""
-
-#: modules/Chrome.js:162
-msgid "No pages"
-msgstr ""
-
 #: modules/Classes.js:354
 msgid "Put the class in {0}, like the others here"
 msgstr ""
@@ -2264,39 +2263,39 @@ msgstr ""
 msgid "Run to cursor needs a program being debugged."
 msgstr ""
 
-#: modules/Designer.js:2863
+#: modules/Designer.js:2939
 msgid "the menu bar"
 msgstr ""
 
-#: modules/Designer.js:954
+#: modules/Designer.js:959
 msgid "{0} holds controls of its own, so there is nothing to draw an item in."
 msgstr ""
 
-#: modules/Designer.js:1194
+#: modules/Designer.js:1199
 msgid ""
 "An aspect frame holds one child.\n"
 "Put a container in it to hold more."
 msgstr ""
 
-#: modules/Designer.js:1201
-#: modules/Designer.js:2707
+#: modules/Designer.js:1206
+#: modules/Designer.js:2762
 msgid ""
 "A split holds exactly two children.\n"
 "Put a container in one of its halves to hold more."
 msgstr ""
 
-#: modules/Designer.js:2918
-#: modules/Designer.js:3000
+#: modules/Designer.js:2994
+#: modules/Designer.js:3076
 msgid ""
 "The code already has handlers for {0}: {1}.\n"
 "Rename or delete them first."
 msgstr ""
 
-#: modules/Designer.js:2982
+#: modules/Designer.js:3058
 msgid "\"{0}\" is not usable as a control name."
 msgstr ""
 
-#: modules/Designer.js:2987
+#: modules/Designer.js:3063
 msgid "There is already a control named {0}."
 msgstr ""
 
@@ -2617,7 +2616,7 @@ msgid "Other"
 msgstr ""
 
 #: modules/PropertyGrid.js:565
-#: modules/Workspace.js:357
+#: modules/Workspace.js:372
 msgid "Inspector"
 msgstr ""
 
@@ -2810,34 +2809,42 @@ msgstr ""
 msgid "Structure"
 msgstr ""
 
-#: modules/Workspace.js:309
+#: modules/Workspace.js:276
+msgid "Previous page (Ctrl+Page Up)"
+msgstr ""
+
+#: modules/Workspace.js:277
+msgid "Next page (Ctrl+Page Down)"
+msgstr ""
+
+#: modules/Workspace.js:324
 msgid "Design values"
 msgstr ""
 
-#: modules/Workspace.js:310
+#: modules/Workspace.js:325
 msgid "Edit what the designer shows instead of what the application will run with"
 msgstr ""
 
-#: modules/Workspace.js:327
+#: modules/Workspace.js:342
 msgid "Filter properties"
 msgstr ""
 
-#: modules/Workspace.js:328
+#: modules/Workspace.js:343
 msgid "Show only the properties whose name contains this"
 msgstr ""
 
-#: modules/Workspace.js:348
+#: modules/Workspace.js:363
 msgid "Double click an event to write its handler, or to go to it"
 msgstr ""
 
-#: modules/Workspace.js:360
+#: modules/Workspace.js:375
 msgid "Properties"
 msgstr ""
 
-#: modules/Workspace.js:361
+#: modules/Workspace.js:376
 msgid "Events"
 msgstr ""
 
-#: modules/Workspace.js:380
+#: modules/Workspace.js:395
 msgid "Outline"
 msgstr ""

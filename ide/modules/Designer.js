@@ -1106,7 +1106,7 @@ Ide.Designer = class Designer {
         }
     }
 
-    /* The page container the page bar and the keys work on: the selection
+    /* The page container the design bar and the keys work on: the selection
      * itself, or the nearest one around it. */
     pageHost() {
         for (let c = this.selected; c; c = this.parentOf(c)) {
@@ -1139,7 +1139,7 @@ Ide.Designer = class Designer {
      * on screen** rather than making it a page -- which is what the eye says is
      * being added to. A page that is not a container (a control added as a
      * page) cannot take it, so then it is a page as before; a new page is
-     * `addPage`'s, from the page bar or the canvas's menu.
+     * `addPage`'s, from the design bar or the canvas's menu.
      */
     intoShownPage(target) {
         if (!this.pages(target) || target.__node) return target;
@@ -1494,7 +1494,10 @@ Ide.Designer = class Designer {
          * Both are commands now -- a named item cannot be in a menu that each
          * form's tree carries. */
         this.ide.ActRenameCtl.Enabled = has;
-        this.ide.ActAddPage.Enabled   = this.pageHost() !== null;
+        const host = this.pageHost();
+        this.ide.ActAddPage.Enabled   = host !== null;
+        this.ide.ActPrevPage.Enabled  = host !== null && host.Current > 0;
+        this.ide.ActNextPage.Enabled  = host !== null && host.Current < host.Count - 1;
         this.ide.ActTrRename.Enabled  = has;
         /* Saving is the toolbar's -- one Save for a form and for a .js, enabled
          * by `refresh()` from the same `isDirty()` the menu's Ctrl+S reads.  A
@@ -1784,16 +1787,6 @@ Ide.Designer = class Designer {
 
     mouseDown(x, y, button, ctrl) {
         this.glass.SetFocus();      /* so the keys arrive here */
-
-        /* The page bar is the designer's own and drawn over everything, so it
-         * answers first. */
-        const part = this.chrome.pageBarAt(x, y);
-        if (part) {
-            if (part === "prev")      this.stepPage(-1);
-            else if (part === "next") this.stepPage(1);
-            else if (part === "add")  this.addPage();
-            return;
-        }
 
         const grabbed = this.chrome.handleAt(x, y);
         if (grabbed) {

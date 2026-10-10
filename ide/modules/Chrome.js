@@ -101,93 +101,6 @@ Ide.Chrome = class Chrome {
         this.extraOutlines = [];
         this.timer = null;
 
-        this.makePageBar();
-    }
-
-    /*
-     * **The page bar**: `‹  2 / 3  Datos  ›  +` under the page container the
-     * selection is in, or is.
-     *
-     * The real tab strip is under the Glass and never sees a press, and a
-     * `Switcher` with `Strip: "None"` has no strip at all -- so without this the
-     * only way to another page was the control tree. It is the designer's own
-     * drawing, like the handles, and the designer reads clicks on it before
-     * anything else (`pageBarAt`). Looking at a page is not an edit: see
-     * `Designer.showPage`.
-     */
-    makePageBar() {
-        const bar = new Panel();
-        bar.Arrangement = "Horizontal";
-        bar.Background  = SELECT_COLOR;
-        bar.Radius      = "4";
-        bar.Visible     = false;
-        this.glass.Add(bar);
-
-        const part = (text, tip, active) => {
-            const label = new Label();
-            bar.Add(label);
-            label.Text       = text;
-            label.Foreground = "#ffffff";
-            label.Padding    = "1 6 1 6";
-            if (tip)    label.Tooltip = tip;
-            if (active) label.Cursor  = "Hand";
-            return label;
-        };
-        this.pageBar   = bar;
-        this.pageParts = {
-            prev: part("‹", Locale.Text("Previous page (Ctrl+Page Up)"), true),
-            name: part("", "", false),
-            next: part("›", Locale.Text("Next page (Ctrl+Page Down)"), true),
-            add:  part("+", Locale.Text("Add page"), true),
-        };
-    }
-
-    /* Under the container's bottom-right corner, or just inside it when the
-     * canvas ends there. */
-    layoutPageBar() {
-        const d    = this.designer;
-        const bar  = this.pageBar;
-        const host = d.pageHost();
-        const r    = host && d.rectOf(host);
-
-        if (!host || !r || r.w <= 0 || r.h <= 0) {
-            bar.Visible = false;
-            return;
-        }
-
-        const count = host.Count;
-        const at    = host.Current;
-        const tabs  = host.Tabs || [];
-        this.pageParts.name.Text = count === 0
-            ? Locale.Text("No pages")
-            : `${at + 1} / ${count}   ${tabs[at] || ""}`.trimEnd();
-        this.pageParts.prev.Opacity = at > 0 ? 1 : 0.4;
-        this.pageParts.next.Opacity = at >= 0 && at < count - 1 ? 1 : 0.4;
-        bar.Visible = true;
-
-        const b  = bar.Bounds(this.glass);
-        const bw = b && b.Width  > 0 ? b.Width  : 120;
-        const bh = b && b.Height > 0 ? b.Height : 20;
-
-        let x = r.x + r.w - bw;
-        if (x < 0) x = r.x;
-        let y = r.y + r.h + 2;
-        if (y + bh > this.glass.Height) y = r.y + r.h - bh - 2;
-        bar.Move(Math.round(x), Math.round(Math.max(0, y)));
-    }
-
-    /* Which part of the page bar is under the pointer: `prev`, `next`, `add`,
-     * `bar` for the rest of it, or null. */
-    pageBarAt(x, y) {
-        if (!this.pageBar.Visible) return null;
-        const inside = (w) => {
-            const b = w.Bounds(this.glass);
-            return b && x >= b.X && x < b.X + b.Width && y >= b.Y && y < b.Y + b.Height;
-        };
-        if (!inside(this.pageBar)) return null;
-        for (const id of ["prev", "next", "add"])
-            if (inside(this.pageParts[id])) return id;
-        return "bar";
     }
 
     bar(colour) {
@@ -256,7 +169,6 @@ Ide.Chrome = class Chrome {
     layout() {
         const d = this.designer;
         this.layoutBounds();
-        this.layoutPageBar();
 
         const pool = this.outlinePool(Math.max(0, d.selection.length - 1));
         for (const bars of pool) for (const bar of bars) bar.Visible = false;

@@ -6747,6 +6747,14 @@ designer was left), and letting the press through the Glass to the real strip
   on it: `book.Tabs` answered the old tabs and `book.Count` the old count while
   every edit went to the new one. Look it up by name after anything that
   restores.
+- **Nothing about pages is drawn over the canvas.** The first version had a
+  page bar (`‹ 2 / 3 Datos › +`) under the page container around the
+  selection, and it covered the form: it showed while *any* control inside a
+  page was selected, and a container reaching the canvas's bottom edge had no
+  room under it, so the bar went inside, over its contents. Previous, next and
+  *Add page* are commands now (`ActPrevPage`, `ActNextPage`, `ActAddPage`) in
+  the design bar under the control tree, enabled from `Designer.refresh` like
+  the rest of it.
 - **A tab is clicked on the release, and a press that moves grabs the
   container.** The first version ended the press at the page, which left a
   `Switcher` with nowhere to be dragged from: its buttons span the whole strip

@@ -253,8 +253,12 @@ Ide.Workspace = class Workspace {
         return box;
     }
 
-    /* The three buttons under the control tree, pointing at the IDE's own
-     * commands: one assignment decides whether they are available. */
+    /* The buttons under the control tree, pointing at the IDE's own commands:
+     * one assignment decides whether they are available. The last three walk
+     * the pages of the page container the selection is in. They lived in a
+     * bar drawn under that container on the canvas, which covered the form
+     * whenever the container reached its bottom edge -- here they cover
+     * nothing. */
     buildBar() {
         const bar = new Panel();
         bar.Name        = "DesignBar";
@@ -264,13 +268,24 @@ Ide.Workspace = class Workspace {
         bar.Spacing     = 4;
         bar.Style       = "toolbar";
 
-        for (const [action, icon, tip] of [
-                ["ActDelCtl", "edit-delete-symbolic", "Delete control"],
-                ["ActRaise",  "go-up-symbolic",       "Bring to front"],
-                ["ActLower",  "go-down-symbolic",     "Send to back"]]) {
+        for (const row of [
+                ["ActDelCtl", "edit-delete-symbolic", Locale.Text("Delete control")],
+                ["ActRaise",  "go-up-symbolic",       Locale.Text("Bring to front")],
+                ["ActLower",  "go-down-symbolic",     Locale.Text("Send to back")],
+                null,
+                ["ActPrevPage", "go-previous-symbolic", Locale.Text("Previous page (Ctrl+Page Up)")],
+                ["ActNextPage", "go-next-symbolic",     Locale.Text("Next page (Ctrl+Page Down)")],
+                ["ActAddPage",  "list-add-symbolic",    Locale.Text("Add page")]]) {
+            if (!row) {
+                const sep = new Separator();
+                sep.Orientation = "Vertical";
+                bar.Add(sep);
+                continue;
+            }
+            const [action, icon, tip] = row;
             const b = new Button();
             b.Icon    = icon;
-            b.Tooltip = Locale.Text(tip);
+            b.Tooltip = tip;
             b.Style   = "flat";
             b.Resize(34, 30);
             bar.Add(b);

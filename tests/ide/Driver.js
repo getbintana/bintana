@@ -2958,7 +2958,7 @@ function* p_pages(ide) {
     yield;
     eq("selecting the container itself shows the page it was on", book.Current, 1);
 
-    /* --- the keys and the page bar ----------------------------------------- */
+    /* --- the keys and the design bar --------------------------------------- */
     ide.WidgetTree.Key = "BtnA";
     yield;
     ide.Glass_KeyPress("Page_Down", true, false);
@@ -2969,23 +2969,11 @@ function* p_pages(ide) {
     yield;
     eq("Ctrl+Page Up the one before", book.Current, 0);
 
-    const bar = designer.chrome.pageBar;
-    yield* until(() => bar.Visible && bar.Bounds(designer.glass).Width > 0);
-    check("a page bar is drawn for the container around the selection",
-          bar.Visible && bar.Bounds(designer.glass).Width > 0);
-    check("saying which page it is",
-          designer.chrome.pageParts.name.Text.startsWith("1 / 3"),
-          designer.chrome.pageParts.name.Text);
-
-    const middle = (w) => {
-        const b = w.Bounds(designer.glass);
-        return [b.X + b.Width / 2, b.Y + b.Height / 2];
-    };
-    const [nx, ny] = middle(designer.chrome.pageParts.next);
-    ide.Glass_MouseDown(nx, ny, 1, false);
-    ide.Glass_MouseUp(nx, ny, 1, false);
+    /* Nothing is drawn over the canvas for it: a bar there covered the form. */
+    check("no page bar over the canvas", !("pageBar" in designer.chrome));
+    ide.ActNextPage.Execute();
     yield;
-    eq("its arrow shows the next page", book.Current, 1);
+    eq("the design bar's next shows the next page", book.Current, 1);
     eq("and selects it", designer.selected, byName(ide, "PgB"));
     eq("still not an edit", designer.dirty, false);
 
@@ -3106,6 +3094,32 @@ function* p_pages(ide) {
     designer.select(null);
     yield;
     eq("with nothing in a page container it is not offered", ide.ActAddPage.Enabled, false);
+
+    /* --- the same three from the design bar, which covers nothing ---------- */
+    const ws = ide.tabs.activeState().workspace;
+    const barActions = ws ? ws.barButtons.map(([, a]) => a) : [];
+    check("the design bar walks the pages too",
+          ["ActPrevPage", "ActNextPage", "ActAddPage"].every((a) => barActions.includes(a)),
+          JSON.stringify(barActions));
+    eq("previous and next are off with nothing in a page container",
+       ide.ActPrevPage.Enabled || ide.ActNextPage.Enabled, false);
+    designer.select(tabs.Children[0]);
+    yield;
+    eq("on the first page there is no previous one", ide.ActPrevPage.Enabled, false);
+    eq("and there is a next one", ide.ActNextPage.Enabled, true);
+    ide.ActNextPage.Execute();
+    yield;
+    eq("next shows the next page", tabs.Current, 1);
+    eq("and selects it", designer.selected, tabs.Children[1]);
+    eq("and previous is on now", ide.ActPrevPage.Enabled, true);
+    ide.ActPrevPage.Execute();
+    yield;
+    eq("previous goes back", tabs.Current, 0);
+    designer.select(tabs.Children[tabs.Count - 1]);
+    yield;
+    eq("on the last page there is no next one", ide.ActNextPage.Enabled, false);
+    designer.select(null);
+    yield;
 
     /* --- the strip is where a page container is grabbed ---------------------
      *
