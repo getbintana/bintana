@@ -592,6 +592,40 @@ and the **installed** runtime is run against a console project that names it,
 answering the half a compile cannot: the installed loader, its GModule, its ABI
 check, and the global the plugin installs.
 
+## How fast, which the suite does not measure
+
+```sh
+tests/bench.sh                         # every program, best of three
+tests/bench.sh nbody primes --runs 5   # those, best of five
+BINTANA=/other/bintana tests/bench.sh  # another build
+```
+
+`tests/bench` runs Gambas's eight benchmark programs -- the same algorithms at
+the same sizes, written again in this language -- each in a process of its own,
+timed inside the child so start-up is not counted, and checked against the
+answer it must give. It prints the best of N, with the spread beside it.
+
+Measured on this machine (GCC 16, best of three; Python is one run of
+Gambas's own `.py` versions, process time):
+
+| program | Debug `build/` | Release, no GCC fix | RelWithDebInfo | Release | CPython 3.14 |
+|---|---|---|---|---|---|
+| btree | 14103 | 4132 | 3706 | 3587 | 2458 |
+| mandelbrot | 7400 | 1920 | 1989 | 1916 | 2243 |
+| nbody | 8107 | 1839 | 1596 | 1822 | 1815 |
+| polynom | 25051 | 11606 | 6445 | 6495 | 5409 |
+| primes | 12926 | 6037 | 4507 | 4603 | 2828 |
+| sort | 9187 | 3061 | 2374 | 2461 | 1573 |
+| string1 | 44654 | 7801 | 10254 | 7813 | 3601 |
+| string2 | 77105 | 34184 | 34608 | 33175 | did not finish |
+
+Milliseconds. The Debug and the no-fix columns are one run each. Two things
+in it are worth keeping: **the GCC 14+ fix is half of `polynom` and a quarter
+of `primes`**, and **the strings are where the engine loses most** -- `string2`
+appends 26 million short strings to one that ends 104 MB long, and the cost of
+an append grows with the string (Python 3.14 is quadratic there and was
+stopped after eleven minutes, which is why Gambas's own runner skips it).
+
 ## Scratch state
 
 Tests that touch the filesystem work under `/tmp` and clean up after themselves —

@@ -124,6 +124,7 @@ tests/try.sh <project> [args...]                  # run any project, on a virtua
 ./tests/styles.sh                                 # which style classes its theme defines
 ./tests/install.sh                                # what `make install` produces, run out of a staging prefix
 ./tests/pack.sh                                   # what `lib/package` writes, read back file by file
+./tests/bench.sh                                  # how fast the interpreter is: Gambas's eight programs, timed and checked
 ```
 
 **Nothing here opens a window, and that is the scripts' doing rather than
@@ -239,10 +240,25 @@ generated file with no consumer is a check about itself. Do not bring one back
 to fix a completion: fix the runtime verb the IDE asks.
 
 **Every one of those but `asan.sh` is a Bintana project now** — `tests/runner`,
-`tests/icons`, `tests/styles`, `tests/install`, each a console project (`"main"`,
-no display) with a ten-line `.sh` in front of it that finds the binary. There is
-no Python left in the repository, and adding a desk tool means writing a project,
-not a script.
+`tests/icons`, `tests/styles`, `tests/install`, `tests/bench`, each a console
+project (`"main"`, no display) with a ten-line `.sh` in front of it that finds
+the binary. There is no Python left in the repository, and adding a desk tool
+means writing a project, not a script.
+
+**`tests/bench.sh` is how a change to the interpreter is measured, and it
+measures whichever binary runs it** -- `build/` is Debug, three times slower
+than an optimised build, so point `BINTANA` at a `RelWithDebInfo` or `Release`
+one before believing a number. The programs are Gambas's (`benchmark/` in its
+tree), written again here because theirs are GPL-2, at their sizes so the
+numbers sit beside Gambas's published table; each runs in a process of its own
+and **checks its answer**, so a faster wrong result is a failure and never a
+time. Not in `tests/run.sh`, since a timing is not an assertion. What it found
+the first day is in `docs/testing.md`: QuickJS beats CPython 3.14 on floating
+point (`mandelbrot`, `nbody`) and loses the other five Python finishes, and **appending to a long string grows
+faster than its length** -- a fifth of `string2`'s appends is 90 ms and all of
+them 1067 ms over five times the data -- which is the engine lead it leaves
+open. `-O3` against `-O2` moves `string1` 24 % one way and `nbody` 12 % the
+other, and nothing else: the packages' `RelWithDebInfo` stays.
 
 `tests/install.sh` is the only one that needs no `HEADLESS` of its own, and it is
 not an exception to the rule above: it never uses the caller's display at all. It brings up an `Xvfb` of its own, because the check is a second command

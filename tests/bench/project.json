@@ -1,0 +1,6 @@
+{
+  "name": "bench",
+  "main": "Main",
+  "sources": ["Programs.js", "Main.js"],
+  "description": "How fast the interpreter is: Gambas's eight benchmark programs, each in a process of its own, timed and checked. A console project, and not part of the suite -- a timing is not an assertion."
+}
