@@ -766,8 +766,10 @@ hold. `docs/plans/debug-plan.md` is the design and the measurements.
   `let total = 0;` right under `function Main() {` has none. A breakpoint there
   would arm and never fire, silently. `JS_DebugLines` is what lets
   `bta_debug.c` move it to the next line that exists and tell the IDE where it
-  went -- which is why a file is compiled and run in two steps under `--debug`
-  and in one otherwise.
+  went -- which is why a file is compiled and run in two steps. (It used to be
+  one step without `--debug`; it is always two now, because whether a file is a
+  script or a module is decided by compiling it -- see *A file with `export` is
+  a module* -- and the compile is then the one that runs.)
 - **A direct eval cannot read a frame, and that is not a bug to work around.**
   It is the eval that sees an enclosing scope, and QuickJS compiles one against
   a lexical scope index the *compiler* wrote into each `OP_eval`; there is no
@@ -813,6 +815,21 @@ hold. `docs/plans/debug-plan.md` is the design and the measurements.
   name in every file) -- `path_is` wants the tail to start at a separator. `testDebuggerOrders` is red on
   the old binary for the second and third; the SIGPIPE half needs the channel
   closed from outside and was measured with a Python driver.
+- **A module is a record and not a function, and the readers had to learn
+  both halves of that.** `JS_DebugLines` answered nothing for a module (its
+  `bta_lines_of` returned on `JS_TAG_MODULE`), so a breakpoint in a module file
+  had no line to arm on; it reads the record's `func_obj`, the module body's
+  bytecode, now. And **a module's private top-level names are closure variables
+  of every function that uses them** -- `const K` in a module, read by
+  `twice`, lives in `twice`'s `var_refs` and not in its frame -- so the values
+  panel did not show it and `eval` of `n + K` was `ReferenceError`.
+  `JS_DebugLocals` and `JS_DebugEval` read `closure_var` through the function
+  object's `var_refs` after the frame's own names (an own name hides an outer
+  one, as in the code), skipping what a parameter list cannot take (an arrow's
+  `this`, `new.target`, the engine's `<...>`). The row carries `Closure: true`.
+  The same was always true of a variable a nested function captures from an
+  enclosing one; a module made it the common case. `tests/widgets`'
+  `modulesDebugger` stops in a module and reads `K` both ways.
 - **Dropping this patch does not fail to build.** The handler is never called,
   `--debug` waits for a debugger that can never stop anything, and the IDE's
   Debug menu does nothing at all. `tests/widgets` asserts it (`testDebugger`):
@@ -857,7 +874,7 @@ declaration or an expression has it upgraded from the keyword a few lines in.
 Both are one `if`.
 
 **What it replaced is the reason it exists, and it is not obvious.** Not
-installing `JS_AddIntrinsicPromise` is a decision about the language and a good
+installing `JS_AddIntrinsicPromise` was a decision about the language and a good
 one -- but that intrinsic is also **the only thing that registers the engine's
 ten async classes**, `JS_CLASS_ASYNC_FUNCTION` among them. An unregistered
 class has a NULL finalizer and a NULL mark function, so the object `js_closure`
@@ -868,6 +885,15 @@ the process at exit -- **after** the program had done its work and called
 it in silence instead. It cost nothing for years because nothing in this tree
 writes `async`; the day an application did, it would have looked like a bug in
 the runtime's teardown and not in a word the manual said was unavailable.
+
+**The intrinsic is installed now, and the decision about the language is
+not reversed**: modules need it (a module is evaluated through a promise), so
+`bta_new_context` installs it and `bta_close_hatches` deletes the `Promise`
+name. What that changes here is only the failure: an async object would now be
+collected. The guard stays, because the language still has no promise to give
+an async function -- and with the classes registered, `import()` and a module's
+top-level `await` went from aborting to working, which is why patch 13 refuses
+them beside this one.
 
 The bisection that found it is worth keeping: an async function **inside a
 function that is never called** is clean, which rules out the parser and the
@@ -1195,8 +1221,8 @@ the column names the word. **The fifth patch's other half**, and written for
 exit, and a module may await. `tests/widgets`' `testCuratedLanguage` asserts the
 `import()` half (two spellings, refused at the word's column, and `import` and
 `await` still names in a script) and is red on four assertions without the
-patch; the top-level `await` half is asserted where a module can be compiled,
-which is stage 2 of the plan. The fork's own `make test` stays 0/118: the nine
+patch; the top-level `await` half is `Modules`' (three spellings, at the
+word's column), since it needed a module to be compiled at all. The fork's own `make test` stays 0/118: the nine
 upstream tests it now refuses all use top-level `await` or `import()`, the way
 patch 5 already refused the ones using `async`.
 
@@ -4475,7 +4501,9 @@ person who wrote it either.
   again. A dialog with
   no buttons set said `Cerrar`, GTK's own, which is how an old binary shows
   itself in a capture.
-- **Every `ide/**/*.js` shares one global scope.** They are separate
+- **Every `ide/**/*.js` shares one global scope** -- every file that does not
+  say `export`, that is; one that does is a module and keeps the rest of its
+  names (see *A file with `export` is a module*). They are separate
   `JS_Eval(JS_EVAL_TYPE_GLOBAL)` calls in one context, which is what lets `Runner`
   use `MainForm`'s `SOURCE_LINK` and `Palette` use `Chrome`'s `SELECT_COLOR` -- and
   what makes the *same* top-level `const` in two files a `SyntaxError:
@@ -7636,6 +7664,62 @@ designer was left), and letting the press through the Glass to the real strip
   the spot when the run has a callback. Found by reading, since no headless
   run can answer the dialog; `on_draw` had the same shape answered years
   before.
+
+## A file with `export` is a module
+
+Stage 2 of [`docs/plans/modules-plan.md`](docs/plans/modules-plan.md), in
+`runtime/src/bta_module.c`: what a module exports goes on the global object and
+reaches every file -- and a `.form`'s `type`, `startup`, `Task.Start`, through
+`bta_lookup_global`'s ordinary eval -- with no `import`; the rest is the file's
+own. `lib/markdown` is the first module in the tree, and `tests/api.sh`'s count
+of top-level names in `lib/` went **88 -> 49** with it. What is worth knowing
+before touching it:
+
+- **A text is a module when only the module compile gets further.**
+  `bta_compile` compiles as a script, and on a `SyntaxError` as a module, and
+  keeps the one whose error is later in the text (or the one with none). Two
+  traps were in that sentence: **the error text cannot decide it** -- a script
+  compile names `export` (`unsupported keyword`) but answers an `import`
+  declaration with a generic `Unexpected token` after the word -- and **a module
+  compile resolves its imports in the same step**, so a module importing
+  something not there fails with `could not load module` and *no position*,
+  after the parse succeeded: a module compile that fails with anything but a
+  `SyntaxError` is a module. `JS_DetectModule` is not this; it answers true for
+  nearly every strict script.
+- **Everything that compiles a project's text goes through `bta_compile`**: the
+  loader, a `Task`'s worker, `Application.CheckSource` and `bta_symbols`.
+  `bta_symbols` asks it **before** installing the symbol handler and then
+  compiles once more in the answer's mode, because a failed script compile
+  reports what it read before failing and a module would come out twice.
+- **An export is a non-configurable accessor**, and both words are the design.
+  The getter reads the module's namespace, so `export let` is live and nobody
+  outside the file can assign it (`no setter`). Non-configurable is what makes
+  a script that declares the same name **after** the module a `SyntaxError` from
+  the engine (`redeclaration of 'Foo'` -- not naming the module, which is a
+  message to improve); one that declared it **before** is found by evaluating
+  the bare name once the global object has said it has none (`lexical_has`),
+  and refused naming the module. A name the runtime installs is refused the
+  same way -- the plan's open question, answered loudly: `export class Timer`
+  would otherwise replace the runtime's for the whole program.
+- **Two owners are not an error until somebody uses the name.** The second is
+  written beside the first in a per-context table of C strings
+  (`owners_by_ctx`, under a mutex since a worker has a context of its own) and
+  the getter, already installed, throws naming both. C strings so that
+  `bta_modules_forget` can run after `JS_FreeRuntime` and nothing in it is a
+  `JSValue` the runtime would assert on; the namespace lives in the getter's own
+  function data, which the collector owns.
+- **`export default` is refused at load**: there is no name to reach anybody by.
+  It may come back with stage 3's `import`.
+- **`tests/api.sh` reads only what a module exports** when it asks whether two
+  libraries claim one name -- the private ones collide with nothing, which was
+  the check standing in for this feature.
+
+`tests/widgets`' `Modules` runs a child per rule (the markdown probes, reach,
+two owners, both collision orders, a runtime name, `export default`, a live
+binding, a task class in a module) plus `CheckSource`/`Symbols` on a module
+and a module's top-level `await` (patch 13's half that needed a module), and
+`modulesDebugger` stops in one. Taking the `export` off `lib/markdown` turns the
+two markdown assertions red.
 
 ## A bare class name resolves the way JavaScript does
 

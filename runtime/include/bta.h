@@ -645,6 +645,22 @@ JSValue bta_lookup_global(JSContext *ctx, const char *name);
  * what `Widget.Members` reads a class's own shape out of.  Takes the text and
  * owns the result. */
 JSValue bta_symbols(JSContext *ctx, const char *src);
+
+/* --- modules (bta_module.c, docs/plans/modules-plan.md) ------------------- */
+/* Compiles `src` as a script, or as a module when only that compiles -- the
+ * further of the two compiles decides, and its error is the one thrown.  The
+ * result is a function or a module record, ready for JS_EvalFunction or
+ * bta_module_run. */
+JSValue bta_compile(JSContext *ctx, const char *src, size_t len,
+                    const char *name, bool *is_module);
+/* Evaluates a compiled module (taking it) and puts what it exports on the
+ * global object; -1 with an exception pending. */
+int     bta_module_run(JSContext *ctx, JSValue compiled, const char *path);
+/* Whether a module put `name` on the global object -- a program's name, not
+ * the runtime's, which is what `Application.Globals` needs to tell apart. */
+bool    bta_module_exported(JSContext *ctx, const char *name);
+/* Who exports what, for a context that is going away. */
+void    bta_modules_forget(JSContext *ctx);
 /* A JSDoc comment's description and its `@returns {T}` type, each NULL when
  * absent; the caller frees both. */
 void    bta_prelude_sources(const char **rad, const char **forms);

@@ -547,6 +547,8 @@ const TESTS = [
     "DesignPadding",
     /* Children too: a project's own class named like a runtime global. */
     "ClassNamedLikeAGlobal",
+    /* Children too: a file with `export` is a module. */
+    "Modules",
     "Time",
     "Stopwatch",
     "Shortcut", "Decimal", "FieldDecimal",
@@ -4095,6 +4097,210 @@ class WidgetsForm extends Form {
                     "}\n",
         });
         check("a control's type named like a global is the project's class", ran.Output.includes("TYPE true"), ran.Output);
+    }
+
+    /*
+     * A file with `export` is a module: what it exports reaches every file with
+     * no `import`, the rest is its own (docs/plans/modules-plan.md, stage 2;
+     * runtime/src/bta_module.c). Children, because what is being tested is a
+     * program's load -- what reaches the shared scope and what stops it.
+     */
+    testModules() {
+        const run = (name, project, files) => {
+            const dir = File.Join(SCRATCH, "module-" + name);
+            Directory.Make(dir);
+            const sources = Dictionary.Keys(files).filter((f) => f.endsWith(".js"));
+            File.SaveJson(File.Join(dir, "project.json"),
+                          { name: "module" + name, sources, ...project });
+            for (const f of Dictionary.Keys(files)) File.Save(File.Join(dir, f), files[f]);
+            return Exec.Wait([Application.Executable, dir], { Timeout: 30000 });
+        };
+        const main = (body) => `function Main() {\n${body}\n    Application.Quit(0);\n}\n`;
+
+        /* The two probes that measured the problem, against `lib/markdown`,
+         * which is a module now: a project's own `slug` replaced the library's
+         * anchors, and its own `GAP` stopped the program from starting. */
+        let r = run("markdown", { startup: "F", uses: ["markdown"] }, {
+            "Mine.js": "const GAP = 8;\nfunction slug(s) { return s.toUpperCase(); }\n",
+            "F.js": "class F extends Form {\n" +
+                    "    Form_Open() {\n" +
+                    "        this.Visible = false;\n" +
+                    "        const md = new Markdown();\n" +
+                    "        this.Add(md);\n" +
+                    "        md.Text = '# Precios y condiciones';\n" +
+                    "        print('ANCHOR ' + md.Headings[0].Id + ' ' + GAP + ' ' + slug('x'));\n" +
+                    "        Application.Quit(0);\n" +
+                    "    }\n" +
+                    "}\n",
+            "F.form": JSON.stringify({ format: "bintana-form/1", class: "F",
+                                       properties: { Width: 200, Height: 100 }, children: [] }),
+        });
+        check("a project's own slug no longer changes the library's anchors",
+              r.Output.includes("ANCHOR precios-y-condiciones 8 X"), r.Output);
+        eq("...and its own GAP does not stop it", r.ExitCode, 0);
+
+        /* Rule 2: exports reach a script with no import, the rest stays home. */
+        r = run("reach", { main: "Main" }, {
+            "Prices.js": "const IVA = 0.21;\nexport function withIva(n) { return n * (1 + IVA); }\n" +
+                         "export class Invoice { Total() { return withIva(100); } }\n",
+            "Main.js": main("    print('REACH ' + withIva(100) + ' ' + new Invoice().Total() + ' ' + typeof IVA);"),
+        });
+        check("an export reaches a script with no import, and a private name does not",
+              r.Output.includes("REACH 121 121 undefined"), r.Output);
+
+        /* Rules 3 and 4: two owners of a name load fine, and the name answers
+         * neither -- at the use, naming both. */
+        r = run("ambiguous", { main: "Main" }, {
+            "Csv.js": "export class Parser {}\nexport const csv = 1;\n",
+            "Ini.js": "export class Parser {}\n",
+            "Main.js": main("    print('OTHERS ' + csv);\n" +
+                            "    try { new Parser(); } catch (e) { print('AMBIGUOUS ' + e.message); }"),
+        });
+        check("two owners of a name still load, and their other names arrive",
+              r.Output.includes("OTHERS 1"), r.Output);
+        check("...and the shared name names both owners",
+              r.Output.includes("AMBIGUOUS 'Parser' is exported by Csv.js and Ini.js: choose one with import"),
+              r.Output);
+
+        /* A collision with a script, in either order, and with the runtime. */
+        r = run("before", { main: "Main" }, {
+            "A.js": "class Foo {}\n", "B.js": "export class Foo {}\n", "Main.js": main(""),
+        });
+        check("a module exporting what a script declared is refused, naming it",
+              r.ExitCode !== 0 && r.Output.includes("B.js exports 'Foo', which a script already declares"),
+              r.Output);
+        r = run("after", { main: "Main" }, {
+            "B.js": "export class Foo {}\n", "A.js": "class Foo {}\n", "Main.js": main(""),
+        });
+        check("a script declaring what a module exported is refused",
+              r.ExitCode !== 0 && r.Output.includes("redeclaration of 'Foo'"), r.Output);
+        r = run("runtime", { main: "Main" }, {
+            "T.js": "export class Timer {}\n", "Main.js": main(""),
+        });
+        check("exporting a name of the runtime is refused",
+              r.ExitCode !== 0 && r.Output.includes("T.js exports 'Timer', which is already a name"),
+              r.Output);
+        r = run("default", { main: "Main" }, {
+            "D.js": "export default 1;\n", "Main.js": main(""),
+        });
+        check("an export default is refused: it has no name to reach anybody by",
+              r.ExitCode !== 0 && r.Output.includes("'export default' has no name"), r.Output);
+
+        /* An export is a live binding, and nobody else can assign it. */
+        r = run("live", { main: "Main" }, {
+            "L.js": "export let n = 1;\nexport function bump() { n++; }\n",
+            "Main.js": main("    bump(); bump();\n    print('LIVE ' + n);\n" +
+                            "    try { n = 5; print('ASSIGNED'); } catch (e) { print('REFUSED'); }"),
+        });
+        check("an exported let is live", r.Output.includes("LIVE 3"), r.Output);
+        check("...and only its module assigns it", r.Output.includes("REFUSED"), r.Output);
+
+        /* A task's file may be a module: the worker loads it the same way. */
+        r = run("task", { main: "Main" }, {
+            "Doubler.js": "const FACTOR = 2;\n" +
+                          "export class Doubler extends Task { Run(m) { return m.n * FACTOR; } }\n",
+            "Main.js": "function Main() {\n" +
+                       "    const t = new Doubler();\n" +
+                       "    t.Done = (v) => { print('TASK ' + v + ' ' + typeof FACTOR); Application.Quit(0); };\n" +
+                       "    t.Error = (m) => { print('TASK FAILED ' + m); Application.Quit(1); };\n" +
+                       "    t.Start({ n: 21 });\n" +
+                       "}\n",
+        });
+        check("a task class exported by a module runs in a worker",
+              r.Output.includes("TASK 42 undefined"), r.Output);
+
+        /* The editor's two questions read a module as a module. */
+        const src = "const K = 1;\n/** doubles */\nexport function twice(n) { return n * K; }\n";
+        eq("CheckSource accepts a module", Application.CheckSource(src), null);
+        const fns = Application.Symbols(src).filter((x) => x.Kind === "Function");
+        eq("Symbols reads a module's function", fns.map((x) => x.Name + x.Params + x.Doc).join(), "twice(n)doubles");
+        const late = Application.CheckSource("export function f() {}\n\nconst = ;");
+        eq("a module that breaks later says where it broke", late && late.Line, 3);
+
+        /* Fork patch 13's other half, which needed a module to be asked:
+         * a module's top-level await is refused at the word. */
+        for (const [what, text, column] of [
+            ["an await",           "export const x = await 41;",     18],
+            ["an await using",     "export const y = 1;\nawait using r = null;", 1],
+            ["a for (await using", "export const y = 1;\nfor (await using r of []) {}", 6],
+        ]) {
+            const no = Application.CheckSource(text);
+            check(`${what} at a module's top level is refused`,
+                  no !== null && /await is not available/.test(no.Message), JSON.stringify(no));
+            eq(`...at the word`, no && no.Column, column);
+        }
+
+        this.modulesDebugger();
+    }
+
+    /*
+     * The debugger in a module: a breakpoint in one of its functions stops
+     * (the fork's JS_DebugLines reads a module record as its body), and the
+     * frame shows -- and `eval` names -- the module's private top-level names,
+     * which to the engine are closure variables of the function (the fork's
+     * JS_DebugLocals/JS_DebugEval read them through `var_refs`).
+     */
+    modulesDebugger() {
+        const proj = File.Join(SCRATCH, "module-dbg");
+
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "moduledbg", main: "Main", sources: ["Lib.js", "Main.js"] });
+        File.Save(File.Join(proj, "Lib.js"),
+                  "const K = 100;\n" +
+                  "export function twice(n) {\n" +
+                  "    const doubled = n * 2;\n" +
+                  "    return doubled + K;\n" +
+                  "}\n");
+        File.Save(File.Join(proj, "Main.js"),
+                  "function Main() {\n" +
+                  "    print(`answer ${twice(21)}`);\n" +
+                  "    Application.Quit(0);\n" +
+                  "}\n");
+
+        const stops = [];
+        const out   = [];
+        let   locals = null;
+        let   value  = null;
+
+        waiting++;
+        const job = Exec([Application.Executable, "--debug", proj],
+            {
+                Timeout: 20000,
+                Control: (line) => {
+                    const msg  = JSON.parse(line);
+                    const kind = msg.event || msg.reply;
+
+                    if (kind === "ready") {
+                        job.Write(JSON.stringify({ do: "break", file: "Lib.js", line: 3, id: 1 }));
+                        job.Write(JSON.stringify({ do: "continue" }));
+                    } else if (kind === "stopped") {
+                        stops.push(msg);
+                        job.Write(JSON.stringify({ do: "locals", frame: 0 }));
+                    } else if (kind === "locals") {
+                        locals = msg.items;
+                        job.Write(JSON.stringify({ do: "eval", frame: 0, text: "n + K" }));
+                    } else if (kind === "eval") {
+                        value = msg.value;
+                        job.Write(JSON.stringify({ do: "continue" }));
+                    }
+                },
+            },
+            (line) => out.push(line),
+            (code) => {
+                eq("a module run under the debugger finishes", code, 0);
+                check("...and prints its answer", out.join("").includes("answer 142"),
+                      JSON.stringify(out));
+                eq("a breakpoint in a module function stops once", stops.length, 1);
+                const at = stops[0] && stops[0].frames;
+                eq("...in that function, on that line", at && `${at[0].Name}:${at[0].Line}`,
+                   "twice:3");
+                const by = {};
+                for (const item of locals || []) by[item.Name] = item.Value;
+                eq("the frame shows the module's private name", by.K, "100");
+                eq("...and eval names it", value, "121");
+                waiting--;
+            });
     }
 
     MediaVid_Ended() { this.mediaEnded = (this.mediaEnded || 0) + 1; }

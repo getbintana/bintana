@@ -1323,8 +1323,17 @@ static gpointer task_thread(gpointer data)
         goto unwind;
     }
 
-    r = JS_Eval(ctx, job->file_text, strlen(job->file_text), job->file_path,
-                JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_STRICT);
+    /* The task's file may be a module (bta_module.c), like any other. */
+    bool is_module = false;
+    r = bta_compile(ctx, job->file_text, strlen(job->file_text), job->file_path,
+                    &is_module);
+    if (!JS_IsException(r)) {
+        if (is_module)
+            r = bta_module_run(ctx, r, job->file_path) < 0 ? JS_EXCEPTION
+                                                            : JS_UNDEFINED;
+        else
+            r = JS_EvalFunction(ctx, r);
+    }
     if (JS_IsException(r)) {
         task_exc_text(ctx, &job->fail_msg, &job->fail_stack);
         job->fail = 1;
@@ -1405,6 +1414,7 @@ unwind:
     g_mutex_unlock(&task_lock);
     JS_FreeContext(ctx);
     JS_FreeRuntime(rt);
+    bta_modules_forget(ctx);
 
 done:
     /* Said before the idle source, so teardown's bounded wait ends as soon as

@@ -104,10 +104,17 @@ const HELPER_EVENTS = { MouseDown: 5, MouseUp: 5, MouseMove: 5, DblClick: 5 };
  * library declares one.
  *
  * Only the top level counts -- what is inside a class or a function is that
- * scope's and collides with nothing.
+ * scope's and collides with nothing. **And of a module, only what it exports**:
+ * a library file with an `export` keeps the rest to itself
+ * (docs/plans/modules-plan.md), which is the fix this check used to stand in
+ * for. Two libraries exporting one name still start, and the name then answers
+ * neither -- which is still a problem for a library that ships.
  */
 const TOP_LEVEL = new Regex("^(?:const|let|var|function|class)\\s+([A-Za-z_$][\\w$]*)",
                             { Multiline: true });
+const EXPORTED  = new Regex("^export\\s+(?:const|let|var|function|class)\\s+([A-Za-z_$][\\w$]*)",
+                            { Multiline: true });
+const IS_MODULE = new Regex("^\\s*(?:export|import)\\s", { Multiline: true });
 
 function checkLibraryScopes(root, problems) {
     const owners = {};        /* name -> the libraries that declare it */
@@ -117,9 +124,12 @@ function checkLibraryScopes(root, problems) {
         const lib  = File.Name(dir);
         const mine = new Set();
 
-        for (const src of Directory.Files(dir, "*.js"))
-            for (const m of TOP_LEVEL.Matches(File.Load(src)))
+        for (const src of Directory.Files(dir, "*.js")) {
+            const text = File.Load(src);
+            const read = IS_MODULE.IsMatch(text) ? EXPORTED : TOP_LEVEL;
+            for (const m of read.Matches(text))
                 mine.add(m.Group(1));
+        }
 
         for (const n of mine) {
             if (!owners[n]) owners[n] = [];
@@ -133,7 +143,7 @@ function checkLibraryScopes(root, problems) {
         if (owners[n].length > 1) {
             clashes++;
             problems.push(`${owners[n].join(" and ")} both declare a top-level ` +
-                          `\`${n}\` -- a project naming both will not start`);
+                          `\`${n}\` -- a project naming both cannot use it`);
         }
     }
     return { names, clashes };

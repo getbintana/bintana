@@ -1,8 +1,9 @@
 # Modules: a file that keeps its own names
 
-**Status: stages 0 and 1 done (2026-10-11).** The spike changed nothing and
-found nothing that sends the plan back; its results are under stage 0. Stage 1
-is fork patch 13. Stage 2 is next.
+**Status: stages 0, 1 and 2 done (2026-10-11).** The spike changed nothing
+and found nothing that sends the plan back; its results are under stage 0.
+Stage 1 is fork patch 13; stage 2 is `runtime/src/bta_module.c`, and
+`lib/markdown` is its first module. Stage 3, the explicit `import`, is next.
 
 It answers L1 and D1 of [the October 2026 audit](../audit-2026-10.md): one
 global scope for every file and library, and a dynamic `import()` that compiles
@@ -257,6 +258,25 @@ stage 2, the first time the runtime compiles a module.
 - `tests/widgets`: the two probes above as assertions (a private `slug` of the
   library is not replaced; a private `GAP` does not collide), an ambiguous name
   with its message, and an `export` read from a script file.
+
+**Done, 2026-10-11.** What building it decided, beyond the bullets above
+(`AGENTS.md`, *A file with `export` is a module*, has the traps):
+
+- **Where an export lives -- the first open question -- is the global object,
+  as a non-configurable accessor**, and exporting a name the runtime installs
+  is refused at load. Non-configurable makes a script that declares the same
+  name afterwards a redeclaration error; one that declared it before is found
+  and refused naming the module. The getter reads the namespace, so an
+  `export let` is live and read-only outside its file.
+- **Detection is stage 0's rule plus one case**: a module compile resolves its
+  imports, so one that fails with anything but a `SyntaxError` read the whole
+  text and is a module.
+- **`export default` is refused** until stage 3 gives it a way to be named.
+- **The debugger needed a fork change beside patch 4's readers**: lines for a
+  module record, and closure variables in the values panel and in `eval`,
+  which is what a module's private names are to the engine.
+- `tests/api.sh`'s check that no two libraries claim a top-level name reads
+  only a module's exports: 88 names in `lib/` became 49 with markdown's move.
 
 ### Stage 3 -- explicit `import`
 

@@ -590,19 +590,19 @@ int bta_eval_file(JSContext *ctx, const char *path)
      * evaluates in one step, as it always did.
      */
     JSValue r;
-    if (bta_debug_enabled()) {
-        r = JS_Eval(ctx, src, len, path,
-                    JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_STRICT |
-                    JS_EVAL_FLAG_COMPILE_ONLY);
-        if (!JS_IsException(r)) {
-            bta_debug_compiled(ctx, path, r);
-            r = JS_EvalFunction(ctx, r);
-        }
-    } else {
-        r = JS_Eval(ctx, src, len, path,
-                    JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_STRICT);
-    }
+    bool    is_module = false;
+
+    /* A file with `export` is a module (bta_module.c): compiled, shown to the
+     * debugger like a script, then evaluated and its exports handed out. */
+    r = bta_compile(ctx, src, len, path, &is_module);
     g_free(src);
+    if (!JS_IsException(r)) {
+        bta_debug_compiled(ctx, path, r);
+        if (is_module)
+            r = bta_module_run(ctx, r, path) < 0 ? JS_EXCEPTION : JS_UNDEFINED;
+        else
+            r = JS_EvalFunction(ctx, r);
+    }
 
     if (JS_IsException(r)) {
         bta_dump_error(ctx);
@@ -732,9 +732,8 @@ static JSValue js_check_source(JSContext *ctx, JSValueConst this_val,
         JS_SetPropertyStr(ctx, err_ctor, "stackTraceLimit", JS_NewInt32(ctx, 10));
     }
 
-    JSValue r = JS_Eval(ctx, src, strlen(src), "<check>",
-                        JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_STRICT |
-                        JS_EVAL_FLAG_COMPILE_ONLY);
+    bool    is_module;
+    JSValue r = bta_compile(ctx, src, strlen(src), "<check>", &is_module);
     JS_FreeCString(ctx, src);
 
     if (!JS_IsException(r)) {
@@ -963,10 +962,20 @@ JSValue bta_symbols(JSContext *ctx, const char *src)
     SymbolSink sink = { ctx, JS_NewArray(ctx), 0 };
     JSRuntime *rt   = JS_GetRuntime(ctx);
 
+    /* Which of the two the text is, asked first and without the handler: a
+     * script compile that fails reports what it read before failing, and a
+     * module would then report its declarations twice. */
+    bool    is_module;
+    JSValue probe = bta_compile(ctx, src, strlen(src), "<symbols>", &is_module);
+    if (JS_IsException(probe))
+        JS_FreeValue(ctx, JS_GetException(ctx));
+    JS_FreeValue(ctx, probe);
+
     JS_SetSymbolHandler(rt, symbol_report, &sink);
 
     JSValue r = JS_Eval(ctx, src, strlen(src), "<symbols>",
-                        JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_STRICT |
+                        (is_module ? JS_EVAL_TYPE_MODULE
+                                   : JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_STRICT) |
                         JS_EVAL_FLAG_COMPILE_ONLY);
 
     JS_SetSymbolHandler(rt, NULL, NULL);
@@ -1599,7 +1608,7 @@ static JSValue js_globals(JSContext *ctx, JSValueConst this_val,
             const char *name = JS_AtomToCString(ctx, tab[i].atom);
             /* `globalThis` went with the hatches, and so did every name they
              * took: what is left here is what a program may actually write. */
-            if (name && *name)
+            if (name && *name && !bta_module_exported(ctx, name))
                 JS_SetPropertyUint32(ctx, out, n++, JS_NewString(ctx, name));
             if (name) JS_FreeCString(ctx, name);
         }
@@ -1880,7 +1889,9 @@ static bool install_globals(BtaApp *app)
      *   library installed, and the JavaScript builtins -- `Math`, `JSON`,
      *   `Date`, `Map`, `Timer`, `Confirm`. **A top-level `class` is a lexical
      *   binding and not a property of the global object**, so a library's and
-     *   a project's classes are *not* in it -- read those out of the sources,
+     *   a project's classes are *not* in it -- nor what a module exports, which
+     *   is on the global object and left out on purpose: it is the program's
+     *   and not the runtime's -- read those out of the sources,
      *   which is what the IDE does. It exists because the alternative is a
      *   hand-written list of global names, and there are a hundred and
      *   sixty-four of them
@@ -2186,7 +2197,18 @@ void bta_close_hatches(JSContext *ctx)
      * `JS_FreeRuntime` abort at exit, 134, after the program had done its work.
      * Found through `Widget.Members("Array")`, which reads every own property
      * of the constructor. It cannot work without promises anyway, so it goes.
+     * The async classes are registered now (see bta_new_context), so it would
+     * be collected -- and it answers a promise, which is reason enough.
      */
+    /*
+     * `Promise`, whose intrinsic is installed for one reason -- a module is
+     * evaluated through a promise -- and whose name is not part of the
+     * language.  Nothing a program writes can reach one: patches 5 and 13
+     * refuse `async`, `await` and `import()`, which are the only syntax that
+     * makes or hands back a promise.
+     */
+    delete_named(ctx, global, "Promise");
+
     JSValue array = JS_GetPropertyStr(ctx, global, "Array");
     if (JS_IsObject(array))
         delete_named(ctx, array, "fromAsync");
@@ -2641,6 +2663,14 @@ static GPtrArray *collect_sources(BtaApp *app, JSValueConst cfg)
  *
  * Promise is the deliberate one: this is a RAD language with events, not
  * continuations, and leaving it out makes that a fact rather than advice.
+ * **Its intrinsic is installed all the same, and the name deleted after boot**
+ * (bta_close_hatches): a module is evaluated through a promise, and the
+ * intrinsic is the only thing that registers the engine's async classes --
+ * without which an object of one of them is never collected and
+ * JS_FreeRuntime aborts at exit, the mechanism behind patch 5 and audit D1.
+ * The language still has no promise: `async`, `await` and `import()` are
+ * refused by the parser (patches 5 and 13), so nothing a program writes can
+ * make or receive one.
  *
  * Eval is *not* optional, and not for the reason it looks.  JS_AddIntrinsicEval
  * does not install the global `eval` -- base objects does that -- it sets the
@@ -2659,7 +2689,8 @@ JSContext *bta_new_context(JSRuntime *rt)
         JS_AddIntrinsicDate(ctx) ||
         JS_AddIntrinsicRegExp(ctx) ||      /* renaming a control is a regexp */
         JS_AddIntrinsicJSON(ctx) ||        /* a .form is JSON */
-        JS_AddIntrinsicMapSet(ctx)) {
+        JS_AddIntrinsicMapSet(ctx) ||
+        JS_AddIntrinsicPromise(ctx)) {     /* modules; the name goes, see above */
         JS_FreeContext(ctx);
         return NULL;
     }
@@ -2824,6 +2855,7 @@ void bta_app_free(BtaApp *app)
     bta_widgets_cleanup(app->ctx);
     JS_FreeContext(app->ctx);
     JS_FreeRuntime(app->rt);
+    bta_modules_forget(app->ctx);   /* C strings only, keyed by the pointer */
     /* After the context: a plugin's cleanup is C-only, and this is where the
      * shared objects are let go. See the note on bta_plugins_cleanup. */
     bta_plugins_cleanup(app);

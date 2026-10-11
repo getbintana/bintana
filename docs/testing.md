@@ -1,7 +1,7 @@
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 8644 assertions
+./tests/run.sh                          # all seven projects, 8671 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -219,7 +219,7 @@ own says so with `reportsItself`.
 
 `tests/widgets` is 195 tests listed in `TESTS`, and a filter there **selects** rather
 than running a prefix — `./tests/run.sh widgets record` is 142 assertions
-against 4926 in about twenty. It can select because these tests are
+against 4953 in about twenty. It can select because these tests are
 independent: each builds the controls it needs and deletes them again. The two that
 are not say so in the file:
 
@@ -377,9 +377,10 @@ which is the same bargain `tests/icons` and `tests/styles` make. The numbers
 `./tests/api.sh` prints as this is written: 13 class statics, 294 global verbs
 with their parameters named, 928 members and events saying what they are for,
 in C and in JavaScript, 5 members checked for shadowing a base one, 409 members
-held to `api.json`, 88 top-level names in `lib/` with no two libraries claiming
-one, all 46 globals the runtime installs accounted for, and 107 links over the
-28 pages that stayed. Every one of them has been stale at some point in this
+held to `api.json`, 49 top-level names in `lib/` with no two libraries claiming
+one (a module counts only what it exports, which is why `lib/markdown` becoming
+one took the figure from 88), all 46 globals the runtime installs accounted
+for, and 115 links over the 31 pages that stayed. Every one of them has been stale at some point in this
 repository.
 
 **A library's events are read from the code that raises them**, which is the

@@ -194,6 +194,7 @@ add_custom_command(
 add_executable(bintana
     runtime/src/main.c
     runtime/src/bta_runtime.c
+    runtime/src/bta_module.c
     runtime/src/bta_journal.c
     runtime/src/bta_widget.c
     runtime/src/bta_fixed.c
