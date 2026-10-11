@@ -23,6 +23,7 @@ move with:
 | [ide-internals.md](ide-internals.md) | How the IDE is built: its parsers, its caches, how a form is built and drawn, the shape of the tree. The half of the IDE's documentation that is about changing it |
 | [llm/issues.md](llm/issues.md) | **What is deliberately not here**: the curated language's decisions, what is missing, and what to do about it. What an application author is told to read before inventing something |
 | [plans/](plans/README.md) | **Designs argued before they are code**: each saying in its first lines whether it is built, waiting for a caller or not started |
+| [audit-2026-10.md](audit-2026-10.md) | **An independent audit, October 2026**: defects and gaps in the language, runtime, widgets and IDE, each with an id and evidence, measured against Gambas, Lazarus/Delphi, Xojo, Qt/.NET and Electron/Tauri, and an order of attack |
 | [issues/](issues/README.md) | **Reported gaps**: what the runtime is missing, each written in the form `llm/issues.md` asks for — never how to add it |
 
 Working *on* this repository — commands, conventions, the trap list — is
