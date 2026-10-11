@@ -13009,6 +13009,29 @@ function Main() {
             check(`...and says where ${what} was`, no !== null && no.Column > 0,
                   JSON.stringify(no));
         }
+
+        /* The thirteenth patch, the fifth's other half: `import()` answers a
+         * promise, so it is refused where it is written. It compiled and then
+         * aborted the process at exit (134) with the same never-collected
+         * object as `async`, and once the async classes are registered it
+         * hands the program a promise whose `constructor` is the `Promise` the
+         * global deletion took away. The column is the word's. A module's
+         * top-level `await` is the patch's other half and is asserted where a
+         * module can be compiled. */
+        for (const [what, src, column] of [
+            ["a dynamic import",          "const p = import('./x.js');", 11],
+            ["one split across lines",    "f(import(\n'x'));",           3],
+        ]) {
+            const no = Application.CheckSource(src);
+
+            check(`${what} is refused`,
+                  no !== null && /import\(\) is not available/.test(no.Message),
+                  JSON.stringify(no));
+            eq(`...at the word`, no && no.Column, column);
+        }
+        for (const src of ["const o = { import: 1 }; o.import;",
+                           "const await = 1;", "function await() {}"])
+            eq(`and '${src}' is still a script`, Application.CheckSource(src), null);
     }
 
     /* `typeof x` is safe on an undeclared name, but only written literally --

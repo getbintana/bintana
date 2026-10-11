@@ -589,11 +589,11 @@ used to read as no id at all; a project that declares none keeps the old answer,
 program's own name. `GtkApplication` also takes the id as the default window
 icon when the theme has one by that name (`gtkapplication.c`).
 
-## The twelve patches in vendor/
+## The thirteen patches in vendor/
 
 `vendor/quickjs` is a **submodule** of
 [`getbintana/quickjs`](https://github.com/getbintana/quickjs), branch `bintana`:
-upstream **v0.17.0** plus the twelve patches below, one commit each (the eighth
+upstream **v0.17.0** plus the thirteen patches below, one commit each (the eighth
 carries a fix as a second commit, `1493dc7`, until it is squashed into it). The fork's
 `BINTANA.md` is the recipe; what follows is what each patch does and what
 dropping it costs.
@@ -668,12 +668,12 @@ git push --force-with-lease origin bintana
 git submodule update --remote vendor/quickjs              # and commit the pin
 ```
 
-Then the suite. All twelve are marked `Bintana patch` in the source, and
+Then the suite. All thirteen are marked `Bintana patch` in the source, and
 **dropping one does not fail to build** -- that is the property they share and
 the reason `tests/widgets` asserts each of them (`Decimal`, `JsonFiles`,
 `strictChecks`, `testDebugger`, `testCuratedLanguage`, `LongAppend`,
 `StringSearch`) -- the
-fifth of which carries the seventh, the eighth and the ninth. Grep the fork for the
+fifth of which carries the seventh, the eighth, the ninth and the thirteenth. Grep the fork for the
 marker after a rebase; there is no build-time check that they survived.
 
 ### 1. Operators on a Decimal
@@ -1160,6 +1160,45 @@ narrow and wide is a ratio of the machine with itself -- 1.0 on the old engine
 `lastIndexOf`, `startsWith` and `endsWith` still compare position by position,
 through the `memcmp` now; a backwards search has no `memrchr` the C standard
 promises, and the other two compare at one position only.
+
+### 13. `await` and `import()` are refused where they are written
+
+`js_refuse_await` in `quickjs.c`, asked wherever the parser accepts an
+`await` -- the expression, `for await`, and `await using` in a statement, a
+`for` head and a `for...of` head -- and a guard in the `import` case of the
+primary expression that refuses `import(` while the token is still `import`, so
+the column names the word. **The fifth patch's other half**, and written for
+`docs/plans/modules-plan.md`, whose evidence it is:
+
+- **`import()` compiled, and a program that called it aborted at exit (134)**,
+  audit D1: it builds a promise, the runtime registers no async classes, and
+  the object is never collected -- patch 5's mechanism by the one door patch 5
+  did not guard. **And registering the classes does not make it safe**: the
+  modules plan installs `JS_AddIntrinsicPromise` (a module is evaluated through
+  a promise), and measured with it, `import()` runs and hands the program a
+  promise whose `constructor` is the `Promise` the global deletion took away.
+- **A module's top level is the only `await` left.** With patch 5 refusing every
+  async function, the one function whose kind is still `JS_FUNC_ASYNC` is a
+  module's body, so the guard asks `func_kind` and meets nothing else -- `await`
+  stays an ordinary name in a script (`const await = 1` compiles), and inside a
+  non-async function it is still the engine's own *unexpected 'await'*. Measured
+  in a module with the intrinsic in: `export const x = await 41;` evaluated,
+  drained by the job queue and exited 0, which is the language growing a
+  promise it does not have.
+- **`js_parse_for_in_of` reads `await using` on its own**, without asking the
+  function's kind -- the first version guarded the four places that ask and
+  `for (await using r of [])` still compiled. A probe that compiles every
+  spelling as a module is what found it; the `await` paths are five and not
+  four.
+
+**Dropping it does not fail to build**: `import()` compiles again and aborts at
+exit, and a module may await. `tests/widgets`' `testCuratedLanguage` asserts the
+`import()` half (two spellings, refused at the word's column, and `import` and
+`await` still names in a script) and is red on four assertions without the
+patch; the top-level `await` half is asserted where a module can be compiled,
+which is stage 2 of the plan. The fork's own `make test` stays 0/118: the nine
+upstream tests it now refuses all use top-level `await` or `import()`, the way
+patch 5 already refused the ones using `async`.
 
 ## Memory rules
 
