@@ -5468,6 +5468,16 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   language's, and an `undefined` in an *object* is still a key that is not
   there. A `Record` never reaches this: `Field.Number` refuses a non-finite
   value on the way in.
+- **A `Field.Decimal` rounds to its places, and `Load` was the one coercion
+  that did not say so.** `new Decimal(v, places)` rounds the *value*, not its
+  display (`new Decimal("19.999", 2) - 20` is `0.00`), so a file saying 19.999
+  loaded as 20.00 and the next save wrote it -- while a `2.5` in a `Field.Int`
+  beside it was reported. `fieldValue` takes a `notes` list that only `Load`
+  passes (an assignment means the rounding: the program chose the field), and
+  the value is **kept rounded** rather than reset to the default, since 20.00
+  is a thousandth away and `0.00` is not. Trailing zeros (`"19.90"`, `"20"`)
+  change nothing and say nothing. `LoadXml` and a `Table`'s rows go through
+  `Load`, so they report it too.
 - **`g_base64_decode` ignores what it does not understand.** Hand it `"hello"`
   and it answers three bytes rather than an error, so a value that was meant to
   be text becomes a silent handful of nonsense -- and `Field.Bytes` reads base64

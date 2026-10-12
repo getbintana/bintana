@@ -19298,6 +19298,24 @@ function Main() {
         eq("and read back exactly", `${Priced.Load(written).Price}`, "1.01");
         eq("with nothing to complain about", Priced.Load(written).Problems.length, 0);
 
+        /* A file with more places than the field is rounded to them -- the
+         * field's scale -- and said: it was the one change Load made to a
+         * value without a word, and the next save writes 20.00 over 19.999.
+         * Kept rounded and not reset, since 20.00 is a thousandth away. */
+        const more = Priced.Load({ Name: "x", Price: "19.999" });
+        eq("a file's extra places are rounded", `${more.Price}`, "20.00");
+        eq("and Load says so, naming both scales", JSON.stringify(more.Problems),
+           JSON.stringify(["Price: 19.999 has 3 decimal places, the field 2 -- rounded to 20.00"]));
+        eq("a number from the file too",
+           Priced.Load({ Name: "x", Price: 19.999 }).Problems.length, 1);
+        eq("but trailing zeros change nothing and say nothing",
+           Priced.Load({ Name: "x", Price: "19.90" }).Problems.length
+           + Priced.Load({ Name: "x", Price: "20" }).Problems.length, 0);
+        const assigned = new Priced({ Name: "x" });
+        assigned.Price = "19.999";
+        eq("an assignment rounds in silence: the program chose the field",
+           assigned.Problems.length, 0);
+
         /*
          * A field still at its default is left out of the file, which only works
          * because `sameValue` learned to compare decimals: `===` on two of them

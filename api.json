@@ -12808,7 +12808,7 @@
           "Params": 1,
           "Signature": "(opts)",
           "Returns": "",
-          "Doc": "a [`Decimal`](docs/reference/globals/Decimal.md) at a fixed scale. Options: `required`, `min`, `max`, `decimals` (2 by default)",
+          "Doc": "a [`Decimal`](docs/reference/globals/Decimal.md) at a fixed scale. Options: `required`, `min`, `max`, `decimals` (2 by default). A value with more places is **rounded** to them, away from zero: an assignment does it in silence, and `Load` says so in `Problems` (`Price: 19.999 has 3 decimal places, the field 2 -- rounded to 20.00`), since the next save writes the rounded value over the file's",
           "Native": false
         },
         {

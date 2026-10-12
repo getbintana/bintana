@@ -1400,7 +1400,13 @@ function makeField(kind, opts, extra) {
  * given -- the same bargain every setter in this runtime makes, and the reason a
  * record can be trusted by whoever reads it next.
  */
-function fieldValue(field, name, v, mayBeEmpty) {
+/*
+ * `notes`, when given, collects what was taken and changed on the way in --
+ * which is only ever a decimal rounded to its field's places.  Load passes one
+ * and reports them; an assignment passes none, since a program that assigns a
+ * sum to a two-place field means the rounding, and a file did not decide it.
+ */
+function fieldValue(field, name, v, mayBeEmpty, notes) {
     /* Absent is not a value: it is the field at what it starts from, which is
      * also what a file without the key means. */
     if (v === undefined || v === null) {
@@ -1466,6 +1472,18 @@ function fieldValue(field, name, v, mayBeEmpty) {
             throw new RangeError(`${name}: ${field.min} at least, got ${out}`);
         if (field.max !== undefined && out > new Decimal(field.max))
             throw new RangeError(`${name}: ${field.max} at most, got ${out}`);
+        /* A value with more places than the field is rounded to them, which
+         * is the field's scale doing its job -- and a file that said 19.999
+         * now says 20.00 at the next save.  Said, so Problems keeps its
+         * promise; kept rounded, since 20.00 is a thousandth away and the
+         * default is not.  The exact value can always be made here: what
+         * would refuse it (past nine places, not a number) refused above. */
+        if (notes) {
+            const exact = new Decimal(v);
+            if ((exact - out).Sign !== 0)
+                notes.push(`${name}: ${v} has ${exact.Scale} decimal places, the field `
+                           + `${field.places} -- rounded to ${out}`);
+        }
         return out;
     }
 
@@ -1649,7 +1667,7 @@ function fieldValue(field, name, v, mayBeEmpty) {
                 throw new TypeError(`${name}[${i}]: expected ` +
                                     `${recordClass(field.item).name}, got ` +
                                     `${item === null ? "null" : "nothing"}`);
-            return fieldValue(field.item, `${name}[${i}]`, item);
+            return fieldValue(field.item, `${name}[${i}]`, item, false, notes);
         });
     }
     }
@@ -1720,7 +1738,11 @@ GLOBAL.Field = {
      */
     /**
      * a [`Decimal`](docs/reference/globals/Decimal.md) at a fixed scale.
-     * Options: `required`, `min`, `max`, `decimals` (2 by default)
+     * Options: `required`, `min`, `max`, `decimals` (2 by default). A value
+     * with more places is **rounded** to them, away from zero: an assignment
+     * does it in silence, and `Load` says so in `Problems` (`Price: 19.999
+     * has 3 decimal places, the field 2 -- rounded to 20.00`), since the next
+     * save writes the rounded value over the file's
      */
     Decimal: (opts) => {
         const places = opts && opts.decimals !== undefined ? opts.decimals : 2;
@@ -2304,7 +2326,9 @@ GLOBAL.Record = class Record {
             }
 
             try {
-                rec.#d[name] = fieldValue(field, name, v);
+                const notes = [];
+                rec.#d[name] = fieldValue(field, name, v, false, notes);
+                rec.#p.push(...notes);
             } catch (e) {
                 rec.#p.push(`${e.message} -- left at ` +
                             `${JSON.stringify(rec.#d[name])}`);
