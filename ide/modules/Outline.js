@@ -1,5 +1,6 @@
 /*
- * The methods of the file on screen, listed beside it.
+ * The methods of the file on screen, listed beside it -- and, in a module, what
+ * it exports, each as `export <name>` at its declaration.
  *
  * The side panel speaks about the *selection* -- properties, events, the control
  * tree -- so it was hidden whenever a form was not being designed, which is to
@@ -101,7 +102,13 @@ Ide.Outline = class Outline {
         if (!ide.Editor || !ide.OutlineBox || !ide.OutlineBox.Visible) return;
         if (!ide.OutlineList) return;
 
-        const found = ide.navigator.symbols(ide.Editor.Text);
+        /* A module's exports are rows too, marked as what other files see; in
+         * line order with the methods, since `follow` reads the rows as lines
+         * that only go down. */
+        const text  = ide.Editor.Text;
+        const found = ide.navigator.symbols(text)
+                         .concat(ide.navigator.exportsOf(text))
+                         .sort((a, b) => a.line - b.line);
         const signature = found.map((s) => `${s.line}:${s.name}`).join("\n");
         if (signature === this.drawn) return;
 

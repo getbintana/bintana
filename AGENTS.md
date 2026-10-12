@@ -589,11 +589,11 @@ used to read as no id at all; a project that declares none keeps the old answer,
 program's own name. `GtkApplication` also takes the id as the default window
 icon when the theme has one by that name (`gtkapplication.c`).
 
-## The thirteen patches in vendor/
+## The fifteen patches in vendor/
 
 `vendor/quickjs` is a **submodule** of
 [`getbintana/quickjs`](https://github.com/getbintana/quickjs), branch `bintana`:
-upstream **v0.17.0** plus the thirteen patches below, one commit each (the eighth
+upstream **v0.17.0** plus the fifteen patches below, one commit each (the eighth
 carries a fix as a second commit, `1493dc7`, until it is squashed into it). The fork's
 `BINTANA.md` is the recipe; what follows is what each patch does and what
 dropping it costs.
@@ -668,12 +668,13 @@ git push --force-with-lease origin bintana
 git submodule update --remote vendor/quickjs              # and commit the pin
 ```
 
-Then the suite. All thirteen are marked `Bintana patch` in the source, and
+Then the suite. All fifteen are marked `Bintana patch` in the source, and
 **dropping one does not fail to build** -- that is the property they share and
 the reason `tests/widgets` asserts each of them (`Decimal`, `JsonFiles`,
 `strictChecks`, `testDebugger`, `testCuratedLanguage`, `LongAppend`,
-`StringSearch`) -- the
-fifth of which carries the seventh, the eighth, the ninth and the thirteenth. Grep the fork for the
+`StringSearch`, `Modules`, `Imports`) -- the
+fifth of which carries the seventh, the eighth, the ninth and the thirteenth,
+and the last two the fourteenth and the fifteenth. Grep the fork for the
 marker after a rebase; there is no build-time check that they survived.
 
 ### 1. Operators on a Decimal
@@ -1225,6 +1226,59 @@ patch; the top-level `await` half is `Modules`' (three spellings, at the
 word's column), since it needed a module to be compiled at all. The fork's own `make test` stays 0/118: the nine
 upstream tests it now refuses all use top-level `await` or `import()`, the way
 patch 5 already refused the ones using `async`.
+
+### 14. A module compiled to be looked at can be thrown away
+
+`JS_FreeUnevaluatedModule` in `quickjs.c`: `js_free_module_def` for a record
+still `UNLINKED`, nothing for one the context has linked or evaluated, and
+`JS_FreeValue` for anything that is not a module. `Application.CheckSource` and
+`Application.Symbols` free what they compiled with it.
+
+**`JS_FreeValue` never frees a module**, and nothing says so: a module value is
+refcounted, but a record lives in the context's `loaded_modules` list until the
+context goes, so freeing the value only drops a count. A script compiled to be
+checked is collected; a module text compiled to be checked stayed. Measured on
+`ide/modules/Designer.js` (136 KB) with `export` added: **923 KB a
+`CheckSource` plus `Symbols`**, against 1.4 KB for the same text as a script --
+and an editor checks the file on screen at every pause in the typing, so the
+IDE would have grown by a megabyte a pause in any module file. With the patch,
+0.3 KB. Stage 2 of the modules plan shipped with this, and stage 3 wrote it
+down as open; the measurement is what made it the first thing stage 4 did.
+
+**Dropping it does not fail to build** (the call goes back to being a
+`JS_FreeValue`, so remove the calls with it): `tests/widgets`' `Modules` checks
+a 1500-function module forty times and asserts the process grew by less than
+4 MB -- 78 MB without the patch. **Not under `tests/asan.sh`**, and the reason is
+a trap of its own: AddressSanitizer's quarantine holds what is freed, so the
+resident size there measures the quarantine -- a *script* grew 1.3 MB a check,
+and the assertion read 296 MB with the patch in; `quarantine_size_mb=0` makes
+both 4 KB. The test skips itself when `ASAN_OPTIONS` is set, which `asan.sh`
+exports. A memory assertion by RSS is an assertion about an unsanitized build.
+
+### 15. The parser reports what a module exports and imports
+
+`JS_SYMBOL_EXPORT` and `JS_SYMBOL_IMPORT` for the handler of patches 6-10,
+reported by `js_report_module_entries` once an `export` or `import` statement
+has parsed, at the line of its keyword. **Every spelling of either ends in three
+tables of the module** -- export entries, star exports, import entries -- so the
+report reads the entries the statement added instead of hooking `js_parse_class`,
+`js_parse_var` and the function parser one spelling at a time; a statement that
+broke reports nothing, since its entries are half filled. `Application.Symbols`
+hands them out as `Kind: "Export"` (`Name` the exported name, `default` or `*`;
+`Parent` the local name) and `"Import"` (`Name` the local name, `Parent` the
+imported one), with the specifier in a new field, **`From`** -- the handler
+carries it in the slot a class keeps its base in, and the runtime moves it so
+`Super` stays a base class. Two things that are easy to get wrong: an import's
+local name is on the closure variable `add_import` made, and `var_idx` *is* that
+variable's index (the first version searched the closure variables for an equal
+`var_idx`, which is the module's import count and not the same number); and
+`export default <expression>` stands for the engine's own `*default*` binding,
+which is reported as no local name rather than leaking that spelling.
+
+**Dropping it does not fail to build**: no row says `Export` or `Import`, so the
+IDE offers a module's private names again, the outline marks nothing and F12
+does not follow an import. `tests/widgets`' `Imports` asserts the rows of every
+spelling and `tests/ide`'s `modules` phase what the IDE makes of them.
 
 ## Memory rules
 
@@ -7667,8 +7721,8 @@ designer was left), and letting the press through the Glass to the real strip
 
 ## A file with `export` is a module
 
-Stages 2 and 3 of [`docs/plans/modules-plan.md`](docs/plans/modules-plan.md), in
-`runtime/src/bta_module.c`: what a module exports goes on the global object and
+Stages 2 to 4 of [`docs/plans/modules-plan.md`](docs/plans/modules-plan.md), in
+`runtime/src/bta_module.c` and, for the IDE, `ide/modules`: what a module exports goes on the global object and
 reaches every file -- and a `.form`'s `type`, `startup`, `Task.Start`, through
 `bta_lookup_global`'s ordinary eval -- with no `import`; the rest is the file's
 own. `lib/markdown` is the first module in the tree, and `tests/api.sh`'s count
@@ -7752,11 +7806,27 @@ it settled:
 - **The loader's refusals are `ReferenceError`s and never `SyntaxError`s**, for
   the detection rule above: a positionless `SyntaxError` would hand the report
   to the script compile. Each names the importing file and what to do.
-- **Still open**: a module compiled only to be checked stays in the context's
-  module list (`JS_TAG_MODULE` is never freed by `JS_FreeValue` -- the engine
-  frees module records with the context), so every `CheckSource` of a module
-  text keeps one record alive; stage 2 already had it. Worth measuring before
-  the IDE checks module files on every keystroke.
+- **A module compiled only to be checked is freed** by `CheckSource` and
+  `Symbols` (fork patch 14): the engine keeps a module record until the context
+  goes, and it was a megabyte a check of a large file.
+
+**What the IDE makes of a module is stage 4** (fork patch 15 gives it the rows):
+`completionPublished` in `Completion.js` is what a file puts in the shared scope
+-- everything at its top level for a script, its exports for a module -- so a
+module's private names are offered nowhere else, while `completionScopeNames`
+still offers them, its classes and its imports inside the file; the outline adds
+`export <name>` rows at the declarations (`Navigator.exportsOf`), in line order
+because `follow` reads the rows as lines going down; F12 on an imported name
+follows a path import to the file and the declaration (`Navigator.imported`,
+before any class of the same name elsewhere -- the import is the file saying
+whose it is; a library import is not followed); a rename of a name a module
+declares and does not export touches that file only, and one two files declare
+is refused (`Refactor.privateTo`); and `Ide.Names.ambiguous` says the runtime's
+sentence where a name two modules export is used with no import, in the live
+pass and the project check. **What is not done**: the runtime still says it at
+the use and not at load -- that needs the parser to report the free names a file
+uses, which no patch does -- and `ambiguous` reads words, so a file that declares
+a local of the name anywhere is skipped whole rather than guessed at.
 
 `tests/widgets`' `Imports` runs a child per rule (choosing by import and `as`,
 once and unlisted, a re-export, a default, a cycle, a library, a task's

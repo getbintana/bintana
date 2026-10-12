@@ -12537,6 +12537,100 @@ function* p_outline(ide) {
 }
 
 /*
+ * A file with `export` is a module (docs/plans/modules-plan.md, stage 4): what
+ * the IDE says about one. Its private names are offered to no other file, the
+ * outline marks what it publishes, F12 on an imported name goes to the file
+ * the import names, a private name renames in its own file only, and a name two
+ * modules export is a warning where it is used without an import.
+ */
+function* p_modules(ide) {
+    const files = {
+        "ModCsv.js":    "export class ModParser { get Kind() { return 'csv'; } }\n",
+        "ModIni.js":    "export class ModParser { get Kind() { return 'ini'; } }\n",
+        "ModPrices.js": "const MOD_IVA = 0.21;\n" +                       /* 1 */
+                        "function modRound(n) { return Math.round(n); }\n" + /* 2 */
+                        "\n" +                                               /* 3 */
+                        "/** what a price is with tax */\n" +               /* 4 */
+                        "export function modWithIva(n) {\n" +               /* 5 */
+                        "    return modRound(n * (1 + MOD_IVA));\n" +       /* 6 */
+                        "}\n",
+        "ModUse.js":    'import { ModParser } from "./ModCsv.js";\n' +      /* 1 */
+                        "function modUse() { return new ModParser().Kind + modWithIva(1); }\n",
+        "ModBare.js":   "function modBare() { return new ModParser(); }\n",
+    };
+    for (const f of Dictionary.Keys(files)) File.Save(File.Join(TMP, f), files[f]);
+    ide.listFiles();
+    ide.completion.forget();
+    yield;
+
+    /* --- what other files are offered --------------------------------------- */
+
+    const declared = ide.completion.declaredClasses();
+    check("a module's export is offered to every file", declared.tops.includes("modWithIva"),
+          JSON.stringify(declared.tops.filter((t) => t.startsWith("mod") || t.startsWith("MOD"))));
+    check("...and its private names to none",
+          !declared.tops.includes("MOD_IVA") && !declared.tops.includes("modRound"));
+    check("a script's top-level names still are", declared.tops.includes("modBare"));
+    eq("two modules exporting one class are both its owners",
+       (declared.owners.get("ModParser") || []).join(","), "ModCsv.js,ModIni.js");
+
+    /* --- the outline marks what a module publishes --------------------------- */
+
+    ide.openInTab("ModPrices.js");
+    yield* settled(ide);
+    ide.outline.refresh();
+    eq("the outline lists a module's export, at its declaration",
+       ide.OutlineList.Items.join(","), "export modWithIva");
+    ide.OutlineList.Index = 0;
+    eq("...and choosing it goes there", ide.Editor.Line, 5);
+
+    /* --- the file itself still completes its own private names --------------- */
+
+    const own = completionScopeNames(Application.Symbols(ide.Editor.Text), 6).map((e) => e.Text);
+    check("inside a module its private names are in scope",
+          own.includes("MOD_IVA") && own.includes("modRound"), JSON.stringify(own));
+
+    /* --- F12 follows an import ----------------------------------------------- */
+
+    ide.openInTab("ModUse.js");
+    yield* settled(ide);
+    const at = ide.navigator.find("ModParser");
+    eq("F12 on an imported name goes to the file the import names",
+       at && `${at.file}:${at.line}`, "ModCsv.js:1");
+    check("...and an import is a name in scope where it is written",
+          completionScopeNames(Application.Symbols(ide.Editor.Text), 2)
+              .some((e) => e.Text === "ModParser" && e.Detail === "import"));
+
+    /* --- a name two modules export, used without an import ------------------- */
+
+    const warned = [...ide.names.ambiguous(files["ModBare.js"], "ModBare.js", -1)];
+    eq("a name two modules export, used with no import, is a warning", warned.length, 1);
+    eq("...on its line, in the runtime's own sentence", warned[0] && `${warned[0].line} ${warned[0].text}`,
+       "1 'ModParser' is exported by ModCsv.js and ModIni.js: choose one with import");
+    eq("...and a file that imports it is told nothing",
+       [...ide.names.ambiguous(files["ModUse.js"], "ModUse.js", -1)].length, 0);
+
+    /* --- a rename knows a module's own names --------------------------------- */
+
+    const renamed = ide.refactor.rename("modRound", "modRounded");
+    eq("a module's private function renames in its own file only",
+       (renamed.Files || []).join(","), "ModPrices.js", JSON.stringify(renamed));
+    const both = ide.refactor.rename("ModParser", "ModReader");
+    check("a class two modules declare is refused, naming the count",
+          (both.Refused || "").includes("declared in 2 files"), JSON.stringify(both));
+
+    /* The fixture does not outlive the phase. */
+    for (const f of Dictionary.Keys(files)) {
+        if (ide.openTabs.has(f)) ide.tabs.closeByName(f, true);
+        File.Delete(File.Join(TMP, f));
+    }
+    ide.listFiles();
+    ide.completion.forget();
+    ide.openInTab("Main.js");
+    yield* settled(ide);
+}
+
+/*
  * The pass over the whole project.
  *
  * Seven checks, and each one is a thing the runtime was measured accepting in
@@ -15270,6 +15364,7 @@ const PHASES = [
     { name: "names", run: p_names },
     { name: "refs",    run: p_refs },
     { name: "outline", run: p_outline },
+    { name: "modules", run: p_modules },
     { name: "check", run: p_check },
     { name: "quick", run: p_quick },
     { name: "recovery", run: p_recovery },

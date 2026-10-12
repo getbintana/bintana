@@ -1,10 +1,11 @@
 # Modules: a file that keeps its own names
 
-**Status: stages 0 to 3 done (2026-10-11 and 12).** The spike changed nothing
+**Status: stages 0 to 4 done (2026-10-11 and 12)**, but for a load-time
+refusal of an ambiguous name, which the IDE says instead. The spike changed nothing
 and found nothing that sends the plan back; its results are under stage 0.
 Stage 1 is fork patch 13; stage 2 is `runtime/src/bta_module.c`, and
 `lib/markdown` is its first module; stage 3, the explicit `import`, is the same
-file's loader. Stage 4, the IDE, is next.
+file's loader; stage 4 is the IDE's half and fork patches 14 and 15.
 
 It answers L1 and D1 of [the October 2026 audit](../audit-2026-10.md): one
 global scope for every file and library, and a dynamic `import()` that compiles
@@ -329,6 +330,30 @@ stage 2, the first time the runtime compiles a module.
   the free names a file uses, which no patch does today.
 - `sources` order stops mattering for anything reached through an `import`;
   the docs say so.
+
+**Done, 2026-10-12, except the load-time half.** What building it decided
+(`AGENTS.md`, *A file with `export` is a module* and patches 14 and 15):
+
+- **First, a leak the stages before it left.** A module compiled only to be
+  checked was kept by the engine for the life of the context -- 923 KB a
+  `CheckSource` plus `Symbols` of a 136 KB module, which an editor pays at
+  every pause in the typing. Fork patch 14 frees it.
+- **The parser reports exports and imports** (patch 15) as two more kinds of
+  symbol, read from the module's own tables after each statement, so every
+  spelling -- `export { a as b }`, `export *`, `export default`, `import * as`
+  -- is covered by one function. The specifier is `From`.
+- Completion offers a module's private names in that file only; the outline
+  marks what a module exports; F12 follows a path import to its file; a rename
+  of a module's private name stays in its file, and one declared by two files
+  is refused.
+- **An ambiguous name is underlined by the IDE, not refused at load.** The IDE
+  says the runtime's own sentence where a name two modules export is used with
+  no import. A load-time error in the runtime needs the parser to report the
+  free names a file uses, which is a patch of its own and is left for when a
+  program needs it: the runtime already throws at the use, naming both owners
+  and the line.
+- `sources` order: a file only imported need not be listed, and is evaluated
+  before the file that imports it (stage 3), which the language page says.
 
 ## Open questions
 

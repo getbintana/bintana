@@ -7,7 +7,7 @@
  * that is not there, a `.js` sits on disk that nothing loads. Those are just as
  * wrong in a file nobody has open, and until now nothing looked.
  *
- * **Seven checks, and every one of them was measured before it was written.** Each
+ * **Eight checks, and every one of them was measured before it was written.** Each
  * is a thing the runtime accepts without a word, found by writing it wrong on
  * purpose and watching what happened:
  *
@@ -33,6 +33,10 @@
  *                                   ReferenceError at the next run, and the
  *                                   replacement was nowhere in the project.
  *                                   `Ide.Names` asks the runtime's own table
+ *     a name two modules export     loaded, and the use throws naming both
+ *                                   at run time; `Ide.Names.ambiguous` says
+ *                                   it where the word is, unless the file
+ *                                   imports it
  *
  * The last two are why `Ide.Names` exists apart from `Ide.Live`: *does this
  * control have this member* has to have one answer, and a second copy of it
@@ -298,6 +302,8 @@ Ide.Check = class Check {
          * a module as well as on a form's own class. `Ide.Names` owns it and
          * `Ide.Live` runs the same one over the file on screen. */
         for (const problem of this.ide.names.curated(text, rel, -1))
+            found.push(problem);
+        for (const problem of this.ide.names.ambiguous(text, rel, -1))
             found.push(problem);
 
         const form = this.ide.classes.formOf(rel);

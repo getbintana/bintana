@@ -257,7 +257,7 @@ Ide.Refactor = class Refactor {
         if (word === to)
             return { Refused: "The new name is the same as the old one." };
 
-        const rows = this.references(word);
+        let   rows = this.references(word);
         const decl = rows.find((r) => r.Decl);
 
         if (!decl)
@@ -268,6 +268,25 @@ Ide.Refactor = class Refactor {
             return { Refused: `${word} is a static of ${decl.Parent || "a class"} -- this cannot tell which class a member access belongs to.` };
         if (decl.Decl === "Class" && this.ide.classes.formOf(decl.File))
             return { Refused: `${word} is a form -- F2 renames it, and moves its .form, its tab and project.json with it.` };
+
+        /*
+         * Modules (docs/plans/modules-plan.md): a file with `export` keeps what
+         * it does not export, so the same top-level name may be declared by two
+         * files and mean two things. One declared by more than one file is
+         * refused -- a use elsewhere cannot be told apart -- and one a module
+         * declares and does not export is that file's alone, so only that file
+         * moves. An exported name moves everywhere, `import { X }` and
+         * `export { X as Y }` included, since there it is code like any use.
+         */
+        if (decl.Decl === "Class" || decl.Decl === "Function") {
+            const homes = new Set(rows.filter((r) => r.Decl === "Class" ||
+                                                     r.Decl === "Function")
+                                      .map((r) => r.File));
+            if (homes.size > 1)
+                return { Refused: `${word} is declared in ${homes.size} files -- this rename cannot tell which one a use means.` };
+            if (this.privateTo(decl.File, word))
+                rows = rows.filter((r) => r.File === decl.File);
+        }
 
         /* A class a form places as a control is a use in a `.form`, and the
          * forms are rewritten rather than reported: they are JSON the IDE owns
@@ -385,6 +404,19 @@ Ide.Refactor = class Refactor {
         }
 
         return { Moved: moved, Files: files };
+    }
+
+    /*
+     * Whether a top-level name is a module's own: the file says `export` or
+     * `import` somewhere, and no export of its own stands for this name.
+     */
+    privateTo(file, word) {
+        const source = this.sourceOf(file);
+        if (source === null) return false;
+
+        const syms = Application.Symbols(source);
+        if (!syms.some((s) => s.Kind === "Export" || s.Kind === "Import")) return false;
+        return !syms.some((s) => s.Kind === "Export" && !s.From && s.Parent === word);
     }
 
     /*

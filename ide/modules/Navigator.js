@@ -99,7 +99,54 @@ Ide.Navigator = class Navigator {
         const tail = word.includes(".") ? word.slice(word.lastIndexOf(".") + 1)
                                         : word;
 
-        return this.classNamed(tail) || this.inActiveFile(tail);
+        return this.imported(tail) || this.classNamed(tail) || this.inActiveFile(tail);
+    }
+
+    /*
+     * A name the open file imports, followed to the file it names: an import is
+     * the file saying where the name comes from, which wins over any class of
+     * the same name elsewhere -- that is what the import was written for.
+     *
+     * A path (`./Csv.js`) is a file of the project, resolved against the
+     * importing file's folder; it lands on the declaration of the name it
+     * imports, or on the `export` that publishes it under another one. A
+     * library (`"markdown"`) is not followed: its files are not the project's
+     * to open.
+     */
+    imported(name) {
+        const file = this.ide.activeFile;
+        if (!file || !File.IsExtension(file, "js")) return null;
+
+        const binding = Application.Symbols(this.sourceOf(file))
+                                   .find((s) => s.Kind === "Import" && s.Name === name);
+        if (!binding || !/^\.\.?\//.test(binding.From)) return null;
+
+        const parts = file.split("/").slice(0, -1);
+        for (const part of binding.From.split("/")) {
+            if (part === "..") parts.pop();
+            else if (part !== "." && part !== "") parts.push(part);
+        }
+        const target = parts.join("/");
+        if (!File.Exists(File.Join(this.ide.project, target))) return null;
+
+        const syms   = Application.Symbols(this.sourceOf(target));
+        const wanted = binding.Parent;
+        /* At the top level: a local of the same name inside a function is not
+         * what another file can import. */
+        const scopes = syms.filter((s) => s.Kind === "Scope");
+        const top = (name) => syms.find((s) =>
+            (s.Kind === "Class" || s.Kind === "Function" || s.Kind === "Variable") &&
+            s.Name === name &&
+            !scopes.some((sc) => sc.Line < s.Line && s.Line <= sc.End));
+        const declared  = top(wanted);
+        const published = syms.find((s) => s.Kind === "Export" && s.Name === wanted);
+        /* `export { p as q }` imported as q: the export names p, and p is the
+         * declaration worth landing on. */
+        const local = published && published.Parent && published.Parent !== wanted
+            ? top(published.Parent) : null;
+        const at = (wanted === "default" || wanted === "*") ? published
+                 : (local || declared || published);
+        return { file: target, line: at ? at.Line : 1 };
     }
 
     /* --- the three lookups ------------------------------------------------- */
@@ -181,6 +228,29 @@ Ide.Navigator = class Navigator {
      * go-to-symbol list is made of. */
     symbols(source) {
         return methodsOf(source).map((s) => ({ name: s.Name, line: s.Line }));
+    }
+
+    /*
+     * What a module publishes, each at the line that declares it -- or at its
+     * `export`, for a name it re-exports or publishes under another -- in the
+     * order they are written: the rows the outline adds for a module. Empty
+     * for a script, which publishes everything and so marks nothing.
+     */
+    exportsOf(source) {
+        const syms   = Application.Symbols(source);
+        const scopes = syms.filter((s) => s.Kind === "Scope");
+        const out    = [];
+
+        for (const e of syms) {
+            if (e.Kind !== "Export") continue;
+            const local = !e.From && e.Parent
+                ? syms.find((s) => (s.Kind === "Class" || s.Kind === "Function" ||
+                                    s.Kind === "Variable") && s.Name === e.Parent &&
+                                   !scopes.some((sc) => sc.Line < s.Line && s.Line <= sc.End))
+                : null;
+            out.push({ name: `export ${e.Name}`, line: local ? local.Line : e.Line });
+        }
+        return out;
     }
 
     /*

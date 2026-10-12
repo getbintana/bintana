@@ -115,7 +115,8 @@ Ide.Live = class Live {
         /* `Ide.Names`, and not a copy of it: the project pass runs the same
          * three. What belongs to this class is the *moment*: the pause, and the
          * caret rule that goes with it. */
-        const found = [...ide.names.curated(text, name, at)];
+        const found = [...ide.names.curated(text, name, at),
+                       ...ide.names.ambiguous(text, name, at)];
 
         /*
          * **And then the two that need a form beside it, which a module does not

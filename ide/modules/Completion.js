@@ -178,7 +178,43 @@ function completionScopeNames(symbols, line) {
     }
     for (const f of symbols)
         if (f.Kind === "Function") add(f.Name, "function");
+    /* The file's own classes, and what it imports: in a module those are names
+     * of this file alone, which the project-wide list no longer carries. */
+    for (const c of symbols)
+        if (c.Kind === "Class" && !inner(c.Line)) add(c.Name, "class");
+    for (const i of symbols)
+        if (i.Kind === "Import") add(i.Name, "import");
     return out;
+}
+
+/*
+ * What a file puts in the scope every file shares, out of its symbols: a
+ * script, everything it declares at its top level; a module, only what it
+ * exports -- the rest is its own (docs/plans/modules-plan.md). `classes` are
+ * the ones whose declaration is reached by that name, which is what
+ * `Widget.Members` is handed a source for.
+ */
+function completionPublished(symbols) {
+    const exports = symbols.filter((s) => s.Kind === "Export" &&
+                                          s.Name !== "default" && s.Name !== "*");
+    const isModule = symbols.some((s) => s.Kind === "Export" || s.Kind === "Import");
+    const classes = [];
+    const tops = [];
+
+    if (!isModule) {
+        for (const sym of symbols)
+            if (sym.Kind === "Class") classes.push(sym.Name);
+        for (const e of completionScopeNames(symbols, 0))
+            if (e.Detail === "top level" || e.Detail === "function") tops.push(e.Text);
+        return { classes, tops, module: false };
+    }
+    for (const e of exports) {
+        if (!tops.includes(e.Name)) tops.push(e.Name);
+        if (!e.From && e.Parent === e.Name &&
+            symbols.some((s) => s.Kind === "Class" && s.Name === e.Name))
+            classes.push(e.Name);
+    }
+    return { classes, tops, module: true };
 }
 
 /*
@@ -944,30 +980,35 @@ Ide.Completion = class Completion {
         const names = [];
         const sources = new Map();
         const tops = [];
+        const owners = new Map();
 
         for (const [path, text] of live) {
             let cached = this._parsed.get(path);
             if (!cached || cached.text !== text) {
-                const classes = [];
-                const tops = [];
+                let classes = [];
+                let tops = [];
+                let module = false;
                 try {
-                    const syms = Application.Symbols(text);
-                    for (const sym of syms)
-                        if (sym.Kind === "Class") classes.push(sym.Name);
                     /* What the file declares at its top level is a name every
                      * other file of the project can write: they are evaluated
-                     * into one global scope. */
-                    for (const e of completionScopeNames(syms, 0))
-                        if (e.Detail === "top level" || e.Detail === "function")
-                            tops.push(e.Text);
+                     * into one global scope -- all of it for a script, what it
+                     * exports for a module. */
+                    ({ classes, tops, module } = completionPublished(Application.Symbols(text)));
                 } catch (e) { /* half a file is still a file */ }
-                cached = { text, classes, tops };
+                cached = { text, classes, tops, module };
                 this._parsed.set(path, cached);
                 changed = true;
             }
             for (const c of cached.classes)
                 if (!sources.has(c)) { sources.set(c, text); names.push(c); }
             for (const t of cached.tops) if (!tops.includes(t)) tops.push(t);
+            /* Who exports each name, so a name two modules export can be said
+             * to be ambiguous where it is used (`Ide.Names.ambiguous`). */
+            if (cached.module)
+                for (const t of cached.tops) {
+                    if (!owners.has(t)) owners.set(t, []);
+                    owners.get(t).push(path);
+                }
         }
 
         const formList = [...forms.values()];
@@ -977,7 +1018,7 @@ Ide.Completion = class Completion {
             return this._declared;
 
         this.generation = (this.generation || 0) + 1;
-        this._declared = { names, sources, forms: formList, tops };
+        this._declared = { names, sources, forms: formList, tops, owners };
         return this._declared;
     }
 

@@ -1,7 +1,7 @@
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 8695 assertions
+./tests/run.sh                          # all seven projects, 8713 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -170,7 +170,7 @@ every phase up to and including the last one whose name contains `<name>`:
 welcome files designer palette clipboard taborder completion handlers events
 goto images watch tooldirs namespaces selfns views document help forms nested projects
 menus folders strings settings columns export apps errors problems names
-outline check quick recovery unsaved session search git debug launch running
+outline modules check quick recovery unsaved session search git debug launch running
 ```
 
 `unsaved` is the one about losing work: every road that used to drop typed
@@ -219,7 +219,7 @@ own says so with `reportsItself`.
 
 `tests/widgets` is 195 tests listed in `TESTS`, and a filter there **selects** rather
 than running a prefix — `./tests/run.sh widgets record` is 142 assertions
-against 4977 in about twenty. It can select because these tests are
+against 4981 in about twenty. It can select because these tests are
 independent: each builds the controls it needs and deletes them again. The two that
 are not say so in the file:
 

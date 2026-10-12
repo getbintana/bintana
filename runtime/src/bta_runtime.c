@@ -749,7 +749,11 @@ static JSValue js_check_source(JSContext *ctx, JSValueConst this_val,
     JS_FreeCString(ctx, src);
 
     if (!JS_IsException(r)) {
-        JS_FreeValue(ctx, r);
+        /* A module compiled only to be looked at is discarded: the engine
+         * otherwise keeps every one for the life of the context, which in an
+         * editor checking as somebody types is a megabyte a keystroke (fork
+         * patch 14). */
+        JS_FreeUnevaluatedModule(ctx, r);
         check_restore_error(ctx, err_ctor, guarded, saved_prepare, saved_limit);
         return JS_NULL;
     }
@@ -811,6 +815,9 @@ static const char *symbol_kind_name(JSSymbolKind kind)
     case JS_SYMBOL_SCOPE:         return "Scope";
     /* A function assigned at the top level, named by its target. */
     case JS_SYMBOL_ASSIGNED:      return "Assigned";
+    /* What a module publishes, and each name it imports (fork patch 15). */
+    case JS_SYMBOL_EXPORT:        return "Export";
+    case JS_SYMBOL_IMPORT:        return "Import";
     }
     return "";
 }
@@ -913,7 +920,13 @@ static void symbol_report(void *opaque, JSSymbolKind kind, const char *name,
      * is most of what a control has. Empty for everything that is not a class,
      * and for a class whose `extends` is not a plain identifier -- see
      * JSSymbolHandler in quickjs.h for why that is the limit. */
-    JS_SetPropertyStr(ctx, obj, "Super", JS_NewString(ctx, supertype ? supertype : ""));
+    /* An export or an import carries its specifier in the field a class keeps
+     * its base in; it is handed out as `From` and `Super` stays a base class. */
+    bool module_kind = kind == JS_SYMBOL_EXPORT || kind == JS_SYMBOL_IMPORT;
+    JS_SetPropertyStr(ctx, obj, "Super",
+                      JS_NewString(ctx, !module_kind && supertype ? supertype : ""));
+    JS_SetPropertyStr(ctx, obj, "From",
+                      JS_NewString(ctx, module_kind && supertype ? supertype : ""));
     /* The parameter list, in the spelling a declaration uses -- `(message,
      * [options], ...rest)`.  Empty for anything that is not a member, and for a
      * method that takes none. */
@@ -982,7 +995,7 @@ JSValue bta_symbols(JSContext *ctx, const char *src)
     JSValue probe = bta_compile(ctx, src, strlen(src), "<symbols>", &is_module);
     if (JS_IsException(probe))
         JS_FreeValue(ctx, JS_GetException(ctx));
-    JS_FreeValue(ctx, probe);
+    JS_FreeUnevaluatedModule(ctx, probe);     /* fork patch 14, as in CheckSource */
 
     JS_SetSymbolHandler(rt, symbol_report, &sink);
 
@@ -999,7 +1012,7 @@ JSValue bta_symbols(JSContext *ctx, const char *src)
     if (JS_IsException(r))
         JS_FreeValue(ctx, JS_GetException(ctx));
     else
-        JS_FreeValue(ctx, r);
+        JS_FreeUnevaluatedModule(ctx, r);
 
     return sink.list;
 }
@@ -1821,9 +1834,9 @@ static bool install_globals(BtaApp *app)
      * pattern, and the answer belongs to the compiler and not to one
      * application.
      */
-    /* Symbols(text) -> { Name, Kind, Line, Parent, Super, Params, End, Doc, Returns }[]
-     *   what the text declares — `[{ Name, Kind, Line, Parent, Super, Params,
-     *   End, Doc, Returns }]`, out of the parser and with nothing run.
+    /* Symbols(text) -> { Name, Kind, Line, Parent, Super, From, Params, End, Doc, Returns }[]
+     *   what the text declares — `[{ Name, Kind, Line, Parent, Super, From,
+     *   Params, End, Doc, Returns }]`, out of the parser and with nothing run.
      *   **`Kind` is `"Class"`, `"Function"`, `"Method"`, `"Static"`,
      *   `"Getter"`, `"Setter"`, `"StaticGetter"` or `"StaticSetter"`**, or
      *   **`"Assigned"`** (a function assigned at the top level, named by its
@@ -1835,7 +1848,12 @@ static bool install_globals(BtaApp *app)
      *   **`"Scope"`** (every function, anonymous ones included, with its
      *   `Params` and the lines it spans, `Line` to **`End`**; one that fails
      *   to parse spans up to where it broke) — together, what a name can mean
-     *   where the cursor is — the member kinds are what separates `Value: T`
+     *   where the cursor is — or, in a module, **`"Export"`** (one per name it
+     *   publishes, at its `export`: `Name` the exported name, `default` or
+     *   `*`, `Parent` the local name it stands for) and **`"Import"`** (one
+     *   per binding, at its `import`: `Name` the local name, `Parent` the name
+     *   imported, `default` or `*`), each with **`From`**, the specifier, `""`
+     *   for an export of the file's own — the member kinds are what separates `Value: T`
      *   from `Value(): T`, and a property of the class from one of the
      *   instance. **`Params` is the parameter list in the spelling a
      *   declaration uses** — `(message, [options], ...rest)`, `()` for a

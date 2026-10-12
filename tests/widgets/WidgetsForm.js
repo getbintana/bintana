@@ -4218,6 +4218,27 @@ class WidgetsForm extends Form {
         const late = Application.CheckSource("export function f() {}\n\nconst = ;");
         eq("a module that breaks later says where it broke", late && late.Line, 3);
 
+        /* A module compiled only to be looked at is discarded (fork patch 14):
+         * the engine kept every one, 923 KB a check of the IDE's Designer.js,
+         * which an editor checking as somebody types pays per keystroke.
+         * **Not under AddressSanitizer**, whose quarantine holds what is freed
+         * -- measured there, a *script* grows 1.3 MB a check and the process
+         * grew 296 MB here with the patch in; with `quarantine_size_mb=0` both
+         * are 4 KB. `tests/asan.sh` exports ASAN_OPTIONS, which is the sign. */
+        if (File.Exists("/proc/self/status") && !Environment.Get("ASAN_OPTIONS")) {
+            const rss = () => Number(File.Load("/proc/self/status").split("\n")
+                .find((l) => l.startsWith("VmRSS")).split(/\s+/)[1]);
+            let big = "export const first = 1;\n";
+            for (let i = 0; i < 1500; i++)
+                big += `export function f${i}(a, b) { const c = a * b + ${i}; return [c, a, b].join("-"); }\n`;
+            Application.CheckSource(big);
+            Application.Symbols(big);
+            const before = rss();
+            for (let i = 0; i < 40; i++) { Application.CheckSource(big); Application.Symbols(big); }
+            const grew = rss() - before;
+            check("checking a module's text forty times keeps nothing", grew < 4096, `${grew} KB`);
+        }
+
         /* Fork patch 13's other half, which needed a module to be asked:
          * a module's top-level await is refused at the word. */
         for (const [what, text, column] of [
@@ -4359,6 +4380,29 @@ class WidgetsForm extends Form {
         const fns = Application.Symbols('import { Q } from "nolib";\nexport function f(a) {}')
                                .filter((x) => x.Kind === "Function");
         eq("Symbols reads a module that imports", fns.map((x) => x.Name).join(), "f");
+
+        /* What a module says to other files, from the parser (fork patch 15):
+         * one row per name published and per binding imported, at the line of
+         * the statement, with the specifier in From. */
+        const said = Application.Symbols(
+            'import { Parser, x as y } from "./Csv.js";\n' +
+            'import d, * as ns from "two";\n' +
+            'export class A {}\n' +
+            'const p = 1;\nexport { p as q };\n' +
+            'export default 5;\n' +
+            'export { r as s } from "./R.js";\n' +
+            'export * from "./All.js";\n')
+            .filter((x) => x.Kind === "Export" || x.Kind === "Import")
+            .map((x) => `${x.Kind} ${x.Line} ${x.Name}<${x.Parent}<${x.From}`);
+        eq("Symbols reports each import binding and each export", said.join(" | "),
+           "Import 1 Parser<Parser<./Csv.js | Import 1 y<x<./Csv.js | Import 2 d<default<two | " +
+           "Import 2 ns<*<two | Export 3 A<A< | Export 5 q<p< | Export 6 default<< | " +
+           "Export 7 s<r<./R.js | Export 8 *<*<./All.js");
+        eq("...and a script has neither", Application.Symbols("class A {}\n")
+           .filter((x) => x.Kind === "Export" || x.Kind === "Import").length, 0);
+        eq("...and a class's base is still Super, not From",
+           Application.Symbols("export class B extends A {}").filter((x) => x.Kind === "Class")
+               .map((x) => x.Super + "|" + x.From).join(), "A|");
     }
 
     /*

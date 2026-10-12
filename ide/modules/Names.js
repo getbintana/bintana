@@ -182,6 +182,49 @@ Ide.Names = class Names {
     }
 
     /*
+     * A name two modules export, used here with no `import` to say whose.
+     *
+     * The runtime loads such a program and throws at the use -- *'Parser' is
+     * exported by Csv.js and Ini.js: choose one with import* -- so this is the
+     * same sentence said before the run, where the word is (modules-plan,
+     * stage 4). Who exports what is `Ide.Completion`'s per-file reading, kept
+     * live over the open tabs; a file that imports the name, or declares one
+     * of its own anywhere in it, is skipped whole rather than guessed at, and
+     * a member (`x.Parser`) is not the shared name.
+     */
+    *ambiguous(text, file, caret) {
+        const owners = this.ide.completion ? this.ide.completion.declaredClasses().owners
+                                           : null;
+        if (!owners || !owners.size) return;
+
+        let syms;
+        try { syms = Application.Symbols(text); } catch (e) { return; }
+        const mine = new Set(syms.filter((s) => s.Kind === "Import" || s.Kind === "Class" ||
+                                                s.Kind === "Function" || s.Kind === "Variable")
+                                 .map((s) => s.Name));
+        const code = Ide.Lex.blank(text);
+
+        for (const [name, files] of owners) {
+            if (files.length < 2 || mine.has(name)) continue;
+
+            const who  = files.map((f) => File.Name(f));
+            const list = who.length === 2 ? who.join(" and ")
+                       : `${who.slice(0, -1).join(", ")} and ${who[who.length - 1]}`;
+            const re   = new Regex(`(^|[^A-Za-z0-9_$.])${Regex.Escape(name)}(?![A-Za-z0-9_$])`,
+                                   { Multiline: true });
+            for (const m of re.Matches(code)) {
+                if (underCaret(m, caret)) continue;
+                yield {
+                    kind: "Warning",
+                    file,
+                    line: Text.LineOf(text, m.Index + m.Value.indexOf(name)),
+                    text: `'${name}' is exported by ${list}: choose one with import`,
+                };
+            }
+        }
+    }
+
+    /*
      * `this.Btn.Txt`: a member the control's class does not have.
      *
      * The test is the `in` operator on a real control of that type, which is
