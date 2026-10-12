@@ -90,9 +90,10 @@ another process the IDE does not load — so `namespaceMembers` reads the two
 halves the runtime itself will act on: the `Namespace("Parts")` declaration, and
 an assignment that really puts a class there. Declaring it is not being in it. It
 reads loose `.js` files and not only forms, because that is what a namespace is
-mostly made of: it arrived the day the IDE's own classes became
-`Ide.something` (they are modules now) and completion went quiet on the prefix
-its own authors typed most.
+mostly made of. It was written while the IDE's own classes were
+`Ide.Designer` and the like, when completion went quiet on the prefix its
+authors typed most; they are modules now, and a project's namespaces are what
+it reads.
 
 Nothing is inferred, which is why the answers can be exact. A completion engine
 for JavaScript normally needs a parser and a type inferencer because nothing in

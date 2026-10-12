@@ -598,11 +598,11 @@ used to read as no id at all; a project that declares none keeps the old answer,
 program's own name. `GtkApplication` also takes the id as the default window
 icon when the theme has one by that name (`gtkapplication.c`).
 
-## The sixteen patches in vendor/
+## The seventeen patches in vendor/
 
 `vendor/quickjs` is a **submodule** of
 [`getbintana/quickjs`](https://github.com/getbintana/quickjs), branch `bintana`:
-upstream **v0.17.0** plus the sixteen patches below, one commit each (the eighth
+upstream **v0.17.0** plus the seventeen patches below, one commit each (the eighth
 carries a fix as a second commit, `1493dc7`, until it is squashed into it). The fork's
 `BINTANA.md` is the recipe; what follows is what each patch does and what
 dropping it costs.
@@ -677,13 +677,13 @@ git push --force-with-lease origin bintana
 git submodule update --remote vendor/quickjs              # and commit the pin
 ```
 
-Then the suite. All sixteen are marked `Bintana patch` in the source, and
+Then the suite. All seventeen are marked `Bintana patch` in the source, and
 **dropping one does not fail to build** -- that is the property they share and
 the reason `tests/widgets` asserts each of them (`Decimal`, `JsonFiles`,
 `strictChecks`, `testDebugger`, `testCuratedLanguage`, `LongAppend`,
 `StringSearch`, `Modules`, `Imports`) -- the
 fifth of which carries the seventh, the eighth, the ninth and the thirteenth,
-and the last two the fourteenth, the fifteenth and the sixteenth. Grep the fork for the
+and the last two the fourteenth to the seventeenth. Grep the fork for the
 marker after a rebase; there is no build-time check that they survived.
 
 ### 1. Operators on a Decimal
@@ -1315,6 +1315,26 @@ that case, and with the check taken out it prints `EARLY function`.
 **Dropping it does not fail to build** (the call is the only use): every file
 loads, a name two modules export is refused only where it runs, and the
 `Modules` and `Imports` assertions about the load go red.
+
+### 17. Which module an export's binding belongs to
+
+`JS_GetExportOrigin(ctx, m, name, &local)` answers, for an exported name of a
+linked module, the name of the module whose own binding it is and that
+binding's local name -- `js_resolve_export`, the engine's own walk through
+`export { x } from`, `export *` and their chains; an `export * as ns` answers
+the module it names, with `*`. **What it replaced was a comparison of values**:
+`distribute` called a second exporter of a name a re-export when the two values
+were `===`, which is right for a class or a function and wrong for a number --
+two files each declaring `export let count = 0` passed for one owner, `count`
+answered the first file's forever, and an increment in the second was
+invisible. A review found it by asking the IDE, which counted files and warned
+where the runtime was silent. An owner is now `<path>\n<local name>`, so one
+binding handed out by several files is one owner and two bindings are two,
+whatever they hold.
+
+**Dropping it does not fail to build**: every owner is the file that
+distributes, so a re-export becomes a second owner and refuses every use of
+the name. `Imports`' `reexportValue` and `sameValue` hold both directions.
 
 ## Memory rules
 
@@ -2598,7 +2618,7 @@ Three things that will waste your time:
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
-  392 assertions against 3039 for the whole project -- 9.2 s against 409 to 624 on this
+  424 assertions against 3073 for the whole project -- 9.2 s against 409 to 624 on this
   machine -- which is what makes iterating on an early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.
@@ -2785,7 +2805,7 @@ nothing is written at all.
 
 **The first harvest was the IDE, and the event marks are what it found.**
 `--profile` over `tests/ide` is 3.9 MB and **37,449 marks** in 354 s with the
-suite green (2818 assertions then; 3039 today) -- against 431 s for the ordinary runner run, so
+suite green (2818 assertions then; 3073 today) -- against 431 s for the ordinary runner run, so
 the writer's per-mark cost does not show at this size. 37,238 of those marks are
 `Event` and 211 are the runtime's (`Bintana`); **28,402 of them are one
 handler**, `PropGrid_Filter` -- the property grid's filter answering GTK for
@@ -7828,8 +7848,9 @@ it settled:
 - **What an import brought in is handed out after the module that imported it
   ran**, from a pending list `load_file` fills, so it reaches later files by
   name like any module. A re-export (`export { withIva } from "./P.js"`) is the
-  same binding and is not counted as a second owner: `distribute` compares the
-  values with `JS_IsStrictEqual` before calling a name ambiguous.
+  same binding and is not counted as a second owner: `distribute` asks fork
+  patch 17 whose binding it is. (It compared the values first, which made two
+  `export let count = 0` one owner -- see patch 17.)
 - **Detection needed one more case**: a module compile whose `SyntaxError` is
   not in this text at all -- a file it imports, compiled in the same step --
   has position 0 against this name, and would otherwise lose to the script
@@ -7863,6 +7884,20 @@ pass and the project check -- the sentence the runtime now refuses the load
 with (patch 16), said while typing. `ambiguous` reads words, so a file that
 declares a local of the name anywhere is skipped whole rather than guessed at;
 the runtime's half reads the bytecode and has no such gap.
+
+Three things a review of stages 2 to 4 found, each with a test in `Imports`:
+**a library cannot be imported by name from one of its own files**, nor two
+libraries import each other -- the library's module is registered only after
+its files compile, so either recursed until `RangeError: Maximum call stack
+size exceeded`, with no file and no line; `load_library` keeps the names it is
+loading and refuses with a sentence (a file of a library imports another by
+path). **A file is named by its path in the project** (`csv/Csv.js`), or
+`<library>/<file>`, in every sentence about owners -- the basename made *'Parser'
+is exported by Csv.js and Csv.js*; `shown_path` here and `shownPath` in
+`Ide.Names`. And **an entry a module did not export** (`main`, `startup`) is
+followed by the sentence that says to export it, since the engine's *Main is not
+defined* says nothing of modules. The IDE counted a re-export as an owner too
+(`completionPublished`'s `own` is what a module declares itself).
 
 `tests/widgets`' `Imports` runs a child per rule (choosing by import and `as`,
 once and unlisted, a re-export, a default, a cycle, a library, a task's

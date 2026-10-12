@@ -117,12 +117,27 @@ export class Navigator {
 
         const binding = Application.Symbols(this.sourceOf(file))
                                    .find((s) => s.Kind === "Import" && s.Name === name);
-        if (!binding || !/^\.\.?\//.test(binding.From)) return null;
+        if (!binding) return null;
 
-        const parts = file.split("/").slice(0, -1);
-        for (const part of binding.From.split("/")) {
-            if (part === "..") parts.pop();
-            else if (part !== "." && part !== "") parts.push(part);
+        /* A path the runtime accepts: relative to this file, or absolute and
+         * inside the project. One that climbs out of the project, or a
+         * library's name, is not followed -- a wrong file is worse than none. */
+        let from  = binding.From;
+        let parts = file.split("/").slice(0, -1);
+        const root = this.ide.project + "/";
+        if (from.startsWith(root)) {
+            from  = from.slice(root.length);
+            parts = [];
+        } else if (!/^\.\.?\//.test(from)) {
+            return null;
+        }
+        for (const part of from.split("/")) {
+            if (part === "..") {
+                if (!parts.length) return null;
+                parts.pop();
+            } else if (part !== "." && part !== "") {
+                parts.push(part);
+            }
         }
         const target = parts.join("/");
         if (!File.Exists(File.Join(this.ide.project, target))) return null;

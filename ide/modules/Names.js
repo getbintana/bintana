@@ -64,6 +64,13 @@ const NAMES_CALL = new Regex(
 const DECLARING  = /^(function|class|const|let|var)$/;
 const WORD_BEFORE = /[A-Za-z_$][\w$]*[ \t]*$/;
 
+/* A file as the runtime's messages name it: relative to the project as the
+ * tabs already are, and a library's as `<library>/<file>`. */
+function shownPath(f) {
+    if (!/^([A-Za-z]:)?[\\/]/.test(f)) return f;
+    return File.Join(File.Name(File.Directory(f)), File.Name(f));
+}
+
 export class Names {
 
     /** @param {MainForm} ide */
@@ -182,10 +189,12 @@ export class Names {
     /*
      * A name two modules export, used here with no `import` to say whose.
      *
-     * The runtime loads such a program and throws at the use -- *'Parser' is
+     * The runtime refuses to start such a program -- *Main.js:3: 'Parser' is
      * exported by Csv.js and Ini.js: choose one with import* -- so this is the
-     * same sentence said before the run, where the word is (modules-plan,
-     * stage 4). Who exports what is `Completion`'s per-file reading, kept
+     * same sentence said while typing, where the word is (modules-plan,
+     * stage 4). A file is named as the runtime names it: by its path in the
+     * project, or `<library>/<file>`, never by its name alone, which made two
+     * `Csv.js` in two folders one word. Who exports what is `Completion`'s per-file reading, kept
      * live over the open tabs; a file that imports the name, or declares one
      * of its own anywhere in it, is skipped whole rather than guessed at, and
      * a member (`x.Parser`) is not the shared name.
@@ -205,7 +214,7 @@ export class Names {
         for (const [name, files] of owners) {
             if (files.length < 2 || mine.has(name)) continue;
 
-            const who  = files.map((f) => File.Name(f));
+            const who  = files.map(shownPath);
             const list = who.length === 2 ? who.join(" and ")
                        : `${who.slice(0, -1).join(", ")} and ${who[who.length - 1]}`;
             const re   = new Regex(`(^|[^A-Za-z0-9_$.])${Regex.Escape(name)}(?![A-Za-z0-9_$])`,

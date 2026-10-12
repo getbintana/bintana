@@ -198,21 +198,28 @@ function completionPublished(symbols) {
     const isModule = symbols.some((s) => s.Kind === "Export" || s.Kind === "Import");
     const classes = [];
     const tops = [];
+    /* What the module itself declares, as opposed to what it re-exports
+     * (`export { x } from`, or an imported name exported again): only the
+     * first makes it an owner of the name, which is the runtime's rule too --
+     * one binding handed out twice is one answer. */
+    const own = [];
 
     if (!isModule) {
         for (const sym of symbols)
             if (sym.Kind === "Class") classes.push(sym.Name);
         for (const e of completionScopeNames(symbols, 0))
             if (e.Detail === "top level" || e.Detail === "function") tops.push(e.Text);
-        return { classes, tops, module: false };
+        return { classes, tops, own, module: false };
     }
+    const imported = new Set(symbols.filter((s) => s.Kind === "Import").map((s) => s.Name));
     for (const e of exports) {
         if (!tops.includes(e.Name)) tops.push(e.Name);
+        if (!e.From && !imported.has(e.Parent) && !own.includes(e.Name)) own.push(e.Name);
         if (!e.From && e.Parent === e.Name &&
             symbols.some((s) => s.Kind === "Class" && s.Name === e.Name))
             classes.push(e.Name);
     }
-    return { classes, tops, module: true };
+    return { classes, tops, own, module: true };
 }
 
 /*
@@ -985,15 +992,16 @@ export class Completion {
             if (!cached || cached.text !== text) {
                 let classes = [];
                 let tops = [];
+                let own = [];
                 let module = false;
                 try {
                     /* What the file declares at its top level is a name every
                      * other file of the project can write: they are evaluated
                      * into one global scope -- all of it for a script, what it
                      * exports for a module. */
-                    ({ classes, tops, module } = completionPublished(Application.Symbols(text)));
+                    ({ classes, tops, own, module } = completionPublished(Application.Symbols(text)));
                 } catch (e) { /* half a file is still a file */ }
-                cached = { text, classes, tops, module };
+                cached = { text, classes, tops, own, module };
                 this._parsed.set(path, cached);
                 changed = true;
             }
@@ -1003,7 +1011,7 @@ export class Completion {
             /* Who exports each name, so a name two modules export can be said
              * to be ambiguous where it is used (`Names.ambiguous`). */
             if (cached.module)
-                for (const t of cached.tops) {
+                for (const t of cached.own) {
                     if (!owners.has(t)) owners.set(t, []);
                     owners.get(t).push(path);
                 }

@@ -5,7 +5,7 @@
  * `export`: then it is a module, what it exports reaches every other file of
  * the program **without an import**, and what it does not export is its own.
  * docs/plans/modules-plan.md is the design and its measurements; this file is
- * stage 2 of it.
+ * its stages 2 to 4: modules, the explicit `import`, and the load-time check.
  *
  * Three things live here, because four callers need them alike -- the loader,
  * a `Task`'s worker, `Application.Symbols` and `Application.CheckSource`:
@@ -39,10 +39,13 @@
  * question answered the loud way.
  *
  * **Two modules exporting one name** is not an error at load: rules 3 and 4 of
- * the plan.  The second owner is written down beside the first and the getter,
- * which is already installed, then answers with a `ReferenceError` naming both
- * -- at the use, which is where somebody can do something about it, and only
- * if anybody uses it.
+ * the plan.  The second owner is written down beside the first -- by the
+ * binding it is, so a re-export is not a second owner (fork patch 17) -- and a
+ * file that uses the name with no import is refused once every file has
+ * loaded, naming its line (bta_modules_check, from fork patch 16's free
+ * names).  The getter, already installed, also answers with a `ReferenceError`
+ * naming both: the net for a name reached from outside any compiled file --
+ * a `.form`'s `type`, `startup`, `Widget.New` -- which no free name lists.
  *
  * **An `import` is standard JavaScript, resolved here (stage 3).**  A path
  * (`./Prices.js`) is a file of the project, or of the library the importing
@@ -185,6 +188,7 @@ typedef struct {
     GPtrArray  *libs;       /* the directories `uses` resolved to */
     int         checking;   /* > 0 while CheckSource or Symbols compiles */
     GPtrArray  *uses;       /* Uses: each file's free names, until checked */
+    GHashTable *loading;    /* library name -> 1 while load_library runs */
 } ModState;
 
 /* The free names one file uses, each at the first line it is used on. */
@@ -212,6 +216,14 @@ static void pending_free(gpointer p)
     g_free(p);
 }
 
+/*
+ * The lock guards `state_by_ctx` and the tables a context shares with nothing
+ * else only where it was cheap to be uniform (owners, uses).  A context is used
+ * by one thread -- the main one, or its `Task`'s worker -- so `done`,
+ * `pending`, `loading` and `checking` are read and written without it; what
+ * the lock is for is the map from contexts to states, which every thread
+ * touches.
+ */
 static GMutex      owners_lock;
 static GHashTable *state_by_ctx;    /* JSContext* -> ModState* */
 
@@ -221,6 +233,7 @@ static void state_free(ModState *st)
     g_hash_table_unref(st->done);
     g_ptr_array_unref(st->pending);
     g_ptr_array_unref(st->uses);
+    g_hash_table_unref(st->loading);
     g_free(st->project);
     if (st->libs)
         g_ptr_array_unref(st->libs);
@@ -244,6 +257,8 @@ static ModState *state_of(JSContext *ctx, bool make)
                                                 NULL);
             st->pending = g_ptr_array_new_with_free_func(pending_free);
             st->uses    = g_ptr_array_new_with_free_func(uses_free);
+            st->loading = g_hash_table_new_full(g_str_hash, g_str_equal, g_free,
+                                                NULL);
             g_hash_table_insert(state_by_ctx, ctx, st);
         }
     }
@@ -293,17 +308,57 @@ void bta_modules_checking(JSContext *ctx, bool on)
     st->checking += on ? 1 : -1;
 }
 
+static bool path_inside(const char *path, const char *root);
+
+/*
+ * A file as a message names it: relative to the project when it is in it
+ * (`Csv.js`, `parsers/Csv.js`), as `<library>/<file>` when it is in a library
+ * of `uses`, whole otherwise -- a basename alone made two `Csv.js` in two
+ * folders one name in the very sentence that is about telling them apart.
+ */
+static char *shown_path(ModState *st, const char *path)
+{
+    if (st && st->project && path_inside(path, st->project))
+        return g_strdup(path + strlen(st->project) + 1);
+    for (guint i = 0; st && st->libs && i < st->libs->len; i++) {
+        char *lib = g_canonicalize_filename(st->libs->pdata[i], NULL);
+        if (path_inside(path, lib)) {
+            char *name = g_path_get_basename(lib);
+            char *out  = g_build_filename(name, path + strlen(lib) + 1, NULL);
+            g_free(name);
+            g_free(lib);
+            return out;
+        }
+        g_free(lib);
+    }
+    return g_strdup(path);
+}
+
+/*
+ * An owner is written `<path>\n<local name>`: the module whose own binding an
+ * export is, and that binding's name there -- what JS_GetExportOrigin answers.
+ * Two files exporting one binding (a re-export) are one owner; two bindings are
+ * two, whatever they hold.
+ */
+static char *owner_key(const char *path, const char *local)
+{
+    return g_strconcat(path, "\n", local, NULL);
+}
+
 /* The owners of a name as a sentence: `Lib.js and Other.js`. */
-static char *owners_text(GPtrArray *owners)
+static char *owners_text(ModState *st, GPtrArray *owners)
 {
     GString *out = g_string_new(NULL);
 
     for (guint i = 0; i < owners->len; i++) {
-        char *base = g_path_get_basename(owners->pdata[i]);
+        const char *key  = owners->pdata[i];
+        char       *path = g_strndup(key, strcspn(key, "\n"));
+        char       *shown = shown_path(st, path);
         if (i)
             g_string_append(out, i + 1 == owners->len ? " and " : ", ");
-        g_string_append(out, base);
-        g_free(base);
+        g_string_append(out, shown);
+        g_free(shown);
+        g_free(path);
     }
     return g_string_free(out, FALSE);
 }
@@ -382,8 +437,8 @@ int bta_modules_check(JSContext *ctx)
             }
         }
         if (worst) {
-            char *file = g_path_get_basename(u->path);
-            char *who  = owners_text(owners_at);
+            char *file = shown_path(st, u->path);
+            char *who  = owners_text(st, owners_at);
             msg = g_strdup_printf("%s:%d: '%s' is exported by %s: choose one "
                                   "with import", file, line, worst, who);
             g_free(file);
@@ -415,13 +470,14 @@ static JSValue export_get(JSContext *ctx, JSValueConst this_val, int argc,
     if (!name)
         return JS_EXCEPTION;
 
-    GHashTable *t        = owners_of(ctx, false);
+    ModState   *st        = state_of(ctx, false);
+    GHashTable *t         = st ? st->owners : NULL;
     char       *ambiguous = NULL;
 
     g_mutex_lock(&owners_lock);
     GPtrArray *owners = t ? g_hash_table_lookup(t, name) : NULL;
     if (owners && owners->len > 1)
-        ambiguous = owners_text(owners);
+        ambiguous = owners_text(st, owners);
     g_mutex_unlock(&owners_lock);
 
     if (ambiguous) {
@@ -456,10 +512,12 @@ static bool lexical_has(JSContext *ctx, const char *name)
 }
 
 static int distribute(JSContext *ctx, JSValueConst global, JSValueConst ns,
-                      JSAtom atom, const char *path)
+                      JSModuleDef *m, JSAtom atom, const char *path)
 {
+    ModState   *st   = state_of(ctx, true);
     const char *name = JS_AtomToCString(ctx, atom);
-    char       *file = g_path_get_basename(path);   /* what the messages say */
+    char       *file = shown_path(st, path);        /* what the messages say */
+    char       *key  = NULL;
     int         rc   = -1;
 
     if (!name) {
@@ -474,36 +532,45 @@ static int distribute(JSContext *ctx, JSValueConst global, JSValueConst ns,
         goto out;
     }
 
-    GHashTable *t = owners_of(ctx, true);
+    /* Who the binding belongs to, through any re-export (fork patch 17): a
+     * file that re-exports what it imported (`export { withIva } from
+     * "./Prices.js"`) hands out the very binding the first owner did, and is
+     * not a second answer.  Comparing the values instead let two `export let
+     * count = 0` pass for one -- two bindings that held the same number. */
+    JSAtom local  = JS_ATOM_NULL;
+    JSAtom origin = JS_GetExportOrigin(ctx, m, atom, &local);
+    if (origin != JS_ATOM_NULL) {
+        const char *o = JS_AtomToCString(ctx, origin);
+        const char *l = JS_AtomToCString(ctx, local);
+        if (o && l)
+            key = owner_key(o, l);
+        JS_FreeCString(ctx, o);
+        JS_FreeCString(ctx, l);
+        JS_FreeAtom(ctx, origin);
+        JS_FreeAtom(ctx, local);
+    }
+    if (!key) {
+        if (JS_HasException(ctx))
+            JS_FreeValue(ctx, JS_GetException(ctx));
+        key = owner_key(path, name);
+    }
+
+    GHashTable *t = st->owners;
     g_mutex_lock(&owners_lock);
     GPtrArray *owners = g_hash_table_lookup(t, name);
     bool       seen   = false;
     guint      count  = owners ? owners->len : 0;
     for (guint i = 0; i < count && !seen; i++)
-        seen = !strcmp(owners->pdata[i], path);
+        seen = !strcmp(owners->pdata[i], key);
     g_mutex_unlock(&owners_lock);
 
     if (owners) {
         /* A second owner: the getter is already there, and from now on it
-         * names both -- unless it is the same thing.  A file that re-exports
-         * what it imported (`export { withIva } from "./Prices.js"`) hands out
-         * the very binding the first owner did, and is not a second answer.
-         * The same file twice is one owner. */
-        if (!seen && count == 1) {
-            JSValue mine   = JS_GetProperty(ctx, ns, atom);
-            JSValue theirs = JS_GetProperty(ctx, global, atom);
-            if (JS_IsException(mine) || JS_IsException(theirs)) {
-                JS_FreeValue(ctx, mine);
-                JS_FreeValue(ctx, theirs);
-                goto out;
-            }
-            seen = JS_IsStrictEqual(ctx, mine, theirs);
-            JS_FreeValue(ctx, mine);
-            JS_FreeValue(ctx, theirs);
-        }
+         * names both -- unless it is the same binding. */
         if (!seen) {
             g_mutex_lock(&owners_lock);
-            g_ptr_array_add(owners, g_strdup(path));
+            g_ptr_array_add(owners, key);
+            key = NULL;
             g_mutex_unlock(&owners_lock);
         }
         rc = 0;
@@ -542,7 +609,8 @@ static int distribute(JSContext *ctx, JSValueConst global, JSValueConst ns,
     JS_FreeValue(ctx, getter);
 
     owners = g_ptr_array_new_with_free_func(g_free);
-    g_ptr_array_add(owners, g_strdup(path));
+    g_ptr_array_add(owners, key);
+    key = NULL;
     g_mutex_lock(&owners_lock);
     g_hash_table_insert(t, g_strdup(name), owners);
     g_mutex_unlock(&owners_lock);
@@ -551,6 +619,7 @@ static int distribute(JSContext *ctx, JSValueConst global, JSValueConst ns,
 out:
     JS_FreeCString(ctx, name);
     g_free(file);
+    g_free(key);
     return rc;
 }
 
@@ -571,7 +640,7 @@ static int distribute_module(JSContext *ctx, JSModuleDef *m, const char *path)
         rc = -1;
     } else {
         for (uint32_t i = 0; i < n && rc == 0; i++)
-            rc = distribute(ctx, global, ns, tab[i].atom, path);
+            rc = distribute(ctx, global, ns, m, tab[i].atom, path);
         JS_FreePropertyEnum(ctx, tab, n);
     }
     JS_FreeValue(ctx, global);
@@ -699,7 +768,11 @@ static char *module_normalize(JSContext *ctx, const char *base,
     g_free(dir);
 
     /* Inside the project, or inside a library it uses: an import is not a way
-     * to read the disk. */
+     * to read the disk.  The test is on the path as written, not as the disk
+     * resolves it, so a symlink inside the project that points out of it is
+     * followed -- whoever made the link put it there, and the project is the
+     * author's own code anyway; the rule keeps a typo of `../` from reaching
+     * another program's files, not the author out of their own disk. */
     bool ok = !st || (!st->project && !st->libs);
     if (st && st->project && path_inside(full, st->project))
         ok = true;
@@ -783,8 +856,34 @@ static JSModuleDef *load_file(JSContext *ctx, ModState *st, const char *path,
  * yet -- in a worker, or a library that comes later in `uses` -- is compiled
  * here, and a script is left for the loader, since it has nothing to import.
  */
+static JSModuleDef *load_library1(JSContext *ctx, ModState *st,
+                                  const char *name, const char *dir);
+
+/*
+ * The library's module is registered only once its files are compiled, so an
+ * import of it from one of those files -- its own name, or a second library
+ * that imports the first back -- would start it again, and again, until the
+ * stack ran out with nothing said.  It is refused with a sentence instead.
+ */
 static JSModuleDef *load_library(JSContext *ctx, ModState *st, const char *name,
                                  const char *dir)
+{
+    if (g_hash_table_contains(st->loading, name)) {
+        JS_ThrowReferenceError(ctx, "import from '%s' while that library is "
+                               "still loading: a file of a library imports "
+                               "another file of it by path (\"./X.js\"), not "
+                               "by the library's name -- and two libraries "
+                               "cannot import each other", name);
+        return NULL;
+    }
+    g_hash_table_add(st->loading, g_strdup(name));
+    JSModuleDef *m = load_library1(ctx, st, name, dir);
+    g_hash_table_remove(st->loading, name);
+    return m;
+}
+
+static JSModuleDef *load_library1(JSContext *ctx, ModState *st,
+                                  const char *name, const char *dir)
 {
     GPtrArray *files = bta_library_sources(ctx, dir);
     GString   *text  = g_string_new(NULL);

@@ -12557,7 +12557,15 @@ function* p_modules(ide) {
         "ModUse.js":    'import { ModParser } from "./ModCsv.js";\n' +      /* 1 */
                         "function modUse() { return new ModParser().Kind + modWithIva(1); }\n",
         "ModBare.js":   "function modBare() { return new ModParser(); }\n",
+        /* A re-export hands on ModCsv's binding: not a third owner. */
+        "ModRe.js":     'export { ModParser } from "./ModCsv.js";\n',
+        /* Two files of one name, told apart by their folders. */
+        "twina/ModTwin.js": "export class ModTwin {}\n",
+        "twinb/ModTwin.js": "export class ModTwin {}\n",
+        "ModTwinUse.js": "function modTwinUse() { return new ModTwin(); }\n",
     };
+    Directory.Make(File.Join(TMP, "twina"));
+    Directory.Make(File.Join(TMP, "twinb"));
     for (const f of Dictionary.Keys(files)) File.Save(File.Join(TMP, f), files[f]);
     ide.listFiles();
     ide.completion.forget();
@@ -12571,7 +12579,7 @@ function* p_modules(ide) {
     check("...and its private names to none",
           !declared.tops.includes("MOD_IVA") && !declared.tops.includes("modRound"));
     check("a script's top-level names still are", declared.tops.includes("modBare"));
-    eq("two modules exporting one class are both its owners",
+    eq("two modules exporting one class are both its owners, and a re-export is not",
        (declared.owners.get("ModParser") || []).join(","), "ModCsv.js,ModIni.js");
 
     /* --- the outline marks what a module publishes --------------------------- */
@@ -12609,6 +12617,10 @@ function* p_modules(ide) {
        "1 'ModParser' is exported by ModCsv.js and ModIni.js: choose one with import");
     eq("...and a file that imports it is told nothing",
        [...ide.names.ambiguous(files["ModUse.js"], "ModUse.js", -1)].length, 0);
+    const twins = [...ide.names.ambiguous(files["ModTwinUse.js"], "ModTwinUse.js", -1)];
+    eq("two owners of one file name are named by their paths, as the runtime does",
+       twins[0] && twins[0].text,
+       "'ModTwin' is exported by twina/ModTwin.js and twinb/ModTwin.js: choose one with import");
 
     /* --- a rename knows a module's own names --------------------------------- */
 

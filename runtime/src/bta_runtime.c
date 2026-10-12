@@ -3026,6 +3026,30 @@ static gboolean console_idle(gpointer user_data)
     return G_SOURCE_CONTINUE;   /* removed with the source, after the loop */
 }
 
+/*
+ * The entry a project names was not found as a name.  Whether that is because
+ * it lives in a module and was not exported is the likeliest reason the day a
+ * project adopts `export`, and the engine's *Main is not defined* says nothing
+ * of it -- so the pending error is looked at, reported as it is, and followed
+ * by the sentence when it is that one.
+ */
+static void entry_not_found(JSContext *ctx, const char *name, const char *how)
+{
+    JSValue     exc     = JS_GetException(ctx);
+    JSValue     msg     = JS_GetPropertyStr(ctx, exc, "message");
+    const char *text    = JS_IsString(msg) ? JS_ToCString(ctx, msg) : NULL;
+    bool        missing = text && g_str_has_suffix(text, "is not defined");
+
+    JS_FreeCString(ctx, text);
+    JS_FreeValue(ctx, msg);
+    JS_Throw(ctx, exc);
+    bta_dump_error(ctx);
+    if (missing)
+        fprintf(stderr, "bintana: if '%s' is declared in a file that says "
+                "`export`, that file keeps it to itself until it is exported "
+                "too: `%s %s`\n", name, how, name);
+}
+
 static int run_console(BtaApp *app)
 {
     JSContext *ctx = app->ctx;
@@ -3045,7 +3069,7 @@ static int run_console(BtaApp *app)
     JSValue fn = bta_lookup_global(ctx, app->entry);
     if (JS_IsException(fn) || !JS_IsFunction(ctx, fn)) {
         if (JS_IsException(fn))
-            bta_dump_error(ctx);
+            entry_not_found(ctx, app->entry, "export function");
         else
             fprintf(stderr, "bintana: main function '%s' not found\n", app->entry);
         JS_FreeValue(ctx, fn);
@@ -3146,7 +3170,7 @@ static void on_activate(GtkApplication *gapp, gpointer user_data)
     JSValue klass = bta_lookup_global(ctx, app->startup);
     if (JS_IsException(klass) || !JS_IsFunction(ctx, klass)) {
         if (JS_IsException(klass))
-            bta_dump_error(ctx);
+            entry_not_found(ctx, app->startup, "export class");
         else
             fprintf(stderr, "bintana: startup class '%s' not found\n", app->startup);
         JS_FreeValue(ctx, klass);

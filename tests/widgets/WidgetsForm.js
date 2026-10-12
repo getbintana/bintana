@@ -4329,6 +4329,54 @@ class WidgetsForm extends Form {
         });
         check("a re-export does not make its name ambiguous", r.Output.includes("REEXPORT 121"), r.Output);
 
+        /* Owners are bindings, not values (fork patch 17): a number handed on
+         * through a re-export and an `export *` is one owner, and two
+         * `export * as ns` of one file are one namespace -- while two files
+         * each declaring `count = 0` are two, though both hold a zero. */
+        r = run("reexportValue", { sources: ["P.js", "R.js", "S.js", "X.js", "N1.js", "N2.js", "Main.js"] }, {
+            "P.js": "export const RATE = 0.21;\n",
+            "R.js": 'export { RATE } from "./P.js";\n',
+            "S.js": 'export * from "./R.js";\n',
+            "X.js": "export const v = 7;\n",
+            "N1.js": 'export * as ns from "./X.js";\n',
+            "N2.js": 'export * as ns from "./X.js";\n',
+            "Main.js": main("", "    print('VALUE ' + RATE + ' ' + ns.v);"),
+        });
+        check("a value re-exported, twice over, is still one owner",
+              r.ExitCode === 0 && r.Output.includes("VALUE 0.21 7"), r.Output);
+        r = run("sameValue", { sources: ["A.js", "B.js", "Main.js"] }, {
+            "A.js": "export let count = 0;\nexport function bumpA() { count++; }\n",
+            "B.js": "export let count = 0;\nexport function bumpB() { count++; }\n",
+            "Main.js": main("", "    bumpB();\n    print('COUNT ' + count);"),
+        });
+        check("two bindings holding the same number are two owners, refused at the use",
+              r.ExitCode !== 0 && !r.Output.includes("COUNT") &&
+              r.Output.includes("Main.js:4: 'count' is exported by A.js and B.js"), r.Output);
+
+        /* A file is named by its path in the project, not its name alone. */
+        r = run("twoCsv", { sources: ["csv/Csv.js", "ini/Csv.js", "Main.js"] }, {
+            "csv/Csv.js": "export class Parser {}\n", "ini/Csv.js": "export class Parser {}\n",
+            "Main.js": main("", "    new Parser();"),
+        });
+        check("two files of one name in two folders are told apart in the sentence",
+              r.Output.includes("'Parser' is exported by csv/Csv.js and ini/Csv.js"), r.Output);
+
+        /* An import for its effect alone evaluates the file once, and its
+         * exports are handed out like any module's. */
+        r = run("effect", { sources: ["Main.js", "E.js"] }, {
+            "E.js": "print('EFFECT');\nexport const fromEffect = 'e';\n",
+            "Main.js": main('import "./E.js";', "    print('EFFECT USED ' + fromEffect);"),
+        });
+        check("an import for its effect runs the file once and hands out its exports",
+              r.Output.split("EFFECT\n").length - 1 === 1 && r.Output.includes("EFFECT USED e"), r.Output);
+
+        /* An entry a module keeps to itself says how to publish it. */
+        r = run("entry", { sources: ["Main.js"] }, {
+            "Main.js": "export const x = 1;\nfunction Main() { print(x); }\n",
+        });
+        check("a Main a module did not export is refused, saying to export it",
+              r.ExitCode !== 0 && r.Output.includes("`export function Main`"), r.Output);
+
         /* export default is reached by an import, and only so. */
         r = run("default", { sources: ["Main.js"] }, {
             "D.js": "export default function () { return 'dflt'; }\n",
@@ -4372,6 +4420,16 @@ class WidgetsForm extends Form {
             "lib/two/A.js": "export class Parser {}\n", "lib/two/B.js": "export class Parser {}\n",
             "Main.js": main('import { Parser } from "two";', ""),
         }, "export 'Parser' in module 'two' is ambiguous", { uses: ["two"] });
+        refused("selfImport", {
+            "lib/a/A1.js": 'import { Helper } from "a";\nexport class Other {}\n',
+            "lib/a/A2.js": "export class Helper {}\n",
+            "Main.js": main("", ""),
+        }, "import from 'a' while that library is still loading", { uses: ["a"] });
+        refused("mutual", {
+            "lib/a/A.js": 'import { B } from "b";\nexport class A {}\n',
+            "lib/b/B.js": 'import { A } from "a";\nexport class B {}\n',
+            "Main.js": main("", ""),
+        }, "while that library is still loading", { uses: ["a", "b"] });
         refused("broken", { "Bad.js": "export const x = ;\n", "Main.js": main('import { x } from "./Bad.js";', "") },
                 "Bad.js:1:");
 
@@ -4412,6 +4470,10 @@ class WidgetsForm extends Form {
             'export * from "./All.js";\n')
             .filter((x) => x.Kind === "Export" || x.Kind === "Import")
             .map((x) => `${x.Kind} ${x.Line} ${x.Name}<${x.Parent}<${x.From}`);
+        eq("an export * as reports its name, the star and the specifier",
+           Application.Symbols('export * as all from "./X.js";\n')
+                      .filter((x) => x.Kind === "Export")
+                      .map((x) => `${x.Name}<${x.Parent}<${x.From}`).join(), "all<*<./X.js");
         eq("Symbols reports each import binding and each export", said.join(" | "),
            "Import 1 Parser<Parser<./Csv.js | Import 1 y<x<./Csv.js | Import 2 d<default<two | " +
            "Import 2 ns<*<two | Export 3 A<A< | Export 5 q<p< | Export 6 default<< | " +
@@ -6071,7 +6133,7 @@ function Main() {
      *
      * A *method* is a different case and is deliberately not here: `Close` is
      * shadowed by the control rather than refusing it, the assignment succeeds,
-     * and finding that one is `Ide.Check`'s job. Both are written down in
+     * and finding that one is the IDE's `Check`'s job. Both are written down in
      * `docs/plans/strict-plan.md`.
      */
     nameTakenByForm() {
