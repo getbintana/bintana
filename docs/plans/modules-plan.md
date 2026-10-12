@@ -376,7 +376,7 @@ stage 2, the first time the runtime compiles a module.
   `forms.js` are the prelude and stay scripts.
 - **What happens to `Namespace()`.** It stays: it groups names, which a module
   does not. With the IDE moved, nothing in this tree uses it but its own tests,
-  so whether to retire it is the question now.
+  so whether to retire it is the question now: [namespace-plan.md](namespace-plan.md).
 
 ## Rejected
 
