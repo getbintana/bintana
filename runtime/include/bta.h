@@ -661,6 +661,17 @@ int     bta_module_run(JSContext *ctx, JSValue compiled, const char *path);
 bool    bta_module_exported(JSContext *ctx, const char *name);
 /* Who exports what, for a context that is going away. */
 void    bta_modules_forget(JSContext *ctx);
+/* Where this context's imports resolve: `./x.js` inside `project` or one of
+ * `libs`, a bare name to one of `libs` by its directory's name.  Installs the
+ * runtime's module loader; copies both. */
+void    bta_modules_scope(JSContext *ctx, const char *project, GPtrArray *libs);
+/* Whether the file at `path` (canonical) is already a module of this context
+ * -- evaluated because something imported it -- so the loader skips it. */
+bool    bta_module_done(JSContext *ctx, const char *path);
+/* Around a compile that only checks a text: no import reads the disk. */
+void    bta_modules_checking(JSContext *ctx, bool on);
+/* A library's `.js` files in the order it loads them (bta_runtime.c). */
+GPtrArray *bta_library_sources(JSContext *ctx, const char *dir);
 /* A JSDoc comment's description and its `@returns {T}` type, each NULL when
  * absent; the caller frees both. */
 void    bta_prelude_sources(const char **rad, const char **forms);

@@ -1,9 +1,10 @@
 # Modules: a file that keeps its own names
 
-**Status: stages 0, 1 and 2 done (2026-10-11).** The spike changed nothing
+**Status: stages 0 to 3 done (2026-10-11 and 12).** The spike changed nothing
 and found nothing that sends the plan back; its results are under stage 0.
 Stage 1 is fork patch 13; stage 2 is `runtime/src/bta_module.c`, and
-`lib/markdown` is its first module. Stage 3, the explicit `import`, is next.
+`lib/markdown` is its first module; stage 3, the explicit `import`, is the same
+file's loader. Stage 4, the IDE, is next.
 
 It answers L1 and D1 of [the October 2026 audit](../audit-2026-10.md): one
 global scope for every file and library, and a dynamic `import()` that compiles
@@ -290,6 +291,32 @@ stage 2, the first time the runtime compiles a module.
   ambiguity refused.
 - `Task`: a task file's explicit imports are loaded into the worker.
   `examples/sheets` moves its helpers out, as the proof.
+
+**Done, 2026-10-12.** What building it decided (`AGENTS.md`, *A file with
+`export` is a module*, has the traps):
+
+- **The library module is text, not `JS_NewCModule`**: one
+  `export * from "<path>"` per module file of the library, compiled under the
+  library's bare name. A C module's exports are values set once, so an
+  `export let` would have stopped being live; `export *` keeps the bindings,
+  excludes `default`, and *is* the union rule -- a name two files export is
+  left out and refused as ambiguous by the engine when imported. A library
+  with no module file refuses an import, naming why: its classes are reached
+  by name.
+- **A module's name is its canonical path**, which is what lets the loader and
+  the engine agree that a file is already loaded; a file only imported need
+  not be in `sources`, and one both imported and listed is evaluated once.
+- **What an import brought in is handed out like any module**, after the file
+  that imported it ran; a re-export is the same binding and not a second
+  owner.
+- **`export default` is allowed again**, reached only through an import.
+- **`Task`**: the worker loads its file and what it imports.
+  `examples/sheets` moved its helpers to `SheetParts.js`, which is not in
+  `sources` and arrives by the reader's import, on both threads.
+- `CheckSource` and `Symbols` compile an import against one empty module and
+  read nothing from the disk.
+- Not done, because nothing asked: a `.js` suffix is not added to a path that
+  lacks one, and a library cannot be imported by path from outside it.
 
 ### Stage 4 -- the IDE and load-time checks
 

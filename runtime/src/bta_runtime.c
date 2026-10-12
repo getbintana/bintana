@@ -575,8 +575,17 @@ int bta_eval_file(JSContext *ctx, const char *path)
     int64_t prof = bta_profile_begin();
     int     rc   = 0;
     size_t  len;
-    char   *src = bta_read_file(path, &len);
+    char   *src;
+    /* The name a module is known by, so that `import "./x.js"` from another
+     * file finds the same record and not a second one. */
+    char   *name = g_canonicalize_filename(path, NULL);
 
+    /* Already a module of this program: something earlier imported it, and
+     * the engine evaluated it then. */
+    if (bta_module_done(ctx, name))
+        goto out;
+
+    src = bta_read_file(path, &len);
     if (!src) {
         fprintf(stderr, "bintana: cannot read %s\n", path);
         rc = -1;
@@ -594,12 +603,12 @@ int bta_eval_file(JSContext *ctx, const char *path)
 
     /* A file with `export` is a module (bta_module.c): compiled, shown to the
      * debugger like a script, then evaluated and its exports handed out. */
-    r = bta_compile(ctx, src, len, path, &is_module);
+    r = bta_compile(ctx, src, len, name, &is_module);
     g_free(src);
     if (!JS_IsException(r)) {
-        bta_debug_compiled(ctx, path, r);
+        bta_debug_compiled(ctx, name, r);
         if (is_module)
-            r = bta_module_run(ctx, r, path) < 0 ? JS_EXCEPTION : JS_UNDEFINED;
+            r = bta_module_run(ctx, r, name) < 0 ? JS_EXCEPTION : JS_UNDEFINED;
         else
             r = JS_EvalFunction(ctx, r);
     }
@@ -624,6 +633,7 @@ out:
         bta_profile_end_at(prof, done, "Bintana", "Script", base);
         g_free(base);
     }
+    g_free(name);
     return rc;
 }
 
@@ -733,7 +743,9 @@ static JSValue js_check_source(JSContext *ctx, JSValueConst this_val,
     }
 
     bool    is_module;
+    bta_modules_checking(ctx, true);
     JSValue r = bta_compile(ctx, src, strlen(src), "<check>", &is_module);
+    bta_modules_checking(ctx, false);
     JS_FreeCString(ctx, src);
 
     if (!JS_IsException(r)) {
@@ -966,6 +978,7 @@ JSValue bta_symbols(JSContext *ctx, const char *src)
      * script compile that fails reports what it read before failing, and a
      * module would then report its declarations twice. */
     bool    is_module;
+    bta_modules_checking(ctx, true);
     JSValue probe = bta_compile(ctx, src, strlen(src), "<symbols>", &is_module);
     if (JS_IsException(probe))
         JS_FreeValue(ctx, JS_GetException(ctx));
@@ -979,6 +992,7 @@ JSValue bta_symbols(JSContext *ctx, const char *src)
                         JS_EVAL_FLAG_COMPILE_ONLY);
 
     JS_SetSymbolHandler(rt, NULL, NULL);
+    bta_modules_checking(ctx, false);
 
     /* Compiled and not run, so the only thing it can hand back is an error --
      * and the symbols collected before it are the answer, not the error. */
@@ -2032,6 +2046,9 @@ static bool install_globals(BtaApp *app)
 
     /* Last, and only after rad.js: it captured what it needs. */
     bta_close_hatches(ctx);
+
+    /* Where an `import` in the project's files resolves (bta_module.c). */
+    bta_modules_scope(ctx, app->dir, app->libs);
     return true;
 }
 
@@ -2544,7 +2561,7 @@ static JSValue js_libraries(JSContext *ctx, JSValueConst this_val,
  * Nothing else in that file means anything here: a library is not a project and
  * `bintana <library>` is not a thing to do.
  */
-static GPtrArray *lib_sources(BtaApp *app, const char *dir)
+GPtrArray *bta_library_sources(JSContext *ctx, const char *dir)
 {
     GPtrArray *out  = g_ptr_array_new_with_free_func(g_free);
     char      *path = g_build_filename(dir, "project.json", NULL);
@@ -2555,34 +2572,34 @@ static GPtrArray *lib_sources(BtaApp *app, const char *dir)
     g_free(path);
 
     if (text) {
-        JSValue cfg = JS_ParseJSON(app->ctx, text, strlen(text), "library");
+        JSValue cfg = JS_ParseJSON(ctx, text, strlen(text), "library");
 
         if (!JS_IsException(cfg)) {
-            JSValue arr = JS_GetPropertyStr(app->ctx, cfg, "sources");
+            JSValue arr = JS_GetPropertyStr(ctx, cfg, "sources");
 
             if (JS_IsArray(arr)) {
-                JSValue  lenv = JS_GetPropertyStr(app->ctx, arr, "length");
+                JSValue  lenv = JS_GetPropertyStr(ctx, arr, "length");
                 uint32_t n    = 0;
-                JS_ToUint32(app->ctx, &n, lenv);
-                JS_FreeValue(app->ctx, lenv);
+                JS_ToUint32(ctx, &n, lenv);
+                JS_FreeValue(ctx, lenv);
 
                 for (uint32_t i = 0; i < n; i++) {
-                    JSValue     e = JS_GetPropertyUint32(app->ctx, arr, i);
-                    const char *f = JS_ToCString(app->ctx, e);
+                    JSValue     e = JS_GetPropertyUint32(ctx, arr, i);
+                    const char *f = JS_ToCString(ctx, e);
 
                     if (f && *f)
                         g_ptr_array_add(out, g_build_filename(dir, f, NULL));
-                    JS_FreeCString(app->ctx, f);
-                    JS_FreeValue(app->ctx, e);
+                    JS_FreeCString(ctx, f);
+                    JS_FreeValue(ctx, e);
                 }
             }
-            JS_FreeValue(app->ctx, arr);
+            JS_FreeValue(ctx, arr);
         } else {
-            JS_FreeValue(app->ctx, JS_GetException(app->ctx));
+            JS_FreeValue(ctx, JS_GetException(ctx));
             fprintf(stderr, "bintana: %s/project.json is not JSON; loading its "
                             "sources by path\n", dir);
         }
-        JS_FreeValue(app->ctx, cfg);
+        JS_FreeValue(ctx, cfg);
         g_free(text);
     }
 
@@ -2638,7 +2655,7 @@ static GPtrArray *collect_sources(BtaApp *app, JSValueConst cfg)
 
     for (guint i = 0; app->libs && i < app->libs->len; i++) {
         const char *dir  = g_ptr_array_index(app->libs, i);
-        GPtrArray  *mine = lib_sources(app, dir);
+        GPtrArray  *mine = bta_library_sources(ctx, dir);
 
         for (guint j = 0; j < mine->len; j++)
             g_ptr_array_add(first, g_strdup(g_ptr_array_index(mine, j)));

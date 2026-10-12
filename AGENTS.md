@@ -1429,8 +1429,8 @@ patch 5 already refused the ones using `async`.
   `preventExtensions` and `isExtensible` all went with `Object`'s statics, so
   there is no way to lock the prototype and no way to ask whether anything wrote
   to it. That makes the old sentence not merely false but unfalsifiable from
-  inside the language. It stays a small risk only because there are no imports:
-  the only code that can do it is the project's own and its `uses` libraries.
+  inside the language. It stays a small risk only because an import reaches only
+  the project and its `uses` libraries: the only code that can do it is the project's own and its `uses` libraries.
   **`Dictionary.Keys` is immune** -- it is the `Object.keys` `rad.js` captured,
   own and enumerable -- which is the strongest argument for it and was written
   down nowhere.
@@ -7667,7 +7667,7 @@ designer was left), and letting the press through the Glass to the real strip
 
 ## A file with `export` is a module
 
-Stage 2 of [`docs/plans/modules-plan.md`](docs/plans/modules-plan.md), in
+Stages 2 and 3 of [`docs/plans/modules-plan.md`](docs/plans/modules-plan.md), in
 `runtime/src/bta_module.c`: what a module exports goes on the global object and
 reaches every file -- and a `.form`'s `type`, `startup`, `Task.Start`, through
 `bta_lookup_global`'s ordinary eval -- with no `import`; the rest is the file's
@@ -7708,16 +7708,65 @@ before touching it:
   `bta_modules_forget` can run after `JS_FreeRuntime` and nothing in it is a
   `JSValue` the runtime would assert on; the namespace lives in the getter's own
   function data, which the collector owns.
-- **`export default` is refused at load**: there is no name to reach anybody by.
-  It may come back with stage 3's `import`.
+- **`export default` reaches nobody by name** and is skipped when the exports
+  are handed out; an `import` is the one way to it. It was refused at load
+  until stage 3 gave it that way.
 - **`tests/api.sh` reads only what a module exports** when it asks whether two
   libraries claim one name -- the private ones collide with nothing, which was
   the check standing in for this feature.
 
+**An `import` is resolved by `bta_modules_scope`'s loader** (stage 3, the
+same file), installed on every runtime that runs a project's code -- the main
+one in `install_globals`, a worker's before its file is compiled. What building
+it settled:
+
+- **A module's name is its canonical path, and that is what makes "once"
+  work.** The engine finds an already-loaded module by the name the normaliser
+  answers, so `bta_eval_file` and the worker compile under
+  `g_canonicalize_filename(path)`, and `./x.js` normalises to the same string.
+  A file an import brought in is in the per-context `done` set and the loader
+  skips it when `sources` reaches it; a different spelling of one path would
+  have evaluated it twice.
+- **A library is a module this file writes**: `export * from "<path>"` for each
+  of its files that compiles as a module, compiled under the library's bare
+  name. `export *` is the plan's union rule for free -- `default` excluded, a
+  name two files export left out and refused by the engine as *ambiguous* when
+  imported -- and the re-exports are live bindings. A library file not loaded
+  yet (in a worker, or a library later in `uses`) is compiled there; a script
+  file of the library is skipped, so `import { Chart } from "charts"` refuses
+  until `lib/charts` exports.
+- **What an import brought in is handed out after the module that imported it
+  ran**, from a pending list `load_file` fills, so it reaches later files by
+  name like any module. A re-export (`export { withIva } from "./P.js"`) is the
+  same binding and is not counted as a second owner: `distribute` compares the
+  values with `JS_IsStrictEqual` before calling a name ambiguous.
+- **Detection needed one more case**: a module compile whose `SyntaxError` is
+  not in this text at all -- a file it imports, compiled in the same step --
+  has position 0 against this name, and would otherwise lose to the script
+  compile's *Unexpected token* on the `import` line. Position 0 now means
+  "a module".
+- **`CheckSource` and `Symbols` never read the disk for an import**:
+  `bta_modules_checking` makes the normaliser answer every specifier with one
+  empty C module, `<import>`, which is enough to compile against (import names
+  are resolved at link, not at compile).
+- **The loader's refusals are `ReferenceError`s and never `SyntaxError`s**, for
+  the detection rule above: a positionless `SyntaxError` would hand the report
+  to the script compile. Each names the importing file and what to do.
+- **Still open**: a module compiled only to be checked stays in the context's
+  module list (`JS_TAG_MODULE` is never freed by `JS_FreeValue` -- the engine
+  frees module records with the context), so every `CheckSource` of a module
+  text keeps one record alive; stage 2 already had it. Worth measuring before
+  the IDE checks module files on every keystroke.
+
+`tests/widgets`' `Imports` runs a child per rule (choosing by import and `as`,
+once and unlisted, a re-export, a default, a cycle, a library, a task's
+imports, and seven refusals), and `modulesDebugger(true)` stops in a file only
+an import brought in.
+
 `tests/widgets`' `Modules` runs a child per rule (the markdown probes, reach,
-two owners, both collision orders, a runtime name, `export default`, a live
-binding, a task class in a module) plus `CheckSource`/`Symbols` on a module
-and a module's top-level `await` (patch 13's half that needed a module), and
+two owners, both collision orders, a runtime name, an `export default` that
+no longer stops a load, a live binding, a task class in a module) plus
+`CheckSource`/`Symbols` on a module and a module's top-level `await` (patch 13's half that needed a module), and
 `modulesDebugger` stops in one. Taking the `export` off `lib/markdown` turns the
 two markdown assertions red.
 

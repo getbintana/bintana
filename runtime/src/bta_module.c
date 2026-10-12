@@ -43,6 +43,20 @@
  * which is already installed, then answers with a `ReferenceError` naming both
  * -- at the use, which is where somebody can do something about it, and only
  * if anybody uses it.
+ *
+ * **An `import` is standard JavaScript, resolved here (stage 3).**  A path
+ * (`./Prices.js`) is a file of the project, or of the library the importing
+ * file is in; a bare name (`markdown`) is a library `uses` names, and stands
+ * for a module written here whose whole text is one `export * from` per module
+ * file of the library -- so the union of its files' exports, with a name two of
+ * them export left out by the engine's own rule and refused as *ambiguous*
+ * when imported.  A file brought in by an import is evaluated by the engine
+ * before the file that imports it, and its exports are handed out like any
+ * module's; the loader then finds it done and does not run it twice.  A file
+ * with no `export` cannot be imported: its names reach everybody already.
+ * While `Application.CheckSource` or `Symbols` compiles a text, nothing is
+ * read from the disk -- every import is answered by one empty module, which is
+ * enough to compile against.
  */
 #include "bta.h"
 
@@ -123,12 +137,13 @@ JSValue bta_compile(JSContext *ctx, const char *src, size_t len,
 
     /* A module compile that failed with anything but a syntax error read the
      * whole text: it resolves its imports in the same step, so an import of
-     * something not there is `could not load module` with no position, after
-     * the parse succeeded. */
+     * something not there fails after the parse succeeded.  So did one whose
+     * syntax error is not in this text at all -- it is a file an import named,
+     * compiled in the same step, and its position is in its own name. */
     JSValue module_exc = JS_GetException(ctx);
-    if (!is_syntax_error(ctx, module_exc) ||
-        error_position(ctx, module_exc, name) >
-        error_position(ctx, script_exc, name)) {
+    long    module_at  = error_position(ctx, module_exc, name);
+    if (!is_syntax_error(ctx, module_exc) || module_at == 0 ||
+        module_at > error_position(ctx, script_exc, name)) {
         JS_FreeValue(ctx, script_exc);
         *is_module = true;
         return JS_Throw(ctx, module_exc);
@@ -137,43 +152,86 @@ JSValue bta_compile(JSContext *ctx, const char *src, size_t len,
     return JS_Throw(ctx, script_exc);
 }
 
-/* ------------------------------------------------------------ the owners */
+/* ------------------------------------------------------------ the state */
 
 /*
- * Per context, because a `Task` has a context of its own on another thread:
- * name -> the files that export it, in the order they did.  Plain C strings,
- * so forgetting it needs no context and can happen after the runtime is gone.
+ * Per context, because a `Task` has a context of its own on another thread.
+ * Plain C throughout, so forgetting it needs no context and can happen after
+ * the runtime is gone: who exports what, which files are already modules of
+ * this context, what an import brought in and has not been handed out yet, and
+ * where imports are resolved.
  */
-static GMutex      owners_lock;
-static GHashTable *owners_by_ctx;   /* JSContext* -> GHashTable name -> GPtrArray */
+typedef struct {
+    GHashTable *owners;     /* name -> GPtrArray of paths, in export order */
+    GHashTable *done;       /* canonical path -> GINT_TO_POINTER(1): loaded */
+    GPtrArray  *pending;    /* Pending: brought in by an import, not handed out */
+    char       *project;    /* where `./x.js` may point; NULL for anywhere */
+    GPtrArray  *libs;       /* the directories `uses` resolved to */
+    int         checking;   /* > 0 while CheckSource or Symbols compiles */
+} ModState;
 
-static GHashTable *owners_of(JSContext *ctx, bool make)
+typedef struct {
+    char        *path;
+    JSModuleDef *m;
+} Pending;
+
+static void pending_free(gpointer p)
 {
-    GHashTable *t = NULL;
+    g_free(((Pending *)p)->path);
+    g_free(p);
+}
+
+static GMutex      owners_lock;
+static GHashTable *state_by_ctx;    /* JSContext* -> ModState* */
+
+static void state_free(ModState *st)
+{
+    g_hash_table_unref(st->owners);
+    g_hash_table_unref(st->done);
+    g_ptr_array_unref(st->pending);
+    g_free(st->project);
+    if (st->libs)
+        g_ptr_array_unref(st->libs);
+    g_free(st);
+}
+
+static ModState *state_of(JSContext *ctx, bool make)
+{
+    ModState *st = NULL;
 
     g_mutex_lock(&owners_lock);
-    if (!owners_by_ctx && make)
-        owners_by_ctx = g_hash_table_new(g_direct_hash, g_direct_equal);
-    if (owners_by_ctx) {
-        t = g_hash_table_lookup(owners_by_ctx, ctx);
-        if (!t && make) {
-            t = g_hash_table_new_full(g_str_hash, g_str_equal, g_free,
-                                      (GDestroyNotify)g_ptr_array_unref);
-            g_hash_table_insert(owners_by_ctx, ctx, t);
+    if (!state_by_ctx && make)
+        state_by_ctx = g_hash_table_new(g_direct_hash, g_direct_equal);
+    if (state_by_ctx) {
+        st = g_hash_table_lookup(state_by_ctx, ctx);
+        if (!st && make) {
+            st = g_new0(ModState, 1);
+            st->owners  = g_hash_table_new_full(g_str_hash, g_str_equal, g_free,
+                                                (GDestroyNotify)g_ptr_array_unref);
+            st->done    = g_hash_table_new_full(g_str_hash, g_str_equal, g_free,
+                                                NULL);
+            st->pending = g_ptr_array_new_with_free_func(pending_free);
+            g_hash_table_insert(state_by_ctx, ctx, st);
         }
     }
     g_mutex_unlock(&owners_lock);
-    return t;
+    return st;
+}
+
+static GHashTable *owners_of(JSContext *ctx, bool make)
+{
+    ModState *st = state_of(ctx, make);
+    return st ? st->owners : NULL;
 }
 
 void bta_modules_forget(JSContext *ctx)
 {
     g_mutex_lock(&owners_lock);
-    if (owners_by_ctx) {
-        GHashTable *t = g_hash_table_lookup(owners_by_ctx, ctx);
-        if (t) {
-            g_hash_table_remove(owners_by_ctx, ctx);
-            g_hash_table_unref(t);
+    if (state_by_ctx) {
+        ModState *st = g_hash_table_lookup(state_by_ctx, ctx);
+        if (st) {
+            g_hash_table_remove(state_by_ctx, ctx);
+            state_free(st);
         }
     }
     g_mutex_unlock(&owners_lock);
@@ -188,6 +246,18 @@ bool bta_module_exported(JSContext *ctx, const char *name)
     yes = t && g_hash_table_contains(t, name);
     g_mutex_unlock(&owners_lock);
     return yes;
+}
+
+bool bta_module_done(JSContext *ctx, const char *path)
+{
+    ModState *st = state_of(ctx, false);
+    return st && g_hash_table_contains(st->done, path);
+}
+
+void bta_modules_checking(JSContext *ctx, bool on)
+{
+    ModState *st = state_of(ctx, true);
+    st->checking += on ? 1 : -1;
 }
 
 /* The owners of a name as a sentence: `Lib.js and Other.js`. */
@@ -270,29 +340,48 @@ static int distribute(JSContext *ctx, JSValueConst global, JSValueConst ns,
         return -1;
     }
 
+    /* A default export has no name for the other files to use: it is reached
+     * only by an import, which names it there. */
     if (!strcmp(name, "default")) {
-        JS_ThrowSyntaxError(ctx, "%s: 'export default' has no name for the "
-                            "other files to use: export a declaration by its "
-                            "name", file);
+        rc = 0;
         goto out;
     }
 
     GHashTable *t = owners_of(ctx, true);
     g_mutex_lock(&owners_lock);
     GPtrArray *owners = g_hash_table_lookup(t, name);
+    bool       seen   = false;
+    guint      count  = owners ? owners->len : 0;
+    for (guint i = 0; i < count && !seen; i++)
+        seen = !strcmp(owners->pdata[i], path);
+    g_mutex_unlock(&owners_lock);
+
     if (owners) {
         /* A second owner: the getter is already there, and from now on it
-         * names both.  The same file twice (a module loaded again) is one. */
-        bool seen = false;
-        for (guint i = 0; i < owners->len && !seen; i++)
-            seen = !strcmp(owners->pdata[i], path);
-        if (!seen)
+         * names both -- unless it is the same thing.  A file that re-exports
+         * what it imported (`export { withIva } from "./Prices.js"`) hands out
+         * the very binding the first owner did, and is not a second answer.
+         * The same file twice is one owner. */
+        if (!seen && count == 1) {
+            JSValue mine   = JS_GetProperty(ctx, ns, atom);
+            JSValue theirs = JS_GetProperty(ctx, global, atom);
+            if (JS_IsException(mine) || JS_IsException(theirs)) {
+                JS_FreeValue(ctx, mine);
+                JS_FreeValue(ctx, theirs);
+                goto out;
+            }
+            seen = JS_IsStrictEqual(ctx, mine, theirs);
+            JS_FreeValue(ctx, mine);
+            JS_FreeValue(ctx, theirs);
+        }
+        if (!seen) {
+            g_mutex_lock(&owners_lock);
             g_ptr_array_add(owners, g_strdup(path));
-        g_mutex_unlock(&owners_lock);
+            g_mutex_unlock(&owners_lock);
+        }
         rc = 0;
         goto out;
     }
-    g_mutex_unlock(&owners_lock);
 
     int has = JS_HasProperty(ctx, global, atom);
     if (has < 0)
@@ -338,11 +427,38 @@ out:
     return rc;
 }
 
+/* Hands out what an evaluated module exports. */
+static int distribute_module(JSContext *ctx, JSModuleDef *m, const char *path)
+{
+    JSValue ns = JS_GetModuleNamespace(ctx, m);
+    if (JS_IsException(ns))
+        return -1;
+
+    JSValue         global = JS_GetGlobalObject(ctx);
+    JSPropertyEnum *tab    = NULL;
+    uint32_t        n      = 0;
+    int             rc     = 0;
+
+    if (JS_GetOwnPropertyNames(ctx, &tab, &n, ns,
+                               JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) < 0) {
+        rc = -1;
+    } else {
+        for (uint32_t i = 0; i < n && rc == 0; i++)
+            rc = distribute(ctx, global, ns, tab[i].atom, path);
+        JS_FreePropertyEnum(ctx, tab, n);
+    }
+    JS_FreeValue(ctx, global);
+    JS_FreeValue(ctx, ns);
+    return rc;
+}
+
 int bta_module_run(JSContext *ctx, JSValue compiled, const char *path)
 {
     JSModuleDef *m       = JS_VALUE_GET_PTR(compiled);
+    ModState    *st      = state_of(ctx, true);
     JSValue      promise = JS_EvalFunction(ctx, compiled);   /* takes it */
 
+    g_hash_table_add(st->done, g_strdup(path));
     if (JS_IsException(promise))
         return -1;
 
@@ -364,24 +480,260 @@ int bta_module_run(JSContext *ctx, JSValue compiled, const char *path)
         return -1;
     }
 
-    JSValue ns = JS_GetModuleNamespace(ctx, m);
-    if (JS_IsException(ns))
-        return -1;
-
-    JSValue         global = JS_GetGlobalObject(ctx);
-    JSPropertyEnum *tab    = NULL;
-    uint32_t        n      = 0;
-    int             rc     = 0;
-
-    if (JS_GetOwnPropertyNames(ctx, &tab, &n, ns,
-                               JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) < 0) {
-        rc = -1;
-    } else {
-        for (uint32_t i = 0; i < n && rc == 0; i++)
-            rc = distribute(ctx, global, ns, tab[i].atom, path);
-        JS_FreePropertyEnum(ctx, tab, n);
+    /* What its imports brought in was evaluated first, by the engine, and is
+     * handed out first: it is what a later file reaches by name, exactly as if
+     * it had been loaded on its own. */
+    while (st->pending->len) {
+        Pending *p  = g_ptr_array_steal_index(st->pending, 0);
+        int      rc = distribute_module(ctx, p->m, p->path);
+        pending_free(p);
+        if (rc < 0)
+            return -1;
     }
-    JS_FreeValue(ctx, global);
-    JS_FreeValue(ctx, ns);
-    return rc;
+    return distribute_module(ctx, m, path);
+}
+
+/* ------------------------------------------------------------ importing */
+
+/* The answer to an import while a text is only being checked. */
+#define UNCHECKED "<import>"
+
+static int unchecked_init(JSContext *ctx, JSModuleDef *m)
+{
+    (void)ctx; (void)m;
+    return 0;
+}
+
+/* `path` is under `root`. */
+static bool path_inside(const char *path, const char *root)
+{
+    size_t n = strlen(root);
+    return !strncmp(path, root, n) &&
+           (path[n] == G_DIR_SEPARATOR || (n && root[n - 1] == G_DIR_SEPARATOR));
+}
+
+static char *js_strdup_c(JSContext *ctx, const char *s)
+{
+    size_t n   = strlen(s) + 1;
+    char  *out = js_malloc(ctx, n);
+    if (out)
+        memcpy(out, s, n);
+    return out;
+}
+
+static const char *library_named(ModState *st, const char *name)
+{
+    for (guint i = 0; st && st->libs && i < st->libs->len; i++) {
+        char *base = g_path_get_basename(st->libs->pdata[i]);
+        bool  same = !strcmp(base, name);
+        g_free(base);
+        if (same)
+            return st->libs->pdata[i];
+    }
+    return NULL;
+}
+
+static char *module_normalize(JSContext *ctx, const char *base,
+                              const char *spec, void *opaque)
+{
+    (void)opaque;
+    ModState *st = state_of(ctx, false);
+
+    if (st && st->checking)
+        return js_strdup_c(ctx, UNCHECKED);
+
+    bool path = spec[0] == '/' || g_str_has_prefix(spec, "./") ||
+                g_str_has_prefix(spec, "../");
+
+    if (!path) {
+        if (library_named(st, spec))
+            return js_strdup_c(ctx, spec);
+        char *from = g_path_get_basename(base);
+        JS_ThrowReferenceError(ctx, "%s imports '%s', and no library of that "
+                               "name is in project.json's \"uses\" -- add it "
+                               "there, or write a file as a path (\"./%s.js\")",
+                               from, spec, spec);
+        g_free(from);
+        return NULL;
+    }
+
+    /* A library's own module names its files by their whole path. */
+    char *dir = NULL;
+    if (spec[0] != '/') {
+        if (!g_path_is_absolute(base)) {
+            JS_ThrowReferenceError(ctx, "import from '%s': %s is not a file, so "
+                                   "there is nothing for the path to be "
+                                   "relative to", spec, base);
+            return NULL;
+        }
+        dir = g_path_get_dirname(base);
+    }
+    char *full = g_canonicalize_filename(spec, dir);
+    g_free(dir);
+
+    /* Inside the project, or inside a library it uses: an import is not a way
+     * to read the disk. */
+    bool ok = !st || (!st->project && !st->libs);
+    if (st && st->project && path_inside(full, st->project))
+        ok = true;
+    for (guint i = 0; !ok && st && st->libs && i < st->libs->len; i++) {
+        char *lib = g_canonicalize_filename(st->libs->pdata[i], NULL);
+        ok = path_inside(full, lib);
+        g_free(lib);
+    }
+    if (!ok) {
+        char *from = g_path_get_basename(base);
+        JS_ThrowReferenceError(ctx, "%s imports '%s', which is outside the "
+                               "project and its libraries", from, spec);
+        g_free(from);
+        g_free(full);
+        return NULL;
+    }
+
+    if (!g_file_test(full, G_FILE_TEST_IS_REGULAR)) {
+        char *from = g_path_get_basename(base);
+        JS_ThrowReferenceError(ctx, "%s imports '%s', and there is no such "
+                               "file (%s)", from, spec, full);
+        g_free(from);
+        g_free(full);
+        return NULL;
+    }
+
+    char *out = js_strdup_c(ctx, full);
+    g_free(full);
+    return out;
+}
+
+/* Compiles a file an import names; NULL with the exception pending. */
+static JSModuleDef *load_file(JSContext *ctx, ModState *st, const char *path,
+                              bool quiet_script)
+{
+    size_t len;
+    char  *src = bta_read_file(path, &len);
+    char  *file = g_path_get_basename(path);
+
+    if (!src) {
+        JS_ThrowReferenceError(ctx, "import of %s: there is no such file "
+                               "(%s)", file, path);
+        g_free(file);
+        return NULL;
+    }
+
+    bool    is_module;
+    JSValue r = bta_compile(ctx, src, len, path, &is_module);
+    g_free(src);
+    if (JS_IsException(r)) {
+        g_free(file);
+        return NULL;
+    }
+    if (!is_module) {
+        JS_FreeValue(ctx, r);
+        if (!quiet_script)
+            JS_ThrowReferenceError(ctx, "import of %s: it exports nothing -- a "
+                                   "file with no export is a script, and its "
+                                   "names reach every file without an import",
+                                   file);
+        g_free(file);
+        return NULL;
+    }
+    g_free(file);
+
+    JSModuleDef *m = JS_VALUE_GET_PTR(r);
+    bta_debug_compiled(ctx, path, r);
+    JS_FreeValue(ctx, r);
+
+    Pending *p = g_new0(Pending, 1);
+    p->path = g_strdup(path);
+    p->m    = m;
+    g_ptr_array_add(st->pending, p);
+    g_hash_table_add(st->done, g_strdup(path));
+    return m;
+}
+
+/*
+ * A library as one module: `export * from` each of its files that is a module.
+ * A file already loaded is the engine's to find by its name; one not loaded
+ * yet -- in a worker, or a library that comes later in `uses` -- is compiled
+ * here, and a script is left for the loader, since it has nothing to import.
+ */
+static JSModuleDef *load_library(JSContext *ctx, ModState *st, const char *name,
+                                 const char *dir)
+{
+    GPtrArray *files = bta_library_sources(ctx, dir);
+    GString   *text  = g_string_new(NULL);
+
+    for (guint i = 0; i < files->len; i++) {
+        char *path = g_canonicalize_filename(files->pdata[i], NULL);
+
+        if (!g_hash_table_contains(st->done, path)) {
+            if (!load_file(ctx, st, path, true)) {
+                if (JS_HasException(ctx)) {
+                    g_free(path);
+                    g_ptr_array_unref(files);
+                    g_string_free(text, TRUE);
+                    return NULL;
+                }
+                g_free(path);
+                continue;   /* a script */
+            }
+        }
+        g_string_append(text, "export * from \"");
+        for (const char *c = path; *c; c++) {
+            if (*c == '"' || *c == '\\')
+                g_string_append_c(text, '\\');
+            g_string_append_c(text, *c);
+        }
+        g_string_append(text, "\";\n");
+        g_free(path);
+    }
+    g_ptr_array_unref(files);
+
+    if (!text->len) {
+        g_string_free(text, TRUE);
+        JS_ThrowReferenceError(ctx, "import from '%s': the library exports "
+                               "nothing -- its classes are reached by name, "
+                               "with no import", name);
+        return NULL;
+    }
+
+    JSValue r = JS_Eval(ctx, text->str, text->len, name,
+                        JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY);
+    g_string_free(text, TRUE);
+    if (JS_IsException(r))
+        return NULL;
+
+    JSModuleDef *m = JS_VALUE_GET_PTR(r);
+    JS_FreeValue(ctx, r);
+    return m;
+}
+
+static JSModuleDef *module_load(JSContext *ctx, const char *name, void *opaque)
+{
+    (void)opaque;
+    ModState *st = state_of(ctx, true);
+
+    if (!strcmp(name, UNCHECKED))
+        return JS_NewCModule(ctx, UNCHECKED, unchecked_init);
+
+    const char *lib = name[0] != '/' ? library_named(st, name) : NULL;
+    if (lib)
+        return load_library(ctx, st, name, lib);
+    return load_file(ctx, st, name, false);
+}
+
+void bta_modules_scope(JSContext *ctx, const char *project, GPtrArray *libs)
+{
+    ModState *st = state_of(ctx, true);
+
+    g_free(st->project);
+    st->project = project && *project ? g_canonicalize_filename(project, NULL)
+                                      : NULL;
+    if (st->libs)
+        g_ptr_array_unref(st->libs);
+    st->libs = g_ptr_array_new_with_free_func(g_free);
+    for (guint i = 0; libs && i < libs->len; i++)
+        g_ptr_array_add(st->libs, g_strdup(libs->pdata[i]));
+
+    JS_SetModuleLoaderFunc(JS_GetRuntime(ctx), module_normalize, module_load,
+                           NULL);
 }

@@ -185,6 +185,7 @@ struct BtaTaskJob {
     char      *app_name;
     char      *app_version;
     char      *app_dir;
+    GPtrArray *app_libs;    /* what `uses` resolved to, for the file's imports */
     char      *app_config;
     char      *app_exe;         /* "" where the platform will not say */
     char     **app_args;        /* NULL-terminated copy */
@@ -267,6 +268,8 @@ static void task_job_unref(gpointer data)
     g_free(job->app_name);
     g_free(job->app_version);
     g_free(job->app_dir);
+    if (job->app_libs)
+        g_ptr_array_unref(job->app_libs);
     g_free(job->app_config);
     g_free(job->app_exe);
     g_strfreev(job->app_args);
@@ -1323,7 +1326,9 @@ static gpointer task_thread(gpointer data)
         goto unwind;
     }
 
-    /* The task's file may be a module (bta_module.c), like any other. */
+    /* The task's file may be a module (bta_module.c), like any other, and
+     * what it imports is the whole of what the worker loads besides it. */
+    bta_modules_scope(ctx, job->app_dir, job->app_libs);
     bool is_module = false;
     r = bta_compile(ctx, job->file_text, strlen(job->file_text), job->file_path,
                     &is_module);
@@ -1688,7 +1693,7 @@ static JSValue task_start(JSContext *ctx, JSValueConst this_val,
         return r;
     }
     text = bta_read_file(found, &len);
-    path = g_strdup(found);
+    path = g_canonicalize_filename(found, NULL);   /* a module's name */
     if (!text) {
         JSValue r = JS_ThrowTypeError(ctx, "Task: cannot read %s", path);
         g_free(class_name);
@@ -1720,6 +1725,9 @@ static JSValue task_start(JSContext *ctx, JSValueConst this_val,
         job->app_name    = g_strdup(app->name);
         job->app_version = g_strdup(app->version);
         job->app_dir     = g_strdup(app->dir);
+        job->app_libs    = g_ptr_array_new_with_free_func(g_free);
+        for (guint i = 0; app->libs && i < app->libs->len; i++)
+            g_ptr_array_add(job->app_libs, g_strdup(app->libs->pdata[i]));
         job->app_config  = g_build_filename(g_get_user_config_dir(), "bintana",
                                             app->name, NULL);
         job->app_exe     = exe ? exe : g_strdup("");

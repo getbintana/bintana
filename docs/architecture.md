@@ -181,7 +181,7 @@ cannot be a program that needs one to start.
 Class declarations at the top level of a `.js` file land in the **global lexical
 scope**, not on `globalThis`, so a plain property read misses them.
 `bta_lookup_global()` falls back to evaluating the bare identifier, which is what
-makes "every class is visible everywhere, no imports" work.
+makes "every class is visible everywhere, with no import" work.
 
 ## One JSClassID, a prototype chain
 

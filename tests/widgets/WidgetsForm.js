@@ -548,7 +548,7 @@ const TESTS = [
     /* Children too: a project's own class named like a runtime global. */
     "ClassNamedLikeAGlobal",
     /* Children too: a file with `export` is a module. */
-    "Modules",
+    "Modules", "Imports",
     "Time",
     "Stopwatch",
     "Shortcut", "Decimal", "FieldDecimal",
@@ -4181,10 +4181,11 @@ class WidgetsForm extends Form {
               r.ExitCode !== 0 && r.Output.includes("T.js exports 'Timer', which is already a name"),
               r.Output);
         r = run("default", { main: "Main" }, {
-            "D.js": "export default 1;\n", "Main.js": main(""),
+            "D.js": "export default 1;\nexport const d = 2;\n",
+            "Main.js": main("    print('DEFAULT ' + d);"),
         });
-        check("an export default is refused: it has no name to reach anybody by",
-              r.ExitCode !== 0 && r.Output.includes("'export default' has no name"), r.Output);
+        check("an export default no longer stops a module loading, and its other names arrive",
+              r.ExitCode === 0 && r.Output.includes("DEFAULT 2"), r.Output);
 
         /* An export is a live binding, and nobody else can assign it. */
         r = run("live", { main: "Main" }, {
@@ -4230,7 +4231,134 @@ class WidgetsForm extends Form {
             eq(`...at the word`, no && no.Column, column);
         }
 
-        this.modulesDebugger();
+        this.modulesDebugger(false);
+        this.modulesDebugger(true);
+    }
+
+    /*
+     * Stage 3: an explicit `import` is standard JavaScript, scoped to its file
+     * (runtime/src/bta_module.c, *importing*). A path is a file of the project;
+     * a bare name is a library of `uses`, as one module of all its files'
+     * exports. What an import brings in is evaluated first and handed out like
+     * any module's, once.
+     */
+    testImports() {
+        const run = (name, project, files) => {
+            const dir = File.Join(SCRATCH, "import-" + name);
+            Directory.Make(dir);
+            for (const f of Dictionary.Keys(files)) {
+                Directory.Make(File.Directory(File.Join(dir, f)));
+                File.Save(File.Join(dir, f), files[f]);
+            }
+            File.SaveJson(File.Join(dir, "project.json"), { name: "import" + name, main: "Main", ...project });
+            return Exec.Wait([Application.Executable, dir], { Timeout: 30000 });
+        };
+        const main = (head, body) => `${head}\nexport function Main() {\n${body}\n    Application.Quit(0);\n}\n`;
+        const csv = "export class Parser { get Kind() { return 'csv'; } }\n";
+        const ini = "export class Parser { get Kind() { return 'ini'; } }\n";
+
+        /* Rule 5: an import settles an ambiguous name in one file, by name or
+         * renamed, and another file is still told it is ambiguous. */
+        let r = run("choose", { sources: ["Csv.js", "Ini.js", "Main.js", "Other.js"] }, {
+            "Csv.js": csv, "Ini.js": ini,
+            "Main.js": main('import { Parser } from "./Csv.js";\nimport { Parser as IniParser } from "./Ini.js";',
+                            "    print('CHOSEN ' + new Parser().Kind + ' ' + new IniParser().Kind + ' ' + other());"),
+            "Other.js": "function other() { try { return new Parser().Kind; } catch (e) { return 'AMBIGUOUS'; } }\n",
+        });
+        check("an import chooses between two owners, and as renames one",
+              r.Output.includes("CHOSEN csv ini AMBIGUOUS"), r.Output);
+
+        /* A file an import names need not be in `sources`, is evaluated once
+         * whichever order, and hands out its exports to the rest. */
+        r = run("once", { sources: ["Main.js", "Count.js", "Late.js"] }, {
+            "Count.js": "print('EVALUATED');\nexport const once = 1;\n",
+            "lib2/Deep.js": "export const deep = 'deep';\n",
+            "Main.js": main('import { once } from "./Count.js";\nimport { deep } from "./lib2/Deep.js";',
+                            "    print('ONCE ' + once + ' ' + deep + ' ' + late());"),
+            "Late.js": "function late() { return deep; }\n",
+        });
+        eq("a file imported and listed is evaluated once",
+           r.Output.split("EVALUATED").length - 1, 1);
+        check("...and a file only imported hands its exports to every file",
+              r.Output.includes("ONCE 1 deep deep"), r.Output);
+
+        /* A re-export is the same binding, not a second owner. */
+        r = run("reexport", { sources: ["P.js", "R.js", "Main.js"] }, {
+            "P.js": "export function withIva(n) { return n * 1.21; }\n",
+            "R.js": 'export { withIva } from "./P.js";\n',
+            "Main.js": main("", "    print('REEXPORT ' + withIva(100));"),
+        });
+        check("a re-export does not make its name ambiguous", r.Output.includes("REEXPORT 121"), r.Output);
+
+        /* export default is reached by an import, and only so. */
+        r = run("default", { sources: ["Main.js"] }, {
+            "D.js": "export default function () { return 'dflt'; }\n",
+            "Main.js": main('import d from "./D.js";', "    print('DEFAULT ' + d());"),
+        });
+        check("an export default is reached through an import", r.Output.includes("DEFAULT dflt"), r.Output);
+
+        /* A cycle between two modules is the engine's ordinary linking. */
+        r = run("cycle", { sources: ["Main.js"] }, {
+            "B.js": 'import { a } from "./Main.js";\nexport function b() { return a + 1; }\n',
+            "Main.js": main('import { b } from "./B.js";\nexport const a = 1;', "    print('CYCLE ' + b());"),
+        });
+        check("two modules that import each other load", r.Output.includes("CYCLE 2"), r.Output);
+
+        /* A library is one module: what its module files export, by its name. */
+        r = run("library", { sources: ["Main.js"], uses: ["two"] }, {
+            "lib/two/A.js": "export class Parser {}\nexport const A = 'a';\n",
+            "lib/two/B.js": "export class Parser {}\nexport const B = 'b';\nconst hidden = 1;\n",
+            "lib/two/C.js": "class Plain {}\n",
+            "Main.js": main('import { A, B } from "two";', "    print('LIBRARY ' + A + B + ' ' + typeof Plain);"),
+        });
+        check("a library is imported by its name, its files' exports as one",
+              r.Output.includes("LIBRARY ab function"), r.Output);
+
+        /* What is refused, and that each says what to do. */
+        const refused = (what, files, wanted, project) => {
+            const rr = run(what, { sources: ["Main.js"], ...(project || {}) }, files);
+            check(`${what}: refused, saying so`, rr.ExitCode !== 0 && rr.Output.includes(wanted), rr.Output);
+        };
+        refused("missing", { "Main.js": main('import { x } from "./Nope.js";', "") },
+                "Main.js imports './Nope.js', and there is no such file");
+        refused("script", { "S.js": "function x() {}\n", "Main.js": main('import { x } from "./S.js";', "") },
+                "import of S.js: it exports nothing");
+        refused("outside", { "Main.js": main('import { x } from "../../x.js";', "") },
+                "which is outside the project and its libraries");
+        refused("unused", { "Main.js": main('import { Markdown } from "markdown";', "") },
+                "no library of that name is in project.json's \"uses\"");
+        refused("private", { "Main.js": main('import { slug } from "markdown";', "") },
+                "Could not find export 'slug' in module 'markdown'", { uses: ["markdown"] });
+        refused("ambiguous", {
+            "lib/two/A.js": "export class Parser {}\n", "lib/two/B.js": "export class Parser {}\n",
+            "Main.js": main('import { Parser } from "two";', ""),
+        }, "export 'Parser' in module 'two' is ambiguous", { uses: ["two"] });
+        refused("broken", { "Bad.js": "export const x = ;\n", "Main.js": main('import { x } from "./Bad.js";', "") },
+                "Bad.js:1:");
+
+        /* A task's file brings what it imports into the worker, and nothing
+         * else: the helper is not in the worker unless imported. */
+        r = run("task", { sources: ["Worker.js", "Main.js"] }, {
+            "Help.js": "const K = 10;\nexport function twice(n) { return n * 2; }\n",
+            "Worker.js": 'import { twice } from "./Help.js";\n' +
+                         "export class Worker extends Task { Run(m) { return twice(m) + ' ' + typeof K; } }\n",
+            "Main.js": "export function Main() {\n" +
+                       "    const t = new Worker();\n" +
+                       "    t.Done = (v) => { print('TASK ' + v); Application.Quit(0); };\n" +
+                       "    t.Error = (m) => { print('TASK FAILED ' + m); Application.Quit(1); };\n" +
+                       "    t.Start(21);\n" +
+                       "}\n",
+        });
+        check("a task's imports are loaded into its worker", r.Output.includes("TASK 42 undefined"), r.Output);
+
+        /* The editor's questions read an import without reading the disk. */
+        eq("CheckSource compiles an import of a file that is not there",
+           Application.CheckSource('import { Q } from "./Nowhere.js";\nexport const z = 1;'), null);
+        eq("...or of a library nobody uses",
+           Application.CheckSource('import { Q } from "nolib";\nexport const z = 1;'), null);
+        const fns = Application.Symbols('import { Q } from "nolib";\nexport function f(a) {}')
+                               .filter((x) => x.Kind === "Function");
+        eq("Symbols reads a module that imports", fns.map((x) => x.Name).join(), "f");
     }
 
     /*
@@ -4240,12 +4368,14 @@ class WidgetsForm extends Form {
      * which to the engine are closure variables of the function (the fork's
      * JS_DebugLocals/JS_DebugEval read them through `var_refs`).
      */
-    modulesDebugger() {
-        const proj = File.Join(SCRATCH, "module-dbg");
+    modulesDebugger(imported) {
+        const proj = File.Join(SCRATCH, imported ? "module-dbg-import" : "module-dbg");
+        const how  = imported ? " brought in by an import" : "";
 
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.json"),
-                      { name: "moduledbg", main: "Main", sources: ["Lib.js", "Main.js"] });
+                      { name: "moduledbg", main: "Main",
+                        sources: imported ? ["Main.js"] : ["Lib.js", "Main.js"] });
         File.Save(File.Join(proj, "Lib.js"),
                   "const K = 100;\n" +
                   "export function twice(n) {\n" +
@@ -4253,6 +4383,7 @@ class WidgetsForm extends Form {
                   "    return doubled + K;\n" +
                   "}\n");
         File.Save(File.Join(proj, "Main.js"),
+                  (imported ? 'import { twice } from "./Lib.js";\nexport ' : "") +
                   "function Main() {\n" +
                   "    print(`answer ${twice(21)}`);\n" +
                   "    Application.Quit(0);\n" +
@@ -4288,16 +4419,16 @@ class WidgetsForm extends Form {
             },
             (line) => out.push(line),
             (code) => {
-                eq("a module run under the debugger finishes", code, 0);
+                eq(`a module${how} run under the debugger finishes`, code, 0);
                 check("...and prints its answer", out.join("").includes("answer 142"),
                       JSON.stringify(out));
-                eq("a breakpoint in a module function stops once", stops.length, 1);
+                eq(`a breakpoint in a module${how} stops once`, stops.length, 1);
                 const at = stops[0] && stops[0].frames;
                 eq("...in that function, on that line", at && `${at[0].Name}:${at[0].Line}`,
                    "twice:3");
                 const by = {};
                 for (const item of locals || []) by[item.Name] = item.Value;
-                eq("the frame shows the module's private name", by.K, "100");
+                eq(`the frame shows the module's private name${how}`, by.K, "100");
                 eq("...and eval names it", value, "121");
                 waiting--;
             });
@@ -19822,6 +19953,7 @@ function Main() {
             Directory.DeleteTree(dir);
         Directory.Make(dir);
         File.Save(File.Join(dir, "SheetReader.js"), File.Load(src));
+        File.Save(File.Join(dir, "SheetParts.js"), File.Load(File.Join(File.Directory(src), "SheetParts.js")));
         File.SaveJson(File.Join(dir, "project.json"),
                       { name: "sheetprobe", main: "Main", version: "1.0", sources: ["SheetReader.js", "Main.js"] });
         File.Save(File.Join(dir, "Main.js"),
@@ -19970,6 +20102,7 @@ function Main() {
             Directory.DeleteTree(dir);
         Directory.Make(dir);
         File.Save(File.Join(dir, "SheetReader.js"), File.Load(sheets));
+        File.Save(File.Join(dir, "SheetParts.js"), File.Load(File.Join(File.Directory(sheets), "SheetParts.js")));
         /* The writer is the library, not a copy of it: the scratch project
          * declares it, which is the whole point of the move. */
         File.SaveJson(File.Join(dir, "project.json"),
