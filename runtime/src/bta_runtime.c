@@ -607,10 +607,13 @@ int bta_eval_file(JSContext *ctx, const char *path)
     g_free(src);
     if (!JS_IsException(r)) {
         bta_debug_compiled(ctx, name, r);
-        if (is_module)
+        if (is_module) {
             r = bta_module_run(ctx, r, name) < 0 ? JS_EXCEPTION : JS_UNDEFINED;
-        else
+        } else {
             r = JS_EvalFunction(ctx, r);
+            if (JS_IsException(r))
+                bta_modules_explain(ctx, name);
+        }
     }
 
     if (JS_IsException(r)) {

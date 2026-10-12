@@ -189,12 +189,14 @@ typedef struct {
     int         checking;   /* > 0 while CheckSource or Symbols compiles */
     GPtrArray  *uses;       /* Uses: each file's free names, until checked */
     GHashTable *loading;    /* library name -> 1 while load_library runs */
+    GHashTable *declared;   /* name -> GPtrArray of the modules declaring it */
 } ModState;
 
 /* The free names one file uses, each at the first line it is used on. */
 typedef struct {
     char       *path;
     GHashTable *lines;      /* name -> GINT_TO_POINTER(line) */
+    GHashTable *needs;      /* the same, less the names only `typeof` asks */
 } Uses;
 
 static void uses_free(gpointer p)
@@ -202,6 +204,8 @@ static void uses_free(gpointer p)
     Uses *u = p;
     g_free(u->path);
     g_hash_table_unref(u->lines);
+    if (u->needs)
+        g_hash_table_unref(u->needs);
     g_free(u);
 }
 
@@ -234,6 +238,7 @@ static void state_free(ModState *st)
     g_ptr_array_unref(st->pending);
     g_ptr_array_unref(st->uses);
     g_hash_table_unref(st->loading);
+    g_hash_table_unref(st->declared);
     g_free(st->project);
     if (st->libs)
         g_ptr_array_unref(st->libs);
@@ -259,6 +264,8 @@ static ModState *state_of(JSContext *ctx, bool make)
             st->uses    = g_ptr_array_new_with_free_func(uses_free);
             st->loading = g_hash_table_new_full(g_str_hash, g_str_equal, g_free,
                                                 NULL);
+            st->declared = g_hash_table_new_full(g_str_hash, g_str_equal, g_free,
+                                                 (GDestroyNotify)g_ptr_array_unref);
             g_hash_table_insert(state_by_ctx, ctx, st);
         }
     }
@@ -399,53 +406,169 @@ static void note_uses(JSContext *ctx, JSValueConst compiled, const char *path)
     u->path  = g_strdup(path);
     u->lines = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
     JS_EnumFreeNames(ctx, compiled, note_one, u);
+    /* `typeof X` asks whether a name exists, so it is no use of another
+     * module's private name -- only of an ambiguous one, whose getter throws
+     * for it as for any read. */
+    Uses need = { u->path, g_hash_table_new_full(g_str_hash, g_str_equal,
+                                                 g_free, NULL), NULL };
+    JS_EnumFreeNamesFlags(ctx, compiled, JS_FREE_NAMES_SKIP_TYPEOF, note_one,
+                          &need);
+    u->needs = need.lines;
+
+    /* A module's own top level (fork patch 18), exported or not: what a file
+     * may be reaching for when it uses a name nothing else declares. */
+    Uses decl = { (char *)path, g_hash_table_new_full(g_str_hash, g_str_equal,
+                                                      g_free, NULL), NULL };
+    JS_EnumModuleDeclarations(ctx, compiled, note_one, &decl);
 
     g_mutex_lock(&owners_lock);
     g_ptr_array_add(st->uses, u);
+    GHashTableIter it;
+    gpointer       k;
+    g_hash_table_iter_init(&it, decl.lines);
+    while (g_hash_table_iter_next(&it, &k, NULL)) {
+        GPtrArray *who = g_hash_table_lookup(st->declared, k);
+        if (!who) {
+            who = g_ptr_array_new_with_free_func(g_free);
+            g_hash_table_insert(st->declared, g_strdup(k), who);
+        }
+        g_ptr_array_add(who, g_strdup(path));
+    }
     g_mutex_unlock(&owners_lock);
+    g_hash_table_unref(decl.lines);
 }
+
+#define REFUSALS_SHOWN 20
+
+/* One thing a file uses that the load refuses. */
+typedef struct {
+    guint  file;        /* index of the file in load order */
+    int    line;
+    char  *name;
+    char  *text;        /* the sentence, file and line not yet in front */
+    bool   private;     /* refused only if nothing else answers the name */
+} Refusal;
+
+static void refusal_free(gpointer p)
+{
+    Refusal *r = p;
+    g_free(r->name);
+    g_free(r->text);
+    g_free(r);
+}
+
+static gint refusal_order(gconstpointer a, gconstpointer b)
+{
+    const Refusal *x = *(Refusal *const *)a, *y = *(Refusal *const *)b;
+    if (x->file != y->file)
+        return x->file < y->file ? -1 : 1;
+    if (x->line != y->line)
+        return x->line < y->line ? -1 : 1;
+    return strcmp(x->name, y->name);
+}
+
+static bool lexical_has(JSContext *ctx, const char *name);
 
 int bta_modules_check(JSContext *ctx)
 {
-    ModState *st = state_of(ctx, false);
-    char     *msg = NULL;
+    ModState  *st = state_of(ctx, false);
+    GPtrArray *found = g_ptr_array_new_with_free_func(refusal_free);
+    char      *msg = NULL;
 
-    if (!st)
+    if (!st) {
+        g_ptr_array_unref(found);
         return 0;
+    }
 
+    /* Two refusals, both about a free name of a file:
+     *   - two modules export it, and the file did not import one (rules 3
+     *     and 4 of the plan);
+     *   - a module declares it and keeps it to itself, and nothing else in the
+     *     program has it -- a forgotten `export`, which would otherwise be a
+     *     ReferenceError on the day that line runs, and only then.
+     * The second needs the program asked (a script's top-level `let`, a
+     * global a library set up), so it is gathered here and asked below, out
+     * of the lock. */
     g_mutex_lock(&owners_lock);
-    for (guint i = 0; i < st->uses->len && !msg; i++) {
-        Uses          *u    = st->uses->pdata[i];
-        const char    *worst = NULL;
-        int            line  = 0;
-        GPtrArray     *owners_at = NULL;
+    for (guint i = 0; i < st->uses->len; i++) {
+        Uses          *u = st->uses->pdata[i];
         GHashTableIter it;
         gpointer       k, v;
 
-        /* The first line of the file that uses one, so the answer does not
-         * depend on the order a hash table walks in. */
         g_hash_table_iter_init(&it, u->lines);
         while (g_hash_table_iter_next(&it, &k, &v)) {
             GPtrArray *owners = g_hash_table_lookup(st->owners, k);
-            if (!owners || owners->len < 2)
-                continue;
-            if (!worst || GPOINTER_TO_INT(v) < line ||
-                (GPOINTER_TO_INT(v) == line && strcmp(k, worst) < 0)) {
-                worst     = k;
-                line      = GPOINTER_TO_INT(v);
-                owners_at = owners;
+            GPtrArray *decl   = owners ? NULL
+                                       : g_hash_table_lookup(st->declared, k);
+            Refusal   *r      = NULL;
+
+            if (owners && owners->len > 1) {
+                char *who = owners_text(st, owners);
+                r = g_new0(Refusal, 1);
+                r->text = g_strdup_printf("'%s' is exported by %s: choose one "
+                                          "with import", (char *)k, who);
+                g_free(who);
+            } else if (decl && g_hash_table_contains(u->needs, k)) {
+                char *where = NULL;
+                for (guint j = 0; j < decl->len && !where; j++)
+                    if (strcmp(decl->pdata[j], u->path))
+                        where = shown_path(st, decl->pdata[j]);
+                if (where) {
+                    r = g_new0(Refusal, 1);
+                    r->private = true;
+                    r->text = g_strdup_printf("'%s' is declared in %s, which "
+                                              "keeps it to itself: export it "
+                                              "there", (char *)k, where);
+                    g_free(where);
+                }
+            }
+            if (r) {
+                r->file = i;
+                r->line = GPOINTER_TO_INT(r->private
+                                          ? g_hash_table_lookup(u->needs, k) : v);
+                r->name = g_strdup(k);
+                g_ptr_array_add(found, r);
             }
         }
-        if (worst) {
+    }
+    g_mutex_unlock(&owners_lock);
+
+    /* The first in load order and line, so the answer does not depend on the
+     * order a hash table walks in. */
+    g_ptr_array_sort(found, refusal_order);
+    /* Every one, not the first: adopting `export` file by file is exactly
+     * when several are missing at once, and one per run is a migration done
+     * by trial.  A long list is cut, saying how many were left out. */
+    JSValue  global = JS_GetGlobalObject(ctx);
+    GString *all    = g_string_new(NULL);
+    guint    count  = 0;
+    for (guint i = 0; i < found->len; i++) {
+        Refusal *r = found->pdata[i];
+        if (r->private) {
+            JSAtom a   = JS_NewAtom(ctx, r->name);
+            int    has = JS_HasProperty(ctx, global, a);
+            JS_FreeAtom(ctx, a);
+            if (has < 0)
+                JS_FreeValue(ctx, JS_GetException(ctx));
+            if (has > 0 || lexical_has(ctx, r->name))
+                continue;
+        }
+        if (++count <= REFUSALS_SHOWN) {
+            Uses *u    = st->uses->pdata[r->file];
             char *file = shown_path(st, u->path);
-            char *who  = owners_text(st, owners_at);
-            msg = g_strdup_printf("%s:%d: '%s' is exported by %s: choose one "
-                                  "with import", file, line, worst, who);
+            g_string_append_printf(all, "%s%s:%d: %s", all->len ? "\n" : "",
+                                   file, r->line, r->text);
             g_free(file);
-            g_free(who);
         }
     }
+    if (count > REFUSALS_SHOWN)
+        g_string_append_printf(all, "\n... and %u more", count - REFUSALS_SHOWN);
+    msg = count ? g_string_free(all, FALSE) : (g_string_free(all, TRUE), NULL);
+    JS_FreeValue(ctx, global);
+    g_ptr_array_unref(found);
+
     /* Asked once, when the program is in: nothing loads after it. */
+    g_mutex_lock(&owners_lock);
     g_ptr_array_set_size(st->uses, 0);
     g_mutex_unlock(&owners_lock);
 
@@ -455,6 +578,55 @@ int bta_modules_check(JSContext *ctx)
         return -1;
     }
     return 0;
+}
+
+/*
+ * A script that declares at its top level a name a module already exported is
+ * refused by the engine itself -- the export is a non-configurable property of
+ * the global object -- with *redeclaration of 'X'*, which names neither file.
+ * The other order is refused here and names the module, so this one does too:
+ * the pending error is looked at and, when it is that one, replaced.
+ */
+void bta_modules_explain(JSContext *ctx, const char *path)
+{
+    ModState *st = state_of(ctx, false);
+    if (!st)
+        return;
+
+    JSValue     exc  = JS_GetException(ctx);
+    JSValue     m    = JS_IsError(exc) ? JS_GetPropertyStr(ctx, exc, "message")
+                                       : JS_UNDEFINED;
+    const char *text = JS_IsString(m) ? JS_ToCString(ctx, m) : NULL;
+    const char *pre  = "redeclaration of '";
+    char       *name = NULL;
+
+    if (text && g_str_has_prefix(text, pre) && g_str_has_suffix(text, "'"))
+        name = g_strndup(text + strlen(pre), strlen(text) - strlen(pre) - 1);
+    JS_FreeCString(ctx, text);
+    JS_FreeValue(ctx, m);
+
+    char *who = NULL;
+    if (name) {
+        g_mutex_lock(&owners_lock);
+        GPtrArray *owners = g_hash_table_lookup(st->owners, name);
+        if (owners)
+            who = owners_text(st, owners);
+        g_mutex_unlock(&owners_lock);
+    }
+    if (!who) {
+        g_free(name);
+        JS_Throw(ctx, exc);
+        return;
+    }
+    JS_FreeValue(ctx, exc);
+    char *file = shown_path(st, path);
+    JS_ThrowSyntaxError(ctx, "%s declares '%s' at its top level, which %s "
+                        "already exports: one of the two has to change -- or "
+                        "use the export and drop the declaration", file, name,
+                        who);
+    g_free(file);
+    g_free(who);
+    g_free(name);
 }
 
 /*

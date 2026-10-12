@@ -4183,8 +4183,40 @@ class WidgetsForm extends Form {
         r = run("after", { main: "Main" }, {
             "B.js": "export class Foo {}\n", "A.js": "class Foo {}\n", "Main.js": main(""),
         });
-        check("a script declaring what a module exported is refused",
-              r.ExitCode !== 0 && r.Output.includes("redeclaration of 'Foo'"), r.Output);
+        check("a script declaring what a module exported is refused, naming both",
+              r.ExitCode !== 0 &&
+              r.Output.includes("A.js declares 'Foo' at its top level, which B.js already exports"),
+              r.Output);
+
+        /* A name a module keeps to itself, used by another file, is refused at
+         * load with every such use listed (fork patch 18): a forgotten export
+         * is otherwise a ReferenceError on the day that line runs, and only
+         * then -- which is how one slipped through a careful migration. */
+        r = run("private", { main: "Main", sources: ["Sched.js", "Main.js"] }, {
+            "Sched.js": "export const A = 1, B = 2;\nconst C = 3;\nfunction helper() { return C; }\n" +
+                        "export function f() { return helper(); }\n",
+            "Main.js": main("    print('STARTED ' + A + B);") +
+                       "function later() {\n    return C + helper();\n}\n",
+        });
+        check("a name another module keeps to itself stops the load, at its line",
+              r.ExitCode !== 0 && !r.Output.includes("STARTED") &&
+              r.Output.includes("Main.js:6: 'C' is declared in Sched.js, which keeps it to itself: export it there"),
+              r.Output);
+        check("...and every such name is listed, not only the first",
+              r.Output.includes("Main.js:6: 'helper' is declared in Sched.js"), r.Output);
+        r = run("privateAnswered", { main: "Main", sources: ["Sched.js", "Other.js", "Main.js"] }, {
+            "Sched.js": "const K = 1;\nexport function f() { return K; }\n",
+            "Other.js": "const K = 5;\n",
+            "Main.js": main("    print('K ' + K);"),
+        });
+        check("...but a name a script also declares is that script's, and loads",
+              r.ExitCode === 0 && r.Output.includes("K 5"), r.Output);
+        r = run("exportNothing", { main: "Main", sources: ["Hidden.js", "Main.js"] }, {
+            "Hidden.js": "const secret = 1;\nexport {};\n",
+            "Main.js": main("    print(secret);"),
+        });
+        check("export {} makes a module that keeps every name to itself",
+              r.ExitCode !== 0 && r.Output.includes("'secret' is declared in Hidden.js"), r.Output);
         r = run("runtime", { main: "Main" }, {
             "T.js": "export class Timer {}\n", "Main.js": main(""),
         });

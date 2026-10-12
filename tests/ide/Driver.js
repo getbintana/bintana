@@ -15094,6 +15094,11 @@ function* p_unsaved(ide) {
     yield* settled(ide);
 
     /* --- a clean close forgets the snapshot ---------------------------------- */
+    /* The IDE's own thirty-second tick is held here as in `recovery`: one
+     * that lands between the edit and the question has already written this
+     * very snapshot, and `snapshot()` then answers false for the file it
+     * says nothing about -- one suite run in many went red on exactly that. */
+    if (ide.recovery.timer) ide.recovery.timer.Stop();
     ide.openInTab("Kept.js");
     yield* settled(ide);
     ide.Editor.Text = ide.Editor.Text + "// dirty\n";
@@ -15117,6 +15122,7 @@ function* p_unsaved(ide) {
 
     ide.tabs.discardAll();
     yield* settled(ide);
+    ide.recovery.start();                         /* the tick, as it was */
 }
 
 /*

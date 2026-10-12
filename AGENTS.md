@@ -598,11 +598,11 @@ used to read as no id at all; a project that declares none keeps the old answer,
 program's own name. `GtkApplication` also takes the id as the default window
 icon when the theme has one by that name (`gtkapplication.c`).
 
-## The seventeen patches in vendor/
+## The eighteen patches in vendor/
 
 `vendor/quickjs` is a **submodule** of
 [`getbintana/quickjs`](https://github.com/getbintana/quickjs), branch `bintana`:
-upstream **v0.17.0** plus the seventeen patches below, one commit each (the eighth
+upstream **v0.17.0** plus the eighteen patches below, one commit each (the eighth
 carries a fix as a second commit, `1493dc7`, until it is squashed into it). The fork's
 `BINTANA.md` is the recipe; what follows is what each patch does and what
 dropping it costs.
@@ -677,13 +677,13 @@ git push --force-with-lease origin bintana
 git submodule update --remote vendor/quickjs              # and commit the pin
 ```
 
-Then the suite. All seventeen are marked `Bintana patch` in the source, and
+Then the suite. All eighteen are marked `Bintana patch` in the source, and
 **dropping one does not fail to build** -- that is the property they share and
 the reason `tests/widgets` asserts each of them (`Decimal`, `JsonFiles`,
 `strictChecks`, `testDebugger`, `testCuratedLanguage`, `LongAppend`,
 `StringSearch`, `Modules`, `Imports`) -- the
 fifth of which carries the seventh, the eighth, the ninth and the thirteenth,
-and the last two the fourteenth to the seventeenth. Grep the fork for the
+and the last two the fourteenth to the eighteenth. Grep the fork for the
 marker after a rebase; there is no build-time check that they survived.
 
 ### 1. Operators on a Decimal
@@ -1335,6 +1335,33 @@ whatever they hold.
 **Dropping it does not fail to build**: every owner is the file that
 distributes, so a re-export becomes a second owner and refuses every use of
 the name. `Imports`' `reexportValue` and `sameValue` hold both directions.
+
+### 18. A module's own top-level names, and free names without `typeof`
+
+`JS_EnumModuleDeclarations(ctx, compiled, cb, opaque)` reports the closure
+variables a module body creates itself (`JS_CLOSURE_MODULE_DECL`) -- its
+top-level `let`, `const`, `function` and `class`, exported or not; an import is
+another kind and `*default*` is skipped. `JS_EnumFreeNamesFlags` is patch 16's
+walk with `JS_FREE_NAMES_SKIP_TYPEOF`, which leaves `get_var_undef` out.
+
+**What it is for is a forgotten `export`.** Making a file a module turns every
+name it does not export private, silently, and a file elsewhere that used one
+finds out with *X is not defined* on the day that line runs -- a migration of
+`bintana-project` lost `CONSTRAINT_SNET` (the second name of a `const` list)
+past a careful pass and only a rich harness caught it. `bta_modules_check` now
+refuses at load a file that reads a name some *other* module declares and keeps,
+when nothing else in the program answers it (no global property, no script's
+top-level binding), and **lists every such use**, not the first -- adopting
+modules file by file is exactly when several are missing, and one per run is a
+migration by trial. That list is also the answer to *what does this file have
+to export*, which is why no verb for it was added. **`typeof X` is not a use**:
+it asks whether a name exists, and `testModules`' own *private name stays home*
+assertions are written that way -- which is how the first version, without the
+flag, found the exemption by going red on three of them. An ambiguous name
+still counts a `typeof`, since its getter throws for one as for any read.
+
+**Dropping it does not fail to build** (the calls are the only uses):
+`Modules`' `private`, `privateAnswered` and `exportNothing` go red.
 
 ## Memory rules
 
@@ -7898,6 +7925,18 @@ is exported by Csv.js and Csv.js*; `shown_path` here and `shownPath` in
 followed by the sentence that says to export it, since the engine's *Main is not
 defined* says nothing of modules. The IDE counted a re-export as an owner too
 (`completionPublished`'s `own` is what a module declares itself).
+
+A second review, from adopting modules in `bintana-project` (23 files, 109
+exports, 85 names made private), found two more. **A forgotten export** is
+patch 18 above. And **a script that declares what a module already exported**
+got the engine's bare *redeclaration of 'SHARED'*, naming neither file, while
+the other order named the module: `bta_modules_explain` replaces that one error
+with *Main.js declares 'SHARED' at its top level, which Mod.js already
+exports*. It reported a third that is not one: a form class a module does not
+export is **reachable from its own module** (`new Dialogs()` there finds
+`Dialogs.form` by the class's name, measured), so an unexported form nobody
+makes is dead code like any class nobody makes, and a use from another file is
+the forgotten export above.
 
 `tests/widgets`' `Imports` runs a child per rule (choosing by import and `as`,
 once and unlisted, a re-export, a default, a cycle, a library, a task's

@@ -660,6 +660,10 @@ int     bta_module_run(JSContext *ctx, JSValue compiled, const char *path);
  * that uses with no import a name two modules export.  -1 with the exception
  * pending. */
 int     bta_modules_check(JSContext *ctx);
+/* With an exception pending from evaluating the script `path`: when it is the
+ * engine's *redeclaration of 'X'* over a name a module exports, replaces it with
+ * a sentence naming both files. */
+void    bta_modules_explain(JSContext *ctx, const char *path);
 /* Whether a module put `name` on the global object -- a program's name, not
  * the runtime's, which is what `Application.Globals` needs to tell apart. */
 bool    bta_module_exported(JSContext *ctx, const char *name);
