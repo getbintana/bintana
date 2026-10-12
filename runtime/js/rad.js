@@ -137,13 +137,47 @@ File.LoadJson = function (path) {
     }
 };
 
+/*
+ * What JSON cannot hold is refused rather than written as something else.
+ * `JSON.stringify` turns NaN and both infinities into `null`, and `undefined`
+ * in a list into `null` too, and says nothing: a `0 / 0` in a setting came back
+ * from the file as a null the program never stored.  The walk is the replacer,
+ * so it sees each value after its `toJSON` (a Decimal, a Record) exactly as the
+ * text will, and a WeakMap from each holder to its path is what lets the
+ * refusal say `items[3].x` rather than `x`.  `JSON.stringify` itself stays the
+ * language's, and is the way to write the nulls on purpose.
+ */
+function jsonRefusal(path, where, what) {
+    const at = where === "" ? "the value itself" : `'${where}'`;
+    return new RangeError(`File.SaveJson: ${path}: ${at} is ${what}, which JSON cannot hold`
+                          + ` -- JSON.stringify writes it as null, if that is what is meant`);
+}
+
 /**
  * one canonical shape: indented by two, one trailing newline. Every `.form` and
  * every `project.json` in this tree is written by it, which is why a file saved
- * by the IDE and one written by hand look the same
+ * by the IDE and one written by hand look the same. **What JSON cannot hold is
+ * refused**, naming where it is: `NaN`, `Infinity` and `-Infinity`, and
+ * `undefined` inside a list -- all of which `JSON.stringify` writes as `null`
+ * without a word. To write those nulls on purpose, `File.Save(path,
+ * JSON.stringify(value, null, 2))`
  */
 File.SaveJson = function (path, value) {
-    File.Save(path, `${JSON.stringify(value, null, 2)}\n`);
+    const paths = new WeakMap();
+    const text  = JSON.stringify(value, function (key, v) {
+        const above = paths.get(this);
+        const here  = above === undefined ? ""
+                    : Array.isArray(this) ? `${above}[${key}]`
+                    : above === "" ? key : `${above}.${key}`;
+
+        if (typeof v === "number" && !Number.isFinite(v))
+            throw jsonRefusal(path, here, String(v));
+        if (v === undefined && Array.isArray(this))
+            throw jsonRefusal(path, here, "undefined in a list");
+        if (v !== null && typeof v === "object") paths.set(v, here);
+        return v;
+    }, 2);
+    File.Save(path, `${text}\n`);
 };
 
 /* ------------------------------------------------------------------------
@@ -1394,7 +1428,9 @@ function fieldValue(field, name, v, mayBeEmpty) {
             throw new RangeError(`${name}: expected a whole number, got ${v}`);
 
         /* Rounded to what it holds, as a SpinBox is: a value read back has to
-         * agree with the value that was set. */
+         * agree with the value that was set.  The double is what is rounded,
+         * on purpose -- 1.005 comes out 1 -- and the JSDoc on Field.Number
+         * says so; Field.Decimal is the field that rounds what was written. */
         let out = v;
         if (field.decimals !== undefined) {
             const scale = Math.pow(10, field.decimals);
@@ -1624,7 +1660,13 @@ GLOBAL.Field = {
     Text:     (opts) => makeField("text",     opts),
     /** a whole number. Options: `required`, `min`, `max` */
     Int:      (opts) => makeField("int",      opts),
-    /** a number. Options: `required`, `min`, `max`, `decimals` */
+    /**
+     * a number. Options: `required`, `min`, `max`, `decimals`. **`decimals`
+     * rounds the double**, as `Math.round(v * 10^n) / 10^n` does, so a value
+     * whose double sits below the half rounds down: `1.005` comes out `1` and
+     * `8.575` comes out `8.57`, where `Decimal("1.005").Round(2)` is `1.01`. An
+     * amount that has to round the way it is written is a `Field.Decimal`
+     */
     Number:   (opts) => makeField("number",   opts),
     /** `"YYYY-MM-DD"`, checked against the calendar. Options: `required` */
     Date:     (opts) => makeField("date",     opts),

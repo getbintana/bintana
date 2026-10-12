@@ -5457,6 +5457,17 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   refused naming the match. `new Regex("x", "i")` -- RegExp's flags -- is
   refused as a string; walked by `for...in` it was its indices and the refusal
   said `'0' is not one of its options`.
+- **`JSON.stringify` writes `NaN`, both infinities and an `undefined` in a list
+  as `null`, and says nothing -- so `File.SaveJson` refuses them.** A `0 / 0`
+  in a setting came back from the file as a null nobody stored. The check is
+  `SaveJson`'s replacer, which sees each value after its `toJSON` exactly as the
+  text will, and a `WeakMap` from each holder to its path is what lets the
+  refusal say `items[3].x` and not `x`. **There is deliberately no option to
+  allow them**: `File.Save(p, JSON.stringify(v, null, 2))` is that option
+  already, and the refusal says so. `JSON.stringify` itself is left the
+  language's, and an `undefined` in an *object* is still a key that is not
+  there. A `Record` never reaches this: `Field.Number` refuses a non-finite
+  value on the way in.
 - **`g_base64_decode` ignores what it does not understand.** Hand it `"hello"`
   and it answers three bytes rather than an error, so a value that was meant to
   be text becomes a silent handful of nonsense -- and `Field.Bytes` reads base64

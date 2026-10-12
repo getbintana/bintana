@@ -12844,7 +12844,7 @@
           "Params": 1,
           "Signature": "(opts)",
           "Returns": "",
-          "Doc": "a number. Options: `required`, `min`, `max`, `decimals`",
+          "Doc": "a number. Options: `required`, `min`, `max`, `decimals`. **`decimals` rounds the double**, as `Math.round(v * 10^n) / 10^n` does, so a value whose double sits below the half rounds down: `1.005` comes out `1` and `8.575` comes out `8.57`, where `Decimal(\"1.005\").Round(2)` is `1.01`. An amount that has to round the way it is written is a `Field.Decimal`",
           "Native": false
         },
         {
@@ -13092,7 +13092,7 @@
           "Params": 2,
           "Signature": "(path, value)",
           "Returns": "",
-          "Doc": "one canonical shape: indented by two, one trailing newline. Every `.form` and every `project.json` in this tree is written by it, which is why a file saved by the IDE and one written by hand look the same",
+          "Doc": "one canonical shape: indented by two, one trailing newline. Every `.form` and every `project.json` in this tree is written by it, which is why a file saved by the IDE and one written by hand look the same. **What JSON cannot hold is refused**, naming where it is: `NaN`, `Infinity` and `-Infinity`, and `undefined` inside a list -- all of which `JSON.stringify` writes as `null` without a word. To write those nulls on purpose, `File.Save(path, JSON.stringify(value, null, 2))`",
           "Native": false
         },
         {

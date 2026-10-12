@@ -11551,6 +11551,25 @@ function Main() {
               text.includes('\n  "name"'), JSON.stringify(text));
         check("and ending in a newline", text.endsWith("}\n"), JSON.stringify(text.slice(-4)));
 
+        /* What JSON cannot hold is refused, naming where -- JSON.stringify
+         * writes NaN, the infinities and an undefined in a list as null and
+         * says nothing, so a 0 / 0 in a setting came back a null nobody
+         * stored.  The refusal comes before the file is touched. */
+        const nan = refusal(() => File.SaveJson(path, { window: { ratio: NaN } }));
+        check(`NaN is refused, naming its path: ${nan}`,
+              nan !== null && nan.includes("'window.ratio' is NaN")
+              && nan.includes("JSON.stringify"));
+        const inf = refusal(() => File.SaveJson(path, { items: [{ x: 1 }, { x: -Infinity }] }));
+        check(`an infinity inside a list says the index: ${inf}`,
+              inf !== null && inf.includes("'items[1].x' is -Infinity"));
+        const hole = refusal(() => File.SaveJson(path, [1, undefined]));
+        check(`undefined in a list is refused: ${hole}`,
+              hole !== null && hole.includes("'[1]' is undefined in a list"));
+        eq("and the file is as it was", File.Load(path), text);
+        File.SaveJson(path, { gone: undefined, kept: 1 });
+        eq("undefined in an object is a key that is not there, as always",
+           File.Load(path), '{\n  "kept": 1\n}\n');
+
         /* A .form the IDE is about to open is exactly this case, and a bare
          * SyntaxError would not say which file was at fault. */
         File.Save(path, "{ not json");
