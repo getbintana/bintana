@@ -19,7 +19,7 @@
  */
 "use strict";
 
-class AboutForm extends Form {
+export class AboutForm extends Form {
 
     /* AboutForm.show() -- there is nothing to ask and nothing to answer, so it
      * takes no callback.  It hands the dialog back for the same reason

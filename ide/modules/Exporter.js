@@ -18,9 +18,7 @@
  */
 "use strict";
 
-Namespace("Ide");
-
-Ide.Exporter = class Exporter {
+export class Exporter {
 
     /** @param {MainForm} ide */
     constructor(ide) {
@@ -121,4 +119,4 @@ Ide.Exporter = class Exporter {
         this.ide.log(`Exported ${File.Name(path)}\n`);
         Message.Info("Exported to {0}", path);
     }
-};
+}

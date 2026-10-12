@@ -27,7 +27,7 @@ let openLog = null;
  * integration gives to every question it does not own. */
 const HOW_MANY = 60;
 
-class LogForm extends Form {
+export class LogForm extends Form {
 
     static open(ide) {
         if (openLog) {
@@ -148,12 +148,12 @@ class LogForm extends Form {
 
         /* Aligned and marked, out of the same diff that is in the tab beside
          * it -- the `Changes` window's argument, and the same class. */
-        const pair = Ide.Diff.sideBySide(before, after, this.Unified.Text);
+        const pair = Diff.sideBySide(before, after, this.Unified.Text);
 
-        this.Before.Text = Ide.Diff.text(pair.left);
-        this.After.Text  = Ide.Diff.text(pair.right);
-        Ide.Diff.mark(this.Before, pair.left);
-        Ide.Diff.mark(this.After,  pair.right);
+        this.Before.Text = Diff.text(pair.left);
+        this.After.Text  = Diff.text(pair.right);
+        Diff.mark(this.Before, pair.left);
+        Diff.mark(this.After,  pair.right);
 
         const lang = this.languageOf(file.path);
         this.Before.Language = lang;

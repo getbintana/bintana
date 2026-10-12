@@ -361,7 +361,7 @@ method runs, started at the class prototype, so a class and a control cannot
 disagree. A new method is a method because it is on the prototype; a new event,
 prose property or enumerated value is answered because its row says so.
 `Widget.Member` is the `in` question with the kind added — `ReadOnly` is the name
-a `.form` refuses to load over, which is what `Ide.Check` reads to tell a
+a `.form` refuses to load over, which is what `Check` reads to tell a
 shadowed name from a refused one.
 
 **The parameters are the one thing that has to be declared**, because a function

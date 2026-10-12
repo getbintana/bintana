@@ -45,7 +45,7 @@ function searchIcon(name) {
     return "file";
 }
 
-class SearchForm extends Form {
+export class SearchForm extends Form {
 
     /*
      * Opens it, or raises the one already up.
@@ -253,7 +253,7 @@ class SearchForm extends Form {
             if (!opensInTab(name)) continue;
 
             const path = File.Join(this.ide.project, name);
-            if (!File.Exists(path) || Ide.TabSet.notUtf8(path)) continue;
+            if (!File.Exists(path) || TabSet.notUtf8(path)) continue;
 
             let text;
             try {
@@ -424,7 +424,7 @@ class SearchForm extends Form {
         const name = hit ? hit.file : (key.startsWith("f:") ? key.slice(2) : "");
         if (!name) return;
 
-        if (Ide.Translations.isCatalogue(name)) {
+        if (Translations.isCatalogue(name)) {
             this.ide.openCatalogue(name);
             return;
         }

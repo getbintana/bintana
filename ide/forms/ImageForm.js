@@ -35,11 +35,11 @@ const ZOOM_MAX  = 20;
  * in it. */
 const IMAGE_EXTS = ["png", "jpg", "jpeg", "webp", "tiff", "tif", "bmp"];
 
-function isImageFile(name) {
+export function isImageFile(name) {
     return IMAGE_EXTS.includes(File.Extension(name || "").toLowerCase());
 }
 
-class ImageForm extends Form {
+export class ImageForm extends Form {
 
     /* ImageForm.show(ide, "art/logo.png") */
     static show(ide, file) {

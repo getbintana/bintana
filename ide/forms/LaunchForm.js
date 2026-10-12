@@ -6,7 +6,7 @@
  * Lazarus's modes, VS Code's `launch.json` seen through its UI.
  *
  * Like every other dialog here it works on a **copy** and hands it back on Save,
- * so Cancel costs nothing. The copy is a list of `Ide.LaunchConfig` records, so
+ * so Cancel costs nothing. The copy is a list of `LaunchConfig` records, so
  * this file checks nothing itself: it assigns to the record and lets the setters
  * refuse what they refuse -- which is how the field that is wrong gets named
  * without this form knowing what the rules are. `Validate` is what says
@@ -17,12 +17,12 @@
  * suggestion a new configuration will start with. One place to set both, because
  * they are the same question asked about now and about next time -- and because
  * a preferences dialog holding two booleans that only matter here would be a
- * window nobody opens. See `Ide.Launch`: copied at creation, never resolved at
+ * window nobody opens. See `Launch`: copied at creation, never resolved at
  * read.
  */
 "use strict";
 
-class LaunchForm extends Form {
+export class LaunchForm extends Form {
 
     /*
      * LaunchForm.edit(list, suggestion, onAccept)
@@ -136,7 +136,7 @@ class LaunchForm extends Form {
     BtnLcAdd_Click() {
         if (!this.gather()) return;
 
-        const one = new Ide.LaunchConfig();
+        const one = new LaunchConfig();
 
         one.Name        = this.freshName();
         one.Strict      = this.ChkLcStrict.Active;

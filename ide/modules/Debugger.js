@@ -21,8 +21,6 @@
  */
 "use strict";
 
-Namespace("Ide");
-
 /* The mark kind a breakpoint wears. */
 const BREAK_MARK = "Bookmark";
 
@@ -33,7 +31,7 @@ const HERE_MARK = "Info";
 /* What a breakpoint's settings are keyed by, here and in the runtime's `id`. */
 function breakKey(file, line) { return `${file}:${line}`; }
 
-Ide.Debugger = class Debugger {
+export class Debugger {
 
     /** @param {MainForm} ide */
     constructor(ide) {
@@ -723,4 +721,4 @@ Ide.Debugger = class Debugger {
     }
 
     pause() { return this.running ? this.send({ do: "pause" }) : false; }
-};
+}

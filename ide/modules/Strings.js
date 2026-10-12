@@ -23,8 +23,6 @@
  */
 "use strict";
 
-Namespace("Ide");
-
 /*
  * The calls whose Nth argument is a msgid.
  *
@@ -106,7 +104,7 @@ function literalValue(text) {
 }
 
 
-Ide.Strings = class Strings {
+export class Strings {
 
     /** @param {MainForm} ide */
     constructor(ide) {
@@ -472,4 +470,4 @@ Ide.Strings = class Strings {
         this.prose = [...names];
         return this.prose;
     }
-};
+}

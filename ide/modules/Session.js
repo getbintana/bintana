@@ -34,8 +34,6 @@
  */
 "use strict";
 
-Namespace("Ide");
-
 /* The window, and the projects. Dotted like `tree.view` and `recovery.seconds`:
  * a settings file is something a person opens, and a prefix is how the entries
  * of one subject stay together in it. */
@@ -50,7 +48,7 @@ const PROJECTS_KEY = "session.projects";
  * did not mean to move.
  *
  * `PageSplit`, `CenterSplit`, `SideSplit` and `EditSplit` are the per-tab
- * workspace's (`Ide.Workspace`): there is one set per open file, so what is
+ * workspace's (`Workspace`): there is one set per open file, so what is
  * remembered is the width the person dragged, not a widget -- see `divider`.
  */
 const DIVIDERS = ["Split", "RightSplit", "PageSplit", "CenterSplit",
@@ -61,10 +59,10 @@ const DIVIDERS = ["Split", "RightSplit", "PageSplit", "CenterSplit",
  * is larger still and GTK enforces that itself, so this only has to catch a
  * number that could never have come from a resize.
  *
- * `MIN_WINDOW` and not `MIN_SIZE`, which `Designer` already has: a top-level
- * `const` is in the one global lexical scope whatever file it is written in --
- * the same thing that put every one of these classes in `Ide`. The runtime says
- * so out loud (`SyntaxError: redeclaration`), which is the good case.
+ * `MIN_WINDOW` and not `MIN_SIZE`, which `Designer` has too. It was a
+ * redeclaration while every file shared one scope; both are modules now, so a
+ * top-level `const` is its own file's, and the specific name stays because it
+ * says more.
  */
 const MIN_WINDOW = 200;
 
@@ -93,7 +91,7 @@ function extentOf(split) {
     return split.Arrangement === "Vertical" ? box.Height : box.Width;
 }
 
-Ide.Session = class Session {
+export class Session {
 
     /** @param {MainForm} ide */
     constructor(ide) {
@@ -398,4 +396,4 @@ Ide.Session = class Session {
         this.saveTabs();
         this.saveWindow();
     }
-};
+}

@@ -14,9 +14,7 @@
  */
 "use strict";
 
-Namespace("Ide");
-
-Ide.Installer = class Installer {
+export class Installer {
 
     /** @param {MainForm} ide */
     constructor(ide) {
@@ -118,4 +116,4 @@ Ide.Installer = class Installer {
                      ctx.Script);
         return ctx;
     }
-};
+}

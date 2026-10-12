@@ -11,7 +11,7 @@
  * **It is a template and not a cascade**, which is the decision the whole shape
  * rests on: the suggestion is *copied* when a configuration is created and is
  * the configuration's own from then on. Changing it later changes nothing that
- * exists. `Ide.LaunchConfig` has the argument and the prior art; the
+ * exists. `LaunchConfig` has the argument and the prior art; the
  * consequence here is that nothing has to resolve anything at read time, so
  * there is no layer to walk and no value that means *ask my parent*.
  *
@@ -29,18 +29,16 @@
  *
  * Which is why the choice is not in `session.projects` with the open tabs,
  * although that is also personal and per project: that entry is **deleted when
- * a project has nothing open** (see `Ide.Session`), and a choice has to outlive
+ * a project has nothing open** (see `Session`), and a choice has to outlive
  * closing the last tab.
  */
 "use strict";
-
-Namespace("Ide");
 
 /* What a new configuration starts with, and which one is chosen where. */
 const SUGGESTION_KEY = "launch.suggestion";
 const CHOSEN_KEY     = "launch.chosen";
 
-Ide.Launch = class Launch {
+export class Launch {
 
     /** @param {MainForm} ide */
     constructor(ide) {
@@ -116,7 +114,7 @@ Ide.Launch = class Launch {
     /*
      * What a new configuration starts with. A plain object and not a record: it
      * is two booleans, and a record would be a shape to keep in step with
-     * `Ide.LaunchConfig`'s own for no gain.
+     * `LaunchConfig`'s own for no gain.
      */
     suggestion() {
         const said = Settings.Get(SUGGESTION_KEY, null);
@@ -137,11 +135,11 @@ Ide.Launch = class Launch {
      *
      * **This is the only place the suggestion is read**, which is what makes the
      * whole thing a template rather than a cascade -- and what lets every field
-     * of `Ide.LaunchConfig` be an ordinary one, since none of them ever has to
+     * of `LaunchConfig` be an ordinary one, since none of them ever has to
      * mean *nothing said*.
      */
     make(name) {
-        const one   = new Ide.LaunchConfig();
+        const one   = new LaunchConfig();
         const seed  = this.suggestion();
 
         one.Name        = name;
@@ -221,7 +219,7 @@ Ide.Launch = class Launch {
         /*
          * The menu is rebuilt only when what it would say moved. Assigning
          * `Items` rebuilds the radio list inside the dynamic item, and this
-         * runs on every caret move; `Ide.Outline` and `Ide.Events` keep the
+         * runs on every caret move; `Outline` and `Events` keep the
          * same signature for the same reason.
          */
         const signature = `${labels.join("\u0000")}|${empty}|${value}|${edit}`;
@@ -238,8 +236,8 @@ Ide.Launch = class Launch {
 
     /*
      * The arguments after the project directory, the options `Exec` takes, and
-     * whether this run is strict -- the three questions `Ide.Runner` and
-     * `Ide.Debugger` ask, answered in one place so the two cannot drift.
+     * whether this run is strict -- the three questions `Runner` and
+     * `Debugger` ask, answered in one place so the two cannot drift.
      *
      * With no configuration this is what Run always did: the project's own
      * directory and nothing else.
@@ -264,4 +262,4 @@ Ide.Launch = class Launch {
             stopOnThrow: one.StopOnThrow,
         };
     }
-};
+}

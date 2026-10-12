@@ -12,7 +12,7 @@
  *
  * **Copied at creation, not inherited at read**, which is the decision this
  * shape exists to carry out. `Settings` holds a *suggestion* -- which switches a
- * new configuration should start with -- and `Ide.Launch.make` copies it in,
+ * new configuration should start with -- and `Launch.make` copies it in,
  * which is the only place it is read at all. From then on the value is the
  * configuration's own, and changing the suggestion changes nothing that already
  * exists.
@@ -30,14 +30,12 @@
  */
 "use strict";
 
-Namespace("Ide");
-
 /* `NAME=value`, which is how a shell, a `.env` file, systemd's `Environment=`
  * and `docker --env` all spell it. The name is an identifier because that is
  * what an environment variable may be. */
 const ENV_LINE = new Regex("^[A-Za-z_][A-Za-z0-9_]*=");
 
-Ide.LaunchConfig = class LaunchConfig extends Record {
+export class LaunchConfig extends Record {
     static Naming = "lower";
 
     static Fields = {
@@ -111,4 +109,4 @@ Ide.LaunchConfig = class LaunchConfig extends Record {
         }
         return out;
     }
-};
+}

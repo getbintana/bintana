@@ -21,7 +21,7 @@
  * a fact about the runtime, and the runtime does not change while it runs. */
 let nodeCache = null;
 
-class StyleForm extends Form {
+export class StyleForm extends Form {
 
     /*
      * StyleForm.pick("card title-3", offered, (value) => ...)
@@ -71,7 +71,7 @@ class StyleForm extends Form {
         const nodes  = Dictionary.Keys(owners);
 
         const fits = (name) =>
-            Ide.Styles.fits(Ide.Styles.find(name), node, nodes, container);
+            Styles.fits(Styles.find(name), node, nodes, container);
 
         this.classes = [...known.filter(fits), ...known.filter((n) => !fits(n))];
         this.boxes   = [];
@@ -98,7 +98,7 @@ class StyleForm extends Form {
             box.Margin = 4;
             if (!ok) {
                 box.Style   = "dim-label";
-                box.Tooltip = Ide.Styles.why(Ide.Styles.find(name), owners);
+                box.Tooltip = Styles.why(Styles.find(name), owners);
             }
 
             this.rows.push([name]);
@@ -210,7 +210,7 @@ class StyleForm extends Form {
         const at   = this.List.Index;
         const name = at >= 0 && this.rows[at] ? this.rows[at][0] : "";
 
-        if (!name || Ide.Styles.find(name)) {
+        if (!name || Styles.find(name)) {
             Message.Info("Pick one of the project's own classes to edit. The theme's belong to the desktop.");
             return;
         }

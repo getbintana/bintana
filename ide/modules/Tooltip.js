@@ -1,5 +1,3 @@
-Namespace("Ide");
-
 /*
  * What the name under the pointer is, once the pointer rests on it.
  *
@@ -13,14 +11,14 @@ Namespace("Ide");
  * pixel, so the answer is armed 400 ms after the pointer stops and disarmed by
  * any movement, a leave, a click or a key -- which is what keeps a tooltip
  * from following the hand around a file. `Editor.PositionAt` says which
- * character is under the point, and `Ide.Completion.topic` says what it is;
+ * character is under the point, and `Completion.topic` says what it is;
  * nothing here parses anything.
  *
  * **`Autohide` is off, unlike most popovers**, because an autohide one takes
  * the keyboard: the pointer may be resting over a name while the person goes
  * on typing, and the whole point is that the editor keeps the keys.
  */
-Ide.Tooltip = class Tooltip {
+export class Tooltip {
     constructor(ide) {
         this.ide   = ide;
         this.label = null;
@@ -137,4 +135,4 @@ Ide.Tooltip = class Tooltip {
         if (this.label && Popover.IsOpen(this.label))
             Popover.Close(this.label);
     }
-};
+}

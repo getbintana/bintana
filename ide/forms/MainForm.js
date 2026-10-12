@@ -38,7 +38,7 @@
  * the text clickable; the pane is an ordinary `TextEditor` now, so it is only
  * ever a JavaScript regex -- see `Runner.linkAt`.
  */
-const SOURCE_LINK = "[\\w./+-]+\\.(?:js|form|json):\\d+";
+export const SOURCE_LINK = "[\\w./+-]+\\.(?:js|form|json):\\d+";
 
 /* What the output pane keeps, in characters. Long enough for a traceback and
  * the output that led to it; short enough that a runaway `print` is a bounded
@@ -124,7 +124,7 @@ function Main() {
 
 /* The tab strip's action button, in order of preference: the first the desktop
  * really has wins.  See dressTabActions. */
-const TAB_ACTION_ICON = [
+export const TAB_ACTION_ICON = [
     "view-more-symbolic", "open-menu-symbolic",
     "document-properties-symbolic", "pan-down-symbolic",
 ];
@@ -181,7 +181,7 @@ const PAGE_WELCOME = 0;
 const PAGE_WORK    = 1;
 
 
-class MainForm extends Form {
+export class MainForm extends Form {
 
     /*
      * The helpers this window is made of, as fields and not as `Form_Open`.
@@ -202,23 +202,23 @@ class MainForm extends Form {
      * traceback and every field below still unset. A handler that can be reached
      * that way guards, and says so; see `SideTabs_Switch`.
      */
-    finder    = new Ide.Finder(this);        // the find bar
-    runner    = new Ide.Runner(this);        // running the project, and its output
-    manifest  = new Ide.Manifest(this);      // project.json
-    launch    = new Ide.Launch(this);        // how this project is run, in three places
-    classes   = new Ide.Classes(this);       // what the project holds, and its names
-    projectTree = new Ide.ProjectTree(this); // ...as the file tree shows it
-    formFiles = new Ide.FormFiles(this);     // creating, renaming, deleting one
-    strings   = new Ide.Strings(this);       // what the project shows, extracted
-    catalogues = new Ide.Translations(this); // the .po files, and msgmerge
-    exporter  = new Ide.Exporter(this);      // the project tree as one .tar
-    installer = new Ide.Installer(this);     // the project as a Windows setup
-    tabs      = new Ide.TabSet(this);        // the open files
-    completion = new Ide.Completion(this);   // what the editor proposes
-    callTip    = new Ide.CallTip(this);      // the parameters of the call being written
-    tooltip    = new Ide.Tooltip(this);      // what the name under the pointer is
-    recovery  = new Ide.Recovery(this);      // the dirty tabs, copied aside
-    session   = new Ide.Session(this);       // the desk, as it was left
+    finder    = new Finder(this);        // the find bar
+    runner    = new Runner(this);        // running the project, and its output
+    manifest  = new Manifest(this);      // project.json
+    launch    = new Launch(this);        // how this project is run, in three places
+    classes   = new Classes(this);       // what the project holds, and its names
+    projectTree = new ProjectTree(this); // ...as the file tree shows it
+    formFiles = new FormFiles(this);     // creating, renaming, deleting one
+    strings   = new Strings(this);       // what the project shows, extracted
+    catalogues = new Translations(this); // the .po files, and msgmerge
+    exporter  = new Exporter(this);      // the project tree as one .tar
+    installer = new Installer(this);     // the project as a Windows setup
+    tabs      = new TabSet(this);        // the open files
+    completion = new Completion(this);   // what the editor proposes
+    callTip    = new CallTip(this);      // the parameters of the call being written
+    tooltip    = new Tooltip(this);      // what the name under the pointer is
+    recovery  = new Recovery(this);      // the dirty tabs, copied aside
+    session   = new Session(this);       // the desk, as it was left
     /* The palette and the events page are one per form now, and these are the
      * words for *the active one*: `TabSet.placeContent` repoints them at the
      * tab on screen and nulls them when there is none, exactly as it does for
@@ -227,34 +227,34 @@ class MainForm extends Form {
     palette   = null;
     events    = null;
     /* F12: where a name is declared, by looking it up rather than guessing. */
-    navigator = new Ide.Navigator(this);
+    navigator = new Navigator(this);
     /* Breakpoints, the stack and the values: what the runtime's `--debug` says,
      * drawn. */
-    debugger_ = new Ide.Debugger(this);
+    debugger_ = new Debugger(this);
     /* What git says about the project, and the only thing here that runs one. */
-    git       = new Ide.Git(this);
+    git       = new Git(this);
     /* The changed files as a page of the side bar, with the message box: the
      * Changes window is for reading a diff, and this is for living in. */
-    changes   = new Ide.Changes(this);
+    changes   = new Changes(this);
     /* Everything that is wrong, in one list. It runs no check of its own: what
      * it collects is what the save, the lint and the failed run already found
      * and had nowhere to say. */
-    problems  = new Ide.Problems(this);
+    problems  = new Problems(this);
     /* And the one thing that puts rows in it on its own: the names a file uses,
      * checked against the form beside it while it is being written. */
     /* The two checks that read a name against the `.form` beside it, shared by
      * the two things that ask: the pause, and the project pass. */
-    names     = new Ide.Names(this);
-    live      = new Ide.Live(this);
+    names     = new Names(this);
+    live      = new Live(this);
     /* Where a name is used, and moving it everywhere it means the same thing:
      * F12's other half, and the one rename that is not the designer's. */
-    refactor  = new Ide.Refactor(this);
+    refactor  = new Refactor(this);
     /* ...and the pass itself: what is wrong with the project, asked of the whole
      * of it rather than of the file on screen. */
-    check     = new Ide.Check(this);
+    check     = new Check(this);
     /* What is in the file on screen, beside it: the side panel's other half, for
      * the tabs where there is no selection to speak about. */
-    outline   = new Ide.Outline(this);
+    outline   = new Outline(this);
 
     /*
      * The catalogue the left button last selected, or null.
@@ -402,7 +402,7 @@ class MainForm extends Form {
          * And what is wrong with it, once, here.
          *
          * Opening a project is the moment one is willing to be told -- before
-         * any of it is on screen, and not while typing in it. `Ide.Check` takes
+         * any of it is on screen, and not while typing in it. `Check` takes
          * the project's own listing, which `listFiles` above has just rebuilt,
          * and reads files rather than opening them.
          */
@@ -483,7 +483,7 @@ class MainForm extends Form {
          * unwritten handler as written.
          */
         const written = control
-            ? Ide.FormFiles.handlersIn(this.formFiles.siblingSource(), control.Name)
+            ? FormFiles.handlersIn(this.formFiles.siblingSource(), control.Name)
             : [];
 
         this.MnuHandler.Items = events.length
@@ -669,7 +669,7 @@ class MainForm extends Form {
 
         const first = inFolder(FORM_DIR, "Form1");
 
-        const config = new Ide.ProjectFile({
+        const config = new ProjectFile({
             Name:        File.Name(dir),
             Id:          id || "",
             Startup:     "Form1",
@@ -720,7 +720,7 @@ class MainForm extends Form {
      * describing a window to a program that has no display.
      */
     createConsoleProject(dir, description, id) {
-        const config = new Ide.ProjectFile({
+        const config = new ProjectFile({
             Name:        File.Name(dir),
             Id:          id || "",
             Main:        "Main",
@@ -773,7 +773,7 @@ class MainForm extends Form {
      * Installing the open project as a user application: a menu entry the user
      * owns, under their own data directory, with no root and no package.
      *
-     * `Ide.Apps` owns the entry and the runtime owns the format; what this does
+     * `Apps` owns the entry and the runtime owns the format; what this does
      * is hand the dialog the manifest it starts on -- a project whose
      * `project.json` declares a name has it filled in already -- and keep the
      * dialog so `tests/ide` can drive it, the way `editSettings` keeps the
@@ -1165,8 +1165,8 @@ class MainForm extends Form {
         /* Editing is for a translation; starting one is for the template. The
          * two are never both about the same file. */
         const cat = this.selectedCatalogue;
-        this.MnuFtTranslate.Enabled       = cat !== null && !Ide.Translations.isTemplate(cat);
-        this.MnuFtNewTranslation.Enabled  = cat !== null && Ide.Translations.isTemplate(cat);
+        this.MnuFtTranslate.Enabled       = cat !== null && !Translations.isTemplate(cat);
+        this.MnuFtNewTranslation.Enabled  = cat !== null && Translations.isTemplate(cat);
         this.MnuFtTranslateWith.Enabled   = cat !== null;
         this.MnuTranslationNew.Enabled    = open;
         this.MnuFtProject.Enabled = open;
@@ -1252,7 +1252,7 @@ class MainForm extends Form {
 
         /*
          * The remotes need somewhere to talk to, and only one of them may be in
-         * flight: `Ide.Git` keeps one job, and a second Fetch while the first is
+         * flight: `Git` keeps one job, and a second Fetch while the first is
          * running would be silently dropped rather than queued.
          */
         const talking  = this.git.job !== null;
@@ -1533,7 +1533,7 @@ class MainForm extends Form {
          */
         const wasCatalogue = this.selectedCatalogue;
 
-        if (Ide.Translations.isCatalogue(name)) {
+        if (Translations.isCatalogue(name)) {
             this.selectedCatalogue = name;
             this.refresh();
             return;
@@ -1634,7 +1634,7 @@ class MainForm extends Form {
      * is what it does.
      */
     openCatalogue(file) {
-        if (Ide.Translations.isTemplate(file)) this.newTranslation(file);
+        if (Translations.isTemplate(file)) this.newTranslation(file);
         else                               PoForm.edit(this, file);
     }
 
@@ -1649,7 +1649,7 @@ class MainForm extends Form {
     /* The same from a menu, for the hand that does not think to double click --
      * and so the command has a name somewhere it can be read. */
     MnuFtTranslate_Click() {
-        if (this.selectedCatalogue && !Ide.Translations.isTemplate(this.selectedCatalogue)) {
+        if (this.selectedCatalogue && !Translations.isTemplate(this.selectedCatalogue)) {
             PoForm.edit(this, this.selectedCatalogue);
         }
     }
@@ -1665,7 +1665,7 @@ class MainForm extends Form {
      */
     startTranslation() {
         const template = this.selectedCatalogue &&
-                         Ide.Translations.isTemplate(this.selectedCatalogue)
+                         Translations.isTemplate(this.selectedCatalogue)
             ? this.selectedCatalogue : this.catalogues.templateFile();
 
         if (!template) {
@@ -1697,7 +1697,7 @@ class MainForm extends Form {
      * always been in, and in the tree's own context menu besides.
      */
     /*
-     * The pass over the whole project, which is the half `Ide.Live` cannot be:
+     * The pass over the whole project, which is the half `Live` cannot be:
      * it reads the file on screen, and a control lost to a name collision is
      * lost in a file nobody has open.
      *
@@ -1713,7 +1713,7 @@ class MainForm extends Form {
     /*
      * **Just bring the panel up, without running anything.**
      *
-     * `Ide.Live` fills the Problems page on every pause and `Ide.Check` on every
+     * `Live` fills the Problems page on every pause and `Check` on every
      * save, and neither of them changes which page of `ConsoleBox` is showing --
      * which is right, because a keystroke must not take the view away from
      * somebody reading the output. The cost is a gutter mark that appears and
@@ -1752,7 +1752,7 @@ class MainForm extends Form {
 
     /*
      * "The pointer is here" -- the point decides which name it is about, and
-     * the dwell is `Ide.Tooltip`'s. The leave is its too, and it is not the
+     * the dwell is `Tooltip`'s. The leave is its too, and it is not the
      * obvious handler: see the note over `Tooltip.left`.
      */
     Editor_MouseMove(x, y) {
@@ -1879,7 +1879,7 @@ class MainForm extends Form {
          * the same chooser and not a tab strip of its own because it answers the
          * same question -- *what is on the left* -- and two choosers stacked over
          * one column is the shape that makes people hunt. */
-        this.CmbView.Items = [...Ide.ProjectTree.views, Locale.Text("Changes")];
+        this.CmbView.Items = [...ProjectTree.views, Locale.Text("Changes")];
         this.CmbView.Index = this.sideView;
     }
 
@@ -1892,7 +1892,7 @@ class MainForm extends Form {
      * Project again must find the view it was left in.
      */
     get sideView() {
-        return Settings.Get("side.changes", false) ? Ide.Changes.view
+        return Settings.Get("side.changes", false) ? Changes.view
                                                   : this.projectTree.view;
     }
 
@@ -1934,7 +1934,7 @@ class MainForm extends Form {
          * *nothing* is not a view to switch to. */
         if (which < 0) return;
 
-        const changes = which === Ide.Changes.view;
+        const changes = which === Changes.view;
 
         Settings.Set("side.changes", changes);
         this.FileTree.Visible   = !changes;
@@ -2057,7 +2057,7 @@ class MainForm extends Form {
      * **And every one of them asks whether there is a designer first**, which
      * five of them did not. `ide.designer` is a name repointed at the active tab
      * and is `null` whenever that tab is not a form -- a code tab, a catalogue,
-     * a document, or nothing open at all (`Ide.TabSet.placeContent`, whose own
+     * a document, or nothing open at all (`TabSet.placeContent`, whose own
      * comment says it: *"words for 'the active one', and `null` when there is
      * none"*). It reached the pointer anyway: moving the mouse over the form's
      * editor raised `TypeError: cannot read property 'mouseMove' of null` on
@@ -2070,7 +2070,7 @@ class MainForm extends Form {
      * mapped on a tab that is no longer designing raises this with `designing`
      * false and a designer null. Asking the thing being dereferenced cannot be
      * wrong. `TitleBar_MouseDown` below asked the mode and had the same shape
-     * waiting for it; `Ide.TabSet` nulls the canvas names with the designer now,
+     * waiting for it; `TabSet` nulls the canvas names with the designer now,
      * which is the other half. */
 
     Glass_MouseDown(x, y, button, ctrl) {
@@ -2304,7 +2304,7 @@ class MainForm extends Form {
      *
      * The word is taken the way the completion and F12 take it -- the tail of a
      * dotted name, because `this.greet` is a use of `greet` -- and the search
-     * and the window are `Ide.Refactor`'s and `RefsForm`'s. A key that silently
+     * and the window are `Refactor`'s and `RefsForm`'s. A key that silently
      * does nothing is indistinguishable from one that is not bound, so no word
      * under the cursor is a line in the log.
      */
@@ -2359,7 +2359,7 @@ class MainForm extends Form {
     /*
      * --- debugging ----------------------------------------------------------
      *
-     * Everything about *what* happens is `Ide.Debugger`'s; these are the keys.
+     * Everything about *what* happens is `Debugger`'s; these are the keys.
      * *Debug* is also *Continue*, the way F5 is in every environment since
      * Visual Basic: what one presses to get going is the same whether it has
      * started or not.
@@ -2403,7 +2403,7 @@ class MainForm extends Form {
     /*
      * --- git ----------------------------------------------------------------
      *
-     * Everything that runs one is `Ide.Git`; these are the commands. Asking
+     * Everything that runs one is `Git`; these are the commands. Asking
      * again is explicit rather than on a timer: a repository changes because
      * somebody did something, and a tree that redrew itself every few seconds
      * would move under the pointer.
@@ -2570,7 +2570,7 @@ class MainForm extends Form {
      * --- the Changes page of the side bar -----------------------------------
      *
      * The handlers are one line each and the decisions are all in
-     * `Ide.Changes`: this is the wiring between a control and a method, which
+     * `Changes`: this is the wiring between a control and a method, which
      * is what a `.form` and its class are for.
      */
     ChangeTable_Select()   { this.changes.say(); }
@@ -2728,13 +2728,13 @@ class MainForm extends Form {
     ActStop_Execute()   { this.stopRun(); }
 
     /* A tick, and the runtime has already moved it: what is left is remembering
-     * it. What it does is one argument to `bintana` -- see `Ide.Runner`. */
+     * it. What it does is one argument to `bintana` -- see `Runner`. */
     MnuStrict_Click(on) { this.runner.chose(on); }
 
     /*
      * Which configuration this project runs with. A radio item, so the runtime
      * has already moved the mark and hands over the entry that was chosen; what
-     * is left is writing it down, which is `Ide.Launch`'s -- it is yours and
+     * is left is writing it down, which is `Launch`'s -- it is yours and
      * per project, not the project's.
      */
     MnuLaunch_Click(index, text) {
@@ -2770,7 +2770,7 @@ class MainForm extends Form {
 
     /*
      * The menu bar of the form being designed.  The board shows it -- a preview
-     * built out of ordinary widgets, which is `Ide.MenuBar` -- but a menu is a
+     * built out of ordinary widgets, which is `MenuBar` -- but a menu is a
      * model wired to actions and not a tree of widgets to drag, so what reorders
      * and renames is this dialog, on the spec.
      *

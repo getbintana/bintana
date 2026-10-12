@@ -14,11 +14,9 @@
  */
 "use strict";
 
-Namespace("Ide");
-
 /* Colours.  `SELECT_COLOR` is the selection's blue and is read from the palette
  * too, which marks the active tool in it: the same colour means the same thing. */
-const SELECT_COLOR  = "#1c71d8";
+export const SELECT_COLOR  = "#1c71d8";
 /* A control that came out bigger than it asked for: amber, not the selection's
  * blue, because it is a statement about the control and not about the choosing. */
 const OVERFLOW_COLOR = "#e5a50a";
@@ -40,7 +38,7 @@ const SETTLE_MS = 30;
 
 /* Which edges each handle moves: [left, top, right, bottom].  Read by the
  * designer as well -- a drag on a handle is what the table is for. */
-const HANDLES = {
+export const HANDLES = {
     nw: [1, 1, 0, 0], n: [0, 1, 0, 0], ne: [0, 1, 1, 0],
     w:  [1, 0, 0, 0],                  e:  [0, 0, 1, 0],
     sw: [1, 0, 0, 1], s: [0, 0, 0, 1], se: [0, 0, 1, 1],
@@ -60,11 +58,11 @@ const HANDLE_CURSOR = {
     sw: "ResizeTopRight",   s: "ResizeVertical",   se: "ResizeTopLeft",
 };
 
-Ide.Chrome = class Chrome {
+export class Chrome {
 
     /* Four thin bars for the outline and eight little squares for the handles,
      * created once and repositioned on every change. */
-    /** @param {Ide.Designer} designer */
+    /** @param {Designer} designer */
     constructor(designer) {
         this.designer = designer;
         this.glass    = designer.glass;
@@ -403,4 +401,4 @@ Ide.Chrome = class Chrome {
     hideBand() {
         for (const bar of this.outlinePool(1)[0]) bar.Visible = false;
     }
-};
+}

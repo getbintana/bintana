@@ -7,7 +7,7 @@
  * control's size from `DEFAULT_SIZE` -- which is what keeps a control looking
  * the same wherever the IDE draws it.
  *
- * The palette itself is **one widget per open form**, built by `Ide.Workspace`
+ * The palette itself is **one widget per open form**, built by `Workspace`
  * with the rest of the tab: the buttons are the tab's page's, so the palette
  * sits under the strip with the canvas, and each form's page keeps its own
  * marked tool and its own scroll for free.  `Palette.offer` is still what
@@ -16,8 +16,6 @@
  * already costs.
  */
 "use strict";
-
-Namespace("Ide");
 
 /*
  * The palette: tabs of square buttons, one per type of control.
@@ -49,7 +47,7 @@ Namespace("Ide");
  * places a control the user cannot finish is worse than a missing button, and
  * the only warning used to be a dialog at run time.
  */
-const PALETTE_TABS = [
+export const PALETTE_TABS = [
     { name: "Basic",  types: ["Button", "Label", "Image", "Picture", "Separator", "TextBox",
                               "CheckButton", "ToggleButton", "Switch", "LinkButton"] },
     { name: "Data",   types: ["ComboBox", "SpinBox", "DecimalBox", "ListBox", "Slider",
@@ -71,7 +69,7 @@ const PALETTE_TABS = [
  * and has two more that resolve but render blank.  An icon that is not there is
  * dropped, which on a button with no text leaves an empty square.
  */
-const PALETTE_ICON = {
+export const PALETTE_ICON = {
     Button:   ["input-mouse-symbolic",      "bta-button-symbolic"],
     Label:    ["insert-text-symbolic",      "bta-label-symbolic"],
     Image:    ["insert-image-symbolic",     "bta-image-symbolic"],
@@ -208,7 +206,7 @@ const PALETTE_ICON = {
 
 /* The first one that exists.  The ide/icons ones are in the search path just
  * like the theme's, so asking about all of them works the same way. */
-function paletteIcon(type) {
+export function paletteIcon(type) {
     return (PALETTE_ICON[type] || []).find((name) => Application.HasIcon(name)) || "";
 }
 
@@ -222,17 +220,17 @@ const PALETTE_TABS_HERE = PALETTE_TABS
                      types: tab.types.filter((t) => Widget.Available(t)) }))
     .filter((tab) => tab.types.length);
 
-const PALETTE = PALETTE_TABS_HERE.flatMap((tab) => tab.types);
+export const PALETTE = PALETTE_TABS_HERE.flatMap((tab) => tab.types);
 
 /* The project's own components get a tab of their own, after the runtime's. */
-const COMPONENT_TAB  = "Project";
-const COMPONENT_ICON = ["application-x-addon-symbolic", "bta-component-symbolic"];
-const COMPONENT_SIZE = [200, 60];
+export const COMPONENT_TAB  = "Project";
+export const COMPONENT_ICON = ["application-x-addon-symbolic", "bta-component-symbolic"];
+export const COMPONENT_SIZE = [200, 60];
 
 const PALETTE_BUTTON = 40;      // side of the square button, in pixels
 
 /* A sensible starting size per type, in pixels. */
-const DEFAULT_SIZE = {
+export const DEFAULT_SIZE = {
     Button:   [110, 34],
     Label:    [110, 24],
     Image:    [64, 64],
@@ -311,9 +309,9 @@ const DEFAULT_SIZE = {
     Video:        [320, 180],
 };
 
-Ide.Palette = class Palette {
+export class Palette {
 
-    /** @param {Ide.Designer} designer */
+    /** @param {Designer} designer */
     constructor(designer) {
         this.designer = designer;
         this.ide      = designer.ide;
@@ -448,4 +446,4 @@ Ide.Palette = class Palette {
             button.Foreground = on ? "#ffffff" : "";
         }
     }
-};
+}

@@ -101,7 +101,7 @@ component drawn at 180x130 hands the room its host gives it down to its `Fill`
 child -- which used to keep the drawn size, because the panel latched the cell
 as its design,
 and a control's `Menu`/`HeaderMenu` labels, which no class can declare as
-prose: `Ide.Strings` walks the two keys by name, the same way it walks a form's
+prose: `Strings` walks the two keys by name, the same way it walks a form's
 own `menus` block, and the reference names the control and the menu. The IDE's
 own four context menus were English under a Spanish window until the template
 knew their 13 labels.

@@ -25,8 +25,6 @@
  */
 "use strict";
 
-Namespace("Ide");
-
 /*
  * What a remote is **never** allowed to do: ask.
  *
@@ -87,7 +85,7 @@ function porcelainRenamed(index, tree) {
     return index === "R" || index === "C" || tree === "R" || tree === "C";
 }
 
-Ide.Git = class Git {
+export class Git {
 
     /** @param {MainForm} ide */
     constructor(ide) {
@@ -803,4 +801,4 @@ Ide.Git = class Git {
 
         return bits.join("  ");
     }
-};
+}

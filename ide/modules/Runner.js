@@ -19,13 +19,11 @@
  */
 "use strict";
 
-Namespace("Ide");
-
 /* Where the tick is remembered. A property of this window and not of any
  * project: the same project is run both ways. */
 const STRICT_KEY = "run.strict";
 
-Ide.Runner = class Runner {
+export class Runner {
 
     /** @param {MainForm} ide */
     constructor(ide) {
@@ -108,7 +106,7 @@ Ide.Runner = class Runner {
      *
      * `--strict` makes a control refuse a property its class does not have, so
      * `this.Lbl.Txt = "x"` throws where it is written instead of doing nothing
-     * forever -- the half of that question `Ide.Live` and `Ide.Check` cannot
+     * forever -- the half of that question `Live` and `Check` cannot
      * answer, because it needs the program to be running.
      *
      * **Two things can turn it on and they mean different things.** The chosen
@@ -366,4 +364,4 @@ Ide.Runner = class Runner {
     relative(path) {
         return File.Relative(path, this.ide.project);
     }
-};
+}

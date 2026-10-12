@@ -35,9 +35,9 @@ every save cost 38 ms on the IDE's own project against 11 ms for the whole of
 now carries milliseconds instead of whole seconds.
 
 The IDE's own project is the demonstration, and `tests/ide` opens it to check:
-`Ide` with twenty classes under a *Modules* category, the forms at the top
-level in no namespace at all, and neither `modules/` nor `forms/` drawn as a
-folder.
+its loose classes under a *Modules* category and its forms beside them, at the
+top level -- every file is a module and none declares a namespace -- and neither
+`modules/` nor `forms/` drawn as a folder.
 
 **Files is the directory as it is**: folders first, then files, everything shown
 — including what the project does not recognise. A `README`, a `.tar` an export
@@ -87,12 +87,12 @@ parameter, and an editor outside this one reads the same lines.
 The last one is the one the project cannot be *asked*. A namespace is an
 ordinary object built at load time, and it belongs to the project — which runs in
 another process the IDE does not load — so `namespaceMembers` reads the two
-halves the runtime itself will act on: the `Namespace("Ide")` declaration, and an
-assignment that really puts a class there. Declaring it is not being in it. It
+halves the runtime itself will act on: the `Namespace("Parts")` declaration, and
+an assignment that really puts a class there. Declaring it is not being in it. It
 reads loose `.js` files and not only forms, because that is what a namespace is
-mostly made of: eighteen of the IDE's own classes have no `.form` at all, and
-this arrived the day they became `Ide.something` and completion went quiet on the
-prefix its own authors type most.
+mostly made of: it arrived the day the IDE's own classes became
+`Ide.something` (they are modules now) and completion went quiet on the prefix
+its own authors typed most.
 
 Nothing is inferred, which is why the answers can be exact. A completion engine
 for JavaScript normally needs a parser and a type inferencer because nothing in
@@ -143,7 +143,7 @@ keystroke:
   and another function's local is not in scope; a block's `let` is offered
   after its block has closed, which is the only way this is wrong.
 - **Inside a call, which argument.** `File.Save(p, |` puts `Save(path, **text**)`
-  above the cursor (`Ide.CallTip`): `Completion.callAt` reads the text before
+  above the cursor (`CallTip`): `Completion.callAt` reads the text before
   the cursor forwards -- a comma separates arguments only outside a string, a
   comment and a nested bracket -- finds the innermost open call, and asks its
   signature the way a dot asks a member; `this.go(` is a method of the file on
@@ -261,7 +261,7 @@ and a symbol carries its file, which is why the digits half of that box is off
 for the project: a line number names a place in a file, and here the file is
 part of the address.
 
-It runs on the pause after typing, and **`Ide.Live` owns that timer**: one pause
+It runs on the pause after typing, and **`Live` owns that timer**: one pause
 should mean one pass over the file however many readers it has. A pass that found
 the same methods compares a signature and stops there, which is what keeps the
 list from being rebuilt under somebody's cursor.
@@ -290,14 +290,14 @@ is checked by the other's handler.
 
 ### It shares its two hardest checks rather than copying them
 
-The sixth row above is `Ide.Names`, which is `Ide.Live`'s member and handler
+The sixth row above is `Names`, which is `Live`'s member and handler
 checks moved somewhere both can reach. *Does this control have this member* has
 to have one answer; a second copy is a second answer to drift from the first,
-which is the argument this project already made about `Ide.Git`'s commands, about
+which is the argument this project already made about `Git`'s commands, about
 `SOURCE_LINK` and about `Navigator.symbols`.
 
-What each caller keeps is its own half. `Ide.Live` owns the *moment* — the pause,
-and the rule that what the caret is inside is never reported. `Ide.Check` passes
+What each caller keeps is its own half. `Live` owns the *moment* — the pause,
+and the rule that what the caret is inside is never reported. `Check` passes
 a caret of `-1`, because nobody is typing in a file it is reading.
 
 That is the check that found two real ones in the IDE's own dialogs: a
@@ -341,7 +341,7 @@ At run time the walks in `bta_widget.c` read the static off the prototype's own
 answers. The IDE has no live component and never will, so it reads the same
 declaration the only way it can: out of the text.
 
-`Ide.Classes` reads them from the source in the same pass that finds the
+`Classes` reads them from the source in the same pass that finds the
 accessors — once per listing,
 so the designer, the grid, the completion and the extractor all ask a lookup and
 none of them can be reading an older file than the others — and hands back the
@@ -434,9 +434,9 @@ mean "not at all" rather than "not that way". `AskForm.prompt` takes an optional
 `{text, checked}` and hands the state back as a second argument; it makes room by
 moving the buttons down and growing the window by the same amount.
 
-The IDE is the demonstration of the rule it now follows: the classes in
-`ide/modules/` are `Ide.Designer` and `Ide.TabSet` because their code says
-`Namespace("Ide")` — never `Modules.Designer`, because no folder names anything.
+The rule is that no folder names anything: a class in `modules/` is never
+`Modules.Designer`. The IDE's own classes are plain `Designer` and `TabSet`, and
+each file is a module that exports its class.
 
 - *New form...* and *New component...* accept a folder in the name, create it,
   and register `Widgets/Stepper.js` in `sources`. The suggested name is offered

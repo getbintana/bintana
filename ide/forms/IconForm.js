@@ -16,7 +16,7 @@ const ICON_SIZE = 44;    // side of one icon button
  * way to the rest, and the count says so out loud. */
 const PAGE      = 240;
 
-class IconForm extends Form {
+export class IconForm extends Form {
 
     /*
      * IconForm.pick("folder-open", (name) => ...)

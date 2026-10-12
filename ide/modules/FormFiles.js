@@ -21,8 +21,6 @@
  */
 "use strict";
 
-Namespace("Ide");
-
 /* Index of the closing quote of the string that starts at `start`. */
 function endOfString(source, start) {
     const quote = source[start];
@@ -126,7 +124,7 @@ function retargetNamespace(source, klass, oldNs, newNs) {
            declares.Replace(source, `${newNs}.${klass} = class ${klass}`, 1);
 }
 
-Ide.FormFiles = class FormFiles {
+export class FormFiles {
 
     /** @param {MainForm} ide */
     constructor(ide) {
@@ -1003,4 +1001,4 @@ Ide.FormFiles = class FormFiles {
         this.ide.renderTabs();
         return true;
     }
-};
+}

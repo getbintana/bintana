@@ -49,8 +49,6 @@
  */
 "use strict";
 
-Namespace("Ide");
-
 /*
  * The globals worth completing, asked of the objects themselves.
  *
@@ -150,7 +148,7 @@ function completionSteps(expr) {
  * after the `if` has closed -- which is the wrong direction to be wrong in
  * only by a name the person can see.
  */
-function completionScopeNames(symbols, line) {
+export function completionScopeNames(symbols, line) {
     const scopes = symbols.filter((s) => s.Kind === "Scope");
     const inner  = (at) => {
         let best = null;
@@ -330,7 +328,7 @@ const DECLARED_JSDOC = (name) =>
 const FIELD_FROM_PARAM = (name) =>
     new Regex(`\\bthis\\.${name}\\s*=\\s*([A-Za-z_$][\\w$]*)\\s*[;\\n]`);
 
-Ide.Completion = class Completion {
+export class Completion {
 
     /** @param {MainForm} ide */
     constructor(ide) {
@@ -344,7 +342,7 @@ Ide.Completion = class Completion {
         this.methods = { names: [] };
         /* And a third, for a class of the project asked about from another
          * file: two reads per class, on the keystroke. Not `classes`, which is
-         * `Ide.Classes` two characters away and would read as the same thing. */
+         * `Classes` two characters away and would read as the same thing. */
         this.declared = new Map();
 
         /* Which type names the runtime answers by class, worked out once: the
@@ -870,7 +868,7 @@ Ide.Completion = class Completion {
      *   itself, out of `Application.Symbols` over the sources. **A top-level
      *   `class` is a lexical binding and not a property of the global object**,
      *   so `Globals()` cannot see `Confirm` however the library is loaded -- read
-     *   and asked, which is the same road `Ide.Classes` already walks.
+     *   and asked, which is the same road `Classes` already walks.
      *
      * **Not keyed on the word.** The first version rebuilt the list once per
      * new word, on the path GTK runs on every keystroke. It is rebuilt when a
@@ -1003,7 +1001,7 @@ Ide.Completion = class Completion {
                 if (!sources.has(c)) { sources.set(c, text); names.push(c); }
             for (const t of cached.tops) if (!tops.includes(t)) tops.push(t);
             /* Who exports each name, so a name two modules export can be said
-             * to be ambiguous where it is used (`Ide.Names.ambiguous`). */
+             * to be ambiguous where it is used (`Names.ambiguous`). */
             if (cached.module)
                 for (const t of cached.tops) {
                     if (!owners.has(t)) owners.set(t, []);
@@ -1029,7 +1027,7 @@ Ide.Completion = class Completion {
      * **Only the libraries this project `uses`, and the walk is not written
      * here.** The first version asked `Application.Libraries()` -- every library
      * installed on the machine -- so a project that names one library was
-     * offered every class of all seven. `Ide.Classes`' own `libraries` cache
+     * offered every class of all seven. `Classes`' own `libraries` cache
      * already reads the manifest and resolves each name, and is invalidated when
      * the project changes, which is the lifetime this answer has too.
      *
@@ -1096,7 +1094,7 @@ Ide.Completion = class Completion {
      * built. A class of the project answers from **its two files** -- the
      * controls its `.form` names and the methods its `.js` declares -- which is
      * the same pair `membersOfForm` reads about the file on screen, asked about
-     * another one. Nothing is loaded and nothing is parsed: `Ide.Names`
+     * another one. Nothing is loaded and nothing is parsed: `Names`
      * flattens the JSON and the methods are the same four-spaces-name-bracket
      * shape.
      */
@@ -1180,7 +1178,7 @@ Ide.Completion = class Completion {
      * addressed by name whatever it is nested in, because a handler is
      * `Name_Event` on the form and names are unique across it.
      *
-     * The walk is `Ide.Names`'s and not one of this file's own. It was one of
+     * The walk is `Names`'s and not one of this file's own. It was one of
      * this file's own, and it read `children` alone, which is how three
      * flatteners came to agree that a menu item is not a thing a form has.
      */
@@ -1228,7 +1226,7 @@ Ide.Completion = class Completion {
      * no control built. A component of the project is not a class of *this*
      * process -- the IDE never loads the project's code -- so there is nothing
      * to ask for one, and the answer falls through to what its class declares
-     * (`Ide.Classes`, read from the source once per listing, so this stays a
+     * (`Classes`, read from the source once per listing, so this stays a
      * lookup).
      */
     propertiesOf(name) {
@@ -1397,4 +1395,4 @@ Ide.Completion = class Completion {
         this.methods = { names };
         return names;
     }
-};
+}

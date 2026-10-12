@@ -29,8 +29,6 @@
  */
 "use strict";
 
-Namespace("Ide");
-
 /*
  * What a decoration layout can name, and the icons each is drawn with, in order
  * of preference -- the same bargain the palette makes: first the desktop's own,
@@ -99,7 +97,7 @@ const DECORATION_RADIUS = "8 8 0 0";
  */
 const DECORATION_SHADOW = "0 3 9 1 rgba(0,0,0,0.5)";
 
-Ide.TitleBar = class TitleBar {
+export class TitleBar {
 
     /*
      * One per open form, like the canvas it sits on: what it shows is *this*
@@ -254,4 +252,4 @@ Ide.TitleBar = class TitleBar {
      * same reason the property grid offers it no `Text`. */
     set Visible(on) { this.panel.Visible = on; }
     get Visible()   { return this.panel.Visible; }
-};
+}

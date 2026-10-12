@@ -368,11 +368,15 @@ stage 2, the first time the runtime compiles a module.
 - **Is `export` the default?** This plan says no: rule 1 keeps every existing
   file a script. A later `project.json` key could make every file a module,
   once the IDE and the libraries have moved.
-- **Should the runtime's own code move?** `ide/` is the largest Bintana program
-  and would prove the design; it is also 30 000 lines with shared top-level
-  constants (`SELECT_COLOR`, `SOURCE_LINK`). Not before stage 4.
+- **Should the runtime's own code move?** Done for the IDE, 2026-10-12: every
+  file of `ide/` is a module, `Namespace("Ide")` is gone from it, and of 326
+  top-level names 99 are exported and 227 private. The exports were read off
+  fork patch 16's free names rather than searched for, and the IDE's shared
+  constants (`SELECT_COLOR`, `SOURCE_LINK`) are simply exported. `rad.js` and
+  `forms.js` are the prelude and stay scripts.
 - **What happens to `Namespace()`.** It stays: it groups names, which a module
-  does not. Whether it is still needed once files are private is for later.
+  does not. With the IDE moved, nothing in this tree uses it but its own tests,
+  so whether to retire it is the question now.
 
 ## Rejected
 

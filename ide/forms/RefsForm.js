@@ -3,7 +3,7 @@
  *
  * `F12` answers *where is this declared*; this is the other half -- **where
  * else is it** -- which is what somebody asks before touching a name at all.
- * The searching is `Ide.Refactor`'s, and it is the same answer the rename
+ * The searching is `Refactor`'s, and it is the same answer the rename
  * uses: one function, so the list that is shown and the list that is rewritten
  * cannot disagree about what a reference is.
  *
@@ -23,7 +23,7 @@
  * there is. `SearchForm`'s registry, spelled the same way. */
 let openRefs = null;
 
-class RefsForm extends Form {
+export class RefsForm extends Form {
 
     /*
      * RefsForm.show(ide, word)
@@ -51,7 +51,7 @@ class RefsForm extends Form {
 
     /*
      * The rows, computed on every open: a declaration is labelled with its
-     * kind and comes first -- `Ide.Refactor.references` is the one that decides
+     * kind and comes first -- `Refactor.references` is the one that decides
      * the order -- and a `.form` row has no line to go to, which is what a
      * designer is.
      */
@@ -96,7 +96,7 @@ class RefsForm extends Form {
     /*
      * The rename, asked for and then reported.
      *
-     * `Ide.Refactor.rename` refuses with a sentence rather than half writing,
+     * `Refactor.rename` refuses with a sentence rather than half writing,
      * so the only two outcomes are a message or a count -- and the list is
      * recomputed after either, because a refusal is the moment one wants to
      * see the place it is about.

@@ -69,8 +69,6 @@
  */
 "use strict";
 
-Namespace("Ide");
-
 /* The theme's own metrics for a `menubar > item`, said here because the node
  * that carries them is not one an application can build. */
 const ITEM_PADDING = "4 8";
@@ -99,7 +97,7 @@ const BAR_HEIGHT = 27;
  */
 const PREVIEW = "Prv";
 
-Ide.MenuBar = class MenuBar {
+export class MenuBar {
 
     /*
      * One per open form, like the canvas and the title bar it sits between.  The
@@ -386,11 +384,11 @@ Ide.MenuBar = class MenuBar {
         const found = (actions || []).find((a) => a.name === node.action);
         return (found && found.text) || node.action || "";
     }
-};
+}
 
 /* One per open form, and the names they put on the IDE's form have to differ:
  * two designers previewing two forms are two sets of items, and the second must
  * not answer to the first one's names. */
-Ide.MenuBar.serial = 0;
+MenuBar.serial = 0;
 /* The measurement, shared: it is a fact about the desktop, not about a form. */
-Ide.MenuBar.measured = 0;
+MenuBar.measured = 0;

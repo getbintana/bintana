@@ -5,7 +5,7 @@
  * nothing on the surface to drag into place, and what the designer edits is the
  * spec itself: the same `menus` array the .form carries and the loader reads.
  *
- * The board does *show* the bar (Ide.MenuBar), which is a different question: a
+ * The board does *show* the bar (MenuBar), which is a different question: a
  * preview is ordinary widgets and a real popover, and it is where most people
  * will click to get here.  What it cannot be is the editor -- reordering and
  * renaming a tree is what this dialog is for.
@@ -30,7 +30,7 @@ const MENU_HELP =
     "it radio keeps the entry that was chosen.\n\n" +
     "Double click an item to write its handler.";
 
-class MenuForm extends Form {
+export class MenuForm extends Form {
 
     /* MenuForm.edit(menus, (spec) => ..., (name) => ...) */
     static edit(menus, onAccept, onOpenHandler) {

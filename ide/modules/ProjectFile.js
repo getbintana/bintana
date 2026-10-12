@@ -19,8 +19,6 @@
  */
 "use strict";
 
-Namespace("Ide");
-
 /*
  * What a project starts at: the *index* of the entry in the dialogs' drop-down.
  *
@@ -33,9 +31,9 @@ Namespace("Ide");
  * project's sources share one scope: two files declaring `const KIND_FORM` at
  * the top level is a redeclaration, and the runtime says so.
  */
-Ide.Kind = { Form: 0, Function: 1 };
+export const Kind = { Form: 0, Function: 1 };
 
-Ide.ProjectFile = class ProjectFile extends Record {
+export class ProjectFile extends Record {
     static Naming = "lower";
 
     static Fields = {
@@ -100,7 +98,7 @@ Ide.ProjectFile = class ProjectFile extends Record {
         /*
          * How this project is run: named configurations, each with the
          * arguments, the directory and the environment it needs
-         * (`Ide.LaunchConfig`). Versioned on purpose -- *what this project needs
+         * (`LaunchConfig`). Versioned on purpose -- *what this project needs
          * to start* is a fact about the project and not about whoever opened it,
          * so it belongs beside `sources` and `uses` rather than in anybody's
          * settings.
@@ -114,7 +112,7 @@ Ide.ProjectFile = class ProjectFile extends Record {
          * it lives in `Settings` with the rest of what this window remembers
          * about itself.
          */
-        Launch: Field.List(Ide.LaunchConfig),
+        Launch: Field.List(LaunchConfig),
     };
 
     /*
@@ -171,4 +169,4 @@ Ide.ProjectFile = class ProjectFile extends Record {
      * have frozen the order of a project that had asked for the scan.
      */
     get Lists() { return this.Sources.length > 0; }
-};
+}

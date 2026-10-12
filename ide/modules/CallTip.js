@@ -1,5 +1,3 @@
-Namespace("Ide");
-
 /*
  * The parameters of the call being written, beside the cursor.
  *
@@ -8,7 +6,7 @@ Namespace("Ide");
  * go here*; this answers *what goes here*, and it is the half a person reaches
  * for once the name is typed and the popup has gone.
  *
- * **Nothing here knows a signature.** `Ide.Completion.callAt` finds the call
+ * **Nothing here knows a signature.** `Completion.callAt` finds the call
  * and asks the runtime -- the same `Signature` the popup shows, following a
  * chain the same way -- so a verb declared beside its C entry, a method of
  * rad.js read out of its own source and a library class read by the parser all
@@ -24,7 +22,7 @@ Namespace("Ide");
  * content is one `Label`, built on first use and shown over the editor -- it is
  * in no form's tree, so nothing here adds it anywhere.
  */
-Ide.CallTip = class CallTip {
+export class CallTip {
     constructor(ide) {
         this.ide   = ide;
         this.label = null;
@@ -51,7 +49,7 @@ Ide.CallTip = class CallTip {
      * parameter is every argument from where it stands. */
     markup(info) {
         const inner = info.Signature.replace(/^\(|\)$/g, "");
-        const parts = Ide.CallTip.split(inner);
+        const parts = CallTip.split(inner);
         let at = info.Index;
         if (at >= parts.length && parts.length && parts[parts.length - 1].startsWith("..."))
             at = parts.length - 1;
@@ -109,4 +107,4 @@ Ide.CallTip = class CallTip {
         if (byHand) this.dismissed = this.key || null;
         if (this.label && Popover.IsOpen(this.label)) Popover.Close(this.label);
     }
-};
+}

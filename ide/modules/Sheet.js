@@ -18,8 +18,6 @@
  */
 "use strict";
 
-Namespace("Ide");
-
 /* What a class the editor owns can say: exactly the appearance a control can be
  * given by hand, which is exactly what `StyleRule()` writes. */
 const SHEET_PROPS = ["Background", "Foreground", "Font", "FontScale", "Opacity",
@@ -35,7 +33,7 @@ const WEIGHTS = { 100: "Thin", 200: "Ultra-Light", 300: "Light", 400: "",
  * common (`dim-label`), a leading digit is not. */
 const CSS_CLASS_NAME = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 
-Ide.Sheet = class Sheet {
+export class Sheet {
 
     static get props() { return SHEET_PROPS; }
 
@@ -290,4 +288,4 @@ Ide.Sheet = class Sheet {
         const after = sheet.slice(rule.end).replace(/^\n{1,2}/, "\n");
         return sheet.slice(0, rule.start) + after;
     }
-};
+}

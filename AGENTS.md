@@ -350,14 +350,23 @@ is what the code declares and nothing else, so there is nothing to exempt.
 which is what the New form dialog offers; the first class of a namespace is told
 which one. See the note above it, and [`docs/ide.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#folders-and-namespaces-which-are-not-the-same-thing).
 
-**The classes in `ide/modules/` are `Ide.<name>`.** Each file declares
-`Namespace("Ide")` and assigns one class, and its name is the file's:
-`Ide.Designer`, `Ide.TabSet`, `Ide.Classes`. Twenty-three generic names are off the
-global lexical scope, where a top-level `class` silently wins over a runtime
-global of the same name -- and the largest Bintana program there is now uses the
-feature it offers everyone else. The namespace is **declared by the code**: it is
-`Ide` and not `Modules`, because the folder is not what named it. The forms stay
-bare -- a form's name is what the runtime looks it up by.
+**Every file of the IDE is a module** (see *A file with `export` is a
+module*). A file in `ide/modules/` says `export class <name>`, named like the
+file -- `Designer`, `TabSet`, `Classes` -- and a form says `export class
+MainForm extends Form`, since a form's name is what the runtime looks it up by.
+What one file uses of another is exported where it is declared and reached by
+its bare name, with no `import`; everything else is the file's own. It was
+`Namespace("Ide")` and `Ide.Designer` until the modules plan, and the move
+found what the shared scope had been hiding: of 326 top-level names, **99 are
+exported** -- the 45 classes, the 26 forms and 28 more another file uses
+(`SOURCE_LINK`, `PALETTE`, `inFolder` ...) -- and the other 227 are private
+now. The list was taken from fork patch 16's
+free names, not from a search for words, which also offered `lines`, `snap`
+and `plain` -- locals of the same spelling in other files. **A name a test
+reads** (`GRID`, `PALETTE_TABS`, `completionScopeNames`) is exported for that
+reason, and `tests/ide/Driver.js` stays a script. A new top-level name used
+from a second file wants `export` where it is declared, and the load says so
+otherwise: `ReferenceError: X is not defined`, at the use.
 
 **The IDE is written in Bintana and has no privileged API.** When the IDE
 needs something the runtime lacks, the fix is a runtime feature every
@@ -367,7 +376,7 @@ The corollary runs the other way too, and is easy to forget: before writing C,
 check whether the thing is expressible as a Bintana form. `AskForm` and
 `ConfirmForm` are dialogs, not runtime primitives.
 
-**The workspace belongs to the tab, and the strip is above it.** `Ide.Workspace`
+**The workspace belongs to the tab, and the strip is above it.** `Workspace`
 (`ide/modules/Workspace.js`) builds, once per open file, everything under the
 tab strip: the palette, the control tree and the design bar on the left, the
 canvas or the editor in the middle, and the property grid, the events page or
@@ -489,7 +498,7 @@ inside it, and never as a second pass in `rad.js`, which would get the order
 wrong and lose the middle of a `class Chip extends Stepper` chain. Own
 properties throughout: a constructor inherits its parent's statics, and reading
 through would report the parent's at the child's step and again at the parent's.
-The IDE never loads the project's code, so `Ide.Classes` parses the same
+The IDE never loads the project's code, so `Classes` parses the same
 declarations out of the source and the designer, the grid, the completion and
 the extractor ask it.
 
@@ -1847,7 +1856,7 @@ focus, and both were put in after the first version got it backwards.
 **A library's own prose has no msgid, and that is not fixable from where it
 looks.** `static TextProperties = ["BtnAccept", "BtnCancel"]` puts the two labels
 through the catalogue when the `.form` loads, and the extractor cannot reach
-them: `Ide.Strings`' `projectFiles` walks from `this.ide.project`, so a `.form`
+them: `Strings`' `projectFiles` walks from `this.ide.project`, so a `.form`
 under `lib/` is invisible to it. **The answer is that a caller passes its own
 words** — `{ Accept: "Delete" }` at the call site is a literal in the project's
 own `.js`, which is exactly where the extractor looks. It is the same shape as the
@@ -1885,7 +1894,7 @@ So there were two fixes, and **only one of them is in the IDE**:
   classes come out of that library's sources, because **a top-level `class` is a
   lexical binding and not a property of the global object**, so no list of
   globals could ever contain `Confirm`. **Only the libraries the project declares
-  in `uses`,** and the walk is `Ide.Classes`' own cached `libraries`: the first
+  in `uses`,** and the walk is `Classes`' own cached `libraries`: the first
   version asked `Application.Libraries()` and offered the classes of all seven on
   a project naming one -- `QrView` in a program with no `qr` anywhere in it, which
   is not a completion list but a list of what somebody else has on their disk. A
@@ -2071,7 +2080,7 @@ call is that call's answer, `this.X` is the control's class or the field's
 from a field and from a local, and through a named type; with `stepType`
 returning nothing six of those go red.
 
-**And inside a call, which argument -- `Ide.CallTip`.** `File.Save(p, |` shows
+**And inside a call, which argument -- `CallTip`.** `File.Save(p, |` shows
 `Save(path, <b>text</b>)` above the cursor. The IDE needed two runtime verbs
 for it and got them as ordinary API: `Editor.CursorBounds()` (where the cursor
 is drawn, in the control's coordinates: `get_iter_location`, then
@@ -2112,8 +2121,8 @@ Placement was checked by eye once, on an `Xvfb` with a root capture (a
 popover is its own surface and does not show in a window capture): the hint
 sits directly above the cursor with the argument in bold.
 
-**And the pointer resting on a name is `Ide.Tooltip`**, which answers the same
-`Ide.Completion.topic` F1 does, with `Editor.PositionAt` saying which character
+**And the pointer resting on a name is `Tooltip`**, which answers the same
+`Completion.topic` F1 does, with `Editor.PositionAt` saying which character
 is under the point. **`MouseLeave` is not what closes it, and finding that out
 cost a real pointer.** A popover maps under the pointer for the instant GTK
 places it, the editor is sent a `leave` for that instant, and a handler that
@@ -3008,7 +3017,7 @@ person who wrote it either.
   that is genuinely useless: nothing says which lines are the change, and after
   the first added line the two columns are off by one, so the locked scrolling
   lines up code with unrelated code. What makes it a diff is the padding -- a
-  `Gap` row facing every added line -- and the paint. `Ide.Diff` reads git's own
+  `Gap` row facing every added line -- and the paint. `Diff` reads git's own
   unified output for both; it never computes a diff, and the reason is worth
   keeping: the pair a viewer is handed can be four thousand lines, and an LCS of
   that is a table of sixteen million cells.
@@ -3020,7 +3029,7 @@ person who wrote it either.
   `File.Join(project, …)` all say `ClientsForm.js`. Nothing errors: the tree
   marks nothing because no name ever matches, and the diff's worktree pane comes
   up **empty**, because it went looking for
-  `<project>/examples/clients/ClientsForm.js`. `Ide.Git` keeps git's own answer
+  `<project>/examples/clients/ClientsForm.js`. `Git` keeps git's own answer
   (`rev-parse --show-prefix`) and crosses the boundary in `strip`/`full`; and
   every listing carries `-- .`, since a repository can hold more than this
   project and the panel must not offer to stage somebody else's folder.
@@ -3673,7 +3682,7 @@ person who wrote it either.
   application of the same id and the menu started the source tree. The window
   is still matched by `StartupWMClass` (the id), and an entry an older IDE left
   under the bare id is found by `X-Bintana-Project` like any other, so Update
-  moves it and Uninstall removes it. `Ide.Apps.entryId` is the one place the
+  moves it and Uninstall removes it. `Apps.entryId` is the one place the
   name is decided -- the dialog's state line asks it too.
 - **A generated menu entry is a file a test can leave in somebody's menu.**
   `tests/ide`'s `apps` phase installs a real `.desktop` under
@@ -4287,7 +4296,7 @@ person who wrote it either.
   so clicking the picture would have opened a project; and `set_accels` ends in
   `gtk_application_set_accels_for_action`, which is the **application** -- a
   designed form with `<Control>s` in its menu takes Ctrl+S off the IDE. Rename
-  after the path and drop the shortcuts (`Ide.MenuBar.sanitise`). The same lookup
+  after the path and drop the shortcuts (`MenuBar.sanitise`). The same lookup
   is what makes it work at all: a handler assigned from code is found like any
   other, which is how a menu built at run time gets one.
 - **And that assignment is checked now.** `make_item` and `bta_actions_build`
@@ -4478,14 +4487,14 @@ person who wrote it either.
   same pair. A rename onto a file that exists is refused, and only a stock
   `<icon>` is rewritten -- a `remote` or `local` one is the author's.
 - **A lint nobody runs over the IDE is a lint about other people's projects.**
-  `Ide.Strings` has always warned about a msgid joined from two literals, and
+  `Strings` has always warned about a msgid joined from two literals, and
   the IDE had seven -- the id error in New project and Project settings, three
   style-editor sentences, a property-grid hint -- each in `ide.pot` as its first
   half, which no translation can ever match. `tests/ide`'s `strings` phase runs
   the lint over the real `ide/` now and fails on any.
 - **`--` is not literal: git still globs what follows it.** Discarding
   `data[1].json` also restored `data1.json`, silently and with no undo.
-  `Ide.Git` passes `--literal-pathspecs` on every call; a new git call built
+  `Git` passes `--literal-pathspecs` on every call; a new git call built
   outside `run`/`remote` has to carry it too. An untracked folder is one
   porcelain row (`?? d/`) and `File.Delete` takes only an empty directory, so
   discarding one threw halfway -- it goes to the trash now, like every other
@@ -4582,14 +4591,13 @@ person who wrote it either.
   again. A dialog with
   no buttons set said `Cerrar`, GTK's own, which is how an old binary shows
   itself in a capture.
-- **Every `ide/**/*.js` shares one global scope** -- every file that does not
-  say `export`, that is; one that does is a module and keeps the rest of its
-  names (see *A file with `export` is a module*). They are separate
-  `JS_Eval(JS_EVAL_TYPE_GLOBAL)` calls in one context, which is what lets `Runner`
-  use `MainForm`'s `SOURCE_LINK` and `Palette` use `Chrome`'s `SELECT_COLOR` -- and
-  what makes the *same* top-level `const` in two files a `SyntaxError:
-  redeclaration` that stops the IDE at startup. Splitting a file means moving each
-  constant, not copying it.
+- **Every `ide/**/*.js` is a module, so a top-level name is its file's** --
+  `Runner` reaches `MainForm`'s `SOURCE_LINK` and `Palette` `Chrome`'s
+  `SELECT_COLOR` because both are exported, and two files may now declare the
+  same private `const`. Two files *exporting* one name is the trap left: it
+  loads, and a file using it with no `import` stops the IDE at startup, naming
+  both (fork patch 16). Splitting a file means exporting what the other half
+  uses, not copying it.
 - **`Focusable` reaches `inner` and the editable's delegate, and the *getter* has
   to ask the same three.** A `TextBox`'s focus sits on the `GtkText` *inside* its
   entry and an editor's on the view inside its scroller -- the same *contains*
@@ -4698,7 +4706,7 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   roads in (`bta_notebook_page_added` for the loader/`Add`/the designer, and
   `notebook_append` which bypasses both) -- and then the notebook can change its
   own order, which means every list kept beside it is a cache, and
-  `Ide.TabSet.tabOrder` is one. It was built, the docs written, `Reordered`
+  `TabSet.tabOrder` is one. It was built, the docs written, `Reordered`
   published, `tabs reordered` asserted -- and with the feature in, moving between
   a form tab and a code tab left **the page on screen and the tab the names
   speak for as two different answers**: the side panel stuck on the form's, a
@@ -4709,7 +4717,7 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   pixel-for-pixel against a healthy reference -- and it still followed a user
   around, so it was reverted rather than explained.
   **The cause was found later, parked in `ide/tab-reorder` as a red assertion
-  that had been asking the wrong question.** `Ide.TabSet.nameOfPage` walked its
+  that had been asking the wrong question.** `TabSet.nameOfPage` walked its
   `openTabs` `Map` with `for...in`, and `for...in` visits the properties of the
   object, of which a `Map` has none -- so it named **no page at all**, and the
   list was rebuilt empty on the first reorder. From then on `Tabs_Switch` (which
@@ -4739,7 +4747,7 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   halves that were always *proved* stayed: the five canvas handlers ask whether
   there is a designer before dereferencing it (`tests/ide` goes red without them,
   and reproduces the reported `TypeError` by name), and
-  `Ide.TabSet.placeContent` brings the canvas names down with the designer
+  `TabSet.placeContent` brings the canvas names down with the designer
   instead of leaving them naming the last form.
 - **Tab order cannot ride the child list, because paint order already does.**
   GTK4 walks the focus in child-list order and removed `GtkContainer`'s focus
@@ -5523,7 +5531,7 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   ordinary code does, because build-then-add is the natural order. Anything that
   needs a window is attached on `realize`, not in the setter.
 - **The extractor read comments, and a call's two prose arguments as a
-  plural.** `Ide.Strings` matches calls with a pattern, so the example in
+  plural.** `Strings` matches calls with a pattern, so the example in
   `AskForm.js`'s own comment -- `AskForm.prompt("New form", "Name:", …)` --
   was extracted as a call; and `AskForm.prompt` was declared `args: 2`
   without `many`, so its title and label became a singular and its plural:
@@ -5536,7 +5544,7 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   installer* as *Desinstalar*). A fuzzy match from msgmerge is a suggestion,
   never a translation -- read each one.
   **And it never read a command's label at all.** `actions[].text` goes
-  through the catalogue like a menu label, and `Ide.Strings` walked `menus`
+  through the catalogue like a menu label, and `Strings` walked `menus`
   and `children` only. It hid behind the four commands the IDE had, each with
   a button whose tooltip said the same words; when the Debug menu's items
   became commands, `"Pause"` fell out of the catalogue. `fromAction` reads
@@ -5546,7 +5554,7 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   it holds text; a `Menu` is a structure whose items carry `text`, and the
   runtime translates each label in `append_item` -- where the comment says why
   `BtaClass.texts` cannot express it: a menu item is not a widget and has no
-  class. So `Ide.Strings` knows the two keys by name, exactly as `fromMenu`
+  class. So `Strings` knows the two keys by name, exactly as `fromMenu`
   knows the form's own `menus` block, and the reference names the control and
   the menu (`ChangeTable.Menu MnuChStage`). Without it the IDE's own four
   context menus were English under a Spanish window -- 13 labels in no
@@ -5973,12 +5981,12 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   `uses` names it.** `Classes.rescan` walks the whole project directory into
   `files`, and the six-place search only turns a directory into a library when
   the manifest says so -- so a scan that means *the project's own code* has to
-  ask `Classes.inLibrary(file)` itself, which is what `Ide.Refactor` does and
+  ask `Classes.inLibrary(file)` itself, which is what `Refactor` does and
   what the tree already did to file a component under its library tab.
   Measured with `tests/ide`'s own fixture: `lib/gadgets/Dial.js` was scanned,
   and its `turn` made a rename of a project method refuse for a class the
   project had never heard of. The same asymmetry runs the other way -- a
-  library *is* declared and must not be written, so `Ide.Refactor` reads its
+  library *is* declared and must not be written, so `Refactor` reads its
   classes to refuse a collision and never rewrites one.
 
 ## `Drawing`: a document with no display
@@ -7124,7 +7132,7 @@ designer was left), and letting the press through the Glass to the real strip
   `Width`/`Height` by the same amount, or the anchors keep the old gaps.
 
 - **A drop-down whose `Items` are prose is addressed by `Index`, never by its
-  words.** `Ide.Kind` was `"a form"`/`"a function"` and the dialogs assigned and
+  words.** `Kind` was `"a form"`/`"a function"` and the dialogs assigned and
   compared `Text`; under a Spanish desktop the loader had translated the items,
   so opening *Project settings* threw `'a form' is not one of CmbPrKind's items`.
   The suite runs in English and could not see it. It is `0`/`1` and `Index` now
@@ -7849,7 +7857,7 @@ follows a path import to the file and the declaration (`Navigator.imported`,
 before any class of the same name elsewhere -- the import is the file saying
 whose it is; a library import is not followed); a rename of a name a module
 declares and does not export touches that file only, and one two files declare
-is refused (`Refactor.privateTo`); and `Ide.Names.ambiguous` says the runtime's
+is refused (`Refactor.privateTo`); and `Names.ambiguous` says the runtime's
 sentence where a name two modules export is used with no import, in the live
 pass and the project check -- the sentence the runtime now refuses the load
 with (patch 16), said while typing. `ambiguous` reads words, so a file that
@@ -7888,7 +7896,7 @@ found the runtime's object, and building a form out of it is what failed.
 A bare name is now `JS_Eval`'d, which is JavaScript's own order: the lexical
 declaration, then the global property, and a `ReferenceError` for a name that is
 neither -- the same error the fallback always threw. A qualified name
-(`Ide.Designer`) is still a walk down properties. **Nothing got slower**: every
+(`Designer`) is still a walk down properties. **Nothing got slower**: every
 caller asks the class table first, so `Button` and `Label` never arrive here,
 and the names that do are a project's or a library's, which always went through
 `JS_Eval` before. `tests/widgets`' `ClassNamedLikeAGlobal` runs three children

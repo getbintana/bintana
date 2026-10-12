@@ -19,7 +19,7 @@
  * reason is that a name is a **finished fact** about a control the `.form` next
  * door already describes: nothing has to be inferred, parsed or guessed.
  *
- * Two checks, and both are lookups -- `Ide.Names` has them, because the project
+ * Two checks, and both are lookups -- `Names` has them, because the project
  * pass runs the same two over files nobody has open:
  *
  *     this.Btn.Txt       Btn is a Button, and a Button has no Txt
@@ -43,8 +43,6 @@
  */
 "use strict";
 
-Namespace("Ide");
-
 /*
  * How long a pause means *stopped typing*.
  *
@@ -55,7 +53,7 @@ Namespace("Ide");
  */
 const LIVE_PAUSE = 400;
 
-Ide.Live = class Live {
+export class Live {
 
     /** @param {MainForm} ide */
     constructor(ide) {
@@ -112,7 +110,7 @@ Ide.Live = class Live {
         const text = ide.Editor.Text;
         const at   = this.caret(ide.Editor, text);
 
-        /* `Ide.Names`, and not a copy of it: the project pass runs the same
+        /* `Names`, and not a copy of it: the project pass runs the same
          * three. What belongs to this class is the *moment*: the pause, and the
          * caret rule that goes with it. */
         const found = [...ide.names.curated(text, name, at),
@@ -160,4 +158,4 @@ Ide.Live = class Live {
         for (const p of found)
             if (p.line > 0) editor.Mark(p.line, "Warning", p.text);
     }
-};
+}

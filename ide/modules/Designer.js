@@ -11,7 +11,7 @@
  * What this file is left with is the canvas: what is selected, what a drag or a
  * key does to it, how a control is added and named, the undo history, and
  * reading and writing the `.form`.  The panels around it each have a class of
- * their own, and each drives the widget of the tab's own page (`Ide.Workspace`):
+ * their own, and each drives the widget of the tab's own page (`Workspace`):
  *
  *   Chrome         what is drawn *over* the form -- outline, handles, guides
  *   ControlTree    what the form is made of, as a tree
@@ -20,8 +20,6 @@
  *   Events         what the selection raises, and which handlers are written
  */
 "use strict";
-
-Namespace("Ide");
 
 /*
  * Which event a double click opens is **asked of the control**, not looked up
@@ -37,7 +35,7 @@ Namespace("Ide");
  * current as whoever last added a control remembered to be.
  */
 
-const GRID = 4;                 // moves snap to this grid
+export const GRID = 4;                 // moves snap to this grid
 /* How far a control that would land on top of another is shifted -- a paste and
  * a palette press both do it, and the number is the same question both times:
  * far enough to see there are two. */
@@ -60,7 +58,7 @@ const MIN_SIZE = 12;
  * size -- which for the smallest of them is a row 30 tall. */
 const STANDIN_ICON = 16;
 
-const PREVIEW_ROWS = 3;
+export const PREVIEW_ROWS = 3;
 const PREVIEW_MAX  = 20;
 
 /* A control the IDE cannot build: a component of the project, whose class lives
@@ -69,7 +67,7 @@ const STANDIN_BG    = "#d0cfcc";
 
 /* All a stand-in has: the designer places it and names it, and the component
  * itself owns everything else. */
-const STANDIN_PROPS = ["Name", "X", "Y", "Width", "Height"];
+export const STANDIN_PROPS = ["Name", "X", "Y", "Width", "Height"];
 /*
  * What surrounds the board.  A `Background` and not a class, which is the
  * exception this project reserves for what a stylesheet cannot say: there is no
@@ -145,7 +143,7 @@ function snap(v) {
     return Math.round(v / GRID) * GRID;
 }
 
-Ide.Designer = class Designer {
+export class Designer {
 
     /*
      * One designer per open form, each with the canvas of its own tab and the
@@ -158,7 +156,7 @@ Ide.Designer = class Designer {
     /**
      * @param {MainForm} ide
      * @param {object} canvas
-     * @param {Ide.Workspace} workspace
+     * @param {Workspace} workspace
      */
     constructor(ide, canvas, workspace) {
         this.ide      = ide;
@@ -217,20 +215,20 @@ Ide.Designer = class Designer {
 
         /* What is drawn over the form -- outline, handles, guides, border -- and
          * the panels it is drawn with.  One per designer, like the canvas. */
-        this.chrome = new Ide.Chrome(this);
+        this.chrome = new Chrome(this);
 
         /* What the form is made of, as a tree: one per designer, and its widget
          * is the tab's own -- see Workspace. */
-        this.tree = new Ide.ControlTree(this);
+        this.tree = new ControlTree(this);
 
         /* And what one property of it is worth: same bargain. */
-        this.grid = new Ide.PropertyGrid(this);
+        this.grid = new PropertyGrid(this);
 
         /* The palette and the events page, one per form now for the same
          * reason: the buttons are widgets of this tab's page, and which one is
          * marked is this designer's tool. */
-        this.palette = new Ide.Palette(this);
-        this.events  = new Ide.Events(this);
+        this.palette = new Palette(this);
+        this.events  = new Events(this);
 
         /* The glass layer takes focus when clicked, and that is where it gets
          * the keys: Delete, arrows, Escape. */
@@ -276,7 +274,7 @@ Ide.Designer = class Designer {
      *
      * The designer cannot ask an instance: a component's class belongs to the
      * project, and the designer runs in the IDE's own process without it.  What
-     * it *can* do is read the class -- `Ide.Classes` does that once per listing,
+     * it *can* do is read the class -- `Classes` does that once per listing,
      * off the same source it read to decide the class was a component at all --
      * and these three are the designer's share of the answer.
      */
@@ -2633,7 +2631,7 @@ Ide.Designer = class Designer {
 
         let n = 1;
         while (taken.includes(`${stem}${n}`) ||
-               Ide.FormFiles.handlersIn(source, `${stem}${n}`).length) n++;
+               FormFiles.handlersIn(source, `${stem}${n}`).length) n++;
         return `${stem}${n}`;
     }
 
@@ -2828,7 +2826,7 @@ Ide.Designer = class Designer {
         if (!name || claimed.includes(name)) return null;
         if (this.allControls().some((c) => c.Name === name)) return null;
         if (cutFrom !== this.path &&
-            Ide.FormFiles.handlersIn(this.ide.formFiles.siblingSource(), name).length)
+            FormFiles.handlersIn(this.ide.formFiles.siblingSource(), name).length)
             return null;
         return name;
     }
@@ -2868,7 +2866,7 @@ Ide.Designer = class Designer {
 
         const left = [];
         const walk = (control) => {
-            for (const event of Ide.FormFiles.handlersIn(source, control.Name,
+            for (const event of FormFiles.handlersIn(source, control.Name,
                                                          this.eventsOf(control)))
                 left.push(`${control.Name}_${event}`);
             if ("Children" in control) for (const kid of control.Children) walk(kid);
@@ -2988,7 +2986,7 @@ Ide.Designer = class Designer {
 
         const events = ["Execute"];
         for (const [, to] of renames) {
-            const answered = Ide.FormFiles.handlersIn(this.ide.formFiles.siblingSource(),
+            const answered = FormFiles.handlersIn(this.ide.formFiles.siblingSource(),
                                                       to, events);
             if (answered.length) {
                 Message.Error("The code already has handlers for {0}: {1}.\nRename or delete them first.",
@@ -3070,7 +3068,7 @@ Ide.Designer = class Designer {
          * handlers over methods already there, and two methods of one name in a
          * class is the silent kind: the later one wins. */
         const events   = this.eventsOf(control);
-        const answered = Ide.FormFiles.handlersIn(this.ide.formFiles.siblingSource(),
+        const answered = FormFiles.handlersIn(this.ide.formFiles.siblingSource(),
                                                   newName, events);
         if (answered.length) {
             Message.Error("The code already has handlers for {0}: {1}.\nRename or delete them first.",
@@ -3233,4 +3231,4 @@ Ide.Designer = class Designer {
         for (const k in this.root.design) any = k !== undefined;
         if (!any) delete this.root.design;
     }
-};
+}

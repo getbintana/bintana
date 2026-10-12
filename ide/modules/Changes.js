@@ -20,15 +20,13 @@
  * is the same shape. VB6 and Gambas have nothing like it, because neither has
  * git at all.
  *
- * **It runs no git of its own.** Every command is `Ide.Git`'s -- `stage`,
+ * **It runs no git of its own.** Every command is `Git`'s -- `stage`,
  * `unstage`, `discard`, `commit` -- which is also what the window's buttons
  * call, so *stage* has one set of guards and one spelling wherever it is
  * pressed. What this class owns is a table, a signature of what it last drew,
  * and which path each row is about.
  */
 "use strict";
-
-Namespace("Ide");
 
 /* Which entry of the side bar's chooser this is: after the two views of the
  * tree, because it is the third answer to *what is on the left*, and last
@@ -38,7 +36,7 @@ const CHANGES_VIEW = 2;
 /* The state column. Two characters and a space is all it ever holds. */
 const STATE_W = 34;
 
-Ide.Changes = class Changes {
+export class Changes {
 
     /* Which entry of the chooser it is, for the window that fills the chooser.
      * A number and not a name, for the reason `ProjectTree.views` gives: what is
@@ -236,7 +234,7 @@ Ide.Changes = class Changes {
      * Asked first, by name and by count, because it is the one command here
      * with no undo and it sits two rows under *Stage*. An untracked file is
      * **deleted** and not restored, which is a different sentence and is said
-     * as one; which files those are is `Ide.Git.untracked`, so the wording and
+     * as one; which files those are is `Git.untracked`, so the wording and
      * the work agree by construction.
      */
     discard() {
@@ -315,4 +313,4 @@ Ide.Changes = class Changes {
         this.drawn = null;
         this.ide.refreshGit();
     }
-};
+}

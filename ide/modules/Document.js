@@ -26,8 +26,6 @@
  */
 "use strict";
 
-Namespace("Ide");
-
 /* The measure of the text column. A document that fills a maximised window is a
  * line of ninety words; the editor beside it has the same problem and solves it
  * with a monospace and a shorter line. */
@@ -37,7 +35,7 @@ const COLUMN = 760;
  * tab strip. */
 const MARGINS = 28;
 
-Ide.Document = class Document {
+export class Document {
 
     /*
      * Builds the page: the bar, the rendered document, and the editor the tab
@@ -169,7 +167,7 @@ Ide.Document = class Document {
         const name = root && File.Within(target, root)
                         ? File.Relative(target, root) : "";
 
-        if (name && Ide.TabSet.opensInTab(name) && this.ide.opensAsText(name)) {
+        if (name && TabSet.opensInTab(name) && this.ide.opensAsText(name)) {
             this.ide.openInTab(name);
             return true;
         }
@@ -183,4 +181,4 @@ Ide.Document = class Document {
         }
         return true;
     }
-};
+}

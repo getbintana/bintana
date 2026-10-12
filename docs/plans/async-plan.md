@@ -230,7 +230,7 @@ Named because a deferral without triggers is a punt:
   already draws: a harness is allowed machinery that the front page is not.
 
   **And it has since fired in an application too, which the caveat does not
-  cover.** `Ide.Translations.update()` still chains `msgmerge` over N
+  cover.** `Translations.update()` still chains `msgmerge` over N
   catalogues through a `next(i + 1)` closure carrying its own index -- the very
   shape the opening of this document says waiting retired. It was not retired
   and **could not be**: that code runs with the IDE's window up, and `Exec.Wait`

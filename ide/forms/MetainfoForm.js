@@ -18,7 +18,7 @@
  */
 "use strict";
 
-class MetainfoForm extends Form {
+export class MetainfoForm extends Form {
 
     /*
      * The road the menu takes: the project's metainfo, made when there is none

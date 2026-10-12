@@ -12,7 +12,7 @@
  */
 "use strict";
 
-class BreakpointForm extends Form {
+export class BreakpointForm extends Form {
 
     /*
      * BreakpointForm.edit(where, condition, message, onAccept)

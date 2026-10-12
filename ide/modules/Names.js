@@ -2,18 +2,18 @@
  * The two checks that read a name against what the `.form` beside it says, with
  * no editor in sight.
  *
- * They were `Ide.Live`'s, and they still run from there on every pause -- but
+ * They were `Live`'s, and they still run from there on every pause -- but
  * the *file on screen* is one file, and three of the mistakes they catch are
- * just as wrong in a file nobody has open. `Ide.Check` walks the project with
+ * just as wrong in a file nobody has open. `Check` walks the project with
  * the same two, which is why they are here and not there: a second copy of
  * *does this control have this member* is a second answer to drift from the
- * first, and this project has said so about `Ide.Git`'s commands, about
+ * first, and this project has said so about `Git`'s commands, about
  * `SOURCE_LINK` and about `Navigator.symbols` already.
  *
  * What they need is a **table** -- `[{ name, type }, …]`, everything one form
  * names, flattened -- and the text of the class beside it. `tableOf` is that
- * walk and it is the only one: `Ide.Live` gets its table from `Completion`,
- * which keeps one per form for the completion popup, and `Ide.Check` builds one
+ * walk and it is the only one: `Live` gets its table from `Completion`,
+ * which keeps one per form for the completion popup, and `Check` builds one
  * per file as it walks, and both of them go through here.
  *
  * **The third check here asks about no `.form` at all**, and that is deliberate
@@ -21,7 +21,7 @@
  * this language has*, which is `Application.Replacements()` -- a table the
  * runtime builds from the very rows `close_hatches` deletes, so what was taken
  * and what to write instead cannot disagree. It is a method of its own and not
- * part of `check()` for the same reason the other two are not `Ide.Check`'s: it
+ * part of `check()` for the same reason the other two are not `Check`'s: it
  * needs the caret rule below, and a second copy of "is this under the cursor" is
  * a second answer to drift from the first. Both callers add it themselves, which
  * is what stops a form's class being told about it twice.
@@ -39,8 +39,6 @@
  * editor for this language would otherwise have to infer.
  */
 "use strict";
-
-Namespace("Ide");
 
 /* `this.Name.Member`, and a method that looks like a handler -- `Name_Event(` at
  * the start of a line, which is how every handler in every project of this
@@ -66,7 +64,7 @@ const NAMES_CALL = new Regex(
 const DECLARING  = /^(function|class|const|let|var)$/;
 const WORD_BEFORE = /[A-Za-z_$][\w$]*[ \t]*$/;
 
-Ide.Names = class Names {
+export class Names {
 
     /** @param {MainForm} ide */
     constructor(ide) {
@@ -87,7 +85,7 @@ Ide.Names = class Names {
         /*
          * The names this language took, read once: the runtime's own table, and
          * a set of its keys because the question is asked once per call-shaped
-         * token in a file. `Ide.Check` builds the same table over the whole
+         * token in a file. `Check` builds the same table over the whole
          * project, and the alternative -- a list of taken names written here --
          * would be a second answer that goes stale the moment the runtime takes
          * one more, which is the mistake this whole module is arranged against.
@@ -130,7 +128,7 @@ Ide.Names = class Names {
      *             instead: a project is allowed to define its own `setTimeout`,
      *             and the table knows nothing about that
      *
-     * **And the other half is that the scan is run over `Ide.Lex.blank`ed
+     * **And the other half is that the scan is run over `Lex.blank`ed
      * text.** The two guards above read the text, and text is where prose
      * lives: it reported `setTimeout(fn, 1)` out of a comment *and* out of a
      * string, out of the fixture written to prove it would not -- and the
@@ -147,8 +145,8 @@ Ide.Names = class Names {
          * a name both come from the same text, and a `function` in a comment
          * must not be the one that saves a declaration. Offsets are the
          * original's, so `caret`, `m.Index` and `Text.LineOf` need no
-         * translation -- that is the bargain `Ide.Lex.blank` makes. */
-        const code = Ide.Lex.blank(text);
+         * translation -- that is the bargain `Lex.blank` makes. */
+        const code = Lex.blank(text);
 
         for (const m of NAMES_CALL.Matches(code)) {
             if (underCaret(m, caret)) continue;
@@ -187,7 +185,7 @@ Ide.Names = class Names {
      * The runtime loads such a program and throws at the use -- *'Parser' is
      * exported by Csv.js and Ini.js: choose one with import* -- so this is the
      * same sentence said before the run, where the word is (modules-plan,
-     * stage 4). Who exports what is `Ide.Completion`'s per-file reading, kept
+     * stage 4). Who exports what is `Completion`'s per-file reading, kept
      * live over the open tabs; a file that imports the name, or declares one
      * of its own anywhere in it, is skipped whole rather than guessed at, and
      * a member (`x.Parser`) is not the shared name.
@@ -202,7 +200,7 @@ Ide.Names = class Names {
         const mine = new Set(syms.filter((s) => s.Kind === "Import" || s.Kind === "Class" ||
                                                 s.Kind === "Function" || s.Kind === "Variable")
                                  .map((s) => s.Name));
-        const code = Ide.Lex.blank(text);
+        const code = Lex.blank(text);
 
         for (const [name, files] of owners) {
             if (files.length < 2 || mine.has(name)) continue;
@@ -359,7 +357,7 @@ Ide.Names = class Names {
      *
      * A control is addressed by name whatever it is nested in, because a handler
      * is `Name_Event` on the form and names are unique across it -- and the same
-     * mistake two controls of one name is, `Ide.Check` reports from this list.
+     * mistake two controls of one name is, `Check` reports from this list.
      *
      * **`children` is not the whole of it, and for three flatteners it was.** A
      * `.form` has three blocks that name something and bind it on the form by
@@ -383,7 +381,7 @@ Ide.Names = class Names {
         walk(root && root.actions, ACTION_TYPE);
         return out;
     }
-};
+}
 
 /* What the two blocks a `.form` declares beside its controls are made of. Not a
  * `type` anybody writes: `menus` holds menu items and `actions` holds commands,

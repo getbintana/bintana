@@ -31,9 +31,7 @@
  */
 "use strict";
 
-Namespace("Ide");
-
-Ide.Outline = class Outline {
+export class Outline {
 
     /** @param {MainForm} ide */
     constructor(ide) {
@@ -93,7 +91,7 @@ Ide.Outline = class Outline {
     /*
      * The list, from the text on screen.
      *
-     * Called on the pause after typing -- `Ide.Live` owns that timer, because
+     * Called on the pause after typing -- `Live` owns that timer, because
      * one pause should mean one pass over the file however many readers it has
      * -- and on a tab switch, which is the other moment the answer changes.
      */
@@ -168,4 +166,4 @@ Ide.Outline = class Outline {
             this.syncing = false;
         }
     }
-};
+}

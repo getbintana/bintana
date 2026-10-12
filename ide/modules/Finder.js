@@ -17,9 +17,7 @@
  */
 "use strict";
 
-Namespace("Ide");
-
-Ide.Finder = class Finder {
+export class Finder {
 
     /** @param {MainForm} ide */
     constructor(ide) {
@@ -168,4 +166,4 @@ Ide.Finder = class Finder {
         this.close();
         return true;
     }
-};
+}

@@ -14,7 +14,7 @@
  * normalised, and the three ways a font size reaches a stylesheet wrong are
  * written in C and read from there. What this file adds is a name and two braces.
  *
- * And a class it cannot reproduce is not its to edit: `Ide.Sheet.owned` reads the
+ * And a class it cannot reproduce is not its to edit: `Sheet.owned` reads the
  * rule back and regenerates it, and anything that does not come out the same --
  * a gradient, a transition, a selector of somebody's own -- is left alone and
  * edited as the text it is.
@@ -33,7 +33,7 @@ const SHEET_HEADER =
     " * file by name: nothing in project.json points at it.\n" +
     " */\n";
 
-class ClassForm extends Form {
+export class ClassForm extends Form {
 
     /*
      * ClassForm.edit(project, "danger", (name) => ...)
@@ -48,7 +48,7 @@ class ClassForm extends Form {
     static edit(project, name, onSaved) {
         const path  = File.Join(project, SHEET);
         const text  = File.Exists(path) ? File.Load(path) : "";
-        const props = name ? Ide.Sheet.owned(text, name) : {};
+        const props = name ? Sheet.owned(text, name) : {};
 
         if (name && !props) {
             Message.Info(
@@ -189,7 +189,7 @@ class ClassForm extends Form {
     BtnSave_Click() {
         const name = this.TxtName.Text.trim();
 
-        if (!Ide.Sheet.isName(name)) {
+        if (!Sheet.isName(name)) {
             Message.Error("{0} is not a class name: a letter first, then letters, digits, dashes or underscores.", name || "''");
             return;
         }
@@ -197,7 +197,7 @@ class ClassForm extends Form {
         /* Asked of the runtime, not built here: see the header. */
         let body;
         try {
-            body = Ide.Sheet.rule(this.values());
+            body = Sheet.rule(this.values());
         } catch (e) {
             Message.Error("{0}", e.message);
             return;
@@ -208,7 +208,7 @@ class ClassForm extends Form {
         }
 
         const had  = File.Exists(this.path) ? File.Load(this.path) : SHEET_HEADER;
-        const text = Ide.Sheet.put(had, name, body);
+        const text = Sheet.put(had, name, body);
 
         try {
             File.Save(this.path, text);

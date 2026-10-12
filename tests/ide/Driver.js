@@ -1577,7 +1577,7 @@ function* p_designer(ide) {
        ClassForm.edit(TMP, "pill-ish", () => {}), null);
 
     check("while one it wrote itself reads back",
-          Ide.Sheet.owned(sheet, "made-here") !== null);
+          Sheet.owned(sheet, "made-here") !== null);
 
     styleDlg.BtnOk_Click();
     yield;
@@ -1993,7 +1993,7 @@ function* p_designer(ide) {
     /*
      * **The consequence, which is the bug this was reported as.** The page the
      * notebook is showing and the tab the names speak for are two answers, and
-     * `Ide.TabSet.switchTo` vetoes a page change the notebook made by itself --
+     * `TabSet.switchTo` vetoes a page change the notebook made by itself --
      * which is right, and which left the two disagreeing: the canvas on screen
      * with no designer behind it. Moving the mouse over it threw; once the
      * handler learned to ask, clicking a control selected nothing, and a loud bug
@@ -2017,7 +2017,7 @@ function* p_designer(ide) {
     /*
      * **And the same invariant across a reorder, which is the road a drag
      * takes.** The notebook moves the page on its own and says so with
-     * `Reordered`; `Ide.TabSet.reordered` rebuilds its list from the notebook,
+     * `Reordered`; `TabSet.reordered` rebuilds its list from the notebook,
      * so the list and the strip agree however the page got moved. Both halves
      * are asked because either alone is the drift: the current page against the
      * list, and the list against the pages.
@@ -2321,7 +2321,7 @@ function* p_palette(ide) {
      * allowed to hold -- so anything in it that the control has belongs in this
      * group, and the test is that list and not a list written here.
      */
-    const look = Ide.Sheet.props.filter((k) => ide.designer.grid.propKeys.includes(k));
+    const look = Sheet.props.filter((k) => ide.designer.grid.propKeys.includes(k));
     check("everything a class can say is in the appearance group",
           look.every((k) => groups[2].keys.includes(k)),
           JSON.stringify(look.filter((k) => !groups[2].keys.includes(k))));
@@ -3888,14 +3888,13 @@ function* p_completion(ide) {
 
     /* --- a namespace of this project ------------------------------------------
      *
-     * `Ide.` in the IDE's own sources, and whatever a project declares in
-     * anybody else's. It cannot be asked of the object the way `File.` is: the
+     * Whatever a project declares with `Namespace`. It cannot be asked of the object the way `File.` is: the
      * namespace belongs to the project, which runs in another process, so this
      * reads the same two halves the runtime will act on -- the declaration, and
      * an assignment that really puts a class there.
      *
      * A loose `.js` and not a form, because that is what a namespace is mostly
-     * made of: eighteen of the IDE's own classes have no `.form` at all.
+     * made of: most loose classes have no `.form` at all.
      */
     Directory.Make(File.Join(TMP, "modules"));
     File.Save(File.Join(TMP, "modules", "Util.js"),
@@ -3934,10 +3933,10 @@ function* p_completion(ide) {
 
     /* --- a menu item, which is a thing a form has --------------------------- *
      *
-     * It was not, for three flatteners at once: `Ide.Completion`, `Ide.Names`
-     * and `Ide.Check` each walked a `.form`'s `children` and a menu is not among
+     * It was not, for three flatteners at once: `Completion`, `Names`
+     * and `Check` each walked a `.form`'s `children` and a menu is not among
      * them, so `this.MnuSave.` proposed nothing and `MnuSave_Clik()` went
-     * unremarked. One walk now, in `Ide.Names`, over all three blocks that bind
+     * unremarked. One walk now, in `Names`, over all three blocks that bind
      * a name on the form.
      *
      * And what a `MenuItem` has is asked of a real one, not listed here: neither
@@ -4297,14 +4296,14 @@ function* p_handlers(ide) {
 
     check("a fresh control gets a fresh name", doomed.startsWith("Button"), doomed);
     check("with nothing written for it yet",
-          Ide.FormFiles.handlersIn(File.Load(jsPath), doomed).length === 0);
+          FormFiles.handlersIn(File.Load(jsPath), doomed).length === 0);
 
     /* Through the gesture, not by writing the file: double clicking a control is
      * what puts a handler in the .js. */
     check("writing its handler works", ide.formFiles.openHandler(doomed, "Click"));
     yield;
     eq("and the .js answers for it",
-       JSON.stringify(Ide.FormFiles.handlersIn(File.Load(jsPath), doomed)),
+       JSON.stringify(FormFiles.handlersIn(File.Load(jsPath), doomed)),
        '["Click"]');
 
     /* --- deleting it ------------------------------------------------------- */
@@ -4321,7 +4320,7 @@ function* p_handlers(ide) {
 
     check("the control is gone", !ide.Surface.Children.some((c) => c.Name === doomed));
     eq("and its code is not, which is the user's to keep",
-       JSON.stringify(Ide.FormFiles.handlersIn(File.Load(jsPath), doomed)),
+       JSON.stringify(FormFiles.handlersIn(File.Load(jsPath), doomed)),
        '["Click"]');
 
     /* Said out loud: dead code nobody knows about is how this went wrong. */
@@ -4342,7 +4341,7 @@ function* p_handlers(ide) {
 
     neq("the next control does not take the deleted one's name", fresh, doomed);
     check("so nothing it does was written for something else",
-          Ide.FormFiles.handlersIn(File.Load(jsPath), fresh).length === 0, fresh);
+          FormFiles.handlersIn(File.Load(jsPath), fresh).length === 0, fresh);
 
     /*
      * And the evidence is in the file rather than in a counter, which is what
@@ -4355,11 +4354,11 @@ function* p_handlers(ide) {
      * parser instead of a pattern anchored at four spaces. */
     const brace = wasJs.lastIndexOf("}");
     eq("a name whose handlers are still written is taken",
-       Ide.FormFiles.handlersIn(wasJs.slice(0, brace) +
+       FormFiles.handlersIn(wasJs.slice(0, brace) +
                                 `    ${doomed}_Click() {}\n` +
                                 wasJs.slice(brace), doomed).length, 1);
     eq("and a mere mention of it in a call is not a handler",
-       Ide.FormFiles.handlersIn(`        this.${doomed}_Click();\n`, doomed).length, 0);
+       FormFiles.handlersIn(`        this.${doomed}_Click();\n`, doomed).length, 0);
 
     /* --- back to what the phases after this one expect ---------------------- */
     ide.designer.select(byName(ide, fresh));
@@ -4506,7 +4505,7 @@ function* p_prefixes(ide) {
     check("and the handler comes back under it",
           js.includes("    Btn_Click()") && js.includes("Btn_Ok_Click()"), js);
     eq("Btn_Ok's handlers are not Btn's",
-       Ide.FormFiles.handlersIn(js, "Btn").join(), "Click");
+       FormFiles.handlersIn(js, "Btn").join(), "Click");
 
     for (const n of ["Pre.form", "Pre.js"]) {
         ide.closeTabByName(n, true);
@@ -4731,7 +4730,7 @@ function* p_events(ide) {
     yield;
 
     eq("activating a row writes that handler",
-       JSON.stringify(Ide.FormFiles.handlersIn(File.Load(jsPath), button.Name)),
+       JSON.stringify(FormFiles.handlersIn(File.Load(jsPath), button.Name)),
        '["Click"]');
 
     /* The page is behind the editor now -- writing a handler goes to it -- so
@@ -4753,7 +4752,7 @@ function* p_events(ide) {
     ide.events.activated(0);
     yield;
     eq("activating it again does not write it twice",
-       Ide.FormFiles.handlersIn(File.Load(jsPath), button.Name).length, 1);
+       FormFiles.handlersIn(File.Load(jsPath), button.Name).length, 1);
 
     /* --- the form's own events ---------------------------------------------- */
     ide.openInTab("Child.form");
@@ -4846,7 +4845,7 @@ function* p_goto(ide) {
     eq("a class of the project is found", cls && cls.file, "Child.js");
     eq("at the line it is declared on", cls && cls.line, 1);
 
-    /* `Ide.Events` and `Events` are one class: the tail is its name. */
+    /* `Ns.Events` and `Events` are one class: the tail is its name. */
     const qualified = nav.find("Whatever.Child");
     eq("a qualified name resolves to the same class",
        qualified && qualified.file, "Child.js");
@@ -5086,7 +5085,7 @@ function* p_goto(ide) {
 /*
  * The rows as they are drawn, which is what a reader of the panel sees: the
  * mark, the event and the method.  Read off the labels rather than asked of
- * `Ide.Events`, because a page that agrees with itself proves nothing.
+ * `Events`, because a page that agrees with itself proves nothing.
  */
 function eventRows(ide) {
     return ide.EventList.Children.map((row) => {
@@ -5419,18 +5418,19 @@ function* p_namespaces(ide) {
 /*
  * The IDE's own project, drawn by the IDE.
  *
- * It is the largest Bintana project there is and the one that uses every rule
- * here at once: eighteen classes in `Ide`, a `forms/` and a `modules/` the tool
- * named, forms in no namespace at all. Opening it read-only is the cheapest
- * check that the three fit together in something real rather than in fixtures.
+ * It is the largest Bintana project there is: forty-five loose classes, each a
+ * module that exports it, twenty-six forms, and a `forms/` and a `modules/` the
+ * tool named. No file declares a namespace, so nothing is drawn under one.
+ * Opening it read-only is the cheapest check that this fits together in
+ * something real rather than in fixtures.
  */
 function* p_selfns(ide) {
     openFresh(ide, File.Join(Application.Directory, "..", "..", "ide"));
     yield;
 
-    check("its own modules are a namespace", ide.FileTree.Exists("ns:Ide"));
-    check("under a category, being loose classes",
-          ide.FileTree.Exists("cat:mods:ns:Ide"));
+    check("its own modules are in no namespace", !ide.FileTree.Exists("ns:Ide"));
+    check("but under a category of the top level, being loose classes",
+          ide.FileTree.Exists("cat:mods"));
     check("with the files themselves in it",
           ide.FileTree.Exists("modules/Designer.js") &&
           ide.FileTree.Exists("modules/ProjectTree.js"));
@@ -7738,8 +7738,8 @@ function* p_projects(ide) {
     eq("the IDE switched to it", ide.project, CONSOLE);
     eq("and opened the one file there is", ide.activeFile, "Main.js");
     check("the manifest has nothing to report",
-          Ide.ProjectFile.Load(consoleCfg).Problems.length === 0,
-          JSON.stringify(Ide.ProjectFile.Load(consoleCfg).Problems));
+          ProjectFile.Load(consoleCfg).Problems.length === 0,
+          JSON.stringify(ProjectFile.Load(consoleCfg).Problems));
 
     /* And it runs: what the IDE wrote is a project this runtime opens, prints
      * from and quits. Run as a child, because a console project of our own is
@@ -7778,14 +7778,14 @@ function* p_projects(ide) {
      * with a bad id as a child, which is where the runtime's half is asserted.
      */
     check("the application id rule takes a reverse-DNS name",
-          Ide.ProjectFile.idValid("io.github.getbintana.App"));
-    check("...refuses one with no dot at all", !Ide.ProjectFile.idValid("App"));
+          ProjectFile.idValid("io.github.getbintana.App"));
+    check("...refuses one with no dot at all", !ProjectFile.idValid("App"));
     check("...and one whose element starts with a digit",
-          !Ide.ProjectFile.idValid("io.github.2App"));
+          !ProjectFile.idValid("io.github.2App"));
     check("...and one with a character the platform refuses",
-          !Ide.ProjectFile.idValid("io.github.my app"));
+          !ProjectFile.idValid("io.github.my app"));
     check("the manifest lint reports a bad id",
-          new Ide.ProjectFile({ Name: "x", Startup: "F", Id: "nope" })
+          new ProjectFile({ Name: "x", Startup: "F", Id: "nope" })
               .Validate().some((p) => p.includes("not an application id")));
 
     /* --- the new-project dialog ------------------------------------------- */
@@ -8953,12 +8953,12 @@ function* p_menus(ide) {
      * the preview bar with it -- the page holds a split now, so the room the
      * board gets is one pass further down. */
     yield* settled(ide);
-    check("its height was measured, not assumed", Ide.MenuBar.measured > 0,
-          `${Ide.MenuBar.measured}`);
+    check("its height was measured, not assumed", MenuBar.measured > 0,
+          `${MenuBar.measured}`);
     eq("and the preview comes out at a real bar's height",
-       bar.Drawn, Ide.MenuBar.measured);
+       bar.Drawn, MenuBar.measured);
     eq("which is what the canvas gives up", ide.designer.menuBarHeight(),
-       Ide.MenuBar.measured);
+       MenuBar.measured);
 
     /* And it is where the runtime puts one: spanning the window, directly above
      * the surface -- a menu bar is a sibling of the surface, not something in
@@ -10164,7 +10164,7 @@ function* p_strings(ide) {
      * no translation can ever match.  Asked of the real `ide/`, file by file.
      */
     const ideDir = File.Join(Application.Directory, "..", "..", "ide");
-    const own    = new Ide.Strings({ project: ideDir });
+    const own    = new Strings({ project: ideDir });
     for (const path of own.projectFiles(".js", ideDir)) own.fromSource(path);
     const joined = own.warnings.filter((w) => w.includes("two literals joined"));
     check("no message in the IDE is two literals joined", joined.length === 0,
@@ -10401,8 +10401,8 @@ function* p_strings(ide) {
     const potFile = ide.catalogues.templateFile();
     check("the project has a template to start from", !!potFile, potFile);
     check("and the IDE knows it is not a translation",
-          Ide.Translations.isTemplate(potFile) &&
-          !Ide.Translations.isTemplate("po/es.po"));
+          Translations.isTemplate(potFile) &&
+          !Translations.isTemplate("po/es.po"));
 
     /* The header a new catalogue gets: its own language, and its own plural
      * rule -- which is a property of the language and cannot be worked out. */
@@ -11434,16 +11434,16 @@ function* p_installer(ide) {
  * the entry claims that id as `StartupWMClass` -- the window really is classed
  * by it.  A project that declares none installs under a slug of the name and
  * claims no class, because its window is `bintana`'s.  The dialog road below is
- * the first; the second is driven straight through `Ide.Apps`, since what
+ * the first; the second is driven straight through `Apps`, since what
  * changes between them is only which string names the file.
  */
 function* p_apps(ide) {
-    const at = () => Ide.Apps.installed(ide.project);
+    const at = () => Apps.installed(ide.project);
 
     /* Not a state this phase may inherit: a previous run stopped between the
      * install and the uninstall, or a hand-run with no runner to isolate it. */
     const old = at();
-    if (old) Ide.Apps.uninstall(old.Id);
+    if (old) Apps.uninstall(old.Id);
     check("this project is not installed yet", at() === null);
 
     /*
@@ -11451,9 +11451,9 @@ function* p_apps(ide) {
      * specification allows letters, digits, dashes, underscores and periods,
      * and the runtime refuses anything else by name.
      */
-    eq("the id is a slug of the name", Ide.Apps.idFor("My App 2"), "my-app-2");
+    eq("the id is a slug of the name", Apps.idFor("My App 2"), "my-app-2");
     eq("a name of punctuation still gets one",
-       Ide.Apps.idFor("!!!"), "bintana-app");
+       Apps.idFor("!!!"), "bintana-app");
 
     /*
      * A project with no application id takes that slug as the entry's name and
@@ -11461,15 +11461,15 @@ function* p_apps(ide) {
      * claiming otherwise is one the dock can never match.
      */
     const slugproj = "/tmp/bta-test-ide-slugproj";
-    Ide.Apps.install(slugproj, { Name: "My App 2", AppId: "" });
-    const slugged = Ide.Apps.installed(slugproj);
+    Apps.install(slugproj, { Name: "My App 2", AppId: "" });
+    const slugged = Apps.installed(slugproj);
     check("a project with no id installs under the slug", !!slugged);
     if (slugged) {
         eq("...with the slug as the file's name", slugged.Id, "my-app-2");
         check("...and no window class claimed",
               !("StartupWMClass" in slugged.Entry), slugged.Entry.StartupWMClass);
     }
-    Ide.Apps.uninstall("my-app-2");
+    Apps.uninstall("my-app-2");
 
     /* --- the dialog, through the menu item --------------------------------- */
     check("with a project open, installing is on offer", ide.MnuAppInstall.Enabled);
@@ -11580,7 +11580,7 @@ function* p_apps(ide) {
      * and not its name, which is why Update moves it and Uninstall takes it.
      */
     const bare = "io.github.getbintana.IdeChild";
-    Desktop.Entries.Install(bare, Ide.Apps.entry(ide.project,
+    Desktop.Entries.Install(bare, Apps.entry(ide.project,
         { Name: "Old Entry", AppId: bare }));
     eq("an entry under the bare id is found as this project's", at() && at().Id, bare);
 
@@ -11887,8 +11887,8 @@ function* p_problems(ide) {
 
     /*
      * **The duplication this is about, taken straight from how it happens.**
-     * `Ide.Live` runs the name checks over the file on screen and reports under
-     * `names:<file>`; `Ide.Check` runs the same ones over every file and reports
+     * `Live` runs the name checks over the file on screen and reports under
+     * `names:<file>`; `Check` runs the same ones over every file and reports
      * under `project`. Two sources, one check, one text -- and the panel drew
      * both, so a member with no such member appeared twice and so did the count
      * on the tab.
@@ -11975,8 +11975,8 @@ function* p_problems(ide) {
     /* --- the menu item that only brings the page up -------------------------- */
 
     /*
-     * `MnuProblems` is the way back to a panel nothing takes you to: `Ide.Live`
-     * and `Ide.Check` fill it without stealing the view from somebody reading
+     * `MnuProblems` is the way back to a panel nothing takes you to: `Live`
+     * and `Check` fill it without stealing the view from somebody reading
      * the output, which is right, so the count on the tab was the only sign
      * there was anything to read. What the item promises is the page and not
      * another pass -- the pass is `MnuCheck`'s.
@@ -12015,7 +12015,7 @@ function* p_lex(ide) {
         "    }",
         "}",
     ].join("\n");
-    const out = Ide.Lex.blank(src);
+    const out = Lex.blank(src);
 
     eq("the answer has the same length", out.length, src.length);
     eq("...and the same number of lines", out.split("\n").length, src.split("\n").length);
@@ -12055,7 +12055,7 @@ function* p_lex(ide) {
          (o) => has(o, "const c = 1;") && !has(o, "two")],
     ];
     for (const [what, code, holds] of cases) {
-        const got = Ide.Lex.blank(code);
+        const got = Lex.blank(code);
         check(what, holds(got), JSON.stringify(got));
     }
 
@@ -12066,7 +12066,7 @@ function* p_lex(ide) {
      * than no jump, and it is why the division case above has to be asked for
      * by the text before the sign. */
     eq("a lone slash keeps the line readable",
-       Ide.Lex.blank("const q = a / b;"), "const q = a / b;");
+       Lex.blank("const q = a / b;"), "const q = a / b;");
 }
 
 /*
@@ -12183,7 +12183,7 @@ function* p_names(ide) {
 /*
  * Where a name is used, and the rename that moves it.
  *
- * `Ide.Refactor` reads the project's `.js` with `Ide.Lex` -- a comment and a
+ * `Refactor` reads the project's `.js` with `Lex` -- a comment and a
  * string are not references -- and answers declarations first. The rename
  * writes through `TabSet.rewriteSource`, so the disk and the open tab move
  * together, and it refuses every shape it cannot attribute. What is asserted
@@ -12828,7 +12828,7 @@ function* p_check(ide) {
      * member out, `DECLARING` keeps a project's own declaration out -- **and it
      * did not**, because the space between `function` and the name made the
      * answer `"function "`, so the trim in `wordBefore` is that half of this --
-     * and `Ide.Lex.blank` is what keeps prose out, which it also did not.
+     * and `Lex.blank` is what keeps prose out, which it also did not.
      *
      * **And this file was not in the list the pass reads** until this phase was
      * made to call `listFiles()` again: the single assertion below was passing
@@ -13776,7 +13776,7 @@ function* p_git(ide) {
     File.Save(File.Join(repo, "Uno.js"), "class Uno extends Form {\n    // tres\n}\n");
     File.Save(File.Join(repo, "cuatro.txt"), "nuevo\n");
 
-    ide.CmbView.Index = Ide.Changes.view;
+    ide.CmbView.Index = Changes.view;
     ide.CmbView_Select();
     yield* settled(ide);
 
@@ -14172,7 +14172,7 @@ function* p_git(ide) {
     File.Save(File.Join(repo, "muchas.txt"), `${changed.join("\n")}\n`);
     ide.refreshGit();
 
-    const pair = Ide.Diff.sideBySide(git.show("", "muchas.txt"),
+    const pair = Diff.sideBySide(git.show("", "muchas.txt"),
                                      File.Load(File.Join(repo, "muchas.txt")),
                                      git.diff("muchas.txt", false));
 
@@ -14308,7 +14308,7 @@ function* p_git(ide) {
 
     /* And the other kind of empty, which is this project: the panel over
      * something that is not a repository says that rather than nothing. */
-    ide.CmbView.Index = Ide.Changes.view;
+    ide.CmbView.Index = Changes.view;
     ide.CmbView_Select();
     yield* settled(ide);
 
@@ -14639,12 +14639,12 @@ function* p_launch(ide) {
     /* --- the dialog, driven ---------------------------------------------------
      *
      * **Which is the half that was missing, and it is where the bug was.** This
-     * phase tested `Ide.Launch` and not `LaunchForm`, so eight assignments to a
+     * phase tested `Launch` and not `LaunchForm`, so eight assignments to a
      * `CheckButton.Value` -- a property a `CheckButton` does not have; it is
      * `Active` -- went in green and blew up the first time a person opened the
      * window. Two other things would have caught it and neither was pointed at
      * this file: `bintana --strict`, which is what finally did and named the
-     * property, and `Ide.Check`, which reads exactly this shape. A model without
+     * property, and `Check`, which reads exactly this shape. A model without
      * its window is half a test.
      */
     launch.save([]);

@@ -34,8 +34,6 @@
  */
 "use strict";
 
-Namespace("Ide");
-
 /* The mark on an event the `.js` already answers.  The same bullet the Form
  * menu uses, because it is the same fact being reported. */
 const WRITTEN = "\u2022";   /* • the .js answers this one */
@@ -51,9 +49,9 @@ const NAME_W = 104;
  */
 const EVENTS_PAGE = 1;
 
-Ide.Events = class Events {
+export class Events {
 
-    /** @param {Ide.Designer} designer */
+    /** @param {Designer} designer */
     constructor(designer) {
         this.designer = designer;
         /* What the rows currently say, so an unchanged refresh does nothing. */
@@ -115,7 +113,7 @@ Ide.Events = class Events {
         const events  = this.list();
         /* One read of the `.js`, and every event answered from it -- rather
          * than `hasHandler` per event, which reads it once each. */
-        const written = Ide.FormFiles.handlersIn(
+        const written = FormFiles.handlersIn(
             this.designer.ide.formFiles.siblingSource(), name);
 
         const signature = `${name}|${events.join(",")}|${written.join(",")}`;
@@ -210,4 +208,4 @@ Ide.Events = class Events {
 
         this.designer.ide.openHandler(this.targetName(), event);
     }
-};
+}

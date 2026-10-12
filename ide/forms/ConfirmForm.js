@@ -7,7 +7,7 @@
  */
 "use strict";
 
-class ConfirmForm extends Form {
+export class ConfirmForm extends Form {
 
     /*
      * ConfirmForm.ask("Delete", "Delete X?", "Delete", () => ...)

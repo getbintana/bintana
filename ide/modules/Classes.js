@@ -21,8 +21,6 @@
  */
 "use strict";
 
-Namespace("Ide");
-
 /* A form's name is the name of a JS class. */
 /*
  * Where a new class goes when nothing says otherwise -- named after the
@@ -30,9 +28,9 @@ Namespace("Ide");
  * view one reads it in. Shared with `NewProjectForm`, which starts a project
  * with the same shape rather than leaving it to be tidied later.
  */
-const FORM_DIR      = "forms";
-const COMPONENT_DIR = "components";
-const MODULE_DIR    = "modules";
+export const FORM_DIR      = "forms";
+export const COMPONENT_DIR = "components";
+export const MODULE_DIR    = "modules";
 
 /*
  * The folders a *tool* names, and what belongs in each.
@@ -57,18 +55,18 @@ const MODULE_DIR    = "modules";
  * a `src/forms/` somebody nested is theirs, and so is a `.png` left in
  * `modules/`.
  */
-const TOOL_DIRS = {
+export const TOOL_DIRS = {
     [FORM_DIR]:      (f) => ["form", "js"].includes(File.Extension(f).toLowerCase()),
     [COMPONENT_DIR]: (f) => ["form", "js"].includes(File.Extension(f).toLowerCase()),
     [MODULE_DIR]:    (f) => File.IsExtension(f, "js"),
-    po:              (f) => Ide.Translations.isCatalogue(f),
+    po:              (f) => Translations.isCatalogue(f),
 };
 
-const CLASS_NAME = new Regex("^[A-Za-z_$][A-Za-z0-9_$]*$");
+export const CLASS_NAME = new Regex("^[A-Za-z_$][A-Za-z0-9_$]*$");
 
 /* What may name a folder inside the project: no dots, so no "..", and nothing
  * that would turn a relative path into an absolute one. */
-const FOLDER_NAME = new Regex("^[A-Za-z0-9_-]+$");
+export const FOLDER_NAME = new Regex("^[A-Za-z0-9_-]+$");
 
 /* What a file says about the namespace it belongs to.  The declaration is what
  * the runtime acts on, so it is what the IDE reads -- deducing it from the
@@ -225,23 +223,23 @@ function ownThenInherited(own, inherited) {
  * so that joining is plain concatenation and two paths for the same file cannot
  * both exist: everything here is compared by string.
  */
-function folderOf(file) {
+export function folderOf(file) {
     const dir = File.Directory(file);
     return (dir === "." || dir === "/" || dir === file) ? "" : dir;
 }
 
-function inFolder(folder, name) {
+export function inFolder(folder, name) {
     return folder ? `${folder}/${name}` : name;
 }
 
 /* The file next to this one with another extension: a form's code, a class's
  * design.  Both live in the same folder, always -- that is what makes them a
  * pair rather than two files that happen to share a name. */
-function sibling(file, ext) {
+export function sibling(file, ext) {
     return inFolder(folderOf(file), `${File.BaseName(file)}.${ext}`);
 }
 
-Ide.Classes = class Classes {
+export class Classes {
 
     /** @param {MainForm} ide */
     constructor(ide) {
@@ -451,7 +449,7 @@ Ide.Classes = class Classes {
 
     /*
      * The `.js` that declares a class, by the name a `.form` or a `new` would
-     * use for it -- `Ide.Runner` answers `modules/Runner.js`, `MainForm`
+     * use for it -- `Runner` answers `modules/Runner.js`, `MainForm`
      * answers `forms/MainForm.js`.
      *
      * The companion of `formOfClass`, and the half it cannot do: most of a
@@ -520,8 +518,8 @@ Ide.Classes = class Classes {
     }
 
     /*
-     * What a namespace holds, by what the code says -- `Ide` answers `Chrome`,
-     * `Classes`, `Completion` and the rest.
+     * What a namespace holds, by what the code says -- a file that declares
+     * `Namespace("Parts")` and assigns `Parts.Gear` puts `Gear` in `Parts`.
      *
      * The IDE cannot ask the namespace object: it belongs to the project, which
      * runs in another process, and the whole point of `Namespace` is that it is
@@ -906,4 +904,4 @@ Ide.Classes = class Classes {
         const form = sibling(file, "form");
         return this.files.includes(form) ? form : null;
     }
-};
+}

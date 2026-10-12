@@ -2,18 +2,18 @@
  * The install dialog: one entry in the user's menu for the open project.
  *
  * Three fields and a state line, and the three fields are the three keys an
- * entry needs a person to decide -- the rest is `Ide.Apps` and the runtime.
+ * entry needs a person to decide -- the rest is `Apps` and the runtime.
  * It opens on what is already installed when there is something, so the second
  * visit is an Update and not a second installation under a name nobody typed.
  *
- * **The dialog does not write the file.**  It hands the fields to `Ide.Apps`,
+ * **The dialog does not write the file.**  It hands the fields to `Apps`,
  * which is the one place that knows what an entry is, and reports whatever the
  * runtime refused -- the same bargain `ProjectForm` makes with the record: the
  * layer that owns the rules is the layer that checks them.
  */
 "use strict";
 
-class AppForm extends Form {
+export class AppForm extends Form {
 
     /*
      * AppForm.edit(project, config, onChanged)
@@ -25,7 +25,7 @@ class AppForm extends Form {
      */
     static edit(project, config, onChanged) {
         const dlg   = new AppForm();
-        const found = Ide.Apps.installed(project);
+        const found = Apps.installed(project);
 
         dlg.project   = project;
         dlg.appId     = config.Id || "";
@@ -41,7 +41,7 @@ class AppForm extends Form {
         dlg.TxtAppComment.Text = entry ? (entry.Comment || "")
                                        : (config.Description || "");
         dlg.TxtAppIcon.Text    = entry ? (entry.Icon || "")
-                                       : Ide.Apps.defaultIcon(project, config.Id);
+                                       : Apps.defaultIcon(project, config.Id);
 
         dlg.showState();
         dlg.Show();
@@ -58,7 +58,7 @@ class AppForm extends Form {
      * so here is cheaper than a complaint after the click.
      */
     showState() {
-        const id = Ide.Apps.entryId(this.appId, this.TxtAppName.Text);
+        const id = Apps.entryId(this.appId, this.TxtAppName.Text);
 
         this.LblAppWhere.Text = this.installed
             ? Locale.Text("Installed for this user as {0}.desktop, in {1}",
@@ -85,7 +85,7 @@ class AppForm extends Form {
      * The chooser starts in the project's `icons/`, when it has one: that is
      * where a project's own drawings live, and what it draws is what a menu
      * should show.  The path comes back absolute, which is what the entry needs
-     * -- see `Ide.Apps.defaultIcon`.
+     * -- see `Apps.defaultIcon`.
      */
     BtnAppIcon_Click() {
         const icons = File.Join(this.project, "icons");
@@ -104,7 +104,7 @@ class AppForm extends Form {
         }
 
         try {
-            Ide.Apps.install(this.project, this.fields());
+            Apps.install(this.project, this.fields());
         } catch (e) {
             Message.Error("{0}", e.message);
             return;
@@ -116,7 +116,7 @@ class AppForm extends Form {
         if (!this.installed) return;
 
         try {
-            Ide.Apps.uninstall(this.installed);
+            Apps.uninstall(this.installed);
         } catch (e) {
             Message.Error("{0}", e.message);
             return;

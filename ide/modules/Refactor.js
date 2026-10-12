@@ -3,12 +3,12 @@
  *
  * F12 answers *where is this declared*; this answers the other half of the
  * same question -- **where else is it** -- which is the one a rename needs and
- * the one a person asks before touching a name at all. `Ide.Navigator`'s
+ * the one a person asks before touching a name at all. `Navigator`'s
  * doctrine holds here word for word: table lookups and the parser's answers,
  * never inference, and a refusal said out loud where an answer would be a
  * guess.
  *
- * **A reference is a word in code, and `Ide.Lex` is what says which words are
+ * **A reference is a word in code, and `Lex` is what says which words are
  * code.** A mention in a comment or in a string is not a reference, and a
  * rename that moved one would be renaming prose -- which is why the scanner
  * exists and why this module is small.
@@ -28,8 +28,6 @@
  * refusing to write.
  */
 "use strict";
-
-Namespace("Ide");
 
 /* What a name can be: the parser's own rule for an identifier, and nothing
  * else. Both sides of a rename go through it, because `to` becomes the text of
@@ -55,7 +53,7 @@ const REFACTOR_STATICS = ["Static", "StaticGetter", "StaticSetter"];
  * two declarations. */
 const REFACTOR_MEMBERS = ["Method", "Getter", "Setter"];
 
-Ide.Refactor = class Refactor {
+export class Refactor {
 
     /** @param {MainForm} ide */
     constructor(ide) {
@@ -115,7 +113,7 @@ Ide.Refactor = class Refactor {
      * Every occurrence of the word in one file's *code*, each with the line and
      * the text of the line it is on.
      *
-     * `Ide.Lex.blank` is what makes a comment and a string a space: the answer
+     * `Lex.blank` is what makes a comment and a string a space: the answer
      * has the file's own length and line breaks, so the offset found in it is
      * the offset in the original and nothing has to be translated.
      */
@@ -123,7 +121,7 @@ Ide.Refactor = class Refactor {
         const source = this.sourceOf(name);
         if (source === null) return [];
 
-        const code = Ide.Lex.blank(source);
+        const code = Lex.blank(source);
         const out  = [];
 
         for (const m of this.wordPattern(word).Matches(code)) {
@@ -161,7 +159,7 @@ Ide.Refactor = class Refactor {
      * declaration of a control -- and a node's `type`, which is a class placed
      * as a control and therefore a use of that class.
      *
-     * `Ide.Names.tableOf` is the one walk over the three blocks a form names
+     * `Names.tableOf` is the one walk over the three blocks a form names
      * things in, so a menu item and a command are here too.
      */
     formDeclarations(word) {
@@ -229,7 +227,7 @@ Ide.Refactor = class Refactor {
      * scanner left are not the file's.
      */
     replaceIn(source, word, to) {
-        const code = Ide.Lex.blank(source);
+        const code = Lex.blank(source);
         let out = "", at = 0, moved = 0;
 
         for (const m of this.wordPattern(word).Matches(code)) {
@@ -515,4 +513,4 @@ Ide.Refactor = class Refactor {
 
         return "bare";
     }
-};
+}

@@ -37,7 +37,7 @@ function alignments() {
     return Widget.PropertyOptions("Label", "Alignment") || ["Left", "Center", "Right"];
 }
 
-class ColumnForm extends Form {
+export class ColumnForm extends Form {
 
     /*
      * ColumnForm.edit(columns, onAccept)

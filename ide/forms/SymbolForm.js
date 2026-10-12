@@ -21,7 +21,7 @@
  */
 "use strict";
 
-class SymbolForm extends Form {
+export class SymbolForm extends Form {
 
     /*
      * SymbolForm.go(symbols, lines, (line) => ...)

@@ -25,8 +25,6 @@
  */
 "use strict";
 
-Namespace("Ide");
-
 /*
  * The control tree's context menu.
  *
@@ -71,7 +69,7 @@ const CENTER_W   = 520;
 const OUTLINE_W  = 260;     /* the editor's outline: the editor takes the rest */
 const PALETTE_H  = 200;     /* the palette (two rows) and its title */
 
-Ide.Workspace = class Workspace {
+export class Workspace {
 
     /**
      * @param {MainForm} ide
@@ -420,4 +418,4 @@ Ide.Workspace = class Workspace {
         this.treeOptions.Menu   = TREE_OPTIONS;
         for (const [button, action] of this.barButtons) button.Action = action;
     }
-};
+}

@@ -15,7 +15,7 @@
  * (`formProbe`) answers what the list, the defaults and the drop-downs are.
  *
  * One per designer, like the control tree and the palette: `PropGrid` is the
- * tab's own widget now (`Ide.Workspace`), and what it shows is this form's
+ * tab's own widget now (`Workspace`), and what it shows is this form's
  * selection.  Each editor **carries its own handler** (`editor.On("Change",
  * ...)`), so a rebuilt grid drops the previous set with the controls they
  * belonged to; nothing of the grid's is left on the IDE's form to be taken
@@ -28,8 +28,6 @@
  * whoever is typing.
  */
 "use strict";
-
-Namespace("Ide");
 
 /*
  * Properties one *picks* rather than types, and the button that opens the
@@ -308,7 +306,7 @@ const NUMBER_MAX = 9999;
  *
  * So the question goes to a throwaway wearing the selection's own properties,
  * straight off `Serialize()`: hand it a number with six decimals and count how
- * many came back. It is the round trip `Ide.Sheet.owned` makes with a CSS rule
+ * many came back. It is the round trip `Sheet.owned` makes with a CSS rule
  * and the one `bta_icon_available` makes with an icon -- ask the thing, rather
  * than keep an opinion about it.
  *
@@ -388,9 +386,9 @@ function sameJsonValue(a, b) {
     return false;
 }
 
-Ide.PropertyGrid = class PropertyGrid {
+export class PropertyGrid {
 
-    /** @param {Ide.Designer} designer */
+    /** @param {Designer} designer */
     constructor(designer) {
         this.designer = designer;
 
@@ -1299,7 +1297,7 @@ Ide.PropertyGrid = class PropertyGrid {
 
         /*
          * The project's first: they are the answer more often. The theme's come
-         * from `Ide.Styles`, which is generated from the theme itself
+         * from `Styles`, which is generated from the theme itself
          * (`tests/styles.sh --json`) -- there used to be a list of twenty-three
          * names written out here, and a hand-written list is the thing this
          * codebase has been bitten by twice.
@@ -1308,7 +1306,7 @@ Ide.PropertyGrid = class PropertyGrid {
          * from a class is deleting it, and an empty entry in a chooser of
          * checkboxes would be a box that means nothing.
          */
-        const theme = Ide.Styles.all.map((c) => c.name);
+        const theme = Styles.all.map((c) => c.name);
 
         return [...own.sort(), ...theme.filter((name) => !own.includes(name))];
     }
@@ -1935,4 +1933,4 @@ Ide.PropertyGrid = class PropertyGrid {
         this.designer.chrome.position();
         this.designer.touch();
     }
-};
+}

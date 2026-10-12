@@ -7,7 +7,7 @@
  */
 "use strict";
 
-class AskForm extends Form {
+export class AskForm extends Form {
 
     /*
      * AskForm.prompt("New form", "Name:", "Form2", (name) => ...)

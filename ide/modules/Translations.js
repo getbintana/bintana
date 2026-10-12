@@ -86,7 +86,7 @@ const LOCALE_NAME = /^[a-z]{2,3}(_[A-Za-z]{2,4})?$/;
  * in the manifest would commit one person's setup to everybody's checkout. */
 const PO_EDITOR_KEY = "translationEditor";
 
-Ide.Translations = class Translations {
+export class Translations {
 
     /** @param {MainForm} ide */
     constructor(ide) {
@@ -454,4 +454,4 @@ Ide.Translations = class Translations {
 
         Locale.Write(path, entries);
     }
-};
+}

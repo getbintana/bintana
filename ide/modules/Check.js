@@ -1,7 +1,7 @@
 /*
  * What is wrong with the project, asked of the whole of it.
  *
- * `Ide.Live` reads the file on screen, which is one file. Most of what this
+ * `Live` reads the file on screen, which is one file. Most of what this
  * language accepts in silence is not about the file on screen at all: a `.form`
  * loses a control because another one has its name, a manifest lists a source
  * that is not there, a `.js` sits on disk that nothing loads. Those are just as
@@ -27,18 +27,18 @@
  *                                   in another file entirely
  *     a key nothing reads           ignored; `"format"` was in one of this
  *                                   repository's own examples
- *     a member or a handler         `Ide.Names`, over every pair, not just the
+ *     a member or a handler         `Names`, over every pair, not just the
  *                                   one on screen
  *     a call to a name taken away   `setTimeout(fn, 100)` runs into a
  *                                   ReferenceError at the next run, and the
  *                                   replacement was nowhere in the project.
- *                                   `Ide.Names` asks the runtime's own table
+ *                                   `Names` asks the runtime's own table
  *     a name two modules export     loaded, and the use throws naming both
- *                                   at run time; `Ide.Names.ambiguous` says
+ *                                   at run time; `Names.ambiguous` says
  *                                   it where the word is, unless the file
  *                                   imports it
  *
- * The last two are why `Ide.Names` exists apart from `Ide.Live`: *does this
+ * The last two are why `Names` exists apart from `Live`: *does this
  * control have this member* has to have one answer, and a second copy of it
  * would be a second answer to drift from the first — and the third of them asks
  * about no `.form` at all, so it runs over a module too.
@@ -56,9 +56,7 @@
  */
 "use strict";
 
-Namespace("Ide");
-
-Ide.Check = class Check {
+export class Check {
 
     /** @param {MainForm} ide */
     constructor(ide) {
@@ -120,7 +118,7 @@ Ide.Check = class Check {
      * manifest is a file that never loads, and what says so is a `ReferenceError`
      * in whichever other file called it.
      *
-     * The keys are `Ide.ProjectFile`'s own -- it is a `Record`, so what a
+     * The keys are `ProjectFile`'s own -- it is a `Record`, so what a
      * manifest may hold is a list this class does not have to keep.
      */
     manifest(found) {
@@ -135,7 +133,7 @@ Ide.Check = class Check {
             return;
         }
 
-        const known = new Ide.ProjectFile().PropertyNames().map((n) => n.toLowerCase());
+        const known = new ProjectFile().PropertyNames().map((n) => n.toLowerCase());
         for (const key in cfg) {
             if (known.includes(key.toLowerCase())) continue;
             found.push({
@@ -190,7 +188,7 @@ Ide.Check = class Check {
         }
 
         /*
-         * The names come from `Ide.Names`, which walks all three blocks a
+         * The names come from `Names`, which walks all three blocks a
          * `.form` binds by name -- `children`, `menus` and `actions`. This
          * class had a walk of its own that read `children` alone, so a menu
          * item called `Close` was a collision nothing looked for.
@@ -270,8 +268,8 @@ Ide.Check = class Check {
      * Two questions about a source file, and only one of them needs a `.form`.
      *
      * **The syntax check is the one that used to be missing, and it was missing
-     * for the reason the second one is skipped.** `Ide.Live` checks the file on
-     * screen and the save-time check in `Ide.TabSet` checks the tab in front of
+     * for the reason the second one is skipped.** `Live` checks the file on
+     * screen and the save-time check in `TabSet` checks the tab in front of
      * you, so a module -- a `.js` with no `.form` beside it, which is most of
      * them -- was read by nobody at any point. The answer came from the run
      * instead, as a `ReferenceError` in whichever *other* file called it, and
@@ -299,8 +297,8 @@ Ide.Check = class Check {
             found.push({ kind: "Error", file: rel, line: bad.Line, text: bad.Message });
 
         /* The names the language has taken, which asks no `.form` and so runs on
-         * a module as well as on a form's own class. `Ide.Names` owns it and
-         * `Ide.Live` runs the same one over the file on screen. */
+         * a module as well as on a form's own class. `Names` owns it and
+         * `Live` runs the same one over the file on screen. */
         for (const problem of this.ide.names.curated(text, rel, -1))
             found.push(problem);
         for (const problem of this.ide.names.ambiguous(text, rel, -1))
@@ -320,4 +318,4 @@ Ide.Check = class Check {
         for (const problem of this.ide.names.check(text, controls, rel, -1))
             found.push(problem);
     }
-};
+}

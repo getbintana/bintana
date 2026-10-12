@@ -20,7 +20,7 @@ measured, not guessed:
 | a secure random | **0.** The only randomness is `Math.random` in `examples/charts` (fake chart data, where it is right) |
 | an HMAC | **0** |
 | gzip / deflate | **0.** |
-| zip | **0.** `Ide.Exporter` shells out to `tar -cf` (uncompressed, and its one `Exec` is the precedent `bundle-plan.md` calls fine) |
+| zip | **0.** `Exporter` shells out to `tar -cf` (uncompressed, and its one `Exec` is the precedent `bundle-plan.md` calls fine) |
 
 So this is a plan for *capability an application author will hit*, not a
 cleanup of copies — the opposite of how `lib/dialog` earned its place. The
@@ -164,7 +164,7 @@ equals what `Hmac` returned yesterday*.
 The first draft of this plan said compression "unblocks `bundle-plan`". **It
 does not**: `bundle-plan.md` specifies *one uncompressed ustar* with a minimal
 writer in its own `bta_bundle.c` and says *no compression in v1* — `.jsc` and
-forms are kilobytes, the icons dominate. And `Ide.Exporter`'s `tar` is the
+forms are kilobytes, the icons dominate. And `Exporter`'s `tar` is the
 precedent that shelling out for an export is fine. So the honest callers are
 **formats that are zip** — `.docx`, `.xlsx`, `.odt`, `.epub`, `.jar` — and
 **`.gz` files and bodies**, read by an application that already has `Xml`.
@@ -342,7 +342,7 @@ out.Finish()                                // only now does the file exist
 
 Stage 1 is the only one that should be done without a caller; 2 and 3 want an
 application that reads or writes one, and the first such application is also the
-test of the API's shape. **`Ide.Exporter` is not that caller** and should not be
+test of the API's shape. **`Exporter` is not that caller** and should not be
 rewritten onto this: its `tar` is documented, tested and the project's chosen
 precedent.
 

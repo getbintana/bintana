@@ -27,17 +27,15 @@
  *
  * Prior art for the shape: this is what Meld, `git difftool --dir-diff` and
  * every review page draw. The refusal to compute the diff is the same bargain
- * `Ide.Git` makes everywhere else: the engine is git.
+ * `Git` makes everywhere else: the engine is git.
  */
 "use strict";
-
-Namespace("Ide");
 
 /* `@@ -12,7 +12,9 @@` -- the counts are optional and mean 1 when absent, which
  * is what a one-line hunk looks like. */
 const HUNK = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 
-Ide.Diff = class Diff {
+export class Diff {
 
     /*
      * The two columns, from the two texts and the diff between them.
@@ -192,7 +190,7 @@ Ide.Diff = class Diff {
     static text(rows) {
         return rows.map((r) => r.text).join("\n");
     }
-};
+}
 
 /*
  * A text as its lines, without the empty one a trailing newline leaves behind.

@@ -35,9 +35,7 @@
  */
 "use strict";
 
-Namespace("Ide");
-
-Ide.Apps = class Apps {
+export class Apps {
 
     /*
      * The id an entry is installed under when the project declares none: the
@@ -164,4 +162,4 @@ Ide.Apps = class Apps {
         return Application.HasIcon("application-x-executable")
                    ? "application-x-executable" : "";
     }
-};
+}

@@ -43,7 +43,7 @@ const MARK_TODO  = "● ";   /* ● nothing in it */
 const MARK_FUZZY = "~ ";        /* needs work */
 const MARK_DONE  = "  ";
 
-class PoForm extends Form {
+export class PoForm extends Form {
 
     /*
      * Opens the editor for one catalogue, or raises the one already on it.

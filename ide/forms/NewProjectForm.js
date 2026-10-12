@@ -19,13 +19,13 @@
  * that points somewhere else. */
 const BAD_NAME = /[/\\]|^\.\.?$/;
 
-class NewProjectForm extends Form {
+export class NewProjectForm extends Form {
 
     static ask(baseDir, onAccept) {
         const dlg = new NewProjectForm();
 
         dlg.TxtBase.Text = baseDir || Application.Directory;
-        dlg.CmbKind.Index = Ide.Kind.Form;      /* what most projects are */
+        dlg.CmbKind.Index = Kind.Form;      /* what most projects are */
         dlg.onAccept     = onAccept;
         dlg.Modal        = true;
 
@@ -54,7 +54,7 @@ class NewProjectForm extends Form {
         /* What will be there afterwards, and not only where: the two kinds of
          * project are two different sets of files, and finding that out by
          * looking at the tree afterwards is late. */
-        const first = this.CmbKind.Index === Ide.Kind.Function ? "Main.js"
+        const first = this.CmbKind.Index === Kind.Function ? "Main.js"
                                                           : "forms/Form1.form";
 
         this.LblHint.Text = name && base
@@ -76,7 +76,7 @@ class NewProjectForm extends Form {
         /* Optional, and checked when it is there: an id that is not one is a
          * window class nothing matches, so it is cheaper to say so here than
          * to meet it as a generic icon in a dock. */
-        if (id && !Ide.ProjectFile.idValid(id)) {
+        if (id && !ProjectFile.idValid(id)) {
             Message.Error("\"{0}\" is not an application id. Use a reverse-DNS name like io.github.you.App.", id);
             return;
         }
@@ -86,7 +86,7 @@ class NewProjectForm extends Form {
         }
 
         const info = { name, base, id, description: this.TxtDesc.Text.trim(),
-                       console: this.CmbKind.Index === Ide.Kind.Function };
+                       console: this.CmbKind.Index === Kind.Function };
         this.dismiss();
         if (this.onAccept) this.onAccept(info);
     }

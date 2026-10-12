@@ -153,11 +153,11 @@ one verb, and which the IDE still asks. Its history is in git.
 8. **And the menu gap, which lived in three places and not one.** Each flattened
    a form's `children`, and a menu is not among them, so `this.MnuSave.` proposed
    nothing and neither check looked at a menu item: `Completion.js`, `Names.js`
-   and `Check.js` -- `Ide.Check` does not go through `Completion` at all, it had
+   and `Check.js` -- `Check` does not go through `Completion` at all, it had
    `Names.tableOf` *and* a walk of its own. Three, and the generated `.d.ts` of
    stage 0 was a fourth reader of the same table.
 
-   One walk now, `Ide.Names.tableOf`, over all three blocks; the other two read
+   One walk now, `Names.tableOf`, over all three blocks; the other two read
    it. **And it took a runtime addition**: a `MenuItem` and an `Action` are not
    widgets, so `Widget.New` cannot make one to ask -- the only thing that builds
    one is a `.form` loader reading a `menus` block. Both answer `PropertyNames()`
@@ -192,7 +192,7 @@ completes a name*):
   is gone.
 - **A bare name offers what is in scope**, out of the parser's `Scope` and
   `Variable` report (fork patch 9); **a call shows its parameters** as the
-  cursor moves through them (`Ide.CallTip`); **the classes are the open tabs'**
+  cursor moves through them (`CallTip`); **the classes are the open tabs'**
   before the disk's.
 - **What a member is for** is written once beside it -- the C comment or a JSDoc
   comment (fork patch 10) -- and the popup, `docs/llm` and `docs/reference` all
@@ -268,7 +268,7 @@ today:
 ### The way in that avoids the third one entirely
 
 **Let the analyser feed [Problems](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#problems-in-one-list) and never the
-completion.** It runs on the pause `Ide.Live` already times, it answers when it
+completion.** It runs on the pause `Live` already times, it answers when it
 answers -- which a docked panel tolerates and a popup does not -- and what it
 delivers is exactly what no lookup will ever give: real type errors over the
 734 declarations that are calls. The panel is built, its rule that *a source
@@ -294,7 +294,7 @@ waits for somebody who needs what no declaration can say.**
 - **Completing `this.Control.Property.`** -- the case the current code calls
   *deeper than the .form can answer*. 39 places, nearly all `.Text.trim()`.
 - **Inferring a constructor parameter from its call sites.** It is one
-  cross-file fact -- who writes `new Ide.Runner(` -- and it is what F12 already
+  cross-file fact -- who writes `new Runner(` -- and it is what F12 already
   reads 40 files and 20 000 lines per keypress to avoid keeping an index for.
   Completion runs on the keystroke, so it would need that index cached, with an
   invalidation story this tree refuses elsewhere

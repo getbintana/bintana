@@ -42,8 +42,6 @@
  */
 "use strict";
 
-Namespace("Ide");
-
 /*
  * Where the runtime looks for the catalogues.  A folder the *runtime* names, not
  * one the programmer organised -- which is why the tree does not show it: its
@@ -58,7 +56,7 @@ const PO_DIR = "po";
 const VIEW_PROJECT = 0;
 const VIEW_FILES   = 1;
 
-Ide.ProjectTree = class ProjectTree {
+export class ProjectTree {
 
     /** @param {MainForm} ide */
     constructor(ide) {
@@ -491,11 +489,11 @@ Ide.ProjectTree = class ProjectTree {
         /* Every catalogue the project has, at the top, whichever folder it is
          * in -- `po/` is a place the runtime looks in rather than a shape the
          * programmer chose, so it is the category that carries the meaning. */
-        const langs = scope ? [] : this.ide.files.filter((f) => Ide.Translations.isCatalogue(f));
+        const langs = scope ? [] : this.ide.files.filter((f) => Translations.isCatalogue(f));
         const pics  = loose.filter((f) => isImageFile(f));
         const docs  = loose.filter((f) => ext(f) === "md");
         const rest  = loose.filter((f) => ext(f) !== "js" && ext(f) !== "md" &&
-                                          !Ide.Translations.isCatalogue(f) &&
+                                          !Translations.isCatalogue(f) &&
                                           !isImageFile(f));
 
         if (mods.length) {
@@ -576,4 +574,4 @@ Ide.ProjectTree = class ProjectTree {
     tip(key, path) {
         if (path !== this.texts[key]) this.ide.FileTree.SetTooltip(key, path);
     }
-};
+}

@@ -28,7 +28,7 @@
  */
 "use strict";
 
-class TabOrderForm extends Form {
+export class TabOrderForm extends Form {
 
     /*
      * TabOrderForm.open(ide)

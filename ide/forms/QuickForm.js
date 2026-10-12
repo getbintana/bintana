@@ -38,7 +38,7 @@ const openQuickPickers = [];
  * character, and VS Code's after it. */
 const QUICK_COMMAND = ">";
 
-class QuickForm extends Form {
+export class QuickForm extends Form {
 
     /* The one that is open, if any -- `SearchForm`'s spelling, for the same two
      * readers: the test that drives it, and the next `Ctrl+P`. */

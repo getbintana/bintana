@@ -24,9 +24,7 @@
  */
 "use strict";
 
-Namespace("Ide");
-
-Ide.Styles = class Styles {
+export class Styles {
 
     /* The theme this was generated from, said out loud: another desktop's may
      * differ, and the ordering is a hint rather than a fact about the machine
@@ -93,7 +91,7 @@ Ide.Styles = class Styles {
     static find(name) {
         return CLASSES.find((c) => c.name === name) || null;
     }
-};
+}
 
 /* Generated -- see the header. */
 const CLASSES = [

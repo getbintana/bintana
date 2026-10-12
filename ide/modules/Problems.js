@@ -29,8 +29,6 @@
  */
 "use strict";
 
-Namespace("Ide");
-
 /*
  * The three severities, in the order they are shown -- and they are
  * `SourceEditor.Mark`'s three words rather than three of our own, because a
@@ -47,7 +45,7 @@ const PROBLEM_KIND_W = 34;
  * and a file of this project is rarely deeper than that. */
 const PROBLEM_PLACE_W = 220;
 
-Ide.Problems = class Problems {
+export class Problems {
 
     /** @param {MainForm} ide */
     constructor(ide) {
@@ -106,8 +104,8 @@ Ide.Problems = class Problems {
      *
      * **The merge is not tidiness, it is the half of the rule above that had
      * nowhere to go.** Two checkers can agree about one thing, and they do:
-     * `Ide.Live` runs the name checks over the file on screen and reports it
-     * under `names:<file>`, and `Ide.Check` runs *the same checks* over every
+     * `Live` runs the name checks over the file on screen and reports it
+     * under `names:<file>`, and `Check` runs *the same checks* over every
      * file -- the whole point of it being the pass is that a control lost to a
      * name collision is lost in a file nobody has open -- and reports under
      * `project`. The two are the same check over the same text, so before this
@@ -128,7 +126,7 @@ Ide.Problems = class Problems {
      * It does not change who reports what. Each source still replaces only its
      * own rows, and neither checker was told anything -- which is the difference
      * between merging the two answers and pretending there is one, and is why
-     * the fix is here rather than in `Ide.Check`.
+     * the fix is here rather than in `Check`.
      */
     get all() {
         const out  = [];
@@ -278,4 +276,4 @@ Ide.Problems = class Problems {
 
         return this.ide.runner.open(p.file, p.line || 1);
     }
-};
+}

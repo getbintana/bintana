@@ -21,8 +21,6 @@
  */
 "use strict";
 
-Namespace("Ide");
-
 /*
  * **What a file declares is the parser's answer, not a pattern's.**
  *
@@ -50,7 +48,7 @@ function methodsOf(source) {
     return Application.Symbols(source).filter((s) => s.Kind === "Method");
 }
 
-Ide.Navigator = class Navigator {
+export class Navigator {
 
     /** @param {MainForm} ide */
     constructor(ide) {
@@ -95,7 +93,7 @@ Ide.Navigator = class Navigator {
             return this.inActiveFile(member) || this.controlNamed(member);
         }
 
-        /* `Ide.Events` and `Events` are the same class; the tail is its name. */
+        /* `Ns.Events` and `Events` are the same class; the tail is its name. */
         const tail = word.includes(".") ? word.slice(word.lastIndexOf(".") + 1)
                                         : word;
 
@@ -326,4 +324,4 @@ Ide.Navigator = class Navigator {
         this.ide.designer.select(control);
         return true;
     }
-};
+}

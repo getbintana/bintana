@@ -26,8 +26,6 @@
  */
 "use strict";
 
-Namespace("Ide");
-
 /*
  * How often, and it is a compromise with one number on each side: a tick is a
  * `JSON.stringify` of the dirty tabs plus, when something really changed, one
@@ -61,7 +59,7 @@ const SNAP_OFF = 0;
  * might want to read, and this is a copy of somebody's source file. */
 const FOLDER = "recovery";
 
-Ide.Recovery = class Recovery {
+export class Recovery {
 
     /** @param {MainForm} ide */
     constructor(ide) {
@@ -330,4 +328,4 @@ Ide.Recovery = class Recovery {
         this.ide.refresh();
         return done;
     }
-};
+}

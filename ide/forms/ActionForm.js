@@ -18,7 +18,7 @@
 /* A command's name is a property of the form and the prefix of its handler. */
 const ACTION_IDENT = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
-class ActionForm extends Form {
+export class ActionForm extends Form {
 
     /*
      * ActionForm.edit(actions, { uses, taken }, (spec, renames) => ...,

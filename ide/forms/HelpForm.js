@@ -63,7 +63,7 @@ const SECTIONS = [
     { key: "libraries" },
 ];
 
-class HelpForm extends Form {
+export class HelpForm extends Form {
 
     /*
      * The one window, kept.
@@ -91,7 +91,7 @@ class HelpForm extends Form {
      * long form, and `Doc_Link` shows the address.
      *
      * `topic` is `{ Name, Member, Text, Where }`, which is what
-     * `Ide.Completion.reference` answers.
+     * `Completion.reference` answers.
      */
     static openTopic(topic) {
         if (!topic) return null;

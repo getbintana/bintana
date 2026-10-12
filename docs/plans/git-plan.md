@@ -36,7 +36,7 @@ The list a design here is judged against:
 
 ## Settled: the scope
 
-**IDE plus one helper, no C.** `Ide.Git` in `ide/modules/` answers every
+**IDE plus one helper, no C.** `Git` in `ide/modules/` answers every
 question and every other file asks it — the `Translations`/`Exporter` shape.
 The runtime already has everything this needs: `Exec` and `Exec.Wait` for the
 child, `Application.HasCommand` for the guard, `File` for the worktree half,
@@ -131,7 +131,7 @@ counts join `LblStatus`; every literal sits at the call site inside
 
 | | what lands | |
 |---|---|---|
-| **1** | `Ide.Git` readers (`available`, `isRepo`, `status`, `branch`, `show`, `diff`, `split`), menu Refresh, branch in the status bar, indicators in the tree | **built** |
+| **1** | `Git` readers (`available`, `isRepo`, `status`, `branch`, `show`, `diff`, `split`), menu Refresh, branch in the status bar, indicators in the tree | **built** |
 | **2** | the viewer: side by side plus unified, caps and binaries | **built** |
 | **3** | stage / unstage / commit / discard per file | **built**, plus `init` |
 | **4** | log, branches, checkout | **built** |
@@ -182,7 +182,7 @@ would need a merge stops and says so rather than opening an editor for a merge
 message inside a child nobody is looking at; and a push on a branch that follows
 nothing carries the flag git would otherwise print an instruction to retype.
 Cloning is the one command that runs where there is *no* project, so it cannot
-go through `-C <project>` -- it is still `Ide.Git`'s child, because *nothing else
+go through `-C <project>` -- it is still `Git`'s child, because *nothing else
 in `ide/` runs a child of its own* is what keeps the worktree one file's
 business, and it takes the same job slot, so Stop reaches a clone of something
 big exactly as it reaches a fetch.
@@ -199,7 +199,7 @@ staged and never what is selected**: a button that quietly staged first would
 make *Commit* mean two different things depending on where the pointer had been.
 
 It runs no git of its own -- and that is what made it cheap. `stage`, `unstage`,
-`discard` and `commit` moved out of `GitForm` and into `Ide.Git`, where the
+`discard` and `commit` moved out of `GitForm` and into `Git`, where the
 readers already were, so the panel and the window press *the same* commands with
 the same guards rather than two spellings of each. Prior art for the shape:
 Android Studio's *Commit* tool window and Visual Studio's *Git Changes* pane.

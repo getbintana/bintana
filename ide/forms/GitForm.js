@@ -36,7 +36,7 @@ let openGit = null;
  * SourceEditors full of it cost seconds. The unified tab still says what it is. */
 const BIG_FILE = 4000;
 
-class GitForm extends Form {
+export class GitForm extends Form {
 
     /*
      * Opened, or raised if it is already up.
@@ -104,7 +104,7 @@ class GitForm extends Form {
      * Everything git says has changed, split into the two questions.
      *
      * Read from the porcelain the IDE already parses rather than from a second
-     * command: `Ide.Git.status` is what the tree's indicators come from too, and
+     * command: `Git.status` is what the tree's indicators come from too, and
      * two readings of one repository is how a window and a tree come to
      * disagree.
      */
@@ -229,17 +229,17 @@ class GitForm extends Form {
             this.Before.Text = this.After.Text = note;
         } else {
             /*
-             * The two columns, aligned and marked -- `Ide.Diff` reads git's own
+             * The two columns, aligned and marked -- `Diff` reads git's own
              * answer rather than working out a second one. Without it these are
              * two files: the change is not shown, and the lines stop facing
              * each other at the first one that was added.
              */
-            const pair = Ide.Diff.sideBySide(before, after, this.Unified.Text);
+            const pair = Diff.sideBySide(before, after, this.Unified.Text);
 
-            this.Before.Text = Ide.Diff.text(pair.left);
-            this.After.Text  = Ide.Diff.text(pair.right);
-            Ide.Diff.mark(this.Before, pair.left);
-            Ide.Diff.mark(this.After,  pair.right);
+            this.Before.Text = Diff.text(pair.left);
+            this.After.Text  = Diff.text(pair.right);
+            Diff.mark(this.Before, pair.left);
+            Diff.mark(this.After,  pair.right);
         }
 
         /*
@@ -285,7 +285,7 @@ class GitForm extends Form {
     BtnStage_Click()   { this.act((git, files) => git.stage(files)); }
     BtnUnstage_Click() { this.act((git, files) => git.unstage(files)); }
 
-    /* The commands themselves are `Ide.Git`'s -- the side panel offers the same
+    /* The commands themselves are `Git`'s -- the side panel offers the same
      * three, and two spellings of *stage* would be two sets of guards. */
     act(what) {
         const files = this.chosen();

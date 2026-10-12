@@ -11,9 +11,7 @@
  */
 "use strict";
 
-Namespace("Ide");
-
-Ide.Manifest = class Manifest {
+export class Manifest {
 
     /** @param {MainForm} ide */
     constructor(ide) {
@@ -35,7 +33,7 @@ Ide.Manifest = class Manifest {
 
         let config;
         try {
-            config = Ide.ProjectFile.Load(File.LoadJson(this.path));
+            config = ProjectFile.Load(File.LoadJson(this.path));
         } catch (e) {
             Message.Warning("project.json could not be read:\n{0}", e.message);
             return null;
@@ -325,4 +323,4 @@ Ide.Manifest = class Manifest {
         ide.log(`Starts at ${name}\n`);
         ide.listFiles();                /* the marker moved */
     }
-};
+}

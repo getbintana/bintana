@@ -88,7 +88,7 @@ first line and decodes before parsing. No compression in v1 (`.jsc` and forms
 are kilobytes; icons dominate); no new dependencies — a minimal ustar writer
 and reader in C (~100 lines each, regular files only, no symlinks/sparse),
 because **reading** a bundle must never depend on the target machine having
-`tar` (the `Ide.Exporter` precedent of shelling out is fine for exporting a
+`tar` (the `Exporter` precedent of shelling out is fine for exporting a
 developer tree, not for running an application).
 
 Running: `bintana <app.bta> [args...]` extracts to a temp dir
@@ -183,5 +183,5 @@ If either half fails, this plan is redesigned before the loader is touched.
   installed application still carries its JavaScript, so whoever can open its
   directory can rewrite it. Whatever is left over when this is built (signing,
   an installer) becomes a new issue if it earns one.
-- IDE support (*Export bundle…* on top of `Ide.Exporter`) is an explicit later
+- IDE support (*Export bundle…* on top of `Exporter`) is an explicit later
   phase, not part of this change.

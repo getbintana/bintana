@@ -8,7 +8,7 @@ a small cleanup with the check as its proof -- which is what this document is
 mostly about, because the cleanup is worth more than the flag.
 
 It is the runtime's half of the answer
-[`Ide.Live` and `Ide.Check`](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#the-names-a-file-uses-checked-while-it-is-written)
+[`Live` and `Check`](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#the-names-a-file-uses-checked-while-it-is-written)
 give statically. Those read what the `.form` describes; this catches what no file
 describes, in the act, with a traceback naming the line.
 

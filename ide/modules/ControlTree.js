@@ -16,15 +16,13 @@
  */
 "use strict";
 
-Namespace("Ide");
-
 /* The tree's root, standing for the form itself. Not a name a control could
  * have, so it can never collide with one. */
 const TREE_ROOT = "@form";
 
-Ide.ControlTree = class ControlTree {
+export class ControlTree {
 
-    /** @param {Ide.Designer} designer */
+    /** @param {Designer} designer */
     constructor(designer) {
         this.designer = designer;
 
@@ -217,4 +215,4 @@ Ide.ControlTree = class ControlTree {
                            found.Name,
                            (name) => this.designer.renameControl(name.trim()));
     }
-};
+}

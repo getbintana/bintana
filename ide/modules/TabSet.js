@@ -4,7 +4,7 @@
  * One page of `Tabs` per open file, and **the page owns what is in it**: a code
  * tab has its own `SourceEditor`, a form tab its own canvas and the `Designer`
  * driving it, and both have the workspace around them -- palette, control tree,
- * property grid and outline (`Ide.Workspace`), because the strip is above all
+ * property grid and outline (`Workspace`), because the strip is above all
  * of it and a widget belongs to one parent.  That is what buys what one shared
  * editor could not: the undo history, the selection, the scroll position, the
  * design tree and the property filter belong to the widget, so they survive a
@@ -20,8 +20,6 @@
  * `ide.activeFile` is read all over the IDE and written only here.
  */
 "use strict";
-
-Namespace("Ide");
 
 /*
  * Which project files the tree lists, and with which highlighting.
@@ -42,7 +40,7 @@ const EDITABLE = {
     css:  "css",    /* app.css: the classes a control wears through Style */
     /* A README is the one file a project writes for a person to *read*, and the
      * IDE showed it the way it shows a source file, when it showed it at all. It
-     * opens as the document it is -- see `Ide.Document` -- with the editor a
+     * opens as the document it is -- see `Document` -- with the editor a
      * click away, because a tab that could not edit it would be the IDE refusing
      * to let anybody fix a typo in their own project. */
     md:   "markdown",
@@ -72,13 +70,13 @@ const EDITABLE = {
  * `x.constructor` read as editable and its tab was handed the inherited
  * function as a `Language`. `undefined` for an extension the table does not
  * name. */
-function editableOf(ext) {
+export function editableOf(ext) {
     const key = String(ext).toLowerCase();
     return Dictionary.Has(EDITABLE, key) ? EDITABLE[key] : undefined;
 }
 
 /* Whether a file of this extension opens in a tab at all. */
-function opensInTab(file) {
+export function opensInTab(file) {
     return editableOf(File.Extension(file)) !== false;
 }
 
@@ -114,7 +112,7 @@ const CANVAS_MENU = [
     { action: "ActLower" },
 ];
 
-Ide.TabSet = class TabSet {
+export class TabSet {
 
     /* Which files open here at all, asked from outside: a link in a document
      * points at a file of the project and has to know whether the answer is a
@@ -203,7 +201,7 @@ Ide.TabSet = class TabSet {
 
         /*
          * The page and the workspace in it: the palette and the property panel
-         * are the tab's own now, built by `Ide.Workspace` -- which is what
+         * are the tab's own now, built by `Workspace` -- which is what
          * lets the strip span the window with everything below it, and what
          * gives each form its own filter, its own tree and its own selection
          * state for free.  See Workspace.js for the shape and for what it
@@ -216,7 +214,7 @@ Ide.TabSet = class TabSet {
          * with no idea how big the page will be.  An editor put in one would
          * keep its natural size and leave the rest of the page empty.  A box
          * has no such question: it fills. */
-        const workspace = new Ide.Workspace(this.ide, state.mode === "design");
+        const workspace = new Workspace(this.ide, state.mode === "design");
         const view      = workspace.page;
         this.ide.Tabs.Append(view);
         /* Only now do these widgets have a form: a `Menu` names handlers on
@@ -277,12 +275,12 @@ Ide.TabSet = class TabSet {
              * A document tab is this tab with a preview in front of it: the
              * editor stays, holding the text, so the modified flag, the save,
              * the reload from disk, the find bar, the session and the recovery
-             * are the ones every other code tab has. `Ide.Document` adds the bar
+             * are the ones every other code tab has. `Document` adds the bar
              * and the rendered page, and puts the editor in itself -- which is
              * why this branch does not.
              */
             if (isDocument(name)) {
-                state.document = new Ide.Document(
+                state.document = new Document(
                     this.ide, workspace.main, ed, File.Join(this.ide.project, name));
             } else {
                 workspace.main.Add(ed);
@@ -299,8 +297,8 @@ Ide.TabSet = class TabSet {
              */
             const scroll   = new Scroller();
             const board    = new Panel();
-            const titlebar = new Ide.TitleBar();
-            const menubar  = new Ide.MenuBar(this.ide);
+            const titlebar = new TitleBar();
+            const menubar  = new MenuBar(this.ide);
             const canvas   = new Overlay();
             const surface  = new Panel();
             const glass    = new Panel();
@@ -340,7 +338,7 @@ Ide.TabSet = class TabSet {
             canvas.Add(glass);
 
             state.canvas   = { scroll, canvas, surface, glass, board, titlebar, menubar };
-            state.designer = new Ide.Designer(this.ide,
+            state.designer = new Designer(this.ide,
                                           { surface, glass, view: scroll, titlebar,
                                             menubar }, workspace);
             /* The list, not setComponents: it has to be known before the tree is
@@ -412,7 +410,7 @@ Ide.TabSet = class TabSet {
 
         /* Read-only as text, whatever it is: a designer would serialise it
          * back, which is the write this exists to prevent. */
-        if (Ide.TabSet.notUtf8(path)) {
+        if (TabSet.notUtf8(path)) {
             const onDisk = File.Load(path);
             this.warnForeign(name);
             return {
@@ -806,7 +804,7 @@ Ide.TabSet = class TabSet {
         /* A file that has become UTF-8 since, or stopped being it, changes
          * whether the tab may write -- and a form that stopped being one
          * cannot be drawn, so it is left to be closed and opened again. */
-        const foreign = Ide.TabSet.notUtf8(path);
+        const foreign = TabSet.notUtf8(path);
         if (foreign && !state.foreign) this.warnForeign(name);
 
         if (state.mode === "design" && foreign) {
@@ -1153,7 +1151,7 @@ Ide.TabSet = class TabSet {
 
         /* Not a byte of a file that is not UTF-8: the rewrite would be its
          * text, which is the file with its accents gone. Said, not skipped. */
-        if ((state && state.foreign) || (File.Exists(path) && Ide.TabSet.notUtf8(path))) {
+        if ((state && state.foreign) || (File.Exists(path) && TabSet.notUtf8(path))) {
             this.warnForeign(name);
             return;
         }
@@ -1317,4 +1315,4 @@ Ide.TabSet = class TabSet {
         this.render();
         return true;
     }
-};
+}

@@ -20,7 +20,7 @@
  * is what the code *means*, and the runtime's own `Application.Symbols` is the
  * parser for that. The line between the two is the one this tree keeps
  * drawing: nothing here infers a scope, resolves a name, or decides what a token
- * is for. `Ide.Navigator` refuses rather than follow a value, and this is the
+ * is for. `Navigator` refuses rather than follow a value, and this is the
  * same refusal one level down.
  *
  * Four things it has to get right, and **every one of them was wrong in the
@@ -48,9 +48,7 @@
  */
 "use strict";
 
-Namespace("Ide");
-
-Ide.Lex = class Lex {
+export class Lex {
 
     /*
      * The file with everything that is not code blanked to spaces.
@@ -60,7 +58,7 @@ Ide.Lex = class Lex {
      */
     static blank(text) {
         const out = text.split("");
-        Ide.Lex.scan(text, out, 0, text.length);
+        Lex.scan(text, out, 0, text.length);
         return out.join("");
     }
 
@@ -86,7 +84,7 @@ Ide.Lex = class Lex {
             if (c === "/" && n === "/") {
                 let k = i;
                 while (k < to && text[k] !== "\n") k++;
-                Ide.Lex.fill(out, i, k);
+                Lex.fill(out, i, k);
                 i = k;
                 continue;
             }
@@ -95,15 +93,15 @@ Ide.Lex = class Lex {
                 let k = i + 2;
                 while (k < to && !(text[k] === "*" && text[k + 1] === "/")) k++;
                 k = Math.min(k + 2, to);
-                Ide.Lex.fill(out, i, k);
+                Lex.fill(out, i, k);
                 i = k;
                 continue;
             }
 
-            if (c === "/" && Ide.Lex.opensRegex(out, i)) {
-                const k = Ide.Lex.skipRegex(text, i, to);
+            if (c === "/" && Lex.opensRegex(out, i)) {
+                const k = Lex.skipRegex(text, i, to);
                 if (k > i) {                       /* it really was one */
-                    Ide.Lex.fill(out, i, k);
+                    Lex.fill(out, i, k);
                     i = k;
                     while (i < to && /[A-Za-z]/.test(text[i])) i++;   /* flags are code */
                     continue;
@@ -113,14 +111,14 @@ Ide.Lex = class Lex {
             }
 
             if (c === "'" || c === '"') {
-                const k = Ide.Lex.skipQuoted(text, i, to);
-                Ide.Lex.fill(out, i, k);
+                const k = Lex.skipQuoted(text, i, to);
+                Lex.fill(out, i, k);
                 i = k;
                 continue;
             }
 
             if (c === "`") {
-                i = Ide.Lex.template(text, out, i, to);
+                i = Lex.template(text, out, i, to);
                 continue;
             }
 
@@ -147,14 +145,14 @@ Ide.Lex = class Lex {
             if (c === "\\") { i += 2; continue; }
 
             if (c === "`") {
-                Ide.Lex.fill(out, lit, i + 1);
+                Lex.fill(out, lit, i + 1);
                 return i + 1;
             }
 
             if (c === "$" && text[i + 1] === "{") {
-                Ide.Lex.fill(out, lit, i);           /* the literal, up to the `$` */
-                const close = Ide.Lex.findHoleEnd(text, i + 2, to);
-                Ide.Lex.scan(text, out, i + 2, close);
+                Lex.fill(out, lit, i);           /* the literal, up to the `$` */
+                const close = Lex.findHoleEnd(text, i + 2, to);
+                Lex.scan(text, out, i + 2, close);
                 i = close + 1;
                 lit = i;                             /* the literal resumes here */
                 continue;
@@ -163,7 +161,7 @@ Ide.Lex = class Lex {
             i++;
         }
 
-        Ide.Lex.fill(out, lit, to);          /* unterminated: take the rest */
+        Lex.fill(out, lit, to);          /* unterminated: take the rest */
         return to;
     }
 
@@ -194,14 +192,14 @@ Ide.Lex = class Lex {
                 i = Math.min(k + 2, to);
                 continue;
             }
-            if (c === "/" && Ide.Lex.opensRegex(text, i)) {
-                const k = Ide.Lex.skipRegex(text, i, to);
+            if (c === "/" && Lex.opensRegex(text, i)) {
+                const k = Lex.skipRegex(text, i, to);
                 if (k > i) { i = k; while (i < to && /[A-Za-z]/.test(text[i])) i++; continue; }
                 i++;
                 continue;
             }
-            if (c === "'" || c === '"') { i = Ide.Lex.skipQuoted(text, i, to); continue; }
-            if (c === "`") { i = Ide.Lex.template(text, null, i, to); continue; }
+            if (c === "'" || c === '"') { i = Lex.skipQuoted(text, i, to); continue; }
+            if (c === "`") { i = Lex.template(text, null, i, to); continue; }
             if (c === "{") { depth++; i++; continue; }
             if (c === "}") {
                 depth--;
@@ -276,4 +274,4 @@ Ide.Lex = class Lex {
         return /(^|[^A-Za-z0-9_$])(return|typeof|case|in|of|do|else|new|yield|await|delete|void)$/
             .test(before);
     }
-};
+}
