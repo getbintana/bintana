@@ -13791,6 +13791,24 @@ function Main() {
         eq("a function is handed the Match",
            pair.Replace("a=1 b=2", (found) => found.Group("key").toUpperCase()),
            "A B");
+        eq("and what it answers may be a number",
+           pair.Replace("a=1", () => 7), "7");
+
+        /* JavaScript's habit is `(m, g1) =>`, and its g1 is undefined here: the
+         * word went into the result once per match.  Refused before anything
+         * runs, and so is an answer that is not text -- `(m) => {}` wrote
+         * "undefined" in place of every match. */
+        const habit = refusal(() => pair.Replace("a=1", (m, key) => key));
+        check(`a second parameter is refused, naming the Match: ${habit}`,
+              habit !== null && habit.includes("m.Groups[1]"));
+        const empty = refusal(() => pair.Replace("a=1 b=2", (m) => {}));
+        check(`an answer that is not text is refused, naming the match: ${empty}`,
+              empty !== null && empty.includes("'a=1' at 0"));
+        eq("but a function nothing matches is never asked",
+           pair.Replace("nada", (m) => {}), "nada");
+        const flags = refusal(() => new Regex("x", "i"));
+        check(`RegExp's string of flags is refused as such: ${flags}`,
+              flags !== null && flags.includes("IgnoreCase: true") && !flags.includes("'0'"));
 
         /* --- Split --- */
         eq("Split", new Regex(",").Split("a,b,c").join("|"), "a|b|c");
@@ -19040,6 +19058,24 @@ function Main() {
         eq("and the other way round", `${3 * p}`, "59.97");
         eq("minus a text, which JavaScript already reads as a number",
            `${p - "0.99"}`, "19.00");
+
+        /*
+         * A number is read through the shortest text that is the same double,
+         * which is what its literal says.  It went through %.17g, so `0.2`
+         * arrived as 0.20000000000000001 and `price + 0.2` was refused for
+         * ten decimal places nobody had written.
+         */
+        eq("plus a plain 0.2", `${new Decimal("0.1") + 0.2}`, "0.3");
+        eq("and a decimal made of 0.1 is a tenth", `${new Decimal(0.1)}`, "0.1");
+        /* %g writes an exponent when its precision is shorter than the whole
+         * part (`%.1g` of 10 is 1e+01) and for anything under 1e-4: neither
+         * is a decimal's text, and lib/report's 10 was the first to say so. */
+        eq("ten is ten and not 1e+01", `${new Decimal(10)}`, "10");
+        eq("a small number in fixed places", `${new Decimal(1e-7)}`, "0.0000001");
+        const inexact = refusal(() => new Decimal("0") + (0.1 + 0.2));
+        check(`a double that is already inexact is refused as a number: ${inexact}`,
+              inexact !== null && inexact.includes("the number 0.30000000000000004")
+              && inexact.includes("from text"));
 
         /*
          * `+` with a text is **concatenation**, as everywhere else in

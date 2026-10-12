@@ -418,10 +418,50 @@ static bool dec_from(JSContext *ctx, JSValueConst v, BtaDecimal *out)
                                isnan(d) ? "NaN" : "an infinity");
             return false;
         }
-        /* The C locale on purpose: this is machine text on its way through, and
-         * g_ascii_dtostr writes the shortest form that reads back the same. */
-        g_ascii_dtostr(buf, sizeof buf, d);
-        return dec_parse(ctx, buf, out);
+        /* The shortest text that reads back as the same double, in the C
+         * locale because this is machine text on its way through.
+         * g_ascii_dtostr is *not* that, whatever its name suggests: it is
+         * %.17g, so `0.2` came through as 0.20000000000000001 and every
+         * `price + 0.2` was refused for ten decimal places nobody wrote.
+         * Without an exponent, too: %g switches to one when the precision is
+         * shorter than the whole part, so `%.1g` of 10 is `1e+01`, which reads
+         * back the same and is not a decimal's text.  %g also writes one for
+         * anything under 1e-4 whatever the precision, so a small number gets
+         * a second try in fixed notation, at the places a decimal can hold. */
+        bool found = false;
+        for (int digits = 1; digits <= 17 && !found; digits++) {
+            char how[8];
+            g_snprintf(how, sizeof how, "%%.%dg", digits);
+            g_ascii_formatd(buf, sizeof buf, how, d);
+            found = g_ascii_strtod(buf, NULL) == d && !strchr(buf, 'e');
+        }
+        for (int places = 0; places <= DEC_MAX_SCALE && !found; places++) {
+            char how[8];
+            g_snprintf(how, sizeof how, "%%.%df", places);
+            g_ascii_formatd(buf, sizeof buf, how, d);
+            found = g_ascii_strtod(buf, NULL) == d;
+        }
+        /* Nothing found is a number past the places in either notation:
+         * every double from 1e17 up is whole, and %.0f writes it. */
+        if (!found)
+            g_ascii_formatd(buf, sizeof buf, "%.17g", d);
+
+        int64_t units = 0;
+        int     scale = 0;
+        switch (found ? dec_scan(buf, &units, &scale) : DEC_TEXT_TOO_MANY_PLACES) {
+        case DEC_TEXT_OK:
+            return dec_reduce(ctx, units, dec_pow10[scale], scale, out);
+        case DEC_TEXT_TOO_MANY_PLACES:
+            /* Said as a number, because the program wrote a number: what
+             * reaches here is a double that was already inexact -- the result
+             * of arithmetic on doubles, usually -- and text is the cure. */
+            JS_ThrowRangeError(ctx, "Decimal: the number %s has more than %d decimal "
+                               "places -- a double is not exact; make the decimal "
+                               "from text, as new Decimal(\"...\")", buf, DEC_MAX_SCALE);
+            return false;
+        default:
+            return dec_parse(ctx, buf, out);
+        }
     }
     JS_ThrowTypeError(ctx, "Decimal: expected text, a number or a Decimal");
     return false;

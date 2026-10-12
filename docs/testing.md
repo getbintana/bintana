@@ -219,7 +219,7 @@ own says so with `reportsItself`.
 
 `tests/widgets` is 199 tests listed in `TESTS`, and a filter there **selects** rather
 than running a prefix — `./tests/run.sh widgets record` is 142 assertions
-against 4995 in about twenty. It can select because these tests are
+against 5005 in about twenty. It can select because these tests are
 independent: each builds the controls it needs and deletes them again. The two that
 are not say so in the file:
 

@@ -747,6 +747,14 @@ function regexFlags(options) {
      * before it reads, so it is an implementation detail rather than a mode. */
     let flags = "g";
 
+    /* `new Regex("x", "i")` is RegExp's spelling, and a string walked by
+     * `for...in` is its indices -- so the refusal below used to say that '0'
+     * is not an option, which named nothing the program wrote. */
+    if (options !== undefined && options !== null
+        && (typeof options !== "object" || Array.isArray(options)))
+        throw new TypeError(`Regex: the options are an object, such as { IgnoreCase: true }, `
+                            + `not ${JSON.stringify(options)}`);
+
     for (const key in options || {}) {
         /* Own keys: `"constructor" in REGEX_FLAGS` is true through
          * `Object.prototype`, and then `REGEX_FLAGS.constructor` -- which is a
@@ -990,11 +998,20 @@ GLOBAL.Regex = class Regex {
      *
      * The function is handed the `Match` rather than JavaScript's list of
      * arguments, whose shape depends on how many groups the pattern happens to
-     * have.
+     * have.  So a function declaring a second parameter -- `(m, g1) =>`, which
+     * is the habit JavaScript teaches -- is refused before anything runs: its
+     * `g1` would be `undefined` and the word would be written into the result,
+     * once per match and with nothing said.  And an answer that is not text or
+     * a number is refused naming the match, for the same reason: `(m) => {}`
+     * wrote "undefined" in place of every one.
      */
     /**
      * the text with the matches replaced. **All of them** unless a count says
-     * how many
+     * how many. The replacement is a text (`$1`, `${name}`, `$&`, `$$`) or a
+     * function handed **one argument, the `Match`** -- a group is
+     * `m.Groups[1]`, not a second parameter -- that answers text or a number;
+     * a function declaring more parameters, or answering anything else, is
+     * refused
      */
     Replace(text, replacement, count) {
         const subject = String(text);
@@ -1004,6 +1021,9 @@ GLOBAL.Regex = class Regex {
 
         const evaluate = typeof replacement === "function"
             ? replacement : null;
+        if (evaluate && evaluate.length > 1)
+            throw new TypeError("Regex.Replace: the function is handed one argument, the Match "
+                                + "-- a group is m.Groups[1], not a second parameter");
         const spec = evaluate ? "" : String(replacement);
 
         let out = "";
@@ -1011,8 +1031,15 @@ GLOBAL.Regex = class Regex {
 
         for (const match of matches) {
             out += subject.slice(at, match.Index);
-            out += evaluate ? String(evaluate(match))
-                            : expandReplacement(spec, match, subject);
+            if (evaluate) {
+                const made = evaluate(match);
+                if (typeof made !== "string" && typeof made !== "number")
+                    throw new TypeError(`Regex.Replace: the function answered ${made === null ? "null" : typeof made} `
+                                        + `for '${match.Value}' at ${match.Index}; it answers text or a number`);
+                out += String(made);
+            } else {
+                out += expandReplacement(spec, match, subject);
+            }
             at = match.Index + match.Length;
         }
         return out + subject.slice(at);

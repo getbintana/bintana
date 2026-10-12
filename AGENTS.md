@@ -5435,6 +5435,28 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   vocabulary this small is only worth having if a word means one thing. It became
   `Add(values, { Key, Parent })`, which is the options-object shape
   `Directory.Files` and `Exec` already use.
+- **`g_ascii_dtostr` is not the shortest text of a double; it is `%.17g`.**
+  `dec_from` said it was, in a comment, and read every plain number through
+  it -- so `0.2` reached `Decimal` as `0.20000000000000001` and
+  `new Decimal("0.1") + 0.2` was refused for *more than 9 decimal places*,
+  naming seventeen digits nobody had written, while the documentation promised
+  that a decimal mixes with ordinary numbers. The shortest form is the first of
+  `%.1g` … `%.17g` that reads back as the same double; a double that is already
+  inexact (`0.1 + 0.2` as numbers) still has seventeen digits and is refused
+  **as a number**, saying to build the decimal from text. **And no exponent**:
+  `%g` writes one when the precision is shorter than the whole part -- `%.1g`
+  of 10 is `1e+01`, which reads back as 10 and is not a decimal's text, and
+  `lib/report`'s suite went red on it -- and for anything under 1e-4, so a
+  small number gets a second try as `%.Nf` up to nine places.
+- **`Regex.Replace` hands its function one argument, and JavaScript's habit is
+  three.** `(m, g1) => "x" + g1` wrote `xundefined` per match with nothing
+  said, and `(m) => {}` wrote `undefined`; the contract lived in a comment.
+  A function declaring a second parameter is refused before anything runs
+  (`Function.length`, so `(m, g = 1)` slips through -- it is the habit that is
+  caught, not every spelling), and an answer that is not text or a number is
+  refused naming the match. `new Regex("x", "i")` -- RegExp's flags -- is
+  refused as a string; walked by `for...in` it was its indices and the refusal
+  said `'0' is not one of its options`.
 - **`g_base64_decode` ignores what it does not understand.** Hand it `"hello"`
   and it answers three bytes rather than an error, so a value that was meant to
   be text becomes a silent handful of nonsense -- and `Field.Bytes` reads base64

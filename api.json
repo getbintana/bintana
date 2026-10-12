@@ -14370,7 +14370,7 @@
           "Params": 3,
           "Signature": "(text, replacement, count)",
           "Returns": "",
-          "Doc": "the text with the matches replaced. **All of them** unless a count says how many",
+          "Doc": "the text with the matches replaced. **All of them** unless a count says how many. The replacement is a text (`$1`, `${name}`, `$&`, `$$`) or a function handed **one argument, the `Match`** -- a group is `m.Groups[1]`, not a second parameter -- that answers text or a number; a function declaring more parameters, or answering anything else, is refused",
           "Native": false
         },
         {
