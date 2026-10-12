@@ -1339,6 +1339,10 @@ static gpointer task_thread(gpointer data)
         else
             r = JS_EvalFunction(ctx, r);
     }
+    if (!JS_IsException(r) && bta_modules_check(ctx) < 0) {
+        JS_FreeValue(ctx, r);
+        r = JS_EXCEPTION;
+    }
     if (JS_IsException(r)) {
         task_exc_text(ctx, &job->fail_msg, &job->fail_stack);
         job->fail = 1;

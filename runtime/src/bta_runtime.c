@@ -3037,6 +3037,10 @@ static int run_console(BtaApp *app)
     for (guint i = 0; i < app->sources->len; i++)
         if (bta_eval_file(ctx, app->sources->pdata[i]) < 0)
             return 1;
+    if (bta_modules_check(ctx) < 0) {
+        bta_dump_error(ctx);
+        return 1;
+    }
 
     JSValue fn = bta_lookup_global(ctx, app->entry);
     if (JS_IsException(fn) || !JS_IsFunction(ctx, fn)) {
@@ -3129,6 +3133,14 @@ static void on_activate(GtkApplication *gapp, gpointer user_data)
             g_application_quit(G_APPLICATION(gapp));
             return;
         }
+    }
+    /* A name two modules export, used with no import: refused here, before
+     * anything starts, rather than at whichever line reaches it first. */
+    if (bta_modules_check(ctx) < 0) {
+        bta_dump_error(ctx);
+        app->exit_code = 1;
+        g_application_quit(G_APPLICATION(gapp));
+        return;
     }
 
     JSValue klass = bta_lookup_global(ctx, app->startup);

@@ -589,11 +589,11 @@ used to read as no id at all; a project that declares none keeps the old answer,
 program's own name. `GtkApplication` also takes the id as the default window
 icon when the theme has one by that name (`gtkapplication.c`).
 
-## The fifteen patches in vendor/
+## The sixteen patches in vendor/
 
 `vendor/quickjs` is a **submodule** of
 [`getbintana/quickjs`](https://github.com/getbintana/quickjs), branch `bintana`:
-upstream **v0.17.0** plus the fifteen patches below, one commit each (the eighth
+upstream **v0.17.0** plus the sixteen patches below, one commit each (the eighth
 carries a fix as a second commit, `1493dc7`, until it is squashed into it). The fork's
 `BINTANA.md` is the recipe; what follows is what each patch does and what
 dropping it costs.
@@ -668,13 +668,13 @@ git push --force-with-lease origin bintana
 git submodule update --remote vendor/quickjs              # and commit the pin
 ```
 
-Then the suite. All fifteen are marked `Bintana patch` in the source, and
+Then the suite. All sixteen are marked `Bintana patch` in the source, and
 **dropping one does not fail to build** -- that is the property they share and
 the reason `tests/widgets` asserts each of them (`Decimal`, `JsonFiles`,
 `strictChecks`, `testDebugger`, `testCuratedLanguage`, `LongAppend`,
 `StringSearch`, `Modules`, `Imports`) -- the
 fifth of which carries the seventh, the eighth, the ninth and the thirteenth,
-and the last two the fourteenth and the fifteenth. Grep the fork for the
+and the last two the fourteenth, the fifteenth and the sixteenth. Grep the fork for the
 marker after a rebase; there is no build-time check that they survived.
 
 ### 1. Operators on a Decimal
@@ -1279,6 +1279,33 @@ which is reported as no local name rather than leaking that spelling.
 IDE offers a module's private names again, the outline marks nothing and F12
 does not follow an import. `tests/widgets`' `Imports` asserts the rows of every
 spelling and `tests/ide`'s `modules` phase what the IDE makes of them.
+
+### 16. A compile reports the free names it uses
+
+`JS_EnumFreeNames(ctx, compiled, cb, opaque)` hands the embedder every name a
+compiled script or module looks up in the global scope, each with the line of
+the use, once per use. **It reads the final bytecode, not the parser**: after
+the last pass a name nothing in the file binds is an opcode carrying its atom
+(`get_var`, `get_var_undef` for `typeof`, `put_var`, `delete_var`,
+`make_var_ref`), and the walk is `JS_DebugLines`' -- the function, then its
+constant pool -- with `find_line_num` for the line. A report from the parser
+would have had to follow the scope analysis by hand; the bytecode is its
+answer. A declaration at a script's top level (`define_var`, `define_func`,
+`put_var_init`) is not a use; the `with_*` forms are not globals.
+
+**What it is for is the load-time half of stage 4**: `bta_compile` notes each
+file's free names (`note_uses` in `bta_module.c`), and `bta_modules_check`,
+once every source has loaded -- and in a worker once its file has run -- refuses
+a file that uses a name two modules export, with *`Use.js:12: 'Parser' is
+exported by Csv.js and Ini.js: choose one with import`*. **The getter's throw
+at the use was not enough, and the reason is order**: a file loaded between the
+two owners read the first one's value in its top-level code, silently -- the
+second owner only made the name ambiguous after. `Modules`' `ambiguousUse` is
+that case, and with the check taken out it prints `EARLY function`.
+
+**Dropping it does not fail to build** (the call is the only use): every file
+loads, a name two modules export is refused only where it runs, and the
+`Modules` and `Imports` assertions about the load go red.
 
 ## Memory rules
 
@@ -7755,7 +7782,8 @@ before touching it:
   and refused naming the module. A name the runtime installs is refused the
   same way -- the plan's open question, answered loudly: `export class Timer`
   would otherwise replace the runtime's for the whole program.
-- **Two owners are not an error until somebody uses the name.** The second is
+- **Two owners are not an error until somebody uses the name** -- and a use
+  is refused at load, not where it runs (patch 16, `bta_modules_check`). The second is
   written beside the first in a per-context table of C strings
   (`owners_by_ctx`, under a mutex since a worker has a context of its own) and
   the getter, already installed, throws naming both. C strings so that
@@ -7823,10 +7851,10 @@ whose it is; a library import is not followed); a rename of a name a module
 declares and does not export touches that file only, and one two files declare
 is refused (`Refactor.privateTo`); and `Ide.Names.ambiguous` says the runtime's
 sentence where a name two modules export is used with no import, in the live
-pass and the project check. **What is not done**: the runtime still says it at
-the use and not at load -- that needs the parser to report the free names a file
-uses, which no patch does -- and `ambiguous` reads words, so a file that declares
-a local of the name anywhere is skipped whole rather than guessed at.
+pass and the project check -- the sentence the runtime now refuses the load
+with (patch 16), said while typing. `ambiguous` reads words, so a file that
+declares a local of the name anywhere is skipped whole rather than guessed at;
+the runtime's half reads the bytecode and has no such gap.
 
 `tests/widgets`' `Imports` runs a child per rule (choosing by import and `as`,
 once and unlisted, a re-export, a default, a cycle, a library, a task's

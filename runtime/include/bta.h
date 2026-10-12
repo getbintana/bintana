@@ -656,6 +656,10 @@ JSValue bta_compile(JSContext *ctx, const char *src, size_t len,
 /* Evaluates a compiled module (taking it) and puts what it exports on the
  * global object; -1 with an exception pending. */
 int     bta_module_run(JSContext *ctx, JSValue compiled, const char *path);
+/* Once every file is loaded: refuses, naming the file and the line, a file
+ * that uses with no import a name two modules export.  -1 with the exception
+ * pending. */
+int     bta_modules_check(JSContext *ctx);
 /* Whether a module put `name` on the global object -- a program's name, not
  * the runtime's, which is what `Application.Globals` needs to tell apart. */
 bool    bta_module_exported(JSContext *ctx, const char *name);

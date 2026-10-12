@@ -4148,19 +4148,30 @@ class WidgetsForm extends Form {
         check("an export reaches a script with no import, and a private name does not",
               r.Output.includes("REACH 121 121 undefined"), r.Output);
 
-        /* Rules 3 and 4: two owners of a name load fine, and the name answers
-         * neither -- at the use, naming both. */
+        /* Rules 3 and 4: two owners of a name load fine while nobody uses
+         * it, and the name answers neither -- naming both. */
         r = run("ambiguous", { main: "Main" }, {
             "Csv.js": "export class Parser {}\nexport const csv = 1;\n",
             "Ini.js": "export class Parser {}\n",
-            "Main.js": main("    print('OTHERS ' + csv);\n" +
-                            "    try { new Parser(); } catch (e) { print('AMBIGUOUS ' + e.message); }"),
+            "Main.js": main("    print('OTHERS ' + csv);"),
         });
         check("two owners of a name still load, and their other names arrive",
-              r.Output.includes("OTHERS 1"), r.Output);
-        check("...and the shared name names both owners",
-              r.Output.includes("AMBIGUOUS 'Parser' is exported by Csv.js and Ini.js: choose one with import"),
+              r.ExitCode === 0 && r.Output.includes("OTHERS 1"), r.Output);
+
+        /* A use with no import is refused at load (fork patch 16), with the
+         * file and the line -- before anything runs, and even when the use was
+         * reached between the two owners, where it read the first. */
+        r = run("ambiguousUse", { main: "Main", sources: ["Csv.js", "Use.js", "Ini.js", "Main.js"] }, {
+            "Csv.js": "export class Parser {}\nexport const csv = 1;\n",
+            "Ini.js": "export class Parser {}\n",
+            "Use.js": "print('EARLY ' + typeof Parser);\n\nfunction later() {\n    return new Parser();\n}\n",
+            "Main.js": main("    print('STARTED');"),
+        });
+        check("a name two modules export, used with no import, stops the load naming both",
+              r.ExitCode !== 0 &&
+              r.Output.includes("Use.js:1: 'Parser' is exported by Csv.js and Ini.js: choose one with import"),
               r.Output);
+        check("...and the program never started", !r.Output.includes("STARTED"), r.Output);
 
         /* A collision with a script, in either order, and with the runtime. */
         r = run("before", { main: "Main" }, {
@@ -4279,15 +4290,22 @@ class WidgetsForm extends Form {
         const ini = "export class Parser { get Kind() { return 'ini'; } }\n";
 
         /* Rule 5: an import settles an ambiguous name in one file, by name or
-         * renamed, and another file is still told it is ambiguous. */
-        let r = run("choose", { sources: ["Csv.js", "Ini.js", "Main.js", "Other.js"] }, {
+         * renamed, and another file that uses it with none stops the load. */
+        let r = run("choose", { sources: ["Csv.js", "Ini.js", "Main.js"] }, {
             "Csv.js": csv, "Ini.js": ini,
             "Main.js": main('import { Parser } from "./Csv.js";\nimport { Parser as IniParser } from "./Ini.js";',
-                            "    print('CHOSEN ' + new Parser().Kind + ' ' + new IniParser().Kind + ' ' + other());"),
-            "Other.js": "function other() { try { return new Parser().Kind; } catch (e) { return 'AMBIGUOUS'; } }\n",
+                            "    print('CHOSEN ' + new Parser().Kind + ' ' + new IniParser().Kind);"),
         });
         check("an import chooses between two owners, and as renames one",
-              r.Output.includes("CHOSEN csv ini AMBIGUOUS"), r.Output);
+              r.Output.includes("CHOSEN csv ini"), r.Output);
+        r = run("chooseOther", { sources: ["Csv.js", "Ini.js", "Main.js", "Other.js"] }, {
+            "Csv.js": csv, "Ini.js": ini,
+            "Main.js": main('import { Parser } from "./Csv.js";', "    print('CHOSEN');"),
+            "Other.js": "// one line down\nfunction other() { return new Parser().Kind; }\n",
+        });
+        check("...and a file with no import of it is refused at its line",
+              r.ExitCode !== 0 && !r.Output.includes("CHOSEN") &&
+              r.Output.includes("Other.js:2: 'Parser' is exported by Csv.js and Ini.js"), r.Output);
 
         /* A file an import names need not be in `sources`, is evaluated once
          * whichever order, and hands out its exports to the rest. */

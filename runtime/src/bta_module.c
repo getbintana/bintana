@@ -109,8 +109,8 @@ static bool is_syntax_error(JSContext *ctx, JSValueConst exc)
     return yes;
 }
 
-JSValue bta_compile(JSContext *ctx, const char *src, size_t len,
-                    const char *name, bool *is_module)
+static JSValue compile_text(JSContext *ctx, const char *src, size_t len,
+                            const char *name, bool *is_module)
 {
     *is_module = false;
 
@@ -152,6 +152,22 @@ JSValue bta_compile(JSContext *ctx, const char *src, size_t len,
     return JS_Throw(ctx, script_exc);
 }
 
+static void note_uses(JSContext *ctx, JSValueConst compiled, const char *path);
+
+/*
+ * Everything that compiles a project's text comes through here, so this is
+ * also where the free names a file uses are written down (note_uses): which
+ * of them two modules export is only known once every file has loaded.
+ */
+JSValue bta_compile(JSContext *ctx, const char *src, size_t len,
+                    const char *name, bool *is_module)
+{
+    JSValue r = compile_text(ctx, src, len, name, is_module);
+    if (!JS_IsException(r))
+        note_uses(ctx, r, name);
+    return r;
+}
+
 /* ------------------------------------------------------------ the state */
 
 /*
@@ -168,7 +184,22 @@ typedef struct {
     char       *project;    /* where `./x.js` may point; NULL for anywhere */
     GPtrArray  *libs;       /* the directories `uses` resolved to */
     int         checking;   /* > 0 while CheckSource or Symbols compiles */
+    GPtrArray  *uses;       /* Uses: each file's free names, until checked */
 } ModState;
+
+/* The free names one file uses, each at the first line it is used on. */
+typedef struct {
+    char       *path;
+    GHashTable *lines;      /* name -> GINT_TO_POINTER(line) */
+} Uses;
+
+static void uses_free(gpointer p)
+{
+    Uses *u = p;
+    g_free(u->path);
+    g_hash_table_unref(u->lines);
+    g_free(u);
+}
 
 typedef struct {
     char        *path;
@@ -189,6 +220,7 @@ static void state_free(ModState *st)
     g_hash_table_unref(st->owners);
     g_hash_table_unref(st->done);
     g_ptr_array_unref(st->pending);
+    g_ptr_array_unref(st->uses);
     g_free(st->project);
     if (st->libs)
         g_ptr_array_unref(st->libs);
@@ -211,6 +243,7 @@ static ModState *state_of(JSContext *ctx, bool make)
             st->done    = g_hash_table_new_full(g_str_hash, g_str_equal, g_free,
                                                 NULL);
             st->pending = g_ptr_array_new_with_free_func(pending_free);
+            st->uses    = g_ptr_array_new_with_free_func(uses_free);
             g_hash_table_insert(state_by_ctx, ctx, st);
         }
     }
@@ -273,6 +306,100 @@ static char *owners_text(GPtrArray *owners)
         g_free(base);
     }
     return g_string_free(out, FALSE);
+}
+
+/* ------------------------------------------------------------ free names */
+
+static void note_one(JSContext *ctx, JSAtom name, int line, void *opaque)
+{
+    Uses       *u = opaque;
+    const char *s = JS_AtomToCString(ctx, name);
+
+    if (!s) {
+        JS_FreeValue(ctx, JS_GetException(ctx));
+        return;
+    }
+    gpointer at;
+    if (!g_hash_table_lookup_extended(u->lines, s, NULL, &at) ||
+        line < GPOINTER_TO_INT(at))
+        g_hash_table_insert(u->lines, g_strdup(s), GINT_TO_POINTER(line));
+    JS_FreeCString(ctx, s);
+}
+
+/*
+ * Writes down the names a compiled file looks up in the global scope (fork
+ * patch 16), so bta_modules_check can ask, once every file is in, whether one
+ * of them is a name two modules export.  An imported name is bound and a
+ * module's own top level is bound, so neither is here -- which is exactly the
+ * set the getter would refuse at the use.  Not while a text is only checked.
+ */
+static void note_uses(JSContext *ctx, JSValueConst compiled, const char *path)
+{
+    ModState *st = state_of(ctx, true);
+
+    if (st->checking)
+        return;
+
+    Uses *u  = g_new0(Uses, 1);
+    u->path  = g_strdup(path);
+    u->lines = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+    JS_EnumFreeNames(ctx, compiled, note_one, u);
+
+    g_mutex_lock(&owners_lock);
+    g_ptr_array_add(st->uses, u);
+    g_mutex_unlock(&owners_lock);
+}
+
+int bta_modules_check(JSContext *ctx)
+{
+    ModState *st = state_of(ctx, false);
+    char     *msg = NULL;
+
+    if (!st)
+        return 0;
+
+    g_mutex_lock(&owners_lock);
+    for (guint i = 0; i < st->uses->len && !msg; i++) {
+        Uses          *u    = st->uses->pdata[i];
+        const char    *worst = NULL;
+        int            line  = 0;
+        GPtrArray     *owners_at = NULL;
+        GHashTableIter it;
+        gpointer       k, v;
+
+        /* The first line of the file that uses one, so the answer does not
+         * depend on the order a hash table walks in. */
+        g_hash_table_iter_init(&it, u->lines);
+        while (g_hash_table_iter_next(&it, &k, &v)) {
+            GPtrArray *owners = g_hash_table_lookup(st->owners, k);
+            if (!owners || owners->len < 2)
+                continue;
+            if (!worst || GPOINTER_TO_INT(v) < line ||
+                (GPOINTER_TO_INT(v) == line && strcmp(k, worst) < 0)) {
+                worst     = k;
+                line      = GPOINTER_TO_INT(v);
+                owners_at = owners;
+            }
+        }
+        if (worst) {
+            char *file = g_path_get_basename(u->path);
+            char *who  = owners_text(owners_at);
+            msg = g_strdup_printf("%s:%d: '%s' is exported by %s: choose one "
+                                  "with import", file, line, worst, who);
+            g_free(file);
+            g_free(who);
+        }
+    }
+    /* Asked once, when the program is in: nothing loads after it. */
+    g_ptr_array_set_size(st->uses, 0);
+    g_mutex_unlock(&owners_lock);
+
+    if (msg) {
+        JS_ThrowReferenceError(ctx, "%s", msg);
+        g_free(msg);
+        return -1;
+    }
+    return 0;
 }
 
 /*
