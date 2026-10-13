@@ -6412,6 +6412,32 @@ with `xfwm4`, since none of it reaches the suite:
   row is its *position* -- which is gone with it. A tree keeps its key and an
   on-demand row is the program's to store, so only the held flat shape is
   reported now: it is not raised at all.
+- **`CellEdit` says what ended the edit, last: `how`.** `"enter"`, `"tab"` and
+  `"shift-tab"` are the grid's move-on keys -- the keys are consumed, and an
+  edit that ends with one is reported even when nothing changed, because the
+  program reads the reason and moves; `"pick"` is a day, an item or a tick
+  chosen; `"focus"` is the keyboard leaving; `"code"` is `EndEdit`; `"left"` is
+  the row unbound, scrolled away. Tab was let go before, so it walked the focus
+  out of the grid and the edit ended as a blur that said nothing about where the
+  reader meant to go.
+- **The current cell is the table's** (`CurrentCell`, `CellChange`): the press,
+  F2, `EditCell` and an assignment move it, and a class on the cell's box draws
+  it (`.bta-cell-current`, an `outline` so marking a cell does not shift its
+  text by a pixel -- a border would). The class is applied at every bind
+  (`cell_fill`), so a row scrolled back into view is drawn current with no
+  bookkeeping, and moving it finds the drawn cell with the walk `F2` already
+  takes: once per move, never per frame. Assigning `CurrentCell` selects the row
+  as a press would; the row is held, and every verb that empties a table --
+  `Clear`, `RemoveRow`, `RemoveNode`, `Count` -- drops it.
+- **Enter is offered to the program before the view activates the row.** GTK's
+  column view claims Return for `Activate` (the double click's other half)
+  *before* the bubble phase, where a control's `KeyPress` is heard -- measured
+  on 4.22: a grid whose Enter moves the cell never heard it, and the row's
+  dialog opened instead. So `on_table_key` raises `KeyPress` for the
+  Return family itself, and **a handler that returns true consumes it**; one
+  that does not gets the same activation as ever. With an edit open it is the
+  editor's Enter, not the view's -- checked there, because the capture on the
+  column view runs before the editor's own.
 
 ## Keyring: the vault, and what it does not promise
 

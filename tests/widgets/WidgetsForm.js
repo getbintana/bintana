@@ -555,7 +555,7 @@ const TESTS = [
     /* Early on purpose: they show windows of their own, and the pushed-surface
      * assertions in the async tail measure a form on the frame it settles. See
      * the note below. */
-    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableTree", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableGeometry", "TableEditors", "TableIcon", "TableProse",
+    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableTree", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableGeometry", "TableEditors", "TableCell", "TableCellHow", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
     "Expand", "Spacing", "Designing", "CurrentPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
@@ -16116,6 +16116,152 @@ function Main() {
                 t.geoHost.Delete();
                 v.geoHost.Delete();
             });
+        });
+    }
+
+    /*
+     * **The cell the reader is on**: `CurrentCell` and `CellChange`, and the
+     * reasons `CellEdit` gives. The frame it draws is a class on the cell's
+     * box -- a widget the suite cannot see -- so the drawing is by hand (the
+     * runtime's `AGENTS.md` keeps that list); the address, the event and the
+     * selection are what this asserts.
+     */
+    testTableCell() {
+        const t = new TableView();
+        t.Name = "CurT";
+        t.Columns = [{ Text: "A", Editor: "Text" }, { Text: "B" }];
+        this.geoAdd(t, 0, 160);
+        t.Add(["uno", "1"]);
+        t.Add(["dos", "2"]);
+        t.Add(["tres", "3"]);
+
+        this.curSeen = [];
+        t.On("CellChange", (row, col) => { this.curSeen.push([row, col]); });
+
+        until("a table drawn for the current cell", () => t.RowHeight > 0, () => {
+            eq("no cell is current to begin with", t.CurrentCell, null);
+            eq("and nothing was said", this.curSeen.length, 0);
+
+            t.CurrentCell = { Row: 1, Column: 0 };
+            eq("assigning moves the current cell",
+               JSON.stringify(t.CurrentCell), '{"Row":1,"Column":0}');
+            eq("and says so", JSON.stringify(this.curSeen), "[[1,0]]");
+            eq("and selects the row, as a press would", t.Index, 1);
+
+            t.CurrentCell = { Row: 1, Column: 0 };
+            eq("the same address is not a move", this.curSeen.length, 1);
+
+            t.CurrentCell = { Row: 1, Column: 1 };
+            eq("another column is a move", JSON.stringify(this.curSeen[1]), "[1,1]");
+            eq("and the selection stays", t.Index, 1);
+
+            /* `EditCell` is the click from code, so it lands the reader in the
+             * cell and on the row. */
+            eq("EditCell opens the cell", t.EditCell(2, 0), true);
+            eq("and the current cell went with it",
+               JSON.stringify(t.CurrentCell), '{"Row":2,"Column":0}');
+            eq("and so did the selection", t.Index, 2);
+            t.EndEdit(false);
+
+            t.CurrentCell = null;
+            eq("null clears it", t.CurrentCell, null);
+            eq("and the clearing is said with null and -1",
+               JSON.stringify(this.curSeen[this.curSeen.length - 1]), "[null,-1]");
+
+            throws("CurrentCell takes an object or null",
+                   () => { t.CurrentCell = 3; });
+            throws("a row that is not there is refused",
+                   () => { t.CurrentCell = { Row: 9, Column: 0 }; });
+            throws("and a column that is not one",
+                   () => { t.CurrentCell = { Row: 0, Column: -1 }; });
+
+            /* A row taken away cannot be the reader's cell. */
+            t.CurrentCell = { Row: 1, Column: 0 };
+            const gone = this.curSeen.length;
+            t.RemoveRow(1);
+            eq("removing the current row clears the cell", t.CurrentCell, null);
+            eq("and raises the clearing", this.curSeen.length, gone + 1);
+            eq("with null and -1", JSON.stringify(this.curSeen[gone]), "[null,-1]");
+
+            t.CurrentCell = { Row: 0, Column: 1 };
+            t.Clear();
+            eq("Clear takes the current cell with it", t.CurrentCell, null);
+
+            /* A tree: a key is the address, and assigning opens the way. */
+            const tree = new TableView();
+            tree.Name = "CurTree";
+            tree.Columns = [{ Text: "T", Editor: "Text" }];
+            this.geoAdd(tree, 0, 120);
+            tree.Add(["padre"], { Key: "p" });
+            tree.Add(["hijo"],  { Key: "h", Parent: "p" });
+            tree.Add(["otro"],  { Key: "o" });
+            until("a tree drawn for the current cell", () => tree.RowHeight > 0, () => {
+                tree.CollapseNode("p");
+                tree.CurrentCell = { Row: "h", Column: 0 };
+                eq("assigning opens the way to the node", tree.Expanded("p"), true);
+                eq("and it is the current cell",
+                   JSON.stringify(tree.CurrentCell), '{"Row":"h","Column":0}');
+                eq("and the node is selected", tree.Key, "h");
+                throws("a key that is not there is refused",
+                       () => { tree.CurrentCell = { Row: "zz", Column: 0 }; });
+                tree.geoHost.Delete();
+            });
+
+            /* On demand: the address is the index. */
+            const v = new TableView();
+            v.Name = "CurV";
+            v.Columns = [{ Text: "A", Editor: "Text" }];
+            v.On("Data", (row) => `r${row}`);
+            this.geoAdd(v, 0, 120);
+            v.Count = 3;
+            until("an on-demand table drawn for the current cell",
+                  () => v.RowHeight > 0, () => {
+                v.CurrentCell = { Row: 2, Column: 0 };
+                eq("an on-demand cell is addressed by index",
+                   JSON.stringify(v.CurrentCell), '{"Row":2,"Column":0}');
+                eq("and selects the row", v.Index, 2);
+                v.Count = 1;
+                eq("a count that shrank past it clears it", v.CurrentCell, null);
+                v.geoHost.Delete();
+            });
+
+            t.geoHost.Delete();
+        });
+    }
+
+    /*
+     * The `how` of `CellEdit`: `EndEdit` says `"code"` and a tick says
+     * `"pick"`. `"enter"`, `"tab"` and `"shift-tab"` are keys the suite cannot
+     * press -- the editor is a widget and there is no key injection -- so they
+     * are by hand, on the runtime's list.
+     */
+    testTableCellHow() {
+        const t = new TableView();
+        t.Name = "HowT";
+        t.Columns = [
+            { Text: "A", Editor: { Kind: "Number", Decimals: 1 } },
+            { Text: "Done", Editor: { Kind: "Check", ActiveText: "sí", InactiveText: "" } },
+        ];
+        this.geoAdd(t, 0, 120);
+        t.Add(["7.50", ""]);
+
+        this.howSeen = [];
+        t.On("CellEdit", (row, col, text, how) => {
+            this.howSeen.push([row, col, text, how]);
+        });
+
+        until("a table drawn for the how", () => t.RowHeight > 0, () => {
+            t.EditCell(0, 0);
+            t.EndEdit();
+            eq("EndEdit reports how the edit ended",
+               JSON.stringify(this.howSeen[0]), '[0,0,"7.5","code"]');
+
+            t.EditCell(0, 1);
+            eq("a tick turned reports itself",
+               JSON.stringify(this.howSeen[1]), '[0,1,"sí","pick"]');
+            eq("and no edit is left open", t.EndEdit(), false);
+
+            t.geoHost.Delete();
         });
     }
 

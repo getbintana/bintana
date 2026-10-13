@@ -261,6 +261,14 @@ typedef struct {
     bool           sortable;
     bool           sort_hooked;   /* the view's sorter is being watched */
     int            header_min;    /* a floor for the row of column headings */
+
+    /* **The current cell**: the row the reader is on, held, and its column.
+     * `NULL` when there is none. The row is held so the address survives the
+     * store telling its cells changed; the verbs that empty a table -- `Clear`,
+     * `RemoveRow`, `RemoveNode`, `Count` -- drop it first, so a removed row is
+     * not kept alive by this. */
+    BtaTableRow   *cell;
+    guint          cell_col;
 } TableState;
 
 static void table_state_free(gpointer p)
@@ -269,6 +277,7 @@ static void table_state_free(gpointer p)
     g_clear_pointer(&st->keys, g_hash_table_unref);
     g_clear_object(&st->virt);
     g_clear_object(&st->rows);
+    g_clear_object(&st->cell);
     g_free(st);
 }
 
@@ -1023,19 +1032,28 @@ static int table_still_holds(BtaWidget *w, BtaTableRow *row)
 /*
  * The edit is over and changed something: report it and let the program decide.
  *
- * `CellEdit(row, column, text)`. **`false` refuses it** and the cell says what
- * it said; **a string is what to keep instead** -- the program's spelling of
+ * `CellEdit(row, column, text, how)`. **`false` refuses it** and the cell says
+ * what it said; **a string is what to keep instead** -- the program's spelling of
  * what was typed, `"2"` kept as `"2d"`; anything else keeps the text. A held row
  * is written here, after the handler, so a `SetCell` inside it used to be
  * overwritten by the typed text -- the string answer is the way to say it. A
  * handler that throws has not accepted anything, so it refuses.
+ *
+ * **`how` says what ended the edit**: `"enter"`, `"tab"` and `"shift-tab"` are
+ * the grid's move-on keys (the keys themselves are consumed, and an edit that
+ * ends with one is reported even when nothing changed, because the program
+ * reads the reason and moves); `"pick"` is a day, an item or a tick chosen;
+ * `"focus"` is the keyboard leaving; `"code"` is `EndEdit`; `"left"` is the row
+ * unbound -- scrolled away -- with the edit committed. The empty string is an
+ * old caller that ended it without saying.
  *
  * Answers what the cell should say now. Everything the handler could change is
  * taken before it runs: the row and the table's wrapper are held, both texts
  * are copied.
  */
 static char *table_report_edit(BtaWidget *w, BtaTableRow *row, guint col,
-                               const char *old, const char *now)
+                               const char *old, const char *now,
+                               const char *how)
 {
     JSContext *ctx   = w->ctx;
     JSValue    self  = JS_DupValue(ctx, w->self);
@@ -1060,9 +1078,10 @@ static char *table_report_edit(BtaWidget *w, BtaTableRow *row, guint col,
                 table_still_holds(w, row) < 0;
 
     if (!gone) {
-        JSValue argv[3] = { table_address(ctx, w, row), JS_NewInt32(ctx, (int)col),
-                            JS_NewString(ctx, typed) };
-        JSValue r = bta_emit_answer(w, "CellEdit", 3, argv, &threw);
+        JSValue argv[4] = { table_address(ctx, w, row), JS_NewInt32(ctx, (int)col),
+                            JS_NewString(ctx, typed),
+                            JS_NewString(ctx, how ? how : "") };
+        JSValue r = bta_emit_answer(w, "CellEdit", 4, argv, &threw);
 
         if (threw || JS_IsStrictEqual(ctx, r, JS_FALSE)) {
             out = g_steal_pointer(&was);
@@ -1086,7 +1105,7 @@ static char *table_report_edit(BtaWidget *w, BtaTableRow *row, guint col,
         }
 
         JS_FreeValue(ctx, r);
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < 4; i++)
             JS_FreeValue(ctx, argv[i]);
     } else {
         out = g_steal_pointer(&was);
@@ -1249,18 +1268,29 @@ static char *cell_value(BtaCell *c)
     }
 }
 
+/* The keys that mean "and go on": an edit that ends with one is reported even
+ * when nothing changed, because the program reads the reason and moves. */
+static bool cell_move_key(const char *how)
+{
+    return how && (!strcmp(how, "enter") || !strcmp(how, "tab") ||
+                   !strcmp(how, "shift-tab"));
+}
+
 /*
  * Ends the open edit: commits what it holds, or not. Runs outside GTK's own
  * signals -- from an idle, or from code -- because reporting runs the program,
  * and the program may empty the table this cell is drawn in.
+ *
+ * `how` is what ended it and is passed to `CellEdit`; NULL is a cancel, which
+ * reports nothing.
  */
-static void cell_finish(BtaCell *c, bool commit)
+static void cell_finish(BtaCell *c, const char *how)
 {
     if (!c->editor)
         return;
 
     BtaWidget   *w   = cell_table(c);
-    char        *now = commit ? cell_value(c) : NULL;
+    char        *now = how ? cell_value(c) : NULL;
     BtaTableRow *row = g_steal_pointer(&c->erow);
     char        *was = g_steal_pointer(&c->was);
     GtkWidget   *box = g_object_ref(c->box);
@@ -1268,8 +1298,8 @@ static void cell_finish(BtaCell *c, bool commit)
 
     cell_take_editor(c, w);
 
-    if (w && now && row && strcmp(now, was ? was : "")) {
-        char *shown = table_report_edit(w, row, c->col, was, now);
+    if (w && now && row && (strcmp(now, was ? was : "") || cell_move_key(how))) {
+        char *shown = table_report_edit(w, row, c->col, was, now, how);
 
         /* A held row is redrawn by the write; an on-demand one is the
          * program's, and the label says what it answered until `Data` is asked
@@ -1317,6 +1347,7 @@ typedef struct {
     GtkWidget *box;
     guint      gen;
     int        how;
+    const char *reason;   /* what ended it, for `CellEdit`; a static string */
 } CellSettle;
 
 static gboolean cell_settle_cb(gpointer p)
@@ -1356,17 +1387,17 @@ static gboolean cell_settle_cb(gpointer p)
         if (ours)
             gtk_widget_grab_focus(c->field ? c->field : c->editor);
         else
-            cell_finish(c, true);
+            cell_finish(c, "focus");
         break;
     }
     case SETTLE_LEFT:
         /* Unbound for good, not rebound to the same row a moment later: what
          * was typed is committed, not lost to a scroll. */
         if (c->row != c->erow)
-            cell_finish(c, true);
+            cell_finish(c, "left");
         break;
     default:
-        cell_finish(c, s->how == SETTLE_COMMIT);
+        cell_finish(c, s->how == SETTLE_COMMIT ? s->reason : NULL);
     }
     return G_SOURCE_REMOVE;
 }
@@ -1379,13 +1410,14 @@ static void cell_settle_free(gpointer p)
     g_free(s);
 }
 
-static void cell_settle(BtaCell *c, int how)
+static void cell_settle(BtaCell *c, int how, const char *reason)
 {
     CellSettle *s = g_new0(CellSettle, 1);
 
     s->box = g_object_ref(c->box);
     s->gen = c->gen;
     s->how = how;
+    s->reason = reason;
     g_idle_add_full(G_PRIORITY_DEFAULT, cell_settle_cb, s, cell_settle_free);
 }
 
@@ -1409,7 +1441,7 @@ static gboolean cell_report_cb(gpointer p)
     BtaWidget  *w = g ? g_object_get_data(g, BTA_WIDGET_QUARK) : NULL;
 
     if (w)
-        g_free(table_report_edit(w, r->row, r->col, r->was, r->now));
+        g_free(table_report_edit(w, r->row, r->col, r->was, r->now, "left"));
     if (g)
         g_object_unref(g);
     return G_SOURCE_REMOVE;
@@ -1463,14 +1495,29 @@ static gboolean on_editor_key(GtkEventControllerKey *k, guint keyval,
     if (!c->editor)
         return FALSE;
     if (keyval == GDK_KEY_Escape) {
-        cell_settle(c, SETTLE_CANCEL);
+        cell_settle(c, SETTLE_CANCEL, NULL);
         return TRUE;
     }
     /* Enter commits from the field; on the calendar's button or a combo's it
      * is the button's own, which opens its list. */
     if ((keyval == GDK_KEY_Return || keyval == GDK_KEY_KP_Enter ||
          keyval == GDK_KEY_ISO_Enter) && c->field && focus_inside(c->field)) {
-        cell_settle(c, SETTLE_COMMIT);
+        cell_settle(c, SETTLE_COMMIT, "enter");
+        return TRUE;
+    }
+    /*
+     * **Tab commits and is consumed**, so the program hears `how` and moves the
+     * current cell itself. Left alone it would walk the focus -- out of the
+     * grid and into whatever is next -- and the edit would end as a blur that
+     * says nothing about where the reader meant to go. Consumed, the focus goes
+     * back to the table when the edit is taken out (`cell_take_editor`), which
+     * is where the next cell's frame is drawn.
+     */
+    if ((keyval == GDK_KEY_Tab || keyval == GDK_KEY_KP_Tab ||
+         keyval == GDK_KEY_ISO_Left_Tab) && c->field && focus_inside(c->field)) {
+        bool back = keyval == GDK_KEY_ISO_Left_Tab ||
+                    (state & GDK_SHIFT_MASK) != 0;
+        cell_settle(c, SETTLE_COMMIT, back ? "shift-tab" : "tab");
         return TRUE;
     }
     return FALSE;
@@ -1481,7 +1528,7 @@ static void on_editor_leave(GtkEventControllerFocus *f, gpointer data)
     BtaCell *c = data;
 
     if (c->editor)
-        cell_settle(c, SETTLE_BLUR);
+        cell_settle(c, SETTLE_BLUR, "focus");
 }
 
 /* Date: the day picked, into the field, and the edit committed. */
@@ -1496,7 +1543,7 @@ static void cell_date_pick(BtaCell *c, GtkCalendar *cal)
     g_date_time_unref(d);
     if (pop)
         gtk_popover_popdown(GTK_POPOVER(pop));
-    cell_settle(c, SETTLE_COMMIT);
+    cell_settle(c, SETTLE_COMMIT, "pick");
 }
 
 /*
@@ -1588,7 +1635,7 @@ static void on_combo_closed(GtkPopover *pop, gpointer data)
 
     if (c->editor && GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(pop), "bta-gen"))
                          == c->gen)
-        cell_settle(c, c->chosen ? SETTLE_COMMIT : SETTLE_CANCEL);
+        cell_settle(c, c->chosen ? SETTLE_COMMIT : SETTLE_CANCEL, "pick");
 }
 
 /*
@@ -1666,30 +1713,43 @@ static void cell_calendar_from(GtkCalendar *cal, const char *text)
  * cell's label asks for, so opening any cell grew its row by two pixels and the
  * whole table shifted under the pointer. The class takes that floor off the
  * editor, so the row keeps the height the label gave it.
+ *
+ * **And the current cell's frame.** An `outline` and not a border: it takes no
+ * space, so marking a cell does not shift the text of that row by a pixel --
+ * and the color is the cell's own text color, so it is the theme's answer on a
+ * light or a dark one. Added once per display, by the table's build, because a
+ * frame must be drawable before any editor ever opens.
  */
-static void cell_editor_style(GtkWidget *ed)
+static void table_style_once(void)
 {
     static GtkCssProvider *provider;
 
-    if (!provider) {
-        provider = gtk_css_provider_new();
-        const char *css =
-            "spinbutton.bta-cell-editor:not(.vertical), "
-            "spinbutton.bta-cell-editor:not(.vertical) > text, "
-            "spinbutton.bta-cell-editor:not(.vertical) > button, "
-            "entry.bta-cell-editor, entry.bta-cell-editor > text, "
-            ".bta-cell-editor button, .bta-cell-editor entry, .bta-cell-editor text "
-            "{ min-height: 0; margin-top: 0; margin-bottom: 0; "
-            "padding-top: 0; padding-bottom: 0; }"
+    if (provider)
+        return;
+    provider = gtk_css_provider_new();
+    const char *css =
+        ".bta-cell-current { outline: 1px solid; outline-offset: -1px; }"
+        "cell.bta-editable-cell { padding: 2px 4px; }"
+        "spinbutton.bta-cell-editor:not(.vertical), "
+        "spinbutton.bta-cell-editor:not(.vertical) > text, "
+        "spinbutton.bta-cell-editor:not(.vertical) > button, "
+        "entry.bta-cell-editor, entry.bta-cell-editor > text, "
+        ".bta-cell-editor button, .bta-cell-editor entry, .bta-cell-editor text "
+        "{ min-height: 0; margin-top: 0; margin-bottom: 0; "
+        "padding-top: 0; padding-bottom: 0; }"
 ;
 #if GTK_CHECK_VERSION(4, 12, 0)
-        gtk_css_provider_load_from_string(provider, css);
+    gtk_css_provider_load_from_string(provider, css);
 #else
-        gtk_css_provider_load_from_data(provider, css, -1);
+    gtk_css_provider_load_from_data(provider, css, -1);
 #endif
-        gtk_style_context_add_provider_for_display(gdk_display_get_default(),
-            GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
-    }
+    gtk_style_context_add_provider_for_display(gdk_display_get_default(),
+        GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+}
+
+static void cell_editor_style(GtkWidget *ed)
+{
+    table_style_once();
     gtk_widget_add_css_class(ed, "bta-cell-editor");
 }
 
@@ -1702,7 +1762,7 @@ static bool cell_open(BtaCell *c, BtaWidget *w, BtaTableRow *row, EdSpec *spec)
     if (spec->kind == ED_CHECK) {
         char *was = g_strdup(c->text ? c->text : "");
         const char *now = strcmp(was, spec->active) ? spec->active : spec->inactive;
-        char *shown = table_report_edit(w, row, c->col, was, now);
+        char *shown = table_report_edit(w, row, c->col, was, now, "pick");
 
         if (c->row == row) {
             g_free(c->text);
@@ -1993,12 +2053,26 @@ static void cell_select_row(BtaWidget *w, BtaTableRow *row)
         return;
     }
 
+    /*
+     * **An on-demand row is addressed by the index it stands for**, because
+     * the model makes a fresh object per asked-for row: the one in hand is
+     * never in a store to be found.
+     */
+    if (row && !row->cells) {
+        gtk_selection_model_select_item(table_model(w), row->index, TRUE);
+        return;
+    }
+
     GListStore *store = table_store_of(w, row);
     int         at    = table_index_in(store, row);
 
     if (at >= 0)
         gtk_selection_model_select_item(table_model(w), (guint)at, TRUE);
 }
+
+/* The current cell: the press and F2 move it, and the verbs below draw it.
+ * Defined after `table_find_cell`, which is what finds the drawn cell. */
+static void table_current_set(BtaWidget *w, BtaTableRow *row, guint col);
 
 /* The cell the focused widget is in: the box is an **ancestor** of whatever
  * holds the focus inside it -- the label, the tick, an editor's field -- so
@@ -2099,8 +2173,16 @@ static void on_view_pressed(GtkGestureClick *g, int n, double x, double y,
     if (c && c->editor && at && (at == c->editor || gtk_widget_is_ancestor(at, c->editor)))
         c->pressed = g_get_monotonic_time();
 
-    if (!c || !c->row || c->editor || cell_locked(c) ||
+    if (!c || !c->row || c->editor ||
         gtk_gesture_single_get_current_button(GTK_GESTURE_SINGLE(g)) != GDK_BUTTON_PRIMARY)
+        return;
+
+    /* **The press is also what chooses the cell**, before the lock and the
+     * kind decide whether it opens: a locked cell is read and a tick turns,
+     * but both are the reader's cell as much as an editable one. */
+    table_current_set(w, c->row, c->col);
+
+    if (cell_locked(c))
         return;
     cell_select_row(w, c->row);
     if (c->spec->kind == ED_CHECK)
@@ -2112,11 +2194,44 @@ static void on_view_pressed(GtkGestureClick *g, int n, double x, double y,
 
 /* F2 on the focused cell: the editing key every grid has. Off a cell -- the
  * keyboard is on the view after a commit -- it is the selected row's first
- * field. */
+ * field.
+ *
+ * **And Enter is offered to the program before the view claims it.** GTK's
+ * column view activates the row on Return -- a double click's other half -- and
+ * it does so before the bubble phase, where a control's `KeyPress` is heard: a
+ * grid whose Enter moves the cell, which is the first thing every sheet does,
+ * could never hear it. So Return is raised as `KeyPress` here, where the event
+ * is still ours: **a handler that returns true consumes it** and the activation
+ * does not happen; anything else falls through and the row activates as it
+ * always did. With an edit open it is the editor's Enter (to commit), not the
+ * view's.
+ */
 static gboolean on_table_key(GtkEventControllerKey *k, guint keyval, guint keycode,
                              GdkModifierType state, gpointer data)
 {
     BtaWidget *w = data;
+
+    if (keyval == GDK_KEY_Return || keyval == GDK_KEY_KP_Enter ||
+        keyval == GDK_KEY_ISO_Enter) {
+        if (table_find_cell(w->inner, NULL, -1, -1))
+            return FALSE;
+
+        JSContext  *ctx  = w->ctx;
+        const char *name = gdk_keyval_name(keyval);
+        JSValue     argv[4] = {
+            JS_NewString(ctx, name ? name : "Return"),
+            JS_NewBool(ctx, (state & GDK_CONTROL_MASK) != 0),
+            JS_NewBool(ctx, (state & GDK_SHIFT_MASK) != 0),
+            JS_NewBool(ctx, (state & GDK_ALT_MASK) != 0),
+        };
+        JSValue r = bta_emit_answer(w, "KeyPress", 4, argv, NULL);
+        bool    handled = JS_ToBool(ctx, r) > 0;
+
+        JS_FreeValue(ctx, r);
+        for (int i = 0; i < 4; i++)
+            JS_FreeValue(ctx, argv[i]);
+        return handled;
+    }
 
     if (keyval != GDK_KEY_F2)
         return FALSE;
@@ -2128,6 +2243,7 @@ static gboolean on_table_key(GtkEventControllerKey *k, guint keyval, guint keyco
         c = cell_of_selection(w);
     if (!c || c->editor || c->locked || !c->row)
         return FALSE;
+    table_current_set(w, c->row, c->col);
     cell_begin_later(c);
     return TRUE;
 }
@@ -2152,6 +2268,114 @@ static BtaCell *table_find_cell(GtkWidget *x, BtaTableRow *row, int index, int c
         if ((c = table_find_cell(k, row, index, col)))
             return c;
     return NULL;
+}
+
+/* ---------------------------------------------------------- the current cell
+ *
+ * **The cell the reader is on**, kept as an address -- a row and a column --
+ * and drawn: a thin frame around it, and the corner the fill drag will take.
+ * It is what F2 and `EditCell` mean by "this cell", what a program moves to
+ * walk the grid, and what `CellChange` says moved.
+ *
+ * **The frame is a class on the cell's box, applied at every bind**
+ * (`cell_fill`): a row scrolled back into view is drawn current with no
+ * bookkeeping, and moving the cell takes the class off one drawn cell and puts
+ * it on another -- a walk of the drawn widgets that happens once per move and
+ * never per frame. The row is held so the address survives the store telling
+ * its cells changed; the verbs that empty a table drop it first.
+ */
+#define CELL_CURRENT_CLASS "bta-cell-current"
+
+/* Whether this drawn cell is the current one. **An on-demand row is compared
+ * by the index it stands for**: every bind makes a fresh row object, so the
+ * held one would never match it. */
+static bool table_cell_is_current(BtaWidget *w, BtaTableRow *row, guint col)
+{
+    TableState *st = table_state(w);
+
+    if (!st->cell || !row || st->cell_col != col)
+        return false;
+    if (!row->cells || !st->cell->cells)
+        return !row->cells && !st->cell->cells && row->index == st->cell->index;
+    return st->cell == row;
+}
+
+/* The drawn cell of the current one, or NULL when it is not on screen. */
+static BtaCell *table_current_drawn(BtaWidget *w)
+{
+    TableState *st = table_state(w);
+
+    if (!st->cell)
+        return NULL;
+    if (!st->cell->cells)
+        return table_find_cell(w->inner, NULL, (int)st->cell->index,
+                               (int)st->cell_col);
+    return table_find_cell(w->inner, st->cell, 0, (int)st->cell_col);
+}
+
+/* One drawn cell, marked or unmarked as the current one. */
+static void table_cell_mark(BtaCell *c, bool on)
+{
+    if (!c || !c->box)
+        return;
+    if (on)
+        gtk_widget_add_css_class(c->box, CELL_CURRENT_CLASS);
+    else
+        gtk_widget_remove_css_class(c->box, CELL_CURRENT_CLASS);
+}
+
+/*
+ * Moves the current cell to (row, col), or clears it with `row` NULL, raising
+ * `CellChange` with the address and the column -- `null` and `-1` when it is
+ * cleared. The same address twice is not a move and raises nothing.
+ *
+ * **It does not select the row**: the press selects where it claims and GTK
+ * selects where it does not, `Key` and `Select` are the selection's own verbs,
+ * and the current cell is the finer address inside the row already chosen. The
+ * verbs that move it *from code* -- `EditCell`, `CurrentCell` -- select as a
+ * press would, because a program pointing at a cell means the row too.
+ */
+static void table_current_set(BtaWidget *w, BtaTableRow *row, guint col)
+{
+    TableState *st = table_state(w);
+
+    if (row && !row->cells && st->cell && !st->cell->cells &&
+        st->cell->index == row->index && st->cell_col == col)
+        return;
+    if (st->cell == row && (!row || st->cell_col == col))
+        return;
+
+    table_cell_mark(table_current_drawn(w), false);
+
+    g_clear_object(&st->cell);
+    st->cell = row ? g_object_ref(row) : NULL;
+    st->cell_col = row ? col : 0;
+
+    table_cell_mark(table_current_drawn(w), true);
+
+    /*
+     * The handler runs the program, which may take the widget -- or the table
+     * -- apart: the wrapper is held across the emit, the same bargain
+     * `table_report_edit` makes.
+     */
+    JSContext *ctx  = w->ctx;
+    JSValue    self = JS_DupValue(ctx, w->self);
+    JSValue    argv[2] = {
+        row ? table_address(ctx, w, row) : JS_NULL,
+        JS_NewInt32(ctx, row ? (int)col : -1),
+    };
+
+    bta_emit(w, "CellChange", 2, argv);
+
+    JS_FreeValue(ctx, argv[0]);
+    JS_FreeValue(ctx, argv[1]);
+    JS_FreeValue(ctx, self);
+}
+
+/* The current cell cleared, for the verbs that take rows away. */
+static void table_current_clear(BtaWidget *w)
+{
+    table_current_set(w, NULL, 0);
 }
 
 static void on_setup_cell(GtkSignalListItemFactory *f, GtkListItem *item,
@@ -2381,7 +2605,7 @@ static void on_unbind_cell(GtkSignalListItemFactory *f, GtkListItem *item,
      */
     c->row = NULL;
     if (c->editor)
-        cell_settle(c, SETTLE_LEFT);
+        cell_settle(c, SETTLE_LEFT, "left");
 }
 
 /*
@@ -2483,6 +2707,14 @@ static void cell_fill(BtaWidget *w, GtkWidget *box, BtaTableRow *row, guint col,
         bta_image_set_icon(img, icon);
     gtk_widget_set_visible(img, show);
 
+    /* **The current cell's frame is applied at the bind**, so a row scrolled
+     * back into view is drawn current and one no longer current loses it --
+     * no bookkeeping and nothing to run per frame. */
+    if (table_cell_is_current(w, row, col))
+        gtk_widget_add_css_class(box, CELL_CURRENT_CLASS);
+    else
+        gtk_widget_remove_css_class(box, CELL_CURRENT_CLASS);
+
     g_free(text);
     g_free(icon);
     g_free(uri);
@@ -2569,6 +2801,17 @@ static void on_bind_cell(GtkSignalListItemFactory *f, GtkListItem *item,
     bool link = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(f), "bta-link"));
 
     cell_fill(w, box, row, col, link);
+
+    /* The theme's padding on a cell (8px 6px in Adwaita) is what an editable
+     * column's field sits inside, and it reads as a gap around the editor;
+     * the class is on GTK's own cell widget, which is the parent of what the
+     * factory built, and only for a column that edits. */
+    if (g_object_get_data(G_OBJECT(f), "bta-editor")) {
+        GtkWidget *cellw = gtk_widget_get_parent(gtk_list_item_get_child(item));
+
+        if (cellw)
+            gtk_widget_add_css_class(cellw, "bta-editable-cell");
+    }
 
     /* A held row says when it changes; one asked of `Data` is asked again by
      * the rebind a `Count` brings. */
@@ -2845,6 +3088,14 @@ static JSValue table_edit_cell(JSContext *ctx, JSValueConst this_val,
 
     BtaCell *cell = table_find_cell(w->inner, row, index, c);
 
+    /* **The click from code is a click**: the row is selected and the cell
+     * becomes the current one, so `EditCell` and a pointer leave the reader in
+     * the same place. */
+    if (cell && cell->row) {
+        cell_select_row(w, cell->row);
+        table_current_set(w, cell->row, cell->col);
+    }
+
     g_clear_object(&row);
     return JS_NewBool(ctx, cell && cell_begin(cell));
 }
@@ -2872,7 +3123,7 @@ static JSValue table_end_edit(JSContext *ctx, JSValueConst this_val,
 
     if (!cell)
         return JS_NewBool(ctx, false);
-    cell_finish(cell, commit);
+    cell_finish(cell, commit ? "code" : NULL);
     return JS_NewBool(ctx, true);
 }
 
@@ -3448,6 +3699,10 @@ static void on_row_activated(GtkColumnView *view, guint position,
 
 static void build_table(BtaWidget *w)
 {
+    /* The table's own rules -- the current cell's frame, the editors' floor --
+     * once per display, before any cell is drawn. */
+    table_style_once();
+
     TableState *st = g_new0(TableState, 1);
     st->rows = g_list_store_new(BTA_TYPE_TABLE_ROW);
     /* On, which is what a tree of folders wants and what `TreeView` does. It
@@ -4048,6 +4303,7 @@ static JSValue table_add(JSContext *ctx, JSValueConst this_val,
 
     /* Adding a row is saying the table holds its own again. */
     if (st->virt) {
+        table_current_clear(w);
         g_clear_object(&st->virt);
         table_use_model(w, G_LIST_MODEL(st->rows));
     }
@@ -4065,6 +4321,10 @@ static JSValue table_clear(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     TableState *st = table_state(w);
+
+    /* **The current cell goes with the rows**, and the frame comes off while
+     * the cell is still drawn. */
+    table_current_clear(w);
 
     g_list_store_remove_all(st->rows);
 
@@ -4144,6 +4404,12 @@ static JSValue table_remove_node(JSContext *ctx, JSValueConst this_val,
     table_forget(w, node);
     if (at >= 0)
         g_list_store_remove(store, (guint)at);
+
+    /* **A row taken away is not the reader's cell any more** -- and the walk
+     * is the question, because the node may have been an ancestor of the
+     * current one. */
+    if (st->cell && table_still_holds(w, st->cell) < 0)
+        table_current_clear(w);
     return JS_UNDEFINED;
 }
 
@@ -4171,6 +4437,9 @@ static JSValue table_remove_row(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowRangeError(ctx, "RemoveRow: there is no row %d", i);
 
     g_list_store_remove(rows, (guint)i);
+
+    if (st->cell && table_still_holds(w, st->cell) < 0)
+        table_current_clear(w);
     return JS_UNDEFINED;
 }
 
@@ -4369,11 +4638,17 @@ static JSValue table_set_count(JSContext *ctx, JSValueConst this_val,
     if (!st->virt) {
         /* Going on demand: what the table held is dropped, because it is no
          * longer what it shows and keeping it would be two answers to Count. */
+        table_current_clear(w);
         g_list_store_remove_all(st->rows);
         st->virt = g_object_new(BTA_TYPE_TABLE_MODEL, NULL);
         table_use_model(w, G_LIST_MODEL(st->virt));
     }
     table_model_set_count(st->virt, (guint)n);
+
+    /* A count that shrank past the current cell leaves it outside. */
+    if (st->cell && !st->cell->cells &&
+        st->cell->index >= g_list_model_get_n_items(G_LIST_MODEL(st->virt)))
+        table_current_clear(w);
     return JS_UNDEFINED;
 }
 
@@ -4921,6 +5196,104 @@ static JSValue table_set_key(JSContext *ctx, JSValueConst this_val,
 }
 
 /*
+ * `CurrentCell` -- the cell the reader is on, as `{ Row, Column }`, and
+ * assigning moves it.
+ *
+ * `Row` is the address every verb uses: a key in a tree, an index in a flat
+ * table. `Column` is a column's index, the same one `Cell`/`EditCell` take.
+ * Assigning `null` clears it, and **assigning also selects the row** and opens
+ * the way to it, as a press would: pointing a program at a cell means the row
+ * too. The address it is already on is not a move and raises nothing;
+ * `CellChange` is what says it moved, whichever way it moved.
+ */
+static JSValue table_get_current(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget  *w = bta_this(ctx, this_val);
+    TableState *st;
+
+    if (!w)
+        return JS_EXCEPTION;
+    st = table_state(w);
+    if (!st->cell)
+        return JS_NULL;
+
+    JSValue out = JS_NewObject(ctx);
+
+    JS_SetPropertyStr(ctx, out, "Row", table_address(ctx, w, st->cell));
+    JS_SetPropertyStr(ctx, out, "Column", JS_NewInt32(ctx, (int)st->cell_col));
+    return out;
+}
+
+static JSValue table_set_current(JSContext *ctx, JSValueConst this_val,
+                                 JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    if (JS_IsNull(val) || JS_IsUndefined(val)) {
+        table_current_clear(w);
+        return JS_UNDEFINED;
+    }
+    if (!JS_IsObject(val))
+        return JS_ThrowTypeError(ctx, "CurrentCell: { Row, Column }, or null");
+
+    JSValue cv  = JS_GetPropertyStr(ctx, val, "Column");
+    int32_t col = 0;
+
+    if (JS_IsUndefined(cv) || !bta_to_int(ctx, cv, "CurrentCell.Column", &col)) {
+        JS_FreeValue(ctx, cv);
+        return JS_EXCEPTION;
+    }
+    JS_FreeValue(ctx, cv);
+    if (col < 0)
+        return JS_ThrowRangeError(ctx, "CurrentCell: %d is not a column", col);
+
+    JSValue      rv  = JS_GetPropertyStr(ctx, val, "Row");
+    TableState  *st  = table_state(w);
+    bool         bad = false;
+    BtaTableRow *row = NULL;
+
+    /*
+     * **An on-demand row is made here**, since there is no store to find it
+     * in: a bare row carrying the index, which is how the model names one.
+     */
+    if (st->virt) {
+        int32_t index;
+
+        if (!bta_to_int(ctx, rv, "CurrentCell.Row", &index))
+            bad = true;
+        else if (index >= 0 &&
+                 (guint)index < g_list_model_get_n_items(G_LIST_MODEL(st->virt))) {
+            row = g_object_new(BTA_TYPE_TABLE_ROW, NULL);
+            g_clear_pointer(&row->cells, g_ptr_array_unref);
+            row->index = (guint)index;
+        }
+    } else {
+        row = table_row_arg(ctx, w, rv, &bad);
+    }
+
+    if (bad) {
+        JS_FreeValue(ctx, rv);
+        return JS_EXCEPTION;
+    }
+    if (!row) {
+        const char *name = JS_ToCString(ctx, rv);
+        JSValue     e    = JS_ThrowRangeError(ctx, "CurrentCell: there is no %s %s",
+                                              table_what(w), name ? name : "");
+        JS_FreeCString(ctx, name);
+        JS_FreeValue(ctx, rv);
+        return e;
+    }
+    JS_FreeValue(ctx, rv);
+
+    cell_select_row(w, row);
+    table_current_set(w, row, (guint)col);
+    g_clear_object(&row);
+    return JS_UNDEFINED;
+}
+
+/*
  * `AutoExpand` -- whether a node comes open when it gains children. On by
  * default, which is what a tree of folders wants and what `TreeView` does.
  */
@@ -5186,6 +5559,14 @@ static const JSCFunctionListEntry table_props[] = {
      *   `""` selects nothing. A tree only
      */
     JS_CGETSET_DEF("Key",        table_get_key,        table_set_key),
+    /* CurrentCell
+     *   the cell the reader is on, as `{ Row, Column }` — the row is a key in
+     *   a tree and an index in a flat table, the column is an index — or
+     *   `null` for none. **Assigning moves it and selects the row**, opening
+     *   the way to it; `null` clears it. A cell that is not editable is a
+     *   cell all the same: it can be current, and F2 is what opens it
+     */
+    JS_CGETSET_DEF("CurrentCell", table_get_current, table_set_current),
     /* AutoExpand
      *   opens a node as it arrives, and again when it gains a child after
      *   being closed by hand. Default `true`. A tree only. The same mechanism
@@ -5388,17 +5769,28 @@ void bta_table_register(void)
          *   `Check` column stays one). For a `Custom` column this is the whole
          *   edit: open the dialog here and write with `SetCell`
          */
-        /* CellEdit(row, column, text)
-         *   an edit ended with a different text -- Enter, the focus moving
-         *   away, a day or an item picked, a tick turned. `row` is an index in a
-         *   flat table and a key in a tree. **Returning `false` refuses it** and
-         *   the cell goes back to what it said; **a string is kept instead of
+        /* CellEdit(row, column, text, how)
+         *   an edit ended. **`how` says what ended it**: `"enter"`, `"tab"` and
+         *   `"shift-tab"` are the grid's move-on keys, and an edit that ends
+         *   with one is reported even when nothing changed, because the program
+         *   reads the reason and moves; `"pick"` is a day, an item or a tick
+         *   chosen; `"focus"` is the keyboard leaving; `"code"` is `EndEdit`;
+         *   `"left"` is the row unbound, scrolled away. Every other reason
+         *   reports a text that changed. `row` is an index in a flat table and
+         *   a key in a tree. **Returning `false` refuses it** and the cell goes
+         *   back to what it said; **a string is kept instead of
          *   the text** -- the program's own spelling of what was typed; anything
          *   else keeps the text. A handler that throws refuses. An on-demand
          *   table holds no cells, so there the handler stores it. **A held flat
          *   row the program removed while the edit was open is not raised at
          *   all**: its index went with it, and `-1` names no row; a tree keeps
          *   its key
+         */
+        /* CellChange(row, column)
+         *   the current cell moved — a press, `EditCell`, F2, or an assignment
+         *   to `CurrentCell`. `row` is an index in a flat table and a key in a
+         *   tree; **`null` and `-1` say it was cleared**. `CurrentCell` is
+         *   where it is now
          */
         /* CellLink(row, column, uri)
          *   a `Link` cell was activated — a click, or Enter on it. `row` is an
@@ -5421,7 +5813,7 @@ void bta_table_register(void)
          */
         BTA_CLASS_ENUM_TEXT("TableView", "Control", build_table, table_props, false,
                             table_options, "Columns.Text",
-                            "Select,Activate,Data,Sort,CellEditor,CellEdit,CellLink,HeaderClick,Scroll"),
+                            "Select,Activate,Data,Sort,CellEditor,CellEdit,CellChange,CellLink,HeaderClick,Scroll"),
     };
     bta_register_classes(rows, (int)G_N_ELEMENTS(rows));
 }

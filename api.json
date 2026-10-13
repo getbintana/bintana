@@ -8645,6 +8645,15 @@
           "Native": true
         },
         {
+          "Name": "CurrentCell",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the cell the reader is on, as `{ Row, Column }` — the row is a key in a tree and an index in a flat table, the column is an index — or `null` for none. **Assigning moves it and selects the row**, opening the way to it; `null` clears it. A cell that is not editable is a cell all the same: it can be current, and F2 is what opens it",
+          "Native": true
+        },
+        {
           "Name": "Deselect",
           "Kind": "Method",
           "Params": 1,
@@ -8961,8 +8970,13 @@
         },
         {
           "Name": "CellEdit",
-          "Signature": "(row, column, text)",
-          "Doc": "an edit ended with a different text -- Enter, the focus moving away, a day or an item picked, a tick turned. `row` is an index in a flat table and a key in a tree. **Returning `false` refuses it** and the cell goes back to what it said; **a string is kept instead of the text** -- the program's own spelling of what was typed; anything else keeps the text. A handler that throws refuses. An on-demand table holds no cells, so there the handler stores it. **A held flat row the program removed while the edit was open is not raised at all**: its index went with it, and `-1` names no row; a tree keeps its key"
+          "Signature": "(row, column, text, how)",
+          "Doc": "an edit ended. **`how` says what ended it**: `\"enter\"`, `\"tab\"` and `\"shift-tab\"` are the grid's move-on keys, and an edit that ends with one is reported even when nothing changed, because the program reads the reason and moves; `\"pick\"` is a day, an item or a tick chosen; `\"focus\"` is the keyboard leaving; `\"code\"` is `EndEdit`; `\"left\"` is the row unbound, scrolled away. Every other reason reports a text that changed. `row` is an index in a flat table and a key in a tree. **Returning `false` refuses it** and the cell goes back to what it said; **a string is kept instead of the text** -- the program's own spelling of what was typed; anything else keeps the text. A handler that throws refuses. An on-demand table holds no cells, so there the handler stores it. **A held flat row the program removed while the edit was open is not raised at all**: its index went with it, and `-1` names no row; a tree keeps its key"
+        },
+        {
+          "Name": "CellChange",
+          "Signature": "(row, column)",
+          "Doc": "the current cell moved — a press, `EditCell`, F2, or an assignment to `CurrentCell`. `row` is an index in a flat table and a key in a tree; **`null` and `-1` say it was cleared**. `CurrentCell` is where it is now"
         },
         {
           "Name": "CellLink",
