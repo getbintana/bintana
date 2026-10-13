@@ -1175,6 +1175,23 @@ static bool focus_inside(GtkWidget *w)
  * click somewhere else it is where the click put it, and taking it back would
  * undo the click.
  */
+/* GTK's own cell widget around a cell's box (a tree has an expander between),
+ * which is the node whose padding the theme sets. It carries
+ * `bta-cell-editing` only while an editor is open in it, so the row keeps its
+ * height when nothing is being edited. */
+static void cell_editing_class(GtkWidget *box, bool on)
+{
+    for (GtkWidget *x = box; x; x = gtk_widget_get_parent(x)) {
+        if (g_str_equal(G_OBJECT_TYPE_NAME(x), "GtkColumnViewCellWidget")) {
+            if (on)
+                gtk_widget_add_css_class(x, "bta-cell-editing");
+            else
+                gtk_widget_remove_css_class(x, "bta-cell-editing");
+            return;
+        }
+    }
+}
+
 static void cell_take_editor(BtaCell *c, BtaWidget *w)
 {
     GtkWidget *ed = c->editor;
@@ -1187,6 +1204,7 @@ static void cell_take_editor(BtaCell *c, BtaWidget *w)
     c->gen++;
     c->editor = NULL;
     c->field  = NULL;
+    cell_editing_class(c->box, false);
     gtk_box_remove(GTK_BOX(c->box), ed);
     gtk_widget_set_visible(c->view, TRUE);
     g_clear_pointer(&c->espec, ed_spec_unref);
@@ -1714,11 +1732,11 @@ static void cell_calendar_from(GtkCalendar *cal, const char *text)
  * whole table shifted under the pointer. The class takes that floor off the
  * editor, so the row keeps the height the label gave it.
  *
- * **And the current cell's frame.** An `outline` and not a border: it takes no
- * space, so marking a cell does not shift the text of that row by a pixel --
- * and the color is the cell's own text color, so it is the theme's answer on a
- * light or a dark one. Added once per display, by the table's build, because a
- * frame must be drawable before any editor ever opens.
+ * **And the current cell has no frame.** It had an `outline`, and it drew a
+ * black square around the editor it was editing -- the only style an editor
+ * wears is `linked`, and the only thing played with is the padding
+ * (`bta-cell-editing`). `bta-cell-current` is still on the cell, as a class
+ * and nothing more, so an application's `app.css` can style it if it wants one.
  */
 static void table_style_once(void)
 {
@@ -1728,8 +1746,7 @@ static void table_style_once(void)
         return;
     provider = gtk_css_provider_new();
     const char *css =
-        ".bta-cell-current { outline: 1px solid; outline-offset: -1px; }"
-        "cell.bta-editable-cell { padding: 2px 4px; }"
+        "cell.bta-cell-editing { padding: 2px 6px; }"
         "spinbutton.bta-cell-editor:not(.vertical), "
         "spinbutton.bta-cell-editor:not(.vertical) > text, "
         "spinbutton.bta-cell-editor:not(.vertical) > button, "
@@ -1900,6 +1917,7 @@ static bool cell_open(BtaCell *c, BtaWidget *w, BtaTableRow *row, EdSpec *spec)
     gtk_widget_add_controller(ed, focus);
 
     c->editor = ed;
+    cell_editing_class(c->box, true);
     gtk_widget_set_visible(c->view, FALSE);
     if (c->more)
         gtk_widget_set_visible(c->more, FALSE);
@@ -2801,17 +2819,6 @@ static void on_bind_cell(GtkSignalListItemFactory *f, GtkListItem *item,
     bool link = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(f), "bta-link"));
 
     cell_fill(w, box, row, col, link);
-
-    /* The theme's padding on a cell (8px 6px in Adwaita) is what an editable
-     * column's field sits inside, and it reads as a gap around the editor;
-     * the class is on GTK's own cell widget, which is the parent of what the
-     * factory built, and only for a column that edits. */
-    if (g_object_get_data(G_OBJECT(f), "bta-editor")) {
-        GtkWidget *cellw = gtk_widget_get_parent(gtk_list_item_get_child(item));
-
-        if (cellw)
-            gtk_widget_add_css_class(cellw, "bta-editable-cell");
-    }
 
     /* A held row says when it changes; one asked of `Data` is asked again by
      * the rebind a `Count` brings. */
