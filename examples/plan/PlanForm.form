@@ -1,0 +1,125 @@
+{
+  "format": "bintana-form/1",
+  "class": "PlanForm",
+  "properties": {
+    "Text": "Plan",
+    "Icon": "x-office-spreadsheet-symbolic",
+    "Arrangement": "Vertical",
+    "Spacing": 10,
+    "Padding": "12",
+    "Width": 900,
+    "Height": 520
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "Bar",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Height": 34,
+        "Spacing": 8,
+        "Width": 876
+      },
+      "children": [
+        {
+          "type": "Button",
+          "name": "BtnAdd",
+          "properties": {
+            "Icon": "list-add-symbolic",
+            "Text": "Add task",
+            "Width": 120
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnRemove",
+          "properties": {
+            "Icon": "list-remove-symbolic",
+            "Text": "Remove",
+            "Width": 120
+          }
+        },
+        {
+          "type": "Label",
+          "name": "Spacer",
+          "properties": {
+            "HExpand": true
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnSave",
+          "properties": {
+            "Icon": "document-save-symbolic",
+            "Text": "Save",
+            "Width": 104
+          }
+        }
+      ]
+    },
+    {
+      "type": "TableView",
+      "name": "Sheet",
+      "properties": {
+        "ColumnLines": true,
+        "Columns": [
+          {
+            "Text": "Task",
+            "Width": 260,
+            "Editor": "Text"
+          },
+          {
+            "Text": "Duration",
+            "Width": 100,
+            "Alignment": "Right",
+            "Editor": {
+              "Kind": "Number",
+              "Min": 0,
+              "Max": 365
+            }
+          },
+          {
+            "Text": "Start",
+            "Width": 140,
+            "Editor": "Date"
+          },
+          {
+            "Text": "Done",
+            "Width": 70,
+            "Alignment": "Center",
+            "Editor": {
+              "Kind": "Check",
+              "ActiveText": "Yes",
+              "InactiveText": "No"
+            }
+          },
+          {
+            "Text": "Calendar",
+            "Width": 130,
+            "Editor": "Combo"
+          },
+          {
+            "Text": "Notes",
+            "Width": 0,
+            "Editor": "Custom"
+          }
+        ],
+        "Height": 422,
+        "Style": "frame",
+        "VAlign": "Fill",
+        "VExpand": true,
+        "Width": 874
+      }
+    },
+    {
+      "type": "Label",
+      "name": "Status",
+      "properties": {
+        "Ellipsize": true,
+        "Height": 18,
+        "Text": "Click a cell, or press F2 on one, to edit it",
+        "Width": 876
+      }
+    }
+  ]
+}

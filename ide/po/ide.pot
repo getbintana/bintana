@@ -317,8 +317,44 @@ msgstr ""
 msgid "Alignment:"
 msgstr ""
 
+#: forms/ColumnForm.form: ColList.Columns.Text
+msgid "Cell"
+msgstr ""
+
+#: forms/ColumnForm.form: LblColCell.Text
+msgid "Cell:"
+msgstr ""
+
+#: forms/ColumnForm.form: LblColMin.Text
+msgid "Min:"
+msgstr ""
+
+#: forms/ColumnForm.form: LblColMax.Text
+msgid "Max:"
+msgstr ""
+
+#: forms/ColumnForm.form: LblColStep.Text
+msgid "Step:"
+msgstr ""
+
+#: forms/ColumnForm.form: LblColDec.Text
+msgid "Decimals:"
+msgstr ""
+
+#: forms/ColumnForm.form: LblColOn.Text
+msgid "Active text:"
+msgstr ""
+
+#: forms/ColumnForm.form: LblColOff.Text
+msgid "Inactive text:"
+msgstr ""
+
+#: forms/ColumnForm.form: LblColItems.Text
+msgid "Items, one per line:"
+msgstr ""
+
 #: forms/ColumnForm.form: LblColHint.Text
-msgid "A width of 0 lets the column size itself. Every column can be dragged whatever it says here."
+msgid "A width of 0 lets the column size itself. Every column can be dragged whatever it says here. An empty option keeps its default."
 msgstr ""
 
 #: forms/GitForm.form: GitForm.Text

@@ -555,7 +555,7 @@ const TESTS = [
     /* Early on purpose: they show windows of their own, and the pushed-surface
      * assertions in the async tail measure a form on the frame it settles. See
      * the note below. */
-    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableTree", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableGeometry", "TableIcon", "TableProse",
+    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableTree", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableGeometry", "TableEditors", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
     "Expand", "Spacing", "Designing", "CurrentPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
@@ -15552,13 +15552,12 @@ function Main() {
         eq("a position that is not there is not an error", activated, 2);
 
         /*
-         * **A column may be editable**, which is a `GtkEditableLabel` in the
-         * cell and `CellEdit(row, column, text)` raised when the edit ends.
+         * **A column may be editable**: `Editable: true` is `Editor: "Text"`,
+         * and `CellEdit(row, column, text)` is raised when the edit ends.
          *
-         * The edit itself is a pointer gesture and cannot be driven from here,
-         * so what this holds is the declaration and the event's contract: the
+         * What this holds is the declaration and the event's contract: the
          * handler is asked with the three, and its `false` is the veto. The
-         * gesture is on the by-hand list, next to whether a popover opened.
+         * editors themselves, driven through `EditCell`, are `TableEditors`.
          */
         t.Columns = [{ Text: "A", Editable: true }, { Text: "B" }];
         eq("Editable is part of the declaration and round-trips",
@@ -15925,6 +15924,201 @@ function Main() {
      * rule `bta_scroll_set` is written around; `until` is how this file waits
      * for a turn.
      */
+    /*
+     * **A column's editor is a kind with options**, and a row says whether its
+     * cell has one. The edit is a pointer gesture, so it is driven here the way
+     * `SortColumn` drives a heading: `EditCell` is the click, `EndEdit` the
+     * Enter or the Escape. Picking a day or an item is a pointer on a popover
+     * and stays on the by-hand list.
+     */
+    testTableEditors() {
+        const t = new TableView();
+        t.Name = "EdT";
+
+        /* --- the declaration ---------------------------------------------- */
+        const cols = [
+            { Text: "Name", Editor: "Text" },
+            { Text: "Days", Alignment: "Right",
+              Editor: { Kind: "Number", Min: 0, Max: 100, Decimals: 1 } },
+            { Text: "Done", Editor: { Kind: "Check", ActiveText: "Sí", InactiveText: "No" } },
+            { Text: "Cal",  Editor: { Kind: "Combo", Items: ["Standard", "Night"] } },
+            { Text: "When", Editor: "Date" },
+            { Text: "More", Editor: "Custom" },
+        ];
+        t.Columns = cols;
+        eq("an Editor is part of the declaration and round-trips",
+           JSON.stringify(t.Columns), JSON.stringify(cols));
+
+        const refused = (name, decl) => throws(name, () => { t.Columns = [decl]; });
+        refused("a kind that is not one",      { Text: "A", Editor: "Slider" });
+        refused("an Editor that is a number",  { Text: "A", Editor: 3 });
+        refused("an object with no Kind",      { Text: "A", Editor: { Min: 0 } });
+        refused("an option of another kind",   { Text: "A", Editor: { Kind: "Number", Items: [] } });
+        refused("a misspelt option",           { Text: "A", Editor: { Kind: "Combo", Itmes: [] } });
+        refused("Items that are not strings",  { Text: "A", Editor: { Kind: "Combo", Items: [1] } });
+        refused("a Min above the Max",         { Text: "A", Editor: { Kind: "Number", Min: 5, Max: 1 } });
+        refused("a Step that is not above zero", { Text: "A", Editor: { Kind: "Number", Step: 0 } });
+        refused("Decimals past nine",          { Text: "A", Editor: { Kind: "Number", Decimals: 12 } });
+        refused("ActiveText is text, not a boolean",
+                { Text: "A", Editor: { Kind: "Check", ActiveText: true } });
+        refused("ActiveText and InactiveText cannot be the same",
+                { Text: "A", Editor: { Kind: "Check", ActiveText: "x", InactiveText: "x" } });
+        refused("Editable false beside an Editor is two answers",
+                { Text: "A", Editable: false, Editor: "Text" });
+        refused("a column is edited or a link, never both",
+                { Text: "A", Editor: "Date", Link: true });
+        eq("and a refused declaration leaves the columns as they were",
+           JSON.stringify(t.Columns), JSON.stringify(cols));
+
+        t.Add(["Ana",   "7.50", "No", "Standard", "2026-10-01", "ASAP"]);
+        t.Add(["Bruno", "2d",   "Sí", "Night",    "",           ""]);
+        t.Add(["Total", "9",    "No", "",         "",           ""]);
+
+        throws("SetEditable takes a boolean", () => t.SetEditable(2, 0, "no"));
+        throws("and a row that is there",     () => t.SetEditable(9, 0, false));
+        t.SetEditable(2, 0, false);
+        t.SetEditable(2, 1, false);
+
+        this.geoAdd(t, 0, 160);
+        this.edEdits = [];
+        this.edAsked = [];
+        this.edAnswer = undefined;
+        t.On("CellEdit", (row, col, text) => {
+            this.edEdits.push([row, col, text]);
+            return this.edAnswer;
+        });
+        t.On("CellEditor", (row, col) => {
+            this.edAsked.push([row, col]);
+            return this.edAsk ? this.edAsk(row, col) : undefined;
+        });
+
+        until("an editing table drawn", () => t.RowHeight > 0, () => {
+            eq("EndEdit with nothing open answers false", t.EndEdit(), false);
+            throws("EditCell refuses a row that is not there", () => t.EditCell(9, 0));
+
+            /* Text: opened and given up, which reports nothing. */
+            eq("EditCell opens a cell's editor", t.EditCell(0, 0), true);
+            eq("and CellEditor was asked first, with the row and the column",
+               JSON.stringify(this.edAsked), "[[0,0]]");
+            eq("EditCell on the cell already open is still true", t.EditCell(0, 0), true);
+            eq("EndEdit(false) gives it up", t.EndEdit(false), true);
+            eq("and a given-up edit raises no CellEdit", this.edEdits.length, 0);
+            t.EditCell(0, 0);
+            t.EndEdit();
+            eq("nor does one that changed nothing", this.edEdits.length, 0);
+
+            /* Number: the spin reads the cell and answers with a point. */
+            t.EditCell(0, 1);
+            t.EndEdit();
+            eq("a Number answers in its own Decimals, with a point",
+               JSON.stringify(this.edEdits), '[[0,1,"7.5"]]');
+            eq("and a taken edit is written into the row", t.Cell(0, 1), "7.5");
+
+            this.edAnswer = "2 days";
+            t.EditCell(1, 1);
+            t.EndEdit();
+            eq("a Number reads the number the text starts with",
+               this.edEdits[1][2], "2.0");
+            eq("and a string from CellEdit is what is kept", t.Cell(1, 1), "2 days");
+            this.edAnswer = undefined;
+
+            /* Rounded as a person rounds: a half away from zero, on the
+             * double's shortest text -- printf's `%.1f` made 12.25 into 12.2
+             * (half to even) and 1.005 into 1.00 (it is 1.00499... in binary). */
+            t.SetCell(1, 1, "12.25");
+            t.EditCell(1, 1);
+            t.EndEdit();
+            eq("a half goes away from zero", t.Cell(1, 1), "12.3");
+            this.edAsk = () => ({ Decimals: 2 });
+            t.SetCell(1, 1, "1.005");
+            t.EditCell(1, 1);
+            t.EndEdit();
+            eq("and is read as the decimal that was written", t.Cell(1, 1), "1.01");
+            this.edAsk = undefined;
+
+            /* Check: turning it is the edit. */
+            eq("EditCell turns a Check", t.EditCell(0, 2), true);
+            const last = () => this.edEdits[this.edEdits.length - 1][2];
+            eq("from InactiveText to ActiveText", last(), "Sí");
+            eq("into the row", t.Cell(0, 2), "Sí");
+            this.edAnswer = false;
+            t.EditCell(0, 2);
+            eq("a refused turn is asked about", last(), "No");
+            eq("and leaves the cell as it was", t.Cell(0, 2), "Sí");
+            this.edAnswer = undefined;
+            eq("a Check opens nothing to end", t.EndEdit(), false);
+
+            /* A locked cell is not opened, and nobody is asked. */
+            const asked = this.edAsked.length;
+            eq("a cell SetEditable(false) does not open", t.EditCell(2, 0), false);
+            eq("and CellEditor is not raised for it", this.edAsked.length, asked);
+            t.SetEditable(2, 0, true);
+            eq("SetEditable(true) gives it back", t.EditCell(2, 0), true);
+            t.EndEdit(false);
+
+            /* CellEditor's two answers. */
+            this.edAsk = () => false;
+            eq("CellEditor's false refuses the edit", t.EditCell(1, 0), false);
+            eq("and nothing is open", t.EndEdit(), false);
+            this.edAsk = () => ({ Kind: "Number", Decimals: 2 });
+            eq("an object is this edit's editor", t.EditCell(1, 0), true);
+            t.EndEdit();
+            eq("so a Text cell edited as a Number answers one",
+               this.edEdits[this.edEdits.length - 1][2], "0.00");
+            this.edAsk = undefined;
+
+            /* Custom: asking is the whole of it. */
+            const before = this.edAsked.length;
+            eq("a Custom cell answers true", t.EditCell(0, 5), true);
+            eq("having raised CellEditor", this.edAsked.length, before + 1);
+            eq("and opened nothing", t.EndEdit(), false);
+
+            /* Combo and Date: nothing picked, nothing reported. */
+            const n = this.edEdits.length;
+            eq("a Combo opens", t.EditCell(0, 3), true);
+            t.EndEdit();
+            eq("and with no item picked it reports nothing", this.edEdits.length, n);
+            eq("a Date opens", t.EditCell(0, 4), true);
+            t.EndEdit();
+            eq("and with its field untouched it reports nothing", this.edEdits.length, n);
+
+            /* **A flat row the program removed while its edit was open is
+             * not reported**: the commit is queued, the row is gone, and the
+             * only address a flat table has is its position -- `-1` is not
+             * one. A tree keeps its key and an on-demand row is the program's
+             * to store, so this is the flat held shape alone. */
+            t.Add(["Extra", "7d", "No", "", "", ""]);
+            const beforeGone = this.edEdits.length;
+            eq("EditCell opens the row that is about to go", t.EditCell(3, 1), true);
+            t.RemoveRow(3);
+            let turn = false;
+            Timer.After(10, () => { turn = true; });
+            until("the queued commit runs after the row is gone", () => turn, () => {
+                eq("and the CellEdit it held is not raised",
+                   this.edEdits.length, beforeGone);
+                eq("with the row gone", t.Count, 3);
+            });
+
+            /* On demand: the row's answer says whether its cell edits. */
+            const v = new TableView();
+            v.Name = "EdV";
+            v.Columns = [{ Text: "A", Editor: "Text" }];
+            v.On("Data", (row) => row === 0 ? { Text: "fixed", Editable: false } : `r${row}`);
+            this.geoAdd(v, 0, 120);
+            v.Count = 3;
+            throws("SetEditable is refused on an on-demand table",
+                   () => v.SetEditable(0, 0, false));
+            until("an on-demand editing table drawn", () => v.RowHeight > 0, () => {
+                eq("Data's Editable: false locks that cell", v.EditCell(0, 0), false);
+                eq("and the others edit", v.EditCell(1, 0), true);
+                v.EndEdit(false);
+
+                t.geoHost.Delete();
+                v.geoHost.Delete();
+            });
+        });
+    }
+
     testTableGeometry() {
         /* **In a `Scroller` and not straight into the `Fixed`.** Both numbers
          * here are `0` until the scrolled window around the column view has a

@@ -4,7 +4,7 @@
   "properties": {
     "Text": "Columns",
     "Width": 552,
-    "Height": 414,
+    "Height": 528,
     "Icon": "x-office-spreadsheet-symbolic"
   },
   "children": [
@@ -26,16 +26,19 @@
         "Columns": [
           {
             "Text": "Heading",
-            "Width": 200
+            "Width": 170
           },
           {
             "Text": "Width",
-            "Width": 70,
+            "Width": 60,
             "Alignment": "Right"
           },
           {
             "Text": "Alignment",
-            "Width": 100
+            "Width": 80
+          },
+          {
+            "Text": "Cell"
           }
         ],
         "HAlign": "Fill",
@@ -166,17 +169,225 @@
     },
     {
       "type": "Label",
+      "name": "LblColCell",
+      "properties": {
+        "Height": 24,
+        "Text": "Cell:",
+        "Width": 90,
+        "X": 12,
+        "Y": 322
+      }
+    },
+    {
+      "type": "ComboBox",
+      "name": "CmbColCell",
+      "properties": {
+        "Height": 34,
+        "Width": 140,
+        "X": 108,
+        "Y": 316
+      }
+    },
+    {
+      "type": "Panel",
+      "name": "NumPanel",
+      "properties": {
+        "Width": 528,
+        "Height": 76,
+        "X": 12,
+        "Y": 356,
+        "Visible": false
+      },
+      "children": [
+        {
+          "type": "Label",
+          "name": "LblColMin",
+          "properties": {
+            "Height": 24,
+            "Text": "Min:",
+            "Width": 40,
+            "X": 0,
+            "Y": 6
+          }
+        },
+        {
+          "type": "TextBox",
+          "name": "TxtColMin",
+          "properties": {
+            "Height": 34,
+            "Width": 70,
+            "X": 44,
+            "Y": 0
+          }
+        },
+        {
+          "type": "Label",
+          "name": "LblColMax",
+          "properties": {
+            "Height": 24,
+            "Text": "Max:",
+            "Width": 40,
+            "X": 126,
+            "Y": 6
+          }
+        },
+        {
+          "type": "TextBox",
+          "name": "TxtColMax",
+          "properties": {
+            "Height": 34,
+            "Width": 70,
+            "X": 170,
+            "Y": 0
+          }
+        },
+        {
+          "type": "Label",
+          "name": "LblColStep",
+          "properties": {
+            "Height": 24,
+            "Text": "Step:",
+            "Width": 44,
+            "X": 252,
+            "Y": 6
+          }
+        },
+        {
+          "type": "TextBox",
+          "name": "TxtColStep",
+          "properties": {
+            "Height": 34,
+            "Width": 60,
+            "X": 300,
+            "Y": 0
+          }
+        },
+        {
+          "type": "Label",
+          "name": "LblColDec",
+          "properties": {
+            "Height": 24,
+            "Text": "Decimals:",
+            "Width": 80,
+            "X": 372,
+            "Y": 6
+          }
+        },
+        {
+          "type": "TextBox",
+          "name": "TxtColDec",
+          "properties": {
+            "Height": 34,
+            "Width": 60,
+            "X": 456,
+            "Y": 0
+          }
+        }
+      ]
+    },
+    {
+      "type": "Panel",
+      "name": "CheckPanel",
+      "properties": {
+        "Width": 528,
+        "Height": 76,
+        "X": 12,
+        "Y": 356,
+        "Visible": false
+      },
+      "children": [
+        {
+          "type": "Label",
+          "name": "LblColOn",
+          "properties": {
+            "Height": 24,
+            "Text": "Active text:",
+            "Width": 96,
+            "X": 0,
+            "Y": 6
+          }
+        },
+        {
+          "type": "TextBox",
+          "name": "TxtColOn",
+          "properties": {
+            "Height": 34,
+            "Width": 150,
+            "X": 100,
+            "Y": 0
+          }
+        },
+        {
+          "type": "Label",
+          "name": "LblColOff",
+          "properties": {
+            "Height": 24,
+            "Text": "Inactive text:",
+            "Width": 110,
+            "X": 262,
+            "Y": 6
+          }
+        },
+        {
+          "type": "TextBox",
+          "name": "TxtColOff",
+          "properties": {
+            "Height": 34,
+            "Width": 140,
+            "X": 376,
+            "Y": 0
+          }
+        }
+      ]
+    },
+    {
+      "type": "Panel",
+      "name": "ComboPanel",
+      "properties": {
+        "Width": 528,
+        "Height": 76,
+        "X": 12,
+        "Y": 356,
+        "Visible": false
+      },
+      "children": [
+        {
+          "type": "Label",
+          "name": "LblColItems",
+          "properties": {
+            "Height": 24,
+            "Text": "Items, one per line:",
+            "Width": 170,
+            "X": 0,
+            "Y": 6
+          }
+        },
+        {
+          "type": "TextEditor",
+          "name": "TxtColItems",
+          "properties": {
+            "Height": 76,
+            "Width": 340,
+            "X": 176,
+            "Y": 0,
+            "Style": "frame"
+          }
+        }
+      ]
+    },
+    {
+      "type": "Label",
       "name": "LblColHint",
       "properties": {
         "HAlign": "Fill",
         "Height": 34,
         "Style": "dim-label",
-        "Text": "A width of 0 lets the column size itself. Every column can be dragged whatever it says here.",
+        "Text": "A width of 0 lets the column size itself. Every column can be dragged whatever it says here. An empty option keeps its default.",
         "VAlign": "End",
         "Width": 528,
         "Wrap": true,
         "X": 12,
-        "Y": 320
+        "Y": 436
       }
     },
     {
@@ -190,7 +401,7 @@
         "VAlign": "End",
         "Width": 90,
         "X": 350,
-        "Y": 370
+        "Y": 482
       }
     },
     {
@@ -205,7 +416,7 @@
         "VAlign": "End",
         "Width": 90,
         "X": 450,
-        "Y": 370
+        "Y": 482
       }
     }
   ]

@@ -8632,7 +8632,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "an array of `{ Text, Width, Alignment, Editable, Link }`. `Text` is **translated**; `Width: 0` sizes itself and the last column takes the slack; `Editable: true` makes a cell a field — clicked, typed and committed — and an editable column reads left-aligned, because a `GtkEditableLabel` is not a label. `Link: true` makes each cell a link — underlined, a pointer over it, a focus stop, Enter — whose address is the cell's text unless `SetUri` or `Data` says another, and a cell with no text is plain. **A column is a field or a link, never both**",
+          "Doc": "an array of `{ Text, Width, Alignment, Editor, Link }`. `Text` is **translated**; `Width: 0` sizes itself and the last column takes the slack. **`Editor` makes the cells fields**, and is a kind's name or `{ Kind, ... }`: `\"Text\"`; `{ Kind: \"Number\", Min, Max, Step, Decimals }`, answering with a point and rounding a half away from zero; `\"Date\"`, a field with a calendar whose day is `YYYY-MM-DD` (the arrows move the day, Enter or Space picks it); `{ Kind: \"Check\", ActiveText, InactiveText }`, a tick holding one of the two (`\"true\"`/`\"false\"`); `{ Kind: \"Combo\", Items }`; and `\"Custom\"`, which opens nothing and raises `CellEditor`. The kinds are `Widget.PropertyOptions(\"TableView\", \"Columns.Editor\")`. A click or F2 opens a cell, Enter or the focus leaving commits, Escape gives up, and `CellEdit` decides. **A cell is still text** -- every kind reads it and writes it back. `Editable: true` is `Editor: \"Text\"`. `Link: true` makes each cell a link -- underlined, a pointer over it, a focus stop, Enter -- whose address is the cell's text unless `SetUri` or `Data` says another, and a cell with no text is plain. **A column is edited or a link, never both**, and a misspelt option is refused by name",
           "Native": true
         },
         {
@@ -8660,6 +8660,24 @@
           "Signature": "()",
           "Returns": "",
           "Doc": "selects nothing",
+          "Native": true
+        },
+        {
+          "Name": "EditCell",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(row, column)",
+          "Returns": "",
+          "Doc": "the click, from code: opens that cell's editor, turns a `Check`, or raises a `Custom` cell's `CellEditor`. Answers whether it did -- `false` for a cell that is not on screen (`Reveal` first), not editable, or refused by `CellEditor`",
+          "Native": true
+        },
+        {
+          "Name": "EndEdit",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "([commit])",
+          "Returns": "",
+          "Doc": "ends the open edit: committed as Enter would, or with `false` given up as Escape would. Answers whether one was open",
           "Native": true
         },
         {
@@ -8861,6 +8879,15 @@
           "Native": true
         },
         {
+          "Name": "SetEditable",
+          "Kind": "Method",
+          "Params": 3,
+          "Signature": "(row, column, editable)",
+          "Returns": "",
+          "Doc": "whether this row's cell edits, in a column with an `Editor`: `false` draws it dim and opens nothing, **before** anything is typed -- a summary's dates, which are its children's. Refused on an on-demand table, whose `Data` answers `{ Text, Editable: false }`",
+          "Native": true
+        },
+        {
           "Name": "SetIcon",
           "Kind": "Method",
           "Params": 3,
@@ -8920,7 +8947,7 @@
         {
           "Name": "Data",
           "Signature": "(row, column)",
-          "Doc": "the table needs a cell. **The return value is the answer**: a string, or `{ Text, Icon, Uri }` for a cell with a picture or an address of its own. In a `Link` column an absent `Uri` means the text is the address and `\"\"` means this cell is not a link"
+          "Doc": "the table needs a cell. **The return value is the answer**: a string, or `{ Text, Icon, Uri, Editable }` for a cell with a picture or an address of its own, or one that does not edit in a column that does (`Editable: false`). In a `Link` column an absent `Uri` means the text is the address and `\"\"` means this cell is not a link"
         },
         {
           "Name": "Sort",
@@ -8928,9 +8955,14 @@
           "Doc": "a sortable header was clicked. **The handler decides** — `SortBy` is what actually reorders"
         },
         {
+          "Name": "CellEditor",
+          "Signature": "(row, column)",
+          "Doc": "an edit is about to begin -- a click, F2 or `EditCell`. `row` is an index in a flat table and a key in a tree. **Returning `false` refuses it**; an object is this edit's editor over the column's -- `{ Items: [...] }` for a list that is the row's, `{ Max: 1000 }`, or `{ Kind: \"Date\" }` for a cell whose kind depends on its row (a `Check` column stays one). For a `Custom` column this is the whole edit: open the dialog here and write with `SetCell`"
+        },
+        {
           "Name": "CellEdit",
           "Signature": "(row, column, text)",
-          "Doc": "an editable cell's edit ended — Enter, or the focus moving away. `row` is an index in a flat table and a key in a tree, as every verb here addresses one. **Returning `false` refuses it** and the cell goes back to what it said; anything else is taken and the text is written into the row. An on-demand table holds no cells, so there the handler stores it"
+          "Doc": "an edit ended with a different text -- Enter, the focus moving away, a day or an item picked, a tick turned. `row` is an index in a flat table and a key in a tree. **Returning `false` refuses it** and the cell goes back to what it said; **a string is kept instead of the text** -- the program's own spelling of what was typed; anything else keeps the text. A handler that throws refuses. An on-demand table holds no cells, so there the handler stores it. **A held flat row the program removed while the edit was open is not raised at all**: its index went with it, and `-1` names no row; a tree keeps its key"
         },
         {
           "Name": "CellLink",

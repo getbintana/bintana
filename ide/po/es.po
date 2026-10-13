@@ -293,13 +293,45 @@ msgstr "Ancho:"
 msgid "Alignment:"
 msgstr "Alineación:"
 
+#: forms/ColumnForm.form: ColList.Columns.Text
+msgid "Cell"
+msgstr "Celda"
+
+#: forms/ColumnForm.form: LblColCell.Text
+msgid "Cell:"
+msgstr "Celda:"
+
+#: forms/ColumnForm.form: LblColMin.Text
+msgid "Min:"
+msgstr "Mín:"
+
+#: forms/ColumnForm.form: LblColMax.Text
+msgid "Max:"
+msgstr "Máx:"
+
+#: forms/ColumnForm.form: LblColStep.Text
+msgid "Step:"
+msgstr "Paso:"
+
+#: forms/ColumnForm.form: LblColDec.Text
+msgid "Decimals:"
+msgstr "Decimales:"
+
+#: forms/ColumnForm.form: LblColOn.Text
+msgid "Active text:"
+msgstr "Texto activo:"
+
+#: forms/ColumnForm.form: LblColOff.Text
+msgid "Inactive text:"
+msgstr "Texto inactivo:"
+
+#: forms/ColumnForm.form: LblColItems.Text
+msgid "Items, one per line:"
+msgstr "Ítems, uno por línea:"
+
 #: forms/ColumnForm.form: LblColHint.Text
-msgid ""
-"A width of 0 lets the column size itself. Every column can be dragged "
-"whatever it says here."
-msgstr ""
-"Un ancho de 0 deja que la columna se dimensione sola. Toda columna se puede "
-"arrastrar, diga lo que diga acá."
+msgid "A width of 0 lets the column size itself. Every column can be dragged whatever it says here. An empty option keeps its default."
+msgstr "Un ancho de 0 deja que la columna se dimensione sola. Toda columna se puede arrastrar, diga lo que diga acá. Una opción vacía conserva su valor por defecto."
 
 #: forms/GitForm.form: GitForm.Text forms/MainForm.js:1882
 msgid "Changes"

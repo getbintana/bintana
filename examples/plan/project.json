@@ -1,0 +1,12 @@
+{
+  "name": "Plan",
+  "startup": "PlanForm",
+  "sources": [
+    "PlanForm.js"
+  ],
+  "uses": [
+    "dialog"
+  ],
+  "version": "1.0",
+  "description": "A task sheet edited in its cells: a number, a date, a tick, a list and a dialog, and the phases' rows shut where their values are their tasks'"
+}

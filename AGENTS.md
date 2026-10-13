@@ -2645,7 +2645,7 @@ Three things that will waste your time:
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
-  424 assertions against 3073 for the whole project -- 9.2 s against 409 to 624 on this
+  424 assertions against 3083 for the whole project -- 9.2 s against 409 to 624 on this
   machine -- which is what makes iterating on an early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.
@@ -2832,7 +2832,7 @@ nothing is written at all.
 
 **The first harvest was the IDE, and the event marks are what it found.**
 `--profile` over `tests/ide` is 3.9 MB and **37,449 marks** in 354 s with the
-suite green (2818 assertions then; 3073 today) -- against 431 s for the ordinary runner run, so
+suite green (2818 assertions then; 3083 today) -- against 431 s for the ordinary runner run, so
 the writer's per-mark cost does not show at this size. 37,238 of those marks are
 `Event` and 211 are the runtime's (`Bintana`); **28,402 of them are one
 handler**, `PropGrid_Filter` -- the property grid's filter answering GTK for
@@ -5391,8 +5391,9 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   label synchronously, freeing the row, `bta-edit-old` and the label's buffer
   the code went on to read. The index is asked of the store now, before and
   after; the row, the label and the table's wrapper are held and both texts
-  copied across the emit. **Not assertable from the suite**: a real
-  `GtkEditableLabel` edit needs a pointer, so this one is a by-hand check.
+  copied across the emit. It is `table_report_edit` now, which every editor
+  kind goes through, and `EditCell`/`EndEdit` drive it from the suite
+  (`TableEditors`); see *A table cell's editors*.
 - **A table sorts the text it shows, so the order has to know about numbers
   without knowing the format.** `SortBy` compared cells with `g_utf8_collate`,
   and every column of numbers came out `10, 100, 9`. A per-column type was the
@@ -6287,11 +6288,130 @@ unbind the label under it. Measured with a real pointer on an `Xvfb`: the click
 reaches `CellLink` with the right arguments; `tests/widgets` holds the
 declaration, `SetUri` and the event's contract, and **whether the desktop then
 opens the address is by hand** -- the suite must never launch a browser. The
-designer's column dialog does not offer `Link` yet (nor `Editable`): the
-property grid's JSON field is the way in, and the dialog preserves the key.
+designer's column dialog offers it as a *Cell* kind beside the editors (see
+*A table cell's editors*).
 **The probe killed the user's window manager**: clean up a hand-driven `Xvfb`
 and its `xfwm4` by the PIDs you started (`$!`), never `pkill xfwm4` -- it matches
 the desktop's own.
+
+## A table cell's editors
+
+`Columns[].Editor` is a kind with options -- `Text`, `Number` (`Min`, `Max`,
+`Step`, `Decimals`), `Date`, `Check` (`ActiveText`, `InactiveText`), `Combo`
+(`Items`), `Custom` -- read by `ed_spec_read` in `bta_table.c` against a table
+(`ED_KINDS`); a new kind is a row there, a case in `cell_open` and one in
+`cell_value`. `Editable: true` is `Editor: "Text"`. **A cell is still text**:
+every kind reads the cell and writes text back, so `Add`, `Cell`, `Data`,
+`SortBy` and the `.form` know nothing of editors. Per row, `SetEditable` and
+`Data`'s `Editable: false` shut a cell before it is typed in; `CellEditor(row,
+column)` is asked as an edit begins (`false` refuses, an object is this edit's
+editor, `Kind` included except to or from `Check`); `CellEdit`'s string answer
+is what is kept. `EditCell`/`EndEdit` are the gesture from code, and the road
+`tests/widgets`' `TableEditors` takes. The names were compared against GTK3's
+renderers, Qt, WinForms, WPF, Delphi, DevExpress, Lazarus, Gambas, Swing, JavaFX,
+Xojo and AG Grid; `ActiveText`/`InactiveText` and not `Checked`, because every
+check here says `Active`, and not `Active` alone, because that is a boolean
+everywhere else. What bit, all of it measured with a real pointer on an `Xvfb`
+with `xfwm4`, since none of it reaches the suite:
+
+- **A flat table's `SetCell` did not redraw, and nothing said so.** GTK 4.22
+  keeps the widgets of an item that is the same object across `items-changed`
+  and does not bind them again, so `table_row_changed`'s `items_changed(at, 1,
+  1)` changed `Cell()` and left the screen as it was -- `SetCell`, `SetIcon`,
+  `SetUri`, a taken edit, all of them, for as long as the suite only read
+  `Cell()` back. A row emits `changed` now and every bound cell listens
+  (`cell_fill`, connected in the bind, disconnected in the unbind, which every
+  column has for that reason). A tree was never affected: it gets fresh
+  `GtkTreeListRow` wrappers.
+- **The press is heard on the column view, not on the cell.** With an edit open
+  in one row, GTK's own gesture on *another* row claims that row's press in its
+  capture phase, before a capture gesture on the cell under it runs: the second
+  row was selected and never opened, while a cell of the same row opened fine.
+  One capture `GtkGestureClick` on `w->inner` finds the cell with
+  `gtk_widget_pick` -- **up and down**, because a row grown by an open field
+  puts the next row's press in GTK's cell padding, which picks
+  `GtkColumnViewCellWidget` and not our box.
+- **The edit begins on the press, not the release.** The press moves the focus,
+  the edit open elsewhere commits, and a release whose widgets moved in between
+  was not delivered. The queued begin names the row and the column, not the
+  box, and looks the cell up again.
+- **Nothing ends an edit inside a GTK signal.** Enter, Escape, the focus leaving
+  and a popover closing queue an idle (`cell_settle`) holding the box and the
+  edit's `gen`; ending runs the program, which may empty the table. No queued
+  job holds a `JSValue`: the table is a weak reference to `w->gtk` looked up
+  through `BTA_WIDGET_QUARK`. **An unbind with an edit open is not its end** --
+  a store telling a row changed unbinds and binds it again at once -- so it is
+  asked a turn later, and an edit whose row scrolled away is committed, not lost.
+- **`xdotool click` is not a hand, and the difference hid a whole bug.** It
+  presses and releases with no time between, and a person leaves a tenth of a
+  second. A press inside an open editor hands the focus to GTK's row widget at
+  the press; the edit took that for leaving and committed before the release,
+  taking the calendar's button away under it -- so clicking the button closed
+  the edit and the calendar never showed, while every `xdotool click` probe
+  opened it. `on_view_pressed` notes a press inside the editor and
+  `SETTLE_BLUR` gives the field its focus back when the focus went to an
+  ancestor of the editor right after one. **Probe a gesture with `mousedown`,
+  a sleep and `mouseup`**; the fast form proves nothing about a hand.
+- **Two walks, two directions.** F2 looks for the cell *up* from the focus
+  (`cell_under`), and a press in a cell's padding looks *down* from GTK's cell
+  widget it picked; one helper for both answered one of them wrong.
+- **A frameless `GtkButton` still has a button's floor**: the `…` of a `Custom`
+  cell made every row 51 high against 36. It is a label, `can-target` off.
+- **A day is picked by a press, Enter or Space, never by an arrow key** -- and
+  in GTK 4 the arrows did not move the day at all. They move a focus ring over
+  the days, leave the selection where it was, and Enter does not select the
+  day under the ring (only Space does, and nothing public says which day the
+  ring is on): three arrows and Enter committed the day the calendar opened
+  on, measured. The calendar's key handler moves the *selection* by a day or a
+  week, across months, and Enter or Space commits what is selected. It also
+  takes the focus when the popover maps, which otherwise lands on the month's
+  back arrow. A press is marked in the capture phase so its `day-selected`
+  commits and an arrow's does not.
+- **A `Number` rounds as a person rounds**, and printf does not: `%.1f` of
+  12.25 is `12.2` (half to even) and of 1.005 is `1.00` (1.00499... in binary).
+  `number_text` takes the double's shortest text and rounds it as a decimal, a
+  half away from zero -- `Decimal`'s default. **The spin rounds what it shows
+  with printf too, and reads its own text back as the value**, so it is handed
+  the number already rounded, or 12.25 opens as 12.2.
+- **The kinds are published, not copied**: `Widget.PropertyOptions("TableView",
+  "Columns.Editor")` answers them out of `ED_KINDS` (`table_options`), which is
+  what the designer's column dialog (`ColumnForm`) offers after its own `None`
+  and `Link`. The dialog rewrites a column's cell keys only when a cell field
+  was touched, so renaming leaves an old `Editable: true` alone, and it hands
+  the result to a scratch `TableView` on OK: **the runtime's refusal is the
+  dialog's**, rather than a second copy of `ed_spec_read` in the IDE. An edit
+  redraws the list without filling the fields back -- writing a `TextEditor`
+  from inside its own `Change` is GTK's *invalidate all outstanding iterators*
+  warning, and it appeared in the suite's output the first time.
+- **An open editor made its row two pixels taller, and the theme did it.** An
+  entry, a spin button and a menu button each carry a `min-height` (34 here) and
+  padding beyond what a cell's label asks for, so opening any cell grew its row
+  36 -> 38 and shifted the table (`examples/plan`: every editor but the check).
+  `cell_editor_style` puts `bta-cell-editor` on the editor and one display-wide
+  rule takes the floor off. **The selector needs the theme's specificity**:
+  `.bta-cell-editor` alone left the spin at 38 and the date at 37, because
+  Adwaita's is `spinbutton:not(.vertical)`; `spinbutton.bta-cell-editor:not(.vertical)`
+  (and its `> text`, `> button`) is what wins. Measured with a probe that reads
+  `RowHeight` before and after `EditCell` on each kind; no suite assertion,
+  since the row height is a frame behind the open.
+- **A held row's lock is asked of the row, not of the cell**: the rebind
+  `SetEditable` asks for comes on GTK's next frame, so `EditCell` right after it
+  read the old answer.
+- **F2 found leaves, and a commit left the keyboard on nothing.** `cell_under`
+  walked *down* from the focus, and a tree's chain is
+  `GtkColumnViewRowWidget -> GtkColumnViewCellWidget -> GtkTreeExpander ->
+  GtkBuiltinIcon` -- the arrow is the expander's first child and the box its
+  child, so the walk ended on an icon; and *after* a commit the focus is GTK's
+  wrapper for the row, which telling the store the row changed *rebuilt*, so
+  the keys went to the toplevel and no control heard them. Now the cell is the
+  box the focus is **inside** (walk up), F2 off a cell is the **selected row's
+  first field**, and `cell_finish` puts the focus back **after** the report.
+  Keys and a pointer, so on the by-hand list.
+- **A flat row the program removed under an open edit was raised as
+  `CellEdit(-1, ...)`.** The commit is queued, and a flat table's address for a
+  row is its *position* -- which is gone with it. A tree keeps its key and an
+  on-demand row is the program's to store, so only the held flat shape is
+  reported now: it is not raised at all.
 
 ## Keyring: the vault, and what it does not promise
 

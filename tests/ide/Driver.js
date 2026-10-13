@@ -11202,6 +11202,77 @@ function* p_columns(ide) {
        ide.designer.undoStack.length, undoneAt + 1);
     check("which can be undone", ide.designer.canUndo());
 
+    /*
+     * **What a cell is: nothing, a link, or an editor of a kind.** The kinds are
+     * the runtime's, asked as `Columns.Editor`, and the options are written as
+     * the declaration takes them -- the kind's name alone when none was given.
+     * A declaration the dialog did not touch is left as it was, so a column
+     * renamed keeps an `Editable: true` written before `Editor` existed.
+     */
+    tab.Columns = [{ Text: "Old", Editable: true }, { Text: "Url", Link: true }];
+    ide.designer.grid.editColumns("Columns");
+    const cd = ide.columnEditor;
+    yield;
+
+    eq("the cell kinds are the runtime's, after None and Link",
+       cd.CmbColCell.Items.join(","),
+       ["None", "Link"].concat(Widget.PropertyOptions("TableView", "Columns.Editor")).join(","));
+    eq("an Editable column reads as a Text cell", cd.ColList.Cell(0, 3), "Text");
+    eq("a link as a Link",                        cd.ColList.Cell(1, 3), "Link");
+
+    cd.ColList.Index = 0;
+    cd.ColList_Select();
+    cd.TxtColText.Text = "Renamed";
+    cd.TxtColText_Change();
+    eq("renaming leaves the cell's declaration alone", cd.cols[0].Editable, true);
+
+    cd.CmbColCell.Text = "Number";
+    cd.CmbColCell_Select();
+    check("a Number shows its options", cd.NumPanel.Visible && !cd.ComboPanel.Visible);
+    eq("and with none given is its name alone",
+       JSON.stringify(cd.cols[0]), '{"Text":"Renamed","Editor":"Number"}');
+    cd.TxtColMax.Text = "100";
+    cd.TxtColMax_Change();
+    cd.TxtColDec.Text = "1";
+    cd.TxtColDec_Change();
+    eq("an option given makes it an object",
+       JSON.stringify(cd.cols[0].Editor), '{"Kind":"Number","Max":100,"Decimals":1}');
+
+    cd.ColList.Index = 1;
+    cd.ColList_Select();
+    cd.CmbColCell.Text = "Combo";
+    cd.CmbColCell_Select();
+    cd.TxtColItems.Text = "Low\n\n High \nUrgent";
+    cd.TxtColItems_Change();
+    eq("a link turned into a Combo is no longer a link, and its items are lines",
+       JSON.stringify(cd.cols[1]), '{"Text":"Url","Editor":{"Kind":"Combo","Items":["Low","High","Urgent"]}}');
+
+    /* The runtime's refusal is the dialog's: a Min above the Max stays open. */
+    cd.ColList.Index = 0;
+    cd.ColList_Select();
+    cd.TxtColMin.Text = "500";
+    cd.TxtColMin_Change();
+    const errors = [];
+    const realError = Message.Error;
+    Message.Error = (m, ...a) => { errors.push(a.length ? a[0] : m); };
+    try {
+        cd.BtnColOk_Click();
+    } finally {
+        Message.Error = realError;
+    }
+    check("what the runtime refuses keeps the dialog open, and says why",
+          ide.columnEditor === cd && errors.length === 1 && /Min/.test(errors[0]),
+          JSON.stringify(errors));
+    cd.TxtColMin.Text = "";
+    cd.TxtColMin_Change();
+    cd.BtnColOk_Click();
+    yield* settled(ide);
+
+    eq("and accepting writes the editors",
+       JSON.stringify(tab.Columns),
+       '[{"Text":"Renamed","Editor":{"Kind":"Number","Max":100,"Decimals":1}},'
+       + '{"Text":"Url","Editor":{"Kind":"Combo","Items":["Low","High","Urgent"]}}]');
+
     tab.Delete();
     yield* settled(ide);
 }
