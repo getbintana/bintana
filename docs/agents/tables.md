@@ -4,6 +4,14 @@ The traps and decisions of this area, each with what it cost and the rule it lef
 
 ## Tables
 
+- **A `GListStore` append raises `items-changed`, and GTK's item manager walks
+  the list for each one -- so `Add` in a loop is quadratic.** 10 000 rows took
+  0.65 s, 20 000 2.3 s and 40 000 17.4 s (D3 of the October audit), and filling
+  a table from a query is exactly that loop. **`AddRows(rows)`** builds every
+  row first and hands them over in one `g_list_store_splice`: 40 000 rows in
+  42 ms and one change to the view. It is refused on a tree, whose rows are
+  nodes with keys, and a refusal adds none of them -- nothing reaches the store
+  until every row came through its conversion.
 - **`Clear()` is the way out of every mode, on-demand included.** It reset a
   tree to flat but left a table answering `Data` with its `Count`, so
   `Add(values, { Key })` refused with *Clear() it first* and `Clear()` could not

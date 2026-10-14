@@ -4320,6 +4320,98 @@ static JSValue table_add(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
+/*
+ * `AddRows(rows)` -- the row `Add` takes, many times, in one change to the
+ * list.
+ *
+ * **What it is for is a cost nobody could guess from `Add`.** An append to a
+ * `GListStore` raises `items-changed`, which GTK's list item manager walks, so
+ * a loop of `Add` calls is not a loop of cheap calls but a quadratic curve:
+ * 10 000 rows took 0.65 s, 20 000 took 2.3 s and 40 000 took 17.4 s (D3 of the
+ * October audit), and filling a table from a query is exactly that loop. Here
+ * the rows are built first and enter the store with one `splice`, so the view
+ * is told once whatever the count.
+ *
+ * **Built first, because a refusal must leave the table as it was** -- a
+ * half-added batch is a table showing rows the program never meant to write.
+ * A tree is refused for the reason `Add` gives: its rows are nodes with keys,
+ * and a batch of those is a different call with a different shape (one has not
+ * been needed yet).
+ */
+static JSValue table_add_rows(JSContext *ctx, JSValueConst this_val,
+                              int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    if (argc < 1 || !JS_IsArray(argv[0]))
+        return JS_ThrowTypeError(ctx, "AddRows(rows) expects an array of rows, "
+                                      "each the array Add(values) takes");
+
+    TableState *st = table_state(w);
+
+    if (st->tree)
+        return JS_ThrowTypeError(ctx, "AddRows: this table is a tree -- every "
+                                      "row in one is a node, so it needs a key: "
+                                      "Add(values, { Key, Parent })");
+
+    JSValue  lenv = JS_GetPropertyStr(ctx, argv[0], "length");
+    uint32_t n    = 0;
+    int      ok   = JS_ToUint32(ctx, &n, lenv);
+
+    JS_FreeValue(ctx, lenv);
+    if (ok < 0)
+        return JS_EXCEPTION;
+
+    if (!n)
+        return JS_UNDEFINED;
+
+    gpointer *items = g_new(gpointer, n);
+    guint     made  = 0;
+
+    for (; made < n; made++) {
+        JSValue v = JS_GetPropertyUint32(ctx, argv[0], made);
+
+        if (JS_IsException(v))
+            break;
+
+        BtaTableRow *row = g_object_new(BTA_TYPE_TABLE_ROW, NULL);
+
+        if (!table_fill_cells(ctx, row, v)) {
+            g_object_unref(row);
+            JS_FreeValue(ctx, v);
+            break;
+        }
+
+        JS_FreeValue(ctx, v);
+        items[made] = row;
+    }
+
+    if (made < n) {
+        for (guint i = 0; i < made; i++)
+            g_object_unref(items[i]);
+        g_free(items);
+        return JS_EXCEPTION;   /* the conversion's own exception stands */
+    }
+
+    /* Adding rows is saying the table holds its own again, as one `Add` is. */
+    if (st->virt) {
+        table_current_clear(w);
+        g_clear_object(&st->virt);
+        table_use_model(w, G_LIST_MODEL(st->rows));
+    }
+
+    g_list_store_splice(st->rows,
+                        g_list_model_get_n_items(G_LIST_MODEL(st->rows)),
+                        0, items, n);
+
+    for (guint i = 0; i < n; i++)
+        g_object_unref(items[i]);
+    g_free(items);
+    return JS_UNDEFINED;
+}
+
 static JSValue table_clear(JSContext *ctx, JSValueConst this_val,
                            int argc, JSValueConst *argv)
 {
@@ -5603,9 +5695,20 @@ static const JSCFunctionListEntry table_props[] = {
      *   first one makes this table a tree, `Parent` is the key of the node it
      *   goes under (absent is a root), and `Icon` is the picture for its
      *   first column — the same one `TreeView.Add` takes, so a node need not
-     *   be added and then decorated
+     *   be added and then decorated. **For many rows at once, `AddRows`**:
+     *   one change to the list instead of one per row
      */
     JS_CFUNC_DEF("Add",     2, table_add),
+    /* AddRows(rows)
+     *   many rows in one call, each the array `Add` takes. **The whole batch
+     *   is one change to the list**, which is what makes filling a table from
+     *   a query linear: `Add` appends one item and raises `items-changed` per
+     *   call, so the ordinary loop was quadratic — 40 000 rows took 17 s (D3
+     *   of the October audit), and this is a `splice`. Refused on a tree,
+     *   whose rows are nodes with keys, and it clears an on-demand `Count` as
+     *   one `Add` does
+     */
+    JS_CFUNC_DEF("AddRows", 1, table_add_rows),
     /* ExpandNode(key)
      *   opens or closes it. Opening opens the way to it too, since a row only
      *   exists once its ancestors are open. Not `Expand`, which is `Widget`'s

@@ -555,7 +555,7 @@ const TESTS = [
     /* Early on purpose: they show windows of their own, and the pushed-surface
      * assertions in the async tail measure a form on the frame it settles. See
      * the note below. */
-    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableTree", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableGeometry", "TableEditors", "TableCell", "TableCellHow", "TableIcon", "TableProse",
+    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableBatch", "TableTree", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableGeometry", "TableEditors", "TableCell", "TableCellHow", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
     "Expand", "Spacing", "Designing", "CurrentPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
@@ -15623,6 +15623,87 @@ function Main() {
         throws("an on-demand table holds no cells to give an address",
                () => v.SetUri(0, 0, "x"));
         v.Delete();
+
+        t.Delete();
+    }
+
+    /*
+     * **Many rows in one change to the list.** `Add` appends one item to a
+     * `GListStore` and raises `items-changed` per call, and GTK's item manager
+     * walks the list every time: 40 000 `Add` calls took 17.4 s (D3 of the
+     * October audit), and filling a table from a query is exactly that loop.
+     * `AddRows` builds the rows and hands them over in one `splice`.
+     *
+     * The bound at the end is seconds and not a measurement -- the same
+     * bargain `Record.SaveXml`'s test makes: it cannot pass with the loop, and
+     * the batch is orders of magnitude away from it.
+     */
+    testTableBatch() {
+        const t = new TableView();
+        this.Fixed1.Add(t);
+        t.Name    = "Batch1";
+        t.Columns = [{ Text: "A" }, { Text: "B" }];
+
+        t.AddRows([["Ana", "1"], ["Beto", "2"]]);
+        eq("a batch counts", t.Count, 2);
+        eq("and the rows are the ones given",
+           JSON.stringify(t.Row(1)), '["Beto","2"]');
+        eq("in the order they came in", t.Cell(0, 0), "Ana");
+
+        /* Each row is `Add`'s: the array of cells, a short one, or one value. */
+        t.AddRows([["Cora"], "Dora"]);
+        eq("a short row stays short", JSON.stringify(t.Row(2)), '["Cora"]');
+        eq("and one value is a row of one", JSON.stringify(t.Row(3)), '["Dora"]');
+
+        t.AddRows([]);
+        eq("an empty batch adds nothing", t.Count, 4);
+
+        throws("rows must be an array", () => t.AddRows("Ana"));
+        eq("and the table keeps what it held", t.Count, 4);
+
+        /*
+         * A value that cannot become text refuses the whole batch: the table
+         * is built apart and spliced in only once every row is there, because
+         * a half-added batch is rows the program never meant to write.
+         */
+        throws("a value that is not text refuses the batch",
+               () => t.AddRows([["ok", "1"],
+                                [{ toString() { throw new Error("no"); } }]]));
+        eq("and a refused batch adds none of it", t.Count, 4);
+
+        /* A tree's rows are nodes with keys, so the batch is refused there
+         * with the sentence that says what to write instead. */
+        const tree = new TableView();
+        this.Fixed1.Add(tree);
+        tree.Name    = "BatchTree";
+        tree.Columns = [{ Text: "A" }, { Text: "B" }];
+        tree.Add(["root", "0"], { Key: "r" });
+        throws("a tree refuses a batch of rows", () => tree.AddRows([["x", "1"]]));
+        eq("and its rows are untouched", tree.Count, 1);
+        tree.Delete();
+
+        /* On demand it does what one `Add` does: the count is dropped and the
+         * table holds its own again. */
+        t.Count = 5;
+        eq("on demand it stands for five", t.Count, 5);
+        t.AddRows([["uno", "1"]]);
+        eq("a batch drops the on-demand count", t.Count, 1);
+        eq("with the row it was given", t.Cell(0, 0), "uno");
+
+        /* The curve, on the road the audit measured. */
+        t.Clear();
+        const rows = [];
+        for (let i = 0; i < 40000; i++) rows.push([`r${i}`, `${i}`]);
+
+        const watch = new Stopwatch().Start();
+        t.AddRows(rows);
+        const took = watch.Elapsed;
+
+        eq("forty thousand rows arrive", t.Count, 40000);
+        eq("the first is the first",  t.Cell(0, 0), "r0");
+        eq("and the last is the last", t.Cell(39999, 0), "r39999");
+        check(`40 000 rows in one batch is seconds of nothing (${took.toFixed(0)} ms)`,
+              took < 5000, took);
 
         t.Delete();
     }

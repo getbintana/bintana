@@ -8569,7 +8569,16 @@
           "Params": 2,
           "Signature": "(values, [options])",
           "Returns": "",
-          "Doc": "one row, as an array of strings. A row shorter than there are columns reads `\"\"` for the rest. Clears an on-demand `Count`. **`options` is `{ Key, Parent, Icon }`, and a row with a `Key` is a node**: the first one makes this table a tree, `Parent` is the key of the node it goes under (absent is a root), and `Icon` is the picture for its first column — the same one `TreeView.Add` takes, so a node need not be added and then decorated",
+          "Doc": "one row, as an array of strings. A row shorter than there are columns reads `\"\"` for the rest. Clears an on-demand `Count`. **`options` is `{ Key, Parent, Icon }`, and a row with a `Key` is a node**: the first one makes this table a tree, `Parent` is the key of the node it goes under (absent is a root), and `Icon` is the picture for its first column — the same one `TreeView.Add` takes, so a node need not be added and then decorated. **For many rows at once, `AddRows`**: one change to the list instead of one per row",
+          "Native": true
+        },
+        {
+          "Name": "AddRows",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(rows)",
+          "Returns": "",
+          "Doc": "many rows in one call, each the array `Add` takes. **The whole batch is one change to the list**, which is what makes filling a table from a query linear: `Add` appends one item and raises `items-changed` per call, so the ordinary loop was quadratic — 40 000 rows took 17 s (D3 of the October audit), and this is a `splice`. Refused on a tree, whose rows are nodes with keys, and it clears an on-demand `Count` as one `Add` does",
           "Native": true
         },
         {
