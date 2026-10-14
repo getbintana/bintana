@@ -41,8 +41,12 @@ top level -- every file is a module and none declares a namespace -- and neither
 
 **Files is the directory as it is**: folders first, then files, everything shown
 — including what the project does not recognise. A `README`, a `.tar` an export
-left behind, an `.svg` in `icons/`: those were invisible in this IDE until this
-view existed, because `Classes.scan` collects only the extensions it can edit.
+left behind, an `.svg` in `icons/`: this is the view that shows them *where they
+live*, and the project view is the other reading of the same list — grouped, and
+with a file no kind claims under `Other`. **Membership is the same in both**:
+`Classes.scan` lists every non-hidden file, and what `TabSet`'s table says is how
+one *opens*, not whether it is the project's. What the two views differ about is
+grouping.
 
 Three things it leans on, all of them recent:
 
@@ -463,5 +467,5 @@ each file is a module that exports its class.
   hold the same short name, and only the open file says which one is meant.
 - Control names use the **last segment**. A control's handlers are `Name_Event`
   methods, and `Partes.Chip1` is not an identifier.
-- A folder with nothing editable in it is not shown: the tree is built from the
-  files, so an emptied folder disappears on its own.
+- A folder with no files in it is not shown: the tree is built from the files,
+  so an emptied folder disappears on its own.
