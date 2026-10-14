@@ -11278,6 +11278,143 @@ function* p_columns(ide) {
 }
 
 /*
+ * A record's shape, edited in its dialog.
+ *
+ * The file goes into the project the phases before built, with an option the
+ * dialog does not show (`attribute`) and one it does (`max`), so what OK keeps
+ * and what it rewrites are both assertions and not hopes. Every step takes the
+ * road a person takes -- selection in the tree, the double click, the controls,
+ * OK -- and the dialog's `Change_`/`Click_` handlers are called the way a hand
+ * would reach them.
+ */
+function* p_records(ide) {
+    const file = "ShapeSample.record";
+    const path = File.Join(TMP, file);
+
+    File.Save(path, JSON.stringify({
+        format: "bta-record/1",
+        class: "ShapeSample",
+        naming: "snake",
+        fields: {
+            Name:  { kind: "text", required: true, max: 80 },
+            Price: { kind: "decimal", decimals: 2, attribute: true },
+            Kind:  { kind: "enum", values: ["A", "B"] },
+        },
+    }, null, 2) + "\n");
+    ide.listFiles();
+    yield* settled(ide);
+
+    check("a .record is a file of the project", ide.files.includes(file),
+          JSON.stringify(ide.files));
+    check("in a category of its own", ide.FileTree.Exists("cat:records"));
+    check("with a node of its own", ide.FileTree.Exists(file));
+
+    const wasOpen = ide.activeFile;
+
+    ide.FileTree.Key = file;
+    eq("selecting one selects the shape", ide.selectedRecord, file);
+    eq("and opens no tab", ide.activeFile, wasOpen);
+    check("the bar says what the double click does",
+          ide.LblStatus.Text.includes(file), ide.LblStatus.Text);
+
+    ide.FileTree_Activate();
+    const dlg = ide.recordEditor;
+    check("the double click opens the editor", dlg !== undefined);
+    yield;
+    if (!dlg) return;
+
+    eq("on the class it declares",   dlg.TxtRecClass.Text, "ShapeSample");
+    eq("and its naming",             dlg.CmbRecNaming.Text, "snake");
+    eq("the kinds are the runtime's own", JSON.stringify(dlg.CmbRecKind.Items),
+       JSON.stringify(Field.Kinds()));
+    eq("the fields are the file's, in order", dlg.RecList.Count, 3);
+    eq("first the name",             dlg.RecList.Cell(0, 0), "Name");
+    eq("with its kind",              dlg.RecList.Cell(0, 1), "text");
+    eq("and the gloss of its rules", dlg.RecList.Cell(0, 2), "required · max 80");
+    eq("an option this dialog does not show is not its business",
+       dlg.RecList.Cell(1, 0), "Price");
+
+    /* Pick a row through the list, and edit it through the controls. */
+    dlg.RecList.Index = 1;                       /* fires Select */
+    eq("picking a row fills the fields", dlg.TxtRecName.Text, "Price");
+    eq("the kind is the one it has",     dlg.CmbRecKind.Text, "decimal");
+    eq("with its decimals where they were", dlg.CmbRecDec.Index, 3);
+
+    dlg.TxtRecMax.Text = "999";
+    dlg.TxtRecMax_Change();
+    eq("typing reaches the row", dlg.RecList.Cell(1, 2), "max 999 · 2 places");
+
+    /* A field that is not there yet, of a kind with options of its own. */
+    dlg.BtnRecAdd_Click();
+    eq("adding one names it", dlg.TxtRecName.Text, "Field");
+    dlg.TxtRecName.Text = "Since";
+    dlg.TxtRecName_Change();
+    dlg.CmbRecKind.Text = "date";
+    dlg.CmbRecKind_Select();
+    eq("a date takes required and neither a max nor places",
+       `${dlg.ChkRecRequired.Enabled} ${dlg.TxtRecMax.Enabled} ` +
+       `${dlg.CmbRecDec.Enabled}`, "true false false");
+    dlg.ChkRecRequired.Active = true;
+    dlg.ChkRecRequired_Click();
+    eq("and the row says so", dlg.RecList.Cell(3, 2), "required");
+
+    /* Reordering, which is why the list is a list. */
+    dlg.BtnRecUp_Click();
+    eq("Up moves it above", dlg.RecList.Cell(2, 0), "Since");
+    dlg.BtnRecDown_Click();
+    eq("Down puts it back", dlg.RecList.Cell(3, 0), "Since");
+
+    /* OK writes the file, through the runtime's own door. */
+    dlg.BtnRecOk_Click();
+    yield* settled(ide);
+
+    const written = File.LoadJson(path);
+    eq("the file keeps its class and naming",
+       `${written.class} ${written.naming}`, "ShapeSample snake");
+    eq("the fields in order", Dictionary.Keys(written.fields).join(","),
+       "Name,Price,Kind,Since");
+    eq("the option that was edited, as a number",
+       JSON.stringify(written.fields.Name), '{"kind":"text","required":true,"max":80}');
+    eq("the one the dialog does not show, kept",
+       JSON.stringify(written.fields.Price),
+       '{"kind":"decimal","attribute":true,"max":"999","decimals":2}');
+    eq("and the one nobody touched, as it was",
+       JSON.stringify(written.fields.Kind), '{"kind":"enum","values":["A","B"]}');
+    eq("the new field", JSON.stringify(written.fields.Since),
+       '{"kind":"date","required":true}');
+
+    /* Cancel costs nothing: the file stays what OK wrote. */
+    const before = File.Load(path);
+    ide.FileTree_Activate();
+    const cancelled = ide.recordEditor;
+    yield;
+    if (cancelled) {
+        cancelled.BtnRecAdd_Click();
+        cancelled.TxtRecName.Text = "Gone";
+        cancelled.TxtRecName_Change();
+        cancelled.BtnRecCancel_Click();
+        yield;
+    }
+    eq("Cancel leaves the file as it was", File.Load(path), before);
+
+    /* And what the runtime would refuse is refused here: two fields with one
+     * name would write one of them away. */
+    ide.FileTree_Activate();
+    const refused = ide.recordEditor;
+    yield;
+    if (refused) {
+        refused.RecList.Index = 3;
+        refused.TxtRecName.Text = "Name";
+        refused.TxtRecName_Change();
+        refused.BtnRecOk_Click();
+        check("a duplicated name is refused and the dialog stays open",
+              ide.recordEditor === refused && File.Load(path) === before);
+        refused.BtnRecCancel_Click();
+        yield;
+    }
+}
+
+/*
  * Exporting the project as one .tar.
  *
  * **Nothing here opens the chooser.** A file dialog is a modal surface nothing
@@ -15444,6 +15581,7 @@ const PHASES = [
     { name: "strings", run: p_strings },
     { name: "settings", run: p_settings },
     { name: "columns", run: p_columns },
+    { name: "records", run: p_records },
     { name: "export", run: p_export },
     { name: "installer", run: p_installer },
     { name: "apps", run: p_apps },

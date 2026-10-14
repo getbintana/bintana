@@ -52,6 +52,12 @@ const EDITABLE = {
     po:   false,    /* a catalogue: shown, and handed to a translation editor */
     pot:  false,    /* ...and the template it is updated from */
 
+    /* A record's shape -- `Customer.record` -- and the second case of the same
+     * rule: shown, and handed to the dialog that edits its fields
+     * (`RecordForm`) rather than to a tab. The file *is* the document, and
+     * editing its JSON by hand is what the dialog exists to avoid. */
+    record: false,
+
     /* Images: shown in the tree and handed to a viewer, for the same reason a
      * catalogue is -- the project owns them and "the IDE cannot show you your
      * own file" is a worse answer than a window that can. Not SVG: a `Picture`

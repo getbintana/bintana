@@ -12894,6 +12894,15 @@
           "Native": false
         },
         {
+          "Name": "Kinds",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "every kind a field can be, by name",
+          "Native": false
+        },
+        {
           "Name": "List",
           "Kind": "Method",
           "Params": 2,
@@ -12918,6 +12927,15 @@
           "Signature": "(of, opts)",
           "Returns": "",
           "Doc": "another record: the class, or `() => the class` for a shape that contains itself. Starts at `null`. Options: `required`",
+          "Native": false
+        },
+        {
+          "Name": "Spec",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(spec)",
+          "Returns": "",
+          "Doc": "a field from the object a `.record` file holds for one, refusing what a class body refuses",
           "Native": false
         },
         {

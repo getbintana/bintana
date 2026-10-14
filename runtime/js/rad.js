@@ -1688,6 +1688,30 @@ function fieldValue(field, name, v, mayBeEmpty, notes) {
 }
 
 GLOBAL.Field = {
+    /*
+     * The kinds a field can be, by the name a `.record` file spells: `text`,
+     * `int`, `number`, `decimal`, `bool`, `date`, `time`, `datetime`, `bytes`,
+     * `list`, `enum`, `record`.  A dialog that edits a shape offers them from
+     * here, so a kind added to this table appears there with no other change --
+     * and this is the same list a refusal names when a spec misspells one.
+     */
+    /**
+     * every kind a field can be, by name
+     */
+    Kinds: () => ownKeys(FIELD_KINDS).slice(),
+
+    /*
+     * A field from the object a `.record` file holds for one -- the same road
+     * the file's loader takes (`fieldOfSpec`), published so a program can build
+     * or check a spec, and so a dialog that edits a shape asks the runtime
+     * rather than keeping a second copy of the rules.
+     */
+    /**
+     * a field from the object a `.record` file holds for one, refusing what a
+     * class body refuses
+     */
+    Spec: (spec) => fieldOfSpec(spec, "Field.Spec"),
+
     /** a string. Options: `required`, `max` (characters) */
     Text:     (opts) => makeField("text",     opts),
     /** a whole number. Options: `required`, `min`, `max` */

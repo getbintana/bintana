@@ -276,6 +276,10 @@ export class MainForm extends Form {
      * page, where nothing has ever been selected. */
     selectedImage = null;
 
+    /* And a record's shape, which is the same case one step further: the tree
+     * shows it, no tab opens, and a double click hands it to `RecordForm`. */
+    selectedRecord = null;
+
     /* And the one that is neither: something the files view showed and no
      * editor here can hold. */
     selectedOther = null;
@@ -1276,6 +1280,9 @@ export class MainForm extends Form {
              * appears to do nothing at all -- which is worse than either opening
              * it or leaving it alone. The bar is where the gesture is named. */
             status = Locale.Text("{0}   double click to edit", this.selectedCatalogue);
+        } else if (this.selectedRecord) {
+            status = Locale.Text("{0}   double click to edit its fields",
+                                 this.selectedRecord);
         } else if (!this.activeFile) {
             status = Locale.Plural("{0} file", "{0} files", this.files.length);
         } else {
@@ -1557,6 +1564,19 @@ export class MainForm extends Form {
         if (this.selectedImage) return;
 
         /*
+         * A record's shape is the third of the family. It is a document -- the
+         * file *is* the shape -- so nothing opens in a tab and a double click
+         * hands it to the dialog that edits its fields; selecting one only says
+         * so in the bar, for the catalogues' reason: a modal per row walked
+         * through with the arrow keys is unusable.
+         */
+        this.selectedRecord = File.IsExtension(name, "record") ? name : null;
+        if (this.selectedRecord) {
+            this.refresh();
+            return;
+        }
+
+        /*
          * The files view shows what the project does not recognise, so a
          * selection there can be a `.tar` or a font. Reading one into an editor
          * would fill it with the bytes of something that is not text -- and
@@ -1592,6 +1612,7 @@ export class MainForm extends Form {
         if (this.muted) return;
         if (this.selectedCatalogue)  this.openCatalogue(this.selectedCatalogue);
         else if (this.selectedImage) ImageForm.show(this, this.selectedImage);
+        else if (this.selectedRecord) this.editRecord(this.selectedRecord);
         else if (this.selectedOther) this.openOutside(this.selectedOther);
     }
 
@@ -1621,6 +1642,37 @@ export class MainForm extends Form {
             this.log(`Opened ${name} outside the IDE\n`);
         } catch (e) {
             Message.Error("Cannot open {0}:\n{1}", name, e.message);
+        }
+    }
+
+    /*
+     * A record's shape, opened in the dialog that edits it.
+     *
+     * The document is read as it is on disk -- not through the runtime's
+     * `Record`, because the class it describes belongs to the *project* and
+     * this process is the IDE's own -- and written back whole on accept.
+     * `RecordForm` refuses a file that is not a `bta-record/1` document before
+     * touching anything, so nothing is ever rewritten blind.
+     */
+    editRecord(file) {
+        const path = File.Join(this.project, file);
+        let doc;
+
+        try {
+            doc = File.LoadJson(path);
+        } catch (e) {
+            Message.Error("Cannot read {0}:\n{1}", file, e.message);
+            return;
+        }
+
+        try {
+            this.recordEditor = RecordForm.edit(doc, (shape) => {
+                File.SaveJson(path, shape);
+                this.log(`Edited ${file}\n`);
+                this.refresh();
+            });
+        } catch (e) {
+            Message.Error("Cannot edit {0}:\n{1}", file, e.message);
         }
     }
 

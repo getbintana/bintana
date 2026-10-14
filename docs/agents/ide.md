@@ -587,6 +587,21 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   read-only `TextEditor` now, which is what `examples/usage` already documented,
   and the dependency stopped being required in the same change. Before keeping a
   heavy widget because of what it *can* do, list what the callers actually call.
+- **A `.record` is a document, so it gets a category and a dialog and no tab.**
+  The tree already had the shape for a file the IDE shows but does not open as
+  text -- a catalogue goes to a translation editor, an image to a viewer -- and
+  a record's shape is the third: `EDITABLE.record = false` is what makes
+  `Classes.scan` list it at all (a file whose extension the table does not name
+  is not the project's), the category says what kind of thing it is, and the
+  double click hands it to `RecordForm` through `MainForm.editRecord`. The
+  dialog edits the *document* and not a control's property, so it reads and
+  writes the file whole -- and **the options it does not show are kept**: each
+  row brings its spec and an edit touches only the keys its controls own, which
+  is what lets an option the IDE has never heard of (`attribute` today, whatever
+  tomorrow) survive an OK. The fields are checked through `Field.Spec`, the road
+  the runtime's own loader takes, so a misspelt option is refused with the
+  sentence the project would have read at load rather than by a second copy of
+  the rules that would drift -- the column dialog's lesson, one document over.
 
 ## The designer's pages: the page shown is a design value
 

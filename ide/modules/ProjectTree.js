@@ -277,6 +277,11 @@ export class ProjectTree {
              * "this is an image", which is what the viewer opens. */
             images:     ["image-x-generic-symbolic", "bta-image-symbolic"],
             image:      ["image-x-generic-symbolic", "bta-image-symbolic"],
+            /* A record's shape: a document that is not opened as text but
+             * handed to the dialog that edits its fields. The category and the
+             * file get the same picture, the images' rule. */
+            records:    ["x-office-address-book-symbolic", "view-list-symbolic",
+                         "bta-file-symbolic"],
             /* A document and the category it is in: what the desktop draws for
              * a page of text, with the runtime's own file behind it. */
             docs:       ["x-office-document-symbolic", "text-x-generic-symbolic",
@@ -492,7 +497,12 @@ export class ProjectTree {
         const langs = scope ? [] : this.ide.files.filter((f) => Translations.isCatalogue(f));
         const pics  = loose.filter((f) => isImageFile(f));
         const docs  = loose.filter((f) => ext(f) === "md");
+        /* A record's shape, for the catalogue's reason exactly: it is not
+         * opened as text but handed to its own editor, and a category is how
+         * this tree already says "these are a different kind of thing". */
+        const records = loose.filter((f) => ext(f) === "record");
         const rest  = loose.filter((f) => ext(f) !== "js" && ext(f) !== "md" &&
+                                          ext(f) !== "record" &&
                                           !Translations.isCatalogue(f) &&
                                           !isImageFile(f));
 
@@ -551,6 +561,12 @@ export class ProjectTree {
                               this.icon("docs"));
             for (const f of docs)
                 this.addLeaf(f, File.Name(f), catKey("docs"), "document");
+        }
+        if (records.length) {
+            this.node(catKey("records"), Locale.Text("Records"), parentKey,
+                              this.icon("records"));
+            for (const f of records)
+                this.addLeaf(f, File.Name(f), catKey("records"), "records");
         }
         if (rest.length) {
             this.node(catKey("other"), Locale.Text("Other"), parentKey,

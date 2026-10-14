@@ -1,0 +1,396 @@
+{
+  "format": "bintana-form/1",
+  "class": "RecordForm",
+  "properties": {
+    "Text": "Record",
+    "Width": 640,
+    "Height": 628,
+    "Icon": "x-office-address-book-symbolic"
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblRecClass",
+      "properties": {
+        "Height": 24,
+        "Text": "Record:",
+        "Width": 60,
+        "X": 12,
+        "Y": 18
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtRecClass",
+      "properties": {
+        "Height": 34,
+        "ReadOnly": true,
+        "Width": 180,
+        "X": 76,
+        "Y": 12
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblRecNaming",
+      "properties": {
+        "Height": 24,
+        "Text": "Naming:",
+        "Width": 60,
+        "X": 272,
+        "Y": 18
+      }
+    },
+    {
+      "type": "ComboBox",
+      "name": "CmbRecNaming",
+      "properties": {
+        "Height": 34,
+        "Width": 130,
+        "X": 336,
+        "Y": 12
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblRecFields",
+      "properties": {
+        "Height": 24,
+        "Text": "Fields, in order:",
+        "Width": 300,
+        "X": 12,
+        "Y": 58
+      }
+    },
+    {
+      "type": "TableView",
+      "name": "RecList",
+      "properties": {
+        "Columns": [
+          {
+            "Text": "Field",
+            "Width": 170
+          },
+          {
+            "Text": "Kind",
+            "Width": 100
+          },
+          {
+            "Text": "Its rules"
+          }
+        ],
+        "HAlign": "Fill",
+        "Height": 200,
+        "MinWidth": 260,
+        "Style": "frame",
+        "Width": 480,
+        "X": 12,
+        "Y": 84
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnRecAdd",
+      "properties": {
+        "HAlign": "End",
+        "Height": 32,
+        "Text": "Add",
+        "Width": 100,
+        "X": 506,
+        "Y": 84
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnRecDel",
+      "properties": {
+        "HAlign": "End",
+        "Height": 32,
+        "Text": "Delete",
+        "Width": 100,
+        "X": 506,
+        "Y": 122
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnRecUp",
+      "properties": {
+        "HAlign": "End",
+        "Height": 32,
+        "Text": "Up",
+        "Width": 100,
+        "X": 506,
+        "Y": 168
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnRecDown",
+      "properties": {
+        "HAlign": "End",
+        "Height": 32,
+        "Text": "Down",
+        "Width": 100,
+        "X": 506,
+        "Y": 206
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblRecName",
+      "properties": {
+        "Height": 24,
+        "Text": "Name:",
+        "Width": 60,
+        "X": 12,
+        "Y": 298
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtRecName",
+      "properties": {
+        "ActivatesDefault": true,
+        "Height": 34,
+        "Width": 200,
+        "X": 80,
+        "Y": 292
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblRecKind",
+      "properties": {
+        "Height": 24,
+        "Text": "Kind:",
+        "Width": 60,
+        "X": 292,
+        "Y": 298
+      }
+    },
+    {
+      "type": "ComboBox",
+      "name": "CmbRecKind",
+      "properties": {
+        "Height": 34,
+        "Width": 140,
+        "X": 360,
+        "Y": 292
+      }
+    },
+    {
+      "type": "CheckButton",
+      "name": "ChkRecRequired",
+      "properties": {
+        "Height": 28,
+        "Text": "Required",
+        "Width": 130,
+        "X": 80,
+        "Y": 334
+      }
+    },
+    {
+      "type": "CheckButton",
+      "name": "ChkRecKey",
+      "properties": {
+        "Height": 28,
+        "Text": "Key",
+        "Width": 90,
+        "X": 218,
+        "Y": 334
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblRecAs",
+      "properties": {
+        "Height": 24,
+        "Text": "As:",
+        "Width": 32,
+        "X": 340,
+        "Y": 340
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtRecAs",
+      "properties": {
+        "Height": 34,
+        "Width": 168,
+        "X": 376,
+        "Y": 334
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblRecDef",
+      "properties": {
+        "Height": 24,
+        "Text": "Default:",
+        "Width": 64,
+        "X": 12,
+        "Y": 378
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtRecDef",
+      "properties": {
+        "Height": 34,
+        "Width": 200,
+        "X": 80,
+        "Y": 372
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblRecMin",
+      "properties": {
+        "Height": 24,
+        "Text": "Min:",
+        "Width": 40,
+        "X": 292,
+        "Y": 378
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtRecMin",
+      "properties": {
+        "Height": 34,
+        "Width": 80,
+        "X": 336,
+        "Y": 372
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblRecMax",
+      "properties": {
+        "Height": 24,
+        "Text": "Max:",
+        "Width": 44,
+        "X": 428,
+        "Y": 378
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtRecMax",
+      "properties": {
+        "Height": 34,
+        "Width": 130,
+        "X": 476,
+        "Y": 372
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblRecDec",
+      "properties": {
+        "Height": 24,
+        "Text": "Decimals:",
+        "Width": 84,
+        "X": 292,
+        "Y": 422
+      }
+    },
+    {
+      "type": "ComboBox",
+      "name": "CmbRecDec",
+      "properties": {
+        "Height": 34,
+        "Width": 90,
+        "X": 380,
+        "Y": 416
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblRecValues",
+      "properties": {
+        "Height": 24,
+        "Text": "Values:",
+        "Width": 64,
+        "X": 12,
+        "Y": 466
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtRecValues",
+      "properties": {
+        "Height": 34,
+        "Width": 526,
+        "X": 80,
+        "Y": 460
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblRecOf",
+      "properties": {
+        "Height": 24,
+        "Text": "Holds:",
+        "Width": 64,
+        "X": 12,
+        "Y": 510
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtRecOf",
+      "properties": {
+        "Height": 34,
+        "Width": 526,
+        "X": 80,
+        "Y": 504
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblRecHint",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 36,
+        "Style": "dim-label",
+        "Text": "Options the kind does not take are shut; changing the kind drops them. An empty option keeps its default. Holds is a Record class's name, or { … } for entries of their own.",
+        "VAlign": "End",
+        "Width": 596,
+        "Wrap": true,
+        "X": 12,
+        "Y": 548
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnRecCancel",
+      "properties": {
+        "Cancel": true,
+        "HAlign": "End",
+        "Height": 32,
+        "Text": "Cancel",
+        "VAlign": "End",
+        "Width": 90,
+        "X": 440,
+        "Y": 584
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnRecOk",
+      "properties": {
+        "Default": true,
+        "HAlign": "End",
+        "Height": 32,
+        "Style": "suggested-action",
+        "Text": "OK",
+        "VAlign": "End",
+        "Width": 90,
+        "X": 538,
+        "Y": 584
+      }
+    }
+  ]
+}

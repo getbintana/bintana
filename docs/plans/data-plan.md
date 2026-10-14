@@ -417,9 +417,12 @@ which is what Delphi does, is the wrong answer for a form with twelve fields.
    a `.record` beside the class, indexed by the same walk that finds a `.form`,
    read through the `Field` constructors, with `Record.File` and `Record.Shape`
    (the recursive spelling included: `{ "kind": "record", "of": "MenuItem" }`
-   names a class the way a `.form` names a `"type"`). What is left of this stage
-   is the declarative half proper -- the three properties and the field editor,
-   which is [below](#where-it-stands).
+   names a class the way a `.form` names a `"type"`), and **the editor over it**
+   — `RecordForm`, the dialog the tree opens on a double click, asking
+   `Field.Kinds` and checking every field through `Field.Spec`. `examples/quote`
+   and `examples/clients` declare their shapes in files. What is left of this
+   stage is the declarative half proper -- the three properties and the writing
+   over them, which is [below](#where-it-stands).
 2. **`sales.conn` and sqlite** — **half built.** `Database.Sqlite` and `Table` are
    there and tested: a record reads and writes a table, and `snake` stopped being
    unused. What is left is the declarative half, which is
@@ -450,10 +453,12 @@ account. `TableView` with the on-demand mode a bound grid over a query wants. A
 record that holds a list of records, so master–detail is a declaration. And
 `Database.Sqlite` + `Table`, so a record reads and writes a table.
 
-**And one piece of the declarative half landed with the plan still waiting**: a
-record's shape as a file (`Customer.record`, `Record.File`, `Record.Shape`),
-which is what the tree groups and the dialog edits; the rest of stage 1 is
-three properties and the editor over them.
+**And two pieces of the declarative half landed with the plan still waiting**:
+a record's shape as a file (`Customer.record`, `Record.File`, `Record.Shape`)
+and the IDE's dialog over it (`RecordForm`, on the tree's double click, asking
+`Field.Kinds`/`Field.Spec`); `examples/quote` and `examples/clients` declare
+their shapes in files now. The rest of stage 1 is the three properties and the
+writing over them.
 
 So what is left is the declarative half proper, and it is now small enough to
 list:
@@ -464,7 +469,6 @@ list:
 | `Form.Record` / `Form.Source` / `Control.DataField` | three ordinary properties, so all three are designable and serialisable with no other change — the invariant the runtime rests on |
 | the drop-downs | `DataField` from the record's fields, `Source` from the declared connections' tables and the project's `.json` files, computed the way the grid's `Style` row already is |
 | the write-back | on `Activate` and `LostFocus`, with the error marked beside the field. It asks **`Validate()`** and never `Problems`, which is the report of a load and never clears |
-| the field editor | the IDE dialog over `Record.Shape` and the `.record` file — what the shape file was built for |
 
 And two things the binding will have to answer that this document did not
 foresee, both found by writing the screens by hand: **a guard**, because

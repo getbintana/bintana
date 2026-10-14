@@ -24,6 +24,7 @@
     "../../ide/forms/StyleForm.js",
     "../../ide/forms/ImageForm.js",
     "../../ide/forms/ColumnForm.js",
+    "../../ide/forms/RecordForm.js",
     "../../ide/modules/LaunchConfig.js",
     "../../ide/modules/ProjectFile.js",
     "../../ide/modules/Launch.js",

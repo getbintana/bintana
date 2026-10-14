@@ -205,7 +205,7 @@ Three things that will waste your time:
   with the first frame of its stack. **A new phase does not have to remember
   this**, which is the point; what it does mean is that a test deliberately
   provoking an error has to catch it.
-- **`tests/ide/Driver.js` is fifty phases, and the phase is the scope.** It used
+- **`tests/ide/Driver.js` is fifty-one phases, and the phase is the scope.** It used
   to be one 4000-line generator where every `const` shared one scope, so a name
   near the top collided with one added at the bottom and the suite died with
   `SyntaxError: invalid redefinition of lexical identifier` — three times in one

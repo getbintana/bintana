@@ -123,7 +123,10 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   refusal per rule, and it is the same sentence a class body gets.
   `Record.File(type)` answers the path and `Record.Shape(type)` writes the
   document back -- the two halves of the same format, and `Shape` is what the
-  IDE's dialog will edit.
+  IDE's dialog edits. `Field.Kinds()` and `Field.Spec(spec)` are the pair that
+  dialog asks with: one builds a field out of the object a file holds for it
+  (refusing what a class body refuses, the default included), the other lists
+  the kinds, so neither the IDE nor a program keeps a second copy of the rules.
 - **The index is `index_forms`' with the other suffix, and it is one per
   thread.** A `.record` is found by the walk that finds a `.form`: qualified
   name then bare, nearest folder wins, two files at one depth refuse **when one
