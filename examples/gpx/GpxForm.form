@@ -114,7 +114,10 @@
           "properties": {
             "Expand": true,
             "HAlign": "Fill",
-            "VAlign": "Fill"
+            "HExpand": true,
+            "Style": "frame",
+            "VAlign": "Fill",
+            "VExpand": true
           }
         },
         {
@@ -122,11 +125,11 @@
           "name": "Hover",
           "properties": {
             "Arrangement": "Vertical",
-            "Foreground": "#ffffff",
+            "Foreground": "rgb(255,255,255)",
             "HAlign": "Start",
             "Margin": 12,
             "Padding": "6 10",
-            "Radius": 8,
+            "Radius": "8",
             "Shadow": "0 2 10 0 rgba(0,0,0,0.35)",
             "Spacing": 2,
             "Style": "osd",
@@ -138,8 +141,7 @@
               "type": "Label",
               "name": "LblHoverAt",
               "properties": {
-                "Alignment": "Start",
-                "Foreground": "#ffffff"
+                "Foreground": "rgb(255,255,255)"
               },
               "design": {
                 "Text": "12,40 km · 28 m"
@@ -149,8 +151,7 @@
               "type": "Label",
               "name": "LblHoverWhen",
               "properties": {
-                "Alignment": "Start",
-                "Foreground": "#ffffff"
+                "Foreground": "rgb(255,255,255)"
               },
               "design": {
                 "Text": "0:58:12 · 4:41 /km"
@@ -166,7 +167,7 @@
             "HAlign": "End",
             "Margin": 12,
             "Padding": "4 10",
-            "Radius": 8,
+            "Radius": "8",
             "Spacing": 14,
             "Style": "osd",
             "VAlign": "End",
@@ -177,7 +178,7 @@
               "type": "LinkButton",
               "name": "LnkCredit",
               "properties": {
-                "Foreground": "#ffffff",
+                "Foreground": "rgb(255,255,255)",
                 "Text": "© OpenStreetMap contributors",
                 "Tooltip": "The map data is OpenStreetMap's, under the ODbL",
                 "Uri": "https://www.openstreetmap.org/copyright"
@@ -187,7 +188,7 @@
               "type": "LinkButton",
               "name": "LnkFix",
               "properties": {
-                "Foreground": "#ffffff",
+                "Foreground": "rgb(255,255,255)",
                 "Text": "Report a map issue",
                 "Uri": "https://www.openstreetmap.org/fixthemap"
               }

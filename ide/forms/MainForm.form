@@ -822,7 +822,7 @@
                     "HAlign": "Center",
                     "Height": 28,
                     "Orientation": "Vertical",
-                    "Width": 304
+                    "Width": 4
                   }
                 },
                 {
@@ -883,7 +883,7 @@
                 "HExpand": true,
                 "MinHeight": 400,
                 "MinWidth": 720,
-                "Position": 260,
+                "Position": 256,
                 "VAlign": "Fill",
                 "VExpand": true
               },
@@ -911,6 +911,7 @@
                         "Arrangement": "Vertical",
                         "Expand": true,
                         "HExpand": true,
+                        "Style": "frame",
                         "VExpand": true
                       },
                       "children": [
@@ -921,7 +922,8 @@
                             "Arrangement": "Horizontal",
                             "HAlign": "Fill",
                             "Padding": "0 4",
-                            "Style": "linked"
+                            "Spacing": 6,
+                            "Style": "default-decoration titlebar"
                           },
                           "children": [
                             {
@@ -931,6 +933,7 @@
                                 "HAlign": "Fill",
                                 "HExpand": true,
                                 "Height": 30,
+                                "Style": "heading flat",
                                 "Tooltip": "What this tree shows"
                               }
                             },
@@ -939,6 +942,7 @@
                               "name": "BtnSideHide",
                               "properties": {
                                 "Height": 30,
+                                "Style": "flat circular",
                                 "Tooltip": "Hide the project panel",
                                 "Width": 34
                               }
@@ -958,6 +962,9 @@
                               "Changes"
                             ],
                             "VExpand": true
+                          },
+                          "design": {
+                            "Current": 1
                           },
                           "children": [
                             {
@@ -1076,6 +1083,7 @@
                               "properties": {
                                 "Arrangement": "Vertical",
                                 "HAlign": "Fill",
+                                "Margin": 4,
                                 "Spacing": 4,
                                 "VAlign": "Fill",
                                 "VExpand": true,
@@ -1124,6 +1132,7 @@
                                         "text": "Changes window..."
                                       }
                                     ],
+                                    "Style": "frame",
                                     "Tooltip": "Double click a file to read what changed in it",
                                     "VExpand": true
                                   }
@@ -1216,9 +1225,9 @@
                             "Arrangement": "Horizontal",
                             "HAlign": "Fill",
                             "Height": 38,
-                            "Margin": 4,
+                            "Margin": 2,
                             "Spacing": 8,
-                            "Style": "toolbar",
+                            "Style": "toolbar warning",
                             "Visible": false
                           },
                           "children": [
@@ -1267,7 +1276,6 @@
                           "properties": {
                             "Expand": true,
                             "HExpand": true,
-                            "Margin": 2,
                             "VExpand": true
                           },
                           "children": [
@@ -1444,7 +1452,6 @@
                             "Background": "rgba(0,0,0,0.13)",
                             "Expand": true,
                             "HExpand": true,
-                            "Style": "frame",
                             "VExpand": true
                           },
                           "children": [
@@ -1505,6 +1512,9 @@
                           "Debug",
                           "Problems"
                         ]
+                      },
+                      "design": {
+                        "Current": 1
                       },
                       "children": [
                         {
@@ -1635,7 +1645,7 @@
                               "properties": {
                                 "Expand": true,
                                 "HExpand": true,
-                                "Position": 320,
+                                "Position": 321,
                                 "VExpand": true
                               },
                               "children": [
