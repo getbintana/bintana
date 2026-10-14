@@ -26,6 +26,19 @@ typedef struct BtaApp    BtaApp;
 #endif
 
 /*
+ * How long a **blocking** call waits when nobody said.
+ *
+ * `Exec.Wait` and the seven `Http.*Wait` verbs freeze the window while they
+ * wait, and an absent `Timeout` used to mean forever -- a hang with no ending
+ * the program had chosen.  Half a minute is well past what either is for
+ * (`msgmerge`, `git rev-parse`, a request that answers), and **`Timeout: 0` is
+ * the explicit *wait forever*** for the program that means it.  The callback
+ * spellings are untouched: nothing is frozen, so they wait as long as they
+ * like.
+ */
+#define BTA_WAIT_DEFAULT 30000
+
+/*
  * The runtime's own notes about a widget -- what it knows and the application
  * does not, kept on the struct rather than as own properties of the wrapper.
  * See the fields at the end of BtaWidget, and `docs/plans/strict-plan.md` for

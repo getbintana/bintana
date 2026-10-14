@@ -12822,7 +12822,7 @@
           "Params": 2,
           "Signature": "(argv, [options])",
           "Returns": "{ ExitCode, Output }",
-          "Doc": "runs it and **waits**, answering what it printed: `{ ExitCode, Output }`. It blocks the main loop, so it is for programs that answer in milliseconds -- `msgfmt`, `git rev-parse`, `which` -- and never for one that might sit there; `Input` is the text or `Bytes` the child reads, which is what makes `Exec.Wait([\"sort\"], { Input: text })` a filter",
+          "Doc": "runs it and **waits**, answering what it printed: `{ ExitCode, Output }`. It blocks the main loop, so it is for programs that answer in milliseconds -- `msgfmt`, `git rev-parse`, `which` -- and never for one that might sit there; `Input` is the text or `Bytes` the child reads, which is what makes `Exec.Wait([\"sort\"], { Input: text })` a filter. **With no `Timeout` it gives up after 30 s** — a frozen window is no place for a default that never ends — and `Timeout: 0` is the explicit *wait forever*",
           "Native": true
         }
       ]
@@ -13324,7 +13324,7 @@
           "Params": 1,
           "Signature": "([opts])",
           "Returns": "HttpClient",
-          "Doc": "a client with its own session: `BaseUrl`, `Headers`, `Timeout` (ms, `0` waits forever), `FollowRedirects` (default `true`), `Language`, `UserAgent`, `Proxy`, `Auth`, `Cookies`, `IdleTimeout`, `MaxConns`, `MaxPerHost`. The options are an object — a bare URL is refused",
+          "Doc": "a client with its own session: `BaseUrl`, `Headers`, `Timeout` (ms, `0` waits forever for the callback verbs), `FollowRedirects` (default `true`), `Language`, `UserAgent`, `Proxy`, `Auth`, `Cookies`, `IdleTimeout`, `MaxConns`, `MaxPerHost`. The options are an object — a bare URL is refused",
           "Native": true
         },
         {
@@ -15458,7 +15458,7 @@
           "Params": 1,
           "Signature": "(url, [opts])",
           "Returns": "{ Status, Reason, Headers, Body, Url }",
-          "Doc": "the blocking `Delete`",
+          "Doc": "the blocking `Delete`. **With no `Timeout` it gives up after 30 s**, and `{ Timeout: 0 }` waits forever",
           "Native": true
         },
         {
@@ -15485,7 +15485,7 @@
           "Params": 1,
           "Signature": "(url, [opts])",
           "Returns": "{ Status, Reason, Headers, Body, Url }",
-          "Doc": "the blocking `Get`",
+          "Doc": "the blocking `Get`. **With no `Timeout` it gives up after 30 s**, and `{ Timeout: 0 }` waits forever",
           "Native": true
         },
         {
@@ -15503,7 +15503,7 @@
           "Params": 1,
           "Signature": "(url, [opts])",
           "Returns": "{ Status, Reason, Headers, Body, Url }",
-          "Doc": "the blocking `Head`",
+          "Doc": "the blocking `Head`. **With no `Timeout` it gives up after 30 s**, and `{ Timeout: 0 }` waits forever",
           "Native": true
         },
         {
@@ -15575,7 +15575,7 @@
           "Params": 2,
           "Signature": "(url, body, [opts])",
           "Returns": "{ Status, Reason, Headers, Body, Url }",
-          "Doc": "the blocking `Patch`",
+          "Doc": "the blocking `Patch`. **With no `Timeout` it gives up after 30 s**, and `{ Timeout: 0 }` waits forever",
           "Native": true
         },
         {
@@ -15593,7 +15593,7 @@
           "Params": 2,
           "Signature": "(url, body, [opts])",
           "Returns": "{ Status, Reason, Headers, Body, Url }",
-          "Doc": "the blocking `Post`",
+          "Doc": "the blocking `Post`. **With no `Timeout` it gives up after 30 s**, and `{ Timeout: 0 }` waits forever",
           "Native": true
         },
         {
@@ -15620,7 +15620,7 @@
           "Params": 2,
           "Signature": "(url, body, [opts])",
           "Returns": "{ Status, Reason, Headers, Body, Url }",
-          "Doc": "the blocking `Put`",
+          "Doc": "the blocking `Put`. **With no `Timeout` it gives up after 30 s**, and `{ Timeout: 0 }` waits forever",
           "Native": true
         },
         {
@@ -15638,7 +15638,7 @@
           "Params": 2,
           "Signature": "(method, url, [body], [opts])",
           "Returns": "{ Status, Reason, Headers, Body, Url }",
-          "Doc": "the blocking spelling: answers with the record, **throws** on transport failure — and what it throws carries the same `Kind` and `Status` the callback would have been handed",
+          "Doc": "the blocking spelling: answers with the record, **throws** on transport failure — and what it throws carries the same `Kind` and `Status` the callback would have been handed. **With no `Timeout` it gives up after 30 s**, and `{ Timeout: 0 }` waits forever",
           "Native": true
         },
         {
@@ -15656,7 +15656,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "ms before a request is given up on; `0` waits forever",
+          "Doc": "ms before a request is given up on; `0` waits forever for the callback verbs. The blocking ones use it when it is not zero and otherwise give up after 30 s — `{ Timeout: 0 }` on the call is the explicit *wait forever*",
           "Native": true
         },
         {

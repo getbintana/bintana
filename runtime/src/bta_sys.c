@@ -2455,11 +2455,13 @@ static void exec_wait_guard_free(GSource *src)
  * standing in.  A frozen window is visible; a live window that is lying is where
  * lifetime crashes come from.
  *
- * And **there is no timeout**: with no loop running there is nowhere to arm a
- * timer that would kill the child, so a command that never ends hangs the
- * program.  Exactly as it would in a shell script.  For anything long, of
- * unknown length, or that has to show progress, the callback spelling is the one
- * that is right.
+ * **A wait that never ends used to be the default, and that is not a default
+ * a freeze can afford**: with no `Timeout` a command that never ends hung the
+ * program with nothing chosen and nothing said.  It is half a minute now
+ * (`BTA_WAIT_DEFAULT`, bta.h) -- well past the commands this is for -- and
+ * `Timeout: 0` is the explicit *wait forever*.  For anything long, of unknown
+ * length, or that has to show progress, the callback spelling is the one that
+ * is right.
  *
  * Nothing here outlives the call: no job registered, no JSValue held across an
  * async boundary, nothing for bta_sys_cleanup() to free.  Which is the whole of
@@ -2496,7 +2498,7 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
     }
 
     bool     split      = exec_wants_split(ctx, opts);
-    unsigned timeout    = exec_millis(ctx, opts, "Timeout", 0);
+    unsigned timeout    = exec_millis(ctx, opts, "Timeout", BTA_WAIT_DEFAULT);
     unsigned kill_after = exec_millis(ctx, opts, "KillAfter", EXEC_KILL_AFTER);
 
     /*
@@ -4301,7 +4303,9 @@ void bta_sys_init(JSContext *ctx, JSValue global)
      *   milliseconds -- `msgfmt`, `git rev-parse`, `which` -- and never for
      *   one that might sit there; `Input` is the text or `Bytes` the child
      *   reads, which is what makes `Exec.Wait(["sort"], { Input: text })` a
-     *   filter
+     *   filter. **With no `Timeout` it gives up after 30 s** — a frozen window
+     *   is no place for a default that never ends — and `Timeout: 0` is the
+     *   explicit *wait forever*
      */
     JS_SetPropertyStr(ctx, exec, "Wait",
                       JS_NewCFunction(ctx, sys_exec_wait, "Wait", 2));

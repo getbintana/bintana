@@ -545,6 +545,17 @@ icon when the theme has one by that name (`gtkapplication.c`).
   to `G_MAXUINT` instead, "effectively forever" for either key, and negatives
   stay 0 as before. The `JS_ToFloat64` beside it is infallible -- its input is
   guarded by `JS_IsNumber` -- and says so where it stands.
+- **A blocking call waits half a minute when nobody said, because a default
+  that never ends is a hang the program did not choose.** `Exec.Wait` and the
+  seven `Http.*Wait` verbs freeze the window while they wait, and an absent
+  `Timeout` meant forever (R6 of the October audit) -- a child that never ends
+  sat there with nothing said and nothing on screen to close. Both now fall
+  back to `BTA_WAIT_DEFAULT` (bta.h, 30000 ms) and **`Timeout: 0` is the
+  explicit *wait forever***; the callback spellings are untouched, since
+  nothing there is frozen. A client's own `Timeout` still speaks when it is not
+  zero, and a per-call `{ Timeout: 0 }` outranks it. `tests/widgets` holds the
+  opt-out -- the half minute itself is the constant, and waiting it out in the
+  suite would cost more than it says.
 - **An option's default was decided by a second reading of the same key, and
   the two readings disagreed about `null`.** `Print`'s reader took `undefined`
   and `null` alike for "not given"; the line that makes `To` default to the

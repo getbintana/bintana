@@ -1573,6 +1573,17 @@ icon when the theme has one by that name (`gtkapplication.c`).
   to `G_MAXUINT` instead, "effectively forever" for either key, and negatives
   stay 0 as before. The `JS_ToFloat64` beside it is infallible -- its input is
   guarded by `JS_IsNumber` -- and says so where it stands.
+- **A blocking call waits half a minute when nobody said, because a default
+  that never ends is a hang the program did not choose.** `Exec.Wait` and the
+  seven `Http.*Wait` verbs freeze the window while they wait, and an absent
+  `Timeout` meant forever (R6 of the October audit) -- a child that never ends
+  sat there with nothing said and nothing on screen to close. Both now fall
+  back to `BTA_WAIT_DEFAULT` (bta.h, 30000 ms) and **`Timeout: 0` is the
+  explicit *wait forever***; the callback spellings are untouched, since
+  nothing there is frozen. A client's own `Timeout` still speaks when it is not
+  zero, and a per-call `{ Timeout: 0 }` outranks it. `tests/widgets` holds the
+  opt-out -- the half minute itself is the constant, and waiting it out in the
+  suite would cost more than it says.
 - **An option's default was decided by a second reading of the same key, and
   the two readings disagreed about `null`.** `Print`'s reader took `undefined`
   and `null` alike for "not given"; the line that makes `To` default to the
@@ -6303,6 +6314,16 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   the runtime's own loader takes, so a misspelt option is refused with the
   sentence the project would have read at load rather than by a second copy of
   the rules that would drift -- the column dialog's lesson, one document over.
+- **A file whose extension `TabSet.js` does not name is not the project's**,
+  and that is the question to ask when something on disk is "invisible" here:
+  `Classes.scan` drops it, so the project view has no node and no category to
+  put one in. The way in is the one `.record` and a `.wav` took -- an
+  `EDITABLE` entry (`false` when nothing opens it as a tab), a category in the
+  tree, and the double click's road said for it (`RecordForm` for the shape,
+  `openOutside` for the sound, since nothing in this IDE plays audio; the audio
+  extensions are one list read by both the table and the tree, so what is shown
+  and what is grouped cannot drift). The Files view still shows everything,
+  which is what it is for; `tests/ide`'s `sounds` phase holds the tree's half.
 
 ## The designer's pages: the page shown is a design value
 
@@ -11028,13 +11049,13 @@ it came from. It was added the day a window shipped throwing six of them into a
 run that said *0 failed*: every assertion the phase made was true, and the
 window was broken.
 
-`tests/ide` is fifty-one **phases**, each a generator with a scope of its own,
+`tests/ide` is fifty-two **phases**, each a generator with a scope of its own,
 listed in `PHASES` at the bottom of `Driver.js`. `./tests/run.sh ide <name>` runs
 every phase up to and including the last one whose name contains `<name>`:
 
 ```
 welcome files designer palette clipboard taborder completion handlers events
-goto images watch tooldirs namespaces selfns views document help forms nested projects
+goto images sounds watch tooldirs namespaces selfns views document help forms nested projects
 menus folders strings settings columns records export apps errors problems names
 outline modules check quick recovery unsaved session search git debug launch running
 ```

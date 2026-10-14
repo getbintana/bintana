@@ -2672,7 +2672,16 @@ static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
 
     int timeout = 0;
 
-    if (!http_int_opt(ctx, opts, "Timeout", c ? c->timeout_ms : 0, &timeout)) {
+    /*
+     * **A blocking call with no `Timeout` gives up after half a minute.** A
+     * freeze that never ends used to be the default here -- the same defect
+     * `Exec.Wait` had -- and `{ Timeout: 0 }` is the explicit *wait forever*.
+     * The client's own `Timeout` still speaks when it is not zero; the
+     * callback spellings are untouched, since nothing there is frozen.
+     */
+    if (!http_int_opt(ctx, opts, "Timeout",
+                      c && c->timeout_ms ? c->timeout_ms : BTA_WAIT_DEFAULT,
+                      &timeout)) {
         g_object_unref(msg);
         http_tls_unref(tls);
         return JS_EXCEPTION;
@@ -2943,7 +2952,10 @@ static const JSCFunctionListEntry http_client_props[] = {
      */
     JS_CGETSET_DEF("Headers",         http_client_get_headers, http_client_set_headers),
     /* Timeout
-     *   ms before a request is given up on; `0` waits forever
+     *   ms before a request is given up on; `0` waits forever for the callback
+     *   verbs. The blocking ones use it when it is not zero and otherwise give
+     *   up after 30 s — `{ Timeout: 0 }` on the call is the explicit *wait
+     *   forever*
      */
     JS_CGETSET_DEF("Timeout",         http_client_get_timeout, http_client_set_timeout),
     /* FollowRedirects
@@ -3052,31 +3064,38 @@ static const JSCFunctionListEntry http_client_props[] = {
     /* RequestWait(method, url, [body], [opts]) -> { Status, Reason, Headers, Body, Url }
      *   the blocking spelling: answers with the record, **throws** on
      *   transport failure — and what it throws carries the same `Kind` and
-     *   `Status` the callback would have been handed
+     *   `Status` the callback would have been handed. **With no `Timeout` it
+     *   gives up after 30 s**, and `{ Timeout: 0 }` waits forever
      */
     JS_CFUNC_DEF("RequestWait", 4, http_client_requestwait),
     /* GetWait(url, [opts]) -> { Status, Reason, Headers, Body, Url }
-     *   the blocking `Get`
+     *   the blocking `Get`. **With no `Timeout` it gives up after 30 s**, and
+     *   `{ Timeout: 0 }` waits forever
      */
     JS_CFUNC_DEF("GetWait",     2, http_client_getwait),
     /* PostWait(url, body, [opts]) -> { Status, Reason, Headers, Body, Url }
-     *   the blocking `Post`
+     *   the blocking `Post`. **With no `Timeout` it gives up after 30 s**, and
+     *   `{ Timeout: 0 }` waits forever
      */
     JS_CFUNC_DEF("PostWait",    3, http_client_postwait),
     /* PutWait(url, body, [opts]) -> { Status, Reason, Headers, Body, Url }
-     *   the blocking `Put`
+     *   the blocking `Put`. **With no `Timeout` it gives up after 30 s**, and
+     *   `{ Timeout: 0 }` waits forever
      */
     JS_CFUNC_DEF("PutWait",     3, http_client_putwait),
     /* PatchWait(url, body, [opts]) -> { Status, Reason, Headers, Body, Url }
-     *   the blocking `Patch`
+     *   the blocking `Patch`. **With no `Timeout` it gives up after 30 s**, and
+     *   `{ Timeout: 0 }` waits forever
      */
     JS_CFUNC_DEF("PatchWait",   3, http_client_patchwait),
     /* DeleteWait(url, [opts]) -> { Status, Reason, Headers, Body, Url }
-     *   the blocking `Delete`
+     *   the blocking `Delete`. **With no `Timeout` it gives up after 30 s**,
+     *   and `{ Timeout: 0 }` waits forever
      */
     JS_CFUNC_DEF("DeleteWait",  2, http_client_deletewait),
     /* HeadWait(url, [opts]) -> { Status, Reason, Headers, Body, Url }
-     *   the blocking `Head`
+     *   the blocking `Head`. **With no `Timeout` it gives up after 30 s**, and
+     *   `{ Timeout: 0 }` waits forever
      */
     JS_CFUNC_DEF("HeadWait",    2, http_client_headwait),
 };
@@ -3436,7 +3455,8 @@ static JSValue js_http_server(JSContext *ctx, JSValueConst this_val,
 static const JSCFunctionListEntry http_props[] = {
     /* Client([opts]) -> HttpClient
      *   a client with its own session: `BaseUrl`, `Headers`, `Timeout` (ms,
-     *   `0` waits forever), `FollowRedirects` (default `true`), `Language`,
+     *   `0` waits forever for the callback verbs), `FollowRedirects` (default
+     *   `true`), `Language`,
      *   `UserAgent`, `Proxy`, `Auth`, `Cookies`, `IdleTimeout`, `MaxConns`,
      *   `MaxPerHost`. The options are an object — a bare URL is refused
      */

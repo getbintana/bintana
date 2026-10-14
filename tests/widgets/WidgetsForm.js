@@ -23921,6 +23921,20 @@ function Main() {
            refusal(() => Exec.Wait(["/no/such/binary"])),
            "Exec.Wait failed: no such file or directory");
 
+        /*
+         * **A blocking call waits half a minute when nobody said.** With no
+         * `Timeout` at all it used to wait forever -- a frozen window and a
+         * child that never ends is a hang the program did not choose -- and
+         * `Timeout: 0` is the explicit *wait forever*.  The half minute
+         * (`BTA_WAIT_DEFAULT`, bta.h) is not waited out here; what is held is
+         * that the opt-out still means what it meant.
+         */
+        const patient = new Stopwatch().Start();
+        const waited  = Exec.Wait(["/bin/sh", "-c", "sleep 0.3"], { Timeout: 0 });
+        check("`Timeout: 0` still waits for a child that takes its time",
+              waited.ExitCode === 0 && patient.Elapsed >= 250,
+              `${waited.ExitCode} in ${patient.Elapsed.toFixed(0)} ms`);
+
         const running = Exec(["/bin/sh", "-c", "sleep 30"]);
         check("a child starts out running", running.Running === true);
         check("with no exit code yet", running.ExitCode === null);
