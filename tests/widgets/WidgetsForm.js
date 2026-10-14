@@ -20211,8 +20211,8 @@ function Main() {
         /*
          * `LC_ALL=C` and not a real language: it is the one locale every machine
          * has, and POSIX says what it spells -- a period for the decimal, no
-         * grouping at all, and `%m/%d/%y` for a date.  Asserting `1.234.567,89`
-         * would be asserting this developer's desktop.
+         * grouping at all, and `%m/%d/%y` for a date, which the runtime widens
+         * to a four-digit year (`08/31/2026` and not `08/31/26`).
          */
         const ran = Exec.Wait([Application.Executable, dir],
                               { Environment: { LC_ALL: "C", LANG: "C" },
@@ -20224,7 +20224,8 @@ function Main() {
         eq("under C there is no grouping and the decimal is a period",
            said[0], "1234567.89");
         eq("an integer is still bare", said[1], "3");
-        eq("and C's date is month first", said[2], "08/31/26");
+        eq("and C's date is month first, with the year in four digits",
+           said[2], "08/31/2026");
         eq("with its time unchanged", said[3], "14:05:09");
     }
 

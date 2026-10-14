@@ -23,6 +23,9 @@
 #include <inttypes.h>
 #include <limits.h>    /* CHAR_MAX, which is localeconv's "stop grouping" */
 #include <locale.h>
+#ifndef G_OS_WIN32
+#include <langinfo.h>  /* D_FMT, the desktop's own date pattern */
+#endif
 #include <math.h>      /* isfinite, for a value Number will not write */
 #include <stdio.h>
 #include <string.h>
@@ -1987,14 +1990,64 @@ static GDateTime *locale_when(JSContext *ctx, JSValueConst v)
 }
 
 /*
+ * The default date: the locale's own `%x` with the year spelled in four digits.
+ *
+ * `%x` is the one the desktop defines -- order, separators and all -- and on a
+ * Spanish desktop glibc's is `%d/%m/%y`, so the first second of 1970 was
+ * `31/12/69`: a date nobody reads twice without asking which century.  There
+ * is no four-digit `%x`, so the **pattern** is asked for (`D_FMT`) and the year
+ * field widened -- the pattern and not the output, because replacing two digits
+ * in the text would have to guess which pair is the year.
+ *
+ * Windows keeps `%x`: the CRT's short date is four digits in the locales it
+ * ships, and there is no `nl_langinfo` there to ask.
+ */
+static char *locale_date_default(GDateTime *when)
+{
+#ifdef G_OS_WIN32
+    return g_date_time_format(when, "%x");
+#else
+    const char *pattern = nl_langinfo(D_FMT);
+    GString    *fmt;
+    char       *shown;
+
+    if (!pattern || !*pattern)
+        return g_date_time_format(when, "%x");
+
+    fmt = g_string_new(pattern);
+    for (gsize i = 0; i + 1 < fmt->len; i++) {
+        if (fmt->str[i] != '%')
+            continue;
+        if (fmt->str[i + 1] == '%') {   /* a literal percent, not a field */
+            i++;
+            continue;
+        }
+        gsize j = i + 1;
+        if (fmt->str[j] == 'E' || fmt->str[j] == 'O')   /* glibc's modifiers */
+            j++;
+        if (j < fmt->len && fmt->str[j] == 'y')
+            fmt->str[j] = 'Y';
+    }
+
+    shown = g_date_time_format(when, fmt->str);
+    g_string_free(fmt, TRUE);
+
+    /* A desktop that does not spell its own pattern answers `%x` as before. */
+    return shown ? shown : g_date_time_format(when, "%x");
+#endif
+}
+
+/*
  * Locale.Date(when, [format]) -- the desktop's own date, time, or both.
  *
- * Four names and no pattern language yet, and the four are exactly the ones the
- * locale itself defines: `%x`, `%X`, `%c` and ISO 8601.  A "long date" is not
- * among them because glibc does not carry one -- assembling `%A %d %B %Y` would
- * read "lunes 31 agosto 2026" in Spanish, missing the connector words a person
- * writes, and inventing those per language is a catalogue and not a format.  So
- * it waits for the custom patterns, where it belongs.
+ * Six names and no pattern language yet, and the whole spellings are exactly
+ * the ones the locale itself defines: `%x` -- **with the year widened to four
+ * digits**, see `locale_date_default` -- `%X`, `%c` and ISO 8601.  A "long
+ * date" is not among them because glibc does not carry one -- assembling `%A
+ * %d %B %Y` would read "lunes 31 agosto 2026" in Spanish, missing the
+ * connector words a person writes, and inventing those per language is a
+ * catalogue and not a format.  So it waits for the custom patterns, where it
+ * belongs.
  */
 static JSValue js_locale_date(JSContext *ctx, JSValueConst this_val,
                               int argc, JSValueConst *argv)
@@ -2024,7 +2077,9 @@ static JSValue js_locale_date(JSContext *ctx, JSValueConst this_val,
      * spelling.
      */
     static const struct { const char *name, *fmt; } kinds[] = {
-        { "Date",     "%x" },   /* the default: what the locale calls a date */
+        /* The default: the locale's own pattern with a four-digit year, which
+         * is `locale_date_default`'s and not a format string. */
+        { "Date",     NULL },
         { "Time",     "%X" },
         { "DateTime", "%c" },
         { "ISO",      NULL },   /* not the locale's, which is the point of it */
@@ -2058,8 +2113,10 @@ static JSValue js_locale_date(JSContext *ctx, JSValueConst this_val,
     if (!when)
         return JS_EXCEPTION;
 
-    char *shown = kinds[which].fmt ? g_date_time_format(when, kinds[which].fmt)
-                                   : g_date_time_format_iso8601(when);
+    char *shown = which == 0
+                ? locale_date_default(when)
+                : (kinds[which].fmt ? g_date_time_format(when, kinds[which].fmt)
+                                    : g_date_time_format_iso8601(when));
     g_date_time_unref(when);
 
     /* A format the locale does not define comes back NULL -- `%r` does, on a
@@ -2405,7 +2462,8 @@ static const JSCFunctionListEntry locale_props[] = {
     JS_CFUNC_DEF("Number",  2, js_locale_number),
     /* Date(when, [format]) -> string
      *   `"Date"` `"Time"` `"DateTime"` `"ISO"` `"Weekday"` `"Month"`. `when`
-     *   is a `Date` **or** a `"YYYY-MM-DD"` string
+     *   is a `Date` **or** a `"YYYY-MM-DD"` string. The default -- `"Date"`
+     *   -- is the desktop's own pattern **with the year in four digits**
      */
     JS_CFUNC_DEF("Date",    2, js_locale_date),
     /* Currency(value, [options]) -> string

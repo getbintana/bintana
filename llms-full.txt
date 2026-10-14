@@ -8017,6 +8017,19 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   evaluated once at load while the catalogue is chosen per run. `RECENT_EMPTY`
   was that for months: a bare literal in a module constant, and "(none yet)" was
   in no catalogue. Put the literal at the call site.
+- **A date whose year is two digits is a date that half-reads, and glibc has no
+  four-digit `%x`.** `Locale.Date`'s default was `%x` -- the desktop's own
+  pattern, order and separators and all -- which on a Spanish desktop is
+  `%d/%m/%y`: the first second of 1970 spelled `31/12/69`, while the same
+  program's `Date.toLocaleDateString()` said `12/31/1969` (L5 of the October
+  audit). There is no `%x`-with-`%Y` in glibc, so the **pattern** is asked for
+  (`nl_langinfo(D_FMT)`) and its year field widened -- `%y` to `%Y`, with a
+  literal `%%y` left alone and glibc's `E`/`O` modifiers carried. Windows keeps
+  `%x`, whose CRT short date is four digits already. The *output* is not
+  searched and replaced: which two digits are the year depends on the locale,
+  and in `03/03/03` every candidate looks the same. `tests/widgets` pins the
+  `C` locale's `08/31/2026` from a child, and the widening was taken out to
+  watch it go red.
 
 ---
 

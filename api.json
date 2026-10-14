@@ -13568,7 +13568,7 @@
           "Params": 2,
           "Signature": "(when, [format])",
           "Returns": "string",
-          "Doc": "`\"Date\"` `\"Time\"` `\"DateTime\"` `\"ISO\"` `\"Weekday\"` `\"Month\"`. `when` is a `Date` **or** a `\"YYYY-MM-DD\"` string",
+          "Doc": "`\"Date\"` `\"Time\"` `\"DateTime\"` `\"ISO\"` `\"Weekday\"` `\"Month\"`. `when` is a `Date` **or** a `\"YYYY-MM-DD\"` string. The default -- `\"Date\"` -- is the desktop's own pattern **with the year in four digits**",
           "Native": true
         },
         {
