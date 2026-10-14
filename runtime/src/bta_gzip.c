@@ -211,7 +211,7 @@ static char *gz_run(GConverter *conv, bool inflate, GzSource *src, GzSink *sink)
             have = gz_read(src, in, sizeof in, &failed);
             off  = 0;
             if (failed)
-                return g_strdup_printf("cannot read the input: %s", g_strerror(errno));
+                return g_strdup_printf("cannot read the input: %s", bta_errno_text(errno));
             if (have == 0)
                 eof = true;
         }
@@ -247,7 +247,7 @@ static char *gz_run(GConverter *conv, bool inflate, GzSource *src, GzSink *sink)
                 return g_strdup_printf("the output exceeds MaxSize (%" G_GUINT64_FORMAT
                                        " bytes) -- raise it with { MaxSize } if "
                                        "this data is trusted", sink->max);
-            return g_strdup_printf("cannot write the output: %s", g_strerror(errno));
+            return g_strdup_printf("cannot write the output: %s", bta_errno_text(errno));
         }
 
         if (r == G_CONVERTER_ERROR) {
@@ -261,7 +261,7 @@ static char *gz_run(GConverter *conv, bool inflate, GzSource *src, GzSink *sink)
              * desktop's language, and an error that reads differently on each
              * machine cannot be matched by a program or quoted in a report. */
             if (!inflate)
-                msg = g_strdup(err->message);
+                msg = g_strdup(bta_gerror_text(err));
             else if (member_start == 0)
                 msg = g_strdup("not gzip data, or damaged");
             else
@@ -412,17 +412,17 @@ static JSValue gz_file(JSContext *ctx, int argc, JSValueConst *argv,
     uint64_t written = 0;
 
     if (!in) {
-        why = g_strdup_printf("cannot read '%s': %s", from, g_strerror(errno));
+        why = g_strdup_printf("cannot read '%s': %s", from, bta_errno_text(errno));
     } else {
         tmp = g_strdup_printf("%s.XXXXXX", to);
         int fd = g_mkstemp(tmp);
 
         if (fd < 0) {
-            why = g_strdup_printf("cannot write beside '%s': %s", to, g_strerror(errno));
+            why = g_strdup_printf("cannot write beside '%s': %s", to, bta_errno_text(errno));
         } else {
             made = true;
             if (!(out = fdopen(fd, "wb"))) {
-                why = g_strdup_printf("cannot write beside '%s': %s", to, g_strerror(errno));
+                why = g_strdup_printf("cannot write beside '%s': %s", to, bta_errno_text(errno));
                 close(fd);
             }
         }
@@ -440,13 +440,13 @@ static JSValue gz_file(JSContext *ctx, int argc, JSValueConst *argv,
         g_object_unref(conv);
 
         if (!why && fflush(out) != 0)
-            why = g_strdup_printf("cannot write '%s': %s", to, g_strerror(errno));
+            why = g_strdup_printf("cannot write '%s': %s", to, bta_errno_text(errno));
     }
 
     if (in)
         fclose(in);
     if (out && fclose(out) != 0 && !why)
-        why = g_strdup_printf("cannot write '%s': %s", to, g_strerror(errno));
+        why = g_strdup_printf("cannot write '%s': %s", to, bta_errno_text(errno));
 
     if (!why) {
 #ifndef G_OS_WIN32
@@ -458,7 +458,7 @@ static JSValue gz_file(JSContext *ctx, int argc, JSValueConst *argv,
 #endif
         if (g_rename(tmp, to) != 0)
             why = g_strdup_printf("cannot move the result to '%s': %s", to,
-                                  g_strerror(errno));
+                                  bta_errno_text(errno));
     }
 
     if (why && made)

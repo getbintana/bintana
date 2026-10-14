@@ -504,7 +504,7 @@ static void on_print_done(GtkPrintOperation *op, GtkPrintOperationResult result,
          * reported here: `Application.OnError` sees it, and there is no caller
          * left to throw at. */
         JS_ThrowPlainError(ctx, "%s: %s", run->who,
-                           err ? err->message : "the printer refused");
+                           err ? bta_gerror_text(err) : "the printer refused");
         bta_dump_error(ctx);
         g_clear_error(&err);
     } else if (result == GTK_PRINT_OPERATION_RESULT_APPLY && run->ok) {
@@ -750,7 +750,7 @@ static JSValue printer_to_file(JSContext *ctx, JSValueConst this_val,
         answer = JS_EXCEPTION;
     } else if (result == GTK_PRINT_OPERATION_RESULT_ERROR) {
         JS_ThrowPlainError(ctx, "Printer.ToFile: %s",
-                           err ? err->message : "the file could not be written");
+                           err ? bta_gerror_text(err) : "the file could not be written");
         g_clear_error(&err);
         g_unlink(path);
         answer = JS_EXCEPTION;

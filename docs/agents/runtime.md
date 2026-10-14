@@ -559,6 +559,18 @@ icon when the theme has one by that name (`gtkapplication.c`).
   comprimidos no válidos*, and an error that reads differently per machine cannot
   be matched by a program or pasted into a report -- the `http_kind_for` lesson
   again. The sentence is ours and names the byte where the member starts.
+  **And it was never only Gzip** (D5 of the October audit): `File.Load` of a
+  missing file answered "No such file or directory" on one desktop and "No
+  existe el fichero o el directorio" on another, and the same for `Exec`,
+  `Http`, `Picture`, `Printer`, every media failure -- **GStreamer translates
+  its messages too, measured**: "Resource not found." against "Recurso no
+  encontrado." -- and the `g_strerror` spellings. `bta_gerror_text` builds the
+  sentence out of the domain and the code, from the pairs the runtime's verbs
+  meet; a pair it does not know is still named by its domain and code, and
+  `bta_errno_text` is the same table for `errno`. Two messages deliberately
+  stay as they are: the editor's search error and the `Terminal`'s `LinkPattern`
+  are pcre2's own text -- English on every desktop, measured -- and libxml2's
+  carry the line and the column of the document, which no table can replace.
 - **`g_object_ref(NULL)` is a critical and carries on, which is how a wrong
   branch stays invisible.** `Split.Reorder` ref'd both halves before unparenting
   them, and a split with **one** half is ordinary -- it is what one looks like

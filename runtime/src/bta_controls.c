@@ -5407,7 +5407,7 @@ GdkTexture *bta_texture_from_bytes(JSContext *ctx, JSValueConst val,
     g_bytes_unref(held);
     if (!texture) {
         JS_ThrowTypeError(ctx, "%s: cannot read %zu bytes: %s", who, len,
-                          error ? error->message : "not an image");
+                          error ? bta_gerror_text(error) : "not an image");
         g_clear_error(&error);
         return NULL;
     }
@@ -5587,7 +5587,7 @@ static JSValue picture_set_file(JSContext *ctx, JSValueConst this_val,
 
     if (!texture) {
         JSValue e = JS_ThrowTypeError(ctx, "cannot show %s: %s", path,
-                                      error ? error->message : "not an image");
+                                      error ? bta_gerror_text(error) : "not an image");
         g_clear_error(&error);
         JS_FreeCString(ctx, path);
         return e;

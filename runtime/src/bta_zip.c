@@ -284,7 +284,7 @@ static JSValue zip_open(JSContext *ctx, JSValueConst this_val,
 
     if (g_stat(path, &st) != 0) {
         JSValue r = JS_ThrowPlainError(ctx, "Zip.Open: cannot read '%s': %s",
-                                       path, g_strerror(errno));
+                                       path, bta_errno_text(errno));
         g_free(z);
         JS_FreeCString(ctx, path);
         return r;
@@ -296,7 +296,7 @@ static JSValue zip_open(JSContext *ctx, JSValueConst this_val,
 
         if (!g_file_get_contents(path, &buf, &n, &err)) {
             JSValue r = JS_ThrowPlainError(ctx, "Zip.Open: cannot read '%s': %s",
-                                           path, g_strerror(errno));
+                                           path, bta_errno_text(errno));
             g_clear_error(&err);
             g_free(z);
             JS_FreeCString(ctx, path);
@@ -309,7 +309,7 @@ static JSValue zip_open(JSContext *ctx, JSValueConst this_val,
         z->map = g_mapped_file_new(path, FALSE, &err);
         if (!z->map) {
             JSValue r = JS_ThrowPlainError(ctx, "Zip.Open: cannot read '%s': %s",
-                                           path, g_strerror(errno));
+                                           path, bta_errno_text(errno));
             g_clear_error(&err);
             g_free(z);
             JS_FreeCString(ctx, path);
@@ -670,7 +670,7 @@ static bool zip_write_file(const char *dest, const guint8 *data, gsize n, char *
 
     if (!g_file_set_contents(dest, (const gchar *)(data ? data : (const guint8 *)""),
                              (gssize)n, &err)) {
-        *why = g_strdup_printf("cannot write '%s': %s", dest, g_strerror(errno));
+        *why = g_strdup_printf("cannot write '%s': %s", dest, bta_errno_text(errno));
         g_clear_error(&err);
         return false;
     }
@@ -775,12 +775,12 @@ static JSValue zip_extract_all(JSContext *ctx, JSValueConst this_val, int argc, 
 
         if (x->dir) {
             if (g_mkdir_with_parents(path, 0755) != 0)
-                why = g_strdup_printf("cannot make '%s': %s", path, g_strerror(errno));
+                why = g_strdup_printf("cannot make '%s': %s", path, bta_errno_text(errno));
         } else {
             char *parent = g_path_get_dirname(path);
 
             if (g_mkdir_with_parents(parent, 0755) != 0) {
-                why = g_strdup_printf("cannot make '%s': %s", parent, g_strerror(errno));
+                why = g_strdup_printf("cannot make '%s': %s", parent, bta_errno_text(errno));
             } else {
                 GByteArray *b = zip_read_entry(z, x, max, &why);
 
@@ -1266,7 +1266,7 @@ static JSValue zipw_add(JSContext *ctx, JSValueConst this_val, int argc, JSValue
             guint16 flags = g_str_is_ascii(name) ? 0 : 0x800;
 
             if (!zipw_header(w, &o, flags) || !zipw_put(w, payload, psize)) {
-                why = g_strdup_printf("cannot write the archive: %s", g_strerror(errno));
+                why = g_strdup_printf("cannot write the archive: %s", bta_errno_text(errno));
                 g_free(o.name);
             } else {
                 o.offset = (guint32)(w->pos - psize - 30 - strlen(name));
@@ -1333,7 +1333,7 @@ static JSValue zipw_add_file(JSContext *ctx, JSValueConst this_val, int argc, JS
     FILE *in = NULL;
 
     if (!why && !(in = g_fopen(path, "rb")))
-        why = g_strdup_printf("cannot read '%s': %s", path, g_strerror(errno));
+        why = g_strdup_printf("cannot read '%s': %s", path, bta_errno_text(errno));
 
     if (!why) {
         ZipOut o = { 0 };
@@ -1347,7 +1347,7 @@ static JSValue zipw_add_file(JSContext *ctx, JSValueConst this_val, int argc, JS
         o.offset = (guint32)w->pos;
 
         if (!zipw_header(w, &o, flags)) {
-            why = g_strdup_printf("cannot write the archive: %s", g_strerror(errno));
+            why = g_strdup_printf("cannot write the archive: %s", bta_errno_text(errno));
         } else {
             GConverter *conv = store ? NULL
                 : G_CONVERTER(g_zlib_compressor_new(G_ZLIB_COMPRESSOR_FORMAT_RAW, 6));
@@ -1376,7 +1376,7 @@ static JSValue zipw_add_file(JSContext *ctx, JSValueConst this_val, int argc, JS
                 have = fread(inb, 1, sizeof inb, in);
                 if (have == 0) {
                     if (ferror(in))
-                        why = g_strdup_printf("cannot read '%s': %s", path, g_strerror(errno));
+                        why = g_strdup_printf("cannot read '%s': %s", path, bta_errno_text(errno));
                     eof = true;
                 }
                 for (gsize i = 0; i < have; i++)
@@ -1389,7 +1389,7 @@ static JSValue zipw_add_file(JSContext *ctx, JSValueConst this_val, int argc, JS
 
                 if (!conv) {
                     if (have && !zipw_put(w, inb, have))
-                        why = g_strdup_printf("cannot write the archive: %s", g_strerror(errno));
+                        why = g_strdup_printf("cannot write the archive: %s", bta_errno_text(errno));
                     csize += have;
                     continue;
                 }
@@ -1405,7 +1405,7 @@ static JSValue zipw_add_file(JSContext *ctx, JSValueConst this_val, int argc, JS
 
                     off += br;
                     if (bw && !zipw_put(w, outb, bw)) {
-                        why = g_strdup_printf("cannot write the archive: %s", g_strerror(errno));
+                        why = g_strdup_printf("cannot write the archive: %s", bta_errno_text(errno));
                         g_clear_error(&err);
                         break;
                     }
@@ -1446,7 +1446,7 @@ static JSValue zipw_add_file(JSContext *ctx, JSValueConst this_val, int argc, JS
                 put32(d + 8, o.csize);
                 put32(d + 12, o.usize);
                 if (!zipw_put(w, d, sizeof d))
-                    why = g_strdup_printf("cannot write the archive: %s", g_strerror(errno));
+                    why = g_strdup_printf("cannot write the archive: %s", bta_errno_text(errno));
             }
         }
         (void)start;
@@ -1505,7 +1505,7 @@ static JSValue zipw_finish(JSContext *ctx, JSValueConst this_val, int argc, JSVa
         put16(c + 28, (guint)nlen);
         put32(c + 42, o->offset);
         if (!zipw_put(w, c, sizeof c) || !zipw_put(w, o->name, nlen))
-            why = g_strdup_printf("cannot write the archive: %s", g_strerror(errno));
+            why = g_strdup_printf("cannot write the archive: %s", bta_errno_text(errno));
     }
 
     if (!why) {
@@ -1518,16 +1518,16 @@ static JSValue zipw_finish(JSContext *ctx, JSValueConst this_val, int argc, JSVa
         put32(e + 12, (guint32)(w->pos - cd_start));
         put32(e + 16, (guint32)cd_start);
         if (!zipw_put(w, e, sizeof e))
-            why = g_strdup_printf("cannot write the archive: %s", g_strerror(errno));
+            why = g_strdup_printf("cannot write the archive: %s", bta_errno_text(errno));
     }
     if (!why && fflush(w->f) != 0)
-        why = g_strdup_printf("cannot write the archive: %s", g_strerror(errno));
+        why = g_strdup_printf("cannot write the archive: %s", bta_errno_text(errno));
     if (!why) {
         int closed = fclose(w->f);
 
         w->f = NULL;
         if (closed != 0)
-            why = g_strdup_printf("cannot write the archive: %s", g_strerror(errno));
+            why = g_strdup_printf("cannot write the archive: %s", bta_errno_text(errno));
     }
     if (!why) {
 #ifndef G_OS_WIN32
@@ -1539,7 +1539,7 @@ static JSValue zipw_finish(JSContext *ctx, JSValueConst this_val, int argc, JSVa
         g_chmod(w->tmp, 0666 & ~um);
 #endif
         if (g_rename(w->tmp, w->dest) != 0)
-            why = g_strdup_printf("cannot move the archive to '%s': %s", w->dest, g_strerror(errno));
+            why = g_strdup_printf("cannot move the archive to '%s': %s", w->dest, bta_errno_text(errno));
     }
 
     JSValue r;
@@ -1583,7 +1583,7 @@ static JSValue zip_create(JSContext *ctx, JSValueConst this_val, int argc, JSVal
 
     if (fd < 0) {
         JSValue r = JS_ThrowPlainError(ctx, "Zip.Create: cannot write beside '%s': %s",
-                                       path, g_strerror(errno));
+                                       path, bta_errno_text(errno));
         g_free(tmp);
         JS_FreeCString(ctx, path);
         return r;
@@ -1602,7 +1602,7 @@ static JSValue zip_create(JSContext *ctx, JSValueConst this_val, int argc, JSVal
         close(fd);
         zipw_free(w);
         g_free(w);
-        return JS_ThrowPlainError(ctx, "Zip.Create: cannot write the archive: %s", g_strerror(errno));
+        return JS_ThrowPlainError(ctx, "Zip.Create: cannot write the archive: %s", bta_errno_text(errno));
     }
 
     JSValue proto = JS_GetClassProto(ctx, bta_zipw_class_id);

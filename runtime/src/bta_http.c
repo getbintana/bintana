@@ -84,7 +84,7 @@ static GTlsCertificate *http_tls_cert(JSContext *ctx, const char *path, const ch
 
     if (!cert) {
         JS_ThrowTypeError(ctx, "%s: cannot read the certificate '%s': %s", who, path,
-                          err ? err->message : "unknown error");
+                          bta_gerror_text(err));
         g_clear_error(&err);
         return NULL;
     }
@@ -1315,7 +1315,7 @@ static void http_deliver_send_error(HttpJob *job, GError *err)
         }
     } else {
         kind = http_kind_for(err);
-        detail = g_strdup(err ? err->message : "unknown error");
+        detail = g_strdup(bta_gerror_text(err));
     }
     http_deliver_error(job, kind, detail);
     g_free(detail);
@@ -2739,7 +2739,7 @@ static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
         const char *kind = late ? "Timeout" :
             (g_error_matches(w.err, G_IO_ERROR, G_IO_ERROR_CANCELLED) ? "Cancelled" :
              http_kind_for(w.err));
-        char *detail = g_strdup(w.err->message);
+        char *detail = g_strdup(bta_gerror_text(w.err));
 
         g_clear_error(&w.err);
         if (w.bytes)
@@ -4482,7 +4482,7 @@ static JSValue http_server_start(JSContext *ctx, JSValueConst this_val,
 
         if (!cert) {
             char *detail = g_strdup_printf("Http.Server.Start: cannot read a certificate: %s",
-                                           err ? err->message : "unknown error");
+                                           bta_gerror_text(err));
 
             g_clear_error(&err);
             g_object_unref(s->server);
@@ -4503,7 +4503,7 @@ static JSValue http_server_start(JSContext *ctx, JSValueConst this_val,
         ok = soup_server_listen_all(s->server, (guint)s->port, flags, &err);
     if (!ok) {
         char *detail = g_strdup_printf("Http.Server.Start: cannot listen on %d: %s",
-                                       s->port, err ? err->message : "unknown error");
+                                       s->port, bta_gerror_text(err));
 
         g_clear_error(&err);
         g_object_unref(s->server);

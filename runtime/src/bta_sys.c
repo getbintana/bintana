@@ -100,7 +100,7 @@ static JSValue sys_file_load(JSContext *ctx, JSValueConst this_val,
 
     if (!g_file_get_contents(path, &data, &len, &err)) {
         JSValue e = JS_ThrowPlainError(ctx, "cannot read %s: %s", path,
-                                       err ? err->message : "unknown error");
+                                       bta_gerror_text(err));
         g_clear_error(&err);
         JS_FreeCString(ctx, path);
         return e;
@@ -146,7 +146,7 @@ static JSValue sys_file_save(JSContext *ctx, JSValueConst this_val,
     JS_FreeCString(ctx, text);
     if (!ok) {
         JSValue e = JS_ThrowPlainError(ctx, "cannot write %s: %s", path,
-                                       err ? err->message : "unknown error");
+                                       bta_gerror_text(err));
         g_clear_error(&err);
         JS_FreeCString(ctx, path);
         return e;
@@ -197,17 +197,17 @@ static JSValue sys_file_append(JSContext *ctx, JSValueConst this_val,
 
     if (!out) {
         e = JS_ThrowPlainError(ctx, "cannot append to %s: %s", path,
-                               error ? error->message : "unknown error");
+                               bta_gerror_text(error));
     } else {
         gsize written = 0;
 
         if (!g_output_stream_write_all(G_OUTPUT_STREAM(out), text, len,
                                        &written, NULL, &error))
             e = JS_ThrowPlainError(ctx, "cannot write %s: %s", path,
-                                   error ? error->message : "unknown error");
+                                   bta_gerror_text(error));
         else if (!g_output_stream_close(G_OUTPUT_STREAM(out), NULL, &error))
             e = JS_ThrowPlainError(ctx, "cannot close %s: %s", path,
-                                   error ? error->message : "unknown error");
+                                   bta_gerror_text(error));
         g_object_unref(out);
     }
 
@@ -513,7 +513,7 @@ static JSValue sys_file_copy(JSContext *ctx, JSValueConst this_val,
 
         if (!g_file_copy(src, dst, G_FILE_COPY_NONE, NULL, NULL, NULL, &error))
             e = JS_ThrowPlainError(ctx, "cannot copy %s to %s: %s", from, to,
-                                   error ? error->message : "unknown error");
+                                   bta_gerror_text(error));
         g_clear_error(&error);
         g_object_unref(src);
         g_object_unref(dst);
@@ -646,7 +646,7 @@ static void on_launched(GObject *source, GAsyncResult *result, gpointer data)
     if (!gtk_file_launcher_launch_finish(GTK_FILE_LAUNCHER(source), result, &error) &&
         !g_error_matches(error, GTK_DIALOG_ERROR, GTK_DIALOG_ERROR_DISMISSED))
         g_warning("cannot open %s: %s", path,
-                  error ? error->message : "no application for it");
+                  error ? bta_gerror_text(error) : "no application for it");
 
     g_clear_error(&error);
     g_free(path);
@@ -843,7 +843,7 @@ static JSValue sys_file_watch(JSContext *ctx, JSValueConst this_val,
 
     if (!monitor) {
         JSValue e = JS_ThrowPlainError(ctx, "cannot watch %s: %s", path,
-                                       error ? error->message : "unknown error");
+                                       bta_gerror_text(error));
         g_clear_error(&error);
         JS_FreeCString(ctx, path);
         return e;
@@ -920,7 +920,7 @@ static JSValue sys_file_trash(JSContext *ctx, JSValueConst this_val,
 
     if (!g_file_trash(file, NULL, &error))
         e = JS_ThrowPlainError(ctx, "cannot trash %s: %s", path,
-                               error ? error->message : "unknown error");
+                               bta_gerror_text(error));
 
     g_clear_error(&error);
     g_object_unref(file);
@@ -1006,7 +1006,7 @@ static JSValue sys_dir_copy(JSContext *ctx, JSValueConst this_val,
 
         if (!copy_tree(src, dst, &error))
             e = JS_ThrowPlainError(ctx, "cannot copy %s to %s: %s", from, to,
-                                   error ? error->message : "unknown error");
+                                   bta_gerror_text(error));
         g_clear_error(&error);
         g_object_unref(src);
         g_object_unref(dst);
@@ -1068,7 +1068,7 @@ static JSValue sys_dir_delete(JSContext *ctx, JSValueConst this_val,
     bool    ok = g_rmdir(path) == 0;
     JSValue e  = ok ? JS_UNDEFINED
                     : JS_ThrowPlainError(ctx, "cannot delete %s: %s", path,
-                                         g_strerror(errno));
+                                         bta_errno_text(errno));
     JS_FreeCString(ctx, path);
     return e;
 }
@@ -1091,7 +1091,7 @@ static JSValue sys_dir_delete_tree(JSContext *ctx, JSValueConst this_val,
 
         if (!delete_tree(dir, &error))
             e = JS_ThrowPlainError(ctx, "cannot delete %s: %s", path,
-                                   error ? error->message : "unknown error");
+                                   bta_gerror_text(error));
         g_clear_error(&error);
         g_object_unref(dir);
     }
@@ -1116,7 +1116,7 @@ static JSValue sys_dir_list(JSContext *ctx, JSValueConst this_val,
     GDir   *dir = g_dir_open(path, 0, &err);
     if (!dir) {
         JSValue e = JS_ThrowPlainError(ctx, "cannot list %s: %s", path,
-                                       err ? err->message : "unknown error");
+                                       bta_gerror_text(err));
         g_clear_error(&err);
         JS_FreeCString(ctx, path);
         JS_FreeCString(ctx, pattern);
@@ -2139,7 +2139,7 @@ static int exec_control_fd(JSContext *ctx, JSValueConst opts,
      */
     if (pipe(ends) != 0) {
         JS_ThrowPlainError(ctx, "Exec: Control could not be opened: %s",
-                           g_strerror(errno));
+                           bta_errno_text(errno));
         return -2;
     }
 
@@ -2224,7 +2224,7 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
 
     if (!proc) {
         JSValue e = JS_ThrowPlainError(ctx, "Exec failed: %s",
-                                       err ? err->message : "unknown error");
+                                       bta_gerror_text(err));
         g_clear_error(&err);
         if (ctl_fd >= 0)
             close(ctl_fd);
@@ -2536,7 +2536,7 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
 
     if (!proc) {
         JSValue e = JS_ThrowPlainError(ctx, "Exec.Wait failed: %s",
-                                       err ? err->message : "unknown error");
+                                       bta_gerror_text(err));
         g_clear_error(&err);
         g_clear_pointer(&input, g_bytes_unref);
         g_main_context_pop_thread_default(priv);
@@ -2605,7 +2605,7 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
 
     if (w.err) {
         JSValue e = JS_ThrowPlainError(ctx, "Exec.Wait failed: %s",
-                                       w.err->message);
+                                       bta_gerror_text(w.err));
         g_clear_error(&w.err);
         g_clear_pointer(&out, g_bytes_unref);
         g_clear_pointer(&errs, g_bytes_unref);
@@ -2822,7 +2822,7 @@ static JSValue env_cwd_set(JSContext *ctx, JSValueConst this_val, JSValueConst v
     int rc = g_chdir(path);
     if (rc != 0) {
         JSValue e = JS_ThrowPlainError(ctx, "cannot enter %s: %s",
-                                       path, g_strerror(errno));
+                                       path, bta_errno_text(errno));
         JS_FreeCString(ctx, path);
         return e;
     }
@@ -3670,7 +3670,7 @@ static JSValue sys_file_load_bytes(JSContext *ctx, JSValueConst this_val,
 
     if (!g_file_get_contents(path, &data, &len, &err)) {
         JSValue e = JS_ThrowPlainError(ctx, "cannot read %s: %s", path,
-                                       err ? err->message : "unknown error");
+                                       bta_gerror_text(err));
         g_clear_error(&err);
         JS_FreeCString(ctx, path);
         return e;
@@ -3706,7 +3706,7 @@ static JSValue sys_file_save_bytes(JSContext *ctx, JSValueConst this_val,
 
     if (!ok) {
         JSValue e = JS_ThrowPlainError(ctx, "cannot write %s: %s", path,
-                                       err ? err->message : "unknown error");
+                                       bta_gerror_text(err));
         g_clear_error(&err);
         JS_FreeCString(ctx, path);
         return e;
@@ -4055,7 +4055,7 @@ static JSValue sys_file_hash(JSContext *ctx, JSValueConst this_val,
     FILE *f = g_fopen(path, "rb");
     if (!f) {
         JSValue e = JS_ThrowPlainError(ctx, "File.Hash: cannot read '%s': %s",
-                                       path, g_strerror(errno));
+                                       path, bta_errno_text(errno));
         JS_FreeCString(ctx, path);
         return e;
     }
@@ -4072,7 +4072,7 @@ static JSValue sys_file_hash(JSContext *ctx, JSValueConst this_val,
 
     if (failed) {
         JSValue e = JS_ThrowPlainError(ctx, "File.Hash: cannot read '%s': %s",
-                                       path, g_strerror(errno));
+                                       path, bta_errno_text(errno));
         g_checksum_free(sum);
         JS_FreeCString(ctx, path);
         return e;

@@ -3488,6 +3488,9 @@ class WidgetsForm extends Form {
          */
         throws("a file that does not exist says so",
                () => { pic.File = File.Join(dir, "nope.png"); });
+        eq("and says it in words of ours",
+           refusal(() => { pic.File = File.Join(dir, "nope.png"); }),
+           `cannot show ${File.Join(dir, "nope.png")}: no such file or directory`);
         throws("and one that is not an image either",
                () => { pic.File = File.Join(Application.Directory, "project.json"); });
         eq("and the last good one is still shown", pic.SourceHeight, 140);
@@ -18860,6 +18863,20 @@ function Main() {
         File.Save(path, "hola\nmundo\n");
         eq("Save then Load", File.Load(path), "hola\nmundo\n");
 
+        /*
+         * **A failure says what went wrong in words of ours**, built from the
+         * `GError` domain and code: GLib's own sentence is translated, so this
+         * code read "No such file or directory" on one desktop and "No existe
+         * el fichero o el directorio" on another, and a program could match
+         * neither nor quote it in a report (D5 of the October audit).
+         */
+        eq("a missing file is named the same way on every desktop",
+           refusal(() => File.Load(File.Join(SCRATCH, "nope.txt"))),
+           `cannot read ${File.Join(SCRATCH, "nope.txt")}: no such file or directory`);
+        eq("...and writing into a folder that is not there",
+           refusal(() => File.Save(File.Join(SCRATCH, "no-dir", "x.txt"), "t")),
+           `cannot write ${File.Join(SCRATCH, "no-dir", "x.txt")}: no such file or directory`);
+
         /* --- appending, which is the log/CSV case: no read, no rewrite. */
         const log = File.Join(SCRATCH, "append.txt");
         if (File.Exists(log)) File.Delete(log);
@@ -18969,6 +18986,9 @@ function Main() {
         eq("List filters by pattern", JSON.stringify(js), JSON.stringify(["one.js", "two.js"]));
 
         throws("listing a missing dir throws", () => Directory.List("/no/such/dir"));
+        eq("and names it in words of ours",
+           refusal(() => Directory.List("/no/such/dir")),
+           "cannot list /no/such/dir: no such file or directory");
 
         /* --- Files and Folders: full paths, and as deep as asked -------------
          *
@@ -21431,6 +21451,12 @@ function Main() {
             return;
         }
 
+        /* The refused connection says which it was in words of ours -- the
+         * same on every desktop (D5 of the October audit). */
+        eq("a refused connection is named the same way on every desktop",
+           refusal(() => Http.GetWait("http://127.0.0.1:9/", { Timeout: 200 })),
+           "Http.GetWait: cannot reach 'http://127.0.0.1:9/': the connection was refused");
+
         const fast = Exec(["python3", "-m", "http.server", "8471",
                            "--directory", "/tmp"]);
         const slow = Exec(["python3", "-c", [
@@ -23633,6 +23659,12 @@ function Main() {
         throws("Exec needs an array", () => Exec("ls"));
         throws("Exec rejects an empty argv", () => Exec([]));
         throws("Exec reports a missing binary", () => Exec(["/no/such/binary"]));
+        eq("...and names it the same way on every desktop",
+           refusal(() => Exec(["/no/such/binary"])),
+           "Exec failed: no such file or directory");
+        eq("as does the blocking spelling",
+           refusal(() => Exec.Wait(["/no/such/binary"])),
+           "Exec.Wait failed: no such file or directory");
 
         const running = Exec(["/bin/sh", "-c", "sleep 30"]);
         check("a child starts out running", running.Running === true);

@@ -615,6 +615,11 @@ void    bta_app_free(BtaApp *app);
 int     bta_app_run(BtaApp *app, int argc, char **argv);
 
 char   *bta_read_file(const char *path, size_t *len);
+/* A `GError` as a stable sentence of ours, out of its domain and code -- never
+ * `err->message`, which GLib translates on each desktop.  See bta_runtime.c. */
+const char *bta_gerror_text(const GError *err);
+/* And `errno`'s: `g_strerror` is translated too. */
+const char *bta_errno_text(int errnum);
 int     bta_eval_file(JSContext *ctx, const char *path);
 void    bta_dump_error(JSContext *ctx);
 /* The language without any project: the intrinsics build_context installs,

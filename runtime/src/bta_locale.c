@@ -1231,7 +1231,7 @@ static JSValue js_locale_write(JSContext *ctx, JSValueConst this_val,
 
     if (!ok) {
         JSValue e = JS_ThrowTypeError(ctx, "Locale.Write: cannot write %s: %s",
-                                      path, err ? err->message : "unknown error");
+                                      path, bta_gerror_text(err));
         g_clear_error(&err);
         JS_FreeCString(ctx, path);
         return e;

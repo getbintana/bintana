@@ -103,7 +103,7 @@ static bool random_fill(guint8 *buf, size_t n, const char **why)
         if (got < 0) {
             if (errno == EINTR)
                 continue;
-            *why = g_strerror(errno);
+            *why = bta_errno_text(errno);
             return false;
         }
         buf += got;

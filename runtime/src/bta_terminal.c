@@ -525,7 +525,8 @@ static void on_spawned(VteTerminal *term, GPid pid, GError *error, gpointer user
     }
 
     if (error) {
-        char *msg = g_strdup_printf("\r\n[no se pudo ejecutar: %s]\r\n", error->message);
+        char *msg = g_strdup_printf("\r\n[could not run: %s]\r\n",
+                                    bta_gerror_text(error));
         vte_terminal_feed(term, msg, -1);
         g_free(msg);
 

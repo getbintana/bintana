@@ -599,7 +599,7 @@ static bool layout_text(JSContext *ctx, PangoLayout *l, const char *s,
 
         if (!pango_parse_markup(s, -1, 0, &attrs, &plain, NULL, &err)) {
             JS_ThrowTypeError(ctx, "%s: the markup is not valid -- %s", where,
-                              err ? err->message : "parse error");
+                              err ? bta_gerror_text(err) : "parse error");
             g_clear_error(&err);
             return false;
         }
@@ -916,7 +916,7 @@ static cairo_surface_t *image_surface(JSContext *ctx, const char *path)
 
     if (!texture) {
         JS_ThrowTypeError(ctx, "Image: cannot read %s: %s", path,
-                          error ? error->message : "not an image");
+                          error ? bta_gerror_text(error) : "not an image");
         g_clear_error(&error);
         return NULL;
     }

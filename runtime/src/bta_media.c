@@ -498,7 +498,7 @@ static char *media_effective_uri(JSContext *ctx, const char *s)
     g_free(abs);
     if (!uri) {
         JS_ThrowTypeError(ctx, "Uri: '%s' is neither a URI nor a local path (%s)",
-                          s, err ? err->message : "and cannot be turned into one");
+                          s, err ? bta_gerror_text(err) : "and cannot be turned into one");
         g_clear_error(&err);
         return NULL;
     }
@@ -1475,6 +1475,63 @@ static const char *media_kind_for(const GError *err)
     return "Error";
 }
 
+/*
+ * What went wrong, in words of ours.
+ *
+ * **GStreamer's messages are translated like any other gettext user's** --
+ * "Recurso no encontrado." on a Spanish desktop, "Resource not found." on an
+ * English one (measured) -- so the domain and the code are read here, as the
+ * kind already is.  A pair this table does not know falls to
+ * `bta_gerror_text`, which names the domain and the code rather than quoting
+ * a sentence that moves with the desktop.
+ */
+static const char *media_error_text(const GError *err)
+{
+    if (err && err->domain == GST_RESOURCE_ERROR) {
+        switch (err->code) {
+        case GST_RESOURCE_ERROR_NOT_FOUND:       return "the resource was not found";
+        case GST_RESOURCE_ERROR_BUSY:            return "the resource is busy";
+        case GST_RESOURCE_ERROR_OPEN_READ:
+        case GST_RESOURCE_ERROR_OPEN_READ_WRITE: return "it could not be opened for reading";
+        case GST_RESOURCE_ERROR_OPEN_WRITE:      return "it could not be opened for writing";
+        case GST_RESOURCE_ERROR_CLOSE:           return "it could not be closed";
+        case GST_RESOURCE_ERROR_READ:            return "it could not be read";
+        case GST_RESOURCE_ERROR_WRITE:           return "it could not be written";
+        case GST_RESOURCE_ERROR_SEEK:            return "it cannot seek there";
+        case GST_RESOURCE_ERROR_SYNC:            return "it could not be synchronized";
+        case GST_RESOURCE_ERROR_SETTINGS:        return "its settings were refused";
+        case GST_RESOURCE_ERROR_NO_SPACE_LEFT:   return "no space left";
+        case GST_RESOURCE_ERROR_NOT_AUTHORIZED:  return "it is not authorized";
+        default: break;
+        }
+    } else if (err && err->domain == GST_STREAM_ERROR) {
+        switch (err->code) {
+        case GST_STREAM_ERROR_TYPE_NOT_FOUND:    return "its type does not say how to read it";
+        case GST_STREAM_ERROR_WRONG_TYPE:        return "it is not the type its name says";
+        case GST_STREAM_ERROR_CODEC_NOT_FOUND:   return "no decoder is installed for it";
+        case GST_STREAM_ERROR_DECODE:            return "it could not be decoded";
+        case GST_STREAM_ERROR_ENCODE:            return "it could not be encoded";
+        case GST_STREAM_ERROR_DEMUX:             return "it could not be separated into streams";
+        case GST_STREAM_ERROR_MUX:               return "it could not be put into one stream";
+        case GST_STREAM_ERROR_FORMAT:            return "the format is not usable here";
+        case GST_STREAM_ERROR_DECRYPT:           return "it could not be decrypted";
+        case GST_STREAM_ERROR_DECRYPT_NOKEY:     return "it needs a key to be decrypted";
+        case GST_STREAM_ERROR_NOT_IMPLEMENTED:   return "it is not implemented";
+        default: break;
+        }
+    } else if (err && err->domain == GST_LIBRARY_ERROR) {
+        switch (err->code) {
+        case GST_LIBRARY_ERROR_INIT:      return "the library would not start";
+        case GST_LIBRARY_ERROR_SHUTDOWN:  return "the library would not stop";
+        case GST_LIBRARY_ERROR_SETTINGS:  return "the library refused its settings";
+        case GST_LIBRARY_ERROR_ENCODE:    return "the library could not encode it";
+        default: break;
+        }
+    }
+
+    return bta_gerror_text(err);
+}
+
 static void media_on_error(BtaMedia *m, GstMessage *msg)
 {
     GError *err = NULL;
@@ -1490,8 +1547,8 @@ static void media_on_error(BtaMedia *m, GstMessage *msg)
      * nor what it was playing is a status line nobody can act on. */
     char *text = g_strdup_printf("%s: cannot play '%s': %s", media_who(m),
                                  m->declared ? m->declared : "",
-                                 err && err->message ? err->message
-                                                     : "playback failed");
+                                 err ? media_error_text(err)
+                                     : "playback failed");
 
     if (dbg)
         bta_log_debug(m->ctx, dbg);
@@ -1557,8 +1614,9 @@ static gboolean media_bus_cb(GstBus *bus, GstMessage *msg, gpointer data)
         gchar  *dbg = NULL;
 
         gst_message_parse_warning(msg, &err, &dbg);
-        if (err && err->message) {
-            char *line = g_strdup_printf("%s: %s", media_who(m), err->message);
+        if (err) {
+            char *line = g_strdup_printf("%s: %s", media_who(m),
+                                         media_error_text(err));
 
             bta_log_debug(m->ctx, line);
             g_free(line);
