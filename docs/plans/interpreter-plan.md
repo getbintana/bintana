@@ -6,7 +6,7 @@
 34.8 -> 3.9 s, `string1` 10.3 -> 5.5 s). `tests/bench` went **65.5 -> 30.0 s**
 over Gambas's eight programs. What is left is not a function to fix: `perf`
 says it is the interpreter loop, the size of a value and property lookup with
-no inline caches (`AGENTS.md`, *Profiling the interpreter*). This plan is the
+no inline caches ([`docs/agents/profiling.md`](../agents/profiling.md), *Profiling the interpreter*). This plan is the
 order to attack that in, and -- first -- the measurement that decides whether
 to attack it at all.
 
@@ -83,7 +83,7 @@ Things to settle while doing it:
   one machine; here the two roads are *with a debugger* and *without*, and both
   exist before the patch too. Candidate: a child under `--debug` with no
   breakpoint against the same loop without, where the patch should widen the
-  ratio. If no ratio is stable enough, say so in `AGENTS.md` and let the bench
+  ratio. If no ratio is stable enough, say so in `docs/agents/profiling.md` and let the bench
   be the record -- an assertion that flakes is worse than none.
 - Re-measure with `tests/bench`, and the property-read microbenchmark from
   patch 4's note, back to back.
@@ -124,7 +124,7 @@ afresh"* (quickjs-ng#876). `763076d` says the original had what its author
   is freed). A raw shape pointer is an ABA bug: the shape is freed, another is
   allocated at the same address, and the cache answers an index from a
   different layout -- a wrong property read, not a crash, and ASan will not see
-  it, because shapes come from the arena (the `JSValue` note in `AGENTS.md`).
+  it, because shapes come from the arena (the `JSValue` note in [`docs/agents/quickjs.md`](../agents/quickjs.md)).
 - **`put_field` caches the transition**: `{old shape, new shape, index}`, so a
   constructor that adds `left` then `right` reuses both transitions. This is
   the half `btree` is made of.
@@ -184,7 +184,7 @@ Recorded so they are not tried again:
 
 Each fork change follows the rule the twelve patches follow: one commit in
 `../bintana-quickjs` on `bintana`, a row in its `BINTANA.md`, a section in
-`AGENTS.md`'s *The patches in vendor/*, an assertion in `tests/widgets` that
+`docs/agents/quickjs.md`'s *The eighteen patches in vendor/*, an assertion in `tests/widgets` that
 goes red without it, and the rebase past v0.17.0 (`876442b`, `c359cac`) kept
 in mind -- **doing that rebase before stage 2 is worth considering**, since a
 cache written against v0.17.0's property code is the patch most likely to

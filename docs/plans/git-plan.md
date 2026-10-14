@@ -146,7 +146,7 @@ back a C string -- so `status --porcelain=v1 -z`, the very thing chosen here
 lost the rest. Silently. One file name with a space in it parsed fine and a list
 of them parsed as a single entry, which is the shape of bug this plan's own
 `-z` decision existed to avoid. It captures `GBytes` now; the note is in
-`AGENTS.md` and the assertion in `tests/widgets`.
+[`docs/agents/runtime.md`](../agents/runtime.md) and the assertion in `tests/widgets`.
 
 **And "cursor-follow" is gone from stage 2**, because the gap it worked around
 was filled: an `Editor` answers `ScrollY` now, so the panes lock properly.
@@ -221,7 +221,7 @@ the strings through the extractor (literals at the call site, which the above
 already requires); and the suite phase, which asserts the parse (`-z` with
 spaces and accents), the before/after pairs, and the guards — never pixels.
 No `tests/api.sh` surface changes: no runtime member is added. And the first
-surprise gets its trap line in `AGENTS.md`, like everything else that bit.
+surprise gets its trap line in `docs/agents/`, like everything else that bit.
 
 ## The gap that was open, and is not
 

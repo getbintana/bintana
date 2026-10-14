@@ -26,8 +26,9 @@ move with:
 | [audit-2026-10.md](audit-2026-10.md) | **An independent audit, October 2026**: defects and gaps in the language, runtime, widgets and IDE, each with an id and evidence, measured against Gambas, Lazarus/Delphi, Xojo, Qt/.NET and Electron/Tauri, and an order of attack |
 | [issues/](issues/README.md) | **Reported gaps**: what the runtime is missing, each written in the form `llm/issues.md` asks for — never how to add it |
 
-Working *on* this repository — commands, conventions, the trap list — is
-[`AGENTS.md`](../AGENTS.md). Writing an application *with* it is
+Working *on* this repository — commands, conventions, the rules every change
+follows — is [`AGENTS.md`](../AGENTS.md); the traps of each area, with their
+evidence, are in [agents/](agents/), and design narratives in [notes/](notes/). Writing an application *with* it is
 [`bintana-docs`](https://github.com/getbintana/bintana-docs) and
 [`bintana-llm`](https://github.com/getbintana/bintana-llm).
 

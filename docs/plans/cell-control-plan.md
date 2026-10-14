@@ -4,7 +4,7 @@
 out on purpose: `Kind: "Control"`, which opens a control of the runtime -- or a
 component of the project -- in a table cell, so the kinds stop being a closed
 list. The six that exist (`Text`, `Number`, `Date`, `Check`, `Combo`, `Custom`)
-are in `runtime/src/bta_table.c` and *A table cell's editors* in `AGENTS.md`;
+are in `runtime/src/bta_table.c` and *A table cell's editors* in [`docs/agents/tables.md`](../agents/tables.md);
 read that first, because every rule this plan leans on was measured there.
 
 ## What is missing, and who asks
@@ -74,7 +74,7 @@ the designer can edit -- which is the property every other column option has.
   built control, as a third argument, so a row can fill a list the control
   holds without a declaration for it.
 
-## The hard part is lifetime, and it is all in AGENTS.md already
+## The hard part is lifetime, and it is all in docs/agents/ already
 
 A cell editor today is a GTK widget the cell owns and nothing in JavaScript can
 reach. A control is a `BtaWidget` with a wrapper, a form it binds to, handlers,

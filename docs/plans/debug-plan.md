@@ -134,7 +134,7 @@ turns each, best of five within a run and the lowest of four runs:
 0 % on the arithmetic loop and about 10 % on property reads.** The table above
 was taken on GCC 16 without it, where every `JSValue` built in
 `JS_CallInternal` went through the stack, and much of what it charges to the
-branch was that. See `AGENTS.md`, *The ten patches in vendor/*.
+branch was that. See [`docs/agents/quickjs.md`](../agents/quickjs.md), *The eighteen patches in vendor/*.
 
 **Between 12 % and 16 % for a branch that is never taken.** Measured twice, and
 the second time is the one above: the first pass compared against a binary built

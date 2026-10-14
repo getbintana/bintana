@@ -35,12 +35,13 @@ runtime/js/rad.js the JS half, baked into the binary
 
 `vendor/quickjs` is a submodule of
 [`getbintana/quickjs`](https://github.com/getbintana/quickjs), branch `bintana`
--- quickjs-ng **v0.17.0** plus **six local patches** as one commit each: the
+-- quickjs-ng **v0.17.0** plus **eighteen local patches** as one commit each,
+among them the
 arithmetic hook that gives `Decimal` its operators, `js_atod` so `JSON.parse`
 does not read the locale's decimal comma, the refusal message that names the
 property it would not add, the debugger's hook with its six readers, the
 refusal of `async` where it is written, and the parser's symbol report behind
-`Application.Symbols`. The fork's `BINTANA.md` is how it is rebased; all six are
+`Application.Symbols`, then string speed and modules. The fork's `BINTANA.md` is how it is rebased; all eighteen are
 in [`docs/agents/quickjs.md`](agents/quickjs.md#the-eighteen-patches-in-vendor), each with what
 dropping it costs. GTK4 (4.10 or newer) and GtkSourceView 5 come from pkg-config and are
 required; sqlite3, libsystemd, libsoup-3.0, gstreamer-1.0 and VTE come from
@@ -413,7 +414,8 @@ the slot outlives the wrapper exactly as `gtk` does, and a walk that found a
 stale one there would read freed memory. Found by the IDE's About dialog, which
 is the smallest thing that has a focused button and outlives everything else.
 
-Three more rules, all in `AGENTS.md` because they are easy to break:
+Three more rules, stated in `AGENTS.md` and argued in
+[`agents/lifetimes.md`](agents/lifetimes.md), because they are easy to break:
 
 - Controls point back at their form, so the object graph has cycles. Report the
   edge in `gc_mark` or forms never get collected.

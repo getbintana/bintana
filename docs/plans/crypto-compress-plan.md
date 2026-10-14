@@ -12,7 +12,7 @@ measurement, and the plan is ordered so that the cheap, dependency-free half of
 each ships first and the expensive half waits for a caller.
 
 **Read this before the stages: nothing in this tree asks for either yet.**
-`AGENTS.md` says the count of copies is the ticket, and here the count is
+[`docs/notes/library-promotion.md`](../notes/library-promotion.md) says the count of copies is the ticket, and here the count is
 measured, not guessed:
 
 | Wanted | Callers found in `ide/ lib/ examples/ tests/ runtime/js/` |
@@ -62,7 +62,7 @@ Hash.Hmac(key, message, "Sha512")      // the algorithms Hash already has
   `getrandom(2)` in a loop (a call may return fewer bytes than asked),
   `BCryptGenRandom` on Windows, `arc4random_buf` on macOS. **The Windows and
   macOS branches cannot be compiled here** — the same rule as every platform
-  guard in `AGENTS.md`: keep each as small as it can be and put the *why*
+  guard in [`docs/agents/build-and-tools.md`](../agents/build-and-tools.md): keep each as small as it can be and put the *why*
   beside it, since CI's log names a line and not a reason. A source that fails
   **throws** and never falls back to a weaker one; that is the one place a
   silent fallback is the bug.
@@ -72,11 +72,11 @@ Hash.Hmac(key, message, "Sha512")      // the algorithms Hash already has
   **a span past 2^53 is refused** with a sentence rather than rounded; `lo > hi`,
   NaN, Infinity and a non-integer are refused through `bta_to_number`/
   `bta_to_int`, naming the call — a bare `JS_ToInt32` would take `"abc"` for 0,
-  which is the trap `AGENTS.md` records twenty-eight times.
+  which is the trap [`docs/agents/runtime.md`](../agents/runtime.md) records twenty-eight times.
 - **`Bytes(n)`'s `n` is capped** (1 MiB) and `0` answers an empty `Bytes`. An
   empty `Bytes` carries `NULL` on purpose, so the zero case goes through
   `bta_bytes_new(ctx, NULL, 0)` and **never a `memcpy` of a `NULL`** — the
-  formal-UB note in `AGENTS.md`.
+  formal-UB note in [`docs/agents/lifetimes.md`](../agents/lifetimes.md).
 - **`Uuid()` is built from `Random.Bytes(16)` by hand** (version nibble 4,
   variant `10xx`), five lines. `g_uuid_string_random` exists, but where it
   gets its bytes is exactly the thing this part refuses to assume; verify
@@ -155,7 +155,7 @@ equals what `Hmac` returned yesterday*.
 `library.md`'s `Hash` section and a new `Random` section in `bintana-docs`;
 `docs/reference/globals/Random.md` and `Hash.md`; `GLOBAL_SECTIONS` and
 `GLOBAL_PAGE_OWNERS` in `bintana-docs/check/Check.js` for the new global;
-`./tools/apijson.sh`; and an `AGENTS.md` note on whatever the build taught.
+`./tools/apijson.sh`; and a `docs/agents/` note on whatever the build taught.
 
 ## Part B — compression
 
@@ -375,7 +375,7 @@ precedent.
 `bintana-docs/check/Check.js`; `llm/controls.md`'s *deliberately not here* gains
 **"a streaming compressor"** with the argument (the language has no stream, and
 a value or a file covers every caller measured); `./tools/apijson.sh`;
-`docs/testing.md` for the counts; and an `AGENTS.md` note on whatever the
+`docs/testing.md` for the counts; and a `docs/agents/` note on whatever the
 corpus teaches — a zip reader is where that note will be written.
 
 ## What is deliberately not here
@@ -417,4 +417,4 @@ build it; any of them is a rename away from being reopened.
 
 Two things the build found that the plan had not: the decompressor's message is
 translated and is never quoted (the sentence is ours), and `Hmac` had to be
-stricter than `Hash.Sha256` about what it accepts. Both are in `AGENTS.md`.
+stricter than `Hash.Sha256` about what it accepts. Both are in [`docs/notes/crypto-gzip.md`](../notes/crypto-gzip.md).

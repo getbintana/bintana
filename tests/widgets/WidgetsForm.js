@@ -607,13 +607,11 @@ const TESTS = [
 ];
 
 /*
- * What a test cannot run without, and it runs both ways: the asynchronous tail
- * checks what `Terminal` and `TimerShorthand` left behind -- `Terminal.Text` is
- * only readable a beat after being fed, and a timer has to have fired -- so
- * asking for the tail brings those, and
- * asking for either of those brings the tail that finishes them. Otherwise
- * `run.sh widgets terminal` would answer with half of the terminal's assertions
- * and look complete.
+ * What a test cannot run without. The asynchronous tail (`Exec`) checks what
+ * `Terminal` and `TimerShorthand` left behind -- `Terminal.Text` is only
+ * readable a beat after being fed, and a timer has to have fired -- so asking
+ * for the tail brings those. It runs one way: asking for `Terminal` alone does
+ * not bring the tail, and answers with the terminal's synchronous assertions.
  */
 const NEEDS = {
     Exec:           ["Terminal", "TimerShorthand"],

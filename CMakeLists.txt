@@ -114,7 +114,7 @@ pkg_check_modules(SYSPROF IMPORTED_TARGET sysprof-capture-4)
 # ---------------------------------------------------------------- QuickJS ---
 # A fork of quickjs-ng, vendored under vendor/quickjs as a submodule:
 # `getbintana/quickjs`, branch `bintana`, which is upstream v0.17.0 plus the
-# six commits the runtime's patches live in.  See AGENTS.md.
+# eighteen commits the runtime's patches live in.  See docs/agents/quickjs.md.
 # A clone without `--recurse-submodules` leaves the directory empty, and the
 # answer here names the one command that fixes it rather than letting the
 # compiler fail on a missing `quickjs.c` three targets away.

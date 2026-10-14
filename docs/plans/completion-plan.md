@@ -180,8 +180,7 @@ is held to.
 The 38 % row was called *the one a lookup can never answer*, and that was true
 only while nothing declared a return. Each of these is still a lookup; what
 changed is what is written down, and all of it is described where it lives
-([`ide.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#what-the-editor-proposes), and AGENTS.md's *The IDE
-completes a name*):
+([`ide.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#what-the-editor-proposes), and [`docs/notes/ide-completion.md`](../notes/ide-completion.md)):
 
 - **What a member answers** is the arrow in its signature comment in the C
   (`-> Bytes`, `-> { Size, IsDir }`, `-> string[]`) or `@returns {T}` in a JSDoc

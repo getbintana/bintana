@@ -1,33 +1,23 @@
 /*
- * Does docs/llm/controls.md document the whole surface?
+ * Does the runtime still say what it publishes?
  *
- * The reference is meant to be complete: an application author -- a person or a
+ * The surface is meant to be complete: an application author -- a person or a
  * language model -- should never have to open the project tree to find out
  * whether a property exists. A claim like that is worth nothing unless something
- * fails when it stops being true, which is this.
+ * fails when it stops being true, which is this, and `tests/api.sh` lists what
+ * it checks.
  *
- * A console project (`"main"`, no display), because it reads C and Markdown off
- * the disk and asking GTK would tell it nothing. It parses rather than links, so
- * it works when the runtime does not build -- the same bargain `tests/icons` and
- * `tests/styles` make.
+ * A console project (`"main"`, no display), because it reads C and JavaScript
+ * off the disk and asking GTK would tell it nothing. It parses rather than
+ * links, so it works when the runtime does not build -- the same bargain
+ * `tests/icons` and `tests/styles` make.
  *
- * **The globals are held to the same rule**, against `docs/llm/library.md`, and
- * they were not until this was written: their tables were exempted from
- * `controls.md` and *nothing* asked anything else, so forty-six members of
- * `Locale`, `Decimal`, `Connection`, `Log`, `Day` and `MenuItem` were documented
- * by hand or not at all. A whole global family (`Database`/`Connection`/`Table`)
- * was added while that was true and nothing would have failed had its reference
- * been wrong. It found three real gaps the day it was written --
- * `Application.LibraryPath`, which the IDE uses, and `Decimal`'s `toString` and
- * `toJSON`, which are why `${d}` and `JSON.stringify(d)` are exact.
- *
- * **The libraries that ship with the runtime are held to the same rule**, against
- * `docs/llm/<library>.md`. A library in `lib/` is not an example: a project says
- * `uses: ["charts"]` and gets its classes, which makes what they publish part of
- * the contract exactly as a control's properties are. The surface is read out of
- * the Bintana rather than out of C -- accessors with a capital initial, the
- * `static Events` declaration, and the arity of each `Emit` -- and the check is
- * the one that matters here: a property that exists and has no row.
+ * **The pages are not checked here any more.** `docs/llm/controls.md`,
+ * `library.md`, `<library>.md` and `docs/reference/` live in `bintana-docs`,
+ * whose `check.sh` holds them to `api.json`. What is left is what only the C
+ * and the prelude can answer: every member has a signature and a description
+ * beside it, every global with members is in the manifest, no two libraries
+ * claim one top-level name, and the pages that stayed link to files that exist.
  *
  * **And the whole surface is also `api.json`**, the manifest the documentation
  * repositories read. It is built by `tools/apijson/Catalog.js` -- sourced here,
@@ -394,13 +384,11 @@ function checkApiJson(root, problems, members, events) {
 }
 
 /*
- * ------------------------------------------------------------ the reference
+ * ------------------------------------------------------------ the classes
  *
- * `docs/reference/widgets/<Class>.md` is the long form of one class: the same members as
- * `llm/controls.md`, each with a real explanation, for the person writing an
- * application rather than for a model writing a file. **The two references hold
- * the same rows and differ only in how much each cell says**, so the check is
- * the same check: a member that exists and has no row.
+ * The reference pages this block was written for moved to `bintana-docs`; what
+ * stays is the map from a member table to its class, which `checkShadows` and
+ * `checkApiJson` need.
  *
  * Which members belong to which class is read out of the **class registration**
  * and not from a list kept here: `BTA_CLASS_ENUM_TEXT("TableView", "Control",
@@ -409,13 +397,6 @@ function checkApiJson(root, problems, members, events) {
  * variant with no table (`BTA_CLASS_BARE`) names a boolean in that position and
  * simply matches nothing.
  *
- * The globals get the same treatment under `docs/reference/globals/`, by the
- * same rule and with a check of their own, when the first of them is written.
- *
- * **A class with no page is counted and not failed.** The pages are being
- * written one at a time, and a check that failed on the ones not written yet
- * would be a red suite for as long as that takes -- which is how a rule gets
- * turned off. What it must never allow is a page that is *there* and incomplete.
  */
 const CLASS_NAME = new Regex("BTA_CLASS(?:_\\w+)?\\s*\\(\\s*\"(\\w+)\"");
 const CLASS_REG = new Regex(

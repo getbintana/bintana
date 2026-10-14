@@ -218,8 +218,8 @@ a `Label`, and the name is in hand at every site that refuses an addition -- so
 it is said. Two lines of helper and three call sites in
 `vendor/quickjs/quickjs.c`, the same shape `JS_ThrowTypeErrorReadOnly` two lines
 above has always had. It is the **fourth** Bintana patch in the vendor, and the
-only one whose loss costs nothing but a worse sentence: `AGENTS.md` lists it with
-the other three.
+only one whose loss costs nothing but a worse sentence: [`docs/agents/quickjs.md`](../agents/quickjs.md) lists it with
+the others.
 
 ```
 TypeError: no 'Txt' to assign: the object is not extensible

@@ -239,7 +239,7 @@ whatever happens to the rest: it is a process abort today. With stage 2 a static
 `import` declaration becomes legal and the dynamic one stays refused, since it
 answers with a promise.
 
-**Done, 2026-10-11, as fork patch 13** (`AGENTS.md` has its note). Stage 0
+**Done, 2026-10-11, as fork patch 13** ([`docs/agents/quickjs.md`](../agents/quickjs.md) has its note). Stage 0
 widened it: `js_refuse_await` also refuses a module's top-level `await` in all
 five places the parser accepts one, since with patch 5 in place a module's
 body is the only async function left. `testCuratedLanguage` asserts the
@@ -261,7 +261,7 @@ stage 2, the first time the runtime compiles a module.
   with its message, and an `export` read from a script file.
 
 **Done, 2026-10-11.** What building it decided, beyond the bullets above
-(`AGENTS.md`, *A file with `export` is a module*, has the traps):
+([`docs/agents/modules.md`](../agents/modules.md) has the traps):
 
 - **Where an export lives -- the first open question -- is the global object,
   as a non-configurable accessor**, and exporting a name the runtime installs
@@ -292,8 +292,7 @@ stage 2, the first time the runtime compiles a module.
 - `Task`: a task file's explicit imports are loaded into the worker.
   `examples/sheets` moves its helpers out, as the proof.
 
-**Done, 2026-10-12.** What building it decided (`AGENTS.md`, *A file with
-`export` is a module*, has the traps):
+**Done, 2026-10-12.** What building it decided ([`docs/agents/modules.md`](../agents/modules.md) has the traps):
 
 - **The library module is text, not `JS_NewCModule`**: one
   `export * from "<path>"` per module file of the library, compiled under the
@@ -331,7 +330,7 @@ stage 2, the first time the runtime compiles a module.
   the docs say so.
 
 **Done, 2026-10-12.** What building it decided
-(`AGENTS.md`, *A file with `export` is a module* and patches 14 to 16):
+([`docs/agents/modules.md`](../agents/modules.md), and patches 14 to 16 in [`docs/agents/quickjs.md`](../agents/quickjs.md)):
 
 - **First, a leak the stages before it left.** A module compiled only to be
   checked was kept by the engine for the life of the context -- 923 KB a

@@ -55,8 +55,9 @@ installing ([installing](docs/installing.md)), the IDE's own machinery
 What is missing, already decided, or still planned lives with the gaps:
 [docs/issues/](docs/issues/README.md), [docs/llm/issues.md](docs/llm/issues.md)
 and [docs/plans/](docs/plans/README.md), which is where every `*-plan.md` now
-lives. [`AGENTS.md`](AGENTS.md) is the working notes: commands, conventions and
-the trap list.
+lives. [`AGENTS.md`](AGENTS.md) is the guide for working on the repository --
+commands, conventions and the rules every change follows -- and
+[docs/agents/](docs/agents/) holds the traps of each area with their evidence.
 
 ## Licence
 

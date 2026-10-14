@@ -150,7 +150,7 @@ order of magnitude worse than the table predicts, stage 2 moves first.
 4. **The documentation, in the three repositories.** `api.json` by
    `tools/apijson.sh`; `bintana-docs`' `docs/llm/library.md` and its
    `docs/reference/globals/Bitmap.md`, named in `GLOBAL_SECTIONS` and
-   `GLOBAL_PAGE_OWNERS` of its `check/Check.js`; `AGENTS.md` (the five places,
+   `GLOBAL_PAGE_OWNERS` of its `check/Check.js`; `docs/agents/` (the five places,
    the integer currency, the worker split); `docs/architecture.md`'s boundary
    table if the stage 0 numbers move it.
 
