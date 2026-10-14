@@ -198,7 +198,10 @@ C, check whether the thing is expressible as a Bintana form (`AskForm` and
   No folder name is a namespace.
 - **`tests/ide` loads the real `ide/**/*.js`.** Its `.form` files are symlinks
   to the IDE's own: a form added to the IDE is a symlink added there, and its
-  `.js` goes in `tests/ide/project.json`'s `sources`.
+  `.js` goes in **both** `tests/ide/project.json`'s `sources` and the IDE's own
+  `ide/project.json`'s -- a file listed only in the test project's loads in the
+  suite and is a `ReferenceError` in the real IDE (`RecordForm` was exactly
+  that), and `tests/ide` compares the two lists now.
 - **The workspace (palette, tree, canvas or editor, property grid) is built per
   tab** by `ide/modules/Workspace.js`; a widget built in code is not published
   on the form, so a new per-tab widget needs its line in
@@ -3249,8 +3252,11 @@ the IDE the way a user would. Its `.form` files are symlinks to the IDE's own,
 so the two cannot drift — and **a form added to the IDE is a symlink added
 here**, or the test project builds that dialog with no controls at all and the
 first assignment to one of them throws `cannot set property 'Text' of
-undefined`. The new `.js` has to go in `tests/ide/project.json`'s `sources` too;
-a file listed in neither place is a class that never loads.
+undefined`. The new `.js` has to go in `tests/ide/project.json`'s `sources` too
+**and in the IDE's own `ide/project.json`**: a file listed only in the test
+project's loads in the suite and is a `ReferenceError` in the real IDE —
+`RecordForm` answered *RecordForm is not defined* on the first double click —
+so `tests/ide` compares the two lists and names what is missing from either.
 
 **The runner points `XDG_DATA_HOME` at a scratch directory under `/tmp`**
 (`bta-suite-<pid>/data`), because `tests/ide`'s `apps` phase installs a menu

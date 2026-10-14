@@ -34,8 +34,11 @@ the IDE the way a user would. Its `.form` files are symlinks to the IDE's own,
 so the two cannot drift — and **a form added to the IDE is a symlink added
 here**, or the test project builds that dialog with no controls at all and the
 first assignment to one of them throws `cannot set property 'Text' of
-undefined`. The new `.js` has to go in `tests/ide/project.json`'s `sources` too;
-a file listed in neither place is a class that never loads.
+undefined`. The new `.js` has to go in `tests/ide/project.json`'s `sources` too
+**and in the IDE's own `ide/project.json`**: a file listed only in the test
+project's loads in the suite and is a `ReferenceError` in the real IDE —
+`RecordForm` answered *RecordForm is not defined* on the first double click —
+so `tests/ide` compares the two lists and names what is missing from either.
 
 **The runner points `XDG_DATA_HOME` at a scratch directory under `/tmp`**
 (`bta-suite-<pid>/data`), because `tests/ide`'s `apps` phase installs a menu

@@ -188,7 +188,10 @@ C, check whether the thing is expressible as a Bintana form (`AskForm` and
   No folder name is a namespace.
 - **`tests/ide` loads the real `ide/**/*.js`.** Its `.form` files are symlinks
   to the IDE's own: a form added to the IDE is a symlink added there, and its
-  `.js` goes in `tests/ide/project.json`'s `sources`.
+  `.js` goes in **both** `tests/ide/project.json`'s `sources` and the IDE's own
+  `ide/project.json`'s -- a file listed only in the test project's loads in the
+  suite and is a `ReferenceError` in the real IDE (`RecordForm` was exactly
+  that), and `tests/ide` compares the two lists now.
 - **The workspace (palette, tree, canvas or editor, property grid) is built per
   tab** by `ide/modules/Workspace.js`; a widget built in code is not published
   on the form, so a new per-tab widget needs its line in
