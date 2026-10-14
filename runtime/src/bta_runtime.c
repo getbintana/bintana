@@ -510,6 +510,14 @@ void bta_dump_error(JSContext *ctx)
 {
     JSValue exc = JS_GetException(ctx);
 
+    /* Recorded at the one place every uncaught error ends, and before the
+     * reporting below -- which can itself fail -- so the fact cannot be lost.
+     * `run_console` is where it becomes an exit status; a windowed run leaves
+     * the status alone, because a handler that throws does not take the
+     * window down. */
+    if (g_app)
+        g_app->uncaught = true;
+
     const char *msg   = JS_ToCString(ctx, exc);
     const char *trace = NULL;
     JSValue     stack = JS_UNDEFINED;
@@ -1733,9 +1741,10 @@ static bool install_globals(BtaApp *app)
      *   quit with that exit status. `0` is *it worked*, and a console tool
      *   that answers a question answers with this. A `code` that is not a
      *   number is **refused** — `Quit("fail")` used to exit `0`, which a
-     *   runner reads as success. A `code` that is not a number is refused
-     *   rather than read as `0`, which a runner would take for success;
-     *   `Quit()` is `0`
+     *   runner reads as success; `Quit()` is `0`. **An uncaught error makes a
+     *   `main` project exit `1` unless `Quit` said otherwise** — a traceback
+     *   that leaves the status at `0` is a failure a runner reads as success
+     *   too
      */
     JS_SetPropertyStr(ctx, application, "Quit",
                       JS_NewCFunction(ctx, js_quit, "Quit", 1));
@@ -3110,6 +3119,17 @@ static int run_console(BtaApp *app)
         g_main_loop_unref(app->loop);
         app->loop = NULL;
     }
+
+    /*
+     * **A failure that reads as success.** An uncaught error in a callback --
+     * a `Timer`, an `Http` answer, a `Task` coming back -- used to print its
+     * traceback and leave the status at `0`, which a runner, a build step or
+     * CI takes for *it worked*. The run keeps going (the error is reported,
+     * not fatal) but the status says it happened. `Application.Quit(code)` is
+     * the program saying otherwise, and outranks this.
+     */
+    if (app->uncaught && !app->quitting)
+        return 1;
 
     return app->exit_code;
 }

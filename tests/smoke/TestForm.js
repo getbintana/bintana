@@ -126,6 +126,7 @@ class TestForm extends Form {
         this.testListBox();
         this.testContainers();
         this.testPrelude();
+        this.testConsoleExit();
     }
 
     /* --- .form loading -------------------------------------------------- */
@@ -299,5 +300,46 @@ class TestForm extends Form {
               JSON.stringify(libs));
         eq("and a name nothing has resolves to nothing",
            Application.LibraryPath("no-such-library-here"), "");
+    }
+
+    /* --- a console program's exit status --------------------------------- */
+    /*
+     * **A traceback used to leave the status at 0**, and 0 is what a runner, a
+     * build step and CI read as *it worked*: the error of a `Timer` callback
+     * stopped at "Bintana error:", one line above an exit a script took for
+     * success. The children are real console projects -- the thing being
+     * asserted is another process's status, which no assertion inside this one
+     * could see.
+     */
+    testConsoleExit() {
+        const dir = File.Join(Environment.TempDirectory,
+                              `bta-smoke-exit-${Environment.ProcessId}`);
+
+        Directory.Make(dir);
+        File.Save(File.Join(dir, "project.json"),
+                  JSON.stringify({ name: "smoke-exit", main: "Main", version: "1.0",
+                                   sources: ["Main.js"] }));
+
+        try {
+            const cases = [
+                ["an error nobody caught fails the run",
+                 "function Main(){ Timer.After(10, () => nope()); }", 1],
+                ["Application.Quit outranks it",
+                 "function Main(){ Timer.After(10, () => nope());" +
+                 "               Timer.After(40, () => Application.Quit(7)); }", 7],
+                ["and a program with nothing to report ends 0",
+                 "function Main(){ print(\"ok\"); }", 0],
+            ];
+
+            for (const [name, body, want] of cases) {
+                File.Save(File.Join(dir, "Main.js"), body);
+
+                const res = Exec.Wait([Application.Executable, dir],
+                                      { Timeout: 10000 });
+                eq(name, res.ExitCode, want);
+            }
+        } finally {
+            Directory.DeleteTree(dir);
+        }
     }
 }

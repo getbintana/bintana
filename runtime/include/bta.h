@@ -354,6 +354,13 @@ struct BtaApp {
     /* Quit was called. Its own flag because a console `main` can call it before
      * the loop exists, and a loop that has not started cannot be stopped. */
     bool            quitting;
+    /*
+     * An error nobody caught has been reported (`bta_dump_error`, where every
+     * uncaught one ends).  The console loop reads it at the end: a traceback
+     * that leaves the status at `0` is a failure a runner, a build step or CI
+     * reads as success.  `Application.Quit(code)` outranks it.
+     */
+    bool            uncaught;
 
     JSValue         startup_form;
     int             exit_code;

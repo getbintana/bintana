@@ -179,6 +179,12 @@ the ability to build a widget. That it never initialises GTK is the point rather
 than an economy: a runner that decides whether the suite needs a virtual display
 cannot be a program that needs one to start.
 
+**An uncaught error is a failing status.** Every uncaught exception ends in
+`bta_dump_error`, which marks the application; `run_console` answers `1` for a
+run that reported one and was not told otherwise by `Application.Quit(code)`.
+A traceback that left the status at `0` read, to a runner or a build step, as
+*it worked*.
+
 Class declarations at the top level of a `.js` file land in the **global lexical
 scope**, not on `globalThis`, so a plain property read misses them.
 `bta_lookup_global()` falls back to evaluating the bare identifier, which is what
