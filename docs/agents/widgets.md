@@ -11,6 +11,19 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   blocking the `Switch` handler for the duration, or a rebuild that ends where it
   started reports a fistful of switches nobody made. A page's title lives on the
   `GtkStackPage`, which goes away with the page, so it is carried across by hand.
+- **A page that is not on screen still reports `Visible: true`, and keeps the
+  last rectangle it was given.** A `GtkStack` does not hide its pages — it
+  allocates only the visible one — so `Bounds()` on the page behind answers
+  yesterday's number and `Visible` answers true either way. Measured on a
+  `Switcher` whose pages were a 240-wide panel and a button: after the swap the
+  panel still read `w=240`, and the button read `w=0` until its page was first
+  shown. *Which page* is `Current`, and that is what a test asks. **And the stack
+  measures every page, visible or not** — which is what makes it right for a view
+  that swaps (the column keeps its floor) and wrong for a panel that folds (the
+  half could not go under the far page's minimum; `docs/agents/layout.md`). The
+  GTK switch for the second, `hhomogeneous: false`, is not exposed yet, and the
+  `Homogeneous` a `Switcher` already answers is the inherited no-op
+  `docs/agents/runtime.md` describes.
 - **An order lives in one function, `bta_container_reorder`, and three callers
   ask it**: `Reorder(child, index)`, `Raise`/`Lower`, and the designer's drag.
   It sits beside `bta_container_attach`/`detach` because it is the same

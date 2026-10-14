@@ -81,6 +81,39 @@ at ~14 ms in the IDE, against the 44-211 ms a form tab already costs to open
   rebuilt with every tab, so `Session.divider(name, fallback)` answers with the
   live value of the page on screen and falls back to the saved one, and
   `DIVIDERS` lists `PageSplit`/`CenterSplit`/`SideSplit`/`EditSplit`.
+- **The project panel folds to its own button, and the half of the split stays
+  under it.** `MainForm.foldSide` hides the content and keeps the half -- hiding
+  the half whole would hand its room to the work area and GTK would hide the
+  divider with it (`gtk_paned_size_allocate`, the one-child branch), taking the
+  strip down too. The divider moves only *after* the content is out, because a
+  `Split`'s half cannot be squeezed below what it holds: a `Position` of 30 with
+  the tree up clamps to the tree's own minimum, and with the content hidden it
+  lands on the strip button's (~36 in Adwaita; the 30 is a request). The width
+  to come back to is not the divider's while folded, so it is kept beside the
+  fold -- `side: { hidden, width }` in `session.window`, read and written by
+  `Session.side`/`noteSide` -- and re-applied by `Form_Open` before the window
+  is mapped. For that to work the half itself declares **no** `Width`: a
+  declared `Width` on a split's child is a floor that survives the content
+  going away (measured; see `docs/agents/layout.md`). Its content is
+  `SideView`, the button that folds it `BtnSideHide` (in `SideHead`, beside the
+  view chooser), and the strip's `BtnSideShow` -- the icons picked by
+  `dressSide` from what the desktop really has, the `TAB_ACTION_ICON` idiom.
+  The half is arranged **`Horizontal` with the strip first**, so the button sits
+  against the leading edge and keeps its natural width: measured, with the
+  divider dragged out while folded the half goes 36 -> 120 and the button stays
+  `24x390` (arranged `Vertical` with the button last it stretched across the
+  half, which a drag made a six-hundred-pixel button).
+- **The side bar's views are a `Switcher` (`SideStack`), and what is up is asked
+  with `Current`.** Files and Changes are two pages -- `TreePage` carries the
+  tree and its filter, `ChangesBox` the table -- and `CmbView_Select` swaps them
+  with one assignment; `CmbView` stays the chooser, because it offers the tree's
+  two groupings and the changes view as one list (see `dressViews`). Not a
+  `Visible` per child: *one of these shows* is what a stack is, and it keeps the
+  column's floor across the swap because it measures every page -- which is what
+  a view change wants and the reason the fold above is a panel and not a page.
+  A page behind still reports `Visible: true` and keeps the last rectangle it
+  was given, so neither of those says what is on screen (measured;
+  `docs/agents/widgets.md`).
 - **And the canvas is what is left, which at the declared 1100 is 281.** The
   project's tree, the tab's controls column and its side panel each keep a
   floor, so the room a form is drawn in shrank by the panels this change moved

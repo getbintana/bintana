@@ -129,6 +129,22 @@ export const TAB_ACTION_ICON = [
     "document-properties-symbolic", "pan-down-symbolic",
 ];
 
+/* The project panel's two buttons, the same bargain: the first the desktop
+ * really has wins.  See dressSide. */
+const SIDE_HIDE_ICON = [
+    "go-previous-symbolic", "pan-start-symbolic", "sidebar-show-symbolic",
+];
+const SIDE_SHOW_ICON = [
+    "sidebar-show-symbolic", "go-next-symbolic", "pan-end-symbolic",
+];
+
+/* What is asked for the divider when the project panel is folded.  A `Split`'s
+ * half cannot be squeezed below what it holds, so this is a request and the
+ * strip's own button is the answer: 30 asks, a button's minimum of ~36 is what
+ * comes back, and that is the right way round -- a theme with fatter buttons
+ * gets a fatter strip.  See foldSide. */
+const SIDE_STRIP_W = 30;
+
 /* How many projects the "Recent projects" menu remembers.  Where they are kept
  * is Settings' business, and Settings is per application, so the IDE's list
  * never collides with any other project's (nor with the tests'). */
@@ -291,6 +307,12 @@ export class MainForm extends Form {
     running = false;
     designing = false;
 
+    /* The project panel, folded to its strip: which of its two buttons is up,
+     * and the width the panel had while open -- while folded the divider says
+     * the strip's, and coming back means this number.  `Session` keeps both. */
+    sideHidden = false;
+    sideWidth  = 0;
+
     /* The file the window is showing, which every helper reads and only `TabSet`
      * writes.  Null with nothing open, and that is not the same as no project. */
     activeFile = null;
@@ -315,6 +337,15 @@ export class MainForm extends Form {
 
         this.dressTabActions();
         this.dressViews();
+        /* The project panel, folded again if that is how it was left.  The
+         * same moment as the window's size, so the window is mapped with the
+         * strip already there; the width it comes back to is the one written
+         * down beside the fold.  `restoreWindow` above put the divider where
+         * the file says, which folded is the strip's -- the width that matters
+         * is this one. */
+        this.dressSide();
+        const side = this.session.side();
+        if (side.hidden) this.foldSide(side.width);
         this.buildTerminal();
         this.renderTabs();          /* no pages yet: no strip either */
         this.setMode(false);        /* ...and so no editor nor designer either */
@@ -1980,6 +2011,16 @@ export class MainForm extends Form {
         if (this.projectTree) this.projectTree.setFilter(this.TxtFilter.Text);
     }
 
+    /*
+     * Which page of the side bar is showing.
+     *
+     * The swap is a `Switcher`'s (`SideStack`) and not a `Visible` per child:
+     * *one of these shows* is what a stack is, and it keeps the column's floor
+     * while swapping because it measures every page.  What is up is asked with
+     * `Current` -- a page that is not on screen still reports `Visible: true`
+     * and keeps the last rectangle it was given, so neither of those two says
+     * anything (measured).
+     */
     CmbView_Select() {
         const which = this.CmbView.Index;
         /* Filling `Items` moves the chooser to nothing on the way past, and
@@ -1989,12 +2030,70 @@ export class MainForm extends Form {
         const changes = which === Changes.view;
 
         Settings.Set("side.changes", changes);
-        this.FileTree.Visible   = !changes;
-        this.FtFilterRow.Visible = !changes;
-        this.ChangesBox.Visible = changes;
+        this.SideStack.Current = changes ? 1 : 0;
 
         if (changes) this.changes.shown();
         else         this.projectTree.setView(which);
+    }
+
+    /* --- the project panel, folded to its strip --------------------------- */
+
+    /* The panel's two buttons, in order of preference: the first the desktop
+     * really has wins -- `dressTabActions`' own idiom, and for the same reason:
+     * an icon the theme lacks is a blank button. */
+    dressSide() {
+        this.BtnSideHide.Icon = SIDE_HIDE_ICON.find((n) => Application.HasIcon(n)) || "";
+        this.BtnSideShow.Icon = SIDE_SHOW_ICON.find((n) => Application.HasIcon(n)) || "";
+        if (!this.BtnSideHide.Icon) this.BtnSideHide.Text = "\u00ab";
+        if (!this.BtnSideShow.Icon) this.BtnSideShow.Text = "\u00bb";
+    }
+
+    BtnSideHide_Click() { this.foldSide(); }
+    BtnSideShow_Click() { this.unfoldSide(); }
+
+    /*
+     * Fold the project panel to its strip, and bring it back.
+     *
+     * **The half of the `Split` does not go away.**  Hiding the panel whole
+     * would hand its room to the work area and GTK would hide the divider with
+     * it -- `gtk_paned_size_allocate`, the branch where only one child is
+     * visible -- and the strip somebody would be looking for is *inside* the
+     * half that just disappeared.  What goes is the content, and the strip is
+     * what stays.
+     *
+     * **And the divider moves only after the content is out.**  A `Split`'s
+     * halves cannot be squeezed below what they hold, and the content stops
+     * holding anything the moment it is hidden: measured, a position of 30
+     * with the tree up clamps to the tree's own minimum, and with the content
+     * hidden it lands on the strip's -- the button's own.  The order of the two
+     * assignments is the whole of the trick, and coming back it is reversed.
+     *
+     * The width to come back to is not the divider's while folded, so it is
+     * kept here and in `Session`: one for this session's unfold, one for the
+     * next start's.
+     */
+    foldSide(openWidth) {
+        if (this.sideHidden) return;
+
+        this.sideWidth = openWidth > 0 ? Math.round(openWidth)
+                                       : Math.round(this.Split.Position);
+        this.SideView.Visible    = false;
+        this.BtnSideShow.Visible = true;
+        this.Split.Position      = SIDE_STRIP_W;
+        this.sideHidden          = true;
+        this.session.noteSide(true, this.sideWidth);
+    }
+
+    unfoldSide() {
+        if (!this.sideHidden) return;
+
+        this.SideView.Visible    = true;
+        this.BtnSideShow.Visible = false;
+        /* After the content, for the reason above: a position is clamped to
+         * what the half holds, and a strip's worth of pixels is not that. */
+        if (this.sideWidth > 0) this.Split.Position = this.sideWidth;
+        this.sideHidden = false;
+        this.session.noteSide(false, this.sideWidth);
     }
 
     /* --- what happened to the file while it was open -----------------------

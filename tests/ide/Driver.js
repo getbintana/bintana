@@ -14084,8 +14084,7 @@ function* p_git(ide) {
     ide.CmbView_Select();
     yield* settled(ide);
 
-    check("choosing Changes puts the panel up", ide.ChangesBox.Visible);
-    check("and takes the tree down", !ide.FileTree.Visible);
+    eq("choosing Changes puts its page up", ide.SideStack.Current, 1);
 
     /* The same rule as the window: the list takes the room, and the message box
      * and its buttons keep theirs. A panel whose table was its natural height
@@ -14230,7 +14229,7 @@ function* p_git(ide) {
     ide.CmbView.Index = 0;
     ide.CmbView_Select();
     yield* settled(ide);
-    check("the tree comes back", ide.FileTree.Visible && !ide.ChangesBox.Visible);
+    eq("the tree comes back", ide.SideStack.Current, 0);
 
     /*
      * --- the remotes ---------------------------------------------------------
@@ -15495,6 +15494,62 @@ function* p_session(ide) {
     yield* settled(ide);
     eq("a divider is put back where it was left", ide.Split.Position, home + 40);
     eq("...and so is the one under it", ide.RightSplit.Position, console_);
+
+    /*
+     * The project panel, folded to its strip.  What goes is the content and
+     * not the half: the strip with the button that brings the panel back is
+     * *in* the half, and hiding the half would take the strip down with the
+     * divider itself -- GTK hides the handle when only one child is visible.
+     * What is asserted is the direction and the coming back, not a pixel
+     * count: the strip is as wide as its own button needs, which is the
+     * theme's number and not this file's.
+     */
+    const sideOpen = ide.Split.Position;
+    const sideWork = ide.WorkArea.Bounds().Width;
+
+    ide.BtnSideHide.Emit("Click");
+    yield* settled(ide);
+
+    check("the button folds the project panel away", !ide.SideView.Visible);
+    check("and leaves the one that brings it back", ide.BtnSideShow.Visible);
+    check("the half of the split is a strip now",
+          ide.Split.Position > 0 && ide.Split.Position < 60,
+          `pos=${ide.Split.Position}`);
+    check("and the work area took the room it gave up",
+          ide.WorkArea.Bounds().Width > sideWork,
+          `work=${ide.WorkArea.Bounds().Width} was ${sideWork}`);
+
+    ide.BtnSideShow.Emit("Click");
+    yield* settled(ide);
+
+    check("the button brings the panel back", ide.SideView.Visible);
+    check("and puts itself away", !ide.BtnSideShow.Visible);
+    eq("at the width it had", ide.Split.Position, sideOpen);
+    eq("with the work area where it was", ide.WorkArea.Bounds().Width, sideWork);
+
+    /*
+     * And the fold is furniture of the window: written down with it, and the
+     * width to come back to written beside it.  The divider says the strip's
+     * while it is folded, so a start that read only the divider would give the
+     * panel back a strip's worth of pixels.
+     */
+    ide.BtnSideHide.Emit("Click");
+    yield* settled(ide);
+    ide.session.saveWindow();
+
+    const folded = Settings.Get("session.window", {}).side;
+    check("the fold is written down", !!folded && folded.hidden === true,
+          JSON.stringify(folded));
+    eq("with the width it had open", folded.width, sideOpen);
+
+    const read = ide.session.side();
+    check("and that is what the next start reads",
+          read.hidden === true && read.width === sideOpen, JSON.stringify(read));
+
+    /* Out again, which is where the phase goes on from. */
+    ide.BtnSideShow.Emit("Click");
+    yield* settled(ide);
+    eq("unfolding gives the width back", ide.Split.Position, sideOpen);
 
     /* --- what was open ---------------------------------------------------- */
 

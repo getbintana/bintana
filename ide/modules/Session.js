@@ -109,6 +109,11 @@ export class Session {
          * write the flag down beside it.
          */
         this.size = null;
+
+        /* What the project panel is doing, once one of its buttons has said:
+         * `null` until then, and the file's own answer is what stands.  See
+         * `noteSide`. */
+        this.sideLive = null;
     }
 
     /* --- the window ------------------------------------------------------ */
@@ -221,6 +226,37 @@ export class Session {
     }
 
     /*
+     * The project panel: folded to its strip or out, and the width it had
+     * while it was out.
+     *
+     * A folded panel has no divider to read -- the half is the strip's, and
+     * the divider says the strip's width -- so the width it comes back to is
+     * kept beside the fold instead of being read off a widget.  It is
+     * furniture of the window like the dividers and not of the project, and it
+     * is checked rather than trusted for the same reason they are: this is a
+     * file a person can edit.
+     */
+    side() {
+        const saved = this.window();
+        const side  = saved && saved.side && typeof saved.side === "object"
+                      ? saved.side : null;
+        const width = Number(side && side.width);
+        return {
+            hidden: !!(side && side.hidden),
+            width:  Number.isFinite(width) && width > 0 ? Math.round(width) : 0,
+        };
+    }
+
+    /* What the panel is doing now, for `saveWindow`: said by the button that
+     * folded or unfolded it, and the file's own answer stands until one of
+     * them runs. */
+    noteSide(hidden, width) {
+        const n = Number(width);
+        this.sideLive = { hidden: !!hidden,
+                          width:  Number.isFinite(n) && n > 0 ? Math.round(n) : 0 };
+    }
+
+    /*
      * Every resize, which is what `Form_Resize` is for and all this costs: two
      * numbers, compared and kept. Nothing is written here -- a `Settings.Set`
      * per frame of a drag is a file rewritten a hundred times to record a
@@ -257,6 +293,11 @@ export class Session {
         }
 
         const saved = { maximized: !!ide.Maximized, dividers, ends };
+        /* The folded project panel, if there is one: the divider above says
+         * the strip's width while it is folded, so the width to come back to
+         * is this pair and not that number. */
+        const side = this.sideLive || this.side();
+        if (side.hidden || side.width > 0) saved.side = side;
         if (this.size) {
             saved.width  = this.size.width;
             saved.height = this.size.height;

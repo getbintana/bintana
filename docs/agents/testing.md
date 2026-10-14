@@ -224,7 +224,7 @@ Three things that will waste your time:
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
-  424 assertions against 3083 for the whole project -- 9.2 s against 409 to 624 on this
+  426 assertions against 3134 for the whole project -- 9.5 s against 409 to 624 on this
   machine -- which is what makes iterating on an early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.

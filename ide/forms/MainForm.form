@@ -676,6 +676,9 @@
         "VAlign": "Fill",
         "Width": 1100
       },
+      "design": {
+        "Current": 1
+      },
       "children": [
         {
           "type": "Panel",
@@ -881,224 +884,298 @@
                   "type": "Panel",
                   "name": "SideBar",
                   "properties": {
-                    "Arrangement": "Vertical",
-                    "Width": 260
+                    "Arrangement": "Horizontal"
                   },
                   "children": [
                     {
-                      "type": "ComboBox",
-                      "name": "CmbView",
+                      "type": "Button",
+                      "name": "BtnSideShow",
                       "properties": {
-                        "HAlign": "Fill",
-                        "Height": 30,
-                        "Margin": 4,
-                        "Tooltip": "What this tree shows"
-                      }
-                    },
-                    {
-                      "type": "TreeView",
-                      "name": "FileTree",
-                      "properties": {
-                        "Expand": true,
-                        "HAlign": "Fill",
-                        "HExpand": true,
-                        "Menu": [
-                          {
-                            "name": "MnuFtStartup",
-                            "text": "Set as startup form"
-                          },
-                          {
-                            "name": "MnuFtTranslate",
-                            "text": "Edit translations"
-                          },
-                          {
-                            "name": "MnuFtNewTranslation",
-                            "text": "New translation from this template..."
-                          },
-                          {
-                            "name": "MnuFtTranslateWith",
-                            "text": "Open in external editor"
-                          },
-                          {
-                            "separator": true
-                          },
-                          {
-                            "name": "MnuFtRename",
-                            "text": "Rename..."
-                          },
-                          {
-                            "name": "MnuFtDelete",
-                            "text": "Delete from project..."
-                          },
-                          {
-                            "separator": true
-                          },
-                          {
-                            "name": "MnuFtProject",
-                            "text": "Project settings..."
-                          }
-                        ],
-                        "VAlign": "Fill",
+                        "Style": "flat",
+                        "Tooltip": "Show the project panel",
                         "VExpand": true,
-                        "Width": 260
+                        "Visible": false
                       }
                     },
                     {
                       "type": "Panel",
-                      "name": "ChangesBox",
+                      "name": "SideView",
                       "properties": {
                         "Arrangement": "Vertical",
-                        "HAlign": "Fill",
-                        "Spacing": 4,
-                        "VAlign": "Fill",
-                        "VExpand": true,
-                        "Visible": false,
-                        "Width": 260
+                        "Expand": true,
+                        "HExpand": true,
+                        "VExpand": true
                       },
                       "children": [
                         {
-                          "type": "TableView",
-                          "name": "ChangeTable",
-                          "properties": {
-                            "Expand": true,
-                            "HExpand": true,
-                            "Menu": [
-                              {
-                                "name": "MnuChDiff",
-                                "text": "Show the diff"
-                              },
-                              {
-                                "name": "MnuChOpen",
-                                "text": "Open the file"
-                              },
-                              {
-                                "separator": true
-                              },
-                              {
-                                "name": "MnuChStage",
-                                "text": "Stage"
-                              },
-                              {
-                                "name": "MnuChUnstage",
-                                "text": "Unstage"
-                              },
-                              {
-                                "name": "MnuChDiscard",
-                                "text": "Discard changes..."
-                              },
-                              {
-                                "separator": true
-                              },
-                              {
-                                "name": "MnuChAll",
-                                "text": "Stage everything"
-                              },
-                              {
-                                "name": "MnuChWindow",
-                                "text": "Changes window..."
-                              }
-                            ],
-                            "Tooltip": "Double click a file to read what changed in it",
-                            "VExpand": true
-                          }
-                        },
-                        {
-                          "type": "Label",
-                          "name": "LblChanges",
-                          "properties": {
-                            "HAlign": "Start",
-                            "Margin": 4,
-                            "Style": "dim-label",
-                            "Visible": false,
-                            "Wrap": true
-                          }
-                        },
-                        {
-                          "type": "TextBox",
-                          "name": "TxtCommit",
-                          "properties": {
-                            "HAlign": "Fill",
-                            "Height": 30,
-                            "Placeholder": "Message, then Enter",
-                            "Tooltip": "Commit what is staged. Enter is the button"
-                          }
-                        },
-                        {
                           "type": "Panel",
-                          "name": "CommitRow",
+                          "name": "SideHead",
                           "properties": {
                             "Arrangement": "Horizontal",
                             "HAlign": "Fill",
-                            "Height": 32,
-                            "Spacing": 4
+                            "Margin": 4,
+                            "Style": "linked"
                           },
                           "children": [
                             {
-                              "type": "Button",
-                              "name": "BtnChStage",
+                              "type": "ComboBox",
+                              "name": "CmbView",
                               "properties": {
+                                "HAlign": "Fill",
                                 "HExpand": true,
-                                "Text": "Stage",
-                                "Tooltip": "Put the chosen files in the next commit"
+                                "Height": 30,
+                                "Tooltip": "What this tree shows"
                               }
                             },
                             {
                               "type": "Button",
-                              "name": "BtnChCommit",
+                              "name": "BtnSideHide",
                               "properties": {
-                                "HExpand": true,
-                                "Style": "suggested-action",
-                                "Text": "Commit",
-                                "Tooltip": "Commit what is staged, with the message above"
+                                "Height": 30,
+                                "Icon": "close-symbolic",
+                                "Tooltip": "Hide the project panel",
+                                "Width": 34
                               }
                             }
                           ]
-                        }
-                      ]
-                    },
-                    {
-                      "type": "Panel",
-                      "name": "FtFilterRow",
-                      "properties": {
-                        "Arrangement": "Horizontal",
-                        "HAlign": "Fill",
-                        "Margin": 4,
-                        "Style": "linked"
-                      },
-                      "children": [
-                        {
-                          "type": "TextBox",
-                          "name": "TxtFilter",
-                          "properties": {
-                            "HAlign": "Fill",
-                            "HExpand": true,
-                            "Placeholder": "Filter files",
-                            "Tooltip": "Show only the files whose name contains this"
-                          }
                         },
                         {
-                          "type": "Button",
-                          "name": "BtnFtOptions",
+                          "type": "Switcher",
+                          "name": "SideStack",
                           "properties": {
-                            "Menu": [
-                              {
-                                "action": "ActFtExpand"
-                              },
-                              {
-                                "action": "ActFtCollapse"
-                              },
-                              {
-                                "separator": true
-                              },
-                              {
-                                "action": "ActFtClearFilter"
-                              },
-                              {
-                                "action": "ActFtRefresh"
-                              }
+                            "Current": 0,
+                            "Expand": true,
+                            "HExpand": true,
+                            "Strip": "None",
+                            "Tabs": [
+                              "Project",
+                              "Changes"
                             ],
-                            "Tooltip": "Tree options"
-                          }
+                            "VExpand": true
+                          },
+                          "children": [
+                            {
+                              "type": "Panel",
+                              "name": "TreePage",
+                              "properties": {
+                                "Arrangement": "Vertical",
+                                "Expand": true,
+                                "HExpand": true,
+                                "VExpand": true
+                              },
+                              "children": [
+                                {
+                                  "type": "TreeView",
+                                  "name": "FileTree",
+                                  "properties": {
+                                    "Expand": true,
+                                    "HAlign": "Fill",
+                                    "HExpand": true,
+                                    "Margin": 4,
+                                    "Menu": [
+                                      {
+                                        "name": "MnuFtStartup",
+                                        "text": "Set as startup form"
+                                      },
+                                      {
+                                        "name": "MnuFtTranslate",
+                                        "text": "Edit translations"
+                                      },
+                                      {
+                                        "name": "MnuFtNewTranslation",
+                                        "text": "New translation from this template..."
+                                      },
+                                      {
+                                        "name": "MnuFtTranslateWith",
+                                        "text": "Open in external editor"
+                                      },
+                                      {
+                                        "separator": true
+                                      },
+                                      {
+                                        "name": "MnuFtRename",
+                                        "text": "Rename..."
+                                      },
+                                      {
+                                        "name": "MnuFtDelete",
+                                        "text": "Delete from project..."
+                                      },
+                                      {
+                                        "separator": true
+                                      },
+                                      {
+                                        "name": "MnuFtProject",
+                                        "text": "Project settings..."
+                                      }
+                                    ],
+                                    "Padding": "0",
+                                    "Style": "frame",
+                                    "VAlign": "Fill",
+                                    "VExpand": true,
+                                    "Width": 260
+                                  }
+                                },
+                                {
+                                  "type": "Panel",
+                                  "name": "FtFilterRow",
+                                  "properties": {
+                                    "Arrangement": "Horizontal",
+                                    "HAlign": "Fill",
+                                    "Margin": 4,
+                                    "Style": "linked"
+                                  },
+                                  "children": [
+                                    {
+                                      "type": "TextBox",
+                                      "name": "TxtFilter",
+                                      "properties": {
+                                        "HAlign": "Fill",
+                                        "HExpand": true,
+                                        "Placeholder": "Filter files",
+                                        "Tooltip": "Show only the files whose name contains this"
+                                      }
+                                    },
+                                    {
+                                      "type": "Button",
+                                      "name": "BtnFtOptions",
+                                      "properties": {
+                                        "Menu": [
+                                          {
+                                            "action": "ActFtExpand"
+                                          },
+                                          {
+                                            "action": "ActFtCollapse"
+                                          },
+                                          {
+                                            "separator": true
+                                          },
+                                          {
+                                            "action": "ActFtClearFilter"
+                                          },
+                                          {
+                                            "action": "ActFtRefresh"
+                                          }
+                                        ],
+                                        "Tooltip": "Tree options"
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "Panel",
+                              "name": "ChangesBox",
+                              "properties": {
+                                "Arrangement": "Vertical",
+                                "HAlign": "Fill",
+                                "Spacing": 4,
+                                "VAlign": "Fill",
+                                "VExpand": true,
+                                "Width": 260
+                              },
+                              "children": [
+                                {
+                                  "type": "TableView",
+                                  "name": "ChangeTable",
+                                  "properties": {
+                                    "Expand": true,
+                                    "HExpand": true,
+                                    "Menu": [
+                                      {
+                                        "name": "MnuChDiff",
+                                        "text": "Show the diff"
+                                      },
+                                      {
+                                        "name": "MnuChOpen",
+                                        "text": "Open the file"
+                                      },
+                                      {
+                                        "separator": true
+                                      },
+                                      {
+                                        "name": "MnuChStage",
+                                        "text": "Stage"
+                                      },
+                                      {
+                                        "name": "MnuChUnstage",
+                                        "text": "Unstage"
+                                      },
+                                      {
+                                        "name": "MnuChDiscard",
+                                        "text": "Discard changes..."
+                                      },
+                                      {
+                                        "separator": true
+                                      },
+                                      {
+                                        "name": "MnuChAll",
+                                        "text": "Stage everything"
+                                      },
+                                      {
+                                        "name": "MnuChWindow",
+                                        "text": "Changes window..."
+                                      }
+                                    ],
+                                    "Tooltip": "Double click a file to read what changed in it",
+                                    "VExpand": true
+                                  }
+                                },
+                                {
+                                  "type": "Label",
+                                  "name": "LblChanges",
+                                  "properties": {
+                                    "HAlign": "Start",
+                                    "Margin": 4,
+                                    "Style": "dim-label",
+                                    "Visible": false,
+                                    "Wrap": true
+                                  }
+                                },
+                                {
+                                  "type": "TextBox",
+                                  "name": "TxtCommit",
+                                  "properties": {
+                                    "HAlign": "Fill",
+                                    "Height": 30,
+                                    "Placeholder": "Message, then Enter",
+                                    "Tooltip": "Commit what is staged. Enter is the button"
+                                  }
+                                },
+                                {
+                                  "type": "Panel",
+                                  "name": "CommitRow",
+                                  "properties": {
+                                    "Arrangement": "Horizontal",
+                                    "HAlign": "Fill",
+                                    "Height": 32,
+                                    "Spacing": 4
+                                  },
+                                  "children": [
+                                    {
+                                      "type": "Button",
+                                      "name": "BtnChStage",
+                                      "properties": {
+                                        "HExpand": true,
+                                        "Text": "Stage",
+                                        "Tooltip": "Put the chosen files in the next commit"
+                                      }
+                                    },
+                                    {
+                                      "type": "Button",
+                                      "name": "BtnChCommit",
+                                      "properties": {
+                                        "HExpand": true,
+                                        "Style": "suggested-action",
+                                        "Text": "Commit",
+                                        "Tooltip": "Commit what is staged, with the message above"
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
                         }
                       ]
                     }
@@ -1111,7 +1188,7 @@
                     "Arrangement": "Vertical",
                     "Grows": "Start",
                     "Height": 648,
-                    "Position": 464,
+                    "Position": 463,
                     "Width": 839
                   },
                   "children": [
@@ -1357,11 +1434,11 @@
                           "name": "EmptyBox",
                           "properties": {
                             "Arrangement": "Vertical",
+                            "Background": "rgba(0,0,0,0.13)",
                             "Expand": true,
                             "HExpand": true,
-                            "VExpand": true,
-                            "Background": "rgba(0,0,0,0.13)",
-                            "Style": "frame"
+                            "Style": "frame",
+                            "VExpand": true
                           },
                           "children": [
                             {

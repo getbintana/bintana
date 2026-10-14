@@ -637,6 +637,19 @@ icon when the theme has one by that name (`gtkapplication.c`).
   legitimate -- `Split.Arrangement` narrows its `Fixed` slot on purpose -- and so
   is an override with the same signature (`Form.Show` over `Widget.Show`), which
   is what the five pairs it found are.
+- **A base property arrives on every subclass, and where it means nothing it
+  lies.** `Container.Homogeneous` carries out the value on the box, grid or flow
+  the container is arranged as; on a `Switcher`, `Notebook`, `Overlay` or
+  `RowList` no branch matches, so the setter returns success and does nothing —
+  and the getter answers `false`, which for a `Switcher` is a lie: a `GtkStack`
+  is homogeneous until told otherwise, and that is where *swapping a page does
+  not resize anything around it* comes from. Measured: `switcher.Homogeneous`
+  read `false` while a `Position` of 30 clamped to the far page's minimum (200).
+  `Widget.PropertyNames` lists it for those classes, so the property grid offers
+  the dead checkbox. The fix, when something needs it, is the property where it
+  means something (`Switcher.Homogeneous` over the stack is the one the IDE
+  wants, a stack that follows the page on screen) -- never an exemption in
+  `PropertyNames`.
 - **A console project could make a widget and dump core.** A project declaring
   `main` never calls `gtk_init`, so `new Panel()` reached
   `gtk_css_static_style_get_default()` with nothing initialised and the process

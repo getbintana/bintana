@@ -1,7 +1,7 @@
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 8949 assertions
+./tests/run.sh                          # all seven projects, 8972 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -183,8 +183,8 @@ or a discarded project leaves behind.
 stale; the one above is here to be read.
 
 The saving is the point of it: `welcome files` is **125** assertions and
-`designer` **424**, against **3083** for the whole project — measured at 3.8 s,
-9.2 s and 413 s on the machine this was last run on, where what carries over to
+`designer` **426**, against **3134** for the whole project — measured at 3.9 s,
+9.5 s and 434 s on the machine this was last run on, where what carries over to
 another machine is the proportion and not the seconds. Iterating on an early
 phase stops being minutes a time.
 
@@ -218,8 +218,8 @@ own says so with `reportsItself`.
 ### tests/widgets selects
 
 `tests/widgets` is 200 tests listed in `TESTS`, and a filter there **selects** rather
-than running a prefix — `./tests/run.sh widgets record` is 142 assertions
-against 5072 in about twenty. It can select because these tests are
+than running a prefix — `./tests/run.sh widgets record` is 173 assertions
+against 5175 in about twenty. It can select because these tests are
 independent: each builds the controls it needs and deletes them again. The two that
 are not say so in the file:
 

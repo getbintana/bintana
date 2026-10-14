@@ -341,6 +341,21 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   when an older settings file saved the divider without `ends`). A page that is not on screen cannot say its `ends`, so
   `saveWindow` merges with the last ones. Reproduced on an `Xvfb` with a remembered
   width of 1800 -- there is no window manager, so `Maximized` cannot be.
+- **A declared `Width` on a `Split`'s child is a floor that survives hiding
+  what is inside it, and it blocks folding the half.** `SideBar` declared
+  `Width: 260`, so the project panel could not be folded below 260: a position
+  is `CLAMP`ed to `start_child_req` (`gtk_paned_compute_position`, both
+  `shrink` flags off in `build_split`), and a size *request* is part of a
+  widget's minimum whether or not its own children are visible. Measured in a
+  probe: `Position = 30` with the content up came out **260**, and **stayed
+  260** with the content hidden. The floor belongs to the content instead --
+  `SideView`, whose `FileTree` already declares its own 260 -- so it goes away
+  with what it holds: the same `Position = 30` landed on the strip button's
+  minimum (**36**). Two things follow about the order, and both are in
+  `MainForm.foldSide`: hide the content **before** moving the divider, and show
+  it **before** moving the divider back -- either way with the move first, the
+  clamp eats it and the half stays where it was (measured: `30` with the
+  content visible clamped to the content's minimum, `200` in the probe).
 - **`Label.Alignment` placed the block and left its lines justified left.** It set
   `xalign` only, so a `Wrap`ped paragraph with `Alignment: "Center"` was a centred
   box of left-aligned lines -- measured on the empty view's hint. It sets `justify`
