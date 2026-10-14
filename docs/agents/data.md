@@ -112,6 +112,40 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   engine patch that gives this type its operators, left open; `Equals` is the
   comparison -- exact, across scales, and reading a number or machine text as
   the operators do. D4 of the October audit.
+- **A record's shape may live in a file, and the file is read *through* the
+  `Field` constructors.** `Customer.record` (format `bta-record/1`: `class`,
+  an optional `naming`, and `fields`) is the declarative half of the data plan;
+  a field's options are the ones its constructor takes, the two positional
+  arguments are named (`values` for an enum, `of` for what a record or a list
+  holds), and the classes `of` names resolve **at first use of the class** --
+  which is what lets a shape contain itself (`of` naming the class being
+  declared). Reading through the constructors is the whole design: one
+  refusal per rule, and it is the same sentence a class body gets.
+  `Record.File(type)` answers the path and `Record.Shape(type)` writes the
+  document back -- the two halves of the same format, and `Shape` is what the
+  IDE's dialog will edit.
+- **The index is `index_forms`' with the other suffix, and it is one per
+  thread.** A `.record` is found by the walk that finds a `.form`: qualified
+  name then bare, nearest folder wins, two files at one depth refuse **when one
+  is asked for** -- so a project with a leftover still runs (`tests/widgets`'
+  `Records` holds each of those as a child project; a `.record` nothing asks
+  for is never even parsed, malformed or not). The walk is C, so `Record.File`
+  is a hook `rad.js` captures and the hatches delete -- and a `Task` worker
+  installs its own, because the same question from another thread must not read
+  a table the main thread is writing. **A miss rebuilds the index**, as a
+  `.form` miss does, but a record class asks once per class (`Record` prepares
+  its fields once), not once per instantiation.
+- **A class may declare `Fields` or have a `.record`, never both.** The file is
+  where the shape lives when there is one; two shapes that can disagree is what
+  the format exists to avoid, and the refusal names the class, the file and
+  *the shape lives in one place*. A `naming` both declare and disagree on is
+  refused the same way (agreeing is fine), and a subclass may add a file the
+  parent does not have -- the fields merge down the chain exactly as `static
+  Fields` does.
+- **`Field.Decimal`'s `def` was accepted and silently dropped** -- `makeField`'s
+  `extra` overwrote it with a zero -- and the file format is what needed it:
+  `"def": "1.0005"` at three places is `1.001`, `new Decimal(def, places)`, the
+  field's own rule applied to its start.
 
 ## Numbers, JSON and bytes
 

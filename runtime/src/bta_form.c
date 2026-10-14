@@ -475,12 +475,14 @@ static int build_children(JSContext *ctx, JSValueConst form_obj,
     return 0;
 }
 
-/* ------------------------------------------------------- where a .form lives
+/* --------------------------------------------------- where a class's file lives
  *
  * A project may organise its classes in directories, so <Class>.form is not
  * simply a file in the project root.  The tree is indexed once, by name: a
  * class declaration and a .form node both name a class and neither carries a
- * path, so the name is what there is to look up.
+ * path, so the name is what there is to look up.  A `.record` file is the same
+ * question with the other extension -- where the class's *shape* is declared --
+ * which is why the walk and the lookup are shared and only the suffix changes.
  *
  * Two files with the same name are an error and not a choice -- the classes
  * would collide as well -- but only when one of them is asked for: a project
@@ -490,11 +492,11 @@ static int build_children(JSContext *ctx, JSValueConst form_obj,
 typedef struct {
     char *path;    /* NULL once more than one file claims this name */
     int   depth;   /* how many directories below the project root it sits */
-} FormEntry;
+} ClassFile;
 
-static void form_entry_free(gpointer p)
+static void class_file_free(gpointer p)
 {
-    FormEntry *e = p;
+    ClassFile *e = p;
     g_free(e->path);
     g_free(e);
 }
@@ -513,10 +515,10 @@ static void form_entry_free(gpointer p)
  */
 static void index_add(GHashTable *out, char *key, const char *path, int depth)
 {
-    FormEntry *have = g_hash_table_lookup(out, key);
+    ClassFile *have = g_hash_table_lookup(out, key);
 
     if (!have) {
-        FormEntry *e = g_new0(FormEntry, 1);
+        ClassFile *e = g_new0(ClassFile, 1);
         e->path  = g_strdup(path);
         e->depth = depth;
         g_hash_table_insert(out, key, e);
@@ -540,9 +542,13 @@ static void index_add(GHashTable *out, char *key, const char *path, int depth)
  * `prefix` is the namespace the folders walked so far spell out -- "" at the
  * project root, "Widgets" inside Widgets/ -- or NULL once a directory has a
  * name no namespace could have, since nothing below it is qualifiable either.
+ *
+ * `suffix` is ".form" or ".record": one walk, one lookup, and the file a class
+ * is built from and the file its shape is declared in cannot resolve
+ * differently.
  */
-static void index_forms(GHashTable *out, const char *dir, const char *prefix,
-                        int depth)
+static void index_class_files(GHashTable *out, const char *dir,
+                              const char *prefix, int depth, const char *suffix)
 {
     GDir *d = g_dir_open(dir, 0, NULL);
     if (!d)
@@ -562,17 +568,17 @@ static void index_forms(GHashTable *out, const char *dir, const char *prefix,
                 deeper = *prefix ? g_strdup_printf("%s.%s", prefix, name)
                                  : g_strdup(name);
 
-            index_forms(out, path, deeper, depth + 1);
+            index_class_files(out, path, deeper, depth + 1, suffix);
             g_free(deeper);
             g_free(path);
             continue;
         }
-        if (!g_str_has_suffix(name, ".form")) {
+        if (!g_str_has_suffix(name, suffix)) {
             g_free(path);
             continue;
         }
 
-        char *base = g_strndup(name, strlen(name) - strlen(".form"));
+        char *base = g_strndup(name, strlen(name) - strlen(suffix));
         index_add(out, g_strdup(base), path, depth);
 
         /* Also under the name its folders spell out, which is what a project
@@ -596,14 +602,14 @@ static void index_forms(GHashTable *out, const char *dir, const char *prefix,
  * bare key is marked ambiguous and saying which one is exactly what qualifying
  * the name is for.
  */
-static const FormEntry *index_find(GHashTable *forms, const char *class_name)
+static const ClassFile *index_find(GHashTable *files, const char *class_name)
 {
-    const FormEntry *hit = g_hash_table_lookup(forms, class_name);
+    const ClassFile *hit = g_hash_table_lookup(files, class_name);
     if (hit)
         return hit;
 
     const char *dot = strrchr(class_name, '.');
-    return dot ? g_hash_table_lookup(forms, dot + 1) : NULL;
+    return dot ? g_hash_table_lookup(files, dot + 1) : NULL;
 }
 
 /*
@@ -624,14 +630,18 @@ static const FormEntry *index_find(GHashTable *forms, const char *class_name)
  * the argument above still wins at these sizes.  `AGENTS.md` carries the
  * numbers and what would reopen it, and `task_class_file` in `bta_task.c` makes
  * the same trade for a cheaper reason.
+ *
+ * A `.record` miss costs one walk per *class* and not per instantiation, since
+ * `Record` prepares its fields once; `record_files_lookup` below makes the same
+ * trade for that reason.
  */
-static const FormEntry *form_path(BtaApp *app, const char *class_name)
+static const ClassFile *form_path(BtaApp *app, const char *class_name)
 {
     if (!app->forms) {
         app->forms = g_hash_table_new_full(g_str_hash, g_str_equal,
-                                           g_free, form_entry_free);
+                                           g_free, class_file_free);
     } else {
-        const FormEntry *hit = index_find(app->forms, class_name);
+        const ClassFile *hit = index_find(app->forms, class_name);
         if (hit)
             return hit;
         g_hash_table_remove_all(app->forms);
@@ -644,11 +654,115 @@ static const FormEntry *form_path(BtaApp *app, const char *class_name)
      * shadows the library's rather than being shadowed by it -- the same order
      * the library search itself has.
      */
-    index_forms(app->forms, app->dir, "", 0);
+    index_class_files(app->forms, app->dir, "", 0, ".form");
     for (guint i = 0; app->libs && i < app->libs->len; i++)
-        index_forms(app->forms, g_ptr_array_index(app->libs, i), "", 0);
+        index_class_files(app->forms, g_ptr_array_index(app->libs, i), "", 0,
+                          ".form");
 
     return index_find(app->forms, class_name);
+}
+
+/* -------------------------------------------------------- where a .record lives */
+
+/*
+ * `Record.File(type)`, which the `.record` loader in `rad.js` is built on.
+ *
+ * It is its own index and not `app->forms` with another suffix: a `Task` worker
+ * evaluates `rad.js` in a thread of its own, and the same question there must
+ * not read a table the main thread is writing.  The hook is one C closure per
+ * context -- `bta_record_init` builds it -- holding the directories it resolves
+ * against and the index it builds lazily, freed with the closure.
+ */
+typedef struct {
+    GPtrArray  *dirs;      /* the project first, then each library */
+    GHashTable *by_name;   /* NULL until the first ask; rebuilt on a miss */
+} RecordFiles;
+
+static void record_files_free(gpointer p)
+{
+    RecordFiles *rf = p;
+
+    if (rf->by_name)
+        g_hash_table_unref(rf->by_name);
+    g_ptr_array_unref(rf->dirs);
+    g_free(rf);
+}
+
+static void record_files_rebuild(RecordFiles *rf)
+{
+    if (!rf->by_name)
+        rf->by_name = g_hash_table_new_full(g_str_hash, g_str_equal,
+                                            g_free, class_file_free);
+    else
+        g_hash_table_remove_all(rf->by_name);
+
+    for (guint i = 0; i < rf->dirs->len; i++)
+        index_class_files(rf->by_name, g_ptr_array_index(rf->dirs, i), "", 0,
+                          ".record");
+}
+
+/*
+ * The path of the class's `.record` file: "" when it is built in code, and a
+ * refusal when more than one file claims the name.
+ */
+static const ClassFile *record_files_lookup(RecordFiles *rf, const char *name)
+{
+    if (!rf->by_name)
+        record_files_rebuild(rf);
+    else if (!index_find(rf->by_name, name))
+        record_files_rebuild(rf);   /* a file may have appeared since */
+
+    return index_find(rf->by_name, name);
+}
+
+static JSValue record_file_js(JSContext *ctx, JSValueConst this_val, int argc,
+                              JSValueConst *argv, int magic, void *opaque)
+{
+    RecordFiles *rf = opaque;
+
+    if (argc < 1 || !JS_IsString(argv[0]))
+        return JS_ThrowTypeError(ctx, "the record-file lookup needs a class name");
+
+    const char *name = JS_ToCString(ctx, argv[0]);
+    if (!name)
+        return JS_EXCEPTION;
+
+    const ClassFile *found = record_files_lookup(rf, name);
+
+    if (!found) {
+        JS_FreeCString(ctx, name);
+        return JS_NewString(ctx, "");
+    }
+    if (!found->path) {
+        JSValue e = JS_ThrowPlainError(ctx, "more than one %s.record in the project",
+                                       name);
+        JS_FreeCString(ctx, name);
+        return e;
+    }
+
+    JSValue out = JS_NewString(ctx, found->path);
+    JS_FreeCString(ctx, name);
+    return out;
+}
+
+/*
+ * The hook `Record.File` is written on, installed before `rad.js` runs --
+ * which captures it and deletes the name with the rest of the scaffolding
+ * (`bta_close_hatches`).  `dirs` is copied, so a worker may hand over arrays
+ * that outlive this call.
+ */
+void bta_record_init(JSContext *ctx, JSValueConst global, const char *dir,
+                     GPtrArray *libs)
+{
+    RecordFiles *rf = g_new0(RecordFiles, 1);
+    rf->dirs = g_ptr_array_new_with_free_func(g_free);
+    g_ptr_array_add(rf->dirs, g_strdup(dir));
+    for (guint i = 0; libs && i < libs->len; i++)
+        g_ptr_array_add(rf->dirs, g_strdup(g_ptr_array_index(libs, i)));
+
+    JSValue fn = JS_NewCClosure(ctx, record_file_js, "recordFile",
+                                record_files_free, 1, 0, rf);
+    JS_SetPropertyStr(ctx, global, "recordFile", fn);
 }
 
 /* -------------------------------------------------------------------- entry */
@@ -661,7 +775,7 @@ static int form_build(JSContext *ctx, JSValueConst form_obj,
     if (!app)
         return 0;
 
-    const FormEntry *found = form_path(app, class_name);
+    const ClassFile *found = form_path(app, class_name);
 
     /* A form with no .form file is legal: it is simply built in code. */
     if (!found)

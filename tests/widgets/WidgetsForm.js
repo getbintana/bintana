@@ -548,7 +548,7 @@ const TESTS = [
     /* Children too: a project's own class named like a runtime global. */
     "ClassNamedLikeAGlobal",
     /* Children too: a file with `export` is a module. */
-    "Modules", "Imports",
+    "Modules", "Imports", "Records",
     "Time",
     "Stopwatch",
     "Shortcut", "Decimal", "FieldDecimal",
@@ -4516,6 +4516,261 @@ class WidgetsForm extends Form {
         eq("...and a class's base is still Super, not From",
            Application.Symbols("export class B extends A {}").filter((x) => x.Kind === "Class")
                .map((x) => x.Super + "|" + x.From).join(), "A|");
+    }
+
+    /*
+     * **A record's shape as a file** (`bta-record/1`): `Class.record` beside
+     * the class -- found the way a `.form` is, read through the `Field`
+     * constructors so a file refuses what a class body refuses, and written
+     * back by `Record.Shape`.
+     *
+     * Every rule with a file is a child project, because a class prepares its
+     * fields once: a file appearing under a class this process already
+     * constructed would not be read again.  The index is the runtime's own --
+     * the one that finds a class's `.form`, with the other extension -- and a
+     * `Task` worker builds one too, which is the case at the end.
+     */
+    testRecords() {
+        const run = (name, files, project) => {
+            const dir = File.Join(SCRATCH, "record-" + name);
+            Directory.Make(dir);
+            const sources = Dictionary.Keys(files).filter((f) => f.endsWith(".js"));
+            File.SaveJson(File.Join(dir, "project.json"),
+                          { name: "record" + name, main: "Main", sources,
+                            ...(project || {}) });
+            for (const f of Dictionary.Keys(files)) {
+                Directory.Make(File.Directory(File.Join(dir, f)));
+                File.Save(File.Join(dir, f), files[f]);
+            }
+            return Exec.Wait([Application.Executable, dir], { Timeout: 30000 });
+        };
+        const main = (body) => `function Main() {\n${body}\n    Application.Quit(0);\n}\n`;
+
+        /* --- what a class built in code answers, in this process ----------- */
+        class NoFile extends Record {
+            static Fields = { Name: Field.Text() };
+        }
+        eq("a class built in code has no .record file", Record.File(NoFile), "");
+        throws("Record.File wants a Record class", () => Record.File(Button));
+        throws("and Record.Shape too", () => Record.Shape(File));
+
+        const bare = Record.Shape(NoFile);
+        eq("the shape names the format it is", bare.format, "bta-record/1");
+        eq("and the class it describes", bare.class, "NoFile");
+        eq("with every field, and nothing a field does not say",
+           JSON.stringify(bare.fields), '{"Name":{"kind":"text"}}');
+
+        /*
+         * The inverse of the loader, on a shape with something to say: a
+         * decimal's `def` at its own places, a list's entries, a record that
+         * contains itself, and the three options that are neither.
+         */
+        class Priced extends Record {
+            static Fields = {
+                Price:  Field.Decimal({ decimals: 3, def: "1.0005" }),
+                Tags:   Field.List(Field.Text({ max: 8 }), { def: ["x"] }),
+                Parent: Field.Record(() => Priced),
+                Code:   Field.Text({ as: "codigo", key: true }),
+            };
+        }
+        eq("a decimal field starts where it says, at its own places",
+           `${new Priced().Price}`, "1.001");
+        eq("and the shape writes what the declaration decided",
+           JSON.stringify(Record.Shape(Priced).fields),
+           '{"Price":{"kind":"decimal","decimals":3,"def":"1.001"},' +
+           '"Tags":{"kind":"list","of":{"kind":"text","max":8},"def":["x"]},' +
+           '"Parent":{"kind":"record","of":"Priced"},' +
+           '"Code":{"kind":"text","as":"codigo","key":true}}');
+
+        /* --- a file, its defaults and its naming, in a child --------------- */
+        const client = {
+            format: "bta-record/1",
+            class: "Client",
+            naming: "snake",
+            fields: {
+                Name:     { kind: "text", required: true, max: 80 },
+                Category: { kind: "enum", values: ["Retail", "Wholesale"], def: "Retail" },
+                Balance:  { kind: "decimal", decimals: 2, def: "5.00" },
+                Active:   { kind: "bool", def: true },
+                Since:    { kind: "date" },
+                Limit:    { kind: "int", min: 0, def: 10 },
+                Address:  { kind: "record", of: "Address" },
+                Tags:     { kind: "list", of: { kind: "text", max: 8 } },
+                Lines:    { kind: "list", of: "Line" },
+            },
+        };
+        const clientJs = "class Address extends Record {\n" +
+                         "    static Fields = { City: Field.Text() };\n" +
+                         "}\n" +
+                         "class Line extends Record {\n" +
+                         "    static Fields = { What: Field.Text({ required: true }) };\n" +
+                         "}\n" +
+                         "class Client extends Record {}\n";
+
+        let r = run("defaults", {
+            "Model.js": clientJs,
+            "Client.record": JSON.stringify(client),
+            "Main.js": main(
+                '    const c = new Client({ Name: "Ana" });\n' +
+                '    print("DEFAULTS " + [c.Category, c.Active, c.Limit, "" + c.Balance, c.Since].join("|"));\n' +
+                '    c.Address = new Address({ City: "CABA" });\n' +
+                '    print("NESTED " + c.Address.City + " LINES " + c.Lines.length);\n' +
+                '    c.Apply({ Category: "Wholesale", Limit: 3 });\n' +
+                '    print("SERIALIZE " + JSON.stringify(c.Serialize()));\n' +
+                '    print("PROBLEMS " + JSON.stringify(c.Validate()));\n' +
+                '    try { c.Name = ""; } catch (e) { print("REQUIRED " + e.message); }\n' +
+                '    print("SHAPE " + JSON.stringify(Record.Shape(Client)));'),
+        });
+        check("a file's fields arrive with their defaults",
+              r.Output.includes("DEFAULTS Retail|true|10|5.00|"), r.Output);
+        check("...and the nested classes their fields name",
+              r.Output.includes("NESTED CABA LINES 0"), r.Output);
+        check("...and its naming writes the file's keys",
+              r.Output.includes('SERIALIZE {"name":"Ana","category":"Wholesale","limit":3,' +
+                                '"address":{"City":"CABA"}}'),
+              r.Output);
+        check("and a required field refuses where the setter does",
+              r.Output.includes("REQUIRED Name is required"), r.Output);
+
+        const shapeLine = r.Output.split("\n").find((l) => l.startsWith("SHAPE "));
+        const shape     = shapeLine ? shapeLine.slice(6) : "";
+        eq("and the shape writes the file back as it was",
+           shape,
+           '{"format":"bta-record/1","class":"Client","naming":"snake","fields":' +
+           '{"Name":{"kind":"text","required":true,"max":80},' +
+           '"Category":{"kind":"enum","values":["Retail","Wholesale"]},' +
+           '"Balance":{"kind":"decimal","def":"5.00"},' +
+           '"Active":{"kind":"bool","def":true},' +
+           '"Since":{"kind":"date"},' +
+           '"Limit":{"kind":"int","min":0,"def":10},' +
+           '"Address":{"kind":"record","of":"Address"},' +
+           '"Tags":{"kind":"list","of":{"kind":"text","max":8}},' +
+           '"Lines":{"kind":"list","of":"Line"}}}');
+
+        r = run("roundtrip", {
+            "Model.js": clientJs,
+            "Client.record": shape,
+            "Main.js": main('    print("SHAPE " + JSON.stringify(Record.Shape(Client)));\n' +
+                            '    print("NAME " + new Client({ Name: "Ana" }).Name);'),
+        });
+        check("the document it writes loads into another process unchanged",
+              r.ExitCode === 0 && r.Output.includes("SHAPE " + shape), r.Output);
+        check("and a default it no longer spells out still starts where it did",
+              r.Output.includes("NAME Ana"), r.Output);
+
+        /* --- what a file may not say --------------------------------------- */
+        const refuses = (label, files, says) => {
+            const rr = run("no-" + label, files);
+            check(`refuses ${label}, naming it`,
+                  rr.ExitCode !== 0 && rr.Output.includes(says), rr.Output);
+        };
+        const model = (js, doc) => ({
+            "Client.js": js,
+            "Client.record": JSON.stringify(doc),
+            "Main.js": main("    print('NAME ' + new Client({ Name: 'Ana' }).Name);"),
+        });
+
+        refuses("Fields and a file at once", {
+            "Client.js": "class Client extends Record {\n" +
+                         "    static Fields = { Name: Field.Text() };\n}\n",
+            "Client.record": JSON.stringify(client),
+            "Main.js": main("    new Client();"),
+        }, "declares Fields and has");
+        refuses("a format that is not this one",
+                model("class Client extends Record {}\n",
+                      { ...client, format: "bta-form/1" }),
+                "format is 'bta-form/1', expected 'bta-record/1'");
+        refuses("a class it is not",
+                model("class Client extends Record {}\n", { ...client, class: "Other" }),
+                "declares class 'Other'");
+        refuses("a kind nobody has",
+                model("class Client extends Record {}\n",
+                      { ...client, fields: { Name: { kind: "tex" } } }),
+                "is not one of");
+        refuses("a misspelt option",
+                model("class Client extends Record {}\n",
+                      { ...client, fields: { Name: { kind: "text", mx: 1 } } }),
+                "'mx' is not one of its options");
+        refuses("a named argument of another kind",
+                model("class Client extends Record {}\n",
+                      { ...client, fields: { Name: { kind: "text", values: ["a"] } } }),
+                "'values' is not one of its options");
+        refuses("an enum with no values",
+                model("class Client extends Record {}\n",
+                      { ...client, fields: { C: { kind: "enum" } } }),
+                "expected a list of values");
+        refuses("a record of something that is not one",
+                model("class Client extends Record {}\n",
+                      { ...client, fields: { P: { kind: "record", of: "Button" } } }),
+                "'Button' is not a Record class");
+        refuses("a record of a name nothing declares",
+                model("class Client extends Record {}\n",
+                      { ...client, fields: { P: { kind: "record", of: "Nope" } } }),
+                "'Nope' is not a class");
+        refuses("a list of nothing",
+                model("class Client extends Record {}\n",
+                      { ...client, fields: { L: { kind: "list" } } }),
+                "'of' is what the entries are");
+        refuses("a default the field itself would refuse",
+                model("class Client extends Record {}\n",
+                      { ...client, fields: { N: { kind: "int", min: 1 } } }),
+                "is not a value it accepts");
+        refuses("a naming the class disagrees with",
+                model("class Client extends Record {\n" +
+                      "    static Naming = 'lower';\n}\n", client),
+                "declares Naming 'lower' and");
+        refuses("two files claiming one class", {
+            "A/Client.record": JSON.stringify(client),
+            "B/Client.record": JSON.stringify(client),
+            "Client.js": "class Client extends Record {}\n",
+            "Main.js": main("    new Client();"),
+        }, "more than one Client.record in the project");
+
+        let rr = run("leftover", {
+            "Unused.record": "{ this is not json",
+            "Main.js": main("    print('LEFT ALONE');"),
+        });
+        check("a .record nothing asks for is never read",
+              rr.ExitCode === 0 && rr.Output.includes("LEFT ALONE"), rr.Output);
+
+        /* --- a shape that contains itself, and a worker -------------------- */
+        rr = run("recursive", {
+            "Node.js": "class Node extends Record {}\n",
+            "Node.record": JSON.stringify({ format: "bta-record/1", class: "Node",
+                fields: { Name:     { kind: "text" },
+                          Children: { kind: "list", of: "Node" } } }),
+            "Main.js": main("    const n = new Node({ Name: 'root' });\n" +
+                            "    n.Children.push(new Node({ Name: 'child' }));\n" +
+                            "    print('RECURSIVE ' + n.Children[0].Name + ' ' +\n" +
+                            "          Record.Shape(Node).fields.Children.of);"),
+        });
+        check("a shape that contains itself resolves at first use",
+              rr.ExitCode === 0 && rr.Output.includes("RECURSIVE child Node"), rr.Output);
+
+        rr = run("worker", {
+            "Row.js": "export class Row extends Record {}\n",
+            "Row.record": JSON.stringify({ format: "bta-record/1", class: "Row",
+                fields: { Name: { kind: "text", required: true } } }),
+            "Job.js": 'import { Row } from "./Row.js";\n' +
+                      "export class Job extends Task {\n" +
+                      "    Run(m) {\n" +
+                      "        const r = new Row({ Name: m.name });\n" +
+                      "        return { name: r.Name,\n" +
+                      "                 file: Record.File(Row).includes('Row.record'),\n" +
+                      "                 shape: JSON.stringify(Record.Shape(Row).fields.Name) };\n" +
+                      "    }\n" +
+                      "}\n",
+            "Main.js": "function Main() {\n" +
+                       "    const t = new Job();\n" +
+                       "    t.Done = (v) => { print('ROW ' + v.name + ' ' + v.file + ' ' + v.shape); Application.Quit(0); };\n" +
+                       "    t.Error = (m) => { print('ROW FAILED ' + m); Application.Quit(1); };\n" +
+                       "    t.Start({ name: 'Zoe' });\n" +
+                       "}\n",
+        });
+        check("a worker reads a record's file on its own thread",
+              rr.ExitCode === 0 &&
+              rr.Output.includes('ROW Zoe true {"kind":"text","required":true}'),
+              rr.Output);
     }
 
     /*

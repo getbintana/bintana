@@ -48,11 +48,12 @@ come from is a resource of the project rather than a line of code.
 | `Record.Clone`, for a dialog editing a copy | — |
 | `PropertyNames` / `PropertyOptions` on a record | a property grid could edit one already |
 | `Naming = "snake"` | **unused today**, and on purpose: it is the SQL spelling |
-| `index_forms` in `bta_form.c`: class name → file, anywhere in the tree | the same walk would index `.record` files |
+| `index_forms` in `bta_form.c`: class name → file, anywhere in the tree | **built**: the same walk indexes `.record` files now, and `Record.File`/`Record.Shape` are the pair its loader and its writer |
 | `GotFocus`/`LostFocus`/`Focused` on every widget | when a bound control would write its value back |
 | The grid's `Style` drop-down, built from the project rather than the runtime | the same trick for `DataField` and `Source` |
 | `TableView`, with rows held or answered on demand through `Data` | **the widget stage 3 was waiting for**, and it arrived after this plan was written -- see the note at the end |
 | `Field.Record` / `Field.List(Class)`: a record inside a record, to any depth | **the wall this plan was waiting on**, built after it was written -- master--detail is a declaration now |
+| `Customer.record`: the shape as a file, read through the `Field` constructors | **built**: stage 1's file half, with the recursive spelling (`{ "kind": "record", "of": "Line" }`) and `Record.Shape` as its inverse |
 | `Database.Sqlite` + `Table`: `Find`/`Where`/`Save`/`Delete` over a table | **the reading and writing half of stage 2**, built after this was written. What is left of that stage is the *declarative* half: the connection as a resource, and `Form.Source` |
 | `key: true` on a field, and `PropertyInfo` beside `PropertyOptions` | the identity, and the one member a mapper needed that `Record` did not expose |
 | `Naming = "snake"` -- **no longer unused** | it is what a `Table` spells a column with, and it needed no change at all |
@@ -412,10 +413,13 @@ which is what Delphi does, is the wrong answer for a form with twelve fields.
    at a time, over JSON, with a field editor in the IDE. No database at all, so the
    declarative machinery is proven before a dependency arrives. Everything it
    needed exists: the focus events, and the nesting, so a bound form and a bound
-   grid over its detail are one shape rather than two. The `.record` file needs one
-   thing the code path does not, and it is where the recursive spelling goes:
-   `{ "kind": "record", "of": "MenuItem" }` names a class the way a `.form` names a
-   `"type"`.
+   grid over its detail are one shape rather than two. **The file half is built**:
+   a `.record` beside the class, indexed by the same walk that finds a `.form`,
+   read through the `Field` constructors, with `Record.File` and `Record.Shape`
+   (the recursive spelling included: `{ "kind": "record", "of": "MenuItem" }`
+   names a class the way a `.form` names a `"type"`). What is left of this stage
+   is the declarative half proper -- the three properties and the field editor,
+   which is [below](#where-it-stands).
 2. **`sales.conn` and sqlite** — **half built.** `Database.Sqlite` and `Table` are
    there and tested: a record reads and writes a table, and `snake` stopped being
    unused. What is left is the declarative half, which is
@@ -446,16 +450,21 @@ account. `TableView` with the on-demand mode a bound grid over a query wants. A
 record that holds a list of records, so master–detail is a declaration. And
 `Database.Sqlite` + `Table`, so a record reads and writes a table.
 
-So what is left is **only the declarative half**, and it is now small enough to
+**And one piece of the declarative half landed with the plan still waiting**: a
+record's shape as a file (`Customer.record`, `Record.File`, `Record.Shape`),
+which is what the tree groups and the dialog edits; the rest of stage 1 is
+three properties and the editor over them.
+
+So what is left is the declarative half proper, and it is now small enough to
 list:
 
 | | |
 |---|---|
-| `Customer.record` | the shape as a file, so the tree groups it and a dialog edits it — with `{ "kind": "record", "of": "Line" }` as the file's spelling of a nested one |
 | `sales.conn` | the connection as a project resource, with a category, an icon and a dialog. Not a section of `project.json` |
 | `Form.Record` / `Form.Source` / `Control.DataField` | three ordinary properties, so all three are designable and serialisable with no other change — the invariant the runtime rests on |
 | the drop-downs | `DataField` from the record's fields, `Source` from the declared connections' tables and the project's `.json` files, computed the way the grid's `Style` row already is |
 | the write-back | on `Activate` and `LostFocus`, with the error marked beside the field. It asks **`Validate()`** and never `Problems`, which is the report of a load and never clears |
+| the field editor | the IDE dialog over `Record.Shape` and the `.record` file — what the shape file was built for |
 
 And two things the binding will have to answer that this document did not
 foresee, both found by writing the screens by hand: **a guard**, because

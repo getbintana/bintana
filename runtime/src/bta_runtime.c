@@ -1363,6 +1363,38 @@ JSValue bta_lookup_global(JSContext *ctx, const char *name)
     return v;
 }
 
+/*
+ * The value a bare name resolves to, for `rad.js` and for nothing else.
+ *
+ * A `.record` file names the classes its fields hold, and a name has to resolve
+ * the way the rest of the runtime resolves one -- a project's `class Line`, or
+ * a library's -- which is `bta_lookup_global` above.  JavaScript cannot
+ * evaluate a name itself (`eval` is not part of this language), so the rule is
+ * handed over as this hook; `Record`'s loader captures it and the hatch below
+ * takes the name away.
+ */
+static JSValue js_class_of_name(JSContext *ctx, JSValueConst this_val, int argc,
+                                JSValueConst *argv)
+{
+    if (argc < 1 || !JS_IsString(argv[0]))
+        return JS_ThrowTypeError(ctx, "the name lookup needs a name");
+
+    const char *name = JS_ToCString(ctx, argv[0]);
+    if (!name)
+        return JS_EXCEPTION;
+
+    JSValue out = bta_lookup_global(ctx, name);
+    JS_FreeCString(ctx, name);
+    return out;
+}
+
+/* Installed by the main thread and by every worker; deleted with the hatches. */
+void bta_class_of_name_init(JSContext *ctx, JSValueConst global)
+{
+    JS_SetPropertyStr(ctx, global, "classOfName",
+                      JS_NewCFunction(ctx, js_class_of_name, "classOfName", 1));
+}
+
 /* ---------------------------------------------------------------- globals */
 
 /* ------------------------------------------------------------------ logging
@@ -2286,6 +2318,16 @@ static bool install_globals(BtaApp *app)
     bta_xml_init(ctx, global);
     bta_keyring_init(ctx, global);
 
+    /*
+     * The two hooks `rad.js`'s `.record` half is built on, installed with the
+     * rest and captured before the hatches close: where a class's shape is
+     * declared (`bta_form.c`), and what a bare name resolves to.  Neither is a
+     * language name -- `bta_close_hatches` deletes both -- so a program cannot
+     * see either.
+     */
+    bta_record_init(ctx, global, app->dir, app->libs);
+    bta_class_of_name_init(ctx, global);
+
     JS_FreeValue(ctx, global);
 
     /*
@@ -2526,6 +2568,16 @@ void bta_close_hatches(JSContext *ctx)
      */
     for (size_t i = 0; i < G_N_ELEMENTS(bta_replacements); i++)
         delete_named(ctx, global, bta_replacements[i].name);
+
+    /*
+     * And the two hooks `rad.js` captured, which were never language names and
+     * so have no row in the table above: where a class's `.record` shape is
+     * declared, and what a bare name resolves to.  Gone from here on, which is
+     * what keeps them out of `Application.Globals()` and out of the published
+     * surface.
+     */
+    delete_named(ctx, global, "recordFile");
+    delete_named(ctx, global, "classOfName");
 
     JS_FreeValue(ctx, global);
 }

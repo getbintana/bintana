@@ -1191,6 +1191,12 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
      * for, and no `L` crosses a thread. */
     bta_locale_init_facts(ctx, global);
 
+    /* The `.record` hooks, on the same terms as the main thread's: a worker
+     * that constructs a Record whose shape lives in a file reads the project's
+     * own tree, and the index is this context's (bta_form.c). */
+    bta_record_init(ctx, global, job->app_dir, job->app_libs);
+    bta_class_of_name_init(ctx, global);
+
     /* rad.js, the same text the main thread runs: Dictionary, Regex,
      * Stopwatch, Record, Field, Table and Namespace come from here, and
      * without it a worker would have no way to walk the keys of the plain

@@ -40,6 +40,20 @@ const clearTimer   = clearInterval;
 const monotonicNow = monotonic;
 
 /*
+ * The two hooks a `.record` file needs, held on the same terms.
+ *
+ * A record's shape may live in a file beside its class, the way a form's tree
+ * lives in a `.form`, and finding that file is the runtime's own index -- the
+ * one that finds a class's `.form`, with the other extension (`bta_form.c`).
+ * What the file's `of` names -- another Record class -- has to resolve the way
+ * the rest of the runtime resolves a name, and JavaScript cannot evaluate one
+ * (`eval` is not part of this language), so the runtime hands both over.
+ * `Record.File` is the first one's public face; the names go with the hatches.
+ */
+const findRecordFile = recordFile;
+const resolveName    = classOfName;
+
+/*
  * The reflection this file is built out of, held on the same terms.
  *
  * Discovering what a control can be asked for is the runtime's job, and the
@@ -1738,7 +1752,8 @@ GLOBAL.Field = {
      */
     /**
      * a [`Decimal`](docs/reference/globals/Decimal.md) at a fixed scale.
-     * Options: `required`, `min`, `max`, `decimals` (2 by default). A value
+     * Options: `required`, `min`, `max`, `decimals` (2 by default), `def`
+     * (rounded to those places). A value
      * with more places is **rounded** to them, away from zero: an assignment
      * does it in silence, and `Load` says so in `Problems` (`Price: 19.999
      * has 3 decimal places, the field 2 -- rounded to 20.00`), since the next
@@ -1748,12 +1763,22 @@ GLOBAL.Field = {
         const places = opts && opts.decimals !== undefined ? opts.decimals : 2;
         const rest   = {};
 
-        for (const key in opts || {}) if (key !== "decimals") rest[key] = opts[key];
+        for (const key in opts || {})
+            if (key !== "decimals" && key !== "def") rest[key] = opts[key];
 
-        const field = makeField("decimal", rest, {
-            places,
-            def: new Decimal("0", places),
-        });
+        /*
+         * `def` is what it starts from, at its own scale, like every other
+         * kind's: `new Decimal(def, places)` rounds the value to those places,
+         * which is this field's own rule applied to its start.  It used to be
+         * dropped in silence -- the extra below overwrote whatever was given
+         * with a zero -- and a `.record` file with a decimal default is what
+         * needed it.
+         */
+        const def = opts && opts.def !== undefined
+                  ? new Decimal(opts.def, places)
+                  : new Decimal("0", places);
+
+        const field = makeField("decimal", rest, { places, def });
         return field;
     },
 
@@ -1812,6 +1837,202 @@ GLOBAL.Field = {
     },
 };
 
+/* ------------------------------------------------------------ .record files
+ *
+ * **A record's shape as a file**, beside the class, the way a form's tree is a
+ * `.form` beside its class: `Customer.record` next to a `Customer.js` that
+ * declares `class Customer extends Record {}` and the behaviours, if any.  The
+ * `static Fields` block stays the code-only path -- a record with no file is
+ * legal and built in code, exactly as a form with no `.form` is -- and a class
+ * with **both** is refused: two shapes that can disagree is what the file
+ * exists to avoid.
+ *
+ * The document is a `bta-record/1` object:
+ *
+ *     { "format": "bta-record/1", "class": "Customer", "naming": "snake",
+ *       "fields": {
+ *         "Name":     { "kind": "text",   "required": true, "max": 80 },
+ *         "Balance":  { "kind": "number", "decimals": 2, "min": 0 },
+ *         "Category": { "kind": "enum",   "values": ["Retail", "Wholesale"] },
+ *         "Lines":    { "kind": "list",   "of": "Line" },
+ *         "Since":    { "kind": "date" }
+ *       } }
+ *
+ * A field's options are the ones its `Field.*` constructor takes, spelled the
+ * same -- and they are read **through** those constructors and not beside
+ * them, so a file refuses what a class body refuses, with the same sentence.
+ * The two arguments that are positional in code are named here: `values` for
+ * an enum and `of` for what a record or a list holds -- a Record class's name,
+ * or a field of its own for the entries of a list of simple values.  A name
+ * resolves the way any name does and **at first use of the class**, which is
+ * what lets a shape contain itself: `of` naming the class being declared is
+ * legal.
+ */
+const RECORD_FORMAT = "bta-record/1";
+
+/* The field a spec builds, with `where` in front of whatever it refuses, so
+ * the sentence names the file and the field and not only the option. */
+function fieldOfSpec(spec, where) {
+    try {
+        return buildFieldOfSpec(spec, where);
+    } catch (e) {
+        const said = e && e.message !== undefined ? e.message : String(e);
+        const Type = e instanceof TypeError ? TypeError
+                   : e instanceof RangeError ? RangeError : Error;
+        throw new Type(`${where}: ${said}`);
+    }
+}
+
+/* Everything that is not the kind or one of the two named arguments: exactly
+ * what the constructor's `opts` is.  `values` and `of` are named arguments
+ * *only for the kinds that take them* -- on any other kind they are what they
+ * are, an option nobody declared, and the constructor refuses them by name. */
+function optionsOfSpec(spec, kind) {
+    const out = {};
+    for (const key in spec) {
+        if (key === "kind") continue;
+        if (key === "values" && kind === "enum") continue;
+        if (key === "of" && (kind === "record" || kind === "list")) continue;
+        out[key] = spec[key];
+    }
+    return out;
+}
+
+function withoutDef(opts) {
+    const out = {};
+    for (const key in opts) if (key !== "def") out[key] = opts[key];
+    return out;
+}
+
+/* The class a name holds, resolved lazily and checked: `of` is a Record class
+ * here, and a typo names the file and the field it was written in. */
+function recordOfSpecName(name, where) {
+    let got;
+    try {
+        got = resolveName(name);
+    } catch (e) {
+        throw new TypeError(`${where}: '${name}' is not a class`);
+    }
+    if (!isRecordClass(got))
+        throw new TypeError(`${where}: '${name}' is not a Record class`);
+    return got;
+}
+
+function buildFieldOfSpec(spec, where) {
+    if (!spec || typeof spec !== "object" || Array.isArray(spec))
+        throw new TypeError("expected an object with a kind");
+
+    const kind = spec.kind;
+    if (typeof kind !== "string" || !FIELD_KINDS[kind])
+        throw new RangeError(`'${kind}' is not one of ` +
+                             ownKeys(FIELD_KINDS).join(", "));
+
+    const opts = optionsOfSpec(spec, kind);
+
+    const simple = { text: Field.Text, int: Field.Int, number: Field.Number,
+                     decimal: Field.Decimal, date: Field.Date, time: Field.Time,
+                     datetime: Field.DateTime, bytes: Field.Bytes };
+    if (simple[kind]) return simple[kind](opts);
+
+    if (kind === "bool") {
+        if (opts.def !== undefined && typeof opts.def !== "boolean")
+            throw new TypeError("'def' is true or it is false");
+        return Field.Bool(opts.def === true, withoutDef(opts));
+    }
+
+    if (kind === "enum")
+        return Field.Enum(spec.values, opts.def, withoutDef(opts));
+
+    if (kind === "record") {
+        if (typeof spec.of !== "string" || !spec.of)
+            throw new TypeError("'of' is the class's name");
+        return Field.Record(() => recordOfSpecName(spec.of, where), opts);
+    }
+
+    /* list */
+    if (typeof spec.of === "string" && spec.of)
+        return Field.List(() => recordOfSpecName(spec.of, where), opts);
+    if (spec.of && typeof spec.of === "object" && !Array.isArray(spec.of))
+        return Field.List(buildFieldOfSpec(spec.of, where), opts);
+    throw new TypeError("'of' is what the entries are: a Record class's name, " +
+                        "or a field for the entries");
+}
+
+/* What a kind starts from by itself: what a `def` equal to this is not a
+ * decision, and is not written down. */
+function specStart(field) {
+    if (field.kind === "enum")    return field.options[0];
+    if (field.kind === "decimal") return new Decimal("0", field.places);
+    return FIELD_KINDS[field.kind].def;
+}
+
+function sameSpecValue(a, b) {
+    if (a === b) return true;
+    if (a instanceof Decimal && b instanceof Decimal) return `${a}` === `${b}`;
+    if (Array.isArray(a) && Array.isArray(b))
+        return a.length === b.length && a.every((v, i) => sameSpecValue(v, b[i]));
+    if (a && b && typeof a === "object" && typeof b === "object")
+        return JSON.stringify(a) === JSON.stringify(b);
+    return false;
+}
+
+/* A `def` as the document writes it: the plain value, and a **refusal** for
+ * what a document cannot hold -- a `Bytes` default has no JSON spelling, and a
+ * silent `null` would be a shape that changed when it was saved. */
+function writableSpecValue(v, where) {
+    if (v === null || typeof v === "string" || typeof v === "number" ||
+        typeof v === "boolean")
+        return v;
+    if (Array.isArray(v)) return v.map((x) => writableSpecValue(x, where));
+    if (v instanceof Decimal) return `${v}`;
+    if (typeof v === "object" && !(v instanceof Bytes)) {
+        const out = {};
+        for (const key in v) out[key] = writableSpecValue(v[key], where);
+        return out;
+    }
+    throw new TypeError(`${where}: its default cannot be written in a ` +
+                        `.record file`);
+}
+
+/* The name a document spells a record's class with; an anonymous one cannot be
+ * written down, and a shape that cannot be read back is not written. */
+function recordNameOf(field, where) {
+    const name = recordClass(field).name;
+    if (!name)
+        throw new TypeError(`${where}: its Record class has no name, so a ` +
+                            `.record file cannot name it`);
+    return name;
+}
+
+/* A field as the document writes it -- the inverse of `fieldOfSpec`, and the
+ * reason a shape built in code can become a file. */
+function specOfField(field, where) {
+    const spec = { kind: field.kind };
+
+    for (const key in field) {
+        if (key === "__field" || key === "kind" || key === "def" ||
+            key === "places" || key === "options" || key === "item" ||
+            key === "of" || key === "make")
+            continue;
+        spec[key] = field[key];
+    }
+
+    if (field.kind === "enum")
+        spec.values = field.options.slice();
+    else if (field.kind === "record")
+        spec.of = recordNameOf(field, where);
+    else if (field.kind === "list")
+        spec.of = field.item.kind === "record"
+                ? recordNameOf(field.item, `${where}.of`)
+                : specOfField(field.item, `${where}.of`);
+    else if (field.kind === "decimal" && field.places !== 2)
+        spec.decimals = field.places;      /* `places` is the field's, `decimals` the file's */
+
+    if (!sameSpecValue(field.def, specStart(field)))
+        spec.def = writableSpecValue(field.def, where);
+    return spec;
+}
+
 GLOBAL.Record = class Record {
     /* The values, by property name.  Private is the point: the setter is the
      * only way in. */
@@ -1841,22 +2062,39 @@ GLOBAL.Record = class Record {
 
         const fields = {};
         for (const c of chain) {
-            const own = ownDescriptor(c, "Fields");
-            if (!own) continue;                    /* inherited: already taken */
+            const own  = ownDescriptor(c, "Fields");
+            const path = Record.#fileOf(c);
 
-            /* `static get Fields()` used to declare **nothing, silently**:
-             * a getter's descriptor has no `value`, so the loop below ran over
-             * `undefined` and the class came out with no fields at all.  It is
-             * a tempting way to write a shape that contains itself -- the
-             * getter defers the class body's own name until it is bound -- so
-             * it is refused out loud rather than found later.  The thunk is the
-             * way: `Field.List(() => MenuItem)`. */
-            if (!own.value || typeof own.value !== "object")
-                throw new TypeError(`${c.name}.Fields must be a static object ` +
-                                    `of Fields; a getter (or anything else) ` +
-                                    `here declares nothing`);
+            /* Two shapes that can disagree: the file is where the shape lives
+             * when there is one, and a class that declares both is told so
+             * rather than one of them silently winning. */
+            if (own && path)
+                throw new Error(`${c.name} declares Fields and has ${path}: ` +
+                                `the shape lives in one place`);
 
-            for (const name in own.value) fields[name] = own.value[name];
+            let declared = null;
+
+            if (own) {
+                /* `static get Fields()` used to declare **nothing, silently**:
+                 * a getter's descriptor has no `value`, so the loop below ran
+                 * over `undefined` and the class came out with no fields at
+                 * all.  It is a tempting way to write a shape that contains
+                 * itself -- the getter defers the class body's own name until
+                 * it is bound -- so it is refused out loud rather than found
+                 * later.  The thunk is the way: `Field.List(() => MenuItem)`. */
+                if (!own.value || typeof own.value !== "object")
+                    throw new TypeError(`${c.name}.Fields must be a static ` +
+                                        `object of Fields; a getter (or ` +
+                                        `anything else) here declares nothing`);
+                declared = own.value;
+            } else if (path) {
+                declared = Record.#fieldsFromFile(c, path);
+            }
+
+            /* Inherited: already taken. */
+            if (!declared) continue;
+
+            for (const name in declared) fields[name] = declared[name];
         }
 
         const naming = ctor.Naming || "same";
@@ -1869,11 +2107,12 @@ GLOBAL.Record = class Record {
             if (!field || field.__field !== true)
                 throw new TypeError(`${ctor.name}.Fields.${name} is not a Field`);
 
-            /* A field declared twice -- once here and once as a hand-written
-             * accessor -- would have one of them silently win.  Say so instead. */
+            /* A field declared twice -- once in `Fields` or its `.record`, and
+             * once as a hand-written accessor -- would have one of them
+             * silently win.  Say so instead. */
             if (ownDescriptor(ctor.prototype, name))
-                throw new Error(`${ctor.name}.${name} is both declared in Fields ` +
-                                `and written by hand: pick one`);
+                throw new Error(`${ctor.name}.${name} is declared (Fields or ` +
+                                `its .record) and also written by hand: pick one`);
 
             /*
              * A thunk is resolved **here** and not when data first flows through
@@ -1923,6 +2162,66 @@ GLOBAL.Record = class Record {
 
         Record.#ready.set(ctor, fields);
         return fields;
+    }
+
+    /* The class's `.record` file, "" when it is built in code: the runtime's
+     * own index, keyed the way a `.form` is (qualified name, then the bare
+     * one), and its own table per thread. */
+    static #fileOf(ctor) {
+        return ctor.name ? findRecordFile(ctor.name) : "";
+    }
+
+    /*
+     * The fields the class's file declares.
+     *
+     * Everything a document may say wrong is refused here, with the file and
+     * the field in the sentence: the format, the class it claims to be, the
+     * naming, and then each field -- through the constructors above, which is
+     * where a misspelt option is refused by name.
+     */
+    static #fieldsFromFile(ctor, path) {
+        let src;
+        try {
+            src = File.Load(path);
+        } catch (e) {
+            throw new Error(`${path}: ${e.message}`);
+        }
+
+        let doc;
+        try {
+            doc = JSON.parse(src);
+        } catch (e) {
+            throw new Error(`${path}: ${e.message}`);
+        }
+
+        if (!doc || typeof doc !== "object" || Array.isArray(doc))
+            throw new TypeError(`${path}: expected an object`);
+
+        if (doc.format !== RECORD_FORMAT)
+            throw new RangeError(`${path}: format is '${doc.format}', expected ` +
+                                 `'${RECORD_FORMAT}'`);
+        if (doc.class !== ctor.name)
+            throw new RangeError(`${path}: declares class '${doc.class}'`);
+
+        if (doc.naming !== undefined) {
+            if (!NAMINGS[doc.naming])
+                throw new RangeError(`${path}: naming '${doc.naming}' is not one ` +
+                                     `of ${ownKeys(NAMINGS).join(", ")}`);
+            const own = ownDescriptor(ctor, "Naming");
+            if (own && own.value !== doc.naming)
+                throw new Error(`${ctor.name} declares Naming '${own.value}' and ` +
+                                `${path} says '${doc.naming}'`);
+            if (!own) ctor.Naming = doc.naming;
+        }
+
+        if (!doc.fields || typeof doc.fields !== "object" ||
+            Array.isArray(doc.fields))
+            throw new TypeError(`${path}: 'fields' is an object of fields`);
+
+        const out = {};
+        for (const name in doc.fields)
+            out[name] = fieldOfSpec(doc.fields[name], `${path}: ${name}`);
+        return out;
     }
 
     #fields() { return Record.#fieldsOf(this.constructor); }
@@ -2247,6 +2546,57 @@ GLOBAL.Record = class Record {
         }
         for (const complaint of this.Problems) lines.push(`  ! ${complaint}`);
         return lines.join("\n");
+    }
+
+    /*
+     * Where the class's shape is declared, when it is declared in a file: the
+     * index is the one that finds a class's `.form`, with the other extension,
+     * so a project's folders spell a qualified name the same way in both.
+     *
+     * It is also what the loader above asks, which is why a `Task` worker
+     * installs the same hook: a record whose shape lives in a file is read on
+     * whichever thread constructs one.
+     */
+    /**
+     * the `.record` file that declares this type's fields, or `""` when the
+     * shape is built in code. **The file**, because it is a document like a
+     * `.form`: what the tree shows and a dialog edits. Two files claiming the
+     * class refuse by name
+     */
+    static File(type) {
+        if (!isRecordClass(type))
+            throw new TypeError("Record.File(type) expects a Record class");
+        return Record.#fileOf(type);
+    }
+
+    /*
+     * The shape as the document a `.record` file holds -- the inverse of what
+     * a file loads, so a class built in code can be written to a file, and a
+     * file read back, without either losing anything.
+     *
+     * A `def` equal to what its kind starts from is left out, the way the
+     * serialiser leaves out a field at its start: the document records the
+     * decisions.
+     */
+    /**
+     * the type's shape as the document a `.record` file holds, ready for
+     * `JSON.stringify`
+     */
+    static Shape(type) {
+        if (!isRecordClass(type))
+            throw new TypeError("Record.Shape(type) expects a Record class");
+
+        const fields = Record.#fieldsOf(type);
+        const out    = { format: RECORD_FORMAT, class: type.name };
+        const naming = type.Naming || "same";
+
+        if (naming !== "same")
+            out.naming = naming;
+
+        out.fields = {};
+        for (const name in fields)
+            out.fields[name] = specOfField(fields[name], name);
+        return out;
     }
 
     /*

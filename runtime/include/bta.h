@@ -1433,6 +1433,16 @@ char *bta_locale_format(JSContext *ctx, const char *text,
  * tree, wiring each control to its Name_Event handlers. */
 int bta_form_build(JSContext *ctx, JSValueConst form_obj, const char *class_name);
 
+/* Installs `recordFile(name)`, the hook `Record.File` is written on: where a
+ * class's `.record` file is, or "" when it is built in code.  Its own index per
+ * context, because a Task worker asks the same question from its own thread. */
+void bta_record_init(JSContext *ctx, JSValueConst global, const char *dir,
+                     GPtrArray *libs);
+
+/* Installs `classOfName(name)`, the value a bare name resolves to; rad.js
+ * captures it for the `.record` loader and the hatches take it away. */
+void bta_class_of_name_init(JSContext *ctx, JSValueConst global);
+
 /*
  * Platform log backends.  The runtime logs to stdout and stderr on its own;
  * these are what a system that has something better offers instead, and a build

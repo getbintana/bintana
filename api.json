@@ -12872,7 +12872,7 @@
           "Params": 1,
           "Signature": "(opts)",
           "Returns": "",
-          "Doc": "a [`Decimal`](docs/reference/globals/Decimal.md) at a fixed scale. Options: `required`, `min`, `max`, `decimals` (2 by default). A value with more places is **rounded** to them, away from zero: an assignment does it in silence, and `Load` says so in `Problems` (`Price: 19.999 has 3 decimal places, the field 2 -- rounded to 20.00`), since the next save writes the rounded value over the file's",
+          "Doc": "a [`Decimal`](docs/reference/globals/Decimal.md) at a fixed scale. Options: `required`, `min`, `max`, `decimals` (2 by default), `def` (rounded to those places). A value with more places is **rounded** to them, away from zero: an assignment does it in silence, and `Load` says so in `Problems` (`Price: 19.999 has 3 decimal places, the field 2 -- rounded to 20.00`), since the next save writes the rounded value over the file's",
           "Native": false
         },
         {
@@ -14289,6 +14289,15 @@
           "Native": false
         },
         {
+          "Name": "File",
+          "Kind": "Static",
+          "Params": 1,
+          "Signature": "(type)",
+          "Returns": "",
+          "Doc": "the `.record` file that declares this type's fields, or `\"\"` when the shape is built in code. **The file**, because it is a document like a `.form`: what the tree shows and a dialog edits. Two files claiming the class refuse by name",
+          "Native": false
+        },
+        {
           "Name": "Load",
           "Kind": "Static",
           "Params": 1,
@@ -14358,6 +14367,15 @@
           "Signature": "(all)",
           "Returns": "",
           "Doc": "a plain object — **what differs from the start**, or everything with `true`",
+          "Native": false
+        },
+        {
+          "Name": "Shape",
+          "Kind": "Static",
+          "Params": 1,
+          "Signature": "(type)",
+          "Returns": "",
+          "Doc": "the type's shape as the document a `.record` file holds, ready for `JSON.stringify`",
           "Native": false
         },
         {
