@@ -1,0 +1,78 @@
+/*
+ * The runtime's own stylesheet: loaded under every application's `app.css`,
+ * and the place a class the theme cannot reach is made to reach.
+ *
+ * `Style` puts a class on the control's own CSS node, and the desktop's theme
+ * writes its rules for particular nodes.  A `ComboBox` is a `GtkDropDown`,
+ * whose node is `dropdown`, and what is *drawn* is the button inside it: the
+ * theme writes `button.flat`, so a class that lands on the wrapper is a class
+ * nobody sees -- `flat` on a `ComboBox` did nothing at all, and neither did it
+ * on the other three controls here whose face is a button (`DatePicker` is a
+ * `menubutton`, a `ColorButton` a `colorbutton`, a `FontButton` a
+ * `fontbutton`).  These are the rules that reach the face.
+ *
+ * **The states are copied too, because `flat` is not one rule.**  The theme
+ * writes `button.flat` for the rest state and `button.flat:hover`,
+ * `:active`/`:checked` and `:disabled`/`:backdrop` beside it -- so a wrapper
+ * rule for the rest state alone would give a control that is flat until the
+ * pointer arrives and then wears the plain button's gradient and frame.  What
+ * is *not* copied is the literal grey: `#dad6d2` is Adwaita's light theme, and
+ * a dark or high-contrast desktop wants its own ink, so the tints are
+ * `alpha(@theme_fg_color, …)` at the weights that theme uses (0.16 and 0.24
+ * over `#f6f5f4` are `#dad6d2` and `#cdc7c2`).  `:disabled` and `:backdrop`
+ * need no rule of their own: the rule above already beats `button:disabled`
+ * and `button:backdrop`, since a provider above the theme takes the property
+ * whatever the state.
+ *
+ * **Only rules that are true in any theme belong here** -- no literal colours,
+ * no sizes: what a desktop would have said differently stays out, and what is
+ * particular to one project is that project's `app.css`.  This sheet is
+ * loaded *first* and `app.css` after it, at the same priority, so an
+ * application's own rule wins whatever its specificity (measured: with two
+ * providers at one priority, the one added last takes the rule).
+ *
+ * Baked into the binary like the prelude (`tools/embed_text.cmake`), so every
+ * application gets it with nothing installed beside it.
+ */
+
+dropdown.flat > button,
+menubutton.flat > button,
+colorbutton.flat > button,
+fontbutton.flat > button {
+    border-color: transparent;
+    background-color: transparent;
+    background-image: none;
+    box-shadow: none;
+    transition: none;
+}
+
+dropdown.flat > button:hover,
+menubutton.flat > button:hover,
+colorbutton.flat > button:hover,
+fontbutton.flat > button:hover {
+    border-color: transparent;
+    background-image: none;
+    box-shadow: none;
+    background-color: alpha(@theme_fg_color, 0.16);
+    transition: all 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    transition-duration: 500ms;
+}
+
+dropdown.flat > button.keyboard-activating,
+dropdown.flat > button:active,
+dropdown.flat > button:checked,
+menubutton.flat > button.keyboard-activating,
+menubutton.flat > button:active,
+menubutton.flat > button:checked,
+colorbutton.flat > button.keyboard-activating,
+colorbutton.flat > button:active,
+colorbutton.flat > button:checked,
+fontbutton.flat > button.keyboard-activating,
+fontbutton.flat > button:active,
+fontbutton.flat > button:checked {
+    border-color: transparent;
+    background-image: none;
+    box-shadow: none;
+    background-color: alpha(@theme_fg_color, 0.24);
+    transition: all 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}

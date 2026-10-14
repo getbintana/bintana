@@ -20,13 +20,23 @@
  * what one needs to know before writing a class into a form and wondering why
  * nothing happened.
  *
+ * **And it reads the runtime's own sheet with the theme** (`runtime/css/base.css`,
+ * baked into every application and loaded under its `app.css`): a class that
+ * sheet fixes -- `flat` on a `ComboBox` -- is a class that works, and the answer
+ * here is what a form author can write, not what one file happens to say.
+ *
  * The suite cannot answer this, for the same reason it cannot answer which icons
  * exist: it runs under Xvfb against whatever Adwaita GTK carries, and the person
  * using the IDE may be running something else.
  */
 "use strict";
 
-const USAGE = `tests/styles.sh                 the theme compiled into GTK
+/* The runtime's own sheet, beside the theme, for the reason above.  Read from
+ * the tree and skipped when there is none -- the tool also answers about a
+ * stylesheet given by path, and that can be run from anywhere. */
+const BASE = "runtime/css/base.css";
+
+const USAGE = `tests/styles.sh                 the theme compiled into GTK, with the runtime's base.css
 tests/styles.sh --all           every class in it, by how much it is used
 tests/styles.sh --json          the same as a machine reads it
 tests/styles.sh path/to/gtk.css a theme of your own`;
@@ -74,8 +84,8 @@ function Main() {
             Application.Quit(1);
             return;
         }
-        if (!json) print(`== ${own}`);
-        report(File.Load(own), all, json);
+        if (!json) print(`== ${own}, and the runtime's base.css`);
+        report(withBase(File.Load(own)), all, json);
         return;
     }
 
@@ -85,9 +95,18 @@ function Main() {
             Application.Quit(1);
             return;
         }
-        if (!json) print(`== ${from}, Default-light`);
-        report(css, all, json);
+        if (!json) print(`== ${from}, Default-light, and the runtime's base.css`);
+        report(withBase(css), all, json);
     });
+}
+
+/* The theme's own rules with the runtime's under them: a class the base sheet
+ * fixes is one a form can wear, and this tool answers *what can I write*.  A
+ * tree without the sheet still answers -- a theme given by path is read from
+ * anywhere. */
+function withBase(css) {
+    if (!File.Exists(BASE)) return css;
+    return `${css}\n${File.Load(BASE)}`;
 }
 
 /*
@@ -188,7 +207,11 @@ control puts the class on the node docs/widgets.md lists for it, and a class
 whose node does not match is accepted, saved, and does nothing.
 
 \`styles > x\` means the rules are about the children rather than the thing
-carrying the class, so it needs a widget whose children really are \`x\`.`);
+carrying the class, so it needs a widget whose children really are \`x\`.
+
+The runtime's own sheet is read with the theme (\`runtime/css/base.css\`, loaded
+under every app.css): it is why \`flat\` reaches the four controls drawn as a
+button, whose node is the wrapper around it.`);
 
     Application.Quit(0);
 }

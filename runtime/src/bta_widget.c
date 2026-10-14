@@ -2878,6 +2878,11 @@ static JSValue w_text_properties(JSContext *ctx, JSValueConst this_val,
  * neither, because a `RowList` is a `scrolledwindow` with the list three nodes
  * further in. A class whose node does not match is accepted, saved into the
  * `.form` and does nothing, which is the quietest failure this runtime has.
+ * **The cases that are ours to fix are fixed in the runtime's own sheet**
+ * (`runtime/css/base.css`, loaded under every `app.css`): a control drawn as a
+ * button -- a `ComboBox`, a `DatePicker`, a `ColorButton`, a `FontButton` -- is
+ * where `flat` reaches, because the theme writes it for the `button` inside and
+ * this answers the wrapper.
  *
  * Asked of GTK rather than declared, so it cannot drift from what the widget is:
  * a build function that swaps the outer widget changes this answer, and that is

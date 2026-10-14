@@ -4,6 +4,7 @@
 #include "bta.h"
 #include "bta_prelude.h"
 #include "bta_forms.h"
+#include "bta_base_css.h"
 
 /* For gtk_source_init/finalize: the library has to be initialised before any of
  * its widgets is built. See bta_app_run. */
@@ -3259,7 +3260,10 @@ static void register_app_icons(BtaApp *app)
  *
  * It loads at PRIORITY_APPLICATION: above the desktop's theme, so the sheet has
  * the last word on what the application looks like, and below the per-widget
- * Background/Font (see bta_widget.c), which are the exception to it.
+ * Background/Font (see bta_widget.c), which are the exception to it.  **The
+ * runtime's own base sheet loads there first**, same priority and added before,
+ * so a rule of the application's own wins whatever its specificity -- which is
+ * how a project overrides the few classes the base sheet fixes.
  *
  * A rule GTK cannot parse is reported and the rest of the sheet is kept, which
  * is what CSS does everywhere else and the only behaviour that leaves an
@@ -3268,9 +3272,43 @@ static void register_app_icons(BtaApp *app)
 static void on_css_error(GtkCssProvider *provider, GtkCssSection *section,
                          const GError *error, gpointer user_data)
 {
-    char *where = gtk_css_section_to_string(section);
-    fprintf(stderr, "bintana: app.css: %s: %s\n", where, bta_gerror_text(error));
+    const char *sheet = user_data ? (const char *)user_data : "app.css";
+    char       *where = gtk_css_section_to_string(section);
+    fprintf(stderr, "bintana: %s: %s: %s\n", sheet, where,
+            bta_gerror_text(error));
     g_free(where);
+}
+
+/*
+ * The runtime's own sheet, out of the binary (`runtime/css/base.css`).
+ *
+ * It is the part of the look every application shares, and it exists for one
+ * job: a class the theme writes for a node a control only keeps *inside*
+ * itself -- `flat` on a `ComboBox`, whose face is a button -- reaches that
+ * face from here.  The project's sheet is loaded after it and wins; nothing
+ * else about the arrangement changes.
+ */
+static void register_base_styles(GdkDisplay *display)
+{
+    GtkCssProvider *provider = gtk_css_provider_new();
+
+    g_signal_connect(provider, "parsing-error", G_CALLBACK(on_css_error),
+                     (gpointer)"base.css");
+
+    /* `load_from_string` is 4.12 and the floor here is 4.10, where the data
+     * call is not yet deprecated; the guard keeps the build silent on both. */
+#if GTK_CHECK_VERSION(4, 12, 0)
+    gtk_css_provider_load_from_string(provider, bta_base_css);
+#else
+    G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+    gtk_css_provider_load_from_data(provider, bta_base_css, -1);
+    G_GNUC_END_IGNORE_DEPRECATIONS
+#endif
+
+    gtk_style_context_add_provider_for_display(
+        display, GTK_STYLE_PROVIDER(provider),
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    g_object_unref(provider);   /* the display holds it now */
 }
 
 static void register_app_styles(BtaApp *app)
@@ -3278,6 +3316,8 @@ static void register_app_styles(BtaApp *app)
     GdkDisplay *display = gdk_display_get_default();
     if (!display)
         return;
+
+    register_base_styles(display);
 
     char *path = g_build_filename(app->dir, "app.css", NULL);
     if (g_file_test(path, G_FILE_TEST_IS_REGULAR)) {

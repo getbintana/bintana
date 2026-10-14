@@ -173,6 +173,21 @@ add_custom_command(
     COMMENT "Embedding forms.js prelude"
 )
 
+# ------------------------------------------------------------- base sheet ---
+# The runtime's own stylesheet, baked in for the same reason the prelude is:
+# every application gets it, and nothing has to be installed beside the binary
+# for a `ComboBox` to be able to wear `flat`.  See runtime/css/base.css.
+set(BASE_CSS    ${CMAKE_SOURCE_DIR}/runtime/css/base.css)
+set(BASE_CSS_H  ${CMAKE_BINARY_DIR}/generated/bta_base_css.h)
+add_custom_command(
+    OUTPUT ${BASE_CSS_H}
+    COMMAND ${CMAKE_COMMAND}
+            -DINPUT=${BASE_CSS} -DOUTPUT=${BASE_CSS_H} -DSYMBOL=bta_base_css
+            -P ${CMAKE_SOURCE_DIR}/tools/embed_text.cmake
+    DEPENDS ${BASE_CSS} ${CMAKE_SOURCE_DIR}/tools/embed_text.cmake
+    COMMENT "Embedding base.css"
+)
+
 # ------------------------------------------------------ member signatures ---
 # Every method and event declares its parameters in a one-line comment beside
 # itself, and this is the table that publishes them: `Widget.Signature(type,
@@ -237,6 +252,7 @@ add_executable(bintana
     runtime/src/bta_plugin.c
     ${PRELUDE_H}
     ${FORMS_H}
+    ${BASE_CSS_H}
     ${SIGNATURES_H}
 )
 target_include_directories(bintana PRIVATE

@@ -568,6 +568,35 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   this tree moved three of them in one afternoon before anything checked, which is
   why `testCssNode` in `tests/widgets` now writes every node down and fails on a
   type that is not in the table.
+- **A control whose face is a button wears the theme's button rules from a sheet
+  of the runtime's own.** A `ComboBox` is a `dropdown` and what is *painted* is
+  the `button` inside it, so `flat` -- which the theme writes as `button.flat` --
+  landed on a wrapper nobody sees and did nothing; the same for `DatePicker`
+  (`menubutton`), `ColorButton` (`colorbutton`) and `FontButton` (`fontbutton`).
+  `runtime/css/base.css` names the path those four need; it is baked into the
+  binary like the prelude and loaded *under* every `app.css` (same priority,
+  added first: measured, with two providers at one priority the last one added
+  takes the rule, so a project overrides it whatever its specificity).
+  **The states are copied with the class**, because `flat` is not one rule:
+  `button.flat:hover` and `:active`/`:checked` sit beside the rest state in the
+  theme, and a rest-state-only rule gives a control that is flat until the
+  pointer arrives and then wears the plain button's gradient and frame. The tints
+  are `alpha(@theme_fg_color, …)` -- 0.16 and 0.24, the weights that make
+  Adwaita light's `#dad6d2` and `#cdc7c2` over `#f6f5f4` -- rather than the
+  literal grey, so a dark or high-contrast desktop hovers with its own ink;
+  `:disabled`/`:backdrop` need no rule, the base one already beats
+  `button:disabled` because a provider above the theme takes the property in any
+  state. Measured on an `Xvfb` with `xfwm4`, `tests/probe.sh` on the pixels: at
+  rest `srgb(246,245,244)`, the window's own, against a plain one's framed
+  `srgb(250,249,249)`; hover `srgb(213,214,214)` against the theme's own flat
+  button at `srgb(218,214,210)`; pressed `srgb(198,198,199)`; a disabled one
+  stays flat. **What it will not do is guess a colour** -- `suggested-action` on
+  a `ColorButton` is still nothing, and that is a rule in the project's
+  `app.css`. `tests/styles.sh` reads the sheet with the theme, so
+  `ide/modules/Styles.js` says `flat` fits those four and the class chooser
+  offers it as its own. (The other road -- putting the class on the face in C --
+  would reach the theme's whole `button` vocabulary at once, including the
+  states, at the cost of `Style` landing on two nodes; the sheet was the call.)
 - **A `Separator`'s declared size is the room, and the rule is the pixel in the
   middle of it -- a shape the runtime owes to GTK, not one GTK has.** In GTK 4
   a `GtkSeparator` draws nothing of its own: `gtkseparator.c` has no measure

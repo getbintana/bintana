@@ -19,6 +19,11 @@
  *           wants a container of buttons, `.boxed-list > row` a widget whose
  *           children are rows -- which no control here can be.
  *
+ * The tool reads the runtime's own sheet with the theme
+ * (`runtime/css/base.css`), because that is what a form can really wear: it is
+ * why `flat` reaches a `ComboBox`, whose face is a button the class cannot
+ * land on by itself.
+ *
  * Stale rows cost ordering and nothing else. The vocabulary itself, and the node
  * each control is, are in docs/widgets.md.
  */
@@ -29,7 +34,7 @@ export class Styles {
     /* The theme this was generated from, said out loud: another desktop's may
      * differ, and the ordering is a hint rather than a fact about the machine
      * the IDE happens to be running on. */
-    static get theme() { return "GTK 4.22.4, Adwaita (Default-light)"; }
+    static get theme() { return "GTK 4.22.4, Adwaita (Default-light), and the runtime's base.css"; }
 
     static get all() { return CLASSES; }
 
@@ -110,7 +115,7 @@ const CLASSES = [
     { name: "monospace",           group: "type",      on: ["any"],                                       kids: [] },
     { name: "suggested-action",    group: "buttons",   on: ["button"],                                    kids: [] },
     { name: "destructive-action",  group: "buttons",   on: ["button"],                                    kids: [] },
-    { name: "flat",                group: "buttons",   on: ["arrow", "button", "entry", "modelbutton", "spinbutton", "text"], kids: [] },
+    { name: "flat",                group: "buttons",   on: ["arrow", "button", "colorbutton", "dropdown", "entry", "fontbutton", "menubutton", "modelbutton", "spinbutton", "text"], kids: ["button"] },
     { name: "circular",            group: "buttons",   on: ["box", "button", "menubutton", "stackswitcher"], kids: ["button"] },
     { name: "image-button",        group: "buttons",   on: ["arrow", "button"],                           kids: [] },
     { name: "text-button",         group: "buttons",   on: ["arrow", "button", "checkbutton"],            kids: [] },

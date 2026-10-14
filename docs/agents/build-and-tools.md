@@ -199,7 +199,9 @@ editing anything under `ide/`, `tests/`, or `examples/`.
 baked into the binary (`bta_prelude.h`), so editing it and running the suite tests
 the *previous* one — silently, and every assertion that should have failed passes.
 `tests/run.sh` warns when a source is newer than the binary; invoking `./build/bintana`
-by hand skips that warning, which is how it bites.
+by hand skips that warning, which is how it bites. `runtime/js/forms.js` and
+`runtime/css/base.css` are baked the same way (`bta_forms.h`, `bta_base_css.h`),
+so they need the same rebuild for the same silent reason.
 
 **A push is the machine owner's, and a failure to push is a question for them.**
 The remote is SSH (`git@github.com:getbintana/bintana.git`) and an agent's shell

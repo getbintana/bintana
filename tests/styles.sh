@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Which style classes this desktop's theme defines, and what each one is written
-# for.
+# for -- with the runtime's own base sheet (runtime/css/base.css), which every
+# application loads under its app.css.
 #
 #   tests/styles.sh                 the theme compiled into GTK (what everyone gets)
 #   tests/styles.sh --all           every class in it, by how much it is used
