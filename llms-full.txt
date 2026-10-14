@@ -7693,6 +7693,16 @@ The traps and decisions of this area, each with what it cost and the rule it lef
 
 ## Http
 
+- **A request body with no limit is a hole, and the declared length is the
+  cheap half of the answer.** `Http.Server` flattened whatever arrived, so a
+  body grew until the process died (R4 of the October audit). `MaxBody` is a
+  property now -- 1 MiB when nothing is said, `0` for the explicit *no limit* --
+  and both refusal points answer `413` with the limit in the body: the declared
+  `Content-Length` decides **before anything is read**, and a body that arrives
+  without one (chunked) is measured when it is here, which is the most a
+  flatten can do. The handler never runs for either. `tests/widgets`'
+  `HttpServer` holds the refusal and the property, and the check was taken out
+  to watch it go red.
 - **libsoup3 has no session `authenticate` signal, and connecting one is a
   `GLib-GObject-CRITICAL`, not a `NULL` or a no-op.** The plan assumed the
   soup2 shape; measured, the signal is in neither `soup-session.h` nor any

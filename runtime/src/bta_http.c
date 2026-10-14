@@ -3539,6 +3539,11 @@ static const JSCFunctionListEntry http_props[] = {
 
 /* ------------------------------------------------------- Server */
 
+/* What a request body may weigh when the program says nothing: a webhook's
+ * JSON, a form, an upload for `Multipart` -- and not a hole where a body grows
+ * until the process dies.  `MaxBody: 0` is the explicit *no limit*. */
+#define HTTP_SERVER_MAX_BODY (1024 * 1024)
+
 /* One listening socket set, answered on the loop that runs the application:
  * a server belongs to the loop the way a watch does, so creation and
  * dispatch share the default context by construction -- the affinity question
@@ -3561,6 +3566,7 @@ typedef struct {
     char        *auth_realm;
     GHashTable  *auth_users; /* user -> pass; NULL is open */
     SoupAuthDomain *auth_domain; /* live while running with Auth (server-owned) */
+    int          max_body;   /* bytes accepted; 0 is no limit */
     /*
      * Stop() asked from inside a handler, and the idle that finishes it.
      * `soup_server_disconnect` during dispatch drops the connection with the
@@ -3966,6 +3972,19 @@ static const JSCFunctionListEntry http_request_props[] = {
     JS_CFUNC_DEF("Multipart", 0, http_request_multipart),
 };
 
+/* `413` with the limit in the body: the one sentence both refusal points
+ * share, and the answer a client can read. */
+static void http_server_too_large(HttpServerData *s, SoupServerMessage *msg)
+{
+    char said[128];
+
+    g_snprintf(said, sizeof said,
+               "the request body is larger than MaxBody (%d bytes)", s->max_body);
+    soup_server_message_set_status(msg, SOUP_STATUS_REQUEST_ENTITY_TOO_LARGE, NULL);
+    soup_server_message_set_response(msg, "text/plain", SOUP_MEMORY_COPY,
+                                     said, strlen(said));
+}
+
 static void on_server_request(SoupServer *server, SoupServerMessage *msg,
                               const char *path, GHashTable *query, gpointer data)
 {
@@ -3993,6 +4012,28 @@ static void on_server_request(SoupServer *server, SoupServerMessage *msg,
         }
     }
 
+    /*
+     * **A body past `MaxBody` never reaches the handler.** The declared length
+     * decides first -- an oversized upload is answered with nothing read --
+     * and a body that arrives without one (chunked) is measured when it is
+     * here, which is the most a flatten can do. The answer is the `413` a
+     * client understands, with the limit in it.
+     */
+    SoupMessageBody *rbody = soup_server_message_get_request_body(msg);
+    GBytes          *flat  = rbody ? soup_message_body_flatten(rbody) : NULL;
+
+    if (s->max_body > 0) {
+        goffset declared = soup_message_headers_get_content_length(
+            soup_server_message_get_request_headers(msg));
+
+        if ((declared > 0 && declared > (goffset)s->max_body) ||
+            (flat && g_bytes_get_size(flat) > (gsize)s->max_body)) {
+            g_clear_pointer(&flat, g_bytes_unref);
+            http_server_too_large(s, msg);
+            return;
+        }
+    }
+
     GUri           *uri = soup_server_message_get_uri(msg);
     const char     *upath = uri ? g_uri_get_path(uri) : NULL;
     JSValue         proto = JS_GetClassProto(s->ctx, http_request_class_id);
@@ -4000,8 +4041,10 @@ static void on_server_request(SoupServer *server, SoupServerMessage *msg,
     HttpReqData    *r;
 
     JS_FreeValue(s->ctx, proto);
-    if (JS_IsException(req))
+    if (JS_IsException(req)) {
+        g_clear_pointer(&flat, g_bytes_unref);
         return;
+    }
     r = g_new0(HttpReqData, 1);
     r->msg = g_object_ref(msg);
     JS_SetOpaque(req, r);
@@ -4025,14 +4068,11 @@ static void on_server_request(SoupServer *server, SoupServerMessage *msg,
                                  http_server_header_foreach, &w);
     JS_SetPropertyStr(s->ctx, req, "Headers", hobj);
 
-    SoupMessageBody *rbody = soup_server_message_get_request_body(msg);
-    GBytes          *flat = rbody ? soup_message_body_flatten(rbody) : NULL;
-    gsize            flen = 0;
-    const void      *fdata = flat ? g_bytes_get_data(flat, &flen) : NULL;
+    gsize       flen  = flat ? g_bytes_get_size(flat) : 0;
+    const void *fdata = flat ? g_bytes_get_data(flat, NULL) : NULL;
 
     JS_SetPropertyStr(s->ctx, req, "Body", bta_bytes_new(s->ctx, fdata, flen ? flen : 0));
-    if (flat)
-        g_bytes_unref(flat);
+    g_clear_pointer(&flat, g_bytes_unref);
 
     const char *remote = soup_server_message_get_remote_host(msg);
 
@@ -4113,6 +4153,31 @@ static JSValue http_server_get_url(JSContext *ctx, JSValueConst this_val)
     if (!s)
         return JS_ThrowTypeError(ctx, "Url: not an Http server");
     return JS_NewString(ctx, s->url ? s->url : "");
+}
+
+static JSValue http_server_get_maxbody(JSContext *ctx, JSValueConst this_val)
+{
+    HttpServerData *s = http_server_data(this_val);
+
+    if (!s)
+        return JS_ThrowTypeError(ctx, "MaxBody: not an Http server");
+    return JS_NewInt32(ctx, s->max_body);
+}
+
+static JSValue http_server_set_maxbody(JSContext *ctx, JSValueConst this_val,
+                                       JSValueConst v)
+{
+    HttpServerData *s = http_server_data(this_val);
+    int32_t         n = 0;
+
+    if (!s)
+        return JS_ThrowTypeError(ctx, "MaxBody: not an Http server");
+    if (!bta_to_int(ctx, v, "MaxBody", &n))
+        return JS_EXCEPTION;
+    if (n < 0)
+        return JS_ThrowRangeError(ctx, "MaxBody: %d is negative", n);
+    s->max_body = n;
+    return JS_UNDEFINED;
 }
 
 static JSValue http_server_get_host(JSContext *ctx, JSValueConst this_val)
@@ -4652,6 +4717,13 @@ static const JSCFunctionListEntry http_server_props[] = {
      *   `null`. Like `Allow`, it takes effect at once
      */
     JS_CGETSET_DEF("Auth",       http_server_get_auth, http_server_set_auth),
+    /* MaxBody
+     *   bytes of request body accepted. **1 MiB when nothing is said**, `0`
+     *   for no limit; a declared `Content-Length` past it is answered `413`
+     *   **before the handler runs**, and a body that arrives without one is
+     *   read and refused the same way when it passes the number
+     */
+    JS_CGETSET_DEF("MaxBody",    http_server_get_maxbody, http_server_set_maxbody),
     /* Running
      *   `Port` is declared until `Start`, actual after; `Url` is `""` until
      *   then, and empty again after `Stop`
@@ -4704,6 +4776,7 @@ static JSValue js_http_server(JSContext *ctx, JSValueConst this_val,
     s->handler = JS_UNDEFINED;
     s->port = 8080;
     s->local = true;
+    s->max_body = HTTP_SERVER_MAX_BODY;
     JS_SetOpaque(obj, s);
     http_servers = g_list_prepend(http_servers, s);
 

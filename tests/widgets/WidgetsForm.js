@@ -23145,6 +23145,10 @@ function Main() {
         eq("Tls starts empty", srv.Tls, null);
         eq("Allow starts open", JSON.stringify(srv.Allow), "[]");
         eq("Auth starts open", srv.Auth, null);
+        eq("MaxBody starts at a megabyte", srv.MaxBody, 1024 * 1024);
+        srv.MaxBody = 64;
+        eq("MaxBody reads back", srv.MaxBody, 64);
+        srv.MaxBody = 1024 * 1024;
         srv.Tls = { Cert: "a", Key: "b" };
         eq("Tls reads back", srv.Tls.Key, "b");
         srv.Tls = null;
@@ -23162,6 +23166,7 @@ function Main() {
             ["Tls without a Key", () => { srv.Tls = { Cert: "a" }; }, "Cert and a Key"],
             ["Allow that is not a list", () => { srv.Allow = "x"; }, "Allow"],
             ["Auth without Users", () => { srv.Auth = { Realm: "r" }; }, "Realm and Users"],
+            ["MaxBody that is negative", () => { srv.MaxBody = -1; }, "MaxBody"],
         ]) {
             let complaint = "";
             try {
@@ -23431,6 +23436,28 @@ function Main() {
                 failures.push(`badanswer errored: ${e.Message}`);
                 finish();
             }),
+            /*
+             * **A body past `MaxBody` never reaches the handler.** The declared
+             * length decides before anything is read -- the request goes to
+             * `/echo`, whose handler would answer `200` with the body -- and
+             * the answer is the `413` a client understands, with the limit in
+             * it. Put back right after, since the requests above posted more
+             * than sixteen bytes.
+             */
+            () => {
+                srv.MaxBody = 16;
+                api.Post("/echo", "x".repeat(64), (rm) => {
+                    eq("a body past MaxBody is answered 413", rm.Status, 413);
+                    check("...naming the limit",
+                          rm.Body.ToText().includes("MaxBody (16 bytes)"),
+                          rm.Body.ToText());
+                    srv.MaxBody = 1024 * 1024;
+                    steps[8]();
+                }, (e) => {
+                    failures.push(`MaxBody errored: ${e.Message}`);
+                    finish();
+                });
+            },
             () => api.Get("/silent", (r5) => {
                 eq("no answer is a 500", r5.Status, 500);
                 check("stopping answers true", srv.Stop() === true);

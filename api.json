@@ -15733,6 +15733,15 @@
           "Native": true
         },
         {
+          "Name": "MaxBody",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "bytes of request body accepted. **1 MiB when nothing is said**, `0` for no limit; a declared `Content-Length` past it is answered `413` **before the handler runs**, and a body that arrives without one is read and refused the same way when it passes the number",
+          "Native": true
+        },
+        {
           "Name": "Port",
           "Kind": "Property",
           "Params": -1,
