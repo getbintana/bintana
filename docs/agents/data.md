@@ -494,11 +494,6 @@ text cannot be modelled beside its attributes (`<guid isPermaLink>`), and
 - **Parameters are counted before any are bound.** sqlite binds what it is given
   and leaves the rest NULL, so three values into a statement with four `?` runs
   and answers about a NULL -- a *wrong answer* rather than an error.
-- **`api.sh` does not check a global's documentation.** `NOT_A_WIDGET` in
-  `tests/api/Check.js` exempts a `*_props` table from the `controls.md`
-  completeness check and nothing else asks about it, so `llm/library.md` is
-  documented by hand. A new global needs its name in that set *and* its members
-  written down, and only the first of those two fails a test.
 - **The optional-dependency branch has to be compiled to be known to work.**
   `-DSQLITE3_FOUND=OFF` does nothing -- `pkg_check_modules` overwrites it -- so
   the way to check the `#else` half of `bta_sqlite.c` is to compile that one

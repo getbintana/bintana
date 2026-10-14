@@ -75,7 +75,7 @@ distribution are in [`docs/installing.md`](docs/installing.md), with the
 ```sh
 ./tests/run.sh                                    # whole suite
 ./tests/run.sh widgets                            # one project
-./tests/run.sh widgets record                     # one test of it (case-sensitive)
+./tests/run.sh widgets record                     # the tests whose name contains it
 ./tests/run.sh ide designer                       # one project, up to one phase
 ./tests/run.sh ide list                           # what a project can be asked for
 BINTANA=/other/bintana ./tests/run.sh             # suite against another build

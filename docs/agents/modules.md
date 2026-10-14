@@ -40,7 +40,7 @@ before touching it:
 - **Two owners are not an error until somebody uses the name** -- and a use
   is refused at load, not where it runs (patch 16, `bta_modules_check`). The second is
   written beside the first in a per-context table of C strings
-  (`owners_by_ctx`, under a mutex since a worker has a context of its own) and
+  (`owners_of()`, under `owners_lock` since a worker has a context of its own) and
   the getter, already installed, throws naming both. C strings so that
   `bta_modules_forget` can run after `JS_FreeRuntime` and nothing in it is a
   `JSValue` the runtime would assert on; the namespace lives in the getter's own

@@ -138,8 +138,7 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   `TabSet.placeContent`; `TreeFind_Change` hands the text to `designer.tree`
   (`ControlTree.setFilter`), which keeps it, folds it into `shape()` so a changed
   filter rebuilds and an edit does not, and skips what neither matches nor holds a
-  match. A match keeps its subtree. A selected control the filter hides is simply
-  not on the tree: `sync()` already refuses a key that does not exist.
+  match. A match keeps its subtree.
 - **The options buttons beside both filters are commands, never named items.**
   The project tree's is declared in `MainForm.form` (`BtnFtOptions`, `Menu` of
   `ActFt*` actions, popped by `BtnFtOptions_Click`); the control tree's is

@@ -280,9 +280,9 @@ handling reads `uint8_t`), which is why it is alignment and not a fix.
   reports something surprisingly expensive, suspect the instrument first.
 - **Five things a static analyser flags here that are not leaks**, each read and
   dismissed, so the next run of one does not cost the same afternoon:
-  `bta_widget.c:1124` (freed by `g_clear_pointer`, with the strv beside it by
-  `g_strfreev`), `bta_controls.c:3196` (`strv` by `g_strfreev` on the line
-  before), `bta_controls.c:4778` (a `NULL` widget cannot reach `cal_marks` --
-  all five callers guard), `bta_http.c:3583` (the list and its elements are
-  freed on both early-outs) and `bta_notebook.c:161` (the output is assigned on
-  every path that returns success).
+  `w_set_style` in `bta_widget.c` (freed by `g_clear_pointer`, with the strv beside it by
+  `g_strfreev`), `combo_set_items` in `bta_controls.c` (`strv` by `g_strfreev` before
+  it returns), `cal_marks` in `bta_controls.c` (a `NULL` widget cannot reach it --
+  every caller guards), `http_server_parse_allow` in `bta_http.c` (the list and its
+  elements are freed on both early-outs) and `notebook_get_action` in
+  `bta_notebook.c` (the output is assigned on every path that returns success).

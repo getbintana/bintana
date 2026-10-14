@@ -85,7 +85,7 @@ distribution are in [`docs/installing.md`](docs/installing.md), with the
 ```sh
 ./tests/run.sh                                    # whole suite
 ./tests/run.sh widgets                            # one project
-./tests/run.sh widgets record                     # one test of it (case-sensitive)
+./tests/run.sh widgets record                     # the tests whose name contains it
 ./tests/run.sh ide designer                       # one project, up to one phase
 ./tests/run.sh ide list                           # what a project can be asked for
 BINTANA=/other/bintana ./tests/run.sh             # suite against another build
@@ -507,8 +507,8 @@ the whole signal.
 - **`docs/llm/` claims to be the whole public surface, and eight names were
   outside it**: `BigInt`, `WeakMap`, `WeakSet`, `Iterator`, `DisposableStack`,
   `queueMicrotask`, `escape` and `unescape` were all installed and in neither
-  list -- neither *what is here* nor *what is not*. `tests/api.sh` cannot catch
-  this, because it checks the globals the runtime *registers* against
+  list -- neither *what is here* nor *what is not*. `tests/api.sh` could not catch
+  this, because it compared the globals the runtime *registers* against
   `library.md`; a name QuickJS installs of its own accord is invisible to it.
   Three were removed and five documented. If you add an `JS_AddIntrinsic*` call,
   the names it brings are yours to list.
@@ -550,14 +550,15 @@ the whole signal.
   manifest whole** -- no member of any section may be blank -- which is the
   check that does not depend on knowing where owners come from. Removing
   `Uninstall`'s comment turns three lines red, one per road.
-- **`tests/api.sh` cannot see a class rename.** It checks that every member has a
+- **The page check cannot see a class rename** (it was `tests/api.sh` and is
+  `bintana-docs`' `check.sh` now). It checked that every member has a
   row *somewhere* in `docs/llm/controls.md`, not that the row is under the right
   class -- so moving `Language` from one class to another, or documenting it under
   a name the runtime no longer has, passes. It stayed green through this whole
   rename. What catches that is reading the reference, and the CSS-node table in
   `tests/widgets`, which does force a new class to be written down.
-- **`tests/api.sh` matches a member name anywhere in `controls.md`, not under its
-  own control** -- deliberately, because inherited members are documented once
+- **The page check matched a member name anywhere in `controls.md`, not under its
+  own control** (when it was `tests/api.sh`; that check lives in `bintana-docs` now) -- deliberately, because inherited members are documented once
   under `Widget` or `Container` and a per-control check would have to know the
   hierarchy. Two consequences, and both have happened. It **misses** a member
   that exists on one control and is documented only for another. And it
@@ -580,37 +581,18 @@ the whole signal.
   them and a hand-written list of prose-bearing property names in `ide/` would drift
   from the widget table the first time a control was added. Both are ordinary
   published API, which is the one rule working as intended.
-- **`tests/api.sh` now covers the globals too, and it did not until a whole global
+- **`tests/api.sh` covered the globals too, and it did not until a whole global
   family had been added without it.** The old `NOT_A_WIDGET` set exempted a
   table from the `controls.md` check and **nothing asked anything else**, so 46
   members of `Locale`, `Decimal`, `Connection`, `Log` and `Day` were documented by
   hand or not at all -- and `Database`/`Connection`/`Table` were written while
   that was true, with nothing that would have failed had the reference been wrong.
-  It now checks 85 members against `llm/library.md`, and it found three real gaps
+  It checked 85 members against `llm/library.md` -- the pages and that check
+  are `bintana-docs`' now, and here `checkGlobalsListed` holds every global with
+  members to `api.json` -- and it found three real gaps
   the day it was written: `Application.LibraryPath` (which the IDE calls) and
   `Decimal`'s `toString`/`toJSON` (which are why `${d}` and `JSON.stringify(d)`
   are exact).
-- **Adding a global means adding a line to `GLOBAL_TABLES` or `GLOBAL_VARS` in
-  `tests/api/Check.js` for the member check, and regenerating `api.json`
-  (`tools/apijson.sh`) for the contract the documentation repositories read.**
-  The member check's line is deliberate rather than a chore: the scan cannot
-  infer it, because the very same
-  `JS_SetPropertyStr(ctx, x, "Name", JS_New…)` shape builds half the runtime's
-  *return values* -- `Exec`'s handle, `File.Info`'s answer, a table row, a
-  `Dialect` -- so guessing would demand a documentation heading for every one of
-  them. The explicit line is what makes the reference's completeness checkable.
-  The installed half needs no line any more: `checkGlobalsListed` asks
-  `Application.Globals()` and `Widget.Members`.
-- **The globals' check is looser than the widgets' on purpose.** `controls.md` is
-  all tables so a member must begin a row; `library.md` is a table for `File`, a
-  bullet list for `Dialog` and a sentence for `Logger`, each right for what it
-  describes. So the rule there is *the name in backticks somewhere under its own
-  `##` heading*, bare or qualified (`` `Debug` `` or `` `Logger.Debug` ``) -- its
-  own section and not the file, since `Load` belongs to both `File` and `Locale`
-  and a file-wide search would let either cover the other.
-- **The globals' check needed `http_props` *and* `http_client_props` in
-  `tests/api/Check.js`**, since the client's verbs live on its prototype and
-  not on `Http`.
 - **A deleted document leaves its links behind, and the prose around them reads
   as current.** `docs/issues/ISSUE-printing.md` went the day printing arrived;
   `docs/llm/markdown.md` and `docs/reference/globals/Dialog.md` went on pointing
@@ -954,11 +936,11 @@ disagree.
   needs.
 - **A repository path is spelt with `/` on every platform, while
   `Directory.Files` joins with the platform's separator -- and the two are
-  crossed in `tools/docs/Rows.js`, which is the check's and the writer's one
-  copy.** A page key was `p.slice(root.length + 1)`, so on the Windows job every
+  crossed in `tools/docs/Rows.js` -- `bintana-docs`' now, the check's and the
+  writer's one copy.** A page key was `p.slice(root.length + 1)`, so on the Windows job every
   `docs/reference` key came back backslashed; `docRelative` splits a path on `/`
   and read the whole key as one component, so every row carrying a link was
-  recomputed with the wrong `..` depth. `tests/api.sh` reported **31 long
+  recomputed with the wrong `..` depth. The check reported **31 long
   pages** as rows that do not say what the code says -- all of them reference
   pages, because the `docs/llm` keys are literals written with `/` -- and
   `tools/docs.sh` would have written those wrong links into the pages. The
@@ -977,20 +959,9 @@ disagree.
   (a global missing from the worker is *not a function* at call time, which
   `testTask`'s `entropy` step now asserts).
 
-**And two about checking the documentation, which cost an hour.**
-`bintana-docs/check.sh` with no `BINTANA_API` fetches the `api.json` its
-`bintana-ref.txt` pins -- the *previous* surface -- so it is green for a change
-it has never seen. Point it at yours:
-`BINTANA_API=$PWD/api.json BINTANA_SRC=$PWD ./check.sh`. And `tools/docs.sh` run
-that way rewrites **every** row the manifest says is stale, including other
-branches' pending work (it rewrote `Background` in `controls.md` and `Widget.md`
-here); look at `git diff --stat` and take back what is not yours. A long page
-also wants a table row **in the body** for each member, not only in *Every
-member*: the check reads that as "explained", and a section of prose naming the
-member does not count.
-
-**`tests/run.sh widgets <name>` takes one test, and the name is case-sensitive**
-(`Hash`, not `hash`); a second name is ignored and the line says `[only Hash]`.
+**`tests/run.sh widgets <name>` selects by name, ignoring case, and takes every
+test whose name contains it** (`hash` runs `Hash`), plus what `NEEDS` adds; a
+second name is ignored and the line says `[only Hash]`.
 - **An optional dependency is not the same question as an optional *widget*, and
   `Widget.Types()` is the wrong list to build a palette from.** `Terminal` on a
   build without VTE is there, constructs, draws, loads out of a `.form` and
@@ -1135,7 +1106,7 @@ declarations out of the source and the designer, the grid, the completion and
 the extractor ask it.
 
 A class that declares none must keep answering *nothing* — which is not an empty
-list, and the difference is load-bearing on the IDE side: see `docs/ide.md`.
+list, and the difference is load-bearing on the IDE side: see [`docs/ide-internals.md`](../ide-internals.md).
 
 **A class answers about itself with no control built, and every caller that
 needed it was holding a name.** `Widget.PropertyNames/Methods/EventNames/
@@ -1174,8 +1145,8 @@ touching them:
   selects a row and the event that says the selection moved — and the walk stops
   at the first class that declares the member, so an override
   (`Form.Serialize`) answers its own. `tests/api` fails on a method or event
-  that declares none, and compares `controls.md`/`reference/widgets` against
-  what the runtime answers.
+  that declares none, and `api.json` carries the answers to `bintana-docs`,
+  whose `check.sh` holds its pages to them.
 - **And the table parser in `tests/api` was `[^}]*`**, which
   a signature comment with an options object broke: `/* Search(text,
   [{CaseSensitive, …}]) */` stopped the body at its first `}` and every member
@@ -1526,7 +1497,7 @@ icon when the theme has one by that name (`gtkapplication.c`).
   same value both wrote `"?"` and walked away, so the failure surfaced later as
   whoever asked next appearing to have thrown. Handling a conversion failure
   means consuming it: `if (!s) JS_FreeValue(ctx, JS_GetException(ctx));`.
-  `bta_debug.c:350-355` is the other shape, for when there is a pending
+  `render` in `bta_debug.c` is the other shape, for when there is a pending
   exception to *preserve* across the work rather than discard.
 - **A refusal a C function returns and nothing reads is a feature that quietly
   is not there.** Two of these, both fixed and both worth recognising by shape:
@@ -2079,13 +2050,13 @@ carries a fix as a second commit, `1493dc7`, until it is squashed into it). The 
 `BINTANA.md` is the recipe; what follows is what each patch does and what
 dropping it costs.
 
-**And one upstream commit taken before its release: `2f0aa72`, the GCC 14+
-fix, which made the interpreter two to three times faster here.** `JS_MKVAL`
+**And one upstream fix taken before its release: the GCC 14+ fix, `6de8b67`
+in the fork, a port of bellard/quickjs `10c81b1`, which made the interpreter two to three times faster here.** `JS_MKVAL`
 wrote only the 32-bit half of a `JSValue`'s union, and since GCC 14 (GCC PR
 114134) every `js_int32`/`js_bool` inlined into `JS_CallInternal` became a
 read-modify-write through the stack. On GCC 16: a 3e7-turn integer
 loop went **1650 -> 580 ms** and 2e7 property reads **1092 -> 570 ms**, Release
-against Release. It is a cherry-pick (`-x`) under the eleventh and not a patch,
+against Release. It is a port under the eleventh and not a patch,
 listed in `BINTANA.md`, and the rebase onto the release that contains it simply
 drops it. **The release builds were `-O0` too**: an unset
 `CMAKE_BUILD_TYPE` is `Debug` here, and the `package` and `windows` jobs set
@@ -2994,7 +2965,7 @@ still counts a `typeof`, since its getter throws for one as for any read.
   **`for...in` is not the trap** and never was: `Object.prototype`'s members are
   non-enumerable and are never recited. The trap is `in`, and a plain `bag[key]`
   read used as a boolean -- `taken["toString"]` is a function, which is truthy.
-  `Dictionary` had it right from the start (`hasOwn.call`, `rad.js:403`) with
+  `Dictionary` had it right from the start (`hasOwn.call`, in `Dictionary` in `rad.js`) with
   the reasoning written above it; `Settings` and `Record` are the two that did
   not reach for it, and `Settings` disagreed with itself -- `Keys()` used the
   captured `ownKeys` while `Has` and `Get` beside it used `in`. **Own keys or
@@ -3110,7 +3081,7 @@ before touching it:
 - **Two owners are not an error until somebody uses the name** -- and a use
   is refused at load, not where it runs (patch 16, `bta_modules_check`). The second is
   written beside the first in a per-context table of C strings
-  (`owners_by_ctx`, under a mutex since a worker has a context of its own) and
+  (`owners_of()`, under `owners_lock` since a worker has a context of its own) and
   the getter, already installed, throws naming both. C strings so that
   `bta_modules_forget` can run after `JS_FreeRuntime` and nothing in it is a
   `JSValue` the runtime would assert on; the namespace lives in the getter's own
@@ -3241,7 +3212,7 @@ Seven Bintana projects are run by the suite — `ide`, `markdown`, `qr`, `report
 non-zero status on failure. They are applications, not a harness — write
 assertions the way the suite already does. A project is any directory under
 `tests/` with a `project.json` that does not declare `main`, so adding one is
-adding a directory: nothing lists them. (The console projects — `api`, `icons`,
+adding a directory: nothing lists them. (The console projects — `api`, `bench`, `icons`,
 `install`, `pack`, `runner`, `styles` — are tools and are driven by their own
 `.sh`.)
 
@@ -3437,7 +3408,7 @@ Three things that will waste your time:
   with the first frame of its stack. **A new phase does not have to remember
   this**, which is the point; what it does mean is that a test deliberately
   provoking an error has to catch it.
-- **`tests/ide/Driver.js` is forty-nine phases, and the phase is the scope.** It used
+- **`tests/ide/Driver.js` is fifty phases, and the phase is the scope.** It used
   to be one 4000-line generator where every `const` shared one scope, so a name
   near the top collided with one added at the bottom and the suite died with
   `SyntaxError: invalid redefinition of lexical identifier` — three times in one
@@ -3446,9 +3417,10 @@ Three things that will waste your time:
 - **`tests/widgets` selects where `tests/ide` runs a prefix**, and the difference is
   the shape of the tests, not a missing feature: the widget tests each build what
   they need and delete it, so any one of them can run alone (`run.sh widgets record`
-  is 71 assertions in 0.2 s). Its couplings are declared in `NEEDS`, both ways --
-  the async tail checks what `Terminal` and `TimerShorthand` set up, so asking for
-  either brings the other. A test whose deferred half lives in the tail and does not
+  is 71 assertions in 0.2 s). Its couplings are declared in `NEEDS`, and they run one way:
+  the async tail (`Exec`) checks what `Terminal` and `TimerShorthand` set up, so
+  asking for the tail brings those two; asking for one of them alone does not bring
+  the tail. A test whose deferred half lives in the tail and does not
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
@@ -3946,12 +3918,12 @@ handling reads `uint8_t`), which is why it is alignment and not a fix.
   reports something surprisingly expensive, suspect the instrument first.
 - **Five things a static analyser flags here that are not leaks**, each read and
   dismissed, so the next run of one does not cost the same afternoon:
-  `bta_widget.c:1124` (freed by `g_clear_pointer`, with the strv beside it by
-  `g_strfreev`), `bta_controls.c:3196` (`strv` by `g_strfreev` on the line
-  before), `bta_controls.c:4778` (a `NULL` widget cannot reach `cal_marks` --
-  all five callers guard), `bta_http.c:3583` (the list and its elements are
-  freed on both early-outs) and `bta_notebook.c:161` (the output is assigned on
-  every path that returns success).
+  `w_set_style` in `bta_widget.c` (freed by `g_clear_pointer`, with the strv beside it by
+  `g_strfreev`), `combo_set_items` in `bta_controls.c` (`strv` by `g_strfreev` before
+  it returns), `cal_marks` in `bta_controls.c` (a `NULL` widget cannot reach it --
+  every caller guards), `http_server_parse_allow` in `bta_http.c` (the list and its
+  elements are freed on both early-outs) and `notebook_get_action` in
+  `bta_notebook.c` (the output is assigned on every path that returns success).
 
 ---
 
@@ -4314,9 +4286,10 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   **only when the process tears down**, never during a step. `SetAction` on its
   own, `Strip` through every value, and deleting a notebook, a switcher or an
   action widget each emit nothing. What produces that message is
-  `g_signal_handler_disconnect(instance, id)`, and the only call by id in this
-  repository is `bta_tree.c:on_unbind_row` — instrumented, and it never fires for
-  this. **The caller is now named, and it is GTK's own.** From a backtrace under
+  `g_signal_handler_disconnect(instance, id)`, and the calls by id in this
+  repository are `bta_tree.c:on_unbind_row` — instrumented, and it never fires for
+  this — and two list-item unwatches in `bta_table.c` (`on_unbind_cell`,
+  `cell_unwatch_row`) -- and the backtrace below names GTK's own caller instead. **The caller is now named, and it is GTK's own.** From a backtrace under
   the suite's exact child invocation — which is the part that had been getting in
   the way, because the project does not run its tests unless it is started the way
   the runner starts it:
@@ -5836,8 +5809,7 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   `TabSet.placeContent`; `TreeFind_Change` hands the text to `designer.tree`
   (`ControlTree.setFilter`), which keeps it, folds it into `shape()` so a changed
   filter rebuilds and an edit does not, and skips what neither matches nor holds a
-  match. A match keeps its subtree. A selected control the filter hides is simply
-  not on the tree: `sync()` already refuses a key that does not exist.
+  match. A match keeps its subtree.
 - **The options buttons beside both filters are commands, never named items.**
   The project tree's is declared in `MainForm.form` (`BtnFtOptions`, `Menu` of
   `ActFt*` actions, popped by `BtnFtOptions_Click`); the control tree's is
@@ -6949,11 +6921,6 @@ text cannot be modelled beside its attributes (`<guid isPermaLink>`), and
 - **Parameters are counted before any are bound.** sqlite binds what it is given
   and leaves the rest NULL, so three values into a statement with four `?` runs
   and answers about a NULL -- a *wrong answer* rather than an error.
-- **`api.sh` does not check a global's documentation.** `NOT_A_WIDGET` in
-  `tests/api/Check.js` exempts a `*_props` table from the `controls.md`
-  completeness check and nothing else asks about it, so `llm/library.md` is
-  documented by hand. A new global needs its name in that set *and* its members
-  written down, and only the first of those two fails a test.
 - **The optional-dependency branch has to be compiled to be known to work.**
   `-DSQLITE3_FOUND=OFF` does nothing -- `pkg_check_modules` overwrites it -- so
   the way to check the `#else` half of `bta_sqlite.c` is to compile that one

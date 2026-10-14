@@ -9,7 +9,7 @@ Seven Bintana projects are run by the suite — `ide`, `markdown`, `qr`, `report
 non-zero status on failure. They are applications, not a harness — write
 assertions the way the suite already does. A project is any directory under
 `tests/` with a `project.json` that does not declare `main`, so adding one is
-adding a directory: nothing lists them. (The console projects — `api`, `icons`,
+adding a directory: nothing lists them. (The console projects — `api`, `bench`, `icons`,
 `install`, `pack`, `runner`, `styles` — are tools and are driven by their own
 `.sh`.)
 
@@ -205,7 +205,7 @@ Three things that will waste your time:
   with the first frame of its stack. **A new phase does not have to remember
   this**, which is the point; what it does mean is that a test deliberately
   provoking an error has to catch it.
-- **`tests/ide/Driver.js` is forty-nine phases, and the phase is the scope.** It used
+- **`tests/ide/Driver.js` is fifty phases, and the phase is the scope.** It used
   to be one 4000-line generator where every `const` shared one scope, so a name
   near the top collided with one added at the bottom and the suite died with
   `SyntaxError: invalid redefinition of lexical identifier` — three times in one
@@ -214,9 +214,10 @@ Three things that will waste your time:
 - **`tests/widgets` selects where `tests/ide` runs a prefix**, and the difference is
   the shape of the tests, not a missing feature: the widget tests each build what
   they need and delete it, so any one of them can run alone (`run.sh widgets record`
-  is 71 assertions in 0.2 s). Its couplings are declared in `NEEDS`, both ways --
-  the async tail checks what `Terminal` and `TimerShorthand` set up, so asking for
-  either brings the other. A test whose deferred half lives in the tail and does not
+  is 71 assertions in 0.2 s). Its couplings are declared in `NEEDS`, and they run one way:
+  the async tail (`Exec`) checks what `Terminal` and `TimerShorthand` set up, so
+  asking for the tail brings those two; asking for one of them alone does not bring
+  the tail. A test whose deferred half lives in the tail and does not
   say so answers with half its assertions and looks complete.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —

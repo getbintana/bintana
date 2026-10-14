@@ -81,7 +81,7 @@ declarations out of the source and the designer, the grid, the completion and
 the extractor ask it.
 
 A class that declares none must keep answering *nothing* — which is not an empty
-list, and the difference is load-bearing on the IDE side: see `docs/ide.md`.
+list, and the difference is load-bearing on the IDE side: see [`docs/ide-internals.md`](../ide-internals.md).
 
 **A class answers about itself with no control built, and every caller that
 needed it was holding a name.** `Widget.PropertyNames/Methods/EventNames/
@@ -120,8 +120,8 @@ touching them:
   selects a row and the event that says the selection moved — and the walk stops
   at the first class that declares the member, so an override
   (`Form.Serialize`) answers its own. `tests/api` fails on a method or event
-  that declares none, and compares `controls.md`/`reference/widgets` against
-  what the runtime answers.
+  that declares none, and `api.json` carries the answers to `bintana-docs`,
+  whose `check.sh` holds its pages to them.
 - **And the table parser in `tests/api` was `[^}]*`**, which
   a signature comment with an options object broke: `/* Search(text,
   [{CaseSensitive, …}]) */` stopped the body at its first `}` and every member
@@ -472,7 +472,7 @@ icon when the theme has one by that name (`gtkapplication.c`).
   same value both wrote `"?"` and walked away, so the failure surfaced later as
   whoever asked next appearing to have thrown. Handling a conversion failure
   means consuming it: `if (!s) JS_FreeValue(ctx, JS_GetException(ctx));`.
-  `bta_debug.c:350-355` is the other shape, for when there is a pending
+  `render` in `bta_debug.c` is the other shape, for when there is a pending
   exception to *preserve* across the work rather than discard.
 - **A refusal a C function returns and nothing reads is a feature that quietly
   is not there.** Two of these, both fixed and both worth recognising by shape:

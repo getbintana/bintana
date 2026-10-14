@@ -11,13 +11,13 @@ carries a fix as a second commit, `1493dc7`, until it is squashed into it). The 
 `BINTANA.md` is the recipe; what follows is what each patch does and what
 dropping it costs.
 
-**And one upstream commit taken before its release: `2f0aa72`, the GCC 14+
-fix, which made the interpreter two to three times faster here.** `JS_MKVAL`
+**And one upstream fix taken before its release: the GCC 14+ fix, `6de8b67`
+in the fork, a port of bellard/quickjs `10c81b1`, which made the interpreter two to three times faster here.** `JS_MKVAL`
 wrote only the 32-bit half of a `JSValue`'s union, and since GCC 14 (GCC PR
 114134) every `js_int32`/`js_bool` inlined into `JS_CallInternal` became a
 read-modify-write through the stack. On GCC 16: a 3e7-turn integer
 loop went **1650 -> 580 ms** and 2e7 property reads **1092 -> 570 ms**, Release
-against Release. It is a cherry-pick (`-x`) under the eleventh and not a patch,
+against Release. It is a port under the eleventh and not a patch,
 listed in `BINTANA.md`, and the rebase onto the release that contains it simply
 drops it. **The release builds were `-O0` too**: an unset
 `CMAKE_BUILD_TYPE` is `Debug` here, and the `package` and `windows` jobs set
@@ -926,7 +926,7 @@ still counts a `typeof`, since its getter throws for one as for any read.
   **`for...in` is not the trap** and never was: `Object.prototype`'s members are
   non-enumerable and are never recited. The trap is `in`, and a plain `bag[key]`
   read used as a boolean -- `taken["toString"]` is a function, which is truthy.
-  `Dictionary` had it right from the start (`hasOwn.call`, `rad.js:403`) with
+  `Dictionary` had it right from the start (`hasOwn.call`, in `Dictionary` in `rad.js`) with
   the reasoning written above it; `Settings` and `Record` are the two that did
   not reach for it, and `Settings` disagreed with itself -- `Keys()` used the
   captured `ownKeys` while `Has` and `Get` beside it used `in`. **Own keys or

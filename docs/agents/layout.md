@@ -355,9 +355,10 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   **only when the process tears down**, never during a step. `SetAction` on its
   own, `Strip` through every value, and deleting a notebook, a switcher or an
   action widget each emit nothing. What produces that message is
-  `g_signal_handler_disconnect(instance, id)`, and the only call by id in this
-  repository is `bta_tree.c:on_unbind_row` — instrumented, and it never fires for
-  this. **The caller is now named, and it is GTK's own.** From a backtrace under
+  `g_signal_handler_disconnect(instance, id)`, and the calls by id in this
+  repository are `bta_tree.c:on_unbind_row` — instrumented, and it never fires for
+  this — and two list-item unwatches in `bta_table.c` (`on_unbind_cell`,
+  `cell_unwatch_row`) -- and the backtrace below names GTK's own caller instead. **The caller is now named, and it is GTK's own.** From a backtrace under
   the suite's exact child invocation — which is the part that had been getting in
   the way, because the project does not run its tests unless it is started the way
   the runner starts it:

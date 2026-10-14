@@ -101,8 +101,8 @@ the whole signal.
 - **`docs/llm/` claims to be the whole public surface, and eight names were
   outside it**: `BigInt`, `WeakMap`, `WeakSet`, `Iterator`, `DisposableStack`,
   `queueMicrotask`, `escape` and `unescape` were all installed and in neither
-  list -- neither *what is here* nor *what is not*. `tests/api.sh` cannot catch
-  this, because it checks the globals the runtime *registers* against
+  list -- neither *what is here* nor *what is not*. `tests/api.sh` could not catch
+  this, because it compared the globals the runtime *registers* against
   `library.md`; a name QuickJS installs of its own accord is invisible to it.
   Three were removed and five documented. If you add an `JS_AddIntrinsic*` call,
   the names it brings are yours to list.
@@ -144,14 +144,15 @@ the whole signal.
   manifest whole** -- no member of any section may be blank -- which is the
   check that does not depend on knowing where owners come from. Removing
   `Uninstall`'s comment turns three lines red, one per road.
-- **`tests/api.sh` cannot see a class rename.** It checks that every member has a
+- **The page check cannot see a class rename** (it was `tests/api.sh` and is
+  `bintana-docs`' `check.sh` now). It checked that every member has a
   row *somewhere* in `docs/llm/controls.md`, not that the row is under the right
   class -- so moving `Language` from one class to another, or documenting it under
   a name the runtime no longer has, passes. It stayed green through this whole
   rename. What catches that is reading the reference, and the CSS-node table in
   `tests/widgets`, which does force a new class to be written down.
-- **`tests/api.sh` matches a member name anywhere in `controls.md`, not under its
-  own control** -- deliberately, because inherited members are documented once
+- **The page check matched a member name anywhere in `controls.md`, not under its
+  own control** (when it was `tests/api.sh`; that check lives in `bintana-docs` now) -- deliberately, because inherited members are documented once
   under `Widget` or `Container` and a per-control check would have to know the
   hierarchy. Two consequences, and both have happened. It **misses** a member
   that exists on one control and is documented only for another. And it
@@ -174,37 +175,18 @@ the whole signal.
   them and a hand-written list of prose-bearing property names in `ide/` would drift
   from the widget table the first time a control was added. Both are ordinary
   published API, which is the one rule working as intended.
-- **`tests/api.sh` now covers the globals too, and it did not until a whole global
+- **`tests/api.sh` covered the globals too, and it did not until a whole global
   family had been added without it.** The old `NOT_A_WIDGET` set exempted a
   table from the `controls.md` check and **nothing asked anything else**, so 46
   members of `Locale`, `Decimal`, `Connection`, `Log` and `Day` were documented by
   hand or not at all -- and `Database`/`Connection`/`Table` were written while
   that was true, with nothing that would have failed had the reference been wrong.
-  It now checks 85 members against `llm/library.md`, and it found three real gaps
+  It checked 85 members against `llm/library.md` -- the pages and that check
+  are `bintana-docs`' now, and here `checkGlobalsListed` holds every global with
+  members to `api.json` -- and it found three real gaps
   the day it was written: `Application.LibraryPath` (which the IDE calls) and
   `Decimal`'s `toString`/`toJSON` (which are why `${d}` and `JSON.stringify(d)`
   are exact).
-- **Adding a global means adding a line to `GLOBAL_TABLES` or `GLOBAL_VARS` in
-  `tests/api/Check.js` for the member check, and regenerating `api.json`
-  (`tools/apijson.sh`) for the contract the documentation repositories read.**
-  The member check's line is deliberate rather than a chore: the scan cannot
-  infer it, because the very same
-  `JS_SetPropertyStr(ctx, x, "Name", JS_New…)` shape builds half the runtime's
-  *return values* -- `Exec`'s handle, `File.Info`'s answer, a table row, a
-  `Dialect` -- so guessing would demand a documentation heading for every one of
-  them. The explicit line is what makes the reference's completeness checkable.
-  The installed half needs no line any more: `checkGlobalsListed` asks
-  `Application.Globals()` and `Widget.Members`.
-- **The globals' check is looser than the widgets' on purpose.** `controls.md` is
-  all tables so a member must begin a row; `library.md` is a table for `File`, a
-  bullet list for `Dialog` and a sentence for `Logger`, each right for what it
-  describes. So the rule there is *the name in backticks somewhere under its own
-  `##` heading*, bare or qualified (`` `Debug` `` or `` `Logger.Debug` ``) -- its
-  own section and not the file, since `Load` belongs to both `File` and `Locale`
-  and a file-wide search would let either cover the other.
-- **The globals' check needed `http_props` *and* `http_client_props` in
-  `tests/api/Check.js`**, since the client's verbs live on its prototype and
-  not on `Http`.
 - **A deleted document leaves its links behind, and the prose around them reads
   as current.** `docs/issues/ISSUE-printing.md` went the day printing arrived;
   `docs/llm/markdown.md` and `docs/reference/globals/Dialog.md` went on pointing

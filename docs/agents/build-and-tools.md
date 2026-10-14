@@ -322,11 +322,11 @@ disagree.
   needs.
 - **A repository path is spelt with `/` on every platform, while
   `Directory.Files` joins with the platform's separator -- and the two are
-  crossed in `tools/docs/Rows.js`, which is the check's and the writer's one
-  copy.** A page key was `p.slice(root.length + 1)`, so on the Windows job every
+  crossed in `tools/docs/Rows.js` -- `bintana-docs`' now, the check's and the
+  writer's one copy.** A page key was `p.slice(root.length + 1)`, so on the Windows job every
   `docs/reference` key came back backslashed; `docRelative` splits a path on `/`
   and read the whole key as one component, so every row carrying a link was
-  recomputed with the wrong `..` depth. `tests/api.sh` reported **31 long
+  recomputed with the wrong `..` depth. The check reported **31 long
   pages** as rows that do not say what the code says -- all of them reference
   pages, because the `docs/llm` keys are literals written with `/` -- and
   `tools/docs.sh` would have written those wrong links into the pages. The
@@ -345,20 +345,9 @@ disagree.
   (a global missing from the worker is *not a function* at call time, which
   `testTask`'s `entropy` step now asserts).
 
-**And two about checking the documentation, which cost an hour.**
-`bintana-docs/check.sh` with no `BINTANA_API` fetches the `api.json` its
-`bintana-ref.txt` pins -- the *previous* surface -- so it is green for a change
-it has never seen. Point it at yours:
-`BINTANA_API=$PWD/api.json BINTANA_SRC=$PWD ./check.sh`. And `tools/docs.sh` run
-that way rewrites **every** row the manifest says is stale, including other
-branches' pending work (it rewrote `Background` in `controls.md` and `Widget.md`
-here); look at `git diff --stat` and take back what is not yours. A long page
-also wants a table row **in the body** for each member, not only in *Every
-member*: the check reads that as "explained", and a section of prose naming the
-member does not count.
-
-**`tests/run.sh widgets <name>` takes one test, and the name is case-sensitive**
-(`Hash`, not `hash`); a second name is ignored and the line says `[only Hash]`.
+**`tests/run.sh widgets <name>` selects by name, ignoring case, and takes every
+test whose name contains it** (`hash` runs `Hash`), plus what `NEEDS` adds; a
+second name is ignored and the line says `[only Hash]`.
 - **An optional dependency is not the same question as an optional *widget*, and
   `Widget.Types()` is the wrong list to build a palette from.** `Terminal` on a
   build without VTE is there, constructs, draws, loads out of a `.form` and
