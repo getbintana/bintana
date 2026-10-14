@@ -698,7 +698,7 @@ back to a real screen for the questions that need one.
 When it really is about pixels, `tests/probe.sh` asks the capture rather than
 showing it: `pixel` for a colour, `region` for whether an area is uniform (which is
 what "blank" means), `diff` for whether anything changed at all. See
-[`AGENTS.md`](../AGENTS.md#verifying-by-hand).
+[`docs/agents/testing.md`](agents/testing.md#verifying-by-hand).
 
 ## What the tests cannot see
 

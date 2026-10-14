@@ -8964,7 +8964,7 @@ does not read the locale's decimal comma, the refusal message that names the
 property it would not add, the debugger's hook with its six readers, the
 refusal of `async` where it is written, and the parser's symbol report behind
 `Application.Symbols`. The fork's `BINTANA.md` is how it is rebased; all six are
-in [`AGENTS.md`](../AGENTS.md#the-six-patches-in-vendor), each with what
+in [`docs/agents/quickjs.md`](agents/quickjs.md#the-eighteen-patches-in-vendor), each with what
 dropping it costs. GTK4 (4.10 or newer) and GtkSourceView 5 come from pkg-config and are
 required; sqlite3, libsystemd, libsoup-3.0, gstreamer-1.0 and VTE come from
 pkg-config and are not.
@@ -10373,7 +10373,7 @@ and macOS in [plans/macos-plan.md](plans/macos-plan.md).
 | **GLib, GIO, GModule** | come with GTK. GModule is the plugin loader, `gio-unix-2.0` is `Exec`'s third stream |
 | **a C11 compiler** | gcc or clang |
 | **CMake 3.16+** and **pkg-config** | the build |
-| **QuickJS** | **not a dependency to install**: quickjs-ng v0.17.0, plus the six patches of ours, is vendored in `vendor/quickjs` as a git submodule ([AGENTS.md](../AGENTS.md#the-six-patches-in-vendor)) |
+| **QuickJS** | **not a dependency to install**: quickjs-ng v0.17.0, plus the six patches of ours, is vendored in `vendor/quickjs` as a git submodule ([docs/agents/quickjs.md](agents/quickjs.md#the-eighteen-patches-in-vendor)) |
 
 Eight more are optional, and CMake prints what it found either way. Without each
 the runtime builds and the thing itself says which package is missing when it is
@@ -11499,7 +11499,7 @@ back to a real screen for the questions that need one.
 When it really is about pixels, `tests/probe.sh` asks the capture rather than
 showing it: `pixel` for a colour, `region` for whether an area is uniform (which is
 what "blank" means), `diff` for whether anything changed at all. See
-[`AGENTS.md`](../AGENTS.md#verifying-by-hand).
+[`docs/agents/testing.md`](agents/testing.md#verifying-by-hand).
 
 ## What the tests cannot see
 

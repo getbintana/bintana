@@ -41,7 +41,7 @@ does not read the locale's decimal comma, the refusal message that names the
 property it would not add, the debugger's hook with its six readers, the
 refusal of `async` where it is written, and the parser's symbol report behind
 `Application.Symbols`. The fork's `BINTANA.md` is how it is rebased; all six are
-in [`AGENTS.md`](../AGENTS.md#the-six-patches-in-vendor), each with what
+in [`docs/agents/quickjs.md`](agents/quickjs.md#the-eighteen-patches-in-vendor), each with what
 dropping it costs. GTK4 (4.10 or newer) and GtkSourceView 5 come from pkg-config and are
 required; sqlite3, libsystemd, libsoup-3.0, gstreamer-1.0 and VTE come from
 pkg-config and are not.

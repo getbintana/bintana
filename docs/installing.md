@@ -14,7 +14,7 @@ and macOS in [plans/macos-plan.md](plans/macos-plan.md).
 | **GLib, GIO, GModule** | come with GTK. GModule is the plugin loader, `gio-unix-2.0` is `Exec`'s third stream |
 | **a C11 compiler** | gcc or clang |
 | **CMake 3.16+** and **pkg-config** | the build |
-| **QuickJS** | **not a dependency to install**: quickjs-ng v0.17.0, plus the six patches of ours, is vendored in `vendor/quickjs` as a git submodule ([AGENTS.md](../AGENTS.md#the-six-patches-in-vendor)) |
+| **QuickJS** | **not a dependency to install**: quickjs-ng v0.17.0, plus the six patches of ours, is vendored in `vendor/quickjs` as a git submodule ([docs/agents/quickjs.md](agents/quickjs.md#the-eighteen-patches-in-vendor)) |
 
 Eight more are optional, and CMake prints what it found either way. Without each
 the runtime builds and the thing itself says which package is missing when it is
