@@ -3477,30 +3477,30 @@ save will edit `examples/hello` for real.
 - **The suite is headless by default, and that is a mechanism replacing a rule
   that failed five times.** `asan.sh` exported `HEADLESS=${HEADLESS:-1}` first,
   after four sanitizer runs went onto the user's desktop -- each of them the
-  whole suite, dozens of windows over whatever he was doing. `run.sh` went on
+  whole suite, dozens of windows over whatever the user was doing. `run.sh` went on
   needing the prefix by hand for a while longer, and was walked into again; both
   export `HEADLESS=${HEADLESS-1}` now, with `-` so an explicitly empty one still
   reaches a real screen. "Remember to" is not a mechanism. The same goes for a probe of your own under `/tmp` -- `xvfb-run`
-  is one word. Even driving one by hand does not need his screen: xvfb is a real
+  is one word. Even driving one by hand does not need the user's screen: xvfb is a real
   X server and `xdotool` works against it, so a resize or a click done "for
   real" belongs there too.
 - **`HEADLESS=1` is read by `tests/runner`, the suite's own runner. The binary
   does not read it at all.** `HEADLESS=1 ./build/bintana <project>` is a window on the user's desktop,
   and it *looks* exactly like the safe thing right up until it opens -- which is
-  how a catalogue probe went onto his screen twice, sixty seconds each. Run an
+  how a catalogue probe went onto the user's screen twice, sixty seconds each. Run an
   ad-hoc project with **`tests/try.sh <dir>`**, which is `xvfb-run` and cannot be
   forgotten; going back to a real screen there is `HEADLESS= tests/try.sh`, and
   it should be a question you can say out loud (an icon, a theme). Debugging
   under `gdb` changes nothing about this: `gdb --args xvfb-run -a ./build/bintana
   <project>` debugs the same binary on a display nobody uses, and a bare
-  `gdb ./build/bintana tests/widgets` is a windowed suite on his screen held
+  `gdb ./build/bintana tests/widgets` is a windowed suite on the user's screen held
   open by a breakpoint.
 - **And a real screen is worse than an inconvenience: it fails assertions.** A
-  run on the user's desktop put every window *on his screen* — dozens of them,
+  run on the user's desktop put every window *on that screen* — dozens of them,
   taking the focus, and a stray click on one moves the focus and breaks whatever
   was measuring, which is a plausible source of any one-run-in-three failure.
   Measurements differ too: the same `tests/ide` that passes under xvfb failed a
-  `Calendar`'s drawn size on his session, because the theme and the font are not
+  `Calendar`'s drawn size on that session, because the theme and the font are not
   the ones the numbers were written against. So `HEADLESS=` is for a question
   about the real desktop, never for an ordinary run. The exception is
   the one AGENTS.md already names: icons resolve against Adwaita under xvfb, so a
@@ -4654,7 +4654,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   `action_finalizer` both `g_signal_handlers_disconnect_by_data` now (the latter
   also dropped a reference it never released). The orphaned action does
   nothing, which is the truth about an item nothing can reach.
-  **And the collision itself is refused now**, which is Matias's call: a name
+  **And the collision itself is refused now**, which is the maintainer's call: a name
   on the form belongs to one thing, so `make_item` reads `form[name]` first and
   refuses a name held by an item of *another* menu, a control, a command or a
   member, pointing at `actions` -- one command, an `{ "action": … }` item in
@@ -4732,7 +4732,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   the classes GTK styles its own decoration with -- does **not** generalise.
   `menubar`, `menubar > item` are node names, and no widget an application builds
   is named `item`. Check before designing around it: `./tests/styles.sh` lists
-  *classes*, and `menubar` is not in it; `gresource extract /usr/lib64/libgtk-4.so.1
+  *classes*, and `menubar` is not in it; `gresource extract <libdir>/libgtk-4.so.1
   /org/gtk/libgtk/theme/Default/Default-light.css` is where the rules are. Some
   themes add a `.menubar` alias and the one inside libgtk does not, which is the
   wrong way round to build on.
@@ -4958,8 +4958,8 @@ The traps and decisions of this area, each with what it cost and the rule it lef
 - An own `-symbolic` icon is drawn with **fills**: GTK's recolouring forces
   `fill`, and a stroke keeps the colour in the file (black on a dark theme).
 - **A headless run does not see the desktop's icon theme.** Under `xvfb-run` GTK
-  falls back to Adwaita (1520 icons here), while the session runs
-  elementary-xfce (2575). So `Application.HasIcon` answers about a theme that is
+  falls back to Adwaita (1520 icons), while a desktop session runs its own
+  theme (the one measured had 2575). So `Application.HasIcon` answers about a theme that is
   not the user's, and `tests/ide`'s walk over every declared `Icon` passes on a
   name that comes out blank on the real screen -- `view-more-symbolic` did.
   **`tests/icons.sh` is how you check one now** -- a console project, so it needs
@@ -5454,8 +5454,8 @@ opens the address is by hand** -- the suite must never launch a browser. The
 designer's column dialog offers it as a *Cell* kind beside the editors (see
 *A table cell's editors*).
 **The probe killed the user's window manager**: clean up a hand-driven `Xvfb`
-and its `xfwm4` by the PIDs you started (`$!`), never `pkill xfwm4` -- it matches
-the desktop's own.
+and its window manager by the PIDs you started (`$!`), never `pkill` by the
+window manager's name -- it matches the desktop's own.
 
 ## A table cell's editors
 
@@ -6079,7 +6079,7 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   `stale` so it reloads when shown -- and never load a background designer
   directly, since it would drive the shared side panel.
 - **The suite's temp directory may have no trash, and the old delete hid it.**
-  `File.Trash` fails there on this machine, so every *Delete from project* in
+  `File.Trash` fails where it has none, so every *Delete from project* in
   `tests/ide` fell through to a permanent `File.Delete` without a word -- the
   very thing the comment above `deleteFiles` said it never did. It asks now
   (*Delete permanently*), and a test that deletes goes through
@@ -6889,7 +6889,7 @@ text cannot be modelled beside its attributes (`<guid isPermaLink>`), and
   existed and needed no change to become the SQL spelling; `Field.Bool` already
   took sqlite's `0`/`1` and `Field.Date` already held `YYYY-MM-DD`. Do not add a
   conversion layer -- if a value needs one, the field kind is what is wrong.
-- **The doctrine, and it is Matias': a `Table` uses sqlite's standard types and
+- **The doctrine, and it is the maintainer's: a `Table` uses sqlite's standard types and
   invents no format of its own. What sqlite cannot do is sqlite's limitation and
   is said as one; the program filters and orders; and the extension exists,
   opt-in, always warning that it makes the file incompatible.** This was arrived

@@ -381,7 +381,7 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   `stale` so it reloads when shown -- and never load a background designer
   directly, since it would drive the shared side panel.
 - **The suite's temp directory may have no trash, and the old delete hid it.**
-  `File.Trash` fails there on this machine, so every *Delete from project* in
+  `File.Trash` fails where it has none, so every *Delete from project* in
   `tests/ide` fell through to a permanent `File.Delete` without a word -- the
   very thing the comment above `deleteFiles` said it never did. It asks now
   (*Delete permanently*), and a test that deletes goes through

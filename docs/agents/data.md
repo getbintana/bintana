@@ -434,7 +434,7 @@ text cannot be modelled beside its attributes (`<guid isPermaLink>`), and
   existed and needed no change to become the SQL spelling; `Field.Bool` already
   took sqlite's `0`/`1` and `Field.Date` already held `YYYY-MM-DD`. Do not add a
   conversion layer -- if a value needs one, the field kind is what is wrong.
-- **The doctrine, and it is Matias': a `Table` uses sqlite's standard types and
+- **The doctrine, and it is the maintainer's: a `Table` uses sqlite's standard types and
   invents no format of its own. What sqlite cannot do is sqlite's limitation and
   is said as one; the program filters and orders; and the extension exists,
   opt-in, always warning that it makes the file incompatible.** This was arrived

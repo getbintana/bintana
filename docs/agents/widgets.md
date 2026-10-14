@@ -227,7 +227,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   `action_finalizer` both `g_signal_handlers_disconnect_by_data` now (the latter
   also dropped a reference it never released). The orphaned action does
   nothing, which is the truth about an item nothing can reach.
-  **And the collision itself is refused now**, which is Matias's call: a name
+  **And the collision itself is refused now**, which is the maintainer's call: a name
   on the form belongs to one thing, so `make_item` reads `form[name]` first and
   refuses a name held by an item of *another* menu, a control, a command or a
   member, pointing at `actions` -- one command, an `{ "action": … }` item in
@@ -305,7 +305,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   the classes GTK styles its own decoration with -- does **not** generalise.
   `menubar`, `menubar > item` are node names, and no widget an application builds
   is named `item`. Check before designing around it: `./tests/styles.sh` lists
-  *classes*, and `menubar` is not in it; `gresource extract /usr/lib64/libgtk-4.so.1
+  *classes*, and `menubar` is not in it; `gresource extract <libdir>/libgtk-4.so.1
   /org/gtk/libgtk/theme/Default/Default-light.css` is where the rules are. Some
   themes add a `.menubar` alias and the one inside libgtk does not, which is the
   wrong way round to build on.
@@ -531,8 +531,8 @@ The traps and decisions of this area, each with what it cost and the rule it lef
 - An own `-symbolic` icon is drawn with **fills**: GTK's recolouring forces
   `fill`, and a stroke keeps the colour in the file (black on a dark theme).
 - **A headless run does not see the desktop's icon theme.** Under `xvfb-run` GTK
-  falls back to Adwaita (1520 icons here), while the session runs
-  elementary-xfce (2575). So `Application.HasIcon` answers about a theme that is
+  falls back to Adwaita (1520 icons), while a desktop session runs its own
+  theme (the one measured had 2575). So `Application.HasIcon` answers about a theme that is
   not the user's, and `tests/ide`'s walk over every declared `Icon` passes on a
   name that comes out blank on the real screen -- `view-more-symbolic` did.
   **`tests/icons.sh` is how you check one now** -- a console project, so it needs

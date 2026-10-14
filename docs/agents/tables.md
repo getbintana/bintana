@@ -92,8 +92,8 @@ opens the address is by hand** -- the suite must never launch a browser. The
 designer's column dialog offers it as a *Cell* kind beside the editors (see
 *A table cell's editors*).
 **The probe killed the user's window manager**: clean up a hand-driven `Xvfb`
-and its `xfwm4` by the PIDs you started (`$!`), never `pkill xfwm4` -- it matches
-the desktop's own.
+and its window manager by the PIDs you started (`$!`), never `pkill` by the
+window manager's name -- it matches the desktop's own.
 
 ## A table cell's editors
 
