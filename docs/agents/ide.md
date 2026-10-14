@@ -743,6 +743,17 @@ designer was left), and letting the press through the Glass to the real strip
   do not fit, and the strip scrolls. The test sweeps a band of parallel lines
   and keeps the one that met the most, since nothing hands out a tab's
   rectangle.
+- **The canvas's pick is GTK's, and GTK picks by the border box.** A `Separator`
+  with room is a rule *inside* its declared size -- the room is a CSS margin --
+  and `gtk_widget_real_contains` tests the border box, so a click on the space
+  around a rule came back as the bar the separator is in: a separator with room
+  could not be selected on the canvas at all. `Designer.hitTest` asks its own
+  `roomAt` after GTK's answer -- the innermost control whose `Bounds()`
+  contains the point, hidden ones skipped -- which finds exactly the controls
+  whose rectangle is bigger than what they draw, and nothing else: an ordinary
+  control's `Bounds()` *is* its border box, so GTK would have returned it.
+  `tests/ide`'s `designer` phase clicks two pixels into the room and asserts
+  the selection.
 
 ## Action: a command in several places
 

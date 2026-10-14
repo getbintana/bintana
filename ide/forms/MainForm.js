@@ -129,10 +129,14 @@ export const TAB_ACTION_ICON = [
     "document-properties-symbolic", "pan-down-symbolic",
 ];
 
-/* The project panel's two buttons, the same bargain: the first the desktop
- * really has wins.  See dressSide. */
+/* The project panel's two buttons, in order of preference: the first the
+ * desktop really has wins.  The preference lives here and not in the `.form`
+ * because the file can only name one icon, and the one this window wants
+ * (`sidebar-hide-symbolic`) is not in every theme the suite runs against --
+ * `tests/ide` walks the declared names, so a file may only carry one that
+ * resolves under the fallback theme.  See dressSide. */
 const SIDE_HIDE_ICON = [
-    "go-previous-symbolic", "pan-start-symbolic", "sidebar-show-symbolic",
+    "sidebar-hide-symbolic", "go-previous-symbolic", "pan-start-symbolic",
 ];
 const SIDE_SHOW_ICON = [
     "sidebar-show-symbolic", "go-next-symbolic", "pan-end-symbolic",

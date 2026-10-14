@@ -568,6 +568,33 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   this tree moved three of them in one afternoon before anything checked, which is
   why `testCssNode` in `tests/widgets` now writes every node down and fails on a
   type that is not in the table.
+- **A `Separator`'s declared size is the room, and the rule is the pixel in the
+  middle of it -- a shape the runtime owes to GTK, not one GTK has.** In GTK 4
+  a `GtkSeparator` draws nothing of its own: `gtkseparator.c` has no measure
+  and no snapshot, it is a `separator` CSS node the theme paints over the
+  *whole allocation*, so a separator 76 wide is a 76-wide band of border colour
+  -- the square everybody draws once. The runtime insets what is *painted*
+  through a CSS margin, which GTK applies when it allocates and does not count
+  when it measures (`gtk_widget_allocate`, `gtk_widget_adjust_size_request`),
+  so a box's cell and a surface's rectangle stay exactly what they were and the
+  rule comes out centred. Measured on the IDE's own toolbar and in
+  `tests/widgets`: `Width: 12` on a `Vertical` one is a cell of 12 with a
+  **1x120 rule five pixels in** -- `Bounds()` answers the *cell* (the room plus
+  the rule, which is what the layout gave the control, and what the designer
+  needs to select) while the room itself is the rule's own CSS margin -- and
+  `Width: 1` is no room at all, the rule filling its box as it always did. The
+  theme still decides the rule's colour; `Margin` is one number for all four
+  sides rather than CSS's four, which is why the room is the size.
+  **And the container cannot stretch it into a band**: the axis across the rule
+  is the one a size means room on, and a box fills a child across itself -- a
+  horizontal rule in a horizontal bar came out the bar's whole height (28 of a
+  44-pixel toolbar). `widget_apply_align` centres a `Separator` on that axis
+  wherever GTK is the one placing it -- and it is asked *there*, not in the room
+  function, because `Add` re-applies the declared alignment after the attach,
+  which undid the first version of this and brought the band back. Measured: the
+  same rule loose in a 40-pixel bar is **1x1**, and the room itself is computed
+  on arrival (`bta_container_attach`, plus `bta_widget_adopt` for a page
+  appended to a notebook, which never attaches) and on every relayout.
 - **A hand-written list in a test drifts exactly like a hand-written list in the
   code.** The icon walk was seven form names typed out; by the time anybody
   looked the IDE had eleven forms, and `ColumnForm`, `PoForm`, `ProjectForm` and

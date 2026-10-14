@@ -1686,9 +1686,71 @@ export class Designer {
 
     /* The layout is asked: that way it lands correctly inside a Panel or a
      * Frame, whose border and label shift the content by whatever the theme
-     * decides. */
+     * decides.
+     *
+     * ...and then the *room* a control keeps inside its own size is asked for
+     * too. A `Separator`'s room is a CSS margin and GTK picks by the border
+     * box -- the rule -- so a click on the space around a rule landed on the
+     * bar the separator is in, or on nothing at all when the separator sits
+     * directly on the surface, and a separator with room could not be selected
+     * on the canvas. The search runs from the surface, topmost first, and
+     * finds exactly the controls whose rectangle is bigger than what GTK
+     * picks by. */
     hitTest(x, y) {
-        return this.owner(this.surface.PickAt(x, y));
+        const picked = this.owner(this.surface.PickAt(x, y));
+        return this.roomAt(this.surface, x, y) || picked;
+    }
+
+    /*
+     * The innermost control *keeping room* whose rectangle contains the point,
+     * topmost first, or null.
+     *
+     * Ordinary controls are never returned: GTK already tested their border
+     * box, which is the same rectangle, so a hit inside one would have come
+     * back from the pick. Hidden controls are skipped -- a page nobody is
+     * looking at keeps the rectangles it had, and a stale one would swallow
+     * clicks -- and a page container is walked into along the page it shows,
+     * for the same reason.
+     */
+    roomAt(within, x, y) {
+        if (!within || !("Children" in within)) return null;
+
+        let kids = within.Children;
+
+        /* A page container shows one page and the designer edits what is on
+         * screen, which is `Current` here (the design value). */
+        if (this.pages(within) && within.Current >= 0 && within.Current < kids.length)
+            kids = [kids[within.Current]];
+
+        for (let i = kids.length - 1; i >= 0; i--) {
+            const kid = kids[i];
+            if (kid.Visible === false) continue;
+
+            const deeper = this.roomAt(kid, x, y);
+            if (deeper) return deeper;
+
+            if (!this.keepsRoom(kid)) continue;
+
+            const r = this.rectOf(kid);
+            if (r && x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h)
+                return kid;
+        }
+        return null;
+    }
+
+    /*
+     * Whether a control keeps room inside its own size, which is what makes
+     * its rectangle bigger than the box GTK picks by.
+     *
+     * The room is a CSS margin of the control's *own* rule -- a `Separator`'s,
+     * when its size across the rule is more than the one-pixel rule -- and
+     * `StyleRule()` answers exactly the CSS the widget is wearing. Asking the
+     * mechanism itself is what keeps this from being a table of class names
+     * that the next control with room would have to be added to; `Margin`, the
+     * property, is GTK's and never reaches this rule.
+     */
+    keepsRoom(control) {
+        return /(^|[;\s])margin-(left|right|top|bottom):/.test(control.StyleRule());
     }
 
     /*

@@ -6797,12 +6797,30 @@
       "Parent": "Control",
       "Members": [
         {
+          "Name": "Height",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the same on the other axis: the room across a `Horizontal` separator, and the length of a `Vertical` one",
+          "Native": true
+        },
+        {
           "Name": "Orientation",
           "Kind": "Property",
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "`Horizontal` `Vertical`. **The thickness is the line**: it paints its whole allocation, so one 12 high is a line 12 thick. Room around it goes on `Margin`. Default `\"Horizontal\"`. A `Horizontal` separator is a line across, between two rows of things; a `Vertical` one divides a toolbar",
+          "Doc": "`Horizontal` `Vertical`. **Which axis the room is on**: the size across the rule, the other one being a minimum length. Default `\"Horizontal\"`. A `Horizontal` separator is a line across, between two rows of things; a `Vertical` one divides a toolbar",
+          "Native": true
+        },
+        {
+          "Name": "Width",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the **room** it takes across itself, not the thickness of the rule: a `Vertical` separator is this wide, and its one-pixel rule stands centred in it -- `Width: 76` is a rule with 37 pixels of air on each side. `1` (or less) is a rule with no room. **The container cannot stretch it into a band**: the axis across the rule is the one a size means room on, and the rule is one pixel there whatever the container gives. On a `Horizontal` separator this is the rule's length instead, and `Height` is the room",
           "Native": true
         }
       ],

@@ -15656,18 +15656,75 @@ function Main() {
         eq("and raises nothing of its own", s.EventNames()[0], "MouseDown");
 
         /*
-         * **Its thickness is the line.** A GtkSeparator paints its whole
-         * allocation, so the natural height of a horizontal one is a pixel --
-         * which is what makes `Margin` and not `Height` the way to give it room.
-         * Measured rather than assumed, because it is the one number a caller
-         * will get wrong.
+         * **Its size is the room, and the rule is the pixel in the middle of
+         * it.** A `GtkSeparator` paints its whole allocation -- `gtkseparator.c`
+         * has no measure and no snapshot of its own -- so the runtime insets
+         * what is *painted* with a CSS margin, which GTK applies when it
+         * allocates and does not count when it measures. The declared size is
+         * therefore exactly what the control occupies, `Bounds()` answers *it*
+         * (what the layout gave the control, which is the room plus the rule),
+         * and the room itself is visible in the rule's own CSS. The paint was
+         * measured off a capture -- a 1x120 rule five pixels into a
+         * twelve-wide cell -- which is the one thing a suite with no pixels
+         * cannot ask for.
          */
         s.Orientation = "Horizontal";
         s.Move(4, 4);
-        s.Resize(120, 0);
-        until("the separator is laid out", () => s.Bounds().Width > 1, () => {
-            eq("a horizontal rule is one pixel tall", s.Bounds().Height, 1);
-            s.Delete();
+        s.Resize(120, 12);
+        until("the separator is laid out",
+              () => s.Bounds(this.Fixed1).Height === 12, () => {
+            eq("the size declared is what it occupies",
+               `${s.Bounds(this.Fixed1).Width}x${s.Bounds(this.Fixed1).Height}`,
+               "120x12");
+            eq("and is what the request answers",
+               JSON.stringify(s.SizeRequest()), "[120,12]");
+            eq("with the room written as the rule's insets",
+               s.StyleRule(), "margin-top: 5px; margin-bottom: 6px;");
+
+            /* Stand it up and the axes swap: the width is the room now, the
+             * height the rule's length. */
+            s.Orientation = "Vertical";
+            s.Resize(12, 120);
+            until("the upright one is laid out",
+                  () => s.Bounds(this.Fixed1).Width === 12, () => {
+                eq("the room is on the other axis now",
+                   s.StyleRule(), "margin-left: 5px; margin-right: 6px;");
+
+                /* A size of one is *no room*: the rule fills its box, which
+                 * is what a separator did before there was a room to have. */
+                s.Resize(1, 120);
+                until("the thin one is laid out",
+                      () => s.Bounds(this.Fixed1).Width === 1, () => {
+                    eq("with no room declared nothing is inset",
+                       s.StyleRule(), "");
+                    s.Delete();
+
+                    /*
+                     * **And a container may not stretch the rule into a band.**
+                     * The axis across the rule is the one its size means room
+                     * on, and a `Horizontal` rule in a `Horizontal` bar used
+                     * to come out the bar's whole height: a band of border
+                     * colour.  Centred in a box, the separator gets what it
+                     * asks for -- one pixel when it asks for nothing -- and
+                     * that is what the thickness is.
+                     */
+                    const bar = new Panel();
+                    bar.Arrangement = "Horizontal";
+                    bar.Resize(160, 40);
+                    bar.Move(4, 140);
+                    this.Fixed1.Add(bar);
+
+                    const flat = new Separator();
+                    bar.Add(flat);
+
+                    until("the flat one is laid out",
+                          () => flat.Bounds(this.Fixed1).Height > 0, () => {
+                        eq("a rule across a bar is one pixel thick",
+                           flat.Bounds(this.Fixed1).Height, 1);
+                        bar.Delete();
+                    });
+                });
+            });
         });
     }
 

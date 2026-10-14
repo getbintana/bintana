@@ -166,6 +166,13 @@ void bta_widget_adopt(JSContext *ctx, JSValueConst parent_val, BtaWidget *parent
      * is. Said here because this is the one place every way of adding a child
      * goes through -- a page appended to a notebook never sees relayout. */
     widget_apply_align(child);
+
+    /* ...and a `Separator` computes the room its size means here too, for the
+     * roads that arrive without `bta_container_attach` (a page appended to a
+     * notebook or a switcher): the alignment above is the pick's business, and
+     * this is the paint's. */
+    if (GTK_IS_SEPARATOR(child->gtk))
+        bta_separator_room(child);
 }
 
 /*
@@ -295,6 +302,12 @@ void bta_widget_relayout(BtaWidget *w)
     /* Which of the two placings applies is the parent's to say, and a control
      * changes parents: re-asked here, where every move already lands. */
     widget_apply_align(w);
+
+    /* ...and a class whose size is read as something other than a size
+     * recomputes what it derives, here for the same reason: a `Separator`'s
+     * room is whatever its across size has beyond the rule. */
+    if (GTK_IS_SEPARATOR(w->gtk))
+        bta_separator_room(w);
 
     /* The surface reads x/y off the widget itself, so moving one is only a
      * matter of telling it to lay out again. */
@@ -833,6 +846,25 @@ static JSValue w_set_geom(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
+/*
+ * `Width` and `Height` as a class of its own answers them.
+ *
+ * The storing, the range and the relayout are the base accessors' -- one
+ * spelling of *what a size request means here*. A class whose own accessor
+ * means something else (a `Separator`'s room) delegates through these instead
+ * of keeping a second copy of the rules. See the Separator in bta_controls.c.
+ */
+JSValue bta_widget_get_geom(JSContext *ctx, JSValueConst this_val, bool height)
+{
+    return w_get_geom(ctx, this_val, height ? GEOM_H : GEOM_W);
+}
+
+JSValue bta_widget_set_geom(JSContext *ctx, JSValueConst this_val,
+                            JSValueConst val, bool height)
+{
+    return w_set_geom(ctx, this_val, val, height ? GEOM_H : GEOM_W);
+}
+
 enum { FLAG_VISIBLE, FLAG_ENABLED, FLAG_FOCUSABLE };
 
 /*
@@ -1109,6 +1141,25 @@ static void widget_apply_align(BtaWidget *w)
 
     gtk_widget_set_halign(w->gtk, drawn ? GTK_ALIGN_FILL : align_gtk(w->halign));
     gtk_widget_set_valign(w->gtk, drawn ? GTK_ALIGN_FILL : align_gtk(w->valign));
+
+    /*
+     * ...except for a `Separator`, whose axis *across* the rule is not the
+     * container's to fill: the size there means room, and a box fills a child
+     * across itself -- a horizontal rule in a horizontal bar came out the bar's
+     * whole height, a band of border colour. Centered, the box gives it what it
+     * asks for: one pixel when nothing is declared, the room when it is. Asked
+     * here because this is where the two axes are decided, and every road that
+     * changes them -- a `.form` property, `Add`, a move, a re-arrangement --
+     * ends here. On a surface GTK's must stay `Fill` (above), and the room is
+     * what insets the rule there.
+     */
+    if (!drawn && GTK_IS_SEPARATOR(w->gtk)) {
+        if (gtk_orientable_get_orientation(GTK_ORIENTABLE(w->gtk))
+                == GTK_ORIENTATION_VERTICAL)
+            gtk_widget_set_halign(w->gtk, GTK_ALIGN_CENTER);
+        else
+            gtk_widget_set_valign(w->gtk, GTK_ALIGN_CENTER);
+    }
 
     /*
      * ...and the **parent** has to lay out again, because the parent's layout is
@@ -1628,7 +1679,7 @@ static void widget_style_write(BtaWidget *w, GString *body);
 /*
  * The CSS this widget's own appearance comes to.
  *
- * Split out of `widget_styles_apply` so it can be *asked for* as well as
+ * Split out of `bta_widget_style_apply` so it can be *asked for* as well as
  * applied: the IDE's class editor sets these same properties on a control and
  * writes what comes back into the project's `app.css`, which means the units,
  * the colour normalising and Pango's three traps are written in one place and
@@ -1643,7 +1694,7 @@ static char *widget_style_body(BtaWidget *w)
     return g_string_free(body, FALSE);
 }
 
-static void widget_styles_apply(BtaWidget *w)
+void bta_widget_style_apply(BtaWidget *w)
 {
     if (!style_provider) {
         style_provider = gtk_css_provider_new();
@@ -1703,6 +1754,15 @@ static void widget_style_write(BtaWidget *w, GString *body)
         g_string_append(body, "; ");
         g_strfreev(parts);
     }
+
+    /* The room a class computed for itself: a `Separator`'s rule inset in the
+     * size it declares. See `room_before`/`room_after`. */
+    if (w->room_before || w->room_after)
+        g_string_append_printf(body, "margin-%s: %dpx; margin-%s: %dpx; ",
+                               w->room_vertical ? "left"  : "top",
+                               w->room_before,
+                               w->room_vertical ? "right" : "bottom",
+                               w->room_after);
 
     if (w->shadow) {
         /* Four sizes and a colour, in that order and nothing else: built here,
@@ -1856,7 +1916,7 @@ static JSValue w_set_font(JSContext *ctx, JSValueConst this_val, JSValueConst va
     g_free(w->font);
     w->font = parsed;
 
-    widget_styles_apply(w);
+    bta_widget_style_apply(w);
     return JS_UNDEFINED;
 }
 
@@ -1964,7 +2024,7 @@ static JSValue w_set_radius(JSContext *ctx, JSValueConst this_val, JSValueConst 
     g_free(w->radius);
     w->radius = radius;
 
-    widget_styles_apply(w);
+    bta_widget_style_apply(w);
     return JS_UNDEFINED;
 }
 
@@ -2005,7 +2065,7 @@ static JSValue w_set_padding(JSContext *ctx, JSValueConst this_val, JSValueConst
     g_free(w->padding);
     w->padding = padding;
 
-    widget_styles_apply(w);
+    bta_widget_style_apply(w);
     return JS_UNDEFINED;
 }
 
@@ -2100,7 +2160,7 @@ static JSValue w_set_shadow(JSContext *ctx, JSValueConst this_val, JSValueConst 
         g_free(rgba);
     }
 
-    widget_styles_apply(w);
+    bta_widget_style_apply(w);
     return JS_UNDEFINED;
 }
 
@@ -2143,7 +2203,7 @@ static JSValue w_set_color(JSContext *ctx, JSValueConst this_val,
     g_free(*slot);
     *slot = parsed;
 
-    widget_styles_apply(w);
+    bta_widget_style_apply(w);
     return JS_UNDEFINED;
 }
 
@@ -5337,11 +5397,32 @@ static JSValue widget_box(JSContext *ctx, BtaWidget *w, GtkWidget *ref)
         out.x = out.y = 0.0f;
     }
 
+    int width  = gtk_widget_get_width(w->gtk);
+    int height = gtk_widget_get_height(w->gtk);
+
+    /*
+     * A control that keeps room inside its own size is answered with it: what
+     * the layout gave a `Separator` is the room plus its rule, and GTK reports
+     * only what is painted. `Bounds()` is the allocation and said so, so the
+     * room it declared is added back -- which is also what the designer needs
+     * to select and resize it by the space it takes rather than by the one
+     * pixel the rule draws.
+     */
+    if (w->room_before || w->room_after) {
+        if (w->room_vertical) {
+            out.x -= w->room_before;
+            width += w->room_before + w->room_after;
+        } else {
+            out.y -= w->room_before;
+            height += w->room_before + w->room_after;
+        }
+    }
+
     JSValue o = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, o, "X",      JS_NewInt32(ctx, (int)out.x));
     JS_SetPropertyStr(ctx, o, "Y",      JS_NewInt32(ctx, (int)out.y));
-    JS_SetPropertyStr(ctx, o, "Width",  JS_NewInt32(ctx, gtk_widget_get_width(w->gtk)));
-    JS_SetPropertyStr(ctx, o, "Height", JS_NewInt32(ctx, gtk_widget_get_height(w->gtk)));
+    JS_SetPropertyStr(ctx, o, "Width",  JS_NewInt32(ctx, width));
+    JS_SetPropertyStr(ctx, o, "Height", JS_NewInt32(ctx, height));
     return o;
 }
 
@@ -6431,7 +6512,7 @@ static JSValue w_set_border(JSContext *ctx, JSValueConst this_val, JSValueConst 
         g_free(rgba);
     }
 
-    widget_styles_apply(w);
+    bta_widget_style_apply(w);
     return JS_UNDEFINED;
 }
 
@@ -6512,7 +6593,7 @@ static JSValue w_set_scale(JSContext *ctx, JSValueConst this_val, JSValueConst v
             "FontScale: %g is not a factor -- 1 is the size in force", v);
 
     w->font_scale = v;
-    widget_styles_apply(w);
+    bta_widget_style_apply(w);
     return JS_UNDEFINED;
 }
 
@@ -6542,7 +6623,7 @@ static JSValue w_set_opacity(JSContext *ctx, JSValueConst this_val, JSValueConst
      * could not be composed into one.
      */
     w->opacity = v;
-    widget_styles_apply(w);
+    bta_widget_style_apply(w);
     return JS_UNDEFINED;
 }
 
@@ -7537,6 +7618,13 @@ bool bta_container_attach(JSContext *ctx, BtaWidget *parent, BtaWidget *child)
     /* A radio's set is its container, so arriving in one joins it. */
     bta_radio_regroup(slot, child->gtk);
     bta_grid_reflow(slot);
+
+    /* ...and a `Separator` asks what its own size means here, where every way
+     * of adding a child arrives -- the loader's included, which is the one that
+     * never adopts. Which axis its room is on, and whether the container may
+     * stretch it at all, are facts about where it just arrived. */
+    if (GTK_IS_SEPARATOR(child->gtk))
+        bta_separator_room(child);
     return true;
 }
 

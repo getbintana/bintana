@@ -8891,6 +8891,75 @@ function* p_projects(ide) {
           `${deep.length} controls`);
 
     /*
+     * **A separator is selected by the room it declares**, not by the pixel its
+     * rule draws.  The rectangle is the one `Bounds()` answers -- the room plus
+     * the rule -- and the *pick* is asked for it too, because GTK's is the
+     * border box, the rule, so a click on the space around it would land on the
+     * bar the separator is in.  That is the gesture that could not be made at
+     * all while the rule was the only rectangle there was.
+     */
+    const sep    = byName(ide, "ToolbarSeparator");
+    const sepWas = sep.Width;
+    sep.Width = 24;
+    yield;
+
+    eq("a separator's rectangle is the room it declares",
+       ide.designer.rectOf(sep).w, 24);
+
+    ide.designer.select(null);
+    const room = ide.designer.rectOf(sep);
+    ide.designer.mouseDown(room.x + 2, room.y + 2);
+    ide.designer.mouseUp(room.x + 2, room.y + 2);
+    yield;
+
+    eq("and a click on the room selects it",
+       ide.designer.selected && ide.designer.selected.Name, "ToolbarSeparator");
+
+    sep.Width = sepWas;
+
+    /*
+     * ...and the same for a separator *loose on the surface* -- the horizontal
+     * one, dropped on the form.  There GTK's pick answers the bar the point
+     * falls in or empty space, so the room is not inside anything the pick
+     * returned: the search has to run from the surface.
+     */
+    const loose = Widget.New("Separator");
+    loose.Name = "LooseSep";
+    ide.Surface.Add(loose);
+    loose.Move(600, 620);
+    loose.Resize(120, 12);
+    yield;
+
+    ide.designer.select(null);
+    ide.designer.mouseDown(602, 622);
+    ide.designer.mouseUp(602, 622);
+    yield;
+
+    check("a separator loose on the surface is selected by its room too",
+          ide.designer.selected === loose,
+          ide.designer.selected ? ide.designer.selected.Name : "nothing");
+
+    ide.designer.select(null);
+    loose.Delete();
+
+    /*
+     * ...and the bar may not stretch it: the toolbar's separator turned
+     * horizontal used to come out the bar's whole height -- a band of border
+     * colour -- because the axis across the rule is a box's to fill.
+     */
+    const sepTall = sep.Height;
+    sep.Orientation = "Horizontal";
+    sep.Height = 0;                 /* no room: the rule *is* one pixel */
+    yield* until(() => ide.designer.rectOf(sep).h === 1);
+
+    eq("a rule across the bar is one pixel thick",
+       ide.designer.rectOf(sep).h, 1);
+
+    sep.Height = sepTall;
+    sep.Orientation = "Vertical";
+    yield* until(() => ide.designer.rectOf(sep).w === sepWas);
+
+    /*
      * And it can be saved back with its menus, which is the other half of being
      * able to edit itself.
      *

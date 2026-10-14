@@ -228,6 +228,16 @@ struct BtaWidget {
     char      *font;        /* a Pango description, re-serialised; NULL for none */
     char      *radius;      /* corner radii, "8" or "8 8 0 0"; NULL for square */
     char      *padding;     /* inner room, same shape; NULL for the theme's */
+    /* The room a `Separator` keeps **around** its rule, as the two insets its
+     * painted box leaves inside the size it declares -- zero for every other
+     * control, and zero when there is no room to keep. `Bounds()` adds them
+     * back, because what the layout gave the control *is* the room plus the
+     * rule; and the per-widget CSS writes them as margins, which GTK applies
+     * when it allocates and does not count when it measures, so no layout at
+     * all is changed by them. See the Separator in bta_controls.c. */
+    int        room_before;
+    int        room_after;
+    bool       room_vertical;   /* which axis the room is on */
     /* The keys that press this control, as declared -- kept so the getter and
      * the serialiser answer with what the .form said. */
     char     **shortcuts;
@@ -865,6 +875,22 @@ GtkWidget *bta_style_root(GtkWidget *at);
 /* Scroll a row into view inside whatever scrolled window holds it -- the
  * arithmetic `GtkListBox` has no call for. */
 void bta_widget_reveal(GtkWidget *target);
+/* `Width` and `Height`, stored and carried out: the accessors a class uses for
+ * its own when one of them means something else there -- a `Separator`'s size
+ * is the room around its rule, so it shadows both and delegates the storing
+ * here. `height` picks which of the two. */
+JSValue bta_widget_get_geom(JSContext *ctx, JSValueConst this_val, bool height);
+JSValue bta_widget_set_geom(JSContext *ctx, JSValueConst this_val,
+                            JSValueConst val, bool height);
+/* Apply this widget's per-widget CSS again. What a class that *computes* part
+ * of its style asks for after the number it came from changed (the Separator's
+ * room; see `w->room`). */
+void bta_widget_style_apply(BtaWidget *w);
+/* The room a `Separator` keeps around its rule, recomputed from the size it
+ * declares. Called where every geometry change lands -- `bta_widget_relayout`
+ * -- and by the one setter that does not pass through there, `Orientation`.
+ * Idempotent: an unchanged room costs a string compare. */
+void bta_separator_room(BtaWidget *w);
 /* The Widget prototype's own accessors, shared by the class table. */
 const JSCFunctionListEntry *bta_widget_base_props(int *count);
 /* The values `Cursor` accepts, comma separated, for Widget's `options`. Built

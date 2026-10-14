@@ -781,8 +781,6 @@
                 "Arrangement": "Horizontal",
                 "HAlign": "Fill",
                 "Height": 44,
-                "Margin": 4,
-                "Spacing": 6,
                 "Style": "toolbar"
               },
               "children": [
@@ -815,6 +813,16 @@
                     "Icon": "document-save",
                     "Style": "flat",
                     "Width": 14
+                  }
+                },
+                {
+                  "type": "Separator",
+                  "name": "ToolbarSeparator",
+                  "properties": {
+                    "HAlign": "Center",
+                    "Height": 28,
+                    "Orientation": "Vertical",
+                    "Width": 304
                   }
                 },
                 {
@@ -913,7 +921,7 @@
                           "properties": {
                             "Arrangement": "Horizontal",
                             "HAlign": "Fill",
-                            "Margin": 4,
+                            "Padding": "0 4",
                             "Style": "linked"
                           },
                           "children": [
@@ -932,7 +940,6 @@
                               "name": "BtnSideHide",
                               "properties": {
                                 "Height": 30,
-                                "Icon": "close-symbolic",
                                 "Tooltip": "Hide the project panel",
                                 "Width": 34
                               }
@@ -961,6 +968,8 @@
                                 "Arrangement": "Vertical",
                                 "Expand": true,
                                 "HExpand": true,
+                                "Margin": 4,
+                                "Spacing": 4,
                                 "VExpand": true
                               },
                               "children": [
@@ -971,7 +980,6 @@
                                     "Expand": true,
                                     "HAlign": "Fill",
                                     "HExpand": true,
-                                    "Margin": 4,
                                     "Menu": [
                                       {
                                         "name": "MnuFtStartup",
@@ -1021,7 +1029,6 @@
                                   "properties": {
                                     "Arrangement": "Horizontal",
                                     "HAlign": "Fill",
-                                    "Margin": 4,
                                     "Style": "linked"
                                   },
                                   "children": [
@@ -1039,6 +1046,7 @@
                                       "type": "Button",
                                       "name": "BtnFtOptions",
                                       "properties": {
+                                        "Icon": "open-menu-symbolic",
                                         "Menu": [
                                           {
                                             "action": "ActFtExpand"
@@ -1458,7 +1466,8 @@
                                   "name": "ImgEmpty",
                                   "properties": {
                                     "Icon": "document-edit-symbolic",
-                                    "Size": 64
+                                    "Size": 64,
+                                    "Style": "dim-label"
                                   }
                                 },
                                 {
@@ -1466,7 +1475,7 @@
                                   "name": "LblEmpty",
                                   "properties": {
                                     "Alignment": "Center",
-                                    "Style": "title-2",
+                                    "Style": "title-2 dim-label",
                                     "Text": "Nothing open"
                                   }
                                 },

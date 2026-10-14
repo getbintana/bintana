@@ -6031,31 +6031,139 @@ static const char *level_options(const char *prop)
  * thing more quietly -- and that is an argument about taste, not about whether a
  * widget set should have one.
  *
- * `Orientation` is the same word `Slider` and `ProgressBar` answer to, through
- * the same accessor: `GtkOrientable` is what the three have in common. Nothing
- * else, which is the point of it -- a separator that needed configuring would be
- * a `Frame`.
+ * **The size it declares is the room, and the rule stands centred in it.** A
+ * `GtkSeparator` draws nothing of its own -- it is a `separator` CSS node and
+ * the theme paints its *whole allocation* -- so one 76 wide used to come out a
+ * 76-wide band of border colour: the square everybody draws once. What a width
+ * is wanted for there is the space between two groups, so the runtime reads it
+ * that way: the separator keeps its declared size in the layout and the
+ * *painted* box shrinks to a one-pixel rule, centred, through a CSS margin.
+ * That margin is the load-bearing part -- GTK applies CSS margins when it
+ * allocates and does not count them when it measures (`gtk_widget_allocate`,
+ * `gtk_widget_adjust_size_request`) -- so a box's cell and a surface's
+ * rectangle are exactly what they were, and the room costs the layout nothing.
  *
- * **Its thickness is the line, not the room around it.** A `GtkSeparator` paints
- * its whole allocation, so a separator 12 high is a line 12 thick rather than a
- * line with space above and below. The room goes on `Margin`, which is the same
- * answer this runtime already gives for a form whose contents sit against the
- * frame.
+ * `Orientation` is the same word `Slider` and `ProgressBar` answer to: what the
+ * three have in common is `GtkOrientable`. Which axis the room is on follows
+ * from it -- the size *across* the rule -- and the other axis keeps its old
+ * meaning, a minimum length. `Margin` still applies outside all of it, and the
+ * theme still decides the rule's colour: a separator of the twentieth theme
+ * looks like that theme's. And `Bounds()` answers the **room**, not the rule --
+ * the room plus the rule is what the layout gave the control, which is also
+ * what the designer needs to select it by the space it takes.
  */
 static void build_separator(BtaWidget *w)
 {
     w->gtk = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
 }
 
+/*
+ * The room the declared size asks for, as the two insets the painted box
+ * leaves inside it -- and as the CSS margins that put them there.
+ *
+ * A size of one or less means *no room*: nothing is inset and the rule fills
+ * the box exactly as it always did, which is what `Width: 1` says. The rule is
+ * one pixel -- the theme's colour, the runtime's thickness -- and everything
+ * the declared size has beyond it is split as evenly as it divides.
+ *
+ * Called from `bta_widget_relayout`, where every geometry change lands, and
+ * from the orientation setter, which is the one that does not go through
+ * there. Idempotent: a room that did not change costs the comparison, so the
+ * stylesheet is only touched when a number moved.
+ */
+void bta_separator_room(BtaWidget *w)
+{
+    bool vertical = gtk_orientable_get_orientation(GTK_ORIENTABLE(w->gtk))
+                        == GTK_ORIENTATION_VERTICAL;
+    int  cell     = vertical ? w->w : w->h;
+    int  before   = 0;
+    int  after    = 0;
+
+    if (cell > 1) {
+        before = (cell - 1) / 2;
+        after  = cell - 1 - before;
+    }
+
+    if (before == w->room_before && after == w->room_after &&
+        (!before || vertical == w->room_vertical))
+        return;
+
+    w->room_before   = before;
+    w->room_after    = after;
+    w->room_vertical = vertical;
+    bta_widget_style_apply(w);
+}
+
+/* Width and Height, shadowed: their storing and their relayout are the base
+ * accessors', and the room that follows is `bta_separator_room`'s, which
+ * `bta_widget_set_geom` reaches through `bta_widget_relayout`. That these two
+ * are the class's own is what says in the documentation -- and in the property
+ * grid -- that the number means something else here. */
+static JSValue separator_get_width(JSContext *ctx, JSValueConst this_val)
+{
+    return bta_widget_get_geom(ctx, this_val, false);
+}
+
+static JSValue separator_set_width(JSContext *ctx, JSValueConst this_val,
+                                   JSValueConst val)
+{
+    return bta_widget_set_geom(ctx, this_val, val, false);
+}
+
+static JSValue separator_get_height(JSContext *ctx, JSValueConst this_val)
+{
+    return bta_widget_get_geom(ctx, this_val, true);
+}
+
+static JSValue separator_set_height(JSContext *ctx, JSValueConst this_val,
+                                    JSValueConst val)
+{
+    return bta_widget_set_geom(ctx, this_val, val, true);
+}
+
+/* Its own, and not the shared `orient_set`: which axis the room is on is the
+ * orientation's to say, and turning one over hands the *other* axis back to
+ * the alignment it was declared with -- which is `bta_widget_relayout`'s two
+ * steps, `widget_apply_align` and the room. */
+static JSValue separator_set_orientation(JSContext *ctx, JSValueConst this_val,
+                                         JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    JSValue r = orient_set(ctx, this_val, val);
+    if (JS_IsException(r))
+        return r;
+
+    bta_widget_relayout(w);
+    return r;
+}
+
 static const JSCFunctionListEntry separator_props[] = {
-    /* Orientation
-     *   `Horizontal` `Vertical`. **The thickness is the line**: it paints its
-     *   whole allocation, so one 12 high is a line 12 thick. Room around it
-     *   goes on `Margin`. Default `"Horizontal"`. A `Horizontal` separator is
-     *   a line across, between two rows of things; a `Vertical` one divides a
-     *   toolbar
+    /* Width
+     *   the **room** it takes across itself, not the thickness of the rule: a
+     *   `Vertical` separator is this wide, and its one-pixel rule stands
+     *   centred in it -- `Width: 76` is a rule with 37 pixels of air on each
+     *   side. `1` (or less) is a rule with no room. **The container cannot
+     *   stretch it into a band**: the axis across the rule is the one a size
+     *   means room on, and the rule is one pixel there whatever the container
+     *   gives. On a `Horizontal` separator this is the rule's length instead,
+     *   and `Height` is the room
      */
-    JS_CGETSET_DEF("Orientation", orient_get, orient_set),
+    JS_CGETSET_DEF("Width",  separator_get_width,  separator_set_width),
+    /* Height
+     *   the same on the other axis: the room across a `Horizontal` separator,
+     *   and the length of a `Vertical` one
+     */
+    JS_CGETSET_DEF("Height", separator_get_height, separator_set_height),
+    /* Orientation
+     *   `Horizontal` `Vertical`. **Which axis the room is on**: the size across
+     *   the rule, the other one being a minimum length. Default
+     *   `"Horizontal"`. A `Horizontal` separator is a line across, between two
+     *   rows of things; a `Vertical` one divides a toolbar
+     */
+    JS_CGETSET_DEF("Orientation", orient_get, separator_set_orientation),
 };
 
 /* ----------------------------------------------------------- ProgressBar */
