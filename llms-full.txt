@@ -901,10 +901,10 @@ disagree.
   the same shape of risk: the runner is the only GCC 13 this repository has.
 - **And so is its GTK, which is the one that actually bit.** The runner is
   Ubuntu 24.04 with GTK **4.14** while Fedora 44 has **4.22**, so a name added
-  since 4.15 compiles here and is an *undeclared identifier* there:
+  since 4.15 compiles on Fedora and is an *undeclared identifier* there:
   `GDK_ACTION_NONE` is an enumerator only since **4.20**
   (`GDK_AVAILABLE_ENUMERATOR_IN_4_20` in `gdk/gdkenums.h`) and `bta_widget.c`
-  returned it for a refused drag -- green here, `error: 'GDK_ACTION_NONE'
+  returned it for a refused drag -- green on Fedora 44, `error: 'GDK_ACTION_NONE'
   undeclared` on the runner, and the floor this runtime declares is 4.10. `0` is
   the zero of the flags type and says it in every version. **A new GTK or GDK
   name is checked against the floor, not against the machine you build on**: grep the header
@@ -964,8 +964,8 @@ disagree.
   `tools/docs.sh` would have written those wrong links into the pages. The
   normalisation belongs at the boundary (`…slice(root.length + 1).replace(/\\/g,
   "/")`), which is where the platform's spelling enters, and `File.Join` takes
-  the `/` spelling back on either platform. It is green here and red only on the
-  runner, so the evidence is by hand: a scratch copy of `Rows.js` given the
+  the `/` spelling back on either platform. It is green on Linux and red only on the
+  Windows runner, so the evidence is by hand: a scratch copy of `Rows.js` given the
   backslashed keys the walk really returns reports the same 31 pages with the
   fix removed.
 - **`add_executable(bintana …)` lists its sources by hand while the signature
@@ -1876,7 +1876,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   `job->cancel` (only teardown did). The debugger's last event races its exit;
   when the exit won, the read completed into freed memory and
   `on_exec_line` segfaulted in `JS_IsFunction` -- exit 139 on the
-  `no-unix-print` job, one run in several, and never in forty here. And the
+  `no-unix-print` job, one run in several, and never in forty local runs. And the
   callback read `job->err`/`job->control` *before* checking for the cancel, so
   even teardown's cancel was a read of freed memory. Now: the free cancels,
   the callback finishes the read before touching the job and also asks
@@ -4986,7 +4986,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   code.** The icon walk was seven form names typed out; by the time anybody
   looked the IDE had eleven forms, and `ColumnForm`, `PoForm`, `ProjectForm` and
   `SearchForm` had never had an icon checked -- `ColumnForm` was declaring
-  `view-table-symbolic`, which is in no theme here and not inside GTK either, so
+  `view-table-symbolic`, which is in no theme the suite was checked against and not inside GTK either, so
   the dialog came up with no icon and the suite was green. AGENTS.md even
   described the test as walking *every* `.form` under `ide/`, which is what it
   does now: `Directory.List` the directory. A test about files that names its files is
@@ -5001,7 +5001,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   `go-up`, `document-new` and `applications-development` are Fedora's
   `AdwaitaLegacy` and Ubuntu's Yaru, and the Adwaita a bare runner falls back to
   ships only the symbolic set. Sixteen icons drew blank on the runner and every
-  one of them was fine here -- which is what walking every `.form` is for.
+  one of them was fine on a desktop with the legacy icons -- which is what walking every `.form` is for.
 - `gtk_icon_theme_has_icon()` promises more than the theme delivers: it can say
   yes and hand back its `image-missing`, or an SVG that renders to nothing (art
   outside the frame, no `viewBox`). `bta_icon_available` renders it at 16x16 and
@@ -5401,9 +5401,9 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   sorted, since each is its own store.
   **And where the minus lands is glib's answer, not the table's**: `-5` sorts
   first under glib 2.88 (Fedora 44) and last under the runner's 2.80, so a
-  test that stripped it with `.replace("-5,", "")` passed here and failed there
-  -- green here, red on `no-xml`, `no-unix-print` and `no-vte`, which are the
-  only jobs that run this green machine's suite against that older library.
+  test that stripped it with `.replace("-5,", "")` passed on Fedora and failed there
+  -- green locally, red on `no-xml`, `no-unix-print` and `no-vte`, which are the
+  only jobs that run a full suite against that older library.
   The test filters the minus row wherever it lands now; asserting its position
   would be asserting a library version.
 - **`GtkColumnView` cannot hide its heading row**, and that fact decides a design

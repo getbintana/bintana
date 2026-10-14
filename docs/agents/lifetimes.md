@@ -115,7 +115,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   `job->cancel` (only teardown did). The debugger's last event races its exit;
   when the exit won, the read completed into freed memory and
   `on_exec_line` segfaulted in `JS_IsFunction` -- exit 139 on the
-  `no-unix-print` job, one run in several, and never in forty here. And the
+  `no-unix-print` job, one run in several, and never in forty local runs. And the
   callback read `job->err`/`job->control` *before* checking for the cancel, so
   even teardown's cancel was a read of freed memory. Now: the free cancels,
   the callback finishes the read before touching the job and also asks

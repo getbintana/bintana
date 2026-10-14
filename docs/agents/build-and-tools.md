@@ -269,10 +269,10 @@ disagree.
   the same shape of risk: the runner is the only GCC 13 this repository has.
 - **And so is its GTK, which is the one that actually bit.** The runner is
   Ubuntu 24.04 with GTK **4.14** while Fedora 44 has **4.22**, so a name added
-  since 4.15 compiles here and is an *undeclared identifier* there:
+  since 4.15 compiles on Fedora and is an *undeclared identifier* there:
   `GDK_ACTION_NONE` is an enumerator only since **4.20**
   (`GDK_AVAILABLE_ENUMERATOR_IN_4_20` in `gdk/gdkenums.h`) and `bta_widget.c`
-  returned it for a refused drag -- green here, `error: 'GDK_ACTION_NONE'
+  returned it for a refused drag -- green on Fedora 44, `error: 'GDK_ACTION_NONE'
   undeclared` on the runner, and the floor this runtime declares is 4.10. `0` is
   the zero of the flags type and says it in every version. **A new GTK or GDK
   name is checked against the floor, not against the machine you build on**: grep the header
@@ -332,8 +332,8 @@ disagree.
   `tools/docs.sh` would have written those wrong links into the pages. The
   normalisation belongs at the boundary (`…slice(root.length + 1).replace(/\\/g,
   "/")`), which is where the platform's spelling enters, and `File.Join` takes
-  the `/` spelling back on either platform. It is green here and red only on the
-  runner, so the evidence is by hand: a scratch copy of `Rows.js` given the
+  the `/` spelling back on either platform. It is green on Linux and red only on the
+  Windows runner, so the evidence is by hand: a scratch copy of `Rows.js` given the
   backslashed keys the walk really returns reports the same 31 pages with the
   fix removed.
 - **`add_executable(bintana …)` lists its sources by hand while the signature

@@ -39,9 +39,9 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   sorted, since each is its own store.
   **And where the minus lands is glib's answer, not the table's**: `-5` sorts
   first under glib 2.88 (Fedora 44) and last under the runner's 2.80, so a
-  test that stripped it with `.replace("-5,", "")` passed here and failed there
-  -- green here, red on `no-xml`, `no-unix-print` and `no-vte`, which are the
-  only jobs that run this green machine's suite against that older library.
+  test that stripped it with `.replace("-5,", "")` passed on Fedora and failed there
+  -- green locally, red on `no-xml`, `no-unix-print` and `no-vte`, which are the
+  only jobs that run a full suite against that older library.
   The test filters the minus row wherever it lands now; asserting its position
   would be asserting a library version.
 - **`GtkColumnView` cannot hide its heading row**, and that fact decides a design

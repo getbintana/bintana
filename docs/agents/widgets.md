@@ -559,7 +559,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   code.** The icon walk was seven form names typed out; by the time anybody
   looked the IDE had eleven forms, and `ColumnForm`, `PoForm`, `ProjectForm` and
   `SearchForm` had never had an icon checked -- `ColumnForm` was declaring
-  `view-table-symbolic`, which is in no theme here and not inside GTK either, so
+  `view-table-symbolic`, which is in no theme the suite was checked against and not inside GTK either, so
   the dialog came up with no icon and the suite was green. AGENTS.md even
   described the test as walking *every* `.form` under `ide/`, which is what it
   does now: `Directory.List` the directory. A test about files that names its files is
@@ -574,7 +574,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   `go-up`, `document-new` and `applications-development` are Fedora's
   `AdwaitaLegacy` and Ubuntu's Yaru, and the Adwaita a bare runner falls back to
   ships only the symbolic set. Sixteen icons drew blank on the runner and every
-  one of them was fine here -- which is what walking every `.form` is for.
+  one of them was fine on a desktop with the legacy icons -- which is what walking every `.form` is for.
 - `gtk_icon_theme_has_icon()` promises more than the theme delivers: it can say
   yes and hand back its `image-missing`, or an SVG that renders to nothing (art
   outside the frame, no `viewBox`). `bta_icon_available` renders it at 16x16 and
