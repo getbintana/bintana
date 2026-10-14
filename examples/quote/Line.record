@@ -1,0 +1,10 @@
+{
+  "format": "bta-record/1",
+  "class": "Line",
+  "naming": "lower",
+  "fields": {
+    "What":     { "kind": "text", "required": true, "max": 60 },
+    "Quantity": { "kind": "decimal", "decimals": 2, "min": "0" },
+    "Price":    { "kind": "decimal", "decimals": 2, "min": "0" }
+  }
+}

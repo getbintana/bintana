@@ -1,0 +1,14 @@
+{
+  "format": "bta-record/1",
+  "class": "Client",
+  "naming": "snake",
+  "fields": {
+    "Id":         { "kind": "int", "key": true },
+    "Name":       { "kind": "text", "required": true, "max": 80 },
+    "Category":   { "kind": "enum", "values": ["Retail", "Wholesale", "Government"] },
+    "Balance":    { "kind": "decimal", "decimals": 2 },
+    "Since":      { "kind": "date" },
+    "PostalCode": { "kind": "text", "max": 8 },
+    "Active":     { "kind": "bool", "def": true }
+  }
+}

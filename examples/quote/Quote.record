@@ -1,0 +1,13 @@
+{
+  "format": "bta-record/1",
+  "class": "Quote",
+  "naming": "lower",
+  "fields": {
+    "Customer":    { "kind": "text", "required": true, "max": 80 },
+    "Date":        { "kind": "date", "required": true },
+    "Discount":    { "kind": "decimal", "decimals": 2, "min": "0", "max": "100" },
+    "Tax":         { "kind": "enum", "values": ["21", "10.5", "0"] },
+    "Instalments": { "kind": "int", "min": 1, "max": 12, "def": 1 },
+    "Lines":       { "kind": "list", "of": "Line" }
+  }
+}

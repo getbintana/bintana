@@ -1,0 +1,13 @@
+{
+  "format": "bta-record/1",
+  "class": "Order",
+  "naming": "snake",
+  "fields": {
+    "Id":       { "kind": "int", "key": true },
+    "ClientId": { "kind": "int", "required": true },
+    "Placed":   { "kind": "date", "required": true },
+    "What":     { "kind": "text", "required": true, "max": 60 },
+    "Amount":   { "kind": "decimal", "decimals": 2, "min": "0" },
+    "State":    { "kind": "enum", "values": ["Pending", "Executed"] }
+  }
+}

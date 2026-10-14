@@ -33,28 +33,24 @@
 /*
  * A client.
  *
- * `Naming = "snake"` is the whole of what makes this a database shape rather
- * than a JSON one, and it was written for this years before there was any SQL.
- * `Id` is `Field.Int({ key: true })`: at 0 it is a row that was never saved,
- * which is how `Table.Save` tells an INSERT from an UPDATE with no flag.
+ * **The shape is `Client.record` beside this file**, and `Order.record` beside
+ * its class below: the fields, their rules and the names they are written with
+ * live there, the tree groups them under Records, and the IDE's dialog edits
+ * them. This file keeps what is a class's own -- the `Label` getter, the
+ * schema, and the samples.
+ *
+ * The file's `naming: "snake"` is the whole of what makes this a database
+ * shape rather than a JSON one, and it was written for this years before there
+ * was any SQL. `Id` is `int` with `key: true`: at 0 it is a row that was never
+ * saved, which is how `Table.Save` tells an INSERT from an UPDATE with no flag.
+ *
+ * Two facts from the file worth knowing while reading the schema below: `Since`
+ * is an ordinary optional date -- it was `required` while a `DatePicker` had no
+ * empty state, which is a limit this runtime no longer has -- and `Balance` is
+ * a `decimal` because TEXT is what keeps `'19.90'` from becoming the double
+ * `19.9`, which is what most ORMs declaring a `decimal` column get.
  */
 class Client extends Record {
-    static Naming = "snake";
-    static Fields = {
-        Id:         Field.Int({ key: true }),
-        Name:       Field.Text({ required: true, max: 80 }),
-        Category:   Field.Enum(["Retail", "Wholesale", "Government"]),
-        Balance:    Field.Decimal({ decimals: 2 }),
-        /* Optional, and it **was** `required` because of the control and not
-         * because of the domain: a `DatePicker` had no empty state, so an
-         * optional date could not come back out of one. `Value = ""` is no
-         * date now, and a new record shows the placeholder. See measurement 7
-         * in ClientsForm.js. */
-        Since:      Field.Date(),
-        PostalCode: Field.Text({ max: 8 }),
-        Active:     Field.Bool(true),
-    };
-
     /* A field written by hand is a field, and the serialiser leaves it out --
      * so it is not a column and `Table` never asks about it. */
     get Label() { return `${this.Name} (${this.Category})`; }
@@ -67,28 +63,15 @@ class Client extends Record {
  * a number in one shape names a row of another, which is the whole of what a
  * child collection would add. Until then the foreign key is a field like any
  * other and the join is a `Where`.
+ *
+ * `State`'s values are the file's.  An enum and not a boolean, for the reason
+ * enums earn their keep everywhere in this tree: the setter refuses a state
+ * nobody has, the column shows the word rather than a `1`, and
+ * `PropertyOptions` would fill a drop-down from the same list -- which the
+ * dialog that edits the shape also reads. `Pending` is the default because an
+ * enum with no `def` takes its first value.
  */
 class Order extends Record {
-    static Naming = "snake";
-    static Fields = {
-        Id:       Field.Int({ key: true }),
-        ClientId: Field.Int({ required: true }),
-        Placed:   Field.Date({ required: true }),
-        What:     Field.Text({ required: true, max: 60 }),
-        Amount:   Field.Decimal({ decimals: 2, min: "0" }),
-
-        /*
-         * Pending until it is executed, and executing it is what moves the
-         * client's balance.
-         *
-         * A `Field.Enum` and not a boolean, for the reason enums earn their keep
-         * everywhere in this tree: the setter refuses a state nobody has, the
-         * column shows the word rather than a `1`, and `PropertyOptions` would
-         * fill a drop-down from the same list. `Pending` is the default because
-         * an enum with no `def` takes its first value.
-         */
-        State:    Field.Enum(["Pending", "Executed"]),
-    };
 }
 
 /*
