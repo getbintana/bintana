@@ -1,27 +1,27 @@
 /*
  * The tree, in two views.
  *
- * **Project** is the one this file is mostly about: every editable file, grouped
- * by what it *is*. **Files** is the other question -- what is really in that
- * directory -- and the two are worth having separately for the reason Android
- * Studio has them: the first is where one works, and the second is where one
- * goes when the first is not telling the whole truth.
+ * **Project** is the one this file is mostly about: **every file of the
+ * project**, grouped by what it *is*. **Files** is the other question -- the
+ * same files in the folders they are really in, with no grouping at all -- and
+ * the two are worth having separately for the reason Android Studio has them:
+ * the second is where one goes when the grouping is what is hiding something.
  *
  * The project view is a *lie about the disk*, deliberately: a form's two files
  * are one node, catalogues from anywhere in the tree gather under one category,
  * the hierarchy is the namespaces rather than the directories, and `po/` is not
- * drawn at all. That is what makes it useful and what makes it
- * unable to answer "why is there a stray file in here". The files view shows
- * everything, in the folders it is really in, including what the project does
- * not recognise -- a `README`, a `.tar` an export left behind, an `.svg` in
- * `icons/`. Those were invisible in this IDE until it existed.
+ * drawn at all. But it is no longer a *short* list of the disk: a file no
+ * category claims -- a `README` with no extension, a `.tar` an export left
+ * behind, an `.svg` in `icons/`, the `.gpx` of a track -- sits under `Other`.
+ * A file left out of this view is a file the person who put it there cannot
+ * see.
  *
  * Both fill the same `byKey`, so selecting, renaming and deleting work the same
  * in either and nothing downstream has to know which view is up.
  */
 
 /*
- * The project tree: every editable file under the project, grouped.
+ * The project tree: every file under the project, grouped.
  *
  * The grouping is the whole of it.  A form is one thing even though it lives in
  * two files, so the `.form` and the `.js` beside it hang under one node;
@@ -277,6 +277,10 @@ export class ProjectTree {
              * "this is an image", which is what the viewer opens. */
             images:     ["image-x-generic-symbolic", "bta-image-symbolic"],
             image:      ["image-x-generic-symbolic", "bta-image-symbolic"],
+            /* And the sounds, with the same pair: the desktop's own icon for
+             * "this is audio", and the runtime's generic file behind it. */
+            sounds:     ["audio-x-generic-symbolic", "bta-file-symbolic"],
+            sound:      ["audio-x-generic-symbolic", "bta-file-symbolic"],
             /* A record's shape: a document that is not opened as text but
              * handed to the dialog that edits its fields. The category and the
              * file get the same picture, the images' rule. */
@@ -302,7 +306,7 @@ export class ProjectTree {
     }
 
     /* The folders directly inside this one, from the files themselves: a folder
-     * with nothing to edit in it has nothing to show. */
+     * with no files in it has nothing to show. */
     subfoldersOf(folder) {
         const prefix = folder ? `${folder}/` : "";
         const names  = new Set();
@@ -496,6 +500,7 @@ export class ProjectTree {
          * programmer chose, so it is the category that carries the meaning. */
         const langs = scope ? [] : this.ide.files.filter((f) => Translations.isCatalogue(f));
         const pics  = loose.filter((f) => isImageFile(f));
+        const sounds = loose.filter((f) => isSoundFile(f));
         const docs  = loose.filter((f) => ext(f) === "md");
         /* A record's shape, for the catalogue's reason exactly: it is not
          * opened as text but handed to its own editor, and a category is how
@@ -504,7 +509,8 @@ export class ProjectTree {
         const rest  = loose.filter((f) => ext(f) !== "js" && ext(f) !== "md" &&
                                           ext(f) !== "record" &&
                                           !Translations.isCatalogue(f) &&
-                                          !isImageFile(f));
+                                          !isImageFile(f) &&
+                                          !isSoundFile(f));
 
         if (mods.length) {
             this.node(catKey("mods"), Locale.Text("Modules"), parentKey,
@@ -548,6 +554,20 @@ export class ProjectTree {
                               this.icon("images"));
             for (const f of pics)
                 this.addLeaf(f, File.Name(f), catKey("images"), "image");
+        }
+        /*
+         * And the sounds, the same reason once more: the project ships them,
+         * nothing here plays or edits one, and the double click hands it to
+         * whatever the desktop plays it with -- `openOutside`, already the road
+         * a `.tar` takes from the Files view. A category and not the `Other`
+         * pile: a `.wav` filed beside the settings files would say it is the
+         * same kind of thing.
+         */
+        if (sounds.length) {
+            this.node(catKey("sounds"), Locale.Text("Sounds"), parentKey,
+                              this.icon("sounds"));
+            for (const f of sounds)
+                this.addLeaf(f, File.Name(f), catKey("sounds"), "sound");
         }
         /*
          * And the documents, for the third time the same reason: a `.md` is

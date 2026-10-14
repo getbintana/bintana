@@ -22,11 +22,12 @@
 "use strict";
 
 /*
- * Which project files the tree lists, and with which highlighting.
+ * How an extension opens, and with which highlighting -- **not whether it is
+ * the project's**, which is every file `Classes.scan` finds.
  *
  * The value is the GtkSourceView language a tab for it opens in -- **or `false`,
- * which means the file belongs to the project and is shown, but is not opened
- * here.**  A catalogue is the case: it is text, so a tab would work, and that is
+ * which means it is never opened in a tab here.**  A catalogue is the case: it
+ * is text, so a tab would work, and that is
  * exactly the problem.  Poedit saving underneath a stale tab, or `Update
  * translations` rewriting the file while a tab holds the old content, loses a
  * translator's work in the ordinary course of using both -- and the IDE runs
@@ -58,6 +59,9 @@ const EDITABLE = {
      * editing its JSON by hand is what the dialog exists to avoid. */
     record: false,
 
+    /* Audio: `SOUND_EXTS` below, and **one list only**, because the tree's
+     * `Sounds` category reads the same one. */
+
     /* Images: shown in the tree and handed to a viewer, for the same reason a
      * catalogue is -- the project owns them and "the IDE cannot show you your
      * own file" is a worse answer than a window that can. Not SVG: a `Picture`
@@ -70,6 +74,19 @@ const EDITABLE = {
     tif:  false,
     bmp:  false,
 };
+
+/* The audio a project ships: shown, and handed to whatever plays it.  **One
+ * list, read twice** -- the table above marks it never-a-tab and `ProjectTree`
+ * groups it -- because two copies are a `.wav` the two disagree about.  The
+ * formats every desktop's player opens by default; the list grows the day
+ * somebody ships one that is not here. */
+const SOUND_EXTS = ["wav", "ogg", "opus", "flac", "mp3"];
+for (const ext of SOUND_EXTS)
+    EDITABLE[ext] = false;
+
+export function isSoundFile(name) {
+    return SOUND_EXTS.includes(File.Extension(name || "").toLowerCase());
+}
 
 /* What the table says about an extension, **own keys only**: `EDITABLE[ext]`
  * and `ext in EDITABLE` both walk to `Object.prototype`, so a file called

@@ -162,13 +162,13 @@ it came from. It was added the day a window shipped throwing six of them into a
 run that said *0 failed*: every assertion the phase made was true, and the
 window was broken.
 
-`tests/ide` is fifty-one **phases**, each a generator with a scope of its own,
+`tests/ide` is fifty-two **phases**, each a generator with a scope of its own,
 listed in `PHASES` at the bottom of `Driver.js`. `./tests/run.sh ide <name>` runs
 every phase up to and including the last one whose name contains `<name>`:
 
 ```
 welcome files designer palette clipboard taborder completion handlers events
-goto images watch tooldirs namespaces selfns views document help forms nested projects
+goto images sounds watch tooldirs namespaces selfns views document help forms nested projects
 menus folders strings settings columns records export apps errors problems names
 outline modules check quick recovery unsaved session search git debug launch running
 ```

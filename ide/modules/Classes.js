@@ -245,7 +245,8 @@ export class Classes {
     constructor(ide) {
         this.ide = ide;
 
-        /* Everything editable under the project, as paths relative to it. */
+        /* Every file under the project, hidden ones aside, as paths relative to
+         * it. */
         this.files      = [];
         /* Which of its classes are components, as the palette needs them. */
         this.components = [];
@@ -287,9 +288,18 @@ export class Classes {
     }
 
     /*
-     * Everything editable under the project, as paths relative to it.  A folder
-     * is not a category the IDE invented: it is where the programmer put the
-     * file, and the runtime finds a class's .form by name wherever it is.
+     * Every file of the project, as paths relative to it -- hidden ones
+     * (`git` and company) aside.
+     *
+     * **The tree is the project's, so a file is not left out for having an
+     * extension nobody has taught the IDE** (`notes.bin`, a `.gpx`, an `.svg`,
+     * a `.tar` an export left behind): it is shown, and the tree files it under
+     * `Other` when no category claims it. What `TabSet`'s table says is how a
+     * file *opens*, not whether it is the project's -- and whether a file that
+     * is not text even opens here is the desktop's answer (`opensAsText`), not
+     * a second list. A folder is not a category the IDE invented either: it is
+     * where the programmer put the file, and the runtime finds a class's .form
+     * by name wherever it is.
      */
     scan(folder) {
         const out  = [];
@@ -299,14 +309,10 @@ export class Classes {
             if (name.startsWith(".")) continue;      /* .git and company */
 
             const rel = inFolder(folder, name);
-            if (File.IsDir(File.Join(this.ide.project, rel))) {
+            if (File.IsDir(File.Join(this.ide.project, rel)))
                 out.push(...this.scan(rel));
-                /* Named at all and not a truthiness test: an entry may be `false`, which
-                 * means the project owns the file and the tree shows it but no
-                 * tab opens it (a .po goes to a translation editor). */
-            } else if (editableOf(File.Extension(name)) !== undefined) {
+            else
                 out.push(rel);
-            }
         }
         return out;
     }

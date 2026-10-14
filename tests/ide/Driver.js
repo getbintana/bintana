@@ -5226,12 +5226,66 @@ function* p_images(ide) {
 }
 
 /*
+ * The project's sounds: in the tree, and handed out.
+ *
+ * A `.wav` was not a project file at all -- the table of what the tree lists
+ * did not name the extension -- so the audio an application ships was the one
+ * file of its own project the project view could not see. It is the image's
+ * case one step further out, and the fourth of the family: shown under a
+ * category of its own, and the double click hands it to whatever the desktop
+ * plays it with, which is the road `openOutside` already is for everything
+ * that is not text. Nothing here plays audio, and a player window for a file
+ * one listens to once would be a viewer with no second use.
+ */
+function* p_sounds(ide) {
+    const ding = "ding.wav";
+
+    /* A real WAV -- header, no samples -- and not text under that name: what
+     * the tree asks the desktop is what the file *is*, and a `.wav` holding
+     * text is text. */
+    File.SaveBytes(File.Join(TMP, ding), new Bytes(
+        [0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00,   /* RIFF, 36     */
+         0x57, 0x41, 0x56, 0x45,                           /* WAVE         */
+         0x66, 0x6d, 0x74, 0x20, 0x10, 0x00, 0x00, 0x00,   /* fmt, 16      */
+         0x01, 0x00, 0x01, 0x00, 0x44, 0xac, 0x00, 0x00,   /* PCM, 44100   */
+         0x88, 0x58, 0x01, 0x00, 0x02, 0x00, 0x10, 0x00,   /* 16-bit mono  */
+         0x64, 0x61, 0x74, 0x61, 0x00, 0x00, 0x00, 0x00])); /* data, none  */
+    ide.listFiles();
+    yield;
+
+    check("a sound is listed with the project's files",
+          ide.files.includes(ding), JSON.stringify(ide.files));
+    check("under a category of its own", ide.FileTree.Exists("cat:sounds"));
+    check("and as a leaf one can point at", ide.FileTree.Exists(ding));
+
+    /* Selecting opens nothing -- the arrow keys walk a tree, so a player per
+     * row walked through would be the catalogue's mistake one turn worse --
+     * and the remembering is what the double click reads. The double click
+     * itself stops here like `p_views`' `.bin`: `File.Open` hands the file to
+     * the desktop, and what this test can hold is the road up to it. */
+    const openTabs = ide.Tabs.Count;
+    ide.FileTree.Key = ding;
+    ide.FileTree_Select();
+    yield;
+
+    eq("selecting it opens no tab", ide.Tabs.Count, openTabs);
+    eq("and is remembered for the double click", ide.selectedOther, ding);
+
+    /* Put the project back. */
+    File.Delete(File.Join(TMP, ding));
+    ide.listFiles();
+    yield;
+    check("and the sound is gone from the tree", !ide.files.includes(ding));
+}
+
+/*
  * The tree, in two views.
  *
  * `Project` groups by what a file *is* and lies about the disk on purpose -- a
- * form's two files are one node, `po/` is not drawn. `Files` is the other
- * question: what is really in that directory, including everything the project
- * does not recognise, which until this view existed was invisible here.
+ * form's two files are one node, `po/` is not drawn. `Files` is the same files
+ * with no grouping at all, in the folders they are really in. **Both show every
+ * file of the project**: one no kind claims sits under `Other` in the project
+ * view, which is the half that used to be the difference between the two.
  */
 /*
  * The folders a tool names are not nodes.
@@ -5474,17 +5528,20 @@ function* p_views(ide) {
     const readme = "README.md";
     const stray  = "notes.txt";
     const blob   = "notes.bin";
+    const track  = "traza.gpx";
 
     File.Save(File.Join(TMP, readme), "# el proyecto\n");
-    /* Text, and not a kind of file the project knows: what this view is for. A
-     * `.md` used to be this example and is a project file now -- it opens as a
-     * document, which is `p_document` below. */
+    /* Files of the project that are not one of its *kinds*: what the two views
+     * used to differ about. A `.md` used to be this example and is a kind now
+     * -- it opens as a document, which is `p_document` below. */
     File.Save(File.Join(TMP, stray), "un apunte\n");
     File.Copy(File.Join(Application.Directory, "..", "widgets", "images", "small.png"),
               File.Join(TMP, blob));
+    File.Save(File.Join(TMP, track),
+              '<?xml version="1.0"?>\n<gpx version="1.1"><trk/></gpx>\n');
 
-    /* A folder of its own, with something in it the project does not recognise
-     * either: the point of this view is the shape of the directory. */
+    /* A folder of its own, with something in it: the point of the other view is
+     * the shape of the directory. */
     Directory.Make(File.Join(TMP, "notas"));
     File.Save(File.Join(TMP, "notas", "leeme.md"), "hola\n");
     ide.listFiles();
@@ -5494,11 +5551,15 @@ function* p_views(ide) {
     eq("the side bar offers three views", ide.CmbView.Count, 3);
     eq("and starts on the project's", ide.CmbView.Index, 0);
 
-    check("neither stray file is in the project view",
-          !ide.FileTree.Exists(stray) && !ide.FileTree.Exists(blob));
-    check("...because the project does not recognise them",
-          !ide.files.includes(stray), JSON.stringify(ide.files.slice(0, 6)));
-    check("a document of the project is in it, though",
+    check("a file of the project no kind claims is in the project view",
+          ide.FileTree.Exists(stray) && ide.FileTree.Exists(blob) &&
+          ide.FileTree.Exists(track),
+          JSON.stringify(ide.files.slice(0, 10)));
+    check("...under `Other`, since no category claims it",
+          ide.projectTree.parents[stray] === "cat:other" &&
+          ide.projectTree.parents[blob]  === "cat:other" &&
+          ide.projectTree.parents[track] === "cat:other");
+    check("a document of the project is in it too",
           ide.FileTree.Exists(readme) && ide.files.includes(readme),
           JSON.stringify(ide.files.slice(0, 8)));
 
@@ -5507,8 +5568,9 @@ function* p_views(ide) {
     ide.CmbView_Select();
     yield;
 
-    check("the files view shows what the project does not know about",
-          ide.FileTree.Exists(stray) && ide.FileTree.Exists(blob));
+    check("the files view shows the same files",
+          ide.FileTree.Exists(stray) && ide.FileTree.Exists(blob) &&
+          ide.FileTree.Exists(track));
     check("and the folders as they really are", ide.FileTree.Exists("dir:notas"));
     check("with what is inside them, where it lives",
           ide.FileTree.Exists("notas/leeme.md"));
@@ -5544,8 +5606,9 @@ function* p_views(ide) {
     yield;
 
     check("the project view is back", ide.FileTree.Exists("cat:forms"));
-    check("and the stray files are out of sight again",
-          !ide.FileTree.Exists(stray));
+    check("with the unclaimed files still there, under `Other`",
+          ide.FileTree.Exists(stray) && ide.FileTree.Exists(track) &&
+          ide.projectTree.parents[stray] === "cat:other");
     eq("the choice is written down, so it survives closing the IDE",
        Settings.Get("tree.view", -1), 0);
 
@@ -5553,6 +5616,7 @@ function* p_views(ide) {
     File.Delete(File.Join(TMP, stray));
     File.Delete(File.Join(TMP, readme));
     File.Delete(File.Join(TMP, blob));
+    File.Delete(File.Join(TMP, track));
     File.Delete(File.Join(TMP, "notas", "leeme.md"));
     File.Delete(File.Join(TMP, "notas"));
     ide.listFiles();
@@ -15583,6 +15647,7 @@ const PHASES = [
     { name: "events", run: p_events },
     { name: "goto", run: p_goto },
     { name: "images", run: p_images },
+    { name: "sounds", run: p_sounds },
     { name: "watch", run: p_watch },
     { name: "foreign", run: p_foreign },
     { name: "prefixes", run: p_prefixes },
