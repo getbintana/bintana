@@ -12318,6 +12318,15 @@
           "Native": true
         },
         {
+          "Name": "Equals",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(other)",
+          "Returns": "boolean",
+          "Doc": "whether the two are the same number. **`==` compares two objects by identity** — `new Decimal(\"1\") == new Decimal(\"1.0\")` is `false`, and `!=` is `true`, while `<=` and `>=` answer true because those are operators this type implements — so **this is the comparison**. It reads a number or machine text as the operators do, at any scale; a third is never equal to the nine-place text it rounds to",
+          "Native": true
+        },
+        {
           "Name": "IsExact",
           "Kind": "ReadOnly",
           "Params": -1,

@@ -946,6 +946,41 @@ static JSValue dec_number(JSContext *ctx, JSValueConst this_val,
     return JS_NewFloat64(ctx, (double)d->num / (double)d->den);
 }
 
+/*
+ * Equals(other) -> boolean
+ *
+ * **The one comparison between two decimals, and the reason it is a method.**
+ * A decimal is an object, so `==` on two of them is identity: `new
+ * Decimal("1") == new Decimal("1.0")` is `false` -- and, worse, `!=` is `true`
+ * -- while `<=` and `>=` both answer true, because those are operators this
+ * type implements. Hooking `==` is a change to the engine's own comparison,
+ * so the comparison is named, as `Bytes.Equals` is.
+ *
+ * The other side is whatever the operators read: a Decimal, a number or
+ * machine text.  Two values of different scales are the same number; a third
+ * is not equal to the nine-place text it rounds to on the way out.
+ */
+static JSValue dec_equals(JSContext *ctx, JSValueConst this_val,
+                          int argc, JSValueConst *argv)
+{
+    BtaDecimal *d = dec_of(this_val);
+    if (!d)
+        return JS_ThrowTypeError(ctx, "not a Decimal");
+
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "Equals(other) needs a value to compare");
+
+    BtaDecimal other;
+    if (!dec_from(ctx, argv[0], &other))
+        return JS_EXCEPTION;
+
+    /* Cross-multiplied in 128 bits, as the inequalities are: both values are
+     * reduced with a positive denominator, so this is the numbers' own
+     * equality and not the way either happened to be written. */
+    return JS_NewBool(ctx, (__int128)d->num * other.den ==
+                           (__int128)other.num * d->den);
+}
+
 /* So JSON.stringify and File.SaveJson write a decimal as its own text rather
  * than as an empty object.  A string and not a number, because a number is where
  * the exactness would be lost again on the way back in. */
@@ -976,6 +1011,15 @@ static const JSCFunctionListEntry dec_proto_funcs[] = {
      *   percentage — anywhere the value stops being money
      */
     JS_CFUNC_DEF("Number",   0, dec_number),
+    /* Equals(other) -> boolean
+     *   whether the two are the same number. **`==` compares two objects by
+     *   identity** — `new Decimal("1") == new Decimal("1.0")` is `false`,
+     *   and `!=` is `true`, while `<=` and `>=` answer true because those
+     *   are operators this type implements — so **this is the comparison**.
+     *   It reads a number or machine text as the operators do, at any scale;
+     *   a third is never equal to the nine-place text it rounds to
+     */
+    JS_CFUNC_DEF("Equals",   1, dec_equals),
     /* Scale
      *   how many decimal places it carries — `2` for money that came from
      *   `"19.99"`

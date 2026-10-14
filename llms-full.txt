@@ -6539,6 +6539,14 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   a thousand, from a file the serialiser had written correctly. Machine text
   first, locale second, and only text that is not machine-readable falls
   through.
+- **A decimal is an object, so `==` and `!=` between two decimals are identity
+  -- and the inequalities are not.** `new Decimal("1") == new Decimal("1.0")`
+  is `false` and `!=` is `true`, while `a <= b && a >= b` answers the
+  operators' way; `==` against a plain number reads the decimal's text, which
+  is the accident that makes the trap quiet. Hooking `==` is a change to the
+  engine patch that gives this type its operators, left open; `Equals` is the
+  comparison -- exact, across scales, and reading a number or machine text as
+  the operators do. D4 of the October audit.
 
 ## Numbers, JSON and bytes
 

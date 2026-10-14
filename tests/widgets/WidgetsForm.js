@@ -19609,6 +19609,33 @@ function Main() {
         check("=== is identity and stays that way",
               !(new Decimal("1.00") === new Decimal("1.00")));
 
+        /*
+         * **`==` is identity too, and `!=` was the loud half of the trap**:
+         * two equal values answered `a != b` as true while `a <= b && a >= b`
+         * said they were the same number (D4 of the October audit).
+         * `Equals` is the comparison -- exact, across scales, and reading a
+         * number or machine text as the operators do.
+         */
+        check("== is identity, as for every object",
+              !(new Decimal("1.00") == new Decimal("1.00")));
+        check("while Equals is the comparison",
+              new Decimal("1.00").Equals(new Decimal("1.0")));
+        check("...across a declared scale",
+              new Decimal("19.9", 2).Equals(new Decimal("19.90")));
+        check("...against a plain number", new Decimal("1.0").Equals(1));
+        check("...and against machine text", new Decimal("1").Equals("1.000"));
+        check("while a different value is not equal",
+              !new Decimal("1.005").Equals("1.01"));
+        check("and a quotient equals itself exactly",
+              (new Decimal("1") / new Decimal("3")).Equals(
+                  new Decimal("1") / new Decimal("3")));
+        check("...but not the text it rounds to",
+              !(new Decimal("1") / new Decimal("3")).Equals("0.333333333"));
+
+        throws("Equals needs a value", () => new Decimal("1").Equals());
+        throws("and refuses what is not a number",
+               () => new Decimal("1").Equals("hola"));
+
         /* --- rounding, by name --- */
         eq("Away is the default", `${new Decimal("1.005").Round(2)}`, "1.01");
         eq("Even sends a half to the even neighbour",
