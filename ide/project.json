@@ -25,6 +25,7 @@
     "forms/StyleForm.js",
     "forms/ImageForm.js",
     "forms/ColumnForm.js",
+    "forms/RecordForm.js",
     "modules/LaunchConfig.js",
     "modules/ProjectFile.js",
     "modules/Launch.js",

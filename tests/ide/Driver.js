@@ -1316,6 +1316,26 @@ function* p_designer(ide) {
 
     check("the walk covers every form the IDE has", forms.length >= 11, `${forms.length}`);
 
+    /*
+     * **And every file of the IDE is in its own `sources`.** `tests/ide` lists
+     * the IDE's files by hand -- a symlink per form, a name per module -- so a
+     * file added there and forgotten in `ide/project.json` loads in the suite
+     * and is a `ReferenceError` in the real IDE: `RecordForm` was green here
+     * and answered *RecordForm is not defined* when a person double-clicked a
+     * `.record`. The two lists can be compared, so they are.
+     */
+    const ideRoot = File.Join(Application.Directory, "..", "..", "ide");
+    const listed  = new Set(File.LoadJson(File.Join(ideRoot, "project.json")).sources);
+    const missing = [];
+
+    for (const sub of ["forms", "modules"])
+        for (const f of Directory.List(File.Join(ideRoot, sub)))
+            if (File.IsExtension(f, "js") && !listed.has(`${sub}/${f}`))
+                missing.push(`${sub}/${f}`);
+
+    check("every file of the IDE is in its own sources", missing.length === 0,
+          missing.join(", "));
+
     for (const entry of forms) {
         const file = File.BaseName(entry);
         const node = JSON.parse(File.Load(File.Join(ideDir, entry)));
