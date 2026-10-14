@@ -101,10 +101,10 @@ probes anything — so a desktop whose portal cannot start gives the application
 broken. `bintana-project` was reported exactly that way. A GTK application run
 from a source tree is not sandboxed, probes the portal, and falls back to its
 own chooser when the probe fails; that is the difference between the IDE and a
-package, and not a difference in the code. **Why this machine's portal could
-not start, since the symptom names the application and the cause is nowhere
+package, and not a difference in the code. **Why a desktop's portal can fail to
+start, since the symptom names the application and the cause is nowhere
 near it**: xdg-desktop-portal 1.22 added `Requisite=graphical-session.target`,
-an Xfce session never activates that target, and `RefuseManualStart=yes` on the
+a session that never activates that target (some desktops do not), and `RefuseManualStart=yes` on the
 target then leaves the portal unstartable — so *every* packaged application
 loses its file dialogs at once ([#1983], fixed upstream; a distro package will
 carry it). The workaround is a **full** user unit

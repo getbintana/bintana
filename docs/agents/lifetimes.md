@@ -30,8 +30,8 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   handler disconnected. Measured with a probe on its own `Xvfb` **plus a real
   window manager** — under a bare `xvfb-run` a synthetic click never reached GTK
   at all (`xdotool getmouselocation` reported the pointer over no client window,
-  with the window mapped and focused; `xfwm4` on the same `Xvfb` made the first
-  try work): with the hold, a click before and a click after a 400 000-object
+  with the window mapped and focused; a window manager started on the same `Xvfb` made
+  the first try work): with the hold, a click before and a click after a 400 000-object
   ball both answer; with `form_hold` compiled out, the first answers and the
   second is silent **while the window is still on screen**, which is the
   reported symptom exactly.

@@ -224,17 +224,17 @@ Three things that will waste your time:
   machine -- which is what makes iterating on an early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.
-- **The desktop grabs bare function keys.** On Xfce, `F2`, `F3` and `Alt+F2` open
-  the application finder and never reach the app. Menu `shortcut` accepts a list
+- **The desktop may grab bare function keys.** On one measured, `F2`, `F3` and
+  `Alt+F2` open its application finder and never reach the app. Menu `shortcut` accepts a list
   for this reason: *Find next* is `["F3", "<Control>g"]` and only the second one
-  fires here. Verified by hand — the accelerator is registered and correct, and
+  fires there. Verified by hand — the accelerator is registered and correct, and
   the key simply never arrives.
 - **And a stolen key steals the focus with it, which makes every test after it
   lie.** Pressing `F3` at the IDE opened the finder *in front of it*, so the next
   `Ctrl+G` went to the finder and looked like a broken accelerator, and the next
   `Escape` looked like an event the runtime never delivered. Both were fine. When
   a key does nothing, check `xdotool getactivewindow` before believing the app is
-  at fault — and `pkill -x xfce4-appfinder` (never `pkill -f`, whose pattern
+  at fault — and close the intruder with `pkill -x <its name>` (never `pkill -f`, whose pattern
   matches the shell command containing it, killing your own shell).
 
 Copy a project to `/tmp` before driving it interactively — a stray drag plus a

@@ -297,7 +297,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   the item goes the same way -- Edit > Copy copies what has the focus -- and
   `Action.Execute()` does not (`executing`), since code asked for the command.
   The suite cannot send a key; it was measured with `xdotool` on an `Xvfb` with
-  `xfwm4`: focus in a `TextBox` copies its text, focus on a button runs the
+  a window manager: focus in a `TextBox` copies its text, focus on a button runs the
   handler. **The designer depends on the canvas taking the focus** (`glass.
   SetFocus()` on a click), or Ctrl+C after picking a control would copy the
   grid's text instead.

@@ -187,9 +187,9 @@ before it sends, and the sending is a **child on a private bus**
 
 **The configuration is the point, and a bare `dbus-run-session` is not safe.** It
 uses the default service directories, so the private bus *activated the system's
-real services*: `xdg-desktop-portal`, `xfce4-notifyd` and **`xfconfd`, which is the
-desktop's settings daemon** -- seen in the monitor's log, "Activating service
-name='org.xfce.Xfconf'", on a spike that was only meant to look. A `<busconfig>`
+real services*: `xdg-desktop-portal`, the desktop's notification daemon and **the
+desktop's settings daemon** -- seen in the monitor's log as "Activating service
+name=…" lines, on a spike that was only meant to look. A `<busconfig>`
 with a `<listen>`, an `<auth>` and one permissive `<policy>` and **no `<servicedir>`**
 makes the bus empty; calls to a name nobody owns fail and the monitor still sees
 them. Do that for anything that needs a bus.
@@ -210,7 +210,7 @@ Three more, measured with it:
 - **"Is the user looking at this window" is `Form.Focused`, and nobody had said so.**
   `Widget.Focused` is `gtk_event_controller_focus_contains_focus`, which GTK4 turns
   `false` when the toplevel stops being the active window. Measured on an `Xvfb` with
-  `xfwm4` and two windows: `Focused=true` on the one activated, `false` on the other,
+  a window manager and two windows: `Focused=true` on the one activated, `false` on the other,
   swapping with `xdotool windowactivate`. **Without a window manager it never turns
   false** (nothing takes the focus away), so a headless run of `examples/backup`
   correctly sends nothing -- seeing its notification needs the window manager, a

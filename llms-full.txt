@@ -1791,8 +1791,8 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   handler disconnected. Measured with a probe on its own `Xvfb` **plus a real
   window manager** — under a bare `xvfb-run` a synthetic click never reached GTK
   at all (`xdotool getmouselocation` reported the pointer over no client window,
-  with the window mapped and focused; `xfwm4` on the same `Xvfb` made the first
-  try work): with the hold, a click before and a click after a 400 000-object
+  with the window mapped and focused; a window manager started on the same `Xvfb` made
+  the first try work): with the hold, a click before and a click after a 400 000-object
   ball both answer; with `form_hold` compiled out, the first answers and the
   second is silent **while the window is still on screen**, which is the
   reported symptom exactly.
@@ -3456,17 +3456,17 @@ Three things that will waste your time:
   machine -- which is what makes iterating on an early phase bearable. Each phase works on the project the ones before it built and
   renamed, so selecting one in the middle *alone* would fail on state that was
   never created.
-- **The desktop grabs bare function keys.** On Xfce, `F2`, `F3` and `Alt+F2` open
-  the application finder and never reach the app. Menu `shortcut` accepts a list
+- **The desktop may grab bare function keys.** On one measured, `F2`, `F3` and
+  `Alt+F2` open its application finder and never reach the app. Menu `shortcut` accepts a list
   for this reason: *Find next* is `["F3", "<Control>g"]` and only the second one
-  fires here. Verified by hand — the accelerator is registered and correct, and
+  fires there. Verified by hand — the accelerator is registered and correct, and
   the key simply never arrives.
 - **And a stolen key steals the focus with it, which makes every test after it
   lie.** Pressing `F3` at the IDE opened the finder *in front of it*, so the next
   `Ctrl+G` went to the finder and looked like a broken accelerator, and the next
   `Escape` looked like an event the runtime never delivered. Both were fine. When
   a key does nothing, check `xdotool getactivewindow` before believing the app is
-  at fault — and `pkill -x xfce4-appfinder` (never `pkill -f`, whose pattern
+  at fault — and close the intruder with `pkill -x <its name>` (never `pkill -f`, whose pattern
   matches the shell command containing it, killing your own shell).
 
 Copy a project to `/tmp` before driving it interactively — a stray drag plus a
@@ -4724,7 +4724,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   the item goes the same way -- Edit > Copy copies what has the focus -- and
   `Action.Execute()` does not (`executing`), since code asked for the command.
   The suite cannot send a key; it was measured with `xdotool` on an `Xvfb` with
-  `xfwm4`: focus in a `TextBox` copies its text, focus on a button runs the
+  a window manager: focus in a `TextBox` copies its text, focus on a button runs the
   handler. **The designer depends on the canvas taking the focus** (`glass.
   SetFocus()` on a click), or Ctrl+C after picking a control would copy the
   grid's text instead.
@@ -5475,7 +5475,7 @@ renderers, Qt, WinForms, WPF, Delphi, DevExpress, Lazarus, Gambas, Swing, JavaFX
 Xojo and AG Grid; `ActiveText`/`InactiveText` and not `Checked`, because every
 check here says `Active`, and not `Active` alone, because that is a boolean
 everywhere else. What bit, all of it measured with a real pointer on an `Xvfb`
-with `xfwm4`, since none of it reaches the suite:
+with a window manager, since none of it reaches the suite:
 - **A flat table's `SetCell` did not redraw, and nothing said so.** GTK 4.22
   keeps the widgets of an item that is the same object across `items-changed`
   and does not bind them again, so `table_row_changed`'s `items_changed(at, 1,
@@ -7567,9 +7567,9 @@ before it sends, and the sending is a **child on a private bus**
 
 **The configuration is the point, and a bare `dbus-run-session` is not safe.** It
 uses the default service directories, so the private bus *activated the system's
-real services*: `xdg-desktop-portal`, `xfce4-notifyd` and **`xfconfd`, which is the
-desktop's settings daemon** -- seen in the monitor's log, "Activating service
-name='org.xfce.Xfconf'", on a spike that was only meant to look. A `<busconfig>`
+real services*: `xdg-desktop-portal`, the desktop's notification daemon and **the
+desktop's settings daemon** -- seen in the monitor's log as "Activating service
+name=…" lines, on a spike that was only meant to look. A `<busconfig>`
 with a `<listen>`, an `<auth>` and one permissive `<policy>` and **no `<servicedir>`**
 makes the bus empty; calls to a name nobody owns fail and the monitor still sees
 them. Do that for anything that needs a bus.
@@ -7590,7 +7590,7 @@ Three more, measured with it:
 - **"Is the user looking at this window" is `Form.Focused`, and nobody had said so.**
   `Widget.Focused` is `gtk_event_controller_focus_contains_focus`, which GTK4 turns
   `false` when the toplevel stops being the active window. Measured on an `Xvfb` with
-  `xfwm4` and two windows: `Focused=true` on the one activated, `false` on the other,
+  a window manager and two windows: `Focused=true` on the one activated, `false` on the other,
   swapping with `xdotool windowactivate`. **Without a window manager it never turns
   false** (nothing takes the focus away), so a headless run of `examples/backup`
   correctly sends nothing -- seeing its notification needs the window manager, a
@@ -8037,10 +8037,10 @@ probes anything — so a desktop whose portal cannot start gives the application
 broken. `bintana-project` was reported exactly that way. A GTK application run
 from a source tree is not sandboxed, probes the portal, and falls back to its
 own chooser when the probe fails; that is the difference between the IDE and a
-package, and not a difference in the code. **Why this machine's portal could
-not start, since the symptom names the application and the cause is nowhere
+package, and not a difference in the code. **Why a desktop's portal can fail to
+start, since the symptom names the application and the cause is nowhere
 near it**: xdg-desktop-portal 1.22 added `Requisite=graphical-session.target`,
-an Xfce session never activates that target, and `RefuseManualStart=yes` on the
+a session that never activates that target (some desktops do not), and `RefuseManualStart=yes` on the
 target then leaves the portal unstartable — so *every* packaged application
 loses its file dialogs at once ([#1983], fixed upstream; a distro package will
 carry it). The workaround is a **full** user unit

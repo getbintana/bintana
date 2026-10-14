@@ -113,7 +113,7 @@ renderers, Qt, WinForms, WPF, Delphi, DevExpress, Lazarus, Gambas, Swing, JavaFX
 Xojo and AG Grid; `ActiveText`/`InactiveText` and not `Checked`, because every
 check here says `Active`, and not `Active` alone, because that is a boolean
 everywhere else. What bit, all of it measured with a real pointer on an `Xvfb`
-with `xfwm4`, since none of it reaches the suite:
+with a window manager, since none of it reaches the suite:
 - **A flat table's `SetCell` did not redraw, and nothing said so.** GTK 4.22
   keeps the widgets of an item that is the same object across `items-changed`
   and does not bind them again, so `table_row_changed`'s `items_changed(at, 1,
