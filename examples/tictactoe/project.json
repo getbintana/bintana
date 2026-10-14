@@ -1,0 +1,9 @@
+{
+  "name": "TicTacToe",
+  "startup": "MainForm",
+  "sources": [
+    "MainForm.js"
+  ],
+  "version": "1.0",
+  "description": "A board drawn in a DrawingArea: the frame, the pointer, a mark that grows on a timer, the theme's own colours, and a chime on a win"
+}

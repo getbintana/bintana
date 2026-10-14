@@ -1,0 +1,56 @@
+{
+  "format": "bintana-form/1",
+  "class": "MainForm",
+  "properties": {
+    "Text": "Tic-Tac-Toe",
+    "Width": 420,
+    "Height": 520,
+    "Arrangement": "Vertical",
+    "Spacing": 8,
+    "Margin": 12
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "Top",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Spacing": 8,
+        "Height": 34
+      },
+      "children": [
+        {
+          "type": "Label",
+          "name": "LblStatus",
+          "properties": {
+            "Text": "X's turn",
+            "Expand": true
+          }
+        },
+        {
+          "type": "Label",
+          "name": "LblScore",
+          "properties": {
+            "Text": "X 0 · O 0",
+            "Style": "dim-label"
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnNew",
+          "properties": {
+            "Text": "New game"
+          }
+        }
+      ]
+    },
+    {
+      "type": "DrawingArea",
+      "name": "Board",
+      "properties": {
+        "Expand": true,
+        "Cursor": "Hand"
+      }
+    }
+  ]
+}
