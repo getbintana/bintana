@@ -350,7 +350,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   probe: `Position = 30` with the content up came out **260**, and **stayed
   260** with the content hidden. The floor belongs to the content instead --
   `SideView`, whose `FileTree` already declares its own 260 -- so it goes away
-  with what it holds: the same `Position = 30` landed on the strip button's
+  with what it holds: the same `Position = 30` landed on the strip's buttons'
   minimum (**36**). Two things follow about the order, and both are in
   `MainForm.foldSide`: hide the content **before** moving the divider, and show
   it **before** moving the divider back -- either way with the move first, the

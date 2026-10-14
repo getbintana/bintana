@@ -139,11 +139,45 @@ export class ProjectTree {
         ide.FileTree.ExpandAll();
     }
 
-    /* The views, in the order the chooser offers them. Their *names* are prose
-     * and are filled in from code; what is stored and compared is the index, so
-     * a translated word can never become a value nothing recognises. */
-    static get views() {
-        return [Locale.Text("Project"), Locale.Text("Files")];
+    /*
+     * The tree's rows of the side bar, one per view, in the order the chooser
+     * offers them -- and the window fills `CmbView` and the folded strip from
+     * them (`MainForm.sideViews`).  A row carries:
+     *
+     *   text   what the chooser says.  The literal goes to `Locale.Text` at
+     *          this call, where the extractor finds it, and what is stored and
+     *          compared is the *index*, so a translated word can never become
+     *          a value nothing recognises.
+     *   tip    what the strip's button says with the pointer over it.
+     *   icons  what that button's icon is tried from: the first the desktop
+     *          really has wins, and the IDE's own come last so one does.
+     *   page   the page of `SideStack` showing it.  **Both views are one
+     *          page**: a view is not a page, which is why the strip has three
+     *          buttons and the stack two.
+     *   show   what brings it up, in this class.
+     *
+     * One row per view and this is the only list of them: `CmbView` and the
+     * strip are both filled from here, so a third grouping would be a row and
+     * the `build` branch that draws it, with no list to keep in step.
+     */
+    static get sideEntries() {
+        return [
+            { text:  Locale.Text("Project"),
+              tip:   Locale.Text("Show the project view"),
+              /* The grouped view: drawn with the package the tree gives a
+               * namespace, since namespaces are its hierarchy. */
+              icons: ["package-x-generic-symbolic", "view-grid-symbolic",
+                      "bta-grid-symbolic"],
+              page:  0,
+              show:  (ide) => ide.projectTree.setView(VIEW_PROJECT) },
+            { text:  Locale.Text("Files"),
+              tip:   Locale.Text("Show the files view"),
+              /* The disk as it is, which is the folder the tree draws. */
+              icons: ["folder-symbolic", "folder-documents-symbolic",
+                      "bta-file-symbolic"],
+              page:  0,
+              show:  (ide) => ide.projectTree.setView(VIEW_FILES) },
+        ];
     }
 
     setView(which) {

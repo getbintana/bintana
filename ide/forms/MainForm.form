@@ -896,12 +896,11 @@
                   },
                   "children": [
                     {
-                      "type": "Button",
-                      "name": "BtnSideShow",
+                      "type": "Panel",
+                      "name": "SideStrip",
                       "properties": {
-                        "Style": "flat",
-                        "Tooltip": "Show the project panel",
-                        "VExpand": true,
+                        "Arrangement": "Vertical",
+                        "Spacing": 2,
                         "Visible": false
                       }
                     },

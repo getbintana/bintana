@@ -5551,6 +5551,14 @@ function* p_views(ide) {
     eq("the side bar offers three views", ide.CmbView.Count, 3);
     eq("and starts on the project's", ide.CmbView.Index, 0);
 
+    /* The strip that opens one of them while the panel is folded is the same
+     * list with pictures, and every picture resolves: the last entry of each
+     * row is the IDE's own, which it ships. */
+    eq("with one strip button for each", ide.sideButtons.length, ide.CmbView.Count);
+    check("and each of those has an icon",
+          ide.sideButtons.every((b) => b.Icon !== ""),
+          JSON.stringify(ide.sideButtons.map((b) => b.Icon)));
+
     check("a file of the project no kind claims is in the project view",
           ide.FileTree.Exists(stray) && ide.FileTree.Exists(blob) &&
           ide.FileTree.Exists(track),
@@ -14149,7 +14157,7 @@ function* p_git(ide) {
     File.Save(File.Join(repo, "Uno.js"), "class Uno extends Form {\n    // tres\n}\n");
     File.Save(File.Join(repo, "cuatro.txt"), "nuevo\n");
 
-    ide.CmbView.Index = Changes.view;
+    ide.CmbView.Index = 2;               /* the third view: Changes */
     ide.CmbView_Select();
     yield* settled(ide);
 
@@ -14167,7 +14175,7 @@ function* p_git(ide) {
     check("and the buttons under that",
           ide.BtnChCommit.Bounds().Y > ide.TxtCommit.Bounds().Y);
     eq("the choice is written down like the tree's",
-       Settings.Get("side.changes", false), true);
+       Settings.Get("side.view", -1), 2);
 
     const panel = ide.changes;
     const both  = git.split();
@@ -14680,7 +14688,7 @@ function* p_git(ide) {
 
     /* And the other kind of empty, which is this project: the panel over
      * something that is not a repository says that rather than nothing. */
-    ide.CmbView.Index = Changes.view;
+    ide.CmbView.Index = 2;               /* Changes, once more */
     ide.CmbView_Select();
     yield* settled(ide);
 
@@ -15566,12 +15574,12 @@ function* p_session(ide) {
 
     /*
      * The project panel, folded to its strip.  What goes is the content and
-     * not the half: the strip with the button that brings the panel back is
-     * *in* the half, and hiding the half would take the strip down with the
-     * divider itself -- GTK hides the handle when only one child is visible.
-     * What is asserted is the direction and the coming back, not a pixel
-     * count: the strip is as wide as its own button needs, which is the
-     * theme's number and not this file's.
+     * not the half: the strip that opens a view is *in* the half, and hiding
+     * the half would take the strip down with the divider itself -- GTK hides
+     * the handle when only one child is visible.  What is asserted is the
+     * direction and the coming back, not a pixel count: the strip is as wide
+     * as its own buttons need, which is the theme's number and not this
+     * file's.
      */
     const sideOpen = ide.Split.Position;
     const sideWork = ide.WorkArea.Bounds().Width;
@@ -15580,7 +15588,10 @@ function* p_session(ide) {
     yield* settled(ide);
 
     check("the button folds the project panel away", !ide.SideView.Visible);
-    check("and leaves the one that brings it back", ide.BtnSideShow.Visible);
+    check("and leaves the strip that opens a view", ide.SideStrip.Visible);
+    eq("with a button for each view", ide.sideButtons.length, 3);
+    check("all of them showing", ide.sideButtons.every((b) => b.Visible),
+          JSON.stringify(ide.sideButtons.map((b) => b.Visible)));
     check("the half of the split is a strip now",
           ide.Split.Position > 0 && ide.Split.Position < 60,
           `pos=${ide.Split.Position}`);
@@ -15588,13 +15599,42 @@ function* p_session(ide) {
           ide.WorkArea.Bounds().Width > sideWork,
           `work=${ide.WorkArea.Bounds().Width} was ${sideWork}`);
 
-    ide.BtnSideShow.Emit("Click");
+    /*
+     * **And each button opens its own view**, which is the whole point of the
+     * strip: the one button it replaced could only bring back whatever was up.
+     * The changes page first, which is neither of the two the tree holds.
+     */
+    ide.sideButtons[2].Emit("Click");       /* Changes */
     yield* settled(ide);
 
-    check("the button brings the panel back", ide.SideView.Visible);
-    check("and puts itself away", !ide.BtnSideShow.Visible);
+    check("the changes button brings the panel back", ide.SideView.Visible);
+    check("and puts the strip away", !ide.SideStrip.Visible);
+    eq("on the changes page", ide.SideStack.Current, 1);
+    eq("with the chooser moved with it", ide.CmbView.Index, 2);
+    check("which is the page that says so", ide.changes.visible);
     eq("at the width it had", ide.Split.Position, sideOpen);
     eq("with the work area where it was", ide.WorkArea.Bounds().Width, sideWork);
+
+    /* And a view of the tree: the strip opens *Files*, the chooser follows,
+     * and the tree is built for it like any other change of view. */
+    ide.BtnSideHide.Emit("Click");
+    yield* settled(ide);
+    ide.sideButtons[1].Emit("Click");       /* Files */
+    yield* settled(ide);
+
+    check("the files button opens the tree", ide.SideView.Visible);
+    eq("on the files view", ide.SideStack.Current, 0);
+    eq("with the chooser there too", ide.CmbView.Index, 1);
+    eq("and the tree built for it", Settings.Get("tree.view", -1), 1);
+
+    /* Back to the project view, which is where the rest of the suite is: the
+     * same gesture from the fold. */
+    ide.BtnSideHide.Emit("Click");
+    yield* settled(ide);
+    ide.sideButtons[0].Emit("Click");       /* Project */
+    yield* settled(ide);
+    eq("the project button brings the project view back", ide.CmbView.Index, 0);
+    eq("which the tree is on again", Settings.Get("tree.view", -1), 0);
 
     /*
      * And the fold is furniture of the window: written down with it, and the
@@ -15615,8 +15655,12 @@ function* p_session(ide) {
     check("and that is what the next start reads",
           read.hidden === true && read.width === sideOpen, JSON.stringify(read));
 
+    /* And which view was up is furniture of the desk as well. */
+    eq("the view the strip opened is written down",
+       Settings.Get("side.view", -1), 0);
+
     /* Out again, which is where the phase goes on from. */
-    ide.BtnSideShow.Emit("Click");
+    ide.sideButtons[0].Emit("Click");
     yield* settled(ide);
     eq("unfolding gives the width back", ide.Split.Position, sideOpen);
 

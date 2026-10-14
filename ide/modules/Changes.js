@@ -7,8 +7,8 @@
  * covers the editor, and committing three edits over an afternoon meant opening
  * and closing it three times.
  *
- * So the list moves to where the project tree already is, in the third view of
- * the side bar's chooser: the changed files, a box for the message, and the two
+ * So the list moves to where the project tree already is, in the side bar's
+ * own chooser: the changed files, a box for the message, and the two
  * buttons that are the whole of a small commit. Double clicking a row opens the
  * window on **that file**, which is the one thing the panel does not try to do
  * itself -- a diff in a 260-pixel column would be a worse answer than the one
@@ -28,20 +28,31 @@
  */
 "use strict";
 
-/* Which entry of the side bar's chooser this is: after the two views of the
- * tree, because it is the third answer to *what is on the left*, and last
- * because it is the one that is empty in a project that is not a repository. */
-const CHANGES_VIEW = 2;
-
 /* The state column. Two characters and a space is all it ever holds. */
 const STATE_W = 34;
 
 export class Changes {
 
-    /* Which entry of the chooser it is, for the window that fills the chooser.
-     * A number and not a name, for the reason `ProjectTree.views` gives: what is
-     * shown is prose and what is compared must not be. */
-    static get view() { return CHANGES_VIEW; }
+    /*
+     * What this page contributes to the side bar: one row, shaped like the
+     * ones `ProjectTree.sideEntries` returns -- the name the chooser says, what
+     * the folded strip's button says and tries, which page of `SideStack` it
+     * is, and what brings it up.  Kept beside the panel so another panel is a
+     * row in its own file and a page in `MainForm.form`, with nothing counting
+     * them.
+     */
+    static get sideEntries() {
+        return [{
+            text:  Locale.Text("Changes"),
+            tip:   Locale.Text("Show the changes view"),
+            /* The page with the pencil, the document `GitForm` wears as its
+             * window icon: what is here is the project's edits. */
+            icons: ["document-edit-symbolic", "document-properties-symbolic",
+                    "bta-code-symbolic"],
+            page:  1,
+            show:  (ide) => ide.changes.shown(),
+        }];
+    }
 
     /** @param {MainForm} ide */
     constructor(ide) {
@@ -60,13 +71,15 @@ export class Changes {
     /* --- what it shows ------------------------------------------------------ */
 
     /*
-     * Whether this view is the one on screen.
-     *
-     * Hidden, it is not kept up to date: showing it redraws it, so there is
-     * nothing to lose and a `git status` per keystroke to save.
+     * Whether this view is the one on screen: **the page of the stack that is
+     * up**, and not a number in the chooser's list, which a panel added before
+     * this one would move.  Hidden, it is not kept up to date: showing it
+     * redraws it, so there is nothing to lose and a `git status` per keystroke
+     * to save.
      */
     get visible() {
-        return this.ide.CmbView.Index === CHANGES_VIEW;
+        const stack = this.ide.SideStack;
+        return !!stack && stack.Children[stack.Current] === this.ide.ChangesBox;
     }
 
     /* The chooser moved here: whatever is in the table was drawn for another

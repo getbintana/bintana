@@ -129,24 +129,24 @@ export const TAB_ACTION_ICON = [
     "document-properties-symbolic", "pan-down-symbolic",
 ];
 
-/* The project panel's two buttons, in order of preference: the first the
- * desktop really has wins.  The preference lives here and not in the `.form`
- * because the file can only name one icon, and the one this window wants
+/* The fold button's icon, in order of preference: the first the desktop really
+ * has wins.  The preference lives here and not in the `.form` because the file
+ * can only name one icon, and the one this window wants
  * (`sidebar-hide-symbolic`) is not in every theme the suite runs against --
  * `tests/ide` walks the declared names, so a file may only carry one that
- * resolves under the fallback theme.  See dressSide. */
+ * resolves under the fallback theme.  The strip's own buttons carry their
+ * lists beside their views (`ProjectTree.sideEntries`, `Changes.sideEntries`),
+ * since which picture says *Project*, *Files* or *Changes* is the view's own
+ * fact.  See dressSide. */
 const SIDE_HIDE_ICON = [
     "sidebar-hide-symbolic", "go-previous-symbolic", "pan-start-symbolic",
-];
-const SIDE_SHOW_ICON = [
-    "sidebar-show-symbolic", "go-next-symbolic", "pan-end-symbolic",
 ];
 
 /* What is asked for the divider when the project panel is folded.  A `Split`'s
  * half cannot be squeezed below what it holds, so this is a request and the
- * strip's own button is the answer: 30 asks, a button's minimum of ~36 is what
- * comes back, and that is the right way round -- a theme with fatter buttons
- * gets a fatter strip.  See foldSide. */
+ * strip's own buttons are the answer: 30 asks, a button's minimum of ~36 is
+ * what comes back, and that is the right way round -- a theme with fatter
+ * buttons gets a fatter strip.  See foldSide. */
 const SIDE_STRIP_W = 30;
 
 /* How many projects the "Recent projects" menu remembers.  Where they are kept
@@ -311,11 +311,13 @@ export class MainForm extends Form {
     running = false;
     designing = false;
 
-    /* The project panel, folded to its strip: which of its two buttons is up,
-     * and the width the panel had while open -- while folded the divider says
-     * the strip's, and coming back means this number.  `Session` keeps both. */
-    sideHidden = false;
-    sideWidth  = 0;
+    /* The project panel, folded to its strip: the width the panel had while
+     * open -- while folded the divider says the strip's, and coming back means
+     * this number, which `Session` keeps -- and the strip's own buttons, built
+     * from `sideViews()` and kept where a test can press one. */
+    sideHidden  = false;
+    sideWidth   = 0;
+    sideButtons = [];
 
     /* The file the window is showing, which every helper reads and only `TabSet`
      * writes.  Null with nothing open, and that is not the same as no project. */
@@ -1954,33 +1956,87 @@ export class MainForm extends Form {
     }
 
     /*
-     * The two views of the tree, offered by name.
+     * The side bar's views, in the order both roads offer them: `CmbView` says
+     * the names and the folded strip shows the pictures.
      *
-     * The names are prose and the value is the **index**: what the chooser shows
-     * goes through the catalogue, so comparing the text would mean comparing a
-     * translation -- the trap a `ComboBox` of keywords in a `.form` already
-     * taught this project once.
+     * **Each panel publishes its own rows** -- `ProjectTree.sideEntries` for
+     * the tree's two groupings and `Changes.sideEntries` for the git page --
+     * and this is the one place that lists them, so another panel is a page of
+     * `SideStack` in `MainForm.form` and a row beside the class it belongs to,
+     * with nothing here counting them.
+     *
+     * A row carries:
+     *
+     *   text   what the chooser shows, the literal inside `Locale.Text` at the
+     *          call in the class that declares it, where the extractor finds it
+     *   tip    what the strip's button says under the pointer
+     *   icons  what its icon is tried from, the first the desktop really has
+     *          winning and the IDE's own shipped last
+     *   page   which page of `SideStack` shows it -- the tree's two views share
+     *          one, and that is why a view is not a page
+     *   show   what brings it up, on the panel that owns it
      */
-    dressViews() {
-        /* The tree's two, and then the third thing the side bar can be. It is in
-         * the same chooser and not a tab strip of its own because it answers the
-         * same question -- *what is on the left* -- and two choosers stacked over
-         * one column is the shape that makes people hunt. */
-        this.CmbView.Items = [...ProjectTree.views, Locale.Text("Changes")];
-        this.CmbView.Index = this.sideView;
+    sideViews() {
+        return [...ProjectTree.sideEntries, ...Changes.sideEntries];
     }
 
     /*
-     * Which of the three is up, remembered across runs.
+     * The chooser and the strip that stands in for it while the panel is
+     * folded, both filled from the one list -- so a panel the list gains
+     * appears in the two.
+     *
+     * The names are prose and the value is the **index**: what the chooser
+     * shows goes through the catalogue, so comparing the text would mean
+     * comparing a translation -- the trap a `ComboBox` of keywords in a `.form`
+     * already taught this project once.
+     */
+    dressViews() {
+        const views = this.sideViews();
+
+        this.CmbView.Items = views.map((v) => v.text);
+        this.CmbView.Index = this.sideView;
+
+        this.buildSideStrip(views);
+    }
+
+    /*
+     * The strip's buttons, one per view, **built here and not declared in the
+     * .form**: how many there are is `sideViews`'s answer, and a .form is
+     * loaded once with no way to say "one per row of that list". They are kept
+     * in `sideButtons` so a test can press one.
+     *
+     * The icon is the first of the row's the desktop really has; the IDE's own
+     * come last in every list and it ships them, so an empty answer takes the
+     * loss of a theme *and* of the icons folder -- and then the button wears
+     * the first letter of its own name, because a button with neither icon nor
+     * text is a blank square nobody can find.
+     */
+    buildSideStrip(views) {
+        for (let i = 0; i < views.length; i++) {
+            const view = views[i];
+
+            const button = new Button();
+            button.Style   = "flat";
+            button.Tooltip = view.tip;
+            button.Icon    = view.icons.find((n) => Application.HasIcon(n)) || "";
+            if (!button.Icon) button.Text = view.text.slice(0, 1);
+
+            button.On("Click", () => this.openSide(i));
+            this.SideStrip.Add(button);
+            this.sideButtons.push(button);
+        }
+    }
+
+    /*
+     * Which of the side bar's views is up, remembered across runs.
      *
      * The tree's own view is `ProjectTree`'s and stays there -- it is what the
-     * tree is built from. What this adds is *the tree at all*, which is why the
-     * two are not one number: coming back to the Changes page and choosing
-     * Project again must find the view it was left in.
+     * tree is built from. What this adds is *which view at all*, which is why
+     * the two are not one number: coming back to the changes page and choosing
+     * Project again must find the grouping it was left in.
      */
     get sideView() {
-        return Settings.Get("side.changes", false) ? Changes.view
-                                                  : this.projectTree.view;
+        return Settings.Get("side.view", 0);
     }
 
     /* Escape empties a filter and gives the focus back to what it filters. */
@@ -2016,7 +2072,7 @@ export class MainForm extends Form {
     }
 
     /*
-     * Which page of the side bar is showing.
+     * Which view of the side bar is showing.
      *
      * The swap is a `Switcher`'s (`SideStack`) and not a `Visible` per child:
      * *one of these shows* is what a stack is, and it keeps the column's floor
@@ -2024,36 +2080,58 @@ export class MainForm extends Form {
      * `Current` -- a page that is not on screen still reports `Visible: true`
      * and keeps the last rectangle it was given, so neither of those two says
      * anything (measured).
+     *
+     * The chooser is a view over the list like the strip is: both say *which*
+     * and `showSideView` is what the choice means.  Filling `Items` moves the
+     * chooser to nothing on the way past, and *nothing* is not a view.
      */
     CmbView_Select() {
         const which = this.CmbView.Index;
-        /* Filling `Items` moves the chooser to nothing on the way past, and
-         * *nothing* is not a view to switch to. */
         if (which < 0) return;
 
-        const changes = which === Changes.view;
+        this.showSideView(which);
+    }
 
-        Settings.Set("side.changes", changes);
-        this.SideStack.Current = changes ? 1 : 0;
+    /*
+     * Bring one of the side bar's views up, which is what both roads call --
+     * the chooser when it moves and a strip button when it is pressed.  The
+     * page is the row's and the rest is the panel's own `show`: a tree view is
+     * a rebuild, the changes page a reload, and neither knows about the other.
+     */
+    showSideView(which) {
+        const view = this.sideViews()[which];
+        if (!view) return;
 
-        if (changes) this.changes.shown();
-        else         this.projectTree.setView(which);
+        Settings.Set("side.view", which);
+        this.SideStack.Current = view.page;
+        view.show(this);
+    }
+
+    /*
+     * A button of the folded strip: **the chooser is where *which view* is
+     * kept**, so pressing one moves the chooser -- `Select` is what brings the
+     * view up, and there is one road into `showSideView` -- and the panel
+     * unfolds around it.  A chooser already on that view raises nothing, and
+     * then the view is already the one showing: that is the state the fold
+     * left.
+     */
+    openSide(which) {
+        this.CmbView.Index = which;
+        this.unfoldSide();
     }
 
     /* --- the project panel, folded to its strip --------------------------- */
 
-    /* The panel's two buttons, in order of preference: the first the desktop
-     * really has wins -- `dressTabActions`' own idiom, and for the same reason:
-     * an icon the theme lacks is a blank button. */
+    /* The fold button: the first icon the desktop really has wins --
+     * `dressTabActions`' own idiom, and for the same reason: an icon the theme
+     * lacks is a blank button.  The strip's buttons dress themselves from
+     * their rows when `buildSideStrip` makes them. */
     dressSide() {
         this.BtnSideHide.Icon = SIDE_HIDE_ICON.find((n) => Application.HasIcon(n)) || "";
-        this.BtnSideShow.Icon = SIDE_SHOW_ICON.find((n) => Application.HasIcon(n)) || "";
         if (!this.BtnSideHide.Icon) this.BtnSideHide.Text = "\u00ab";
-        if (!this.BtnSideShow.Icon) this.BtnSideShow.Text = "\u00bb";
     }
 
     BtnSideHide_Click() { this.foldSide(); }
-    BtnSideShow_Click() { this.unfoldSide(); }
 
     /*
      * Fold the project panel to its strip, and bring it back.
@@ -2069,7 +2147,7 @@ export class MainForm extends Form {
      * halves cannot be squeezed below what they hold, and the content stops
      * holding anything the moment it is hidden: measured, a position of 30
      * with the tree up clamps to the tree's own minimum, and with the content
-     * hidden it lands on the strip's -- the button's own.  The order of the two
+     * hidden it lands on the strip's -- the buttons' own.  The order of the two
      * assignments is the whole of the trick, and coming back it is reversed.
      *
      * The width to come back to is not the divider's while folded, so it is
@@ -2081,18 +2159,18 @@ export class MainForm extends Form {
 
         this.sideWidth = openWidth > 0 ? Math.round(openWidth)
                                        : Math.round(this.Split.Position);
-        this.SideView.Visible    = false;
-        this.BtnSideShow.Visible = true;
-        this.Split.Position      = SIDE_STRIP_W;
-        this.sideHidden          = true;
+        this.SideView.Visible  = false;
+        this.SideStrip.Visible = true;
+        this.Split.Position    = SIDE_STRIP_W;
+        this.sideHidden        = true;
         this.session.noteSide(true, this.sideWidth);
     }
 
     unfoldSide() {
         if (!this.sideHidden) return;
 
-        this.SideView.Visible    = true;
-        this.BtnSideShow.Visible = false;
+        this.SideView.Visible  = true;
+        this.SideStrip.Visible = false;
         /* After the content, for the reason above: a position is clamped to
          * what the half holds, and a strip's worth of pixels is not that. */
         if (this.sideWidth > 0) this.Split.Position = this.sideWidth;
