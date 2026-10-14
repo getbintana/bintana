@@ -366,20 +366,20 @@ class ClientsForm extends Form {
         this.TxtName.Text = c ? c.Name : "";
 
         /*
-         * **Two widget limits that a binding would have to answer, and neither
-         * is obvious.** A `ComboBox` has no empty *text* -- assigning `""`
+         * **Two widget limits a binding has to answer, and one is no longer
+         * one of them.** A `ComboBox` has no empty *text* -- assigning `""`
          * throws `'' is not one of CmbCategory's items`, because the text is one
-         * of the items and nothing is `Index = -1`. And a `DatePicker` has no
-         * empty state at all: its default is today and there is no value that
-         * means *no date*, so an optional `Field.Date` cannot round-trip through
-         * one. `Client.Since` is declared `required` for that reason -- a fact
-         * about the control, written into the shape, which is exactly the kind
-         * of leak a declared binding would have to decide about.
+         * of the items and nothing is `Index = -1`. **The date half is fixed**:
+         * `DatePicker.Value = ""` is no date, spelled the way `Field.Date`
+         * already spelled it, so an optional `Field.Date` round-trips through
+         * one and `Client.Since` is an ordinary optional field -- it was
+         * `required` while the control could not show *no date*, which is
+         * exactly the leak a declared binding has to decide about.
          */
         if (c) this.CmbCategory.Text  = c.Category;
         else   this.CmbCategory.Index = -1;
 
-        this.PckSince.Value = c && c.Since ? c.Since : Day.Today;
+        this.PckSince.Value = c && c.Since ? c.Since : "";
         /* A decimal reaches a TextBox as its own text, which is exactly what it
          * reads back from -- so there is no formatting here and no parsing in
          * `read()`. */

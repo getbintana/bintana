@@ -5303,14 +5303,18 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   combo a placeholder row (`Items = ["—", …]`) and selects that when there is
   no record; `Index = -1` is what an *empty* list reads, not a way to empty
   one.
-- **A `DatePicker` has no empty state at all.** Its default is today and there is
-  no value meaning *no date*, so an **optional `Field.Date` cannot round-trip
-  through one**: showing an empty date puts today in the control, and reading it
-  back writes today into the record. `examples/clients` declares `Since` as
-  `required` for that reason -- a fact about the control, written into the shape.
-  Worth knowing before designing anything that writes a record's value into a
-  control, and `docs/plans/data-plan.md` records it as one of the three things
-  `examples/clients` changed about the binding's design.
+- **A `DatePicker`'s empty state is a flag of its own, and a `Calendar` refuses
+  one.** `Value = ""` is *no date* -- the state GTK's calendar has not got -- so
+  an **optional `Field.Date` round-trips through a picker**: the button reads
+  `Placeholder` (an em dash by default), picking a day is the one gesture that
+  ends the empty state, and browsing months in an empty picker does not fill it
+  in. It is the field's and not the month's: a `Calendar` refuses `""` rather
+  than accepting it and lying. **The limit it replaced is what put `required`
+  into a shape**: `examples/clients` declared `Since` that way because the
+  control could not show *no date*, which is exactly the kind of leak a declared
+  binding has to decide about -- the field is optional now, and the empty date
+  is what a new record shows. `docs/plans/data-plan.md` records the pair of
+  widget limits that example found.
 
 ## Terminal and the output pane
 

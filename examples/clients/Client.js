@@ -45,10 +45,12 @@ class Client extends Record {
         Name:       Field.Text({ required: true, max: 80 }),
         Category:   Field.Enum(["Retail", "Wholesale", "Government"]),
         Balance:    Field.Decimal({ decimals: 2 }),
-        /* `required` because of the *control* and not because of the domain:
-         * a DatePicker has no empty state, so an optional date cannot come back
-         * out of one. See measurement 7 in ClientsForm.js. */
-        Since:      Field.Date({ required: true }),
+        /* Optional, and it **was** `required` because of the control and not
+         * because of the domain: a `DatePicker` had no empty state, so an
+         * optional date could not come back out of one. `Value = ""` is no
+         * date now, and a new record shows the placeholder. See measurement 7
+         * in ClientsForm.js. */
+        Since:      Field.Date(),
         PostalCode: Field.Text({ max: 8 }),
         Active:     Field.Bool(true),
     };
