@@ -232,8 +232,8 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   loop and throws if a page ever fails to advance; the object form of `Margins`
   refuses a side that is not a finite number in both `markdown` and `report`,
   which the number form always had.
-- **`printf("%g")` writes the locale's decimal separator, and this machine writes
-  a comma.** `Ratio = 1.5` came back `"1,5"`, which is what the `.form` would
+- **`printf("%g")` writes the locale's decimal separator, and a decimal-comma
+  locale (es_AR) writes a comma.** `Ratio = 1.5` came back `"1,5"`, which is what the `.form` would
   then carry and what `JSON.parse` would read as **nothing** -- the same fault
   the QuickJS number patch exists for, one layer up, and it was caught by a test
   asserting the round trip rather than by anybody reading the code.

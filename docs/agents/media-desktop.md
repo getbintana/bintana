@@ -130,7 +130,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   `XDG_DATA_HOME` at a scratch directory (`bta-suite-<pid>/data`) for exactly
   this, and the test still removes what it installs, because `tests/try.sh` has
   no runner to isolate it.
-- **`GKeyFile` drops the translations this machine does not speak, unless it is
+- **`GKeyFile` drops the translations the desktop does not speak, unless it is
   told not to.** Without `G_KEY_FILE_KEEP_TRANSLATIONS`, a `Key[locale]` is
   kept only when the locale is one of `g_get_language_names()`'s -- so
   `Name[es]` is a key on a desktop set to Spanish and is **not** on one set to

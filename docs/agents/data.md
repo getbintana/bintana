@@ -98,7 +98,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   `Load`, so they report it too.
 - **The order of the two parsers is the whole of a number setter, and getting it
   backwards is silent.** `DecimalBox.Value` takes machine text (`"1234.567"`,
-  what a `.form` and `Decimal.toJSON()` carry) and this desktop's spelling
+  what a `.form` and `Decimal.toJSON()` carry) and an es_AR desktop's spelling
   (`"1.234,56"`) -- and the locale parser **first** read Argentina's grouping
   separator as a decimal point, so `"1234.567"` became `1234567`: a value off by
   a thousand, from a file the serialiser had written correctly. Machine text

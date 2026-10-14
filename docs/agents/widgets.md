@@ -567,7 +567,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
 - **A `.form` names one icon; code picks the first of a list that resolves.**
   Moving a control from code into the file quietly drops its fallback — which is
   how the IDE's tab-strip button came out blank, since `view-more-symbolic` is
-  not on this desktop and nothing said so. `tests/ide` now walks every `.form`
+  not on the desktop it was checked on and nothing said so. `tests/ide` now walks every `.form`
   under `ide/` and checks each declared `Icon` against `Application.HasIcon`.
   **And the names the IDE's own forms declare are the `-symbolic` spelling**,
   because the full-colour legacy ones are not on every desktop: `edit-find`,
@@ -640,7 +640,7 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   with a `transform`. What it cannot do is invent a fallback: a name with nothing
   behind it comes back `""` and the button is *empty*. That is what
   `color-select-symbolic` did to the palette's `ColorButton` here -- embedded in
-  GTK, overridden by this desktop, blank -- and the fix is a drawn icon behind it,
+  GTK, overridden by the desktop's theme, blank -- and the fix is a drawn icon behind it,
   not a cleverer lookup.
 - **A leading comment can make a valid SVG unreadable.** gdk-pixbuf decides a
   file is SVG by looking for `<svg` in its first bytes, so a header comment long

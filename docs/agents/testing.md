@@ -278,7 +278,7 @@ save will edit `examples/hello` for real.
   suite.** `run.sh` exports `HEADLESS=1` and the runner's only way to honour it
   is `xvfb-run`, so a machine without `xorg-x11-server-Xvfb` stops with *no
   display and no xvfb-run* — and the tempting next move is a display that is
-  already there. **Measured, on this machine, in one afternoon:** under
+  already there. **Measured, in one afternoon:** under
   `weston --backend=headless` the windows map and are never allocated, and
   `tests/widgets` came back **3215 passed, 75 failed** — `Bounds()` answering
   0x0, `never became true`, `expected 372x200, got 400x229` — every one of them

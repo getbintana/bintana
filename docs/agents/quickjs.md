@@ -15,7 +15,7 @@ dropping it costs.
 fix, which made the interpreter two to three times faster here.** `JS_MKVAL`
 wrote only the 32-bit half of a `JSValue`'s union, and since GCC 14 (GCC PR
 114134) every `js_int32`/`js_bool` inlined into `JS_CallInternal` became a
-read-modify-write through the stack. This machine is GCC 16: a 3e7-turn integer
+read-modify-write through the stack. On GCC 16: a 3e7-turn integer
 loop went **1650 -> 580 ms** and 2e7 property reads **1092 -> 570 ms**, Release
 against Release. It is a cherry-pick (`-x`) under the eleventh and not a patch,
 listed in `BINTANA.md`, and the rebase onto the release that contains it simply

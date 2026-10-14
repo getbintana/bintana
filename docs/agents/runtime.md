@@ -528,7 +528,7 @@ icon when the theme has one by that name (`gtkapplication.c`).
   `argc` check is reading `undefined` -- `TextWidth()` measured the string
   `"undefined"`, which is the `db.Query()` trap one layer down.
 - **`bta_to_int` had no range check, and `(int32_t)1e12` is undefined in C.**
-  It answered INT32_MIN on this machine, which is a number nobody typed. The
+  It answered INT32_MIN with GCC on x86-64, which is a number nobody typed. The
   helper refuses past the range now -- `Columns.Width` was read with a bare
   `JS_ToInt32` and took `"wide"` for `0`, and the two are one rule.
 - **`Container.Spacing` accepted a negative and GTK read it as four billion.**
@@ -555,7 +555,7 @@ icon when the theme has one by that name (`gtkapplication.c`).
   it is the only kind that cannot live in the variable's initialiser, and so
   the only kind tempted into a second look.
 - **Never quote a GLib message in an error.** `err->message` is translated into
-  the desktop's language: on this machine a corrupt stream said *Datos
+  the desktop's language: on a Spanish desktop a corrupt stream said *Datos
   comprimidos no válidos*, and an error that reads differently per machine cannot
   be matched by a program or pasted into a report -- the `http_kind_for` lesson
   again. The sentence is ours and names the byte where the member starts.

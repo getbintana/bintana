@@ -89,7 +89,7 @@ What bit, or would, in the order it was learned:
   one for the suite, since a capture is one run and several processes writing
   one file would truncate each other's.
 
-Measured on this machine: `--profile` over `tests/widgets` writes a 125 KB
+Measured on one development machine (Debug build): `--profile` over `tests/widgets` writes a 125 KB
 capture carrying **1199 marks** (1065 `Event`, 88 `Draw`, 79 `Form`, 35 `Task`,
 10 `Script`, the rest `Save` and the one `Startup`), and `sysprof_capture_reader`
 reads every one of them back; the same suite passes with the profiler off, where
@@ -151,7 +151,7 @@ layout; none had anything to do with it.
 `perf record` over `tests/bench --child <program>` against a `RelWithDebInfo`
 build is the profile of the engine (Sysprof's marks are the profile of a
 program). Four things measured with it, after the eleventh and twelfth patches:
-- **This machine is a hybrid CPU, so `perf` records two events.** Without
+- **On a hybrid CPU (performance and efficiency cores) `perf` records two events.** Without
   `-e cpu_core/cycles/u` the report shows `cpu_atom/cycles` first, and its 23
   samples -- start-up, on an efficiency core -- put `do_lookup_x` in the
   dynamic linker at 52 % of `sort`. It is nothing; the 9 000 samples on the
@@ -205,7 +205,7 @@ handling reads `uint8_t`), which is why it is alignment and not a fix.
 - **The other four cost claims were measured and are fine, and the numbers are
   here so nobody has to guess again.** An external audit named five places the
   runtime is slow; one of them was real and is the paragraph above. These are
-  the rest, on this machine, so a future *this looks expensive* has something to
+  the rest, on one development machine, so a future *this looks expensive* has something to
   be compared against:
   - **A class looked up with no `.form`** compiles its identifier through
     `JS_Eval` per instance (`bta_lookup_global`). Two hundred project

@@ -1,10 +1,10 @@
-# Zip: a reader of our own, and what the files on this desktop said
+# Zip: a reader of our own, and what real documents said
 
 **Designed in [`docs/plans/crypto-compress-plan.md`](../plans/crypto-compress-plan.md);
 this is stage 2, the reader.** The writer (stage 3) waits for a caller that has to *make*
 a `.xlsx` or an `.odt` -- `examples/clients` exporting to Excel is the candidate, and it
 is the half `soffice` can check automatically. What bit, in the order it was found:
-- **A third of the entries on this desktop have a data descriptor.** Measured over 49
+- **A third of the entries in real documents have a data descriptor.** Measured over 49
   real documents (859 entries): 271 carry flag `0x08`, meaning the local header in
   front of the data holds no size at all, and LibreOffice writes one on **every** entry.
   So sizes and CRC come from the central directory at the end of the file and the local

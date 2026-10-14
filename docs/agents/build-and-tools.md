@@ -19,7 +19,7 @@ tests/try.sh <project> [args...]                  # run any project, on a virtua
 ./tests/api.sh                                    # does the runtime still say what it publishes, and is api.json current?
 ./tools/apijson.sh                                # rewrite api.json, the surface as data -- tests/api.sh fails while it is stale
 ./tools/llms.sh                                   # rewrite llms-full.txt from the documents llm.txt lists
-./tests/icons.sh                                  # which declared icons this desktop has, and which draw
+./tests/icons.sh                                  # which declared icons the desktop has, and which draw
 ./tests/styles.sh                                 # which style classes its theme defines
 ./tests/install.sh                                # what `make install` produces, run out of a staging prefix
 ./tests/pack.sh                                   # what `lib/package` writes, read back file by file
@@ -256,11 +256,11 @@ disagree.
   compiled-in default rather than adding to it. This produced a wrong
   `docs/installing.md` once -- an "install to `/usr` on Fedora" that was never
   necessary. The question with a true answer is `pkg-config --cflags bintana`;
-  the variable is a report about pkgconf and not about this machine's
-  `pkg-config`. (The pc under `<build>/pkgconfig` is a different case: it is for
+  the variable is a report about pkgconf and not about the
+  `pkg-config` of the machine in front of you. (The pc under `<build>/pkgconfig` is a different case: it is for
   building against a checkout with nothing installed at all.)
-- **The compiler in CI is older than the one here.** The runner is GCC 13 and
-  this machine is GCC 16, so a name the new one knows is a *syntax* error there:
+- **The compiler in CI is older than a current distribution's.** The runner is GCC 13 and
+  Fedora 44 is GCC 16, so a name the new one knows is a *syntax* error there:
   `#if defined(__SANITIZE_ADDRESS__) || (defined(__has_feature) && __has_feature(address_sanitizer))`
   reads as a guard and is not one -- `&&` does not short-circuit the token, and
   GCC 13 stops with `missing binary operator before token "("`. Clang's
@@ -268,14 +268,14 @@ disagree.
   exists (`bta_runtime.c`), and any compiler-version conditional added here is
   the same shape of risk: the runner is the only GCC 13 this repository has.
 - **And so is its GTK, which is the one that actually bit.** The runner is
-  Ubuntu 24.04 with GTK **4.14** while this machine has **4.22**, so a name added
+  Ubuntu 24.04 with GTK **4.14** while Fedora 44 has **4.22**, so a name added
   since 4.15 compiles here and is an *undeclared identifier* there:
   `GDK_ACTION_NONE` is an enumerator only since **4.20**
   (`GDK_AVAILABLE_ENUMERATOR_IN_4_20` in `gdk/gdkenums.h`) and `bta_widget.c`
   returned it for a refused drag -- green here, `error: 'GDK_ACTION_NONE'
   undeclared` on the runner, and the floor this runtime declares is 4.10. `0` is
   the zero of the flags type and says it in every version. **A new GTK or GDK
-  name is checked against the floor, not against this machine**: grep the header
+  name is checked against the floor, not against the machine you build on**: grep the header
   for its `GDK_AVAILABLE_IN_*`, and when it is newer, spell the older thing.
 - **And its libxml2, where a callback's signature changed *constness* --
   and it was Clang that said so.** libxml2 2.12 made

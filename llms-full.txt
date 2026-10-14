@@ -651,7 +651,7 @@ tests/try.sh <project> [args...]                  # run any project, on a virtua
 ./tests/api.sh                                    # does the runtime still say what it publishes, and is api.json current?
 ./tools/apijson.sh                                # rewrite api.json, the surface as data -- tests/api.sh fails while it is stale
 ./tools/llms.sh                                   # rewrite llms-full.txt from the documents llm.txt lists
-./tests/icons.sh                                  # which declared icons this desktop has, and which draw
+./tests/icons.sh                                  # which declared icons the desktop has, and which draw
 ./tests/styles.sh                                 # which style classes its theme defines
 ./tests/install.sh                                # what `make install` produces, run out of a staging prefix
 ./tests/pack.sh                                   # what `lib/package` writes, read back file by file
@@ -888,11 +888,11 @@ disagree.
   compiled-in default rather than adding to it. This produced a wrong
   `docs/installing.md` once -- an "install to `/usr` on Fedora" that was never
   necessary. The question with a true answer is `pkg-config --cflags bintana`;
-  the variable is a report about pkgconf and not about this machine's
-  `pkg-config`. (The pc under `<build>/pkgconfig` is a different case: it is for
+  the variable is a report about pkgconf and not about the
+  `pkg-config` of the machine in front of you. (The pc under `<build>/pkgconfig` is a different case: it is for
   building against a checkout with nothing installed at all.)
-- **The compiler in CI is older than the one here.** The runner is GCC 13 and
-  this machine is GCC 16, so a name the new one knows is a *syntax* error there:
+- **The compiler in CI is older than a current distribution's.** The runner is GCC 13 and
+  Fedora 44 is GCC 16, so a name the new one knows is a *syntax* error there:
   `#if defined(__SANITIZE_ADDRESS__) || (defined(__has_feature) && __has_feature(address_sanitizer))`
   reads as a guard and is not one -- `&&` does not short-circuit the token, and
   GCC 13 stops with `missing binary operator before token "("`. Clang's
@@ -900,14 +900,14 @@ disagree.
   exists (`bta_runtime.c`), and any compiler-version conditional added here is
   the same shape of risk: the runner is the only GCC 13 this repository has.
 - **And so is its GTK, which is the one that actually bit.** The runner is
-  Ubuntu 24.04 with GTK **4.14** while this machine has **4.22**, so a name added
+  Ubuntu 24.04 with GTK **4.14** while Fedora 44 has **4.22**, so a name added
   since 4.15 compiles here and is an *undeclared identifier* there:
   `GDK_ACTION_NONE` is an enumerator only since **4.20**
   (`GDK_AVAILABLE_ENUMERATOR_IN_4_20` in `gdk/gdkenums.h`) and `bta_widget.c`
   returned it for a refused drag -- green here, `error: 'GDK_ACTION_NONE'
   undeclared` on the runner, and the floor this runtime declares is 4.10. `0` is
   the zero of the flags type and says it in every version. **A new GTK or GDK
-  name is checked against the floor, not against this machine**: grep the header
+  name is checked against the floor, not against the machine you build on**: grep the header
   for its `GDK_AVAILABLE_IN_*`, and when it is newer, spell the older thing.
 - **And its libxml2, where a callback's signature changed *constness* --
   and it was Clang that said so.** libxml2 2.12 made
@@ -1582,7 +1582,7 @@ icon when the theme has one by that name (`gtkapplication.c`).
   `argc` check is reading `undefined` -- `TextWidth()` measured the string
   `"undefined"`, which is the `db.Query()` trap one layer down.
 - **`bta_to_int` had no range check, and `(int32_t)1e12` is undefined in C.**
-  It answered INT32_MIN on this machine, which is a number nobody typed. The
+  It answered INT32_MIN with GCC on x86-64, which is a number nobody typed. The
   helper refuses past the range now -- `Columns.Width` was read with a bare
   `JS_ToInt32` and took `"wide"` for `0`, and the two are one rule.
 - **`Container.Spacing` accepted a negative and GTK read it as four billion.**
@@ -1609,7 +1609,7 @@ icon when the theme has one by that name (`gtkapplication.c`).
   it is the only kind that cannot live in the variable's initialiser, and so
   the only kind tempted into a second look.
 - **Never quote a GLib message in an error.** `err->message` is translated into
-  the desktop's language: on this machine a corrupt stream said *Datos
+  the desktop's language: on a Spanish desktop a corrupt stream said *Datos
   comprimidos no válidos*, and an error that reads differently per machine cannot
   be matched by a program or pasted into a report -- the `http_kind_for` lesson
   again. The sentence is ours and names the byte where the member starts.
@@ -2083,7 +2083,7 @@ dropping it costs.
 fix, which made the interpreter two to three times faster here.** `JS_MKVAL`
 wrote only the 32-bit half of a `JSValue`'s union, and since GCC 14 (GCC PR
 114134) every `js_int32`/`js_bool` inlined into `JS_CallInternal` became a
-read-modify-write through the stack. This machine is GCC 16: a 3e7-turn integer
+read-modify-write through the stack. On GCC 16: a 3e7-turn integer
 loop went **1650 -> 580 ms** and 2e7 property reads **1092 -> 570 ms**, Release
 against Release. It is a cherry-pick (`-x`) under the eleventh and not a patch,
 listed in `BINTANA.md`, and the rebase onto the release that contains it simply
@@ -3510,7 +3510,7 @@ save will edit `examples/hello` for real.
   suite.** `run.sh` exports `HEADLESS=1` and the runner's only way to honour it
   is `xvfb-run`, so a machine without `xorg-x11-server-Xvfb` stops with *no
   display and no xvfb-run* — and the tempting next move is a display that is
-  already there. **Measured, on this machine, in one afternoon:** under
+  already there. **Measured, in one afternoon:** under
   `weston --backend=headless` the windows map and are never allocated, and
   `tests/widgets` came back **3215 passed, 75 failed** — `Bounds()` answering
   0x0, `never became true`, `expected 372x200, got 400x229` — every one of them
@@ -3755,7 +3755,7 @@ What bit, or would, in the order it was learned:
   one for the suite, since a capture is one run and several processes writing
   one file would truncate each other's.
 
-Measured on this machine: `--profile` over `tests/widgets` writes a 125 KB
+Measured on one development machine (Debug build): `--profile` over `tests/widgets` writes a 125 KB
 capture carrying **1199 marks** (1065 `Event`, 88 `Draw`, 79 `Form`, 35 `Task`,
 10 `Script`, the rest `Save` and the one `Startup`), and `sysprof_capture_reader`
 reads every one of them back; the same suite passes with the profiler off, where
@@ -3817,7 +3817,7 @@ layout; none had anything to do with it.
 `perf record` over `tests/bench --child <program>` against a `RelWithDebInfo`
 build is the profile of the engine (Sysprof's marks are the profile of a
 program). Four things measured with it, after the eleventh and twelfth patches:
-- **This machine is a hybrid CPU, so `perf` records two events.** Without
+- **On a hybrid CPU (performance and efficiency cores) `perf` records two events.** Without
   `-e cpu_core/cycles/u` the report shows `cpu_atom/cycles` first, and its 23
   samples -- start-up, on an efficiency core -- put `do_lookup_x` in the
   dynamic linker at 52 % of `sort`. It is nothing; the 9 000 samples on the
@@ -3871,7 +3871,7 @@ handling reads `uint8_t`), which is why it is alignment and not a fix.
 - **The other four cost claims were measured and are fine, and the numbers are
   here so nobody has to guess again.** An external audit named five places the
   runtime is slow; one of them was real and is the paragraph above. These are
-  the rest, on this machine, so a future *this looks expensive* has something to
+  the rest, on one development machine, so a future *this looks expensive* has something to
   be compared against:
   - **A class looked up with no `.form`** compiles its identifier through
     `JS_Eval` per instance (`bta_lookup_global`). Two hundred project
@@ -4994,7 +4994,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
 - **A `.form` names one icon; code picks the first of a list that resolves.**
   Moving a control from code into the file quietly drops its fallback — which is
   how the IDE's tab-strip button came out blank, since `view-more-symbolic` is
-  not on this desktop and nothing said so. `tests/ide` now walks every `.form`
+  not on the desktop it was checked on and nothing said so. `tests/ide` now walks every `.form`
   under `ide/` and checks each declared `Icon` against `Application.HasIcon`.
   **And the names the IDE's own forms declare are the `-symbolic` spelling**,
   because the full-colour legacy ones are not on every desktop: `edit-find`,
@@ -5067,7 +5067,7 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   with a `transform`. What it cannot do is invent a fallback: a name with nothing
   behind it comes back `""` and the button is *empty*. That is what
   `color-select-symbolic` did to the palette's `ColorButton` here -- embedded in
-  GTK, overridden by this desktop, blank -- and the fix is a drawn icon behind it,
+  GTK, overridden by the desktop's theme, blank -- and the fix is a drawn icon behind it,
   not a cleverer lookup.
 - **A leading comment can make a valid SVG unreadable.** gdk-pixbuf decides a
   file is SVG by looking for `<svg` in its first bytes, so a header comment long
@@ -5400,7 +5400,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   the sort with the store untouched -- in a tree, the levels already sorted stay
   sorted, since each is its own store.
   **And where the minus lands is glib's answer, not the table's**: `-5` sorts
-  first under this machine's glib 2.88 and last under the runner's 2.80, so a
+  first under glib 2.88 (Fedora 44) and last under the runner's 2.80, so a
   test that stripped it with `.replace("-5,", "")` passed here and failed there
   -- green here, red on `no-xml`, `no-unix-print` and `no-vte`, which are the
   only jobs that run this green machine's suite against that older library.
@@ -6553,7 +6553,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   `Load`, so they report it too.
 - **The order of the two parsers is the whole of a number setter, and getting it
   backwards is silent.** `DecimalBox.Value` takes machine text (`"1234.567"`,
-  what a `.form` and `Decimal.toJSON()` carry) and this desktop's spelling
+  what a `.form` and `Decimal.toJSON()` carry) and an es_AR desktop's spelling
   (`"1.234,56"`) -- and the locale parser **first** read Argentina's grouping
   separator as a decimal point, so `"1234.567"` became `1234567`: a value off by
   a thousand, from a file the serialiser had written correctly. Machine text
@@ -7273,8 +7273,8 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   loop and throws if a page ever fails to advance; the object form of `Margins`
   refuses a side that is not a finite number in both `markdown` and `report`,
   which the number form always had.
-- **`printf("%g")` writes the locale's decimal separator, and this machine writes
-  a comma.** `Ratio = 1.5` came back `"1,5"`, which is what the `.form` would
+- **`printf("%g")` writes the locale's decimal separator, and a decimal-comma
+  locale (es_AR) writes a comma.** `Ratio = 1.5` came back `"1,5"`, which is what the `.form` would
   then carry and what `JSON.parse` would read as **nothing** -- the same fault
   the QuickJS number patch exists for, one layer up, and it was caught by a test
   asserting the round trip rather than by anybody reading the code.
@@ -7510,7 +7510,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   `XDG_DATA_HOME` at a scratch directory (`bta-suite-<pid>/data`) for exactly
   this, and the test still removes what it installs, because `tests/try.sh` has
   no runner to isolate it.
-- **`GKeyFile` drops the translations this machine does not speak, unless it is
+- **`GKeyFile` drops the translations the desktop does not speak, unless it is
   told not to.** Without `G_KEY_FILE_KEEP_TRANSLATIONS`, a `Key[locale]` is
   kept only when the locale is one of `g_get_language_names()`'s -- so
   `Name[es]` is a key on a desktop set to Spanish and is **not** on one set to
@@ -8832,13 +8832,13 @@ the two `install` roads, `bta_runtime.c` **and** `bta_task.c`.
 
 # docs/notes/zip-xlsx.md
 
-# Zip: a reader of our own, and what the files on this desktop said
+# Zip: a reader of our own, and what real documents said
 
 **Designed in [`docs/plans/crypto-compress-plan.md`](../plans/crypto-compress-plan.md);
 this is stage 2, the reader.** The writer (stage 3) waits for a caller that has to *make*
 a `.xlsx` or an `.odt` -- `examples/clients` exporting to Excel is the candidate, and it
 is the half `soffice` can check automatically. What bit, in the order it was found:
-- **A third of the entries on this desktop have a data descriptor.** Measured over 49
+- **A third of the entries in real documents have a data descriptor.** Measured over 49
   real documents (859 entries): 271 carry flag `0x08`, meaning the local header in
   front of the data holds no size at all, and LibreOffice writes one on **every** entry.
   So sizes and CRC come from the central directory at the end of the file and the local
