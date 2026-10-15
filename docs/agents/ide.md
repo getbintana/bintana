@@ -276,6 +276,16 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   The side panels' titles are `heading` labels from `Workspace.titled`; `text`
   arrives already through `Locale.Text`, since the literal has to be at the call
   site for the extractor.
+- **The IDE has a sheet of its own, and it is for the class a theme cannot
+  name.** `ide/app.css` is found by name beside `project.json` -- the source
+  tree and the installed tree alike, `ide/` being copied whole -- and
+  `tests/ide` has it symlinked beside the forms, so the suite runs the IDE
+  dressed as it ships. Today it dresses one thing: the property grid's group
+  headings, which wear the theme's `heading` (the type) plus the IDE's own
+  `prop-group` (the band over the group), with `HAlign Fill` so the band spans
+  the row. `titlebar`/`default-decoration` were the first attempt and are the
+  desktop's *window* chrome -- backdrop handling and decoration metrics -- not
+  a section band, which is what a class of our own is for.
 - **The designer held a control at 0 on the near edges and at nothing on the far
   ones.** Every move was `Math.max(0, x)`, so with a `Padding` on the form (or a
   panel) a control could be dragged, dropped, nudged or grown past the right and

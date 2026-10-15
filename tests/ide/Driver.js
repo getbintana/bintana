@@ -893,9 +893,25 @@ function* p_designer(ide) {
           dTab.Children.map((c) => c.Name).join(" "));
     check("...and so do the two panels",
           ide.CenterSplit.Children.some((c) => c === ide.SidePanel) &&
-          ide.ControlsBox.Children.length === 2,
+          ide.ControlsBox.Children.some((c) => c === ide.SideSplit),
           `center=${ide.CenterSplit.Children.map((c) => c.Name).join(" ")} ` +
           `controls=${ide.ControlsBox.Children.map((c) => c.Name).join(" ")}`);
+
+    /*
+     * And the tree and its bar are alone in one panel -- only the two, which
+     * is what a rule or a class can dress: what the form is made of and what
+     * one does to it, with the title and the filter outside the pair. The bar
+     * used to be a second row of the column, below the whole split, where
+     * what separated it from the tree was the divider's position.
+     */
+    const structureBox = ide.SideSplit.Children[1];
+    const treeStack    = structureBox.Children.find((c) => c.Name === "TreeStack");
+
+    check("the tree and the design bar are alone in one panel",
+          !!treeStack && treeStack.Children.length === 2 &&
+          treeStack.Children.includes(ide.WidgetTree) &&
+          treeStack.Children.some((c) => c.Name === "DesignBar"),
+          `stack=${treeStack && treeStack.Children.map((c) => c.Name).join(" ")}`);
 
     /* Below the strip, which is the point of the page owning them: the strip
      * spans the window and the panels begin under it. */

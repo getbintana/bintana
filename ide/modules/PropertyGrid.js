@@ -772,13 +772,16 @@ export class PropertyGrid {
     }
 
     /* A heading is a row like any other -- the grid is a list -- wearing the
-     * theme's own small-and-bold class, so it needs no stylesheet of ours.
+     * theme's `heading` for the type and the IDE's own `prop-group` for the
+     * band: a class the theme has no word for, which is what `ide/app.css` is
+     * for.  `HAlign` spans it across the row, since a band narrower than the
+     * list it heads reads as a label that happens to be tinted.
      * It is shown while anything under it is, which is what `keys` is for. */
     addHeading(title, keys) {
         const head = new Label();
         head.Text   = title;
-        head.Style  = "caption-heading";
-        head.Margin = 4;
+        head.Style  = "heading prop-group";
+        head.HAlign = "Fill";
 
         this.rowInfo.push(keys);      // before Add: GTK filters on insertion
         this.designer.workspace.propGrid.Add(head);
@@ -795,11 +798,15 @@ export class PropertyGrid {
 
         /* Markup, because a property that is not at its default is shown in
          * bold and the name is what carries it. A property name is an
-         * identifier, so there is nothing in it to escape. */
+         * identifier, so there is nothing in it to escape. Right aligned: the
+         * names are a column of a table and the value they belong to is on
+         * their right, so the text reads against it and the ragged edge falls
+         * on the side where nothing follows. */
         const label = new Label();
-        label.Markup = true;
-        label.Text   = key;
-        label.Width  = PROP_LABEL_W;
+        label.Markup    = true;
+        label.Text      = key;
+        label.Width     = PROP_LABEL_W;
+        label.Alignment = "Right";
         row.Add(label);
 
         const editor = this.makeEditor(key);

@@ -538,6 +538,11 @@ icon when the theme has one by that name (`gtkapplication.c`).
   `Spacing = -1` is refused now, with `tests/widgets`' `testSpacing` asserting
   the refusal and that nothing stuck. A new numeric setter that ends in an
   unsigned GTK call wants the same line.
+- **`bta_surface_is_box` answers for a *slot*, not for "any box".** The name
+  reads as a test anyone can make, and it accepts only a `BtaFixed` with a box
+  layout: a plain `GtkBox` a control keeps its own parts in -- a `Switcher`'s
+  strip and stack -- is "not a box" to it, so code reaching for one has to test
+  `GTK_IS_BOX` itself.
 - **`Exec`'s `Timeout`/`KillAfter` cast a double to `unsigned` unchecked, which
   is undefined past what an unsigned holds -- and 0 means two different
   nothings.** `Timeout: 0` arms no guard while `KillAfter: 0` forces at once

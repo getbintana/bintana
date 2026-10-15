@@ -142,7 +142,10 @@ export class Workspace {
         this.controlsBox = new Panel();
         this.controlsBox.Name        = "ControlsBox";
         this.controlsBox.Arrangement = "Vertical";
-        this.controlsBox.Spacing     = 2;
+        /* The theme's own word for a column beside the work.  Inside a `Split`
+         * the class keeps no edge line of its own -- the theme drops it for
+         * `.sidebar` inside a `paned`, which is where these two sit. */
+        this.controlsBox.Style       = "sidebar";
 
         this.sideSplit = new Split();
         this.sideSplit.Name        = "SideSplit";
@@ -153,6 +156,7 @@ export class Workspace {
         this.paletteBook.Name    = "Palette";
         this.paletteBook.HExpand = true;
         this.paletteBook.VExpand = true;
+        this.paletteBook.Margin  = 4;
         this.sideSplit.Add(this.titled(Locale.Text("Toolbox"), this.paletteBook));
 
         this.widgetTree = new TreeView();
@@ -189,11 +193,25 @@ export class Workspace {
         findRow.Add(this.treeFind);
         findRow.Add(this.treeOptions);
 
-        this.sideSplit.Add(this.titled(Locale.Text("Structure"), this.widgetTree,
-                                       findRow));
+        /*
+         * The tree and its bar, **alone in one panel**: only those two, so
+         * what a rule or a class dresses is the pair -- what the form is made
+         * of and what one does to it -- and the title and the filter over it
+         * stay outside whatever the pair wears.
+         */
+        const treeStack = new Panel();
+        treeStack.Name        = "TreeStack";
+        treeStack.Arrangement = "Vertical";
+        treeStack.HExpand     = true;
+        treeStack.VExpand     = true;
+        treeStack.Margin      = 4;
+        treeStack.Style       = "frame";
+        treeStack.Add(this.widgetTree);
+        treeStack.Add(this.buildBar());
+
+        this.sideSplit.Add(this.titled(Locale.Text("Structure"), treeStack, findRow));
 
         this.controlsBox.Add(this.sideSplit);
-        this.controlsBox.Add(this.buildBar());
 
         this.page.Add(this.controlsBox);
         this.page.Add(this.centerSplit);
@@ -231,6 +249,26 @@ export class Workspace {
         this.ide.session.settle(this.page, "EditSplit", OUTLINE_W);
     }
 
+    /*
+     * A panel's title: the theme's heading class and the room that makes it a
+     * title rather than a first row. A helper because the hand-built headers
+     * -- the inspector's -- have to wear exactly what `titled` gives a panel,
+     * and a second copy is how the two drift apart.
+     *
+     * `Margin` is one number for all four sides and never a list, so the room
+     * is padding: 8 on top and the 4 the panels inset everything by on the
+     * rest. `text` arrives already through `Locale.Text`, since the literal
+     * has to be at the call site for the extractor to find it.
+     */
+    heading(text) {
+        const head = new Label();
+        head.HAlign  = "Start";
+        head.Padding = "8 4 4 4";
+        head.Style   = "heading";
+        head.Text    = text;
+        return head;
+    }
+
     /* A panel's title above its content, so each side panel says what it is
      * the way the outline does. `text` arrives already through `Locale.Text`:
      * the literal has to be at the call site for the extractor to find it. */
@@ -240,23 +278,19 @@ export class Workspace {
         box.HExpand     = true;
         box.VExpand     = true;
 
-        const head = new Label();
-        head.HAlign = "Start";
-        head.Margin = 4;
-        head.Style  = "heading";
-        head.Text   = text;
-        box.Add(head);
+        box.Add(this.heading(text));
         if (under) box.Add(under);      /* between the title and what it titles */
         box.Add(content);
         return box;
     }
 
-    /* The buttons under the control tree, pointing at the IDE's own commands:
-     * one assignment decides whether they are available. The last three walk
-     * the pages of the page container the selection is in. They lived in a
-     * bar drawn under that container on the canvas, which covered the form
-     * whenever the container reached its bottom edge -- here they cover
-     * nothing. */
+    /* The buttons under the control tree, in the same panel as it -- only the
+     * two, so the pair is one thing to dress (`buildDesign`'s `TreeStack`) --
+     * pointing at the IDE's own commands: one assignment decides whether they
+     * are available. The last three walk the pages of the page container the
+     * selection is in. They lived in a bar drawn under that container on the
+     * canvas, which covered the form whenever the container reached its
+     * bottom edge -- here they cover nothing. */
     buildBar() {
         const bar = new Panel();
         bar.Name        = "DesignBar";
@@ -304,11 +338,17 @@ export class Workspace {
         this.sideTabs.Expand  = true;
         this.sideTabs.HExpand = true;
         this.sideTabs.VExpand = true;
+        this.sideTabs.Margin  = 4;
+
+        /* The other column, the same ground as the one on the left: the
+         * inspector is a sidebar too, and the two read as one window. */
+        this.sidePanel.Style = "sidebar";
 
         this.propBox = new Panel();
         this.propBox.Name        = "PropBox";
         this.propBox.Arrangement = "Vertical";
-        this.propBox.Spacing     = 2;
+        this.propBox.Spacing     = 6;
+        this.propBox.Padding     = 4;
 
         const row = new Panel();
         row.Name        = "PropDesignRow";
@@ -335,7 +375,6 @@ export class Workspace {
         this.propFind = new TextBox();
         this.propFind.Name        = "PropFind";
         this.propFind.HExpand     = true;
-        this.propFind.Margin      = 4;
         this.propFind.Icon        = "edit-find-symbolic";
         this.propFind.Placeholder = Locale.Text("Filter properties");
         this.propFind.Tooltip     = Locale.Text("Show only the properties whose name contains this");
@@ -346,12 +385,20 @@ export class Workspace {
         this.propGrid.Expand  = true;
         this.propGrid.HExpand = true;
         this.propGrid.VExpand = true;
+        /* `frame` and `view`, the pair the theme asks for around a list; both
+         * land on the `GtkScrolledWindow`, a `RowList`'s own node -- the
+         * `list` inside it is out of `Style`'s reach. */
+        this.propGrid.Style   = "frame view";
         this.propBox.Add(this.propGrid);
 
         this.eventsBox = new Panel();
         this.eventsBox.Name        = "EventsBox";
         this.eventsBox.Arrangement = "Vertical";
         this.eventsBox.Spacing     = 2;
+        /* The page's own room, the same the properties page keeps: the gap
+         * under the switcher's strip comes from here and not from the
+         * `Switcher` -- its `Spacing` is the stack's, and this is the page's. */
+        this.eventsBox.Padding     = 4;
 
         this.eventList = new RowList();
         this.eventList.Name    = "EventList";
@@ -359,15 +406,15 @@ export class Workspace {
         this.eventList.HExpand = true;
         this.eventList.VExpand = true;
         this.eventList.Tooltip = Locale.Text("Double click an event to write its handler, or to go to it");
+        /* The pair the properties list wears, like the page's room. */
+        this.eventList.Style   = "frame view";
         this.eventsBox.Add(this.eventList);
 
-        /* What the two pages below speak about; `PropertyGrid.fill` writes it. */
-        this.propTitle = new Label();
-        this.propTitle.Name   = "PropTitle";
-        this.propTitle.HAlign = "Start";
-        this.propTitle.Margin = 4;
-        this.propTitle.Style  = "heading";
-        this.propTitle.Text   = Locale.Text("Inspector");
+        /* What the two pages below speak about; `PropertyGrid.fill` writes it.
+         * It wears the panels' header style, so the right column's title is
+         * the same thing as the left column's. */
+        this.propTitle = this.heading(Locale.Text("Inspector"));
+        this.propTitle.Name = "PropTitle";
         this.sidePanel.Add(this.propTitle);
 
         this.sideTabs.Append(this.propBox,   Locale.Text("Properties"));

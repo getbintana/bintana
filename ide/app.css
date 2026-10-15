@@ -1,0 +1,30 @@
+/*
+ * The IDE's own sheet: the classes the theme has no word for.
+ *
+ * Loaded by name, beside `project.json` -- the source tree and the installed
+ * tree alike, `ide/` being copied whole and the runtime finding `app.css` as
+ * it finds `icons/` and `po/`.  `tests/ide` has it symlinked beside the forms,
+ * so the suite runs the IDE dressed as it ships.
+ *
+ * Rules here stay theme-true, the way `runtime/css/base.css` argues: colours
+ * are the theme's own or `currentColor` at an alpha -- `alpha(currentColor,
+ * …)` follows a dark desktop without anybody computing it -- so nothing here
+ * says what colour a heading is, only that a heading has a band.
+ */
+
+/*
+ * The property grid's group heading (`PropertyGrid.addHeading`): the band over
+ * the group of rows it names.  It is worn *with* the theme's `heading`, which
+ * keeps the type; this is the half the theme has no class for.
+ *
+ * The vertical padding is what makes the band as tall as a property row --
+ * measured: `3px` left it a 26px strip beside 44px rows, `12` comes out at
+ * ~41 beside ~45, which is the likeness the reference keeps (gtk4's widget
+ * factory: 37 beside 40) -- so the grid reads as groups of equal rows and not
+ * as thin dividers between them.  (The real fix for this is
+ * `docs/plans/list-headers-plan.md`.)
+ */
+.prop-group {
+    background-color: alpha(currentColor, 0.06);
+    padding: 8px;
+}
