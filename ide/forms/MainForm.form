@@ -353,6 +353,83 @@
       ]
     },
     {
+      "name": "MnuView",
+      "text": "_View",
+      "children": [
+        {
+          "name": "MnuViewProjectPanel",
+          "text": "Project panel",
+          "check": true,
+          "shortcut": "<Control>b"
+        },
+        {
+          "name": "MnuViewSide",
+          "text": "Side panel",
+          "dynamic": true,
+          "radio": true
+        },
+        {
+          "name": "MnuViewOutput",
+          "text": "Output",
+          "check": true,
+          "shortcut": "<Control>j"
+        },
+        {
+          "name": "MnuViewBottom",
+          "text": "Bottom panel",
+          "dynamic": true,
+          "radio": true
+        },
+        {
+          "name": "MnuViewToolbar",
+          "text": "Toolbar",
+          "check": true
+        },
+        {
+          "separator": true
+        },
+        {
+          "name": "MnuViewLineNumbers",
+          "text": "Line numbers",
+          "check": true
+        },
+        {
+          "name": "MnuViewWrap",
+          "text": "Word wrap",
+          "check": true
+        },
+        {
+          "name": "MnuViewTheme",
+          "text": "Syntax theme",
+          "dynamic": true,
+          "radio": true
+        },
+        {
+          "separator": true
+        },
+        {
+          "name": "MnuViewFocusEditor",
+          "text": "Focus the editor"
+        },
+        {
+          "name": "MnuViewFocusTree",
+          "text": "Focus the project tree"
+        },
+        {
+          "name": "MnuViewFocusConsole",
+          "text": "Focus the console"
+        },
+        {
+          "separator": true
+        },
+        {
+          "name": "MnuViewFullScreen",
+          "text": "Full screen",
+          "shortcut": "F11"
+        }
+      ]
+    },
+    {
       "name": "MnuProject",
       "text": "_Project",
       "children": [

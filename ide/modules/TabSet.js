@@ -157,6 +157,16 @@ export class TabSet {
     }
 
     /*
+     * Every editor there is, the one on screen and the ones behind it: a view
+     * setting is about the reader, so it belongs to all of them at once --
+     * switching tabs must not undress the editor that was open a moment ago.
+     */
+    eachEditor(fn) {
+        for (const state of this.openTabs.values())
+            if (state.editor) fn(state.editor);
+    }
+
+    /*
      * The file a page is showing, or `""`.  A walk of `openTabs` and not a
      * second table: `openTabs` already holds every state and every state holds
      * its own page.
@@ -257,9 +267,13 @@ export class TabSet {
          */
         if (state.mode === "edit") {
             const ed = new SourceEditor();
-            ed.Name            = "Editor";
-            ed.Expand          = true;
-            ed.ShowLineNumbers = true;
+            ed.Name   = "Editor";
+            ed.Expand = true;
+
+            /* Line numbers, wrap and the syntax theme are the *reader's*, so
+             * the tab is born with what the View menu has chosen and not with
+             * a default of its own.  See `MainForm.dressEditor`. */
+            this.ide.dressEditor(ed);
 
             /*
              * The words already in the file, offered as you type. The floor of
@@ -1001,6 +1015,11 @@ export class TabSet {
 
         /* And the find bar speaks about an editor, which has just changed hands. */
         this.ide.finder.sync();
+
+        /* The View menu as well, for the same handover: with no theme chosen
+         * its mark is what the editor on screen reports, and the editor has
+         * just changed. */
+        this.ide.dressViewMenu();
     }
 
     save() {

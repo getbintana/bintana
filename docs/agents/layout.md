@@ -356,6 +356,17 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   it **before** moving the divider back -- either way with the move first, the
   clamp eats it and the half stays where it was (measured: `30` with the
   content visible clamped to the content's minimum, `200` in the probe).
+  **A child hidden whole is the other case, and it does go away**: the paned
+  hands the whole rectangle to the half that is left and hides its handle
+  (`gtk_paned_size_allocate`, the branch where only one child is visible)
+  without touching `Position` or `last_allocation`, so the half comes back at
+  the size it had whatever the window did in between -- and a `Grows: "Start"`
+  split gives it back exactly, since `compute_position` carries the difference
+  to the half that stayed. That is the bottom panel's way of being hidden
+  (`MainForm.foldConsole`), and it is why a `Split` whose second half is not
+  `Visible` must not be asked what that half is worth: `Position` still holds
+  where the divider was, so `extent - Position` grows with the window while the
+  half does not (`Session.saveWindow`).
 - **`Label.Alignment` placed the block and left its lines justified left.** It set
   `xalign` only, so a `Wrap`ped paragraph with `Alignment: "Center"` was a centred
   box of left-aligned lines -- measured on the empty view's hint. It sets `justify`

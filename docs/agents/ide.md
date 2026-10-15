@@ -677,6 +677,67 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   never-a-tab and grouped cannot drift. Held by `tests/ide`: `sounds` for the
   category, and `views` for the unknown-kind half and for what the two views
   now differ about -- grouping, not membership.
+- **A window's panels are shown and hidden from the View menu, and the items
+  are views over the widgets rather than a second copy of them.**
+  `MnuViewProjectPanel` folds and unfolds the side panel through the same
+  `foldSide`/`unfoldSide` its own button and its strip use; `MnuViewOutput` is
+  the console's `Visible` and `MnuViewToolbar` the toolbar's; and
+  `dressViewMenu` brings the items to what the window is doing after any
+  road moves one of them -- which is why *Show problems* and a project check
+  end in `showConsole` and not in an assignment: the panel has three roads up
+  and one place that dresses them. What is away is furniture of the window like
+  the fold, so it rides in `session.window.view` (`Session.view`) and is applied
+  in `Form_Open` before the window is mapped.
+  **The console's height is not kept anywhere, and that was measured rather
+  than assumed**: hiding a half is one widget's `Visible`, and GTK's paned hands
+  the room to the half that is left and hides the handle
+  (`gtk_paned_size_allocate`, the branch where only one child is visible)
+  without touching `start_child_size` or `last_allocation` -- and `RightSplit`
+  grows by its `Start` half, so `gtk_paned_compute_position` gives the console
+  back the height it had when it comes up again (asserted to the pixel by
+  `tests/ide`'s `session`).
+  **And a half that is put away cannot say how much room it is worth**, which
+  is why `Session.saveWindow` skips a split whose last child is not `Visible`:
+  `Position` still holds where the divider was, so `size - Position` grows with
+  the window while the half does not, and the last `ends` the file holds stands
+  instead. The same phase resizes the window with the console away and asserts
+  that number did not move.
+  **The panels' own choices are two dynamic radios, and their entries are the
+  lists' answers**: *Side panel* is filled from `sideViews()` and *Bottom panel*
+  from the notebook's own `Tabs`, so a page built in code is a row with nothing
+  here counting pages, and the side bar's three views stay one list with three
+  roads into it (the chooser, the strip and this). They are assigned **once**,
+  in `Form_Open` after `buildTerminal`, and never again -- assigning `Items` is
+  what rebuilds a submenu, and the Problems tab's label is a `Label` that
+  `Problems.say` mutates, so a menu that re-read it would say `2 problems`
+  there. The mark is the widget's own answer (`CmbView.Index`,
+  `ConsoleBox.Current`) and choosing an entry is the same `openSide`/
+  `showConsole` the other roads take.
+  **The editor's line numbers, wrap and syntax theme are the reader's and not a
+  tab's**: one value each, written by the menu, read by `dressEditor` when
+  `TabSet` makes an editor, and applied to every open tab at once
+  (`TabSet.eachEditor`) so switching tabs cannot undress one. The theme entries
+  are `Widget.PropertyOptions("SourceEditor", "Theme")` -- ids and not prose,
+  because a catalogue that translated `cobalt` would be translating a keyword,
+  which is the column editor's combo one menu over -- and with nothing chosen
+  the mark falls back to what the editor on screen reports, the runtime's own
+  default being a theme too.
+  **The three *Focus ...* commands bring the thing into view first**: the tree
+  unfolds its panel (and turns to a tree view, `Changes` having no tree in it),
+  the console is shown, and the focus inside it is the page's own choice -- the
+  stack for the debug page rather than its first button, which is what a
+  notebook cannot say.
+  **Full screen is a command and not a tick**, and the reason is a state the
+  desktop owns: `FullScreen` reads back what the window manager did, and a
+  mapped window on a display with no manager at all (the suite's `Xvfb`) does
+  not change at all -- measured, and set while the window is *not* mapped it
+  does read back, and cannot be taken back while it is. A tick a desktop can
+  overrule is a tick that would lie, so the item moves what the window says it
+  is now; `tests/ide` presses it for the throw it would be and asserts nothing
+  about the state, the way `Maximized` is left alone. `Ctrl+B`, `Ctrl+J` and
+  `F11` are the keys, and the toggles, both submenus, the editor settings and
+  the focus commands are all driven in that phase, each through the roads it
+  has.
 
 ## The designer's pages: the page shown is a design value
 

@@ -257,6 +257,25 @@ export class Session {
     }
 
     /*
+     * What the View menu left showing: the bottom panel and the toolbar, each
+     * `true` unless the file says otherwise -- a file this version has not
+     * written yet is a first run, and a first run shows everything.  The
+     * project panel is **not** here: it is `side` above, which keeps the width
+     * it comes back to, and one fact in two keys is how the two come to
+     * disagree.
+     *
+     * Checked rather than trusted, like everything else read out of this file:
+     * a hand-edited `"console": 0` shows the panel rather than hiding it.
+     */
+    view() {
+        const saved = this.window();
+        const view  = saved && saved.view && typeof saved.view === "object"
+                      ? saved.view : {};
+        return { console: view.console !== false,
+                 toolbar: view.toolbar !== false };
+    }
+
+    /*
      * Every resize, which is what `Form_Resize` is for and all this costs: two
      * numbers, compared and kept. Nothing is written here -- a `Settings.Set`
      * per frame of a drag is a file rewritten a hundred times to record a
@@ -288,11 +307,29 @@ export class Session {
             const last = Number(kept[name]);
             if (Number.isFinite(last) && last > 0) ends[name] = last;
             if (!ide[name]) continue;
+
+            /*
+             * **A half that is put away cannot say how much room it is worth.**
+             * `Position` still holds where the divider was the last time both
+             * halves were there, while the split is allocated whole -- so
+             * `size - Position` grows with the window and the half does not.
+             * What the file already says stands, which is how a console hidden
+             * before the window was resized comes back the height it was.
+             */
+            const halves = ide[name].Children;
+            const end    = halves[halves.length - 1];
+            if (end && !end.Visible) continue;
+
             const size = extentOf(ide[name]);
             if (size > ide[name].Position) ends[name] = size - ide[name].Position;
         }
 
-        const saved = { maximized: !!ide.Maximized, dividers, ends };
+        const saved = { maximized: !!ide.Maximized, dividers, ends,
+                        /* What the View menu left showing.  The folded project
+                         * panel is `side` and not repeated here: it carries the
+                         * width it comes back to. */
+                        view: { console: !!ide.ConsoleBox.Visible,
+                                toolbar: !!ide.ToolBar.Visible } };
         /* The folded project panel, if there is one: the divider above says
          * the strip's width while it is folded, so the width to come back to
          * is this pair and not that number. */

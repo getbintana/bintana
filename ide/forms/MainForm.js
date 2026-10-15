@@ -149,6 +149,25 @@ const SIDE_HIDE_ICON = [
  * buttons gets a fatter strip.  See foldSide. */
 const SIDE_STRIP_W = 30;
 
+/*
+ * The editor's own view settings, which the View menu carries: dotted like
+ * `tree.view` and `side.view`, because a settings file is a file a person
+ * opens and a prefix is how the entries of one subject stay together.  There
+ * is one editor per code tab and every one of them is born with these, so what
+ * is set is the reader's and not one tab's -- see `dressEditor`.
+ */
+const EDITOR_LINES_KEY = "editor.lineNumbers";
+const EDITOR_WRAP_KEY  = "editor.wrap";
+const EDITOR_THEME_KEY = "editor.theme";
+
+/*
+ * The syntax themes the runtime offers, asked of the class: the list cannot
+ * drift from what `Theme` accepts, and no widget is built to ask.  The ids are
+ * *values* and not prose -- nothing translates them, and a catalogue holding
+ * `cobalt` would be a catalogue translating a keyword.
+ */
+const EDITOR_THEMES = Widget.PropertyOptions("SourceEditor", "Theme");
+
 /* How many projects the "Recent projects" menu remembers.  Where they are kept
  * is Settings' business, and Settings is per application, so the IDE's list
  * never collides with any other project's (nor with the tests'). */
@@ -352,7 +371,18 @@ export class MainForm extends Form {
         this.dressSide();
         const side = this.session.side();
         if (side.hidden) this.foldSide(side.width);
+        /* And the rest of the window's furniture, the same moment and for the
+         * same reason: what the View menu had put away is put away before the
+         * window is mapped. */
+        const view = this.session.view();
+        if (!view.console) this.foldConsole();
+        if (!view.toolbar) this.ToolBar.Visible = false;
         this.buildTerminal();
+        /* The menu last, entries before marks: the terminal page is one of the
+         * console's, and an entry list is what a mark is on -- a check item is
+         * born unticked and a radio unmarked. */
+        this.dressViewEntries();
+        this.dressViewMenu();
         this.renderTabs();          /* no pages yet: no strip either */
         this.setMode(false);        /* ...and so no editor nor designer either */
         this.loadRecent();
@@ -1795,7 +1825,7 @@ export class MainForm extends Form {
      */
     MnuCheck_Click() {
         const found = this.check.run();
-        this.ConsoleBox.Current = this.problems.page;
+        this.showConsole(this.problems.page);
         if (!found.length) this.log(`${Locale.Text("Nothing wrong with the project")}\n`);
     }
 
@@ -1814,8 +1844,7 @@ export class MainForm extends Form {
         const page = this.problems.page;
         if (page < 0) return;
 
-        this.ConsoleBox.Current = page;
-        this.ConsoleBox.Visible = true;
+        this.showConsole(page);
         this.ProblemView.SetFocus();
     }
 
@@ -2164,6 +2193,7 @@ export class MainForm extends Form {
         this.Split.Position    = SIDE_STRIP_W;
         this.sideHidden        = true;
         this.session.noteSide(true, this.sideWidth);
+        this.dressViewMenu();
     }
 
     unfoldSide() {
@@ -2176,6 +2206,211 @@ export class MainForm extends Form {
         if (this.sideWidth > 0) this.Split.Position = this.sideWidth;
         this.sideHidden = false;
         this.session.noteSide(false, this.sideWidth);
+        this.dressViewMenu();
+    }
+
+    /* --- the View menu: what the window is showing --------------------------
+     *
+     * The two panels and their own choices, the toolbar, the editor's look,
+     * three places to put the keyboard, and the whole screen.  The project
+     * panel is the one that also folds from its own button and unfolds from
+     * its strip.
+     *
+     * **A tick here is a view over a widget, never a second copy of it.**  The
+     * window is the truth (`sideHidden`, the console's `Visible`, the
+     * toolbar's, the chooser's index, the notebook's page, the editor's own
+     * properties), and `dressViewMenu` is what brings the items to it after
+     * anything that moves one of them.  Assigning a tick raises nothing
+     * (`bta_menu.c`: restoring a state at startup must not run the command it
+     * stands for), so dressing costs nothing.
+     *
+     * The bottom panel has **three roads in**: the View menu, *Show problems*,
+     * and a project check that has something to say.  They all end in
+     * `showConsole`, which is what keeps the tick from disagreeing with the
+     * panel.
+     *
+     * **The panels' own choices are two dynamic radios** -- *Side panel* and
+     * *Bottom panel* -- and not items declared one by one, because how many
+     * there are is a list's answer: the side bar's views are `sideViews`'s
+     * (`ProjectTree.sideEntries` and `Changes.sideEntries`), the console's
+     * pages are the notebook's, and a fourth panel would otherwise have to be
+     * remembered here.  The editor's settings are one check each and a radio
+     * of the runtime's own themes, and they are the *reader's*: one setting
+     * for every tab, written down and re-applied to the next one.
+     */
+
+    MnuViewProjectPanel_Click(on) { if (on) this.unfoldSide(); else this.foldSide(); }
+
+    /* A radio's index is the same one `openSide` takes from the strip's
+     * buttons, which is what "one list, three roads" means. */
+    MnuViewSide_Click(index) { this.openSide(index); }
+
+    MnuViewOutput_Click(on) {
+        if (on) this.showConsole();
+        else    this.foldConsole();
+    }
+
+    MnuViewBottom_Click(index) { this.showConsole(index); }
+
+    MnuViewToolbar_Click(on) {
+        this.ToolBar.Visible = on;
+        this.dressViewMenu();
+    }
+
+    MnuViewLineNumbers_Click(on) {
+        Settings.Set(EDITOR_LINES_KEY, on);
+        this.tabs.eachEditor((ed) => { ed.ShowLineNumbers = on; });
+    }
+
+    MnuViewWrap_Click(on) {
+        Settings.Set(EDITOR_WRAP_KEY, on);
+        this.tabs.eachEditor((ed) => { ed.Wrap = on; });
+    }
+
+    /* The label of the entry is the theme's id -- the entries are values, see
+     * `EDITOR_THEMES` -- so what is written down is what `Theme` accepts. */
+    MnuViewTheme_Click(index, text) {
+        if (!EDITOR_THEMES.includes(text)) return;
+
+        Settings.Set(EDITOR_THEME_KEY, text);
+        this.tabs.eachEditor((ed) => { ed.Theme = text; });
+    }
+
+    /*
+     * *Focus ...* is what a View menu in this family is for, and each of the
+     * three brings the thing it names into view first: a control nobody can
+     * see cannot take the keyboard, and one that quietly does nothing is worse
+     * than one that is dim.
+     */
+    MnuViewFocusEditor_Click() {
+        const where = this.Editor || this.Glass;    /* the tab on screen */
+        if (where) where.SetFocus();
+    }
+
+    MnuViewFocusTree_Click() {
+        /* The tree's own page: *Changes* has no tree in it, so the panel comes
+         * up on the grouping it was on and on *Project* from the changes
+         * page. */
+        this.openSide(this.CmbView.Index === 1 ? 1 : 0);
+        this.FileTree.SetFocus();
+    }
+
+    MnuViewFocusConsole_Click() {
+        this.showConsole();
+
+        const to = this.consoleFocus();
+        if (to) to.SetFocus();
+    }
+
+    /*
+     * Where the focus goes inside the bottom panel: a notebook cannot take it,
+     * and a page that is a `Panel` has no face of its own -- the debug page is
+     * buttons, a split and a field, and what a stop is about is the stack.  So
+     * the pages are named, and one this version has not heard of focuses
+     * nothing rather than the wrong thing.
+     */
+    consoleFocus() {
+        const page = this.ConsoleBox.Children[this.ConsoleBox.Current];
+        if (!page) return null;
+
+        return { LogView: this.LogView, DebugPage: this.StackList,
+                 ProblemView: this.ProblemView, Shell: this.Shell }[page.Name] || null;
+    }
+
+    /*
+     * Full screen is a command and **not** a tick, and the reason was
+     * measured: `FullScreen` is a *state of the window* and GTK hands it to the
+     * window manager -- mapped, `gtk_window_fullscreen` asks and the compositor
+     * answers, so what it reads back right after is not what was asked; under a
+     * display with no manager at all (the suite's Xvfb) a mapped window does not
+     * change.  A tick a desktop can overrule is a tick that lies, so the item
+     * moves what the window says it is now.
+     */
+    MnuViewFullScreen_Click() { this.FullScreen = !this.FullScreen; }
+
+    /*
+     * The items, brought to what the window is doing.  Called once when the
+     * window opens -- a check item is born unticked and a radio unmarked -- and
+     * after anything that shows, hides or chooses one of them.
+     *
+     * The panels' marks are the widgets' own answers: the chooser's index and
+     * the notebook's page.  The theme's is the chosen id, and with nobody
+     * having chosen, what the editor on screen says -- the runtime's own
+     * default is a theme too, and marking nothing would say there is none.
+     */
+    dressViewMenu() {
+        this.MnuViewProjectPanel.Value = !this.sideHidden;
+        this.MnuViewOutput.Value       = this.ConsoleBox.Visible;
+        this.MnuViewToolbar.Value      = this.ToolBar.Visible;
+
+        this.MnuViewSide.Value   = this.CmbView.Index;
+        this.MnuViewBottom.Value = this.ConsoleBox.Current;
+
+        this.MnuViewLineNumbers.Value = Settings.Get(EDITOR_LINES_KEY, true);
+        this.MnuViewWrap.Value        = Settings.Get(EDITOR_WRAP_KEY, false);
+
+        const chosen = Settings.Get(EDITOR_THEME_KEY, "");
+        let   theme  = EDITOR_THEMES.indexOf(chosen);
+        if (theme < 0 && this.Editor)
+            theme = EDITOR_THEMES.indexOf(this.Editor.Theme);
+
+        /* `-1` is *no entry*, which is what a theme the runtime no longer has
+         * and no editor to ask both leave. */
+        this.MnuViewTheme.Value = theme;
+    }
+
+    /*
+     * The entries of the three dynamic items, filled from the lists that own
+     * them: the side bar's views, the console's pages -- the notebook's own
+     * labels, so a page built in code is one of them -- and the runtime's
+     * syntax themes.  **Once**, from `Form_Open` and after the terminal page is
+     * built, and never again: assigning `Items` is what rebuilds a submenu.
+     */
+    dressViewEntries() {
+        this.MnuViewSide.Items   = this.sideViews().map((v) => v.text);
+        this.MnuViewBottom.Items = this.ConsoleBox.Tabs;
+        this.MnuViewTheme.Items  = EDITOR_THEMES;
+    }
+
+    /*
+     * What a code tab's editor is born wearing: the three settings the View
+     * menu carries, applied by the one place that knows them, so the tab that
+     * opens next looks like the one on screen.  `TabSet` calls this where the
+     * editor is made.
+     */
+    dressEditor(ed) {
+        ed.ShowLineNumbers = Settings.Get(EDITOR_LINES_KEY, true);
+        ed.Wrap            = Settings.Get(EDITOR_WRAP_KEY, false);
+
+        /* A name the runtime no longer has is left alone: the editor keeps the
+         * runtime's own theme and the menu marks what that is. */
+        const theme = Settings.Get(EDITOR_THEME_KEY, "");
+        if (EDITOR_THEMES.includes(theme)) ed.Theme = theme;
+    }
+
+    /*
+     * The bottom panel, up on one of its pages or on the one it is on.  **The
+     * one road up**, so the tick cannot disagree with the panel whatever asked
+     * for it.
+     *
+     * Nothing here puts the room back: the panel is a plain `Visible`, and a
+     * `Split` gives its room to the half that is left and hides its handle
+     * while one half is away (`gtk_paned_size_allocate`, the one-child
+     * branch).  `RightSplit` grows by its *start* half, so the console keeps
+     * the height it had while it was gone -- measured, and the reason there is
+     * no height kept here.
+     */
+    showConsole(page = -1) {
+        if (page >= 0) this.ConsoleBox.Current = page;
+        this.ConsoleBox.Visible = true;
+        this.dressViewMenu();
+    }
+
+    foldConsole() {
+        if (!this.ConsoleBox.Visible) return;
+
+        this.ConsoleBox.Visible = false;
+        this.dressViewMenu();
     }
 
     /* --- what happened to the file while it was open -----------------------

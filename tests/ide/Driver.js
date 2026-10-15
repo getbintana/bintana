@@ -9012,10 +9012,10 @@ function* p_projects(ide) {
     })(selfSaved);
     const savedOf = (name) => savedNode(name).properties;
 
-    /* Seven: File, Edit, Project, Git, Debug, Form, Help. The number is here
-     * rather than a list because what is being asserted is that the bar
+    /* Eight: File, Edit, View, Project, Git, Debug, Form, Help. The number is
+     * here rather than a list because what is being asserted is that the bar
      * survived the round trip, not which menus the IDE happens to have. */
-    eq("saving keeps its menu bar", selfSaved.menus.length, 7);
+    eq("saving keeps its menu bar", selfSaved.menus.length, 8);
     /* Fixed is the default, so it is saved by being absent -- the same rule
      * that keeps an unanchored control from writing HAlign "Start". */
     eq("and its arrangement", selfSaved.properties.Arrangement, undefined);
@@ -13345,6 +13345,10 @@ function* p_quick(ide) {
      * means, and project settings is still two clicks away in its own menu. */
     eq("...which project settings no longer claims",
        shortcutOf("MnuProjectSettings"), "");
+    /* The View menu's: the side bar, the bottom panel and the whole screen. */
+    eq("Ctrl+B is the project panel", shortcutOf("MnuViewProjectPanel"), "<Control>b");
+    eq("Ctrl+J is the bottom panel",  shortcutOf("MnuViewOutput"), "<Control>j");
+    eq("and F11 the whole screen",    shortcutOf("MnuViewFullScreen"), "F11");
 
     /* --- the files ----------------------------------------------------------- */
 
@@ -15680,6 +15684,212 @@ function* p_session(ide) {
     yield* settled(ide);
     eq("unfolding gives the width back", ide.Split.Position, sideOpen);
 
+    /* --- the View menu: the panels and the editor --------------------------- */
+
+    /*
+     * The check items start where the window is, and they are *born* unticked:
+     * `Form_Open` is what brings them to what is showing.  The panels' own
+     * choices are the lists' answers -- three views and the notebook's pages --
+     * with the mark on the one that is up.
+     */
+    check("the View menu opens showing everything",
+          ide.MnuViewProjectPanel.Value === true &&
+          ide.MnuViewOutput.Value === true &&
+          ide.MnuViewToolbar.Value === true,
+          JSON.stringify([ide.MnuViewProjectPanel.Value, ide.MnuViewOutput.Value,
+                          ide.MnuViewToolbar.Value]));
+
+    eq("the side panel offers its three views",
+       ide.MnuViewSide.Items.join(","),
+       ide.sideViews().map((v) => v.text).join(","));
+    eq("the bottom panel offers the pages it has",
+       ide.MnuViewBottom.Items.length, ide.ConsoleBox.Count);
+    eq("named as its tabs are", ide.MnuViewBottom.Items[0], "Output");
+    eq("with the mark on the view showing", ide.MnuViewSide.Value, ide.CmbView.Index);
+    eq("and on the page showing", ide.MnuViewBottom.Value, ide.ConsoleBox.Current);
+
+    /*
+     * The project panel's item is a view over the fold and not a second fold:
+     * a test that only drove this one would miss the button beside the chooser
+     * and the strip's buttons, which move it too.
+     */
+    ide.MnuViewProjectPanel.Click();
+    yield* settled(ide);
+    check("the View item folds the project panel", !ide.SideView.Visible);
+    eq("and its tick goes with it", ide.MnuViewProjectPanel.Value, false);
+
+    ide.sideButtons[0].Emit("Click");                    /* Project */
+    yield* settled(ide);
+    check("...and the strip's button unfolds it", ide.SideView.Visible);
+    eq("with the tick following that road", ide.MnuViewProjectPanel.Value, true);
+    eq("and the width the panel had", ide.Split.Position, sideOpen);
+
+    /*
+     * And the submenu is a road of its own: choosing a view from the menu
+     * unfolds the panel around it -- the same `openSide` the strip's buttons
+     * take, so the two cannot drift.
+     */
+    ide.MnuViewProjectPanel.Click();                     /* folded... */
+    yield* settled(ide);
+    ide.MnuViewSide.Click(2);                            /* ...and Changes */
+    yield* settled(ide);
+    check("choosing a view opens the panel", ide.SideView.Visible);
+    eq("on the one chosen", ide.CmbView.Index, 2);
+    eq("with the mark there", ide.MnuViewSide.Value, 2);
+    check("which is the page that says so", ide.changes.visible);
+
+    /* Back to the project view, which is where the rest of the phase is. */
+    ide.MnuViewSide.Click(0);
+    yield* settled(ide);
+    eq("and back on the project view", ide.CmbView.Index, 0);
+
+    /*
+     * The bottom panel, which is one widget's `Visible` and nothing else: the
+     * split hands its room to the pages while it is away.  **Its height comes
+     * back by itself** -- no number is kept anywhere -- so what the second
+     * click is measured against is where the divider was.
+     */
+    const pagesRoom = ide.WorkArea.Bounds().Height;
+    ide.MnuViewOutput.Click();
+    yield* settled(ide);
+
+    check("the View item puts the bottom panel away", !ide.ConsoleBox.Visible);
+    eq("and its tick says so", ide.MnuViewOutput.Value, false);
+    check("the pages take the room it gave up",
+          ide.WorkArea.Bounds().Height > pagesRoom,
+          `${ide.WorkArea.Bounds().Height} against ${pagesRoom}`);
+
+    ide.MnuViewOutput.Click();
+    yield* settled(ide);
+    check("and it comes back", ide.ConsoleBox.Visible);
+    eq("with the tick", ide.MnuViewOutput.Value, true);
+    eq("at the height it had", ide.WorkArea.Bounds().Height, pagesRoom);
+
+    /*
+     * *Show problems* is the other road into the panel, and it ends in the
+     * same place: the tick cannot be left saying the panel is away while the
+     * panel is up.
+     */
+    ide.MnuViewOutput.Click();                           /* away... */
+    yield* settled(ide);
+    ide.MnuProblems.Click();                             /* ...and back */
+    yield* settled(ide);
+
+    check("Show problems brings the panel back", ide.ConsoleBox.Visible);
+    eq("...with the tick following", ide.MnuViewOutput.Value, true);
+    eq("...on the problems page", ide.ConsoleBox.Current, ide.problems.page);
+
+    /* And the pages are the third road down there: choosing one brings the
+     * panel up straight on it. */
+    ide.MnuViewOutput.Click();                           /* away... */
+    yield* settled(ide);
+    ide.MnuViewBottom.Click(ide.ConsoleBox.Tabs.indexOf("Debug"));
+    yield* settled(ide);
+
+    check("choosing a page brings the panel up", ide.ConsoleBox.Visible);
+    eq("...on that page", ide.ConsoleBox.Current,
+       ide.ConsoleBox.Tabs.indexOf("Debug"));
+    eq("...with the mark there", ide.MnuViewBottom.Value, ide.ConsoleBox.Current);
+
+    /*
+     * --- *Focus ...*, which brings the thing it names into view first: a
+     * control nobody can see cannot take the keyboard, and one that quietly
+     * does nothing is worse than one that is dim.
+     */
+    ide.MnuViewProjectPanel.Click();                     /* folded... */
+    yield* settled(ide);
+    ide.MnuViewFocusTree.Click();                        /* ...and asked for */
+    yield* settled(ide);
+    check("asking for the project tree unfolds the panel", ide.SideView.Visible);
+    yield* until(() => ide.FileTree.Focused);
+    check("with the keyboard on the tree", ide.FileTree.Focused);
+
+    ide.MnuViewOutput.Click();                           /* away... */
+    yield* settled(ide);
+    ide.MnuViewFocusConsole.Click();                     /* ...and asked for */
+    yield* settled(ide);
+    check("asking for the console brings it up", ide.ConsoleBox.Visible);
+    yield* until(() => ide.StackList.Focused);
+    check("with the keyboard on what the page is about", ide.StackList.Focused,
+          JSON.stringify([ide.StackList.Focused, ide.ConsoleBox.Current]));
+
+    /* Back on the output page, which is where the rest of the run reads. */
+    ide.MnuViewBottom.Click(0);
+    yield* settled(ide);
+    eq("and the output page comes back", ide.ConsoleBox.Current, 0);
+
+    /*
+     * The toolbar, which is not a split's half at all: the row over the split
+     * goes away and the split takes its room.
+     */
+    const belowRoom = ide.Split.Bounds().Height;
+    ide.MnuViewToolbar.Click();
+    yield* settled(ide);
+
+    check("the View item puts the toolbar away", !ide.ToolBar.Visible);
+    eq("and its tick says so", ide.MnuViewToolbar.Value, false);
+    check("the room it was in goes to what is under it",
+          ide.Split.Bounds().Height > belowRoom,
+          `${ide.Split.Bounds().Height} against ${belowRoom}`);
+
+    ide.MnuViewToolbar.Click();
+    yield* settled(ide);
+    check("and it comes back", ide.ToolBar.Visible);
+    eq("with the tick", ide.MnuViewToolbar.Value, true);
+    eq("and the room it had", ide.Split.Bounds().Height, belowRoom);
+
+    /*
+     * Full screen is a **command** and not a tick, because its state is the
+     * window manager's and not ours: `FullScreen` reads back what the desktop
+     * did, so a tick would be a guess.  Pressing it here is for the throw it
+     * would be -- a display with no manager (Xvfb) does not honour the request,
+     * and one that does would leave the rest of the run on a real screen.
+     */
+    ide.MnuViewFullScreen.Click();
+
+    /*
+     * And what is away is furniture of the window, written down with it and
+     * read back by the next start: the console's room with it, since a hidden
+     * half has no divider to be read off -- and **a window resized while it is
+     * away must not spend that room on it**.
+     */
+    ide.MnuViewOutput.Click();
+    ide.MnuViewToolbar.Click();
+    yield* settled(ide);
+
+    ide.session.saveWindow();
+    const shut = Settings.Get("session.window", {});
+    check("what is shown is written down with the window",
+          shut.view && shut.view.console === false && shut.view.toolbar === false,
+          JSON.stringify(shut.view));
+    check("and the console's room is kept for the next start",
+          shut.ends.RightSplit > 0, JSON.stringify(shut.ends));
+    check("which is what the next start reads",
+          ide.session.view().console === false &&
+          ide.session.view().toolbar === false,
+          JSON.stringify(ide.session.view()));
+
+    const gone    = shut.ends.RightSplit;
+    const beforeW = ide.Width, beforeH = ide.Height;
+    ide.Resize(beforeW + 100, beforeH + 60);
+    yield* settled(ide);
+    ide.session.saveWindow();
+    eq("a resize while the panel is away does not change its room",
+       Settings.Get("session.window", {}).ends.RightSplit, gone);
+
+    ide.Resize(beforeW, beforeH);
+    yield* settled(ide);
+
+    /* Out again, which is where the phase goes on from. */
+    ide.MnuViewOutput.Click();
+    ide.MnuViewToolbar.Click();
+    yield* settled(ide);
+    check("and the window is whole again",
+          ide.ConsoleBox.Visible && ide.ToolBar.Visible &&
+          ide.MnuViewOutput.Value === true && ide.MnuViewToolbar.Value === true,
+          JSON.stringify([ide.ConsoleBox.Visible, ide.ToolBar.Visible,
+                          ide.MnuViewOutput.Value, ide.MnuViewToolbar.Value]));
+
     /* --- what was open ---------------------------------------------------- */
 
     File.Save(File.Join(TMP, "Desk.js"),
@@ -15688,6 +15898,91 @@ function* p_session(ide) {
 
     ide.openInTab("Desk.js");
     yield* settled(ide);
+
+    /* --- the editor's own view settings -------------------------------------
+     *
+     * One setting each for the *reader* -- line numbers, wrap and the syntax
+     * theme -- applied to the tab on screen and to the ones behind it, and a
+     * tab that opens next is born wearing them.  What the phase must leave is
+     * the window's own defaults: the settings file is the machine's, and the
+     * phases after this one read the same one.
+     */
+    const first = ide.Editor;
+    check("line numbers are on as the window draws them",
+          first.ShowLineNumbers === true);
+    check("and wrap is off", first.Wrap === false);
+
+    ide.MnuViewLineNumbers.Click();
+    ide.MnuViewWrap.Click();
+    yield* settled(ide);
+
+    eq("the View item takes the gutter off", first.ShowLineNumbers, false);
+    eq("...and turns wrap on", first.Wrap, true);
+    check("and both are written down",
+          Settings.Get("editor.lineNumbers", true) === false &&
+          Settings.Get("editor.wrap", false) === true,
+          JSON.stringify([Settings.Get("editor.lineNumbers", true),
+                          Settings.Get("editor.wrap", false)]));
+
+    /* A tab that opens next, which is where *one setting for the reader* is
+     * true or false: the editor is made per tab by `TabSet`. */
+    File.Save(File.Join(TMP, "View.js"), "class View {\n}\n");
+    ide.listFiles();
+    ide.openInTab("View.js");
+    yield* settled(ide);
+    check("and a tab that opens next is born wearing them",
+          ide.Editor.ShowLineNumbers === false && ide.Editor.Wrap === true,
+          JSON.stringify([ide.Editor.ShowLineNumbers, ide.Editor.Wrap]));
+    check("while the one behind followed too",
+          first.ShowLineNumbers === false && first.Wrap === true);
+
+    ide.closeTabByName("View.js", true);
+    yield* settled(ide);
+    File.Delete(File.Join(TMP, "View.js"));
+    ide.listFiles();
+
+    /* The syntax theme: a radio of the runtime's own list, values and not
+     * prose -- the entries are the ids `Theme` accepts. */
+    const themes = Widget.PropertyOptions("SourceEditor", "Theme");
+    eq("the theme entries are the runtime's own",
+       ide.MnuViewTheme.Items.length, themes.length);
+
+    const startTheme = ide.Editor.Theme;
+    check("which starts on a theme the radio knows", themes.includes(startTheme),
+          startTheme);
+
+    ide.MnuViewTheme.Click(themes.indexOf("cobalt"));
+    yield* settled(ide);
+    eq("choosing one applies it", ide.Editor.Theme, "cobalt");
+    eq("...to the tab behind too", first.Theme, "cobalt");
+    eq("writes it down", Settings.Get("editor.theme", ""), "cobalt");
+    eq("with the mark on it", ide.MnuViewTheme.Value, themes.indexOf("cobalt"));
+
+    /* And back to what the machine had, so nothing of this outlives the phase. */
+    Settings.Delete("editor.theme");
+    ide.tabs.eachEditor((ed) => { ed.Theme = startTheme; });
+    ide.dressViewMenu();
+    yield* settled(ide);
+    eq("and the mark falls back to what the editor says",
+       ide.MnuViewTheme.Value, themes.indexOf(startTheme));
+
+    /* *Focus the editor*: the third of the three, with the keyboard somewhere
+     * else first. */
+    ide.MnuViewFocusTree.Click();
+    yield* settled(ide);
+    ide.MnuViewFocusEditor.Click();
+    yield* settled(ide);
+    yield* until(() => ide.Editor.Focused);
+    check("asking for the editor puts the keyboard back", ide.Editor.Focused);
+
+    /* Back to the defaults, which is what the phases after this one read. */
+    ide.MnuViewLineNumbers.Click();
+    ide.MnuViewWrap.Click();
+    yield* settled(ide);
+    check("and both back the way the window draws them",
+          first.ShowLineNumbers === true && first.Wrap === false,
+          JSON.stringify([first.ShowLineNumbers, first.Wrap]));
+
     ide.Editor.Select(4, 5);
     yield* settled(ide);
     ide.openInTab("Recover.form");
