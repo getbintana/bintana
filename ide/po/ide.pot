@@ -369,7 +369,7 @@ msgstr ""
 
 #: forms/GitForm.form: GitForm.Text
 #: forms/MainForm.form: SideStack.Tabs
-#: modules/Changes.js:46
+#: modules/Changes.js:74
 msgid "Changes"
 msgstr ""
 
@@ -392,22 +392,19 @@ msgid "Unified"
 msgstr ""
 
 #: forms/GitForm.form: LblMessage.Text
+#: forms/MainForm.form: LblCommit.Text
 msgid "Commit message"
 msgstr ""
 
 #: forms/GitForm.form: BtnStage.Text
-#: forms/MainForm.form: ChangeTable.Menu MnuChStage
-#: forms/MainForm.form: BtnChStage.Text
 msgid "Stage"
 msgstr ""
 
 #: forms/GitForm.form: BtnStage.Tooltip
-#: forms/MainForm.form: BtnChStage.Tooltip
 msgid "Put the chosen files in the next commit"
 msgstr ""
 
 #: forms/GitForm.form: BtnUnstage.Text
-#: forms/MainForm.form: ChangeTable.Menu MnuChUnstage
 msgid "Unstage"
 msgstr ""
 
@@ -417,7 +414,7 @@ msgstr ""
 
 #: forms/GitForm.form: BtnDiscard.Text
 #: forms/GitForm.js:324
-#: modules/Changes.js:269
+#: modules/Changes.js:415
 #: modules/Recovery.js:308
 msgid "Discard"
 msgstr ""
@@ -434,7 +431,7 @@ msgstr ""
 
 #: forms/GitForm.form: BtnCommit.Tooltip
 #: forms/MainForm.form: BtnChCommit.Tooltip
-#: modules/Changes.js:160
+#: modules/Changes.js:285
 msgid "Commit what is staged, with the message above"
 msgstr ""
 
@@ -840,7 +837,7 @@ msgid "Pull"
 msgstr ""
 
 #: forms/MainForm.form: menu MnuGitPush
-#: modules/Git.js:479
+#: modules/Git.js:530
 msgid "Push"
 msgstr ""
 
@@ -1068,7 +1065,7 @@ msgid "Tree options"
 msgstr ""
 
 #: forms/MainForm.form: ChangeTable.Tooltip
-msgid "Double click a file to read what changed in it"
+msgid "Tick a file to put it in the next commit; double click to read what changed"
 msgstr ""
 
 #: forms/MainForm.form: ChangeTable.Menu MnuChDiff
@@ -1083,6 +1080,10 @@ msgstr ""
 msgid "Discard changes..."
 msgstr ""
 
+#: forms/MainForm.form: ChangeTable.Menu MnuChIgnore
+msgid "Add to .gitignore"
+msgstr ""
+
 #: forms/MainForm.form: ChangeTable.Menu MnuChAll
 msgid "Stage everything"
 msgstr ""
@@ -1091,12 +1092,8 @@ msgstr ""
 msgid "Changes window..."
 msgstr ""
 
-#: forms/MainForm.form: TxtCommit.Placeholder
-msgid "Message, then Enter"
-msgstr ""
-
 #: forms/MainForm.form: TxtCommit.Tooltip
-msgid "Commit what is staged. Enter is the button"
+msgid "Commit what is staged, with the button below. Enter writes a line"
 msgstr ""
 
 #: forms/MainForm.form: BtnTakeDisk.Text
@@ -1745,13 +1742,13 @@ msgstr ""
 
 #: forms/GitForm.js:90
 #: forms/LogForm.js:59
-#: modules/Changes.js:134
+#: modules/Changes.js:179
 msgid "File"
 msgstr ""
 
 #: forms/GitForm.js:91
 #: forms/LogForm.js:60
-#: modules/Changes.js:133
+#: modules/Changes.js:178
 msgid "State"
 msgstr ""
 
@@ -1793,7 +1790,7 @@ msgid "Too big to show side by side. The unified tab has it."
 msgstr ""
 
 #: forms/GitForm.js:316
-#: modules/Changes.js:261
+#: modules/Changes.js:407
 msgid "Discard changes"
 msgstr ""
 
@@ -1806,14 +1803,14 @@ msgid "Nothing is staged."
 msgstr ""
 
 #: forms/GitForm.js:318
-#: modules/Changes.js:263
+#: modules/Changes.js:409
 msgid "Throw away {0} file, and delete it if it is new?"
 msgid_plural "Throw away {0} files, deleting the new ones?"
 msgstr[0] ""
 msgstr[1] ""
 
 #: forms/GitForm.js:321
-#: modules/Changes.js:266
+#: modules/Changes.js:412
 msgid "Throw away what was written in {0} file?"
 msgid_plural "Throw away what was written in {0} files?"
 msgstr[0] ""
@@ -2034,15 +2031,15 @@ msgstr ""
 msgid "Delete {0}? Anything committed only there would be refused rather than lost."
 msgstr ""
 
-#: forms/MainForm.js:3109
+#: forms/MainForm.js:3118
 msgid "Clone a repository"
 msgstr ""
 
-#: forms/MainForm.js:3109
+#: forms/MainForm.js:3118
 msgid "From"
 msgstr ""
 
-#: forms/MainForm.js:3117
+#: forms/MainForm.js:3126
 msgid "Clone into"
 msgstr ""
 
@@ -2091,15 +2088,15 @@ msgid ""
 "is not there any more."
 msgstr ""
 
-#: forms/MainForm.js:3250
+#: forms/MainForm.js:3259
 msgid "Open a form's design to edit its menus."
 msgstr ""
 
-#: forms/MainForm.js:3269
+#: forms/MainForm.js:3278
 msgid "Open a form's design to edit its commands."
 msgstr ""
 
-#: forms/MainForm.js:3301
+#: forms/MainForm.js:3310
 msgid "Open a form's design to edit its tab order."
 msgstr ""
 
@@ -2136,7 +2133,7 @@ msgid ""
 "{1}"
 msgstr ""
 
-#: forms/MainForm.js:3134
+#: forms/MainForm.js:3143
 #: modules/FormFiles.js:429
 #: modules/FormFiles.js:610
 msgid "{0} already exists."
@@ -2392,19 +2389,27 @@ msgstr ""
 msgid "Only a container drawn in coordinates has a tab order to edit."
 msgstr ""
 
-#: modules/Changes.js:47
+#: modules/Changes.js:75
 msgid "Show the changes view"
 msgstr ""
 
-#: modules/Changes.js:159
+#: modules/Changes.js:197
+msgid "Versioned"
+msgstr ""
+
+#: modules/Changes.js:199
+msgid "Unversioned"
+msgstr ""
+
+#: modules/Changes.js:284
 msgid "Nothing is staged"
 msgstr ""
 
-#: modules/Changes.js:169
+#: modules/Changes.js:294
 msgid "This project is not in a git repository."
 msgstr ""
 
-#: modules/Changes.js:170
+#: modules/Changes.js:295
 msgid "Nothing has changed."
 msgstr ""
 
@@ -2690,23 +2695,23 @@ msgid ""
 "{2}:{3}: {4}"
 msgstr ""
 
-#: modules/Git.js:480
+#: modules/Git.js:531
 msgid "The branch {0} follows nothing yet. Push it to which remote? ({1})"
 msgstr ""
 
-#: modules/Git.js:786
+#: modules/Git.js:890
 msgid "detached"
 msgstr ""
 
-#: modules/Git.js:788
+#: modules/Git.js:892
 msgid "{0} staged"
 msgstr ""
 
-#: modules/Git.js:789
+#: modules/Git.js:893
 msgid "{0} changed"
 msgstr ""
 
-#: modules/Git.js:485
+#: modules/Git.js:536
 msgid "{0} is not a remote of this repository."
 msgstr ""
 
@@ -2955,8 +2960,8 @@ msgstr ""
 msgid "The project has no {0}."
 msgstr ""
 
-#: modules/TabSet.js:1033
-#: modules/TabSet.js:1246
+#: modules/TabSet.js:1038
+#: modules/TabSet.js:1251
 msgid ""
 "Could not save {0}:\n"
 "{1}"

@@ -192,9 +192,9 @@ window answers *what am I about to commit*, and it answers it well; what it
 cannot be is where you work, because it covers the editor and every small commit
 means opening and closing it. The list therefore also lives in the side bar, as
 the third entry of the chooser that already picks *Project* or *Files* -- the
-same question, *what is on the left*, so the same chooser. A one-line message box
-with Enter as the button is the whole of a small commit; anything with a body is
-written in the window, which has an editor for it. **What it commits is what is
+same question, *what is on the left*, so the same chooser. A message box and a
+Commit button are the whole of a small commit, and the box fits a body: it is a
+text editor and the button is `Ctrl+Enter`. **What it commits is what is
 staged and never what is selected**: a button that quietly staged first would
 make *Commit* mean two different things depending on where the pointer had been.
 
@@ -203,6 +203,41 @@ It runs no git of its own -- and that is what made it cheap. `stage`, `unstage`,
 readers already were, so the panel and the window press *the same* commands with
 the same guards rather than two spellings of each. Prior art for the shape:
 Android Studio's *Commit* tool window and Visual Studio's *Git Changes* pane.
+
+**What the panel became, after living with it** (2026-10-15): the list is a
+**tree of two branches** -- the files the last commit has and the ones it does
+not -- with **a tick per file**, and the tick *is* the index: `git add` on,
+`git restore --staged` off, so *which of these go in* is one click per file
+rather than select-then-Stage. **A tick is not a commit**: a file that git has
+never seen -- untracked, or added and staged -- stays under *unversioned* until
+the commit puts it in the repository, which is the moment the branch changes.
+One row per path replaces the staged/unstaged pair: `MM` in git's own letters
+says *part in, part out*, and unticking is what resolves it. The tree was the
+runtime's answer and not a preference: `TreeView` has no ticks and a
+`TableView` in tree mode is the only control that has both, and it refuses
+`MultiSelect` -- so the tick is what replaces the selection, which is the same
+trade IntelliJ's commit tree makes. **The header is a header and a gesture**:
+it wears the theme's `heading` (`SetStyle`, a class per cell, which the runtime
+grew for it) and its tick takes the whole branch in or out -- a branch that is
+half in reads as unchecked, a `Check` cell having no third state, and one click
+puts it all in. The tree is **updated in place** and never rebuilt: a tick
+changes two cells, and `Clear()` + `Columns` on every refresh cost the reader
+the column width they dragged, the selection and the scroll. **And `-uall`**:
+an untracked directory arrives as the files inside it -- each one tickable,
+openable, ignorable -- rather than as a `dir/` row nobody can do anything with;
+*Add to .gitignore* writes the project's own file, anchored and with the glob
+characters escaped, because an entry is a pattern and the path is not.
+
+**And the first commit taught it one thing**: `restore --staged` restores from
+`HEAD`, and a repository nobody has committed to has none -- *could not resolve
+'HEAD'*, measured -- so `Git.unstage` asks (`rev-parse --verify -q HEAD`) and
+takes the entry out with `git rm --cached` there, which leaves the file on disk.
+**And the box taught it another**: a `GtkTextView` consumes Return -- measured,
+with the plain key and with Ctrl -- so the multiline message box cannot hear
+Enter in any handler, *and* a control's `Shortcut` stops firing while a text
+view has the focus (measured with an F5 that nothing consumes), which is
+`docs/agents/widgets.md`'s trap. The commit is the button here; catching
+Ctrl+Enter inside a text view would be a runtime feature.
 
 **What none of the seven stages foresaw: the project may not be the repository.**
 The whole design says *paths*, and never which root they are counted from --

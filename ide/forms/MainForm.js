@@ -2288,9 +2288,9 @@ export class MainForm extends Form {
     }
 
     MnuViewFocusTree_Click() {
-        /* The tree's own page: *Changes* has no tree in it, so the panel comes
-         * up on the grouping it was on and on *Project* from the changes
-         * page. */
+        /* The project panel's own page: *Project*, or the *Files* grouping
+         * when that is what the panel was left on. *Changes* is a page of the
+         * same panel and not this tree, so it comes up as *Project*. */
         this.openSide(this.CmbView.Index === 1 ? 1 : 0);
         this.FileTree.SetFocus();
     }
@@ -3042,20 +3042,29 @@ export class MainForm extends Form {
      * is what a `.form` and its class are for.
      */
     ChangeTable_Select()   { this.changes.say(); }
-    ChangeTable_Activate() { this.changes.show(this.ChangeTable.Index); }
+    ChangeTable_Activate() { this.changes.show(); }
 
-    TxtCommit_Change()   { this.changes.say(); }
-    /* Enter in the box is the button: that is what makes it quick. */
-    TxtCommit_Activate() { this.changes.commit(); }
+    /* The tick of a file row, which is staging or unstaging it: the answer is
+     * what the cell keeps, so a refused one stays where it was. A branch's tick
+     * is locked and never gets here. */
+    ChangeTable_CellEdit(row, column, text) { return this.changes.ticked(row, text); }
 
-    BtnChStage_Click()  { this.changes.stage(); }
+    TxtCommit_Change() { this.changes.say(); }
+
+    /*
+     * The box is a text editor, so Enter writes a line and **the button is the
+     * way to commit**. Ctrl+Enter is not offered: a `GtkTextView` consumes
+     * Return -- measured, with the plain key and with Ctrl -- so no `KeyPress`
+     * handler hears it, and a control's `Shortcut` does not fire while a text
+     * view has the focus either, measured with `F5` which nothing consumes.
+     * The measurement is in `docs/agents/widgets.md`.
+     */
     BtnChCommit_Click() { this.changes.commit(); }
 
-    MnuChDiff_Click()    { this.changes.show(this.ChangeTable.Index); }
-    MnuChOpen_Click()    { this.changes.open(this.ChangeTable.Index); }
-    MnuChStage_Click()   { this.changes.stage(); }
-    MnuChUnstage_Click() { this.changes.unstage(); }
+    MnuChDiff_Click()    { this.changes.show(); }
+    MnuChOpen_Click()    { this.changes.open(); }
     MnuChDiscard_Click() { this.changes.discard(); }
+    MnuChIgnore_Click()  { this.changes.ignore(); }
     MnuChAll_Click()     { this.changes.stageAll(); }
     MnuChWindow_Click()  { GitForm.open(this); }
 

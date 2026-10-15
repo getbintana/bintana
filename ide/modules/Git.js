@@ -85,6 +85,26 @@ function porcelainRenamed(index, tree) {
     return index === "R" || index === "C" || tree === "R" || tree === "C";
 }
 
+/*
+ * One path, as a line of `.gitignore`.
+ *
+ * **Anchored with a leading slash**, which is what says *this file, here*: a
+ * pattern without one matches at every depth, so `app.css` would also ignore
+ * `deep/app.css`, and `.gitignore` has no other way to say *only here*.
+ *
+ * **And the glob characters are escaped**, because a gitignore pattern is a
+ * pattern: the file `data[1].json` ignored as written also ignores
+ * `data1.json` -- the same trap the pathspecs had, one file over -- and a
+ * trailing space is trimmed unless it is escaped. `\` is what gitignore has to
+ * say *this is a character*.
+ */
+function gitignoreEntry(name) {
+    const escaped = name.replace(/[\\*?[\]]/g, "\\$&")
+                        .replace(/ +$/, (gap) => gap.replace(/ /g, "\\ "));
+
+    return `/${escaped}`;
+}
+
 export class Git {
 
     /** @param {MainForm} ide */
@@ -264,7 +284,8 @@ export class Git {
     }
 
     /*
-     * Every changed path, parsed out of the porcelain.
+     * Every changed path, as git itself spells one record: the index letter,
+     * the worktree letter, and the path.
      *
      * **`--porcelain=v1 -z`, and never the human output.** The human one is
      * translated -- the IDE would read `modificado` on this machine -- and the
@@ -278,15 +299,36 @@ export class Git {
      * rather than read as a path with no state. Measured, not remembered:
      * `git status --porcelain=v1 -z` after a `git mv viejo nuevo` is
      * `R  nuevo.txt\0viejo.txt\0`, and the two were read the other way round.
+     *
+     * **This is the one reading of `status`**, and the three answers built on
+     * it -- `status`'s map of one letter per file, `split`'s two lists, the
+     * Changes page's tree -- are projections of it. Two parsers of one
+     * porcelain is how two lists come to disagree, which is the shape of bug
+     * the `-z` and the rename each were.
+     *
+     * Each record carries the three questions every caller asks, answered in
+     * one spelling: `untracked` is the `??` row git has never been told about,
+     * `staged` is a place in the index, and **`versioned` is a place in the
+     * last commit** -- an added file (`A`) is not versioned until the commit
+     * that puts it there, which is what the panel's branch says and why
+     * ticking a new file does not move it. A rename is versioned by the index
+     * letter it carries (`R` comes from a file that was in a commit), and so
+     * are a modification and a deletion.
+     *
+     * **`-uall`**, and not the default `-unormal`: an untracked directory
+     * arrives as one `dir/` row otherwise, and a row nobody can open, tick or
+     * ignore is not a row. Measured: `?? forms/` versus one record per file
+     * inside it. The price is a long list where a directory holds thousands of
+     * files, which is what the reader asked to see.
      */
-    status() {
-        const out = new Map();
-        const r   = this.run(["status", "--porcelain=v1", "-z", ...this.here()]);
+    changes() {
+        const out = [];
+        const r   = this.run(["status", "--porcelain=v1", "-z", "-uall",
+                              ...this.here()]);
 
         if (!r.ok) return out;
 
         const parts = r.out.split("\0");
-        let staged = 0, changed = 0;
 
         for (let i = 0; i < parts.length; i++) {
             const record = parts[i];
@@ -296,29 +338,38 @@ export class Git {
             const tree  = record[1];
             const path  = this.strip(record.slice(3));
 
-            /* The rename's new name is the record's own path; the next record
-             * is the old one, and consuming it here is what stops it being
-             * read as a file whose state is the first letter of its own name.
-             * The new one is what the tree marks: marking the old as deleted
-             * and the new as *gone* was exactly backwards. */
             if (porcelainRenamed(index, tree)) parts[++i];    /* the old name */
+            if (index === "!") continue;                       /* ignored */
 
-            if (index === "?" ) {
-                out.set(path, UNTRACKED);
+            out.push({ path, index, tree,
+                       untracked: index === "?",
+                       versioned: index !== "A" && index !== "?",
+                       staged:    index !== " " && index !== "?" });
+        }
+        return out;
+    }
+
+    /*
+     * The map the tree's indicators and the status bar read: one letter per
+     * path, the worktree's when it has one.
+     *
+     * The worktree's wins because what it answers is *is there something left
+     * to do here* -- a file staged and then edited again is not a file that is
+     * ready.
+     */
+    status() {
+        const out = new Map();
+        let staged = 0, changed = 0;
+
+        for (const c of this.changes()) {
+            if (c.untracked) {
+                out.set(c.path, UNTRACKED);
                 changed++;
                 continue;
             }
-            if (index === "!") continue;               /* ignored */
-
-            /*
-             * One letter for a file that may have two states. The worktree's
-             * wins when there is one, because what it answers is *is there
-             * something left to do here* -- a file staged and then edited again
-             * is not a file that is ready.
-             */
-            out.set(path, tree !== " " ? tree : index);
-            if (index !== " ") staged++;
-            if (tree !== " ") changed++;
+            out.set(c.path, c.tree !== " " ? c.tree : c.index);
+            if (c.index !== " ") staged++;
+            if (c.tree  !== " ") changed++;
         }
 
         this.staged  = staged;
@@ -504,8 +555,38 @@ export class Git {
      * window that has the buttons because the side panel has the same commands,
      * and two implementations of *stage* would be two sets of guards.
      */
-    stage(paths)   { return this.act(["add", "--"], paths); }
-    unstage(paths) { return this.act(["restore", "--staged", "--"], paths); }
+    stage(paths) { return this.act(["add", "--"], paths); }
+
+    /*
+     * Taking a file out of the index.
+     *
+     * **`restore --staged` restores from HEAD, and a repository nobody has
+     * committed to yet has no HEAD to restore from**: `git restore --staged`
+     * fails there with *could not resolve 'HEAD'* -- measured, in the first
+     * repository the panel was used on -- and a first commit is exactly where
+     * taking a file back out of the index happens. There the way out is
+     * `git rm --cached`: it takes the entry out and leaves the worktree alone,
+     * which is what *unstage* means when there is no version to restore to.
+     *
+     * `-f` because that is the only way for a file edited after the `add` --
+     * git refuses otherwise, the staged copy being different from both the
+     * file and a HEAD that does not exist -- and with `--cached` it throws
+     * away the index entry and nothing else. `-r` because a porcelain record
+     * can name a whole new folder.
+     */
+    unstage(paths) {
+        if (!paths || !paths.length) return this.act([], paths);
+
+        return this.hasHead()
+            ? this.act(["restore", "--staged", "--"], paths)
+            : this.act(["rm", "--cached", "-f", "-r", "--"], paths);
+    }
+
+    /* Whether the branch has a commit to point at. A question about a ref, and
+     * `-q` keeps the repository with no commit from answering prose. */
+    hasHead() {
+        return this.run(["rev-parse", "--verify", "-q", "HEAD"]).ok;
+    }
 
     act(command, paths) {
         if (!paths || !paths.length) return { ok: true, out: "", code: 0 };
@@ -559,6 +640,49 @@ export class Git {
      * *deleted* rather than *restored* about them. */
     untracked(paths) {
         return paths.filter((f) => this.stateOf(f) === UNTRACKED);
+    }
+
+    /*
+     * One path into the project's own `.gitignore`, making the file when there
+     * is none.
+     *
+     * **The project's and not the repository root's**: a pattern is relative to
+     * the `.gitignore` it is written in, so the entry stays inside the project
+     * and a project that is a subdirectory of a bigger repository never edits a
+     * file beside it. The line is `gitignoreEntry`'s, and an entry already
+     * there is left alone rather than written twice.
+     *
+     * Answers whether the file is now ignored. A file that cannot be read or
+     * written is a line in the log and `false` -- the same bargain every other
+     * failure here makes: the caller refreshes and the row stays.
+     */
+    ignore(name) {
+        const file  = File.Join(this.ide.project, ".gitignore");
+        const entry = gitignoreEntry(name);
+        let   text  = "";
+
+        if (File.Exists(file)) {
+            try {
+                text = File.Load(file);
+            } catch (e) {
+                this.ide.log(`git: cannot read .gitignore: ${e.message}\n`);
+                return false;
+            }
+        }
+
+        if (text.split("\n").includes(entry)) return true;
+
+        /* A file whose last line has no newline would otherwise swallow the
+         * entry into it. */
+        if (text !== "" && text.slice(-1) !== "\n") text += "\n";
+
+        try {
+            File.Save(file, `${text}${entry}\n`);
+        } catch (e) {
+            this.ide.log(`git: cannot write .gitignore: ${e.message}\n`);
+            return false;
+        }
+        return true;
     }
 
     /*
@@ -688,43 +812,23 @@ export class Git {
      * single letter cannot describe and the reason this reads the record rather
      * than `states`. A path appears in both lists then, which is the truth: part
      * of it is in the next commit and part of it is not.
+     *
+     * A rename is a record with two columns like any other: `RM` is renamed in
+     * the index *and* edited again since, and reading it as staged alone hid the
+     * edit -- the panel could not list, stage or discard it, while `git status`
+     * shows it on both sides. The old name is consumed by `changes()` and the
+     * two letters are read here.
      */
     split() {
         const out = { staged: [], unstaged: [] };
-        const r   = this.run(["status", "--porcelain=v1", "-z", ...this.here()]);
 
-        if (!r.ok) return out;
-
-        const parts = r.out.split("\0");
-
-        for (let i = 0; i < parts.length; i++) {
-            const record = parts[i];
-            if (record.length < 4) continue;
-
-            const index = record[0];
-            const tree  = record[1];
-            const path  = this.strip(record.slice(3));
-
-            if (index === "?") {
-                out.unstaged.push({ path, state: UNTRACKED });
+        for (const c of this.changes()) {
+            if (c.untracked) {
+                out.unstaged.push({ path: c.path, state: UNTRACKED });
                 continue;
             }
-            if (index === "!") continue;
-
-            /* The record's own path is the rename's **new** name and the next
-             * record is the old one -- `git mv viejo nuevo` answers
-             * `R  nuevo\0viejo\0`. The old one is consumed so it is not read
-             * as a file, and what the panel offers to open is the new one. */
-            /* **And a rename is still a record with two columns.** `RM` is
-             * renamed in the index *and* edited again since, and reading it as
-             * staged alone hid the edit: the panel could not list, stage or
-             * discard it, while `git status` shows it on both sides. So the old
-             * name is consumed and the two letters are read like any other
-             * record's. */
-            if (porcelainRenamed(index, tree)) parts[++i];    /* the old name */
-
-            if (index !== " ") out.staged.push({ path, state: index });
-            if (tree  !== " ") out.unstaged.push({ path, state: tree });
+            if (c.index !== " ") out.staged.push({ path: c.path, state: c.index });
+            if (c.tree  !== " ") out.unstaged.push({ path: c.path, state: c.tree });
         }
         return out;
     }

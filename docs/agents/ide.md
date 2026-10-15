@@ -122,8 +122,13 @@ at ~14 ms in the IDE, against the 44-211 ms a form tab already costs to open
   is built from. **A view is not a page**: the tree's two groupings share
   `TreePage`, which is why the strip has three buttons and the stack two, and
   `Changes.visible` asks the stack (`SideStack.Children[Current] ===
-  ChangesBox`) rather than a number in the chooser's list that a panel added
-  before it would move. The swap itself is a `Switcher`'s and not a `Visible`
+  ChangesSplit`) rather than a number in the chooser's list that a panel added
+  before it would move. **The Changes page is a `Split`** -- the list over the
+  commit box -- and not a panel with a fixed 72-pixel box under it: a message
+  with a body is written in a box whose height the person chooses. Its name is
+  in `Session`'s `DIVIDERS` and in `END_FIXED` (the box is the half that keeps
+  its height, `COMMIT_H` when nobody has chosen), which is the same bargain
+  `RightSplit` makes for the console. The swap itself is a `Switcher`'s and not a `Visible`
   per child: *one of these shows* is what a stack is, and it keeps the column's
   floor across the swap because it measures every page -- which is what a view
   change wants and the reason the fold above is a panel and not a page. A page
@@ -421,7 +426,29 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   outside `run`/`remote` has to carry it too. An untracked folder is one
   porcelain row (`?? d/`) and `File.Delete` takes only an empty directory, so
   discarding one threw halfway -- it goes to the trash now, like every other
-  delete the IDE makes.
+  delete the IDE makes. **And the panel reads `status -uall`**, so a folder git
+  has never seen arrives as the files inside it: a row nobody can tick, open or
+  ignore is not a row. The folder-shaped discard path stayed -- a path that
+  names one can still be handed in, and the panel is not the only caller.
+- **An ignore entry is a pattern and the path is not.** *Add to .gitignore*
+  writes the path into **the project's own** `.gitignore` (made when there is
+  none) as `/` plus the name: anchored, so a root file does not also ignore
+  every file of that name below it; with `\ * ? [ ]` escaped, so
+  `data[1].json` does not take `data1.json` with it -- the pathspec lesson one
+  file over; and inside the project, so a repository holding several never has
+  a file beside it edited. The suite asserts the effect and not the line: the
+  ignored file leaves the list, its neighbour with the glob-ish name stays, and
+  asking twice writes one entry.
+- **`restore --staged` needs a `HEAD`, and a repository with no commit has
+  none.** Taking a file out of the index on a fresh repository answered
+  `fatal: could not resolve 'HEAD'` -- measured, in the first repository the
+  Changes panel was used on, where the tick flipped back and a line landed in
+  the log. `Git.unstage` asks first (`rev-parse --verify -q HEAD`) and uses
+  `git rm --cached -f -r --` there: `-r` for a record naming a whole new folder,
+  `-f` for a file edited after the `add` (git refuses that one otherwise), and
+  `--cached` so the worktree file stays. Any other verb that restores *from
+  HEAD* has the same hole, and `git diff --cached` does not: it compares
+  against the empty tree and works.
 - **`File.Load` cannot say a file was not UTF-8; it answers U+FFFD.** An IDE
   that saved what it read destroyed every Latin-1 accent. The test is
   `Bytes.ToText()` throwing, not a search for U+FFFD (a file may hold one). A tab
@@ -723,10 +750,11 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   the mark falls back to what the editor on screen reports, the runtime's own
   default being a theme too.
   **The three *Focus ...* commands bring the thing into view first**: the tree
-  unfolds its panel (and turns to a tree view, `Changes` having no tree in it),
-  the console is shown, and the focus inside it is the page's own choice -- the
-  stack for the debug page rather than its first button, which is what a
-  notebook cannot say.
+  unfolds its panel on its own page (*Files* when the panel was left on that
+  grouping, *Project* otherwise -- *Changes* is a page of the same panel and is
+  not this tree, whatever shape its own list has), the console is shown, and
+  the focus inside it is the page's own choice -- the stack for the debug page
+  rather than its first button, which is what a notebook cannot say.
   **Full screen is a command and not a tick**, and the reason is a state the
   desktop owns: `FullScreen` reads back what the window manager did, and a
   mapped window on a display with no manager at all (the suite's `Xvfb`) does

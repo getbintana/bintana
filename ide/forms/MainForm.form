@@ -1155,13 +1155,14 @@
                               ]
                             },
                             {
-                              "type": "Panel",
-                              "name": "ChangesBox",
+                              "type": "Split",
+                              "name": "ChangesSplit",
                               "properties": {
                                 "Arrangement": "Vertical",
+                                "Grows": "Start",
                                 "HAlign": "Fill",
                                 "Margin": 4,
-                                "Spacing": 4,
+                                "Position": 460,
                                 "VAlign": "Fill",
                                 "VExpand": true,
                                 "Width": 260
@@ -1186,16 +1187,12 @@
                                         "separator": true
                                       },
                                       {
-                                        "name": "MnuChStage",
-                                        "text": "Stage"
-                                      },
-                                      {
-                                        "name": "MnuChUnstage",
-                                        "text": "Unstage"
-                                      },
-                                      {
                                         "name": "MnuChDiscard",
                                         "text": "Discard changes..."
+                                      },
+                                      {
+                                        "name": "MnuChIgnore",
+                                        "text": "Add to .gitignore"
                                       },
                                       {
                                         "separator": true
@@ -1209,60 +1206,76 @@
                                         "text": "Changes window..."
                                       }
                                     ],
+                                    "RowLines": false,
                                     "Style": "frame",
-                                    "Tooltip": "Double click a file to read what changed in it",
+                                    "Tooltip": "Tick a file to put it in the next commit; double click to read what changed",
                                     "VExpand": true
                                   }
                                 },
                                 {
-                                  "type": "Label",
-                                  "name": "LblChanges",
-                                  "properties": {
-                                    "HAlign": "Start",
-                                    "Margin": 4,
-                                    "Style": "dim-label",
-                                    "Visible": false,
-                                    "Wrap": true
-                                  }
-                                },
-                                {
-                                  "type": "TextBox",
-                                  "name": "TxtCommit",
-                                  "properties": {
-                                    "HAlign": "Fill",
-                                    "Height": 30,
-                                    "Placeholder": "Message, then Enter",
-                                    "Tooltip": "Commit what is staged. Enter is the button"
-                                  }
-                                },
-                                {
                                   "type": "Panel",
-                                  "name": "CommitRow",
+                                  "name": "CommitBox",
                                   "properties": {
-                                    "Arrangement": "Horizontal",
+                                    "Arrangement": "Vertical",
                                     "HAlign": "Fill",
-                                    "Height": 32,
-                                    "Spacing": 4
+                                    "Spacing": 4,
+                                    "VAlign": "Fill"
                                   },
                                   "children": [
                                     {
-                                      "type": "Button",
-                                      "name": "BtnChStage",
+                                      "type": "Label",
+                                      "name": "LblChanges",
                                       "properties": {
-                                        "HExpand": true,
-                                        "Text": "Stage",
-                                        "Tooltip": "Put the chosen files in the next commit"
+                                        "HAlign": "Start",
+                                        "Margin": 4,
+                                        "Style": "dim-label",
+                                        "Visible": false,
+                                        "Wrap": true
                                       }
                                     },
                                     {
-                                      "type": "Button",
-                                      "name": "BtnChCommit",
+                                      "type": "Label",
+                                      "name": "LblCommit",
                                       "properties": {
-                                        "HExpand": true,
-                                        "Style": "suggested-action",
-                                        "Text": "Commit",
-                                        "Tooltip": "Commit what is staged, with the message above"
+                                        "HAlign": "Start",
+                                        "Margin": 4,
+                                        "Style": "caption-heading",
+                                        "Text": "Commit message"
                                       }
+                                    },
+                                    {
+                                      "type": "TextEditor",
+                                      "name": "TxtCommit",
+                                      "properties": {
+                                        "HAlign": "Fill",
+                                        "Height": 72,
+                                        "Style": "frame",
+                                        "Tooltip": "Commit what is staged, with the button below. Enter writes a line",
+                                        "VAlign": "Fill",
+                                        "VExpand": true
+                                      }
+                                    },
+                                    {
+                                      "type": "Panel",
+                                      "name": "CommitRow",
+                                      "properties": {
+                                        "Arrangement": "Horizontal",
+                                        "HAlign": "Fill",
+                                        "Height": 32,
+                                        "Spacing": 4
+                                      },
+                                      "children": [
+                                        {
+                                          "type": "Button",
+                                          "name": "BtnChCommit",
+                                          "properties": {
+                                            "HExpand": true,
+                                            "Style": "suggested-action",
+                                            "Text": "Commit",
+                                            "Tooltip": "Commit what is staged, with the message above"
+                                          }
+                                        }
+                                      ]
                                     }
                                   ]
                                 }

@@ -13881,6 +13881,64 @@ function* p_git(ide) {
     check("and the project is a repository", git.isRepo);
     check("with a branch", git.branchName !== "", git.branchName);
 
+    /*
+     * --- a repository nobody has committed to yet ----------------------------
+     *
+     * There is no HEAD to restore from, so taking a file back out of the index
+     * is `git rm --cached` and not `git restore --staged` -- measured:
+     * `restore --staged` there answers `fatal: could not resolve 'HEAD'`, which
+     * the panel showed as a line in the log while the tick stayed on. A first
+     * commit is exactly where a file is taken back out.
+     */
+    const unborn = File.Join(TMP, "gitnuevo");
+    Directory.Make(unborn);
+    wipe(unborn);
+    File.Save(File.Join(unborn, "Nuevo.js"), "class Nuevo extends Form {\n}\n");
+
+    ide.openProject(unborn);
+    yield* settled(ide);
+
+    git.run(["init"]);
+    git.forget();
+    ide.refreshGit();
+    yield* settled(ide);
+
+    check("a repository with no commit yet is still a repository", git.isRepo);
+
+    ide.CmbView.Index = 2;               /* the third view: Changes */
+    ide.CmbView_Select();
+    yield* settled(ide);
+
+    const unbornKey = ide.changes.keyOf("Nuevo.js");
+
+    check("with its new file under Unversioned",
+          ide.ChangeTable.Exists(unbornKey) &&
+          ide.ChangeTable.Exists("g:unversioned"),
+          JSON.stringify(ide.changes.rows));
+
+    check("ticking it stages it", ide.ChangeTable.EditCell(unbornKey, 0));
+    yield* settled(ide);
+    eq("which git sees as added",
+       git.split().staged.map((r) => r.path).join(), "Nuevo.js");
+
+    /* **A tick is not a commit**: the file waits in *Unversioned* until the
+     * commit that puts it in the repository, and only then crosses. */
+    check("and it is still Unversioned while it waits",
+          !ide.changes.rows.find((r) => r.path === "Nuevo.js").versioned,
+          JSON.stringify(ide.changes.rows));
+
+    check("and unticking takes it back out with no HEAD to restore from",
+          ide.ChangeTable.EditCell(unbornKey, 0));
+    yield* settled(ide);
+
+    eq("which leaves nothing staged", git.split().staged.length, 0);
+    eq("with its tick off", ide.ChangeTable.Cell(unbornKey, 0), "false");
+    eq("and the file where it was", File.Load(File.Join(unborn, "Nuevo.js")),
+       "class Nuevo extends Form {\n}\n");
+
+    ide.openProject(repo);
+    yield* settled(ide);
+
     /* --- the parse ---------------------------------------------------------- */
     File.Save(File.Join(repo, "Uno.js"), "class Uno extends Form {\n    // dos\n}\n");
     File.Save(File.Join(repo, "con espacio y ñ.txt"), "nuevo\n");
@@ -14176,6 +14234,12 @@ function* p_git(ide) {
      */
     File.Save(File.Join(repo, "Uno.js"), "class Uno extends Form {\n    // tres\n}\n");
     File.Save(File.Join(repo, "cuatro.txt"), "nuevo\n");
+    /* A directory git has never seen: **the files inside it are the rows**, not
+     * the folder (`-uall`), because a row nobody can tick, open or ignore is
+     * not a row. */
+    Directory.Make(File.Join(repo, "carpeta"));
+    File.Save(File.Join(repo, "carpeta", "uno.txt"), "uno\n");
+    File.Save(File.Join(repo, "carpeta", "dos.txt"), "dos\n");
 
     ide.CmbView.Index = 2;               /* the third view: Changes */
     ide.CmbView_Select();
@@ -14197,40 +14261,177 @@ function* p_git(ide) {
     eq("the choice is written down like the tree's",
        Settings.Get("side.view", -1), 2);
 
-    const panel = ide.changes;
-    const both  = git.split();
+    /* **And the two are a pane**: moving the divider moves the box, which is
+     * what lets a message with a body be written without the list having to
+     * give up room nobody chose to give up -- and **the room goes into the
+     * message**, which is the control that expands. */
+    eq("the message has its own header", ide.LblCommit.Text, "Commit message");
 
-    eq("every changed file is a row",
-       ide.ChangeTable.Count, both.staged.length + both.unstaged.length);
+    const boxY = ide.TxtCommit.Bounds().Y;
+    const boxH = ide.TxtCommit.Bounds().Height;
+    ide.ChangesSplit.Position -= 80;
+    yield* settled(ide);
+    check("the divider between the list and the message moves the box",
+          ide.TxtCommit.Bounds().Y < boxY,
+          `${boxY} -> ${ide.TxtCommit.Bounds().Y}`);
+    check("and the message grows into the room it was given",
+          ide.TxtCommit.Bounds().Height > boxH,
+          `${boxH} -> ${ide.TxtCommit.Bounds().Height}`);
+    ide.ChangesSplit.Position += 80;
+    yield* settled(ide);
+
+    const panel = ide.changes;
+    const all   = git.changes();
+
+    /*
+     * The tree: the files the last commit has and the ones it does not, and
+     * **one row per path**, where the plain list had two for a file staged and
+     * edited again. The two branches are of this fixture -- one modified file
+     * and one new one -- so the count is the paths plus two.
+     */
+    eq("every changed path is a row, under its branch",
+       ide.ChangeTable.Count, all.length + 2);
+    check("with the branches named",
+          ide.ChangeTable.Exists("g:versioned") && ide.ChangeTable.Exists("g:unversioned"),
+          JSON.stringify(panel.rows));
     check("with the path in it",
           panel.rows.some((r) => r.path === "cuatro.txt"), JSON.stringify(panel.rows));
-    check("and an untracked file among them",
-          panel.rows.some((r) => r.path === "cuatro.txt" && r.state === "?"));
+    check("and the untracked file in its own branch",
+          panel.rows.some((r) => r.path === "cuatro.txt" && r.untracked),
+          JSON.stringify(panel.rows));
+    check("an untracked directory shows the files inside it, not itself",
+          panel.rows.some((r) => r.path === "carpeta/uno.txt") &&
+          panel.rows.some((r) => r.path === "carpeta/dos.txt") &&
+          !panel.rows.some((r) => r.path === "carpeta/"),
+          JSON.stringify(panel.rows));
 
-    /* Staging from the panel, asserted by asking git. */
-    ide.ChangeTable.Index = panel.rows.findIndex((r) => r.path === "Uno.js");
+    /*
+     * The tick, which is the panel's whole way to choose what goes in: asking
+     * git is the assertion, and so is what the tick and the row say. `EditCell`
+     * is the click from code -- the suite has no synthetic pointer -- and the
+     * row is addressed by the key a tree gives it.
+     */
+    const unoKey = panel.keyOf("Uno.js");
+
+    check("a file row is a node of the tree", ide.ChangeTable.Exists(unoKey));
+    eq("with its tick off", ide.ChangeTable.Cell(unoKey, 0), "false");
+
+    ide.ChangeTable.Key = unoKey;
     ide.ChangeTable_Select();
-    check("a row chosen offers to stage it", ide.MnuChStage.Enabled);
-    check("and to throw it away", ide.MnuChDiscard.Enabled);
-    check("but not to unstage what was never staged", !ide.MnuChUnstage.Enabled);
+    check("the chosen row offers its diff and to throw its work away",
+          ide.MnuChDiff.Enabled && ide.MnuChDiscard.Enabled);
 
-    ide.BtnChStage_Click();
+    check("ticking a file row stages it", ide.ChangeTable.EditCell(unoKey, 0));
     yield* settled(ide);
 
     eq("staging from the panel reaches git",
        git.split().staged.map((r) => r.path).join(), "Uno.js");
-    check("and the row says so now",
-          panel.rows.some((r) => r.path === "Uno.js" && r.staged),
-          JSON.stringify(panel.rows));
+    eq("and the tick says so", ide.ChangeTable.Cell(unoKey, 0), "true");
 
-    /* And back out again, through the menu the row offers. */
-    ide.ChangeTable.Index = panel.rows.findIndex((r) => r.path === "Uno.js" && r.staged);
-    ide.ChangeTable_Select();
-    check("a staged row offers to unstage it", ide.MnuChUnstage.Enabled);
-    ide.MnuChUnstage_Click();
+    /* **A tick does not take the reader's place away**, and that is the other
+     * half of updating the tree instead of rebuilding it: the row is still
+     * selected, which is also what keeps the column widths somebody dragged
+     * and the scroll where it was. */
+    eq("and the reader is still on that row", ide.ChangeTable.Key, unoKey);
+
+    /*
+     * **One row for a file staged and edited again** -- the case the plain
+     * list spelled with two. The tick stays on, because it is in the index,
+     * and the state says `MM`: part in the next commit, part not.
+     */
+    File.Save(File.Join(repo, "Uno.js"),
+              "class Uno extends Form {\n    // despues del add\n}\n");
+    ide.refreshGit();
+    yield* settled(ide);
+
+    eq("a file staged and edited again keeps one row",
+       panel.rows.filter((r) => r.path === "Uno.js").length, 1);
+    eq("whose letters say both halves", ide.ChangeTable.Cell(unoKey, 1), "MM");
+    eq("and whose tick still says it is in the index",
+       ide.ChangeTable.Cell(unoKey, 0), "true");
+
+    /* And off again, through the same tick. */
+    check("unticking takes it back out", ide.ChangeTable.EditCell(unoKey, 0));
     yield* settled(ide);
 
     eq("unstaging reaches git too", git.split().staged.length, 0);
+    eq("and the tick went with it", ide.ChangeTable.Cell(unoKey, 0), "false");
+
+    /*
+     * **The header's tick is every file under it.** *Versioned* holds one
+     * modified file, so its tick stages that one and leaves the new files of
+     * the other branch alone; clicking again takes it back out. A branch that
+     * is only half in reads as unchecked -- a `Check` cell has no third state
+     * -- and one click puts it all in.
+     */
+    check("a branch's tick stages its files",
+          ide.ChangeTable.EditCell("g:versioned", 0));
+    yield* settled(ide);
+
+    eq("which is the tracked file",
+       git.split().staged.map((r) => r.path).join(), "Uno.js");
+    eq("and the branch says so", ide.ChangeTable.Cell("g:versioned", 0), "true");
+    eq("while the other branch is untouched",
+       ide.ChangeTable.Cell("g:unversioned", 0), "false");
+
+    check("and unticking the branch takes them out",
+          ide.ChangeTable.EditCell("g:versioned", 0));
+    yield* settled(ide);
+    eq("which reaches git", git.split().staged.length, 0);
+
+    /*
+     * A file git has never been told about, to `.gitignore`: the entry is
+     * anchored and escaped, and the row leaves because git stops reporting it
+     * -- the tree's mark with it.
+     */
+    const ignoreKey = panel.keyOf("carpeta/uno.txt");
+
+    ide.ChangeTable.Key = ignoreKey;
+    ide.ChangeTable_Select();
+    check("an untracked row offers to be ignored", ide.MnuChIgnore.Enabled);
+
+    ide.ChangeTable.Key = unoKey;
+    ide.ChangeTable_Select();
+    check("a tracked file does not", !ide.MnuChIgnore.Enabled);
+
+    ide.ChangeTable.Key = ignoreKey;
+    ide.ChangeTable_Select();
+    ide.MnuChIgnore_Click();
+    yield* settled(ide);
+
+    eq("which writes the project's own .gitignore",
+       File.Load(File.Join(repo, ".gitignore")), "/carpeta/uno.txt\n");
+    check("the row is gone",
+          !panel.rows.some((r) => r.path === "carpeta/uno.txt"),
+          JSON.stringify(panel.rows));
+    check("while the file is still there",
+          File.Exists(File.Join(repo, "carpeta", "uno.txt")));
+    check("and the new .gitignore is a row itself",
+          panel.rows.some((r) => r.path === ".gitignore"),
+          JSON.stringify(panel.rows));
+
+    git.ignore("carpeta/uno.txt");
+    eq("and asking twice writes it once",
+       File.Load(File.Join(repo, ".gitignore")), "/carpeta/uno.txt\n");
+
+    /* **The pattern characters are escaped**: `no[1].txt` ignored as written
+     * would take `no1.txt` with it, which is the pathspec lesson one file
+     * over -- so the effect is asserted, and not only the line. */
+    File.Save(File.Join(repo, "no[1].txt"), "x\n");
+    File.Save(File.Join(repo, "no1.txt"), "y\n");
+    ide.refreshGit();
+    yield* settled(ide);
+    git.ignore("no[1].txt");
+    ide.refreshGit();
+    yield* settled(ide);
+
+    check("a name with glob characters is escaped",
+          File.Load(File.Join(repo, ".gitignore")).includes("/no\\[1\\].txt"),
+          File.Load(File.Join(repo, ".gitignore")));
+    check("so it is ignored and its neighbour is not",
+          !panel.rows.some((r) => r.path === "no[1].txt") &&
+          panel.rows.some((r) => r.path === "no1.txt"),
+          JSON.stringify(panel.rows));
 
     /* Everything at once, which is what a small commit is. `add -A`, so the
      * untracked file goes in too -- a number here would be a count of whatever
@@ -14242,16 +14443,26 @@ function* p_git(ide) {
     check("stage everything stages the untracked one as well", loose > 0);
     eq("and leaves nothing outside the commit", git.split().unstaged.length, 0);
 
-    /* The commit, from the one-line box: a message and Enter. */
+    /* The new file is staged and **still under Unversioned**: a tick is not a
+     * commit, and the branch changes when the commit puts it in git. */
+    check("a new file stays Unversioned while it waits",
+          panel.rows.some((r) => r.path === "cuatro.txt" && !r.versioned),
+          JSON.stringify(panel.rows));
+    eq("with its tick on",
+       ide.ChangeTable.Cell(panel.keyOf("cuatro.txt"), 0), "true");
+
+    /* The commit, from the message box. **The button, and not Enter**: the box
+     * is a text editor, and a `GtkTextView` keeps Return for itself -- see the
+     * comment on `BtnChCommit_Click`. */
     check("an empty message commits nothing", !ide.BtnChCommit.Enabled);
     ide.TxtCommit.Text = "tercero";
     ide.TxtCommit_Change();
     check("with a message and something staged it is on", ide.BtnChCommit.Enabled);
 
-    ide.TxtCommit_Activate();
+    ide.BtnChCommit_Click();
     yield* settled(ide);
 
-    check("Enter in the box commits",
+    check("which is the commit",
           run("log", "--oneline").Output.includes("tercero"));
     eq("and empties the box", ide.TxtCommit.Text, "");
     eq("leaving nothing staged", git.split().staged.length, 0);
@@ -14262,9 +14473,9 @@ function* p_git(ide) {
     ide.refreshGit();
     yield* settled(ide);
 
-    eq("a new change comes back into the panel", ide.ChangeTable.Count, 1);
+    eq("a new change comes back into the panel", panel.rows.length, 1);
 
-    ide.ChangeTable.Index = 0;
+    ide.ChangeTable.Key = panel.keyOf("Uno.js");
     ide.ChangeTable_Activate();
     yield* settled(ide);
 
@@ -14277,7 +14488,7 @@ function* p_git(ide) {
     yield* settled(ide);
 
     /* Rollback, which is the one command with no undo and therefore asks. */
-    ide.ChangeTable.Index = 0;
+    ide.ChangeTable.Key = panel.keyOf("Uno.js");
     ide.ChangeTable_Select();
     ide.MnuChDiscard_Click();
     yield;
@@ -14310,7 +14521,7 @@ function* p_git(ide) {
     ide.save();
     yield* settled(ide);
 
-    eq("saving puts the file in the list", ide.ChangeTable.Count, 1);
+    eq("saving puts the file in the list", panel.rows.length, 1);
     check("under its own name",
           panel.rows.some((r) => r.path === "Uno.js"), JSON.stringify(panel.rows));
     eq("and the tree hears about it too", git.stateOf("Uno.js"), "M");
@@ -14666,10 +14877,12 @@ function* p_git(ide) {
     run("checkout", "--", "data1.json");
 
     /*
-     * And an untracked **folder**, which the porcelain names as one row
-     * (`?? nueva/`): `File.Delete` takes an empty directory and nothing else,
-     * so it threw -- after the restore beside it had run -- and the window was
-     * left offering rows that were already gone.
+     * And an untracked **folder**: `-uall` lists the files inside it -- the
+     * folder itself is not a row -- so what is discarded is each file, and an
+     * empty directory is what stays behind (git does not track directories).
+     * The case the old code had to special-case (`?? nueva/` as one row, and
+     * `File.Delete` refusing a directory that is not empty) no longer arrives
+     * through the panel, and `discard` still handles a path that names one.
      */
     Directory.Make(File.Join(repo, "nueva"));
     File.Save(File.Join(repo, "nueva", "a.txt"), "a\n");
@@ -14679,7 +14892,8 @@ function* p_git(ide) {
     yield* settled(ide);
 
     const fresh = git.split().unstaged.map((r) => r.path);
-    check("an untracked folder is one row", fresh.some((p) => p.startsWith("nueva")),
+    check("an untracked folder lists the files inside it",
+          fresh.some((p) => p === "nueva/a.txt") && !fresh.some((p) => p.endsWith("/")),
           JSON.stringify(fresh));
     let threw = "";
     try {
@@ -14687,8 +14901,9 @@ function* p_git(ide) {
     } catch (e) {
         threw = e.message;
     }
-    eq("discarding an untracked folder does not throw", threw, "");
-    check("and the folder is gone", !File.Exists(File.Join(repo, "nueva")));
+    eq("discarding what is inside an untracked folder does not throw", threw, "");
+    check("and what was inside it is gone",
+          !File.Exists(File.Join(repo, "nueva", "a.txt")));
     eq("with the tracked change beside it restored",
        File.Load(File.Join(repo, "Dos.js")), dos);
     ide.refreshGit();

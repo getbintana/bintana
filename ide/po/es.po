@@ -343,7 +343,7 @@ msgstr ""
 "defecto."
 
 #: forms/GitForm.form: GitForm.Text forms/MainForm.form: SideStack.Tabs
-#: modules/Changes.js:46
+#: modules/Changes.js:74
 msgid "Changes"
 msgstr "Cambios"
 
@@ -363,21 +363,19 @@ msgstr "Lado a lado"
 msgid "Unified"
 msgstr "Unificado"
 
-#: forms/GitForm.form: LblMessage.Text
+#: forms/GitForm.form: LblMessage.Text forms/MainForm.form: LblCommit.Text
 msgid "Commit message"
 msgstr "Mensaje del commit"
 
-#: forms/GitForm.form: BtnStage.Text forms/MainForm.form: ChangeTable.Menu
-#: MnuChStage BtnChStage.Text
+#: forms/GitForm.form: BtnStage.Text
 msgid "Stage"
 msgstr "Poner"
 
-#: forms/GitForm.form: BtnStage.Tooltip forms/MainForm.form: BtnChStage.Tooltip
+#: forms/GitForm.form: BtnStage.Tooltip
 msgid "Put the chosen files in the next commit"
 msgstr "Poner los archivos elegidos en el próximo commit"
 
-#: forms/GitForm.form: BtnUnstage.Text forms/MainForm.form: ChangeTable.Menu
-#: MnuChUnstage
+#: forms/GitForm.form: BtnUnstage.Text
 msgid "Unstage"
 msgstr "Sacar"
 
@@ -386,7 +384,7 @@ msgid "Take the chosen files back out of the next commit"
 msgstr "Sacar los archivos elegidos del próximo commit"
 
 #: forms/GitForm.form: BtnDiscard.Text forms/GitForm.js:324
-#: modules/Changes.js:269 modules/Recovery.js:308
+#: modules/Changes.js:415 modules/Recovery.js:308
 msgid "Discard"
 msgstr "Descartar"
 
@@ -400,7 +398,7 @@ msgid "Commit"
 msgstr "Commit"
 
 #: forms/GitForm.form: BtnCommit.Tooltip forms/MainForm.form:
-#: BtnChCommit.Tooltip modules/Changes.js:160
+#: BtnChCommit.Tooltip modules/Changes.js:285
 msgid "Commit what is staged, with the message above"
 msgstr "Commitear lo que está en el commit, con el mensaje de arriba"
 
@@ -788,7 +786,7 @@ msgstr "Traer"
 msgid "Pull"
 msgstr "Bajar"
 
-#: forms/MainForm.form: menu MnuGitPush modules/Git.js:479
+#: forms/MainForm.form: menu MnuGitPush modules/Git.js:530
 msgid "Push"
 msgstr "Subir"
 
@@ -1002,8 +1000,11 @@ msgid "Tree options"
 msgstr "Opciones del árbol"
 
 #: forms/MainForm.form: ChangeTable.Tooltip
-msgid "Double click a file to read what changed in it"
-msgstr "Doble clic en un archivo para leer qué cambió en él"
+msgid ""
+"Tick a file to put it in the next commit; double click to read what changed"
+msgstr ""
+"Tildar un archivo para ponerlo en el próximo commit; doble clic para leer "
+"qué cambió"
 
 #: forms/MainForm.form: ChangeTable.Menu MnuChDiff
 msgid "Show the diff"
@@ -1017,6 +1018,10 @@ msgstr "Abrir el archivo"
 msgid "Discard changes..."
 msgstr "Descartar los cambios..."
 
+#: forms/MainForm.form: ChangeTable.Menu MnuChIgnore
+msgid "Add to .gitignore"
+msgstr "Agregar a .gitignore"
+
 #: forms/MainForm.form: ChangeTable.Menu MnuChAll
 msgid "Stage everything"
 msgstr "Poner todo"
@@ -1025,13 +1030,11 @@ msgstr "Poner todo"
 msgid "Changes window..."
 msgstr "Ventana de cambios..."
 
-#: forms/MainForm.form: TxtCommit.Placeholder
-msgid "Message, then Enter"
-msgstr "Mensaje, y Enter"
-
 #: forms/MainForm.form: TxtCommit.Tooltip
-msgid "Commit what is staged. Enter is the button"
-msgstr "Commitear lo que está en el próximo commit. Enter es el botón"
+msgid "Commit what is staged, with the button below. Enter writes a line"
+msgstr ""
+"Commitear lo que está en el próximo commit con el botón de abajo. Enter "
+"escribe una línea"
 
 #: forms/MainForm.form: BtnTakeDisk.Text forms/MainForm.js:2462
 msgid "Reload"
@@ -1735,11 +1738,11 @@ msgstr "Aceptar"
 msgid "Changes -- {0}"
 msgstr "Cambios -- {0}"
 
-#: forms/GitForm.js:90 forms/LogForm.js:59 modules/Changes.js:134
+#: forms/GitForm.js:90 forms/LogForm.js:59 modules/Changes.js:179
 msgid "File"
 msgstr "Archivo"
 
-#: forms/GitForm.js:91 forms/LogForm.js:60 modules/Changes.js:133
+#: forms/GitForm.js:91 forms/LogForm.js:60 modules/Changes.js:178
 msgid "State"
 msgstr "Estado"
 
@@ -1776,7 +1779,7 @@ msgid "Too big to show side by side. The unified tab has it."
 msgstr ""
 "Demasiado grande para mostrarlo lado a lado. La solapa unificada lo tiene."
 
-#: forms/GitForm.js:316 modules/Changes.js:261
+#: forms/GitForm.js:316 modules/Changes.js:407
 msgid "Discard changes"
 msgstr "Descartar los cambios"
 
@@ -1788,13 +1791,13 @@ msgstr "Un commit necesita un mensaje."
 msgid "Nothing is staged."
 msgstr "No hay nada en el próximo commit."
 
-#: forms/GitForm.js:318 modules/Changes.js:263
+#: forms/GitForm.js:318 modules/Changes.js:409
 msgid "Throw away {0} file, and delete it if it is new?"
 msgid_plural "Throw away {0} files, deleting the new ones?"
 msgstr[0] "¿Tirar {0} archivo, y borrarlo si es nuevo?"
 msgstr[1] "¿Tirar {0} archivos, borrando los nuevos?"
 
-#: forms/GitForm.js:321 modules/Changes.js:266
+#: forms/GitForm.js:321 modules/Changes.js:412
 msgid "Throw away what was written in {0} file?"
 msgid_plural "Throw away what was written in {0} files?"
 msgstr[0] "¿Tirar lo que se escribió en {0} archivo?"
@@ -2017,15 +2020,15 @@ msgid ""
 "Delete {0}? Anything committed only there would be refused rather than lost."
 msgstr "¿Borrar {0}? Lo que esté commiteado sólo ahí se rechaza, no se pierde."
 
-#: forms/MainForm.js:3109
+#: forms/MainForm.js:3118
 msgid "Clone a repository"
 msgstr "Clonar un repositorio"
 
-#: forms/MainForm.js:3109
+#: forms/MainForm.js:3118
 msgid "From"
 msgstr "Desde"
 
-#: forms/MainForm.js:3117
+#: forms/MainForm.js:3126
 msgid "Clone into"
 msgstr "Dónde clonarlo"
 
@@ -2090,15 +2093,15 @@ msgstr ""
 "{0}\n"
 "ya no está."
 
-#: forms/MainForm.js:3250
+#: forms/MainForm.js:3259
 msgid "Open a form's design to edit its menus."
 msgstr "Abrí el diseño de un formulario para editar sus menús."
 
-#: forms/MainForm.js:3269
+#: forms/MainForm.js:3278
 msgid "Open a form's design to edit its commands."
 msgstr "Abrí el diseño de un formulario para editar sus comandos."
 
-#: forms/MainForm.js:3301
+#: forms/MainForm.js:3310
 msgid "Open a form's design to edit its tab order."
 msgstr "Abrí el diseño de un formulario para editar su orden de tabulación."
 
@@ -2142,7 +2145,7 @@ msgstr ""
 "No se pudo editar {0}:\n"
 "{1}"
 
-#: forms/MainForm.js:3134 modules/FormFiles.js:429 modules/FormFiles.js:610
+#: forms/MainForm.js:3143 modules/FormFiles.js:429 modules/FormFiles.js:610
 msgid "{0} already exists."
 msgstr "{0} ya existe."
 
@@ -2427,19 +2430,27 @@ msgstr ""
 "Solo un contenedor dibujado por coordenadas tiene un orden de tabulación "
 "para editar."
 
-#: modules/Changes.js:47
+#: modules/Changes.js:75
 msgid "Show the changes view"
 msgstr "Mostrar la vista de cambios"
 
-#: modules/Changes.js:159
+#: modules/Changes.js:197
+msgid "Versioned"
+msgstr "Versionados"
+
+#: modules/Changes.js:199
+msgid "Unversioned"
+msgstr "Sin versionar"
+
+#: modules/Changes.js:284
 msgid "Nothing is staged"
 msgstr "No hay nada en el próximo commit"
 
-#: modules/Changes.js:169
+#: modules/Changes.js:294
 msgid "This project is not in a git repository."
 msgstr "Este proyecto no está en un repositorio git."
 
-#: modules/Changes.js:170
+#: modules/Changes.js:295
 msgid "Nothing has changed."
 msgstr "No cambió nada."
 
@@ -2742,23 +2753,23 @@ msgstr ""
 "Agregar {0}() a {1} lo rompería:\n"
 "{2}:{3}: {4}"
 
-#: modules/Git.js:480
+#: modules/Git.js:531
 msgid "The branch {0} follows nothing yet. Push it to which remote? ({1})"
 msgstr "La rama {0} todavía no sigue a ninguna. ¿A qué remoto la subo? ({1})"
 
-#: modules/Git.js:786
+#: modules/Git.js:890
 msgid "detached"
 msgstr "suelto"
 
-#: modules/Git.js:788
+#: modules/Git.js:892
 msgid "{0} staged"
 msgstr "{0} en el próximo commit"
 
-#: modules/Git.js:789
+#: modules/Git.js:893
 msgid "{0} changed"
 msgstr "{0} cambiado"
 
-#: modules/Git.js:485
+#: modules/Git.js:536
 msgid "{0} is not a remote of this repository."
 msgstr "{0} no es un remoto de este repositorio."
 
@@ -3039,7 +3050,7 @@ msgstr "Cerrar pestañas"
 msgid "The project has no {0}."
 msgstr "El proyecto no tiene {0}."
 
-#: modules/TabSet.js:1033 modules/TabSet.js:1246
+#: modules/TabSet.js:1038 modules/TabSet.js:1251
 msgid ""
 "Could not save {0}:\n"
 "{1}"
@@ -3144,6 +3155,21 @@ msgstr "Eventos"
 #: modules/Workspace.js:440
 msgid "Outline"
 msgstr "Contenido"
+
+#~ msgid "Commit what is staged. Ctrl+Enter is the button"
+#~ msgstr "Commitear lo que está en el próximo commit. Ctrl+Enter es el botón"
+
+#~ msgid "Tracked"
+#~ msgstr "Versionados"
+
+#~ msgid "Untracked"
+#~ msgstr "Sin versionar"
+
+#~ msgid "Double click a file to read what changed in it"
+#~ msgstr "Doble clic en un archivo para leer qué cambió en él"
+
+#~ msgid "Message, then Enter"
+#~ msgstr "Mensaje, y Enter"
 
 #~ msgid "No pages"
 #~ msgstr "Sin páginas"

@@ -51,7 +51,7 @@ const PROJECTS_KEY = "session.projects";
  * workspace's (`Workspace`): there is one set per open file, so what is
  * remembered is the width the person dragged, not a widget -- see `divider`.
  */
-const DIVIDERS = ["Split", "RightSplit", "PageSplit", "CenterSplit",
+const DIVIDERS = ["Split", "RightSplit", "ChangesSplit", "PageSplit", "CenterSplit",
                   "SideSplit", "EditSplit"];
 
 /*
@@ -79,11 +79,15 @@ const MIN_WINDOW = 200;
  * rest. These are saved as a second number, `ends`, beside `dividers` -- which
  * stays what it was -- and put back on the split's first real rectangle.
  */
-const END_FIXED = ["CenterSplit", "EditSplit", "RightSplit"];
+const END_FIXED = ["CenterSplit", "EditSplit", "RightSplit", "ChangesSplit"];
 
 /* The console's height when nobody has chosen one: what `MainForm.form` draws it
  * with (a 648 split at 464, less its handle). */
 const CONSOLE_H = 190;
+
+/* And the commit box's, which is the message box, its button and the line under
+ * the list -- what the side panel opens with, room for the line included. */
+const COMMIT_H = 140;
 
 /* How long a split is along the axis it divides. */
 function extentOf(split) {
@@ -168,6 +172,12 @@ export class Session {
         if (ide.RightSplit)
             this.settle(ide.RightSplit, "RightSplit",
                         Number(at.RightSplit) > 0 ? 0 : CONSOLE_H);
+        /* The list and the message box, which is the same bargain one column
+         * over: the box keeps the height it was dragged to and the list takes
+         * the rest. */
+        if (ide.ChangesSplit)
+            this.settle(ide.ChangesSplit, "ChangesSplit",
+                        Number(at.ChangesSplit) > 0 ? 0 : COMMIT_H);
         return true;
     }
 

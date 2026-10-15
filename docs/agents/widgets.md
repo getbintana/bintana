@@ -759,6 +759,17 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   to the entry and arrives. Measured: `b` -> release only; `F5` and `Escape` ->
   both. Do not "fix" the missing press, and do not pair the two halves of a key on
   anything that edits text.
+  **Return is claimed like a printable key, and that is what keeps a multiline
+  box from hearing it**: with a `TextEditor` focused, neither plain Return nor
+  Ctrl+Return ever arrived as a `KeyPress` (measured; the release did, and
+  Ctrl+Return had already written a line in the view). **And a control's
+  `Shortcut` does not fire while a text view has the focus either**: an `F5` --
+  which nothing consumes -- reached the editor's own `KeyPress` and did not
+  activate a button whose `Shortcut` was `F5` in the same window, while the same
+  key activated that button with the focus on the button, on the form, or in a
+  window with no text view in it at all. So a box with a body commits by its
+  button -- the IDE's Changes panel is what measured it -- and catching
+  Ctrl+Enter *inside* a text view is a runtime feature and not a handler.
 
 ## Editors
 
