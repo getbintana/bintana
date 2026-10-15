@@ -8933,6 +8933,15 @@
           "Native": true
         },
         {
+          "Name": "SetStyle",
+          "Kind": "Method",
+          "Params": 3,
+          "Signature": "(row, column, style)",
+          "Returns": "",
+          "Doc": "the theme class a cell wears -- a name like `\"heading\"`, the way `Style` takes one on a control, not a colour. `\"\"` takes it off, and recycling a cell takes it off too. Refused on an on-demand table, whose `Data` answers `{ Text, Style }`",
+          "Native": true
+        },
+        {
           "Name": "SetUri",
           "Kind": "Method",
           "Params": 3,
@@ -8983,7 +8992,7 @@
         {
           "Name": "Data",
           "Signature": "(row, column)",
-          "Doc": "the table needs a cell. **The return value is the answer**: a string, or `{ Text, Icon, Uri, Editable }` for a cell with a picture or an address of its own, or one that does not edit in a column that does (`Editable: false`). In a `Link` column an absent `Uri` means the text is the address and `\"\"` means this cell is not a link"
+          "Doc": "the table needs a cell. **The return value is the answer**: a string, or `{ Text, Icon, Uri, Style, Editable }` for a cell with a picture, an address or a theme class of its own, or one that does not edit in a column that does (`Editable: false`). In a `Link` column an absent `Uri` means the text is the address and `\"\"` means this cell is not a link"
         },
         {
           "Name": "Sort",

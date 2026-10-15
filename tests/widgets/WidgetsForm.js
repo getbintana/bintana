@@ -16510,6 +16510,42 @@ function Main() {
                 t.geoHost.Delete();
                 v.geoHost.Delete();
             });
+
+            /*
+             * **A tick on a tree**, which is how the IDE's Changes panel asks
+             * *which files go in*: the same declaration, and the address of a
+             * row in a tree is its key -- so `CellEdit` carries that. A locked
+             * cell is the second half of it: a branch of that tree is drawn
+             * with a tick and is not a thing to press.
+             */
+            const tr = new TableView();
+            tr.Name = "EdTree";
+            tr.Columns = [
+                { Text: "Done", Editor: { Kind: "Check" } },
+                { Text: "Name" },
+            ];
+            this.geoAdd(tr, 0, 140);
+            tr.Add(["", "raíz"],       { Key: "r" });
+            tr.Add(["false", "uno"],   { Key: "r/uno", Parent: "r" });
+            tr.Add(["false", "dos"],   { Key: "r/dos", Parent: "r" });
+
+            const treeEdits = [];
+            tr.On("CellEdit", (row, col, text) => { treeEdits.push([row, col, text]); });
+
+            until("a tree with a tick drawn", () => tr.RowHeight > 0, () => {
+                eq("a node's tick is turned by key", tr.EditCell("r/uno", 0), true);
+                eq("and reports the key with the new value",
+                   JSON.stringify(treeEdits), '[["r/uno",0,"true"]]');
+                eq("which the cell keeps", tr.Cell("r/uno", 0), "true");
+                eq("while its sibling keeps its own", tr.Cell("r/dos", 0), "false");
+
+                const asked = treeEdits.length;
+                tr.SetEditable("r", 0, false);
+                eq("a locked tick does not turn", tr.EditCell("r", 0), false);
+                eq("and reports nothing", treeEdits.length, asked);
+
+                tr.geoHost.Delete();
+            });
         });
     }
 
@@ -16834,6 +16870,30 @@ function Main() {
 
         throws("a row that is not there is refused", () => t.SetIcon(9, 0, "x"));
         throws("and neither is a column", () => t.SetIcon(0, -1, "x"));
+
+        /*
+         * A theme class on a cell, the third of the things that hang on one.
+         * **What the class looks like is not observable from here** -- it is
+         * painter state, like an editor's highlight -- so what a test holds is
+         * the call's contract: the text is untouched, and the refusals.
+         */
+        t.SetStyle(0, 0, "heading");
+        check("a theme class can be put on a cell", true);
+        t.SetStyle(0, 0, "");
+        check("and taken off again", true);
+        eq("and the text is untouched by a style too", t.Cell(0, 0), "Form1.js");
+
+        throws("a style that is not a name is refused", () => t.SetStyle(0, 0, 7));
+        throws("a row that is not there is refused", () => t.SetStyle(9, 0, "heading"));
+        throws("and neither is a column", () => t.SetStyle(0, -1, "heading"));
+
+        const v = new TableView();
+        v.Columns = [{ Text: "A" }];
+        v.On("Data", (row) => `r${row}`);
+        v.Count = 1;
+        throws("SetStyle is refused on an on-demand table",
+               () => v.SetStyle(0, 0, "heading"));
+        v.Delete();
         t.Delete();
     }
 

@@ -129,8 +129,33 @@ with a window manager, since none of it reaches the suite:
   `SetUri`, a taken edit, all of them, for as long as the suite only read
   `Cell()` back. A row emits `changed` now and every bound cell listens
   (`cell_fill`, connected in the bind, disconnected in the unbind, which every
-  column has for that reason). A tree was never affected: it gets fresh
-  `GtkTreeListRow` wrappers.
+  column has for that reason). **A tree was believed immune -- it gets fresh
+  `GtkTreeListRow` wrappers -- and it was not**: the tree half of
+  `table_row_changed` told the store and emitted nothing, so a tree cell
+  changed from code after it was drawn stayed exactly as it was, measured by
+  hand on 4.22 with a branch header that never dimmed while the same call on a
+  flat row repainted it. Both shapes emit the row's `changed` now.
+- **A lock dims a cell in any column, and it used not to.** The `dim-label`
+  class lived in `cell_show`, which runs only for a cell that has a `BtaCell`
+  -- and a column with no `Editor` builds none -- so `SetEditable`'s promise
+  (*the cell reads dim and does not open*) was kept only in columns that
+  declare an editor. A plain column's locked cell stayed exactly as it was, and
+  the columns a header or a summary row lives in are the plain ones. `cell_fill`
+  applies the class for the cells without a `BtaCell` too, so `Data`'s
+  `Editable: false` says the same thing on an on-demand table. Measured by
+  hand: the class is the theme's `.dim-label` (about `0.45` of the text's
+  black, read off a capture), and no suite assertion can see a class -- the
+  same reason the flat redraw above is on the by-hand list.
+- **A class a cell wears has to come off the widget, not the row.** `SetStyle`
+  puts one theme class on a cell -- `"heading"` for a row that is a group
+  rather than a file -- and the cell's **widget is recycled across rows** while
+  the class belongs to one row's cell, so the class applied last is kept *on
+  the label* (`bta-cell-style`) and removed at the next fill, or the next row
+  to use that widget wears it. `""` and a cell that never had one end in the
+  same place, and the runtime's own `dim-label` (a locked cell) is a different
+  class that can be worn at once. The suite can see the call's contract and not
+  the class -- painter state -- so the look is measured by hand, like the dim
+  above.
 - **The press is heard on the column view, not on the cell.** With an edit open
   in one row, GTK's own gesture on *another* row claims that row's press in its
   capture phase, before a capture gesture on the cell under it runs: the second
@@ -246,6 +271,15 @@ with a window manager, since none of it reaches the suite:
   that does not gets the same activation as ever. With an edit open it is the
   editor's Enter, not the view's -- checked there, because the capture on the
   column view runs before the editor's own.
+- **A `Check` column works on a tree, and the row there is its key.** A tick
+  turned on a node raises `CellEdit(key, column, "true"|"false", "pick")` --
+  the same contract as the flat table with the address changed -- and a cell
+  shut with `SetEditable(key, column, false)` draws its tick and reports
+  nothing when it is pressed. That pair is what a check *list* of files is
+  built on, and it is asserted in `tests/widgets`' `TableEditors`; the IDE's
+  Changes page is the application that asked. The tree is also the one shape
+  in this control that has no `MultiSelect` -- a tree carries one selection and
+  the ticks are what a program uses instead.
 
 ## A table beside another view: the geometry it can say
 

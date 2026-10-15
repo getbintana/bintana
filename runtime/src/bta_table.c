@@ -55,6 +55,8 @@ struct _BtaTableRow {
     GPtrArray *cells;          /* of char*, one per column; NULL when virtual */
     GPtrArray *icons;          /* of char*, lazily made: most rows have none */
     GPtrArray *uris;           /* of char*, lazily made: what `SetUri` put on a link cell */
+    GPtrArray *styles;         /* of char*, lazily made: the theme class `SetStyle`
+                                * put on a cell */
     GByteArray *locked;        /* one per column, lazily made: what `SetEditable`
                                 * took away from an editing column */
     guint      index;          /* virtual rows: which row this is */
@@ -81,6 +83,7 @@ static void bta_table_row_finalize(GObject *object)
 
     g_clear_pointer(&self->icons, g_ptr_array_unref);
     g_clear_pointer(&self->uris, g_ptr_array_unref);
+    g_clear_pointer(&self->styles, g_ptr_array_unref);
     g_clear_pointer(&self->locked, g_byte_array_unref);
     g_clear_pointer(&self->cells, g_ptr_array_unref);
     g_clear_pointer(&self->key, g_free);
@@ -131,6 +134,11 @@ static const char *row_icon(BtaTableRow *row, guint i)
 static const char *row_uri(BtaTableRow *row, guint i)
 {
     return row && row->uris && i < row->uris->len ? row->uris->pdata[i] : NULL;
+}
+
+static const char *row_style(BtaTableRow *row, guint i)
+{
+    return row && row->styles && i < row->styles->len ? row->styles->pdata[i] : NULL;
 }
 
 static bool row_locked(BtaTableRow *row, guint i)
@@ -538,8 +546,11 @@ static void table_select_node(BtaWidget *w, BtaTableRow *node)
 }
 
 /*
- * One row's cells changed, whichever mode: the tree tells the store the node
- * sits in, the flat table tells the one store there is.
+ * One row's cells changed, whichever mode: the store the node sits in is told,
+ * and the row's own signal is emitted so the cells drawn for it fill themselves
+ * again -- **both halves in both shapes**, because GTK keeps the widgets of an
+ * item it already has and the repaint has to be asked for (see the comment
+ * inside on the tree half, which was missing it).
  *
  * **And a tree puts its selection back.** Telling a store an item changed costs
  * the selection there -- the tree model answers with fresh `GtkTreeListRow`
@@ -563,6 +574,15 @@ static void table_row_changed(BtaWidget *w, BtaTableRow *row, int at)
     BtaTableRow *was = table_selected_node(w);
 
     table_node_changed(w, row);
+    /*
+     * **And the cells drawn for it fill themselves again, exactly as the flat
+     * table's do.** Telling the store rebuilds the tree's wrappers, and GTK
+     * 4.22 keeps the widgets of an item it already had -- measured: locking a
+     * tree's header cell after it was drawn left the label exactly as it was,
+     * while the same call on a flat row repainted it. The row's own signal is
+     * what the bound cells listen to, so it is emitted here too.
+     */
+    g_signal_emit(row, row_changed_signal, 0);
     if (was) {
         if (!table_selected_node(w))
             table_select_node(w, was);
@@ -2479,10 +2499,10 @@ static void on_setup_cell(GtkSignalListItemFactory *f, GtkListItem *item,
  *
  * A held row answers from its own values. A virtual one has none, so the
  * application is asked -- `Data(row, column)`, whose **return value** is the
- * answer: a string, or `{ Text, Icon, Uri, Editable }` when the cell carries
- * more. Returning it rather than assigning into a side channel is what this
- * runtime already does with `KeyPress`, and it means a handler is a function of
- * its arguments.
+ * answer: a string, or `{ Text, Icon, Uri, Style, Editable }` when the cell
+ * carries more. Returning it rather than assigning into a side channel is what
+ * this runtime already does with `KeyPress`, and it means a handler is a
+ * function of its arguments.
  *
  * It runs while the row is being drawn, so the rule is the same one the
  * completion provider will have: **a lookup, and nothing that is not a lookup.**
@@ -2490,17 +2510,20 @@ static void on_setup_cell(GtkSignalListItemFactory *f, GtkListItem *item,
  * and not one per row in the table.
  */
 static void cell_of(BtaWidget *w, BtaTableRow *row, guint col,
-                    char **text, char **icon, char **uri, bool *locked)
+                    char **text, char **icon, char **uri, char **style,
+                    bool *locked)
 {
     *text   = NULL;
     *icon   = NULL;
     *uri    = NULL;
+    *style  = NULL;
     *locked = false;
 
     if (row && row->cells) {
         *text   = g_strdup(row_cell(row, col));
         *icon   = g_strdup(row_icon(row, col));
         *uri    = g_strdup(row_uri(row, col));
+        *style  = g_strdup(row_style(row, col));
         *locked = row_locked(row, col);
         return;
     }
@@ -2520,20 +2543,23 @@ static void cell_of(BtaWidget *w, BtaTableRow *row, guint col,
         JSValue     tv = JS_GetPropertyStr(ctx, r, "Text");
         JSValue     iv = JS_GetPropertyStr(ctx, r, "Icon");
         JSValue     uv = JS_GetPropertyStr(ctx, r, "Uri");
+        JSValue     sv = JS_GetPropertyStr(ctx, r, "Style");
         JSValue     ev = JS_GetPropertyStr(ctx, r, "Editable");
         bool        no_t = JS_IsUndefined(tv) || JS_IsNull(tv);
         bool        no_i = JS_IsUndefined(iv) || JS_IsNull(iv);
         bool        no_u = JS_IsUndefined(uv) || JS_IsNull(uv);
+        bool        no_s = JS_IsUndefined(sv) || JS_IsNull(sv);
         const char *ts = no_t ? NULL : JS_ToCString(ctx, tv);
         const char *is = no_i ? NULL : JS_ToCString(ctx, iv);
         const char *us = no_u ? NULL : JS_ToCString(ctx, uv);
+        const char *ss = no_s ? NULL : JS_ToCString(ctx, sv);
 
         /* A `Text` or `Icon` whose conversion throws (a `toString` that throws,
          * a Symbol) is reported the way a `Data` handler that throws is: this
          * runs inside a bind, with nobody to hand it to, and left pending it
          * landed on whatever called into JavaScript next. `null` is no icon,
          * not the icon called "null". */
-        if ((!no_t && !ts) || (!no_i && !is) || (!no_u && !us))
+        if ((!no_t && !ts) || (!no_i && !is) || (!no_u && !us) || (!no_s && !ss))
             bta_dump_error(ctx);
 
         *text = g_strdup(ts ? ts : "");
@@ -2541,6 +2567,7 @@ static void cell_of(BtaWidget *w, BtaTableRow *row, guint col,
         /* Unlike an icon, an empty `Uri` is an answer: it is *no link on this
          * row*, where an absent one means *the text is the address*. */
         *uri  = us ? g_strdup(us) : NULL;
+        *style = ss && *ss ? g_strdup(ss) : NULL;
         /* Only a `false` locks: a cell is as editable as its column unless the
          * row says otherwise. */
         *locked = JS_IsStrictEqual(ctx, ev, JS_FALSE);
@@ -2548,9 +2575,11 @@ static void cell_of(BtaWidget *w, BtaTableRow *row, guint col,
         JS_FreeCString(ctx, ts);
         JS_FreeCString(ctx, is);
         JS_FreeCString(ctx, us);
+        JS_FreeCString(ctx, ss);
         JS_FreeValue(ctx, tv);
         JS_FreeValue(ctx, iv);
         JS_FreeValue(ctx, uv);
+        JS_FreeValue(ctx, sv);
         JS_FreeValue(ctx, ev);
     }
 
@@ -2672,8 +2701,33 @@ static gboolean on_cell_link(GtkLabel *label, const char *uri, gpointer user_dat
 }
 
 /*
- * What a cell shows for a row: its text, its icon, its link, its editor's
- * state. Asked by the bind and again whenever the row says it changed.
+ * The theme class a cell wears, applied at the fill.
+ *
+ * **The widget is recycled, so what it wore last has to come off or the next
+ * row keeps it**: the class applied is remembered on the label itself, which is
+ * the only thing that outlives one fill and belongs to no row.
+ */
+#define CELL_STYLE_KEY "bta-cell-style"
+
+static void cell_style_apply(GtkWidget *lbl, const char *style)
+{
+    const char *was = g_object_get_data(G_OBJECT(lbl), CELL_STYLE_KEY);
+    const char *now = style && *style ? style : NULL;
+
+    if (was && (!now || strcmp(was, now) != 0))
+        gtk_widget_remove_css_class(lbl, was);
+    if (now && (!was || strcmp(was, now) != 0))
+        gtk_widget_add_css_class(lbl, now);
+
+    if (!was || !now || strcmp(was, now) != 0)
+        g_object_set_data_full(G_OBJECT(lbl), CELL_STYLE_KEY,
+                               now ? g_strdup(now) : NULL, g_free);
+}
+
+/*
+ * What a cell shows for a row: its text, its icon, its link, the class it wears
+ * and its editor's state. Asked by the bind and again whenever the row says it
+ * changed.
  */
 static void cell_fill(BtaWidget *w, GtkWidget *box, BtaTableRow *row, guint col,
                       bool link)
@@ -2682,9 +2736,9 @@ static void cell_fill(BtaWidget *w, GtkWidget *box, BtaTableRow *row, guint col,
     BtaCell   *c   = cell_get(box);
     GtkWidget *lbl = c ? c->view : gtk_widget_get_next_sibling(img);
 
-    char *text = NULL, *icon = NULL, *uri = NULL;
+    char *text = NULL, *icon = NULL, *uri = NULL, *style = NULL;
     bool  locked = false;
-    cell_of(w, row, col, &text, &icon, &uri, &locked);
+    cell_of(w, row, col, &text, &icon, &uri, &style, &locked);
 
     if (c) {
         /* Rebound to its own row -- a store told the row changed -- an open
@@ -2717,6 +2771,25 @@ static void cell_fill(BtaWidget *w, GtkWidget *box, BtaTableRow *row, guint col,
         gtk_label_set_text(GTK_LABEL(lbl), text ? text : "");
     }
 
+    /*
+     * **A locked cell with no editor still says so.** `SetEditable` promises
+     * *the cell reads dim and does not open*, and that was only kept in the
+     * columns that declare an editor -- a cell without one has no `BtaCell` to
+     * remember the lock, and the columns a header or a summary row lives in are
+     * exactly those. `Data`'s `Editable: false` sets the same flag, so an
+     * on-demand table's plain cells say it too.
+     */
+    if (!c) {
+        if (locked)
+            gtk_widget_add_css_class(lbl, "dim-label");
+        else
+            gtk_widget_remove_css_class(lbl, "dim-label");
+    }
+
+    /* The class the program asked for -- `SetStyle`, or a `Data` answer's
+     * `Style` -- beside the ones the cell's state carries. */
+    cell_style_apply(lbl, style);
+
     /* An icon the theme cannot really draw is dropped rather than shown as the
      * broken-image glyph -- the same bargain Button.Icon and a TreeView node
      * make, and for the same reason. */
@@ -2736,6 +2809,7 @@ static void cell_fill(BtaWidget *w, GtkWidget *box, BtaTableRow *row, guint col,
     g_free(text);
     g_free(icon);
     g_free(uri);
+    g_free(style);
 }
 
 #define FILL_ROW_KEY     "bta-fill-row"
@@ -2970,6 +3044,78 @@ static JSValue table_set_uri(JSContext *ctx, JSValueConst this_val,
     row_pad(&row->uris, (guint)c);
     g_free(row->uris->pdata[c]);
     row->uris->pdata[c] = s ? g_strdup(s) : NULL;
+
+    JS_FreeCString(ctx, s);
+    table_row_changed(w, row, at);
+    g_object_unref(row);
+    return JS_UNDEFINED;
+}
+
+/*
+ * SetStyle(row, column, style) -- the theme class a cell wears.
+ *
+ * The same shape as `SetIcon`, and for a kindred reason: what a cell says is
+ * its text, and *what kind of row this is* is said with a class the theme
+ * already paints -- a group node wearing `"heading"`, a warning wearing
+ * `"error"`. **It is a class name and not a colour**, exactly like `Style` on a
+ * control: the theme decides what it looks like, and a theme that does not
+ * paint it is a theme saying no. The one class the runtime adds on its own is
+ * `dim-label`, for a cell `SetEditable` locked, and the two can be worn at
+ * once.
+ *
+ * `""` takes it off -- and a class is taken off by the runtime when the cell is
+ * recycled for another row, since the widget outlives the row it was drawn for.
+ * A virtual table answers `{ Text, Style }` from `Data` instead.
+ */
+static JSValue table_set_style(JSContext *ctx, JSValueConst this_val,
+                               int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    TableState *st = table_state(w);
+
+    if (st->virt)
+        return JS_ThrowTypeError(ctx,
+            "SetStyle: a table that answers Data holds no cells; "
+            "return { Text, Style } from the handler instead");
+
+    int32_t c;
+    if (argc < 3 || !bta_to_int(ctx, argv[1], "SetStyle", &c))
+        return JS_ThrowTypeError(ctx, st->tree
+            ? "SetStyle(key, column, style) expects a key, a column and a style"
+            : "SetStyle(row, column, style) expects two numbers and a style");
+
+    bool         bad = false;
+    BtaTableRow *row = table_row_arg(ctx, w, argv[0], &bad);
+    int          at  = st->tree ? -1 : 0;
+
+    if (bad)
+        return JS_EXCEPTION;
+    if (!row) {
+        const char *name = JS_ToCString(ctx, argv[0]);
+        JSValue     e    = JS_ThrowRangeError(ctx, "SetStyle: there is no %s %s",
+                                              table_what(w), name ? name : "");
+        JS_FreeCString(ctx, name);
+        return e;
+    }
+    if (c < 0) {
+        g_object_unref(row);
+        return JS_ThrowRangeError(ctx, "SetStyle: %d is not a column", c);
+    }
+    if (!JS_IsString(argv[2])) {
+        g_object_unref(row);
+        return JS_ThrowTypeError(ctx, "SetStyle: style is a theme class name");
+    }
+    if (!st->tree)
+        JS_ToInt32(ctx, &at, argv[0]);
+
+    const char *s = JS_ToCString(ctx, argv[2]);
+
+    row_pad(&row->styles, (guint)c);
+    g_free(row->styles->pdata[c]);
+    row->styles->pdata[c] = s && *s ? g_strdup(s) : NULL;
 
     JS_FreeCString(ctx, s);
     table_row_changed(w, row, at);
@@ -5775,6 +5921,13 @@ static const JSCFunctionListEntry table_props[] = {
      *   on-demand table
      */
     JS_CFUNC_DEF("SetUri", 3, table_set_uri),
+    /* SetStyle(row, column, style)
+     *   the theme class a cell wears -- a name like `"heading"`, the way
+     *   `Style` takes one on a control, not a colour. `""` takes it off, and
+     *   recycling a cell takes it off too. Refused on an on-demand table,
+     *   whose `Data` answers `{ Text, Style }`
+     */
+    JS_CFUNC_DEF("SetStyle", 3, table_set_style),
     /* SetEditable(row, column, editable)
      *   whether this row's cell edits, in a column with an `Editor`: `false`
      *   draws it dim and opens nothing, **before** anything is typed -- a
@@ -5860,11 +6013,11 @@ void bta_table_register(void)
          */
         /* Data(row, column)
          *   the table needs a cell. **The return value is the answer**: a
-         *   string, or `{ Text, Icon, Uri, Editable }` for a cell with a
-         *   picture or an address of its own, or one that does not edit in a
-         *   column that does (`Editable: false`). In a `Link` column an absent
-         *   `Uri` means the text is the address and `""` means this cell is not
-         *   a link
+         *   string, or `{ Text, Icon, Uri, Style, Editable }` for a cell with
+         *   a picture, an address or a theme class of its own, or one that
+         *   does not edit in a column that does (`Editable: false`). In a
+         *   `Link` column an absent `Uri` means the text is the address and
+         *   `""` means this cell is not a link
          */
         /* Sort(column, ascending)
          *   a sortable header was clicked. **The handler decides** — `SortBy`
