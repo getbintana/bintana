@@ -1,7 +1,7 @@
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 9430 assertions
+./tests/run.sh                          # all seven projects, 9439 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -217,7 +217,7 @@ own says so with `reportsItself`.
 
 ### tests/widgets selects
 
-`tests/widgets` is 212 tests listed in `TESTS`, and a filter there **selects** rather
+`tests/widgets` is 213 tests listed in `TESTS`, and a filter there **selects** rather
 than running a prefix — `./tests/run.sh widgets record` is 173 assertions
 against 5342 in about twenty. It can select because these tests are
 independent: each builds the controls it needs and deletes them again. The two that

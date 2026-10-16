@@ -278,6 +278,10 @@ Each of these was paid for; the evidence is in the linked file.
   replaced object, since the watch holds a reference.
 - **No JavaScript runs inside a GTK signal that disposes or hides**; mark and
   queue an idle that holds a reference, not a pointer.
+- **What C holds across a `bta_emit` may be gone after it**: the handler can
+  clear, delete, rename or rebuild what raised it. Hold the wrapper and the
+  data (not the view), note the control's epoch, and after the emit ask again
+  -- or give the rest up, never redirect it.
 - A callback the program can replace mid-call is `JS_DupValue`'d across its
   own call. A source queued from a worker thread holds a job reference, not an
   id.
@@ -2004,6 +2008,34 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   checked: timers are held by GLib's dispatch, `File.Watch` and the Http
   deliverers by their `calling`/`dead` pair, events by `JS_GetProperty`'s own
   reference -- `Request` was the only one a program could replace mid-call.
+
+- **What C holds across an emit may not be there after it.** An event runs the
+  program, and the program may remake what raised it: clear or refill a table
+  from its own `Select`, rebuild a menu from an item's `Click`, rename a
+  control in its own handler. That is the program's decision and a legal one;
+  the runtime's part is to survive it. Most emits are the last thing their
+  function does (56 of 85 counted when this was written, and about fifteen
+  more only read the answer); for the rest, the shape is:
+  - **before the emit, hold and note**: the wrapper (`JS_DupValue(w->self)`),
+    the *data* the gesture is about (a `BtaTableRow`, by reference) and never
+    the *view* drawing it, and the control's **epoch** -- `TableState.epoch`,
+    moved by everything that remakes the table (`Clear`, `Count`, `Columns`,
+    any model swap);
+  - **after it, ask again**: still in its window, epoch unchanged, the data
+    still the table's; then find the view anew by the data (`cell_refind`).
+    GTK recycles a cell's widget for another row, so "the box is still alive"
+    answers yes about the wrong row;
+  - **anything failing is the rest given up**, never redirected: `EditCell`
+    answers `false`, the editor does not open, a heading menu is not hung on
+    whatever column now has the index.
+  An on-demand row is only an index, which survives `Count = 0; Count = 50`
+  as another row -- that is why the check is an epoch and not identity.
+  A string the profiler reads after a handler (`emit_on`'s label, the
+  `Painter` span) is copied before it: renaming a control in its own `Click`
+  under `--profile` was a heap-use-after-free, found by ASan on a probe and
+  held by `tests/widgets`' `HandlerRemakes` under `asan.sh` with
+  `BINTANA_PROFILE`. `TableCell` holds the table's half, each assertion red
+  without its fix.
 
 ## More lifetime traps
 
@@ -11658,7 +11690,7 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 9430 assertions
+./tests/run.sh                          # all seven projects, 9439 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -11874,7 +11906,7 @@ own says so with `reportsItself`.
 
 ### tests/widgets selects
 
-`tests/widgets` is 212 tests listed in `TESTS`, and a filter there **selects** rather
+`tests/widgets` is 213 tests listed in `TESTS`, and a filter there **selects** rather
 than running a prefix — `./tests/run.sh widgets record` is 173 assertions
 against 5342 in about twenty. It can select because these tests are
 independent: each builds the controls it needs and deletes them again. The two that

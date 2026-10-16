@@ -2170,6 +2170,9 @@ static bool paint_frame_page(BtaWidget *w, cairo_t *cr, int width, int height,
     bool onpaper = page >= 1 && bta_has_handler(w, "DrawPage");
     bool ok;
     int64_t prof = bta_profile_begin();
+    /* Copied before the handler, which may rename the control: the span's
+     * message is read after it (see `emit_on`). */
+    char   *said = prof ? g_strdup(w->name ? w->name : "") : NULL;
 
     if (onpaper) {
         JSValueConst argv[4] = { obj, JS_NewInt32(ctx, page),
@@ -2185,8 +2188,8 @@ static bool paint_frame_page(BtaWidget *w, cairo_t *cr, int width, int height,
      * `Printer` sheet, and `Save`/`SavePdf` all come through here. The control
      * is the message, since the name is what the capture filters on. */
     if (prof)
-        bta_profile_end(prof, "Bintana", onpaper ? "DrawPage" : "Draw",
-                        w->name ? w->name : "");
+        bta_profile_end(prof, "Bintana", onpaper ? "DrawPage" : "Draw", said);
+    g_free(said);
 
     /* The frame is over: every call on this painter refuses from here on. */
     p->cr = NULL;

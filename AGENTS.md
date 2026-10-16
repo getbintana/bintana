@@ -268,6 +268,10 @@ Each of these was paid for; the evidence is in the linked file.
   replaced object, since the watch holds a reference.
 - **No JavaScript runs inside a GTK signal that disposes or hides**; mark and
   queue an idle that holds a reference, not a pointer.
+- **What C holds across a `bta_emit` may be gone after it**: the handler can
+  clear, delete, rename or rebuild what raised it. Hold the wrapper and the
+  data (not the view), note the control's epoch, and after the emit ask again
+  -- or give the rest up, never redirect it.
 - A callback the program can replace mid-call is `JS_DupValue`'d across its
   own call. A source queued from a worker thread holds a job reference, not an
   id.

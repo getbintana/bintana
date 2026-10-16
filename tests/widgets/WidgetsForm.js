@@ -567,7 +567,7 @@ const TESTS = [
     "Expand", "Spacing", "Designing", "CurrentPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
     "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "Record", "Nested", "Database", "Action", "Groups",
-    "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "Metrics", "Library", "Plugin", "ListMulti", "MenuState",
+    "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "Metrics", "Library", "Plugin", "ListMulti", "MenuState", "HandlerRemakes",
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
@@ -9861,6 +9861,38 @@ function Main() {
         eq("and the list stands", lb.Items.length, 4);
 
         lb.Delete();
+    }
+
+    /*
+     * **A handler that remakes what raised it.** The dispatch held the
+     * control's name and the menu item's form while the handler ran, and a
+     * handler that renames its control or rebuilds its menu -- the ordinary
+     * way a menu changes -- freed the name the profiler's label then read.
+     * Nothing here goes red without that read: run it under `tests/asan.sh`
+     * with `BINTANA_PROFILE` set, which is what found it.
+     */
+    testHandlerRemakes() {
+        const host = new Button();
+        host.Name = "RemakeHost";
+        this.Fixed1.Add(host);
+
+        let rebuilt = 0;
+        this.MnuRemake_Click = () => {
+            rebuilt++;
+            host.Menu = [{ name: "MnuRemake", text: `otra vez ${rebuilt}` }];
+        };
+        host.Menu = [{ name: "MnuRemake", text: "una vez" }];
+        for (let i = 0; i < 5; i++) this.MnuRemake.Click();
+        eq("a menu rebuilt from its own item's Click goes on answering", rebuilt, 5);
+
+        let renamed = 0;
+        host.On("Click", () => { host.Name = `RemakeHost${++renamed}`; });
+        for (let i = 0; i < 5; i++) host.Emit("Click");
+        eq("a control renamed in its own Click goes on answering", renamed, 5);
+        eq("and has the last name", host.Name, "RemakeHost5");
+
+        host.Delete();
+        delete this.MnuRemake_Click;
     }
 
     /* --- menus that remember ---------------------------------------------

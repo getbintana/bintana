@@ -418,7 +418,18 @@ static JSValue emit_on(JSContext *ctx, BtaWidget *w, JSValueConst form,
     if (JS_IsFunction(ctx, fn)) {
         int64_t prof = bta_profile_begin();
 
-        result = JS_Call(ctx, fn, self, argc, argv);
+        /*
+         * **Nothing borrowed survives the handler.** `name` is the control's
+         * or the menu item's own string, and a handler that renames the
+         * control or rebuilds the menu (`this.Menu = [...]` from an item's
+         * `Click` -- the ordinary way a menu changes) frees it; `form` is the
+         * item's reference. So the name the label needs is copied before the
+         * call, and the form is held across it.
+         */
+        char   *said   = prof && name && *name ? g_strdup(name) : NULL;
+        JSValue holder = JS_DupValue(ctx, self);
+
+        result = JS_Call(ctx, fn, holder, argc, argv);
 
         /* Read before the label below: the profiler's own string work is not
          * part of what the handler took. */
@@ -433,11 +444,13 @@ static JSValue emit_on(JSContext *ctx, BtaWidget *w, JSValueConst form,
          * under the active check for the same reason; an idle run pays a load.
          */
         if (prof) {
-            char *label = name && *name ? g_strdup_printf("%s_%s", name, event)
-                                        : g_strdup(event);
+            char *label = said ? g_strdup_printf("%s_%s", said, event)
+                               : g_strdup(event);
             bta_profile_end_at(prof, done, "Event", label, "");
             g_free(label);
         }
+        g_free(said);
+        JS_FreeValue(ctx, holder);
 
         if (JS_IsException(result)) {
             bta_dump_error(ctx);

@@ -202,6 +202,34 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   deliverers by their `calling`/`dead` pair, events by `JS_GetProperty`'s own
   reference -- `Request` was the only one a program could replace mid-call.
 
+- **What C holds across an emit may not be there after it.** An event runs the
+  program, and the program may remake what raised it: clear or refill a table
+  from its own `Select`, rebuild a menu from an item's `Click`, rename a
+  control in its own handler. That is the program's decision and a legal one;
+  the runtime's part is to survive it. Most emits are the last thing their
+  function does (56 of 85 counted when this was written, and about fifteen
+  more only read the answer); for the rest, the shape is:
+  - **before the emit, hold and note**: the wrapper (`JS_DupValue(w->self)`),
+    the *data* the gesture is about (a `BtaTableRow`, by reference) and never
+    the *view* drawing it, and the control's **epoch** -- `TableState.epoch`,
+    moved by everything that remakes the table (`Clear`, `Count`, `Columns`,
+    any model swap);
+  - **after it, ask again**: still in its window, epoch unchanged, the data
+    still the table's; then find the view anew by the data (`cell_refind`).
+    GTK recycles a cell's widget for another row, so "the box is still alive"
+    answers yes about the wrong row;
+  - **anything failing is the rest given up**, never redirected: `EditCell`
+    answers `false`, the editor does not open, a heading menu is not hung on
+    whatever column now has the index.
+  An on-demand row is only an index, which survives `Count = 0; Count = 50`
+  as another row -- that is why the check is an epoch and not identity.
+  A string the profiler reads after a handler (`emit_on`'s label, the
+  `Painter` span) is copied before it: renaming a control in its own `Click`
+  under `--profile` was a heap-use-after-free, found by ASan on a probe and
+  held by `tests/widgets`' `HandlerRemakes` under `asan.sh` with
+  `BINTANA_PROFILE`. `TableCell` holds the table's half, each assertion red
+  without its fix.
+
 ## More lifetime traps
 
 - **A `JSValue` in a wrapper's opaque slot wants `gc_mark`, and its finaliser
